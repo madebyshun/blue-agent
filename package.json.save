@@ -1,0 +1,56 @@
+
+  "name": "blue-agent",
+  "version": "1.0.0"{
+  "name": "blue-agent",
+  "version": "1.0.0",
+  "description": "AI agent exploring builders on Base",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/madebyshun/blue-agent.git"
+  },
+  "dependencies": {
+    "axios": "^1.13.6",
+    "dotenv": "^17.3.1",
+    "openai": "^6.27.0"
+  }
+}
+
+  "type": "module",
+  "description": "AI agent exploring builders   "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  }
+}
+{
+  "name": "blue-agent",
+  "version": "1.0.0",
+  "description": "AI agent exploring builders on Base",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/madebyshun/blue-agent.git"
+  },
+  "dependencies": {
+    "axios": "^1.13.6",
+    "dotenv": "^17.3.1",
+    "openai": "^6.27.0"
+  }
+}
+{
+  "name": "blue-agent",
+  "version": "1.0.0",
+  "description": "AI agent exploring builders on Base",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+ {  "name": "blue-agent",  "version": "1.0.0",  "description": "AI agent exploring builders on Base",  "main": "index.js",  "scripts": {    "start": "node index.js",    "test": "echo \"Error: no test specified\" && exit 1"  },  "repository": {    "type": "git",    "url": "git+https://github.com/madebyshun/blue-agent.git"  },  "dependencies": {    "axios": "^1.13.6",    "dotenv": "^17.3.1",    "openai": "^6.27.0"  }}

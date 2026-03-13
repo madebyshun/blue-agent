@@ -1,6 +1,7 @@
 {
   "name": "blue-agent",
   "version": "1.0.0",
+   "type": "module",
   "description": "AI agent exploring builders on Base",
   "main": "index.js",
   "scripts": {
