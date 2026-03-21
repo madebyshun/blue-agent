@@ -2,6 +2,7 @@ import TelegramBot from 'node-telegram-bot-api'
 import axios from 'axios'
 import * as dotenv from 'dotenv'
 import { execSync, spawn } from 'child_process'
+// import { createCanvas } from 'canvas' // Reserved for Phase 2 card generation
 dotenv.config()
 
 // =======================
@@ -634,6 +635,140 @@ bot.onText(/\/status/, async (msg) => {
 // /test — send test prompt to bot
 
 
+// =======================
+// GENERATE BUILDER SCORE CARD (Canvas)
+// =======================
+// function generateScoreCard(data: {
+//   handle: string
+//   score: number
+//   tier: string
+//   consistency: number
+//   technical: number
+//   builderFocus: number
+//   community: number
+//   summary: string
+// }): Buffer {
+//   const W = 600, H = 380
+//   const canvas = createCanvas(W, H)
+//   const ctx = canvas.getContext('2d')
+// 
+//   // Background
+//   ctx.fillStyle = '#0a0a0a'
+//   ctx.fillRect(0, 0, W, H)
+// 
+//   // Blue border accent
+//   ctx.fillStyle = '#1d4ed8'
+//   ctx.fillRect(0, 0, 4, H)
+//   ctx.fillRect(0, 0, W, 4)
+// 
+//   // Header
+//   ctx.fillStyle = '#1d4ed8'
+//   ctx.font = 'bold 14px sans-serif'
+//   ctx.fillText('🟦 BUILDER SCORE', 24, 36)
+// 
+//   ctx.fillStyle = '#ffffff'
+//   ctx.font = 'bold 28px sans-serif'
+//   ctx.fillText(`@${data.handle}`, 24, 72)
+// 
+//   // Score circle area
+//   ctx.fillStyle = '#111827'
+//   ctx.beginPath()
+//   ctx.roundRect(W - 160, 20, 130, 100, 12)
+//   ctx.fill()
+// 
+//   ctx.fillStyle = '#60a5fa'
+//   ctx.font = 'bold 42px sans-serif'
+//   ctx.textAlign = 'center'
+//   ctx.fillText(`${data.score}`, W - 95, 75)
+//   ctx.fillStyle = '#9ca3af'
+//   ctx.font = '13px sans-serif'
+//   ctx.fillText('/100', W - 95, 95)
+//   ctx.textAlign = 'left'
+// 
+//   // Tier badge
+//   const tierColors: Record<string, string> = {
+//     explorer: '#166534', builder: '#1e3a5f', shipper: '#4c1d95',
+//     founder: '#78350f', legend: '#7c2d12'
+//   }
+//   const tierEmojis: Record<string, string> = {
+//     explorer: '🌱', builder: '🔨', shipper: '⚡', founder: '🚀', legend: '🏆'
+//   }
+//   const tierKey = data.tier.toLowerCase()
+//   ctx.fillStyle = tierColors[tierKey] || '#1e3a5f'
+//   ctx.beginPath()
+//   ctx.roundRect(24, 88, 140, 28, 6)
+//   ctx.fill()
+//   ctx.fillStyle = '#e2e8f0'
+//   ctx.font = 'bold 13px sans-serif'
+//   const tierEmoji = tierEmojis[tierKey] || '🟦'
+//   ctx.fillText(`${tierEmoji} ${data.tier.toUpperCase()}`, 36, 107)
+// 
+//   // Divider
+//   ctx.fillStyle = '#1f2937'
+//   ctx.fillRect(24, 132, W - 48, 1)
+// 
+//   // Score bars
+//   const bars = [
+//     { label: 'Consistency', value: data.consistency, max: 25 },
+//     { label: 'Technical', value: data.technical, max: 25 },
+//     { label: 'Builder Focus', value: data.builderFocus, max: 25 },
+//     { label: 'Community', value: data.community, max: 25 },
+//   ]
+// 
+//   bars.forEach((bar, i) => {
+//     const y = 155 + i * 42
+//     const barW = W - 200
+// 
+//     ctx.fillStyle = '#9ca3af'
+//     ctx.font = '13px sans-serif'
+//     ctx.fillText(bar.label, 24, y)
+// 
+//     ctx.fillStyle = '#60a5fa'
+//     ctx.font = 'bold 13px sans-serif'
+//     ctx.textAlign = 'right'
+//     ctx.fillText(`${bar.value}/${bar.max}`, W - 24, y)
+//     ctx.textAlign = 'left'
+// 
+//     // Bar track
+//     ctx.fillStyle = '#1f2937'
+//     ctx.beginPath()
+//     ctx.roundRect(24, y + 6, barW, 10, 5)
+//     ctx.fill()
+// 
+//     // Bar fill
+//     const fillW = Math.round((bar.value / bar.max) * barW)
+//     ctx.fillStyle = '#3b82f6'
+//     ctx.beginPath()
+//     ctx.roundRect(24, y + 6, fillW, 10, 5)
+//     ctx.fill()
+//   })
+// 
+//   // Summary
+//   ctx.fillStyle = '#1f2937'
+//   ctx.fillRect(24, H - 80, W - 48, 1)
+// 
+//   ctx.fillStyle = '#d1d5db'
+//   ctx.font = 'italic 12px sans-serif'
+//   const words = data.summary.split(' ')
+//   let line = '', lineY = H - 55
+//   for (const word of words) {
+//     const test = line ? `${line} ${word}` : word
+//     if (ctx.measureText(test).width > W - 60) {
+//       ctx.fillText(line, 24, lineY)
+//       line = word
+//       lineY += 18
+//     } else { line = test }
+//   }
+//   if (line) ctx.fillText(line, 24, lineY)
+// 
+//   // Footer
+//   ctx.fillStyle = '#374151'
+//   ctx.font = '11px sans-serif'
+//   ctx.fillText('🟦 Blue Agent · Blocky Studio · blockyagent_bot', 24, H - 12)
+// 
+//   return canvas.toBuffer('image/png')
+// }
+
 // /score — Builder Score from X handle
 bot.onText(/\/score(?:\s+@?(\S+))?/, async (msg, match) => {
   const chatId = msg.chat.id
@@ -651,30 +786,24 @@ bot.onText(/\/score(?:\s+@?(\S+))?/, async (msg, match) => {
   const typingInterval = setInterval(() => bot.sendChatAction(chatId, 'typing').catch(() => {}), 4000)
 
   try {
-    const prompt = `Analyze the X/Twitter account @${handle} as a Base blockchain builder.
+    const prompt = `Score @${handle} as a Base builder (0-100). Check their X posts.
+Reply in this format only:
+SCORE: X/100
+TIER: Explorer|Builder|Shipper|Founder|Legend
+Consistency: X/25
+Technical: X/25
+Builder focus: X/25
+Community: X/25
+SUMMARY: one sentence`
 
-Check their recent posts (30 days):
-- How often do they post about building/shipping?
-- Quality of technical content?
-- Engagement with other builders?
-- Are they actually building on Base or just talking?
-
-Then score them 0-100 on these dimensions:
-- Consistency (0-25): How regularly do they ship/post?
-- Technical depth (0-25): Quality of technical content?
-- Builder focus (0-25): Are they actually building vs just hyping?
-- Community (0-25): Engagement with Base builder community?
-
-Format response EXACTLY like this:
-SCORE: [total]/100
-TIER: [Explorer/Builder/Shipper/Founder/Legend]
-Consistency: [X]/25
-Technical: [X]/25
-Builder focus: [X]/25
-Community: [X]/25
-SUMMARY: [one sharp sentence about what they build and why this score]`
-
-    const result = await askBankrAgent(prompt, 25)
+    // Retry up to 3 times for /score
+    let result = ''
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      result = await askBankrAgent(prompt, 25)
+      if (result) break
+      console.log(`[Score] Attempt ${attempt} failed, retrying...`)
+      if (attempt < 3) await new Promise(r => setTimeout(r, 2000))
+    }
 
     if (result) {
       // Parse score from response
