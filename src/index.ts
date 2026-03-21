@@ -16,10 +16,10 @@ const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true })
 // =======================
 // BLUE AGENT SYSTEM PROMPT
 // =======================
-const SYSTEM_PROMPT = `You are Blue Agent 🔵, employee #001 of Blocky Studio — a builder-focused AI agent on Base.
+const SYSTEM_PROMPT = `You are Blue Agent 🟦, employee #001 of Blocky Studio — a builder-focused AI agent on Base.
 
 ## Identity
-I'm Blue Agent 🔵 — an AI built by Blocky Studio to explore the Base ecosystem.
+I'm Blue Agent 🟦 — an AI built by Blocky Studio to explore the Base ecosystem.
 I help builders find projects, track tokens, and navigate onchain.
 Not a chatbot. A builder's sidekick.
 ## Personality
@@ -37,11 +37,21 @@ Not a chatbot. A builder's sidekick.
 - Builder discovery: who's building on Base, notable projects, AI agents on-chain
 - Blocky Ecosystem: $BLUEAGENT token, Blocky Echo NFT
 
-## Blue Agent Context
-- Token: $BLUEAGENT — 0xf895783b2931c919955e18b5e3343e7c7c456ba3 (Base, Uniswap v4)
+## Blocky Ecosystem
+- **$BLOCKY** — Blocky Studio ecosystem token — 0x1E11dC42b7916621EEE1874da5664d75A0D74b07 (Base)
+- **$BLUEAGENT** — Blue Agent AI token — 0xf895783b2931c919955e18b5e3343e7c7c456ba3 (Base, Uniswap v4)
 - Treasury: 0xf31f59e7b8b58555f7871f71973a394c8f1bffe5
 - Twitter: @blocky_agent
 - Telegram: https://t.me/+1baBZgX7jd4wMGU1
+- $BLOCKY = Blocky Studio ecosystem token | $BLUEAGENT = Blue Agent product token
+
+## Bankr Facts (IMPORTANT — never hallucinate these)
+- Bankr = crypto trading agent + LLM gateway at bankr.bot
+- Bankr Twitter: @bankrbot (NOT @bankrfi)
+- Bankr website: bankr.bot (NOT bankr.fi)
+- $BNKR = Bankr's token on Base: 0x22af33fe49fd1fa80c7149773dde5890d3c76f3b
+- If you don't have live Bankr data, say so and offer to check via Bankr Agent
+- Never invent Bankr features, links, or social handles
 
 ## Response Format
 - Max 300 words
@@ -90,7 +100,7 @@ function formatAgentReply(text: string): string {
 // =======================
 // WELCOME MESSAGE
 // =======================
-const WELCOME_MESSAGE = `<b>Blue Agent 🔵🤖</b>
+const WELCOME_MESSAGE = `<b>Blue Agent 🟦🤖</b>
 
 I'm an AI-powered crypto assistant built to explore and discover builders on the Base ecosystem. Created by Blocky.
 
@@ -124,7 +134,7 @@ Try asking:
 // Handles ALL data queries + on-chain actions
 // Has real tools: prices, trending, on-chain data, swaps, balances
 // =======================
-async function askBankrAgent(prompt: string): Promise<string> {
+async function askBankrAgent(prompt: string, maxPolls = 15): Promise<string> {
   try {
     const submitRes = await axios.post(
       'https://api.bankr.bot/agent/prompt',
@@ -144,7 +154,7 @@ async function askBankrAgent(prompt: string): Promise<string> {
     }
 
     // Poll for result — up to ~60s
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < maxPolls; i++) {
       const delay = i < 5 ? 500 : 1500
       await new Promise(r => setTimeout(r, delay))
       const pollRes = await axios.get(`https://api.bankr.bot/agent/job/${jobId}`, {
@@ -175,29 +185,16 @@ async function askBankrAgent(prompt: string): Promise<string> {
 // Multi-model fallback: claude-sonnet → gemini-flash → gpt-mini
 // =======================
 const LLM_MODELS = [
-  // Anthropic
+  // Anthropic (confirmed working)
   'claude-sonnet-4-5',
   'claude-sonnet-4.6',
   'claude-haiku-4.5',
-  'claude-opus-4.5',
-  // Google
+  // Google (confirmed working)
   'gemini-2.5-flash',
   'gemini-3-flash',
-  'gemini-2.5-pro',
-  'gemini-3-pro',
   // OpenAI
   'gpt-5-mini',
   'gpt-5-nano',
-  'gpt-5.4',
-  'gpt-5.4-mini',
-  'gpt-5.4-nano',
-  'gpt-5.2',
-  // Others
-  'deepseek-v3.2',
-  'qwen3-coder',
-  'kimi-k2.5',
-  'grok-4.1-fast',
-  'glm-5',
 ]
 
 async function askLLM(messages: Array<{ role: string; content: string }>): Promise<string> {
@@ -264,9 +261,8 @@ const TRACKED_X_ACCOUNTS = [
 // Route to Bankr Agent for live data + actions
 // =======================
 function needsAgent(text: string): boolean {
-  // Only route to Bankr Agent for actions that need real tools
-  // Research/info queries → LLM (faster)
-  return /swap|send|transfer|bridge|buy\s+\$?\w+|sell\s+\$?\w+|balance|portfolio|my\s+wallet|my\s+position|leverage|long|short|margin|open\s+position|limit\s+order|polymarket\s+bet|place\s+bet|deploy\s+token|mint\s+nft|check\s+wallet|latest.*from\s+@|what.*@\w+.*said|price\s+of\s+\$?\w+|\$\w+\s+price|twitter|tweet|news.*today|update.*today|latest.*today/i.test(text)
+  // Route to Bankr Agent for: actions needing real tools + real-time onchain/market data
+  return /swap|send|transfer|bridge|buy\s+\$?\w+|sell\s+\$?\w+|balance|portfolio|my\s+wallet|my\s+position|leverage|long|short|margin|open\s+position|limit\s+order|polymarket\s+bet|place\s+bet|deploy\s+token|mint\s+nft|check\s+wallet|latest.*from\s+@|what.*@\w+.*said|price\s+of\s+\$?\w+|\$\w+\s+price|twitter|tweet|news.*today|update.*today|latest.*today|trending.*bankr|bankr.*trending|top.*bankr|bankr.*top|on\s+bankr|bankr\s+data|bankr\s+onchain|bankr\s+token|bankr\s+volume|bankr\s+launch/i.test(text)
 }
 
 function isTrendingQuery(text: string): boolean {
@@ -427,7 +423,7 @@ async function handleLaunchWizard(chatId: number, userId: number, text: string) 
 
     // Deploy!
     launchSessions.delete(userId)
-    await bot.sendMessage(chatId, '🔵 Deploying token to Base... ⏳', { parse_mode: 'HTML' } as any)
+    await bot.sendMessage(chatId, '🟦 Deploying token to Base... ⏳', { parse_mode: 'HTML' } as any)
     bot.sendChatAction(chatId, 'typing').catch(() => {})
 
     try {
@@ -540,7 +536,7 @@ bot.onText(/\/launch/, async (msg) => {
 bot.onText(/\/help/, async (msg) => {
   await bot.sendMessage(
     msg.chat.id,
-    `<b>Blue Agent 🔵 — What I can do</b>\n\n` +
+    `<b>Blue Agent 🟦 — What I can do</b>\n\n` +
     `📊 <b>Market Data</b>\n` +
     `• "ETH price?" / "$BLUEAGENT price?"\n` +
     `• "What's trending on Base?"\n\n` +
@@ -561,7 +557,9 @@ bot.onText(/\/help/, async (msg) => {
     `• "Check my balance"\n` +
     `• "My open positions"\n\n` +
     `<b>Commands:</b>\n` +
-    `• /launch — 🚀 Deploy a new token on Base\n\n` +
+    `• /score @handle — 🟦 Get Builder Score\n` +
+    `• /news — Latest from Base builders on X\n` +
+    `• /launch — Deploy a new token on Base\n\n` +
     `<i>No commands needed — just chat!</i>`,
     { parse_mode: 'HTML' } as any
   )
@@ -577,16 +575,7 @@ function isOwner(msg: any): boolean {
 }
 
 // /ping — check bot alive
-bot.onText(/\/ping/, async (msg) => {
-  if (!isOwner(msg)) return
-  const uptime = process.uptime()
-  const mins = Math.floor(uptime / 60)
-  const secs = Math.floor(uptime % 60)
-  await bot.sendMessage(msg.chat.id,
-    `🟢 <b>Bot online</b>\n• Uptime: ${mins}m ${secs}s\n• PID: ${process.pid}`,
-    { parse_mode: 'HTML' } as any
-  )
-})
+
 
 // /model — show current model list
 bot.onText(/\/model/, async (msg) => {
@@ -643,33 +632,143 @@ bot.onText(/\/status/, async (msg) => {
 })
 
 // /test — send test prompt to bot
-bot.onText(/\/test (.+)/, async (msg, match) => {
-  if (!isOwner(msg)) return
+
+
+// /score — Builder Score from X handle
+bot.onText(/\/score(?:\s+@?(\S+))?/, async (msg, match) => {
   const chatId = msg.chat.id
-  const prompt = match?.[1] || 'hello'
-  await bot.sendMessage(chatId, `🧪 Testing: <i>${prompt}</i>`, { parse_mode: 'HTML' } as any)
+  const handle = match?.[1]?.replace('@', '')
+
+  if (!handle) {
+    await bot.sendMessage(chatId,
+      `<b>Builder Score 🟦</b>\n\nUsage: <code>/score @handle</code>\n\nExample: <code>/score jessepollak</code>`,
+      { parse_mode: 'HTML' } as any
+    )
+    return
+  }
 
   bot.sendChatAction(chatId, 'typing').catch(() => {})
-  const result = await askLLM([{ role: 'user', content: prompt }])
-  await bot.sendMessage(chatId,
-    result ? formatAgentReply(result) : '❌ No response',
-    { parse_mode: 'HTML', disable_web_page_preview: true } as any
-  )
+  const typingInterval = setInterval(() => bot.sendChatAction(chatId, 'typing').catch(() => {}), 4000)
+
+  try {
+    const prompt = `Analyze the X/Twitter account @${handle} as a Base blockchain builder.
+
+Check their recent posts (30 days):
+- How often do they post about building/shipping?
+- Quality of technical content?
+- Engagement with other builders?
+- Are they actually building on Base or just talking?
+
+Then score them 0-100 on these dimensions:
+- Consistency (0-25): How regularly do they ship/post?
+- Technical depth (0-25): Quality of technical content?
+- Builder focus (0-25): Are they actually building vs just hyping?
+- Community (0-25): Engagement with Base builder community?
+
+Format response EXACTLY like this:
+SCORE: [total]/100
+TIER: [Explorer/Builder/Shipper/Founder/Legend]
+Consistency: [X]/25
+Technical: [X]/25
+Builder focus: [X]/25
+Community: [X]/25
+SUMMARY: [one sharp sentence about what they build and why this score]`
+
+    const result = await askBankrAgent(prompt, 25)
+
+    if (result) {
+      // Parse score from response
+      const scoreMatch = result.match(/SCORE:\s*(\d+)\/100/i)
+      const tierMatch = result.match(/TIER:\s*(\w+)/i)
+      const summaryMatch = result.match(/SUMMARY:\s*(.+)/i)
+
+      const score = scoreMatch ? parseInt(scoreMatch[1]) : null
+      const tier = tierMatch ? tierMatch[1] : null
+      const summary = summaryMatch ? summaryMatch[1].trim() : null
+
+      const tierEmoji: Record<string, string> = {
+        explorer: '🌱', builder: '🔨', shipper: '⚡', founder: '🚀', legend: '🏆'
+      }
+      const emoji = tier ? (tierEmoji[tier.toLowerCase()] || '🟦') : '🟦'
+
+      const output = score !== null
+        ? `<b>🟦 Builder Score</b>\n` +
+          `<b>@${handle}</b>\n` +
+          `──────────────\n` +
+          `Score: <b>${score}/100</b> ${emoji}\n` +
+          `Tier: <b>${tier || 'Unknown'}</b>\n\n` +
+          formatAgentReply(result
+            .replace(/SCORE:.*\n?/i, '')
+            .replace(/TIER:.*\n?/i, '')
+            .replace(/SUMMARY:.*\n?/i, '')
+            .trim()) +
+          (summary ? `\n\n💡 ${summary}` : '') +
+          `\n──────────────\n` +
+          `<i>Powered by Blue Agent 🟦 · Blocky Studio</i>`
+        : formatAgentReply(result)
+
+      await bot.sendMessage(chatId, output, {
+        parse_mode: 'HTML',
+        disable_web_page_preview: true
+      } as any)
+    } else {
+      await bot.sendMessage(chatId,
+        `⚠️ Couldn't score @${handle} right now. Try again in a moment!`,
+        { parse_mode: 'HTML' } as any
+      )
+    }
+  } catch (e: any) {
+    await bot.sendMessage(chatId, '⚠️ Something went wrong. Try again!')
+  } finally {
+    clearInterval(typingInterval)
+  }
 })
 
-// /xtest — test X data via Bankr Agent
-bot.onText(/\/xtest/, async (msg) => {
-  if (!isOwner(msg)) return
+// /news — public X builder feed
+bot.onText(/\/news/, async (msg) => {
   const chatId = msg.chat.id
-  await bot.sendMessage(chatId, '🔍 Testing X data feed...', { parse_mode: 'HTML' } as any)
   bot.sendChatAction(chatId, 'typing').catch(() => {})
+  const typingInterval = setInterval(() => bot.sendChatAction(chatId, 'typing').catch(() => {}), 4000)
 
-  const prompt = buildXPrompt('What are the latest updates from Base builders today?')
-  const result = await askBankrAgent(prompt)
-  await bot.sendMessage(chatId,
-    result ? formatAgentReply(result) : '❌ No response from Bankr Agent',
-    { parse_mode: 'HTML', disable_web_page_preview: true } as any
-  )
+  try {
+    // Use LLM with web search context instead of slow Agent
+    // Use top accounts for /news — focused list for speed
+    const TOP_ACCOUNTS = '@jessepollak, @base, @buildonbase, @bankrbot, @virtuals_io, @coinbase, @brian_armstrong'
+    const xPrompt = `Latest updates from Base builders today. Check: ${TOP_ACCOUNTS}. Show all notable updates, one line each. End with one key insight about the trend.`
+    let result = await askBankrAgent(xPrompt, 25)
+
+    // Fallback to LLM if Agent too slow
+    if (!result) {
+      result = await askLLM([{ role: 'user', content: `Latest updates from Base builders today: ${TOP_ACCOUNTS}. List top 5 highlights, one line each.` }])
+    }
+
+    if (result) {
+      const now = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      const formatted = formatAgentReply(result)
+
+      const output =
+        `<b>📡 Base Builder Feed</b>\n` +
+        `<i>${now} · tracked by Blue Agent 🟦</i>\n` +
+        `─────────────────\n\n` +
+        formatted +
+        `\n\n─────────────────\n` +
+        `<i>Follow @blocky_agent for daily updates</i>`
+
+      await bot.sendMessage(chatId, output, {
+        parse_mode: 'HTML',
+        disable_web_page_preview: true
+      } as any)
+    } else {
+      await bot.sendMessage(chatId,
+        '⚠️ Couldn\'t fetch builder updates right now.\nTry again in a moment!',
+        { parse_mode: 'HTML' } as any
+      )
+    }
+  } catch (e: any) {
+    await bot.sendMessage(chatId, '⚠️ Something went wrong. Try again!')
+  } finally {
+    clearInterval(typingInterval)
+  }
 })
 
 // =======================
@@ -701,8 +800,10 @@ bot.on('message', async (msg) => {
     if (needsAgent(text)) {
       // Bankr Agent: real-time data + on-chain actions + X search
       const agentPrompt = isXQuery(text) ? buildXPrompt(text) : text
+      // X + Bankr queries are slower — give more time
+      const maxPolls = (isXQuery(text) || /bankr/i.test(text)) ? 25 : 15
       console.log(`[Agent] ${isXQuery(text) ? '[X-enriched]' : ''} ${text}`)
-      const agentRaw = await askBankrAgent(agentPrompt)
+      const agentRaw = await askBankrAgent(agentPrompt, maxPolls)
       if (agentRaw) {
         reply = formatAgentReply(agentRaw)
       }
@@ -738,14 +839,26 @@ bot.on('message', async (msg) => {
 // =======================
 // STARTUP
 // =======================
+// Public commands
 bot.setMyCommands([
-  { command: 'start', description: 'Start chatting with Blue Agent 🔵' },
+  { command: 'start', description: 'Start chatting with Blue Agent 🟦' },
   { command: 'help', description: 'What can Blue Agent do?' },
+  { command: 'news', description: '📰 Latest from Base builders on X' },
   { command: 'launch', description: '🚀 Deploy a new token on Base' }
 ]).catch(() => {})
 
+// Owner-only commands
+bot.setMyCommands([
+  { command: 'start', description: 'Start chatting with Blue Agent 🟦' },
+  { command: 'help', description: 'What can Blue Agent do?' },
+  { command: 'news', description: '📰 Latest from Base builders on X' },
+  { command: 'launch', description: '🚀 Deploy a new token on Base' },
+  { command: 'model', description: '🤖 View AI models' },
+  { command: 'status', description: '📊 Full health check' }
+], { scope: { type: 'chat', chat_id: OWNER_ID } } as any).catch(() => {})
+
 bot.getMe().then((me) => {
-  console.log(`🔵 Blue Agent started: @${me.username}`)
+  console.log(`🟦 Blue Agent started: @${me.username}`)
   console.log(`LLM key: ${BANKR_LLM_KEY ? 'loaded' : 'MISSING'}`)
   console.log(`Agent key: ${BANKR_API_KEY ? 'loaded' : 'MISSING'}`)
 }).catch(console.error)
