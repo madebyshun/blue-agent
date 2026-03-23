@@ -2,13 +2,33 @@ import TelegramBot from 'node-telegram-bot-api'
 import axios from 'axios'
 import * as dotenv from 'dotenv'
 import { execSync, spawn } from 'child_process'
+import * as fs from 'fs'
+import * as path from 'path'
 // import { createCanvas } from 'canvas' // Reserved for Phase 2 card generation
 dotenv.config()
+
+const DATA_DIR = path.join(__dirname, '..', 'data')
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
+const USERS_FILE = path.join(DATA_DIR, 'users.json')
+const REFERRALS_FILE = path.join(DATA_DIR, 'referrals.json')
+const PROJECTS_FILE = path.join(DATA_DIR, 'projects.json')
+
+interface User { id: number; telegramUsername?: string; telegramName?: string; bankrApiToken?: string; evmAddress?: string; score?: number; tier?: string; points?: number; referredBy?: number; walletConnected?: boolean; joinedAt?: number; xHandle?: string; claimedPoints?: number }
+interface Referral { referrerId: number; referredId: number; timestamp: number }
+interface Project { id: string; name: string; description: string; url: string; twitter?: string; submitterId: number; submitterUsername?: string; timestamp: number; votes: number; voters: number[] }
+
+function loadUsers(): Record<string, User> { try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')) } catch { return {} } }
+function saveUsers(d: Record<string, User>) { fs.writeFileSync(USERS_FILE, JSON.stringify(d, null, 2)) }
+function loadReferrals(): Referral[] { try { return JSON.parse(fs.readFileSync(REFERRALS_FILE, 'utf8')) } catch { return [] } }
+function saveReferrals(d: Referral[]) { fs.writeFileSync(REFERRALS_FILE, JSON.stringify(d, null, 2)) }
+function loadProjects(): Project[] { try { return JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf8')) } catch { return [] } }
+function saveProjects(d: Project[]) { fs.writeFileSync(PROJECTS_FILE, JSON.stringify(d, null, 2)) }
+
 
 // =======================
 // CONFIG
 // =======================
-const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8363087451:AAHKl48E-jg_PeeU9GG0NfugpX-vnsYKYLE'
+const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || ''
 const BANKR_LLM_KEY = process.env.BANKR_LLM_KEY || 'bk_9PCM8TGTL5RALEEY7WEKUXY3DQRJ2FVN'
 const BANKR_API_KEY = process.env.BANKR_API_KEY || 'bk_9PCM8TGTL5RALEEY7WEKUXY3DQRJ2FVN'
 
@@ -339,6 +359,12 @@ interface LaunchState {
 
 const launchSessions = new Map<number, LaunchState>()
 
+const walletSessions = new Map<number, { step: string; email?: string }>()
+const submitSessions = new Map<number, { step: number; name?: string; description?: string; url?: string; twitter?: string }>()
+const scoreSessions = new Map<number, boolean>()
+const xHandleSessions = new Map<number, boolean>() // waiting for X handle input
+
+
 async function handleLaunchWizard(chatId: number, userId: number, text: string) {
   const state = launchSessions.get(userId)!
 
@@ -516,14 +542,101 @@ function addToHistory(userId: number, role: string, content: string) {
   }
 }
 
-// =======================
-// /start
-// =======================
-bot.onText(/\/start/, async (msg) => {
-  await bot.sendMessage(msg.chat.id, WELCOME_MESSAGE, {
-    parse_mode: 'HTML',
-    disable_web_page_preview: true
-  } as any)
+// Fetch all agents from Bankr via Agent prompt (only working endpoint)
+async function fetchBankrAgents(): Promise<any[]> {
+  try {
+    // Use Bankr Agent to get leaderboard data
+    const result = await askBankrAgent('List top 10 AI agents on Bankr by market cap. For each show: name, market cap in USD, weekly revenue in ETH, token symbol.', 20)
+    if (result) return [{ raw: result }] // return raw for display
+    return []
+  } catch {
+    return []
+  }
+}
+
+async function sendAgentsLeaderboard(chatId: number, sort: string = 'mcap') {
+  bot.sendChatAction(chatId, 'typing').catch(() => {})
+  try {
+    // Use Bankr Agent for live data
+    const sortLabel = sort === 'revenue' ? 'weekly revenue' : sort === 'newest' ? 'newest first' : 'market cap'
+    const prompt = `List top 10 AI agents on Bankr by ${sortLabel}. For each show: rank, name, market cap (USD), weekly revenue (ETH or USD). Format as numbered list.`
+    const result = await askBankrAgent(prompt, 20)
+
+    if (result) {
+      await bot.sendMessage(chatId,
+        `<b>🤖 Bankr Agent Leaderboard</b>\n\n${formatAgentReply(result)}`,
+        {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [[
+            { text: '📊 By MCap', callback_data: 'agents_mcap' },
+            { text: '💰 By Revenue', callback_data: 'agents_revenue' },
+            { text: '🆕 Newest', callback_data: 'agents_newest' }
+          ]]}
+        } as any
+      )
+    } else {
+      await bot.sendMessage(chatId, '🤖 Could not fetch agent leaderboard. Try again later.')
+    }
+  } catch {
+    await bot.sendMessage(chatId, '🤖 Could not fetch agent leaderboard. Try again later.')
+  }
+}
+
+bot.onText(/\/start(?:\s+(\w+))?/, async (msg, match) => {
+  const chatId = msg.chat.id
+  const userId = msg.from?.id || chatId
+  const telegramUsername = msg.from?.username
+  const telegramName = msg.from?.first_name + (msg.from?.last_name ? ' ' + msg.from.last_name : '')
+  const referralCode = match?.[1]
+
+  const users = loadUsers()
+  const referrals = loadReferrals()
+
+  // Check if user exists
+  if (!users[userId]) {
+    // New user
+    users[userId] = {
+      id: userId,
+      telegramUsername,
+      telegramName,
+      score: 0,
+      points: 0,
+      joinedAt: Date.now(),
+      walletConnected: false
+    }
+    saveUsers(users)
+
+    // Handle referral
+    if (referralCode) {
+      const referrer = Object.values(users).find(u => u.telegramUsername === referralCode)
+      if (referrer && referrer.id !== userId) {
+        referrals.push({ referrerId: referrer.id, referredId: userId, timestamp: Date.now() })
+        saveReferrals(referrals)
+        // Optional: Notify referrer
+        bot.sendMessage(referrer.id, `🎉 You referred @${telegramUsername || userId}! You earned 100 points.`, { parse_mode: 'HTML' })
+        // Optional: Give points to new user
+        users[userId].points = (users[userId].points || 0) + 50
+        saveUsers(users)
+        await bot.sendMessage(chatId, `Welcome! You were referred by @${referrer.telegramUsername}. You earned 50 points!`, { parse_mode: 'HTML' })
+      }
+    }
+    await bot.sendMessage(chatId, WELCOME_MESSAGE, {
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      reply_markup: {
+        inline_keyboard: [[{ text: '🟦 Open Menu', callback_data: 'open_menu' }]]
+      }
+    } as any)
+  } else {
+    // Existing user, just send welcome message
+    await bot.sendMessage(chatId, WELCOME_MESSAGE, {
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      reply_markup: {
+        inline_keyboard: [[{ text: '🟦 Open Menu', callback_data: 'open_menu' }]]
+      }
+    } as any)
+  }
 })
 
 // =======================
@@ -782,19 +895,37 @@ bot.onText(/\/status/, async (msg) => {
 //   return canvas.toBuffer('image/png')
 // }
 
-// /score — Builder Score from X handle
-bot.onText(/\/score(?:\s+@?(\S+))?/, async (msg, match) => {
-  const chatId = msg.chat.id
-  const handle = match?.[1]?.replace('@', '')
-
-  if (!handle) {
-    await bot.sendMessage(chatId,
-      `<b>Builder Score 🟦</b>\n\nUsage: <code>/score @handle</code>\n\nExample: <code>/score jessepollak</code>`,
-      { parse_mode: 'HTML' } as any
-    )
-    return
+// Check if handle has a Bankr agent profile → +10 bonus
+async function checkBankrProfileBonus(handle: string): Promise<boolean> {
+  try {
+    const h = handle.toLowerCase().replace('@', '')
+    // Search agents list for this twitter handle
+    const res = await axios.get(`https://api.bankr.bot/agents?limit=100`, {
+      headers: { 'x-api-key': BANKR_API_KEY },
+      timeout: 5000
+    })
+    const agents = res.data?.agents || res.data || []
+    return agents.some((a: any) => {
+      const twitter = (a.twitterUsername || a.twitter || '').toLowerCase().replace('@', '')
+      const name = (a.projectName || a.name || '').toLowerCase()
+      return twitter === h || name === h
+    })
+  } catch {
+    return false
   }
+}
 
+// Recalculate tier from score
+function getTier(score: number): string {
+  if (score >= 86) return 'Legend'
+  if (score >= 71) return 'Founder'
+  if (score >= 51) return 'Shipper'
+  if (score >= 31) return 'Builder'
+  return 'Explorer'
+}
+
+// /score — Builder Score from X handle
+async function runBuilderScore(chatId: number, handle: string) {
   bot.sendChatAction(chatId, 'typing').catch(() => {})
   const typingInterval = setInterval(() => bot.sendChatAction(chatId, 'typing').catch(() => {}), 4000)
 
@@ -809,7 +940,7 @@ Builder focus: X/25
 Community: X/25
 SUMMARY: one sentence`
 
-    // Retry up to 3 times for /score
+    // Retry up to 3 times via Bankr Agent (same as production)
     let result = ''
     for (let attempt = 1; attempt <= 3; attempt++) {
       result = await askBankrAgent(prompt, 25)
@@ -819,31 +950,46 @@ SUMMARY: one sentence`
     }
 
     if (result) {
-      // Parse score from response
+      // Parse score components
       const scoreMatch = result.match(/SCORE:\s*(\d+)\/100/i)
       const tierMatch = result.match(/TIER:\s*(\w+)/i)
       const summaryMatch = result.match(/SUMMARY:\s*(.+)/i)
 
-      const score = scoreMatch ? parseInt(scoreMatch[1]) : null
+      let score = scoreMatch ? parseInt(scoreMatch[1]) : null
       const tier = tierMatch ? tierMatch[1] : null
       const summary = summaryMatch ? summaryMatch[1].trim() : null
+
+      // Check Bankr builder profile bonus (+10, max 100)
+      const hasBankrProfile = await checkBankrProfileBonus(handle)
+      let bankrBonus = 0
+      if (hasBankrProfile && score !== null) {
+        bankrBonus = Math.min(10, 100 - score)
+        score = Math.min(100, score + bankrBonus)
+      }
+
+      // Recalculate tier after bonus
+      const finalTier = score !== null ? getTier(score) : (tier || 'Explorer')
 
       const tierEmoji: Record<string, string> = {
         explorer: '🌱', builder: '🔨', shipper: '⚡', founder: '🚀', legend: '🏆'
       }
-      const emoji = tier ? (tierEmoji[tier.toLowerCase()] || '🟦') : '🟦'
+      const emoji = tierEmoji[finalTier.toLowerCase()] || '🟦'
+
+      // Build output same format as production + bonus line
+      const cleanResult = formatAgentReply(result
+        .replace(/SCORE:.*\n?/i, '')
+        .replace(/TIER:.*\n?/i, '')
+        .replace(/SUMMARY:.*\n?/i, '')
+        .trim())
 
       const output = score !== null
         ? `<b>🟦 Builder Score</b>\n` +
           `<b>@${handle}</b>\n` +
           `──────────────\n` +
           `Score: <b>${score}/100</b> ${emoji}\n` +
-          `Tier: <b>${tier || 'Unknown'}</b>\n\n` +
-          formatAgentReply(result
-            .replace(/SCORE:.*\n?/i, '')
-            .replace(/TIER:.*\n?/i, '')
-            .replace(/SUMMARY:.*\n?/i, '')
-            .trim()) +
+          `Tier: <b>${finalTier}</b>\n\n` +
+          cleanResult +
+          (hasBankrProfile ? `\n\n🟦 Bankr builder: <b>+${bankrBonus} bonus</b>` : '') +
           (summary ? `\n\n💡 ${summary}` : '') +
           `\n──────────────\n` +
           `<i>Powered by Blue Agent 🟦 · Blocky Studio</i>`
@@ -864,6 +1010,19 @@ SUMMARY: one sentence`
   } finally {
     clearInterval(typingInterval)
   }
+}
+
+bot.onText(/\/score(?:\s+@?(\S+))?/, async (msg, match) => {
+  const chatId = msg.chat.id
+  const handle = match?.[1]?.replace('@', '')
+  if (!handle) {
+    await bot.sendMessage(chatId,
+      `<b>Builder Score 🟦</b>\n\nUsage: <code>/score @handle</code>\n\nExample: <code>/score jessepollak</code>`,
+      { parse_mode: 'HTML' } as any
+    )
+    return
+  }
+  await runBuilderScore(chatId, handle)
 })
 
 // /news — public X builder feed
@@ -914,6 +1073,280 @@ bot.onText(/\/news/, async (msg) => {
 })
 
 // =======================
+// V2.0 COMMAND HANDLERS
+// =======================
+
+const MENU_TEXT = `🟦 <b>Blue Agent</b> — Control Panel\n\nWhat do you need?`
+
+const MENU_KEYBOARD = {
+  inline_keyboard: [
+    [{ text: '📰 News', callback_data: 'menu_news' }, { text: '🔍 Score', callback_data: 'menu_score' }, { text: '🚀 Launch', callback_data: 'menu_launch' }],
+    [{ text: '🎁 Rewards', callback_data: 'menu_rewards' }, { text: '🔗 Refer', callback_data: 'menu_refer' }, { text: '🏆 Top', callback_data: 'menu_leaderboard' }],
+    [{ text: '💰 Wallet', callback_data: 'menu_wallet' }, { text: '📝 Submit', callback_data: 'menu_submit' }, { text: '📁 Projects', callback_data: 'menu_projects' }],
+    [{ text: '👤 Profile', callback_data: 'menu_profile' }, { text: '❓ Help', callback_data: 'menu_help' }, { text: '❌ Close', callback_data: 'menu_close' }],
+  ]
+}
+
+// Build profile text for a user
+function buildProfileText(user: User, rank: number, projectCount: number): string {
+  const wallet = user.evmAddress
+    ? `💳 <code>${user.evmAddress.slice(0, 6)}...${user.evmAddress.slice(-4)}</code>`
+    : '💳 No wallet connected'
+  const xHandle = user.xHandle ? `🐦 @${user.xHandle.replace('@', '')}` : '🐦 No X handle set'
+  const points = user.points || 0
+  const referrals = 0 // loaded separately
+  return (
+    `<b>👤 My Profile</b>\n` +
+    `──────────────\n` +
+    `${wallet}\n` +
+    `${xHandle}\n` +
+    `──────────────\n` +
+    `⭐ Points: <b>${points}</b>\n` +
+    `📝 Projects: <b>${projectCount}</b>\n` +
+    `🏆 Rank: <b>#${rank}</b>\n` +
+    `──────────────\n` +
+    `<i>Joined: ${user.joinedAt ? new Date(user.joinedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown'}</i>`
+  )
+}
+
+// Back + Close row to append to any sub-menu
+const NAV_ROW = [{ text: '← Back', callback_data: 'nav_back' }, { text: '❌ Close', callback_data: 'menu_close' }]
+
+// Edit existing message with new content (clean, no spam)
+async function editMenu(query: any, text: string, keyboard: any) {
+  try {
+    await bot.editMessageText(text, {
+      chat_id: query.message.chat.id,
+      message_id: query.message.message_id,
+      parse_mode: 'HTML',
+      reply_markup: keyboard
+    } as any)
+  } catch {
+    // If can't edit (too old), send new message
+    await bot.sendMessage(query.message.chat.id, text, {
+      parse_mode: 'HTML',
+      reply_markup: keyboard
+    } as any)
+  }
+}
+
+bot.onText(/\/menu/, async (msg) => {
+  const chatId = msg.chat.id
+  await bot.sendMessage(chatId,
+    `🟦 <b>Blue Agent</b> — Control Panel\n\nWhat do you need?`,
+    { parse_mode: 'HTML', reply_markup: MENU_KEYBOARD } as any
+  )
+})
+
+const WALLET_KEYBOARD = {
+  inline_keyboard: [
+    [{ text: '💱 Swap', callback_data: 'wallet_swap' }, { text: '📤 Send', callback_data: 'wallet_send' }, { text: '📊 Portfolio', callback_data: 'wallet_portfolio' }],
+    [{ text: '🔄 DCA', callback_data: 'wallet_dca' }, { text: '📈 Limit Order', callback_data: 'wallet_limit' }, { text: '🔴 Stop Loss', callback_data: 'wallet_stoploss' }],
+    [{ text: '🖼️ NFTs', callback_data: 'wallet_nfts' }, { text: '🎯 Polymarket', callback_data: 'wallet_polymarket' }, { text: '🔀 Bridge', callback_data: 'wallet_bridge' }],
+    [{ text: '📋 My Tokens', callback_data: 'wallet_tokens' }, { text: '➕ Create Wallet', callback_data: 'wallet_create' }],
+  ]
+}
+
+bot.onText(/\/profile/, async (msg) => {
+  const chatId = msg.chat.id
+  const userId = msg.from?.id || chatId
+  const users = loadUsers()
+  const user = users[userId] || { id: userId, points: 0, joinedAt: Date.now() }
+
+  // Calc rank by points
+  const sorted = Object.values(users).sort((a: any, b: any) => (b.points || 0) - (a.points || 0))
+  const rank = sorted.findIndex((u: any) => u.id === userId) + 1 || sorted.length + 1
+
+  // Count user projects
+  const projectCount = loadProjects().filter(p => p.submitterId === userId).length
+
+  const profileText = buildProfileText(user, rank, projectCount)
+  const hasWallet = user.walletConnected && user.bankrApiToken
+  const points = user.points || 0
+  const canClaim = points >= 100
+
+  await bot.sendMessage(chatId, profileText, {
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: user.xHandle ? '✏️ Edit X Handle' : '🐦 Set X Handle', callback_data: 'profile_set_x' },
+          { text: hasWallet ? '💳 Wallet ✅' : '💳 Connect Wallet', callback_data: 'menu_wallet' }
+        ],
+        [{ text: canClaim ? `🎁 Claim $BLUEAGENT (${points} pts)` : `🎁 Claim (need 100 pts)`, callback_data: canClaim ? 'profile_claim' : 'profile_claim_locked' }],
+      ]
+    }
+  } as any)
+})
+
+bot.onText(/\/wallet/, async (msg) => {
+  const chatId = msg.chat.id
+  const userId = msg.from?.id || chatId
+  const users2 = loadUsers()
+  const user2 = users2[userId]
+  const connected = user2?.walletConnected && user2?.bankrApiToken
+  const statusLine = connected
+    ? `<b>👛 Wallet &amp; Trade</b>\n✅ Wallet connected\n<i>Powered by Bankr 🟦</i>`
+    : `<b>👛 Wallet &amp; Trade</b>\n⚠️ No wallet yet — connect to use actions\n<i>Powered by Bankr 🟦</i>`
+  await bot.sendMessage(chatId, statusLine, {
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [
+        ...WALLET_KEYBOARD.inline_keyboard,
+      ]
+    }
+  } as any)
+})
+
+bot.onText(/\/rewards/, async (msg) => {
+  const chatId = msg.chat.id
+  const userId = msg.from?.id || chatId
+  const users = loadUsers()
+  const user = users[userId] || {}
+  const points = user.points || 0
+  const referrals = loadReferrals().filter(r => r.referrerId === userId).length
+
+  await bot.sendMessage(chatId,
+    `<b>🎁 Rewards Hub</b>\n\n` +
+    `⭐ Your Points: <b>${points}</b>\n` +
+    `👥 Referrals made: <b>${referrals}</b>\n\n` +
+    `<b>How to earn points:</b>\n` +
+    `• Refer a friend → +50 pts\n` +
+    `• Submit a project → +20 pts\n` +
+    `• Top 10 leaderboard → +100 pts\n\n` +
+    `<b>Score Tiers:</b>\n` +
+    `🔵 Explorer: 0–30\n` +
+    `🟢 Builder: 31–50\n` +
+    `🟡 Shipper: 51–70\n` +
+    `🟠 Founder: 71–85\n` +
+    `🔴 Legend: 86–100`,
+    { parse_mode: 'HTML' } as any
+  )
+})
+
+bot.onText(/\/refer/, async (msg) => {
+  const chatId = msg.chat.id
+  const userId = msg.from?.id || chatId
+  const referrals = loadReferrals().filter(r => r.referrerId === userId)
+  const refLink = `https://t.me/Blockyagent_beta_bot?start=ref_${userId}`
+
+  await bot.sendMessage(chatId,
+    `<b>👥 Referral System</b>\n\n` +
+    `Your referral link:\n<code>${refLink}</code>\n\n` +
+    `📊 <b>Your Stats:</b>\n` +
+    `• Total referrals: <b>${referrals.length}</b>\n` +
+    `• Points earned: <b>${referrals.length * 50}</b>\n\n` +
+    `Share your link and earn <b>50 points</b> per referral! 🎉`,
+    { parse_mode: 'HTML' } as any
+  )
+})
+
+bot.onText(/\/leaderboard/, async (msg) => {
+  const chatId = msg.chat.id
+  const userId2 = msg.from?.id || chatId
+  const users = loadUsers()
+  const sorted = Object.values(users)
+    .filter((u: any) => (u.points || 0) > 0)
+    .sort((a: any, b: any) => (b.points || 0) - (a.points || 0))
+    .slice(0, 10)
+
+  const medals = ['🥇', '🥈', '🥉']
+  const lines = sorted.map((u: any, i: number) => {
+    const medal = medals[i] || `${i + 1}.`
+    const name = u.xHandle ? `@${u.xHandle}` : u.telegramUsername ? `@${u.telegramUsername}` : u.telegramName || 'Builder'
+    return `${medal} ${name} — <b>${u.points || 0} pts</b>`
+  })
+  const myPoints = users[userId2]?.points || 0
+  const myRank = Object.values(users).sort((a: any, b: any) => (b.points || 0) - (a.points || 0)).findIndex((u: any) => u.id === userId2) + 1
+
+  await bot.sendMessage(chatId,
+    `<b>🏆 Top Builders</b>\n\n` +
+    (lines.length ? lines.join('\n') : 'No points yet. Start earning!') +
+    `\n\n──────────────\nYou: <b>#${myRank || '—'} · ${myPoints} pts</b>`,
+    { parse_mode: 'HTML' } as any
+  )
+})
+
+bot.onText(/\/submit/, async (msg) => {
+  const chatId = msg.chat.id
+  const userId = msg.from?.id || chatId
+  submitSessions.set(userId, { step: 1 })
+  await bot.sendMessage(chatId,
+    `<b>📝 Submit Your Project</b>\n\nStep 1/4: What is your project name?`,
+    { parse_mode: 'HTML' } as any
+  )
+})
+
+bot.onText(/\/projects/, async (msg) => {
+  const chatId = msg.chat.id
+  const projects = loadProjects()
+
+  if (!projects.length) {
+    await bot.sendMessage(chatId, '📁 No projects yet. Be the first to /submit!')
+    return
+  }
+
+  for (const proj of projects.slice(0, 5)) {
+    const submitter = proj.submitterUsername ? `@${proj.submitterUsername}` : 'Anonymous'
+    await bot.sendMessage(chatId,
+      `<b>${proj.name}</b>\n${proj.description}\n🔗 ${proj.url}\n👤 by ${submitter} | 👍 ${proj.votes} votes`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: [[{ text: `👍 Vote (${proj.votes})`, callback_data: `vote_${proj.id}` }]] }
+      } as any
+    )
+  }
+})
+
+bot.onText(/\/stats/, async (msg) => {
+  const chatId = msg.chat.id
+  bot.sendChatAction(chatId, 'typing').catch(() => {})
+
+  try {
+    const res = await axios.get('https://api.bankr.bot/agent/profile', {
+      headers: { 'x-api-key': BANKR_API_KEY },
+      timeout: 8000
+    })
+    const d = res.data
+
+    const mcap = d.marketCapUsd
+      ? `$${Number(d.marketCapUsd).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+      : 'N/A'
+    const rev = d.weeklyRevenueWeth
+      ? `${parseFloat(d.weeklyRevenueWeth).toFixed(4)} ETH`
+      : 'N/A'
+    const token = d.tokenSymbol ? `$${d.tokenSymbol.toUpperCase()}` : '$BLUEAGENT'
+    const products = (d.products || []).map((p: any) => `• ${p.name}`).join('\n')
+    const team = (d.teamMembers || []).map((m: any) => `• ${m.name} — ${m.role}`).join('\n')
+    const latestUpdate = d.projectUpdates?.[0]
+
+    await bot.sendMessage(chatId,
+      `<b>📈 ${d.projectName || 'Blue Agent'}</b>\n` +
+      `<i>${d.description || ''}</i>\n` +
+      `──────────────\n` +
+      `💎 Token: <b>${token}</b>\n` +
+      `📊 MCap: <b>${mcap}</b>\n` +
+      `💰 Weekly Revenue: <b>${rev}</b>\n` +
+      `──────────────\n` +
+      `🛠 Products:\n${products}\n` +
+      `──────────────\n` +
+      `👥 Team:\n${team}\n` +
+      (latestUpdate ? `──────────────\n📣 Latest: <b>${latestUpdate.title}</b>\n<i>${latestUpdate.content.slice(0, 120)}...</i>\n` : '') +
+      `──────────────\n` +
+      `<i>Powered by Bankr 🟦 · bankr.bot/agents/blue-agent</i>`,
+      { parse_mode: 'HTML', disable_web_page_preview: true } as any
+    )
+  } catch {
+    await bot.sendMessage(chatId, '⚠️ Could not fetch stats. Try again!')
+  }
+})
+
+bot.onText(/\/agents(?:\s+(\S+))?/, async (msg, match) => {
+  const chatId = msg.chat.id
+  const sort = match?.[1]?.trim() || 'mcap'
+  await sendAgentsLeaderboard(chatId, sort)
+})
+
 // =======================
 // CALLBACK QUERY HANDLER (for inline buttons)
 // =======================
@@ -922,6 +1355,344 @@ bot.on('callback_query', async (query) => {
   const data = query.data
   if (!chatId || !data) return
   await bot.answerCallbackQuery(query.id).catch(() => {})
+
+  const userId = query.from?.id || 0
+
+  if (data === 'noop') { return }
+
+  // Close — delete the menu message
+  if (data === 'menu_close') {
+    try { await bot.deleteMessage(chatId, query.message?.message_id!) } catch {}
+    return
+  }
+
+  // Back — return to main menu
+  if (data === 'nav_back') {
+    await editMenu(query, MENU_TEXT, MENU_KEYBOARD)
+    return
+  }
+
+  // Open menu from /start button
+  if (data === 'open_menu') {
+    await bot.sendMessage(chatId, MENU_TEXT, { parse_mode: 'HTML', reply_markup: MENU_KEYBOARD } as any)
+    return
+  }
+
+  // MENU callbacks — execute directly
+  // PROFILE callbacks
+  if (data === 'menu_profile') {
+    const users2 = loadUsers()
+    const user2 = users2[userId] || { id: userId, points: 0, joinedAt: Date.now() }
+    const sorted2 = Object.values(users2).sort((a: any, b: any) => (b.points || 0) - (a.points || 0))
+    const rank2 = sorted2.findIndex((u: any) => u.id === userId) + 1 || sorted2.length + 1
+    const projectCount2 = loadProjects().filter(p => p.submitterId === userId).length
+    const profileText2 = buildProfileText(user2, rank2, projectCount2)
+    const hasWallet2 = user2.walletConnected && user2.bankrApiToken
+    const points2 = user2.points || 0
+    const canClaim2 = points2 >= 100
+    await editMenu(query, profileText2, {
+      inline_keyboard: [
+        [
+          { text: user2.xHandle ? '✏️ Edit X Handle' : '🐦 Set X Handle', callback_data: 'profile_set_x' },
+          { text: hasWallet2 ? '💳 Wallet ✅' : '💳 Connect Wallet', callback_data: 'menu_wallet' }
+        ],
+        [{ text: canClaim2 ? `🎁 Claim $BLUEAGENT (${points2} pts)` : `🎁 Claim (need 100 pts)`, callback_data: canClaim2 ? 'profile_claim' : 'profile_claim_locked' }],
+        NAV_ROW
+      ]
+    })
+    return
+  }
+  if (data === 'profile_set_x') {
+    xHandleSessions.set(userId, true)
+    await editMenu(query,
+      `<b>🐦 Set X Handle</b>\n\nEnter your X/Twitter handle:\n<i>(e.g. madebyshun)</i>`,
+      { inline_keyboard: [NAV_ROW] }
+    )
+    return
+  }
+  if (data === 'profile_claim_locked') {
+    await bot.answerCallbackQuery(query.id, { text: '⚠️ Need at least 100 points to claim!', show_alert: true })
+    return
+  }
+  if (data === 'profile_claim') {
+    const users2 = loadUsers()
+    const user2 = users2[userId]
+    if (!user2?.walletConnected || !user2?.bankrApiToken) {
+      await bot.answerCallbackQuery(query.id, { text: '💳 Connect your wallet first!', show_alert: true })
+      return
+    }
+    const points2 = user2.points || 0
+    if (points2 < 100) {
+      await bot.answerCallbackQuery(query.id, { text: '⚠️ Need at least 100 points!', show_alert: true })
+      return
+    }
+    // Stub — coming soon
+    await editMenu(query,
+      `<b>🎁 Claim $BLUEAGENT</b>\n\n⏳ Coming soon!\n\nYour <b>${points2} points</b> will convert to $BLUEAGENT and send directly to your wallet.\n\n<i>Onchain claim launching soon 🟦</i>`,
+      { inline_keyboard: [NAV_ROW] }
+    )
+    return
+  }
+
+  if (data === 'menu_score') {
+    scoreSessions.set(userId, true)
+    await editMenu(query,
+      `<b>📊 Builder Score</b>\n\nEnter your X/Twitter handle:\n<i>(e.g. jessepollak or @jessepollak)</i>`,
+      { inline_keyboard: [NAV_ROW] }
+    )
+    return
+  }
+  if (data === 'menu_wallet') {
+    const users2 = loadUsers()
+    const user2 = users2[userId]
+    const connected = user2?.walletConnected && user2?.bankrApiToken
+    const statusLine = connected
+      ? `<b>👛 Wallet &amp; Trade</b>\n✅ Wallet connected\n<i>Powered by Bankr 🟦</i>`
+      : `<b>👛 Wallet &amp; Trade</b>\n⚠️ No wallet yet — connect to use actions\n<i>Powered by Bankr 🟦</i>`
+    await editMenu(query, statusLine, {
+      inline_keyboard: [
+        ...WALLET_KEYBOARD.inline_keyboard,
+        NAV_ROW
+      ]
+    })
+    return
+  }
+  if (data === 'menu_rewards') {
+    const users2 = loadUsers()
+    const user2 = users2[userId] || {}
+    const points = user2.points || 0
+    const refCount = loadReferrals().filter(r => r.referrerId === userId).length
+    const projCount = loadProjects().filter(p => p.submitterId === userId).length
+    const projVotes = loadProjects().filter(p => p.submitterId === userId).reduce((sum, p) => sum + p.votes, 0)
+    const canClaim = points >= 100
+
+    // Points breakdown
+    const fromRefs = refCount * 50
+    const fromProjs = projCount * 20
+    const fromVotes = projVotes * 2
+    const fromJoin = 5 // join bonus
+
+    await editMenu(query,
+      `<b>🎁 Rewards Hub</b>\n` +
+      `──────────────\n` +
+      `⭐ Total Points: <b>${points}</b>\n` +
+      (canClaim ? `✅ Ready to claim!\n` : `⏳ Need ${100 - points} more to claim\n`) +
+      `──────────────\n` +
+      `<b>📊 Breakdown:</b>\n` +
+      `• Joined: +5 pts\n` +
+      `• Referrals (${refCount}x): +${fromRefs} pts\n` +
+      `• Projects (${projCount}x): +${fromProjs} pts\n` +
+      `• Votes received (${projVotes}x): +${fromVotes} pts\n` +
+      `──────────────\n` +
+      `<b>🔑 How to earn more:</b>\n` +
+      `• Refer a builder → +50\n` +
+      `• Submit project → +20\n` +
+      `• Get voted → +2/vote\n` +
+      `──────────────\n` +
+      `<i>100 pts = claim $BLUEAGENT 🟦</i>`,
+      {
+        inline_keyboard: [
+          [{ text: canClaim ? '🎁 Claim $BLUEAGENT' : `🎁 Claim (${points}/100 pts)`, callback_data: canClaim ? 'profile_claim' : 'profile_claim_locked' }],
+          NAV_ROW
+        ]
+      }
+    )
+    return
+  }
+  if (data === 'menu_refer') {
+    const refCount = loadReferrals().filter(r => r.referrerId === userId).length
+    const refLink = `https://t.me/Blockyagent_beta_bot?start=ref_${userId}`
+    await editMenu(query,
+      `<b>👥 Referral System</b>\n\nYour referral link:\n<code>${refLink}</code>\n\n📊 <b>Your Stats:</b>\n• Total referrals: <b>${refCount}</b>\n• Points earned: <b>${refCount * 50}</b>\n\nShare your link and earn <b>50 points</b> per referral! 🎉`,
+      { inline_keyboard: [NAV_ROW] }
+    )
+    return
+  }
+  if (data === 'menu_leaderboard') {
+    const users2 = loadUsers()
+    const allSorted = Object.values(users2).sort((a: any, b: any) => (b.points || 0) - (a.points || 0))
+    const top10 = allSorted.slice(0, 10)
+    const medals = ['🥇', '🥈', '🥉']
+    const userRank = allSorted.findIndex((u: any) => u.id === userId) + 1
+    const lines = top10.map((u: any, i: number) => {
+      const medal = medals[i] || `${i + 1}.`
+      const name = u.xHandle ? `@${u.xHandle}` : u.telegramUsername ? `@${u.telegramUsername}` : u.telegramName || `Builder`
+      const isMe = u.id === userId ? ' 👈' : ''
+      return `${medal} ${name} — <b>${u.points || 0} pts</b>${isMe}`
+    })
+    const myPoints = users2[userId]?.points || 0
+    await editMenu(query,
+      `<b>🏆 Top Builders</b>\n` +
+      `──────────────\n` +
+      (lines.length ? lines.join('\n') : 'No points yet. Be the first!') +
+      `\n──────────────\n` +
+      `You: <b>#${userRank || '—'} · ${myPoints} pts</b>\n\n` +
+      `<i>Earn pts: refer (+50), submit (+20), get voted (+2)</i>`,
+      {
+        inline_keyboard: [
+          [{ text: '🔗 Refer & Earn', callback_data: 'menu_refer' }, { text: '📝 Submit Project', callback_data: 'menu_submit' }],
+          NAV_ROW
+        ]
+      }
+    )
+    return
+  }
+  if (data === 'menu_submit') {
+    submitSessions.set(userId, { step: 1 })
+    await editMenu(query,
+      `<b>📝 Submit Your Project</b>\n\n` +
+      `Share what you're building on Base!\n` +
+      `+20 pts when submitted ⭐\n\n` +
+      `Step 1/4: What is your <b>project name</b>?`,
+      { inline_keyboard: [NAV_ROW] }
+    )
+    return
+  }
+  if (data === 'menu_projects' || data === 'projects_newest' || data === 'projects_top' || data === 'projects_mine') {
+    const projects2 = loadProjects()
+    if (!projects2.length) {
+      await editMenu(query,
+        `<b>📁 Builder Directory</b>\n\nNo projects yet. Be the first to build!`,
+        { inline_keyboard: [[{ text: '📝 Submit Project', callback_data: 'menu_submit' }], NAV_ROW] }
+      )
+      return
+    }
+    // Sort projects
+    let sorted2 = [...projects2]
+    let sortLabel = '🆕 Newest'
+    if (data === 'projects_top') {
+      sorted2 = sorted2.sort((a, b) => b.votes - a.votes)
+      sortLabel = '🔥 Most Voted'
+    } else if (data === 'projects_mine') {
+      sorted2 = sorted2.filter(p => p.submitterId === userId)
+      sortLabel = '👤 My Projects'
+    } else {
+      sorted2 = sorted2.sort((a, b) => b.timestamp - a.timestamp)
+    }
+
+    await editMenu(query,
+      `<b>📁 Builder Directory</b>\n${sortLabel} · ${sorted2.length} project${sorted2.length !== 1 ? 's' : ''}`,
+      {
+        inline_keyboard: [
+          [{ text: '🆕 Newest', callback_data: 'projects_newest' }, { text: '🔥 Most Voted', callback_data: 'projects_top' }, { text: '👤 Mine', callback_data: 'projects_mine' }],
+          NAV_ROW
+        ]
+      }
+    )
+    // Send project cards separately
+    for (const proj of sorted2.slice(0, 5)) {
+      const submitter = proj.submitterUsername ? `@${proj.submitterUsername}` : 'Anonymous'
+      const alreadyVoted = proj.voters.includes(userId)
+      await bot.sendMessage(chatId,
+        `<b>${proj.name}</b>\n${proj.description}\n🔗 ${proj.url}\n👤 ${submitter} | 👍 ${proj.votes}`,
+        {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [[
+            { text: alreadyVoted ? `✅ Voted (${proj.votes})` : `👍 Vote (${proj.votes})`, callback_data: alreadyVoted ? 'noop' : `vote_${proj.id}` }
+          ]]}
+        } as any
+      )
+    }
+    return
+  }
+  if (data === 'menu_agents') { await sendAgentsLeaderboard(chatId, 'mcap'); return }
+  if (data === 'menu_news') {
+    await editMenu(query, `<b>📡 Base Builder Feed</b>\n\n⏳ Fetching latest updates...`, { inline_keyboard: [NAV_ROW] })
+    bot.sendChatAction(chatId, 'typing').catch(() => {})
+    const typingInterval2 = setInterval(() => bot.sendChatAction(chatId, 'typing').catch(() => {}), 4000)
+    try {
+      const TOP_ACCOUNTS = '@jessepollak, @base, @buildonbase, @bankrbot, @virtuals_io, @coinbase, @brian_armstrong'
+      const xPrompt = `Latest updates from Base builders today. Check: ${TOP_ACCOUNTS}. Show all notable updates, one line each. End with one key insight about the trend.`
+      let result = await askBankrAgent(xPrompt, 25)
+      if (!result) result = await askLLM([{ role: 'user', content: `Latest updates from Base builders today: ${TOP_ACCOUNTS}. List top 5 highlights, one line each.` }])
+      if (result) {
+        const now = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        const output = `<b>📡 Base Builder Feed</b>\n<i>${now} · tracked by Blue Agent 🟦</i>\n─────────────────\n\n${formatAgentReply(result)}\n\n─────────────────\n<i>Follow @blocky_agent for daily updates</i>`
+        await bot.sendMessage(chatId, output, { parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: { inline_keyboard: [NAV_ROW] } } as any)
+      } else {
+        await bot.sendMessage(chatId, '⚠️ Couldn\'t fetch updates. Try again!', { reply_markup: { inline_keyboard: [NAV_ROW] } } as any)
+      }
+    } catch { await bot.sendMessage(chatId, '⚠️ Something went wrong. Try again!') }
+    finally { clearInterval(typingInterval2) }
+    return
+  }
+  if (data === 'menu_help') {
+    await editMenu(query,
+      `<b>Blue Agent 🟦 — What I can do</b>\n\n` +
+      `📊 <b>Market Data</b>\n• "ETH price?" / "$BLUEAGENT price?"\n• "What's trending on Base?"\n\n` +
+      `💱 <b>Trading</b>\n• "Swap 10 USDC to ETH"\n• "Buy $BLUEAGENT"\n\n` +
+      `🔍 <b>Builders</b>\n• "Who's building AI agents on Base?"\n• "Latest from @jessepollak"\n\n` +
+      `<b>Commands:</b> /score /news /launch /wallet /refer /leaderboard /submit /projects /stats /agents\n\n` +
+      `<i>No commands needed — just chat!</i>`,
+      { inline_keyboard: [NAV_ROW] }
+    )
+    return
+  }
+  if (data === 'menu_launch') {
+    launchSessions.set(userId, { step: 'name' })
+    await editMenu(query,
+      `🚀 <b>Token Launch Wizard</b>\n\nI'll walk you through deploying a new token on Base.\n\n📌 Enter your <b>token name</b> (e.g. Blue Agent):`,
+      { inline_keyboard: [NAV_ROW] }
+    )
+    return
+  }
+
+  // AGENTS sort callbacks
+  if (data === 'agents_mcap') { await sendAgentsLeaderboard(chatId, 'mcap'); return }
+  if (data === 'agents_revenue') { await sendAgentsLeaderboard(chatId, 'revenue'); return }
+  if (data === 'agents_newest') { await sendAgentsLeaderboard(chatId, 'newest'); return }
+
+  // VOTE callbacks
+  if (data.startsWith('vote_')) {
+    const projId = data.replace('vote_', '')
+    const projects = loadProjects()
+    const proj = projects.find(p => p.id === projId)
+    if (!proj) { await bot.answerCallbackQuery(query.id, { text: 'Project not found' }); return }
+    if (proj.voters.includes(userId)) { await bot.answerCallbackQuery(query.id, { text: '✅ Already voted!' }); return }
+    proj.votes++
+    proj.voters.push(userId)
+    saveProjects(projects)
+    await bot.answerCallbackQuery(query.id, { text: `👍 Voted! Total: ${proj.votes}` })
+    return
+  }
+
+  // WALLET action callbacks
+  if (data === 'wallet_create') {
+    walletSessions.set(userId, { step: 'email' })
+    await bot.sendMessage(chatId, `<b>➕ Create Bankr Wallet</b>\n\nEnter your Bankr email to connect via OTP:`, { parse_mode: 'HTML' } as any)
+    return
+  }
+
+  const walletActions: Record<string, string> = {
+    wallet_swap: 'I want to swap tokens on Base',
+    wallet_send: 'I want to send crypto',
+    wallet_portfolio: 'Show my full portfolio and balances',
+    wallet_dca: 'Set up DCA recurring buy for me',
+    wallet_limit: 'I want to set a limit order',
+    wallet_stoploss: 'I want to set a stop loss',
+    wallet_nfts: 'Show my NFT portfolio',
+    wallet_polymarket: 'I want to bet on Polymarket',
+    wallet_bridge: 'I want to bridge assets to Base',
+    wallet_tokens: 'Show my token balances and any claimable fees',
+  }
+  if (data in walletActions) {
+    const users2 = loadUsers()
+    const user2 = users2[userId]
+    if (!user2?.bankrApiToken) {
+      await bot.sendMessage(chatId,
+        `⚠️ <b>Wallet not connected</b>\n\nYou need a Bankr wallet to use this feature.\n\nTap below to create one:`,
+        {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [[{ text: '➕ Create Wallet on Bankr', callback_data: 'wallet_create' }]] }
+        } as any
+      )
+      return
+    }
+    await bot.sendMessage(chatId, `Processing... ⏳`)
+    const result = await askBankrAgent(walletActions[data])
+    await bot.sendMessage(chatId, result || '⚠️ Could not complete action. Try again.', { parse_mode: 'HTML' } as any)
+    return
+  }
 
   // Fee type selection for /launch
   if (['fee_x', 'fee_farcaster', 'fee_ens', 'fee_wallet', 'fee_skip'].includes(data)) {
@@ -968,6 +1739,7 @@ bot.on('message', async (msg) => {
   const userId = msg.from?.id || chatId
   const text = msg.text?.trim()
 
+
   if (!text || text.startsWith('/')) return
 
   // Launch wizard takes priority
@@ -976,11 +1748,182 @@ bot.on('message', async (msg) => {
     return
   }
 
+  // X Handle session
+  if (xHandleSessions.has(userId)) {
+    xHandleSessions.delete(userId)
+    const handle = text.replace('@', '').trim()
+    if (!handle) {
+      await bot.sendMessage(chatId, '⚠️ Invalid handle. Try again with /profile')
+      return
+    }
+    const users2 = loadUsers()
+    if (!users2[userId]) users2[userId] = { id: userId, points: 0, joinedAt: Date.now() }
+    users2[userId].xHandle = handle
+    users2[userId].telegramUsername = msg.from?.username
+    users2[userId].telegramName = msg.from?.first_name
+    saveUsers(users2)
+    await bot.sendMessage(chatId,
+      `✅ X handle set: <b>@${handle}</b>\n\nUse /profile to view your profile.`,
+      { parse_mode: 'HTML' } as any
+    )
+    return
+  }
+
+  // Score session — waiting for handle
+  if (scoreSessions.has(userId)) {
+    scoreSessions.delete(userId)
+    const handle = text.replace('@', '').trim()
+    if (!handle) {
+      await bot.sendMessage(chatId, '⚠️ Invalid handle. Try again!')
+      return
+    }
+    await runBuilderScore(chatId, handle)
+    return
+  }
+
+  // Wallet OTP flow
+  if (walletSessions.has(userId)) {
+    const session = walletSessions.get(userId)!
+    if (session.step === 'email') {
+      const email = text.trim()
+      try {
+        await axios.post('https://api.bankr.bot/auth/send-otp', { email },
+          { headers: { 'x-api-key': BANKR_API_KEY, 'content-type': 'application/json' }, timeout: 10000 }
+        )
+        session.step = 'otp'
+        session.email = email
+        walletSessions.set(userId, session)
+        await bot.sendMessage(chatId, `✅ OTP sent to <b>${email}</b>\n\nEnter the OTP code:`, { parse_mode: 'HTML' } as any)
+      } catch {
+        walletSessions.delete(userId)
+        await bot.sendMessage(chatId, '❌ Could not send OTP. Check your email and try /wallet again.')
+      }
+      return
+    }
+    if (session.step === 'otp') {
+      const otp = text.trim()
+      try {
+        const res = await axios.post('https://api.bankr.bot/auth/verify-otp',
+          { email: session.email, otp },
+          { headers: { 'x-api-key': BANKR_API_KEY, 'content-type': 'application/json' }, timeout: 10000 }
+        )
+        const token = res.data?.token || res.data?.apiToken || res.data?.accessToken
+        if (token) {
+          const users = loadUsers()
+          if (!users[userId]) users[userId] = { id: userId, points: 0 }
+          users[userId].bankrApiToken = token
+          users[userId].walletConnected = true
+          users[userId].telegramUsername = msg.from?.username
+          users[userId].telegramName = msg.from?.first_name
+          saveUsers(users)
+          walletSessions.delete(userId)
+          await bot.sendMessage(chatId,
+            `✅ <b>Wallet Connected!</b>\n\nYour Bankr wallet is now linked. Use /wallet to access onchain actions.`,
+            { parse_mode: 'HTML' } as any
+          )
+        } else {
+          throw new Error('No token')
+        }
+      } catch {
+        walletSessions.delete(userId)
+        await bot.sendMessage(chatId, '❌ Invalid OTP. Try /wallet again.')
+      }
+      return
+    }
+    return
+  }
+
+  // Submit project flow
+  if (submitSessions.has(userId)) {
+    const session = submitSessions.get(userId)!
+    switch (session.step) {
+      case 1: // Name — validate max 50 chars
+        if (text.length > 50) {
+          await bot.sendMessage(chatId, '⚠️ Name too long (max 50 chars). Try again:')
+          return
+        }
+        session.name = text
+        session.step = 2
+        await bot.sendMessage(chatId,
+          `✅ <b>${text}</b>\n\nStep 2/4: Short description <i>(max 200 chars)</i>:`,
+          { parse_mode: 'HTML' } as any
+        )
+        break
+      case 2: // Description — validate max 200 chars
+        if (text.length > 200) {
+          await bot.sendMessage(chatId, `⚠️ Too long (${text.length}/200 chars). Shorten it:`)
+          return
+        }
+        session.description = text
+        session.step = 3
+        await bot.sendMessage(chatId, `Step 3/4: Project URL <i>(must start with http)</i>:`, { parse_mode: 'HTML' } as any)
+        break
+      case 3: // URL — validate format
+        if (!text.startsWith('http')) {
+          await bot.sendMessage(chatId, '⚠️ Must start with http:// or https://. Try again:')
+          return
+        }
+        // Check duplicate URL
+        const existingProjects = loadProjects()
+        const duplicate = existingProjects.find(p => p.url === text)
+        if (duplicate) {
+          await bot.sendMessage(chatId, `⚠️ Project with this URL already exists: <b>${duplicate.name}</b>`, { parse_mode: 'HTML' } as any)
+          submitSessions.delete(userId)
+          return
+        }
+        session.url = text
+        session.step = 4
+        await bot.sendMessage(chatId, `Step 4/4: X/Twitter handle <i>(optional — type "skip")</i>:`, { parse_mode: 'HTML' } as any)
+        break
+      case 4: // Twitter + save
+        session.twitter = text.toLowerCase() === 'skip' ? undefined : text.replace('@', '')
+        const projects2 = loadProjects()
+        const newProject: Project = {
+          id: `proj_${Date.now()}`,
+          name: session.name!,
+          description: session.description!,
+          url: session.url!,
+          twitter: session.twitter,
+          submitterId: userId,
+          submitterUsername: msg.from?.username,
+          timestamp: Date.now(),
+          votes: 0,
+          voters: []
+        }
+        projects2.push(newProject)
+        saveProjects(projects2)
+        submitSessions.delete(userId)
+
+        // Award +20 points
+        const usersP = loadUsers()
+        if (!usersP[userId]) usersP[userId] = { id: userId, points: 0, joinedAt: Date.now() }
+        usersP[userId].points = (usersP[userId].points || 0) + 20
+        usersP[userId].telegramUsername = msg.from?.username
+        usersP[userId].telegramName = msg.from?.first_name
+        saveUsers(usersP)
+
+        await bot.sendMessage(chatId,
+          `✅ <b>Project Submitted!</b>\n\n` +
+          `<b>${newProject.name}</b>\n` +
+          `${newProject.description}\n` +
+          `🔗 ${newProject.url}\n` +
+          (newProject.twitter ? `🐦 @${newProject.twitter}\n` : '') +
+          `\n⭐ +20 points awarded!\n` +
+          `<i>Share it with the community → /projects</i>`,
+          { parse_mode: 'HTML', disable_web_page_preview: true } as any
+        )
+        break
+    }
+    submitSessions.set(userId, session)
+    return
+  }
+
   // Typing indicator
   bot.sendChatAction(chatId, 'typing').catch(() => {})
   const typingInterval = setInterval(() => {
     bot.sendChatAction(chatId, 'typing').catch(() => {})
   }, 4000)
+
 
   try {
     let reply = ''
