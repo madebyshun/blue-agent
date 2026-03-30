@@ -111,9 +111,9 @@ Ask anything about Base ecosystem — DeFi, NFTs, builders, protocols, market da
 ## OG Builder Program
 
 First **100 users** to join get:
-- **×2 claim multiplier — forever**
-- OG Builder badge
-- Priority access to new features
+- 🌟 **OG Builder badge** — permanently displayed on profile
+- **+100 pts bonus** on join
+- **Priority access** to new features and beta releases
 
 Spots are limited. Clock is ticking.
 
@@ -132,9 +132,10 @@ Spots are limited. Clock is ticking.
 
 1. DM [@Blockyagent_beta_bot](https://t.me/Blockyagent_beta_bot)
 2. Type `/start` — wallet auto-created
-3. Type `/score @yourXhandle` — check your builder rank
-4. Type `gm` daily — start earning points
-5. Type `/rewards` — claim $BLUEAGENT onchain
+3. Type `gm` daily — start earning points + streak
+4. Type `/score @yourXhandle` — check your builder rank
+5. Type `/submit` — showcase your project (+20 pts)
+6. Type `/rewards` — claim $BLUEAGENT onchain
 
 ---
 
