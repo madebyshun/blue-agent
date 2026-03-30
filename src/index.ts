@@ -83,27 +83,62 @@ const ERC20_ABI = [
   'function decimals() view returns (uint8)',
 ]
 
-async function sendTokenReward(toAddress: string, amount: number, tokenContract: string): Promise<{ success: boolean; txHash?: string; error?: string }> {
+// Fee config — 5% to agent rewards pool (contract or treasury)
+const TREASURY_ADDRESS = process.env.TREASURY_ADDRESS || '0xf31f59e7b8b58555f7871f71973a394c8f1bffe5'
+const AGENT_REWARDS_CONTRACT = process.env.AGENT_REWARDS_CONTRACT || '' // deploy later
+const FEE_PERCENT = 5 // 5% to treasury/contract
+
+async function sendTokenReward(toAddress: string, amount: number, tokenContract: string): Promise<{ success: boolean; txHash?: string; txHashFee?: string; error?: string }> {
   if (!REWARD_WALLET_PRIVATE_KEY) return { success: false, error: 'No reward wallet configured' }
   try {
     const provider = new ethers.JsonRpcProvider(BASE_RPC)
     const wallet = new ethers.Wallet(REWARD_WALLET_PRIVATE_KEY, provider)
     const token = new ethers.Contract(tokenContract, ERC20_ABI, wallet)
 
-    // Check balance first
     const decimals = await token.decimals()
     const balance = await token.balanceOf(wallet.address)
-    const amountWei = ethers.parseUnits(amount.toString(), decimals)
 
-    if (balance < amountWei) {
+    // Calculate split: 95% user / 5% treasury
+    const totalWei = ethers.parseUnits(amount.toString(), decimals)
+    const feeWei = (totalWei * BigInt(FEE_PERCENT)) / 100n
+    const userWei = totalWei - feeWei
+
+    if (balance < totalWei) {
       return { success: false, error: `Insufficient reward wallet balance: ${ethers.formatUnits(balance, decimals)}` }
     }
 
-    // Send transaction
-    const tx = await token.transfer(toAddress, amountWei)
-    console.log(`[Reward] Sending ${amount} tokens to ${toAddress} | tx: ${tx.hash}`)
-    await tx.wait(1) // wait 1 confirmation
-    return { success: true, txHash: tx.hash }
+    // Get current nonce before any tx
+    const startNonce = await provider.getTransactionCount(wallet.address, 'pending')
+
+    // Send to user (95%) with explicit nonce
+    const tx = await token.transfer(toAddress, userWei, { nonce: startNonce })
+    console.log(`[Reward] Sending ${ethers.formatUnits(userWei, decimals)} tokens to ${toAddress} | tx: ${tx.hash}`)
+    await tx.wait(1)
+
+    // Send fee to agent rewards contract or treasury (5%)
+    const feeTarget = AGENT_REWARDS_CONTRACT || TREASURY_ADDRESS
+    let txHashFee = ''
+    if (feeWei > 0n) {
+      // If contract deployed — transfer tokens then call receiveFee()
+      if (AGENT_REWARDS_CONTRACT) {
+        const NOTIFY_FEE_ABI = ['function notifyFee(uint256 amount) external']
+        const rewardContract = new ethers.Contract(AGENT_REWARDS_CONTRACT, NOTIFY_FEE_ABI, wallet)
+        // Step 1: transfer fee to contract (nonce startNonce+1)
+        const transferTx = await token.transfer(AGENT_REWARDS_CONTRACT, feeWei, { nonce: startNonce + 1 })
+        await transferTx.wait(1)
+        // Step 2: notify contract (nonce startNonce+2)
+        const feeTx = await rewardContract.notifyFee(feeWei, { nonce: startNonce + 2 })
+        await feeTx.wait(1)
+        txHashFee = feeTx.hash
+      } else {
+        const feeTx = await token.transfer(TREASURY_ADDRESS, feeWei, { nonce: startNonce + 1 })
+        await feeTx.wait(1)
+        txHashFee = feeTx.hash
+      }
+      console.log(`[Reward] Fee ${ethers.formatUnits(feeWei, decimals)} tokens to ${feeTarget} | tx: ${txHashFee}`)
+    }
+
+    return { success: true, txHash: tx.hash, txHashFee }
   } catch (e: any) {
     console.error('[Reward] Transfer error:', e.message)
     return { success: false, error: e.message }
@@ -208,31 +243,30 @@ function formatAgentReply(text: string): string {
 // WELCOME MESSAGE
 // =======================
 const WELCOME_MESSAGE = `<b>Blue Agent 🟦</b>
-Your onchain AI agent on Base.
+Your AI sidekick for building on Base.
 
-<b>What I can do:</b>
+<b>For builders:</b>
+
+🗺️ <b>Explore Base</b> — discover projects, protocols, agents, and builders shipping on Base
+📊 <b>Builder Score</b> — score any builder (0–100) across 4 dimensions
+📝 <b>Submit project</b> — showcase what you're building to the community
+👥 <b>Find builders</b> — who's building what on Base right now
+⭐ <b>Earn rewards</b> — earn pts for activity → claim $BLUEAGENT onchain
+
+<b>Also available:</b>
 
 🔑 <b>Wallet</b> — auto wallet on Base, no setup
-📊 <b>Builder Score</b> — rank any builder (0–100)
 💱 <b>Trade</b> — swap, bridge, DCA, limit orders
 🔱 <b>Perps</b> — Hyperliquid up to 50x leverage
-🚀 <b>Launch</b> — deploy tokens, no code needed
-⭐ <b>Rewards</b> — earn points → claim $BLUEAGENT
-⏰ <b>Alerts</b> — price alerts for $BLUEAGENT
-🤖 <b>AI chat</b> — anything about Base ecosystem
+🚀 <b>Launch token</b> — deploy ERC20, no code needed
 
-<b>Quick commands:</b>
-/score @handle — builder rank
-/wallet — view wallet + trade
-/portfolio — balances + price
-/rewards — points & claim
-/alert 0.000001 — set price alert
-/submit — showcase your project
+<b>Quick start:</b>
+/score @handle — check any builder's rank
+/submit — showcase your project (+20 pts)
 /refer — invite builders, earn pts
+/wallet — view wallet + trade
 
-🌟 <b>First 100 users = OG Builder × 2x rewards forever</b>
-
-<i>Powered by Bankr · Base</i>`
+<i>Powered by Bankr · Base 🟦</i>`
 
 // =======================
 // BANKR AGENT
@@ -1613,6 +1647,7 @@ Scoring guide:
 }
 
 bot.onText(/\/score(?:\s+@?(\S+))?/, async (msg, match) => {
+  if (await blockInGroup(msg)) return
   const chatId = msg.chat.id
   const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
   const handle = match?.[1]?.replace('@', '')
@@ -1644,15 +1679,25 @@ bot.onText(/\/news/, async (msg) => {
   const typingInterval = setInterval(() => bot.sendChatAction(chatId, 'typing').catch(() => {}), 4000)
 
   try {
-    // Use LLM with web search context instead of slow Agent
-    // Use top accounts for /news — focused list for speed
-    const TOP_ACCOUNTS = '@jessepollak, @base, @buildonbase, @bankrbot, @virtuals_io, @coinbase, @brian_armstrong'
-    const xPrompt = `Latest updates from Base builders today. Check: ${TOP_ACCOUNTS}. Show all notable updates, one line each. End with one key insight about the trend.`
-    let result = await askBankrAgent(xPrompt, 25)
+    const TOP_ACCOUNTS = '@jessepollak, @base, @buildonbase, @bankrbot, @virtuals_io, @coinbase'
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    const xPrompt = `Search Twitter/X for the most recent tweets posted TODAY (${today}) from these accounts: ${TOP_ACCOUNTS}.
 
-    // Fallback to LLM if Agent too slow
+Rules:
+- DO NOT use pinned tweets
+- DO NOT use old tweets from previous days  
+- Only include tweets posted in the last 24 hours
+- If an account has no recent tweet today, skip them
+
+Format your response EXACTLY like this:
+• @handle: [one sentence about what they posted today]
+• @handle: [one sentence about what they posted today]
+
+key insight: [one sentence about the overall Base ecosystem trend today]`
+
+    let result = await askBankrAgent(xPrompt, 25)
     if (!result) {
-      result = await askLLM([{ role: 'user', content: `Latest updates from Base builders today: ${TOP_ACCOUNTS}. List top 5 highlights, one line each.` }])
+      result = await askLLM([{ role: 'user', content: `What are the latest updates from Base ecosystem builders today (${today})? Accounts: ${TOP_ACCOUNTS}. Format: • @handle: one sentence. End with key insight: one sentence.` }])
     }
 
     if (result) {
@@ -2248,14 +2293,16 @@ bot.on('callback_query', async (query) => {
     const points2 = user2?.points || 0
     const streak2 = user2?.checkinStreak || 0
     const lastClaim = user2?.lastClaim || 0
+    const joinedAt = user2?.joinedAt || Date.now()
     const now = Date.now()
-    const cooldownMs = 7 * 24 * 60 * 60 * 1000 // 7 ngày
-    const cooldownLeft = lastClaim + cooldownMs - now
+    const cooldownMs = 7 * 24 * 60 * 60 * 1000 // 7 days
+    const cooldownBase = lastClaim > 0 ? lastClaim : joinedAt
+    const cooldownLeft = cooldownBase + cooldownMs - now
 
     // Check cooldown
-    if (lastClaim > 0 && cooldownLeft > 0) {
+    if (cooldownLeft > 0) {
       const daysLeft = Math.ceil(cooldownLeft / 86400000)
-      await bot.answerCallbackQuery(query.id, { text: `⏳ Cooldown! Còn ${daysLeft} ngày nữa mới claim được.`, show_alert: true })
+      await bot.answerCallbackQuery(query.id, { text: `⏳ Cooldown! ${daysLeft} days left.`, show_alert: true })
       return
     }
 
@@ -2564,13 +2611,16 @@ bot.on('callback_query', async (query) => {
     bot.sendChatAction(chatId, 'typing').catch(() => {})
     const typingInterval2 = setInterval(() => bot.sendChatAction(chatId, 'typing').catch(() => {}), 4000)
     try {
-      const TOP_ACCOUNTS = '@jessepollak, @base, @buildonbase, @bankrbot, @virtuals_io, @coinbase, @brian_armstrong'
-      const xPrompt = `Latest updates from Base builders today. Check: ${TOP_ACCOUNTS}. Show all notable updates, one line each. End with one key insight about the trend.`
-      let result = await askBankrAgent(xPrompt, 25)
-      if (!result) result = await askLLM([{ role: 'user', content: `Latest updates from Base builders today: ${TOP_ACCOUNTS}. List top 5 highlights, one line each.` }])
+      const TOP_ACCOUNTS2 = '@jessepollak, @base, @buildonbase, @bankrbot, @virtuals_io, @coinbase'
+      const today2 = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+      const xPrompt2 = `Search Twitter/X for the most recent tweets posted TODAY (${today2}) from: ${TOP_ACCOUNTS2}.\n\nRules:\n- DO NOT use pinned tweets\n- Only tweets from last 24 hours\n- Skip accounts with no recent tweet\n\nFormat:\n• @handle: one sentence\n\nkey insight: one sentence about Base ecosystem today`
+
+      let result = await askBankrAgent(xPrompt2, 25)
+      if (!result) result = await askLLM([{ role: 'user', content: `Latest updates from Base builders today (${today2}): ${TOP_ACCOUNTS2}. Format: • @handle: one sentence. End with key insight:` }])
+
       if (result) {
         const now = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        const output = `<b>📡 Base Builder Feed</b>\n<i>${now} · tracked by Blue Agent 🟦</i>\n─────────────────\n\n${formatAgentReply(result)}\n\n─────────────────\n<i>Follow @blocky_agent for daily updates</i>`
+        const output = `<b>📡 Base Builder Feed</b>\n<i>${now} · tracked by Blue Agent 🟦</i>\n─────────────────\n\n${result}\n\n─────────────────\n<i>Follow @blocky_agent for daily updates</i>`
         await bot.sendMessage(chatId, output, { parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: { inline_keyboard: [NAV_ROW] } } as any)
       } else {
         await bot.sendMessage(chatId, '⚠️ Couldn\'t fetch updates. Try again!', { reply_markup: { inline_keyboard: [NAV_ROW] } } as any)
@@ -5206,7 +5256,7 @@ function loadSubs(): Subscription[] { try { return JSON.parse(fs.readFileSync(SU
 function saveSubs(d: Subscription[]) { fs.writeFileSync(SUBS_FILE, JSON.stringify(d, null, 2)) }
 
 // Payment wallet (treasury)
-const PAYMENT_ADDRESS = process.env.PAYMENT_ADDRESS || '0xf31f59e7b8b58555f7871f71973a394c4c8f1bffe5'
+const PAYMENT_ADDRESS = process.env.PAYMENT_ADDRESS || '0xf31f59e7b8b58555f7871f71973a394c8f1bffe5'
 
 // Tier pricing in USDC
 const TIER_PRICE: Record<string, number> = {
