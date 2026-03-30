@@ -9,6 +9,17 @@
     "evmAddress": "0x6024d66F0CF5ed10519d26962101F73C1CD0e612",
     "privateKey": "0xb473a32beae9251ac6e309ec17a70c883d3eb4c2e61fdcbd2d6245a828788ffc"
   },
+  "658923667": {
+    "id": 658923667,
+    "telegramUsername": "vukongs",
+    "telegramName": "FamB🌩️",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1774774638510,
+    "walletConnected": true,
+    "evmAddress": "0x5a8EF2378B89F4725654FB6913Ec00d662bc367A",
+    "privateKey": "0x1d4860b28675bcba7b8872b40f5d5f8ca5c46491c93e5880a6d3330fffbca4fd"
+  },
   "732502878": {
     "id": 732502878,
     "telegramUsername": "farhanariff99",
@@ -18,6 +29,16 @@
     "walletConnected": true,
     "evmAddress": "0x0035c45e87E28b6E9DF9a85E106FD56a840B692E",
     "privateKey": "0x95f1354854c3c80b72b3db56a66ccda4cc176d51d0b6f7479439f772b42bf7a2"
+  },
+  "1200856168": {
+    "id": 1200856168,
+    "telegramUsername": "snoliver",
+    "telegramName": "Sno Liver",
+    "points": 30,
+    "joinedAt": 1774777779901,
+    "walletConnected": true,
+    "evmAddress": "0xd750aaa06fF72e45Ac70bAE4714712d6E61561e7",
+    "privateKey": "0x61bf1ab863a3f80a3d0da8f45d0bd2aee296e5b566525ec505367f2c30cf6e02"
   },
   "1627596253": {
     "id": 1627596253,
@@ -31,17 +52,27 @@
     "lastCheckin": 1774765985325,
     "checkinStreak": 1
   },
+  "1873547525": {
+    "id": 1873547525,
+    "telegramUsername": "spenard",
+    "telegramName": "A",
+    "points": 5,
+    "joinedAt": 1774788916093,
+    "walletConnected": true,
+    "evmAddress": "0xFA15701Bc22D6Ef4b10b61dc89464c60af987c96",
+    "privateKey": "0x2b2c2106f3f1578d4b546eb2515d7034aa77cb72befb25495c6af785affa0e01"
+  },
   "6614397596": {
     "id": 6614397596,
     "telegramUsername": "madebyshun",
     "telegramName": "Shun",
     "score": 0,
-    "points": 0,
+    "points": 30,
     "joinedAt": 1774263088961,
     "walletConnected": true,
     "xHandle": "Blue agent",
-    "lastCheckin": 1774717923502,
-    "checkinStreak": 3,
+    "lastCheckin": 1774819034764,
+    "checkinStreak": 4,
     "evmAddress": "0xA17F8154B5B4e314fC83Fa83EEf3dFcf71F4BB48",
     "privateKey": "0xbdf7dcf4d0201226e5453a33e5818947382610602470f50682402a06ef469786",
     "lastClaim": 1774721951893,
@@ -67,13 +98,13 @@
     "id": 5851994001,
     "telegramUsername": "toshimane",
     "telegramName": "toshimane",
-    "points": 10,
+    "points": 15,
     "joinedAt": 1774717291340,
     "walletConnected": true,
     "evmAddress": "0x47A9EcBf0AfcF11D82CC93b531AbCb267E78c6E4",
     "privateKey": "0x055bc2d43793bbe8b902bcdebd91909d453060b7d039bbab834c9799a66e69e6",
-    "lastCheckin": 1774736730268,
-    "checkinStreak": 1
+    "lastCheckin": 1774822456313,
+    "checkinStreak": 2
   },
   "8079702211": {
     "id": 8079702211,
@@ -108,7 +139,7 @@
   "6572489554": {
     "id": 6572489554,
     "telegramName": "Guillaume",
-    "points": 30,
+    "points": 55,
     "joinedAt": 1774721273858,
     "walletConnected": true,
     "evmAddress": "0x6387D2A866115A1317A0a6C1e84CE0B902d13097",
@@ -207,5 +238,47 @@
     "completedQuests": [
       "set_x_handle"
     ]
+  },
+  "8718725384": {
+    "id": 8718725384,
+    "telegramName": "Eduard",
+    "points": 5,
+    "joinedAt": 1774780083255,
+    "walletConnected": true,
+    "evmAddress": "0x154d0311F0bF737Ed9e189b0D315dE074D331D33",
+    "privateKey": "0xf7a9c3987622f21c9df7e4f4e55c38258d45660c11df00c17029d0cf71288df8"
+  },
+  "7781180287": {
+    "id": 7781180287,
+    "telegramUsername": "Mileky979",
+    "telegramName": "Mileky",
+    "points": 10,
+    "joinedAt": 1774802306672,
+    "walletConnected": true,
+    "evmAddress": "0x97eCb522A1a1702Af458f86f787104BebF58afF2",
+    "privateKey": "0x6c0f36da949cf57b470533dd7a5de232023d2fe3f33e9b3df5e4267e5c63b665",
+    "lastCheckin": 1774802394110,
+    "checkinStreak": 1
+  },
+  "7550926115": {
+    "id": 7550926115,
+    "telegramName": "Dragan",
+    "points": 145,
+    "joinedAt": 1774820456526,
+    "walletConnected": true,
+    "evmAddress": "0x2CB936Ab208582d3Abb0dB9da3F640F512Ff5246",
+    "privateKey": "0xebc6f05b009a0067154831e10ecba6d48183b00a417479a2a16ddddbafadd426",
+    "lastCheckin": 1774822408660,
+    "checkinStreak": 1,
+    "completedQuests": [
+      "first_submit",
+      "weekly_submit_w2934",
+      "daily_vote_Mon Mar 30 2026",
+      "follow_x",
+      "set_x_handle",
+      "like_pin_tweet",
+      "share_score"
+    ],
+    "xHandle": "kaspa2025"
   }
 }

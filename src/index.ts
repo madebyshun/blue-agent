@@ -654,7 +654,7 @@ async function handleLaunchWizard(chatId: number, userId: number, text: string) 
   if (state.step === 'confirm') {
     if (text.toLowerCase() === 'cancel') {
       launchSessions.delete(userId)
-      await bot.sendMessage(chatId, '❌ Cancelled. Type /launch to start over.')
+      await bot.sendMessage(chatId, 'Type /launch to start over.')
       return
     }
 
@@ -879,7 +879,7 @@ bot.onText(/\/start(?:\s+(\w+))?/, async (msg, match) => {
       parse_mode: 'HTML',
       disable_web_page_preview: true,
       reply_markup: {
-        inline_keyboard: [[{ text: '🟦 Open Menu', callback_data: 'open_menu' }]]
+        inline_keyboard: [[{ text: '🟦 Open Menu', callback_data: 'open_menu' }, { text: '📖 Docs', url: 'https://github.com/madebyshun/blue-agent/blob/main/INTRODUCING_BLUE_AGENT.md' }]]
       }
     } as any)
   } else {
@@ -915,7 +915,7 @@ bot.onText(/\/start(?:\s+(\w+))?/, async (msg, match) => {
       parse_mode: 'HTML',
       disable_web_page_preview: true,
       reply_markup: {
-        inline_keyboard: [[{ text: '🟦 Open Menu', callback_data: 'open_menu' }]]
+        inline_keyboard: [[{ text: '🟦 Open Menu', callback_data: 'open_menu' }, { text: '📖 Docs', url: 'https://github.com/madebyshun/blue-agent/blob/main/INTRODUCING_BLUE_AGENT.md' }]]
       }
     } as any)
   }
@@ -942,6 +942,22 @@ bot.onText(/\/launch/, async (msg) => {
 // =======================
 // /help
 // =======================
+bot.onText(/\/docs/, async (msg) => {
+  const chatId = msg.chat.id
+  await bot.sendMessage(chatId,
+    `📖 <b>Blue Agent Docs</b>\n\n` +
+    `Full guide: features, commands, rewards, tokenomics.\n\n` +
+    `<a href="${DOCS_URL}">Read the docs →</a>`,
+    {
+      parse_mode: 'HTML',
+      disable_web_page_preview: false,
+      reply_markup: {
+        inline_keyboard: [[{ text: '📖 Open Docs', url: DOCS_URL }]]
+      }
+    } as any
+  )
+})
+
 bot.onText(/\/help/, async (msg) => {
   await bot.sendMessage(
     msg.chat.id,
@@ -983,6 +999,18 @@ function isOwner(msg: any): boolean {
   return msg.from?.id === OWNER_ID
 }
 
+// Block commands in group — redirect to DM
+async function blockInGroup(msg: any): Promise<boolean> {
+  if (msg.chat.type === 'group' || msg.chat.type === 'supergroup') {
+    await bot.sendMessage(msg.chat.id,
+      `🟦 DM @${BOT_USERNAME} to use this command`,
+      { reply_to_message_id: msg.message_id } as any
+    ).catch(() => {})
+    return true
+  }
+  return false
+}
+
 // /ping — check bot alive
 
 
@@ -996,9 +1024,10 @@ bot.onText(/\/model/, async (msg) => {
   )
 })
 
-// /status — full health check
+// /status — full health check (DM only)
 bot.onText(/\/status/, async (msg) => {
   if (!isOwner(msg)) return
+  if (msg.chat.type === 'group' || msg.chat.type === 'supergroup') return
   const chatId = msg.chat.id
   await bot.sendMessage(chatId, '🔍 Running health check...', { parse_mode: 'HTML' } as any)
 
@@ -1661,12 +1690,14 @@ bot.onText(/\/news/, async (msg) => {
 
 const MENU_TEXT = `🟦 <b>Blue Agent</b> — Control Panel\n\nWhat do you need?`
 
+const DOCS_URL = 'https://github.com/madebyshun/blue-agent/blob/main/INTRODUCING_BLUE_AGENT.md'
+
 const MENU_KEYBOARD = {
   inline_keyboard: [
     [{ text: '📰 News', callback_data: 'menu_news' }, { text: '🔍 Score', callback_data: 'menu_score' }, { text: '🚀 Launch', callback_data: 'menu_launch' }],
     [{ text: '🎯 Quests', callback_data: 'menu_quests' }, { text: '🎁 Rewards', callback_data: 'menu_rewards' }, { text: '🔗 Refer', callback_data: 'menu_refer' }],
     [{ text: '🏆 Top', callback_data: 'menu_leaderboard' }, { text: '💰 Wallet', callback_data: 'menu_wallet' }, { text: '📝 Submit', callback_data: 'menu_submit' }],
-    [{ text: '📁 Projects', callback_data: 'menu_projects' }],
+    [{ text: '📁 Projects', callback_data: 'menu_projects' }, { text: '📖 Docs', url: DOCS_URL }],
     [{ text: '👤 Profile', callback_data: 'menu_profile' }, { text: '❓ Help', callback_data: 'menu_help' }, { text: '❌ Close', callback_data: 'menu_close' }],
   ]
 }
@@ -1715,6 +1746,8 @@ async function editMenu(query: any, text: string, keyboard: any) {
 }
 
 bot.onText(/\/menu/, async (msg) => {
+  // Menu only in DM
+  if (msg.chat.type === 'group' || msg.chat.type === 'supergroup') return
   const chatId = msg.chat.id
   await bot.sendMessage(chatId,
     `🟦 <b>Blue Agent</b> — Control Panel\n\nWhat do you need?`,
@@ -1756,6 +1789,7 @@ const WALLET_QUICK_ACTIONS =
   `• <code>show my hyperliquid positions</code>`
 
 bot.onText(/\/profile/, async (msg) => {
+  if (await blockInGroup(msg)) return
   const chatId = msg.chat.id
   const userId = msg.from?.id || chatId
   const users = loadUsers()
@@ -1788,6 +1822,7 @@ bot.onText(/\/profile/, async (msg) => {
 })
 
 bot.onText(/\/wallet/, async (msg) => {
+  if (await blockInGroup(msg)) return
   const chatId = msg.chat.id
   const userId = msg.from?.id || chatId
   const users2 = loadUsers()
@@ -1807,6 +1842,7 @@ bot.onText(/\/wallet/, async (msg) => {
 })
 
 bot.onText(/\/rewards/, async (msg) => {
+  if (await blockInGroup(msg)) return
   const chatId = msg.chat.id
   const userId = msg.from?.id || chatId
   const users = loadUsers()
@@ -1839,6 +1875,7 @@ bot.onText(/\/rewards/, async (msg) => {
 })
 
 bot.onText(/\/refer/, async (msg) => {
+  if (await blockInGroup(msg)) return
   const chatId = msg.chat.id
   const userId = msg.from?.id || chatId
   const referrals = loadReferrals().filter(r => r.referrerId === userId)
@@ -1857,6 +1894,7 @@ bot.onText(/\/refer/, async (msg) => {
 
 // /points — DM (private detail) + Group (public card)
 bot.onText(/\/points/, async (msg) => {
+  if (await blockInGroup(msg)) return
   const chatId = msg.chat.id
   const userId = msg.from?.id
   const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup'
@@ -1904,7 +1942,7 @@ bot.onText(/\/points/, async (msg) => {
   }
 })
 
-// /leaderboard — DM + Group (public)
+// /leaderboard — public (group + DM)
 bot.onText(/\/leaderboard/, async (msg) => {
   const chatId = msg.chat.id
   const userId = msg.from?.id || chatId
@@ -1943,6 +1981,7 @@ bot.onText(/\/leaderboard/, async (msg) => {
 })
 
 bot.onText(/\/submit/, async (msg) => {
+  if (await blockInGroup(msg)) return
   const chatId = msg.chat.id
   const userId = msg.from?.id || chatId
   submitSessions.set(userId, { step: 1 })
@@ -2139,10 +2178,7 @@ bot.on('callback_query', async (query) => {
   }
 
   if (data === 'cancel_session') {
-    await bot.editMessageText('❌ Cancelled.', {
-      chat_id: chatId,
-      message_id: query.message?.message_id,
-    } as any).catch(() => {})
+    await bot.deleteMessage(chatId, query.message?.message_id!).catch(() => {})
     return
   }
 
@@ -2160,6 +2196,12 @@ bot.on('callback_query', async (query) => {
 
   // Open menu from /start button
   if (data === 'open_menu') {
+    // Menu only in DM
+    const chatType = query.message?.chat?.type
+    if (chatType === 'group' || chatType === 'supergroup') {
+      await bot.answerCallbackQuery(query.id, { text: 'Please use the bot in DM for menu 🟦', show_alert: true })
+      return
+    }
     await bot.sendMessage(chatId, MENU_TEXT, { parse_mode: 'HTML', reply_markup: MENU_KEYBOARD } as any)
     return
   }
@@ -2223,33 +2265,35 @@ bot.on('callback_query', async (query) => {
       return
     }
 
-    // 1. Streak multiplier
-    let multiplier = 1
-    let multiplierLabel = 'x1'
-    if (streak2 >= 14) { multiplier = 2; multiplierLabel = 'x2 🔥🔥' }
-    else if (streak2 >= 7) { multiplier = 1.5; multiplierLabel = 'x1.5 🔥' }
+    // Activity Tier — based on days active + total points accumulated
+    const activityTiers = CFG.token.activity_tiers || [
+      { name: 'Builder', min_days: 0,  min_pts: 0,    multiplier: 1.0 },
+      { name: 'Shipper', min_days: 30, min_pts: 500,  multiplier: 1.3 },
+      { name: 'Founder', min_days: 60, min_pts: 1500, multiplier: 1.5 },
+      { name: 'Legend',  min_days: 90, min_pts: 3000, multiplier: 2.0 },
+    ]
+    const daysActive = user2.joinedAt ? Math.floor((Date.now() - user2.joinedAt) / 86400000) : 0
+    const totalPtsEver = (user2.claimedPoints || 0) + points2
+    const currentTier = [...activityTiers].reverse().find((t: any) =>
+      daysActive >= t.min_days && totalPtsEver >= t.min_pts
+    ) || activityTiers[0]
+    const multiplier = currentTier.multiplier
+    const multiplierLabel = `x${currentTier.multiplier} ${currentTier.name}`
 
-    // 2. Early adopter multiplier (top 100 users by joinedAt)
-    const allUsersForEarly = loadUsers()
-    const sortedByJoin = Object.values(allUsersForEarly)
+    // OG Badge (first 100) — bonus pts only, not × multiplier
+    const allUsersForOG = loadUsers()
+    const sortedByJoin = Object.values(allUsersForOG)
       .filter((u: any) => u.joinedAt)
       .sort((a: any, b: any) => a.joinedAt - b.joinedAt)
       .slice(0, CFG.token.early_adopter_limit || 100)
-    const isEarlyAdopter = sortedByJoin.some((u: any) => u.id === userId)
-    const earlyMult = isEarlyAdopter ? (CFG.token.early_adopter_multiplier || 2.0) : 1
-    const earlyLabel = isEarlyAdopter ? ` · 🌟 OG x${earlyMult}` : ''
-
-    // 3. Claim tier bonus by points
-    const claimTiers = CFG.token.claim_tiers || []
-    const tierBonus = claimTiers.reduce((bonus: number, t: any) => {
-      return points2 >= t.min_pts ? t.bonus_pct : bonus
-    }, 0)
-    const tierBonusLabel = tierBonus > 0 ? ` · +${tierBonus}% tier bonus` : ''
+    const isOG = sortedByJoin.some((u: any) => u.id === userId)
+    const earlyLabel = isOG ? ` · 🌟 OG` : ''
 
     const TOKENS_PER_PT = CFG.token.tokens_per_point
-    const baseAmount = Math.floor(points2 * multiplier * earlyMult * TOKENS_PER_PT)
-    const bonusAmount = Math.floor(baseAmount * tierBonus / 100)
-    const claimAmount = baseAmount + bonusAmount
+    const baseAmount = Math.floor(points2 * multiplier * TOKENS_PER_PT)
+    const claimAmount = baseAmount
+    const bonusAmount = 0
+    const tierBonusLabel = ''
 
     // Save claim first — reset points
     users2[userId].points = 0
@@ -2262,7 +2306,7 @@ bot.on('callback_query', async (query) => {
       `<b>🎁 Claim ${TOKEN_NAME}</b>\n` +
       `──────────────\n` +
       `⭐ Points: <b>${points2} pts</b>\n` +
-      `🔥 Streak: <b>${streak2} ngày</b> → ${multiplierLabel}${earlyLabel}${tierBonusLabel}\n` +
+      `🏆 Tier: <b>${currentTier.name}</b> → ${multiplierLabel}${earlyLabel}\n` +
       `──────────────\n` +
       `💰 Claim amount: <b>${claimAmount.toLocaleString()} ${TOKEN_NAME}</b>\n` +
       (bonusAmount > 0 ? `🎁 Tier bonus: <b>+${bonusAmount.toLocaleString()}</b>\n` : '') +
@@ -2597,43 +2641,25 @@ bot.on('callback_query', async (query) => {
   if (data === 'wallet_portfolio') {
     await bot.answerCallbackQuery(query.id)
     const usersP = loadUsers()
-    const userP = usersP[userId]
-    const addrP = userP?.evmAddress
+    const addrP = usersP[userId]?.evmAddress
     if (!addrP) {
       await bot.sendMessage(chatId, '⚠️ No wallet found. Type /start to create one.')
       return
     }
     await bot.sendChatAction(chatId, 'typing')
-    let ethBal = 0, blueagentBal = 0, priceU = 0, change24 = 0
-    try {
-      const rpcR = await axios.post('https://mainnet.base.org', { jsonrpc: '2.0', method: 'eth_getBalance', params: [addrP, 'latest'], id: 1 }, { timeout: 6000 })
-      ethBal = Number(BigInt(rpcR.data?.result || '0x0')) / 1e18
-      const balData = '0x70a08231000000000000000000000000' + addrP.slice(2).padStart(64, '0')
-      const tokR = await axios.post('https://mainnet.base.org', { jsonrpc: '2.0', method: 'eth_call', params: [{ to: TOKEN_CONTRACT, data: balData }, 'latest'], id: 2 }, { timeout: 6000 })
-      blueagentBal = Number(BigInt(tokR.data?.result || '0x0')) / 1e18
-      const prR = await axios.get(`https://api.geckoterminal.com/api/v2/networks/base/pools/${TOKEN_POOL}`, { timeout: 6000 })
-      const pa = prR.data?.data?.attributes || {}
-      priceU = parseFloat(pa.base_token_price_usd || '0')
-      change24 = parseFloat(pa.price_change_percentage?.h24 || '0')
-    } catch {}
-    const blueUSD = blueagentBal * priceU
-    const chgEmoji = change24 >= 0 ? '↑' : '↓'
-    const chgColor = change24 >= 0 ? '🟢' : '🔴'
-    const short = addrP.slice(0, 6) + '...' + addrP.slice(-4)
-    await bot.sendMessage(chatId,
-      `<b>📊 Portfolio</b>\n<code>${short}</code> · <a href="https://basescan.org/address/${addrP}">Basescan</a>\n──────────────────\n` +
-      `<b>ETH</b>   ${ethBal.toFixed(6)} ETH\n` +
-      `<b>${TOKEN_NAME}</b>   ${blueagentBal.toLocaleString('en', { maximumFractionDigits: 0 })} tokens\n` +
-      `       ≈ $${blueUSD.toFixed(4)} USD\n──────────────────\n` +
-      `<b>$BLUEAGENT Price</b>\n$${priceU > 0 ? priceU.toFixed(10).replace(/0+$/, '') : 'N/A'}\n` +
-      `${chgColor} ${chgEmoji}${Math.abs(change24).toFixed(2)}% (24h)\n──────────────────\n<i>Powered by Bankr · Base</i>`,
-      { parse_mode: 'HTML', disable_web_page_preview: true,
+    const agentPrompt = `Check portfolio and token balances for wallet address ${addrP} on Base chain. Do NOT use any other wallet. Wallet: ${addrP}`
+    const result = await askBankrAgent(agentPrompt, 20)
+    if (result) {
+      await bot.sendMessage(chatId, formatAgentReply(result), {
+        parse_mode: 'HTML', disable_web_page_preview: true,
         reply_markup: { inline_keyboard: [
           [{ text: '🔄 Swap', callback_data: 'trade_swap' }, { text: '💰 Buy $BLUEAGENT', callback_data: 'trade_buy_blueagent' }],
           [{ text: '📤 Send', callback_data: 'trade_send' }, { text: '🌉 Bridge', callback_data: 'trade_bridge' }],
         ]}
-      } as any
-    )
+      } as any)
+    } else {
+      await bot.sendMessage(chatId, '⚠️ Could not fetch portfolio. Try again.')
+    }
     return
   }
 
@@ -2740,35 +2766,47 @@ bot.on('message', async (msg) => {
   if (text === '📊 $BLUEAGENT') {
     bot.sendChatAction(chatId, 'typing').catch(() => {})
     try {
-      const [dexRes, poolRes] = await Promise.all([
-        axios.get(`https://api.geckoterminal.com/api/v2/networks/base/tokens/${BLUEAGENT_CONTRACT}`, { timeout: 6000 }),
-        axios.get(`https://api.geckoterminal.com/api/v2/networks/base/pools/${BLUEAGENT_POOL}`, { timeout: 6000 }),
-      ])
-      const ta = dexRes.data?.data?.attributes || {}
-      const pa = poolRes.data?.data?.attributes || {}
+      // Cache price data — only fetch every 60s to avoid rate limits
+      const now = Date.now()
+      let dexData: any = null
+      let poolData: any = null
 
-      const rawPrice = parseFloat(ta.price_usd || '0')
+      if (!priceCache.data || now - priceCache.ts > 60000) {
+        const res = await axios.get(
+          `https://api.dexscreener.com/latest/dex/tokens/${BLUEAGENT_CONTRACT}`,
+          { timeout: 8000 }
+        )
+        priceCache = { ts: now, data: res.data }
+      }
+
+      const pairs = priceCache.data?.pairs || []
+      const pair = pairs.find((p: any) => p.chainId === 'base') || pairs[0]
+
+      if (!pair) throw new Error('No pair data')
+
+      const rawPrice = parseFloat(pair.priceUsd || '0')
       const price = rawPrice === 0 ? 'N/A'
         : rawPrice >= 0.0001 ? `$${rawPrice.toFixed(6)}`
         : `$${rawPrice.toFixed(10).replace(/0+$/, '')}`
 
-      const change24 = pa.price_change_percentage?.h24
-        ? `${parseFloat(pa.price_change_percentage.h24) >= 0 ? '↑' : '↓'}${Math.abs(parseFloat(pa.price_change_percentage.h24)).toFixed(2)}%`
+      const change24 = pair.priceChange?.h24 != null
+        ? `${pair.priceChange.h24 >= 0 ? '↑' : '↓'}${Math.abs(pair.priceChange.h24).toFixed(2)}%`
         : 'N/A'
-      const change1h = pa.price_change_percentage?.h1
-        ? `${parseFloat(pa.price_change_percentage.h1) >= 0 ? '↑' : '↓'}${Math.abs(parseFloat(pa.price_change_percentage.h1)).toFixed(2)}%`
+      const change1h = pair.priceChange?.h1 != null
+        ? `${pair.priceChange.h1 >= 0 ? '↑' : '↓'}${Math.abs(pair.priceChange.h1).toFixed(2)}%`
         : 'N/A'
-      const mcap = ta.market_cap_usd
-        ? `$${(parseFloat(ta.market_cap_usd) / 1000).toFixed(1)}K`
-        : ta.fdv_usd ? `$${(parseFloat(ta.fdv_usd) / 1000).toFixed(1)}K` : 'N/A'
-      const vol = ta.volume_usd?.h24
-        ? `$${(parseFloat(ta.volume_usd.h24) / 1000).toFixed(1)}K`
+      const mcap = pair.marketCap
+        ? `$${(pair.marketCap / 1000).toFixed(1)}K`
+        : pair.fdv ? `$${(pair.fdv / 1000).toFixed(1)}K` : 'N/A'
+      const vol = pair.volume?.h24
+        ? `$${(pair.volume.h24 / 1000).toFixed(1)}K`
         : 'N/A'
-      const liq = pa.reserve_in_usd
-        ? `$${(parseFloat(pa.reserve_in_usd) / 1000).toFixed(1)}K`
+      const liq = pair.liquidity?.usd
+        ? `$${(pair.liquidity.usd / 1000).toFixed(1)}K`
         : 'N/A'
-      const buys = pa.transactions?.h24?.buys || 0
-      const sells = pa.transactions?.h24?.sells || 0
+      const buys = pair.txns?.h24?.buys || 0
+      const sells = pair.txns?.h24?.sells || 0
+      const pairUrl = pair.url || `https://dexscreener.com/base/${BLUEAGENT_CONTRACT}`
 
       await bot.sendMessage(chatId,
         `🟦 <b>$BLUEAGENT</b>\n\n` +
@@ -2777,7 +2815,7 @@ bot.on('message', async (msg) => {
         `🏦 MCap: ${mcap}  💧 Liq: ${liq}\n` +
         `📊 Vol 24h: ${vol}\n` +
         `🛒 ${buys} buys  📤 ${sells} sells\n\n` +
-        `<a href="https://www.geckoterminal.com/base/pools/${BLUEAGENT_POOL}">📊 Chart</a> · <a href="https://dexscreener.com/base/${BLUEAGENT_CONTRACT}">DEX</a>`,
+        `<a href="${pairUrl}">📊 Chart</a> · <a href="https://basescan.org/token/${BLUEAGENT_CONTRACT}">Basescan</a>`,
         { parse_mode: 'HTML', disable_web_page_preview: true } as any
       )
     } catch {
@@ -3506,6 +3544,9 @@ if (featureEnabled('gem_signals')) {
 // =======================
 const TRADES_THREAD_ID = 60
 const BLUEAGENT_CONTRACT = TOKEN_CONTRACT
+
+// Price cache — avoid GeckoTerminal rate limits
+let priceCache: { ts: number; data: any } = { ts: 0, data: null }
 const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY || ''
 let lastProcessedTxHash = ''
 const TRADE_POLL_MS = 60 * 1000 // check every 60s
@@ -4026,6 +4067,7 @@ function isQuestDone(userId: number, quest: Quest): boolean {
 
 // /quests command
 bot.onText(/\/quests/, async (msg) => {
+  if (await blockInGroup(msg)) return
   const chatId = msg.chat.id
   const userId = msg.from?.id || chatId
   await sendQuestMenu(chatId, userId)
@@ -4281,6 +4323,7 @@ interface TriviaSession {
   startTime: number
   answered: boolean
   threadId?: number
+  winners: { userId: number | undefined; username: string }[]
 }
 
 let activeTrivia: TriviaSession | null = null
@@ -4305,12 +4348,13 @@ async function postTriviaQuestion() {
       messageId: msg.message_id,
       startTime: Date.now(),
       answered: false,
-      threadId: undefined
+      threadId: undefined,
+      winners: []
     }
 
-    // Post hint after 60s if not answered
+    // Post hint after 60s
     setTimeout(async () => {
-      if (activeTrivia && !activeTrivia.answered) {
+      if (activeTrivia && activeTrivia.winners.length === 0) {
         await bot.sendMessage(ALPHA_CHAT_ID,
           `💡 <b>Hint:</b> ${q.hint}`,
           { parse_mode: 'HTML' } as any
@@ -4318,15 +4362,31 @@ async function postTriviaQuestion() {
       }
     }, 60 * 1000)
 
-    // Close after 3 min if no answer
+    // Reveal results after 3 min
     setTimeout(async () => {
-      if (activeTrivia && !activeTrivia.answered) {
+      if (!activeTrivia) return
+      const choiceLabels = ['A', 'B', 'C', 'D']
+      const correctLabel = choiceLabels[['a','b','c','d'].indexOf(q.answer)]
+      const correctText = q.choices[['a','b','c','d'].indexOf(q.answer)]
+      const winners = activeTrivia.winners
+
+      if (winners.length === 0) {
         await bot.sendMessage(ALPHA_CHAT_ID,
-          `⏰ Time's up! The answer was: <b>${correctLabel}. ${q.choices[['a','b','c','d'].indexOf(q.answer)]}</b>`,
+          `⏰ <b>Time's up!</b>\n\n` +
+          `✅ Answer: <b>${correctLabel}. ${correctText}</b>\n\n` +
+          `No one got it this time 😅`,
           { parse_mode: 'HTML' } as any
         ).catch(console.error)
-        activeTrivia = null
+      } else {
+        const winnerList = winners.map((w: any, i: number) => `${i + 1}. <b>${w.username}</b>`).join('\n')
+        await bot.sendMessage(ALPHA_CHAT_ID,
+          `⏰ <b>Trivia Results!</b>\n\n` +
+          `✅ Answer: <b>${correctLabel}. ${correctText}</b>\n\n` +
+          `🏆 <b>Winners (+25 pts each):</b>\n${winnerList}`,
+          { parse_mode: 'HTML' } as any
+        ).catch(console.error)
       }
+      activeTrivia = null
     }, 3 * 60 * 1000)
 
   } catch (e) { console.error('Trivia error:', e) }
@@ -4344,36 +4404,38 @@ bot.on('message', async (msg) => {
   if (!['a', 'b', 'c', 'd'].includes(text)) return
 
   const correct = text === activeTrivia.question.answer
+  const userId = msg.from?.id
+  const username = msg.from?.username ? `@${msg.from.username}` : msg.from?.first_name || 'Builder'
+
   if (!correct) {
     await bot.sendMessage(ALPHA_CHAT_ID,
-      `❌ Wrong! Try again...`,
+      `❌ Wrong answer, ${username}! Keep trying...`,
       { parse_mode: 'HTML', reply_to_message_id: msg.message_id } as any
     ).catch(console.error)
     return
   }
 
-  activeTrivia.answered = true
-  const userId = msg.from?.id
-  const username = msg.from?.username ? `@${msg.from.username}` : msg.from?.first_name || 'Builder'
-  const choiceLabels = ['A', 'B', 'C', 'D']
-  const correctLabel = choiceLabels[['a','b','c','d'].indexOf(activeTrivia.question.answer)]
-  const correctText = activeTrivia.question.choices[['a','b','c','d'].indexOf(activeTrivia.question.answer)]
+  // Check if user already answered correctly
+  if (activeTrivia.winners.some((w: any) => w.userId === userId)) return
 
-  if (userId) {
-    const users = loadUsers()
-    if (!users[userId]) users[userId] = { id: userId, points: 0, joinedAt: Date.now() }
-    users[userId].points = (users[userId].points || 0) + 25
-    saveUsers(users)
+  // Add to winners list (max 5)
+  if (activeTrivia.winners.length < 5) {
+    activeTrivia.winners.push({ userId, username })
+
+    // Award points
+    if (userId) {
+      const users = loadUsers()
+      if (!users[userId]) users[userId] = { id: userId, points: 0, joinedAt: Date.now() }
+      users[userId].points = (users[userId].points || 0) + 25
+      saveUsers(users)
+    }
+
+    // React to confirm (silent)
+    await bot.sendMessage(ALPHA_CHAT_ID,
+      `✅ <b>${username}</b> answered correctly! (${activeTrivia.winners.length}/5)`,
+      { parse_mode: 'HTML', reply_to_message_id: msg.message_id } as any
+    ).catch(console.error)
   }
-
-  await bot.sendMessage(ALPHA_CHAT_ID,
-    `🎉 <b>${username} got it!</b>\n\n` +
-    `✅ <b>${correctLabel}. ${correctText}</b>\n` +
-    `⭐ +25 pts awarded!`,
-    { parse_mode: 'HTML', reply_to_message_id: msg.message_id } as any
-  ).catch(console.error)
-
-  activeTrivia = null
 })
 
 // Game 2: /predict — simple prediction game
@@ -4525,11 +4587,40 @@ const SPAM_LIMIT = 5        // max messages per window
 const SPAM_WINDOW = 10000   // 10 seconds
 const MUTE_DURATION = 60    // mute 60 seconds
 
+// Link pattern
+const LINK_PATTERN = /https?:\/\/|t\.me\/|@\w{5,}/i
+
+// Check if user is admin/owner in group
+async function isGroupAdmin(chatId: number, userId: number): Promise<boolean> {
+  try {
+    const member = await bot.getChatMember(chatId, userId)
+    return ['administrator', 'creator'].includes(member.status)
+  } catch {
+    return false
+  }
+}
+
 bot.on('message', async (msg) => {
   if (msg.chat.id !== ALPHA_CHAT_ID) return
   if (msg.from?.is_bot) return
   const userId = msg.from?.id
   if (!userId || userId === OWNER_ID) return
+
+  // Link protection — only admins can share links
+  const text = msg.text || msg.caption || ''
+  if (LINK_PATTERN.test(text)) {
+    const isAdmin = await isGroupAdmin(ALPHA_CHAT_ID, userId)
+    if (!isAdmin) {
+      try {
+        await bot.deleteMessage(ALPHA_CHAT_ID, msg.message_id)
+        await bot.sendMessage(ALPHA_CHAT_ID,
+          `⚠️ @${msg.from?.username || msg.from?.first_name} — only admins can share links in this group.`,
+          { parse_mode: 'HTML' } as any
+        )
+      } catch {}
+      return
+    }
+  }
 
   const now = Date.now()
   const userMsg = messageCount.get(userId) || { count: 0, resetAt: now + SPAM_WINDOW, warned: false }
@@ -5142,63 +5233,11 @@ bot.onText(/\/portfolio/, async (msg) => {
 
   await bot.sendChatAction(chatId, 'typing')
 
-  // Fetch ETH balance
-  let ethBalance = 0
-  let blueagentBalance = 0
-  let priceUSD = 0
-  let change24h = 0
-
-  try {
-    // ETH balance
-    const rpcRes = await axios.post('https://mainnet.base.org', {
-      jsonrpc: '2.0', method: 'eth_getBalance', params: [addr, 'latest'], id: 1
-    }, { timeout: 6000 })
-    const hex = rpcRes.data?.result || '0x0'
-    const wei = BigInt(hex)
-    ethBalance = Number(wei) / 1e18
-
-    // $BLUEAGENT balance (ERC20)
-    const ERC20_BALANCE_DATA = '0x70a08231000000000000000000000000' + addr.slice(2).padStart(64, '0')
-    const tokenRes = await axios.post('https://mainnet.base.org', {
-      jsonrpc: '2.0', method: 'eth_call',
-      params: [{ to: TOKEN_CONTRACT, data: ERC20_BALANCE_DATA }, 'latest'], id: 2
-    }, { timeout: 6000 })
-    const rawBal = tokenRes.data?.result || '0x0'
-    blueagentBalance = Number(BigInt(rawBal)) / 1e18
-
-    // Price
-    const priceRes = await axios.get(
-      `https://api.geckoterminal.com/api/v2/networks/base/pools/${TOKEN_POOL}`,
-      { timeout: 6000 }
-    )
-    const pa = priceRes.data?.data?.attributes || {}
-    priceUSD = parseFloat(pa.base_token_price_usd || '0')
-    change24h = parseFloat(pa.price_change_percentage?.h24 || '0')
-  } catch (e) {
-    // continue with zeros
-  }
-
-  const blueagentUSD = blueagentBalance * priceUSD
-  const changeEmoji = change24h >= 0 ? '↑' : '↓'
-  const changeColor = change24h >= 0 ? '🟢' : '🔴'
-
-  const shortAddr = addr.slice(0, 6) + '...' + addr.slice(-4)
-  const addrUrl = `https://basescan.org/address/${addr}`
-
-  await bot.sendMessage(chatId,
-    `<b>📊 Portfolio</b>\n` +
-    `<code>${shortAddr}</code> · <a href="${addrUrl}">Basescan</a>\n` +
-    `──────────────────\n` +
-    `<b>ETH</b>   ${ethBalance.toFixed(6)} ETH\n` +
-    `<b>${TOKEN_NAME}</b>   ${blueagentBalance.toLocaleString('en', { maximumFractionDigits: 0 })} tokens\n` +
-    `       ≈ $${blueagentUSD.toFixed(4)} USD\n` +
-    `──────────────────\n` +
-    `<b>$BLUEAGENT Price</b>\n` +
-    `$${priceUSD > 0 ? priceUSD.toFixed(10).replace(/0+$/, '') : 'N/A'}\n` +
-    `${changeColor} ${changeEmoji}${Math.abs(change24h).toFixed(2)}% (24h)\n` +
-    `──────────────────\n` +
-    `<i>Powered by Bankr · Base</i>`,
-    {
+  // Use Bankr Agent — same as "my portfolio" prompt
+  const agentPrompt = `Check portfolio and token balances for wallet address ${addr} on Base chain. Do NOT use any other wallet. Wallet: ${addr}`
+  const result = await askBankrAgent(agentPrompt, 20)
+  if (result) {
+    await bot.sendMessage(chatId, formatAgentReply(result), {
       parse_mode: 'HTML',
       disable_web_page_preview: true,
       reply_markup: {
@@ -5207,8 +5246,10 @@ bot.onText(/\/portfolio/, async (msg) => {
           [{ text: '📤 Send', callback_data: 'trade_send' }, { text: '🌉 Bridge', callback_data: 'trade_bridge' }],
         ]
       }
-    } as any
-  )
+    } as any)
+  } else {
+    await bot.sendMessage(chatId, '⚠️ Could not fetch portfolio. Try again.')
+  }
 })
 
 // =======================
