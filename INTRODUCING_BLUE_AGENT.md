@@ -122,7 +122,7 @@ Spots are limited. Clock is ticking.
 ## Community
 
 - **Telegram:** [t.me/blueagent_hub](https://t.me/blueagent_hub)
-- **Bot:** [@Blockyagent_beta_bot](https://t.me/Blockyagent_beta_bot)
+- **Bot:** [@blockyagent_bot](https://t.me/blockyagent_bot)
 - **X/Twitter:** [@blocky_agent](https://x.com/blocky_agent)
 - **Token:** [$BLUEAGENT on Basescan](https://basescan.org/token/0xf895783b2931c919955e18b5e3343e7c7c456ba3)
 
@@ -130,7 +130,7 @@ Spots are limited. Clock is ticking.
 
 ## How to get started
 
-1. DM [@Blockyagent_beta_bot](https://t.me/Blockyagent_beta_bot)
+1. DM [@blockyagent_bot](https://t.me/blockyagent_bot)
 2. Type `/start` — wallet auto-created
 3. Type `gm` daily — start earning points + streak
 4. Type `/score @yourXhandle` — check your builder rank
