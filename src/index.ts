@@ -8,6 +8,14 @@ import { ethers } from 'ethers'
 // import { createCanvas } from 'canvas' // Reserved for Phase 2 card generation
 dotenv.config()
 
+// ── Global error handlers — prevent crashes from unhandled rejections ──
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION]', err.message, err.stack)
+})
+process.on('unhandledRejection', (reason: any) => {
+  console.error('[UNHANDLED REJECTION]', reason?.message || reason)
+})
+
 // ── Load config ──
 const CONFIG_FILE = path.join(__dirname, '..', 'config.json')
 const CFG = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'))
