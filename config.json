@@ -1,0 +1,82 @@
+{
+  "tier": "scale",
+  "project": {
+    "name": "Blue Agent",
+    "emoji": "🟦",
+    "twitter": "@blocky_agent",
+    "telegram_community": "https://t.me/blueagent_hub",
+    "website": "https://blueagent.xyz"
+  },
+  "token": {
+    "symbol": "BLUEAGENT",
+    "name": "$BLUEAGENT",
+    "contract": "0xf895783b2931c919955e18b5e3343e7c7c456ba3",
+    "pool": "0x3245fb3a2034e38c1dfffc2916e2d4e61a070bfc5b822f4fa2236e801a108c8d",
+    "chain": "base",
+    "tokens_per_point": 1000,
+    "early_adopter_limit": 100,
+    "early_adopter_multiplier": 1.0,
+    "early_adopter_bonus_pts": 100,
+    "activity_tiers": [
+      { "name": "Builder", "min_days": 0,  "min_pts": 0,    "multiplier": 1.0 },
+      { "name": "Shipper", "min_days": 30, "min_pts": 500,  "multiplier": 1.3 },
+      { "name": "Founder", "min_days": 60, "min_pts": 1500, "multiplier": 1.5 },
+      { "name": "Legend",  "min_days": 90, "min_pts": 3000, "multiplier": 2.0 }
+    ],
+    "claim_tiers": [
+      { "min_pts": 100,  "bonus_pct": 0 }
+    ]
+  },
+  "telegram": {
+    "group_id": -1003863880093,
+    "bot_username": "blockyagent_bot",
+    "threads": {
+      "alpha": 15,
+      "trades": 60,
+      "feed": 18,
+      "meme": 9,
+      "builders": 5
+    }
+  },
+  "rewards": {
+    "checkin_pts": 5,
+    "checkin_streak_bonus_pts": 10,
+    "streak_bonus_days": 7,
+    "referrer_pts": 50,
+    "referred_pts": 10,
+    "submit_project_pts": 20,
+    "claim_min_pts": 100,
+    "claim_cooldown_days": 7,
+    "streak_multiplier": {
+      "tier1_days": 7,
+      "tier1_mult": 1.5,
+      "tier2_days": 14,
+      "tier2_mult": 2.0
+    }
+  },
+  "auto_posts": {
+    "alpha_signals_interval_ms": 7200000,
+    "trending_interval_ms": 14400000,
+    "trades_enabled": true
+  },
+  "features": {
+    "trade_tracker":      true,
+    "whale_alert":        true,
+    "price_alerts":       true,
+    "gem_signals":        true,
+    "mini_games":         true,
+    "raffle":             true,
+    "scheduled_posts":    true,
+    "anti_spam":          true,
+    "ai_manager":         true,
+    "builder_score":      true,
+    "bounties":           true,
+    "proposal_voting":    true,
+    "x_quests":           true,
+    "token_claim":        true,
+    "broadcast_dm":       true,
+    "flash_quests":       true,
+    "analytics_export":   true,
+    "token_gate":         true
+  }
+}
