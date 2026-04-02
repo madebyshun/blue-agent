@@ -2868,12 +2868,98 @@ bot.on('callback_query', async (query) => {
 // MAIN MESSAGE HANDLER
 // Flow: Bankr Agent (real-time data) → LLM fallback (personality)
 // =======================
+// ==========================================
+// TOKEN SCANNER — auto-detect CA in messages
+// ==========================================
+async function scanToken(ca: string): Promise<string> {
+  try {
+    // Fetch from DexScreener
+    const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${ca}`)
+    const data = await res.json() as any
+    const pairs = data.pairs
+    if (!pairs || pairs.length === 0) {
+      return `❌ Token not found on DexScreener.\n\n<code>${ca}</code>`
+    }
+
+    // Pick best pair (highest liquidity)
+    const pair = pairs.sort((a: any, b: any) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0]
+    const token = pair.baseToken
+    const price = pair.priceUsd ? `$${parseFloat(pair.priceUsd).toFixed(6)}` : 'N/A'
+    const change24h = pair.priceChange?.h24
+    const changeStr = change24h !== undefined
+      ? `${change24h > 0 ? '📈 +' : '📉 '}${change24h.toFixed(2)}%`
+      : 'N/A'
+    const mcap = pair.marketCap ? `$${(pair.marketCap / 1e6).toFixed(2)}M` : pair.fdv ? `$${(pair.fdv / 1e6).toFixed(2)}M` : 'N/A'
+    const liq = pair.liquidity?.usd ? `$${(pair.liquidity.usd / 1e3).toFixed(1)}K` : 'N/A'
+    const vol24h = pair.volume?.h24 ? `$${(pair.volume.h24 / 1e3).toFixed(1)}K` : 'N/A'
+    const buys = pair.txns?.h24?.buys || 0
+    const sells = pair.txns?.h24?.sells || 0
+    const chain = pair.chainId || 'unknown'
+    const dexUrl = pair.url || `https://dexscreener.com/${chain}/${ca}`
+    const age = pair.pairCreatedAt
+      ? `${Math.floor((Date.now() - pair.pairCreatedAt) / 86400000)}d`
+      : 'N/A'
+
+    // Basescan contract check
+    const basescanKey = process.env.BASESCAN_API_KEY || ''
+    let contractInfo = ''
+    if (chain === 'base' && basescanKey) {
+      try {
+        const abiRes = await fetch(`https://api.basescan.org/api?module=contract&action=getabi&address=${ca}&apikey=${basescanKey}`)
+        const abiData = await abiRes.json() as any
+        contractInfo = abiData.status === '1' ? '✅ Verified' : '⚠️ Unverified'
+      } catch { contractInfo = '⚠️ Unknown' }
+    }
+
+    // Simple risk assessment
+    const liqNum = pair.liquidity?.usd || 0
+    const mcapNum = pair.marketCap || pair.fdv || 0
+    const risk = liqNum < 10000 ? '🔴 HIGH' : liqNum < 50000 ? '🟡 MEDIUM' : '🟢 LOW'
+
+    return (
+      `🔍 <b>${token.name}</b> ($${token.symbol})\n` +
+      `<code>${ca.slice(0, 6)}...${ca.slice(-4)}</code> · ${chain}\n` +
+      `──────────────\n` +
+      `💰 Price: <b>${price}</b> ${changeStr}\n` +
+      `📊 MCap: <b>${mcap}</b>\n` +
+      `💧 Liquidity: <b>${liq}</b>\n` +
+      `📈 Vol 24h: <b>${vol24h}</b>\n` +
+      `🔄 Buys/Sells: <b>${buys} / ${sells}</b>\n` +
+      `🕐 Age: <b>${age}</b>\n` +
+      `${contractInfo ? `📋 Contract: <b>${contractInfo}</b>\n` : ''}` +
+      `⚠️ Risk: <b>${risk}</b>\n` +
+      `──────────────\n` +
+      `<a href="${dexUrl}">📊 DexScreener</a> · <a href="https://basescan.org/token/${ca}">🔍 Basescan</a>`
+    )
+  } catch (err) {
+    return `❌ Failed to scan token. Please try again.`
+  }
+}
+
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id
   const userId = msg.from?.id || chatId
   const text = msg.text?.trim()
 
   if (!text || text.startsWith('/')) return
+
+  // Auto-detect contract address (0x + 40 hex chars)
+  const caMatch = text.match(/\b(0x[a-fA-F0-9]{40})\b/)
+  if (caMatch && !dexPaySessions.has(userId)) {
+    const ca = caMatch[1]
+    // Don't scan if it's a wallet address the user is sending to
+    const isKnownWallet = ca.toLowerCase() === '0xf31f59e7b8b58555f7871f71973a394c8f1bffe5'
+    if (!isKnownWallet) {
+      bot.sendChatAction(chatId, 'typing').catch(() => {})
+      const report = await scanToken(ca)
+      await bot.sendMessage(chatId, report, {
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+        reply_to_message_id: msg.message_id,
+      } as any)
+      return
+    }
+  }
 
   // If user is in a DexPay session, let the DexPay handler take over
   if (dexPaySessions.has(userId)) return
