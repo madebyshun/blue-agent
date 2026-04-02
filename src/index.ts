@@ -1948,14 +1948,14 @@ bot.onText(/\/credits/, async (msg) => {
     `<b>🪙 My Credits</b>\n\n` +
     `Balance: <b>${credits} Credits</b>\n\n` +
     `<b>Use Credits for:</b>\n` +
-    `• ✍️ Copywriter: 3 cr/msg\n` +
-    `• 🎨 UX Designer: 5 cr/msg\n` +
-    `• 📊 Tokenomics: 10 cr/msg\n` +
-    `• 🚀 GTM Advisor: 10 cr/msg\n` +
-    `• 💻 Code Review: 8 cr/msg\n\n` +
+    `• ✍️ Copywriter: 2 cr/msg\n` +
+    `• 🎨 UX Designer: 3 cr/msg\n` +
+    `• 📊 Tokenomics: 7 cr/msg\n` +
+    `• 🚀 GTM Advisor: 7 cr/msg\n` +
+    `• 💻 Code Review: 5 cr/msg\n\n` +
     `<b>How to get Credits:</b>\n` +
     `→ Buy with $BLUEAGENT (coming soon)\n\n` +
-    `<i>1M $BLUEAGENT = 100 Credits</i>`,
+    `<i>1M $BLUEAGENT = 20 Credits</i>`,
     {
       parse_mode: 'HTML',
       reply_markup: {
@@ -2651,11 +2651,11 @@ bot.on('callback_query', async (query) => {
   if (data === 'menu_agents') {
     await editMenu(query,
       `<b>🤖 Meet Agents</b>\n\nSpecialist AI agents — pay with $BLUEAGENT Credits.\n\n` +
-      `✍️ <b>Copywriter</b> — Web3 copy & tweets · <i>3 cr/msg</i>\n` +
-      `🎨 <b>UX Designer</b> — UI/UX expert · <i>5 cr/msg</i>\n` +
-      `📊 <b>Tokenomics</b> — Token design expert · <i>10 cr/msg</i>\n` +
-      `🚀 <b>GTM Advisor</b> — Go-to-market strategy · <i>10 cr/msg</i>\n` +
-      `💻 <b>Code Review</b> — Code review & refactor · <i>8 cr/msg</i>\n\n` +
+      `✍️ <b>Copywriter</b> — Web3 copy & tweets · <i>2 cr/msg</i>\n` +
+      `🎨 <b>UX Designer</b> — UI/UX expert · <i>3 cr/msg</i>\n` +
+      `📊 <b>Tokenomics</b> — Token design expert · <i>7 cr/msg</i>\n` +
+      `🚀 <b>GTM Advisor</b> — Go-to-market strategy · <i>7 cr/msg</i>\n` +
+      `💻 <b>Code Review</b> — Code review & refactor · <i>5 cr/msg</i>\n\n` +
       `<i>Coming soon — buy Credits with $BLUEAGENT to get started</i>`,
       {
         inline_keyboard: [
@@ -2673,12 +2673,12 @@ bot.on('callback_query', async (query) => {
     await editMenu(query,
       `<b>🪙 My Credits</b>\n\nBalance: <b>${credits2} Credits</b>\n\n` +
       `<b>Use Credits for:</b>\n` +
-      `• ✍️ Copywriter: 3 cr/msg\n` +
-      `• 🎨 UX Designer: 5 cr/msg\n` +
-      `• 📊 Tokenomics: 10 cr/msg\n` +
-      `• 🚀 GTM Advisor: 10 cr/msg\n` +
-      `• 💻 Code Review: 8 cr/msg\n\n` +
-      `<i>Buy with $BLUEAGENT — coming soon\n1M $BLUEAGENT = 100 Credits</i>`,
+      `• ✍️ Copywriter: 2 cr/msg\n` +
+      `• 🎨 UX Designer: 3 cr/msg\n` +
+      `• 📊 Tokenomics: 7 cr/msg\n` +
+      `• 🚀 GTM Advisor: 7 cr/msg\n` +
+      `• 💻 Code Review: 5 cr/msg\n\n` +
+      `<i>Buy with $BLUEAGENT — coming soon\n1M $BLUEAGENT = 20 Credits</i>`,
       { inline_keyboard: [[{ text: '🤖 Meet Agents', callback_data: 'menu_agents' }, { text: '💰 Buy Credits', callback_data: 'credits_buy' }], NAV_ROW] }
     )
     return
