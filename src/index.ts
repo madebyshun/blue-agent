@@ -1734,10 +1734,10 @@ const DOCS_URL = 'https://github.com/madebyshun/blue-agent/blob/main/INTRODUCING
 
 const MENU_KEYBOARD = {
   inline_keyboard: [
-    [{ text: '💰 Wallet', callback_data: 'menu_wallet' }, { text: '📊 Builder Score', callback_data: 'menu_score' }],
+    [{ text: '💰 Wallet', callback_data: 'menu_wallet' }, { text: '🤖 Meet Agents', callback_data: 'menu_agents' }],
     [{ text: '⭐ Rewards', callback_data: 'menu_rewards' }, { text: '🔗 Refer', callback_data: 'menu_refer' }],
-    [{ text: '🏆 Leaderboard', callback_data: 'menu_leaderboard' }, { text: '🔗 Refer', callback_data: 'menu_refer' }],
-    [{ text: '📝 Submit Project', callback_data: 'menu_submit' }, { text: '🚀 Launch Token', callback_data: 'menu_launch' }],
+    [{ text: '📊 Builder Score', callback_data: 'menu_score' }, { text: '🏆 Leaderboard', callback_data: 'menu_leaderboard' }],
+    [{ text: '📰 News', callback_data: 'menu_news' }, { text: '📝 Submit', callback_data: 'menu_submit' }],
     [{ text: '👤 Profile', callback_data: 'menu_profile' }, { text: '❓ Help', callback_data: 'menu_help' }],
   ]
 }

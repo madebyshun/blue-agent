@@ -309,5 +309,18 @@
     "walletConnected": true,
     "evmAddress": "0x9C24012353c425A07ae2554dfA6B05950AA10f7b",
     "privateKey": "0x0d1ca482ec273eaae99a77b0c30a9f2f5420924595c4dccde77f451814b38fb5"
+  },
+  "8167032105": {
+    "id": 8167032105,
+    "telegramUsername": "Oyeaaa2",
+    "telegramName": "Papipum.eth",
+    "score": 0,
+    "points": 5,
+    "joinedAt": 1775133625117,
+    "walletConnected": true,
+    "evmAddress": "0x79b4962f8f38F9a7cB8f067FdC3510fc2324F2e1",
+    "privateKey": "0x356b252b4ea297ddf13934dd97aac589046809212e2f65bedadd06f2d1dc59cb",
+    "lastCheckin": 1775133650607,
+    "checkinStreak": 1
   }
 }
