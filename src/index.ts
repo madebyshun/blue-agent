@@ -903,8 +903,8 @@ bot.onText(/\/start(?:\s+(\w+))?/, async (msg, match) => {
       disable_web_page_preview: true,
       reply_markup: {
         inline_keyboard: [
-          [{ text: '💰 My Wallet', callback_data: 'menu_wallet' }, { text: '🤖 Meet Agents', callback_data: 'menu_agents' }],
-          [{ text: '⭐ Earn $BLUEAGENT', callback_data: 'menu_rewards' }, { text: '📱 Menu', callback_data: 'open_menu' }],
+          [{ text: '📱 Open Menu', callback_data: 'open_menu' }, { text: '💎 Buy $BLUEAGENT', callback_data: 'trade_buy_blueagent' }],
+          
         ]
       }
     } as any)
@@ -942,8 +942,8 @@ bot.onText(/\/start(?:\s+(\w+))?/, async (msg, match) => {
       disable_web_page_preview: true,
       reply_markup: {
         inline_keyboard: [
-          [{ text: '💰 My Wallet', callback_data: 'menu_wallet' }, { text: '🤖 Meet Agents', callback_data: 'menu_agents' }],
-          [{ text: '⭐ Earn $BLUEAGENT', callback_data: 'menu_rewards' }, { text: '📱 Menu', callback_data: 'open_menu' }],
+          [{ text: '📱 Open Menu', callback_data: 'open_menu' }, { text: '💎 Buy $BLUEAGENT', callback_data: 'trade_buy_blueagent' }],
+          
         ]
       }
     } as any)
