@@ -1,18 +1,137 @@
 {
+  "399145107": {
+    "id": 399145107,
+    "telegramUsername": "chaseopp",
+    "telegramName": "Chase",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1775005934782,
+    "walletConnected": true,
+    "evmAddress": "0x46FA96CDB4c573117C8EcAaB234454Ec12cff37d",
+    "privateKey": "0xf66b589c301f1176de5774c1bac014d113b3536b1e96ac6c1f4d4367758501e6"
+  },
+  "413135832": {
+    "id": 413135832,
+    "telegramUsername": "VictorinoA",
+    "telegramName": "VA",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1774988555829,
+    "walletConnected": true,
+    "evmAddress": "0x26aF18b86Fed3398995E75A0FdF8D863398cB349",
+    "privateKey": "0x8fe3890ef1c8e818be3df3b588748967d3cd9542ca46842a4626b374f88ec4d9"
+  },
+  "679496602": {
+    "id": 679496602,
+    "telegramUsername": "blackhat5454",
+    "telegramName": "Black hat",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1775016881136,
+    "walletConnected": true,
+    "evmAddress": "0x0C31A87Eb04D3e1dEF6410941cc34a506d339413",
+    "privateKey": "0x97ba2df6d8e0f4cca7f515556c4cf672fbacb853cd73b767e78865da8addbc58"
+  },
+  "909956667": {
+    "id": 909956667,
+    "telegramUsername": "Lokalspace",
+    "telegramName": "ARTHOUSE",
+    "score": 0,
+    "points": 157,
+    "joinedAt": 1775027541392,
+    "walletConnected": true,
+    "evmAddress": "0x94637E6Ae2aB8A5bf2632f68FF944DEe58E5F310",
+    "privateKey": "0x0fc45e34092eaea8604344e4bbddbea9f1a9d5c20e060679f1e9db58c65f362c",
+    "xHandle": "arthousebase",
+    "completedQuests": [
+      "set_x_handle",
+      "follow_x",
+      "like_pin_tweet",
+      "share_score",
+      "first_submit",
+      "weekly_submit_w2934",
+      "daily_vote_Wed Apr 01 2026"
+    ],
+    "lastCheckin": 1775029320722,
+    "checkinStreak": 1
+  },
+  "1097614485": {
+    "id": 1097614485,
+    "telegramUsername": "Successufully",
+    "telegramName": "Himu",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1775031956979,
+    "walletConnected": true,
+    "evmAddress": "0x2E61f0Da4b4d75E202F28Dc7B0B0937EbA58D461",
+    "privateKey": "0x8cc1b4bb8d2009fdb4830f524d9c7f27befbb3466c8b88ac63530f164ee1126e"
+  },
+  "1200856168": {
+    "id": 1200856168,
+    "telegramUsername": "snoliver",
+    "telegramName": "Sno Liver",
+    "score": 0,
+    "points": 5,
+    "joinedAt": 1775012736185,
+    "walletConnected": true,
+    "evmAddress": "0x170007539dDDE95F7263c14F3943f32b23Bc0aCe",
+    "privateKey": "0xecb627c674ebf6e48c9fd9aba2978e085b2082c12116f4d8542cd790e3a6ac02",
+    "lastCheckin": 1775012856881,
+    "checkinStreak": 1
+  },
+  "1271800239": {
+    "id": 1271800239,
+    "telegramUsername": "techwithmide",
+    "telegramName": "Israel",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1774980419996,
+    "walletConnected": true,
+    "evmAddress": "0xb7B06Dd3382964b52e1E1bedA59192068ACf21d8",
+    "privateKey": "0xa615e036a6c1229da4c718ee6fbdbbd30f5375dbc3c358306bf636a1cf583b64"
+  },
+  "1356199075": {
+    "id": 1356199075,
+    "telegramUsername": "Haikeys",
+    "telegramName": "Haikeys",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1774977337140,
+    "walletConnected": true,
+    "evmAddress": "0x6C1DD6cFcAB176caA847c86465621663f1c556Bf",
+    "privateKey": "0x37a655f6aeaaa754ac1f9954a872e78d758f82e37b97d7abc02946f84c9dc6a1"
+  },
+  "1603213738": {
+    "id": 1603213738,
+    "telegramUsername": "Cybercelos",
+    "telegramName": "Cyber Celos",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1775034367143,
+    "walletConnected": true,
+    "evmAddress": "0x5D60375fc33ad4B0594df2591E705F028b8C4fd1",
+    "privateKey": "0x53fe6f5bdba051e889cd9f877c56415abecd1bd5c3320ea83091457dac25c77f"
+  },
   "6614397596": {
     "id": 6614397596,
     "telegramUsername": "madebyshun",
     "telegramName": "Shun",
     "score": 0,
-    "points": 30,
+    "points": 77,
     "joinedAt": 1774879978150,
     "walletConnected": true,
     "evmAddress": "0xEE01b8acD1Fe7D5D24F0E11A32F08c9E8EFf524A",
     "privateKey": "0xf9a5b91a60255985d89d199ff4fdd74714f4f613272e3169ee98f96163bae574",
     "lastClaim": 1774880906191,
-    "lastCheckin": 1774928960633,
-    "checkinStreak": 2,
-    "claimedPoints": 710000
+    "lastCheckin": 1774977049558,
+    "checkinStreak": 3,
+    "claimedPoints": 710000,
+    "completedQuests": [
+      "like_pin_tweet",
+      "follow_x",
+      "set_x_handle"
+    ],
+    "xHandle": "madebyshun"
   },
   "5771178280": {
     "id": 5771178280,
@@ -35,5 +154,149 @@
     "walletConnected": true,
     "evmAddress": "0xC1f35c73643D65fcB95b017669b70109b2744088",
     "privateKey": "0xc2bdffcae1d73840e5585df0562a3e62e63935fdd53ec5a0025d434ee4a3bb04"
+  },
+  "7956998450": {
+    "id": 7956998450,
+    "telegramName": "Adam",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1774945173085,
+    "walletConnected": true,
+    "evmAddress": "0x00496c620200C9088fed721ac813dfe3b44cea56",
+    "privateKey": "0x7e55f71863556863ecadd1e513f8636ffe417f3af2b35e17dc894a1a4c7a7085"
+  },
+  "7550926115": {
+    "id": 7550926115,
+    "telegramName": "Dragan",
+    "score": 0,
+    "points": 30,
+    "joinedAt": 1774958886323,
+    "walletConnected": true,
+    "evmAddress": "0x902BD5200b0e2136DCD8702b3FBC0428e34a5C2b",
+    "privateKey": "0x60435b5bef45f96cdda47908f2b78648828d519e1645d4c38adb9c9974271258",
+    "lastCheckin": 1775050849283,
+    "checkinStreak": 1
+  },
+  "6058771166": {
+    "id": 6058771166,
+    "telegramUsername": "Ojee87",
+    "telegramName": "Ojeembut",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1774963577065,
+    "walletConnected": true,
+    "evmAddress": "0x388aaa3EDa46291d4089D27EA595B2b975A756C0",
+    "privateKey": "0x804dc68a9768cb75a00bdb59a84e631880b9b8673f8668ae243ff3637a98fbe6"
+  },
+  "6028588767": {
+    "id": 6028588767,
+    "telegramUsername": "defidevrelalt",
+    "telegramName": "Defidevrel",
+    "score": 0,
+    "points": 157,
+    "joinedAt": 1774976710176,
+    "walletConnected": true,
+    "evmAddress": "0x30237749E712723F08aAa0959Fd35fDec3311a09",
+    "privateKey": "0x08c44911150b20a5c555ac073a615e27a3ade46018fca2ee9b04e253b2f79333",
+    "lastCheckin": 1774976710188,
+    "checkinStreak": 1,
+    "completedQuests": [
+      "first_submit",
+      "weekly_submit_w2934",
+      "daily_vote_Wed Apr 01 2026",
+      "set_x_handle",
+      "follow_x",
+      "like_pin_tweet",
+      "share_score"
+    ],
+    "xHandle": "defidevrel"
+  },
+  "7064407761": {
+    "id": 7064407761,
+    "telegramUsername": "manniasf",
+    "telegramName": "MANNI",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1774977626038,
+    "walletConnected": true,
+    "evmAddress": "0xC5215FE7e56De05cab9ac654C93f97F17b895783",
+    "privateKey": "0x1d0faab618529bcbc95a48bd86b4c11d9d05b378aa9f2b754baceac36e857962"
+  },
+  "6888010209": {
+    "id": 6888010209,
+    "telegramUsername": "AbrahamNA_VIG",
+    "telegramName": "AbrahamNAVIG",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1774987457612,
+    "walletConnected": true,
+    "evmAddress": "0xa0Ef98E82a4997e36Af3829917645955E1CE1CDA",
+    "privateKey": "0x8e8ccf88b687af13ab9614d17086a3c93bc15f642af31ebfc51dcdcf4e5b7e35"
+  },
+  "6266536451": {
+    "id": 6266536451,
+    "telegramUsername": "vawzensm",
+    "telegramName": "Vawzensm",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1774988558545,
+    "walletConnected": true,
+    "evmAddress": "0x1892204C48A0A1d89BE92Dfe97E1f7f8169E4459",
+    "privateKey": "0x8f619cce526a0b7126b6f1fe73403c7435d9d818b10144a8e633472044cb1597"
+  },
+  "6258551845": {
+    "id": 6258551845,
+    "telegramUsername": "NoahBiliamin",
+    "telegramName": "arkade",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1775000284197,
+    "walletConnected": true,
+    "evmAddress": "0x1eE7ea27Fe8647c4078612f2a0e3568cDB5b690E",
+    "privateKey": "0xeacbdcf63e3ed894a8a3024d1b5e27fd8e186171e516f4f2810db785e7cf8e20"
+  },
+  "6286623257": {
+    "id": 6286623257,
+    "telegramUsername": "gondrongkutu01",
+    "telegramName": "LOSER",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1775018559115,
+    "walletConnected": true,
+    "evmAddress": "0xBB0ddC89C02eE9b2f9af7c384E6772DdE88c1171",
+    "privateKey": "0xd1f148898c5be7af784314325c05b119010e84397762aba7b1066e1e7645c50d"
+  },
+  "7584393059": {
+    "id": 7584393059,
+    "telegramUsername": "anthonyonchain7",
+    "telegramName": "Anthony Chainlens dev",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1775040442362,
+    "walletConnected": true,
+    "evmAddress": "0xC5DbB8dD2a8E6f6C026FC1A101efA2bcb422D35E",
+    "privateKey": "0xa67546b32bac5be26cbe4a245bf047a17cf2b585e11061409046737b5ceda62e"
+  },
+  "5861039520": {
+    "id": 5861039520,
+    "telegramUsername": "sexwinters",
+    "telegramName": "J",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1775042567206,
+    "walletConnected": true,
+    "evmAddress": "0x74F3b6B314d43Fed24852B5c619b2187b228FF33",
+    "privateKey": "0xa2235090ca4ee06a45750990035abbccf77a0496765e015ff871b6ae82e9332e"
+  },
+  "7615438372": {
+    "id": 7615438372,
+    "telegramUsername": "alexanderebanii",
+    "telegramName": "Ale👿🎃😺🕳️",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1775044910492,
+    "walletConnected": true,
+    "evmAddress": "0xe466800Bb22EF0BE72aD8e6689e721832b2Cb210",
+    "privateKey": "0xd66de52267456ee12db9ccfb0ada1a3c52dd2dd9bf4097b23085b4690c87097e"
   }
 }

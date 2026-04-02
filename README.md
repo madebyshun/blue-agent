@@ -29,6 +29,8 @@ AI-powered Telegram community bot for Base builders. Built by [Blocky Studio](ht
 | `/submit` | Submit your project to the directory |
 | `/projects` | Browse submitted projects |
 | `/quests` | Active quests — earn bonus points |
+| `/launch` | Token launch wizard (deploy ERC-20 on Base) |
+| `/dexpay` | Update DexScreener token info ($300 USDC) |
 
 ### 📊 Trading & Token
 | Command | Description |
@@ -56,7 +58,6 @@ AI-powered Telegram community bot for Base builders. Built by [Blocky Studio](ht
 | `/unschedule` | Cancel a scheduled post |
 | `/raffle` | Create/manage raffles |
 | `/propose` | Manage proposals |
-| `/launch` | Token launch wizard (deploy ERC-20 on Base) |
 | `/subscribe` | Manage project subscriptions |
 | `/subs` | List all subscriptions |
 
