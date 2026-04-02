@@ -1013,7 +1013,7 @@ bot.onText(/\/help/, async (msg) => {
     { parse_mode: 'HTML', reply_markup: {
       inline_keyboard: [
         [{ text: '📱 Open Menu', callback_data: 'open_menu' }, { text: '🤖 Meet Agents', callback_data: 'menu_agents' }],
-        [{ text: '⭐ My Points', callback_data: 'menu_points' }, { text: '💰 Wallet', callback_data: 'menu_wallet' }],
+        [{ text: '💰 Wallet', callback_data: 'menu_wallet' }, { text: '🤖 Meet Agents', callback_data: 'menu_agents' }],
       ]
     }} as any
   )
@@ -1735,7 +1735,7 @@ const DOCS_URL = 'https://github.com/madebyshun/blue-agent/blob/main/INTRODUCING
 const MENU_KEYBOARD = {
   inline_keyboard: [
     [{ text: '💰 Wallet', callback_data: 'menu_wallet' }, { text: '📊 Builder Score', callback_data: 'menu_score' }],
-    [{ text: '⭐ Points', callback_data: 'menu_points' }, { text: '🎁 Rewards', callback_data: 'menu_rewards' }],
+    [{ text: '⭐ Rewards', callback_data: 'menu_rewards' }, { text: '🔗 Refer', callback_data: 'menu_refer' }],
     [{ text: '🏆 Leaderboard', callback_data: 'menu_leaderboard' }, { text: '🔗 Refer', callback_data: 'menu_refer' }],
     [{ text: '📝 Submit Project', callback_data: 'menu_submit' }, { text: '🚀 Launch Token', callback_data: 'menu_launch' }],
     [{ text: '👤 Profile', callback_data: 'menu_profile' }, { text: '❓ Help', callback_data: 'menu_help' }],
