@@ -117,14 +117,14 @@
     "telegramUsername": "madebyshun",
     "telegramName": "Shun",
     "score": 0,
-    "points": 82,
+    "points": 87,
     "joinedAt": 1774879978150,
     "walletConnected": true,
     "evmAddress": "0xEE01b8acD1Fe7D5D24F0E11A32F08c9E8EFf524A",
     "privateKey": "0xf9a5b91a60255985d89d199ff4fdd74714f4f613272e3169ee98f96163bae574",
     "lastClaim": 1774880906191,
-    "lastCheckin": 1775110014246,
-    "checkinStreak": 4,
+    "lastCheckin": 1775189386297,
+    "checkinStreak": 5,
     "claimedPoints": 710000,
     "completedQuests": [
       "like_pin_tweet",
@@ -322,5 +322,42 @@
     "privateKey": "0x356b252b4ea297ddf13934dd97aac589046809212e2f65bedadd06f2d1dc59cb",
     "lastCheckin": 1775133650607,
     "checkinStreak": 1
+  },
+  "5851994001": {
+    "id": 5851994001,
+    "points": 25,
+    "joinedAt": 1775153164422
+  },
+  "5068062974": {
+    "id": 5068062974,
+    "telegramUsername": "Hamujajm",
+    "telegramName": "musa 🐾",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1775176347533,
+    "walletConnected": true,
+    "evmAddress": "0x4953194F7f87FF0a4fa9c81718aEd0b265049213",
+    "privateKey": "0xc9d3c6561ae8372f62430b906e0d04df4da3b8abd80b9ecd79f0446c5ecc1326"
+  },
+  "5246803697": {
+    "id": 5246803697,
+    "telegramUsername": "sd_coinstore",
+    "telegramName": "Sd | Coinstore | SBD",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1775198952103,
+    "walletConnected": true,
+    "evmAddress": "0xbb5db1ebE6A93DC0D3F5Fa9ce689834A395F844e",
+    "privateKey": "0x2a6e1c2771328aaab3e9d45f95c381cbaf7452ec5cee0b90a9bedda5b852e800"
+  },
+  "7640119893": {
+    "id": 7640119893,
+    "telegramUsername": "Anthony_q_warr08",
+    "telegramName": "Anthony",
+    "points": 5,
+    "joinedAt": 1775221868272,
+    "walletConnected": true,
+    "evmAddress": "0x30b410AF16289DF3f35C109369Fcef173973f1CB",
+    "privateKey": "0x0ce54fdd65d09f4123d3c07e94f96be5a30e5a5091d16435c193ed4196b61252"
   }
 }

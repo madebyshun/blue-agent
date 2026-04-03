@@ -55,7 +55,7 @@ const USERS_FILE = path.join(DATA_DIR, 'users.json')
 const REFERRALS_FILE = path.join(DATA_DIR, 'referrals.json')
 const PROJECTS_FILE = path.join(DATA_DIR, 'projects.json')
 
-interface User { id: number; telegramUsername?: string; telegramName?: string; bankrApiToken?: string; evmAddress?: string; privateKey?: string; score?: number; tier?: string; points?: number; credits?: number; referredBy?: number; walletConnected?: boolean; joinedAt?: number; xHandle?: string; claimedPoints?: number; lastCheckin?: number; checkinStreak?: number; lastClaim?: number; completedQuests?: string[] }
+interface User { id: number; telegramUsername?: string; telegramName?: string; bankrApiToken?: string; evmAddress?: string; privateKey?: string; score?: number; tier?: string; points?: number; credits?: number; referredBy?: number; walletConnected?: boolean; joinedAt?: number; xHandle?: string; xVerified?: boolean; claimedPoints?: number; lastCheckin?: number; checkinStreak?: number; lastClaim?: number; completedQuests?: string[] }
 interface Referral { referrerId: number; referredId: number; timestamp: number }
 interface Project { id: string; name: string; description: string; url: string; twitter?: string; submitterId: number; submitterUsername?: string; timestamp: number; votes: number; voters: number[]; approved?: boolean; buildersMsgId?: number; reactionVotes?: number }
 
@@ -581,12 +581,14 @@ function clearSessionTimer(userId: number) {
 function startSessionTimer(userId: number, chatId: number) {
   clearSessionTimer(userId)
   const t = setTimeout(async () => {
-    if (walletSessions.has(userId) || submitSessions.has(userId) || launchSessions.has(userId) || xHandleSessions.has(userId) || walletConvSessions.has(userId)) {
+    if (walletSessions.has(userId) || submitSessions.has(userId) || launchSessions.has(userId) || xHandleSessions.has(userId) || xVerifySessions.has(userId) || walletConvSessions.has(userId) || x402Sessions.has(userId)) {
       walletSessions.delete(userId)
       submitSessions.delete(userId)
       launchSessions.delete(userId)
       xHandleSessions.delete(userId)
+      xVerifySessions.delete(userId)
       walletConvSessions.delete(userId)
+      x402Sessions.delete(userId)
       await bot.sendMessage(chatId, '⏱ Session expired. Start again when ready.').catch(() => {})
     }
     sessionTimers.delete(userId)
@@ -597,8 +599,155 @@ function startSessionTimer(userId: number, chatId: number) {
 const walletSessions = new Map<number, { step: string; email?: string }>()
 const submitSessions = new Map<number, { step: number; name?: string; description?: string; url?: string; twitter?: string }>()
 const scoreSessions = new Map<number, boolean>()
-const xHandleSessions = new Map<number, boolean>() // waiting for X handle input
+const xHandleSessions = new Map<number, boolean>() // waiting for X handle input (legacy, kept for fallback)
+const xVerifySessions = new Map<number, { code: string; expiresAt: number }>() // verify-by-tweet sessions
 const walletConvSessions = new Map<number, { action: string; addr: string }>() // waiting for wallet action details
+const x402Sessions = new Map<number, { service: string; step: 'input' | 'confirm'; input?: string }>() // x402 service sessions
+
+// ── x402 Service Config ──
+const X402_BASE_URL = `https://x402.bankr.bot/${process.env.TREASURY_ADDRESS || '0xf31f59e7b8b58555f7871f71973a394c8f1bffe5'}`
+const X402_SERVICES: Record<string, {
+  name: string; emoji: string; price: number; description: string;
+  inputPrompt: string; inputKey: string; endpoint: string;
+  formatResult: (data: any) => string
+}> = {
+  analyze: {
+    name: 'Deep Analysis', emoji: '🔍', price: 0.35,
+    description: 'Due diligence any token or project',
+    inputPrompt: 'Enter token address, name, or ticker to analyze:\n<i>(e.g. $BLUEAGENT or 0x1234...)</i>',
+    inputKey: 'projectName',
+    endpoint: 'deep-analysis',
+    formatResult: (d) =>
+      `🔍 <b>Deep Analysis: ${d.projectName || 'Unknown'}</b>\n\n` +
+      `📊 Overall Score: <b>${d.overallScore}/100</b>\n` +
+      `⚠️ Risk Score: <b>${d.riskScore}/100</b>\n` +
+      `🎯 Recommendation: <b>${d.recommendation}</b>\n\n` +
+      `📝 ${d.summary || ''}\n\n` +
+      (d.keyRisks?.length ? `🚨 <b>Key Risks:</b>\n${d.keyRisks.map((r: string) => `• ${r}`).join('\n')}\n\n` : '') +
+      (d.keyStrengths?.length ? `✅ <b>Strengths:</b>\n${d.keyStrengths.map((s: string) => `• ${s}`).join('\n')}` : '')
+  },
+  pnl: {
+    name: 'Wallet PnL', emoji: '💼', price: 1.00,
+    description: 'Trading style + PnL report for any wallet',
+    inputPrompt: 'Enter wallet address to analyze:\n<i>(e.g. 0x1234...)</i>',
+    inputKey: 'address',
+    endpoint: 'wallet-pnl',
+    formatResult: (d) =>
+      `💼 <b>Wallet PnL Report</b>\n\n` +
+      `💳 <code>${d.address?.slice(0, 6)}...${d.address?.slice(-4)}</code>\n\n` +
+      `📈 Est. PnL: <b>${d.estimatedPnL || 'N/A'}</b>\n` +
+      `🎯 Win Rate: <b>${d.winRate || 'N/A'}</b>\n` +
+      `🧠 Style: <b>${d.tradingStyle || 'N/A'}</b>\n` +
+      `⚡ Risk Profile: <b>${d.riskProfile || 'N/A'}</b>\n` +
+      `🏆 Smart Money Score: <b>${d.smartMoneyScore || 0}/100</b>\n\n` +
+      `📝 ${d.summary || ''}`
+  },
+  advisor: {
+    name: 'Launch Advisor', emoji: '🚀', price: 3.00,
+    description: 'Full token launch playbook',
+    inputPrompt: 'Describe your project:\n<i>(e.g. "NFT marketplace for Base builders")</i>',
+    inputKey: 'description',
+    endpoint: 'launch-advisor',
+    formatResult: (d) =>
+      `🚀 <b>Launch Advisor Report</b>\n\n` +
+      `🎯 Launch Score: <b>${d.launchScore || 0}/100</b>\n\n` +
+      `📝 ${d.recommendation || ''}\n\n` +
+      (d.launchTimeline?.length ? `📅 <b>Timeline:</b>\n${d.launchTimeline.slice(0, 3).map((t: any) => `• ${t.phase || t}`).join('\n')}` : '')
+  },
+  grant: {
+    name: 'Grant Evaluator', emoji: '🏛️', price: 5.00,
+    description: 'Base grant scoring + feedback',
+    inputPrompt: 'Enter your project name and description:\n<i>(e.g. "BuilderDAO — onchain builder reputation")</i>',
+    inputKey: 'description',
+    endpoint: 'grant-evaluator',
+    formatResult: (d) =>
+      `🏛️ <b>Grant Evaluation</b>\n\n` +
+      `📊 Overall Score: <b>${d.overallScore || 0}/100</b>\n` +
+      `💰 Suggested Grant: <b>${d.suggestedGrantSize || 'N/A'}</b>\n` +
+      `🎯 Recommendation: <b>${d.recommendation || 'N/A'}</b>\n\n` +
+      `📝 ${d.executiveSummary || ''}\n\n` +
+      (d.strengths?.length ? `✅ <b>Strengths:</b>\n${d.strengths.slice(0, 3).map((s: string) => `• ${s}`).join('\n')}\n\n` : '') +
+      (d.concerns?.length ? `⚠️ <b>Concerns:</b>\n${d.concerns.slice(0, 3).map((c: string) => `• ${c}`).join('\n')}` : '')
+  },
+  riskcheck: {
+    name: 'Risk Check', emoji: '🛡️', price: 0.05,
+    description: 'Safety check before any onchain action',
+    inputPrompt: 'Describe the action you want to check:\n<i>(e.g. "approve 0xABC to spend all my USDC")</i>',
+    inputKey: 'action',
+    endpoint: 'risk-gate',
+    formatResult: (d) => {
+      const icon = d.decision === 'APPROVE' ? '✅' : d.decision === 'WARN' ? '⚠️' : '🚫'
+      return `🛡️ <b>Risk Check</b>\n\n` +
+        `${icon} Decision: <b>${d.decision}</b>\n` +
+        `📊 Risk Score: <b>${d.riskScore || 0}/100</b>\n` +
+        `⚡ Risk Level: <b>${d.riskLevel || 'N/A'}</b>\n\n` +
+        `📝 ${d.recommendation || ''}\n\n` +
+        (d.reasons?.length ? `<b>Reasons:</b>\n${d.reasons.slice(0, 3).map((r: string) => `• ${r}`).join('\n')}` : '')
+    }
+  },
+  quantum: {
+    name: 'Quantum Risk', emoji: '⚛️', price: 1.50,
+    description: 'Quantum vulnerability check for any wallet',
+    inputPrompt: 'Enter wallet address to check:\n<i>(e.g. 0x1234... or type "me" for your wallet)</i>',
+    inputKey: 'address',
+    endpoint: 'quantum-premium',
+    formatResult: (d) => {
+      const riskIconMap: Record<string, string> = { CRITICAL: '🔴', HIGH: '🟠', MEDIUM: '🟡', LOW: '🟢', MINIMAL: '🟢' }
+      const riskIcon = riskIconMap[d.quantumRiskLevel] || '⚪'
+      return `⚛️ <b>Quantum Risk Report</b>\n\n` +
+        `${riskIcon} Risk Level: <b>${d.quantumRiskLevel}</b> (${d.riskScore}/100)\n` +
+        `🔑 Public Key Exposed: <b>${d.publicKeyExposed ? '⚠️ Yes' : '✅ No'}</b>\n` +
+        `⏱ Threat Timeline: <b>${d.threatTimeline || 'N/A'}</b>\n` +
+        `🎯 Recommendation: <b>${d.recommendation}</b>\n\n` +
+        `📝 ${d.executiveSummary || ''}\n\n` +
+        (d.migrationSteps?.length ? `<b>Migration Steps:</b>\n${d.migrationSteps.slice(0, 3).map((s: any) => `${s.step}. ${s.action}`).join('\n')}` : '')
+    }
+  }
+}
+
+async function callX402Service(service: string, inputValue: string): Promise<any> {
+  const svc = X402_SERVICES[service]
+  if (!svc) throw new Error('Unknown service')
+  const url = `${X402_BASE_URL}/${svc.endpoint}`
+
+  const inputJson: any = { [svc.inputKey]: inputValue }
+  if (svc.inputKey === 'address') inputJson.chain = 'base'
+  if (svc.inputKey === 'description') inputJson.projectName = inputValue.split('—')[0]?.trim() || inputValue
+
+  // Use bankr CLI to handle x402 payment automatically
+  const bodyStr = JSON.stringify(inputJson).replace(/'/g, "'\\''")
+  const cmd = `/usr/local/bin/bankr x402 call "${url}" -X POST -d '${bodyStr}' -y --max-payment 2 --raw`
+
+  return new Promise((resolve, reject) => {
+    const { exec } = require('child_process')
+    exec(cmd, { timeout: 60000, env: { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin:' + (process.env.PATH || '') } }, (err: any, stdout: string, stderr: string) => {
+      console.log('[x402 CLI stdout]', stdout?.slice(0, 500))
+      console.log('[x402 CLI stderr]', stderr?.slice(0, 300))
+      console.log('[x402 CLI err]', err?.message)
+      if (err && !stdout) {
+        reject(new Error(stderr?.slice(0, 200) || err.message))
+        return
+      }
+      try {
+        // bankr CLI stdout may be very long (includes endpointSchema)
+        // Extract just the "response" field value directly
+        const responseMatch = stdout.match(/"response"\s*:\s*(\{[\s\S]*?\})\s*,\s*"paymentMade"/)
+        if (responseMatch) {
+          resolve(JSON.parse(responseMatch[1]))
+          return
+        }
+        // Fallback: parse full JSON
+        const jsonStart = stdout.indexOf('{')
+        const jsonStr = jsonStart >= 0 ? stdout.slice(jsonStart) : stdout
+        const parsed = JSON.parse(jsonStr.trim())
+        resolve(parsed.response || parsed)
+      } catch (parseErr) {
+        console.error('[x402 parse error]', parseErr, 'raw stdout:', stdout?.slice(0, 300))
+        reject(new Error('Invalid JSON response from x402'))
+      }
+    })
+  })
+}
 
 
 async function handleLaunchWizard(chatId: number, userId: number, text: string) {
@@ -1735,7 +1884,7 @@ const DOCS_URL = 'https://github.com/madebyshun/blue-agent/blob/main/INTRODUCING
 const MENU_KEYBOARD = {
   inline_keyboard: [
     [{ text: '💰 Wallet', callback_data: 'menu_wallet' }, { text: '🤖 Meet Agents', callback_data: 'menu_agents' }],
-    [{ text: '⭐ Rewards', callback_data: 'menu_rewards' }, { text: '🔗 Refer', callback_data: 'menu_refer' }],
+    [{ text: '⚛️ x402 Services', callback_data: 'menu_x402' }, { text: '⭐ Rewards', callback_data: 'menu_rewards' }],
     [{ text: '📊 Builder Score', callback_data: 'menu_score' }, { text: '🏆 Leaderboard', callback_data: 'menu_leaderboard' }],
     [{ text: '📰 News', callback_data: 'menu_news' }, { text: '📝 Submit', callback_data: 'menu_submit' }],
     [{ text: '👤 Profile', callback_data: 'menu_profile' }, { text: '❓ Help', callback_data: 'menu_help' }],
@@ -1747,7 +1896,9 @@ function buildProfileText(user: User, rank: number, projectCount: number): strin
   const wallet = user.evmAddress
     ? `💳 <code>${user.evmAddress.slice(0, 6)}...${user.evmAddress.slice(-4)}</code>`
     : '💳 No wallet (restart /start)'
-  const xHandle = user.xHandle ? `🐦 @${user.xHandle.replace('@', '')}` : '🐦 No X handle set'
+  const xHandle = user.xHandle
+    ? (user.xVerified ? `🐦 @${user.xHandle.replace('@', '')} ✅` : `🐦 @${user.xHandle.replace('@', '')} (unverified)`)
+    : '🐦 Not linked'
   const points = user.points || 0
   const credits = user.credits || 0
 
@@ -1854,7 +2005,7 @@ bot.onText(/\/profile/, async (msg) => {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: user.xHandle ? '✏️ Edit X Handle' : '🐦 Set X Handle', callback_data: 'profile_set_x' },
+          { text: user.xVerified ? '✏️ Re-verify X' : (user.xHandle ? '🔁 Verify X' : '🐦 Link X Account'), callback_data: 'profile_set_x' },
           { text: '👛 My Wallet', callback_data: 'menu_wallet' }
         ],
         [{ text: canClaim ? `🎁 Claim ${TOKEN_NAME} (${points} pts)` : `🎁 Claim (need 100 pts)`, callback_data: canClaim ? 'profile_claim' : 'profile_claim_locked' }],
@@ -1966,6 +2117,109 @@ bot.onText(/\/credits/, async (msg) => {
       }
     } as any
   )
+})
+
+// ── x402 Services ──
+function x402MenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: '🔍 Analyze $0.35', callback_data: 'x402_start_analyze' },
+        { text: '💼 PnL $1.00', callback_data: 'x402_start_pnl' },
+      ],
+      [
+        { text: '🚀 Advisor $3.00', callback_data: 'x402_start_advisor' },
+        { text: '🏛️ Grant $5.00', callback_data: 'x402_start_grant' },
+      ],
+      [
+        { text: '🛡️ Risk Check $0.05', callback_data: 'x402_start_riskcheck' },
+        { text: '⚛️ Quantum $1.50', callback_data: 'x402_start_quantum' },
+      ],
+      [{ text: '🏠 Menu', callback_data: 'menu_main' }]
+    ]
+  }
+}
+
+bot.onText(/\/x402/, async (msg) => {
+  if (await blockInGroup(msg)) return
+  const chatId = msg.chat.id
+  await bot.sendMessage(chatId,
+    `<b>⚛️ Blue Agent x402 Services</b>\n\n` +
+    `Pay-per-use AI services · USDC on Base · No signup\n\n` +
+    `🔍 <b>Analyze</b> — Due diligence any token\n` +
+    `💼 <b>PnL</b> — Wallet trading report\n` +
+    `🚀 <b>Advisor</b> — Token launch playbook\n` +
+    `🏛️ <b>Grant</b> — Base grant scoring\n` +
+    `🛡️ <b>Risk Check</b> — Safety check before tx\n` +
+    `⚛️ <b>Quantum</b> — Quantum risk report\n\n` +
+    `<i>Powered by @blockyagent_bot × Base x402</i>`,
+    { parse_mode: 'HTML', reply_markup: x402MenuKeyboard() } as any
+  )
+})
+
+// Shortcut commands
+bot.onText(/\/analyze(?:\s+(.+))?/, async (msg, match) => {
+  if (await blockInGroup(msg)) return
+  const chatId = msg.chat.id; const userId = msg.from?.id; if (!userId) return
+  const input = match?.[1]?.trim()
+  if (input) {
+    x402Sessions.set(userId, { service: 'analyze', step: 'confirm', input })
+    await bot.sendMessage(chatId,
+      `🔍 <b>Deep Analysis</b>\n\nAnalyze: <b>${input}</b>\nCost: <b>$0.35 USDC</b>\n\nConfirm?`,
+      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '✅ Confirm', callback_data: 'x402_confirm' }, { text: '❌ Cancel', callback_data: 'x402_cancel' }]] } } as any)
+  } else {
+    x402Sessions.set(userId, { service: 'analyze', step: 'input' })
+    await bot.sendMessage(chatId, `🔍 <b>Deep Analysis</b>\n\n${X402_SERVICES.analyze.inputPrompt}`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'x402_cancel' }]] } } as any)
+  }
+})
+
+bot.onText(/\/quantum(?:\s+(.+))?/, async (msg, match) => {
+  if (await blockInGroup(msg)) return
+  const chatId = msg.chat.id; const userId = msg.from?.id; if (!userId) return
+  let input = match?.[1]?.trim()
+  if (input === 'me') {
+    const users = loadUsers(); input = users[userId]?.evmAddress || ''
+    if (!input) { await bot.sendMessage(chatId, '⚠️ No wallet linked. Use /wallet first.'); return }
+  }
+  if (input) {
+    x402Sessions.set(userId, { service: 'quantum', step: 'confirm', input })
+    await bot.sendMessage(chatId,
+      `⚛️ <b>Quantum Risk Report</b>\n\nWallet: <code>${input.slice(0, 6)}...${input.slice(-4)}</code>\nCost: <b>$1.50 USDC</b>\n\nConfirm?`,
+      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '✅ Confirm', callback_data: 'x402_confirm' }, { text: '❌ Cancel', callback_data: 'x402_cancel' }]] } } as any)
+  } else {
+    x402Sessions.set(userId, { service: 'quantum', step: 'input' })
+    await bot.sendMessage(chatId, `⚛️ <b>Quantum Risk Report</b>\n\n${X402_SERVICES.quantum.inputPrompt}`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'x402_cancel' }]] } } as any)
+  }
+})
+
+bot.onText(/\/pnl(?:\s+(.+))?/, async (msg, match) => {
+  if (await blockInGroup(msg)) return
+  const chatId = msg.chat.id; const userId = msg.from?.id; if (!userId) return
+  const input = match?.[1]?.trim()
+  if (input) {
+    x402Sessions.set(userId, { service: 'pnl', step: 'confirm', input })
+    await bot.sendMessage(chatId,
+      `💼 <b>Wallet PnL Report</b>\n\nWallet: <code>${input.slice(0, 6)}...${input.slice(-4)}</code>\nCost: <b>$1.00 USDC</b>\n\nConfirm?`,
+      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '✅ Confirm', callback_data: 'x402_confirm' }, { text: '❌ Cancel', callback_data: 'x402_cancel' }]] } } as any)
+  } else {
+    x402Sessions.set(userId, { service: 'pnl', step: 'input' })
+    await bot.sendMessage(chatId, `💼 <b>Wallet PnL Report</b>\n\n${X402_SERVICES.pnl.inputPrompt}`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'x402_cancel' }]] } } as any)
+  }
+})
+
+bot.onText(/\/riskcheck(?:\s+(.+))?/, async (msg, match) => {
+  if (await blockInGroup(msg)) return
+  const chatId = msg.chat.id; const userId = msg.from?.id; if (!userId) return
+  const input = match?.[1]?.trim()
+  if (input) {
+    x402Sessions.set(userId, { service: 'riskcheck', step: 'confirm', input })
+    await bot.sendMessage(chatId,
+      `🛡️ <b>Risk Check</b>\n\nAction: <i>${input}</i>\nCost: <b>$0.05 USDC</b>\n\nConfirm?`,
+      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '✅ Confirm', callback_data: 'x402_confirm' }, { text: '❌ Cancel', callback_data: 'x402_cancel' }]] } } as any)
+  } else {
+    x402Sessions.set(userId, { service: 'riskcheck', step: 'input' })
+    await bot.sendMessage(chatId, `🛡️ <b>Risk Check</b>\n\n${X402_SERVICES.riskcheck.inputPrompt}`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'x402_cancel' }]] } } as any)
+  }
 })
 
 bot.onText(/\/points/, async (msg) => {
@@ -2296,7 +2550,7 @@ bot.on('callback_query', async (query) => {
     await editMenu(query, profileText2, {
       inline_keyboard: [
         [
-          { text: user2.xHandle ? '✏️ Edit X Handle' : '🐦 Set X Handle', callback_data: 'profile_set_x' },
+          { text: user2.xVerified ? '✏️ Re-verify X' : (user2.xHandle ? '🔁 Verify X' : '🐦 Link X Account'), callback_data: 'profile_set_x' },
           { text: '👛 My Wallet', callback_data: 'menu_wallet' }
         ],
         [{ text: canClaim2 ? `🎁 Claim ${TOKEN_NAME} (${points2} pts)` : `🎁 Claim (need 100 pts)`, callback_data: canClaim2 ? 'profile_claim' : 'profile_claim_locked' }],
@@ -2305,11 +2559,98 @@ bot.on('callback_query', async (query) => {
     })
     return
   }
-  if (data === 'profile_set_x') {
-    xHandleSessions.set(userId, true)
+  // ── x402 Callbacks ──
+  if (data.startsWith('x402_start_')) {
+    const service = data.replace('x402_start_', '')
+    const svc = X402_SERVICES[service]
+    if (!svc) return
+    x402Sessions.set(userId, { service, step: 'input' })
+    await bot.answerCallbackQuery(query.id)
     await editMenu(query,
-      `<b>🐦 Set X Handle</b>\n\nEnter your X/Twitter handle:\n<i>(e.g. madebyshun)</i>`,
+      `${svc.emoji} <b>${svc.name}</b>\n\n${svc.inputPrompt}`,
+      { inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'x402_cancel' }]] }
+    )
+    return
+  }
+
+  if (data === 'x402_cancel') {
+    x402Sessions.delete(userId)
+    await bot.answerCallbackQuery(query.id, { text: 'Cancelled' })
+    await editMenu(query,
+      `<b>⚛️ Blue Agent x402 Services</b>\n\nPay-per-use AI services · USDC on Base · No signup`,
+      x402MenuKeyboard()
+    )
+    return
+  }
+
+  if (data === 'x402_confirm') {
+    const session = x402Sessions.get(userId)
+    if (!session || !session.input) {
+      await bot.answerCallbackQuery(query.id, { text: '⚠️ Session expired' })
+      return
+    }
+    x402Sessions.delete(userId)
+    await bot.answerCallbackQuery(query.id)
+    const svc = X402_SERVICES[session.service]
+    const loadingMsg = await bot.sendMessage(chatId,
+      `${svc.emoji} <b>${svc.name}</b>\n\n⏳ Analyzing... (may take 15-30 seconds)`,
+      { parse_mode: 'HTML' } as any
+    )
+    try {
+      const result = await callX402Service(session.service, session.input)
+      const formatted = svc.formatResult(result)
+      await bot.editMessageText(formatted, {
+        chat_id: chatId, message_id: loadingMsg.message_id,
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: [
+          [{ text: `${svc.emoji} Run Another`, callback_data: `x402_start_${session.service}` }],
+          [{ text: '⚛️ All Services', callback_data: 'menu_x402' }, { text: '🏠 Menu', callback_data: 'menu_main' }]
+        ]}
+      } as any)
+    } catch (err: any) {
+      console.error('[x402]', err?.message)
+      await bot.editMessageText(
+        `❌ Service error. Please try again.\n<i>${err?.message?.slice(0, 100)}</i>`,
+        { chat_id: chatId, message_id: loadingMsg.message_id, parse_mode: 'HTML' } as any
+      )
+    }
+    return
+  }
+
+  if (data === 'menu_x402') {
+    await bot.answerCallbackQuery(query.id)
+    await editMenu(query,
+      `<b>⚛️ Blue Agent x402 Services</b>\n\nPay-per-use AI services · USDC on Base · No signup\n\n` +
+      `🔍 <b>Analyze</b> — Due diligence any token\n` +
+      `💼 <b>PnL</b> — Wallet trading report\n` +
+      `🚀 <b>Advisor</b> — Token launch playbook\n` +
+      `🏛️ <b>Grant</b> — Base grant scoring\n` +
+      `🛡️ <b>Risk Check</b> — Safety check before tx\n` +
+      `⚛️ <b>Quantum</b> — Quantum risk report`,
+      x402MenuKeyboard()
+    )
+    return
+  }
+
+  if (data === 'profile_set_x') {
+    const code = 'BLU-' + Math.random().toString(36).substring(2, 6).toUpperCase()
+    xVerifySessions.set(userId, { code, expiresAt: Date.now() + 10 * 60 * 1000 })
+    await editMenu(query,
+      `<b>🐦 Verify X Account</b>\n\nTweet the following text (copy exactly):\n\n<code>Verifying my @blockyagent_bot identity — ${code} #BlueAgent</code>\n\nThen paste the tweet URL here.\n\n⏱ Code expires in 10 minutes.`,
       { inline_keyboard: [NAV_ROW] }
+    )
+    return
+  }
+  if (data === 'share_on_x') {
+    const users_sx = loadUsers()
+    const user_sx = users_sx[userId]
+    const score_sx = user_sx?.score || 0
+    const tweetText = encodeURIComponent(`I'm a Base builder 🟦\n\nBuilder Score: ${score_sx}/100\n\nTracked by @blockyagent_bot — join the community:\nt.me/blueagent_hub`)
+    const tweetUrl = `https://twitter.com/intent/tweet?text=${tweetText}`
+    await bot.answerCallbackQuery(query.id)
+    await bot.sendMessage(chatId,
+      `🐦 Tap to share your Builder Score on X:`,
+      { reply_markup: { inline_keyboard: [[{ text: '🐦 Share on X', url: tweetUrl }], NAV_ROW] } } as any
     )
     return
   }
@@ -2949,7 +3290,7 @@ bot.on('message', async (msg) => {
 
   // Auto-detect contract address (0x + 40 hex chars)
   const caMatch = text.match(/\b(0x[a-fA-F0-9]{40})\b/)
-  if (caMatch && !dexPaySessions.has(userId)) {
+  if (caMatch && !dexPaySessions.has(userId) && !x402Sessions.has(userId)) {
     const ca = caMatch[1]
     // Don't scan if it's a wallet address the user is sending to
     const isKnownWallet = ca.toLowerCase() === '0xf31f59e7b8b58555f7871f71973a394c8f1bffe5'
@@ -3117,7 +3458,82 @@ bot.on('message', async (msg) => {
     return
   }
 
-  // X Handle session
+  // x402 input session
+  if (x402Sessions.has(userId)) {
+    const session = x402Sessions.get(userId)!
+    if (session.step === 'input') {
+      let input = text.trim()
+      // Handle "me" for wallet-based services
+      if (input === 'me' && (session.service === 'quantum' || session.service === 'pnl')) {
+        const users2 = loadUsers()
+        input = users2[userId]?.evmAddress || ''
+        if (!input) {
+          await bot.sendMessage(chatId, '⚠️ No wallet linked. Use /wallet first.')
+          x402Sessions.delete(userId)
+          return
+        }
+      }
+      const svc = X402_SERVICES[session.service]
+      x402Sessions.set(userId, { ...session, step: 'confirm', input })
+      const preview = input.startsWith('0x') ? `<code>${input.slice(0, 6)}...${input.slice(-4)}</code>` : `<i>${input.slice(0, 60)}</i>`
+      await bot.sendMessage(chatId,
+        `${svc.emoji} <b>${svc.name}</b>\n\nInput: ${preview}\nCost: <b>$${svc.price.toFixed(2)} USDC</b>\n\nConfirm payment?`,
+        { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '✅ Confirm', callback_data: 'x402_confirm' }, { text: '❌ Cancel', callback_data: 'x402_cancel' }]] } } as any
+      )
+    }
+    return
+  }
+
+  // X Verify session (tweet-code verification)
+  if (xVerifySessions.has(userId)) {
+    const session = xVerifySessions.get(userId)!
+    if (Date.now() > session.expiresAt) {
+      xVerifySessions.delete(userId)
+      await bot.sendMessage(chatId, '⏱ Verification code expired. Please try again with /profile', { parse_mode: 'HTML' } as any)
+      return
+    }
+    // Extract tweet ID from URL
+    const tweetMatch = text.match(/(?:twitter\.com|x\.com)\/\w+\/status\/(\d+)/)
+    if (!tweetMatch) {
+      await bot.sendMessage(chatId, '⚠️ Please paste a valid tweet URL (e.g. https://x.com/yourhandle/status/123...)', { parse_mode: 'HTML' } as any)
+      return
+    }
+    const tweetId = tweetMatch[1]
+    try {
+      const tweetRes = await axios.get(
+        `https://api.twitter.com/2/tweets/${tweetId}?tweet.fields=text&expansions=author_id&user.fields=username`,
+        { headers: { Authorization: `Bearer ${process.env.X_BEARER_TOKEN}` } }
+      )
+      const tweetText2 = tweetRes.data?.data?.text || ''
+      const xUsername = tweetRes.data?.includes?.users?.[0]?.username || ''
+      if (!tweetText2.includes(session.code)) {
+        await bot.sendMessage(chatId, `❌ Tweet does not contain the verification code <code>${session.code}</code>.\n\nMake sure you copied the exact text.`, { parse_mode: 'HTML' } as any)
+        return
+      }
+      xVerifySessions.delete(userId)
+      const users2 = loadUsers()
+      if (!users2[userId]) users2[userId] = { id: userId, points: 0, joinedAt: Date.now() }
+      users2[userId].xHandle = xUsername
+      users2[userId].xVerified = true
+      users2[userId].telegramUsername = msg.from?.username
+      users2[userId].telegramName = msg.from?.first_name
+      saveUsers(users2)
+      autoCompleteQuest(userId, 'set_x_handle', chatId)
+      await bot.sendMessage(chatId,
+        `✅ X account verified! <b>@${xUsername}</b> is now linked to your profile. 🎉`,
+        {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [[{ text: '🐦 Share on X', callback_data: 'share_on_x' }], NAV_ROW] }
+        } as any
+      )
+    } catch (err: any) {
+      console.error('[X Verify]', err?.response?.data || err.message)
+      await bot.sendMessage(chatId, '❌ Could not verify tweet. Make sure the tweet is public and try again.')
+    }
+    return
+  }
+
+  // X Handle session (legacy fallback — should not reach here normally)
   if (xHandleSessions.has(userId)) {
     xHandleSessions.delete(userId)
     const handle = text.replace('@', '').trim()
@@ -3286,7 +3702,7 @@ bot.on('message', async (msg) => {
   }
 
   // If user is in score/xHandle session — handled above, don't fall through to AI
-  if (scoreSessions.has(userId) || xHandleSessions.has(userId)) return
+  if (scoreSessions.has(userId) || xHandleSessions.has(userId) || xVerifySessions.has(userId) || x402Sessions.has(userId)) return
 
   // Typing indicator
   bot.sendChatAction(chatId, 'typing').catch(() => {})
@@ -3366,6 +3782,11 @@ bot.setMyCommands([
   { command: 'launch', description: '🚀 Deploy Token on Base' },
   { command: 'stats', description: '📈 Blue Agent Stats' },
   { command: 'agents', description: '🤖 Bankr Agent Leaderboard' },
+  { command: 'x402', description: '⚛️ AI Services (pay-per-use)' },
+  { command: 'analyze', description: '🔍 Analyze token $0.35' },
+  { command: 'quantum', description: '⚛️ Quantum risk check $1.50' },
+  { command: 'pnl', description: '💼 Wallet PnL report $1.00' },
+  { command: 'riskcheck', description: '🛡️ Safety check $0.05' },
   { command: 'help', description: '❓ Help' },
 ]).catch(() => {})
 
