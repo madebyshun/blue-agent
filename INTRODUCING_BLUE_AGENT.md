@@ -31,6 +31,11 @@ Score any builder from 0–100 across 4 dimensions:
 
 `/score @handle` — works for any X handle.
 
+Also available as a **public API** — pay-per-call via x402:
+- Endpoint: `https://x402.bankr.bot/.../builder-score`
+- Price: $0.001 USDC/request · Revenue → treasury wallet
+- No API key needed — just pay and call
+
 ### 📝 Submit Your Project
 Showcase what you're building to the Blue Agent community. Get votes, visibility, and +20 pts.
 - `/submit` — step-by-step project submission
@@ -42,24 +47,38 @@ Connect with builders shipping on Base. Refer them to the community and earn +50
 ### 🔑 Wallet
 Your wallet is auto-created the moment you start. No seed phrases. No setup. Just `/start` and you're live on Base.
 
+- Deposit ETH (Base) to your wallet to use swap and send
+- Min ~0.001 ETH for gas fees
+- Your address is shown in `/wallet`
+
 ### 💱 Trading
-Swap, send, bridge, DCA, limit orders, stop loss — all via natural language:
+Swap and send tokens via natural language — executed from your wallet directly on Base:
 - `swap 10 USDC to ETH`
-- `DCA $10 into ETH daily`
-- `buy $BLUEAGENT with 5 USDC`
+- `swap 0.01 ETH to USDC`
+- `send 5 USDC to 0x...`
+- `send 0.01 ETH to 0x...`
 
-Powered by Bankr · Uniswap v4 · Base.
+For $BLUEAGENT (Uniswap v4):
+- `buy $BLUEAGENT with 5 USDC` → opens Uniswap directly
 
-### 🔱 Hyperliquid Perps
-Trade BTC, ETH, SOL, TSLA, GOLD and more with up to 50x leverage — directly in Telegram.
-- `long $100 BTC on hyperliquid`
-- `short ETH 10x with stop loss at -5%`
+Powered by Uniswap v3 · Base.
 
 ### 🚀 Token Launch
 Deploy your own ERC20 token on Base — no code needed.
 - `/launch` — step-by-step wizard
 - Custom name, symbol, fee recipient
 - Gas free via Bankr/Clanker
+
+### 🏗️ Community Kit
+White-label community bot for Base token projects. Deploy points, quests, leaderboard, and rewards for your community — in minutes.
+
+- **Free** — up to 100 users
+- **Seed** — $49/mo · 1,000 users
+- **Growth** — $99/mo · 10,000 users
+- **Pro** — $199/mo · unlimited
+- **Scale** — $499/mo · white label + managed hosting
+
+DM [@madebyshun](https://t.me/madebyshun) to get started.
 
 ### ⭐ Rewards — Earn $BLUEAGENT
 Blue Agent rewards builders for showing up.
