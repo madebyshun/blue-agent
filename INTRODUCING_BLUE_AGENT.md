@@ -31,11 +31,6 @@ Score any builder from 0–100 across 4 dimensions:
 
 `/score @handle` — works for any X handle.
 
-Also available as a **public API** — pay-per-call via x402:
-- Endpoint: `https://x402.bankr.bot/.../builder-score`
-- Price: $0.001 USDC/request · Revenue → treasury wallet
-- No API key needed — just pay and call
-
 ### 📝 Submit Your Project
 Showcase what you're building to the Blue Agent community. Get votes, visibility, and +20 pts.
 - `/submit` — step-by-step project submission
@@ -115,6 +110,26 @@ Claim minimum: 100 pts = 100,000 $BLUEAGENT
 
 ### 🤖 AI Chat
 Ask anything about Base ecosystem — DeFi, NFTs, builders, protocols, market data. Powered by multi-model LLM routing (Claude, Gemini, GPT).
+
+---
+
+## 🔌 x402 AI Services
+
+Pay-per-use AI services — no API key needed. Pay USDC on Base, get results instantly.
+
+| Service | Price | Description |
+|---|---|---|
+| **Builder Score** | $0.001/req | AI score (0–100) for any builder on Base |
+| **Deep Analysis** | $0.35/req | Token/project due diligence — risk, tokenomics, rug probability |
+| **Wallet PnL** | $1.00/req | Wallet analysis — PnL, trading style, smart money score |
+| **Launch Advisor** | $3.00/req | Full token launch playbook — tokenomics, timeline, marketing |
+| **Grant Evaluator** | $5.00/req | Base grant application scoring against Coinbase criteria |
+| **Risk Gate** | $0.05/req | Safety check before onchain tx — APPROVE / WARN / BLOCK |
+
+```
+Base URL: https://x402.bankr.bot/{treasury_address}/{service}
+Payment: x402 · USDC on Base · Revenue → treasury wallet
+```
 
 ---
 
