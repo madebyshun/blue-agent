@@ -1,15 +1,4 @@
 {
-  "380174599": {
-    "id": 380174599,
-    "telegramUsername": "Mt_Miggles",
-    "telegramName": "Oleg",
-    "score": 0,
-    "points": 0,
-    "joinedAt": 1775573129345,
-    "walletConnected": true,
-    "evmAddress": "0x7ab0EE58C2A87dbe010456bBf63429746ef95DCd",
-    "privateKey": "0x49b0db829cc34867eb0ebd4e89efafcb638c5c142521b9cf8992d49d2164e411"
-  },
   "6614397596": {
     "id": 6614397596,
     "telegramUsername": "madebyshun",
@@ -46,16 +35,5 @@
     "walletConnected": true,
     "evmAddress": "0xC1f35c73643D65fcB95b017669b70109b2744088",
     "privateKey": "0xc2bdffcae1d73840e5585df0562a3e62e63935fdd53ec5a0025d434ee4a3bb04"
-  },
-  "5929394841": {
-    "id": 5929394841,
-    "telegramUsername": "khanh16002",
-    "telegramName": "Khanh",
-    "score": 0,
-    "points": 0,
-    "joinedAt": 1775574510941,
-    "walletConnected": true,
-    "evmAddress": "0x616Db347c111Ca15121C1c152fdc50f070e97065",
-    "privateKey": "0x353052c8018d6a37a6c69f6f5f741bc1f4cd08a9946c4a08c522c0e73501b976"
   }
 }

@@ -1888,6 +1888,7 @@ const MENU_KEYBOARD = {
     [{ text: '📊 Builder Score', callback_data: 'menu_score' }, { text: '🏆 Leaderboard', callback_data: 'menu_leaderboard' }],
     [{ text: '📰 News', callback_data: 'menu_news' }, { text: '📝 Submit', callback_data: 'menu_submit' }],
     [{ text: '👤 Profile', callback_data: 'menu_profile' }, { text: '❓ Help', callback_data: 'menu_help' }],
+    [{ text: '🤖 Community Kit — Launch your own bot', callback_data: 'menu_community_kit' }],
   ]
 }
 
@@ -5873,11 +5874,23 @@ const PAYMENT_ADDRESS = process.env.PAYMENT_ADDRESS || '0xf31f59e7b8b58555f7871f
 
 // Tier pricing in USDC
 const TIER_PRICE: Record<string, number> = {
-  seed:   49,
-  growth: 99,
-  pro:    199,
-  scale:  499
+  seed:  49,
+  pro:   199,
+  scale: 499
 }
+
+const MONTH_DISCOUNT: Record<number, number> = { 1: 0, 3: 0.10, 6: 0.15, 12: 0.20 }
+const BLUEAGENT_DISCOUNT = 0.20
+
+function calcPrice(tier: string, months: number, currency: 'usdc' | 'blueagent' = 'usdc'): number {
+  const base = TIER_PRICE[tier] || 0
+  const discount = MONTH_DISCOUNT[months] || 0
+  const total = base * months * (1 - discount)
+  if (currency === 'blueagent') return Math.round(total * (1 - BLUEAGENT_DISCOUNT) * 100) / 100
+  return Math.round(total * 100) / 100
+}
+
+const subSessions = new Map<number, { tier: string; months: number; currency: 'usdc' | 'blueagent'; step: string }>()
 
 // =======================
 // PORTFOLIO
@@ -6107,55 +6120,52 @@ bot.onText(/\/pricing/, async (msg) => {
   )
 })
 
-// /subscribe — owner records a subscription
-bot.onText(/\/subscribe(?:\s+(.+))?/, async (msg) => {
+// /subscribe — self-service payment flow
+bot.onText(/^\/subscribe(@\w+)?$/, async (msg) => {
+  const chatId = msg.chat.id
+  const userId = msg.from?.id || chatId
+  if (msg.chat.type !== 'private') {
+    await bot.sendMessage(chatId, '🔒 Please DM me to subscribe: @' + BOT_USERNAME)
+    return
+  }
+  subSessions.set(userId, { tier: '', months: 1, currency: 'usdc', step: 'tier' })
+  await bot.sendMessage(chatId,
+    `💳 <b>Community Kit — Subscribe</b>\n\nChoose your plan:`,
+    { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
+      [{ text: '🌱 Seed — $49/mo', callback_data: 'sub_tier_seed' }],
+      [{ text: '⚡ Pro — $199/mo', callback_data: 'sub_tier_pro' }],
+      [{ text: '🚀 Scale — $499/mo', callback_data: 'sub_tier_scale' }],
+      [{ text: '❌ Close', callback_data: 'menu_close' }]
+    ]}} as any
+  )
+})
+
+// /subscribe_admin — owner manually records
+bot.onText(/\/subscribe_admin(?:\s+(.+))?/, async (msg) => {
   if (!isOwner(msg)) return
   const chatId = msg.chat.id
   const input = msg.text?.split('\n').slice(1).join('\n').trim() || ''
-
   if (!input) {
     await bot.sendMessage(chatId,
-      `💳 <b>Record Subscription</b>\n\nFormat:\n<code>/subscribe\nproject: My Project\ntier: seed\naddress: 0x...\ntx: 0x... (optional)\n</code>`,
-      { parse_mode: 'HTML' } as any
-    )
+      `💳 <b>Record Subscription (Admin)</b>\n\nFormat:\n<code>/subscribe_admin\nproject: My Project\ntier: seed\nmonths: 3\naddress: 0x...\ntx: 0x...\n</code>`,
+      { parse_mode: 'HTML' } as any)
     return
   }
-
   const lines = input.split('\n')
-  let project = '', tier = '', address = '', tx = ''
+  let project = '', tier = '', address = '', tx = '', months = 1
   for (const line of lines) {
     if (line.startsWith('project:')) project = line.replace('project:', '').trim()
     else if (line.startsWith('tier:')) tier = line.replace('tier:', '').trim().toLowerCase()
+    else if (line.startsWith('months:')) months = parseInt(line.replace('months:', '').trim()) || 1
     else if (line.startsWith('address:')) address = line.replace('address:', '').trim()
     else if (line.startsWith('tx:')) tx = line.replace('tx:', '').trim()
   }
-
   if (!project || !tier || !address) { await bot.sendMessage(chatId, '❌ Need: project, tier, address'); return }
-  if (!TIER_PRICE[tier]) { await bot.sendMessage(chatId, `❌ Invalid tier. Options: ${Object.keys(TIER_PRICE).join(', ')}`); return }
-
-  const sub: Subscription = {
-    projectName: project,
-    tier,
-    address,
-    txHash: tx || undefined,
-    amount: TIER_PRICE[tier],
-    startAt: Date.now(),
-    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-    active: true
-  }
-
-  const subs = loadSubs()
-  subs.push(sub)
-  saveSubs(subs)
-
-  await bot.sendMessage(chatId,
-    `✅ <b>Subscription recorded!</b>\n\n` +
-    `📦 Project: ${project}\n` +
-    `🏷️ Tier: ${tier} ($${TIER_PRICE[tier]}/mo)\n` +
-    `📅 Expires: ${new Date(sub.expiresAt).toLocaleDateString()}\n` +
-    `${tx ? `🔗 TX: <code>${tx.slice(0, 20)}...</code>` : ''}`,
-    { parse_mode: 'HTML' } as any
-  )
+  if (!TIER_PRICE[tier]) { await bot.sendMessage(chatId, `❌ Invalid tier: ${Object.keys(TIER_PRICE).join(', ')}`); return }
+  const amount = calcPrice(tier, months)
+  const sub: Subscription = { userId: undefined, projectName: project, tier, address, txHash: tx||undefined, amount, startAt: Date.now(), expiresAt: Date.now() + months*30*24*60*60*1000, active: true }
+  const subs = loadSubs(); subs.push(sub); saveSubs(subs)
+  await bot.sendMessage(chatId, `✅ Recorded: ${project} | ${tier} | ${months}mo | $${amount}${tx?`\nTX: <code>${tx.slice(0,20)}...</code>`:''}`, { parse_mode: 'HTML' } as any)
 })
 
 // /subs — list subscriptions

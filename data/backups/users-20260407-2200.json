@@ -46,16 +46,5 @@
     "walletConnected": true,
     "evmAddress": "0xC1f35c73643D65fcB95b017669b70109b2744088",
     "privateKey": "0xc2bdffcae1d73840e5585df0562a3e62e63935fdd53ec5a0025d434ee4a3bb04"
-  },
-  "5929394841": {
-    "id": 5929394841,
-    "telegramUsername": "khanh16002",
-    "telegramName": "Khanh",
-    "score": 0,
-    "points": 0,
-    "joinedAt": 1775574510941,
-    "walletConnected": true,
-    "evmAddress": "0x616Db347c111Ca15121C1c152fdc50f070e97065",
-    "privateKey": "0x353052c8018d6a37a6c69f6f5f741bc1f4cd08a9946c4a08c522c0e73501b976"
   }
 }
