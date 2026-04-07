@@ -5837,8 +5837,8 @@ bot.on('callback_query', async (query) => {
     await bot.editMessageText(
       `📅 <b>Choose duration</b> (${tier.toUpperCase()})\n\n1 month — <b>$${p1}</b>\n3 months — <b>$${p3}</b> <i>(-10%)</i>\n6 months — <b>$${p6}</b> <i>(-15%)</i>\n12 months — <b>$${p12}</b> <i>(-20%)</i>`,
       { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: { inline_keyboard: [
-        [{ text: `1 month — $${p1}`, callback_data: 'sub_months_1' }, { text: `3 months — $${p3}`, callback_data: 'sub_months_3' }],
-        [{ text: `6 months — $${p6}`, callback_data: 'sub_months_6' }, { text: `12 months — $${p12}`, callback_data: 'sub_months_12' }],
+        [{ text: `1 month — $${p1}`, callback_data: `sub_months_${tier}_1` }, { text: `3 months — $${p3}`, callback_data: `sub_months_${tier}_3` }],
+        [{ text: `6 months — $${p6}`, callback_data: `sub_months_${tier}_6` }, { text: `12 months — $${p12}`, callback_data: `sub_months_${tier}_12` }],
         [{ text: '← Back', callback_data: 'sub_back_tier' }]
       ]}} as any)
   }
@@ -5852,7 +5852,11 @@ bot.on('callback_query', async (query) => {
       ]}} as any)
   }
   else if (data.startsWith('sub_months_')) {
-    const months = parseInt(data.replace('sub_months_', ''))
+    // format: sub_months_<tier>_<months>
+    const parts = data.replace('sub_months_', '').split('_')
+    const tier = parts.slice(0, -1).join('_') // seed, pro, scale
+    const months = parseInt(parts[parts.length - 1])
+    if (tier) session.tier = tier
     session.months = months; session.step = 'currency'; subSessions.set(userId, session)
     const uAmt=calcPrice(session.tier,months,'usdc'), bAmt=calcPrice(session.tier,months,'blueagent')
     await bot.editMessageText(
@@ -5874,7 +5878,7 @@ bot.on('callback_query', async (query) => {
       `💳 <b>Payment Instructions</b>\n\nPlan: <b>${session.tier.toUpperCase()}</b> · ${session.months} month${session.months>1?'s':''}\nAmount: <b>$${amount} ${tokenName}</b>\n\nSend to treasury on <b>Base</b>:\n<code>${PAYMENT_ADDRESS}</code>\n\nToken: <code>${tokenAddr}</code>\n\n⚠️ After sending, paste your <b>tx hash</b> (0x...) here.`,
       { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: { inline_keyboard: [
         [{ text: '🔗 View treasury on Basescan', url: `https://basescan.org/address/${PAYMENT_ADDRESS}` }],
-        [{ text: '← Back', callback_data: `sub_months_${session.months}` }]
+        [{ text: '← Back', callback_data: `sub_tier_${session.tier}` }]
       ]}} as any)
   }
   else if (data === 'sub_pricing') {
