@@ -5739,7 +5739,7 @@ bot.onText(/\/pricing/, async (msg) => {
       parse_mode: 'HTML',
       reply_markup: { inline_keyboard: [
         [{ text: '💳 Subscribe Now', callback_data: 'start_subscribe' }],
-        [{ text: '🌐 github.com/madebyshun/community-kit', url: 'https://github.com/madebyshun/community-kit' }]
+        [{ text: '⭐ GitHub', url: 'https://github.com/madebyshun/community-kit' }, { text: '💬 DM @blockyagent_bot', url: 'https://t.me/blockyagent_bot' }]
       ]}
     } as any
   )
@@ -5833,7 +5833,8 @@ bot.on('callback_query', async (query) => {
       { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
         [{ text: '🌱 Seed — $49/mo', callback_data: 'sub_tier_seed' }],
         [{ text: '⚡ Pro — $199/mo', callback_data: 'sub_tier_pro' }],
-        [{ text: '🚀 Scale — $499/mo', callback_data: 'sub_tier_scale' }]
+        [{ text: '🚀 Scale — $499/mo', callback_data: 'sub_tier_scale' }],
+        [{ text: '❌ Close', callback_data: 'menu_close' }]
       ]}} as any)
     return
   }
@@ -5847,7 +5848,7 @@ bot.on('callback_query', async (query) => {
       { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: { inline_keyboard: [
         [{ text: `1 month — $${p1}`, callback_data: `sub_months_${tier}_1` }, { text: `3 months — $${p3}`, callback_data: `sub_months_${tier}_3` }],
         [{ text: `6 months — $${p6}`, callback_data: `sub_months_${tier}_6` }, { text: `12 months — $${p12}`, callback_data: `sub_months_${tier}_12` }],
-        [{ text: '← Back', callback_data: 'sub_back_tier' }]
+        [{ text: '← Back', callback_data: 'sub_back_tier' }, { text: '❌ Close', callback_data: 'menu_close' }]
       ]}} as any)
   }
   else if (data === 'sub_back_tier') {
@@ -5872,7 +5873,7 @@ bot.on('callback_query', async (query) => {
       { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: { inline_keyboard: [
         [{ text: `💵 Pay $${uAmt} USDC`, callback_data: 'sub_pay_usdc' }],
         [{ text: `🟦 Pay $${bAmt} $BLUEAGENT (-20%)`, callback_data: 'sub_pay_blueagent' }],
-        [{ text: '← Back', callback_data: `sub_tier_${session.tier}` }]
+        [{ text: '← Back', callback_data: `sub_tier_${session.tier}` }, { text: '❌ Close', callback_data: 'menu_close' }]
       ]}} as any)
   }
   else if (data.startsWith('sub_pay_')) {
@@ -5885,7 +5886,7 @@ bot.on('callback_query', async (query) => {
     await bot.editMessageText(
       `💳 <b>Payment Instructions</b>\n\nPlan: <b>${session.tier.toUpperCase()}</b> · ${session.months} month${session.months>1?'s':''}\nAmount: <b>$${amount} ${tokenName}</b>\n\nSend to treasury on <b>Base</b>:\n<code>${PAYMENT_ADDRESS}</code>\n\nToken: <code>${tokenAddr}</code>\n\n⚠️ After sending, paste your <b>tx hash</b> (0x...) here.`,
       { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: { inline_keyboard: [
-        [{ text: '← Back', callback_data: `sub_tier_${session.tier}` }]
+        [{ text: '← Back', callback_data: `sub_tier_${session.tier}` }, { text: '❌ Close', callback_data: 'menu_close' }]
       ]}} as any)
   }
   else if (data === 'sub_pricing') {
