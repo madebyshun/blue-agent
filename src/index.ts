@@ -1751,8 +1751,9 @@ const MENU_KEYBOARD = {
     [{ text: '📰 News', callback_data: 'menu_news' }, { text: '🔍 Score', callback_data: 'menu_score' }, { text: '🚀 Launch', callback_data: 'menu_launch' }],
     [{ text: '🎯 Quests', callback_data: 'menu_quests' }, { text: '🎁 Rewards', callback_data: 'menu_rewards' }, { text: '🔗 Refer', callback_data: 'menu_refer' }],
     [{ text: '🏆 Top', callback_data: 'menu_leaderboard' }, { text: '💰 Wallet', callback_data: 'menu_wallet' }, { text: '📝 Submit', callback_data: 'menu_submit' }],
-    [{ text: '📁 Projects', callback_data: 'menu_projects' }, { text: '💳 Pricing', callback_data: 'menu_pricing' }, { text: '📖 Docs', url: DOCS_URL }],
+    [{ text: '📁 Projects', callback_data: 'menu_projects' }, { text: '📖 Docs', url: DOCS_URL }],
     [{ text: '👤 Profile', callback_data: 'menu_profile' }, { text: '❓ Help', callback_data: 'menu_help' }, { text: '❌ Close', callback_data: 'menu_close' }],
+    [{ text: '🤖 Community Kit — Launch your own bot', callback_data: 'menu_community_kit' }],
   ]
 }
 
@@ -2638,6 +2639,26 @@ bot.on('callback_query', async (query) => {
     finally { clearInterval(typingInterval2) }
     return
   }
+  if (data === 'menu_community_kit') {
+    await editMenu(query,
+      `🤖 <b>Blue Agent Community Kit</b>\n\n` +
+      `<i>Launch your own AI-powered Telegram community in 5 minutes.</i>\n\n` +
+      `🆓 <b>Free</b> — Self-host, core features\n` +
+      `🌱 <b>Seed</b> — $49/mo · Signals, Raffle, Alerts\n` +
+      `⚡ <b>Pro</b> — $199/mo · Token Claim, Broadcast, Quests\n` +
+      `🚀 <b>Scale</b> — $499/mo · Full control + white label\n\n` +
+      `💰 Pay USDC or $BLUEAGENT (-20%) · Multi-month discounts\n\n` +
+      `<code>npx blueagent init</code> — get started in 5 min`,
+      { inline_keyboard: [
+        [{ text: '💳 Subscribe Now', callback_data: 'start_subscribe' }],
+        [{ text: '⭐ View on GitHub', url: 'https://github.com/madebyshun/community-kit' }],
+        [{ text: '💬 DM @blocky_agent', url: 'https://t.me/blocky_agent' }],
+        NAV_ROW
+      ]}
+    )
+    return
+  }
+
   if (data === 'menu_pricing') {
     await editMenu(query,
       `💳 <b>Community Kit — Pricing</b>\n\n` +
