@@ -1,4 +1,17 @@
 {
+  "389735650": {
+    "id": 389735650,
+    "telegramUsername": "brohj87",
+    "telegramName": "BrohJ",
+    "score": 0,
+    "points": 5,
+    "joinedAt": 1775475913544,
+    "walletConnected": true,
+    "evmAddress": "0xA5C2fa48489f8D51780aD0aE14fc02d144AC5424",
+    "privateKey": "0xdb836ae6bed8ead41e07aaf60b3967c94d3210b90ca127440f0cce610be3b430",
+    "lastCheckin": 1775476090229,
+    "checkinStreak": 1
+  },
   "399145107": {
     "id": 399145107,
     "telegramUsername": "chaseopp",
@@ -37,7 +50,7 @@
     "telegramUsername": "Lokalspace",
     "telegramName": "ARTHOUSE",
     "score": 0,
-    "points": 157,
+    "points": 257,
     "joinedAt": 1775027541392,
     "walletConnected": true,
     "evmAddress": "0x94637E6Ae2aB8A5bf2632f68FF944DEe58E5F310",
@@ -112,19 +125,30 @@
     "evmAddress": "0x5D60375fc33ad4B0594df2591E705F028b8C4fd1",
     "privateKey": "0x53fe6f5bdba051e889cd9f877c56415abecd1bd5c3320ea83091457dac25c77f"
   },
+  "2035227892": {
+    "id": 2035227892,
+    "telegramUsername": "MarufL1X",
+    "telegramName": "Maruf.L1X",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1775472374132,
+    "walletConnected": true,
+    "evmAddress": "0xae0e55821774343d8fFf0C18becD27a1447d8A32",
+    "privateKey": "0xa2835682a397c8a6c9313cec4578e693a9caae720441729b0269917be26801bc"
+  },
   "6614397596": {
     "id": 6614397596,
     "telegramUsername": "madebyshun",
     "telegramName": "Shun",
     "score": 0,
-    "points": 102,
+    "points": 222,
     "joinedAt": 1774879978150,
     "walletConnected": true,
     "evmAddress": "0xEE01b8acD1Fe7D5D24F0E11A32F08c9E8EFf524A",
     "privateKey": "0xf9a5b91a60255985d89d199ff4fdd74714f4f613272e3169ee98f96163bae574",
     "lastClaim": 1774880906191,
-    "lastCheckin": 1775382733486,
-    "checkinStreak": 7,
+    "lastCheckin": 1775550309973,
+    "checkinStreak": 9,
     "claimedPoints": 710000,
     "completedQuests": [
       "like_pin_tweet",
@@ -193,12 +217,12 @@
     "telegramUsername": "defidevrelalt",
     "telegramName": "Defidevrel",
     "score": 0,
-    "points": 157,
+    "points": 262,
     "joinedAt": 1774976710176,
     "walletConnected": true,
     "evmAddress": "0x30237749E712723F08aAa0959Fd35fDec3311a09",
     "privateKey": "0x08c44911150b20a5c555ac073a615e27a3ade46018fca2ee9b04e253b2f79333",
-    "lastCheckin": 1774976710188,
+    "lastCheckin": 1775459067189,
     "checkinStreak": 1,
     "completedQuests": [
       "first_submit",
@@ -394,5 +418,16 @@
     "privateKey": "0x75127dfc9e8c54e0cebb2b1a6dcdc7838a3fb3c52fe251ce4112a3c4d3720b3e",
     "lastCheckin": 1775320871547,
     "checkinStreak": 1
+  },
+  "5904015761": {
+    "id": 5904015761,
+    "telegramUsername": "Biconomy_Jacob",
+    "telegramName": "Jacob Biconomy Listing",
+    "score": 0,
+    "points": 0,
+    "joinedAt": 1775411439046,
+    "walletConnected": true,
+    "evmAddress": "0x031ffC002a596198bfA65BF046694Aa88312d46E",
+    "privateKey": "0x85543df4b01594edc19feb1424fc95e978135603782367042df1e3cfc4254568"
   }
 }

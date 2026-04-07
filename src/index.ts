@@ -6306,11 +6306,25 @@ const PAYMENT_ADDRESS = process.env.PAYMENT_ADDRESS || '0xf31f59e7b8b58555f7871f
 
 // Tier pricing in USDC
 const TIER_PRICE: Record<string, number> = {
-  seed:   49,
-  growth: 99,
-  pro:    199,
-  scale:  499
+  seed:  49,
+  pro:   199,
+  scale: 499
 }
+
+// Multi-month discount
+const MONTH_DISCOUNT: Record<number, number> = { 1: 0, 3: 0.10, 6: 0.15, 12: 0.20 }
+const BLUEAGENT_DISCOUNT = 0.20
+
+function calcPrice(tier: string, months: number, currency: 'usdc' | 'blueagent' = 'usdc'): number {
+  const base = TIER_PRICE[tier] || 0
+  const discount = MONTH_DISCOUNT[months] || 0
+  const total = base * months * (1 - discount)
+  if (currency === 'blueagent') return Math.round(total * (1 - BLUEAGENT_DISCOUNT) * 100) / 100
+  return Math.round(total * 100) / 100
+}
+
+// Subscription payment sessions
+const subSessions = new Map<number, { tier: string; months: number; currency: 'usdc' | 'blueagent'; step: string }>()
 
 // =======================
 // PORTFOLIO
@@ -6540,55 +6554,52 @@ bot.onText(/\/pricing/, async (msg) => {
   )
 })
 
-// /subscribe — owner records a subscription
-bot.onText(/\/subscribe(?:\s+(.+))?/, async (msg) => {
+// /subscribe — buyer self-service payment flow
+bot.onText(/\/subscribe/, async (msg) => {
+  const chatId = msg.chat.id
+  const userId = msg.from?.id || chatId
+  if (msg.chat.type !== 'private') {
+    await bot.sendMessage(chatId, '🔒 Please DM me to subscribe: @' + BOT_USERNAME)
+    return
+  }
+  subSessions.set(userId, { tier: '', months: 1, currency: 'usdc', step: 'tier' })
+  await bot.sendMessage(chatId,
+    `💳 <b>Community Kit — Subscribe</b>\n\nChoose your plan:`,
+    { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
+      [{ text: '🌱 Seed — $49/mo', callback_data: 'sub_tier_seed' }],
+      [{ text: '⚡ Pro — $199/mo', callback_data: 'sub_tier_pro' }],
+      [{ text: '🚀 Scale — $499/mo', callback_data: 'sub_tier_scale' }],
+      [{ text: '💰 View pricing details', callback_data: 'sub_pricing' }]
+    ]}} as any
+  )
+})
+
+// /subscribe_admin — owner manually records a subscription
+bot.onText(/\/subscribe_admin(?:\s+(.+))?/, async (msg) => {
   if (!isOwner(msg)) return
   const chatId = msg.chat.id
   const input = msg.text?.split('\n').slice(1).join('\n').trim() || ''
-
   if (!input) {
     await bot.sendMessage(chatId,
-      `💳 <b>Record Subscription</b>\n\nFormat:\n<code>/subscribe\nproject: My Project\ntier: seed\naddress: 0x...\ntx: 0x... (optional)\n</code>`,
-      { parse_mode: 'HTML' } as any
-    )
+      `💳 <b>Record Subscription (Admin)</b>\n\nFormat:\n<code>/subscribe_admin\nproject: My Project\ntier: seed\nmonths: 3\naddress: 0x...\ntx: 0x...\n</code>`,
+      { parse_mode: 'HTML' } as any)
     return
   }
-
   const lines = input.split('\n')
-  let project = '', tier = '', address = '', tx = ''
+  let project = '', tier = '', address = '', tx = '', months = 1
   for (const line of lines) {
     if (line.startsWith('project:')) project = line.replace('project:', '').trim()
     else if (line.startsWith('tier:')) tier = line.replace('tier:', '').trim().toLowerCase()
+    else if (line.startsWith('months:')) months = parseInt(line.replace('months:', '').trim()) || 1
     else if (line.startsWith('address:')) address = line.replace('address:', '').trim()
     else if (line.startsWith('tx:')) tx = line.replace('tx:', '').trim()
   }
-
   if (!project || !tier || !address) { await bot.sendMessage(chatId, '❌ Need: project, tier, address'); return }
-  if (!TIER_PRICE[tier]) { await bot.sendMessage(chatId, `❌ Invalid tier. Options: ${Object.keys(TIER_PRICE).join(', ')}`); return }
-
-  const sub: Subscription = {
-    projectName: project,
-    tier,
-    address,
-    txHash: tx || undefined,
-    amount: TIER_PRICE[tier],
-    startAt: Date.now(),
-    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-    active: true
-  }
-
-  const subs = loadSubs()
-  subs.push(sub)
-  saveSubs(subs)
-
-  await bot.sendMessage(chatId,
-    `✅ <b>Subscription recorded!</b>\n\n` +
-    `📦 Project: ${project}\n` +
-    `🏷️ Tier: ${tier} ($${TIER_PRICE[tier]}/mo)\n` +
-    `📅 Expires: ${new Date(sub.expiresAt).toLocaleDateString()}\n` +
-    `${tx ? `🔗 TX: <code>${tx.slice(0, 20)}...</code>` : ''}`,
-    { parse_mode: 'HTML' } as any
-  )
+  if (!TIER_PRICE[tier]) { await bot.sendMessage(chatId, `❌ Invalid tier: ${Object.keys(TIER_PRICE).join(', ')}`); return }
+  const amount = calcPrice(tier, months)
+  const sub: Subscription = { userId: undefined, projectName: project, tier, address, txHash: tx||undefined, amount, startAt: Date.now(), expiresAt: Date.now() + months*30*24*60*60*1000, active: true }
+  const subs = loadSubs(); subs.push(sub); saveSubs(subs)
+  await bot.sendMessage(chatId, `✅ <b>Recorded!</b>\n${project} | ${tier} | ${months}mo | $${amount}${tx?`\nTX: <code>${tx.slice(0,20)}...</code>`:''}`, { parse_mode: 'HTML' } as any)
 })
 
 // /subs — list subscriptions
@@ -6692,3 +6703,109 @@ bot.on('new_chat_members', async (msg) => {
 })
 
 console.log('🏭 /factory — Community Kit group setup initialized')
+
+// =======================
+// SUBSCRIPTION FLOW CALLBACKS
+// =======================
+bot.on('callback_query', async (query) => {
+  const data = query.data || ''
+  if (!data.startsWith('sub_')) return
+  const chatId = query.message?.chat.id
+  const msgId = query.message?.message_id
+  const userId = query.from.id
+  if (!chatId) return
+  await bot.answerCallbackQuery(query.id)
+
+  const session = subSessions.get(userId) || { tier: '', months: 1, currency: 'usdc' as const, step: 'tier' }
+
+  if (data.startsWith('sub_tier_')) {
+    const tier = data.replace('sub_tier_', '')
+    session.tier = tier; session.step = 'months'; subSessions.set(userId, session)
+    const p1=calcPrice(tier,1), p3=calcPrice(tier,3), p6=calcPrice(tier,6), p12=calcPrice(tier,12)
+    await bot.editMessageText(
+      `📅 <b>Choose duration</b> (${tier.toUpperCase()})\n\n1 month — <b>$${p1}</b>\n3 months — <b>$${p3}</b> <i>(-10%)</i>\n6 months — <b>$${p6}</b> <i>(-15%)</i>\n12 months — <b>$${p12}</b> <i>(-20%)</i>`,
+      { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: { inline_keyboard: [
+        [{ text: `1 month — $${p1}`, callback_data: 'sub_months_1' }, { text: `3 months — $${p3}`, callback_data: 'sub_months_3' }],
+        [{ text: `6 months — $${p6}`, callback_data: 'sub_months_6' }, { text: `12 months — $${p12}`, callback_data: 'sub_months_12' }],
+        [{ text: '← Back', callback_data: 'sub_back_tier' }]
+      ]}} as any)
+  }
+
+  else if (data === 'sub_back_tier') {
+    session.step = 'tier'; subSessions.set(userId, session)
+    await bot.editMessageText(`💳 <b>Community Kit — Subscribe</b>\n\nChoose your plan:`,
+      { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: { inline_keyboard: [
+        [{ text: '🌱 Seed — $49/mo', callback_data: 'sub_tier_seed' }],
+        [{ text: '⚡ Pro — $199/mo', callback_data: 'sub_tier_pro' }],
+        [{ text: '🚀 Scale — $499/mo', callback_data: 'sub_tier_scale' }]
+      ]}} as any)
+  }
+
+  else if (data.startsWith('sub_months_')) {
+    const months = parseInt(data.replace('sub_months_', ''))
+    session.months = months; session.step = 'currency'; subSessions.set(userId, session)
+    const uAmt=calcPrice(session.tier,months,'usdc'), bAmt=calcPrice(session.tier,months,'blueagent')
+    await bot.editMessageText(
+      `💰 <b>Choose payment method</b>\n\nPlan: <b>${session.tier.toUpperCase()}</b> · ${months} month${months>1?'s':''}\n\n💵 USDC — <b>$${uAmt}</b>\n🟦 $BLUEAGENT — <b>$${bAmt}</b> <i>(-20%)</i>`,
+      { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: { inline_keyboard: [
+        [{ text: `💵 Pay $${uAmt} USDC`, callback_data: 'sub_pay_usdc' }],
+        [{ text: `🟦 Pay $${bAmt} in $BLUEAGENT (-20%)`, callback_data: 'sub_pay_blueagent' }],
+        [{ text: '← Back', callback_data: `sub_tier_${session.tier}` }]
+      ]}} as any)
+  }
+
+  else if (data.startsWith('sub_pay_')) {
+    const currency = data.replace('sub_pay_', '') as 'usdc' | 'blueagent'
+    session.currency = currency; session.step = 'awaiting_tx'; subSessions.set(userId, session)
+    const amount = calcPrice(session.tier, session.months, currency)
+    const isBA = currency === 'blueagent'
+    const tokenAddr = isBA ? TOKEN_CONTRACT : '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
+    const tokenName = isBA ? '$BLUEAGENT' : 'USDC'
+    await bot.editMessageText(
+      `💳 <b>Payment Instructions</b>\n\nPlan: <b>${session.tier.toUpperCase()}</b> · ${session.months} month${session.months>1?'s':''}\nAmount: <b>$${amount} ${tokenName}</b>\n\nSend to treasury on <b>Base</b>:\n<code>${PAYMENT_ADDRESS}</code>\n\nToken contract:\n<code>${tokenAddr}</code>\n\n⚠️ After sending, <b>paste your tx hash</b> (0x...) here to verify.`,
+      { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: { inline_keyboard: [
+        [{ text: '🔗 View treasury on Basescan', url: `https://basescan.org/address/${PAYMENT_ADDRESS}` }],
+        [{ text: '← Back', callback_data: `sub_months_${session.months}` }]
+      ]}} as any)
+  }
+
+  else if (data === 'sub_pricing') {
+    await bot.sendMessage(chatId,
+      `💳 <b>Community Kit Pricing</b>\n\n🆓 <b>Free</b> — $0\nPoints, Leaderboard, Referrals, Onboarding, Projects\n\n🌱 <b>Seed</b> — $49/mo\n+ Price Alerts, Gem Signals, Raffle, Scheduled Posts\n\n⚡ <b>Pro</b> — $199/mo\n+ Token Claim, Broadcast DM, Flash Quests, Bounties, Proposals\n\n🚀 <b>Scale</b> — $499/mo\n+ Analytics Export, Token Gate, Custom Branding\n\n💰 Pay USDC or $BLUEAGENT (-20%) on Base\n📊 Multi-month: 3mo -10% | 6mo -15% | 12mo -20%`,
+      { parse_mode: 'HTML' } as any)
+  }
+})
+
+// Handle tx hash for subscription verification
+bot.on('message', async (msg) => {
+  if (msg.chat.type !== 'private') return
+  const userId = msg.from?.id; if (!userId) return
+  const session = subSessions.get(userId)
+  if (!session || session.step !== 'awaiting_tx') return
+  const text = msg.text?.trim() || ''
+  if (!text.startsWith('0x') || text.length < 60) return
+  const chatId = msg.chat.id
+  await bot.sendMessage(chatId, '⏳ Verifying transaction on Base...')
+  try {
+    const res = await axios.get(`https://api.basescan.org/api?module=transaction&action=gettxreceiptstatus&txhash=${text}&apikey=${BASESCAN_API}`, { timeout: 10000 })
+    const status = res.data?.result?.status
+    if (status === '1') {
+      const amount = calcPrice(session.tier, session.months, session.currency)
+      const sub: Subscription = { userId, projectName: `User ${userId}`, tier: session.tier, address: '', txHash: text, amount, startAt: Date.now(), expiresAt: Date.now() + session.months*30*24*60*60*1000, active: true }
+      const subs = loadSubs(); subs.push(sub); saveSubs(subs)
+      subSessions.delete(userId)
+      await bot.sendMessage(chatId,
+        `✅ <b>Payment verified!</b>\n\n🏷️ Plan: <b>${session.tier.toUpperCase()}</b>\n📅 Duration: ${session.months} month${session.months>1?'s':''}\n💰 Amount: $${amount} ${session.currency.toUpperCase()}\n⏰ Expires: ${new Date(sub.expiresAt).toLocaleDateString()}\n\n📩 Our team will activate your tier within 24h. Contact @blocky_agent if needed.`,
+        { parse_mode: 'HTML' } as any)
+      await bot.sendMessage(OWNER_ID,
+        `💰 <b>New Subscription!</b>\n\nUser: @${msg.from?.username||userId}\nTier: ${session.tier} · ${session.months}mo\nAmount: $${amount} ${session.currency}\nTX: <code>${text}</code>`,
+        { parse_mode: 'HTML' } as any)
+    } else if (status === '0') {
+      await bot.sendMessage(chatId, '❌ Transaction failed on-chain. Please check and try again.')
+    } else {
+      await bot.sendMessage(chatId, '⚠️ Cannot verify yet (may be pending). Wait a minute and paste the hash again.')
+    }
+  } catch {
+    await bot.sendMessage(chatId, '⚠️ Verification error. Contact @blocky_agent with your TX hash.')
+  }
+})
