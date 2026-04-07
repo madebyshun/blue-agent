@@ -5477,6 +5477,8 @@ interface Subscription {
   address: string      // buyer's wallet
   amount: number       // USDC amount
   txHash?: string
+  licenseKey?: string
+  reminderSent?: boolean
   startAt: number
   expiresAt: number
   active: boolean
@@ -5887,6 +5889,46 @@ bot.on('callback_query', async (query) => {
   }
 })
 
+// =======================
+// LICENSE KEY SYSTEM
+// =======================
+function generateLicenseKey(tier: string, months: number): string {
+  const rand = Math.random().toString(36).slice(2, 10).toUpperCase()
+  return `ck_${tier}_${months}mo_${rand}`
+}
+
+function parseLicenseKey(key: string): { tier: string; months: number } | null {
+  const match = key.match(/^ck_(seed|pro|scale)_(\d+)mo_[A-Z0-9]+$/)
+  if (!match) return null
+  return { tier: match[1], months: parseInt(match[2]) }
+}
+
+// /my-license — buyer checks their license
+bot.onText(/\/my_license|^\/mylicense/, async (msg) => {
+  const chatId = msg.chat.id
+  const userId = msg.from?.id || chatId
+  const subs = loadSubs()
+  const userSubs = subs.filter(s => s.userId === userId && s.active && Date.now() < s.expiresAt)
+  if (!userSubs.length) {
+    await bot.sendMessage(chatId,
+      `🔑 No active license found.\n\nUse /subscribe to get Community Kit.`,
+      { parse_mode: 'HTML' } as any)
+    return
+  }
+  const sub = userSubs[userSubs.length - 1]
+  const key = sub.licenseKey || 'Key not found — contact @blockyagent_bot'
+  const daysLeft = Math.ceil((sub.expiresAt - Date.now()) / (1000 * 60 * 60 * 24))
+  await bot.sendMessage(chatId,
+    `🔑 <b>Your License</b>\n\n` +
+    `🏷️ Plan: <b>${sub.tier.toUpperCase()}</b>\n` +
+    `⏰ Expires: ${new Date(sub.expiresAt).toLocaleDateString()} (${daysLeft} days left)\n\n` +
+    `<b>License Key:</b>\n<code>${key}</code>\n\n` +
+    `Add to your bot's <code>.env</code>:\n` +
+    `<code>COMMUNITY_KIT_LICENSE=${key}</code>\n\n` +
+    `Then restart your bot → features unlock automatically.`,
+    { parse_mode: 'HTML' } as any)
+})
+
 // TX hash verification for subscription
 bot.on('message', async (msg) => {
   if (msg.chat.type !== 'private') return
@@ -5902,11 +5944,39 @@ bot.on('message', async (msg) => {
     const status = res.data?.result?.status
     if (status === '1') {
       const amount = calcPrice(session.tier, session.months, session.currency)
-      const sub: Subscription = { userId, projectName: `User ${userId}`, tier: session.tier, address: '', txHash: text, amount, startAt: Date.now(), expiresAt: Date.now() + session.months*30*24*60*60*1000, active: true }
+      const licenseKey = generateLicenseKey(session.tier, session.months)
+      const sub: Subscription = {
+        userId, projectName: `User ${userId}`, tier: session.tier, address: '',
+        txHash: text, amount, licenseKey,
+        startAt: Date.now(),
+        expiresAt: Date.now() + session.months * 30 * 24 * 60 * 60 * 1000,
+        active: true
+      }
       const subs = loadSubs(); subs.push(sub); saveSubs(subs)
       subSessions.delete(userId)
-      await bot.sendMessage(chatId, `✅ <b>Payment verified!</b>\n\n🏷️ <b>${session.tier.toUpperCase()}</b> · ${session.months}mo\n💰 $${amount} ${session.currency.toUpperCase()}\n⏰ Expires: ${new Date(sub.expiresAt).toLocaleDateString()}\n\n📩 Tier will be activated within 24h. Contact @blockyagent_bot if needed.`, { parse_mode: 'HTML' } as any)
-      await bot.sendMessage(OWNER_ID, `💰 <b>New Sub!</b>\nUser: @${msg.from?.username||userId}\nTier: ${session.tier} · ${session.months}mo | $${amount} ${session.currency}\nTX: <code>${text}</code>`, { parse_mode: 'HTML' } as any)
+
+      await bot.sendMessage(chatId,
+        `✅ <b>Payment verified!</b>\n\n` +
+        `🏷️ Plan: <b>${session.tier.toUpperCase()}</b> · ${session.months} month${session.months>1?'s':''}\n` +
+        `💰 $${amount} ${session.currency.toUpperCase()}\n` +
+        `⏰ Expires: ${new Date(sub.expiresAt).toLocaleDateString()}\n\n` +
+        `🔑 <b>Your License Key:</b>\n<code>${licenseKey}</code>\n\n` +
+        `Add to your bot's <code>.env</code>:\n` +
+        `<code>COMMUNITY_KIT_LICENSE=${licenseKey}</code>\n\n` +
+        `Restart your bot → <b>${session.tier.toUpperCase()} features unlock automatically</b> ✅\n\n` +
+        `📖 Setup guide: github.com/madebyshun/community-kit\n` +
+        `💬 Need help? /my_license or @blockyagent_bot`,
+        { parse_mode: 'HTML' } as any)
+
+      await bot.sendMessage(OWNER_ID,
+        `💰 <b>New Subscription!</b>\n\n` +
+        `User: @${msg.from?.username || userId} (${userId})\n` +
+        `Tier: <b>${session.tier}</b> · ${session.months}mo\n` +
+        `Amount: $${amount} ${session.currency.toUpperCase()}\n` +
+        `Key: <code>${licenseKey}</code>\n` +
+        `TX: <code>${text}</code>`,
+        { parse_mode: 'HTML' } as any)
+
     } else if (status === '0') {
       await bot.sendMessage(chatId, '❌ Transaction failed on-chain. Please try again.')
     } else {
@@ -5916,3 +5986,32 @@ bot.on('message', async (msg) => {
     await bot.sendMessage(chatId, '⚠️ Verification error. Contact @blockyagent_bot with your TX hash.')
   }
 })
+
+// Expiry reminder cron — check daily, DM users 7 days before expiry
+setInterval(async () => {
+  try {
+    const subs = loadSubs()
+    const now = Date.now()
+    const sevenDays = 7 * 24 * 60 * 60 * 1000
+    for (const sub of subs) {
+      if (!sub.active || !sub.userId) continue
+      const timeLeft = sub.expiresAt - now
+      if (timeLeft > 0 && timeLeft <= sevenDays && !sub.reminderSent) {
+        const daysLeft = Math.ceil(timeLeft / (1000 * 60 * 60 * 24))
+        try {
+          await bot.sendMessage(sub.userId,
+            `⏰ <b>License expiring soon!</b>\n\n` +
+            `Your <b>${sub.tier.toUpperCase()}</b> plan expires in <b>${daysLeft} day${daysLeft>1?'s':''}</b>.\n\n` +
+            `Renew now to keep your features active:\n/subscribe`,
+            { parse_mode: 'HTML' } as any)
+          // Mark reminder sent
+          const idx = subs.indexOf(sub)
+          subs[idx].reminderSent = true
+          saveSubs(subs)
+        } catch {}
+      }
+    }
+  } catch {}
+}, 24 * 60 * 60 * 1000) // check every 24h
+
+console.log('🔑 License key system initialized')
