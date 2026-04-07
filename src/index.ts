@@ -47,7 +47,7 @@ function upgradeMsg(feature: string): string {
     token_gate: 'Scale'
   }
   const needed = tierMap[feature] || 'Pro'
-  return `⬆️ This feature requires <b>Community Kit ${needed}</b>\n\nUpgrade at blueagent.xyz/community-kit`
+  return `⬆️ This feature requires <b>Community Kit ${needed}</b>\n\nUpgrade at github.com/madebyshun/community-kit`
 }
 
 const DATA_DIR = path.join(__dirname, '..', 'data')
@@ -2733,7 +2733,7 @@ bot.on('callback_query', async (query) => {
       `💰 Pay USDC or $BLUEAGENT (-20%) on Base\n📊 Multi-month: 3mo -10% | 6mo -15% | 12mo -20%`,
       { inline_keyboard: [
         [{ text: '💳 Subscribe Now', callback_data: 'start_subscribe' }],
-        [{ text: '🌐 blueagent.xyz/community-kit', url: 'https://blueagent.xyz/community-kit' }],
+        [{ text: '🌐 github.com/madebyshun/community-kit', url: 'https://github.com/madebyshun/community-kit' }],
         NAV_ROW
       ]}
     )
@@ -5739,7 +5739,7 @@ bot.onText(/\/pricing/, async (msg) => {
       parse_mode: 'HTML',
       reply_markup: { inline_keyboard: [
         [{ text: '💳 Subscribe Now', callback_data: 'start_subscribe' }],
-        [{ text: '🌐 blueagent.xyz/community-kit', url: 'https://blueagent.xyz/community-kit' }]
+        [{ text: '🌐 github.com/madebyshun/community-kit', url: 'https://github.com/madebyshun/community-kit' }]
       ]}
     } as any
   )
