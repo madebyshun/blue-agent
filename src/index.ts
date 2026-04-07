@@ -6731,3 +6731,79 @@ bot.on('message', async (msg) => {
 })
 
 console.log('🟦 /dexpay — DexScreener Enhanced Token Info initialized')
+
+// =======================
+// REVENUE DASHBOARD
+// =======================
+bot.onText(/\/revenue/, async (msg) => {
+  if (!isOwner(msg)) return
+  const chatId = msg.chat.id
+  const subs = loadSubs()
+  const now = Date.now()
+  const active = subs.filter(s => s.active && now < s.expiresAt)
+  const expiringSoon = active.filter(s => s.expiresAt - now < 7 * 24 * 60 * 60 * 1000)
+  const thisMonth = subs.filter(s => s.startAt > now - 30 * 24 * 60 * 60 * 1000)
+  const mrr = active.reduce((sum, s) => sum + (s.amount / (s.months || 1)), 0)
+  const tierCount = active.reduce((acc: Record<string,number>, s) => { acc[s.tier] = (acc[s.tier]||0)+1; return acc }, {})
+
+  await bot.sendMessage(chatId,
+    `💰 <b>Revenue Dashboard</b>\n\n` +
+    `📊 <b>Active subs:</b> ${active.length}\n` +
+    `📅 <b>New this month:</b> ${thisMonth.length}\n` +
+    `⚠️ <b>Expiring soon (7d):</b> ${expiringSoon.length}\n\n` +
+    `<b>By tier:</b>\n` +
+    `🌱 Seed: ${tierCount['seed']||0}\n` +
+    `⚡ Pro: ${tierCount['pro']||0}\n` +
+    `🚀 Scale: ${tierCount['scale']||0}\n\n` +
+    `💵 <b>Est. MRR: $${Math.round(mrr)}</b>\n\n` +
+    `${expiringSoon.length ? `⚠️ Expiring soon:\n` + expiringSoon.map(s => `• ${s.projectName} (${s.tier}) — ${Math.ceil((s.expiresAt-now)/86400000)}d`).join('\n') : '✅ No subs expiring soon'}`,
+    { parse_mode: 'HTML' } as any)
+})
+
+// =======================
+// RENEW COMMAND
+// =======================
+bot.onText(/\/renew/, async (msg) => {
+  const chatId = msg.chat.id
+  const userId = msg.from?.id || chatId
+  if (msg.chat.type !== 'private') {
+    await bot.sendMessage(chatId, '🔒 Please DM me to renew: @' + BOT_USERNAME)
+    return
+  }
+  const subs = loadSubs()
+  const lastSub = subs.filter(s => s.userId === userId).sort((a,b) => b.startAt - a.startAt)[0]
+  const currentTier = lastSub?.tier || ''
+  subSessions.set(userId, { tier: currentTier, months: 1, currency: 'usdc', step: 'tier' })
+  await bot.sendMessage(chatId,
+    `🔄 <b>Renew Subscription</b>\n\n` +
+    `${lastSub ? `Current plan: <b>${lastSub.tier.toUpperCase()}</b> · expires ${new Date(lastSub.expiresAt).toLocaleDateString()}\n\n` : ''}` +
+    `Choose plan to renew:`,
+    { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
+      [{ text: `🌱 Seed — $49/mo${currentTier==='seed'?' ✓':''}`, callback_data: 'sub_tier_seed' }],
+      [{ text: `⚡ Pro — $199/mo${currentTier==='pro'?' ✓':''}`, callback_data: 'sub_tier_pro' }],
+      [{ text: `🚀 Scale — $499/mo${currentTier==='scale'?' ✓':''}`, callback_data: 'sub_tier_scale' }]
+    ]}} as any
+  )
+})
+
+// =======================
+// MY LICENSE COMMAND
+// =======================
+bot.onText(/\/my_license|^\/mylicense/, async (msg) => {
+  const chatId = msg.chat.id
+  const userId = msg.from?.id || chatId
+  const subs = loadSubs()
+  const userSubs = subs.filter(s => s.userId === userId && s.active && Date.now() < s.expiresAt)
+  if (!userSubs.length) {
+    await bot.sendMessage(chatId, '🔑 No active license.\n\nUse /subscribe to get Community Kit.', { parse_mode: 'HTML' } as any)
+    return
+  }
+  const sub = userSubs[userSubs.length - 1]
+  const key = (sub as any).licenseKey || 'Contact @blockyagent_bot'
+  const daysLeft = Math.ceil((sub.expiresAt - Date.now()) / (1000 * 60 * 60 * 24))
+  await bot.sendMessage(chatId,
+    `🔑 <b>Your License</b>\n\n🏷️ Plan: <b>${sub.tier.toUpperCase()}</b>\n⏰ Expires: ${new Date(sub.expiresAt).toLocaleDateString()} (${daysLeft}d left)\n\n<b>Key:</b>\n<code>${key}</code>\n\nAdd to <code>.env</code>:\n<code>COMMUNITY_KIT_LICENSE=${key}</code>\n\nRestart bot → features unlock automatically ✅`,
+    { parse_mode: 'HTML' } as any)
+})
+
+console.log('🔑 License + Revenue commands initialized')
