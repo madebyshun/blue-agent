@@ -5877,7 +5877,6 @@ bot.on('callback_query', async (query) => {
     await bot.editMessageText(
       `💳 <b>Payment Instructions</b>\n\nPlan: <b>${session.tier.toUpperCase()}</b> · ${session.months} month${session.months>1?'s':''}\nAmount: <b>$${amount} ${tokenName}</b>\n\nSend to treasury on <b>Base</b>:\n<code>${PAYMENT_ADDRESS}</code>\n\nToken: <code>${tokenAddr}</code>\n\n⚠️ After sending, paste your <b>tx hash</b> (0x...) here.`,
       { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: { inline_keyboard: [
-        [{ text: '🔗 View treasury on Basescan', url: `https://basescan.org/address/${PAYMENT_ADDRESS}` }],
         [{ text: '← Back', callback_data: `sub_tier_${session.tier}` }]
       ]}} as any)
   }
