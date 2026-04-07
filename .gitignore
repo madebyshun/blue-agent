@@ -3,3 +3,11 @@ dist/
 .env
 *.log
 .DS_Store
+
+# Data files — never overwrite in git merge
+data/users.json
+data/referrals.json
+data/projects.json
+data/subscriptions.json
+data/raffles.json
+data/posted_signals.json
