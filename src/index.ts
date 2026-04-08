@@ -3675,7 +3675,7 @@ bot.on('message', async (msg) => {
     if (session.step === 'input') {
       let input = text.trim()
       // Handle "me" for wallet-based services
-      if (input === 'me' && (session.service === 'quantum' || session.service === 'pnl')) {
+      if (input === 'me') {
         const users2 = loadUsers()
         input = users2[userId]?.evmAddress || ''
         if (!input) {
@@ -3684,7 +3684,28 @@ bot.on('message', async (msg) => {
           return
         }
       }
+
+      // Quantum sub-services
+      if (session.service.startsWith('quantum_')) {
+        const qsub = QUANTUM_SUBS[session.service]
+        if (!qsub) { x402Sessions.delete(userId); return }
+        const subNames: Record<string, string> = {
+          quantum_lite: 'Quantum Lite', quantum_premium: 'Quantum Premium',
+          quantum_batch: 'Quantum Batch', quantum_shield: 'Quantum Shield',
+          quantum_timeline: 'Quantum Timeline', quantum_contract: 'Quantum Contract'
+        }
+        const name = subNames[session.service] || 'Quantum'
+        x402Sessions.set(userId, { ...session, step: 'confirm', input })
+        const preview = input.startsWith('0x') ? `<code>${input.slice(0, 6)}...${input.slice(-4)}</code>` : `<i>${input.slice(0, 60)}</i>`
+        await bot.sendMessage(chatId,
+          `⛛️ <b>${name}</b>\n\nInput: ${preview}\nCost: <b>$${qsub.price.toFixed(2)} USDC</b>\n\nConfirm payment?`,
+          { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '✅ Confirm', callback_data: 'x402_confirm' }, { text: '❌ Cancel', callback_data: 'x402_cancel' }]] } } as any
+        )
+        return
+      }
+
       const svc = X402_SERVICES[session.service]
+      if (!svc) { x402Sessions.delete(userId); return }
       x402Sessions.set(userId, { ...session, step: 'confirm', input })
       const preview = input.startsWith('0x') ? `<code>${input.slice(0, 6)}...${input.slice(-4)}</code>` : `<i>${input.slice(0, 60)}</i>`
       await bot.sendMessage(chatId,
