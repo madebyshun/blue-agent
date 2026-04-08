@@ -2733,8 +2733,12 @@ bot.on('callback_query', async (query) => {
     return
   }
 
+  if (data === 'menu_main' || data === 'open_menu') {
+    await editMenu(query, `🟦 <b>Blue Agent</b> — Control Panel\n\nWhat do you need?`, MENU_KEYBOARD)
+    return
+  }
+
   if (data === 'menu_x402') {
-    await bot.answerCallbackQuery(query.id)
     await editMenu(query,
       `<b>⚛️ Blue Agent x402 Services</b>\n\nPay-per-use AI services · USDC on Base · No signup\n\n` +
       `🔍 <b>Analyze</b> — Due diligence any token\n` +
