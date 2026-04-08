@@ -597,6 +597,55 @@ function startSessionTimer(userId: number, chatId: number) {
 }
 
 const walletSessions = new Map<number, { step: string; email?: string }>()
+
+// =======================
+// MEET AGENTS SYSTEM
+// =======================
+const AGENTS: Record<string, { name: string; emoji: string; role: string; personality: string; credits: number }> = {
+  rex: {
+    name: 'Rex', emoji: '🔥',
+    role: 'Onchain Strategist',
+    personality: `You are Rex 🔥 — an onchain strategist on Base. Sharp, direct, no fluff.
+You find alpha, spot opportunities, and cut through noise.
+You think in tokens, liquidity, and timing.
+Never hedge. Give concrete opinions. Be brutally honest.
+Keep replies concise — max 3-4 sentences unless more detail is needed.
+You speak like a seasoned DeFi trader who's seen everything.`,
+    credits: 5
+  },
+  nova: {
+    name: 'Nova', emoji: '✍️',
+    role: 'Web3 Copywriter',
+    personality: `You are Nova ✍️ — a Web3 copywriter. You write tweets, threads, and launch copy that convert.
+Your style: punchy, clear, human. No jargon unless necessary.
+You understand crypto culture — you speak builder, not marketer.
+When asked to write, just write. No preamble.
+Always match the tone the user wants (hype / calm / technical / casual).`,
+    credits: 3
+  },
+  forge: {
+    name: 'Forge', emoji: '💻',
+    role: 'Code Reviewer',
+    personality: `You are Forge 💻 — a no-BS code reviewer. Solidity, TypeScript, Node.js, React.
+You find bugs before they become exploits. You refactor for clarity.
+Direct feedback only. No flattery. If code is bad, say so and fix it.
+Format code blocks properly. Explain WHY, not just what to change.
+Specialty: smart contracts, onchain apps, Telegram bots.`,
+    credits: 7
+  },
+  sage: {
+    name: 'Sage', emoji: '📊',
+    role: 'Tokenomics & GTM',
+    personality: `You are Sage 📊 — you think in systems. Tokenomics, go-to-market, product strategy.
+You design token economies that actually work and GTM plans that scale.
+You ask the right questions before giving answers.
+You think long-term. You've seen too many projects die from bad tokenomics.
+Structured, methodical, but approachable. Use frameworks when useful.`,
+    credits: 8
+  }
+}
+
+const agentSessions = new Map<number, { agentKey: string; history: Array<{ role: string; content: string }> }>()
 const submitSessions = new Map<number, { step: number; name?: string; description?: string; url?: string; twitter?: string }>()
 const scoreSessions = new Map<number, boolean>()
 const xHandleSessions = new Map<number, boolean>() // waiting for X handle input (legacy, kept for fallback)
@@ -2992,15 +3041,16 @@ bot.on('callback_query', async (query) => {
   }
   if (data === 'menu_agents') {
     await editMenu(query,
-      `<b>🤖 Meet Agents</b>\n\nSpecialist AI agents — pay with $BLUEAGENT Credits.\n\n` +
-      `✍️ <b>Copywriter</b> — Web3 copy & tweets · <i>2 cr/msg</i>\n` +
-      `🎨 <b>UX Designer</b> — UI/UX expert · <i>3 cr/msg</i>\n` +
-      `📊 <b>Tokenomics</b> — Token design expert · <i>7 cr/msg</i>\n` +
-      `🚀 <b>GTM Advisor</b> — Go-to-market strategy · <i>7 cr/msg</i>\n` +
-      `💻 <b>Code Review</b> — Code review & refactor · <i>5 cr/msg</i>\n\n` +
-      `<i>Coming soon — buy Credits with $BLUEAGENT to get started</i>`,
+      `🤖 <b>Meet Agents</b>\n\nSpecialist AI agents — pay with $BLUEAGENT Credits.\n\n` +
+      `🔥 <b>Rex</b> — Onchain strategist. Cuts through noise, finds alpha. · <i>5 cr/msg</i>\n` +
+      `✍️ <b>Nova</b> — Web3 copywriter. Tweets, threads, launch copy. · <i>3 cr/msg</i>\n` +
+      `💻 <b>Forge</b> — Code reviewer. Solidity, TypeScript, no BS. · <i>7 cr/msg</i>\n` +
+      `📊 <b>Sage</b> — Tokenomics & GTM. Thinks in systems. · <i>8 cr/msg</i>\n\n` +
+      `🪙 Balance: <b>${loadUsers()[userId]?.credits || 0} Credits</b>`,
       {
         inline_keyboard: [
+          [{ text: '🔥 Rex', callback_data: 'agent_start_rex' }, { text: '✍️ Nova', callback_data: 'agent_start_nova' }],
+          [{ text: '💻 Forge', callback_data: 'agent_start_forge' }, { text: '📊 Sage', callback_data: 'agent_start_sage' }],
           [{ text: '🪙 My Credits', callback_data: 'menu_credits' }, { text: '💰 Buy Credits', callback_data: 'credits_buy' }],
           NAV_ROW
         ]
@@ -3009,18 +3059,48 @@ bot.on('callback_query', async (query) => {
     return
   }
   if (data === 'menu_bankr_agents') { await sendAgentsLeaderboard(chatId, 'mcap'); return }
+
+  // Agent start callbacks
+  if (data.startsWith('agent_start_')) {
+    const agentKey = data.replace('agent_start_', '')
+    const agent = AGENTS[agentKey]
+    if (!agent) return
+    const users3 = loadUsers()
+    const credits3 = users3[userId]?.credits || 0
+    if (credits3 < agent.credits) {
+      await editMenu(query,
+        `🪙 <b>Not enough credits</b>\n\nYou need <b>${agent.credits} credits/msg</b> for ${agent.emoji} ${agent.name}.\nYou have: <b>${credits3} credits</b>\n\nBuy more credits to continue:`,
+        { inline_keyboard: [[{ text: '💰 Buy Credits', callback_data: 'credits_buy' }], [{ text: '← Back', callback_data: 'menu_agents' }]] }
+      )
+      return
+    }
+    agentSessions.set(userId, { agentKey, history: [] })
+    await editMenu(query,
+      `${agent.emoji} <b>${agent.name}</b> — ${agent.role}\n\n<i>Session started. ${agent.credits} credits/msg.</i>\n\nJust type your message. Type /stop to end session.`,
+      { inline_keyboard: [[{ text: '❌ End Session', callback_data: 'agent_stop' }]] }
+    )
+    return
+  }
+
+  if (data === 'agent_stop') {
+    agentSessions.delete(userId)
+    await editMenu(query,
+      `✅ Session ended.\n\nCredits saved.`,
+      { inline_keyboard: [[{ text: '← Meet Agents', callback_data: 'menu_agents' }]] }
+    )
+    return
+  }
   if (data === 'menu_credits') {
     const users2 = loadUsers()
     const credits2 = users2[userId]?.credits || 0
     await editMenu(query,
       `<b>🪙 My Credits</b>\n\nBalance: <b>${credits2} Credits</b>\n\n` +
       `<b>Use Credits for:</b>\n` +
-      `• ✍️ Copywriter: 2 cr/msg\n` +
-      `• 🎨 UX Designer: 3 cr/msg\n` +
-      `• 📊 Tokenomics: 7 cr/msg\n` +
-      `• 🚀 GTM Advisor: 7 cr/msg\n` +
-      `• 💻 Code Review: 5 cr/msg\n\n` +
-      `<i>Buy with $BLUEAGENT — coming soon\n1M $BLUEAGENT = 20 Credits</i>`,
+      `• 🔥 Rex (Strategist): 5 cr/msg\n` +
+      `• ✍️ Nova (Copywriter): 3 cr/msg\n` +
+      `• 💻 Forge (Code Review): 7 cr/msg\n` +
+      `• 📊 Sage (Tokenomics/GTM): 8 cr/msg\n\n` +
+      `<i>1M $BLUEAGENT = 20 Credits</i>`,
       { inline_keyboard: [[{ text: '🤖 Meet Agents', callback_data: 'menu_agents' }, { text: '💰 Buy Credits', callback_data: 'credits_buy' }], NAV_ROW] }
     )
     return
@@ -3282,12 +3362,72 @@ async function scanToken(ca: string): Promise<string> {
   }
 }
 
+// /stop command to end agent session
+bot.onText(/^\/stop$/, async (msg) => {
+  const userId = msg.from?.id || msg.chat.id
+  if (agentSessions.has(userId)) {
+    agentSessions.delete(userId)
+    await bot.sendMessage(msg.chat.id, '✅ Agent session ended. Credits saved.\n\n/menu to go back.', { parse_mode: 'HTML' } as any)
+  }
+})
+
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id
   const userId = msg.from?.id || chatId
   const text = msg.text?.trim()
 
   if (!text || text.startsWith('/')) return
+
+  // Agent session handler
+  const agentSession = agentSessions.get(userId)
+  if (agentSession) {
+    const agent = AGENTS[agentSession.agentKey]
+    if (!agent) { agentSessions.delete(userId); return }
+
+    // Check credits
+    const usersA = loadUsers()
+    const userA = usersA[userId]
+    if (!userA || (userA.credits || 0) < agent.credits) {
+      await bot.sendMessage(chatId,
+        `🪙 Not enough credits. Need ${agent.credits}/msg.\nBuy more credits or /stop to end session.`,
+        { parse_mode: 'HTML' } as any)
+      return
+    }
+
+    // Deduct credits
+    usersA[userId].credits = (userA.credits || 0) - agent.credits
+    saveUsers(usersA)
+
+    // Add to history
+    agentSession.history.push({ role: 'user', content: text })
+    if (agentSession.history.length > 10) agentSession.history = agentSession.history.slice(-10)
+
+    await bot.sendChatAction(chatId, 'typing')
+
+    try {
+      const messages = [
+        { role: 'system', content: agent.personality },
+        ...agentSession.history
+      ]
+      const reply = await askLLM(messages as any)
+      if (reply) {
+        agentSession.history.push({ role: 'assistant', content: reply })
+        agentSessions.set(userId, agentSession)
+        const creditsLeft = usersA[userId].credits || 0
+        await bot.sendMessage(chatId,
+          `${agent.emoji} <b>${agent.name}</b>\n\n${reply}\n\n<i>🪙 ${creditsLeft} credits left · /stop to end</i>`,
+          { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '❌ End Session', callback_data: 'agent_stop' }]] } } as any
+        )
+      }
+    } catch {
+      await bot.sendMessage(chatId, '⚠️ Agent error. Credits refunded.', { parse_mode: 'HTML' } as any)
+      // Refund credits on error
+      const usersRefund = loadUsers()
+      usersRefund[userId].credits = (usersRefund[userId].credits || 0) + agent.credits
+      saveUsers(usersRefund)
+    }
+    return
+  }
 
   // Auto-detect contract address (0x + 40 hex chars)
   const caMatch = text.match(/\b(0x[a-fA-F0-9]{40})\b/)
