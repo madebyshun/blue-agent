@@ -55,7 +55,7 @@ const USERS_FILE = path.join(DATA_DIR, 'users.json')
 const REFERRALS_FILE = path.join(DATA_DIR, 'referrals.json')
 const PROJECTS_FILE = path.join(DATA_DIR, 'projects.json')
 
-interface User { id: number; telegramUsername?: string; telegramName?: string; bankrApiToken?: string; evmAddress?: string; privateKey?: string; score?: number; tier?: string; points?: number; credits?: number; referredBy?: number; walletConnected?: boolean; joinedAt?: number; xHandle?: string; xVerified?: boolean; claimedPoints?: number; lastCheckin?: number; checkinStreak?: number; lastClaim?: number; completedQuests?: string[] }
+interface User { id: number; telegramUsername?: string; telegramName?: string; bankrApiToken?: string; evmAddress?: string; privateKey?: string; score?: number; tier?: string; points?: number; credits?: number; referredBy?: number; walletConnected?: boolean; joinedAt?: number; xHandle?: string; xVerified?: boolean; claimedPoints?: number; lastCheckin?: number; checkinStreak?: number; lastClaim?: number; completedQuests?: string[]; _pendingCredits?: number; _pendingCreditsAmount?: number }
 interface Referral { referrerId: number; referredId: number; timestamp: number }
 interface Project { id: string; name: string; description: string; url: string; twitter?: string; submitterId: number; submitterUsername?: string; timestamp: number; votes: number; voters: number[]; approved?: boolean; buildersMsgId?: number; reactionVotes?: number }
 
@@ -2792,6 +2792,58 @@ bot.on('callback_query', async (query) => {
         [{ text: '⚡ Pro — $199/mo', callback_data: 'sub_tier_pro' }],
         [{ text: '🚀 Scale — $499/mo', callback_data: 'sub_tier_scale' }],
         [{ text: '← Back', callback_data: 'menu_community_kit' }, { text: '❌ Close', callback_data: 'menu_close' }]
+      ]}
+    )
+    return
+  }
+
+  // Buy Credits flow
+  if (data === 'credits_buy') {
+    await editMenu(query,
+      `💰 <b>Buy Credits</b>\n\n` +
+      `1M $BLUEAGENT = <b>20 Credits</b>\n\n` +
+      `<b>Packs:</b>\n` +
+      `• Starter: 1M $BLUEAGENT → 20 Credits\n` +
+      `• Builder: 5M $BLUEAGENT → 100 Credits (+0 bonus)\n` +
+      `• Pro: 20M $BLUEAGENT → 400 Credits (+0 bonus)\n\n` +
+      `<b>How to buy:</b>\n` +
+      `1. Send $BLUEAGENT to treasury:\n<code>${PAYMENT_ADDRESS}</code>\n\n` +
+      `2. Paste tx hash below\n` +
+      `3. Credits added instantly\n\n` +
+      `<i>Contract: <code>0xf895783b2931c919955e18b5e3343e7c7c456ba3</code></i>`,
+      { inline_keyboard: [
+        [{ text: '🟦 1M $BLUEAGENT = 20cr', callback_data: 'credits_pack_1' }],
+        [{ text: '🟦 5M $BLUEAGENT = 100cr', callback_data: 'credits_pack_5' }],
+        [{ text: '🟦 20M $BLUEAGENT = 400cr', callback_data: 'credits_pack_20' }],
+        [{ text: '← Back', callback_data: 'menu_credits' }, { text: '❌ Close', callback_data: 'menu_close' }]
+      ]}
+    )
+    return
+  }
+
+  if (data.startsWith('credits_pack_')) {
+    const pack = parseInt(data.replace('credits_pack_', ''))
+    const packMap: Record<number, { blueagent: string; credits: number }> = {
+      1:  { blueagent: '1,000,000',  credits: 20 },
+      5:  { blueagent: '5,000,000',  credits: 100 },
+      20: { blueagent: '20,000,000', credits: 400 },
+    }
+    const selected = packMap[pack]
+    if (!selected) return
+    // Store pending credits purchase
+    const users = loadUsers()
+    if (!users[userId]) { await bot.answerCallbackQuery(query.id, { text: 'Please /start first' }); return }
+    users[userId]._pendingCredits = selected.credits
+    users[userId]._pendingCreditsAmount = pack
+    saveUsers(users)
+    await editMenu(query,
+      `🟦 <b>Buy ${selected.credits} Credits</b>\n\n` +
+      `Send <b>${selected.blueagent} $BLUEAGENT</b> to:\n` +
+      `<code>${PAYMENT_ADDRESS}</code>\n\n` +
+      `Token contract:\n<code>0xf895783b2931c919955e18b5e3343e7c7c456ba3</code>\n\n` +
+      `⚠️ After sending, paste your <b>tx hash</b> (0x...) here.`,
+      { inline_keyboard: [
+        [{ text: '← Back', callback_data: 'credits_buy' }, { text: '❌ Cancel', callback_data: 'menu_close' }]
       ]}
     )
     return
@@ -7117,3 +7169,42 @@ bot.onText(/\/my_license|^\/mylicense/, async (msg) => {
 })
 
 console.log('🔑 License + Revenue commands initialized')
+
+// Credits purchase tx verification
+bot.on('message', async (msg) => {
+  if (msg.chat.type !== 'private') return
+  const userId = msg.from?.id; if (!userId) return
+  const text = msg.text?.trim() || ''
+  if (!text.startsWith('0x') || text.length < 60) return
+
+  const users = loadUsers()
+  const user = users[userId]
+  if (!user?._pendingCredits) return // not a credits purchase tx
+
+  const chatId = msg.chat.id
+  await bot.sendMessage(chatId, '⏳ Verifying transaction...')
+
+  try {
+    const res = await axios.get(
+      `https://api.basescan.org/api?module=transaction&action=gettxreceiptstatus&txhash=${text}&apikey=${BASESCAN_API}`,
+      { timeout: 10000 }
+    )
+    const status = res.data?.result?.status
+    if (status === '1') {
+      const creditsToAdd = user._pendingCredits || 0
+      users[userId].credits = (user.credits || 0) + creditsToAdd
+      delete users[userId]._pendingCredits
+      delete users[userId]._pendingCreditsAmount
+      saveUsers(users)
+      await bot.sendMessage(chatId,
+        `✅ <b>Credits added!</b>\n\n🪙 <b>+${creditsToAdd} Credits</b>\nNew balance: <b>${users[userId].credits} Credits</b>\n\nStart chatting with agents: /menu → 🤖 Meet Agents`,
+        { parse_mode: 'HTML' } as any)
+    } else if (status === '0') {
+      await bot.sendMessage(chatId, '❌ Transaction failed. Please try again.')
+    } else {
+      await bot.sendMessage(chatId, '⚠️ Cannot verify yet — may be pending. Wait 1 min and paste again.')
+    }
+  } catch {
+    await bot.sendMessage(chatId, '⚠️ Verification error. Contact @blockyagent_bot.')
+  }
+})
