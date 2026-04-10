@@ -3016,7 +3016,7 @@ bot.on('callback_query', async (query) => {
       `• Pro: 20M → <b>400 Credits</b>\n\n` +
       `<i>$BLUEAGENT auto-transferred from your bot wallet</i>`,
       { inline_keyboard: [
-        [{ text: '🟦 500K $BLUEAGENT = 10cr', callback_data: 'credits_pack_05' }],
+        [{ text: '🟦 500K $BLUEAGENT = 10cr', callback_data: 'credits_pack_half' }],
         [{ text: '🟦 1M $BLUEAGENT = 20cr', callback_data: 'credits_pack_1' }],
         [{ text: '🟦 5M $BLUEAGENT = 100cr', callback_data: 'credits_pack_5' }],
         [{ text: '🟦 20M $BLUEAGENT = 400cr', callback_data: 'credits_pack_20' }],
@@ -3027,9 +3027,9 @@ bot.on('callback_query', async (query) => {
   }
 
   if (data.startsWith('credits_pack_')) {
-    const pack = parseInt(data.replace('credits_pack_', ''))
-    const packMap: Record<number, { blueagent: number; blueagentStr: string; credits: number }> = {
-      05: { blueagent: 500000,  blueagentStr: '500,000',  credits: 10 },
+    const pack = data.replace('credits_pack_', '')
+    const packMap: Record<string, { blueagent: number; blueagentStr: string; credits: number }> = {
+      half: { blueagent: 500000,  blueagentStr: '500,000',  credits: 10 },
       1:  { blueagent: 1000000,  blueagentStr: '1,000,000',  credits: 20 },
       5:  { blueagent: 5000000,  blueagentStr: '5,000,000',  credits: 100 },
       20: { blueagent: 20000000, blueagentStr: '20,000,000', credits: 400 },
@@ -3075,8 +3075,8 @@ bot.on('callback_query', async (query) => {
   }
 
   if (data.startsWith('credits_confirm_')) {
-    const pack = parseInt(data.replace('credits_confirm_', ''))
-    const packMap: Record<number, { blueagent: number; blueagentStr: string; credits: number }> = {
+    const pack = data.replace('credits_confirm_', '')
+    const packMap: Record<string, { blueagent: number; blueagentStr: string; credits: number }> = {
       1:  { blueagent: 1000000,  blueagentStr: '1,000,000',  credits: 20 },
       5:  { blueagent: 5000000,  blueagentStr: '5,000,000',  credits: 100 },
       20: { blueagent: 20000000, blueagentStr: '20,000,000', credits: 400 },
