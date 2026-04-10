@@ -110,7 +110,7 @@ async function transferFromUser(userId: number, amountTokens: number): Promise<{
     const balance = await token.balanceOf(wallet.address)
     if (balance < amountWei) {
       const balFormatted = ethers.formatUnits(balance, decimals)
-      return { success: false, error: `Insufficient balance. You have ${parseInt(balFormatted).toLocaleString()} $BLUEAGENT, need ${amountTokens.toLocaleString()}` }
+      return { success: false, error: `Insufficient balance. You have ${parseFloat(balFormatted).toFixed(0).toLocaleString()} $BLUEAGENT, need ${amountTokens.toLocaleString()}` }
     }
     const tx = await token.transfer(TREASURY_ADDRESS, amountWei)
     await tx.wait(1)
@@ -3040,7 +3040,7 @@ bot.on('callback_query', async (query) => {
       const token2 = new ethers.Contract(TOKEN_CONTRACT, ERC20_ABI, provider2)
       const decimals2 = await token2.decimals()
       const bal = await token2.balanceOf(users[userId].evmAddress!)
-      currentBalance = parseInt(ethers.formatUnits(bal, decimals2))
+      currentBalance = parseFloat(ethers.formatUnits(bal, decimals2))
     } catch {}
 
     // Show confirm — bot will auto-buy $BLUEAGENT if needed
@@ -3086,7 +3086,7 @@ bot.on('callback_query', async (query) => {
       const tokC = new ethers.Contract(TOKEN_CONTRACT, ERC20_ABI, provC)
       const decC = await tokC.decimals()
       const rawBal = await tokC.balanceOf(userC.evmAddress!)
-      balC = parseInt(ethers.formatUnits(rawBal, decC))
+      balC = parseFloat(ethers.formatUnits(rawBal, decC))
     } catch {}
 
     // If not enough $BLUEAGENT, auto-swap USDC first via Bankr Agent
