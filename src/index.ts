@@ -2993,19 +2993,30 @@ bot.on('callback_query', async (query) => {
   }
 
   if (data === 'credits_buy') {
+    // Show current $BLUEAGENT balance
+    const usersB = loadUsers()
+    let displayBal = '...'
+    try {
+      if (usersB[userId]?.evmAddress) {
+        const provB = new ethers.JsonRpcProvider(BASE_RPC)
+        const tokB = new ethers.Contract(TOKEN_CONTRACT, ERC20_ABI, provB)
+        const decB = await tokB.decimals()
+        const rawB = await tokB.balanceOf(usersB[userId].evmAddress!)
+        displayBal = Math.floor(parseFloat(ethers.formatUnits(rawB, decB))).toLocaleString()
+      }
+    } catch {}
+
     await editMenu(query,
-      `💰 <b>Buy Credits</b>\n\n` +
-      `1M $BLUEAGENT = <b>20 Credits</b>\n\n` +
+      `🪙 <b>Buy Credits</b>\n\n` +
+      `Your $BLUEAGENT: <b>${displayBal}</b>\n\n` +
       `<b>Packs:</b>\n` +
-      `• Starter: 1M $BLUEAGENT → 20 Credits\n` +
-      `• Builder: 5M $BLUEAGENT → 100 Credits (+0 bonus)\n` +
-      `• Pro: 20M $BLUEAGENT → 400 Credits (+0 bonus)\n\n` +
-      `<b>How to buy:</b>\n` +
-      `1. Send $BLUEAGENT to treasury:\n<code>${PAYMENT_ADDRESS}</code>\n\n` +
-      `2. Paste tx hash below\n` +
-      `3. Credits added instantly\n\n` +
-      `<i>Contract: <code>0xf895783b2931c919955e18b5e3343e7c7c456ba3</code></i>`,
+      `• Nano: 500K → <b>10 Credits</b>\n` +
+      `• Starter: 1M → <b>20 Credits</b>\n` +
+      `• Builder: 5M → <b>100 Credits</b>\n` +
+      `• Pro: 20M → <b>400 Credits</b>\n\n` +
+      `<i>$BLUEAGENT auto-transferred from your bot wallet</i>`,
       { inline_keyboard: [
+        [{ text: '🟦 500K $BLUEAGENT = 10cr', callback_data: 'credits_pack_05' }],
         [{ text: '🟦 1M $BLUEAGENT = 20cr', callback_data: 'credits_pack_1' }],
         [{ text: '🟦 5M $BLUEAGENT = 100cr', callback_data: 'credits_pack_5' }],
         [{ text: '🟦 20M $BLUEAGENT = 400cr', callback_data: 'credits_pack_20' }],
@@ -3018,6 +3029,7 @@ bot.on('callback_query', async (query) => {
   if (data.startsWith('credits_pack_')) {
     const pack = parseInt(data.replace('credits_pack_', ''))
     const packMap: Record<number, { blueagent: number; blueagentStr: string; credits: number }> = {
+      05: { blueagent: 500000,  blueagentStr: '500,000',  credits: 10 },
       1:  { blueagent: 1000000,  blueagentStr: '1,000,000',  credits: 20 },
       5:  { blueagent: 5000000,  blueagentStr: '5,000,000',  credits: 100 },
       20: { blueagent: 20000000, blueagentStr: '20,000,000', credits: 400 },
@@ -3089,20 +3101,19 @@ bot.on('callback_query', async (query) => {
       balC = parseFloat(ethers.formatUnits(rawBal, decC))
     } catch {}
 
-    // If not enough $BLUEAGENT, auto-swap USDC first via Bankr Agent
+    // Not enough $BLUEAGENT
     if (balC < selected.blueagent) {
-      await bot.sendMessage(chatId, '🔄 Auto-buying $BLUEAGENT with USDC...', { parse_mode: 'HTML' } as any)
-      try {
-        const swapPrompt = `Buy exactly ${selected.blueagentStr} $BLUEAGENT (contract: ${TOKEN_CONTRACT}) using USDC from wallet ${userC.evmAddress} on Base. Execute the swap now.`
-        await askBankrAgent(swapPrompt, 20)
-        // Wait for tx to settle
-        await new Promise(r => setTimeout(r, 5000))
-      } catch (e: any) {
-        await bot.sendMessage(chatId,
-          `❌ <b>Auto-buy failed</b>\n\nCould not buy $BLUEAGENT automatically.\nPlease swap manually: /wallet → Swap USDC → $BLUEAGENT\n\nThen try buying credits again.`,
-          { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '💰 Try Again', callback_data: 'credits_buy' }]] } } as any)
-        return
-      }
+      await bot.sendMessage(chatId,
+        `⚠️ <b>Insufficient $BLUEAGENT</b>\n\n` +
+        `Need: <b>${selected.blueagentStr}</b>\n` +
+        `Have: <b>${Math.floor(balC).toLocaleString()}</b>\n\n` +
+        `Get $BLUEAGENT:\n` +
+        `• Type: <code>swap 5 USDC to $BLUEAGENT</code>\n` +
+        `• Or send $BLUEAGENT to your wallet:\n<code>${userC.evmAddress}</code>`,
+        { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
+          [{ text: '💰 Buy Credits', callback_data: 'credits_buy' }]
+        ]}} as any)
+      return
     }
 
     // Transfer $BLUEAGENT to treasury
