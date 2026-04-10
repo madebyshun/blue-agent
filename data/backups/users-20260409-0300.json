@@ -10,17 +10,6 @@
     "evmAddress": "0x7ab0EE58C2A87dbe010456bBf63429746ef95DCd",
     "privateKey": "0x49b0db829cc34867eb0ebd4e89efafcb638c5c142521b9cf8992d49d2164e411"
   },
-  "834996602": {
-    "id": 834996602,
-    "telegramUsername": "voidcider",
-    "telegramName": "void",
-    "score": 0,
-    "points": 0,
-    "joinedAt": 1775794186507,
-    "walletConnected": true,
-    "evmAddress": "0x069beF25839A800624DFC6a0639Db08D8B6A189f",
-    "privateKey": "0x899abdbdf90a16b63d0c6aadb312ce054b244879c0e143101a69f8746bbe64fd"
-  },
   "970465591": {
     "id": 970465591,
     "telegramUsername": "Alexandretamara",
@@ -32,30 +21,19 @@
     "evmAddress": "0x52BE4FFDD8211ed14d33Bcf27349d2C7DbA80cd5",
     "privateKey": "0xe9d8a8b3a3dfa2beb9d3941b8f8e032a3857650267d54b31ade592b5e6185fa7"
   },
-  "1255734402": {
-    "id": 1255734402,
-    "telegramUsername": "Afifp1",
-    "telegramName": "Afif",
-    "score": 0,
-    "points": 0,
-    "joinedAt": 1775787683420,
-    "walletConnected": true,
-    "evmAddress": "0x8f7D5A600523067b7b4D2a57CD6fC49109B62A19",
-    "privateKey": "0xde7f70b46c5f39af567f2c35f1c493f46d6447c5007b7e51cc0eaa0405eafc78"
-  },
   "6614397596": {
     "id": 6614397596,
     "telegramUsername": "madebyshun",
     "telegramName": "Shun",
     "score": 0,
-    "points": 50,
+    "points": 45,
     "joinedAt": 1774879978150,
     "walletConnected": true,
     "evmAddress": "0xEE01b8acD1Fe7D5D24F0E11A32F08c9E8EFf524A",
     "privateKey": "0xf9a5b91a60255985d89d199ff4fdd74714f4f613272e3169ee98f96163bae574",
     "lastClaim": 1774880906191,
-    "lastCheckin": 1775791955392,
-    "checkinStreak": 4,
+    "lastCheckin": 1775671316963,
+    "checkinStreak": 3,
     "claimedPoints": 710000,
     "_pendingCredits": 20,
     "_pendingCreditsAmount": 1
@@ -143,15 +121,5 @@
     "id": 7550926115,
     "points": 25,
     "joinedAt": 1775675308658
-  },
-  "8379380418": {
-    "id": 8379380418,
-    "telegramName": "New Team💪 ᴬᵈᵐᶦⁿ",
-    "score": 0,
-    "points": 0,
-    "joinedAt": 1775679410626,
-    "walletConnected": true,
-    "evmAddress": "0xe0E3c53e959d3555910d645B3A05e0c8B3cE2B33",
-    "privateKey": "0x5de9c3e02a8d90b286e34a8d64e169bb994f7a18e273ade539a4fc11a9f8f107"
   }
 }
