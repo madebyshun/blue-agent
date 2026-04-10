@@ -5,6 +5,7 @@ import { execSync, spawn } from 'child_process'
 import * as fs from 'fs'
 import * as path from 'path'
 import { ethers } from 'ethers'
+import { parseSwapIntent, parseSendIntent, sendToken, swapTokens, needsBankrSwap } from './lib/walletActions'
 // import { createCanvas } from 'canvas' // Reserved for Phase 2 card generation
 dotenv.config()
 
@@ -4361,6 +4362,29 @@ bot.on('message', async (msg) => {
 
   try {
     let reply = ''
+
+    // ── Native swap via ethers.js (USDC/ETH ↔ $BLUEAGENT + other tokens) ──
+    const swapIntent = parseSwapIntent(text)
+    if (swapIntent && msg.chat.type === 'private') {
+      const usersForSwap = loadUsers()
+      const userForSwap = usersForSwap[userId]
+      if (!userForSwap?.privateKey) {
+        reply = '⚠️ No wallet found. Use /start to create one.'
+      } else {
+        clearInterval(typingInterval)
+        await bot.sendMessage(chatId, `⏳ Swapping ${swapIntent.amount} ${swapIntent.fromToken} → ${swapIntent.toToken}...`)
+        const swapResult = await swapTokens(userForSwap.privateKey, swapIntent.fromToken, swapIntent.toToken, swapIntent.amount)
+        if ('error' in swapResult) {
+          reply = `❌ <b>Swap failed</b>\n\n${swapResult.error}`
+        } else {
+          reply = `✅ <b>Swap complete!</b>\n\n` +
+            `🔄 ${swapIntent.amount} ${swapIntent.fromToken} → ${swapResult.amountOut} ${swapIntent.toToken}\n` +
+            `🔗 <a href="${swapResult.explorerUrl}">View TX</a>`
+        }
+        await bot.sendMessage(chatId, reply, { parse_mode: 'HTML', disable_web_page_preview: true } as any)
+        return
+      }
+    }
 
     if (needsAgent(text)) {
       // Inject user wallet address when query is about their wallet/portfolio
