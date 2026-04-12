@@ -1064,13 +1064,17 @@ async function handleLaunchWizard(chatId: number, userId: number, text: string) 
         proc.on('error', reject)
       })
 
-      const reply = `✅ <b>Token deployed!</b>\n\n<pre>${output.slice(0, 3000)}</pre>`
+      // Escape HTML to avoid parse errors from raw output
+      const escapeHtml = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      const safeOutput = escapeHtml(output.slice(0, 3000))
+      const reply = `✅ <b>Token deployed!</b>\n\n<pre>${safeOutput}</pre>`
       await bot.sendMessage(chatId, reply, { parse_mode: 'HTML' } as any)
     } catch (e: any) {
       const errMsg = e.message || 'Unknown error'
       console.error('[Launch] Error:', errMsg)
+      const escapeHtml2 = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
       await bot.sendMessage(chatId,
-        `❌ <b>Deploy failed!</b>\n\n<pre>${errMsg.slice(0, 1000)}</pre>`,
+        `❌ <b>Deploy failed!</b>\n\n<pre>${escapeHtml2(errMsg.slice(0, 1000))}</pre>`,
         { parse_mode: 'HTML' } as any
       )
     }
