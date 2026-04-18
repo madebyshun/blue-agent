@@ -1,0 +1,44 @@
+{
+  "name": "blueagent",
+  "version": "1.0.0",
+  "description": "BlueAgent x402 Pay-per-Use AI services — 21 tools for Data, Security, Research, and Earn on Base",
+  "homepage": "https://t.me/BlueAgentBot",
+  "license": "MIT",
+  "payment": {
+    "protocol": "x402",
+    "network": "base",
+    "token": "USDC",
+    "treasury": "0xf31f59e7b8b58555f7871f71973a394c8f1bffe5"
+  },
+  "mcp": {
+    "command": "npx",
+    "args": ["@blueagent/skill"],
+    "env": {
+      "BANKR_API_KEY": "${BANKR_API_KEY}",
+      "BLUEAGENT_TREASURY": "0xf31f59e7b8b58555f7871f71973a394c8f1bffe5"
+    }
+  },
+  "tools": [
+    { "name": "pnl",              "category": "data",     "priceUSD": 1.00, "description": "Trading PnL report — win rate, style, smart money score" },
+    { "name": "whale-tracker",    "category": "data",     "priceUSD": 0.10, "description": "Smart money and whale flow on Base" },
+    { "name": "dex-flow",         "category": "data",     "priceUSD": 0.15, "description": "DEX volume, liquidity, buy/sell pressure" },
+    { "name": "unlock-alert",     "category": "data",     "priceUSD": 0.20, "description": "Token unlock schedule and vesting cliff" },
+    { "name": "riskcheck",        "category": "security", "priceUSD": 0.05, "description": "Pre-tx safety check — APPROVE / WARN / BLOCK" },
+    { "name": "honeypot-check",   "category": "security", "priceUSD": 0.05, "description": "Detect honeypot or rug pull before buying" },
+    { "name": "phishing-scan",    "category": "security", "priceUSD": 0.10, "description": "Scan URL, contract, or handle for scams" },
+    { "name": "aml-screen",       "category": "security", "priceUSD": 0.25, "description": "AML compliance and sanctions screening" },
+    { "name": "mev-shield",       "category": "security", "priceUSD": 0.30, "description": "MEV sandwich attack risk before large swaps" },
+    { "name": "quantum",          "category": "security", "priceUSD": 1.50, "description": "Quantum vulnerability score and migration steps" },
+    { "name": "analyze",          "category": "research", "priceUSD": 0.35, "description": "Deep due diligence — risk score, red flags" },
+    { "name": "whitepaper-tldr",  "category": "research", "priceUSD": 0.20, "description": "5-bullet whitepaper summary" },
+    { "name": "tokenomics-score", "category": "research", "priceUSD": 0.50, "description": "Supply, inflation, unlock cliff analysis" },
+    { "name": "narrative-pulse",  "category": "research", "priceUSD": 0.40, "description": "Trending narratives in crypto right now" },
+    { "name": "vc-tracker",       "category": "research", "priceUSD": 1.00, "description": "Who is backing what in Base ecosystem" },
+    { "name": "advisor",          "category": "research", "priceUSD": 3.00, "description": "Full token launch playbook" },
+    { "name": "grant",            "category": "research", "priceUSD": 5.00, "description": "Base grant scoring and feedback" },
+    { "name": "airdrop-check",    "category": "earn",     "priceUSD": 0.10, "description": "Airdrop eligibility and estimated value" },
+    { "name": "yield-optimizer",  "category": "earn",     "priceUSD": 0.15, "description": "Best APY on Base DeFi for any token" },
+    { "name": "lp-analyzer",      "category": "earn",     "priceUSD": 0.30, "description": "LP health — impermanent loss, rebalance tips" },
+    { "name": "tax-report",       "category": "earn",     "priceUSD": 2.00, "description": "On-chain tax report with gains/losses" }
+  ]
+}

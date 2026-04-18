@@ -6,10 +6,10 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 import { callX402 } from './x402Client.js'
-import { dataSkills } from './skills/data.js'
-import { securitySkills } from './skills/security.js'
-import { researchSkills } from './skills/research.js'
-import { earnSkills } from './skills/earn.js'
+import { dataSkills } from './tools/data.js'
+import { securitySkills } from './tools/security.js'
+import { researchSkills } from './tools/research.js'
+import { earnSkills } from './tools/earn.js'
 import type { SkillDef } from './types.js'
 
 const ALL_SKILLS: SkillDef[] = [
