@@ -1,4 +1,3 @@
-import { getAddressSecurity } from '../lib/api.js'
 import { askJSON } from '../lib/llm.js'
 
 interface Input { address: string; chain?: string }
@@ -14,20 +13,17 @@ interface Output {
 }
 
 export default async function handler({ address }: Input): Promise<Output> {
-  const [sec, ai] = await Promise.all([
-    getAddressSecurity(address).catch(() => ({})),
-    askJSON<Output>(`
-      Run AML compliance check for wallet address: ${address} on Base.
-      Return JSON: { address, riskLevel, complianceScore (0-100), flags, sanctioned, mixerUsed, darknetLinked, recommendation }
-    `)
-  ])
-
-  if (sec['is_contract'] || sec['malicious_address']) {
-    ai.flags = ai.flags ?? []
-    if (sec['malicious_address'] === '1') ai.flags.push('Flagged as malicious by GoPlus')
-    ai.riskLevel = 'HIGH'
-    ai.complianceScore = Math.min(ai.complianceScore, 30)
-  }
-
-  return ai
+  return askJSON<Output>(`
+    Run AML (Anti-Money Laundering) compliance check for wallet address: ${address} on Base.
+    Return JSON: {
+      address,
+      riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
+      complianceScore (0-100, higher = cleaner),
+      flags (array of specific compliance concerns found),
+      sanctioned (boolean — is address on OFAC or similar sanction list?),
+      mixerUsed (boolean — has address interacted with mixers like Tornado Cash?),
+      darknetLinked (boolean — any darknet market connections?),
+      recommendation (1-2 sentence compliance guidance)
+    }
+  `, 'You are a blockchain compliance analyst specializing in AML screening. Be accurate and cite specific concerns.')
 }

@@ -1,4 +1,3 @@
-import { getAddressSecurity } from '../lib/api.js'
 import { askJSON } from '../lib/llm.js'
 
 interface Input { target: string }
@@ -13,21 +12,17 @@ interface Output {
 export default async function handler({ target }: Input): Promise<Output> {
   const isAddress = /^0x[0-9a-fA-F]{40}$/.test(target)
   const isURL = target.startsWith('http')
+  const type = isAddress ? 'contract/wallet address' : isURL ? 'URL' : 'social handle / domain'
 
-  const [goplusSec, ai] = await Promise.all([
-    isAddress ? getAddressSecurity(target).catch(() => ({})) : Promise.resolve({}),
-    askJSON<Output>(`
-      Scan this for phishing, scam, or malicious indicators: "${target}"
-      Type: ${isAddress ? 'contract/wallet address' : isURL ? 'URL' : 'social handle / domain'}
-      Return JSON: { target, verdict: "SAFE"|"SUSPICIOUS"|"PHISHING"|"SCAM", riskScore (0-100), flags, recommendation }
-    `)
-  ])
-
-  if ((goplusSec as Record<string, string>)['malicious_address'] === '1') {
-    ai.verdict = 'PHISHING'
-    ai.riskScore = Math.max(ai.riskScore, 90)
-    ai.flags = [...(ai.flags ?? []), 'Flagged malicious by GoPlus Security']
-  }
-
-  return ai
+  return askJSON<Output>(`
+    Scan this for phishing, scam, or malicious indicators: "${target}"
+    Type: ${type}
+    Return JSON: {
+      target,
+      verdict: "SAFE" | "SUSPICIOUS" | "PHISHING" | "SCAM",
+      riskScore (0-100, higher = more dangerous),
+      flags (array of specific red flags detected),
+      recommendation (what the user should do)
+    }
+  `, 'You are a Web3 security expert specializing in phishing detection, scam contracts, and social engineering attacks.')
 }

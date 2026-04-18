@@ -1,4 +1,4 @@
-import { getYieldPools } from '../lib/api.js'
+import { askJSON } from '../lib/llm.js'
 
 interface Input { token: string; chain?: string }
 interface Output {
@@ -9,39 +9,14 @@ interface Output {
 }
 
 export default async function handler({ token }: Input): Promise<Output> {
-  const pools = await getYieldPools('Base')
-
-  const symbol = token.toUpperCase().replace('$', '')
-  const relevant = pools
-    .filter(p => p.symbol?.toUpperCase().includes(symbol) && p.apy > 0)
-    .slice(0, 5)
-
-  if (!relevant.length) {
-    const top = pools.slice(0, 5)
-    return {
+  return askJSON<Output>(`
+    Find the best yield farming and staking opportunities for token: ${token} on Base.
+    Return JSON: {
       token,
-      topOpportunities: top.map(p => ({
-        protocol: p.project,
-        pair: p.symbol,
-        apy: `${p.apy.toFixed(2)}%`,
-        tvl: `$${(p.tvlUsd / 1e6).toFixed(1)}M`,
-        risk: p.apy > 50 ? 'HIGH' : p.apy > 20 ? 'MEDIUM' : 'LOW'
-      })),
-      bestAPY: `${top[0]?.apy.toFixed(2) ?? '0'}%`,
-      recommendation: `No direct ${token} pools found. Top Base yield opportunities shown instead.`
+      topOpportunities: [{ protocol, pair, apy, tvl, risk: "LOW"|"MEDIUM"|"HIGH" }] (up to 5 best options),
+      bestAPY (highest APY found, e.g. "24.5%"),
+      recommendation (which opportunity to choose and why)
     }
-  }
-
-  return {
-    token,
-    topOpportunities: relevant.map(p => ({
-      protocol: p.project,
-      pair: p.symbol,
-      apy: `${p.apy.toFixed(2)}%`,
-      tvl: `$${(p.tvlUsd / 1e6).toFixed(1)}M`,
-      risk: p.apy > 50 ? 'HIGH' : p.apy > 20 ? 'MEDIUM' : 'LOW'
-    })),
-    bestAPY: `${relevant[0].apy.toFixed(2)}%`,
-    recommendation: `Best yield for ${token}: ${relevant[0].project} at ${relevant[0].apy.toFixed(2)}% APY`
-  }
+    Focus on Base DeFi protocols: Aerodrome, Moonwell, Compound, ExtraFi, Beefy, Convex.
+  `, 'You are a DeFi yield optimization expert on Base. Be specific with current APY ranges and TVL estimates.')
 }
