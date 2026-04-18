@@ -17,7 +17,7 @@ process.title = 'blueagent'
 process.stdout.write('\x1b]0;blueagent\x07')
 
 // ── ASCII Title ──────────────────────────────────────────────────────
-const TITLE = figlet.textSync('BLUEAGENT', { font: 'Banner3' })
+const TITLE = figlet.textSync('BLUEAGENT', { font: 'ANSI Shadow' })
 
 // ── Skills Data ──────────────────────────────────────────────────────
 interface Skill {
@@ -108,7 +108,7 @@ function callX402(skill: Skill, inputValue: string): Promise<unknown> {
 function Header({ breadcrumb }: { breadcrumb: string }) {
   return (
     <Box flexDirection="column" marginBottom={1}>
-      <Text color="blue" bold>{TITLE}</Text>
+      <Text color="cyanBright" bold>{TITLE}</Text>
       {breadcrumb && (
         <Box>
           <Text color="cyan">{breadcrumb}</Text>
@@ -201,7 +201,7 @@ function App() {
         <Box flexDirection="column">
           <Text color="yellow">{skill.prompt}</Text>
           <Box marginTop={1}>
-            <Text color="blue">❯ </Text>
+            <Text color="cyanBright">❯ </Text>
             <TextInput value={inputVal} onChange={setInputVal} onSubmit={handleSubmit} />
           </Box>
         </Box>
