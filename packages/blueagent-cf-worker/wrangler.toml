@@ -1,0 +1,9 @@
+name = "blueagent-x402"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+TREASURY_ADDRESS = "0xf31f59e7b8b58555f7871f71973a394c8f1bffe5"
+
+# BANKR_API_KEY → set via: wrangler secret put BANKR_API_KEY

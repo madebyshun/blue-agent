@@ -1,0 +1,22 @@
+{
+  "name": "blueagent-cf-worker",
+  "version": "1.0.0",
+  "description": "BlueAgent x402 server on Cloudflare Workers — 15 AI tools, pay-per-use USDC",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "secret:llm": "wrangler secret put BANKR_API_KEY"
+  },
+  "dependencies": {
+    "@x402/hono": "latest",
+    "@x402/evm": "latest",
+    "@x402/core": "latest",
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241022.0",
+    "typescript": "^5.4.5",
+    "wrangler": "^3.80.0"
+  }
+}
