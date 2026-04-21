@@ -1,10 +1,18 @@
 ---
 name: blueagent
+emoji: 🔵
 description: >
-  Use BlueAgent x402 AI services for onchain research, security checks, wallet
-  analysis, and DeFi yield — all paid per-use in USDC on Base via Bankr CLI.
+  AI agent on Base with 21 pay-per-use tools for Data, Security, Research, and Earn.
   Trigger when user asks about token analysis, wallet PnL, risk checks, honeypot
-  detection, airdrops, yield, grant evaluation, or anything related to Base ecosystem.
+  detection, airdrops, yield, VC tracking, or anything related to Base ecosystem.
+  Each tool costs a small amount of USDC — no subscription needed.
+mcp:
+  command: npx
+  args: ["-y", "@blueagent/skill"]
+  env:
+    BANKR_API_KEY: "${BANKR_API_KEY}"
+homepage: https://t.me/BlueAgentBot
+payment: x402 · USDC on Base
 ---
 
 # BlueAgent Skill
