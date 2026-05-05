@@ -1,0 +1,15 @@
+{
+  "name": "blue-agent",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace apps/web run dev",
+    "build:web": "npm --workspace apps/web run build",
+    "dev:api": "node apps/api/index.js",
+    "lint:web": "npm --workspace apps/web run lint"
+  }
+}

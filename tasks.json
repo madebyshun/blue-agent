@@ -1,0 +1,61 @@
+{
+  "tasks": [
+    {
+      "name": "agent_spotlight",
+      "schedule": "0 10,16 * * *",
+      "prompt": "Highlight one interesting AI agent from https://bankr.bot/agents and write a tweet explaining why it is interesting for builders. Tag @bankrbot."
+    },
+    {
+      "name": "builder_insight",
+      "schedule": "0 13 * * *",
+      "prompt": "Write one insightful tweet about AI agents, builders, or automation tools in crypto."
+    },
+    {
+      "name": "quote_viral_tweet",
+      "schedule": "0 18 * * *",
+      "prompt": "Find a viral tweet about AI agents or crypto builders and quote tweet with a thoughtful insight."
+    },
+    {
+      "name": "daily_thread",
+      "schedule": "0 21 * * *",
+      "prompt": "Write a short 3 tweet thread about interesting AI agents discovered this week."
+    },
+    {
+      "name": "reply_mentions",
+      "schedule": "*/30 * * * *",
+      "prompt": "If someone tags @blockyonbase, reply with a helpful comment about builders or AI agents."
+    }
+  ]
+{
+  "limits": {
+    "maxTweetsPerDay": 6,
+    "minMinutesBetweenTweets": 120
+  },
+  "tasks": [
+    {
+      "name": "agent_spotlight",
+      "schedule": "0 10,16 * * *",
+      "prompt": "Highlight one interesting AI agent from https://bankr.bot/agents and write a tweet explaining why it is interesting for builders. Tag @bankrbot."
+    },
+    {
+      "name": "builder_insight",
+      "schedule": "0 13 * * *",
+      "prompt": "Write one insightful tweet about AI agents, builders, or automation tools in crypto."
+    },
+    {
+      "name": "quote_viral_tweet",
+      "schedule": "0 18 * * *",
+      "prompt": "Find a viral tweet about AI agents or crypto builders and quote tweet with a thoughtful insight."
+    },
+    {
+      "name": "daily_thread",
+      "schedule": "0 21 * * *",
+      "prompt": "Write a short 3 tweet thread about interesting AI agents discovered this week."
+    },
+    {
+      "name": "reply_mentions",
+      "schedule": "*/30 * * * *",
+      "prompt": "If someone tags @blockyonbase, reply with a helpful comment about builders or AI agents."
+    }
+  ]
+}

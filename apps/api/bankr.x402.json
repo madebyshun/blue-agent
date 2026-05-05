@@ -1,0 +1,197 @@
+{
+  "network": "base",
+  "currency": "USDC",
+  "services": {
+    "deep-analysis": {
+      "price": "0.35",
+      "description": "Deep Project Due Diligence Analysis - Risk assessment, tokenomics, team review and recommendation for any Base token or project",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "contractAddress": { "type": "string", "description": "Contract address on Base (optional)" },
+            "projectName": { "type": "string", "description": "Project name to analyze (optional)" },
+            "ticker": { "type": "string", "description": "Token ticker symbol (optional)" }
+          }
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "projectName": { "type": "string" },
+            "overallScore": { "type": "number" },
+            "riskScore": { "type": "number" },
+            "rugProbability": { "type": "number" },
+            "recommendation": { "type": "string" },
+            "summary": { "type": "string" }
+          }
+        }
+      }
+    },
+    "wallet-pnl": {
+      "price": "1.00",
+      "description": "Wallet PnL Report - Deep analysis of any Base wallet: trading style, estimated PnL, top tokens, smart money score",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "address": { "type": "string", "description": "Base wallet address (0x...)" }
+          },
+          "required": ["address"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "address": { "type": "string" },
+            "estimatedPnL": { "type": "string" },
+            "winRate": { "type": "string" },
+            "tradingStyle": { "type": "string" },
+            "riskProfile": { "type": "string" },
+            "smartMoneyScore": { "type": "number" },
+            "summary": { "type": "string" }
+          }
+        }
+      }
+    },
+    "launch-advisor": {
+      "price": "3.00",
+      "description": "Token Launch Advisor - Full launch playbook for Base projects: tokenomics, timeline, marketing strategy, KPIs",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "projectName": { "type": "string", "description": "Your project name" },
+            "description": { "type": "string", "description": "What your project does" },
+            "targetAudience": { "type": "string", "description": "Who are your users?" },
+            "teamSize": { "type": "string", "description": "Number of team members (optional)" },
+            "budget": { "type": "string", "description": "Launch budget range (optional)" },
+            "tokenSupply": { "type": "string", "description": "Planned token supply (optional)" }
+          },
+          "required": ["projectName", "description"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "launchScore": { "type": "number" },
+            "tokenomics": { "type": "object" },
+            "launchTimeline": { "type": "array" },
+            "marketingStrategy": { "type": "object" },
+            "recommendation": { "type": "string" }
+          }
+        }
+      }
+    },
+    "grant-evaluator": {
+      "price": "5.00",
+      "description": "Base Grant Evaluator - Professional grant application scoring using Base/Coinbase criteria: innovation, feasibility, impact, team quality",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "projectName": { "type": "string", "description": "Project name" },
+            "description": { "type": "string", "description": "Project description" },
+            "teamBackground": { "type": "string", "description": "Team experience and background (optional)" },
+            "requestedAmount": { "type": "string", "description": "Grant amount requested (optional)" },
+            "milestones": { "type": "string", "description": "Project milestones (optional)" },
+            "githubUrl": { "type": "string", "description": "GitHub repository URL (optional)" },
+            "websiteUrl": { "type": "string", "description": "Project website (optional)" }
+          },
+          "required": ["projectName", "description"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "overallScore": { "type": "number" },
+            "recommendation": { "type": "string" },
+            "suggestedGrantSize": { "type": "string" },
+            "scores": { "type": "object" },
+            "strengths": { "type": "array" },
+            "concerns": { "type": "array" },
+            "executiveSummary": { "type": "string" }
+          }
+        }
+      }
+    },
+    "risk-gate": {
+      "price": "0.05",
+      "description": "Risk Gate for Agents - Safety check before executing onchain transactions. Returns APPROVE/WARN/BLOCK decision with risk score",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "description": "Action the agent wants to execute (e.g. buy token, approve contract)" },
+            "contractAddress": { "type": "string", "description": "Contract address to interact with (optional)" },
+            "amount": { "type": "string", "description": "Transaction amount in USD or token (optional)" },
+            "toAddress": { "type": "string", "description": "Recipient address (optional)" },
+            "agentId": { "type": "string", "description": "Your agent identifier (optional)" },
+            "context": { "type": "string", "description": "Additional context about the action (optional)" }
+          },
+          "required": ["action"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "decision": { "type": "string", "description": "APPROVE | BLOCK | WARN" },
+            "riskScore": { "type": "number" },
+            "riskLevel": { "type": "string" },
+            "reasons": { "type": "array" },
+            "recommendation": { "type": "string" }
+          }
+        }
+      }
+    },
+    "quantum-batch": {
+      "price": "2.50",
+      "paymentScheme": "upto",
+      "description": "Quantum Batch Scanner - Scan 1-10 wallets at $0.25 each. Pay only for what you scan.",
+      "methods": ["POST"],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "addresses": { "type": "array", "description": "Array of wallet addresses to scan (max 10)", "items": { "type": "string" } }
+          },
+          "required": ["addresses"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "scanned": { "type": "number" },
+            "results": { "type": "array" },
+            "billing": { "type": "object" },
+            "summary": { "type": "object", "description": "Count by risk level" }
+          }
+        }
+      }
+    },
+    "quantum-premium": {
+      "price": "1.50",
+      "description": "Quantum Risk Report - Analyze your wallet's vulnerability to quantum computing attacks. Public key exposure check, risk level, migration steps. Powered by Blue Agent.",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "address": { "type": "string", "description": "Wallet address to analyze (0x...)" },
+            "chain": { "type": "string", "description": "Blockchain (default: base)" }
+          },
+          "required": ["address"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "address": { "type": "string" },
+            "chain": { "type": "string" },
+            "quantumRiskLevel": { "type": "string", "description": "CRITICAL | HIGH | MEDIUM | LOW | MINIMAL" },
+            "riskScore": { "type": "number" },
+            "publicKeyExposed": { "type": "boolean" },
+            "confidenceScore": { "type": "number" },
+            "threatTimeline": { "type": "string" },
+            "vulnerabilities": { "type": "array" },
+            "migrationSteps": { "type": "array" },
+            "executiveSummary": { "type": "string" },
+            "recommendation": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}
