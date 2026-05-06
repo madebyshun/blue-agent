@@ -40,6 +40,16 @@ export const TOOL_SCHEMAS: Record<string, ToolSchema> = {
   "quantum-migrate": { fields: [{ name: "address", label: "Wallet Address", placeholder: "0x…", type: "address", required: true }] },
   "quantum-timeline": { fields: [{ name: "address", label: "Wallet Address (optional)", placeholder: "0x…", type: "address", required: false }] },
   "deep-analysis": { fields: [{ name: "token", label: "Token Address or Symbol", placeholder: "0x… or USDC", type: "text", required: true }] },
+  "token-launch": {
+    fields: [
+      { name: "tokenName", label: "Token Name", placeholder: "e.g. Blue Agent", type: "text", required: true },
+      { name: "tokenSymbol", label: "Symbol", placeholder: "e.g. BLUE", type: "text", required: true },
+      { name: "description", label: "Description", placeholder: "What does this token represent?", type: "text", required: true },
+      { name: "imageUrl", label: "Image URL", placeholder: "https://…", type: "url", required: false },
+      { name: "twitter", label: "Twitter Handle", placeholder: "handle (no @)", type: "text", required: false },
+      { name: "website", label: "Website", placeholder: "https://…", type: "url", required: false },
+    ],
+  },
   "launch-advisor": {
     fields: [
       { name: "projectName", label: "Project Name", placeholder: "My Token", type: "text", required: true },
