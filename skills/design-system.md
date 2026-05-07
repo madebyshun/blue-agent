@@ -1,44 +1,57 @@
 # Design System
 
-Source of truth for Blue Agent's visual design. Derived from `apps/web/src/app/globals.css`, `apps/web/tailwind.config.ts`, and all components in `apps/web/src/components/`.
+Source of truth for Blue Agent's visual design. Derived from the official Blue Agent Design System handoff (Blocky Studio) and implemented in `apps/web/`.
 
 ---
 
 ## Color palette
 
-All colors are dark-mode only. There is no light mode — the app is always dark.
+Always dark. No light mode.
 
-| Token | Hex / Value | Tailwind class | Use |
+| Token | Hex | Tailwind / CSS var | Use |
 |---|---|---|---|
-| Background | `#050508` | `bg-bg` / `bg-[#050508]` | Page background |
-| Surface | `#0D0D14` | `bg-surface` / `bg-[#0D0D14]` | Cards, panels |
-| Border | `#1A1A2E` | `border-border` / `border-[#1A1A2E]` | All borders |
-| Blue (primary) | `#4FC3F7` | `text-blue` / `text-[#4FC3F7]` | CTAs, highlights, accents |
-| Blue (hover) | `#29ABE2` | `hover:bg-[#29ABE2]` | Button hover state |
-| Purple (accent) | `#A78BFA` | `text-purple` / `text-[#A78BFA]` | Secondary accent, badges |
-| Text primary | `#E2E8F0` | `text-slate-200` | Body text |
-| Text secondary | `#94A3B8` | `text-slate-400` | Descriptions, labels |
-| Text muted | `#64748B` | `text-slate-500` / `text-slate-600` | Timestamps, hints |
-| Emerald (live/success) | `#34D399` | `text-emerald-400` | Live badges, success states |
-| Red (error) | `#F87171` | `text-red-400` | Error messages |
+| Background | `#060C18` | `bg-bg` / `--surface-bg` | Page background |
+| Base layer | `#0A1628` | `--surface-base` | Layered backgrounds |
+| Surface / Card | `#0F1C35` | `bg-surface` / `--surface-card` | Cards, panels |
+| Mid | `#162040` | `bg-mid` / `--surface-mid` | Hover states, elevated surfaces |
+| High | `#1E2E52` | `--surface-high` | Active states |
+| Primary blue | `#1A52FF` | `bg-blue` / `--blue-500` | Primary CTAs, brand color |
+| Blue-400 | `#4A7AFF` | `text-blue-400` / `--blue-400` | Active nav, link text |
+| Cyan accent | `#33C3FF` | `text-cyan` / `--cyan-400` | Logo highlight, badges, accents |
+| Cyan-300 | `#67E5FF` | `--cyan-300` | Legend tier, gradient peaks |
+| Text primary | `#FFFFFF` | `text-white` / `--text-primary` | Headings, emphasis |
+| Text secondary | `#B8CBE8` | `text-[#B8CBE8]` / `--text-secondary` | Body text, descriptions |
+| Text muted | `#7A8FAE` | `text-[#7A8FAE]` / `--text-muted` | Labels, metadata |
+| Text subtle | `#3D5275` | `text-[#3D5275]` / `--text-subtle` | Timestamps, section labels |
+| Success | `#22C55E` | `text-emerald-400` / `--success` | Live status, positive delta |
+| Warning | `#F59E0B` | `text-amber-400` / `--warning` | Streak, caution |
+| Danger | `#EF4444` | `text-red-400` / `--danger` | Errors, blocked |
 
-### CSS variables (`:root`)
+### Borders
+
+| Token | Value | Use |
+|---|---|---|
+| `--border-subtle` | `rgba(255,255,255,0.06)` | Very faint dividers |
+| `--border-muted` | `rgba(255,255,255,0.10)` | Default border (cards, inputs) |
+| `--border-default` | `rgba(255,255,255,0.15)` | Ghost buttons, secondary borders |
+| `--border-strong` | `rgba(26,82,255,0.35)` | Brand-tinted borders, focus rings |
+
+Use `border-white/10` in Tailwind for default. Use `border-[#1A52FF]/35` for brand-tinted.
+
+### Brand gradient
 
 ```css
---bg:      #050508
---blue:    #4FC3F7
---purple:  #A78BFA
---surface: #0D0D14
---border:  #1A1A2E
+--gradient-brand: linear-gradient(135deg, #1A52FF 0%, #33C3FF 100%)
 ```
+
+Primary button background: `linear-gradient(135deg, #1A52FF, #2E6AFF)`  
+Glow: `box-shadow: 0 0 20px rgba(26,82,255,0.35)`
 
 ---
 
 ## Theme system
 
-- **Always dark.** There is no light/dark toggle — `ThemeProvider` is a no-op stub that always returns `"dark"`.
-- No `data-theme` attribute. No `localStorage` key. Just dark.
-- `body` background is `var(--bg)` (`#050508`), text is `#E2E8F0`.
+Always dark. `ThemeProvider` is a no-op stub. No `data-theme` or `localStorage`.
 
 ---
 
@@ -46,45 +59,52 @@ All colors are dark-mode only. There is no light mode — the app is always dark
 
 | Font | Use | Tailwind class |
 |---|---|---|
-| Inter | Body text, descriptions | `font-sans` (default) |
-| JetBrains Mono | ALL UI labels, commands, badges, buttons, nav | `font-mono` |
+| DM Sans | All UI text — buttons, labels, headings, body | `font-sans` (default) |
+| JetBrains Mono | Contract addresses, commands, terminal text | `font-mono` |
 
-Weights used: 400, 500, 600, 700, 800 (bold headers via `font-bold`).
+**Rule:** Use `font-sans` for nearly all visible UI. Reserve `font-mono` for:
+- Command names (`blue idea`, `/start`)
+- Contract/wallet addresses
+- Token tickers (`$BLUEAGENT`)
+- Terminal-style indicators and status labels
 
-**Rule:** Use `font-mono` for nearly all visible UI text. Inter is used only for longer descriptive paragraphs (`text-slate-400`). When in doubt, use `font-mono`.
+Weights: 400 (body), 500 (label), 600 (heading/button), 700 (display).
+
+Type scale from design system:
+- Display: 48–72px, weight 700
+- Headings: 18–28px, weight 600
+- Body: 13–16px, weight 400, line-height 1.6
+- Label-sm: 11px, weight 500, `letter-spacing: 0.08em`, uppercase
 
 ---
 
 ## Background patterns
 
-Defined in `tailwind.config.ts` as `backgroundImage` extensions:
-
-| Class | Effect |
+| Tailwind class | Effect |
 |---|---|
-| `bg-grid-pattern` | Subtle blue dot-grid at 40×40px intervals |
-| `bg-hero-glow` | Radial glow from top center (blue, `rgba(79,195,247,0.12)`) |
-| `bg-blue-glow` | Radial blue glow centered (use on CTA sections) |
-| `bg-purple-glow` | Radial purple glow centered (use on accent sections) |
-
-Grid pattern usage:
-```tsx
-<div className="absolute inset-0 bg-grid-pattern" style={{ backgroundSize: "40px 40px" }} />
-<div className="absolute inset-0 bg-hero-glow" />
-```
+| `bg-grid-pattern` | Subtle cobalt dot-grid, 40×40px |
+| `bg-hero-glow` | Radial blue glow from top center |
+| `bg-blue-glow` | Centered radial blue glow (CTA sections) |
+| `bg-cyan-glow` | Centered radial cyan glow |
 
 ---
 
-## Utility classes (defined in `globals.css`)
+## Utility classes (globals.css)
 
 | Class | Effect |
 |---|---|
-| `.text-gradient-blue` | Blue→purple gradient text (Inter + clip) |
-| `.text-gradient-white` | White→faded-white gradient text |
+| `.text-gradient-blue` | Cobalt→cyan gradient text |
+| `.text-gradient-white` | White→faded gradient text |
 | `.border-glow-blue` | Blue border + outer/inner box-shadow glow |
-| `.border-glow-purple` | Purple border + outer/inner box-shadow glow |
-| `.card-surface` | Dark surface card: `bg-[#0D0D14]/80 border border-[#1A1A2E] backdrop-blur-xl` |
-| `.card-hover` | Hover lift: `translateY(-2px)` + blue border glow on hover |
-| `.glow-dot` | 8px filled blue circle with radial glow (used in logo/status indicators) |
+| `.border-glow-cyan` | Cyan border + outer/inner box-shadow glow |
+| `.card-surface` | `bg: rgba(15,28,53,0.8) · border: rgba(255,255,255,0.08) · backdrop-blur` |
+| `.card-hover` | Hover lift + blue border glow on hover (`translateY(-2px)`) |
+| `.glow-dot` | 8px gradient circle (cobalt→cyan) with blue radial glow |
+| `.btn-primary` | Gradient cobalt button, white text, blue glow shadow |
+| `.btn-ghost` | Blue-tinted ghost button |
+| `.input-base` | Dark input with focus ring |
+| `.badge-brand` | Blue pill badge |
+| `.badge-cyan` | Cyan pill badge |
 
 ---
 
@@ -92,148 +112,95 @@ Grid pattern usage:
 
 ### `Navbar`
 
-Fixed top bar. `z-50`, `backdrop-blur-xl`, `border-b border-[#1A1A2E]`.
+Fixed top bar, `backdrop-blur-xl`, `border-b border-white/10`.
 
 ```tsx
 <Navbar />
-// No props. Reads pathname for active state. Links: /code /chat /launch /market /rewards
 ```
 
-- Logo: `BLUE` in white + `AGENT` in `#4FC3F7`, `font-mono tracking-widest`
-- Active nav link: `text-[#4FC3F7] bg-[#4FC3F7]/10`
-- Inactive: `text-slate-400 hover:text-white`
-- CTA button: `bg-[#4FC3F7] text-[#050508] font-mono font-semibold` → "Open Console"
-- Mobile: hamburger toggle with slide-down menu
+- Logo: `BLUE` white + `AGENT` in `#33C3FF`, `font-mono tracking-widest`
+- Active link: `text-[#4A7AFF] bg-[#1A52FF]/10`
+- CTA: `.btn-primary rounded-lg`
 
 ---
 
 ### `HeroSection`
 
-Full-height landing section with grid background, animated orbs, 2-column layout, and animated chat mockup.
+Full-height hero, grid + glow bg, 2-column layout, animated chat mockup.
 
 ```tsx
 <HeroSection />
-// No props. Fetches $BLUEAGENT price live from GeckoTerminal API every 30s.
+// Fetches $BLUEAGENT price from GeckoTerminal every 30s
 ```
 
-- Left: headline, price ticker, CTA buttons
-- Right: animated chat window cycling through `blue idea / build / audit / ship / raise` scenes
-- Stats bar: 4 stats in `card-surface rounded-xl` tiles
-
 Chat bubble styles:
-- User message: `bg-[#4FC3F7] text-[#050508] rounded-br-sm`
-- Agent message: `bg-[#1A1A2E] text-slate-300 border border-[#2A2A4E] rounded-bl-sm`
+- User: gradient `#1A52FF → #2E6AFF`, white text
+- Agent: `bg-[#162040] text-[#B8CBE8] border-white/10`
 
 ---
 
 ### `FeaturesSection`
 
-3-column grid of command cards. Uses `.card-surface .card-hover`.
+3-column feature cards. Uses `.card-surface .card-hover`.
 
-```tsx
-<FeaturesSection />
-// No props. Static data — 6 feature cards (idea, build, audit, ship, chat, launch).
-```
-
-Command badge style:
-```tsx
-<div className="font-mono text-[10px] text-[#4FC3F7] tracking-widest px-2 py-1 bg-[#4FC3F7]/5 border border-[#4FC3F7]/20 rounded">
-  blue idea
-</div>
-```
+Command badge: `font-mono text-[10px] text-[#33C3FF] bg-[#1A52FF]/8 border-[#1A52FF]/25 rounded`
 
 ---
 
 ### `HowItWorksSection`
 
-3-step flow + artifacts table.
+3-step flow cards + artifacts table.
 
-```tsx
-<HowItWorksSection />
-// No props. Steps: idea → build → ship. Artifacts table below.
-```
-
-Step number badge: `w-10 h-10 rounded-xl bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 text-[#4FC3F7] font-mono font-bold`
-
----
-
-### `TokenSection`
-
-$BLUEAGENT token card with copy-to-clipboard address, payment rails list, and external links.
-
-```tsx
-<TokenSection />
-// No props. Hardcoded token: 0xf895783b2931c919955e18b5e3343e7c7c456ba3
-```
+Step number badge: `bg-[#1A52FF]/10 border-[#1A52FF]/30 text-[#4A7AFF] rounded-xl`
 
 ---
 
 ### `ComingSoonSection`
 
-3-column product cards for upcoming surfaces (Chat, Launch, Market). Live badge = emerald, Soon = purple.
+Product cards. Live badge = emerald, Soon = cyan.
+
+- Live: `text-emerald-400 bg-emerald-400/5 border-emerald-400/20`
+- Soon: `text-[#33C3FF] bg-[#33C3FF]/8 border-[#33C3FF]/20`
+
+---
+
+### `TokenSection`
+
+$BLUEAGENT token card with copy-to-clipboard, payment rails, external links.
 
 ```tsx
-<ComingSoonSection />
-// No props. Static data.
+<TokenSection />
 ```
-
-Badge styles:
-- Live: `text-emerald-400 bg-emerald-400/5 border-emerald-400/20`
-- Soon: `text-[#A78BFA] bg-[#A78BFA]/5 border-[#A78BFA]/20`
 
 ---
 
 ### `FooterCTA`
 
-Full-width CTA section with blue glow background.
-
-```tsx
-<FooterCTA />
-// No props.
-```
+Full-width CTA section with `bg-blue-glow` radial.
 
 ---
 
 ### `Footer`
 
-Minimal bottom bar with logo, nav links, X icon, tagline.
-
-```tsx
-<Footer />
-// No props.
-```
+Minimal bottom bar.
 
 ---
 
 ### `ToolRunner`
 
-x402 pay-per-use tool runner. Handles 402 payment flow: call → sign → pay → result.
+x402 pay-per-use tool runner. Payment flow: call → sign → pay → result.
 
 ```tsx
 <ToolRunner toolId="risk-gate" price="0.05" />
-// toolId: key from TOOL_SCHEMAS in packages/core/src/tool-inputs.ts
-// price: display string in USDC
 ```
 
-States: `idle | calling | signing | paying | done | error`
-
-Input field style:
-```tsx
-className="w-full bg-[#050508] border border-[#1A1A2E] rounded-lg px-3 py-2 font-mono text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#4FC3F7]/40"
-```
-
-Result display: `<pre>` block in `bg-[#050508] border border-[#1A1A2E] rounded-xl` with `font-mono text-xs text-slate-300`.
+Input uses `.input-base`. Address fields use `font-mono text-xs`. Primary run button uses `.btn-primary`.
 
 ---
 
 ### `ThemeProvider`
 
-No-op stub. Always dark. Wrap layout children with it for future compatibility only.
-
-```tsx
-<ThemeProvider>{children}</ThemeProvider>
-// useTheme() always returns { theme: "dark", toggle: () => {} }
-```
+No-op stub. Always returns `{ theme: "dark" }`.
 
 ---
 
@@ -241,29 +208,42 @@ No-op stub. Always dark. Wrap layout children with it for future compatibility o
 
 | Class | Description |
 |---|---|
-| `animate-pulse-slow` | 4s slow pulse (used on background orbs) |
-| `animate-fade-up` | 0.6s fade + slide up (for entrance animations) |
-| `animate-scan-line` | 3s vertical scan line (terminal aesthetic) |
-| `animate-spin` | Standard Tailwind spin (used in `Spinner` component) |
-| `animate-pulse` | Standard Tailwind pulse (used on live indicators) |
+| `animate-pulse-slow` | 4s slow pulse (background orbs) |
+| `animate-fade-up` | 0.6s fade + slide up |
+| `animate-scan-line` | 3s vertical scan |
+| `animate-spin` | Spinner in ToolRunner |
+| `animate-pulse` | Live status dots |
+
+Timing: 120ms micro, 200ms normal, 300ms transitions. Easing: `ease-out` entries, `ease-in` exits. No bounces.
 
 ---
 
 ## Design rules
 
-1. **Dark only.** Never add light mode styles. Never add `dark:` Tailwind variants — everything is already dark.
-2. **`font-mono` first.** All UI labels, nav items, buttons, badges, and command names use JetBrains Mono.
-3. **Card pattern:** `card-surface rounded-2xl p-6` is the standard. Add `card-hover` for interactive cards.
-4. **Border radius:** `rounded-lg` (8px) for inputs/buttons, `rounded-xl` (12px) for chips/badges, `rounded-2xl` (16px) for cards/panels.
-5. **Blue accents:** `#4FC3F7` is the primary action color. Purple (`#A78BFA`) is for secondary/upcoming states only.
-6. **No shadows on non-interactive elements.** Glow shadows (`box-shadow` with `rgba(79,195,247,…)`) are reserved for primary CTAs and hover states.
-7. **Pill/badge style:** `rounded-full px-4 py-1.5 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5` with `font-mono text-xs tracking-widest`.
-8. **Primary button:** `bg-[#4FC3F7] hover:bg-[#29ABE2] text-[#050508] font-mono font-semibold rounded-lg` — text is always dark on blue.
-9. **Ghost button:** `border border-[#1A1A2E] hover:border-[#4FC3F7]/30 text-slate-400 hover:text-white rounded-lg` — no fill.
-10. **Max width:** `max-w-7xl` for nav/footer, `max-w-5xl` for content sections, `max-w-6xl` for hero.
+1. **Dark only.** Never add light mode. Never use `dark:` variants.
+2. **DM Sans for UI, JetBrains Mono for code.** Swap carefully — this is the opposite of the old system.
+3. **Cobalt blue (#1A52FF) is the brand color.** Cyan (#33C3FF) is the accent/gradient endpoint, not the primary.
+4. **Gradient for primary buttons.** `linear-gradient(135deg, #1A52FF, #2E6AFF)` with white text — not flat fill.
+5. **Subtle rgba borders.** Not hard hex borders. `rgba(255,255,255,0.10)` is the default.
+6. **Glow shadows only on primary CTAs.** `0 0 20px rgba(26,82,255,0.35)` — not on cards or ghost elements.
+7. **Border radius:** `4px` tags, `8px` buttons/inputs, `12px` cards, `24px` icon containers, `9999px` pills.
+8. **No purple.** The old `#A78BFA` purple accent is replaced by cyan `#33C3FF` throughout.
+9. **Card pattern:** `.card-surface rounded-2xl p-6` + `.card-hover` for interactive.
+10. **Max widths:** `max-w-7xl` nav/footer, `max-w-5xl` sections, `max-w-6xl` hero.
+
+---
+
+## Activity tiers (Telegram / Rewards)
+
+| Tier | Color | Multiplier |
+|---|---|---|
+| Builder | `#4A7AFF` | ×1.0 |
+| Shipper | `#33C3FF` | ×1.3 |
+| Founder | `#7FA5FF` | ×1.5 |
+| Legend | `#67E5FF` | ×2.0 |
 
 ---
 
 ## Tone
 
-Terminal-inspired, minimal, Linear-grade precision. No rounded bubbly UI. Sharp edges, monospace text, intentional negative space. Every element earns its place — no decorative padding, no gradients for the sake of gradients. Builder aesthetic: looks like a tool, not a product page.
+Terminal-precision meets clean SaaS. Deep navy backgrounds. Cobalt CTAs. Sharp DM Sans for copy, Mono only for code. No rounded bubbly elements — every edge is intentional. Builder aesthetic: looks like a tool you'd actually use at 2am.
