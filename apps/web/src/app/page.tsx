@@ -13,8 +13,7 @@ export default function Home() {
       <Navbar />
       <main>
         <HeroSection />
-        <hr className="section-divider" />
-        <div className="py-24">
+        <div className="py-16 sm:py-24">
           <FeaturesSection />
           <HowItWorksSection />
           <TokenSection />
