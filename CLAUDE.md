@@ -1,10 +1,31 @@
 # CLAUDE.md — Blue Agent
 
-## What this project is
+## What is Blue Agent
 
-Blue Agent is the **AI-native founder console for Base builders**. It is not a chatbot. It is a workflow-first console for thinking, building, auditing, shipping, and raising on Base — powered by Bankr LLM and monetized via x402 micropayments.
+**Blue Agent** is an AI agent layer built on Base — it interacts with users, automates tasks, and generates onchain activity.
 
-It lives at [bankr.bot](https://bankr.bot) and is the primary surface for founders who build on Base.
+Built by [Blocky Studio](https://blocky.studio) ([@madebyshun](https://x.com/blocky_agent)), Blue Agent is the flagship AI agent of the Base ecosystem. It is not just a chatbot — it is a full economic actor: it holds a wallet, executes onchain transactions, earns and distributes tokens, and powers a growing ecosystem of tools and services.
+
+**Three surfaces:**
+- **Telegram bot** — community hub, wallet, trading, rewards, builder tools
+- **Founder console** (this repo) — AI-native workflow for Base builders: idea → build → audit → ship → raise
+- **x402 API services** — 31 pay-per-use AI tools for agents and developers
+
+**Tokens:**
+- `$BLUEAGENT` — `0xf895783b2931c919955e18b5e3343e7c7c456ba3` (Base, Uniswap v4)
+- `$BLOCKY` — `0x1E11dC42b7916621EEE1874da5664d75A0D74b07` (Base)
+- Treasury — `0xf31f59e7b8b58555f7871f71973a394c8f1bffe5` (Base)
+
+**Links:**
+- X/Twitter: [@blocky_agent](https://x.com/blocky_agent)
+- Telegram community: [t.me/blueagent_hub](https://t.me/blueagent_hub)
+- Bankr profile: [bankr.bot/agent/blue-agent](https://bankr.bot/agent/blue-agent)
+
+---
+
+## This repo — Founder Console
+
+The `blue-agent` repo is the **AI-native founder console for Base builders**. It is a workflow-first product for thinking, building, auditing, shipping, and raising on Base — powered by Bankr LLM and monetized via x402 micropayments.
 
 ---
 
@@ -27,7 +48,7 @@ It lives at [bankr.bot](https://bankr.bot) and is the primary surface for founde
 blue-agent/
 ├── apps/
 │   ├── web/              # Next.js app — /code, /chat, /launch, /market, /rewards
-│   └── api/              # x402 paid endpoints (TypeScript, Bun or Node)
+│   └── api/              # x402 paid endpoints (TypeScript)
 │       └── x402/         # Individual paid tool handlers
 ├── packages/
 │   ├── core/             # Shared types, schemas, pricing, tool-input specs
@@ -36,8 +57,9 @@ blue-agent/
 ├── agents/
 │   └── blue-agent/       # Agent runtime config (agent.json, tasks.json)
 ├── commands/             # Command contract docs (idea.md, build.md, etc.)
+├── skills/               # Bundled grounding knowledge (Base addresses, standards, tools)
 ├── docs/                 # Product brief, roadmap, status, quickstart
-├── features/             # Feature folders (stubbed, fill as features ship)
+├── features/             # Feature folders
 └── CLAUDE.md             # This file
 ```
 
@@ -59,12 +81,12 @@ blue-agent/
 
 ## The 5 core commands
 
-These are the heart of Blue Agent. Each has a contract doc in `commands/`.
+Each has a contract doc in `commands/`.
 
 | Command | What it does | Price |
 |---|---|---|
-| `blue idea` | Turns a rough concept into a fundable brief (problem, why now, why Base, MVP scope, risks, 24h plan) | $0.05 |
-| `blue build` | Generates architecture, stack, folder structure, files, integrations, and test plan | $0.50 |
+| `blue idea` | Turns a rough concept into a fundable brief — problem, why now, why Base, MVP scope, risks, 24h plan | $0.05 |
+| `blue build` | Architecture, stack, folder structure, files, integrations, and test plan | $0.50 |
 | `blue audit` | Security and product risk review — critical issues, suggested fixes, go/no-go | $1.00 |
 | `blue ship` | Deployment checklist, verification steps, release notes, monitoring plan | $0.10 |
 | `blue raise` | Pitch narrative — market framing, why this wins, traction, ask, target investors | $0.20 |
@@ -76,22 +98,17 @@ Pricing is defined in `packages/core/src/schemas.ts` → `BLUE_AGENT_PRICING`.
 ## Commit convention
 
 ```
-feat:   new feature
-fix:    bug fix
-skill:  new skill or command added
-cmd:    changes to a command contract (commands/*.md)
-docs:   documentation only
+feat:     new feature
+fix:      bug fix
+skill:    new skill or grounding file added
+cmd:      changes to a command contract (commands/*.md)
+docs:     documentation only
 refactor: code restructure, no behavior change
-chore:  tooling, deps, config
+chore:    tooling, deps, config
 ```
-
-Examples:
-- `feat: add wallet-pnl x402 endpoint`
-- `cmd: update blue audit required output`
-- `skill: add narrative-pulse tool`
 
 ---
 
 ## Branch policy
 
-**Always work on the `dev` branch.** Never commit directly to `main`. PRs go `dev → main`.
+**Always work on `dev`.** Never commit directly to `main`. PRs go `dev → main`.
