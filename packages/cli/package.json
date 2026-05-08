@@ -1,6 +1,6 @@
 {
   "name": "@blueagent/cli",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "BlueAgent TUI — terminal UI for the full Blue Agent ecosystem",
   "type": "module",
   "bin": {
