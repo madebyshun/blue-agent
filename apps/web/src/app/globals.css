@@ -12,9 +12,13 @@
   --border: #1A1A2E;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+}
 
 body {
   background-color: var(--bg);
@@ -23,11 +27,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: #1A1A2E; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #2A2A4E; }
 
+/* Selection */
 ::selection { background: rgba(79,195,247,0.3); color: #fff; }
 
 @layer utilities {

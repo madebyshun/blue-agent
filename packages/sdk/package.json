@@ -1,7 +1,7 @@
 {
-  "name": "@blueagent/core",
-  "version": "1.0.1",
-  "description": "Core runtime for Blue Agent — grounded LLM calls via Bankr, skill registry, command schemas",
+  "name": "@blueagent/sdk",
+  "version": "1.2.0",
+  "description": "Blue Agent SDK — unified interface for all builder commands and x402 tools",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -11,6 +11,9 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@blueagent/core": "*"
   },
   "devDependencies": {
     "typescript": "^5.3.0",
