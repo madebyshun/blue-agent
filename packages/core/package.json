@@ -1,10 +1,13 @@
 {
   "name": "@blueagent/core",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Core runtime for Blue Agent — grounded LLM calls via Bankr, skill registry, command schemas",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch"
@@ -13,5 +16,7 @@
     "typescript": "^5.3.0",
     "@types/node": "^20.0.0"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }
