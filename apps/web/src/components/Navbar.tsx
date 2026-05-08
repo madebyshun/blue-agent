@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 
 const NAV_LINKS = [
   { label: "Console", href: "/console" },
+  { label: "Launch",  href: "/launch" },
   { label: "Score",   href: "/score", badge: "soon" },
-  { label: "Chat",    href: "/chat" },
 ];
 
 export default function Navbar() {
