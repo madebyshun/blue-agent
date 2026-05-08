@@ -1,19 +1,23 @@
 #!/usr/bin/env node
 /**
  * Blue Agent CLI — `blue` command
- * Commands: idea | build | audit | ship | raise | new | init
+ * Commands: idea | build | audit | ship | raise | new | init | score | agent-score | post-task | tasks | accept | submit
  */
 
 import { Command } from "commander";
-import { runIdea }  from "./commands/idea";
-import { runBuild } from "./commands/build";
-import { runAudit } from "./commands/audit";
-import { runShip }  from "./commands/ship";
-import { runRaise } from "./commands/raise";
+import { runIdea }       from "./commands/idea";
+import { runBuild }      from "./commands/build";
+import { runAudit }      from "./commands/audit";
+import { runShip }       from "./commands/ship";
+import { runRaise }      from "./commands/raise";
 import { runNew }        from "./commands/new";
 import { runInit }       from "./commands/init";
 import { runScore }      from "./commands/score";
 import { runAgentScore } from "./commands/agent-score";
+import { runPostTask }   from "./commands/post-task";
+import { runListTasks }  from "./commands/tasks";
+import { runAcceptTask } from "./commands/accept";
+import { runSubmitTask } from "./commands/submit";
 
 const program = new Command();
 
@@ -101,18 +105,51 @@ program
     await runInit();
   });
 
+// ── Reputation commands ───────────────────────────────────────────────────────
+
 program
   .command("score [handle]")
-  .description("Get Builder Score for an X/Twitter handle (0–100)")
+  .description("Builder Score for an X/Twitter handle — activity, social, thesis (0-100)")
   .action(async (handle) => {
     await runScore(handle);
   });
 
 program
   .command("agent-score [input]")
-  .description("Get Agent Score — accepts @handle, npm:@pkg, github.com/user/repo, or https://url")
+  .description("Agent Score — @handle / npm:@pkg / github.com/repo / https://url")
   .action(async (input) => {
     await runAgentScore(input);
+  });
+
+// ── Work Hub commands ─────────────────────────────────────────────────────────
+
+program
+  .command("post-task [handle]")
+  .description("Post a task to the Work Hub (interactive)")
+  .action(async (handle) => {
+    await runPostTask(handle);
+  });
+
+program
+  .command("tasks")
+  .description("Browse open tasks in the Work Hub")
+  .option("-c, --category <cat>", "Filter by category: audit|content|art|data|dev")
+  .action(async (opts) => {
+    await runListTasks({ category: opts.category });
+  });
+
+program
+  .command("accept <taskId> [handle]")
+  .description("Accept a task from the Work Hub")
+  .action(async (taskId, handle) => {
+    await runAcceptTask(taskId, handle);
+  });
+
+program
+  .command("submit <taskId> <handle> <proof>")
+  .description("Submit completed work with proof")
+  .action(async (taskId, handle, proof) => {
+    await runSubmitTask(taskId, handle, proof);
   });
 
 program.parse(process.argv);
