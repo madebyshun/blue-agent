@@ -1,6 +1,5 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import SelectInput from 'ink-select-input'
 import type { Category, ToolItem } from '../App.js'
 
 // Required input fields for each tool (optional fields end with ?)
@@ -59,12 +58,14 @@ export const TOOL_PARAMS: Record<string, string[]> = {
   'tax-report':      ['address (0x...)', 'year'],
   'alert-subscribe': ['address (0x...)', 'webhookUrl (https://...)'],
 
-  // Bankr wallet — inputs shown as hints
+  // Bankr wallet
   'swap':         ['from (token symbol)', 'to (token symbol)', 'amount'],
   'transfer':     ['to (address 0x...)', 'amount', 'token (USDC|ETH)'],
   'portfolio':    [],
   'launch-token': ['name', 'symbol', 'description'],
 }
+
+const HR = '─'.repeat(61)
 
 interface Props {
   category: Category
@@ -73,31 +74,55 @@ interface Props {
 }
 
 export function ToolMenu({ category, onSelect, onBack }: Props) {
-  useInput((_, key) => { if (key.escape) onBack() })
+  const [cursor, setCursor] = useState(0)
+  const tools = category.items
 
-  const items = category.items.map((t) => {
-    const priceTag = t.price ? ` ${t.price.padStart(6)}` : '       '
-    return {
-      label: `${t.name.padEnd(22)}${priceTag}  ${t.description}`,
-      value: t.name,
-    }
+  useInput((_, key) => {
+    if (key.escape)    { onBack(); return }
+    if (key.upArrow)   setCursor((c) => (c - 1 + tools.length) % tools.length)
+    if (key.downArrow) setCursor((c) => (c + 1) % tools.length)
+    if (key.return)    onSelect(tools[cursor])
   })
 
   return (
     <Box flexDirection="column">
+      {/* Header */}
       <Box marginBottom={1}>
-        <Text color="blueBright" bold>
-          {category.icon} {category.label.toUpperCase()}
-        </Text>
-        <Text dimColor>  esc to go back</Text>
+        <Text dimColor>← </Text>
+        <Text dimColor>{category.label}</Text>
+        <Text dimColor>  </Text>
+        <Text color="cyan">{tools.length}</Text>
+        <Text dimColor> tools</Text>
       </Box>
-      <SelectInput
-        items={items}
-        onSelect={(item) => {
-          const tool = category.items.find((t) => t.name === item.value)!
-          onSelect(tool)
-        }}
-      />
+
+      {/* Tool list */}
+      {tools.map((tool, i) => {
+        const selected = i === cursor
+        const isFree = tool.price === 'free' || !tool.price
+        return (
+          <Box key={tool.name}>
+            <Text color="cyan">{selected ? '❯ ' : '  '}</Text>
+            {/* Tool name — fixed 24 chars */}
+            <Text color={selected ? 'white' : undefined} bold={selected}>
+              {tool.name.padEnd(24)}
+            </Text>
+            {/* Price */}
+            {isFree ? (
+              <Text color="green" dimColor>{'free    '}</Text>
+            ) : (
+              <Text color="cyan" dimColor>{(tool.price ?? '').padEnd(8)}</Text>
+            )}
+            {/* Description */}
+            <Text dimColor>{tool.description}</Text>
+          </Box>
+        )
+      })}
+
+      {/* Footer */}
+      <Box marginTop={1} flexDirection="column">
+        <Text dimColor>{HR}</Text>
+        <Text dimColor> ↑↓ navigate  enter select  ← back  ctrl+c quit</Text>
+      </Box>
     </Box>
   )
 }
