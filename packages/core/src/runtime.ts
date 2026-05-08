@@ -10,7 +10,11 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
-// Inline Bankr LLM client — avoids relative path issues when installed globally
+import { getSkillsForTask, type Task } from "./registry";
+import { readCommandDoc } from "./schemas";
+
+// ── Bankr LLM client (inlined to keep core self-contained for publishing) ─────
+
 export type BankrLLMMessage = { role: string; content: string };
 
 async function callBankrLLM(options: {
@@ -23,7 +27,7 @@ async function callBankrLLM(options: {
   const response = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
     headers: {
-      "x-api-key": process.env.BANKR_API_KEY || "",
+      "x-api-key": process.env.BANKR_API_KEY ?? "",
       "Content-Type": "application/json",
       "anthropic-version": "2023-06-01",
     },
@@ -35,17 +39,17 @@ async function callBankrLLM(options: {
       max_tokens: options.maxTokens ?? 800,
     }),
   });
+
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Bankr LLM error: ${response.status} - ${errorText}`);
   }
-  const data = await response.json();
+
+  const data = await response.json() as { content?: Array<{ text: string }>; text?: string };
   if (data.content && Array.isArray(data.content)) return data.content[0].text;
   if (data.text) return data.text;
   throw new Error("Invalid response format from Bankr LLM");
 }
-import { getSkillsForTask, type Task } from "./registry";
-import { readCommandDoc } from "./schemas";
 
 // ── Skill resolution ─────────────────────────────────────────────────────────
 
@@ -101,7 +105,6 @@ export interface GroundedCallOptions {
   model?: string;
   maxTokens?: number;
   temperature?: number;
-  /** Additional messages prepended before the user prompt (e.g. conversation history) */
   history?: BankrLLMMessage[];
 }
 
@@ -144,11 +147,10 @@ export function streamWithGrounding(
     async start(controller) {
       try {
         const text = await callWithGrounding(task, userPrompt, options);
-        // Emit as SSE-compatible chunks (word-by-word for UX)
         const words = text.split(" ");
         for (const word of words) {
           controller.enqueue(encoder.encode(word + " "));
-          await new Promise((r) => setTimeout(r, 8)); // pace it
+          await new Promise((r) => setTimeout(r, 8));
         }
         controller.close();
       } catch (err) {
