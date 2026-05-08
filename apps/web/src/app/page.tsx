@@ -598,20 +598,45 @@ function Roadmap() {
 function Install() {
   return (
     <section className="max-w-6xl mx-auto px-6 py-24 border-t border-[#1A1A2E]">
-      <p className="font-mono text-xs text-[#4FC3F7] mb-8">// quick start</p>
-      <div className="card-surface rounded-lg p-5 max-w-md">
-        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[#1A1A2E]">
-          <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
-          <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
-          <div className="w-2.5 h-2.5 rounded-full bg-green-500/50" />
-          <span className="font-mono text-[10px] text-slate-700 ml-2">terminal</span>
+      <div className="flex items-baseline justify-between mb-8">
+        <p className="font-mono text-xs text-[#4FC3F7]">// quick start</p>
+        <p className="font-mono text-xs text-slate-700">ready in &lt; 2 minutes</p>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-4 max-w-2xl">
+        {/* Option A — one-liner */}
+        <div className="flex-1 card-surface rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-[#1A1A2E] bg-[#0D0D14]">
+            <span className="font-mono text-[10px] text-[#4FC3F7] font-semibold">Quick Install</span>
+            <span className="font-mono text-[9px] text-green-400/70 border border-green-400/20 px-1.5 rounded">recommended</span>
+          </div>
+          <div className="p-4">
+            <p className="font-mono text-[10px] text-slate-600 mb-3">one command — installs everything</p>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-700 font-mono text-xs">$</span>
+              <span className="font-mono text-xs text-[#4FC3F7] break-all">
+                curl -fsSL https://blueagent.dev/setup.sh | bash
+              </span>
+            </div>
+          </div>
         </div>
-        <div className="space-y-2 font-mono text-sm">
-          <div><span className="text-slate-700">$ </span><span className="text-white">npm install -g @blueagent/builder</span></div>
-          <div><span className="text-slate-700">$ </span><span className="text-white">blue init</span></div>
-          <div><span className="text-slate-700">$ </span><span className="text-[#4FC3F7]">blue audit &quot;your project&quot;</span></div>
+
+        {/* Option B — manual */}
+        <div className="flex-1 card-surface rounded-lg overflow-hidden">
+          <div className="flex items-center px-4 py-2 border-b border-[#1A1A2E] bg-[#0D0D14]">
+            <span className="font-mono text-[10px] text-slate-500">Manual</span>
+          </div>
+          <div className="p-4 space-y-1.5 font-mono text-xs">
+            <div><span className="text-slate-700">$ </span><span className="text-white">npm install -g @blueagent/builder</span></div>
+            <div><span className="text-slate-700">$ </span><span className="text-white">blue init</span></div>
+            <div><span className="text-slate-700">$ </span><span className="text-[#4FC3F7]">blue audit &quot;your project&quot;</span></div>
+          </div>
         </div>
       </div>
+
+      <p className="font-mono text-[10px] text-slate-700 mt-4">
+        verify setup: <span className="text-slate-500">blue doctor</span>
+      </p>
     </section>
   );
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Blue Agent CLI — `blue` command
- * Commands: idea | build | audit | ship | raise | new | init | score | agent-score | post-task | tasks | accept | submit
+ * Commands: idea | build | audit | ship | raise | new | init | doctor | score | agent-score | post-task | tasks | accept | submit
  */
 
 import { Command } from "commander";
@@ -12,6 +12,7 @@ import { runShip }       from "./commands/ship";
 import { runRaise }      from "./commands/raise";
 import { runNew }        from "./commands/new";
 import { runInit }       from "./commands/init";
+import { runDoctor }     from "./commands/doctor";
 import { runScore }      from "./commands/score";
 import { runAgentScore } from "./commands/agent-score";
 import { runPostTask }   from "./commands/post-task";
@@ -103,6 +104,13 @@ program
   .description("Install Blue Agent skills into ~/.blue-agent/skills/ for local grounding")
   .action(async () => {
     await runInit();
+  });
+
+program
+  .command("doctor")
+  .description("Check your Blue Agent setup — node, skills, API key, config")
+  .action(async () => {
+    await runDoctor();
   });
 
 // ── Reputation commands ───────────────────────────────────────────────────────
