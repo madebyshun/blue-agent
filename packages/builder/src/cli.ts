@@ -10,8 +10,10 @@ import { runBuild } from "./commands/build";
 import { runAudit } from "./commands/audit";
 import { runShip }  from "./commands/ship";
 import { runRaise } from "./commands/raise";
-import { runNew }   from "./commands/new";
-import { runInit }  from "./commands/init";
+import { runNew }        from "./commands/new";
+import { runInit }       from "./commands/init";
+import { runScore }      from "./commands/score";
+import { runAgentScore } from "./commands/agent-score";
 
 const program = new Command();
 
@@ -97,6 +99,20 @@ program
   .description("Install Blue Agent skills into ~/.blue-agent/skills/ for local grounding")
   .action(async () => {
     await runInit();
+  });
+
+program
+  .command("score [handle]")
+  .description("Get Builder Score for an X/Twitter handle (0–100)")
+  .action(async (handle) => {
+    await runScore(handle);
+  });
+
+program
+  .command("agent-score [input]")
+  .description("Get Agent Score — accepts @handle, npm:@pkg, github.com/user/repo, or https://url")
+  .action(async (input) => {
+    await runAgentScore(input);
   });
 
 program.parse(process.argv);
