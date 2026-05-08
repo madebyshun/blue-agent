@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@blueagent/core": "^0.1.2",
+    "@blueagent/reputation": "*",
     "commander": "^12.0.0"
   },
   "devDependencies": {
