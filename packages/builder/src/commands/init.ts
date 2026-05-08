@@ -3,7 +3,8 @@ import path from "path";
 import os from "os";
 import { printHeader, printResult, printError } from "../print";
 
-const SKILLS_SOURCE = path.resolve(__dirname, "../../../../skills");
+// When installed globally, skills/ is bundled inside the package next to dist/
+const SKILLS_SOURCE = path.resolve(__dirname, "../../skills");
 const SKILLS_DEST   = path.join(os.homedir(), ".blue-agent", "skills");
 
 export async function runInit() {

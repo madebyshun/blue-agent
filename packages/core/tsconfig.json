@@ -4,7 +4,7 @@
     "module": "CommonJS",
     "moduleResolution": "node",
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDirs": ["src", "../bankr/src"],
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
