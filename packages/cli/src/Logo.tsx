@@ -1,0 +1,20 @@
+import React from 'react'
+import { Box, Text } from 'ink'
+
+const ART = `
+ ██████╗ ██╗     ██╗   ██╗███████╗
+ ██╔══██╗██║     ██║   ██║██╔════╝
+ ██████╔╝██║     ██║   ██║█████╗
+ ██╔══██╗██║     ██║   ██║██╔══╝
+ ██████╔╝███████╗╚██████╔╝███████╗
+ ╚═════╝ ╚══════╝ ╚═════╝ ╚══════╝`
+
+export function Logo() {
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      <Text color="blueBright" bold>{ART}</Text>
+      <Text color="blue"> Security OS for Base Builders · Agents · Founders</Text>
+      <Text dimColor> 45 tools · 8 categories · x402 · Base</Text>
+    </Box>
+  )
+}
