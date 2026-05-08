@@ -1,6 +1,6 @@
 {
   "name": "@blueagent/core",
-  "version": "0.1.2",
+  "version": "1.0.1",
   "description": "Core runtime for Blue Agent — grounded LLM calls via Bankr, skill registry, command schemas",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

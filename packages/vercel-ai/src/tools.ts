@@ -8,7 +8,7 @@ import { callTool, BlueAgentClientOptions } from "./client";
  */
 export function blueagentTools(
   options: BlueAgentClientOptions = {}
-): Record<string, ReturnType<typeof tool>> {
+): Record<string, any> {
   return {
     risk_gate: tool({
       description:
