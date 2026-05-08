@@ -3,14 +3,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const X_URL = "https://x.com/blocky_agent";
-
 const NAV_LINKS = [
-  { label: "Console", href: "/code" },
+  { label: "Console", href: "/console" },
+  { label: "Score",   href: "/score", badge: "soon" },
   { label: "Chat",    href: "/chat" },
-  { label: "Launch",  href: "/launch" },
-  { label: "Market",  href: "/market" },
-  { label: "Rewards", href: "/rewards" },
 ];
 
 export default function Navbar() {
@@ -37,30 +33,24 @@ export default function Navbar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`font-mono text-xs px-3 py-1.5 rounded-lg transition-all ${
+                className={`font-mono text-xs px-3 py-1.5 rounded-lg transition-all flex items-center ${
                   isActive(item.href)
                     ? "text-[#4FC3F7] bg-[#4FC3F7]/10"
                     : "text-slate-400 hover:text-white hover:bg-[#1A1A2E]/50"
                 }`}
               >
                 {item.label}
+                {item.badge && (
+                  <span className="font-mono text-[10px] text-[#4FC3F7] border border-[#4FC3F7]/30 px-1 rounded ml-1 align-middle">
+                    {item.badge}
+                  </span>
+                )}
               </Link>
             ))}
           </div>
 
           {/* Right actions */}
           <div className="hidden md:flex items-center gap-3">
-            <a
-              href={X_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-slate-500 hover:text-white transition-colors"
-              aria-label="X / Twitter"
-            >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-              </svg>
-            </a>
             <a
               href="https://github.com/madebyshun/blue-agent"
               target="_blank"
@@ -70,10 +60,10 @@ export default function Navbar() {
               GitHub
             </a>
             <Link
-              href="/code"
+              href="/console"
               className="font-mono text-xs font-semibold bg-[#4FC3F7] text-[#050508] px-3 py-1.5 rounded hover:bg-[#29ABE2] transition-colors"
             >
-              Open Console
+              Open Console →
             </Link>
           </div>
 
@@ -102,22 +92,27 @@ export default function Navbar() {
               key={item.href}
               href={item.href}
               onClick={() => setOpen(false)}
-              className={`font-mono text-sm px-3 py-2.5 rounded-lg transition-all ${
+              className={`font-mono text-sm px-3 py-2.5 rounded-lg transition-all flex items-center ${
                 isActive(item.href)
                   ? "text-[#4FC3F7] bg-[#4FC3F7]/10"
                   : "text-slate-400 hover:text-white"
               }`}
             >
               {item.label}
+              {item.badge && (
+                <span className="font-mono text-[10px] text-[#4FC3F7] border border-[#4FC3F7]/30 px-1 rounded ml-1 align-middle">
+                  {item.badge}
+                </span>
+              )}
             </Link>
           ))}
           <div className="pt-3 mt-2 border-t border-[#1A1A2E]">
             <Link
-              href="/code"
+              href="/console"
               onClick={() => setOpen(false)}
               className="block text-center font-mono text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-3 py-2.5 rounded-lg hover:bg-[#29ABE2] transition-colors"
             >
-              Open Console
+              Open Console →
             </Link>
           </div>
         </div>
