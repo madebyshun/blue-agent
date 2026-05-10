@@ -15,12 +15,12 @@ const TIER_THRESHOLDS: Record<string, number> = {
   "Bot": 0, "Agent": 100, "Pro Agent": 500, "Elite Agent": 1000, "Sovereign": 5000,
 };
 
-function nextTier(xp: number, currentTier: string): string | null {
+function nextTier(score: number, currentTier: string): string | null {
   const idx = TIERS.indexOf(currentTier);
   if (idx < 0 || idx >= TIERS.length - 1) return null;
   const next = TIERS[idx + 1];
-  const needed = TIER_THRESHOLDS[next] - xp;
-  return `${next} ${TIER_EMOJI[next]} at ${TIER_THRESHOLDS[next]} XP (+${needed} needed)`;
+  const needed = TIER_THRESHOLDS[next] - score;
+  return `${next} ${TIER_EMOJI[next]} at ${TIER_THRESHOLDS[next]} pts (+${needed} needed)`;
 }
 
 export async function runAgentScore(input: string | undefined) {
@@ -43,11 +43,11 @@ export async function runAgentScore(input: string | undefined) {
   try {
     const r = await scoreAgent(input);
     const emoji = TIER_EMOJI[r.tier] ?? "";
-    const next = nextTier(r.xp, r.tier);
+    const next = nextTier(r.score, r.tier);
 
     const lines = [
       ``,
-      `XP:       ${r.xp} — ${r.tier} ${emoji}`,
+      `Score:    ${r.score}/100 — ${r.tier} ${emoji}`,
     ];
     if (next) lines.push(`Next tier: ${next}`);
     lines.push(
