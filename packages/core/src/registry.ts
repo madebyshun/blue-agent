@@ -11,10 +11,10 @@ export type Task = "idea" | "build" | "audit" | "ship" | "raise";
  * Load order matters — files are concatenated in array order.
  */
 export const SKILL_REGISTRY: Record<Task, string[]> = {
-  idea:  ["base-standards", "base-addresses", "blue-agent-identity"],
-  build: ["base-standards", "base-addresses", "bankr-tools"],
-  audit: ["base-standards", "base-addresses", "base-security"],
-  ship:  ["base-standards", "bankr-tools"],
+  idea:  ["base-standards", "base-addresses", "blue-agent-identity", "base-ecosystem", "base-4337-aa"],
+  build: ["base-standards", "base-addresses", "bankr-tools", "base-ecosystem", "x402-patterns", "base-4337-aa"],
+  audit: ["base-standards", "base-addresses", "base-security", "base-ecosystem", "x402-patterns", "base-4337-aa"],
+  ship:  ["base-standards", "bankr-tools", "x402-patterns"],
   raise: ["blue-agent-identity"],
 };
 

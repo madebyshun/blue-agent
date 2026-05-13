@@ -17,10 +17,17 @@ function extractJson(text: string): any {
 }
 
 async function callBankrLLM(system: string, user: string): Promise<string> {
+  if (!process.env.BANKR_API_KEY) {
+    throw new Error(
+      "BANKR_API_KEY is not set.\n" +
+      "  Export it: export BANKR_API_KEY=<your-key>\n" +
+      "  Check setup: blue doctor"
+    );
+  }
   const res = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
     headers: {
-      "x-api-key": process.env.BANKR_API_KEY ?? "",
+      "x-api-key": process.env.BANKR_API_KEY,
       "Content-Type": "application/json",
       "anthropic-version": "2023-06-01",
     },
@@ -32,7 +39,10 @@ async function callBankrLLM(system: string, user: string): Promise<string> {
       max_tokens: 1200,
     }),
   });
-  if (!res.ok) throw new Error(`Bankr LLM error: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Bankr LLM error ${res.status}: ${body.slice(0, 200)}`);
+  }
   const data = await res.json() as any;
   if (data.content?.[0]?.text) return data.content[0].text;
   throw new Error("Invalid Bankr LLM response");

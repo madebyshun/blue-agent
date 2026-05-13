@@ -11,8 +11,9 @@ const TIER_EMOJI: Record<string, string> = {
 };
 
 const TIERS = ["Bot", "Agent", "Pro Agent", "Elite Agent", "Sovereign"];
+// These thresholds match getAgentTier() in packages/reputation/src/agentScore.ts
 const TIER_THRESHOLDS: Record<string, number> = {
-  "Bot": 0, "Agent": 100, "Pro Agent": 500, "Elite Agent": 1000, "Sovereign": 5000,
+  "Bot": 0, "Agent": 41, "Pro Agent": 61, "Elite Agent": 76, "Sovereign": 91,
 };
 
 function nextTier(score: number, currentTier: string): string | null {
