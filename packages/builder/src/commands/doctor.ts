@@ -9,6 +9,9 @@ const SKILL_FILES = [
   "bankr-tools.md",
   "blue-agent-identity.md",
   "design-system.md",
+  "base-ecosystem.md",
+  "x402-patterns.md",
+  "agent-wallet-security.md",
 ];
 
 const SKILLS_DIR  = path.join(os.homedir(), ".blue-agent", "skills");
