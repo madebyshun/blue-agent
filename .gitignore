@@ -9,3 +9,6 @@ coverage/
 .env
 .env.*
 !.env.example
+
+# Claude Code session data
+.claude/
