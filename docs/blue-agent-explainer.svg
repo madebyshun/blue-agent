@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1792" height="1024" viewBox="0 0 1792 1024" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1792" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#08111F"/>
+      <stop offset="1" stop-color="#0B1B33"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#102749"/>
+      <stop offset="1" stop-color="#0C1830"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6EE7FF"/>
+      <stop offset="1" stop-color="#3B82F6"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.35 0"/>
+    </filter>
+  </defs>
+
+  <rect width="1792" height="1024" fill="url(#bg)"/>
+
+  <circle cx="896" cy="438" r="240" fill="#1D4ED8" opacity="0.12" filter="url(#glow)"/>
+  <circle cx="896" cy="438" r="160" fill="#38BDF8" opacity="0.10" filter="url(#glow)"/>
+
+  <text x="96" y="92" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="54" font-weight="700">Blue Agent</text>
+  <text x="96" y="136" fill="#93C5FD" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="500">Base-native founder console for builders on Bankr</text>
+
+  <!-- Center hub -->
+  <rect x="626" y="308" rx="34" ry="34" width="540" height="260" fill="url(#card)" stroke="#2B5AA6" stroke-width="2"/>
+  <rect x="650" y="332" rx="24" ry="24" width="492" height="212" fill="rgba(255,255,255,0.02)" stroke="#1E3A8A" stroke-width="1"/>
+  <text x="896" y="404" text-anchor="middle" fill="#E0F2FE" font-family="Inter, Arial, sans-serif" font-size="64" font-weight="800">Blue Agent</text>
+  <text x="896" y="452" text-anchor="middle" fill="#7DD3FC" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="600">Founder console</text>
+  <text x="896" y="492" text-anchor="middle" fill="#CBD5E1" font-family="Inter, Arial, sans-serif" font-size="22">idea → build → audit → ship → raise</text>
+
+  <!-- Flow line -->
+  <path d="M 896 568 L 896 636" stroke="#60A5FA" stroke-width="4" stroke-dasharray="10 12" opacity="0.8"/>
+
+  <!-- Bottom flow cards -->
+  <g>
+    <rect x="96" y="648" rx="24" ry="24" width="304" height="216" fill="url(#card)" stroke="#224C8F" stroke-width="1.5"/>
+    <text x="132" y="706" fill="#93C5FD" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700">blue idea</text>
+    <text x="132" y="746" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="20">Turn a vague thought</text>
+    <text x="132" y="776" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="20">into a structured concept</text>
+    <text x="132" y="820" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17">Use case, scope, audience, angle</text>
+  </g>
+  <g>
+    <rect x="436" y="648" rx="24" ry="24" width="304" height="216" fill="url(#card)" stroke="#224C8F" stroke-width="1.5"/>
+    <text x="472" y="706" fill="#93C5FD" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700">blue build</text>
+    <text x="472" y="746" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="20">Turn the idea into</text>
+    <text x="472" y="776" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="20">a concrete build plan</text>
+    <text x="472" y="820" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17">Tasks, scaffold, modules</text>
+  </g>
+  <g>
+    <rect x="776" y="648" rx="24" ry="24" width="304" height="216" fill="url(#card)" stroke="#224C8F" stroke-width="1.5"/>
+    <text x="812" y="706" fill="#93C5FD" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700">blue audit</text>
+    <text x="812" y="746" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="20">Check the plan for</text>
+    <text x="812" y="776" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="20">risks and gaps</text>
+    <text x="812" y="820" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17">Security, logic, edge cases</text>
+  </g>
+  <g>
+    <rect x="1116" y="648" rx="24" ry="24" width="304" height="216" fill="url(#card)" stroke="#224C8F" stroke-width="1.5"/>
+    <text x="1152" y="706" fill="#93C5FD" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700">blue ship</text>
+    <text x="1152" y="746" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="20">Prepare the release</text>
+    <text x="1152" y="776" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="20">and launch path</text>
+    <text x="1152" y="820" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17">Deploy, checklist, publish</text>
+  </g>
+  <g>
+    <rect x="1456" y="648" rx="24" ry="24" width="240" height="216" fill="url(#card)" stroke="#224C8F" stroke-width="1.5"/>
+    <text x="1490" y="706" fill="#93C5FD" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700">blue raise</text>
+    <text x="1490" y="746" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="20">Turn the story into</text>
+    <text x="1490" y="776" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="20">a pitch or narrative</text>
+    <text x="1490" y="820" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="17">Deck, angle, partnership</text>
+  </g>
+
+  <!-- Arrows -->
+  <path d="M 896 568 C 896 606, 896 620, 896 648" stroke="url(#accent)" stroke-width="4" opacity="0.9"/>
+  <path d="M 400 756 L 424 756" stroke="#60A5FA" stroke-width="4" stroke-linecap="round"/>
+  <path d="M 740 756 L 764 756" stroke="#60A5FA" stroke-width="4" stroke-linecap="round"/>
+  <path d="M 1080 756 L 1104 756" stroke="#60A5FA" stroke-width="4" stroke-linecap="round"/>
+  <path d="M 1420 756 L 1444 756" stroke="#60A5FA" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Surfaces card -->
+  <g>
+    <rect x="96" y="212" rx="28" ry="28" width="430" height="318" fill="url(#card)" stroke="#224C8F" stroke-width="1.5"/>
+    <text x="132" y="270" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="800">Surfaces</text>
+    <g font-family="Inter, Arial, sans-serif" font-size="23" fill="#BFDBFE" font-weight="600">
+      <text x="132" y="326">/code</text>
+      <text x="132" y="374">/chat</text>
+      <text x="132" y="422">/launch</text>
+      <text x="132" y="470">/market</text>
+      <text x="132" y="518">/rewards</text>
+    </g>
+    <text x="296" y="326" fill="#CBD5E1" font-family="Inter, Arial, sans-serif" font-size="19">founder console</text>
+    <text x="296" y="374" fill="#CBD5E1" font-family="Inter, Arial, sans-serif" font-size="19">model picker + paid compute</text>
+    <text x="296" y="422" fill="#CBD5E1" font-family="Inter, Arial, sans-serif" font-size="19">launch wizard</text>
+    <text x="296" y="470" fill="#CBD5E1" font-family="Inter, Arial, sans-serif" font-size="19">agents / prompts / skills</text>
+    <text x="296" y="518" fill="#CBD5E1" font-family="Inter, Arial, sans-serif" font-size="19">points + credits</text>
+  </g>
+
+  <!-- Footer ribbon -->
+  <rect x="96" y="922" rx="20" ry="20" width="1600" height="56" fill="#0F243F" stroke="#224C8F" stroke-width="1.2"/>
+  <text x="896" y="958" text-anchor="middle" fill="#7DD3FC" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">Bankr-native • Base-first • Workflow-first • Artifact-first</text>
+</svg>
