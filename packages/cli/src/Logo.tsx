@@ -3,44 +3,19 @@ import { Box, Text } from 'ink'
 
 const VERSION = '0.1.10'
 
+// Design system tokens
 const C = {
   blue:   '#4FC3F7',
   purple: '#A78BFA',
+  text:   '#E2E8F0',
   muted:  '#94A3B8',
   dim:    '#475569',
 }
 
-// ── Pixel block art — 5 rows × 4 cols per letter, 2-space gap ─────────────
-//
-// B:████  L:█     U:█  █  E:████
-//   █  █    █       █  █    █
-//   ████    █       █  █    ███
-//   █  █    █       █  █    █
-//   ████    ████    ████    ████
-//
-const BLUE_ART = [
-  '████  █     █  █  ████',
-  '█  █  █     █  █  █   ',
-  '████  █     █  █  ███ ',
-  '█  █  █     █  █  █   ',
-  '████  ████  ████  ████',
-]
+const W = 58 // layout width
+const SEP = '─'.repeat(W)
 
-// A: ██   G: ███  E:████  N:█  █  T:████
-//   █  █    █      █        ██ █    █
-//   ████    █ ██   ███      █ ██    █
-//   █  █    █  █   █        █  █    █
-//   █  █     ███   ████     █  █    █
-//
-const AGENT_ART = [
-  ' ██    ███  ████  █  █  ████',
-  '█  █  █     █     ██ █   █  ',
-  '████  █ ██  ███   █ ██   █  ',
-  '█  █  █  █  █     █  █   █  ',
-  '█  █   ███  ████  █  █   █  ',
-]
-
-const CMDS = [
+const CMDS: { label: string; color: string }[] = [
   { label: 'idea',     color: C.blue   },
   { label: 'build',    color: C.muted  },
   { label: 'audit',    color: C.muted  },
@@ -51,54 +26,45 @@ const CMDS = [
   { label: 'validate', color: C.muted  },
 ]
 
-const SEP = '─'.repeat(44)
-
 export function Logo() {
   return (
-    <Box flexDirection="column" marginBottom={1}>
+    <Box flexDirection="column" marginBottom={1} marginLeft={2}>
 
       <Text>{' '}</Text>
 
-      {/* ── BLUE ─────────────────────────────────────── */}
-      {BLUE_ART.map((row, i) => (
-        <Box key={`b${i}`} marginLeft={2}>
-          <Text color={C.blue} bold>{row}</Text>
+      {/* ── Wordmark + version ───────────────────────── */}
+      <Box width={W} justifyContent="space-between">
+        <Box gap={1}>
+          <Text color={C.blue} bold>◆</Text>
+          <Text color={C.text} bold>Blue Agent</Text>
         </Box>
-      ))}
-
-      {/* ── AGENT ────────────────────────────────────── */}
-      {AGENT_ART.map((row, i) => (
-        <Box key={`a${i}`} marginLeft={2}>
-          <Text color={C.blue} bold>{row}</Text>
-        </Box>
-      ))}
+        <Text color={C.dim}>v{VERSION}</Text>
+      </Box>
 
       {/* ── Tagline ──────────────────────────────────── */}
-      <Box marginLeft={2} marginTop={1} gap={1}>
-        <Text color={C.muted}>AI-native console for Base</Text>
-        <Text color={C.dim}>·</Text>
-        <Text color={C.dim}>Base</Text>
-        <Text color={C.dim}>·</Text>
-        <Text color={C.dim}>x402</Text>
+      <Box marginLeft={3}>
+        <Text color={C.dim}>AI-native founder console for Base  ·  x402</Text>
       </Box>
 
       {/* ── Separator ────────────────────────────────── */}
-      <Box marginLeft={2} marginTop={1}>
+      <Box marginTop={1}>
         <Text dimColor>{SEP}</Text>
       </Box>
 
       {/* ── Command strip ────────────────────────────── */}
-      <Box marginLeft={2}>
+      <Box>
         {CMDS.map((cmd, i) => (
           <React.Fragment key={cmd.label}>
             <Text color={cmd.color}>{cmd.label}</Text>
-            {i < CMDS.length - 1 && <Text color={C.dim}> · </Text>}
+            {i < CMDS.length - 1 && (
+              <Text color={C.dim}> · </Text>
+            )}
           </React.Fragment>
         ))}
       </Box>
 
       {/* ── Bottom rule ──────────────────────────────── */}
-      <Box marginLeft={2}>
+      <Box>
         <Text dimColor>{SEP}</Text>
       </Box>
 
