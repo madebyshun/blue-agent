@@ -19,12 +19,12 @@ export async function runSubmitTask(
     const fee = getFeeAmount(task.reward);
     const doerPayout = getDoerAmount(task.reward);
 
-    console.log(`\n🎉 Task submitted!\n`);
-    console.log(`  Task:    ${task.title}`);
-    console.log(`  Proof:   ${proof}`);
-    console.log(`  Payout:  ${doerPayout} USDC (after ${fee} USDC Blue Agent fee)`);
-    console.log(`  Score:   ${task.score_reward.doer}`);
-    console.log(`\nWaiting for poster confirmation...\n`);
+    process.stdout.write(`\n  🎉 Task submitted!\n\n`);
+    process.stdout.write(`  Task:      ${task.title}\n`);
+    process.stdout.write(`  Proof:     ${proof}\n`);
+    process.stdout.write(`  Payout:    ${doerPayout} USDC`);
+    process.stdout.write(` (after ${fee} USDC Blue Agent fee)\n`);
+    process.stdout.write(`\n  Waiting for poster confirmation...\n\n`);
   } catch (err) {
     printError(err instanceof Error ? err.message : String(err));
   }

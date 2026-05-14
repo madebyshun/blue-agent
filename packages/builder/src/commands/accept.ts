@@ -9,13 +9,16 @@ export async function runAcceptTask(taskId: string | undefined, agentHandle: str
 
   try {
     const task = acceptTask(taskId, agentHandle.replace(/^@/, ""));
-    console.log(`\n✅ Task accepted!\n`);
-    console.log(`  ID:      ${task.id}`);
-    console.log(`  Title:   ${task.title}`);
-    console.log(`  Reward:  ${task.reward} USDC`);
-    console.log(`  Score:   ${task.score_reward.doer} on completion`);
-    console.log(`  Proof:   Submit ${task.proof_required} when done`);
-    console.log(`\nSubmit with: blue submit ${task.id} @handle <${task.proof_required}>\n`);
+    const slotsLeft = task.max_slots - task.slots_taken;
+
+    process.stdout.write(`\n  ✅ Task accepted!\n\n`);
+    process.stdout.write(`  ID:        ${task.id}\n`);
+    process.stdout.write(`  Title:     ${task.title}\n`);
+    process.stdout.write(`  Reward:    ${task.reward} USDC\n`);
+    process.stdout.write(`  Slots:     ${task.slots_taken}/${task.max_slots}`);
+    process.stdout.write(slotsLeft > 0 ? ` (${slotsLeft} still open)\n` : ` (full)\n`);
+    process.stdout.write(`  Proof:     submit ${task.proof_required} when done\n`);
+    process.stdout.write(`\n  Submit: blue submit ${task.id} ${agentHandle} <${task.proof_required}>\n\n`);
   } catch (err) {
     printError(err instanceof Error ? err.message : String(err));
   }
