@@ -9,6 +9,7 @@
  * Discovery:       search · trending · watch · alert · history
  * Launch / market: launch · market
  * Tasks:           tasks · post-task · accept · submit
+ * Microtasks:      micro post · micro list · micro accept · micro submit · micro approve · micro profile
  * Terminal UI:     tui (spawns @blueagent/cli)
  */
 
@@ -39,6 +40,14 @@ import { runHistory }         from "./commands/history";
 import { runCompare }         from "./commands/compare";
 import { runLaunch }          from "./commands/launch";
 import { runMarket }          from "./commands/market";
+import {
+  runMicroPost,
+  runMicroList,
+  runMicroAccept,
+  runMicroSubmit,
+  runMicroApprove,
+  runMicroProfile,
+}                             from "./commands/micro";
 
 const program = new Command();
 
@@ -249,6 +258,86 @@ program
   .description("Submit completed work with proof URL or tx hash")
   .action(async (taskId, handle, proof) => {
     await runSubmitTask(taskId, handle, proof);
+  });
+
+// ── Microtasks ────────────────────────────────────────────────────────────────
+
+const micro = program
+  .command("micro")
+  .description("x402 microtask marketplace — $0.10–$20 fast-settlement tasks");
+
+micro
+  .command("post [description]")
+  .description("Post a new microtask with low-cost slots")
+  .option("--reward <n>", "Reward per slot in USDC (max $20)")
+  .option("--slots <n>", "Number of slots", "1")
+  .option("--platform <p>", "Platform: x | farcaster | telegram | web", "web")
+  .option("--proof <type>", "Proof type: reply | quote | screenshot | url | video | text", "url")
+  .option("--must-mention <handle>", "Require mentioning this handle")
+  .option("--deadline <date>", "Deadline YYYY-MM-DD")
+  .option("--approval <mode>", "Approval: auto | manual | hybrid", "auto")
+  .action(async (description, opts) => {
+    await runMicroPost(description, {
+      reward: opts.reward,
+      slots: opts.slots,
+      platform: opts.platform,
+      proof: opts.proof,
+      mustMention: opts.mustMention,
+      deadline: opts.deadline,
+      approval: opts.approval,
+    });
+  });
+
+micro
+  .command("list [id]")
+  .description("Browse open microtasks (pass ID for detailed view)")
+  .option("--platform <p>", "Filter by platform")
+  .option("--status <s>", "Filter by status")
+  .option("--proof <type>", "Filter by proof type")
+  .option("--mention <handle>", "Filter by required mention")
+  .option("--sort <key>", "Sort by: reward | deadline | slots | created_at", "created_at")
+  .option("--limit <n>", "Max results", "20")
+  .action(async (id, opts) => {
+    await runMicroList(id, {
+      platform: opts.platform,
+      status: opts.status,
+      proof: opts.proof,
+      mention: opts.mention,
+      sort: opts.sort,
+      limit: opts.limit,
+    });
+  });
+
+micro
+  .command("accept [taskId] [handle]")
+  .description("Claim a slot on a microtask")
+  .action(async (taskId, handle) => {
+    await runMicroAccept(taskId, handle);
+  });
+
+micro
+  .command("submit [taskId] [proof]")
+  .description("Submit proof for an accepted microtask slot")
+  .option("--handle <h>", "Your handle if multiple claims exist")
+  .option("--note <text>", "Optional context note")
+  .action(async (taskId, proof, opts) => {
+    await runMicroSubmit(taskId, proof, { handle: opts.handle, note: opts.note });
+  });
+
+micro
+  .command("approve [taskId]")
+  .description("Approve or reject a submission and release payment")
+  .option("--reject", "Reject the submission instead of approving")
+  .option("--claim <id>", "Approve a specific claim ID")
+  .action(async (taskId, opts) => {
+    await runMicroApprove(taskId, { reject: opts.reject, claimId: opts.claim });
+  });
+
+micro
+  .command("profile [handle]")
+  .description("Show doer performance, earnings, and reputation")
+  .action(async (handle) => {
+    await runMicroProfile(handle);
   });
 
 // ── Terminal UI ───────────────────────────────────────────────────────────────
