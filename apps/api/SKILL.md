@@ -24,6 +24,7 @@ metadata:
 |---------|-------|-------------|
 | `deep-analysis` | $0.35/req | Due diligence for any Base token or project |
 | `wallet-pnl` | $1.00/req | PnL report for any Base wallet |
+| `token-launch` | $1.00/req | Fair-launch token wizard on Base via Bankr + Clanker |
 | `launch-advisor` | $3.00/req | Full launch playbook for Base founders |
 | `grant-evaluator` | $5.00/req | Grant application scoring (Base/Coinbase criteria) |
 | `risk-gate` | $0.05/req | Safety check before agents execute transactions |
@@ -108,6 +109,40 @@ Deep due diligence for any Base token or project.
   "keyStrengths": ["..."],
   "recommendation": "Strong Buy",
   "summary": "..."
+}
+```
+
+---
+
+### token-launch — $1.00/req
+
+Fair-launch ERC-20 token on Base via Bankr + Clanker. Returns launch plan, tokenomics, growth tactics, and the exact Bankr prompt to execute the deployment. Creator earns 40% of all swap fees.
+
+**Input:**
+```json
+{
+  "tokenName": "Blue Agent",
+  "tokenSymbol": "BLUE",
+  "description": "The Base-native founder console token",
+  "imageUrl": "https://...",
+  "twitter": "blueagent",
+  "website": "https://blueagent.xyz"
+}
+```
+> `tokenName`, `tokenSymbol`, `description` required. Rest optional.
+
+**Output:**
+```json
+{
+  "launchScore": 82,
+  "summary": "...",
+  "positioning": { "tagline": "...", "whyNow": "...", "targetCommunity": "...", "differentiator": "..." },
+  "tokenomics": { "supply": "1,000,000,000", "feeStructure": "1% on every trade: 40% creator / 40% Bankr / 20% Clanker", "liquidityNote": "..." },
+  "launchChecklist": ["..."],
+  "growthTactics": ["..."],
+  "bankrPrompt": "Launch a token called Blue Agent (BLUE) on Base...",
+  "bankrJob": { "jobId": "...", "status": "submitted", "pollUrl": "..." },
+  "recommendation": "Launch now"
 }
 ```
 

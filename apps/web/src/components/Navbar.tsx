@@ -1,63 +1,127 @@
 "use client";
+import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
-import { useEffect, useState } from "react";
-import { useTheme } from "./ThemeProvider";
-
-const TOKEN = "0xf895783b2931c919955e18b5e3343e7c7c456ba3";
-
-function fmtPrice(p: number): string {
-  if (!p) return "$BLUEAGENT";
-  if (p < 0.000001) return "$" + p.toExponential(2);
-  if (p < 0.0001) return "$" + p.toFixed(8);
-  if (p < 0.01) return "$" + p.toFixed(6);
-  return "$" + p.toFixed(4);
-}
+const NAV_LINKS = [
+  { label: "Console", href: "/console" },
+  { label: "Launch",  href: "/launch" },
+  { label: "Micro",   href: "/micro" },
+  { label: "Profile", href: "/profile" },
+  { label: "Agents",  href: "/agents", badge: "soon" },
+  { label: "Hub",     href: "/hub",    badge: "soon" },
+  { label: "Tools",   href: "/tools" },
+  { label: "Docs",    href: "/docs" },
+];
 
 export default function Navbar() {
-  const [price, setPrice] = useState<string>("$BLUEAGENT");
-  const { theme, toggle } = useTheme();
-
-  useEffect(() => {
-    const fetchPrice = async () => {
-      try {
-        const res = await fetch(`https://api.geckoterminal.com/api/v2/networks/base/tokens/${TOKEN}`);
-        const data = await res.json();
-        const p = parseFloat(data?.data?.attributes?.price_usd || "0");
-        if (p) setPrice(fmtPrice(p));
-      } catch {
-        // silently ignore
-      }
-    };
-    fetchPrice();
-    const iv = setInterval(fetchPrice, 30000);
-    return () => clearInterval(iv);
-  }, []);
+  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const isActive = (href: string) => pathname.startsWith(href);
 
   return (
-    <nav>
-      <div className="flex items-center justify-between px-6 py-5" style={{ maxWidth: "64rem", margin: "0 auto" }}>
-        <div className="flex items-center gap-3">
-          <span className="font-bold text-lg tracking-tight" style={{ color: "var(--text)" }}>🔵 Blue Agent</span>
-          <a href="/code" className="text-xs font-mono px-2 py-1 rounded-full" style={{ color: "#4a90d9", border: "1px solid rgba(74,144,217,0.3)", background: "rgba(74,144,217,0.06)" }}>
-            Founder Console
-          </a>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="price-pill">🔵 <span>{price}</span></div>
-          <a href="/rewards" className="text-sm font-medium hidden md:inline" style={{ color: "#4a90d9" }}>
-            Rewards
-          </a>
-          <a href="/code" className="text-sm font-medium hidden sm:inline" style={{ color: "#4a90d9" }}>
-            Open Console ↗
-          </a>
-          <a href="https://x.com/blocky_agent" target="_blank" rel="noopener noreferrer" className="text-sm font-medium hidden sm:inline" style={{ color: "#4a90d9" }}>
-            @blocky_agent ↗
-          </a>
-          <button onClick={toggle} title={theme === "dark" ? "Switch to light" : "Switch to dark"} style={{ background: "rgba(74,144,217,0.1)", border: "1px solid rgba(74,144,217,0.3)", borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>
-            {theme === "dark" ? "☀️" : "🌙"}
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[#1A1A2E] bg-[#050508]/90 backdrop-blur-xl">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="glow-dot" />
+            <span className="font-mono font-semibold text-white tracking-widest text-sm">
+              BLUE<span className="text-[#4FC3F7]">AGENT</span>
+            </span>
+          </Link>
+
+          {/* Desktop nav */}
+          <div className="hidden md:flex items-center gap-1">
+            {NAV_LINKS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`font-mono text-xs px-3 py-1.5 rounded-lg transition-all flex items-center ${
+                  isActive(item.href)
+                    ? "text-[#4FC3F7] bg-[#4FC3F7]/10"
+                    : "text-slate-400 hover:text-white hover:bg-[#1A1A2E]/50"
+                }`}
+              >
+                {item.label}
+                {item.badge && (
+                  <span className="font-mono text-[10px] text-[#4FC3F7] border border-[#4FC3F7]/30 px-1 rounded ml-1 align-middle">
+                    {item.badge}
+                  </span>
+                )}
+              </Link>
+            ))}
+          </div>
+
+          {/* Right actions */}
+          <div className="hidden md:flex items-center gap-3">
+            <a
+              href="https://github.com/madebyshun/blue-agent"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-xs text-slate-400 hover:text-white transition-colors border border-[#1A1A2E] px-3 py-1.5 rounded hover:border-[#4FC3F7]/30"
+            >
+              GitHub
+            </a>
+            <Link
+              href="/console"
+              className="font-mono text-xs font-semibold bg-[#4FC3F7] text-[#050508] px-3 py-1.5 rounded hover:bg-[#29ABE2] transition-colors"
+            >
+              Open Console →
+            </Link>
+          </div>
+
+          {/* Mobile hamburger */}
+          <button
+            className="md:hidden text-slate-400 hover:text-white"
+            onClick={() => setOpen(!open)}
+            aria-label="Toggle menu"
+          >
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              {open ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              )}
+            </svg>
           </button>
         </div>
       </div>
+
+      {/* Mobile menu */}
+      {open && (
+        <div className="md:hidden border-t border-[#1A1A2E] bg-[#050508]/95 px-4 py-4 flex flex-col gap-1">
+          {NAV_LINKS.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => setOpen(false)}
+              className={`font-mono text-sm px-3 py-2.5 rounded-lg transition-all flex items-center ${
+                isActive(item.href)
+                  ? "text-[#4FC3F7] bg-[#4FC3F7]/10"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              {item.label}
+              {item.badge && (
+                <span className="font-mono text-[10px] text-[#4FC3F7] border border-[#4FC3F7]/30 px-1 rounded ml-1 align-middle">
+                  {item.badge}
+                </span>
+              )}
+            </Link>
+          ))}
+          <div className="pt-3 mt-2 border-t border-[#1A1A2E]">
+            <Link
+              href="/console"
+              onClick={() => setOpen(false)}
+              className="block text-center font-mono text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-3 py-2.5 rounded-lg hover:bg-[#29ABE2] transition-colors"
+            >
+              Open Console →
+            </Link>
+          </div>
+        </div>
+      )}
     </nav>
   );
 }

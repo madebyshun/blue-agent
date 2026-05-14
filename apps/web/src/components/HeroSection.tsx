@@ -1,185 +1,152 @@
 "use client";
-
 import { useEffect, useState } from "react";
 
 const TOKEN = "0xf895783b2931c919955e18b5e3343e7c7c456ba3";
 
+const STATS = [
+  { value: "5",    label: "Core Commands" },
+  { value: "$0.05", label: "Min. per Call" },
+  { value: "Base",  label: "Network" },
+  { value: "x402",  label: "Protocol" },
+];
+
 const CHAT_SCENES = [
   [
-    { from: "user", text: "gm 🟦" },
-    { from: "agent", text: "gm. what are you building?" },
-    { from: "user", text: "blue idea" },
-    { from: "agent", text: "Idea brief ready. Why now, GTM, risks, 24h plan." },
+    { from: "user",  text: "blue idea" },
+    { from: "agent", text: "Fundable brief ready. Why now, GTM, risks, 24h plan." },
+    { from: "user",  text: "blue build" },
+    { from: "agent", text: "Architecture + stack + first build steps generated." },
   ],
   [
-    { from: "user", text: "blue build" },
-    { from: "agent", text: "Architecture, stack, and first build steps are ready." },
-    { from: "user", text: "blue audit" },
-    { from: "agent", text: "Risk review complete. Here are the blockers and fixes." },
-  ],
-  [
-    { from: "user", text: "blue ship" },
+    { from: "user",  text: "blue audit" },
+    { from: "agent", text: "Risk review complete. Blockers and fixes identified." },
+    { from: "user",  text: "blue ship" },
     { from: "agent", text: "Deploy checklist ready. Verify, launch, monitor." },
-    { from: "user", text: "blue raise" },
-    { from: "agent", text: "Pitch narrative generated for partners and investors." },
+  ],
+  [
+    { from: "user",  text: "blue launch" },
+    { from: "agent", text: "Token launch plan + Bankr prompt ready. 40% fees → you." },
+    { from: "user",  text: "blue raise" },
+    { from: "agent", text: "Pitch narrative generated for investors and partners." },
   ],
 ];
 
-function fmtPrice(p: number): string {
-  if (!p) return "…";
+function fmtPrice(p: number) {
+  if (!p) return "—";
   if (p < 0.000001) return "$" + p.toExponential(2);
-  if (p < 0.0001) return "$" + p.toFixed(8);
-  if (p < 0.01) return "$" + p.toFixed(6);
+  if (p < 0.0001)   return "$" + p.toFixed(8);
+  if (p < 0.01)     return "$" + p.toFixed(6);
   return "$" + p.toFixed(4);
 }
 
-function fmtNum(n: number): string {
-  if (n >= 1e6) return "$" + (n / 1e6).toFixed(2) + "M";
-  if (n >= 1e3) return "$" + (n / 1e3).toFixed(1) + "K";
-  return "$" + n.toFixed(2);
-}
-
 export default function HeroSection() {
-  const [priceStr, setPriceStr] = useState("…");
+  const [priceStr, setPriceStr] = useState("—");
   const [change24h, setChange24h] = useState(0);
-  const [mcap, setMcap] = useState("");
   const [sceneIdx, setSceneIdx] = useState(0);
   const [visibleCount, setVisibleCount] = useState(0);
 
   useEffect(() => {
-    const fetchPrice = async () => {
+    const fetch_ = async () => {
       try {
         const res = await fetch(`https://api.geckoterminal.com/api/v2/networks/base/tokens/${TOKEN}`);
         const data = await res.json();
         const attr = data?.data?.attributes;
         if (!attr) return;
-        const p = parseFloat(attr.price_usd || "0");
-        const c = parseFloat(attr.price_change_percentage?.h24 || "0");
-        const m = parseFloat(attr.market_cap_usd || attr.fdv_usd || "0");
-        setPriceStr(fmtPrice(p));
-        setChange24h(c);
-        if (m) setMcap(fmtNum(m));
-      } catch {
-        // ignore
-      }
+        setPriceStr(fmtPrice(parseFloat(attr.price_usd || "0")));
+        setChange24h(parseFloat(attr.price_change_percentage?.h24 || "0"));
+      } catch {}
     };
-
-    fetchPrice();
-    const iv = setInterval(fetchPrice, 30000);
+    fetch_();
+    const iv = setInterval(fetch_, 30000);
     return () => clearInterval(iv);
   }, []);
 
   useEffect(() => {
     const scene = CHAT_SCENES[sceneIdx];
     if (visibleCount < scene.length) {
-      const t = setTimeout(() => setVisibleCount((v) => v + 1), visibleCount === 0 ? 600 : 1000);
+      const t = setTimeout(() => setVisibleCount((v) => v + 1), visibleCount === 0 ? 600 : 900);
       return () => clearTimeout(t);
     }
-
-    const t = setTimeout(() => {
-      setSceneIdx((s) => (s + 1) % CHAT_SCENES.length);
-      setVisibleCount(0);
-    }, 2200);
-
+    const t = setTimeout(() => { setSceneIdx((s) => (s + 1) % CHAT_SCENES.length); setVisibleCount(0); }, 2000);
     return () => clearTimeout(t);
   }, [sceneIdx, visibleCount]);
 
   const isUp = change24h >= 0;
 
   return (
-    <section className="max-w-5xl mx-auto px-6 pt-20 pb-24">
-      <div className="grid md:grid-cols-2 gap-12 items-center">
-        <div>
-          <div className="badge mb-7">Built on Base · Powered by Bankr</div>
+    <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden pt-16">
+      {/* Grid + glow */}
+      <div className="absolute inset-0 bg-grid-pattern" style={{ backgroundSize: "40px 40px" }} />
+      <div className="absolute inset-0 bg-hero-glow" />
 
-          <h1 className="text-5xl md:text-5xl font-black mb-5 leading-[1.15]" style={{ color: "var(--text)" }}>
-            Blue Agent is the <span style={{ color: "#4a90d9" }}>Base-native founder console</span>
-          </h1>
+      {/* Animated orbs */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-[rgba(79,195,247,0.04)] blur-3xl animate-pulse-slow" />
+      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-[rgba(167,139,250,0.05)] blur-3xl animate-pulse-slow" style={{ animationDelay: "2s" }} />
 
-          <p className="text-lg mb-3 leading-relaxed" style={{ color: "var(--text-muted)" }}>
-            Think, build, audit, ship, and raise from one workflow. Later: chat, launch, and marketplace.
-          </p>
+      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 w-full">
+        <div className="grid md:grid-cols-2 gap-12 items-center">
+          {/* Left */}
+          <div>
+            <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-4 py-1.5 mb-8">
+              <span className="w-2 h-2 rounded-full bg-[#4FC3F7] animate-pulse" />
+              <span className="font-mono text-xs text-[#4FC3F7] tracking-widest">BUILT ON BASE · POWERED BY BANKR</span>
+            </div>
 
-          <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <span className="price-pill">🔵 {priceStr}</span>
-            {change24h !== 0 && (
-              <span
-                className="text-xs font-medium px-2 py-0.5 rounded-full"
-                style={{
-                  background: isUp ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
-                  color: isUp ? "#16a34a" : "#dc2626",
-                }}
-              >
-                {isUp ? "▲" : "▼"} {Math.abs(change24h).toFixed(2)}% 24h
-              </span>
-            )}
-            {mcap && (
-              <span
-                className="text-xs font-medium px-2 py-0.5 rounded-full"
-                style={{ background: "rgba(74,144,217,0.08)", color: "#4a90d9" }}
-              >
-                MCAP {mcap}
-              </span>
-            )}
+            <h1 className="font-mono font-bold tracking-[0.15em] mb-4">
+              <span className="block text-4xl sm:text-5xl lg:text-6xl text-gradient-white">BLUE</span>
+              <span className="block text-4xl sm:text-5xl lg:text-6xl text-gradient-blue">AGENT</span>
+            </h1>
+
+            <p className="text-slate-400 text-lg mb-6 leading-relaxed max-w-md">
+              The <span className="text-white font-medium">founder console</span> for Base builders.
+              Idea, build, audit, ship, and raise — all from one workflow.
+            </p>
+
+            {/* Token price */}
+            <div className="flex items-center gap-3 mb-8 flex-wrap">
+              <div className="flex items-center gap-2 border border-[#1A1A2E] bg-[#0D0D14] rounded-lg px-3 py-1.5">
+                <div className="glow-dot" style={{ width: 6, height: 6 }} />
+                <span className="font-mono text-sm text-[#4FC3F7]">{priceStr}</span>
+                {change24h !== 0 && (
+                  <span className={`font-mono text-xs ${isUp ? "text-emerald-400" : "text-red-400"}`}>
+                    {isUp ? "▲" : "▼"} {Math.abs(change24h).toFixed(2)}%
+                  </span>
+                )}
+              </div>
+              <span className="font-mono text-xs text-slate-600">$BLUEAGENT</span>
+            </div>
+
+            <div className="flex gap-3 flex-wrap">
+              <a href="/code" className="font-mono text-sm font-semibold bg-[#4FC3F7] hover:bg-[#29ABE2] text-[#050508] px-5 py-2.5 rounded-lg transition-all hover:shadow-[0_0_20px_rgba(79,195,247,0.4)]">
+                Open Console →
+              </a>
+              <a href="https://github.com/madebyshun/blue-agent" target="_blank" rel="noopener noreferrer" className="font-mono text-sm text-slate-400 hover:text-white border border-[#1A1A2E] hover:border-[#4FC3F7]/30 px-5 py-2.5 rounded-lg transition-all">
+                GitHub
+              </a>
+            </div>
           </div>
 
-          <p className="text-xs mb-10 font-mono break-all" style={{ color: "var(--text-muted)" }}>
-            CA: {TOKEN}
-          </p>
-
-          <div className="flex gap-3 flex-wrap">
-            <a href="/code" className="btn-blue">Open Founder Console</a>
-            <a href="https://github.com/madebyshun/blue-agent" target="_blank" rel="noopener noreferrer" className="btn-ghost">
-              View Repo →
-            </a>
-          </div>
-        </div>
-
-        <div className="flex justify-center">
-          <div
-            style={{
-              width: 290,
-              background: "var(--surface)",
-              borderRadius: 36,
-              padding: 12,
-              boxShadow: "0 30px 80px rgba(74,144,217,0.18), 0 10px 40px rgba(0,0,0,0.10)",
-              border: "1.5px solid var(--phone-border)",
-            }}
-          >
-            <div style={{ background: "var(--surface-2)", borderRadius: 28, overflow: "hidden" }}>
-              <div style={{ padding: "10px 16px 6px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "var(--text-muted)" }}>
-                <span>9:41</span>
-                <div style={{ width: 80, height: 20, background: "#e2e8f0", borderRadius: 12 }} />
-                <span>●●●</span>
+          {/* Right — chat mockup */}
+          <div className="flex justify-center">
+            <div className="w-72 bg-[#0D0D14] border border-[#1A1A2E] rounded-2xl overflow-hidden shadow-[0_30px_80px_rgba(79,195,247,0.12)]">
+              {/* Header */}
+              <div className="bg-[#050508] border-b border-[#1A1A2E] px-4 py-3 flex items-center gap-2.5">
+                <div className="glow-dot" />
+                <span className="font-mono text-xs font-semibold text-white tracking-widest">BLUEAGENT</span>
+                <span className="ml-auto font-mono text-[10px] text-emerald-400">● online</span>
               </div>
 
-              <div style={{ background: "#4a90d9", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 36, height: 36, background: "var(--surface)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🔵</div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: "#fff" }}>Blue Agent</div>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.8)" }}>online</div>
-                </div>
-              </div>
-
-              <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10, minHeight: 320 }}>
+              {/* Messages */}
+              <div className="p-4 flex flex-col gap-3 min-h-64">
                 {CHAT_SCENES[sceneIdx].slice(0, visibleCount).map((msg, i) => {
                   const isUser = msg.from === "user";
                   return (
-                    <div key={`${sceneIdx}-${i}`} style={{ display: "flex", flexDirection: "column", alignItems: isUser ? "flex-end" : "flex-start" }}>
-                      {!isUser && <div style={{ fontSize: 10, color: "#4a90d9", marginBottom: 3, fontWeight: 600 }}>Blue Agent</div>}
-                      <div
-                        style={{
-                          background: isUser ? "#4a90d9" : "var(--chat-bubble-agent)",
-                          color: isUser ? "#fff" : "var(--chat-bubble-agent-text)",
-                          border: isUser ? "none" : "1px solid var(--chat-bubble-border)",
-                          borderRadius: isUser ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                          padding: "8px 12px",
-                          fontSize: 12,
-                          maxWidth: "85%",
-                          lineHeight: 1.6,
-                          whiteSpace: "pre-line",
-                        }}
-                      >
+                    <div key={`${sceneIdx}-${i}`} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[85%] px-3 py-2 rounded-xl font-mono text-xs leading-relaxed ${
+                        isUser
+                          ? "bg-[#4FC3F7] text-[#050508] rounded-br-sm"
+                          : "bg-[#1A1A2E] text-slate-300 rounded-bl-sm border border-[#2A2A4E]"
+                      }`}>
                         {msg.text}
                       </div>
                     </div>
@@ -187,17 +154,32 @@ export default function HeroSection() {
                 })}
               </div>
 
-              <div style={{ background: "var(--surface)", padding: "10px 12px", display: "flex", alignItems: "center", gap: 8, borderTop: "1px solid var(--border)" }}>
-                <div style={{ flex: 1, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: "8px 14px", fontSize: 12, color: "var(--text-muted)" }}>
+              {/* Input */}
+              <div className="border-t border-[#1A1A2E] px-3 py-2.5 flex items-center gap-2">
+                <div className="flex-1 bg-[#050508] border border-[#1A1A2E] rounded-lg px-3 py-1.5 font-mono text-[11px] text-slate-600">
                   Message Blue Agent...
                 </div>
-                <div style={{ width: 30, height: 30, background: "#4a90d9", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#fff" }}>
-                  ↑
-                </div>
+                <div className="w-7 h-7 bg-[#4FC3F7] rounded-lg flex items-center justify-center text-[#050508] text-xs font-bold">↑</div>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Stats */}
+        <div className="mt-20 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl mx-auto">
+          {STATS.map(({ value, label }) => (
+            <div key={label} className="card-surface rounded-xl p-4 text-center">
+              <div className="font-mono text-2xl font-bold text-gradient-blue">{value}</div>
+              <div className="font-mono text-xs text-slate-500 mt-1 tracking-wider uppercase">{label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Scroll indicator */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-slate-600">
+        <span className="font-mono text-xs tracking-widest">SCROLL</span>
+        <div className="w-px h-8 bg-gradient-to-b from-[#4FC3F7]/50 to-transparent" />
       </div>
     </section>
   );
