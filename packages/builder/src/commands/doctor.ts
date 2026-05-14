@@ -3,6 +3,7 @@ import path from "path";
 import os from "os";
 
 const SKILL_FILES = [
+  // Core identity + base chain
   "base-security.md",
   "base-addresses.md",
   "base-standards.md",
@@ -12,6 +13,33 @@ const SKILL_FILES = [
   "base-ecosystem.md",
   "x402-patterns.md",
   "agent-wallet-security.md",
+  // DeFi protocols
+  "aerodrome-dex-guide.md",
+  "aave-lending-patterns.md",
+  "uniswap-v4-hooks-guide.md",
+  "flashloan-patterns.md",
+  "flashloan-patterns-advanced.md",
+  "staking-yield-farming.md",
+  // Security + auditing
+  "solidity-security-patterns.md",
+  "oracle-design-guide.md",
+  "mev-protection-guide.md",
+  "mev-protection-advanced.md",
+  "cross-chain-bridge-security.md",
+  // Wallets + accounts
+  "base-account-integration.md",
+  "account-abstraction-deep-dive.md",
+  "multi-sig-wallet-security.md",
+  "veil-privacy-transactions.md",
+  // Governance + DAOs
+  "governance-dao-patterns.md",
+  // Performance
+  "gas-optimization-guide.md",
+  // Social + distribution
+  "frames-miniapps.md",
+  "telegram-bot-patterns.md",
+  // Work Hub
+  "gig-marketplace-guide.md",
 ];
 
 const SKILLS_DIR  = path.join(os.homedir(), ".blue-agent", "skills");
