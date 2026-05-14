@@ -1,98 +1,68 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 
-const VERSION = '0.1.10'
-
-const C = {
-  blue:   '#4FC3F7',
-  purple: '#A78BFA',
-  muted:  '#94A3B8',
-  dim:    '#475569',
-}
-
-// ── ANSI Shadow figlet — BLUE ─────────────────────────────────────────────
-// Each row is 33 chars: B(8) + L(8) + U(9) + E(8)
-const BLUE_ART = [
-  '██████╗ ██╗     ██╗   ██╗███████╗',
-  '██╔══██╗██║     ██║   ██║██╔════╝',
-  '██████╔╝██║     ██║   ██║█████╗  ',
-  '██╔══██╗██║     ██║   ██║██╔══╝  ',
-  '███████╗███████╗╚██████╔╝███████╗',
-  '╚══════╝╚══════╝ ╚═════╝ ╚══════╝',
-]
-
-// ── ANSI Shadow figlet — AGENT ────────────────────────────────────────────
-// Each row is 44 chars: A(8) + G(9) + E(8) + N(10) + T(9)
-const AGENT_ART = [
-  ' █████╗  ██████╗ ███████╗███╗   ██╗████████╗',
-  '██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝',
-  '███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   ',
-  '██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   ',
-  '██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   ',
-  '╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   ',
-]
-
-const SEP = '─'.repeat(46)
-
-const CMDS: { label: string; color: string }[] = [
-  { label: 'idea',     color: C.blue   },
-  { label: 'build',    color: C.muted  },
-  { label: 'audit',    color: C.muted  },
-  { label: 'ship',     color: C.muted  },
-  { label: 'raise',    color: C.muted  },
-  { label: 'micro',    color: C.purple },
-  { label: 'chat',     color: C.muted  },
-  { label: 'validate', color: C.muted  },
-]
-
 export function Logo() {
+  // Design system colors (from design-system.md)
+  const BLUE = '#4FC3F7'           // primary blue
+  const TEXT_PRIMARY = '#E2E8F0'   // main text
+  const TEXT_SECONDARY = '#94A3B8' // secondary text
+  const BORDER = '#1A1A2E'         // border color
+
   return (
-    <Box flexDirection="column" marginBottom={1} marginLeft={2}>
-
+    <Box flexDirection="column" marginBottom={2}>
+      {/* Top border - clean Claude Code style */}
+      <Text color={BORDER}>────────────────────────────────────────────────────────────────</Text>
+      
+      {/* Spacer */}
       <Text>{' '}</Text>
-
-      {/* ── BLUE ─────────────────────────────────────── */}
-      {BLUE_ART.map((row, i) => (
-        <Box key={`b${i}`}>
-          <Text color={C.blue} bold>{row}</Text>
+      
+      {/* BLUEAGENT Logo - full word, minimal Claude Code aesthetic */}
+      <Box flexDirection="column" marginLeft={1}>
+        {/* Row 1 - B L U E A G E N T */}
+        <Box>
+          <Text color={BLUE} bold>██████  ██      ██  ███████  █████   ███████  ███████ ██  ██ ████████</Text>
         </Box>
-      ))}
-
-      {/* ── AGENT ────────────────────────────────────── */}
-      {AGENT_ART.map((row, i) => (
-        <Box key={`a${i}`}>
-          <Text color={C.blue} bold>{row}</Text>
+        
+        {/* Row 2 */}
+        <Box>
+          <Text color={BLUE} bold>██   ██ ██      ██  ██      ██   ██ ██       ██      ██  ██    ██</Text>
         </Box>
-      ))}
-
-      {/* ── Tagline ──────────────────────────────────── */}
-      <Box marginTop={1} gap={1}>
-        <Text color={C.muted}>AI-native founder console for Base</Text>
-        <Text color={C.dim}>·  Base  ·  x402</Text>
+        
+        {/* Row 3 */}
+        <Box>
+          <Text color={BLUE} bold>██████  ██      ██  █████   ███████ █████    █████   ██████   ██</Text>
+        </Box>
+        
+        {/* Row 4 */}
+        <Box>
+          <Text color={BLUE} bold>██   ██ ██      ██  ██      ██   ██ ██       ██      ██  ██    ██</Text>
+        </Box>
+        
+        {/* Row 5 */}
+        <Box>
+          <Text color={BLUE} bold>██████  ███████ ██  ███████ ██   ██ ███████  ███████ ██  ██    ██</Text>
+        </Box>
       </Box>
-
-      {/* ── Separator ────────────────────────────────── */}
-      <Box marginTop={1}>
-        <Text dimColor>{SEP}</Text>
-      </Box>
-
-      {/* ── Command strip ────────────────────────────── */}
-      <Box>
-        {CMDS.map((cmd, i) => (
-          <React.Fragment key={cmd.label}>
-            <Text color={cmd.color}>{cmd.label}</Text>
-            {i < CMDS.length - 1 && <Text color={C.dim}> · </Text>}
-          </React.Fragment>
-        ))}
-      </Box>
-
-      {/* ── Bottom rule ──────────────────────────────── */}
-      <Box>
-        <Text dimColor>{SEP}</Text>
-      </Box>
-
+      
+      {/* Spacer */}
       <Text>{' '}</Text>
-
+      
+      {/* Tagline */}
+      <Box marginLeft={2}>
+        <Text color={TEXT_PRIMARY}>Founder console for Base builders</Text>
+      </Box>
+      
+      {/* Stats - clean minimal format */}
+      <Box marginLeft={2} marginTop={1}>
+        <Text color={BLUE}>›</Text>
+        <Text color={TEXT_SECONDARY}> 45+ tools · 8 categories · Base native · x402 powered</Text>
+      </Box>
+      
+      {/* Spacer */}
+      <Text>{' '}</Text>
+      
+      {/* Bottom border */}
+      <Text color={BORDER}>────────────────────────────────────────────────────────────────</Text>
     </Box>
   )
 }
