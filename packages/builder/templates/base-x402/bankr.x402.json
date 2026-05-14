@@ -1,0 +1,26 @@
+{
+  "network": "base",
+  "currency": "USDC",
+  "services": {
+    "my-tool": {
+      "price": "0.10",
+      "description": "{{PROJECT_NAME}} AI tool — describe what it does here",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "query": { "type": "string", "description": "Input query" }
+          },
+          "required": ["query"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "result": { "type": "string" },
+            "confidence": { "type": "number" }
+          }
+        }
+      }
+    }
+  }
+}

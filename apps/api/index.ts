@@ -14,6 +14,8 @@ import grantEvaluator from './x402/grant-evaluator/index.js';
 import riskGate from './x402/risk-gate/index.js';
 import quantumPremium from './x402/quantum-premium/index.js';
 import quantumBatch from './x402/quantum-batch/index.js';
+import builderCard from './x402/builder-card/index.js';
+import agentCard from './x402/agent-card/index.js';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 
@@ -26,6 +28,8 @@ const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   'risk-gate': riskGate,
   'quantum-premium': quantumPremium,
   'quantum-batch': quantumBatch,
+  'builder-card': builderCard,
+  'agent-card': agentCard,
 };
 
 const __dir = dirname(fileURLToPath(import.meta.url));

@@ -1,5 +1,14 @@
 import { scoreBuilder } from "@blueagent/reputation";
-import { printHeader, printResult, printError } from "../print";
+import { printError } from "../print";
+
+function progressBar(value: number, max: number, width = 13): string {
+  const filled = Math.round((value / max) * width);
+  return "█".repeat(filled) + "░".repeat(width - filled);
+}
+
+const TIER_EMOJI: Record<string, string> = {
+  Explorer: "🌱", Builder: "🔨", Maker: "⚡", Legend: "🔥", Founder: "👑",
+};
 
 export async function runScore(handle: string | undefined) {
   if (!handle) {
@@ -8,33 +17,29 @@ export async function runScore(handle: string | undefined) {
   }
 
   const clean = handle.replace(/^@/, "");
-  printHeader("score", `Builder Score — @${clean}`);
+  const line = "─".repeat(34);
+
+  process.stdout.write(`\n${line}\n🏗️  Builder Score — @${clean}\n${line}\n`);
 
   try {
-    const result = await scoreBuilder(clean);
+    const r = await scoreBuilder(clean);
+    const emoji = TIER_EMOJI[r.tier] ?? "";
 
-    const tierEmoji: Record<string, string> = {
-      Explorer: "🌱", Builder: "🔨", Maker: "⚡", Legend: "🔥", Founder: "👑",
-    };
-
-    const output = [
-      `Handle:  @${result.handle}`,
-      `Score:   ${result.score}/100`,
-      `Tier:    ${tierEmoji[result.tier] ?? ""} ${result.tier}`,
+    process.stdout.write([
       ``,
-      `Dimensions:`,
-      `  Activity    ${result.dimensions.activity}/25`,
-      `  Social      ${result.dimensions.social}/25`,
-      `  Uniqueness  ${result.dimensions.uniqueness}/20`,
-      `  Thesis      ${result.dimensions.thesis}/20`,
-      `  Community   ${result.dimensions.community}/10`,
+      `Score:    ${r.score}/100 — ${r.tier} ${emoji}`,
       ``,
-      `Summary: ${result.summary}`,
+      `Activity       ${progressBar(r.dimensions.activity, 25)}  ${r.dimensions.activity}/25`,
+      `Social         ${progressBar(r.dimensions.social, 25)}  ${r.dimensions.social}/25`,
+      `Uniqueness     ${progressBar(r.dimensions.uniqueness, 20)}  ${r.dimensions.uniqueness}/20`,
+      `Thesis         ${progressBar(r.dimensions.thesis, 20)}  ${r.dimensions.thesis}/20`,
+      `Community      ${progressBar(r.dimensions.community, 10)}  ${r.dimensions.community}/10`,
       ``,
-      `Badge: ${result.badge}`,
-    ].join("\n");
-
-    printResult(output);
+      `Summary: ${r.summary}`,
+      `Card: https://blueagent.dev/card/builder/${clean}`,
+      `${line}`,
+      ``,
+    ].join("\n"));
   } catch (err) {
     printError(err instanceof Error ? err.message : String(err));
   }

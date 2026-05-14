@@ -195,6 +195,22 @@
         }
       }
     },
+    "builder-card": {
+      "price": "0.001",
+      "description": "Builder Score Card — onchain reputation score for a Base builder",
+      "schema": {
+        "input": { "type": "object", "properties": { "handle": { "type": "string" } }, "required": ["handle"] },
+        "output": { "type": "object", "properties": { "handle": { "type": "string" }, "score": { "type": "number" }, "tier": { "type": "string" } } }
+      }
+    },
+    "agent-card": {
+      "price": "0.01",
+      "description": "Agent Score Card — XP and capability score for an AI agent",
+      "schema": {
+        "input": { "type": "object", "properties": { "handle": { "type": "string" } }, "required": ["handle"] },
+        "output": { "type": "object", "properties": { "handle": { "type": "string" }, "xp": { "type": "number" }, "tier": { "type": "string" } } }
+      }
+    },
     "quantum-premium": {
       "price": "1.50",
       "description": "Quantum Risk Report - Analyze your wallet's vulnerability to quantum computing attacks. Public key exposure check, risk level, migration steps. Powered by Blue Agent.",

@@ -4,7 +4,7 @@ export const runtime = "edge";
 
 const BANKR_LLM = "https://llm.bankr.bot/v1/messages";
 
-export const MODELS: Record<string, { id: string; label: string; price: string; maxTokens: number }> = {
+const MODELS: Record<string, { id: string; label: string; price: string; maxTokens: number }> = {
   fast: { id: "claude-haiku-4-5", label: "Fast", price: "$0.01/msg", maxTokens: 1024 },
   pro:  { id: "claude-sonnet-4-6", label: "Pro",  price: "$0.05/msg", maxTokens: 2048 },
   max:  { id: "claude-opus-4-7",   label: "Max",  price: "$0.20/msg", maxTokens: 4096 },

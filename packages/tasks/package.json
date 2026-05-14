@@ -1,0 +1,14 @@
+{
+  "name": "@blueagent/tasks",
+  "version": "0.1.0",
+  "description": "Blue Agent Work Hub — post tasks, earn USDC, build reputation",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "src"],
+  "scripts": { "build": "tsc", "dev": "tsc --watch" },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "@types/node": "^20.0.0"
+  },
+  "engines": { "node": ">=18" }
+}
