@@ -3,7 +3,6 @@ import { Box, Text } from 'ink'
 
 const VERSION = '0.1.10'
 
-// Design system tokens
 const C = {
   blue:   '#4FC3F7',
   purple: '#A78BFA',
@@ -12,7 +11,9 @@ const C = {
   dim:    '#475569',
 }
 
-const W = 58 // layout width
+// W must cover the command strip:
+// "idea · build · audit · ship · raise · micro · chat · validate" = 61 chars
+const W   = 62
 const SEP = '─'.repeat(W)
 
 const CMDS: { label: string; color: string }[] = [
@@ -32,21 +33,32 @@ export function Logo() {
 
       <Text>{' '}</Text>
 
-      {/* ── Wordmark + version ───────────────────────── */}
-      <Box width={W} justifyContent="space-between">
-        <Box gap={1}>
-          <Text color={C.blue} bold>◆</Text>
-          <Text color={C.text} bold>Blue Agent</Text>
-        </Box>
-        <Text color={C.dim}>v{VERSION}</Text>
+      {/* ── Diamond mark (solo line = visual weight) ─── */}
+      <Text color={C.blue} bold>◆</Text>
+
+      <Text>{' '}</Text>
+
+      {/* ── Wide-spaced wordmark ─────────────────────── */}
+      {/* 3 spaces between letters gives "big" feel       */}
+      {/* BLUE in accent · AGENT in primary text          */}
+      <Box>
+        <Text color={C.blue} bold>{'B   L   U   E'}</Text>
+        <Text color={C.dim}  bold>{'   ·   '}</Text>
+        <Text color={C.text} bold>{'A   G   E   N   T'}</Text>
       </Box>
 
-      {/* ── Tagline ──────────────────────────────────── */}
-      <Box marginLeft={3}>
-        <Text color={C.dim}>AI-native founder console for Base  ·  x402</Text>
+      {/* ── Full-width rule under wordmark ───────────── */}
+      <Box marginTop={1}>
+        <Text dimColor>{SEP}</Text>
       </Box>
 
-      {/* ── Separator ────────────────────────────────── */}
+      {/* ── Tagline + version ────────────────────────── */}
+      <Box>
+        <Text color={C.muted}>AI-native founder console for Base</Text>
+        <Text color={C.dim}>{'  ·  v' + VERSION + '  ·  x402'}</Text>
+      </Box>
+
+      {/* ── Rule above commands ──────────────────────── */}
       <Box marginTop={1}>
         <Text dimColor>{SEP}</Text>
       </Box>
