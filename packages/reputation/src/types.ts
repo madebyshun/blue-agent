@@ -44,25 +44,22 @@ export type TaskCategory = "audit" | "content" | "art" | "data" | "dev";
 export type TaskStatus = "open" | "in_progress" | "completed" | "disputed";
 export type ProofType = "tx_hash" | "github_link" | "npm_link" | "url";
 
-export interface ScoreReward {
-  poster: string;
-  doer: string;
-}
-
 export interface Task {
   id: string;
   title: string;
   description: string;
   category: TaskCategory;
-  reward: number;
+  reward: number;            // USDC, required — no default
   currency: "USDC";
   poster: string;
   deadline: string;
   status: TaskStatus;
   proof_required: ProofType;
-  score_reward: ScoreReward;
+  max_slots: number;         // how many doers can accept (default 1)
+  slots_taken: number;       // how many have accepted so far
   proof?: string;
-  doer?: string;
+  doer?: string;             // last accepted doer (or only doer when max_slots=1)
+  doers?: string[];          // all accepted doers when max_slots > 1
   created_at: string;
   updated_at: string;
 }
@@ -71,8 +68,9 @@ export interface TaskCreateInput {
   title: string;
   description: string;
   category: TaskCategory;
-  reward: number;
+  reward: number;            // required — caller must specify
   poster: string;
   deadline: string;
   proof_required: ProofType;
+  max_slots?: number;        // optional, defaults to 1
 }
