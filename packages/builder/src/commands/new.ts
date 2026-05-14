@@ -4,7 +4,7 @@ import { printHeader, printResult, printError } from "../print";
 
 export type Template = "base-agent" | "base-x402" | "base-token";
 
-const TEMPLATES_DIR = path.resolve(__dirname, "../../../../templates");
+const TEMPLATES_DIR = path.resolve(__dirname, "../../templates");
 
 const TEMPLATE_DESCRIPTIONS: Record<Template, string> = {
   "base-agent": "Bankr agent with wallet, LLM, and x402 payment support",

@@ -25,5 +25,4 @@ export type {
   TaskCategory,
   TaskStatus,
   ProofType,
-  ScoreReward,
 } from "./types";
