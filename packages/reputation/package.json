@@ -1,0 +1,22 @@
+{
+  "name": "@blueagent/reputation",
+  "version": "0.1.1",
+  "description": "Blue Agent Reputation System — Builder Score, Agent Score, Work Hub",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "@types/node": "^20.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

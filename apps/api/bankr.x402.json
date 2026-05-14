@@ -52,6 +52,38 @@
         }
       }
     },
+    "token-launch": {
+      "price": "1.00",
+      "description": "Token Launch Wizard - Fair-launch ERC-20 on Base via Bankr + Clanker. Generates launch plan, tokenomics, growth tactics, and the exact Bankr prompt to execute the launch.",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "tokenName": { "type": "string", "description": "Full token name (e.g. Blue Agent)" },
+            "tokenSymbol": { "type": "string", "description": "Ticker symbol (e.g. BLUE, max 8 chars)" },
+            "description": { "type": "string", "description": "What this token represents or funds" },
+            "imageUrl": { "type": "string", "description": "Token logo image URL (optional)" },
+            "twitter": { "type": "string", "description": "Twitter/X handle without @ (optional)" },
+            "website": { "type": "string", "description": "Project website URL (optional)" }
+          },
+          "required": ["tokenName", "tokenSymbol", "description"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "launchScore": { "type": "number" },
+            "summary": { "type": "string" },
+            "tokenomics": { "type": "object" },
+            "positioning": { "type": "object" },
+            "launchChecklist": { "type": "array" },
+            "growthTactics": { "type": "array" },
+            "bankrPrompt": { "type": "string", "description": "Copy-paste prompt to launch token in Bankr" },
+            "bankrJob": { "type": "object", "description": "Live job submission result if BANKR_API_KEY is set" },
+            "recommendation": { "type": "string" }
+          }
+        }
+      }
+    },
     "launch-advisor": {
       "price": "3.00",
       "description": "Token Launch Advisor - Full launch playbook for Base projects: tokenomics, timeline, marketing strategy, KPIs",
@@ -161,6 +193,22 @@
             "summary": { "type": "object", "description": "Count by risk level" }
           }
         }
+      }
+    },
+    "builder-card": {
+      "price": "0.001",
+      "description": "Builder Score Card — onchain reputation score for a Base builder",
+      "schema": {
+        "input": { "type": "object", "properties": { "handle": { "type": "string" } }, "required": ["handle"] },
+        "output": { "type": "object", "properties": { "handle": { "type": "string" }, "score": { "type": "number" }, "tier": { "type": "string" } } }
+      }
+    },
+    "agent-card": {
+      "price": "0.01",
+      "description": "Agent Score Card — XP and capability score for an AI agent",
+      "schema": {
+        "input": { "type": "object", "properties": { "handle": { "type": "string" } }, "required": ["handle"] },
+        "output": { "type": "object", "properties": { "handle": { "type": "string" }, "xp": { "type": "number" }, "tier": { "type": "string" } } }
       }
     },
     "quantum-premium": {
