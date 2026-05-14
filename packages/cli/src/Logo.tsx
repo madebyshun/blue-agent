@@ -6,15 +6,33 @@ const VERSION = '0.1.10'
 const C = {
   blue:   '#4FC3F7',
   purple: '#A78BFA',
-  text:   '#E2E8F0',
   muted:  '#94A3B8',
   dim:    '#475569',
 }
 
-// W must cover the command strip:
-// "idea · build · audit · ship · raise · micro · chat · validate" = 61 chars
-const W   = 62
-const SEP = '─'.repeat(W)
+// ── ANSI Shadow figlet — BLUE ─────────────────────────────────────────────
+// Each row is 33 chars: B(8) + L(8) + U(9) + E(8)
+const BLUE_ART = [
+  '██████╗ ██╗     ██╗   ██╗███████╗',
+  '██╔══██╗██║     ██║   ██║██╔════╝',
+  '██████╔╝██║     ██║   ██║█████╗  ',
+  '██╔══██╗██║     ██║   ██║██╔══╝  ',
+  '███████╗███████╗╚██████╔╝███████╗',
+  '╚══════╝╚══════╝ ╚═════╝ ╚══════╝',
+]
+
+// ── ANSI Shadow figlet — AGENT ────────────────────────────────────────────
+// Each row is 44 chars: A(8) + G(9) + E(8) + N(10) + T(9)
+const AGENT_ART = [
+  ' █████╗  ██████╗ ███████╗███╗   ██╗████████╗',
+  '██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝',
+  '███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   ',
+  '██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   ',
+  '██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   ',
+  '╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   ',
+]
+
+const SEP = '─'.repeat(46)
 
 const CMDS: { label: string; color: string }[] = [
   { label: 'idea',     color: C.blue   },
@@ -33,32 +51,27 @@ export function Logo() {
 
       <Text>{' '}</Text>
 
-      {/* ── Diamond mark (solo line = visual weight) ─── */}
-      <Text color={C.blue} bold>◆</Text>
+      {/* ── BLUE ─────────────────────────────────────── */}
+      {BLUE_ART.map((row, i) => (
+        <Box key={`b${i}`}>
+          <Text color={C.blue} bold>{row}</Text>
+        </Box>
+      ))}
 
-      <Text>{' '}</Text>
+      {/* ── AGENT ────────────────────────────────────── */}
+      {AGENT_ART.map((row, i) => (
+        <Box key={`a${i}`}>
+          <Text color={C.blue} bold>{row}</Text>
+        </Box>
+      ))}
 
-      {/* ── Wide-spaced wordmark ─────────────────────── */}
-      {/* 3 spaces between letters gives "big" feel       */}
-      {/* BLUE in accent · AGENT in primary text          */}
-      <Box>
-        <Text color={C.blue} bold>{'B   L   U   E'}</Text>
-        <Text color={C.dim}  bold>{'   ·   '}</Text>
-        <Text color={C.text} bold>{'A   G   E   N   T'}</Text>
-      </Box>
-
-      {/* ── Full-width rule under wordmark ───────────── */}
-      <Box marginTop={1}>
-        <Text dimColor>{SEP}</Text>
-      </Box>
-
-      {/* ── Tagline + version ────────────────────────── */}
-      <Box>
+      {/* ── Tagline ──────────────────────────────────── */}
+      <Box marginTop={1} gap={1}>
         <Text color={C.muted}>AI-native founder console for Base</Text>
-        <Text color={C.dim}>{'  ·  v' + VERSION + '  ·  x402'}</Text>
+        <Text color={C.dim}>·  Base  ·  x402</Text>
       </Box>
 
-      {/* ── Rule above commands ──────────────────────── */}
+      {/* ── Separator ────────────────────────────────── */}
       <Box marginTop={1}>
         <Text dimColor>{SEP}</Text>
       </Box>
@@ -68,9 +81,7 @@ export function Logo() {
         {CMDS.map((cmd, i) => (
           <React.Fragment key={cmd.label}>
             <Text color={cmd.color}>{cmd.label}</Text>
-            {i < CMDS.length - 1 && (
-              <Text color={C.dim}> · </Text>
-            )}
+            {i < CMDS.length - 1 && <Text color={C.dim}> · </Text>}
           </React.Fragment>
         ))}
       </Box>
