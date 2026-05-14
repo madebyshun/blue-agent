@@ -40,6 +40,12 @@ const SKILL_FILES = [
   "telegram-bot-patterns.md",
   // Work Hub
   "gig-marketplace-guide.md",
+  // Infrastructure + safety
+  "postgres-for-agents.md",
+  "x402-escrow-patterns.md",
+  "reputation-engine.md",
+  "wallet-guardrails.md",
+  "agent-transaction-verification.md",
 ];
 
 const SKILLS_DIR  = path.join(os.homedir(), ".blue-agent", "skills");
