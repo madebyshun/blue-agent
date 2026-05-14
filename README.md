@@ -1,8 +1,15 @@
 # Blue Agent
 
+[![npm version](https://img.shields.io/npm/v/@blueagent/cli?color=4FC3F7&label=%40blueagent%2Fcli)](https://www.npmjs.com/package/@blueagent/cli)
+[![npm downloads](https://img.shields.io/npm/dm/@blueagent/cli?color=A78BFA)](https://www.npmjs.com/package/@blueagent/cli)
+[![GitHub stars](https://img.shields.io/github/stars/madebyshun/blue-agent?color=4FC3F7)](https://github.com/madebyshun/blue-agent/stargazers)
+[![License: MIT](https://img.shields.io/badge/license-MIT-94A3B8)](LICENSE)
+[![Built on Base](https://img.shields.io/badge/built%20on-Base-0052FF)](https://base.org)
+[![Powered by x402](https://img.shields.io/badge/payments-x402-A78BFA)](https://x402.org)
+
 **AI-native founder console for Base builders.**
 
-Built by [Blocky Studio](https://blocky.studio) — Blue Agent is a full economic actor on Base: it holds a wallet, executes onchain transactions, powers a growing ecosystem of tools, and helps builders go from idea to shipped product.
+Built by [Blocky Studio](https://x.com/blocky_agent) — Blue Agent is a full economic actor on Base: it holds a wallet, executes onchain transactions, powers a growing ecosystem of tools, and helps builders go from idea to shipped product.
 
 - X: [@blocky_agent](https://x.com/blocky_agent)
 - Telegram: [t.me/blueagent_hub](https://t.me/blueagent_hub)
