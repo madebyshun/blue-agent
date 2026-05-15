@@ -23,10 +23,10 @@ export type AgentTier = "Bot" | "Agent" | "Pro Agent" | "Elite Agent" | "Soverei
 
 export interface AgentScoreDimensions {
   skillDepth: number;         // 0-25
-  onchainActivity: number;    // 0-25
+  onchainActivity: number;    // 0-15
   reliability: number;        // 0-20
   interoperability: number;   // 0-20
-  reputation: number;         // 0-10
+  reputation: number;         // 0-20
 }
 
 export interface AgentScoreResult {

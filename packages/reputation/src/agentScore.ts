@@ -297,10 +297,10 @@ const SYSTEM_PROMPT = `You are Blue Agent's Agent Score engine. You score AI age
 
 Dimensions (max pts shown):
 - skillDepth (25): Has CLAUDE.md/SKILL.md? Skills folder? Commands folder? README describes clear domain expertise and toolset? More detail = higher score.
-- onchainActivity (25): Uses onchain deps (viem, wagmi, x402, agentkit)? Base/onchain topics? Wallet/contract mentions in README? Deployed contracts or x402 revenue?
+- onchainActivity (15): Uses onchain deps (viem, wagmi, x402, agentkit)? Base/onchain topics? Wallet/contract mentions in README? Deployed contracts or x402 revenue?
 - reliability (20): Recent commits in last 30 days? GitHub Actions CI? Open issues low? Regular releases? Active maintenance signals.
 - interoperability (20): npm package published with downloads? CLI bin commands? MCP config? agent.json? Keywords signal ecosystem compatibility (mcp, agentkit, x402, vercel-ai)?
-- reputation (10): Stars, forks, watchers, releases, npm weekly downloads. Community traction.
+- reputation (20): Stars, forks, watchers, releases, npm weekly downloads. Community traction. Weighted heavily — real adoption matters most.
 
 Scoring guide:
 - 0-20: Minimal signal, new or incomplete
@@ -316,10 +316,10 @@ Return ONLY valid JSON (no markdown, no code blocks, no explanation):
 {
   "dimensions": {
     "skillDepth": <0-25>,
-    "onchainActivity": <0-25>,
+    "onchainActivity": <0-15>,
     "reliability": <0-20>,
     "interoperability": <0-20>,
-    "reputation": <0-10>
+    "reputation": <0-20>
   },
   "strengths": ["<1-2 sentences, cite specific data points>", "<1-2 sentences, cite specific data points>"],
   "gaps": ["<1-2 sentences, name the gap and suggest concrete fix>", "<1-2 sentences, name the gap and suggest concrete fix>"]
@@ -382,10 +382,10 @@ export async function scoreAgent(rawInput: string): Promise<AgentScoreResult> {
 
   const dims: AgentScoreDimensions = {
     skillDepth:        Math.min(25, Math.max(0, Math.round(parsed.dimensions?.skillDepth ?? 10))),
-    onchainActivity:   Math.min(25, Math.max(0, Math.round(parsed.dimensions?.onchainActivity ?? 8))),
+    onchainActivity:   Math.min(15, Math.max(0, Math.round(parsed.dimensions?.onchainActivity ?? 5))),
     reliability:       Math.min(20, Math.max(0, Math.round(parsed.dimensions?.reliability ?? 8))),
     interoperability:  Math.min(20, Math.max(0, Math.round(parsed.dimensions?.interoperability ?? 8))),
-    reputation:        Math.min(10, Math.max(0, Math.round(parsed.dimensions?.reputation ?? 4))),
+    reputation:        Math.min(20, Math.max(0, Math.round(parsed.dimensions?.reputation ?? 7))),
   };
 
   const score = dims.skillDepth + dims.onchainActivity + dims.reliability + dims.interoperability + dims.reputation;
