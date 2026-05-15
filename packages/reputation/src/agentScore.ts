@@ -100,7 +100,7 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
   if (!owner || !repo) return `invalid GitHub path: ${repoPath}`;
 
   // Fetch all in parallel — round 1
-  const [repoData, contents, commitActivity, releases, rootPkgJson, claudeMd, skillMd, readme, packagesDir] =
+  const [repoData, contents, commitActivity, releases, rootPkgJson, claudeMd, skillMd, readme, packagesDir, srcDir] =
     await Promise.all([
       ghGet(`/repos/${clean}`),
       ghGet(`/repos/${clean}/contents`),
@@ -111,6 +111,7 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
       ghRaw(owner, repo, "SKILL.md"),
       ghRaw(owner, repo, "README.md"),
       ghGet(`/repos/${clean}/contents/packages`),
+      ghGet(`/repos/${clean}/contents/src`),
     ]);
 
   if (!repoData) return `GitHub repo ${clean}: not found`;
@@ -166,12 +167,27 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
 
   const allBinCommands = publishedPackages.flatMap(p => p.bin);
 
+  // src/ entries for deeper scan
+  const srcEntries: string[] = Array.isArray(srcDir)
+    ? srcDir.map((f: any) => f.name)
+    : [];
+
+  // Detect skill signals — check root AND src/
+  const hasSkillsFolder =
+    rootEntries.includes("skills") || rootEntries.includes("skill") ||
+    srcEntries.includes("skills") || srcEntries.includes("skill");
+  const hasCommandsFolder =
+    rootEntries.includes("commands") || srcEntries.includes("commands");
+  const hasSkillJson =
+    rootEntries.some(f => f === "skills.json" || f === "skill.json" || f === "skills.yaml") ||
+    srcEntries.some(f => f === "skills.json" || f === "skill.json");
+
   // Detect interoperability signals
-  const hasMcpConfig = rootEntries.some(f => f.includes("mcp") || f === "skill.json");
-  const hasAgentJson = rootEntries.some(f => f === "agent.json");
+  const hasMcpConfig =
+    rootEntries.some(f => f.includes("mcp") || f === "skill.json") ||
+    srcEntries.some(f => f.includes("mcp"));
+  const hasAgentJson = rootEntries.some(f => f === "agent.json") || srcEntries.some(f => f === "agent.json");
   const hasGithubActions = rootEntries.includes(".github");
-  const hasSkillsFolder = rootEntries.includes("skills") || rootEntries.includes("skill");
-  const hasCommandsFolder = rootEntries.includes("commands");
   const isMonorepo = rootEntries.includes("packages") && subPackageNames.length > 0;
 
   // npm downloads for all published packages
@@ -226,7 +242,9 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
     has_claude_md: !!claudeMd,
     has_skill_md: !!skillMd,
     has_skills_folder: hasSkillsFolder,
+    has_skills_json: hasSkillJson,
     has_commands_folder: hasCommandsFolder,
+    src_entries_sample: srcEntries.slice(0, 20),
     claude_md_excerpt: claudeExcerpt,
     readme_excerpt: readmeExcerpt,
 
