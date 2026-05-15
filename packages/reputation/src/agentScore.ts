@@ -36,7 +36,7 @@ async function callBankrLLM(system: string, user: string): Promise<string> {
       system,
       messages: [{ role: "user", content: user }],
       temperature: 0.3,
-      max_tokens: 1200,
+      max_tokens: 1500,
     }),
   });
   if (!res.ok) {
@@ -48,53 +48,198 @@ async function callBankrLLM(system: string, user: string): Promise<string> {
   throw new Error("Invalid Bankr LLM response");
 }
 
-// Fetch npm package metadata if input starts with "npm:"
+// ── GitHub deep fetch ─────────────────────────────────────────────────────────
+
+async function ghGet(path: string): Promise<any | null> {
+  try {
+    const res = await fetch(`https://api.github.com${path}`, {
+      headers: { "Accept": "application/vnd.github.v3+json" },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function ghRaw(owner: string, repo: string, file: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://raw.githubusercontent.com/${owner}/${repo}/main/${file}`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (!res.ok) {
+      // try master branch
+      const res2 = await fetch(
+        `https://raw.githubusercontent.com/${owner}/${repo}/master/${file}`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+      if (!res2.ok) return null;
+      return await res2.text();
+    }
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
+async function fetchGitHubData(repoPath: string): Promise<string> {
+  const clean = repoPath.replace(/^(https?:\/\/)?(www\.)?github\.com\//, "");
+  const [owner, repo] = clean.split("/");
+  if (!owner || !repo) return `invalid GitHub path: ${repoPath}`;
+
+  // Fetch all in parallel
+  const [repoData, contents, commitActivity, releases, pkgJson, claudeMd, skillMd, readme] =
+    await Promise.all([
+      ghGet(`/repos/${clean}`),
+      ghGet(`/repos/${clean}/contents`),
+      ghGet(`/repos/${clean}/stats/commit_activity`),
+      ghGet(`/repos/${clean}/releases?per_page=5`),
+      ghRaw(owner, repo, "package.json"),
+      ghRaw(owner, repo, "CLAUDE.md"),
+      ghRaw(owner, repo, "SKILL.md"),
+      ghRaw(owner, repo, "README.md"),
+    ]);
+
+  if (!repoData) return `GitHub repo ${clean}: not found`;
+
+  // Root file/folder names
+  const rootEntries: string[] = Array.isArray(contents)
+    ? contents.map((f: any) => f.name)
+    : [];
+
+  // Commits in last 30 days from weekly activity
+  let recentCommits = 0;
+  if (Array.isArray(commitActivity)) {
+    recentCommits = commitActivity
+      .slice(-4) // last 4 weeks
+      .reduce((sum: number, w: any) => sum + (w.total ?? 0), 0);
+  }
+
+  // Parse package.json
+  let parsedPkg: any = null;
+  try { if (pkgJson) parsedPkg = JSON.parse(pkgJson); } catch {}
+
+  const deps = parsedPkg
+    ? Object.keys({ ...(parsedPkg.dependencies ?? {}), ...(parsedPkg.devDependencies ?? {}) })
+    : [];
+
+  // Detect onchain signals from deps
+  const onchainDeps = deps.filter((d: string) =>
+    ["viem", "wagmi", "ethers", "web3", "@coinbase/agentkit", "x402", "ox"].some(k => d.includes(k))
+  );
+
+  // Detect interoperability signals
+  const hasMcpConfig = rootEntries.some(f => f.includes("mcp") || f === "skill.json");
+  const hasAgentJson = rootEntries.some(f => f === "agent.json");
+  const hasGithubActions = rootEntries.includes(".github");
+  const hasSkillsFolder = rootEntries.includes("skills") || rootEntries.includes("skill");
+  const hasCommandsFolder = rootEntries.includes("commands");
+  const npmPackageName: string | null = parsedPkg?.name ?? null;
+  const binCommands = parsedPkg?.bin ? Object.keys(parsedPkg.bin) : [];
+
+  // npm downloads if package exists
+  let npmWeeklyDownloads = 0;
+  if (npmPackageName) {
+    try {
+      const npmRes = await fetch(
+        `https://api.npmjs.org/downloads/point/last-week/${encodeURIComponent(npmPackageName)}`,
+        { signal: AbortSignal.timeout(4000) }
+      );
+      if (npmRes.ok) {
+        const npmData = await npmRes.json() as any;
+        npmWeeklyDownloads = npmData.downloads ?? 0;
+      }
+    } catch {}
+  }
+
+  // README excerpt (first 600 chars)
+  const readmeExcerpt = readme ? readme.slice(0, 600).replace(/\n+/g, " ") : null;
+
+  // CLAUDE.md excerpt (first 400 chars) — strong skill signal
+  const claudeExcerpt = claudeMd ? claudeMd.slice(0, 400).replace(/\n+/g, " ") : null;
+
+  const summary = {
+    // Identity
+    repo: repoData.full_name,
+    description: repoData.description,
+    language: repoData.language,
+    topics: repoData.topics ?? [],
+
+    // Reputation
+    stars: repoData.stargazers_count,
+    forks: repoData.forks_count,
+    watchers: repoData.watchers_count,
+    open_issues: repoData.open_issues_count,
+    releases: Array.isArray(releases) ? releases.length : 0,
+
+    // Activity
+    created_at: repoData.created_at,
+    updated_at: repoData.updated_at,
+    recent_commits_30d: recentCommits,
+    has_github_actions: hasGithubActions,
+
+    // Skill depth signals
+    has_claude_md: !!claudeMd,
+    has_skill_md: !!skillMd,
+    has_skills_folder: hasSkillsFolder,
+    has_commands_folder: hasCommandsFolder,
+    claude_md_excerpt: claudeExcerpt,
+    readme_excerpt: readmeExcerpt,
+
+    // Onchain signals
+    onchain_deps: onchainDeps,
+    onchain_topics: repoData.topics?.filter((t: string) =>
+      ["base", "onchain", "x402", "defi", "web3", "ethereum", "solidity"].some(k => t.includes(k))
+    ) ?? [],
+
+    // Interoperability
+    npm_package: npmPackageName,
+    npm_weekly_downloads: npmWeeklyDownloads,
+    bin_commands: binCommands,
+    has_mcp_config: hasMcpConfig,
+    has_agent_json: hasAgentJson,
+    package_keywords: parsedPkg?.keywords ?? [],
+
+    // Root structure
+    root_files: rootEntries.slice(0, 30),
+  };
+
+  return JSON.stringify(summary, null, 2);
+}
+
+// ── npm standalone fetch ──────────────────────────────────────────────────────
+
 async function fetchNpmData(packageName: string): Promise<string> {
   try {
-    const res = await fetch(`https://registry.npmjs.org/${encodeURIComponent(packageName)}`);
-    if (!res.ok) return `npm package ${packageName}: not found`;
-    const data = await res.json() as any;
+    const [meta, downloads] = await Promise.all([
+      fetch(`https://registry.npmjs.org/${encodeURIComponent(packageName)}`),
+      fetch(`https://api.npmjs.org/downloads/point/last-week/${encodeURIComponent(packageName)}`),
+    ]);
+    if (!meta.ok) return `npm package ${packageName}: not found`;
+    const data = await meta.json() as any;
     const latest = data["dist-tags"]?.latest ?? "unknown";
     const info = data.versions?.[latest] ?? {};
+    const dlData = downloads.ok ? await downloads.json() as any : null;
+
     return JSON.stringify({
       name: data.name,
       description: data.description,
       version: latest,
-      keywords: info.keywords,
+      keywords: info.keywords ?? [],
       dependencies: Object.keys(info.dependencies ?? {}),
-      weeklyDownloads: "unknown", // would need separate API call
+      bin: info.bin ? Object.keys(info.bin) : [],
+      weekly_downloads: dlData?.downloads ?? 0,
+      total_versions: Object.keys(data.versions ?? {}).length,
     });
   } catch {
     return `npm package ${packageName}: fetch failed`;
   }
 }
 
-// Fetch GitHub repo metadata if input looks like a GitHub URL
-async function fetchGitHubData(repoPath: string): Promise<string> {
-  try {
-    // repoPath like "github.com/user/repo" → "user/repo"
-    const clean = repoPath.replace(/^(https?:\/\/)?(www\.)?github\.com\//, "");
-    const res = await fetch(`https://api.github.com/repos/${clean}`, {
-      headers: { "Accept": "application/vnd.github.v3+json" },
-    });
-    if (!res.ok) return `GitHub repo ${clean}: not found`;
-    const data = await res.json() as any;
-    return JSON.stringify({
-      name: data.full_name,
-      description: data.description,
-      stars: data.stargazers_count,
-      forks: data.forks_count,
-      language: data.language,
-      updated_at: data.updated_at,
-      has_readme: true,
-      topics: data.topics,
-    });
-  } catch {
-    return `GitHub repo ${repoPath}: fetch failed`;
-  }
-}
+// ── endpoint ping ─────────────────────────────────────────────────────────────
 
-// Ping an x402 endpoint to check responsiveness
 async function pingEndpoint(url: string): Promise<string> {
   try {
     const start = Date.now();
@@ -112,14 +257,26 @@ async function pingEndpoint(url: string): Promise<string> {
   }
 }
 
-const SYSTEM_PROMPT = `You are Blue Agent's Agent Score engine. You score AI agents on 5 dimensions.
+// ── System prompt ─────────────────────────────────────────────────────────────
+
+const SYSTEM_PROMPT = `You are Blue Agent's Agent Score engine. You score AI agents on 5 dimensions using real data provided.
 
 Dimensions (max pts shown):
-- skillDepth (25): has SKILL.md/CLAUDE.md, grounded knowledge, domain expertise, number of tools
-- onchainActivity (25): wallet txs, x402 revenue, staking, Base deployments
-- reliability (20): uptime, response rate, error rate, process management
-- interoperability (20): MCP server, npm package, API endpoints, AgentKit/Vercel AI compatible
-- reputation (10): npm downloads, GitHub stars, community mentions, agent integrations
+- skillDepth (25): Has CLAUDE.md/SKILL.md? Skills folder? Commands folder? README describes clear domain expertise and toolset? More detail = higher score.
+- onchainActivity (25): Uses onchain deps (viem, wagmi, x402, agentkit)? Base/onchain topics? Wallet/contract mentions in README? Deployed contracts or x402 revenue?
+- reliability (20): Recent commits in last 30 days? GitHub Actions CI? Open issues low? Regular releases? Active maintenance signals.
+- interoperability (20): npm package published with downloads? CLI bin commands? MCP config? agent.json? Keywords signal ecosystem compatibility (mcp, agentkit, x402, vercel-ai)?
+- reputation (10): Stars, forks, watchers, releases, npm weekly downloads. Community traction.
+
+Scoring guide:
+- 0-20: Minimal signal, new or incomplete
+- 21-40: Early stage, some structure but gaps
+- 41-60: Solid agent, clear purpose, some traction
+- 61-75: Strong agent, good ecosystem fit, active
+- 76-90: Elite, high interop + onchain + community
+- 91-100: Sovereign, top of ecosystem
+
+Use the data provided to score precisely. Do NOT guess — if data says 0 stars, score reputation low.
 
 Return ONLY valid JSON:
 {
@@ -130,11 +287,11 @@ Return ONLY valid JSON:
     "interoperability": <0-20>,
     "reputation": <0-10>
   },
-  "strengths": ["<strength 1>", "<strength 2>"],
-  "gaps": ["<gap 1>", "<gap 2>"]
-}
+  "strengths": ["<concrete strength from data>", "<concrete strength from data>"],
+  "gaps": ["<specific gap with suggestion>", "<specific gap with suggestion>"]
+}`;
 
-Be realistic. New/unknown agents score 20-40. Established agents 50-75. Elite 76+.`;
+// ── Exports ───────────────────────────────────────────────────────────────────
 
 export type AgentInput =
   | { type: "handle"; value: string }
@@ -163,8 +320,8 @@ export async function scoreAgent(rawInput: string): Promise<AgentScoreResult> {
   }
 
   const userMessage = contextData
-    ? `Score this AI agent.\nInput: ${rawInput}\nData collected:\n${contextData}`
-    : `Score this AI agent by X/Twitter handle: @${displayHandle}`;
+    ? `Score this AI agent based on the data below.\nInput: ${rawInput}\n\nData:\n${contextData}`
+    : `Score this AI agent by X/Twitter handle: @${displayHandle}. Limited data available — score conservatively.`;
 
   const raw = await callBankrLLM(SYSTEM_PROMPT, userMessage);
 
