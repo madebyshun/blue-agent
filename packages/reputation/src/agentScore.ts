@@ -308,7 +308,16 @@ export function parseAgentInput(raw: string): AgentInput {
 
 export async function scoreAgent(rawInput: string): Promise<AgentScoreResult> {
   const input = parseAgentInput(rawInput);
-  const displayHandle = rawInput.replace(/^@/, "");
+
+  // Clean display handle: github URL → owner/repo, npm: → pkg name, else strip @
+  let displayHandle: string;
+  if (input.type === "github") {
+    displayHandle = rawInput.replace(/^(https?:\/\/)?(www\.)?github\.com\//, "");
+  } else if (input.type === "npm") {
+    displayHandle = input.value;
+  } else {
+    displayHandle = rawInput.replace(/^@/, "");
+  }
 
   let contextData = "";
   if (input.type === "npm") {
