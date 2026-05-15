@@ -321,8 +321,8 @@ Return ONLY valid JSON (no markdown, no code blocks, no explanation):
     "interoperability": <0-20>,
     "reputation": <0-10>
   },
-  "strengths": ["<max 80 chars>", "<max 80 chars>"],
-  "gaps": ["<max 80 chars>", "<max 80 chars>"]
+  "strengths": ["<1-2 sentences, cite specific data points>", "<1-2 sentences, cite specific data points>"],
+  "gaps": ["<1-2 sentences, name the gap and suggest concrete fix>", "<1-2 sentences, name the gap and suggest concrete fix>"]
 }`;
 
 // ── Exports ───────────────────────────────────────────────────────────────────
