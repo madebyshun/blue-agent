@@ -36,7 +36,7 @@ async function callBankrLLM(system: string, user: string): Promise<string> {
       system,
       messages: [{ role: "user", content: user }],
       temperature: 0.3,
-      max_tokens: 1500,
+      max_tokens: 2000,
     }),
   });
   if (!res.ok) {
@@ -312,7 +312,7 @@ Scoring guide:
 
 Use the data provided to score precisely. Do NOT guess — if data says 0 stars, score reputation low.
 
-Return ONLY valid JSON:
+Return ONLY valid JSON (no markdown, no code blocks, no explanation):
 {
   "dimensions": {
     "skillDepth": <0-25>,
@@ -321,8 +321,8 @@ Return ONLY valid JSON:
     "interoperability": <0-20>,
     "reputation": <0-10>
   },
-  "strengths": ["<concrete strength from data>", "<concrete strength from data>"],
-  "gaps": ["<specific gap with suggestion>", "<specific gap with suggestion>"]
+  "strengths": ["<max 80 chars>", "<max 80 chars>"],
+  "gaps": ["<max 80 chars>", "<max 80 chars>"]
 }`;
 
 // ── Exports ───────────────────────────────────────────────────────────────────
