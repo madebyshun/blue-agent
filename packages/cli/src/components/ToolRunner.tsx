@@ -64,10 +64,10 @@ function AgentScoreResult({ data }: { data: Record<string, unknown> }) {
       </Box>
       <Box flexDirection="column">
         <ScoreBar label="skill depth"       score={dims.skillDepth}       max={25} />
-        <ScoreBar label="onchain activity"  score={dims.onchainActivity}  max={25} />
+        <ScoreBar label="onchain activity"  score={dims.onchainActivity}  max={15} />
         <ScoreBar label="reliability"       score={dims.reliability}      max={20} />
         <ScoreBar label="interoperability"  score={dims.interoperability} max={20} />
-        <ScoreBar label="reputation"        score={dims.reputation}       max={10} />
+        <ScoreBar label="reputation"        score={dims.reputation}       max={20} />
       </Box>
       {Array.isArray(data.strengths) && data.strengths.length > 0 && (
         <Text dimColor>strengths: {(data.strengths as string[]).join(' · ')}</Text>
