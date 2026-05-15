@@ -102,8 +102,12 @@ export default async function handler(req: Request): Promise<Response> {
       maxTokens: count * 150 + 100,
     })
 
-    const cleaned = llmResponse.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim()
-    const results = JSON.parse(cleaned)
+    // Extract JSON array robustly — handle markdown fences and trailing text
+    const raw = llmResponse.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim()
+    const arrStart = raw.indexOf('[')
+    const arrEnd   = raw.lastIndexOf(']')
+    if (arrStart < 0 || arrEnd < 0) throw new Error('No JSON array in LLM response')
+    const results = JSON.parse(raw.slice(arrStart, arrEnd + 1))
 
     const response = {
       scanned: count,

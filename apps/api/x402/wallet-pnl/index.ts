@@ -15,11 +15,20 @@ async function callLLM(system: string, userContent: string): Promise<string> {
 }
 
 async function getBasescanTxs(address: string): Promise<any[]> {
-  const apiKey = process.env.BASESCAN_API_KEY || "";
-  const url = `https://api.basescan.org/api?module=account&action=tokentx&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${apiKey}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  return data.result?.slice(0, 50) || [];
+  const apiKey = process.env.BASESCAN_API_KEY;
+  if (!apiKey) return [];
+  try {
+    // Etherscan V2 API with Base chainid
+    const url = `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=tokentx&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${apiKey}`;
+    const res  = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const data = await res.json() as { status: string; result?: unknown };
+    if (data.status === "1" && Array.isArray(data.result)) {
+      return data.result.slice(0, 50);
+    }
+    return [];
+  } catch {
+    return [];
+  }
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -52,23 +61,20 @@ export default async function handler(req: Request): Promise<Response> {
 
     const systemPrompt = `You are a crypto portfolio analyst specializing in onchain wallet analysis on Base chain.
 
-Analyze the provided wallet data and return ONLY a valid JSON object:
+CRITICAL: Return ONLY raw JSON. No markdown. No backticks. Start with { and end with }.
 
 {
   "address": "string",
-  "period": "Last 30 days",
-  "totalTrades": number,
-  "uniqueTokens": number,
-  "estimatedPnL": "string (e.g. +$1,240 or -$320, estimate based on activity)",
-  "winRate": "string (e.g. 65%)",
-  "tradingStyle": "string (e.g. Memecoin Aper | DeFi Farmer | Long-term Holder | Active Trader)",
+  "trades": <number>,
+  "tokens": <number of unique tokens>,
+  "pnl": "estimated e.g. +$1,240 or -$320",
+  "winRate": "e.g. 65%",
+  "style": "Memecoin Aper | DeFi Farmer | Long-term Holder | Active Trader | Degen",
   "topTokens": ["token1", "token2", "token3"],
-  "biggestWin": "string (estimated)",
-  "biggestLoss": "string (estimated)",
-  "riskProfile": "Conservative | Moderate | Aggressive | Degen",
-  "summary": "2-3 sentence human-readable summary of this wallet's trading behavior",
-  "smartMoneyScore": number (0-100, higher = smarter money),
-  "recommendation": "string (what this wallet should do next based on their pattern)"
+  "risk": "Conservative | Moderate | Aggressive | Degen",
+  "score": <0-100 smart money score>,
+  "summary": "2-3 sentence summary of trading behavior",
+  "tip": "one actionable recommendation"
 }`;
 
     const userPrompt = `Analyze this Base wallet: ${address}

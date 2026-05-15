@@ -36,48 +36,25 @@ export default async function handler(req: Request): Promise<Response> {
 
     console.log(`[LaunchAdvisor] Planning launch for: ${projectName}`);
 
-    const systemPrompt = `You are a seasoned Web3 launch strategist with 5+ years experience launching successful tokens on Base. You have helped projects raise $50M+ combined.
+    const systemPrompt = `You are a seasoned Web3 launch strategist for Base ecosystem projects.
 
-CRITICAL: Return ONLY raw JSON. No markdown. No backticks. No code blocks. Start with { and end with }.
-
-Return ONLY a valid JSON object with this structure:
+CRITICAL: Return ONLY raw JSON. No markdown. No backticks. Start with { and end with }.
 
 {
-  "projectName": "string",
-  "launchScore": number (0-100, viability score),
-  "executiveSummary": "2-3 sentence overview",
-  "tokenomics": {
-    "suggestedSupply": "string",
-    "distribution": {
-      "community": "string (e.g. 40%)",
-      "team": "string",
-      "liquidity": "string",
-      "treasury": "string",
-      "marketing": "string"
-    },
-    "vestingSchedule": "string",
-    "initialMarketCap": "string (suggested range)",
-    "warnings": ["warning1", "warning2"]
-  },
-  "launchTimeline": [
-    { "week": "Week 1-2", "phase": "string", "tasks": ["task1", "task2"] },
-    { "week": "Week 3-4", "phase": "string", "tasks": ["task1", "task2"] },
-    { "week": "Week 5-6", "phase": "string", "tasks": ["task1", "task2"] },
-    { "week": "Week 7-8", "phase": "string", "tasks": ["task1", "task2"] }
+  "project": "string",
+  "score": <0-100 viability>,
+  "verdict": "Go | Go with Conditions | No Go",
+  "supply": "suggested token supply",
+  "distribution": { "community": "40%", "team": "20%", "liquidity": "30%", "treasury": "10%" },
+  "timeline": [
+    { "phase": "Week 1-2", "focus": "string", "tasks": ["task1", "task2"] },
+    { "phase": "Week 3-4", "focus": "string", "tasks": ["task1", "task2"] }
   ],
-  "marketingStrategy": {
-    "channels": ["channel1", "channel2"],
-    "keyMessages": ["message1", "message2"],
-    "influencerTiers": "string",
-    "communityBuilding": "string"
-  },
-  "redFlags": ["risk1", "risk2"],
-  "competitiveEdge": ["advantage1", "advantage2"],
-  "kpis": {
-    "week4": { "holders": "string", "volume": "string", "community": "string" },
-    "month3": { "holders": "string", "volume": "string", "community": "string" }
-  },
-  "recommendation": "string (go/no-go + reasoning)"
+  "channels": ["marketing channel1", "channel2"],
+  "kpis": { "month1": "e.g. 500 holders, $50k volume", "month3": "e.g. 2k holders, $500k volume" },
+  "risks": ["risk1", "risk2"],
+  "edges": ["competitive advantage1", "advantage2"],
+  "summary": "2-3 sentence overview"
 }`;
 
     const userPrompt = `Create a full launch playbook for this Base project:

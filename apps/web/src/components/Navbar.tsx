@@ -2,14 +2,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import WalletBar from "@/components/WalletBar";
 
 const NAV_LINKS = [
   { label: "Console", href: "/console" },
+  { label: "Chat",    href: "/chat" },
   { label: "Launch",  href: "/launch" },
   { label: "Micro",   href: "/micro" },
   { label: "Profile", href: "/profile" },
   { label: "Agents",  href: "/agents", badge: "soon" },
-  { label: "Hub",     href: "/hub",    badge: "soon" },
   { label: "Tools",   href: "/tools" },
   { label: "Docs",    href: "/docs" },
 ];
@@ -56,19 +57,12 @@ export default function Navbar() {
 
           {/* Right actions */}
           <div className="hidden md:flex items-center gap-3">
-            <a
-              href="https://github.com/madebyshun/blue-agent"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-mono text-xs text-slate-400 hover:text-white transition-colors border border-[#1A1A2E] px-3 py-1.5 rounded hover:border-[#4FC3F7]/30"
-            >
-              GitHub
-            </a>
+            <WalletBar />
             <Link
               href="/console"
               className="font-mono text-xs font-semibold bg-[#4FC3F7] text-[#050508] px-3 py-1.5 rounded hover:bg-[#29ABE2] transition-colors"
             >
-              Open Console →
+              Console →
             </Link>
           </div>
 
