@@ -54,13 +54,21 @@ async function callBankrLLM(system: string, user: string): Promise<string> {
 
 async function ghGet(path: string): Promise<any | null> {
   try {
+    const headers: Record<string, string> = { "Accept": "application/vnd.github.v3+json" };
+    if (process.env.GITHUB_TOKEN) headers["Authorization"] = `Bearer ${process.env.GITHUB_TOKEN}`;
     const res = await fetch(`https://api.github.com${path}`, {
-      headers: { "Accept": "application/vnd.github.v3+json" },
+      headers,
       signal: AbortSignal.timeout(6000),
     });
+    if (res.status === 403 || res.status === 429) {
+      const reset = res.headers.get("x-ratelimit-reset");
+      const resetTime = reset ? new Date(parseInt(reset) * 1000).toISOString() : "soon";
+      throw new Error(`GitHub API rate limited — resets at ${resetTime}. Set GITHUB_TOKEN env var to raise limit to 5000 req/hour.`);
+    }
     if (!res.ok) return null;
     return await res.json();
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("rate limit")) throw err;
     return null;
   }
 }
