@@ -89,8 +89,8 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
   const [owner, repo] = clean.split("/");
   if (!owner || !repo) return `invalid GitHub path: ${repoPath}`;
 
-  // Fetch all in parallel
-  const [repoData, contents, commitActivity, releases, pkgJson, claudeMd, skillMd, readme] =
+  // Fetch all in parallel — round 1
+  const [repoData, contents, commitActivity, releases, rootPkgJson, claudeMd, skillMd, readme, packagesDir] =
     await Promise.all([
       ghGet(`/repos/${clean}`),
       ghGet(`/repos/${clean}/contents`),
@@ -100,6 +100,7 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
       ghRaw(owner, repo, "CLAUDE.md"),
       ghRaw(owner, repo, "SKILL.md"),
       ghRaw(owner, repo, "README.md"),
+      ghGet(`/repos/${clean}/contents/packages`),
     ]);
 
   if (!repoData) return `GitHub repo ${clean}: not found`;
@@ -109,26 +110,51 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
     ? contents.map((f: any) => f.name)
     : [];
 
-  // Commits in last 30 days from weekly activity
+  // Commits in last 30 days — GitHub stats API can lag up to 1h after pushes
   let recentCommits = 0;
   if (Array.isArray(commitActivity)) {
     recentCommits = commitActivity
-      .slice(-4) // last 4 weeks
+      .slice(-4)
       .reduce((sum: number, w: any) => sum + (w.total ?? 0), 0);
   }
+  // Fallback: if stats API returned empty but repo was updated recently, estimate from updated_at
+  const updatedRecently = repoData.updated_at
+    ? (Date.now() - new Date(repoData.updated_at).getTime()) < 7 * 24 * 60 * 60 * 1000
+    : false;
 
-  // Parse package.json
-  let parsedPkg: any = null;
-  try { if (pkgJson) parsedPkg = JSON.parse(pkgJson); } catch {}
-
-  const deps = parsedPkg
-    ? Object.keys({ ...(parsedPkg.dependencies ?? {}), ...(parsedPkg.devDependencies ?? {}) })
+  // Fetch sub-package package.json files (monorepo support)
+  const subPackageNames: string[] = Array.isArray(packagesDir)
+    ? packagesDir.filter((f: any) => f.type === "dir").map((f: any) => f.name)
     : [];
 
-  // Detect onchain signals from deps
-  const onchainDeps = deps.filter((d: string) =>
-    ["viem", "wagmi", "ethers", "web3", "@coinbase/agentkit", "x402", "ox"].some(k => d.includes(k))
+  // Fetch package.json from each sub-package (up to 6) in parallel
+  const subPkgJsons = await Promise.all(
+    subPackageNames.slice(0, 6).map(name => ghRaw(owner, repo, `packages/${name}/package.json`))
   );
+
+  // Parse all package.jsons — root + sub-packages
+  const allPkgs: any[] = [];
+  try { if (rootPkgJson) allPkgs.push(JSON.parse(rootPkgJson)); } catch {}
+  for (const raw of subPkgJsons) {
+    try { if (raw) allPkgs.push(JSON.parse(raw)); } catch {}
+  }
+
+  // Aggregate deps across all packages
+  const allDeps = allPkgs.flatMap(p =>
+    Object.keys({ ...(p.dependencies ?? {}), ...(p.devDependencies ?? {}) })
+  );
+
+  // Detect onchain signals from deps
+  const onchainDeps = [...new Set(allDeps.filter((d: string) =>
+    ["viem", "wagmi", "ethers", "web3", "@coinbase/agentkit", "x402", "ox"].some(k => d.includes(k))
+  ))];
+
+  // Collect all npm package names + bin commands across monorepo
+  const publishedPackages = allPkgs
+    .filter(p => p.name && !p.private)
+    .map(p => ({ name: p.name, version: p.version, bin: p.bin ? Object.keys(p.bin) : [] }));
+
+  const allBinCommands = publishedPackages.flatMap(p => p.bin);
 
   // Detect interoperability signals
   const hasMcpConfig = rootEntries.some(f => f.includes("mcp") || f === "skill.json");
@@ -136,23 +162,23 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
   const hasGithubActions = rootEntries.includes(".github");
   const hasSkillsFolder = rootEntries.includes("skills") || rootEntries.includes("skill");
   const hasCommandsFolder = rootEntries.includes("commands");
-  const npmPackageName: string | null = parsedPkg?.name ?? null;
-  const binCommands = parsedPkg?.bin ? Object.keys(parsedPkg.bin) : [];
+  const isMonorepo = rootEntries.includes("packages") && subPackageNames.length > 0;
 
-  // npm downloads if package exists
-  let npmWeeklyDownloads = 0;
-  if (npmPackageName) {
-    try {
-      const npmRes = await fetch(
-        `https://api.npmjs.org/downloads/point/last-week/${encodeURIComponent(npmPackageName)}`,
-        { signal: AbortSignal.timeout(4000) }
-      );
-      if (npmRes.ok) {
-        const npmData = await npmRes.json() as any;
-        npmWeeklyDownloads = npmData.downloads ?? 0;
-      }
-    } catch {}
-  }
+  // npm downloads for all published packages
+  const npmDownloadResults = await Promise.all(
+    publishedPackages.slice(0, 5).map(async (pkg) => {
+      try {
+        const res = await fetch(
+          `https://api.npmjs.org/downloads/point/last-week/${encodeURIComponent(pkg.name)}`,
+          { signal: AbortSignal.timeout(4000) }
+        );
+        if (!res.ok) return 0;
+        const data = await res.json() as any;
+        return data.downloads ?? 0;
+      } catch { return 0; }
+    })
+  );
+  const totalNpmDownloads = npmDownloadResults.reduce((a, b) => a + b, 0);
 
   // README excerpt (first 600 chars)
   const readmeExcerpt = readme ? readme.slice(0, 600).replace(/\n+/g, " ") : null;
@@ -166,6 +192,8 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
     description: repoData.description,
     language: repoData.language,
     topics: repoData.topics ?? [],
+    is_monorepo: isMonorepo,
+    sub_packages: subPackageNames,
 
     // Reputation
     stars: repoData.stargazers_count,
@@ -177,7 +205,11 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
     // Activity
     created_at: repoData.created_at,
     updated_at: repoData.updated_at,
+    updated_recently_7d: updatedRecently,
     recent_commits_30d: recentCommits,
+    note_commit_stats: recentCommits === 0 && updatedRecently
+      ? "GitHub stats API may be delayed (up to 1h after pushes) — repo was updated recently"
+      : null,
     has_github_actions: hasGithubActions,
 
     // Skill depth signals
@@ -190,17 +222,17 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
 
     // Onchain signals
     onchain_deps: onchainDeps,
-    onchain_topics: repoData.topics?.filter((t: string) =>
+    onchain_topics: (repoData.topics ?? []).filter((t: string) =>
       ["base", "onchain", "x402", "defi", "web3", "ethereum", "solidity"].some(k => t.includes(k))
-    ) ?? [],
+    ),
 
     // Interoperability
-    npm_package: npmPackageName,
-    npm_weekly_downloads: npmWeeklyDownloads,
-    bin_commands: binCommands,
+    published_packages: publishedPackages,
+    npm_weekly_downloads_total: totalNpmDownloads,
+    bin_commands: allBinCommands,
     has_mcp_config: hasMcpConfig,
     has_agent_json: hasAgentJson,
-    package_keywords: parsedPkg?.keywords ?? [],
+    all_package_keywords: [...new Set(allPkgs.flatMap(p => p.keywords ?? []))],
 
     // Root structure
     root_files: rootEntries.slice(0, 30),
