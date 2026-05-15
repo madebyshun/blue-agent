@@ -45,7 +45,9 @@ async function callBankrLLM(system: string, user: string): Promise<string> {
   }
   const data = await res.json() as any;
   if (data.content?.[0]?.text) return data.content[0].text;
-  throw new Error("Invalid Bankr LLM response");
+  // Surface the actual API error for debugging
+  const detail = data.error?.message ?? data.type ?? JSON.stringify(data).slice(0, 200);
+  throw new Error(`Invalid Bankr LLM response: ${detail}`);
 }
 
 // ── GitHub deep fetch ─────────────────────────────────────────────────────────
@@ -180,11 +182,11 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
   );
   const totalNpmDownloads = npmDownloadResults.reduce((a, b) => a + b, 0);
 
-  // README excerpt (first 600 chars)
-  const readmeExcerpt = readme ? readme.slice(0, 600).replace(/\n+/g, " ") : null;
+  // README excerpt (first 400 chars)
+  const readmeExcerpt = readme ? readme.slice(0, 400).replace(/\n+/g, " ") : null;
 
-  // CLAUDE.md excerpt (first 400 chars) — strong skill signal
-  const claudeExcerpt = claudeMd ? claudeMd.slice(0, 400).replace(/\n+/g, " ") : null;
+  // CLAUDE.md excerpt (first 300 chars) — strong skill signal
+  const claudeExcerpt = claudeMd ? claudeMd.slice(0, 300).replace(/\n+/g, " ") : null;
 
   const summary = {
     // Identity
@@ -360,8 +362,13 @@ export async function scoreAgent(rawInput: string): Promise<AgentScoreResult> {
     contextData = await pingEndpoint(input.value);
   }
 
-  const userMessage = contextData
-    ? `Score this AI agent based on the data below.\nInput: ${rawInput}\n\nData:\n${contextData}`
+  // Truncate context to ~6000 chars to stay within Bankr LLM limits
+  const truncated = contextData && contextData.length > 6000
+    ? contextData.slice(0, 6000) + "\n... [truncated]"
+    : contextData;
+
+  const userMessage = truncated
+    ? `Score this AI agent based on the data below.\nInput: ${rawInput}\n\nData:\n${truncated}`
     : `Score this AI agent by X/Twitter handle: @${displayHandle}. Limited data available — score conservatively.`;
 
   const raw = await callBankrLLM(SYSTEM_PROMPT, userMessage);
