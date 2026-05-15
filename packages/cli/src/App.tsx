@@ -179,12 +179,14 @@ export function App() {
 
       } else if (type === 'score') {
         const { scoreBuilder, scoreAgent } = await import('@blueagent/reputation')
-        const handle = inputs.handle ?? ''
         if (toolName === 'builder-score') {
+          const handle = inputs['X handle (e.g. madebyshun)'] ?? inputs.handle ?? ''
           const score = await scoreBuilder(handle)
           setResult(score)
         } else {
-          const score = await scoreAgent(handle)
+          const raw = inputs['github URL, npm:pkg, or @handle (e.g. github.com/user/repo)']
+            ?? inputs.handle ?? ''
+          const score = await scoreAgent(raw)
           setResult(score)
         }
 

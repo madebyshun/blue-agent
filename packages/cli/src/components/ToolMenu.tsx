@@ -38,8 +38,8 @@ export const TOOL_PARAMS: Record<string, string[]> = {
   'grant-evaluator':  ['projectUrl or description'],
 
   // Score
-  'builder-score': ['handle (@username)'],
-  'agent-score':   ['handle (@username, npm:pkg, or github.com/repo)'],
+  'builder-score': ['X handle (e.g. madebyshun)'],
+  'agent-score':   ['github URL, npm:pkg, or @handle (e.g. github.com/user/repo)'],
 
   // Tasks
   'blue tasks':     [],

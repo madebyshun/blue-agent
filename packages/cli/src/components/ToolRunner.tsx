@@ -54,17 +54,13 @@ function BuilderScoreResult({ data }: { data: Record<string, unknown> }) {
 
 function AgentScoreResult({ data }: { data: Record<string, unknown> }) {
   const dims = data.dimensions as Record<string, number>
-  const online = String(data.status) === 'online'
   return (
     <Box flexDirection="column" gap={1}>
       <Box gap={2}>
-        <Text color="cyan" bold>{String(data.xp)}</Text>
-        <Text dimColor>XP</Text>
-        <Text bold>{String(data.badge)} {String(data.tier)}</Text>
+        <Text color="cyan" bold>{String(data.score)}</Text>
+        <Text dimColor>/100</Text>
+        <Text bold>{String(data.tier)}</Text>
         <Text dimColor>{String(data.handle)}</Text>
-        <Text color={online ? 'green' : undefined} dimColor={!online}>
-          ● {online ? 'ONLINE' : 'OFFLINE'}
-        </Text>
       </Box>
       <Box flexDirection="column">
         <ScoreBar label="skill depth"       score={dims.skillDepth}       max={25} />
@@ -75,6 +71,9 @@ function AgentScoreResult({ data }: { data: Record<string, unknown> }) {
       </Box>
       {Array.isArray(data.strengths) && data.strengths.length > 0 && (
         <Text dimColor>strengths: {(data.strengths as string[]).join(' · ')}</Text>
+      )}
+      {Array.isArray(data.gaps) && data.gaps.length > 0 && (
+        <Text dimColor>gaps: {(data.gaps as string[]).join(' · ')}</Text>
       )}
     </Box>
   )
@@ -90,10 +89,10 @@ function ResultDisplay({ result }: { result: unknown }) {
   }
   if (result && typeof result === 'object') {
     const obj = result as Record<string, unknown>
-    if ('score' in obj && 'dimensions' in obj && 'tier' in obj) {
+    if ('score' in obj && 'dimensions' in obj && 'tier' in obj && 'summary' in obj) {
       return <BuilderScoreResult data={obj} />
     }
-    if ('xp' in obj && 'dimensions' in obj && 'tier' in obj) {
+    if ('score' in obj && 'dimensions' in obj && 'tier' in obj && 'strengths' in obj) {
       return <AgentScoreResult data={obj} />
     }
     return <Text>{JSON.stringify(result, null, 2)}</Text>
