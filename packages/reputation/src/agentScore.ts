@@ -100,7 +100,7 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
   if (!owner || !repo) return `invalid GitHub path: ${repoPath}`;
 
   // Fetch all in parallel — round 1
-  const [repoData, contents, commitActivity, releases, rootPkgJson, claudeMd, skillMd, readme, packagesDir, srcDir] =
+  const [repoData, contents, commitActivity, releases, rootPkgJson, claudeMd, skillMd, readme, packagesDir, srcDir, skillsJson] =
     await Promise.all([
       ghGet(`/repos/${clean}`),
       ghGet(`/repos/${clean}/contents`),
@@ -112,6 +112,7 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
       ghRaw(owner, repo, "README.md"),
       ghGet(`/repos/${clean}/contents/packages`),
       ghGet(`/repos/${clean}/contents/src`),
+      ghRaw(owner, repo, "skills.json"),
     ]);
 
   if (!repoData) return `GitHub repo ${clean}: not found`;
@@ -155,10 +156,25 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
     Object.keys({ ...(p.dependencies ?? {}), ...(p.devDependencies ?? {}) })
   );
 
-  // Detect onchain signals from deps
+  // Detect onchain signals from deps (includes Bankr as onchain gateway)
   const onchainDeps = [...new Set(allDeps.filter((d: string) =>
-    ["viem", "wagmi", "ethers", "web3", "@coinbase/agentkit", "x402", "ox"].some(k => d.includes(k))
+    ["viem", "wagmi", "ethers", "web3", "@coinbase/agentkit", "x402", "ox", "bankr"].some(k => d.includes(k))
   ))];
+
+  // Parse skills.json — list of skill names signals domain depth
+  let skillNames: string[] = [];
+  try { if (skillsJson) skillNames = Object.keys(JSON.parse(skillsJson)); } catch {}
+  const cryptoSkills = skillNames.filter(s =>
+    ["token", "defi", "crypto", "wallet", "onchain", "chain", "trade", "treasury",
+     "distribute", "polymarket", "kalshi", "price", "market", "nft", "swap"].some(k => s.toLowerCase().includes(k))
+  );
+
+  // Detect Bankr onchain signals from README/CLAUDE.md text
+  const allText = [readme ?? "", claudeMd ?? ""].join(" ").toLowerCase();
+  const bankrOnchain = allText.includes("bankr.bot") || allText.includes("bankr_llm") || allText.includes("bankr_api");
+  const hasWalletMention = allText.includes("wallet") || allText.includes("usdc") || allText.includes("0x");
+  const hasOnchainKeywords = ["onchain", "on-chain", "defi", "base chain", "base mainnet", "token distribution",
+    "treasury", "distribute token", "x402", "polymarket"].some(k => allText.includes(k));
 
   // Collect all npm package names + bin commands across monorepo
   const publishedPackages = allPkgs
@@ -253,6 +269,12 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
     onchain_topics: (repoData.topics ?? []).filter((t: string) =>
       ["base", "onchain", "x402", "defi", "web3", "ethereum", "solidity"].some(k => t.includes(k))
     ),
+    uses_bankr_gateway: bankrOnchain,
+    has_wallet_mention: hasWalletMention,
+    has_onchain_keywords: hasOnchainKeywords,
+    crypto_skills_count: cryptoSkills.length,
+    crypto_skills_sample: cryptoSkills.slice(0, 8),
+    total_skills_count: skillNames.length,
 
     // Interoperability
     published_packages: publishedPackages,
@@ -323,7 +345,7 @@ const SYSTEM_PROMPT = `You are Blue Agent's Agent Score engine. You score AI age
 
 Dimensions (max pts shown):
 - skillDepth (25): Has CLAUDE.md/SKILL.md? Skills folder? Commands folder? README describes clear domain expertise and toolset? More detail = higher score.
-- onchainActivity (15): Uses onchain deps (viem, wagmi, x402, agentkit)? Base/onchain topics? Wallet/contract mentions in README? Deployed contracts or x402 revenue?
+- onchainActivity (15): Uses onchain deps (viem, wagmi, x402, agentkit, bankr)? Uses Bankr gateway for token ops? has_wallet_mention or has_onchain_keywords? crypto_skills_count > 0? Base/onchain topics? Note: agents using Bankr API for token distribution, DeFi monitoring, or treasury ops ARE onchain-active even without viem/wagmi deps.
 - reliability (20): Recent commits in last 30 days? GitHub Actions CI? Open issues low? Regular releases? Active maintenance signals.
 - interoperability (20): npm package published with downloads? CLI bin commands? MCP config? agent.json? Keywords signal ecosystem compatibility (mcp, agentkit, x402, vercel-ai)?
 - reputation (20): Stars, forks, watchers, releases, npm weekly downloads. Community traction. Weighted heavily — real adoption matters most.
