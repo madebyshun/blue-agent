@@ -14,15 +14,25 @@ async function callLLM(system: string, userContent: string): Promise<string> {
   });
 }
 
-async function checkContractBasic(contractAddress: string): Promise<any> {
+// Returns: { verified: true/false, unknown: true if API key missing }
+async function checkContractVerified(contractAddress: string): Promise<{ verified: boolean; unknown: boolean }> {
+  const apiKey = process.env.BASESCAN_API_KEY;
+
+  // No API key — can't verify, mark as unknown (don't assume unverified)
+  if (!apiKey) return { verified: false, unknown: true };
+
   try {
-    const apiKey = process.env.BASESCAN_API_KEY || "";
-    const url = `https://api.basescan.org/api?module=contract&action=getabi&address=${contractAddress}&apikey=${apiKey}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    return { verified: data.status === "1", hasAbi: data.result !== "Contract source code not verified" };
+    // Etherscan V2 API (supports Base via chainid=8453)
+    const url = `https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getsourcecode&address=${contractAddress}&apikey=${apiKey}`;
+    const res  = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const data = await res.json() as { status: string; result?: { ContractName?: string }[] };
+
+    if (data.status === "1" && Array.isArray(data.result) && data.result[0]?.ContractName) {
+      return { verified: true, unknown: false };
+    }
+    return { verified: false, unknown: false };
   } catch {
-    return { verified: false, hasAbi: false };
+    return { verified: false, unknown: true };
   }
 }
 
@@ -48,57 +58,72 @@ export default async function handler(req: Request): Promise<Response> {
 
     console.log(`[RiskGate] Checking: ${action} | contract: ${contractAddress}`);
 
-    let contractCheck = null;
-    if (contractAddress && contractAddress.startsWith("0x")) {
-      contractCheck = await checkContractBasic(contractAddress);
+    // Contract verification — only if address provided
+    let contractStatus: { verified: boolean; unknown: boolean } | null = null;
+    if (contractAddress && contractAddress.startsWith("0x") && contractAddress.length === 42) {
+      contractStatus = await checkContractVerified(contractAddress);
     }
+
+    const contractNote = contractStatus === null
+      ? "No contract address provided"
+      : contractStatus.unknown
+        ? "Contract verification status unknown (no Basescan API key configured)"
+        : contractStatus.verified
+          ? "Contract is VERIFIED on Base (Basescan)"
+          : "Contract is NOT verified on Base (Basescan)";
 
     const systemPrompt = `You are a risk management system for AI agents executing onchain transactions on Base.
 
-Your job: quickly assess if an action is safe to execute. Be conservative — when in doubt, block.
+Evaluate if an action is safe to execute. Use good judgement — not everything is high risk.
 
-Red flags to always block:
-- Unverified contracts for large amounts
-- Unusual approval amounts (type(uint256).max)
-- Sending to known scam patterns
-- Amount exceeds reasonable limits (>$1000 without explicit override)
-- Actions that could drain wallet
+Guidelines:
+- Well-known tokens and DEXs on Base are generally lower risk
+- Small amounts (<$100) with legitimate actions can be APPROVED or WARN
+- Large amounts (>$1000) require more caution
+- Contract verification unknown (no API key) ≠ suspicious — treat as neutral
+- Only BLOCK clear red flags: drain wallet, unlimited approvals, known scam patterns, very large amounts to unknown addresses
 
-CRITICAL: Return ONLY raw JSON. No markdown. No backticks. No code blocks. Start with { and end with }.
+Risk decisions:
+- APPROVE: low risk, routine action, well-known protocol
+- WARN: proceed with caution, verify details first
+- BLOCK: clear danger, do not proceed
 
-Return ONLY a valid JSON object:
+CRITICAL: Return ONLY raw JSON. No markdown. No backticks. Start with { and end with }.
 
 {
-  "decision": "APPROVE" | "BLOCK" | "WARN",
-  "riskScore": number (0-100, higher = riskier),
+  "decision": "APPROVE" | "WARN" | "BLOCK",
+  "riskScore": <0-100>,
   "riskLevel": "Low" | "Medium" | "High" | "Critical",
   "reasons": ["reason1", "reason2"],
-  "recommendation": "string (what agent should do)",
-  "maxSafeAmount": "string (suggested max for this action, e.g. $50)",
+  "recommendation": "<what to do>",
+  "maxSafeAmount": "<suggested safe amount, e.g. $50 or unlimited>",
   "checks": {
-    "contractVerified": boolean | null,
-    "amountReasonable": boolean,
-    "actionLegitimate": boolean,
-    "addressSuspicious": boolean
+    "contractVerified": <true | false | null>,
+    "amountReasonable": <true | false>,
+    "actionLegitimate": <true | false>,
+    "addressSuspicious": <true | false>
   }
 }`;
 
-    const userPrompt = `Risk check request from agent:
+    const userPrompt = `Risk check:
 
 Action: ${action}
-Contract Address: ${contractAddress || "N/A"}
+Contract: ${contractAddress || "N/A"}
 Amount: ${amount || "Not specified"}
 Recipient: ${body.toAddress || "N/A"}
-Agent ID: ${body.agentId || "unknown"}
-Context: ${body.context || "None provided"}
+Agent ID: ${body.agentId || "not provided"}
+Context: ${body.context || "none"}
 
-Contract verification check: ${contractCheck ? JSON.stringify(contractCheck) : "Not checked"}`;
+Contract status: ${contractNote}`;
 
     const llmResponse = await callLLM(systemPrompt, userPrompt);
-    const result = extractJsonObject(llmResponse);
+    const result = extractJsonObject(llmResponse) as {
+      checks?: { contractVerified?: boolean | null };
+    };
 
-    if (contractCheck && result.checks) {
-      result.checks.contractVerified = contractCheck.verified;
+    // Inject actual verified status if we got it
+    if (contractStatus && result.checks) {
+      result.checks.contractVerified = contractStatus.unknown ? null : contractStatus.verified;
     }
 
     return Response.json(result, { status: 200 });

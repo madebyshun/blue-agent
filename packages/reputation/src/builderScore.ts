@@ -52,127 +52,144 @@ async function callBankrLLM(system: string, user: string): Promise<string> {
 // ── X/Twitter API v2 ──────────────────────────────────────────────────────────
 
 async function fetchXData(handle: string): Promise<string | null> {
-  const token = process.env.TWITTER_BEARER_TOKEN;
-  if (!token) return null;
-
   const clean = handle.replace(/^@/, "");
 
-  try {
-    // Fetch user profile + pinned tweet in parallel
-    const [userRes, tweetsRes] = await Promise.all([
-      fetch(
+  // Try official API first if token available
+  const token = process.env.TWITTER_BEARER_TOKEN;
+  if (token) {
+    try {
+      const res = await fetch(
         `https://api.twitter.com/2/users/by/username/${clean}` +
         `?user.fields=public_metrics,description,verified,verified_type,created_at,pinned_tweet_id,entities`,
         {
           headers: { Authorization: `Bearer ${token}` },
           signal: AbortSignal.timeout(6000),
         }
-      ),
-      fetch(
-        `https://api.twitter.com/2/users/by/username/${clean}` +
-        `?user.fields=pinned_tweet_id&expansions=pinned_tweet_id` +
-        `&tweet.fields=text,public_metrics,created_at`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: AbortSignal.timeout(6000),
-        }
-      ),
-    ]);
-
-    if (!userRes.ok) {
-      if (userRes.status === 401) throw new Error("TWITTER_BEARER_TOKEN invalid or expired.");
-      if (userRes.status === 404) return `X user @${clean}: not found`;
-      return null;
-    }
-
-    const userData = await userRes.json() as any;
-    const user = userData.data;
-    if (!user) return `X user @${clean}: not found`;
-
-    const metrics = user.public_metrics ?? {};
-
-    // Pinned tweet
-    let pinnedTweet: string | null = null;
-    if (tweetsRes.ok) {
-      const tweetsData = await tweetsRes.json() as any;
-      const pinned = tweetsData.includes?.tweets?.[0];
-      if (pinned) {
-        pinnedTweet = pinned.text?.slice(0, 200) ?? null;
-      }
-    }
-
-    // Fetch recent tweets (last 10) for activity + engagement signals
-    let recentTweets: any[] = [];
-    if (user.id) {
-      try {
-        const recentRes = await fetch(
-          `https://api.twitter.com/2/users/${user.id}/tweets` +
-          `?max_results=10&tweet.fields=public_metrics,created_at&exclude=retweets,replies`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-            signal: AbortSignal.timeout(6000),
-          }
-        );
-        if (recentRes.ok) {
-          const recentData = await recentRes.json() as any;
-          recentTweets = recentData.data ?? [];
-        }
-      } catch {}
-    }
-
-    // Aggregate engagement from recent tweets
-    const totalLikes    = recentTweets.reduce((s, t) => s + (t.public_metrics?.like_count ?? 0), 0);
-    const totalRetweets = recentTweets.reduce((s, t) => s + (t.public_metrics?.retweet_count ?? 0), 0);
-    const totalReplies  = recentTweets.reduce((s, t) => s + (t.public_metrics?.reply_count ?? 0), 0);
-    const avgLikes      = recentTweets.length ? Math.round(totalLikes / recentTweets.length) : 0;
-
-    // Days since last tweet
-    let daysSinceLastTweet: number | null = null;
-    if (recentTweets[0]?.created_at) {
-      daysSinceLastTweet = Math.round(
-        (Date.now() - new Date(recentTweets[0].created_at).getTime()) / 86400000
       );
-    }
+      if (res.status === 401) throw new Error("TWITTER_BEARER_TOKEN invalid or expired.");
+      if (res.status === 402 || res.status === 429) {
+        // Credits depleted or rate limited — fall through to public scrape
+        console.error(`X API ${res.status} — falling back to public scrape`);
+      } else if (res.ok) {
+        const userData = await res.json() as any;
+        const user = userData.data;
+        if (!user) return null;
+        const metrics = user.public_metrics ?? {};
 
-    // Account age in days
-    const accountAgeDays = user.created_at
-      ? Math.round((Date.now() - new Date(user.created_at).getTime()) / 86400000)
+        // Fetch recent tweets
+        let recentTweets: any[] = [];
+        try {
+          const recentRes = await fetch(
+            `https://api.twitter.com/2/users/${user.id}/tweets` +
+            `?max_results=10&tweet.fields=public_metrics,created_at&exclude=retweets,replies`,
+            { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(6000) }
+          );
+          if (recentRes.ok) {
+            recentTweets = (await recentRes.json() as any).data ?? [];
+          }
+        } catch {}
+
+        const totalLikes    = recentTweets.reduce((s, t) => s + (t.public_metrics?.like_count ?? 0), 0);
+        const totalRetweets = recentTweets.reduce((s, t) => s + (t.public_metrics?.retweet_count ?? 0), 0);
+        const totalReplies  = recentTweets.reduce((s, t) => s + (t.public_metrics?.reply_count ?? 0), 0);
+        const avgLikes      = recentTweets.length ? Math.round(totalLikes / recentTweets.length) : 0;
+        const daysSinceLast = recentTweets[0]?.created_at
+          ? Math.round((Date.now() - new Date(recentTweets[0].created_at).getTime()) / 86400000)
+          : null;
+
+        return JSON.stringify({
+          source: "x_api_v2",
+          handle: clean,
+          name: user.name,
+          bio: user.description?.slice(0, 200),
+          verified: user.verified || user.verified_type === "blue",
+          account_age_days: user.created_at
+            ? Math.round((Date.now() - new Date(user.created_at).getTime()) / 86400000)
+            : null,
+          followers: metrics.followers_count ?? 0,
+          following: metrics.following_count ?? 0,
+          tweet_count: metrics.tweet_count ?? 0,
+          listed_count: metrics.listed_count ?? 0,
+          recent_tweets_count: recentTweets.length,
+          days_since_last_tweet: daysSinceLast,
+          avg_likes_per_tweet: avgLikes,
+          total_likes_recent: totalLikes,
+          total_retweets_recent: totalRetweets,
+          total_replies_recent: totalReplies,
+          has_url_in_bio: !!(user.entities?.url?.urls?.length),
+        }, null, 2);
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("TWITTER_BEARER_TOKEN")) throw err;
+    }
+  }
+
+  // ── Fallback: X syndication API (public, no auth needed) ──────────────────
+  try {
+    // Twitter syndication endpoint — public, no credentials required
+    const res = await fetch(
+      `https://syndication.twitter.com/srv/timeline-profile/screen-name/${clean}`,
+      {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; BlueAgent/1.0)",
+          "Accept": "application/json",
+        },
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+
+    if (!res.ok) return null;
+
+    const html = await res.text();
+
+    // Extract JSON embedded in the page
+    const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">(.+?)<\/script>/s);
+    if (!match) return null;
+
+    const nextData = JSON.parse(match[1]);
+    const timeline = nextData?.props?.pageProps?.timeline;
+    const entries  = timeline?.entries ?? [];
+
+    // Pull tweets from entries
+    const tweets = entries
+      .filter((e: any) => e?.content?.tweet)
+      .map((e: any) => e.content.tweet)
+      .slice(0, 10);
+
+    if (tweets.length === 0) return null;
+
+    const user = tweets[0]?.user ?? {};
+    const totalLikes    = tweets.reduce((s: number, t: any) => s + (t.favorite_count ?? 0), 0);
+    const totalRetweets = tweets.reduce((s: number, t: any) => s + (t.retweet_count ?? 0), 0);
+    const avgLikes      = tweets.length ? Math.round(totalLikes / tweets.length) : 0;
+
+    const lastTweetDate = tweets[0]?.created_at
+      ? new Date(tweets[0].created_at)
+      : null;
+    const daysSinceLast = lastTweetDate
+      ? Math.round((Date.now() - lastTweetDate.getTime()) / 86400000)
       : null;
 
-    const summary = {
+    return JSON.stringify({
+      source: "x_public_syndication",
       handle: clean,
       name: user.name,
       bio: user.description?.slice(0, 200),
-      verified: user.verified || user.verified_type === "blue",
-      verified_type: user.verified_type ?? null,
-      account_age_days: accountAgeDays,
-
-      // Social metrics
-      followers: metrics.followers_count ?? 0,
-      following: metrics.following_count ?? 0,
-      tweet_count: metrics.tweet_count ?? 0,
-      listed_count: metrics.listed_count ?? 0,
-      follower_following_ratio: metrics.following_count > 0
-        ? Math.round((metrics.followers_count / metrics.following_count) * 10) / 10
-        : null,
-
-      // Activity signals
-      recent_tweets_count: recentTweets.length,
-      days_since_last_tweet: daysSinceLastTweet,
+      verified: user.verified ?? false,
+      followers: user.followers_count ?? 0,
+      following: user.friends_count ?? 0,
+      tweet_count: user.statuses_count ?? 0,
+      listed_count: user.listed_count ?? 0,
+      recent_tweets_count: tweets.length,
+      days_since_last_tweet: daysSinceLast,
       avg_likes_per_tweet: avgLikes,
       total_likes_recent: totalLikes,
       total_retweets_recent: totalRetweets,
-      total_replies_recent: totalReplies,
-
-      // Content signals
-      pinned_tweet: pinnedTweet,
-      has_url_in_bio: !!(user.entities?.url?.urls?.length),
-      bio_urls: user.entities?.description?.urls?.map((u: any) => u.expanded_url) ?? [],
-    };
-
-    return JSON.stringify(summary, null, 2);
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("TWITTER_BEARER_TOKEN")) throw err;
+      has_url_in_bio: !!(user.url),
+      pinned_tweet: tweets.find((t: any) => t.pinned)?.full_text?.slice(0, 200) ?? null,
+      sample_tweets: tweets.slice(0, 3).map((t: any) => t.full_text?.slice(0, 100)),
+    }, null, 2);
+  } catch {
     return null;
   }
 }

@@ -308,6 +308,21 @@ micro
     });
   });
 
+// Alias: blue micro tasks → blue micro list
+micro
+  .command("tasks")
+  .description("Alias for: blue micro list")
+  .option("--platform <p>", "Filter by platform")
+  .option("--status <s>", "Filter by status")
+  .option("--limit <n>", "Max results", "20")
+  .action(async (opts) => {
+    await runMicroList(undefined, {
+      platform: opts.platform,
+      status: opts.status,
+      limit: opts.limit,
+    });
+  });
+
 micro
   .command("accept [taskId] [handle]")
   .description("Claim a slot on a microtask")

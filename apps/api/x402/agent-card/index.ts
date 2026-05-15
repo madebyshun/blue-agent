@@ -17,26 +17,44 @@ async function checkOnline(handle: string): Promise<"online" | "offline"> {
 
 export default async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
-  const handle = url.searchParams.get("handle");
+  let handle = url.searchParams.get("handle");
+
+  // Also accept POST body: { handle: "..." }
+  if (!handle && req.method === "POST") {
+    try {
+      const text = await req.text();
+      if (text?.trim().startsWith("{")) {
+        const body = JSON.parse(text) as { handle?: string };
+        handle = body.handle ?? null;
+      }
+    } catch {}
+  }
 
   if (!handle) {
-    return Response.json({ error: "handle query param required" }, { status: 400 });
+    return Response.json({ error: "Provide handle as query param or POST body" }, { status: 400 });
   }
 
   try {
-    const result = await scoreAgent(handle);
-    const status = await checkOnline(handle);
+    // Run score + online check with a 55s overall timeout
+    const [result, status] = await Promise.all([
+      Promise.race([
+        scoreAgent(handle),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("scoreAgent timeout after 55s")), 55000)
+        ),
+      ]),
+      checkOnline(handle),
+    ]);
 
     return Response.json({
-      handle: result.handle,
-      xp: result.xp,
-      tier: result.tier,
-      dimensions: result.dimensions,
-      strengths: result.strengths,
-      gaps: result.gaps,
-      badge: result.badge,
+      handle:      result.handle,
+      score:       result.xp,
+      tier:        result.tier,
+      strengths:   result.strengths,
+      gaps:        result.gaps,
+      badge:       result.badge,
       status,
-      cardUrl: `https://blueagent.dev/card/agent/${result.handle}`,
+      cardUrl:     `https://blueagent.dev/card/agent/${result.handle}`,
       generatedAt: new Date().toISOString(),
     });
   } catch (err) {

@@ -94,26 +94,18 @@ Key facts you must know:
 - Migration path: move funds to a fresh wallet that has never sent a transaction, or wait for Ethereum's post-quantum signature upgrade (EIP-7212 and future proposals)
 - Quantum threat timeline: Current estimates suggest harvest-now-decrypt-later attacks are possible, but real-time key cracking requires a cryptographically relevant quantum computer (CRQC) — estimated 5-15 years away
 
-Return ONLY a valid JSON object with this exact structure. No extra text:
+CRITICAL: Return ONLY raw JSON. No markdown. No backticks. Start with { and end with }.
 
 {
   "address": "string",
-  "chain": "string",
-  "quantumRiskLevel": "CRITICAL | HIGH | MEDIUM | LOW | MINIMAL",
-  "riskScore": number (0-100, higher = more at risk),
-  "publicKeyExposed": boolean,
-  "confidenceScore": number (0-100),
-  "threatTimeline": "string (e.g. '5-10 years for practical attack')",
-  "vulnerabilities": [
-    { "type": "string", "severity": "HIGH | MEDIUM | LOW", "description": "string" }
-  ],
-  "protectedFactors": ["string"],
-  "migrationSteps": [
-    { "step": number, "action": "string", "priority": "URGENT | RECOMMENDED | OPTIONAL" }
-  ],
-  "executiveSummary": "string (3-4 sentences, clear and non-technical)",
-  "technicalDetails": "string (2-3 sentences for technical users)",
-  "recommendation": "MIGRATE_NOW | MIGRATE_SOON | MONITOR | SAFE_FOR_NOW"
+  "risk": "CRITICAL | HIGH | MEDIUM | LOW | MINIMAL",
+  "score": <0-100>,
+  "exposed": <true if public key exposed via sent txs>,
+  "timeline": "e.g. 5-10 years for practical attack",
+  "verdict": "MIGRATE_NOW | MIGRATE_SOON | MONITOR | SAFE",
+  "vulnerabilities": ["vuln1", "vuln2"],
+  "steps": ["migration step1", "step2"],
+  "summary": "2-3 sentence plain-English summary"
 }`;
 
     const userMessage = `Analyze quantum computing risk for this ${chain} wallet: ${address}. Return compact JSON only — keep all string values under 100 chars. Max 3 vulnerabilities, max 3 migration steps.`;

@@ -6,10 +6,21 @@ import { scoreBuilder } from "@blueagent/reputation";
 
 export default async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
-  const handle = url.searchParams.get("handle");
+  let handle = url.searchParams.get("handle");
+
+  // Also accept POST body: { handle: "..." }
+  if (!handle && req.method === "POST") {
+    try {
+      const text = await req.text();
+      if (text?.trim().startsWith("{")) {
+        const body = JSON.parse(text) as { handle?: string };
+        handle = body.handle ?? null;
+      }
+    } catch {}
+  }
 
   if (!handle) {
-    return Response.json({ error: "handle query param required" }, { status: 400 });
+    return Response.json({ error: "Provide handle as query param or POST body" }, { status: 400 });
   }
 
   try {

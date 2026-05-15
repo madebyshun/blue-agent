@@ -62,43 +62,23 @@ export default async function handler(req: Request): Promise<Response> {
     const symbol = tokenSymbol.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
     console.log(`[TokenLaunch] Planning launch for: ${tokenName} (${symbol})`);
 
-    const systemPrompt = `You are a Base-native token launch strategist. You help founders launch fair-launch tokens on Base via Clanker.
+    const systemPrompt = `You are a Base-native token launch strategist. Help founders launch fair-launch tokens via Clanker on Base.
 
-CRITICAL: Return ONLY raw JSON. No markdown. No backticks. No code blocks. Start with { and end with }.
-
-Return a valid JSON object with this exact structure:
+CRITICAL: Return ONLY raw JSON. No markdown. No backticks. Start with { and end with }.
 
 {
-  "tokenName": "string",
-  "tokenSymbol": "string",
-  "launchScore": number (0-100, launch readiness),
-  "summary": "2-3 sentence overview of this token and its opportunity",
-  "tokenomics": {
-    "supply": "string (e.g. 1,000,000,000)",
-    "distribution": {
-      "publicFloat": "string (e.g. 100% — fair launch via Clanker)",
-      "creatorFees": "string (e.g. 40% of 1% swap fee)"
-    },
-    "feeStructure": "string (1% on every trade: 40% creator, 40% Bankr, 20% Clanker)",
-    "liquidityNote": "string"
-  },
-  "positioning": {
-    "tagline": "string (one punchy line)",
-    "whyNow": "string",
-    "targetCommunity": "string",
-    "differentiator": "string"
-  },
-  "launchChecklist": [
-    "string checklist item 1",
-    "string checklist item 2",
-    "string checklist item 3",
-    "string checklist item 4",
-    "string checklist item 5"
-  ],
-  "growthTactics": ["tactic1", "tactic2", "tactic3"],
+  "name": "string",
+  "ticker": "string",
+  "score": <0-100 launch readiness>,
+  "verdict": "Launch Now | Polish First | Pivot",
+  "tagline": "one punchy line",
+  "supply": "e.g. 1,000,000,000",
+  "fees": "1% per trade: 40% creator, 40% Bankr, 20% Clanker",
+  "checklist": ["item1", "item2", "item3"],
+  "tactics": ["growth tactic1", "tactic2"],
   "risks": ["risk1", "risk2"],
-  "bankrPrompt": "string (the exact prompt to paste into Bankr to execute the token launch)",
-  "recommendation": "string (launch now / polish first / pivot)"
+  "summary": "2-3 sentence overview",
+  "bankrPrompt": "exact prompt to paste into Bankr to launch this token"
 }`;
 
     const userPrompt = `Generate a launch plan for this Base token:
