@@ -39,35 +39,105 @@ const COMMANDS_DATA = [
 ];
 
 const SKILLS_DATA = [
-  { file: "base-security.md",       stat: "84 checks",     note: "13 categories" },
-  { file: "base-addresses.md",      stat: "Verified",      note: "contracts on Base" },
-  { file: "base-standards.md",      stat: "ERC standards", note: "Base patterns" },
-  { file: "bankr-tools.md",         stat: "Bankr LLM",     note: "x402 patterns" },
-  { file: "blue-agent-identity.md", stat: "Mission",       note: "surfaces + tone" },
-  { file: "design-system.md",       stat: "Visual",        note: "language + components" },
+  { group: "Core", color: "#4FC3F7", items: [
+    { file: "base-security.md",       note: "84 checks · 13 categories" },
+    { file: "base-addresses.md",      note: "verified contracts on Base" },
+    { file: "base-standards.md",      note: "ERC standards · Base patterns" },
+    { file: "base-ecosystem.md",      note: "protocols · teams · infra" },
+    { file: "bankr-tools.md",         note: "Bankr LLM · x402 patterns" },
+    { file: "blue-agent-identity.md", note: "mission · surfaces · tone" },
+    { file: "design-system.md",       note: "visual · language · components" },
+  ]},
+  { group: "Security", color: "#f87171", items: [
+    { file: "solidity-security-patterns.md",     note: "access control · reentrancy" },
+    { file: "oracle-design-guide.md",            note: "Chainlink · TWAP · validation" },
+    { file: "mev-protection-guide.md",           note: "frontrun defense · slippage" },
+    { file: "mev-protection-advanced.md",        note: "Flashbots · Protect RPC" },
+    { file: "cross-chain-bridge-security.md",    note: "finality · replay attacks" },
+    { file: "agent-wallet-security.md",          note: "key mgmt · spend limits" },
+    { file: "wallet-guardrails.md",              note: "allowlists · simulation" },
+  ]},
+  { group: "DeFi", color: "#34d399", items: [
+    { file: "aerodrome-dex-guide.md",         note: "pools · voting · bribes" },
+    { file: "aave-lending-patterns.md",        note: "supply · borrow · liquidation" },
+    { file: "uniswap-v4-hooks-guide.md",       note: "hooks · pool manager" },
+    { file: "flashloan-patterns.md",           note: "callback · use cases" },
+    { file: "flashloan-patterns-advanced.md",  note: "arbitrage · MEV defense" },
+    { file: "staking-yield-farming.md",        note: "vaults · rewards · compounding" },
+    { file: "gas-optimization-guide.md",       note: "packing · calldata · assembly" },
+  ]},
+  { group: "Accounts & Wallets", color: "#a78bfa", items: [
+    { file: "base-account-integration.md",      note: "ERC-4337 · passkeys · sponsored" },
+    { file: "account-abstraction-deep-dive.md",  note: "UserOps · bundlers · paymasters" },
+    { file: "multi-sig-wallet-security.md",      note: "Safe · threshold · timelock" },
+    { file: "veil-privacy-transactions.md",      note: "stealth · private transfers" },
+  ]},
+  { group: "Payments", color: "#fbbf24", items: [
+    { file: "x402-patterns.md",        note: "pay-per-call · pricing · flow" },
+    { file: "x402-escrow-patterns.md",  note: "conditional release · USDC" },
+  ]},
+  { group: "Distribution", color: "#fb923c", items: [
+    { file: "frames-miniapps.md",         note: "Frame spec · actions · txs" },
+    { file: "telegram-bot-patterns.md",    note: "webhooks · inline · wallet flows" },
+    { file: "governance-dao-patterns.md",  note: "Governor · timelock · quorum" },
+  ]},
+  { group: "Infrastructure", color: "#94a3b8", items: [
+    { file: "gig-marketplace-guide.md",          note: "escrow · reputation · USDC" },
+    { file: "postgres-for-agents.md",            note: "schema · indexing · pgvector" },
+    { file: "reputation-engine.md",              note: "Builder Score · Agent Score" },
+    { file: "agent-transaction-verification.md", note: "pre-flight · simulation" },
+  ]},
 ];
 
 const ALL_COMMANDS = [
   { group: "WORKFLOW", items: [
-    { cmd: "blue idea",        arrow: "concept → brief" },
-    { cmd: "blue build",       arrow: "brief → architecture" },
-    { cmd: "blue audit",       arrow: "code → security review" },
-    { cmd: "blue ship",        arrow: "project → deploy checklist" },
-    { cmd: "blue raise",       arrow: "idea → fundraising narrative" },
+    { cmd: "blue idea",              arrow: "concept → fundable brief" },
+    { cmd: "blue build",             arrow: "brief → architecture + stack" },
+    { cmd: "blue audit",             arrow: "code → security review" },
+    { cmd: "blue ship",              arrow: "project → deploy checklist" },
+    { cmd: "blue raise",             arrow: "idea → fundraising narrative" },
   ]},
   { group: "SETUP", items: [
-    { cmd: "blue init",        arrow: "install 6 skills to ~/.blue-agent/skills/" },
-    { cmd: "blue new",         arrow: "scaffold base-agent | base-x402 | base-token" },
+    { cmd: "blue init",              arrow: "install 34 skills to ~/.blue-agent/skills/" },
+    { cmd: "blue new <name>",        arrow: "scaffold base-agent | base-x402 | base-token" },
+    { cmd: "blue doctor",            arrow: "verify node, skills, API key, config" },
+    { cmd: "blue validate [dir]",    arrow: "project health — package.json, tsconfig, env" },
+  ]},
+  { group: "CHAT", items: [
+    { cmd: "blue chat",              arrow: "streaming multi-turn REPL with Blue Agent" },
   ]},
   { group: "SCORE", items: [
-    { cmd: "blue score",       arrow: "@handle → Builder Score" },
-    { cmd: "blue agent-score", arrow: "@handle|npm|github → Agent Score" },
+    { cmd: "blue score",             arrow: "@handle → Builder Score (0-100)" },
+    { cmd: "blue agent-score",       arrow: "@handle|npm|github → Agent Score" },
+    { cmd: "blue compare [a] [b]",   arrow: "compare two builders or agents" },
+  ]},
+  { group: "DISCOVERY", items: [
+    { cmd: "blue search [query]",    arrow: "search builders, agents, projects, tokens" },
+    { cmd: "blue trending [filter]", arrow: "trending on Base — builders|agents|tokens" },
+    { cmd: "blue watch [target]",    arrow: "watch wallet, handle, or token for activity" },
+    { cmd: "blue alert add",         arrow: "configure price or activity alerts" },
+    { cmd: "blue history [input]",   arrow: "activity history for builder or agent" },
+  ]},
+  { group: "LAUNCH / MARKET", items: [
+    { cmd: "blue launch [mode]",     arrow: "token launch on Base | agent on Bankr" },
+    { cmd: "blue market",            arrow: "browse or publish on Bankr marketplace" },
   ]},
   { group: "TASKS", items: [
-    { cmd: "blue tasks",       arrow: "browse open tasks" },
-    { cmd: "blue post-task",   arrow: "create task + escrow USDC" },
-    { cmd: "blue accept",      arrow: "accept a task" },
-    { cmd: "blue submit",      arrow: "submit proof + earn XP" },
+    { cmd: "blue tasks",             arrow: "browse open tasks in Work Hub" },
+    { cmd: "blue post-task",         arrow: "create task + escrow USDC" },
+    { cmd: "blue accept <taskId>",   arrow: "accept an open task" },
+    { cmd: "blue submit <taskId>",   arrow: "submit proof + earn XP + USDC" },
+  ]},
+  { group: "MICROTASKS", items: [
+    { cmd: "blue micro post",        arrow: "post $0.10–$20 microtask with slots" },
+    { cmd: "blue micro list",        arrow: "browse open microtasks" },
+    { cmd: "blue micro accept",      arrow: "claim a slot on a microtask" },
+    { cmd: "blue micro submit",      arrow: "submit proof URL for claimed slot" },
+    { cmd: "blue micro approve",     arrow: "approve submission + release USDC" },
+    { cmd: "blue micro profile",     arrow: "doer earnings, reputation, history" },
+  ]},
+  { group: "TERMINAL UI", items: [
+    { cmd: "blue tui",               arrow: "open @blueagent/cli full TUI" },
   ]},
 ];
 
@@ -137,14 +207,6 @@ const ECOSYSTEM_LAYERS = [
         desc: "Terminal UI — interactive menu, navigate with arrow keys. 8 categories, 31+ tools.",
         install: "npm install -g @blueagent/cli",
         badge: "TUI",
-      },
-      {
-        pkg: "@blueagent/builder",
-        cmd: "blue",
-        version: "v0.1.11",
-        desc: "CLI — 5 core commands + setup + score + tasks. The workhorse.",
-        install: "npm install -g @blueagent/builder",
-        badge: "CLI",
       },
     ],
   },
@@ -314,7 +376,7 @@ function Hero() {
 
 function StatsBar() {
   const stats = [
-    { n: "6",  label: "Skills" },
+    { n: "34", label: "Skills" },
     { n: "37", label: "Tools" },
     { n: "30", label: "Commands" },
     { n: "9",  label: "Packages" },
@@ -376,24 +438,30 @@ function GroundingContract() {
       <div className="mb-10">
         <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-2">// GROUNDING CONTRACT</p>
         <h2 className="font-mono text-3xl sm:text-4xl font-bold text-white mb-2">Zero hallucinations.</h2>
-        <p className="font-mono text-sm text-slate-500">6 skill files · loaded before every command · verified Base data only</p>
+        <p className="font-mono text-sm text-slate-500">34 skill files · loaded before every command · verified Base data only</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-8">
-        {SKILLS_DATA.map((s) => (
-          <div key={s.file} className="card-surface rounded-lg p-4 flex flex-col gap-1">
-            <span className="font-mono text-xs text-[#4FC3F7]">{s.file}</span>
-            <div className="flex gap-2 mt-1">
-              <span className="font-mono text-[10px] text-white">{s.stat}</span>
-              <span className="font-mono text-[10px] text-slate-600">·</span>
-              <span className="font-mono text-[10px] text-slate-600">{s.note}</span>
+      <div className="space-y-6 mb-8">
+        {SKILLS_DATA.map((g) => (
+          <div key={g.group}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="font-mono text-[10px] tracking-widest" style={{ color: g.color }}>{g.group.toUpperCase()}</span>
+              <span className="font-mono text-[10px] text-slate-700">{g.items.length} files</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+              {g.items.map((s) => (
+                <div key={s.file} className="card-surface rounded-lg p-3 flex flex-col gap-1">
+                  <span className="font-mono text-[11px]" style={{ color: g.color }}>{s.file}</span>
+                  <span className="font-mono text-[10px] text-slate-600">{s.note}</span>
+                </div>
+              ))}
             </div>
           </div>
         ))}
       </div>
 
       <div className="card-surface rounded-lg p-4 max-w-sm inline-flex flex-col gap-1">
-        <span className="font-mono text-[10px] text-slate-600">$ <span className="text-[#4FC3F7]">blue init</span> <span className="text-slate-700">← install all 6 skills</span></span>
+        <span className="font-mono text-[10px] text-slate-600">$ <span className="text-[#4FC3F7]">blue init</span> <span className="text-slate-700">← install all 34 skills</span></span>
       </div>
     </section>
   );
@@ -544,8 +612,6 @@ function EcosystemPackages() {
       {/* Architecture arrow */}
       <div className="mt-10 card-surface rounded-lg p-4 flex flex-col sm:flex-row items-center justify-center gap-2 text-center">
         <span className="font-mono text-[10px] text-[#4FC3F7]">@blueagent/cli</span>
-        <span className="font-mono text-[10px] text-slate-700">→ wraps →</span>
-        <span className="font-mono text-[10px] text-white">@blueagent/builder</span>
         <span className="font-mono text-[10px] text-slate-700">→ calls →</span>
         <span className="font-mono text-[10px] text-[#A78BFA]">@blueagent/core</span>
         <span className="font-mono text-[10px] text-slate-700">→ LLM via →</span>
@@ -599,7 +665,7 @@ function QuickStart() {
             <span className="font-mono text-[9px] text-green-400/70 border border-green-400/20 px-1.5 rounded">recommended</span>
           </div>
           <div className="p-4 space-y-2 font-mono text-sm">
-            <div><span className="text-slate-700">$ </span><span className="text-white">npm i -g @blueagent/builder</span></div>
+            <div><span className="text-slate-700">$ </span><span className="text-white">npm i -g @blueagent/cli</span></div>
             <div><span className="text-slate-700">$ </span><span className="text-white">blue init</span></div>
             <div><span className="text-slate-700">$ </span><span className="text-[#4FC3F7]">blue idea "my Base project"</span></div>
           </div>
@@ -653,7 +719,7 @@ function Footer() {
         <div className="flex items-center gap-4 font-mono text-[10px] text-slate-700">
           <a href="https://github.com/madebyshun/blue-agent" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">github</a>
           <a href="https://t.me/blueagent_hub" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">telegram</a>
-          <a href="https://npmjs.com/package/@blueagent/builder" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">npm</a>
+          <a href="https://npmjs.com/package/@blueagent/cli" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">npm</a>
           <a href="https://blueagent.dev" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">blueagent.dev</a>
           <a href="https://x.com/blocky_agent" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">@blocky_agent</a>
         </div>
@@ -675,7 +741,6 @@ export default function Home() {
         <CommandsSection />
         <EcosystemPackages />
         <Integrations />
-        <QuickStart />
         <Footer />
       </main>
     </>
