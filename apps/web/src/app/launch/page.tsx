@@ -91,7 +91,7 @@ export default function LaunchPage() {
           <h1 className="font-mono font-bold text-4xl sm:text-5xl text-white mb-4">
             Launch on <span className="text-gradient-blue">Base</span>
           </h1>
-          <p className="text-slate-400 text-lg max-w-2xl">
+          <p className="font-mono text-base text-slate-400 max-w-2xl">
             Deploy a fair-launch token via Bankr + Clanker, or publish an agent to the Bankr marketplace.
           </p>
         </div>
@@ -162,7 +162,7 @@ export default function LaunchPage() {
               <div className="flex flex-col gap-4">
                 <div className="card-surface rounded-2xl p-6">
                   <div className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-4">HOW IT WORKS</div>
-                  <ol className="space-y-3 text-sm text-slate-400">
+                  <ol className="space-y-3 font-mono text-sm text-slate-400">
                     {[
                       "Fill in your token details",
                       "Get a launch plan + ready-to-run Bankr prompt",
@@ -206,7 +206,7 @@ export default function LaunchPage() {
                     <h2 className="font-mono font-bold text-2xl text-white">
                       {result.tokenName} <span className="text-[#4FC3F7]">({result.tokenSymbol})</span>
                     </h2>
-                    <p className="text-sm text-slate-400 mt-1">{result.summary}</p>
+                    <p className="font-mono text-sm text-slate-400 mt-1">{result.summary}</p>
                   </div>
                   <div className="text-center">
                     <div className="font-mono text-4xl font-black" style={{ color: scoreColor(result.launchScore) }}>
@@ -221,7 +221,7 @@ export default function LaunchPage() {
                     <div className="card-surface rounded-2xl p-6">
                       <div className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-3">POSITIONING</div>
                       <p className="font-mono font-bold text-white mb-3">"{result.positioning.tagline}"</p>
-                      <div className="space-y-1.5 text-sm text-slate-400">
+                      <div className="space-y-1.5 font-mono text-sm text-slate-400">
                         <p><span className="font-semibold text-slate-300">Why now:</span> {result.positioning.whyNow}</p>
                         <p><span className="font-semibold text-slate-300">Community:</span> {result.positioning.targetCommunity}</p>
                         <p><span className="font-semibold text-slate-300">Edge:</span> {result.positioning.differentiator}</p>
@@ -232,7 +232,7 @@ export default function LaunchPage() {
                   {result.tokenomics && (
                     <div className="card-surface rounded-2xl p-6">
                       <div className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-3">TOKENOMICS</div>
-                      <div className="space-y-1.5 text-sm text-slate-400">
+                      <div className="space-y-1.5 font-mono text-sm text-slate-400">
                         <p><span className="font-semibold text-slate-300">Supply:</span> {result.tokenomics.supply}</p>
                         <p><span className="font-semibold text-slate-300">Fees:</span> {result.tokenomics.feeStructure}</p>
                         <p><span className="font-semibold text-slate-300">Liquidity:</span> {result.tokenomics.liquidityNote}</p>
@@ -245,7 +245,7 @@ export default function LaunchPage() {
                   {result.launchChecklist?.length > 0 && (
                     <div className="card-surface rounded-2xl p-6">
                       <div className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-3">LAUNCH CHECKLIST</div>
-                      <ul className="space-y-1.5 text-sm text-slate-400">
+                      <ul className="space-y-1.5 font-mono text-sm text-slate-400">
                         {result.launchChecklist.map((item, i) => (
                           <li key={i} className="flex gap-2">
                             <span className="text-[#4FC3F7]">□</span> {item}
@@ -259,7 +259,7 @@ export default function LaunchPage() {
                     {result.growthTactics?.length > 0 && (
                       <div className="card-surface rounded-2xl p-5">
                         <div className="font-mono text-xs text-emerald-400 tracking-widest mb-2">GROWTH TACTICS</div>
-                        <ul className="space-y-1 text-sm text-slate-400">
+                        <ul className="space-y-1 font-mono text-sm text-slate-400">
                           {result.growthTactics.map((t, i) => <li key={i}>· {t}</li>)}
                         </ul>
                       </div>
@@ -267,7 +267,7 @@ export default function LaunchPage() {
                     {result.risks?.length > 0 && (
                       <div className="card-surface rounded-2xl p-5">
                         <div className="font-mono text-xs text-red-400 tracking-widest mb-2">RISKS</div>
-                        <ul className="space-y-1 text-sm text-slate-400">
+                        <ul className="space-y-1 font-mono text-sm text-slate-400">
                           {result.risks.map((r, i) => <li key={i}>· {r}</li>)}
                         </ul>
                       </div>

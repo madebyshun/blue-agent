@@ -9,9 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.100.10",
     "next": "15.3.9",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "viem": "^2.49.2",
+    "wagmi": "^3.6.15"
   },
   "devDependencies": {
     "@types/node": "^20",

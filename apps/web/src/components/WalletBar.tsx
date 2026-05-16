@@ -91,14 +91,19 @@ export default function WalletBar({ onWalletChange }: WalletBarProps) {
 
   if (!address) {
     return (
-      <button
-        onClick={connect}
-        disabled={loading}
-        className="font-mono text-xs font-semibold px-3 py-1.5 rounded border transition-all disabled:opacity-60"
-        style={{ borderColor: "#4FC3F7", color: "#4FC3F7", background: "#4FC3F718" }}
-      >
-        {loading ? "Connecting…" : "Connect Wallet"}
-      </button>
+      <div className="flex flex-col items-start gap-0.5">
+        <button
+          onClick={connect}
+          disabled={loading}
+          className="font-mono text-xs font-semibold px-3 py-1.5 rounded border transition-all disabled:opacity-60"
+          style={{ borderColor: "#4FC3F7", color: "#4FC3F7", background: "#4FC3F718" }}
+        >
+          {loading ? "Connecting…" : "Connect Wallet"}
+        </button>
+        {!loading && (
+          <span className="font-mono text-[9px] text-slate-600 px-0.5">→ 200 free credits</span>
+        )}
+      </div>
     );
   }
 
