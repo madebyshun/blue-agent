@@ -140,8 +140,19 @@ blue-agent/
 │   └── skills/           # Bundled .md skill files (34 skills)
 ├── commands/             # Command contract docs (idea.md, build.md, ...)
 ├── agents/               # Agent runtime config (agent.json, tasks.json)
+├── skills/               # Public skills entrypoint for Gitlawb collab
+├── templates/            # Public starter templates for Gitlawb collab
+├── collab/               # Issues, bounties, evals, prompts, fixtures
 └── docs/                 # Product brief, roadmap, quickstart
 ```
+
+## Gitlawb collab layers
+
+- `skills/` — grounded knowledge files that others can fork and improve
+- `templates/` — starter kits and scaffolds for Base-native projects
+- `collab/` — issue packs, bounty board items, evals, prompts, and fixtures
+
+If you want to contribute, start with one small item in the matching layer.
 
 ---
 
