@@ -65,6 +65,22 @@ blue-agent/
 
 ---
 
+## Aeon Skills (installed from BankrBot/skills)
+
+Five Aeon skills are bundled in `skills/` and available to any command or agent session:
+
+| Skill | File | Use when |
+|---|---|---|
+| `aeon-token-movers` | `skills/aeon-token-movers.md` | "what's pumping", "top movers today", pre-trade scan |
+| `aeon-token-pick` | `skills/aeon-token-pick.md` | "give me a token pick", "asymmetric setup today" |
+| `aeon-narrative-tracker` | `skills/aeon-narrative-tracker.md` | "what's running on CT", "narrative positions", content ideas |
+| `aeon-deep-research` | `skills/aeon-deep-research.md` | "DD on X", "build me a memo", "contrarian take" |
+| `aeon-distribute-tokens` | `skills/aeon-distribute-tokens.md` | Weekly $BLUEAGENT rewards payout to leaderboard |
+
+When a user request matches a trigger phrase, load the skill file and follow its output rules. All Aeon skills are **read-to-apply** — no extra setup required except `aeon-distribute-tokens` which needs `BANKR_API_KEY` with Wallet write scope.
+
+---
+
 ## Hard rules
 
 1. **Base chain only.** Never suggest Ethereum mainnet. All contract addresses, RPC calls, and on-chain actions target Base (chain ID 8453). Mention Base explicitly in every on-chain context.
