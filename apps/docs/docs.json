@@ -2,18 +2,11 @@
   "$schema": "https://mintlify.com/schema.json",
   "name": "Blue Agent",
   "theme": "mint",
-  "logo": {
-    "dark": "/logo/dark.svg",
-    "light": "/logo/light.svg"
-  },
   "favicon": "/favicon.svg",
   "colors": {
     "primary": "#4FC3F7",
     "light": "#4FC3F7",
-    "dark": "#29ABE2",
-    "background": {
-      "dark": "#050508"
-    }
+    "dark": "#29ABE2"
   },
   "topbarLinks": [
     {
@@ -25,16 +18,6 @@
     "name": "Open Console",
     "url": "https://blueagent.dev/console"
   },
-  "tabs": [
-    {
-      "name": "CLI Reference",
-      "url": "cli"
-    },
-    {
-      "name": "API Reference",
-      "url": "api"
-    }
-  ],
   "anchors": [
     {
       "name": "GitHub",
@@ -52,34 +35,51 @@
       "url": "https://t.me/blueagent_hub"
     }
   ],
-  "navigation": [
-    {
-      "group": "Get Started",
-      "pages": ["introduction", "quickstart", "installation"]
-    },
-    {
-      "group": "CLI Reference",
-      "pages": [
-        "cli/workflow",
-        "cli/setup",
-        "cli/chat",
-        "cli/score",
-        "cli/discovery",
-        "cli/launch",
-        "cli/tasks",
-        "cli/microtasks",
-        "cli/tui"
-      ]
-    },
-    {
-      "group": "Skills",
-      "pages": ["skills/overview", "skills/mcp"]
-    },
-    {
-      "group": "API Reference",
-      "pages": ["api/overview", "api/console", "api/chat", "api/x402"]
-    }
-  ],
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Docs",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["introduction", "quickstart", "installation"]
+          },
+          {
+            "group": "Skills",
+            "pages": ["skills/overview", "skills/mcp"]
+          }
+        ]
+      },
+      {
+        "tab": "CLI Reference",
+        "groups": [
+          {
+            "group": "Commands",
+            "pages": [
+              "cli/workflow",
+              "cli/setup",
+              "cli/chat",
+              "cli/score",
+              "cli/discovery",
+              "cli/launch",
+              "cli/tasks",
+              "cli/microtasks",
+              "cli/tui"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "API",
+            "pages": ["api/overview", "api/console", "api/chat", "api/x402"]
+          }
+        ]
+      }
+    ]
+  },
   "footerSocials": {
     "x-twitter": "https://x.com/blocky_agent",
     "github": "https://github.com/madebyshun/blue-agent"
