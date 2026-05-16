@@ -1,0 +1,52 @@
+---
+title: MCP Setup
+description: Use Blue Agent skills inside Claude Desktop
+---
+
+`@blueagent/skill` exposes all Blue Agent skills as an MCP (Model Context Protocol) server — use them directly inside Claude Desktop or any MCP-compatible client.
+
+## Install
+
+```bash
+npm install -g @blueagent/skill
+```
+
+## Configure Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "blue-agent": {
+      "command": "npx",
+      "args": ["-y", "@blueagent/skill"],
+      "env": {
+        "BANKR_API_KEY": "your_key_here"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop. You'll see Blue Agent tools in the tool picker.
+
+## Available MCP tools
+
+| Tool | Description |
+|------|-------------|
+| `blue_idea` | Generate a fundable brief |
+| `blue_build` | Generate a build plan |
+| `blue_audit` | Security review |
+| `blue_ship` | Deployment checklist |
+| `blue_raise` | Fundraising narrative |
+| `blue_score` | Builder Score lookup |
+| `blue_new` | Scaffold a Base project |
+
+## Usage in Claude
+
+Once configured, just ask Claude:
+
+> "Use blue_idea to help me plan an AI agent marketplace on Base"
+
+Claude will automatically invoke the skill with proper Base-native grounding.

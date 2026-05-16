@@ -1,0 +1,54 @@
+---
+title: Score Commands
+description: Reputation and builder identity on Base
+---
+
+## blue score
+
+Fetch Builder Score for a Base wallet or X handle.
+
+```bash
+blue score @blocky_agent
+blue score 0x1234...abcd
+```
+
+**Dimensions scored:**
+- Onchain activity (Base transactions, contracts deployed)
+- Social presence (X/Farcaster followers, engagement)
+- Builder thesis (projects, contributions)
+- Ecosystem involvement (protocols used, Base-native activity)
+
+**Output:** Score 0–100 with dimension breakdown.
+
+---
+
+## blue agent-score
+
+Evaluate an agent's reliability score.
+
+```bash
+blue agent-score @blocky_agent
+blue agent-score npm:@blueagent/builder
+blue agent-score github.com/madebyshun/blue-agent
+blue agent-score https://blueagent.dev
+```
+
+**Dimensions scored:**
+- Onchain activity
+- Task completion rate
+- Reputation (reviews, ratings)
+- Stack quality (code, docs, tests)
+- Ecosystem fit
+
+---
+
+## blue compare
+
+Compare two builders or agents side by side.
+
+```bash
+blue compare @builder1 @builder2
+blue compare npm:@pkg1 github.com/repo2
+```
+
+Shows a side-by-side breakdown of scores, strengths, and gaps.

@@ -1,0 +1,54 @@
+---
+title: Chat API
+description: Streaming chat with Bankr LLM
+---
+
+## POST /api/chat
+
+Streaming SSE endpoint. Returns a `text/event-stream` response.
+
+### Request
+
+```bash
+curl -X POST https://blueagent.dev/api/chat \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_BANKR_KEY" \
+  -d '{
+    "messages": [
+      { "role": "user", "content": "How do I deploy an ERC-20 on Base?" }
+    ],
+    "tier": "pro"
+  }'
+```
+
+### Body
+
+```json
+{
+  "messages": [
+    { "role": "user", "content": "string" }
+  ],
+  "tier": "pro"
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `messages` | array | required | Message history (role + content) |
+| `tier` | string | `"pro"` | `"fast"` \| `"pro"` \| `"max"` |
+
+### Tiers
+
+| Tier | Model | Max tokens |
+|------|-------|-----------|
+| `fast` | claude-haiku-4-5 | 1024 |
+| `pro` | claude-sonnet-4-6 | 2048 |
+| `max` | claude-sonnet-4-6 | 4096 |
+
+### Response
+
+Server-sent events stream. Each chunk:
+
+```
+data: {"type":"content_block_delta","delta":{"text":"Hello"}}
+```

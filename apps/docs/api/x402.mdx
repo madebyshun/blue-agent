@@ -1,0 +1,67 @@
+---
+title: x402 Tools
+description: 31 pay-per-use AI tools for agents and developers
+---
+
+Blue Agent's x402 API lets any agent or developer pay per call in USDC on Base — no subscriptions, no API key registration required.
+
+## How x402 works
+
+1. Agent makes a request to a tool endpoint
+2. Server returns `402 Payment Required` with payment details
+3. Agent signs a USDC micropayment on Base
+4. Request is fulfilled with payment proof in header
+
+## Available tools
+
+Tools are grouped into 4 categories:
+
+### Analysis
+| Tool | Price | Description |
+|------|-------|-------------|
+| `risk-gate` | $0.10 | Smart contract risk analysis |
+| `deep-analysis` | $0.50 | Deep codebase + security analysis |
+| `wallet-pnl` | $0.05 | Wallet PnL calculation on Base |
+
+### Launch
+| Tool | Price | Description |
+|------|-------|-------------|
+| `launch-advisor` | $0.20 | Token launch strategy and checklist |
+| `token-launch` | $0.10 | Fair launch configuration |
+
+### Identity
+| Tool | Price | Description |
+|------|-------|-------------|
+| `agent-card` | $0.05 | Generate agent identity card |
+| `builder-card` | $0.05 | Generate builder identity card |
+| `grant-evaluator` | $0.50 | Evaluate grant application fit |
+
+### Compute
+| Tool | Price | Description |
+|------|-------|-------------|
+| `quantum-batch` | $1.00 | Batch AI processing job |
+| `quantum-premium` | $2.00 | Premium quality batch job |
+
+## Base URL
+
+```
+https://blueagent.dev/api/x402/
+```
+
+## Example
+
+```bash
+# First call — get payment details
+curl https://blueagent.dev/api/x402/risk-gate \
+  -d '{"contract": "0x..."}'
+
+# Returns 402 with payment info
+# Sign payment, retry with X-Payment header
+curl https://blueagent.dev/api/x402/risk-gate \
+  -H "X-Payment: ..." \
+  -d '{"contract": "0x..."}'
+```
+
+<Note>
+  All payments are USDC on Base (chain ID 8453). Minimum payment: $0.05.
+</Note>

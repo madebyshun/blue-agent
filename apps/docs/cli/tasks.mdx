@@ -1,0 +1,51 @@
+---
+title: Tasks
+description: Work Hub task flow — post, accept, and submit tasks
+---
+
+## blue tasks
+
+Browse open tasks in the Work Hub.
+
+```bash
+blue tasks
+blue tasks --category audit
+blue tasks --category dev
+blue tasks --category content
+```
+
+---
+
+## blue post-task
+
+Post a new task.
+
+```bash
+blue post-task @myhandle
+```
+
+Interactive prompts for title, description, category, reward (USDC), and deadline.
+
+---
+
+## blue accept
+
+Accept an open task.
+
+```bash
+blue accept <taskId>
+blue accept task_abc123
+```
+
+---
+
+## blue submit
+
+Submit completed work.
+
+```bash
+blue submit <taskId> <yourHandle> <proofUrl>
+blue submit task_abc123 @myhandle https://github.com/myrepo/pr/1
+```
+
+Triggers review and releases payment on approval.

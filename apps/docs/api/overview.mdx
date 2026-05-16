@@ -1,0 +1,32 @@
+---
+title: API Overview
+description: Blue Agent REST API — console, chat, and x402 tools
+---
+
+All API endpoints are hosted at `https://blueagent.dev/api`.
+
+## Authentication
+
+```bash
+# All requests require BANKR_API_KEY in the x-api-key header
+curl -H "x-api-key: YOUR_KEY" https://blueagent.dev/api/console
+```
+
+## Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/console` | POST | Run a workflow command (idea/build/audit/ship/raise) |
+| `/api/chat` | POST | Streaming chat with Bankr LLM |
+| `/api/builder-score` | POST | Get Builder Score for an X handle |
+| `/api/agent-score` | POST | Get Agent Score for a package/repo/URL |
+
+## Base URL
+
+```
+https://blueagent.dev/api
+```
+
+## Rate limits
+
+Rate limits are enforced per API key. Contact [@blocky_agent](https://x.com/blocky_agent) for higher limits.
