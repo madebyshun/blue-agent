@@ -1,0 +1,58 @@
+version: 1
+source:
+  repo: madebyshun/blue-agent
+  branch: main
+  root: .
+
+include:
+  - skills/*.md
+  - templates/*/README.md
+  - commands/*.md
+  - docs/product-brief.md
+  - docs/roadmap.md
+  - docs/command-map.md
+  - docs/issue-packs.md
+  - collab/*.md
+  - collab/exports/*.md
+
+exclude:
+  - node_modules/**
+  - .next/**
+  - dist/**
+  - build/**
+  - coverage/**
+  - .env*
+  - .claude/**
+  - .git/**
+
+watch:
+  schedule: "0 7 * * *"
+  triggers:
+    - path: skills/*.md
+      on_change: skill_digest
+    - path: templates/*/README.md
+      on_change: template_digest
+    - path: commands/*.md
+      on_change: command_contract_digest
+    - path: docs/roadmap.md
+      on_change: roadmap_digest
+    - path: docs/issue-packs.md
+      on_change: issue_pack_digest
+    - path: collab/*.md
+      on_change: collab_digest
+    - path: collab/exports/*.md
+      on_change: export_digest
+
+outputs:
+  digest_dir: collab/aeon-output/
+  health_dir: collab/aeon-health/
+  alert_channel: telegram
+  alert_target: blueagent_hub
+
+rules:
+  - base_only
+  - no_hallucinated_addresses
+  - no_secret_propagation
+  - prefer_small_shippable_changes
+  - alert_only_when_actionable
+  - summarize_before_recommending
