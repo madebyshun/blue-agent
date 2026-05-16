@@ -130,7 +130,7 @@ blue-agent/
 │   └── worker/           # Background cron — task expiry, auto-approve, reputation sync
 ├── packages/
 │   ├── cli/              # @blueagent/cli — TUI (Ink + React)
-│   ├── builder/          # @blueagent/builder — blue idea/build/audit/ship/raise
+│   ├── builder/          # internal command engine behind @blueagent/cli
 │   ├── core/             # Shared schemas, pricing, tool-input specs
 │   ├── bankr/            # Bankr LLM client (callBankrLLM)
 │   ├── reputation/       # @blueagent/reputation — Builder Score + Agent Score
@@ -173,8 +173,7 @@ If you want to contribute, start with one small item in the matching layer.
 
 | Package | Version | Description |
 |---|---|---|
-| `@blueagent/cli` | 1.3.5 | TUI — full builder console |
-| `@blueagent/builder` | 0.1.10 | Core build commands |
+| `@blueagent/cli` | 1.3.14 | CLI/TUI — full builder console |
 | `@blueagent/reputation` | 0.1.1 | Builder Score + Agent Score |
 | `@blueagent/skill` | 0.1.1 | Skill loader |
 

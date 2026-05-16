@@ -6,12 +6,14 @@ Last updated: 2026-05-12
 
 ## Immediate (can ship now)
 
-### 1. Publish `@blueagent/builder` v0.1.9
-The package now has 22 commands (was 14). Bump version and publish.
+### 1. Make `@blueagent/cli` the public-facing install path
+Blue Agent users should install the single package:
 
 ```bash
-cd packages/builder && npm version patch && npm publish --access public
+npm install -g @blueagent/cli
 ```
+
+Keep `packages/builder` as the internal command engine behind the CLI.
 
 ### 2. Set BANKR_API_KEY in .env
 All commands that call Bankr LLM require this env var. Catch missing key in `blue doctor`.

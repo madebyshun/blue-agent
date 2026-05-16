@@ -42,7 +42,7 @@ export default function HubPage() {
         </div>
 
         <p className="font-mono text-[10px] text-slate-700 mt-10">
-          Available now via CLI · <span className="text-slate-600">npm install -g @blueagent/builder</span>
+          Available now via CLI · <span className="text-slate-600">npm install -g @blueagent/cli</span>
         </p>
       </main>
     </>
