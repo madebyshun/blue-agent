@@ -1,0 +1,75 @@
+---
+title: Setup Commands
+description: Project init and environment health
+---
+
+## blue init
+
+Initialize Blue Agent in an existing repo.
+
+```bash
+blue init
+```
+
+Installs 6 skill files to `~/.blue-agent/skills/`:
+- `base-security.md`
+- `base-addresses.md`
+- `base-standards.md`
+- `bankr-tools.md`
+- `blue-agent-identity.md`
+- `design-system.md`
+
+---
+
+## blue new
+
+Scaffold a new Base project.
+
+```bash
+blue new <name>
+blue new my-token --template base-token
+blue new my-api --template base-x402
+blue new my-agent --template base-agent
+```
+
+**Templates:**
+| Template | Description |
+|----------|-------------|
+| `base-agent` | AI agent with Bankr LLM + x402 payments |
+| `base-x402` | Paid API service using x402 protocol |
+| `base-token` | ERC-20 token on Base with fair launch |
+
+---
+
+## blue doctor
+
+Full environment health check.
+
+```bash
+blue doctor
+```
+
+Checks:
+- Node.js version (requires 18+)
+- `BANKR_API_KEY` configured
+- Skills installed
+- Config file valid
+- Network connectivity to Bankr LLM
+
+---
+
+## blue validate
+
+Project health check for an existing directory.
+
+```bash
+blue validate
+blue validate ./my-project
+```
+
+Checks:
+- `package.json` present
+- `tsconfig.json` valid
+- `.env` / env vars configured
+- `src/` directory structure
+- Git initialized

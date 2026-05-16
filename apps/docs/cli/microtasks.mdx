@@ -1,0 +1,87 @@
+---
+title: Microtasks
+description: On-demand micro work with instant USDC payout
+---
+
+Microtasks are small, well-scoped jobs ($0.10–$20) with instant USDC payout on Base. Post them, accept them, submit them — all from the CLI.
+
+## blue micro post
+
+Post a new microtask.
+
+```bash
+blue micro post [desc]
+blue micro post "retweet our launch post" --reward 0.5 --slots 10
+blue micro post "translate README to Vietnamese" --reward 5 --platform github
+```
+
+**Options:**
+- `--reward` — USDC amount per slot
+- `--slots` — number of workers
+- `--platform` — `x` | `github` | `farcaster` | `any`
+- `--proof` — `url` | `screenshot` | `tx`
+
+---
+
+## blue micro list
+
+Browse open microtasks.
+
+```bash
+blue micro list
+blue micro list --platform x --sort reward
+blue micro list --status open
+```
+
+---
+
+## blue micro accept
+
+Claim a slot on an open microtask.
+
+```bash
+blue micro accept <taskId>
+blue micro accept task_abc123
+```
+
+---
+
+## blue micro submit
+
+Submit proof for a claimed slot.
+
+```bash
+blue micro submit <taskId> <proofUrl>
+blue micro submit task_abc123 https://x.com/yourpost/status/...
+```
+
+---
+
+## blue micro approve
+
+Approve a submission and release USDC to the worker.
+
+```bash
+blue micro approve <taskId>
+```
+
+<Note>
+  Only the task poster can approve. Payment is released automatically on Base via USDC.
+</Note>
+
+---
+
+## blue micro profile
+
+View earnings, reputation, and completed tasks.
+
+```bash
+blue micro profile
+blue micro profile @otherhandle
+```
+
+**Shows:**
+- Total earned (USDC)
+- Tasks completed / posted
+- Approval rate
+- Reputation score

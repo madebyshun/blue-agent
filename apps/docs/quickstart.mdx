@@ -1,0 +1,81 @@
+---
+title: Quick Start
+description: Get Blue Agent running in under 2 minutes
+---
+
+## Install
+
+<CodeGroup>
+
+```bash One-liner (recommended)
+curl -fsSL https://blueagent.dev/setup.sh | bash
+```
+
+```bash npm
+npm install -g @blueagent/builder
+```
+
+```bash npm (TUI)
+npm install -g @blueagent/cli @blueagent/builder
+```
+
+</CodeGroup>
+
+## Set your API key
+
+```bash
+export BANKR_API_KEY=your_key_here
+```
+
+Get a key at [bankr.bot](https://bankr.bot).
+
+## Run your first command
+
+```bash
+blue idea "An AI agent marketplace for Base builders"
+```
+
+You'll get a full fundable brief in seconds — problem, why now, MVP scope, risks, and a 24-hour action plan.
+
+## The 5 core commands
+
+```bash
+blue idea   # Turn a concept into a fundable brief     $0.05
+blue build  # Architecture + stack + implementation    $0.50
+blue audit  # Security review + go/no-go               $1.00
+blue ship   # Deployment checklist + release notes     $0.10
+blue raise  # Pitch narrative + investor map            $0.20
+```
+
+## Initialize skills
+
+```bash
+blue init
+```
+
+This installs 6 grounding skill files to `~/.blue-agent/skills/` — Base addresses, security patterns, protocol standards, and more. All commands use these automatically.
+
+## Check your environment
+
+```bash
+blue doctor
+```
+
+Verifies Node.js version, API key, skills, and config.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="All CLI Commands" icon="terminal" href="/cli/workflow">
+    Browse all 31 commands across 9 groups
+  </Card>
+  <Card title="Skills" icon="brain" href="/skills/overview">
+    Learn how grounding skills work
+  </Card>
+  <Card title="MCP Setup" icon="plug" href="/skills/mcp">
+    Use Blue Agent inside Claude Desktop
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Call the API directly from your app
+  </Card>
+</CardGroup>

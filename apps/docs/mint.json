@@ -1,0 +1,86 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Blue Agent",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#4FC3F7",
+    "light": "#4FC3F7",
+    "dark": "#29ABE2",
+    "background": {
+      "dark": "#050508"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "blueagent.dev",
+      "url": "https://blueagent.dev"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Open Console",
+    "url": "https://blueagent.dev/console"
+  },
+  "tabs": [
+    {
+      "name": "CLI Reference",
+      "url": "cli"
+    },
+    {
+      "name": "API Reference",
+      "url": "api"
+    }
+  ],
+  "anchors": [
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/madebyshun/blue-agent"
+    },
+    {
+      "name": "X / Twitter",
+      "icon": "x-twitter",
+      "url": "https://x.com/blocky_agent"
+    },
+    {
+      "name": "Telegram",
+      "icon": "telegram",
+      "url": "https://t.me/blueagent_hub"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": ["introduction", "quickstart", "installation"]
+    },
+    {
+      "group": "CLI Reference",
+      "pages": [
+        "cli/workflow",
+        "cli/setup",
+        "cli/chat",
+        "cli/score",
+        "cli/discovery",
+        "cli/launch",
+        "cli/tasks",
+        "cli/microtasks",
+        "cli/tui"
+      ]
+    },
+    {
+      "group": "Skills",
+      "pages": ["skills/overview", "skills/mcp"]
+    },
+    {
+      "group": "API Reference",
+      "pages": ["api/overview", "api/console", "api/chat", "api/x402"]
+    }
+  ],
+  "footerSocials": {
+    "x-twitter": "https://x.com/blocky_agent",
+    "github": "https://github.com/madebyshun/blue-agent"
+  }
+}

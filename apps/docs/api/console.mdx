@@ -1,0 +1,54 @@
+---
+title: Console API
+description: Run workflow commands via REST
+---
+
+## POST /api/console
+
+Run any of the 5 core workflow commands and get a structured response.
+
+### Request
+
+```bash
+curl -X POST https://blueagent.dev/api/console \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_BANKR_KEY" \
+  -d '{
+    "command": "idea",
+    "prompt": "An AI agent marketplace for Base builders"
+  }'
+```
+
+### Body
+
+```json
+{
+  "command": "idea",
+  "prompt": "Your prompt here"
+}
+```
+
+| Field | Type | Values |
+|-------|------|--------|
+| `command` | string | `idea` \| `build` \| `audit` \| `ship` \| `raise` |
+| `prompt` | string | Your project description or question |
+
+### Response
+
+```json
+{
+  "result": "## 1. PROBLEM & INSIGHT\n\nProblem: Base developers waste time..."
+}
+```
+
+### Example — blue audit
+
+```bash
+curl -X POST https://blueagent.dev/api/console \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_BANKR_KEY" \
+  -d '{
+    "command": "audit",
+    "prompt": "function withdraw() { msg.sender.call{value: balance[msg.sender]}(); balance[msg.sender] = 0; }"
+  }'
+```

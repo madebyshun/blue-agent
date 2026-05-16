@@ -1,0 +1,64 @@
+---
+title: Discovery Commands
+description: Ecosystem and market signals on Base
+---
+
+## blue search
+
+Search builders, agents, projects, and tokens.
+
+```bash
+blue search "AI agent"
+blue search "yield optimizer" --type agent
+```
+
+---
+
+## blue trending
+
+Surface what's trending on Base right now.
+
+```bash
+blue trending
+blue trending agents
+blue trending tokens
+blue trending builders
+```
+
+---
+
+## blue watch
+
+Watch a wallet, handle, or token for activity.
+
+```bash
+blue watch 0x1234...abcd
+blue watch @blocky_agent
+blue watch $BLUEAGENT
+```
+
+Sends alerts when new activity is detected.
+
+---
+
+## blue alert
+
+Configure threshold alerts.
+
+```bash
+blue alert add
+```
+
+Interactive setup for price, activity, or score change alerts.
+
+---
+
+## blue history
+
+Pull activity history for a builder or agent.
+
+```bash
+blue history @blocky_agent
+blue history 0x1234...abcd
+blue history npm:@blueagent/builder
+```

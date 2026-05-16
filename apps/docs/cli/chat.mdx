@@ -1,0 +1,27 @@
+---
+title: Chat
+description: Multi-turn streaming chat with Bankr models
+---
+
+## blue chat
+
+Launch a streaming REPL session with a Bankr LLM model.
+
+```bash
+blue chat
+blue chat "how do I deploy a contract to Base?"
+blue chat --sonnet
+blue chat --opus
+```
+
+**Flags:**
+| Flag | Model | Speed | Price |
+|------|-------|-------|-------|
+| _(default)_ | claude-haiku-4-5 | Fast | ~$0.01/msg |
+| `--sonnet` | claude-sonnet-4-6 | Balanced | ~$0.05/msg |
+| `--opus` | claude-opus-4-6 | Best | ~$0.20/msg |
+
+**In-session commands:**
+- `exit` or `ctrl+c` — end session
+- `clear` — clear message history
+- `model haiku` / `model sonnet` / `model opus` — switch mid-session
