@@ -2,9 +2,6 @@
 
 import { useRef, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
-import WalletBar from "@/components/WalletBar";
 import {
   TierInfo,
   creditCost,
@@ -13,21 +10,22 @@ import {
   getCredits,
   deductCredits,
 } from "@/lib/credits";
+import WalletBar from "@/components/WalletBar";
 
 type ChatTier = "fast" | "pro" | "max";
 type Message  = { role: "user" | "assistant"; content: string };
 
-const CHAT_TIERS: { id: ChatTier; label: string; desc: string; color: string }[] = [
-  { id: "fast", label: "Fast", desc: "Haiku · quick tasks",   color: "#64748b" },
-  { id: "pro",  label: "Pro",  desc: "Sonnet · default",      color: "#4FC3F7" },
-  { id: "max",  label: "Max",  desc: "Opus · deep reasoning", color: "#A78BFA" },
+const CHAT_TIERS: { id: ChatTier; label: string; model: string; color: string }[] = [
+  { id: "fast", label: "Fast",  model: "Haiku",  color: "#64748b" },
+  { id: "pro",  label: "Pro",   model: "Sonnet", color: "#4FC3F7" },
+  { id: "max",  label: "Max",   model: "Opus",   color: "#A78BFA" },
 ];
 
 const STARTERS = [
-  "blue idea — I want to build a stablecoin remittance app on Base",
-  "blue build — Help me architect an ERC-4337 agent wallet",
-  "blue audit — Review my token launch plan for risks",
-  "What's the best way to deploy a fair-launch token on Base?",
+  { icon: "💡", text: "I want to build a USDC streaming payroll app on Base" },
+  { icon: "🛠️", text: "Help me architect an ERC-4337 agent wallet" },
+  { icon: "🛡️", text: "Audit my token launch plan for risks" },
+  { icon: "🚀", text: "How do I deploy a fair-launch token on Base?" },
 ];
 
 const EXPLORER_TIER: TierInfo = {
@@ -43,12 +41,12 @@ export default function ChatPage() {
   const [input,      setInput]      = useState("");
   const [streaming,  setStreaming]  = useState(false);
   const [error,      setError]      = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortRef    = useRef<AbortController | null>(null);
 
-  // Init credits on mount
   useEffect(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem("blue_wallet") : null;
     const cr = ensureCredits(saved ?? undefined);
@@ -67,17 +65,16 @@ export default function ChatPage() {
   }, []);
 
   const cost = creditCost(chatTier, holderTier);
-  const hasDiscount = holderTier.discount > 0;
-  const baseCost    = BASE_COST[chatTier] ?? BASE_COST.pro;
+  const outOfCredits = credits < cost;
+  const activeTier = CHAT_TIERS.find((t) => t.id === chatTier)!;
 
   const send = useCallback(async (text: string) => {
     const userMsg = text.trim();
     if (!userMsg || streaming) return;
 
-    // Credit check
     const currentCredits = getCredits(walletAddr);
     if (currentCredits < cost) {
-      setError(`Not enough credits. Need ${cost}, have ${currentCredits}. Get more BLUE → hold more $BLUEAGENT for discounts.`);
+      setError(`Not enough credits. Need ${cost}, have ${currentCredits}.`);
       return;
     }
 
@@ -87,6 +84,9 @@ export default function ChatPage() {
     setInput("");
     setStreaming(true);
     setMessages((m) => [...m, { role: "assistant", content: "" }]);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
 
     abortRef.current = new AbortController();
 
@@ -103,7 +103,6 @@ export default function ChatPage() {
         throw new Error(data.error ?? `Error ${res.status}`);
       }
 
-      // Deduct credits after successful response starts
       const remaining = deductCredits(cost, walletAddr);
       setCredits(remaining);
 
@@ -157,179 +156,214 @@ export default function ChatPage() {
   function stop()  { abortRef.current?.abort(); }
   function clear() { setMessages([]); setError(null); setInput(""); textareaRef.current?.focus(); }
 
-  const isEmpty      = messages.length === 0;
-  const outOfCredits = credits < cost;
-  const activeTier   = CHAT_TIERS.find((t) => t.id === chatTier)!;
+  const isEmpty = messages.length === 0;
 
   return (
-    <>
-      <Navbar />
-      <main className="max-w-4xl mx-auto px-4 py-8 flex flex-col" style={{ minHeight: "calc(100vh - 140px)" }}>
+    <div className="flex h-screen bg-[#050508] text-white overflow-hidden">
 
-        {/* Header */}
-        <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
-          <div>
-            <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-3 py-1 mb-2">
-              <span className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">BLUE AGENT CHAT</span>
-            </div>
-            <h1 className="font-mono font-bold text-2xl text-white">Blue Agent Chat</h1>
-            <p className="font-mono text-xs text-slate-500 mt-1">AI-native assistant for Base builders</p>
+      {/* ── Sidebar ─────────────────────────────────── */}
+      <aside className={`
+        fixed lg:relative inset-y-0 left-0 z-40 flex flex-col
+        w-64 bg-[#0A0A12] border-r border-[#1A1A2E]
+        transition-transform duration-200
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+      `}>
+        {/* Logo */}
+        <div className="flex items-center justify-between px-4 py-4 border-b border-[#1A1A2E]">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="glow-dot" />
+            <span className="font-mono font-semibold text-sm text-white tracking-widest">
+              BLUE<span className="text-[#4FC3F7]">AGENT</span>
+            </span>
+          </Link>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden text-slate-600 hover:text-white"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* New chat */}
+        <div className="px-3 py-3 border-b border-[#1A1A2E]">
+          <button
+            onClick={clear}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg font-mono text-xs text-slate-400 hover:text-white hover:bg-[#1A1A2E] transition-all"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New chat
+          </button>
+        </div>
+
+        {/* Model picker */}
+        <div className="px-3 py-4 border-b border-[#1A1A2E]">
+          <p className="font-mono text-[10px] text-slate-600 tracking-widest px-1 mb-2">MODEL</p>
+          <div className="flex flex-col gap-1">
+            {CHAT_TIERS.map((t) => {
+              const c = creditCost(t.id, holderTier);
+              const isActive = chatTier === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setChatTier(t.id)}
+                  className={`flex items-center justify-between px-3 py-2 rounded-lg transition-all text-left ${
+                    isActive
+                      ? "bg-[#1A1A2E] text-white"
+                      : "text-slate-500 hover:text-slate-300 hover:bg-[#1A1A2E]/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ background: isActive ? t.color : "#374151" }}
+                    />
+                    <span className="font-mono text-sm font-medium">{t.label}</span>
+                    <span className="font-mono text-[10px] text-slate-600">{t.model}</span>
+                  </div>
+                  <span
+                    className="font-mono text-[10px]"
+                    style={{ color: isActive ? t.color : "#374151" }}
+                  >
+                    {c} cr
+                  </span>
+                </button>
+              );
+            })}
           </div>
+        </div>
 
-          {/* Credit + wallet panel (desktop) */}
-          <div className="flex flex-col items-end gap-2">
-            {/* Credits display */}
-            <div
-              className="flex items-center gap-3 px-3 py-2 rounded-xl border font-mono text-xs"
-              style={{ background: "#0D0D14", borderColor: credits <= 20 ? "#EF444430" : "#1A1A2E" }}
-            >
-              <span className="text-slate-500">Credits</span>
+        {/* Credits */}
+        <div className="px-3 py-4 border-b border-[#1A1A2E]">
+          <p className="font-mono text-[10px] text-slate-600 tracking-widest px-1 mb-2">CREDITS</p>
+          <div className="px-3 py-2 rounded-lg bg-[#050508] border border-[#1A1A2E]">
+            <div className="flex items-baseline justify-between">
               <span
-                className="font-bold text-sm"
+                className="font-mono text-xl font-bold"
                 style={{ color: credits <= 20 ? "#EF4444" : "#4FC3F7" }}
               >
                 {credits}
               </span>
-              {holderTier.discount > 0 && (
-                <span
-                  className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
-                  style={{ background: `${holderTier.color}20`, color: holderTier.color }}
-                >
-                  {Math.round(holderTier.discount * 100)}% off
-                </span>
-              )}
+              <span className="font-mono text-xs text-slate-600">credits</span>
             </div>
+            {holderTier.discount > 0 && (
+              <div
+                className="font-mono text-[10px] mt-1"
+                style={{ color: holderTier.color }}
+              >
+                {Math.round(holderTier.discount * 100)}% holder discount active
+              </div>
+            )}
+            {credits <= 20 && (
+              <a
+                href={`https://app.uniswap.org/swap?outputCurrency=0xf895783b2931c919955e18b5e3343e7c7c456ba3&chain=base`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block font-mono text-[10px] text-[#F59E0B] hover:underline mt-1"
+              >
+                Get more BLUE →
+              </a>
+            )}
           </div>
         </div>
 
-        {/* Model picker */}
-        <div className="flex gap-2 flex-wrap mb-4">
-          {CHAT_TIERS.map((t) => {
-            const c    = creditCost(t.id, holderTier);
-            const base = BASE_COST[t.id];
-            const disc = hasDiscount && c !== base;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setChatTier(t.id)}
-                className="flex flex-col items-start px-4 py-2.5 rounded-xl transition-all cursor-pointer"
-                style={{
-                  background: chatTier === t.id ? `${t.color}18` : "#0D0D14",
-                  border: `1.5px solid ${chatTier === t.id ? t.color : "#1A1A2E"}`,
-                }}
-              >
-                <span className="font-mono text-sm font-bold" style={{ color: chatTier === t.id ? t.color : "#fff" }}>
-                  {t.label}
-                </span>
-                <span className="font-mono text-xs text-slate-500">{t.desc}</span>
-                <div className="flex items-center gap-1 mt-0.5">
-                  {disc && (
-                    <span className="font-mono text-[10px] text-slate-600 line-through">{base} cr</span>
-                  )}
-                  <span className="font-mono text-[10px]" style={{ color: disc ? holderTier.color : "#64748b" }}>
-                    {c} cr/msg
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Holder tier hint — if not connected */}
-        {!walletAddr && (
-          <div
-            className="flex items-center justify-between px-4 py-2.5 rounded-xl mb-4 border border-[#F59E0B]/20 bg-[#F59E0B]/5"
-          >
-            <span className="font-mono text-xs text-[#F59E0B]">
-              Hold $BLUEAGENT → get up to 70% off chat credits
-            </span>
-            <WalletBar onWalletChange={handleWalletChange} />
-          </div>
-        )}
-
-        {/* Holder tier strip — if connected */}
-        {walletAddr && holderTier.tier !== "Explorer" && (
-          <div
-            className="flex items-center justify-between px-4 py-2 rounded-xl mb-4"
-            style={{ background: `${holderTier.color}10`, border: `1px solid ${holderTier.color}30` }}
-          >
-            <div className="flex items-center gap-2 font-mono text-xs">
-              <span
-                className="font-bold px-2 py-0.5 rounded text-[11px]"
-                style={{ background: `${holderTier.color}20`, color: holderTier.color }}
-              >
-                {holderTier.tier}
-              </span>
-              <span className="text-slate-500">·</span>
-              <span style={{ color: holderTier.color }}>
-                {Math.round(holderTier.discount * 100)}% discount active
-              </span>
+        {/* Wallet */}
+        <div className="px-3 py-4 mt-auto border-t border-[#1A1A2E]">
+          <p className="font-mono text-[10px] text-slate-600 tracking-widest px-1 mb-2">WALLET</p>
+          <WalletBar onWalletChange={handleWalletChange} />
+          {holderTier.tier !== "Explorer" && (
+            <div
+              className="mt-2 px-3 py-1.5 rounded-lg font-mono text-xs"
+              style={{ background: `${holderTier.color}15`, color: holderTier.color, border: `1px solid ${holderTier.color}25` }}
+            >
+              {holderTier.tier} · {holderTier.blueBalance.toFixed(0)} BLUE
             </div>
-            <span className="font-mono text-[10px] text-slate-600">
-              {holderTier.blueBalance.toFixed(0)} BLUE held
-            </span>
-          </div>
-        )}
-
-        {/* Active tier info strip */}
-        <div
-          className="font-mono text-xs px-4 py-2 rounded-xl mb-4 flex items-center gap-2"
-          style={{ background: `${activeTier.color}10`, border: `1px solid ${activeTier.color}30`, color: activeTier.color }}
-        >
-          <span className="font-semibold">{activeTier.label}</span>
-          <span className="text-slate-600">·</span>
-          <span className="text-slate-500">{activeTier.desc}</span>
-          <span className="text-slate-600">·</span>
-          <span>{cost} credits per message</span>
-          {messages.length > 0 && (
-            <button onClick={clear} className="ml-auto text-slate-500 hover:text-slate-300 transition-colors">
-              Clear
-            </button>
           )}
+        </div>
+      </aside>
+
+      {/* Sidebar overlay (mobile) */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* ── Main ────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0">
+
+        {/* Top bar (mobile only) */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#1A1A2E] lg:hidden">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="text-slate-400 hover:text-white"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <span className="font-mono text-sm font-semibold text-white">Blue Agent</span>
+          <span
+            className="font-mono text-xs px-2 py-1 rounded"
+            style={{ background: `${activeTier.color}20`, color: activeTier.color }}
+          >
+            {activeTier.label}
+          </span>
         </div>
 
         {/* Messages */}
-        <div
-          className="flex-1 overflow-y-auto rounded-2xl mb-4 bg-[#0D0D14] border border-[#1A1A2E]"
-          style={{ minHeight: 360 }}
-        >
+        <div className="flex-1 overflow-y-auto">
           {isEmpty ? (
-            <div className="flex flex-col items-center justify-center h-72 gap-6 px-6">
-              <div className="w-12 h-12 rounded-full bg-[#4FC3F7]/10 border border-[#4FC3F7]/20 flex items-center justify-center">
-                <div className="glow-dot" />
+            /* Empty state */
+            <div className="flex flex-col items-center justify-center h-full px-4 py-16 gap-8">
+              <div>
+                <div className="w-16 h-16 rounded-2xl bg-[#4FC3F7]/10 border border-[#4FC3F7]/20 flex items-center justify-center mx-auto mb-4">
+                  <div className="glow-dot" style={{ width: 12, height: 12 }} />
+                </div>
+                <h1 className="font-mono text-2xl font-bold text-white text-center mb-2">Blue Agent</h1>
+                <p className="font-mono text-sm text-slate-500 text-center max-w-sm">
+                  AI-native assistant for Base builders. Ask anything — ideas, code, audits, launches.
+                </p>
               </div>
-              <p className="font-mono text-sm text-center max-w-sm text-slate-400">
-                Ask Blue Agent anything about building on Base — ideas, architecture, contracts, launches.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-xl">
                 {STARTERS.map((s) => (
                   <button
-                    key={s}
-                    onClick={() => send(s)}
+                    key={s.text}
+                    onClick={() => send(s.text)}
                     disabled={outOfCredits}
-                    className="text-left font-mono text-xs px-3 py-2.5 rounded-xl bg-[#050508] border border-[#1A1A2E] text-slate-500 hover:text-[#4FC3F7] hover:border-[#4FC3F7]/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="text-left px-4 py-3 rounded-xl bg-[#0D0D14] border border-[#1A1A2E] hover:border-[#4FC3F7]/30 hover:bg-[#1A1A2E]/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
                   >
-                    {s}
+                    <div className="text-lg mb-1">{s.icon}</div>
+                    <div className="font-mono text-xs text-slate-400 group-hover:text-slate-300 leading-relaxed">{s.text}</div>
                   </button>
                 ))}
               </div>
             </div>
           ) : (
-            <div className="p-4 space-y-4">
+            /* Messages */
+            <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
               {messages.map((msg, i) => (
-                <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  key={i}
+                  className={`flex gap-4 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                >
                   {msg.role === "assistant" && (
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center mr-2 flex-shrink-0 mt-1 bg-[#4FC3F7]/10 border border-[#4FC3F7]/20">
+                    <div className="w-8 h-8 rounded-full bg-[#4FC3F7]/10 border border-[#4FC3F7]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                       <div className="glow-dot" style={{ width: 8, height: 8 }} />
                     </div>
                   )}
                   <div
-                    className="max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap font-mono"
-                    style={
+                    className={`max-w-[80%] px-4 py-3 rounded-2xl font-mono text-sm leading-relaxed whitespace-pre-wrap ${
                       msg.role === "user"
-                        ? { background: "#4FC3F7", color: "#050508", borderRadius: "16px 16px 4px 16px" }
-                        : { background: "#1A1A2E", color: "#e2e8f0", border: "1px solid #2A2A4E", borderRadius: "16px 16px 16px 4px" }
-                    }
+                        ? "bg-[#1A1A2E] text-slate-200 rounded-tr-sm"
+                        : "text-slate-300 rounded-tl-sm"
+                    }`}
+                    style={msg.role === "user" ? {} : {}}
                   >
                     {msg.content || (
                       <span className="flex gap-1 items-center">
@@ -337,6 +371,11 @@ export default function ChatPage() {
                       </span>
                     )}
                   </div>
+                  {msg.role === "user" && (
+                    <div className="w-8 h-8 rounded-full bg-[#1A1A2E] border border-[#2A2A4E] flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="font-mono text-xs text-slate-400">you</span>
+                    </div>
+                  )}
                 </div>
               ))}
               <div ref={bottomRef} />
@@ -344,84 +383,80 @@ export default function ChatPage() {
           )}
         </div>
 
-        {/* Out of credits banner */}
-        {outOfCredits && (
-          <div className="mb-3 px-4 py-3 rounded-xl bg-[#EF444410] border border-[#EF444430] font-mono text-xs text-red-400 flex items-center justify-between gap-3">
-            <span>
-              Out of credits ({credits} left, need {cost}).{" "}
-              {!walletAddr ? "Connect wallet + hold $BLUEAGENT to get more." : "Hold more $BLUEAGENT to earn credits."}
-            </span>
-            <a
-              href={`https://app.uniswap.org/swap?outputCurrency=0xf895783b2931c919955e18b5e3343e7c7c456ba3&chain=base`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-shrink-0 px-3 py-1 rounded-lg text-[#F59E0B] border border-[#F59E0B]/30 hover:bg-[#F59E0B]/10 transition-all"
+        {/* ── Input bar ─────────────────────────────── */}
+        <div className="border-t border-[#1A1A2E] bg-[#050508] px-4 py-4">
+          <div className="max-w-3xl mx-auto">
+            {/* Error / out of credits */}
+            {outOfCredits && (
+              <div className="mb-3 px-4 py-2.5 rounded-xl bg-[#EF444410] border border-[#EF444430] font-mono text-xs text-red-400 flex items-center justify-between gap-3">
+                <span>Out of credits ({credits} left, need {cost}).</span>
+                <a
+                  href={`https://app.uniswap.org/swap?outputCurrency=0xf895783b2931c919955e18b5e3343e7c7c456ba3&chain=base`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex-shrink-0 text-[#F59E0B] hover:underline"
+                >
+                  Buy BLUE →
+                </a>
+              </div>
+            )}
+            {error && !outOfCredits && (
+              <p className="font-mono text-xs mb-2 px-1 text-red-400">{error}</p>
+            )}
+
+            <div
+              className="flex gap-3 items-end rounded-2xl px-4 py-3 border transition-colors"
+              style={{
+                background: "#0D0D14",
+                borderColor: outOfCredits ? "#EF444430" : "#2A2A4E",
+              }}
             >
-              Buy BLUE →
-            </a>
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={outOfCredits ? "No credits — get more $BLUEAGENT" : "Message Blue Agent…"}
+                rows={1}
+                disabled={streaming || outOfCredits}
+                className="flex-1 resize-none bg-transparent outline-none font-mono text-sm text-white placeholder:text-slate-600 leading-relaxed"
+                style={{ maxHeight: 160, overflowY: "auto" }}
+                onInput={(e) => {
+                  const el = e.currentTarget;
+                  el.style.height = "auto";
+                  el.style.height = Math.min(el.scrollHeight, 160) + "px";
+                }}
+              />
+              {streaming ? (
+                <button
+                  onClick={stop}
+                  className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center bg-[#EF444415] border border-[#EF444430] text-red-400 hover:bg-[#EF444425] transition-all"
+                >
+                  ■
+                </button>
+              ) : (
+                <button
+                  onClick={() => send(input)}
+                  disabled={!input.trim() || outOfCredits}
+                  className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center font-bold transition-all disabled:opacity-30"
+                  style={{ background: "#4FC3F7", color: "#050508" }}
+                >
+                  ↑
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between mt-2 px-1">
+              <span className="font-mono text-[10px] text-slate-700">
+                Enter to send · Shift+Enter for newline
+              </span>
+              <span className="font-mono text-[10px] text-slate-700">
+                {cost} credits/msg · {activeTier.label} ({activeTier.model})
+              </span>
+            </div>
           </div>
-        )}
-
-        {error && !outOfCredits && (
-          <p className="font-mono text-xs mb-2 px-1 text-red-400">{error}</p>
-        )}
-
-        {/* Input */}
-        <div
-          className="flex gap-3 items-end rounded-2xl p-3 bg-[#0D0D14] border transition-all"
-          style={{ borderColor: outOfCredits ? "#EF444430" : "#1A1A2E" }}
-        >
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              outOfCredits
-                ? "No credits — get more $BLUEAGENT to continue chatting"
-                : "Ask Blue Agent… (Enter to send, Shift+Enter for newline)"
-            }
-            rows={1}
-            disabled={streaming || outOfCredits}
-            className="flex-1 resize-none font-mono text-sm outline-none bg-transparent text-white placeholder:text-slate-600 leading-relaxed"
-            style={{ maxHeight: 140, overflowY: "auto" }}
-            onInput={(e) => {
-              const el = e.currentTarget;
-              el.style.height = "auto";
-              el.style.height = Math.min(el.scrollHeight, 140) + "px";
-            }}
-          />
-          {streaming ? (
-            <button
-              onClick={stop}
-              className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all bg-red-400/10 border border-red-400/30 text-red-400"
-            >
-              ■
-            </button>
-          ) : (
-            <button
-              onClick={() => send(input)}
-              disabled={!input.trim() || outOfCredits}
-              className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all disabled:opacity-40 bg-[#4FC3F7] text-[#050508] font-bold"
-            >
-              ↑
-            </button>
-          )}
         </div>
-
-        <p className="font-mono text-xs text-center mt-3 text-slate-600">
-          Powered by Bankr LLM · {cost} credits/msg
-          {hasDiscount && (
-            <span style={{ color: holderTier.color }}>
-              {" "}· {Math.round(holderTier.discount * 100)}% holder discount
-            </span>
-          )}
-          {" "}·{" "}
-          <Link href="/" className="hover:text-slate-400 transition-colors">Base-native</Link>
-        </p>
-      </main>
-      <Footer />
-    </>
+      </div>
+    </div>
   );
 }
 
@@ -430,10 +465,9 @@ function Dot({ delay }: { delay: number }) {
     <span
       style={{
         display: "inline-block",
-        width: 6,
-        height: 6,
+        width: 6, height: 6,
         borderRadius: "50%",
-        background: "#64748b",
+        background: "#475569",
         animation: `pulse 1.2s ${delay}ms ease-in-out infinite`,
       }}
     />

@@ -124,6 +124,102 @@ const X402_CATEGORIES = [
   },
 ];
 
+const ECOSYSTEM_LAYERS = [
+  {
+    layer: "SURFACE",
+    label: "What users install",
+    color: "#4FC3F7",
+    packages: [
+      {
+        pkg: "@blueagent/cli",
+        cmd: "blueagent",
+        version: "v1.3.5",
+        desc: "Terminal UI — interactive menu, navigate with arrow keys. 8 categories, 31+ tools.",
+        install: "npm install -g @blueagent/cli",
+        badge: "TUI",
+      },
+      {
+        pkg: "@blueagent/builder",
+        cmd: "blue",
+        version: "v0.1.11",
+        desc: "CLI — 5 core commands + setup + score + tasks. The workhorse.",
+        install: "npm install -g @blueagent/builder",
+        badge: "CLI",
+      },
+    ],
+  },
+  {
+    layer: "CORE",
+    label: "Runtime & data",
+    color: "#A78BFA",
+    packages: [
+      {
+        pkg: "@blueagent/core",
+        cmd: null,
+        version: "v1.0.1",
+        desc: "Grounded LLM calls via Bankr · skill registry · command schemas.",
+        install: "npm install @blueagent/core",
+        badge: "Runtime",
+      },
+      {
+        pkg: "@blueagent/reputation",
+        cmd: null,
+        version: "v0.1.1",
+        desc: "Builder Score · Agent Score · Work Hub reputation system.",
+        install: "npm install @blueagent/reputation",
+        badge: "Score",
+      },
+      {
+        pkg: "@blueagent/tasks",
+        cmd: null,
+        version: "v0.1.0",
+        desc: "Work Hub — post tasks, earn USDC, build onchain reputation.",
+        install: "npm install @blueagent/tasks",
+        badge: "Tasks",
+      },
+    ],
+  },
+  {
+    layer: "INTEGRATIONS",
+    label: "Plug into any stack",
+    color: "#34D399",
+    packages: [
+      {
+        pkg: "@blueagent/skill",
+        cmd: null,
+        version: "v0.1.1",
+        desc: "MCP server — 5 tools for Claude Code · Cursor · Claude Desktop.",
+        install: "npm install -g @blueagent/skill",
+        badge: "MCP",
+      },
+      {
+        pkg: "@blueagent/sdk",
+        cmd: null,
+        version: "v0.1.0",
+        desc: "Unified programmatic API — ba.builder.idea() and more.",
+        install: "npm install @blueagent/sdk",
+        badge: "SDK",
+      },
+      {
+        pkg: "@blueagent/agentkit",
+        cmd: null,
+        version: "v0.1.0",
+        desc: "Coinbase AgentKit plugin — 32 x402 tools as actions.",
+        install: "npm install @blueagent/agentkit",
+        badge: "AgentKit",
+      },
+      {
+        pkg: "@blueagent/x402-guard",
+        cmd: null,
+        version: "v1.0.0",
+        desc: "Security middleware for x402 payments — validate before you pay.",
+        install: "npm install @blueagent/x402-guard",
+        badge: "Security",
+      },
+    ],
+  },
+];
+
 const INTEGRATIONS = [
   {
     pkg: "@blueagent/skill",
@@ -157,109 +253,6 @@ const INTEGRATIONS = [
   },
 ];
 
-const ECOSYSTEM_ROWS = [
-  {
-    label: "Surfaces",
-    items: [
-      { name: "@blueagent/builder", note: "CLI" },
-      { name: "blueagent.dev",      note: "Web" },
-      { name: "@blockyagent_bot",   note: "Telegram" },
-      { name: "@blueagent/skill",   note: "MCP" },
-    ],
-  },
-  {
-    label: "Intelligence",
-    items: [
-      { name: "Skills",    note: "6 knowledge files" },
-      { name: "Tools",     note: "37 functions" },
-      { name: "Commands",  note: "12 workflows" },
-      { name: "Bankr LLM", note: "inference" },
-    ],
-  },
-  {
-    label: "Identity",
-    items: [
-      { name: "Builder Score", note: "proof of build" },
-      { name: "Agent Score",   note: "XP system" },
-      { name: "Work Hub",      note: "task marketplace" },
-      { name: "Score Cards",   note: "soulbound NFT" },
-    ],
-  },
-];
-
-const BUILT_FOR = [
-  {
-    title: "For Builders",
-    items: [
-      { cmd: "blue audit",      arrow: "security review" },
-      { cmd: "blue idea",       arrow: "concept brief" },
-      { cmd: "Builder Score",   arrow: "reputation" },
-      { cmd: "Score Card NFT",  arrow: "identity" },
-    ],
-  },
-  {
-    title: "For Agents",
-    items: [
-      { cmd: "Agent Score",       arrow: "XP system" },
-      { cmd: "Work Hub",          arrow: "earn USDC" },
-      { cmd: "blue agent-score",  arrow: "evaluate" },
-      { cmd: "MCP server",        arrow: "IDE integration" },
-    ],
-  },
-  {
-    title: "For Projects",
-    items: [
-      { cmd: "Builder Score API", arrow: "credibility" },
-      { cmd: "Community Kit",     arrow: "bot automation" },
-      { cmd: "x402 tools",        arrow: "security checks" },
-      { cmd: "Launch wizard",     arrow: "token deploy" },
-    ],
-  },
-];
-
-const ROADMAP = [
-  {
-    label: "SHIPPED",
-    emoji: "✅",
-    items: [
-      "@blueagent/builder CLI",
-      "31 x402 security tools",
-      "@blueagent/skill MCP",
-      "Builder Score API",
-      "Agent Score + Work Hub",
-    ],
-  },
-  {
-    label: "BUILDING",
-    emoji: "🔵",
-    items: [
-      "Builder Score web UI",
-      "Agent Score + directory",
-      "Work Hub marketplace",
-      "Score Card NFT (soulbound)",
-      "blueagent.dev launch",
-    ],
-  },
-  {
-    label: "NEXT",
-    emoji: "🔜",
-    items: [
-      "Signal Bot (whale tracker)",
-      "Score Cards (soulbound NFT)",
-      "Mobile app",
-      "Governance ($BLUEAGENT)",
-      "SDK v2",
-    ],
-  },
-];
-
-const COMING_DATA = [
-  { icon: "🏗️", title: "Builder Score", desc: "Proof of build on Base" },
-  { icon: "🤖", title: "Agent Score",   desc: "XP system for AI agents" },
-  { icon: "🔧", title: "Work Hub",      desc: "Agents earn USDC via tasks" },
-  { icon: "📡", title: "Signal Bot",    desc: "Whale + builder signals" },
-  { icon: "🃏", title: "Score Cards",   desc: "Soulbound NFT identity" },
-];
 
 const GRID_BG = {
   backgroundImage:
@@ -273,21 +266,30 @@ function Hero() {
       className="min-h-screen flex flex-col justify-center items-center px-6 pt-16 text-center"
       style={GRID_BG}
     >
-      <p className="font-mono text-xs tracking-[0.3em] text-slate-600 mb-3 uppercase">
-        BUILT ON BASE · POWERED BY BANKR LLM
-      </p>
-      <p className="font-mono text-[10px] tracking-widest text-slate-700 mb-8">
-        v0.1 · 6 skills · 37 tools · 12 commands · Base
-      </p>
+      <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-4 py-1.5 mb-8">
+        <span className="w-2 h-2 rounded-full bg-[#4FC3F7] animate-pulse" />
+        <span className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">BUILT ON BASE · POWERED BY BANKR LLM</span>
+      </div>
 
-      <h1 className="font-mono text-6xl sm:text-8xl font-bold text-white tracking-tight mb-6 leading-none">
+      <h1 className="font-mono text-6xl sm:text-8xl font-bold text-white tracking-tight mb-4 leading-none">
         BLUE<br /><span className="text-[#4FC3F7]">AGENT</span>
       </h1>
 
-      <p className="font-mono text-sm text-slate-500 max-w-lg mb-10 leading-relaxed">
-        The AI development layer for Base builders.<br />
-        Idea, build, audit, ship, raise —<br />
-        grounded in real Base knowledge.
+      <p className="font-mono text-base sm:text-lg text-slate-400 max-w-xl mb-3 leading-relaxed">
+        The AI founder console for Base builders.
+      </p>
+      <p className="font-mono text-sm text-slate-600 max-w-lg mb-10 leading-relaxed">
+        Idea → build → audit → ship → raise.
+        Grounded in real Base knowledge. No hallucinations.
+      </p>
+
+      {/* Quick install — right in the hero */}
+      <div className="flex items-center gap-2 bg-[#0D0D14] border border-[#1A1A2E] rounded-xl px-5 py-3 mb-8">
+        <span className="font-mono text-xs text-slate-600">$</span>
+        <span className="font-mono text-sm text-[#4FC3F7]">curl -fsSL https://blueagent.dev/setup.sh | bash</span>
+      </div>
+      <p className="font-mono text-[10px] text-slate-700 -mt-5 mb-8">
+        installs <span className="text-slate-500">blueagent</span> (TUI) + <span className="text-slate-500">blue</span> (CLI) · Node ≥ 18
       </p>
 
       <div className="flex flex-wrap gap-3 justify-center mb-16">
@@ -295,15 +297,13 @@ function Hero() {
           href="/console"
           className="font-mono text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-6 py-3 rounded hover:bg-[#29ABE2] transition-colors"
         >
-          Open Console →
+          Start building →
         </a>
         <a
-          href="https://github.com/madebyshun/blue-agent"
-          target="_blank"
-          rel="noopener noreferrer"
+          href="/docs"
           className="font-mono text-sm text-slate-500 border border-[#1A1A2E] px-6 py-3 rounded hover:border-[#4FC3F7]/30 hover:text-white transition-all"
         >
-          GitHub
+          Read docs →
         </a>
       </div>
 
@@ -316,8 +316,8 @@ function StatsBar() {
   const stats = [
     { n: "6",  label: "Skills" },
     { n: "37", label: "Tools" },
-    { n: "12", label: "Commands" },
-    { n: "5",  label: "Packages" },
+    { n: "30", label: "Commands" },
+    { n: "9",  label: "Packages" },
     { n: "Base", label: "" },
   ];
   return (
@@ -341,19 +341,20 @@ function StatsBar() {
 
 function Engines() {
   return (
-    <section className="max-w-6xl mx-auto px-6 py-24 border-t border-[#1A1A2E]">
-      <div className="flex items-baseline justify-between mb-10">
-        <p className="font-mono text-xs text-[#4FC3F7]">// the five engines</p>
-        <p className="font-mono text-xs text-slate-700">5 commands · grounded by skill files</p>
+    <section id="commands" className="max-w-6xl mx-auto px-6 py-24 border-t border-[#1A1A2E] scroll-mt-28">
+      <div className="mb-10">
+        <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-2">// THE FIVE ENGINES</p>
+        <h2 className="font-mono text-3xl sm:text-4xl font-bold text-white mb-2">From idea to shipped.</h2>
+        <p className="font-mono text-sm text-slate-500">5 commands · grounded by skill files · no hallucinations</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {COMMANDS_DATA.map((c) => (
           <div key={c.tag} className="card-surface card-hover rounded-lg p-6 flex flex-col gap-3">
             <div className="font-mono text-xs text-[#4FC3F7]">&lt;{c.tag}&gt;</div>
-            <div className="font-mono text-sm text-white font-semibold">{c.cmd}</div>
-            <p className="font-mono text-xs text-slate-400 leading-relaxed">{c.desc}</p>
-            <p className="font-mono text-[10px] text-slate-600">{c.detail}</p>
+            <div className="font-mono text-base text-white font-semibold">{c.cmd}</div>
+            <p className="font-mono text-sm text-slate-400 leading-relaxed">{c.desc}</p>
+            <p className="font-mono text-xs text-slate-600">{c.detail}</p>
             <div className="flex flex-wrap gap-1 mt-auto pt-2 border-t border-[#1A1A2E]">
               <span className="font-mono text-[9px] text-slate-700">skills:</span>
               {c.skills.map((s) => (
@@ -371,12 +372,12 @@ function Engines() {
 
 function GroundingContract() {
   return (
-    <section className="max-w-6xl mx-auto px-6 py-24 border-t border-[#1A1A2E]">
-      <div className="flex items-baseline justify-between mb-3">
-        <p className="font-mono text-xs text-[#4FC3F7]">// grounding contract</p>
-        <p className="font-mono text-xs text-slate-700">6 skill files · loaded before every command</p>
+    <section id="skills" className="max-w-6xl mx-auto px-6 py-24 border-t border-[#1A1A2E] scroll-mt-28">
+      <div className="mb-10">
+        <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-2">// GROUNDING CONTRACT</p>
+        <h2 className="font-mono text-3xl sm:text-4xl font-bold text-white mb-2">Zero hallucinations.</h2>
+        <p className="font-mono text-sm text-slate-500">6 skill files · loaded before every command · verified Base data only</p>
       </div>
-      <p className="font-mono text-xs text-slate-600 mb-10">Zero hallucinations. Loaded before every command.</p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-8">
         {SKILLS_DATA.map((s) => (
@@ -400,10 +401,11 @@ function GroundingContract() {
 
 function X402Services() {
   return (
-    <section className="max-w-6xl mx-auto px-6 py-24 border-t border-[#1A1A2E]">
-      <div className="flex items-baseline justify-between mb-10">
-        <p className="font-mono text-xs text-[#4FC3F7]">// x402 services</p>
-        <p className="font-mono text-xs text-slate-700">37 tools · pay-per-use · USDC on Base</p>
+    <section id="tools" className="max-w-6xl mx-auto px-6 py-24 border-t border-[#1A1A2E] scroll-mt-28">
+      <div className="mb-10">
+        <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-2">// X402 SERVICES</p>
+        <h2 className="font-mono text-3xl sm:text-4xl font-bold text-white mb-2">37 tools. Pay per use.</h2>
+        <p className="font-mono text-sm text-slate-500">USDC on Base · no subscriptions · agents welcome</p>
       </div>
 
       {/* x402 Tools — 4 categories */}
@@ -460,9 +462,10 @@ function CommandsSection() {
   const total = ALL_COMMANDS.reduce((sum, g) => sum + g.items.length, 0);
   return (
     <section className="max-w-6xl mx-auto px-6 py-24 border-t border-[#1A1A2E]">
-      <div className="flex items-baseline justify-between mb-10">
-        <p className="font-mono text-xs text-[#4FC3F7]">// commands</p>
-        <p className="font-mono text-xs text-slate-700">{total} commands · every step of the founder journey</p>
+      <div className="mb-10">
+        <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-2">// COMMANDS</p>
+        <h2 className="font-mono text-3xl sm:text-4xl font-bold text-white mb-2">{total} commands.</h2>
+        <p className="font-mono text-sm text-slate-500">Every step of the founder journey — idea to exit</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
@@ -485,12 +488,80 @@ function CommandsSection() {
   );
 }
 
+function EcosystemPackages() {
+  return (
+    <section id="ecosystem" className="max-w-6xl mx-auto px-6 py-24 border-t border-[#1A1A2E] scroll-mt-28">
+      <div className="mb-10">
+        <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-2">// ECOSYSTEM</p>
+        <h2 className="font-mono text-3xl sm:text-4xl font-bold text-white mb-2">9 packages. One ecosystem.</h2>
+        <p className="font-mono text-sm text-slate-500">From TUI to SDK — every layer of the Blue Agent stack on npm</p>
+      </div>
+
+      <div className="space-y-10">
+        {ECOSYSTEM_LAYERS.map((layer) => (
+          <div key={layer.layer}>
+            {/* Layer header */}
+            <div className="flex items-center gap-3 mb-4">
+              <span
+                className="font-mono text-[10px] tracking-widest px-2 py-0.5 rounded border"
+                style={{ color: layer.color, borderColor: `${layer.color}30`, background: `${layer.color}08` }}
+              >
+                {layer.layer}
+              </span>
+              <span className="font-mono text-xs text-slate-600">{layer.label}</span>
+              <div className="flex-1 border-t border-dashed border-[#1A1A2E]" />
+              <span className="font-mono text-[10px] text-slate-700">{layer.packages.length} packages</span>
+            </div>
+
+            {/* Package cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {layer.packages.map((p) => (
+                <div key={p.pkg} className="card-surface rounded-lg p-4 flex flex-col gap-2">
+                  <div className="flex items-start justify-between gap-1">
+                    <span className="font-mono text-xs text-white font-semibold leading-snug break-all">{p.pkg}</span>
+                    <span
+                      className="font-mono text-[9px] px-1.5 py-0.5 rounded shrink-0 mt-0.5"
+                      style={{ color: layer.color, background: `${layer.color}12`, border: `1px solid ${layer.color}25` }}
+                    >
+                      {p.badge}
+                    </span>
+                  </div>
+                  {p.cmd && (
+                    <div className="font-mono text-[10px] text-[#4FC3F7]">$ {p.cmd}</div>
+                  )}
+                  <p className="font-mono text-[10px] text-slate-500 leading-relaxed flex-1">{p.desc}</p>
+                  <div className="pt-2 border-t border-[#1A1A2E] flex items-center justify-between">
+                    <span className="font-mono text-[9px] text-slate-700">{p.version}</span>
+                    <span className="font-mono text-[9px] text-slate-700">npm →</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Architecture arrow */}
+      <div className="mt-10 card-surface rounded-lg p-4 flex flex-col sm:flex-row items-center justify-center gap-2 text-center">
+        <span className="font-mono text-[10px] text-[#4FC3F7]">@blueagent/cli</span>
+        <span className="font-mono text-[10px] text-slate-700">→ wraps →</span>
+        <span className="font-mono text-[10px] text-white">@blueagent/builder</span>
+        <span className="font-mono text-[10px] text-slate-700">→ calls →</span>
+        <span className="font-mono text-[10px] text-[#A78BFA]">@blueagent/core</span>
+        <span className="font-mono text-[10px] text-slate-700">→ LLM via →</span>
+        <span className="font-mono text-[10px] text-slate-400">Bankr LLM (Base)</span>
+      </div>
+    </section>
+  );
+}
+
 function Integrations() {
   return (
     <section className="max-w-6xl mx-auto px-6 py-24 border-t border-[#1A1A2E]">
-      <div className="flex items-baseline justify-between mb-10">
-        <p className="font-mono text-xs text-[#4FC3F7]">// integrations</p>
-        <p className="font-mono text-xs text-slate-700">plug into any stack</p>
+      <div className="mb-10">
+        <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-2">// INTEGRATIONS</p>
+        <h2 className="font-mono text-3xl sm:text-4xl font-bold text-white mb-2">Plug into any stack.</h2>
+        <p className="font-mono text-sm text-slate-500">npm, pip, MCP, SDK — works where you already work</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -511,152 +582,62 @@ function Integrations() {
   );
 }
 
-function EcosystemMap() {
+function QuickStart() {
   return (
-    <section className="max-w-6xl mx-auto px-6 py-24 border-t border-[#1A1A2E]">
-      <div className="flex items-baseline justify-between mb-10">
-        <p className="font-mono text-xs text-[#4FC3F7]">// ecosystem</p>
-        <p className="font-mono text-xs text-slate-700">one platform · many surfaces</p>
+    <section id="quickstart" className="max-w-6xl mx-auto px-6 py-24 border-t border-[#1A1A2E] scroll-mt-28">
+      <div className="mb-10">
+        <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-2">// QUICK START</p>
+        <h2 className="font-mono text-3xl sm:text-4xl font-bold text-white mb-2">Ready in 2 minutes.</h2>
+        <p className="font-mono text-sm text-slate-500">Install, init, and ship — that's the whole flow</p>
       </div>
 
-      <div className="space-y-6">
-        {ECOSYSTEM_ROWS.map((row) => (
-          <div key={row.label}>
-            <p className="font-mono text-[10px] text-slate-700 tracking-widest mb-3">{row.label.toUpperCase()}</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {row.items.map((item) => (
-                <div key={item.name} className="card-surface rounded-lg p-3 flex flex-col gap-1">
-                  <span className="font-mono text-xs text-white">{item.name}</span>
-                  <span className="font-mono text-[10px] text-slate-600">{item.note}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function BuiltFor() {
-  return (
-    <section className="max-w-6xl mx-auto px-6 py-24 border-t border-[#1A1A2E]">
-      <div className="flex items-baseline justify-between mb-10">
-        <p className="font-mono text-xs text-[#4FC3F7]">// built for</p>
-        <p className="font-mono text-xs text-slate-700">three types of builders</p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        {BUILT_FOR.map((col) => (
-          <div key={col.title}>
-            <p className="font-mono text-[10px] text-slate-700 tracking-widest mb-4">{col.title.toUpperCase()}</p>
-            <div className="space-y-2.5">
-              {col.items.map((item) => (
-                <div key={item.cmd} className="flex items-baseline gap-2">
-                  <span className="font-mono text-xs text-white shrink-0">{item.cmd}</span>
-                  <span className="font-mono text-[10px] text-slate-700">→</span>
-                  <span className="font-mono text-[10px] text-slate-500">{item.arrow}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function Roadmap() {
-  return (
-    <section className="max-w-6xl mx-auto px-6 py-24 border-t border-[#1A1A2E]">
-      <div className="flex items-baseline justify-between mb-10">
-        <p className="font-mono text-xs text-[#4FC3F7]">// roadmap</p>
-        <p className="font-mono text-xs text-slate-700">building in public</p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        {ROADMAP.map((col) => (
-          <div key={col.label} className="card-surface rounded-lg p-5">
-            <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-4">
-              {col.label} {col.emoji}
-            </p>
-            <div className="space-y-2">
-              {col.items.map((item) => (
-                <div key={item} className="flex items-start gap-2">
-                  <span className="font-mono text-[10px] text-slate-700 mt-0.5">·</span>
-                  <span className="font-mono text-[10px] text-slate-400">{item}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function Install() {
-  return (
-    <section className="max-w-6xl mx-auto px-6 py-24 border-t border-[#1A1A2E]">
-      <div className="flex items-baseline justify-between mb-8">
-        <p className="font-mono text-xs text-[#4FC3F7]">// quick start</p>
-        <p className="font-mono text-xs text-slate-700">ready in &lt; 2 minutes</p>
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-4 max-w-2xl">
-        {/* Option A — one-liner */}
-        <div className="flex-1 card-surface rounded-lg overflow-hidden">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl">
+        {/* CLI */}
+        <div className="card-surface rounded-lg overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2 border-b border-[#1A1A2E] bg-[#0D0D14]">
-            <span className="font-mono text-[10px] text-[#4FC3F7] font-semibold">Quick Install</span>
+            <span className="font-mono text-xs text-[#4FC3F7] font-semibold">blue CLI</span>
             <span className="font-mono text-[9px] text-green-400/70 border border-green-400/20 px-1.5 rounded">recommended</span>
           </div>
-          <div className="p-4">
-            <p className="font-mono text-[10px] text-slate-600 mb-3">one command — installs everything</p>
-            <div className="flex items-center gap-2">
-              <span className="text-slate-700 font-mono text-xs">$</span>
-              <span className="font-mono text-xs text-[#4FC3F7] break-all">
-                curl -fsSL https://blueagent.dev/setup.sh | bash
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Option B — manual */}
-        <div className="flex-1 card-surface rounded-lg overflow-hidden">
-          <div className="flex items-center px-4 py-2 border-b border-[#1A1A2E] bg-[#0D0D14]">
-            <span className="font-mono text-[10px] text-slate-500">Manual</span>
-          </div>
-          <div className="p-4 space-y-1.5 font-mono text-xs">
-            <div><span className="text-slate-700">$ </span><span className="text-white">npm install -g @blueagent/builder</span></div>
+          <div className="p-4 space-y-2 font-mono text-sm">
+            <div><span className="text-slate-700">$ </span><span className="text-white">npm i -g @blueagent/builder</span></div>
             <div><span className="text-slate-700">$ </span><span className="text-white">blue init</span></div>
-            <div><span className="text-slate-700">$ </span><span className="text-[#4FC3F7]">blue audit &quot;your project&quot;</span></div>
+            <div><span className="text-slate-700">$ </span><span className="text-[#4FC3F7]">blue idea "my Base project"</span></div>
+          </div>
+        </div>
+
+        {/* TUI */}
+        <div className="card-surface rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-[#1A1A2E] bg-[#0D0D14]">
+            <span className="font-mono text-xs text-[#A78BFA] font-semibold">TUI — interactive</span>
+            <span className="font-mono text-[9px] text-[#A78BFA]/70 border border-[#A78BFA]/20 px-1.5 rounded">visual</span>
+          </div>
+          <div className="p-4 space-y-2 font-mono text-sm">
+            <div><span className="text-slate-700">$ </span><span className="text-white">npm i -g @blueagent/cli</span></div>
+            <div><span className="text-slate-700">$ </span><span className="text-[#A78BFA]">blueagent</span></div>
+            <div className="text-slate-700 text-xs">↑↓ navigate · Enter select</div>
+          </div>
+        </div>
+
+        {/* One-liner */}
+        <div className="card-surface rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-[#1A1A2E] bg-[#0D0D14]">
+            <span className="font-mono text-xs text-[#34D399] font-semibold">One-liner</span>
+            <span className="font-mono text-[9px] text-[#34D399]/60 border border-[#34D399]/20 px-1.5 rounded">setup.sh</span>
+          </div>
+          <div className="p-4 space-y-2 font-mono text-sm">
+            <div className="text-slate-600 text-xs">installs CLI + TUI + skills</div>
+            <div className="text-[#34D399] text-xs break-all">curl -fsSL https://blueagent.dev/setup.sh | bash</div>
           </div>
         </div>
       </div>
 
-      <p className="font-mono text-[10px] text-slate-700 mt-4">
-        verify setup: <span className="text-slate-500">blue doctor</span>
+      <p className="font-mono text-xs text-slate-700 mt-6">
+        verify: <span className="text-slate-500">blue doctor</span>
+        {" · "}
+        <a href="/docs" className="text-slate-500 hover:text-[#4FC3F7] transition-colors">full docs →</a>
+        {" · "}
+        <a href="/tools" className="text-slate-500 hover:text-[#4FC3F7] transition-colors">all 9 packages →</a>
       </p>
-    </section>
-  );
-}
-
-function ComingSoon() {
-  return (
-    <section className="max-w-6xl mx-auto px-6 py-24 border-t border-[#1A1A2E]">
-      <p className="font-mono text-xs text-[#4FC3F7] mb-8">// coming soon</p>
-      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        {COMING_DATA.map((item) => (
-          <div key={item.title} className="card-surface rounded-lg p-5 flex flex-col gap-2">
-            <span className="text-xl">{item.icon}</span>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-sm text-white">{item.title}</span>
-              <span className="font-mono text-[9px] text-[#4FC3F7] border border-[#4FC3F7]/30 px-1.5 py-0.5 rounded">soon</span>
-            </div>
-            <p className="font-mono text-[10px] text-slate-600">{item.desc}</p>
-          </div>
-        ))}
-      </div>
     </section>
   );
 }
@@ -692,12 +673,9 @@ export default function Home() {
         <GroundingContract />
         <X402Services />
         <CommandsSection />
+        <EcosystemPackages />
         <Integrations />
-        <EcosystemMap />
-        <BuiltFor />
-        <Roadmap />
-        <Install />
-        <ComingSoon />
+        <QuickStart />
         <Footer />
       </main>
     </>
