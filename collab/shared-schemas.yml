@@ -1,6 +1,12 @@
 version: 1
 description: Shared data schemas for Blue Agent × Aeon × MiroShark collaboration
 
+changelog:
+  v1:
+    date: 2026-05-17
+    changes:
+      - initial release — signal, scenario, forecast, action, result schemas
+
 # ── Signal (Aeon → Blue Agent) ────────────────────────────────────────────────
 signal:
   required:
