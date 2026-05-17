@@ -182,8 +182,6 @@ If you want to contribute, start with one small item in the matching layer.
 ## Tokens
 
 - `$BLUEAGENT` — `0xf895783b2931c919955e18b5e3343e7c7c456ba3` (Base, Uniswap v4)
-- `$BLUEAGENT` — `Base` (Base)
-- Treasury — `0xf31f59e7b8b58555f7871f71973a394c8f1bffe5` (Base)
 
 ---
 
