@@ -75,7 +75,7 @@ Use a machine-readable bridge file so Aeon can ingest Blue Agent without guessin
 
 ### Suggested file
 
-`collab/aeon-blue-agent.yml`
+`collab/aeon-blueagent.yml`
 
 ### Recommended schema
 
@@ -137,7 +137,7 @@ rules:
 
 If you want Aeon to generate useful outputs, add a companion prompt file:
 
-`collab/aeon-blue-agent.prompt.md`
+`collab/aeon-blueagent.prompt.md`
 
 Example prompt:
 
@@ -186,8 +186,8 @@ These are the highest-leverage skills to move over first.
 
 ## Suggested rollout order
 
-1. Add `collab/aeon-blue-agent.yml`
-2. Add `collab/aeon-blue-agent.prompt.md`
+1. Add `collab/aeon-blueagent.yml`
+2. Add `collab/aeon-blueagent.prompt.md`
 3. Export the five skills above
 4. Add digest output examples in `collab/aeon-output/`
 5. Wire a weekly review loop
