@@ -15,7 +15,7 @@ Built by [Blocky Studio](https://x.com/blocky_agent) — Blue Agent is a full ec
 - Website: [blueagent.dev](https://blueagent.dev)
 - X: [@blocky_agent](https://x.com/blocky_agent)
 - Telegram: [t.me/blueagent_hub](https://t.me/blueagent_hub)
-- Bankr: [bankr.bot/agent/blue-agent](https://bankr.bot/agent/blue-agent)
+- Bankr: [bankr.bot/agents/blue-agent](https://bankr.bot/agents/blue-agent)
 
 ---
 
