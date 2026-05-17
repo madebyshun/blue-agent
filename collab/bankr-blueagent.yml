@@ -1,0 +1,72 @@
+# bankr-blueagent.yml
+# Bankr × Blue Agent integration config
+# Bankr is the LLM gateway and wallet API that powers Blue Agent's intelligence and onchain execution
+
+name: bankr-blueagent
+version: "1.0"
+updated: "2026-05-17"
+
+# Bankr's role in the Blue Agent stack
+role: infrastructure
+type: powered-by  # Bankr is not a peer agent — it is the engine Blue Agent runs on
+
+agents:
+  bankr:
+    handle: "@bankr"
+    profile: "https://bankr.bot/agents/blue-agent"
+    description: "LLM gateway + wallet API + trading infrastructure for Base agents"
+    capabilities:
+      - llm_inference       # callBankrLLM() — all AI reasoning in Blue Agent
+      - wallet_api          # balance, send, receive on Base
+      - token_trading       # buy/sell on Uniswap v4, Base DEXes
+      - agent_registry      # agent profiles, discovery, bankr.bot listing
+
+  blue_agent:
+    handle: "@blocky_agent"
+    profile: "https://blueagent.dev"
+    description: "AI agent layer for Base builders — idea, build, audit, ship, raise"
+    depends_on: bankr
+
+# How Blue Agent uses Bankr
+integration:
+  llm:
+    endpoint: "https://llm.bankr.bot/v1/messages"
+    client: "packages/bankr — callBankrLLM()"
+    auth: "BANKR_API_KEY (env)"
+    used_for:
+      - blue_idea   # founder brief generation
+      - blue_build  # architecture planning
+      - blue_audit  # security review
+      - blue_ship   # deployment checklist
+      - blue_raise  # pitch narrative
+
+  wallet:
+    network: base
+    chain_id: 8453
+    used_for:
+      - x402_payment_receipt    # accept USDC from users per command
+      - treasury_management     # route fees to treasury
+      - token_rewards           # distribute $BLUEAGENT to builders
+
+  trading:
+    used_for:
+      - blueagent_token_ops     # $BLUEAGENT liquidity on Uniswap v4
+      - holder_verification     # check wallet holds $BLUEAGENT to unlock Console
+
+# Payment flow
+payment:
+  direction: user → blue_agent → bankr
+  currency: USDC
+  network: base
+  protocol: x402
+  note: "Users pay Blue Agent per command via x402. Blue Agent uses BANKR_API_KEY for LLM calls."
+
+# Thresholds / gates
+gates:
+  console_access:
+    requires: "$BLUEAGENT holder"
+    token: "0xf895783b2931c919955e18b5e3343e7c7c456ba3"
+    check_via: "Bankr wallet API"
+  llm_calls:
+    auth: BANKR_API_KEY
+    fallback: "return 500 — do not expose key to client"

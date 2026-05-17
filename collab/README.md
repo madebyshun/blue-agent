@@ -18,6 +18,10 @@ collab/
 ├── miroshark-blueagent.prompt.md     — MiroShark prompt: what to simulate and how to output
 ├── miroshark-blueagent-bridge.md     — Architecture: how Blue Agent × MiroShark collaborate
 │
+├── bankr-blueagent.yml               — Bankr config: capabilities, integration map, payment flow
+├── bankr-blueagent.prompt.md         — Bankr prompt contracts: per-command input/output schemas
+├── bankr-blueagent-bridge.md         — Architecture: how Bankr powers Blue Agent
+│
 └── exports/                           — Sample outputs, skill exports, bounty fixtures
     ├── agent-wallet-security.sample.md
     ├── base-ecosystem.sample.md
@@ -36,6 +40,8 @@ Blue Agent (translate / decide / distribute)
 MiroShark (simulate / forecast)
   ↓
 Community / Base (aligned outcomes, shared value, onchain growth)
+
+       └── all powered by ──► Bankr (LLM + wallet + trading)
 ```
 
 ## Key files
@@ -46,6 +52,7 @@ Community / Base (aligned outcomes, shared value, onchain growth)
 | `shared-schemas.yml` | Signal, scenario, forecast, action, result — the language all three agents speak |
 | `aeon-blueagent.yml` | Tells Aeon what to watch in this repo and when |
 | `miroshark-blueagent.yml` | Tells MiroShark what scenarios to simulate and what thresholds to use |
+| `bankr-blueagent.yml` | Maps how Bankr LLM, wallet, and trading power Blue Agent |
 | `*-bridge.md` | Human-readable architecture docs for each collab pair |
 
 ## Community contributions
