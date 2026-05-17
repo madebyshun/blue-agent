@@ -33,7 +33,7 @@ Blue Agent's marketplace handles real USDC on Base. A double-release bug sends t
 - Microtasks: $0.10–$20, multi-slot, USDC on Base, stored in `~/.blue-agent/microtasks.json`
 - Gig tasks: $20+, single-claim, USDC on Base, stored in `~/.blue-agent/tasks.json`
 - Platform fee: 5% of gross reward on every release
-- Treasury: `0xf31f59e7b8b58555f7871f71993a394c8f1bffe5` (Base)
+- Treasury: `Base` (Base)
 - USDC: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` (Base, 6 decimals)
 
 ---
@@ -833,7 +833,7 @@ function calculateFee(grossUsdc: number): FeeBreakdown {
 ### 8.3 Fee Distribution
 
 Platform fee goes to:
-- Treasury: `0xf31f59e7b8b58555f7871f71993a394c8f1bffe5` (Base)
+- Treasury: `Base` (Base)
 
 Worker net goes to:
 - Worker's wallet address (resolved from `claimant_address`)
@@ -1686,7 +1686,7 @@ When a user asks about escrow in chat context:
 - Chain ID: `8453`
 - USDC contract: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
 - USDC decimals: `6`
-- Treasury: `0xf31f59e7b8b58555f7871f71993a394c8f1bffe5`
+- Treasury: `Base`
 - Basescan: `https://basescan.org`
 
 Verify every address on Basescan before use. Never hardcode an address that has not been verified.

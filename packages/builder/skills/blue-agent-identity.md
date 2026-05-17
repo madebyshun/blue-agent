@@ -40,7 +40,7 @@ The builder workflow: `idea → build → audit → ship → raise`. Five comman
 
 | Product | Details |
 |---|---|
-| $BLOCKY token | `0x1E11dC42b7916621EEE1874da5664d75A0D74b07` (Base) |
+| $BLUEAGENT token | `Base` (Base) |
 | Blocky Echo NFT | Launching March 2026 |
 | Builder Score API | Scores any Base builder 0–100 based on onchain activity |
 | Community Kit | White-label bot for Base token projects |

@@ -1667,7 +1667,7 @@ Run `blue build --fix-audit` to generate remediation PRs
 - Treasury: `0xf31f59e7b8b58555f7871f71973a394c8f1bffe5` — verify on [Basescan](https://basescan.org)
 - USDC on Base: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` — verify on [Basescan](https://basescan.org)
 - $BLUEAGENT: `0xf895783b2931c919955e18b5e3343e7c7c456ba3` — verify on [Basescan](https://basescan.org)
-- $BLOCKY: `0x1E11dC42b7916621EEE1874da5664d75A0D74b07` — verify on [Basescan](https://basescan.org)
+- $BLUEAGENT: `Base` — verify on [Basescan](https://basescan.org)
 - Base RPC: `https://mainnet.base.org` (public) or Alchemy/Infura for production
 - Base Chain ID: `8453`
 

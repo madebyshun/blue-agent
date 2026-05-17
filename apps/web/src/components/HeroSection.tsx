@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 const TOKEN = "0xf895783b2931c919955e18b5e3343e7c7c456ba3";
 
 const STATS = [
-  { value: "5",    label: "Core Commands" },
+  { value: "31",   label: "CLI Commands" },
   { value: "$0.05", label: "Min. per Call" },
   { value: "Base",  label: "Network" },
   { value: "x402",  label: "Protocol" },

@@ -4,23 +4,15 @@ export const runtime = "edge";
 
 const BANKR_LLM = "https://llm.bankr.bot/v1/messages";
 
-const MODELS: Record<string, { id: string; label: string; price: string; maxTokens: number }> = {
-  fast: { id: "claude-haiku-4-5", label: "Fast", price: "$0.01/msg", maxTokens: 1024 },
-  pro:  { id: "claude-sonnet-4-6", label: "Pro",  price: "$0.05/msg", maxTokens: 2048 },
-  max:  { id: "claude-opus-4-7",   label: "Max",  price: "$0.20/msg", maxTokens: 4096 },
+const MODELS: Record<string, { id: string; maxTokens: number }> = {
+  fast: { id: "claude-haiku-4-5",  maxTokens: 1024 },
+  pro:  { id: "claude-sonnet-4-6", maxTokens: 2048 },
+  max:  { id: "claude-sonnet-4-6", maxTokens: 4096 },
 };
 
 const SYSTEM = `You are Blue Agent — the Base-native AI assistant for builders.
-
-You help founders and developers on Base with:
-- Idea generation and product strategy
-- Smart contract architecture and Solidity
-- DeFi protocol design and tokenomics
-- Agent development and x402 integrations
-- Launch strategy, GTM, and fundraising
-
-You are direct, technical, and builder-minded. No fluff. Every response should be actionable.
-You are Base-first: prefer Base, USDC, Coinbase tools, Uniswap v4, and the Bankr ecosystem.`;
+You help founders and developers on Base with idea generation, smart contract architecture, DeFi design, agent development, and launch strategy.
+Be direct, technical, and actionable. Prefer Base, USDC, Coinbase tools, and the Bankr ecosystem.`;
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.BANKR_API_KEY;

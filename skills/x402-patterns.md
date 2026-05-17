@@ -235,7 +235,7 @@ Current services in `apps/api/`:
 | `risk-gate` | `/api/x402/risk-gate` | $0.001 | Risk score for a contract or wallet |
 
 All accept `x-payment` header, all settle to Blue Agent treasury:
-`0xf31f59e7b8b58555f7871f71993a394c8f1bffe5`
+`Base`
 
 All services: Base mainnet only (chain ID 8453), USDC only.
 

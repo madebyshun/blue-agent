@@ -11,7 +11,7 @@ Never guess or interpolate an address. Mark unknowns as `TODO`.
 | Token | Address | Source |
 |---|---|---|
 | BLUEAGENT | `0xf895783b2931c919955e18b5e3343e7c7c456ba3` | Basescan verified |
-| BLOCKY | `0x1E11dC42b7916621EEE1874da5664d75A0D74b07` | Basescan verified |
+| BLOCKY | `Base` | Basescan verified |
 
 ---
 

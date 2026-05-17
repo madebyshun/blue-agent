@@ -288,7 +288,7 @@ Task lifecycle:
 Fee split:
   Doer receives:      reward × 0.95 (95%)
   Blue Agent fee:     reward × 0.05 (5%)
-  Treasury address:   0xf31f59e7b8b58555f7871f71993a394c8f1bffe5
+  Treasury address:   Base
 
 Example: 200 USDC task
   Doer receives:      190 USDC

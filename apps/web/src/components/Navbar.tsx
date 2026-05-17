@@ -2,7 +2,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import WalletBar from "@/components/WalletBar";
 
 // Working pages first, coming-soon last
 const PAGE_LINKS: { label: string; href: string; soon?: boolean }[] = [
@@ -16,9 +15,9 @@ const PAGE_LINKS: { label: string; href: string; soon?: boolean }[] = [
 // Homepage section anchors — no name collision with page links
 const HOME_SECTIONS = [
   { label: "Commands",    id: "commands" },
+  { label: "Skills",      id: "skills" },
   { label: "x402",        id: "tools" },
   { label: "Packages",    id: "ecosystem" },
-  { label: "Quick Start", id: "quickstart" },
 ];
 
 export default function Navbar() {
@@ -80,7 +79,20 @@ export default function Navbar() {
 
           {/* Right actions */}
           <div className="hidden md:flex items-center gap-3">
-            <WalletBar />
+            <a href="https://x.com/blocky_agent" target="_blank" rel="noopener noreferrer"
+              className="text-slate-500 hover:text-white transition-colors" aria-label="X / Twitter">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+              </svg>
+            </a>
+            <a href="https://github.com/madebyshun/blue-agent" target="_blank" rel="noopener noreferrer"
+              className="font-mono text-xs text-slate-400 hover:text-white transition-colors border border-[#1A1A2E] hover:border-[#4FC3F7]/30 px-3 py-1.5 rounded">
+              GitHub
+            </a>
+            <Link href="/console"
+              className="font-mono text-xs font-semibold bg-[#4FC3F7] text-[#050508] px-3 py-1.5 rounded hover:bg-[#29ABE2] transition-colors">
+              Open Console
+            </Link>
           </div>
 
           {/* Mobile hamburger */}

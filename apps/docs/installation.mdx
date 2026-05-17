@@ -1,60 +1,47 @@
 ---
 title: Installation
-description: Install @blueagent/builder and @blueagent/cli
+description: Install @blueagent/cli — one package, all commands + TUI
 ---
 
-## Packages
+## One package
 
-| Package | Command | Description |
-|---------|---------|-------------|
-| `@blueagent/builder` | `blue` | Core CLI — all 31 commands |
-| `@blueagent/cli` | `blueagent` | Interactive TUI shell |
+```bash
+npm install -g @blueagent/cli
+```
+
+Gives you two commands:
+
+| Command | Description |
+|---------|-------------|
+| `blue` | Direct CLI — `blue idea "..."`, `blue audit "..."`, etc. |
+| `blueagent` | Interactive TUI — arrow keys to navigate |
 
 ## Requirements
 
 - Node.js 18+
-- npm or yarn
-- `BANKR_API_KEY` environment variable
+- `BANKR_API_KEY` — set in `~/.blue-agent/config.toml` or as env var
 
-## Install options
+## Set your API key
 
-<Tabs>
-  <Tab title="One-liner">
-    ```bash
-    curl -fsSL https://blueagent.dev/setup.sh | bash
-    ```
-    Installs both `@blueagent/builder` and `@blueagent/cli` globally.
-  </Tab>
-  <Tab title="CLI only">
-    ```bash
-    npm install -g @blueagent/builder
-    ```
-    Gives you the `blue` command.
-  </Tab>
-  <Tab title="TUI + CLI">
-    ```bash
-    npm install -g @blueagent/cli @blueagent/builder
-    ```
-    Gives you both `blueagent` (TUI) and `blue` (CLI).
-  </Tab>
-</Tabs>
+```toml
+# ~/.blue-agent/config.toml
+bankr_api_key = "your_key_here"
+```
 
-## API key
+Or via environment:
 
 ```bash
-# Add to your shell profile (~/.zshrc or ~/.bashrc)
 export BANKR_API_KEY=your_key_here
 ```
 
 ## Verify install
 
 ```bash
-blue --version
 blue doctor
 ```
 
 ## Update
 
 ```bash
-npm update -g @blueagent/builder @blueagent/cli
+npm update -g @blueagent/cli
 ```
