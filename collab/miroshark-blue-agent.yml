@@ -1,0 +1,47 @@
+version: 1
+source:
+  repo: madebyshun/blue-agent
+  branch: main
+  root: .
+
+scenario:
+  input_dirs:
+    - skills/*.md
+    - commands/*.md
+    - docs/roadmap.md
+    - collab/exports/*.md
+  signal_endpoint: https://blueagent.dev/api/signal
+  scenario_endpoint: https://blueagent.dev/api/simulate
+
+triggers:
+  - event: aeon_signal
+    action: build_scenario
+  - event: holder_activity_spike
+    action: simulate_reward_distribution
+  - event: token_volume_change
+    action: simulate_community_reaction
+  - event: new_command_shipped
+    action: simulate_adoption_forecast
+
+simulation:
+  default_horizon: 6h
+  agents_per_run: 200
+  confidence_threshold: 0.70
+  decision:
+    above_threshold: execute
+    between_40_70: alert_human
+    below_40: skip
+
+outputs:
+  forecast_dir: collab/miroshark-output/
+  schema: shared-schemas.yml
+  alert_channel: telegram
+  alert_target: blueagent_hub
+
+rules:
+  - base_only
+  - no_hallucinated_addresses
+  - no_secret_propagation
+  - require_confidence_score
+  - alert_only_when_actionable
+  - log_predicted_vs_actual
