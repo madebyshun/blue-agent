@@ -1,127 +1,177 @@
-version: 1
+version: 2
 description: Shared data schemas for Blue Agent × Aeon × MiroShark collaboration
 
 changelog:
+  v2:
+    date: 2026-05-18
+    changes:
+      - rewrite based on actual Aeon and MiroShark capabilities
+      - Aeon uses A2A/MCP output, not HTTP POST signal
+      - MiroShark uses webhook callbacks, not synchronous POST
+      - removed fixed agent count and horizon from scenario
+      - added webhook_result schema for MiroShark → Blue Agent async flow
   v1:
     date: 2026-05-17
     changes:
       - initial release — signal, scenario, forecast, action, result schemas
 
-# ── Signal (Aeon → Blue Agent) ────────────────────────────────────────────────
-signal:
+# ── Aeon Output (Aeon → Blue Agent via A2A or webhook) ───────────────────────
+# Aeon runs on GitHub Actions cron. It does NOT POST signals in real-time.
+# Integration: Aeon skill output → Blue Agent via A2A gateway or webhook notify.
+aeon_output:
+  description: >
+    Output from an Aeon skill run. Delivered via A2A protocol gateway,
+    webhook notify, or Telegram. Blue Agent reads and decides whether to act.
   required:
     - id
-    - source
-    - type
-    - data
+    - skill
+    - output
+    - quality_score
     - timestamp
   properties:
     id:
       type: string
-      description: Unique signal ID
-      example: "sig_aeon_20260517_001"
-    source:
+      example: "aeon_run_20260518_001"
+    skill:
       type: string
-      enum: [aeon, miroshark, blueagent, external]
-    type:
-      type: string
+      description: Which Aeon skill produced this output
       enum:
-        - trending
-        - volume_spike
-        - holder_activity
-        - repo_change
-        - skill_regression
-        - launch_alert
-        - security_flag
-    data:
-      type: object
-      description: Signal payload — varies by type
-    confidence:
-      type: number
-      minimum: 0
-      maximum: 1
-      description: How confident the source is in this signal
+        - github-monitor      # repo change digest
+        - token-movers        # price / volume movement
+        - defi-monitor        # onchain DeFi activity
+        - digest              # general research digest
+        - code-health         # codebase quality report
+        - blue_audit          # invoked blue_audit via MCP
+        - custom              # any other Aeon skill
+    output:
+      type: string
+      description: Raw text output from the Aeon skill run
+    quality_score:
+      type: integer
+      minimum: 1
+      maximum: 5
+      description: Aeon auto-scores its own output (1=failed, 5=excellent)
+    flags:
+      type: array
+      items:
+        type: string
+        enum: [api_error, stale_data, rate_limited, actionable, informational]
+    source_repo:
+      type: string
+      description: Repo being monitored, if applicable
+      example: "madebyshun/blue-agent"
     timestamp:
       type: string
       format: iso8601
-    ttl_minutes:
-      type: integer
-      default: 60
-      description: Signal expires after this many minutes
+    notify_channel:
+      type: string
+      enum: [telegram, discord, slack, webhook]
+      description: How this output was delivered to Blue Agent
 
-# ── Scenario (Blue Agent → MiroShark) ────────────────────────────────────────
+# ── Scenario (Blue Agent → MiroShark REST API) ───────────────────────────────
+# MiroShark exposes REST at /api/simulation/
+# Blue Agent POSTs a scenario, MiroShark runs simulation, returns via webhook
 scenario:
+  description: >
+    Scenario payload Blue Agent sends to MiroShark /api/simulation/ endpoint.
+    MiroShark generates Bull/Bear/Neutral variants automatically.
   required:
     - id
     - scenario
-    - context
+    - webhook_url
   properties:
     id:
       type: string
-      example: "scn_20260517_001"
+      example: "scn_20260518_001"
     scenario:
       type: string
-      description: Plain-text description of the scenario to simulate
-      example: "Blue Agent distributes 500 USDC to top 50 holders during a volume spike"
+      description: Plain-text scenario for MiroShark to simulate
+      example: "Blue Agent distributes 500 USDC to top holders after a volume spike — how does the community react?"
     context:
       type: object
+      description: Optional context to ground the simulation
       properties:
         token:
           type: string
           example: "BLUEAGENT"
-        holders:
-          type: integer
-        volume_change:
+        platform:
           type: string
-          example: "+40%"
-        time_of_day:
-          type: string
-          example: "9am UTC"
+          enum: [twitter, reddit, prediction_markets]
+          description: Which platform to simulate reactions on
         recent_activity:
           type: string
-    horizon_hours:
-      type: integer
-      default: 6
-      description: How many hours forward to simulate
+    webhook_url:
+      type: string
+      description: Blue Agent endpoint to receive MiroShark results
+      example: "https://blueagent.dev/api/webhook/miroshark"
+    webhook_secret:
+      type: string
+      description: HMAC secret for webhook verification (optional)
 
-# ── Forecast (MiroShark → Blue Agent) ────────────────────────────────────────
-forecast:
+# ── Webhook Result (MiroShark → Blue Agent async callback) ───────────────────
+# MiroShark POSTs this to blueagent.dev/api/webhook/miroshark when done
+webhook_result:
+  description: >
+    MiroShark simulation result delivered via webhook POST.
+    Blue Agent receives this and decides: execute / alert / skip.
   required:
-    - scenario_id
-    - confidence
+    - simulation_id
+    - consensus_split
     - recommendation
+    - transcript_url
   properties:
+    simulation_id:
+      type: string
     scenario_id:
       type: string
-    confidence:
-      type: number
-      minimum: 0
-      maximum: 1
-    forecast:
-      type: string
-      description: Narrative of predicted outcome
-    peak_moment:
-      type: string
-      example: "within 2 hours"
-    risk_factors:
-      type: array
-      items:
-        type: string
+      description: Matches the scenario.id Blue Agent submitted
+    consensus_split:
+      type: object
+      description: Bull/Bear/Neutral percentage breakdown
+      properties:
+        bull:
+          type: number
+        bear:
+          type: number
+        neutral:
+          type: number
     recommendation:
       type: string
       enum: [execute, alert_human, skip]
-    track_metric:
+      description: Blue Agent maps consensus_split to this decision
+    quality_metrics:
+      type: object
+      description: Simulation quality metadata from MiroShark
+    transcript_url:
       type: string
-      description: What to measure post-action to validate forecast
-      example: "repost_count_24h"
+      description: Full transcript at /api/simulation/{id}/transcript
+    trajectory_url:
+      type: string
+      description: Time-series belief data at /api/simulation/{id}/trajectory.csv
+    timestamp:
+      type: string
+      format: iso8601
 
-# ── Action (Blue Agent → onchain / community) ─────────────────────────────────
+# ── Decision (Blue Agent internal) ───────────────────────────────────────────
+# How Blue Agent maps MiroShark consensus to action
+decision:
+  thresholds:
+    execute:
+      condition: "bull consensus > 60%"
+      action: "Blue Agent executes onchain automatically"
+    alert_human:
+      condition: "bull 40–60% OR bear > 40%"
+      action: "Telegram alert to blueagent_hub, await human input"
+    skip:
+      condition: "neutral > 60% OR quality_score < 3"
+      action: "Log and discard — not enough signal"
+
+# ── Action (Blue Agent → onchain / community) ────────────────────────────────
 action:
   required:
     - id
     - type
-    - trigger_signal_id
-    - forecast_id
+    - trigger_source
     - status
   properties:
     id:
@@ -133,26 +183,28 @@ action:
         - distribute_token
         - post_telegram
         - post_farcaster
-        - update_reputation
+        - run_blue_audit
         - trigger_command
-    trigger_signal_id:
+    trigger_source:
       type: string
-    forecast_id:
+      description: What triggered this action
+      enum: [aeon_output, miroshark_webhook, manual]
+    aeon_run_id:
+      type: string
+    simulation_id:
       type: string
     payload:
       type: object
-      description: Action-specific data (recipients, amounts, message, etc.)
     status:
       type: string
       enum: [pending, executing, done, failed]
     tx_hash:
       type: string
-      description: Onchain transaction hash if applicable
     executed_at:
       type: string
       format: iso8601
 
-# ── Result (Blue Agent → Aeon feedback loop) ──────────────────────────────────
+# ── Result (Blue Agent → feedback) ───────────────────────────────────────────
 result:
   required:
     - action_id
@@ -163,18 +215,15 @@ result:
       type: string
     predicted:
       type: string
-      description: What MiroShark forecast
-      example: "+200 reach"
+      description: What MiroShark forecast (from consensus_split)
     actual:
       type: string
-      description: What actually happened
-      example: "+180 reach"
+      description: What actually happened post-action
     delta_pct:
       type: number
-      description: Variance between predicted and actual
     lesson:
       type: string
-      description: One-line takeaway to improve future forecasts
+      description: One-line takeaway to improve future simulations
     timestamp:
       type: string
       format: iso8601
