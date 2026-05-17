@@ -32,22 +32,21 @@ else
   bail "node not found. install node >= 18 via nvm (https://nvm.sh) and re-run."
 fi
 
-# --- 2. install @blueagent/cli + @blueagent/builder --------------------------
-say "installing @blueagent/cli (TUI + CLI)"
+# --- 2. install @blueagent/cli -----------------------------------------------
+say "installing @blueagent/cli"
 if command -v pnpm >/dev/null 2>&1; then
-  pnpm add -g @blueagent/cli @blueagent/builder >/dev/null
+  pnpm add -g @blueagent/cli >/dev/null
 elif command -v npm >/dev/null 2>&1; then
-  npm install -g @blueagent/cli @blueagent/builder >/dev/null
+  npm install -g @blueagent/cli >/dev/null
 else
   bail "npm not found."
 fi
-ok "@blueagent/cli installed  →  blueagent (TUI)"
-ok "@blueagent/builder installed  →  blue (CLI)"
+ok "@blueagent/cli installed  →  blue (CLI) + blueagent (TUI)"
 
 # --- 3. blue init (install skills) -------------------------------------------
-say "installing skills"
+say "installing 34 skill files"
 if blue init >/dev/null 2>&1; then
-  ok "6 skills installed to ~/.blue-agent/skills/"
+  ok "34 skills installed to ~/.blue-agent/skills/"
 else
   warn "could not install skills. run 'blue init' manually."
 fi

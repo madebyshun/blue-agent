@@ -1395,7 +1395,7 @@ TaskReputation — measures actual work quality on the Work Hub (performance sig
 ```
 Blue Agent Treasury: 0xf31f59e7b8b58555f7871f71973a394c8f1bffe5
 $BLUEAGENT token:    0xf895783b2931c919955e18b5e3343e7c7c456ba3
-$BLOCKY token:       0x1E11dC42b7916621EEE1874da5664d75A0D74b07
+$BLUEAGENT token:       Base
 
 USDC on Base:        Verify current address on Basescan — do not hardcode without confirming.
 EAS on Base:         Verify current address on Basescan — do not hardcode without confirming.

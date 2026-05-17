@@ -12,7 +12,7 @@ const COMMANDS_DOCS = [
     { cmd: "blue raise [prompt]",            desc: "Pitch narrative — why this wins, traction, ask, Base investor map",         example: 'blue raise "Base DeFi protocol"' },
   ]},
   { group: "SETUP", items: [
-    { cmd: "blue init",                      desc: "Install 6 skill files to ~/.blue-agent/skills/ for local grounding",        example: "blue init" },
+    { cmd: "blue init",                      desc: "Install 34 skill files to ~/.blue-agent/skills/ for local grounding",        example: "blue init" },
     { cmd: "blue new <name>",                desc: "Scaffold a new Base project — base-agent | base-x402 | base-token",         example: "blue new my-token --template base-token" },
     { cmd: "blue doctor",                    desc: "Verify node, skills, API key, config — full environment health check",      example: "blue doctor" },
     { cmd: "blue validate [dir]",            desc: "Project health check — Node, package.json, tsconfig, env, src/, git",       example: "blue validate ./my-project" },
@@ -22,7 +22,7 @@ const COMMANDS_DOCS = [
   ]},
   { group: "SCORE", items: [
     { cmd: "blue score [handle]",            desc: "Builder Score for an X handle — activity, social, thesis (0-100)",          example: "blue score @blockyagent" },
-    { cmd: "blue agent-score [input]",       desc: "@handle / npm:@pkg / github.com/repo / https://url → Agent Score",          example: "blue agent-score npm:@blueagent/builder" },
+    { cmd: "blue agent-score [input]",       desc: "@handle / npm:@pkg / github.com/repo / https://url → Agent Score",          example: "blue agent-score npm:@blueagent/cli" },
     { cmd: "blue compare [a] [b]",           desc: "Compare two builders or agents side by side",                               example: "blue compare @vitalik @blocky_agent" },
   ]},
   { group: "DISCOVERY", items: [
@@ -56,12 +56,40 @@ const COMMANDS_DOCS = [
 ];
 
 const SKILLS_DOCS = [
-  { file: "base-security.md",       desc: "500+ security checks across 13 categories. Loaded for blue audit.",       install: "auto via blue init" },
-  { file: "base-addresses.md",      desc: "Verified contract addresses on Base — USDC, WETH, Uniswap, Aave.",       install: "auto via blue init" },
-  { file: "base-standards.md",      desc: "ERC standards, Base patterns, x402 protocol spec.",                      install: "auto via blue init" },
-  { file: "bankr-tools.md",         desc: "Bankr LLM capabilities and all 31 x402 tools.",                          install: "auto via blue init" },
-  { file: "blue-agent-identity.md", desc: "Blue Agent mission, product voice, do/don't rules.",                     install: "auto via blue init" },
-  { file: "design-system.md",       desc: "Visual language, colors, card patterns, spacing.",                       install: "auto via blue init" },
+  { file: "base-security.md",                  desc: "500+ security checks across 13 categories. Loaded for blue audit.",        install: "auto via blue init" },
+  { file: "base-addresses.md",                 desc: "Verified contract addresses on Base — USDC, WETH, Uniswap, Aave.",        install: "auto via blue init" },
+  { file: "base-standards.md",                 desc: "ERC standards, Base patterns, x402 protocol spec.",                       install: "auto via blue init" },
+  { file: "bankr-tools.md",                    desc: "Bankr LLM capabilities and all 31 x402 tools.",                           install: "auto via blue init" },
+  { file: "blue-agent-identity.md",            desc: "Blue Agent mission, product voice, do/don't rules.",                      install: "auto via blue init" },
+  { file: "design-system.md",                  desc: "Visual language, colors, card patterns, spacing.",                        install: "auto via blue init" },
+  { file: "base-ecosystem.md",                 desc: "Base ecosystem overview — key protocols, teams, infrastructure.",         install: "auto via blue init" },
+  { file: "x402-patterns.md",                  desc: "x402 payment patterns — pay-per-call APIs, pricing, flow.",              install: "auto via blue init" },
+  { file: "agent-wallet-security.md",          desc: "Security patterns for agent-controlled wallets.",                         install: "auto via blue init" },
+  { file: "aerodrome-dex-guide.md",            desc: "Aerodrome DEX — pools, voting, bribes, LP strategy on Base.",            install: "auto via blue init" },
+  { file: "aave-lending-patterns.md",          desc: "Aave v3 lending and borrowing patterns on Base.",                         install: "auto via blue init" },
+  { file: "uniswap-v4-hooks-guide.md",         desc: "Uniswap v4 hooks — lifecycle, pool manager, custom logic.",              install: "auto via blue init" },
+  { file: "flashloan-patterns.md",             desc: "Flashloan fundamentals — callback structure, use cases.",                 install: "auto via blue init" },
+  { file: "flashloan-patterns-advanced.md",    desc: "Advanced flashloan strategies and attack vectors.",                       install: "auto via blue init" },
+  { file: "staking-yield-farming.md",          desc: "Staking and yield farming — vaults, rewards, compounding.",              install: "auto via blue init" },
+  { file: "solidity-security-patterns.md",     desc: "Solidity security — access control, overflow, reentrancy.",              install: "auto via blue init" },
+  { file: "oracle-design-guide.md",            desc: "Oracle design — Chainlink, TWAP, price feed validation.",                install: "auto via blue init" },
+  { file: "mev-protection-guide.md",           desc: "MEV protection — frontrun defense, slippage, commit-reveal.",            install: "auto via blue init" },
+  { file: "mev-protection-advanced.md",        desc: "Advanced MEV — Flashbots, Protect RPC, batch auction design.",           install: "auto via blue init" },
+  { file: "cross-chain-bridge-security.md",    desc: "Bridge security — validation, finality, replay attacks.",                install: "auto via blue init" },
+  { file: "base-account-integration.md",       desc: "Coinbase Smart Wallet — ERC-4337, passkeys, sponsored txs.",            install: "auto via blue init" },
+  { file: "account-abstraction-deep-dive.md",  desc: "ERC-4337 deep dive — UserOps, bundlers, paymasters, EntryPoint.",       install: "auto via blue init" },
+  { file: "multi-sig-wallet-security.md",      desc: "Multi-sig — Safe, threshold signing, timelock, key rotation.",          install: "auto via blue init" },
+  { file: "veil-privacy-transactions.md",      desc: "Privacy transactions — stealth addresses, private transfers.",           install: "auto via blue init" },
+  { file: "governance-dao-patterns.md",        desc: "DAO governance — Governor, timelock, voting, quorum.",                   install: "auto via blue init" },
+  { file: "gas-optimization-guide.md",         desc: "Gas optimization — storage packing, calldata, assembly.",               install: "auto via blue init" },
+  { file: "frames-miniapps.md",               desc: "Farcaster Frames and Base mini app development.",                       install: "auto via blue init" },
+  { file: "telegram-bot-patterns.md",          desc: "Telegram bot patterns for onchain agents.",                              install: "auto via blue init" },
+  { file: "gig-marketplace-guide.md",          desc: "Gig marketplace — escrow, reputation, task lifecycle, USDC.",           install: "auto via blue init" },
+  { file: "postgres-for-agents.md",            desc: "Postgres for agents — schema design, indexing, pgvector.",              install: "auto via blue init" },
+  { file: "x402-escrow-patterns.md",           desc: "x402 escrow — conditional release, dispute resolution, USDC.",          install: "auto via blue init" },
+  { file: "reputation-engine.md",              desc: "Reputation engine — Builder Score, Agent Score, onchain signals.",       install: "auto via blue init" },
+  { file: "wallet-guardrails.md",              desc: "Wallet guardrails — spend limits, allowlists, simulation.",              install: "auto via blue init" },
+  { file: "agent-transaction-verification.md", desc: "TX verification — pre-flight checks, simulation, intent validation.",   install: "auto via blue init" },
 ];
 
 const NAV_ITEMS = [
@@ -95,7 +123,8 @@ export default function DocsPage() {
   return (
     <>
       <Navbar />
-      <div className="bg-[#050508] font-mono pt-16 min-h-screen flex">
+      <div className="bg-[#050508] font-mono pt-16 min-h-screen">
+        <div className="max-w-7xl mx-auto flex">
 
           {/* ── Sticky sidebar ───────────────────── */}
           <aside className="hidden lg:flex flex-col w-56 shrink-0 sticky top-16 self-start h-[calc(100vh-4rem)] border-r border-[#1A1A2E] py-10 px-4">
@@ -167,7 +196,7 @@ export default function DocsPage() {
                 </div>
                 <div className="p-5 space-y-3 font-mono text-sm">
                   <div className="text-slate-600"># 1. install CLI</div>
-                  <div><span className="text-slate-600">$ </span><span className="text-white">npm install -g @blueagent/builder</span></div>
+                  <div><span className="text-slate-600">$ </span><span className="text-white">npm install -g @blueagent/cli</span></div>
                   <div className="pt-1 text-slate-600"># 2. install skill files (grounds every command)</div>
                   <div><span className="text-slate-600">$ </span><span className="text-white">blue init</span></div>
                   <div className="pt-1 text-slate-600"># 3. run your first command</div>
@@ -253,7 +282,7 @@ export default function DocsPage() {
 
             {/* ── 04 Skills ───────────────────────── */}
             <section id="skills" className="mb-16 scroll-mt-20">
-              <SectionHeader num="04" title="Skills" subtitle="6 knowledge files · loaded before every command" />
+              <SectionHeader num="04" title="Skills" subtitle="34 knowledge files · loaded before every command" />
               <p className="font-mono text-sm text-slate-500 mb-6">
                 Skill files are markdown documents that ground the LLM in verified Base knowledge.
                 Run <code className="text-[#4FC3F7]">blue init</code> to install them to{" "}
@@ -371,8 +400,7 @@ export default function DocsPage() {
                   <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest mb-2">SURFACE — what users install</p>
                   <div className="space-y-2 mb-5">
                     {[
-                      { pkg: "@blueagent/cli",        desc: "TUI · blueagent cmd · interactive menu · 8 categories" },
-                      { pkg: "@blueagent/builder",    desc: "CLI · blue cmd · 5 commands + setup + score + tasks" },
+                      { pkg: "@blueagent/cli", desc: "TUI + CLI · blueagent (interactive) · blue (direct commands) · 31 commands" },
                     ].map((p) => (
                       <div key={p.pkg} className="flex items-baseline gap-4">
                         <code className="font-mono text-sm text-[#4FC3F7] shrink-0 min-w-[200px]">{p.pkg}</code>
@@ -424,6 +452,7 @@ export default function DocsPage() {
             </section>
 
           </main>
+        </div>
       </div>
     </>
   );

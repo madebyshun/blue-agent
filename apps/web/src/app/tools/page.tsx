@@ -3,13 +3,69 @@
 import { useState, useMemo } from "react";
 import Navbar from "@/components/Navbar";
 
-const SKILLS = [
-  { file: "base-security.md",       desc: "500+ security checks across 13 attack categories",         grounds: "Reentrancy, oracle, MEV, x402, Coinbase Smart Wallet patterns" },
-  { file: "base-addresses.md",      desc: "Verified contract addresses on Base mainnet",               grounds: "USDC, WETH, Uniswap v3/v4, Aave, Compound, Clanker" },
-  { file: "base-standards.md",      desc: "ERC standards and Base-native development patterns",        grounds: "ERC-20, ERC-721, ERC-4337, ERC-7702, x402 payment protocol" },
-  { file: "bankr-tools.md",         desc: "Bankr LLM capabilities and x402 tool catalog",             grounds: "All 31 paid tools, endpoints, pricing, usage examples" },
-  { file: "blue-agent-identity.md", desc: "Blue Agent mission, surfaces, tone, and values",           grounds: "Product positioning, voice, do/don't rules" },
-  { file: "design-system.md",       desc: "Visual language and UI component patterns",                grounds: "Color palette, typography, card patterns, spacing system" },
+const SKILL_GROUPS = [
+  {
+    group: "Core", color: "#4FC3F7", skills: [
+      { file: "base-security.md",       desc: "500+ security checks across 13 attack categories",     grounds: "Reentrancy, oracle, MEV, x402, Coinbase Smart Wallet patterns" },
+      { file: "base-addresses.md",      desc: "Verified contract addresses on Base mainnet",           grounds: "USDC, WETH, Uniswap v3/v4, Aave, Compound, Clanker" },
+      { file: "base-standards.md",      desc: "ERC standards and Base-native development patterns",    grounds: "ERC-20, ERC-721, ERC-4337, ERC-7702, x402 payment protocol" },
+      { file: "base-ecosystem.md",      desc: "Base ecosystem overview and protocol landscape",        grounds: "Key protocols, teams, and infrastructure on Base" },
+      { file: "bankr-tools.md",         desc: "Bankr LLM capabilities and x402 tool catalog",         grounds: "All 31 paid tools, endpoints, pricing, usage examples" },
+      { file: "blue-agent-identity.md", desc: "Blue Agent mission, surfaces, tone, and values",       grounds: "Product positioning, voice, do/don't rules" },
+      { file: "design-system.md",       desc: "Visual language and UI component patterns",            grounds: "Color palette, typography, card patterns, spacing system" },
+    ],
+  },
+  {
+    group: "Security", color: "#f87171", skills: [
+      { file: "solidity-security-patterns.md",     desc: "Solidity security best practices and common pitfalls",    grounds: "Access control, overflow, reentrancy, upgradability" },
+      { file: "oracle-design-guide.md",            desc: "Oracle design patterns and manipulation defense",         grounds: "Chainlink, TWAP, price feed validation" },
+      { file: "mev-protection-guide.md",           desc: "MEV protection strategies for contracts and users",       grounds: "Frontrun defense, slippage, commit-reveal" },
+      { file: "mev-protection-advanced.md",        desc: "Advanced MEV mitigation and private mempool patterns",    grounds: "Flashbots, Protect RPC, batch auction design" },
+      { file: "cross-chain-bridge-security.md",    desc: "Cross-chain bridge security and risk patterns",           grounds: "Validation, finality, replay attacks, bridge hacks" },
+      { file: "agent-wallet-security.md",          desc: "Security patterns for agent-controlled wallets",          grounds: "Key management, signing, spend limits, guardrails" },
+      { file: "wallet-guardrails.md",              desc: "Wallet safety rules and transaction guardrails",          grounds: "Spend limits, allowlists, simulation, revocation" },
+    ],
+  },
+  {
+    group: "DeFi", color: "#34d399", skills: [
+      { file: "aerodrome-dex-guide.md",         desc: "Aerodrome DEX integration and liquidity guide",         grounds: "Pools, voting, bribes, LP strategy on Base" },
+      { file: "aave-lending-patterns.md",        desc: "Aave v3 lending and borrowing patterns on Base",        grounds: "Supply, borrow, health factor, liquidation logic" },
+      { file: "uniswap-v4-hooks-guide.md",       desc: "Uniswap v4 hooks architecture and development guide",   grounds: "Hook lifecycle, pool manager, custom logic patterns" },
+      { file: "flashloan-patterns.md",           desc: "Flashloan patterns and integration fundamentals",        grounds: "Aave flashloans, callback structure, use cases" },
+      { file: "flashloan-patterns-advanced.md",  desc: "Advanced flashloan strategies and attack vectors",       grounds: "Multi-protocol arbitrage, sandwich defense, MEV" },
+      { file: "staking-yield-farming.md",        desc: "Staking and yield farming protocol patterns",           grounds: "Reward distribution, vaults, compounding strategies" },
+      { file: "gas-optimization-guide.md",       desc: "Gas optimization techniques for Solidity contracts",    grounds: "Storage packing, calldata, assembly, benchmarks" },
+    ],
+  },
+  {
+    group: "Accounts & Wallets", color: "#a78bfa", skills: [
+      { file: "base-account-integration.md",      desc: "Coinbase Smart Wallet and Base account integration",  grounds: "ERC-4337, passkeys, sponsored transactions" },
+      { file: "account-abstraction-deep-dive.md",  desc: "ERC-4337 account abstraction deep dive",             grounds: "UserOps, bundlers, paymasters, EntryPoint" },
+      { file: "multi-sig-wallet-security.md",      desc: "Multi-sig wallet patterns and operational security",  grounds: "Safe, threshold signing, timelock, key rotation" },
+      { file: "veil-privacy-transactions.md",      desc: "Privacy-preserving transaction patterns on Base",    grounds: "Stealth addresses, private transfers, Veil" },
+    ],
+  },
+  {
+    group: "Payments", color: "#fbbf24", skills: [
+      { file: "x402-patterns.md",       desc: "x402 payment protocol patterns and integration guide",   grounds: "Pay-per-call APIs, pricing, facilitators, flow" },
+      { file: "x402-escrow-patterns.md", desc: "Escrow and payment flow patterns using x402",           grounds: "Conditional release, dispute resolution, USDC" },
+    ],
+  },
+  {
+    group: "Distribution", color: "#fb923c", skills: [
+      { file: "frames-miniapps.md",      desc: "Farcaster Frames and Base mini app development",  grounds: "Frame spec, actions, transactions, mini app SDK" },
+      { file: "telegram-bot-patterns.md", desc: "Telegram bot patterns for onchain agents",        grounds: "Bot API, webhooks, inline keyboards, wallet flows" },
+      { file: "governance-dao-patterns.md", desc: "DAO governance design and implementation patterns", grounds: "Governor, timelock, voting strategies, quorum" },
+    ],
+  },
+  {
+    group: "Infrastructure", color: "#94a3b8", skills: [
+      { file: "gig-marketplace-guide.md",          desc: "Gig marketplace and work hub design on Base",            grounds: "Escrow, reputation, task lifecycle, USDC payout" },
+      { file: "postgres-for-agents.md",            desc: "Postgres database patterns for AI agents",              grounds: "Schema design, indexing, agent memory, pgvector" },
+      { file: "reputation-engine.md",              desc: "Reputation scoring system design and data sources",      grounds: "Builder Score, Agent Score, onchain signals" },
+      { file: "agent-transaction-verification.md", desc: "Transaction verification patterns for autonomous agents", grounds: "Pre-flight checks, simulation, intent validation" },
+    ],
+  },
 ];
 
 const ALL_TOOLS = [
@@ -70,7 +126,7 @@ const COMMANDS = [
     { cmd: "blue raise [prompt]",           arrow: "idea → fundraising narrative", desc: "Pitch narrative — why this wins, traction, ask, investors",        example: 'blue raise "Base DeFi protocol"' },
   ]},
   { group: "SETUP", items: [
-    { cmd: "blue init",                     arrow: "install 6 skills",             desc: "Install all 6 skill files to ~/.blue-agent/skills/",               example: "blue init" },
+    { cmd: "blue init",                     arrow: "install 34 skills",            desc: "Install all 34 skill files to ~/.blue-agent/skills/",              example: "blue init" },
     { cmd: "blue new <name>",               arrow: "scaffold project",             desc: "Scaffold: base-agent | base-x402 | base-token",                    example: "blue new my-token --template base-token" },
     { cmd: "blue doctor",                   arrow: "check setup",                  desc: "Verify node, skills, API key, config — full health check",          example: "blue doctor" },
     { cmd: "blue validate [dir]",           arrow: "project health",               desc: "Check Node, package.json, tsconfig, env, src/, git",               example: "blue validate ./my-project" },
@@ -116,7 +172,7 @@ const COMMANDS = [
 const SIDEBAR_SECTIONS = [
   { id: "tools",    label: "x402 Tools",  count: "31" },
   { id: "commands", label: "CLI Commands", count: "30" },
-  { id: "skills",   label: "Skills",       count: "6"  },
+  { id: "skills",   label: "Skills",       count: "34" },
 ];
 
 const CATEGORIES = ["all", "security", "research", "launch", "premium"];
@@ -142,7 +198,8 @@ export default function ToolsPage() {
   return (
     <>
       <Navbar />
-      <div className="bg-[#050508] font-mono pt-16 min-h-screen flex">
+      <div className="bg-[#050508] font-mono pt-16 min-h-screen">
+        <div className="max-w-7xl mx-auto flex">
 
         {/* ── Sidebar ──────────────────────────────────── */}
         <aside className="hidden lg:flex flex-col w-56 shrink-0 sticky top-16 self-start h-[calc(100vh-4rem)] border-r border-[#1A1A2E] py-10 px-4">
@@ -203,7 +260,7 @@ export default function ToolsPage() {
               BLUE<span className="text-[#4FC3F7]">AGENT</span> Tools
             </h1>
             <p className="font-mono text-base text-slate-400 max-w-xl">
-              6 skill files · 31 x402 tools · 12 commands — everything Blue Agent knows and can do.
+              34 skill files · 31 x402 tools · 31 commands — everything Blue Agent knows and can do.
             </p>
 
             {/* Mobile section tabs */}
@@ -352,16 +409,26 @@ export default function ToolsPage() {
             <>
               <p className="font-mono text-sm text-slate-500 mb-8">
                 Skill files ground every command in verified Base knowledge. Run{" "}
-                <code className="text-[#4FC3F7]">blue init</code> to install all 6 to{" "}
+                <code className="text-[#4FC3F7]">blue init</code> to install all 34 to{" "}
                 <code className="text-white">~/.blue-agent/skills/</code>.
               </p>
-              <div className="space-y-3">
-                {SKILLS.map((s) => (
-                  <div key={s.file} className="card-surface rounded-xl p-5 grid sm:grid-cols-[220px_1fr] gap-3">
-                    <code className="font-mono text-sm text-[#4FC3F7]">{s.file}</code>
-                    <div>
-                      <p className="font-mono text-sm text-slate-300 mb-1">{s.desc}</p>
-                      <p className="font-mono text-xs text-slate-600">{s.grounds}</p>
+              <div className="space-y-8">
+                {SKILL_GROUPS.map((g) => (
+                  <div key={g.group}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="font-mono text-[10px] tracking-widest" style={{ color: g.color }}>{g.group.toUpperCase()}</span>
+                      <span className="font-mono text-[10px] text-slate-700">{g.skills.length} files</span>
+                    </div>
+                    <div className="space-y-2">
+                      {g.skills.map((s) => (
+                        <div key={s.file} className="card-surface rounded-xl p-5 grid sm:grid-cols-[240px_1fr] gap-3">
+                          <code className="font-mono text-sm" style={{ color: g.color }}>{s.file}</code>
+                          <div>
+                            <p className="font-mono text-sm text-slate-300 mb-1">{s.desc}</p>
+                            <p className="font-mono text-xs text-slate-600">{s.grounds}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -369,12 +436,13 @@ export default function ToolsPage() {
               <div className="mt-8 card-surface rounded-xl p-5 inline-block">
                 <code className="font-mono text-sm text-slate-500">
                   $ <span className="text-[#4FC3F7]">blue init</span>
-                  <span className="text-slate-700 ml-3"># installs all 6 skills</span>
+                  <span className="text-slate-700 ml-3"># installs all 34 skills</span>
                 </code>
               </div>
             </>
           )}
         </main>
+        </div>
       </div>
     </>
   );

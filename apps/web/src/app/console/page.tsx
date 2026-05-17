@@ -61,7 +61,7 @@ export default function ConsolePage() {
     setResult("");
     setError("");
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/console", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command: selected.id, prompt }),
@@ -79,7 +79,8 @@ export default function ConsolePage() {
   return (
     <>
       <Navbar />
-      <div className="bg-[#050508] font-mono pt-16 min-h-screen flex">
+      <div className="bg-[#050508] font-mono pt-16 min-h-screen">
+        <div className="max-w-7xl mx-auto flex">
 
         {/* ── Sidebar ──────────────────────────────────── */}
         <aside className="hidden lg:flex flex-col w-56 shrink-0 sticky top-16 self-start h-[calc(100vh-4rem)] border-r border-[#1A1A2E] py-10 px-4">
@@ -178,8 +179,8 @@ export default function ConsolePage() {
 
           {/* Output */}
           {error && (
-            <div className="card-surface rounded-xl p-4 border border-red-500/20 mb-4">
-              <p className="font-mono text-xs text-red-400">{error}</p>
+            <div className="card-surface rounded-xl p-4 border border-[#4FC3F7]/10 mb-4">
+              <p className="font-mono text-xs text-slate-500">// Coming soon for holders — hold $BLUEAGENT to unlock Console access</p>
             </div>
           )}
 
@@ -195,7 +196,7 @@ export default function ConsolePage() {
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[#1A1A2E]">
                 <div className="glow-dot" />
                 <span className="font-mono text-xs text-slate-400">blue {selected.id}</span>
-                <span className="font-mono text-xs text-slate-700 ml-auto">grounded · 6 skills loaded</span>
+                <span className="font-mono text-xs text-slate-700 ml-auto">grounded · 34 skills loaded</span>
               </div>
               <MarkdownOutput content={result} />
             </div>
@@ -204,10 +205,11 @@ export default function ConsolePage() {
           {!result && !loading && !error && (
             <div className="card-surface rounded-xl p-8 text-center">
               <p className="font-mono text-xs text-slate-700 mb-2">// waiting for input</p>
-              <p className="font-mono text-[10px] text-slate-800">6 skills loaded · Base-grounded · Bankr LLM</p>
+              <p className="font-mono text-[10px] text-slate-800">34 skills loaded · Base-grounded · Bankr LLM</p>
             </div>
           )}
         </main>
+        </div>
       </div>
     </>
   );

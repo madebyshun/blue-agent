@@ -80,4 +80,4 @@ alert-subscribe          alert-check
 - X/Twitter: [@blocky_agent](https://x.com/blocky_agent)
 - Telegram: [t.me/blueagent_hub](https://t.me/blueagent_hub)
 - Bankr: [bankr.bot/agent/blue-agent](https://bankr.bot/agent/blue-agent)
-- Tokens: `$BLUEAGENT` · `$BLOCKY` on Base
+- Tokens: `$BLUEAGENT` on Base

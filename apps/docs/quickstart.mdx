@@ -5,29 +5,35 @@ description: Get Blue Agent running in under 2 minutes
 
 ## Install
 
-<CodeGroup>
-
-```bash One-liner (recommended)
-curl -fsSL https://blueagent.dev/setup.sh | bash
+```bash
+npm install -g @blueagent/cli
 ```
 
-```bash npm
-npm install -g @blueagent/builder
+## Initialize skills
+
+```bash
+blue init
 ```
 
-```bash npm (TUI)
-npm install -g @blueagent/cli @blueagent/builder
-```
-
-</CodeGroup>
+Installs 34 grounding skill files to `~/.blue-agent/skills/` — Base addresses, security patterns, protocol standards, DeFi guides, and more.
 
 ## Set your API key
 
-```bash
-export BANKR_API_KEY=your_key_here
+Add to `~/.blue-agent/config.toml`:
+
+```toml
+bankr_api_key = "your_key_here"
 ```
 
 Get a key at [bankr.bot](https://bankr.bot).
+
+## Verify setup
+
+```bash
+blue doctor
+```
+
+All checks should be green.
 
 ## Run your first command
 
@@ -47,21 +53,13 @@ blue ship   # Deployment checklist + release notes     $0.10
 blue raise  # Pitch narrative + investor map            $0.20
 ```
 
-## Initialize skills
+## Or use the interactive TUI
 
 ```bash
-blue init
+blueagent
 ```
 
-This installs 6 grounding skill files to `~/.blue-agent/skills/` — Base addresses, security patterns, protocol standards, and more. All commands use these automatically.
-
-## Check your environment
-
-```bash
-blue doctor
-```
-
-Verifies Node.js version, API key, skills, and config.
+Arrow keys to navigate all 31 commands + 31 x402 tools.
 
 ## Next steps
 
