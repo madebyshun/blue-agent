@@ -1,0 +1,82 @@
+{
+  "schema": "agent-discovery/v1",
+  "agent": {
+    "name": "Blue Agent",
+    "handle": "@blocky_agent",
+    "description": "Base-native AI agent for builders — idea, build, audit, ship, raise. Grounded in real Base knowledge. Powered by Bankr LLM.",
+    "version": "1.0.0",
+    "network": "base",
+    "chain_id": 8453,
+    "treasury": "0xf31f59e7b8b58555f7871f71973a394c8f1bffe5",
+    "token": "0xf895783b2931c919955e18b5e3343e7c7c456ba3"
+  },
+  "endpoints": {
+    "web": "https://blueagent.dev",
+    "console": "https://blueagent.dev/code",
+    "signal": "https://blueagent.dev/api/signal",
+    "simulate": "https://blueagent.dev/api/simulate",
+    "health": "https://blueagent.dev/api/health"
+  },
+  "skills": [
+    {
+      "name": "blue_idea",
+      "description": "Turn a rough concept into a fundable brief — problem, why now, why Base, MVP scope, risks, 24h plan.",
+      "price_usdc": "0.05",
+      "payment": "x402"
+    },
+    {
+      "name": "blue_build",
+      "description": "Architecture, stack, folder structure, integrations, and test plan.",
+      "price_usdc": "0.50",
+      "payment": "x402"
+    },
+    {
+      "name": "blue_audit",
+      "description": "Security and product risk review — critical issues, suggested fixes, go/no-go.",
+      "price_usdc": "1.00",
+      "payment": "x402"
+    },
+    {
+      "name": "blue_ship",
+      "description": "Deployment checklist, verification steps, release notes, monitoring plan.",
+      "price_usdc": "0.10",
+      "payment": "x402"
+    },
+    {
+      "name": "blue_raise",
+      "description": "Pitch narrative — market framing, why this wins, traction, ask, target investors.",
+      "price_usdc": "0.20",
+      "payment": "x402"
+    },
+    {
+      "name": "blue_score",
+      "description": "Builder Score for a Base wallet or Farcaster handle — onchain reputation at a glance.",
+      "price_usdc": "0.00",
+      "payment": "free"
+    }
+  ],
+  "mcp": {
+    "package": "@blueagent/skill",
+    "install": "npx skills add blueagent",
+    "registry": "https://skills.bankr.bot"
+  },
+  "cli": {
+    "package": "@blueagent/cli",
+    "install": "npm install -g @blueagent/cli",
+    "commands": 31
+  },
+  "collab": {
+    "accepts_signals_from": ["aeon"],
+    "sends_scenarios_to": ["miroshark"],
+    "protocol": "http-post",
+    "payment": "x402-usdc-base",
+    "bridge_specs": "https://github.com/madebyshun/blue-agent/tree/main/collab"
+  },
+  "links": {
+    "github": "https://github.com/madebyshun/blue-agent",
+    "telegram": "https://t.me/blueagent_hub",
+    "x": "https://x.com/blocky_agent",
+    "bankr": "https://bankr.bot/agent/blue-agent",
+    "npm": "https://npmjs.com/package/@blueagent/cli"
+  }
+}
