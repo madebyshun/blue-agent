@@ -10,13 +10,13 @@ collab/
 ├── agent-discovery.json               — Blue Agent identity, endpoints, skills, collab config
 ├── shared-schemas.yml                 — data schemas shared across Aeon × Blue Agent × MiroShark
 │
-├── aeon-blue-agent.yml                — Aeon config: watch Blue Agent repo
-├── aeon-blue-agent.prompt.md          — Aeon prompt: what to produce from repo changes
-├── aeon-blue-agent-bridge.md          — Architecture: how Blue Agent × Aeon collaborate
+├── aeon-blueagent.yml                — Aeon config: watch Blue Agent repo
+├── aeon-blueagent.prompt.md          — Aeon prompt: what to produce from repo changes
+├── aeon-blueagent-bridge.md          — Architecture: how Blue Agent × Aeon collaborate
 │
-├── miroshark-blue-agent.yml           — MiroShark config: simulation triggers and thresholds
-├── miroshark-blue-agent.prompt.md     — MiroShark prompt: what to simulate and how to output
-├── miroshark-blue-agent-bridge.md     — Architecture: how Blue Agent × MiroShark collaborate
+├── miroshark-blueagent.yml           — MiroShark config: simulation triggers and thresholds
+├── miroshark-blueagent.prompt.md     — MiroShark prompt: what to simulate and how to output
+├── miroshark-blueagent-bridge.md     — Architecture: how Blue Agent × MiroShark collaborate
 │
 └── exports/                           — Sample outputs, skill exports, bounty fixtures
     ├── agent-wallet-security.sample.md
@@ -44,8 +44,8 @@ Community / Base (aligned outcomes, shared value, onchain growth)
 |---|---|
 | `agent-discovery.json` | Machine-readable identity — agents use this to find and call Blue Agent |
 | `shared-schemas.yml` | Signal, scenario, forecast, action, result — the language all three agents speak |
-| `aeon-blue-agent.yml` | Tells Aeon what to watch in this repo and when |
-| `miroshark-blue-agent.yml` | Tells MiroShark what scenarios to simulate and what thresholds to use |
+| `aeon-blueagent.yml` | Tells Aeon what to watch in this repo and when |
+| `miroshark-blueagent.yml` | Tells MiroShark what scenarios to simulate and what thresholds to use |
 | `*-bridge.md` | Human-readable architecture docs for each collab pair |
 
 ## Community contributions
