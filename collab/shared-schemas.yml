@@ -1,0 +1,174 @@
+version: 1
+description: Shared data schemas for Blue Agent × Aeon × MiroShark collaboration
+
+# ── Signal (Aeon → Blue Agent) ────────────────────────────────────────────────
+signal:
+  required:
+    - id
+    - source
+    - type
+    - data
+    - timestamp
+  properties:
+    id:
+      type: string
+      description: Unique signal ID
+      example: "sig_aeon_20260517_001"
+    source:
+      type: string
+      enum: [aeon, miroshark, blueagent, external]
+    type:
+      type: string
+      enum:
+        - trending
+        - volume_spike
+        - holder_activity
+        - repo_change
+        - skill_regression
+        - launch_alert
+        - security_flag
+    data:
+      type: object
+      description: Signal payload — varies by type
+    confidence:
+      type: number
+      minimum: 0
+      maximum: 1
+      description: How confident the source is in this signal
+    timestamp:
+      type: string
+      format: iso8601
+    ttl_minutes:
+      type: integer
+      default: 60
+      description: Signal expires after this many minutes
+
+# ── Scenario (Blue Agent → MiroShark) ────────────────────────────────────────
+scenario:
+  required:
+    - id
+    - scenario
+    - context
+  properties:
+    id:
+      type: string
+      example: "scn_20260517_001"
+    scenario:
+      type: string
+      description: Plain-text description of the scenario to simulate
+      example: "Blue Agent distributes 500 USDC to top 50 holders during a volume spike"
+    context:
+      type: object
+      properties:
+        token:
+          type: string
+          example: "BLUEAGENT"
+        holders:
+          type: integer
+        volume_change:
+          type: string
+          example: "+40%"
+        time_of_day:
+          type: string
+          example: "9am UTC"
+        recent_activity:
+          type: string
+    horizon_hours:
+      type: integer
+      default: 6
+      description: How many hours forward to simulate
+
+# ── Forecast (MiroShark → Blue Agent) ────────────────────────────────────────
+forecast:
+  required:
+    - scenario_id
+    - confidence
+    - recommendation
+  properties:
+    scenario_id:
+      type: string
+    confidence:
+      type: number
+      minimum: 0
+      maximum: 1
+    forecast:
+      type: string
+      description: Narrative of predicted outcome
+    peak_moment:
+      type: string
+      example: "within 2 hours"
+    risk_factors:
+      type: array
+      items:
+        type: string
+    recommendation:
+      type: string
+      enum: [execute, alert_human, skip]
+    track_metric:
+      type: string
+      description: What to measure post-action to validate forecast
+      example: "repost_count_24h"
+
+# ── Action (Blue Agent → onchain / community) ─────────────────────────────────
+action:
+  required:
+    - id
+    - type
+    - trigger_signal_id
+    - forecast_id
+    - status
+  properties:
+    id:
+      type: string
+    type:
+      type: string
+      enum:
+        - distribute_usdc
+        - distribute_token
+        - post_telegram
+        - post_farcaster
+        - update_reputation
+        - trigger_command
+    trigger_signal_id:
+      type: string
+    forecast_id:
+      type: string
+    payload:
+      type: object
+      description: Action-specific data (recipients, amounts, message, etc.)
+    status:
+      type: string
+      enum: [pending, executing, done, failed]
+    tx_hash:
+      type: string
+      description: Onchain transaction hash if applicable
+    executed_at:
+      type: string
+      format: iso8601
+
+# ── Result (Blue Agent → Aeon feedback loop) ──────────────────────────────────
+result:
+  required:
+    - action_id
+    - predicted
+    - actual
+  properties:
+    action_id:
+      type: string
+    predicted:
+      type: string
+      description: What MiroShark forecast
+      example: "+200 reach"
+    actual:
+      type: string
+      description: What actually happened
+      example: "+180 reach"
+    delta_pct:
+      type: number
+      description: Variance between predicted and actual
+    lesson:
+      type: string
+      description: One-line takeaway to improve future forecasts
+    timestamp:
+      type: string
+      format: iso8601
