@@ -68,6 +68,7 @@
   "collab": {
     "accepts_signals_from": ["aeon"],
     "sends_scenarios_to": ["miroshark"],
+    "powered_by": ["bankr"],
     "protocol": "http-post",
     "payment": "x402-usdc-base",
     "bridge_specs": "https://github.com/madebyshun/blue-agent/tree/main/collab"
@@ -76,7 +77,7 @@
     "github": "https://github.com/madebyshun/blue-agent",
     "telegram": "https://t.me/blueagent_hub",
     "x": "https://x.com/blocky_agent",
-    "bankr": "https://bankr.bot/agent/blue-agent",
+    "bankr": "https://bankr.bot/agents/blue-agent",
     "npm": "https://npmjs.com/package/@blueagent/cli"
   }
 }
