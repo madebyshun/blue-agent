@@ -13,8 +13,6 @@ Built by [Blocky Studio](https://blocky.studio) ([@madebyshun](https://x.com/blo
 
 **Tokens:**
 - `$BLUEAGENT` — `0xf895783b2931c919955e18b5e3343e7c7c456ba3` (Base, Uniswap v4)
-- `$BLUEAGENT` — `Base` (Base)
-- Treasury — `0xf31f59e7b8b58555f7871f71973a394c8f1bffe5` (Base)
 
 **Links:**
 - X/Twitter: [@blocky_agent](https://x.com/blocky_agent)
