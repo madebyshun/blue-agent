@@ -1,3 +1,19 @@
+import fs from "fs";
+import path from "path";
+import os from "os";
+
+/**
+ * Load BANKR_API_KEY from ~/.blue-agent/config.toml if not already in env.
+ */
+function loadApiKey(): void {
+  if (process.env.BANKR_API_KEY?.trim()) return;
+  const configFile = path.join(os.homedir(), ".blue-agent", "config.toml");
+  if (!fs.existsSync(configFile)) return;
+  const raw = fs.readFileSync(configFile, "utf8");
+  const match = raw.match(/^\s*bankr_api_key\s*=\s*"([^"]+)"/m);
+  if (match) process.env.BANKR_API_KEY = match[1].trim();
+}
+
 /**
  * Lightweight Bankr LLM caller for builder utility commands.
  * Discovery/analytics commands use this directly — they don't need
@@ -9,6 +25,7 @@ export async function callBankr(
   user: string,
   opts: { maxTokens?: number; temperature?: number } = {}
 ): Promise<string> {
+  loadApiKey();
   if (!process.env.BANKR_API_KEY) {
     throw new Error(
       "BANKR_API_KEY is not set.\n" +
