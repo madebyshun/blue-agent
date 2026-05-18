@@ -109,7 +109,7 @@ JSON schema:
   },
   "final_verdict": "LAUNCH | WAIT | ABORT",
   "confidence": <0-100>,
-  "action_items": ["<item 1>", "<item 2>", "<item 3>"]${tier >= 3 ? `,
+  "action_items": ["item 1", "item 2", "item 3"]${tier >= 3 ? `,
   "risk_matrix": {
     "market_timing": <0-10>,
     "community_readiness": <0-10>,
@@ -117,7 +117,7 @@ JSON schema:
     "technical_readiness": <0-10>,
     "narrative_strength": <0-10>
   },
-  "timeline_recommendation": "<launch now | wait N weeks | abort — with reason>"` : ""}
+  "timeline_recommendation": "launch now OR wait X weeks OR abort, with reason"` : ""}
 }
 
 Rules:
@@ -135,11 +135,11 @@ ${marketSection}
 Run all 3 agents and return the full simulation report.`;
 
   const raw = await callBankrLLM({
-    model: tier >= 3 ? "claude-sonnet-4-6" : "claude-haiku-4-5",
+    model: "claude-haiku-4-5",
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
     temperature: 0.4,
-    maxTokens: tier >= 3 ? 1600 : tier === 2 ? 1000 : 800,
+    maxTokens: tier >= 3 ? 2000 : tier === 2 ? 1200 : 900,
   });
 
   return extractJsonObject(raw) as Record<string, unknown>;
