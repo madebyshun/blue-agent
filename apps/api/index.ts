@@ -48,9 +48,12 @@ import lpAnalyzer      from './x402/lp-analyzer/index.js';
 import taxReport       from './x402/tax-report/index.js';
 
 // Launch & Identity
-import tokenLaunch     from './x402/token-launch/index.js';
-import builderCard     from './x402/builder-card/index.js';
-import agentCard       from './x402/agent-card/index.js';
+import tokenLaunch       from './x402/token-launch/index.js';
+import builderCard       from './x402/builder-card/index.js';
+import agentCard         from './x402/agent-card/index.js';
+
+// Collab
+import launchSimulator   from './x402/launch-simulator/index.js';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 
@@ -97,9 +100,12 @@ const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   'tax-report':       taxReport,
 
   // Launch & Identity
-  'token-launch':     tokenLaunch,
-  'builder-card':     builderCard,
-  'agent-card':       agentCard,
+  'token-launch':       tokenLaunch,
+  'builder-card':       builderCard,
+  'agent-card':         agentCard,
+
+  // Collab
+  'launch-simulator':   launchSimulator,
 };
 
 const __dir = dirname(fileURLToPath(import.meta.url));
