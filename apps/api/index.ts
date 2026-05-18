@@ -6,30 +6,100 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-import deepAnalysis from './x402/deep-analysis/index.js';
-import walletPnl from './x402/wallet-pnl/index.js';
-import launchAdvisor from './x402/launch-advisor/index.js';
-import tokenLaunch from './x402/token-launch/index.js';
-import grantEvaluator from './x402/grant-evaluator/index.js';
-import riskGate from './x402/risk-gate/index.js';
-import quantumPremium from './x402/quantum-premium/index.js';
-import quantumBatch from './x402/quantum-batch/index.js';
-import builderCard from './x402/builder-card/index.js';
-import agentCard from './x402/agent-card/index.js';
+// Quantum Security
+import quantumPremium  from './x402/quantum-premium/index.js';
+import quantumBatch    from './x402/quantum-batch/index.js';
+import quantumMigrate  from './x402/quantum-migrate/index.js';
+import quantumTimeline from './x402/quantum-timeline/index.js';
+import keyExposure     from './x402/key-exposure/index.js';
+
+// Agent Safety
+import riskGate        from './x402/risk-gate/index.js';
+import honeypotCheck   from './x402/honeypot-check/index.js';
+import allowanceAudit  from './x402/allowance-audit/index.js';
+import phishingScan    from './x402/phishing-scan/index.js';
+import mevShield       from './x402/mev-shield/index.js';
+import contractTrust   from './x402/contract-trust/index.js';
+import circuitBreaker  from './x402/circuit-breaker/index.js';
+import amlScreen       from './x402/aml-screen/index.js';
+
+// Research
+import deepAnalysis    from './x402/deep-analysis/index.js';
+import launchAdvisor   from './x402/launch-advisor/index.js';
+import grantEvaluator  from './x402/grant-evaluator/index.js';
+import x402Readiness   from './x402/x402-readiness/index.js';
+import baseDeployCheck from './x402/base-deploy-check/index.js';
+import narrativePulse  from './x402/narrative-pulse/index.js';
+import tokenomicsScore from './x402/tokenomics-score/index.js';
+import whitepaperTldr  from './x402/whitepaper-tldr/index.js';
+import vcTracker       from './x402/vc-tracker/index.js';
+
+// Data & Alerts
+import walletPnl       from './x402/wallet-pnl/index.js';
+import whaleTracker    from './x402/whale-tracker/index.js';
+import airdropCheck    from './x402/airdrop-check/index.js';
+import dexFlow         from './x402/dex-flow/index.js';
+import alertCheck      from './x402/alert-check/index.js';
+import alertSubscribe  from './x402/alert-subscribe/index.js';
+
+// Earn
+import yieldOptimizer  from './x402/yield-optimizer/index.js';
+import lpAnalyzer      from './x402/lp-analyzer/index.js';
+import taxReport       from './x402/tax-report/index.js';
+
+// Launch & Identity
+import tokenLaunch     from './x402/token-launch/index.js';
+import builderCard     from './x402/builder-card/index.js';
+import agentCard       from './x402/agent-card/index.js';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 
 const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
-  'deep-analysis': deepAnalysis,
-  'wallet-pnl': walletPnl,
-  'launch-advisor': launchAdvisor,
-  'token-launch': tokenLaunch,
-  'grant-evaluator': grantEvaluator,
-  'risk-gate': riskGate,
-  'quantum-premium': quantumPremium,
-  'quantum-batch': quantumBatch,
-  'builder-card': builderCard,
-  'agent-card': agentCard,
+  // Quantum Security
+  'quantum-premium':  quantumPremium,
+  'quantum-batch':    quantumBatch,
+  'quantum-migrate':  quantumMigrate,
+  'quantum-timeline': quantumTimeline,
+  'key-exposure':     keyExposure,
+
+  // Agent Safety
+  'risk-gate':        riskGate,
+  'honeypot-check':   honeypotCheck,
+  'allowance-audit':  allowanceAudit,
+  'phishing-scan':    phishingScan,
+  'mev-shield':       mevShield,
+  'contract-trust':   contractTrust,
+  'circuit-breaker':  circuitBreaker,
+  'aml-screen':       amlScreen,
+
+  // Research
+  'deep-analysis':    deepAnalysis,
+  'launch-advisor':   launchAdvisor,
+  'grant-evaluator':  grantEvaluator,
+  'x402-readiness':   x402Readiness,
+  'base-deploy-check': baseDeployCheck,
+  'narrative-pulse':  narrativePulse,
+  'tokenomics-score': tokenomicsScore,
+  'whitepaper-tldr':  whitepaperTldr,
+  'vc-tracker':       vcTracker,
+
+  // Data & Alerts
+  'wallet-pnl':       walletPnl,
+  'whale-tracker':    whaleTracker,
+  'airdrop-check':    airdropCheck,
+  'dex-flow':         dexFlow,
+  'alert-check':      alertCheck,
+  'alert-subscribe':  alertSubscribe,
+
+  // Earn
+  'yield-optimizer':  yieldOptimizer,
+  'lp-analyzer':      lpAnalyzer,
+  'tax-report':       taxReport,
+
+  // Launch & Identity
+  'token-launch':     tokenLaunch,
+  'builder-card':     builderCard,
+  'agent-card':       agentCard,
 };
 
 const __dir = dirname(fileURLToPath(import.meta.url));
@@ -63,6 +133,7 @@ const server = http.createServer(async (req, res) => {
       name: 'blue-agent-x402',
       version: '0.1.0',
       tools: Object.keys(HANDLERS),
+      count: Object.keys(HANDLERS).length,
       services,
     }, null, 2));
     return;
@@ -101,6 +172,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`\n🔵 Blue Agent API — http://localhost:${PORT}`);
-  console.log(`   Tools: ${Object.keys(HANDLERS).join(', ')}\n`);
+  console.log(`\n🔵 Blue Agent x402 API — http://localhost:${PORT}`);
+  console.log(`   ${Object.keys(HANDLERS).length} services: ${Object.keys(HANDLERS).join(', ')}\n`);
 });
