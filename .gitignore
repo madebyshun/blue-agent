@@ -12,3 +12,4 @@ coverage/
 
 # Claude Code session data
 .claude/
+.vercel
