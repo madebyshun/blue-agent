@@ -103,19 +103,25 @@ export async function runDoctor(): Promise<void> {
     dim(`${installed ? "✓" : "✗"} ${f}`);
   }
 
-  // 4. BANKR_API_KEY
-  if (process.env.BANKR_API_KEY && process.env.BANKR_API_KEY.trim() !== "") {
-    ok("BANKR_API_KEY set");
+  // 4. Config file
+  if (fs.existsSync(CONFIG_FILE)) {
+    ok(`config found at ~/.blue-agent/config.toml`);
   } else {
-    fail("BANKR_API_KEY not set — add to ~/.blue-agent/config.toml or env");
+    fail(`config not found — run: blue init`);
     allGood = false;
   }
 
-  // 5. Config file
-  if (fs.existsSync(CONFIG_FILE)) {
-    ok(`config found at ${CONFIG_FILE}`);
+  // 5. BANKR_API_KEY — check env first, then config.toml
+  let bankrKey = process.env.BANKR_API_KEY?.trim() ?? "";
+  if (!bankrKey && fs.existsSync(CONFIG_FILE)) {
+    const raw = fs.readFileSync(CONFIG_FILE, "utf8");
+    const match = raw.match(/^\s*bankr_api_key\s*=\s*"([^"]+)"/m);
+    if (match) bankrKey = match[1].trim();
+  }
+  if (bankrKey) {
+    ok("BANKR_API_KEY set");
   } else {
-    fail(`config not found — run: blue init`);
+    fail("BANKR_API_KEY not set — add to ~/.blue-agent/config.toml or env");
     allGood = false;
   }
 
