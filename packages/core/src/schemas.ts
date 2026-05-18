@@ -17,6 +17,12 @@ export const BLUE_AGENT_PRICING = {
   raise: 0.2,
 } as const;
 
+export const LAUNCH_SIMULATOR_PRICING = {
+  tier1: 0.10,  // Quick Signal — Blue Agent LLM only
+  tier2: 0.35,  // Deep Signal  — + live market data
+  tier3: 0.50,  // Full Sim     — + risk matrix + timeline
+} as const;
+
 const COMMANDS_DIR = path.resolve(__dirname, "../../../commands");
 
 export function listBuiltInCommands(): CommandSpec[] {

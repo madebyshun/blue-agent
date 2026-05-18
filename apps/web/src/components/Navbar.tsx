@@ -5,11 +5,12 @@ import { usePathname } from "next/navigation";
 
 // Working pages first, coming-soon last
 const PAGE_LINKS: { label: string; href: string; soon?: boolean }[] = [
-  { label: "Console", href: "/console" },
-  { label: "Tools",   href: "/tools" },
-  { label: "Docs",    href: "/docs" },
-  { label: "Chat",    href: "/chat",   soon: true },
-  { label: "Launch",  href: "/launch", soon: true },
+  { label: "Console",   href: "/console" },
+  { label: "Tools",     href: "/tools" },
+  { label: "Simulator", href: "/simulator" },
+  { label: "Docs",      href: "/docs" },
+  { label: "Chat",      href: "/chat",   soon: true },
+  { label: "Launch",    href: "/launch", soon: true },
 ];
 
 // Homepage section anchors — no name collision with page links
