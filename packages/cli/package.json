@@ -1,17 +1,22 @@
 {
   "name": "@blueagent/cli",
-  "version": "1.3.6",
+  "version": "1.3.14",
   "description": "BlueAgent TUI — terminal UI for the full Blue Agent ecosystem",
   "type": "module",
   "bin": {
-    "blueagent": "dist/index.js"
+    "blueagent": "dist/index.js",
+    "blue": "bin/blue.js"
   },
+  "files": [
+    "dist",
+    "bin"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.tsx"
   },
   "dependencies": {
-    "@blueagent/builder": "^0.1.10",
+    "@blueagent/builder": "^0.1.14",
     "@blueagent/core": "*",
     "@blueagent/reputation": "*",
     "@blueagent/tasks": "*",

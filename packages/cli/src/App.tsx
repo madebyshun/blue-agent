@@ -36,6 +36,75 @@ export const CATEGORIES: Category[] = [
     ],
   },
   {
+    label: 'Setup',
+    icon: '⚙️',
+    description: '4 commands   init · new · doctor · validate',
+    type: 'builder',
+    items: [
+      { name: 'blue init',     description: 'install 34 skill files to ~/.blue-agent/skills/' },
+      { name: 'blue new',      description: 'scaffold a new Base project from template' },
+      { name: 'blue doctor',   description: 'check environment health' },
+      { name: 'blue validate', description: 'validate project structure' },
+    ],
+  },
+  {
+    label: 'Chat',
+    icon: '💬',
+    description: '1 command   interactive AI chat',
+    type: 'builder',
+    items: [
+      { name: 'blue chat', description: 'interactive chat with Bankr LLM' },
+    ],
+  },
+  {
+    label: 'Score',
+    icon: '📊',
+    description: '3 commands   score · agent-score · compare',
+    type: 'builder',
+    items: [
+      { name: 'blue score',       description: 'Builder Score for a wallet or X handle' },
+      { name: 'blue agent-score', description: 'evaluate an agent reliability score' },
+      { name: 'blue compare',     description: 'compare two builders or agents side by side' },
+    ],
+  },
+  {
+    label: 'Discovery',
+    icon: '🔭',
+    description: '5 commands   search · trending · watch · alert · history',
+    type: 'builder',
+    items: [
+      { name: 'blue search',   description: 'search builders, agents, projects, tokens' },
+      { name: 'blue trending', description: 'what\'s trending on Base right now' },
+      { name: 'blue watch',    description: 'watch a wallet, handle, or token' },
+      { name: 'blue alert',    description: 'configure threshold alerts' },
+      { name: 'blue history',  description: 'activity history for a builder or agent' },
+    ],
+  },
+  {
+    label: 'Launch',
+    icon: '🚀',
+    description: '2 commands   launch · market',
+    type: 'builder',
+    items: [
+      { name: 'blue launch', description: 'launch a token or project on Base' },
+      { name: 'blue market', description: 'market intelligence for Base ecosystem' },
+    ],
+  },
+  {
+    label: 'Microtasks',
+    icon: '⚡',
+    description: '6 commands   post · list · accept · submit · approve · profile',
+    type: 'builder',
+    items: [
+      { name: 'blue micro post',    description: 'post a new microtask with USDC reward' },
+      { name: 'blue micro list',    description: 'browse open microtasks' },
+      { name: 'blue micro accept',  description: 'claim a slot on an open microtask' },
+      { name: 'blue micro submit',  description: 'submit proof for a claimed slot' },
+      { name: 'blue micro approve', description: 'approve submission and release USDC' },
+      { name: 'blue micro profile', description: 'view earnings and reputation' },
+    ],
+  },
+  {
     label: 'Security',
     icon: '🔒',
     description: '13 tools   honeypot · contract audit · quantum',
@@ -74,25 +143,15 @@ export const CATEGORIES: Category[] = [
     ],
   },
   {
-    label: 'Score',
-    icon: '📊',
-    description: '2 tools   builder score · agent score',
-    type: 'score',
-    items: [
-      { name: 'builder-score', price: '$0.001', description: 'Score any X handle' },
-      { name: 'agent-score',   price: '$0.01',  description: 'Score any agent' },
-    ],
-  },
-  {
     label: 'Tasks',
-    icon: '⚡',
-    description: '4 tools   post · list · accept · submit',
-    type: 'tasks',
+    icon: '📋',
+    description: '4 commands   tasks · post-task · accept · submit',
+    type: 'builder',
     items: [
-      { name: 'blue tasks',     price: 'free', description: 'Browse open tasks' },
-      { name: 'blue post-task', price: 'free', description: 'Post a task + escrow USDC' },
-      { name: 'blue accept',    price: 'free', description: 'Accept a task' },
-      { name: 'blue submit',    price: 'free', description: 'Submit proof + earn XP' },
+      { name: 'blue tasks',     description: 'browse open tasks' },
+      { name: 'blue post-task', description: 'post a task + escrow USDC' },
+      { name: 'blue accept',    description: 'accept a task' },
+      { name: 'blue submit',    description: 'submit proof + earn XP' },
     ],
   },
   {
@@ -154,11 +213,41 @@ export function App() {
       const toolName = selectedTool.name
 
       if (type === 'builder') {
-        // Dynamically import to avoid ESM/CJS issues at module load
-        const { callWithGrounding } = await import('@blueagent/core')
-        const task = toolName.replace('blue ', '') as 'idea' | 'build' | 'audit' | 'ship' | 'raise'
-        const text = await callWithGrounding(task, inputs.prompt ?? '')
-        setResult(text)
+        // Interactive commands — must be run directly in terminal
+        const INTERACTIVE = ['blue chat', 'blue new']
+        if (INTERACTIVE.includes(toolName)) {
+          const cmd = toolName.replace(/^blue\s+/, '')
+          const hint = toolName === 'blue new'
+            ? `blue new <name> --template base-agent`
+            : toolName
+          setResult(`Run in terminal:\n\n  ${hint}\n\n(Interactive command — cannot run inside TUI)`)
+          return
+        }
+
+        const { spawn } = await import('child_process')
+        const { createRequire } = await import('module')
+        const { resolve, dirname } = await import('path')
+
+        const require = createRequire(import.meta.url)
+        const builderPkg = require.resolve('@blueagent/builder/package.json')
+        const builderBin = resolve(dirname(builderPkg), 'bin/blue.js')
+
+        // Parse "blue micro post" → ["micro", "post"], "blue idea" → ["idea"]
+        const cmdArgs = toolName.replace(/^blue\s+/, '').split(/\s+/)
+        const prompt = inputs.prompt ?? inputs.handle ?? inputs.taskId ?? inputs.name ?? ''
+        const fullArgs = prompt ? [...cmdArgs, prompt] : cmdArgs
+
+        await new Promise<void>((resolve_p, reject) => {
+          const child = spawn(process.execPath, [builderBin, ...fullArgs], {
+            stdio: 'inherit',
+            env: process.env,
+          })
+          child.on('exit', (code) => {
+            if (code === 0) resolve_p()
+            else reject(new Error(`Command exited with code ${code}`))
+          })
+        })
+        setResult('✓ Done')
 
       } else if (type === 'x402') {
         const endpoint = toolName
