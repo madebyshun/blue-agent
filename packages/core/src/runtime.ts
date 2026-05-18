@@ -13,6 +13,19 @@ import os from "os";
 import { getSkillsForTask, type Task } from "./registry";
 import { readCommandDoc } from "./schemas";
 
+// ── Load API key from config.toml if not in env ───────────────────────────────
+
+function loadApiKey(): void {
+  if (process.env.BANKR_API_KEY?.trim()) return;
+  const configFile = path.join(os.homedir(), ".blue-agent", "config.toml");
+  if (!fs.existsSync(configFile)) return;
+  const raw = fs.readFileSync(configFile, "utf8");
+  const match = raw.match(/^\s*bankr_api_key\s*=\s*"([^"]+)"/m);
+  if (match) process.env.BANKR_API_KEY = match[1].trim();
+}
+
+loadApiKey();
+
 // ── Bankr LLM client (inlined to keep core self-contained for publishing) ─────
 
 export type BankrLLMMessage = { role: string; content: string };
@@ -46,7 +59,7 @@ async function callBankrLLM(options: {
   }
 
   const data = await response.json() as { content?: Array<{ text: string }>; text?: string };
-  if (data.content && Array.isArray(data.content)) return data.content[0].text;
+  if (data.content && Array.isArray(data.content) && data.content[0]?.text) return data.content[0].text;
   if (data.text) return data.text;
   throw new Error("Invalid response format from Bankr LLM");
 }
