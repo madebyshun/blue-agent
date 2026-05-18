@@ -96,6 +96,17 @@ const verdictColor = (v: string) => {
   return "#f87171";
 };
 
+function marketRows(md: Record<string, unknown>): { label: string; value: string }[] {
+  const n = (v: unknown) => Number(v);
+  return [
+    { label: "Price",      value: md.priceUsd       ? `$${md.priceUsd as string}`                           : "—" },
+    { label: "24h Volume", value: md.volume24h       ? `$${n(md.volume24h).toLocaleString()}`                : "—" },
+    { label: "Liquidity",  value: md.liquidityUsd    ? `$${n(md.liquidityUsd).toLocaleString()}`             : "—" },
+    { label: "24h Change", value: md.priceChange24h != null
+      ? `${n(md.priceChange24h) > 0 ? "+" : ""}${md.priceChange24h as string}%` : "—" },
+  ];
+}
+
 function Bar({ value, color, label }: { value: number; color: string; label: string }) {
   return (
     <div className="flex items-center gap-3">
@@ -408,16 +419,11 @@ export default function SimulatorPage() {
             </div>
 
             {/* Market data (tier 2+) */}
-            {result.market_data?.available && (
+            {(result.market_data?.available as boolean) && (
               <div className="card-surface rounded-2xl p-6">
                 <div className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-4">LIVE MARKET DATA (Base)</div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {[
-                    { label: "Price",        value: result.market_data.priceUsd     ? `$${result.market_data.priceUsd}` : "—" },
-                    { label: "24h Volume",   value: result.market_data.volume24h    ? `$${Number(result.market_data.volume24h).toLocaleString()}` : "—" },
-                    { label: "Liquidity",    value: result.market_data.liquidityUsd ? `$${Number(result.market_data.liquidityUsd).toLocaleString()}` : "—" },
-                    { label: "24h Change",   value: result.market_data.priceChange24h != null ? `${result.market_data.priceChange24h as number > 0 ? "+" : ""}${result.market_data.priceChange24h}%` : "—" },
-                  ].map((m) => (
+                  {marketRows(result.market_data ?? {}).map((m) => (
                     <div key={m.label}>
                       <div className="font-mono text-xs text-slate-500 mb-1">{m.label}</div>
                       <div className="font-mono text-sm font-bold text-white">{String(m.value)}</div>
