@@ -7,7 +7,6 @@ import { usePathname } from "next/navigation";
 const PAGE_LINKS: { label: string; href: string; soon?: boolean }[] = [
   { label: "Console",   href: "/console" },
   { label: "Tools",     href: "/tools" },
-  { label: "Simulator", href: "/simulator" },
   { label: "Docs",      href: "/docs" },
   { label: "Chat",      href: "/chat",   soon: true },
   { label: "Launch",    href: "/launch", soon: true },
