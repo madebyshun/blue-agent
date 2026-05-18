@@ -13,3 +13,6 @@ coverage/
 # Claude Code session data
 .claude/
 .vercel
+
+# Accidental nested repo clone
+/blue-agent/
