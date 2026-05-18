@@ -37,8 +37,8 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
 
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 shrink-0">
-            <div className="glow-dot" />
+          <Link href="/" className="flex items-center gap-2 shrink-0">
+            <img src="/logo.svg" alt="Blue Agent" className="h-8 w-8" />
             <span className="font-mono font-semibold text-white tracking-widest text-sm">
               BLUE<span className="text-[#4FC3F7]">AGENT</span>
             </span>
