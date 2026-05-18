@@ -53,6 +53,29 @@ async function fetchDexScreener(contract: string): Promise<Record<string, unknow
 
 // ── LLM simulation ────────────────────────────────────────────────────────────
 
+// ── Fetch Aeon cache from web app ─────────────────────────────────────────────
+
+async function fetchAeonCache(): Promise<string | null> {
+  const webUrl = process.env.BLUEAGENT_WEB_URL ?? "http://localhost:3000";
+  try {
+    const res = await fetch(`${webUrl}/api/webhook/aeon`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as {
+      cached_outputs: number;
+      outputs: Array<{ skill: string; output: string; quality_score: number; timestamp: string }>;
+    };
+    if (!data.outputs?.length) return null;
+    return data.outputs
+      .filter((o) => o.quality_score >= 3)
+      .map((o) => `[${o.skill} — ${o.timestamp}]\n${o.output}`)
+      .join("\n\n");
+  } catch {
+    return null;
+  }
+}
+
 async function runSimulation(opts: {
   project: string;
   description: string;
@@ -62,6 +85,9 @@ async function runSimulation(opts: {
   marketData: Record<string, unknown>;
 }): Promise<Record<string, unknown>> {
   const { project, description, ticker, tier, marketData } = opts;
+
+  const [aeonData] = await Promise.all([fetchAeonCache()]);
+  const aeonLive = !!aeonData;
 
   const tierContext = tier === 1
     ? "Quick Signal analysis — baseline ecosystem read."
@@ -73,11 +99,15 @@ async function runSimulation(opts: {
     ? `\n=== Live Market Data (DexScreener/Base) ===\n${JSON.stringify(marketData, null, 2)}`
     : tier >= 2 ? "\n=== Market Data === Not yet trading (pre-launch)" : "";
 
+  const aeonSection = aeonLive
+    ? `\n=== Aeon Ecosystem Signals (LIVE — real data from Aeon skill runs) ===\n${aeonData}`
+    : "";
+
   const systemPrompt = `You are Blue Agent — the AI-native founder console for Base builders.
 You run the Launch Simulator: a pre-launch intelligence tool that combines:
 1. Blue Agent's own analysis
-2. Aeon's ecosystem signal layer (GitHub Actions cron, 117 skills — SIMULATED until real integration)
-3. MiroShark's Bull/Bear/Neutral community consensus simulator (async webhook — SIMULATED until real integration)
+2. Aeon's ecosystem signal layer (GitHub Actions cron, 117 skills — ${aeonLive ? "LIVE data provided below" : "SIMULATED — no real data yet"})
+3. MiroShark's Bull/Bear/Neutral community consensus simulator (SIMULATED until real integration)
 
 Tier context: ${tierContext}
 
@@ -122,7 +152,7 @@ JSON schema:
 
 Rules:
 - bull + bear + neutral must sum to 100
-- aeon signals must be specific to Base ecosystem state (TVL, narrative, recent launches)
+- ${aeonLive ? "aeon signals MUST be derived from the real Aeon data provided — do not invent signals" : "aeon signals must be specific to Base ecosystem state (TVL, narrative, recent launches)"}
 - final_verdict must match the weighted consensus of all 3 agents
 - Be direct, builder-first, no filler`;
 
@@ -130,7 +160,7 @@ Rules:
 Project: ${project}
 Ticker: ${ticker || "TBD"}
 Description: ${description}
-${marketSection}
+${marketSection}${aeonSection}
 
 Run all 3 agents and return the full simulation report.`;
 
@@ -142,7 +172,14 @@ Run all 3 agents and return the full simulation report.`;
     maxTokens: tier >= 3 ? 2000 : tier === 2 ? 1200 : 900,
   });
 
-  return extractJsonObject(raw) as Record<string, unknown>;
+  const result = extractJsonObject(raw) as Record<string, unknown>;
+
+  // Mark aeon status as live if real data was used
+  if (aeonLive && result.aeon && typeof result.aeon === "object") {
+    (result.aeon as Record<string, unknown>).status = "live";
+  }
+
+  return result;
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
