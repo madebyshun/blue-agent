@@ -1,13 +1,6 @@
-// x402/launch-simulator/index.ts
-// Launch Simulator — 3-agent pre-launch intelligence
-// Tier 1: $0.10 · Tier 2: $0.35 · Tier 3: $0.50
-// Blue Agent orchestrates Aeon (ecosystem signals) + MiroShark (consensus) + own LLM analysis
-
 import { callBankrLLM, extractJsonObject } from "@blue-agent/bankr";
-import { fetchAeonEcosystemData } from "../_lib/aeon.js";
-import { runMiroSharkSimulation } from "../_lib/miroshark.js";
-
-// ── Market data helpers ───────────────────────────────────────────────────────
+import { fetchAeonEcosystemData } from "./aeon";
+import { runMiroSharkSimulation } from "./miroshark";
 
 async function fetchDexScreener(contract: string): Promise<Record<string, unknown>> {
   try {
@@ -53,23 +46,26 @@ async function fetchDexScreener(contract: string): Promise<Record<string, unknow
   }
 }
 
-// ── LLM simulation ────────────────────────────────────────────────────────────
-
-async function runSimulation(opts: {
+export async function runSimulation(opts: {
   project: string;
   description: string;
   ticker: string;
   contract: string;
   tier: number;
-  marketData: Record<string, unknown>;
 }): Promise<Record<string, unknown>> {
-  const { project, description, ticker, tier, marketData } = opts;
+  const { project, description, ticker, tier } = opts;
+  const contract = opts.contract ?? "";
 
-  // Run Aeon + MiroShark in parallel
+  let marketData: Record<string, unknown> = { available: false };
+  if (tier >= 2 && contract) {
+    marketData = await fetchDexScreener(contract);
+  }
+
   const [aeonEcosystem, miroSharkResult] = await Promise.all([
     fetchAeonEcosystemData(ticker),
     runMiroSharkSimulation({ project, description, ticker, marketData }),
   ]);
+
   const aeonLive = aeonEcosystem.available;
   const aeonData = aeonLive ? aeonEcosystem.summary : null;
 
@@ -153,7 +149,7 @@ Provide Blue Agent analysis and final verdict.`;
   const llmOpts = {
     model: "claude-haiku-4-5",
     system: systemPrompt,
-    messages: [{ role: "user", content: userPrompt }],
+    messages: [{ role: "user" as const, content: userPrompt }],
     temperature: 0.4,
     maxTokens: tier >= 3 ? 2500 : tier === 2 ? 1800 : 1400,
   };
@@ -166,12 +162,10 @@ Provide Blue Agent analysis and final verdict.`;
       if (result && result.final_verdict) break;
     } catch (e) {
       if (attempt === 2) throw e;
-      console.warn(`[LaunchSimulator] JSON parse failed attempt ${attempt + 1}, retrying...`);
     }
   }
   if (!result) throw new Error("Failed to parse simulation result after 3 attempts");
 
-  // Inject real MiroShark data if LLM deviated
   if (miroSharkResult && result.miroshark && typeof result.miroshark === "object") {
     const ms = result.miroshark as Record<string, unknown>;
     ms.bull = miroSharkResult.bull;
@@ -183,71 +177,17 @@ Provide Blue Agent analysis and final verdict.`;
     if (miroSharkResult.personas) ms.personas = miroSharkResult.personas;
   }
 
-  // Mark aeon status as live if real data was used
   if (result.aeon && typeof result.aeon === "object") {
     (result.aeon as Record<string, unknown>).status = aeonLive ? "live" : "simulated";
   }
 
-  return result;
-}
-
-// ── Handler ───────────────────────────────────────────────────────────────────
-
-export default async function handler(req: Request): Promise<Response> {
-  try {
-    let body: {
-      project?: string;
-      description?: string;
-      ticker?: string;
-      contract?: string;
-      tier?: number;
-    } = {};
-
-    try {
-      const text = await req.text();
-      if (text?.trim().startsWith("{")) body = JSON.parse(text);
-    } catch {}
-
-    const url = new URL(req.url);
-    if (!body.project) {
-      body.project     = url.searchParams.get("project")     ?? undefined;
-      body.description = url.searchParams.get("description") ?? undefined;
-      body.ticker      = url.searchParams.get("ticker")      ?? undefined;
-      body.contract    = url.searchParams.get("contract")    ?? undefined;
-      body.tier        = Number(url.searchParams.get("tier") ?? "1") || 1;
-    }
-
-    const { project, description = "", ticker = "", contract = "" } = body;
-    const tier = Math.min(Math.max(Number(body.tier ?? 1), 1), 3);
-
-    if (!project) {
-      return Response.json({ error: "project is required" }, { status: 400 });
-    }
-
-    console.log(`[LaunchSimulator] tier=${tier} project=${project}`);
-
-    // Fetch market data for tier 2+
-    let marketData: Record<string, unknown> = { available: false };
-    if (tier >= 2 && contract) {
-      marketData = await fetchDexScreener(contract);
-    }
-
-    const simulation = await runSimulation({ project, description, ticker, contract, tier, marketData });
-
-    return Response.json({
-      tier,
-      project,
-      ticker: ticker || null,
-      contract: contract || null,
-      timestamp: new Date().toISOString(),
-      ...(tier >= 2 && { market_data: marketData }),
-      ...simulation,
-    }, { status: 200 });
-  } catch (error) {
-    console.error("[LaunchSimulator] Error:", error);
-    return Response.json(
-      { error: "Launch simulation failed", message: (error as Error).message },
-      { status: 500 }
-    );
-  }
+  return {
+    tier,
+    project,
+    ticker: ticker || null,
+    contract: contract || null,
+    timestamp: new Date().toISOString(),
+    ...(tier >= 2 && { market_data: marketData }),
+    ...result,
+  };
 }
