@@ -1348,6 +1348,124 @@
           }
         }
       }
+    },
+    "launch-simulator-2": {
+      "category": "intelligence",
+      "price": "0.35",
+      "description": "Launch Simulator Tier 2 \u2014 Deep Signal with live DexScreener market data (price, volume, liquidity)",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string",
+              "description": "Project name"
+            },
+            "description": {
+              "type": "string",
+              "description": "Project description"
+            },
+            "ticker": {
+              "type": "string",
+              "description": "Token ticker"
+            },
+            "contract": {
+              "type": "string",
+              "description": "Contract address for live market data"
+            }
+          },
+          "required": [
+            "project"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "final_verdict": {
+              "type": "string",
+              "description": "LAUNCH | WAIT | ABORT"
+            },
+            "confidence": {
+              "type": "number"
+            },
+            "market_data": {
+              "type": "object",
+              "description": "Live DexScreener data"
+            },
+            "blue_agent": {
+              "type": "object"
+            },
+            "aeon": {
+              "type": "object"
+            },
+            "miroshark": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "launch-simulator-3": {
+      "category": "intelligence",
+      "price": "0.50",
+      "description": "Launch Simulator Tier 3 \u2014 Full Simulation with risk matrix and timeline recommendation",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string",
+              "description": "Project name"
+            },
+            "description": {
+              "type": "string",
+              "description": "Project description"
+            },
+            "ticker": {
+              "type": "string",
+              "description": "Token ticker"
+            },
+            "contract": {
+              "type": "string",
+              "description": "Contract address for live market data"
+            }
+          },
+          "required": [
+            "project"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "final_verdict": {
+              "type": "string",
+              "description": "LAUNCH | WAIT | ABORT"
+            },
+            "confidence": {
+              "type": "number"
+            },
+            "market_data": {
+              "type": "object"
+            },
+            "risk_matrix": {
+              "type": "object",
+              "description": "5-axis risk matrix (0-10)"
+            },
+            "timeline_recommendation": {
+              "type": "string"
+            },
+            "blue_agent": {
+              "type": "object"
+            },
+            "aeon": {
+              "type": "object"
+            },
+            "miroshark": {
+              "type": "object"
+            }
+          }
+        }
+      }
     }
   }
 }
