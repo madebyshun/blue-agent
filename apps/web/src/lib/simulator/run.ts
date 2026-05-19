@@ -1,4 +1,4 @@
-import { callBankrLLM, extractJsonObject } from "@blue-agent/bankr";
+import { callBankrLLM, extractJsonObject } from "./bankr";
 import { fetchAeonEcosystemData } from "./aeon";
 import { runMiroSharkSimulation } from "./miroshark";
 

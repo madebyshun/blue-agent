@@ -1,4 +1,4 @@
-import { callBankrLLM } from "@blue-agent/bankr";
+import { callBankrLLM } from "./bankr";
 
 const AEON_REPO = "aaronjmars/aeon";
 const GITHUB_RAW = "https://raw.githubusercontent.com";

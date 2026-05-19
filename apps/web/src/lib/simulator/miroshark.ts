@@ -1,4 +1,4 @@
-import { callBankrLLM, extractJsonObject } from "@blue-agent/bankr";
+import { callBankrLLM, extractJsonObject } from "./bankr";
 
 export type MiroSharkResult = {
   status: "simulated" | "live";
