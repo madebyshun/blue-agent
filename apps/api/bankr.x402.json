@@ -5,7 +5,7 @@
     "quantum-premium": {
       "category": "quantum",
       "price": "1.50",
-      "description": "Quantum vulnerability score for any wallet — public key exposure, threat timeline, migration steps",
+      "description": "Quantum vulnerability score for any wallet \u2014 public key exposure, threat timeline, migration steps",
       "schema": {
         "input": {
           "type": "object",
@@ -47,7 +47,7 @@
       "category": "quantum",
       "price": "2.50",
       "paymentScheme": "upto",
-      "description": "Batch quantum scan — 1-10 wallets at $0.25 each. Pay only for what you scan.",
+      "description": "Batch quantum scan \u2014 1-10 wallets at $0.25 each. Pay only for what you scan.",
       "methods": [
         "POST"
       ],
@@ -89,7 +89,7 @@
     "quantum-migrate": {
       "category": "quantum",
       "price": "2.00",
-      "description": "Step-by-step quantum-safe wallet migration plan — tools, timeline, priority actions",
+      "description": "Step-by-step quantum-safe wallet migration plan \u2014 tools, timeline, priority actions",
       "schema": {
         "input": {
           "type": "object",
@@ -133,7 +133,7 @@
     "quantum-timeline": {
       "category": "quantum",
       "price": "0.40",
-      "description": "Quantum threat timeline — when CRQC arrives, milestone events, what it means for your wallet",
+      "description": "Quantum threat timeline \u2014 when CRQC arrives, milestone events, what it means for your wallet",
       "schema": {
         "input": {
           "type": "object",
@@ -170,7 +170,7 @@
     "key-exposure": {
       "category": "quantum",
       "price": "0.50",
-      "description": "Check if wallet's public key is exposed on-chain — the #1 quantum risk factor",
+      "description": "Check if wallet's public key is exposed on-chain \u2014 the #1 quantum risk factor",
       "schema": {
         "input": {
           "type": "object",
@@ -213,7 +213,7 @@
     "risk-gate": {
       "category": "security",
       "price": "0.05",
-      "description": "Pre-transaction safety check for AI agents — APPROVE / WARN / BLOCK with risk score",
+      "description": "Pre-transaction safety check for AI agents \u2014 APPROVE / WARN / BLOCK with risk score",
       "schema": {
         "input": {
           "type": "object",
@@ -273,7 +273,7 @@
     "honeypot-check": {
       "category": "security",
       "price": "0.05",
-      "description": "Detect honeypot or rug pull token contracts before buying — SAFE / SUSPICIOUS / HONEYPOT verdict",
+      "description": "Detect honeypot or rug pull token contracts before buying \u2014 SAFE / SUSPICIOUS / HONEYPOT verdict",
       "schema": {
         "input": {
           "type": "object",
@@ -312,7 +312,7 @@
     "allowance-audit": {
       "category": "security",
       "price": "0.20",
-      "description": "Audit dangerous token approvals — find unlimited approvals and revoke recommendations",
+      "description": "Audit dangerous token approvals \u2014 find unlimited approvals and revoke recommendations",
       "schema": {
         "input": {
           "type": "object",
@@ -390,7 +390,7 @@
     "mev-shield": {
       "category": "security",
       "price": "0.30",
-      "description": "MEV sandwich attack risk before large swaps — protection strategies and recommended settings",
+      "description": "MEV sandwich attack risk before large swaps \u2014 protection strategies and recommended settings",
       "schema": {
         "input": {
           "type": "object",
@@ -426,7 +426,7 @@
     "contract-trust": {
       "category": "security",
       "price": "0.25",
-      "description": "Trust score for any contract — safe for AI agent interaction? Verified, audited, centralized?",
+      "description": "Trust score for any contract \u2014 safe for AI agent interaction? Verified, audited, centralized?",
       "schema": {
         "input": {
           "type": "object",
@@ -465,7 +465,7 @@
     "circuit-breaker": {
       "category": "security",
       "price": "0.50",
-      "description": "Circuit breaker for autonomous agents — CONTINUE / PAUSE / HALT decision for Zero-Human Companies",
+      "description": "Circuit breaker for autonomous agents \u2014 CONTINUE / PAUSE / HALT decision for Zero-Human Companies",
       "schema": {
         "input": {
           "type": "object",
@@ -518,7 +518,7 @@
     "deep-analysis": {
       "category": "research",
       "price": "0.35",
-      "description": "Deep due diligence for any Base token or project — risk score, rug probability, recommendation",
+      "description": "Deep due diligence for any Base token or project \u2014 risk score, rug probability, recommendation",
       "schema": {
         "input": {
           "type": "object",
@@ -562,7 +562,7 @@
     "launch-advisor": {
       "category": "research",
       "price": "3.00",
-      "description": "Full token launch playbook — tokenomics, 8-week timeline, marketing strategy, KPIs",
+      "description": "Full token launch playbook \u2014 tokenomics, 8-week timeline, marketing strategy, KPIs",
       "schema": {
         "input": {
           "type": "object",
@@ -613,7 +613,7 @@
     "grant-evaluator": {
       "category": "research",
       "price": "5.00",
-      "description": "Base ecosystem grant scoring — innovation, feasibility, impact, team quality",
+      "description": "Base ecosystem grant scoring \u2014 innovation, feasibility, impact, team quality",
       "schema": {
         "input": {
           "type": "object",
@@ -667,7 +667,7 @@
     "x402-readiness": {
       "category": "research",
       "price": "1.00",
-      "description": "Audit any API or service for x402 payment protocol readiness — gaps, steps, pricing suggestion",
+      "description": "Audit any API or service for x402 payment protocol readiness \u2014 gaps, steps, pricing suggestion",
       "schema": {
         "input": {
           "type": "object",
@@ -711,7 +711,7 @@
     "base-deploy-check": {
       "category": "research",
       "price": "0.50",
-      "description": "Pre-deployment security check for Base contracts — vulnerabilities, centralization risks, go/no-go",
+      "description": "Pre-deployment security check for Base contracts \u2014 vulnerabilities, centralization risks, go/no-go",
       "schema": {
         "input": {
           "type": "object",
@@ -752,7 +752,7 @@
     "wallet-pnl": {
       "category": "data",
       "price": "1.00",
-      "description": "Wallet PnL report — trading style, win rate, smart money score, top tokens on Base",
+      "description": "Wallet PnL report \u2014 trading style, win rate, smart money score, top tokens on Base",
       "schema": {
         "input": {
           "type": "object",
@@ -791,7 +791,7 @@
     "whale-tracker": {
       "category": "data",
       "price": "0.10",
-      "description": "Smart money and whale flow analysis — accumulation vs distribution signal for any token",
+      "description": "Smart money and whale flow analysis \u2014 accumulation vs distribution signal for any token",
       "schema": {
         "input": {
           "type": "object",
@@ -827,7 +827,7 @@
     "aml-screen": {
       "category": "data",
       "price": "0.25",
-      "description": "AML compliance screening for any wallet — transaction patterns, risk flags, clean/suspicious verdict",
+      "description": "AML compliance screening for any wallet \u2014 transaction patterns, risk flags, clean/suspicious verdict",
       "schema": {
         "input": {
           "type": "object",
@@ -866,7 +866,7 @@
     "airdrop-check": {
       "category": "data",
       "price": "0.10",
-      "description": "Base airdrop eligibility check — which protocols, activity score, estimated value",
+      "description": "Base airdrop eligibility check \u2014 which protocols, activity score, estimated value",
       "schema": {
         "input": {
           "type": "object",
@@ -902,7 +902,7 @@
     "narrative-pulse": {
       "category": "data",
       "price": "0.40",
-      "description": "Trending narratives in crypto and Base ecosystem — momentum scores, emerging themes, agent opportunities",
+      "description": "Trending narratives in crypto and Base ecosystem \u2014 momentum scores, emerging themes, agent opportunities",
       "schema": {
         "input": {
           "type": "object",
@@ -935,7 +935,7 @@
     "dex-flow": {
       "category": "data",
       "price": "0.15",
-      "description": "DEX volume, buy/sell pressure and liquidity flow for any Base token — live DexScreener data",
+      "description": "DEX volume, buy/sell pressure and liquidity flow for any Base token \u2014 live DexScreener data",
       "schema": {
         "input": {
           "type": "object",
@@ -972,7 +972,7 @@
     "tokenomics-score": {
       "category": "research",
       "price": "0.50",
-      "description": "Token supply, inflation, unlock cliff analysis — sustainability score and sell pressure outlook",
+      "description": "Token supply, inflation, unlock cliff analysis \u2014 sustainability score and sell pressure outlook",
       "schema": {
         "input": {
           "type": "object",
@@ -1011,7 +1011,7 @@
     "whitepaper-tldr": {
       "category": "research",
       "price": "0.20",
-      "description": "Summarize any whitepaper or project docs into 5 key bullets — thesis, moat, token utility, risks",
+      "description": "Summarize any whitepaper or project docs into 5 key bullets \u2014 thesis, moat, token utility, risks",
       "schema": {
         "input": {
           "type": "object",
@@ -1054,7 +1054,7 @@
     "vc-tracker": {
       "category": "research",
       "price": "1.00",
-      "description": "VC investment activity and thesis — who is backing what, hot sectors, signals for builders and traders",
+      "description": "VC investment activity and thesis \u2014 who is backing what, hot sectors, signals for builders and traders",
       "schema": {
         "input": {
           "type": "object",
@@ -1090,7 +1090,7 @@
     "yield-optimizer": {
       "category": "earn",
       "price": "0.15",
-      "description": "Best APY opportunities on Base DeFi — live DeFiLlama data, risk-adjusted recommendations",
+      "description": "Best APY opportunities on Base DeFi \u2014 live DeFiLlama data, risk-adjusted recommendations",
       "schema": {
         "input": {
           "type": "object",
@@ -1126,33 +1126,64 @@
     "alert-subscribe": {
       "price": "0.50",
       "category": "alerts",
-      "description": "Subscribe to real-time alerts via webhook — whale, circuit breaker, quantum exposure",
+      "description": "Subscribe to real-time alerts via webhook \u2014 whale, circuit breaker, quantum exposure",
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "webhookUrl": { "type": "string", "description": "HTTPS webhook URL to receive alert events" },
+            "webhookUrl": {
+              "type": "string",
+              "description": "HTTPS webhook URL to receive alert events"
+            },
             "topics": {
               "type": "array",
-              "items": { "type": "string", "enum": ["whale_movement", "circuit_breaker", "quantum_exposure", "honeypot_detected", "rug_risk"] },
+              "items": {
+                "type": "string",
+                "enum": [
+                  "whale_movement",
+                  "circuit_breaker",
+                  "quantum_exposure",
+                  "honeypot_detected",
+                  "rug_risk"
+                ]
+              },
               "description": "Alert topics to subscribe to"
             },
             "addresses": {
               "type": "array",
-              "items": { "type": "string" },
-              "description": "Specific wallet/token addresses to watch (optional — empty = global alerts)"
+              "items": {
+                "type": "string"
+              },
+              "description": "Specific wallet/token addresses to watch (optional \u2014 empty = global alerts)"
             }
           },
-          "required": ["webhookUrl", "topics"]
+          "required": [
+            "webhookUrl",
+            "topics"
+          ]
         },
         "output": {
           "type": "object",
           "properties": {
-            "subscriptionId": { "type": "string", "description": "Unique subscription identifier" },
-            "topics": { "type": "array", "description": "Active alert topics" },
-            "webhookUrl": { "type": "string" },
-            "status": { "type": "string", "description": "ACTIVE | PENDING" },
-            "expiresAt": { "type": "string", "description": "ISO timestamp when subscription expires" }
+            "subscriptionId": {
+              "type": "string",
+              "description": "Unique subscription identifier"
+            },
+            "topics": {
+              "type": "array",
+              "description": "Active alert topics"
+            },
+            "webhookUrl": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "description": "ACTIVE | PENDING"
+            },
+            "expiresAt": {
+              "type": "string",
+              "description": "ISO timestamp when subscription expires"
+            }
           }
         }
       }
@@ -1165,17 +1196,32 @@
         "input": {
           "type": "object",
           "properties": {
-            "address": { "type": "string", "description": "Wallet or token address to check for active alerts (0x...)" }
+            "address": {
+              "type": "string",
+              "description": "Wallet or token address to check for active alerts (0x...)"
+            }
           },
-          "required": ["address"]
+          "required": [
+            "address"
+          ]
         },
         "output": {
           "type": "object",
           "properties": {
-            "address": { "type": "string" },
-            "hasAlerts": { "type": "boolean" },
-            "alerts": { "type": "array", "description": "Active alert objects with type, severity, message" },
-            "lastChecked": { "type": "string", "description": "ISO timestamp of last alert check" }
+            "address": {
+              "type": "string"
+            },
+            "hasAlerts": {
+              "type": "boolean"
+            },
+            "alerts": {
+              "type": "array",
+              "description": "Active alert objects with type, severity, message"
+            },
+            "lastChecked": {
+              "type": "string",
+              "description": "ISO timestamp of last alert check"
+            }
           }
         }
       }
@@ -1183,7 +1229,7 @@
     "lp-analyzer": {
       "price": "0.25",
       "category": "earn",
-      "description": "LP position analysis — impermanent loss, fee income, rebalance recommendation",
+      "description": "LP position analysis \u2014 impermanent loss, fee income, rebalance recommendation",
       "schema": {
         "input": {
           "type": "object",
@@ -1219,7 +1265,7 @@
     "tax-report": {
       "price": "2.00",
       "category": "earn",
-      "description": "On-chain tax summary — realized gains, taxable events, P&L",
+      "description": "On-chain tax summary \u2014 realized gains, taxable events, P&L",
       "schema": {
         "input": {
           "type": "object",
@@ -1240,6 +1286,66 @@
           "required": [
             "address"
           ]
+        }
+      }
+    },
+    "launch-simulator": {
+      "category": "intelligence",
+      "price": "0.10",
+      "description": "3-agent pre-launch intelligence \u2014 Blue Agent + Aeon + MiroShark. Know before you ship.",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string",
+              "description": "Project name"
+            },
+            "description": {
+              "type": "string",
+              "description": "Project description"
+            },
+            "ticker": {
+              "type": "string",
+              "description": "Token ticker (e.g. $BLUE)"
+            },
+            "contract": {
+              "type": "string",
+              "description": "Contract address (tier 2+ for live market data)"
+            },
+            "tier": {
+              "type": "number",
+              "description": "Simulation depth: 1=Quick $0.10, 2=Deep $0.35, 3=Full $0.50"
+            }
+          },
+          "required": [
+            "project"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "final_verdict": {
+              "type": "string",
+              "description": "LAUNCH | WAIT | ABORT"
+            },
+            "confidence": {
+              "type": "number",
+              "description": "Confidence score 0-100"
+            },
+            "blue_agent": {
+              "type": "object",
+              "description": "Blue Agent analysis"
+            },
+            "aeon": {
+              "type": "object",
+              "description": "Aeon ecosystem signals"
+            },
+            "miroshark": {
+              "type": "object",
+              "description": "MiroShark consensus"
+            }
+          }
         }
       }
     }
