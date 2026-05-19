@@ -267,9 +267,12 @@ export default function SimulatorPage() {
         },
         body: JSON.stringify(body),
       });
-      const d2 = await r2.json() as SimResult & { error?: string };
+      const d2 = await r2.json() as SimResult & { error?: string; message?: string };
       if (d2.final_verdict) { setResults((prev) => ({ ...prev, [tier]: d2 })); setStep("done"); }
-      else throw new Error(typeof d2.error === "string" ? d2.error : "Simulation failed.");
+      else {
+        const errMsg = [d2.error, d2.message].filter(Boolean).join(": ") || "Simulation failed.";
+        throw new Error(errMsg);
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg.includes("rejected") || msg.includes("denied") ? "Payment rejected in wallet." : msg);

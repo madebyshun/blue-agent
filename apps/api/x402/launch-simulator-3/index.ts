@@ -17,7 +17,7 @@ async function callBankrLLM(opts: {
   const res = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
     headers: {
-      "x-api-key": process.env.BANKR_API_KEY ?? "",
+      "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "",
       "Content-Type": "application/json",
       "anthropic-version": "2023-06-01",
     },
