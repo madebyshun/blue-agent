@@ -1,6 +1,10 @@
 // Blue Agent x402 API — local dev server
 // Production: handlers are deployed to x402.bankr.bot infrastructure
 
+// Load .env for local dev
+import { config } from "dotenv";
+config();
+
 import http from 'http';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';

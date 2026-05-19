@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@blue-agent/bankr": "*",
     "@tanstack/react-query": "^5.100.10",
     "next": "15.3.9",
     "react": "^19.0.0",
