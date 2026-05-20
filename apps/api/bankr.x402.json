@@ -1466,6 +1466,834 @@
           }
         }
       }
+    },
+    "token-pick-signal": {
+      "category": "intelligence",
+      "price": "0.20",
+      "description": "One actionable token pick with falsifiable thesis, entry, kill criterion — Aeon token-movers + MiroShark retail",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "chain": { "type": "string", "description": "Chain filter (default: base)" },
+            "min_mcap": { "type": "number", "description": "Min market cap USD (default: 1000000)" }
+          }
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "no_pick": { "type": "boolean" },
+            "pick": { "type": "object" },
+            "retail_consensus": { "type": "object" },
+            "blue_verdict": { "type": "string" },
+            "confidence": { "type": "number" }
+          }
+        }
+      }
+    },
+    "narrative-position": {
+      "category": "intelligence",
+      "price": "0.25",
+      "description": "Narrative map with position calls (FRONT-RUN / RIDE / FADE / IGNORE) — Aeon narrative-tracker + MiroShark influencer",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "topic": { "type": "string", "description": "Optional topic focus" }
+          }
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "narratives": { "type": "array" },
+            "transitions": { "type": "array" },
+            "top_opportunity": { "type": "string" },
+            "influencer_take": { "type": "object" }
+          }
+        }
+      }
+    },
+    "ecosystem-digest": {
+      "category": "intelligence",
+      "price": "0.20",
+      "description": "Weekly Base ecosystem digest — what moved, what matters, what to watch. Aeon + MiroShark observer + Blue synthesis",
+      "schema": {
+        "input": { "type": "object", "properties": {} },
+        "output": {
+          "type": "object",
+          "properties": {
+            "headline": { "type": "string" },
+            "movers": { "type": "array" },
+            "narratives": { "type": "array" },
+            "what_to_watch": { "type": "array" },
+            "week_rating": { "type": "number" }
+          }
+        }
+      }
+    },
+    "market-fit": {
+      "category": "intelligence",
+      "price": "0.35",
+      "description": "Market fit validator — GO / WAIT / PIVOT verdict. Blue idea + Aeon ecosystem + MiroShark 4-persona",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "description": { "type": "string", "description": "Project description (required)" },
+            "name": { "type": "string", "description": "Project name" }
+          },
+          "required": ["description"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "verdict": { "type": "string", "description": "GO|WAIT|PIVOT" },
+            "score": { "type": "number" },
+            "brief": { "type": "object" },
+            "risks": { "type": "array" },
+            "suggested_change": { "type": "string" }
+          }
+        }
+      }
+    },
+    "token-launch-readiness": {
+      "category": "intelligence",
+      "price": "0.50",
+      "description": "Token launch readiness — score 0-100, GO/WAIT verdict, checklist. Aeon market + MiroShark retail + Blue ship",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string", "description": "Token name (required)" },
+            "ticker": { "type": "string", "description": "Token ticker" },
+            "description": { "type": "string", "description": "What the token is for" }
+          },
+          "required": ["name"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "readiness_score": { "type": "number" },
+            "verdict": { "type": "string", "description": "GO|WAIT" },
+            "checklist": { "type": "array" },
+            "action_items": { "type": "array" }
+          }
+        }
+      }
+    },
+    "roadmap-validator": {
+      "category": "builder",
+      "price": "0.50",
+      "description": "Validate your roadmap against market timing — SHIP/REVISE/PIVOT verdict. Blue build + Aeon narrative + MiroShark 4-persona",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": { "type": "string", "description": "Project name (required)" },
+            "roadmap": { "type": "string", "description": "Roadmap items or milestones" },
+            "timeline": { "type": "string", "description": "Target timeline (e.g. Q3 2025)" }
+          },
+          "required": ["project"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "verdict": { "type": "string", "description": "SHIP|REVISE|PIVOT" },
+            "score": { "type": "number" },
+            "milestones": { "type": "array" },
+            "risks": { "type": "array" }
+          }
+        }
+      }
+    },
+    "competitor-scan": {
+      "category": "builder",
+      "price": "0.75",
+      "description": "Competitive landscape deep scan — STRONG/COMPETITIVE/WEAK position. Aeon deep-research x2 + MiroShark analyst",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": { "type": "string", "description": "Your project name (required)" },
+            "description": { "type": "string", "description": "What your project does" },
+            "sector": { "type": "string", "description": "Market sector (e.g. DeFi, AI agents)" }
+          },
+          "required": ["project"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "position": { "type": "string", "description": "STRONG|COMPETITIVE|WEAK" },
+            "score": { "type": "number" },
+            "competitors": { "type": "array" },
+            "differentiators": { "type": "array" },
+            "threats": { "type": "array" }
+          }
+        }
+      }
+    },
+    "pitch-intelligence": {
+      "category": "builder",
+      "price": "0.35",
+      "description": "Pitch deck intelligence — narrative hooks, investor angles, objection handling. Blue raise + Aeon narrative + MiroShark",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": { "type": "string", "description": "Project name (required)" },
+            "description": { "type": "string", "description": "What the project does" },
+            "ask": { "type": "string", "description": "Funding ask (e.g. $500K seed)" }
+          },
+          "required": ["project"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "hook": { "type": "string" },
+            "narrative": { "type": "string" },
+            "objections": { "type": "array" },
+            "investor_angles": { "type": "array" }
+          }
+        }
+      }
+    },
+    "fundraise-timing": {
+      "category": "builder",
+      "price": "0.50",
+      "description": "Optimal fundraise timing signal — RAISE_NOW/WAIT/PREP. Aeon market signals + MiroShark influencer",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": { "type": "string", "description": "Project name (required)" },
+            "stage": { "type": "string", "description": "Funding stage (pre-seed, seed, series-a)" },
+            "sector": { "type": "string", "description": "Project sector" }
+          },
+          "required": ["project"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "timing_signal": { "type": "string", "description": "RAISE_NOW|WAIT|PREP" },
+            "score": { "type": "number" },
+            "window": { "type": "string" },
+            "reasons": { "type": "array" }
+          }
+        }
+      }
+    },
+    "gtm-brief": {
+      "category": "builder",
+      "price": "0.50",
+      "description": "Go-to-market brief with channels, messaging, launch sequence. Blue idea + Aeon narrative + MiroShark influencer+retail",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": { "type": "string", "description": "Project name (required)" },
+            "description": { "type": "string", "description": "What the project does" },
+            "target_audience": { "type": "string", "description": "Target users" }
+          },
+          "required": ["project"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "channels": { "type": "array" },
+            "messaging": { "type": "object" },
+            "launch_sequence": { "type": "array" },
+            "kpis": { "type": "array" }
+          }
+        }
+      }
+    },
+    "stack-recommender": {
+      "category": "builder",
+      "price": "0.35",
+      "description": "Tech stack recommendation for Base builders — frameworks, infra, tooling. Blue build + Aeon research + MiroShark analyst",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": { "type": "string", "description": "Project name (required)" },
+            "description": { "type": "string", "description": "What you're building" },
+            "team_size": { "type": "string", "description": "Team size (solo, 2-5, 5+)" }
+          },
+          "required": ["project"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "recommended_stack": { "type": "object" },
+            "alternatives": { "type": "array" },
+            "reasoning": { "type": "string" },
+            "warnings": { "type": "array" }
+          }
+        }
+      }
+    },
+    "investor-memo": {
+      "category": "builder",
+      "price": "0.75",
+      "description": "Full investor memo — market, thesis, traction, risks, ask. Blue raise + Aeon deep-research + MiroShark analyst+influencer",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": { "type": "string", "description": "Project name (required)" },
+            "description": { "type": "string", "description": "What the project does" },
+            "traction": { "type": "string", "description": "Current traction or metrics" },
+            "ask": { "type": "string", "description": "Funding ask" }
+          },
+          "required": ["project"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "memo": { "type": "object" },
+            "investment_grade": { "type": "string" },
+            "conviction": { "type": "string" },
+            "analyst_verdict": { "type": "string" }
+          }
+        }
+      }
+    },
+    "token-distribution-plan": {
+      "category": "builder",
+      "price": "0.35",
+      "description": "Token distribution strategy — allocation, vesting, community rewards. Aeon token-movers + MiroShark retail + Blue raise",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": { "type": "string", "description": "Project name (required)" },
+            "total_supply": { "type": "string", "description": "Total token supply" },
+            "type": { "type": "string", "description": "Token type: utility, governance, memecoin" }
+          },
+          "required": ["project"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "allocation": { "type": "object" },
+            "vesting_schedule": { "type": "array" },
+            "community_strategy": { "type": "string" },
+            "warnings": { "type": "array" }
+          }
+        }
+      }
+    },
+    "agent-performance": {
+      "category": "builder",
+      "price": "0.35",
+      "description": "AI agent performance audit — activity, reliability, impact score. Blue agent-score + Aeon github-monitor + MiroShark observer",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "agent": { "type": "string", "description": "Agent name or handle (required)" },
+            "repo": { "type": "string", "description": "GitHub repo (optional)" },
+            "description": { "type": "string", "description": "What the agent does" }
+          },
+          "required": ["agent"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "performance_score": { "type": "number" },
+            "activity_level": { "type": "string" },
+            "strengths": { "type": "array" },
+            "gaps": { "type": "array" },
+            "observer_take": { "type": "object" }
+          }
+        }
+      }
+    },
+    "agent-collab-match": {
+      "category": "builder",
+      "price": "0.35",
+      "description": "Agent collaboration compatibility — STRONG_MATCH/WEAK_MATCH verdict. Blue agent-score x2 + MiroShark analyst",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "agent_a": { "type": "string", "description": "First agent name (required)" },
+            "agent_b": { "type": "string", "description": "Second agent name (required)" },
+            "goal": { "type": "string", "description": "Collaboration goal" }
+          },
+          "required": ["agent_a", "agent_b"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "verdict": { "type": "string", "description": "STRONG_MATCH|GOOD_MATCH|WEAK_MATCH|POOR_MATCH" },
+            "score": { "type": "number" },
+            "synergies": { "type": "array" },
+            "conflicts": { "type": "array" },
+            "recommended_split": { "type": "string" }
+          }
+        }
+      }
+    },
+    "repo-health": {
+      "category": "builder",
+      "price": "0.35",
+      "description": "GitHub repo health check — A/B/C/D/F grade, activity, code quality, security. Aeon github-monitor + Blue audit + MiroShark",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "repo": { "type": "string", "description": "GitHub repo (user/repo or full URL) (required)" },
+            "description": { "type": "string", "description": "Project description" }
+          },
+          "required": ["repo"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "health_score": { "type": "number" },
+            "grade": { "type": "string", "description": "A|B|C|D|F" },
+            "status": { "type": "string" },
+            "dimensions": { "type": "object" },
+            "critical_issues": { "type": "array" },
+            "quick_wins": { "type": "array" }
+          }
+        }
+      }
+    },
+    "community-sentiment": {
+      "category": "builder",
+      "price": "0.25",
+      "description": "Community sentiment analysis — sentiment score, bull/bear split, health. MiroShark 4-persona + Aeon narrative + Blue score",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": { "type": "string", "description": "Project name (required)" },
+            "description": { "type": "string", "description": "Project description" }
+          },
+          "required": ["project"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "sentiment_score": { "type": "number" },
+            "overall": { "type": "string" },
+            "consensus": { "type": "object" },
+            "community_health": { "type": "string" },
+            "key_drivers": { "type": "array" }
+          }
+        }
+      }
+    },
+    "defi-opportunity": {
+      "category": "earn",
+      "price": "0.35",
+      "description": "DeFi opportunity scan on Base — top yield, LP, lending opportunities. Aeon defi-monitor + MiroShark analyst + Blue verdict",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "strategy": { "type": "string", "description": "Strategy focus: yield, lp, lending, farming (default: yield)" },
+            "risk_tolerance": { "type": "string", "description": "Risk tolerance: high, medium, low (default: medium)" }
+          }
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "scan_score": { "type": "number" },
+            "market_condition": { "type": "string" },
+            "opportunities": { "type": "array" },
+            "avoid_now": { "type": "array" },
+            "best_entry_timing": { "type": "string" }
+          }
+        }
+      }
+    },
+    "builder-deep-dd": {
+      "category": "builder",
+      "price": "1.00",
+      "description": "Comprehensive builder/project due diligence — STRONG_BUY/BUY/WATCH/PASS/RED_FLAG verdict. Aeon x2 + Blue audit + MiroShark analyst",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "target": { "type": "string", "description": "Builder handle, project name, or GitHub repo (required)" },
+            "type": { "type": "string", "description": "Target type: project, builder, token (default: project)" },
+            "context": { "type": "string", "description": "Additional context" }
+          },
+          "required": ["target"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "dd_score": { "type": "number" },
+            "verdict": { "type": "string", "description": "STRONG_BUY|BUY|WATCH|PASS|RED_FLAG" },
+            "confidence": { "type": "number" },
+            "summary": { "type": "string" },
+            "thesis": { "type": "string" },
+            "strengths": { "type": "array" },
+            "risks": { "type": "array" },
+            "red_flags": { "type": "array" },
+            "due_diligence_checklist": { "type": "array" }
+          }
+        }
+      }
+    },
+    "whale-copy-signal": {
+      "category": "trading",
+      "price": "0.35",
+      "description": "Smart money copy signal — whale accumulation/distribution, entry timing, tokens to follow. Aeon token-movers + MiroShark analyst",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "token": { "type": "string", "description": "Token to analyze (optional)" },
+            "wallet": { "type": "string", "description": "Specific wallet to track (optional)" }
+          }
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "signal": { "type": "string", "description": "STRONG_BUY|BUY|WATCH|PASS" },
+            "confidence": { "type": "number" },
+            "whale_activity": { "type": "string" },
+            "copy_targets": { "type": "array" },
+            "entry_timing": { "type": "string" }
+          }
+        }
+      }
+    },
+    "token-momentum-scanner": {
+      "category": "trading",
+      "price": "0.25",
+      "description": "Scan Base chain for pre-pump momentum plays — early setups before CT picks up. Aeon token-movers + MiroShark retail",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "chain": { "type": "string", "description": "Chain (default: base)" },
+            "min_mcap": { "type": "number", "description": "Min market cap USD (default: 500000)" }
+          }
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "scan_score": { "type": "number" },
+            "market_phase": { "type": "string" },
+            "momentum_plays": { "type": "array" },
+            "best_setup": { "type": "string" }
+          }
+        }
+      }
+    },
+    "portfolio-rebalancer": {
+      "category": "trading",
+      "price": "0.50",
+      "description": "Portfolio rebalance recommendation based on narrative shifts and market signals. Aeon token-movers + narrative + MiroShark analyst",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "holdings": { "type": "string", "description": "Current holdings (e.g. '50% ETH, 30% USDC, 20% BRETT')" },
+            "risk_profile": { "type": "string", "description": "high|medium|low (default: medium)" },
+            "goal": { "type": "string", "description": "growth|yield|preservation (default: growth)" }
+          }
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "description": "REBALANCE_NOW|TRIM|ACCUMULATE|HOLD" },
+            "suggested_allocation": { "type": "array" },
+            "rotate_from": { "type": "array" },
+            "rotate_into": { "type": "array" }
+          }
+        }
+      }
+    },
+    "thread-intelligence": {
+      "category": "content",
+      "price": "0.35",
+      "description": "CT thread strategy — winning angle, hook options, posting time, engagement prediction. Aeon narrative + MiroShark influencer",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "topic": { "type": "string", "description": "Thread topic or idea (required)" },
+            "audience": { "type": "string", "description": "Target audience" },
+            "goal": { "type": "string", "description": "engagement|awareness|conversion" }
+          },
+          "required": ["topic"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "content_score": { "type": "number" },
+            "recommended_angle": { "type": "string" },
+            "thread_outline": { "type": "array" },
+            "hook_options": { "type": "array" },
+            "engagement_prediction": { "type": "string" }
+          }
+        }
+      }
+    },
+    "builder-brand-score": {
+      "category": "content",
+      "price": "0.35",
+      "description": "Builder brand score — visibility, credibility, CT presence, narrative ownership on Base. Aeon research + narrative + MiroShark influencer",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "builder": { "type": "string", "description": "Builder name or @handle (required)" },
+            "project": { "type": "string", "description": "Associated project" }
+          },
+          "required": ["builder"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "brand_score": { "type": "number" },
+            "tier": { "type": "string", "description": "S|A|B|C|D" },
+            "dimensions": { "type": "object" },
+            "quick_wins": { "type": "array" }
+          }
+        }
+      }
+    },
+    "community-growth-playbook": {
+      "category": "content",
+      "price": "0.50",
+      "description": "Community growth strategy — channels, content pillars, engagement loops, milestones. Aeon narrative + MiroShark 4-persona",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": { "type": "string", "description": "Project name (required)" },
+            "description": { "type": "string", "description": "What the project does" },
+            "current_size": { "type": "string", "description": "Current community size" },
+            "goal": { "type": "string", "description": "Growth goal (e.g. 1000 members)" }
+          },
+          "required": ["project"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "growth_score": { "type": "number" },
+            "channels": { "type": "array" },
+            "content_pillars": { "type": "array" },
+            "milestones": { "type": "array" },
+            "quick_wins": { "type": "array" }
+          }
+        }
+      }
+    },
+    "agent-revenue-optimizer": {
+      "category": "agent-economy",
+      "price": "0.50",
+      "description": "Maximize AI agent revenue — streams, pricing strategy, untapped opportunities. Aeon deep-research + MiroShark analyst",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "agent": { "type": "string", "description": "Agent name (required)" },
+            "description": { "type": "string", "description": "What the agent does" },
+            "current_revenue": { "type": "string", "description": "Current revenue (optional)" },
+            "model": { "type": "string", "description": "Current monetization model (default: x402)" }
+          },
+          "required": ["agent"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "revenue_score": { "type": "number" },
+            "recommended_model": { "type": "string" },
+            "revenue_streams": { "type": "array" },
+            "quick_revenue_wins": { "type": "array" },
+            "30_day_target": { "type": "string" }
+          }
+        }
+      }
+    },
+    "agent-token-strategy": {
+      "category": "agent-economy",
+      "price": "0.50",
+      "description": "Token strategy for agent-owned projects — tokenomics, narrative, launch sequence. Aeon token-movers + narrative + MiroShark retail",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "agent": { "type": "string", "description": "Agent or project name (required)" },
+            "description": { "type": "string", "description": "What the agent does" },
+            "token_name": { "type": "string", "description": "Proposed token name" },
+            "total_supply": { "type": "string", "description": "Total token supply (default: 1B)" }
+          },
+          "required": ["agent"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "strategy_score": { "type": "number" },
+            "recommended_type": { "type": "string" },
+            "tokenomics": { "type": "object" },
+            "narrative_angle": { "type": "string" },
+            "launch_sequence": { "type": "array" }
+          }
+        }
+      }
+    },
+    "multi-agent-workflow": {
+      "category": "agent-economy",
+      "price": "0.50",
+      "description": "Design multi-agent workflow — orchestration pattern, handoff protocol, x402 payment routing. Aeon deep-research + MiroShark analyst",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "goal": { "type": "string", "description": "What the workflow should accomplish (required)" },
+            "agents": { "type": "string", "description": "Available agents (default: Blue Agent, Aeon, MiroShark)" },
+            "constraints": { "type": "string", "description": "Budget, latency, or other constraints" }
+          },
+          "required": ["goal"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "pattern": { "type": "string", "description": "pipeline|orchestrator|swarm|hybrid" },
+            "agents": { "type": "array" },
+            "steps": { "type": "array" },
+            "estimated_cost": { "type": "string" },
+            "estimated_latency": { "type": "string" }
+          }
+        }
+      }
+    },
+    "base-grant-finder": {
+      "category": "base-ecosystem",
+      "price": "0.35",
+      "description": "Match your project to Base ecosystem grants — Coinbase, Optimism RetroPGF, ecosystem funds. Aeon deep-research + MiroShark analyst",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": { "type": "string", "description": "Project name (required)" },
+            "description": { "type": "string", "description": "What the project does" },
+            "stage": { "type": "string", "description": "early|growth|mature (default: early)" },
+            "sector": { "type": "string", "description": "DeFi|AI agents|tooling|etc" }
+          },
+          "required": ["project"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "match_score": { "type": "number" },
+            "grants": { "type": "array" },
+            "strongest_narrative": { "type": "string" },
+            "estimated_total": { "type": "string" }
+          }
+        }
+      }
+    },
+    "base-protocol-comparison": {
+      "category": "base-ecosystem",
+      "price": "0.50",
+      "description": "Side-by-side comparison of Base protocols in same category — security, TVL, UX, integration ease. Aeon deep-research x2 + MiroShark analyst",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "protocol_a": { "type": "string", "description": "First protocol to compare (required)" },
+            "protocol_b": { "type": "string", "description": "Second protocol (optional — omit to compare against category alternatives)" },
+            "category": { "type": "string", "description": "Protocol category (e.g. DEX, lending, yield)" },
+            "use_case": { "type": "string", "description": "Your specific use case" }
+          },
+          "required": ["protocol_a"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "recommendation": { "type": "string" },
+            "protocols": { "type": "array" },
+            "use_case_winner": { "type": "string" },
+            "risk_comparison": { "type": "string" }
+          }
+        }
+      }
+    },
+    "base-builder-network-match": {
+      "category": "base-ecosystem",
+      "price": "0.35",
+      "description": "Find collaborators, co-founders, and integration partners in Base ecosystem. Aeon deep-research + MiroShark analyst",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "builder": { "type": "string", "description": "Your name or project (required)" },
+            "skills": { "type": "string", "description": "Your skills or stack" },
+            "looking_for": { "type": "string", "description": "What kind of collaborator you need" }
+          },
+          "required": ["builder"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "match_score": { "type": "number" },
+            "matches": { "type": "array" },
+            "builder_archetype": { "type": "string" },
+            "first_steps": { "type": "array" }
+          }
+        }
+      }
+    },
+    "wallet-strategy-analyzer": {
+      "category": "onchain",
+      "price": "0.50",
+      "description": "Decode on-chain strategy of any wallet — archetype, behaviors, replicable plays, watch signals. Aeon token-movers + MiroShark analyst",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "address": { "type": "string", "description": "Wallet address 0x... (required)" },
+            "focus": { "type": "string", "description": "Focus area: trading|yield|nft|general (default: general)" }
+          },
+          "required": ["address"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "strategy_score": { "type": "number" },
+            "wallet_archetype": { "type": "string" },
+            "strategy": { "type": "object" },
+            "replicable_plays": { "type": "array" },
+            "watch_signals": { "type": "array" }
+          }
+        }
+      }
+    },
+    "protocol-risk-monitor": {
+      "category": "onchain",
+      "price": "0.35",
+      "description": "Real-time protocol risk assessment — smart contract, liquidity, oracle, governance risks. Aeon defi-monitor + MiroShark analyst",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "protocol": { "type": "string", "description": "Protocol name (required, e.g. 'Aerodrome', 'Aave Base')" },
+            "position": { "type": "string", "description": "Your position details (optional)" }
+          },
+          "required": ["protocol"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "risk_score": { "type": "number" },
+            "overall_risk": { "type": "string" },
+            "action": { "type": "string", "description": "EXIT_NOW|REDUCE|HOLD|ADD" },
+            "risk_dimensions": { "type": "object" },
+            "active_risks": { "type": "array" }
+          }
+        }
+      }
     }
   }
 }
