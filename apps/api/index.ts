@@ -57,7 +57,54 @@ import builderCard       from './x402/builder-card/index.js';
 import agentCard         from './x402/agent-card/index.js';
 
 // Collab
-import launchSimulator   from './x402/launch-simulator/index.js';
+import launchSimulator       from './x402/launch-simulator/index.js';
+
+// Trading & Alpha
+import whaleCopySignal       from './x402/whale-copy-signal/index.js';
+import tokenMomentumScanner  from './x402/token-momentum-scanner/index.js';
+import portfolioRebalancer   from './x402/portfolio-rebalancer/index.js';
+
+// Creator & Content
+import threadIntelligence    from './x402/thread-intelligence/index.js';
+import builderBrandScore     from './x402/builder-brand-score/index.js';
+import communityGrowthPlaybook from './x402/community-growth-playbook/index.js';
+
+// Agent Economy
+import agentRevenueOptimizer from './x402/agent-revenue-optimizer/index.js';
+import agentTokenStrategy    from './x402/agent-token-strategy/index.js';
+import multiAgentWorkflow    from './x402/multi-agent-workflow/index.js';
+
+// Base Ecosystem
+import baseGrantFinder       from './x402/base-grant-finder/index.js';
+import baseProtocolComparison from './x402/base-protocol-comparison/index.js';
+import baseBuilderNetworkMatch from './x402/base-builder-network-match/index.js';
+
+// On-chain Strategy
+import walletStrategyAnalyzer from './x402/wallet-strategy-analyzer/index.js';
+import protocolRiskMonitor   from './x402/protocol-risk-monitor/index.js';
+
+// Intelligence Tools — Batch 1
+import tokenPickSignal       from './x402/token-pick-signal/index.js';
+import narrativePosition     from './x402/narrative-position/index.js';
+import ecosystemDigest       from './x402/ecosystem-digest/index.js';
+import marketFit             from './x402/market-fit/index.js';
+import tokenLaunchReadiness  from './x402/token-launch-readiness/index.js';
+
+// Intelligence Tools — Batch 3
+import roadmapValidator      from './x402/roadmap-validator/index.js';
+import competitorScan        from './x402/competitor-scan/index.js';
+import pitchIntelligence     from './x402/pitch-intelligence/index.js';
+import fundraiseTiming       from './x402/fundraise-timing/index.js';
+import gtmBrief              from './x402/gtm-brief/index.js';
+import stackRecommender      from './x402/stack-recommender/index.js';
+import investorMemo          from './x402/investor-memo/index.js';
+import tokenDistributionPlan from './x402/token-distribution-plan/index.js';
+import agentPerformance      from './x402/agent-performance/index.js';
+import agentCollabMatch      from './x402/agent-collab-match/index.js';
+import repoHealth            from './x402/repo-health/index.js';
+import communitySentiment    from './x402/community-sentiment/index.js';
+import defiOpportunity       from './x402/defi-opportunity/index.js';
+import builderDeepDd         from './x402/builder-deep-dd/index.js';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 
@@ -110,6 +157,53 @@ const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
 
   // Collab
   'launch-simulator':   launchSimulator,
+
+  // Trading & Alpha
+  'whale-copy-signal':        whaleCopySignal,
+  'token-momentum-scanner':   tokenMomentumScanner,
+  'portfolio-rebalancer':     portfolioRebalancer,
+
+  // Creator & Content
+  'thread-intelligence':        threadIntelligence,
+  'builder-brand-score':        builderBrandScore,
+  'community-growth-playbook':  communityGrowthPlaybook,
+
+  // Agent Economy
+  'agent-revenue-optimizer':    agentRevenueOptimizer,
+  'agent-token-strategy':       agentTokenStrategy,
+  'multi-agent-workflow':       multiAgentWorkflow,
+
+  // Base Ecosystem
+  'base-grant-finder':          baseGrantFinder,
+  'base-protocol-comparison':   baseProtocolComparison,
+  'base-builder-network-match': baseBuilderNetworkMatch,
+
+  // On-chain Strategy
+  'wallet-strategy-analyzer':   walletStrategyAnalyzer,
+  'protocol-risk-monitor':      protocolRiskMonitor,
+
+  // Intelligence Tools — Batch 1
+  'token-pick-signal':       tokenPickSignal,
+  'narrative-position':      narrativePosition,
+  'ecosystem-digest':        ecosystemDigest,
+  'market-fit':              marketFit,
+  'token-launch-readiness':  tokenLaunchReadiness,
+
+  // Intelligence Tools — Batch 3
+  'roadmap-validator':       roadmapValidator,
+  'competitor-scan':         competitorScan,
+  'pitch-intelligence':      pitchIntelligence,
+  'fundraise-timing':        fundraiseTiming,
+  'gtm-brief':               gtmBrief,
+  'stack-recommender':       stackRecommender,
+  'investor-memo':           investorMemo,
+  'token-distribution-plan': tokenDistributionPlan,
+  'agent-performance':       agentPerformance,
+  'agent-collab-match':      agentCollabMatch,
+  'repo-health':             repoHealth,
+  'community-sentiment':     communitySentiment,
+  'defi-opportunity':        defiOpportunity,
+  'builder-deep-dd':         builderDeepDd,
 };
 
 const __dir = dirname(fileURLToPath(import.meta.url));
