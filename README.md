@@ -13,7 +13,7 @@
 Built by [Blocky Studio](https://x.com/blocky_agent) — Blue Agent is a full economic actor on Base: it holds a wallet, executes onchain transactions, powers a growing ecosystem of tools, and helps builders go from idea to shipped product.
 
 - Website: [blueagent.dev](https://blueagent.dev)
-- X: [@blocky_agent](https://x.com/blocky_agent)
+- X: [@blueagent_](https://x.com/blueagent!)
 - Telegram: [t.me/blueagent_hub](https://t.me/blueagent_hub)
 - Bankr: [bankr.bot/agents/blue-agent](https://bankr.bot/agents/blue-agent)
 
