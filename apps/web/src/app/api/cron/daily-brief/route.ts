@@ -19,9 +19,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const BANKR_API_KEY     = process.env.BANKR_API_KEY!;
-const BANKR_LLM         = "https://llm.bankr.bot/v1/messages";
-const BASESCAN_API_KEY  = process.env.BASESCAN_API_KEY ?? "";
+const BANKR_API_KEY      = process.env.BANKR_API_KEY ?? "";
+const BANKR_LLM          = "https://llm.bankr.bot/v1/messages";
+const ANTHROPIC_API_KEY  = process.env.ANTHROPIC_API_KEY ?? "";
+const ANTHROPIC_LLM      = "https://api.anthropic.com/v1/messages";
+const BASESCAN_API_KEY   = process.env.BASESCAN_API_KEY ?? "";
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 const TELEGRAM_CHAT_ID   = process.env.TELEGRAM_CHAT_ID!;
 const RESEND_API_KEY     = process.env.RESEND_API_KEY!;
@@ -64,9 +66,11 @@ async function fetchBaseDeployments(): Promise<string> {
   }
 }
 
-/** Call Bankr LLM to generate the report */
+/** Call LLM to generate the report — tries Bankr first, falls back to Anthropic */
 async function generateReport(onchainContext: string): Promise<ReportSection> {
   const today = new Date().toISOString().split("T")[0];
+
+  const systemPrompt = "You are Blue Agent — AI intelligence layer for Base builders and founders. Always respond in English. Return only valid JSON when asked.";
 
   const prompt = `You are Blue Agent — AI intelligence layer for Base builders and founders.
 
@@ -99,40 +103,68 @@ Return ONLY a valid JSON object with these exact keys:
 
 No markdown. No code block. No explanation. Raw JSON only.`;
 
-  const res = await fetch(BANKR_LLM, {
+  const body = JSON.stringify({
+    model:      "claude-haiku-4-5",
+    max_tokens: 1200,
+    system:     systemPrompt,
+    messages:   [{ role: "user", content: prompt }],
+  });
+
+  // ── Try Bankr first ──────────────────────────────────────────────────────────
+  if (BANKR_API_KEY) {
+    const bankrRes = await fetch(BANKR_LLM, {
+      method: "POST",
+      headers: {
+        "Content-Type":      "application/json",
+        "x-api-key":         BANKR_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body,
+      signal: AbortSignal.timeout(60000),
+    });
+
+    if (bankrRes.ok) {
+      const data = await bankrRes.json() as { content?: { text?: string }[] };
+      const text = data.content?.[0]?.text ?? "{}";
+      try { return JSON.parse(text) as ReportSection; } catch { /* fall through */ }
+    }
+    // Non-ok (402 credits, 5xx, etc.) — fall through to Anthropic
+    console.warn(`Bankr LLM unavailable (${bankrRes.status}), trying Anthropic fallback`);
+  }
+
+  // ── Fallback: Anthropic API directly ─────────────────────────────────────────
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error("No LLM available: BANKR_API_KEY has no credits and ANTHROPIC_API_KEY is not set.");
+  }
+
+  const anthropicRes = await fetch(ANTHROPIC_LLM, {
     method: "POST",
     headers: {
       "Content-Type":      "application/json",
-      "x-api-key":         BANKR_API_KEY,
+      "x-api-key":         ANTHROPIC_API_KEY,
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
       model:      "claude-haiku-4-5",
       max_tokens: 1200,
-      system:     "You are Blue Agent — AI intelligence layer for Base builders and founders. Always respond in English. Return only valid JSON when asked.",
+      system:     systemPrompt,
       messages:   [{ role: "user", content: prompt }],
     }),
     signal: AbortSignal.timeout(60000),
   });
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Bankr LLM error: ${res.status} — ${errText}`);
+  if (!anthropicRes.ok) {
+    const errText = await anthropicRes.text();
+    throw new Error(`Anthropic API error: ${anthropicRes.status} — ${errText}`);
   }
-  const data = await res.json() as { content?: { text?: string }[] };
+
+  const data = await anthropicRes.json() as { content?: { text?: string }[] };
   const text = data.content?.[0]?.text ?? "{}";
 
   try {
     return JSON.parse(text) as ReportSection;
   } catch {
-    // fallback if JSON parse fails
-    return {
-      ecosystem: text,
-      coinbase:  "",
-      market:    "",
-      onchain:   "",
-      signal:    "",
-    };
+    return { ecosystem: text, coinbase: "", market: "", onchain: "", signal: "" };
   }
 }
 
