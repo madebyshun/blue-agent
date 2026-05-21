@@ -102,18 +102,23 @@ No markdown. No code block. No explanation. Raw JSON only.`;
   const res = await fetch(BANKR_LLM, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      "x-api-key": BANKR_API_KEY,
+      "Content-Type":      "application/json",
+      "x-api-key":         BANKR_API_KEY,
+      "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model:      "claude-sonnet-4-5",
+      model:      "claude-haiku-4-5",
       max_tokens: 1200,
-      messages: [{ role: "user", content: prompt }],
+      system:     "You are Blue Agent — AI intelligence layer for Base builders and founders. Always respond in English. Return only valid JSON when asked.",
+      messages:   [{ role: "user", content: prompt }],
     }),
     signal: AbortSignal.timeout(60000),
   });
 
-  if (!res.ok) throw new Error(`Bankr LLM error: ${res.status}`);
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Bankr LLM error: ${res.status} — ${errText}`);
+  }
   const data = await res.json() as { content?: { text?: string }[] };
   const text = data.content?.[0]?.text ?? "{}";
 
