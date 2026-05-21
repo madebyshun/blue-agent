@@ -170,40 +170,45 @@ No markdown. No code block. No explanation. Raw JSON only.`;
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
+/** Escape special HTML chars so Telegram HTML mode renders correctly */
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function formatTelegram(report: ReportSection, date: string): string {
   const lines: string[] = [];
-  lines.push(`🔵 *Blue Market — Daily Builder Brief*`);
-  lines.push(`📅 ${date}`);
+  lines.push(`🔵 <b>Blue Market — Daily Builder Brief</b>`);
+  lines.push(`📅 ${esc(date)}`);
   lines.push(``);
 
   if (report.signal) {
-    lines.push(`⚡ *Signal*`);
-    lines.push(`_${report.signal}_`);
+    lines.push(`⚡ <b>Signal</b>`);
+    lines.push(`<i>${esc(report.signal)}</i>`);
     lines.push(``);
   }
   if (report.ecosystem) {
-    lines.push(`🏗 *Base Ecosystem*`);
-    lines.push(report.ecosystem);
+    lines.push(`🏗 <b>Base Ecosystem</b>`);
+    lines.push(esc(report.ecosystem));
     lines.push(``);
   }
   if (report.coinbase) {
-    lines.push(`🔷 *Coinbase & Base*`);
-    lines.push(report.coinbase);
+    lines.push(`🔷 <b>Coinbase &amp; Base</b>`);
+    lines.push(esc(report.coinbase));
     lines.push(``);
   }
   if (report.market) {
-    lines.push(`📊 *Market Signals*`);
-    lines.push(report.market);
+    lines.push(`📊 <b>Market Signals</b>`);
+    lines.push(esc(report.market));
     lines.push(``);
   }
   if (report.onchain) {
-    lines.push(`⛓ *Onchain Intelligence*`);
-    lines.push(report.onchain);
+    lines.push(`⛓ <b>Onchain Intelligence</b>`);
+    lines.push(esc(report.onchain));
     lines.push(``);
   }
 
   lines.push(`—`);
-  lines.push(`[blueagent.dev](https://blueagent.dev) · Blue Agent × Aeon × MiroShark`);
+  lines.push(`<a href="https://blueagent.dev">blueagent.dev</a> · Blue Agent × Aeon × MiroShark`);
 
   return lines.join("\n");
 }
@@ -260,7 +265,7 @@ async function sendTelegram(message: string): Promise<void> {
     body: JSON.stringify({
       chat_id:    TELEGRAM_CHAT_ID,
       text:       message,
-      parse_mode: "Markdown",
+      parse_mode: "HTML",
       disable_web_page_preview: true,
     }),
     signal: AbortSignal.timeout(15000),
