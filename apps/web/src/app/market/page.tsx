@@ -21,12 +21,15 @@ const USDC_DAILY       = 10_000_000n; // $10/mo
 const USDC_WEEKLY      = 15_000_000n; // $15/mo
 
 const STAKING_ABI = [
-  { name: "stake",           type: "function", stateMutability: "nonpayable", inputs: [{ name: "amount", type: "uint256" }], outputs: [] },
-  { name: "requestUnstake",  type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
-  { name: "cancelUnstake",   type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
-  { name: "claim",           type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
-  { name: "activeStake",     type: "function", stateMutability: "view",       inputs: [{ name: "user", type: "address" }], outputs: [{ type: "uint256" }] },
-  { name: "cooldownRemaining", type: "function", stateMutability: "view",     inputs: [{ name: "user", type: "address" }], outputs: [{ type: "uint256" }] },
+  { name: "stake",             type: "function", stateMutability: "nonpayable", inputs: [{ name: "amount", type: "uint256" }], outputs: [] },
+  { name: "requestUnstake",    type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { name: "cancelUnstake",     type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { name: "claim",             type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { name: "claimYield",        type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { name: "activeStake",       type: "function", stateMutability: "view",       inputs: [{ name: "user", type: "address" }], outputs: [{ type: "uint256" }] },
+  { name: "cooldownRemaining", type: "function", stateMutability: "view",       inputs: [{ name: "user", type: "address" }], outputs: [{ type: "uint256" }] },
+  { name: "pendingYield",      type: "function", stateMutability: "view",       inputs: [{ name: "user", type: "address" }], outputs: [{ type: "uint256" }] },
+  { name: "totalYieldDistributed", type: "function", stateMutability: "view",   inputs: [], outputs: [{ type: "uint256" }] },
 ] as const;
 
 const ERC20_ABI = [
@@ -74,7 +77,15 @@ function StakingPanel({ address }: { address: `0x${string}` }) {
     address: STAKING_CONTRACT, abi: STAKING_ABI,
     functionName: "cooldownRemaining", args: [address],
   });
-  const { data: allowance, refetch: refetchAllowance } = useReadContract({
+  const { data: yieldPending } = useReadContract({
+    address: STAKING_CONTRACT, abi: STAKING_ABI,
+    functionName: "pendingYield", args: [address],
+  });
+  const { data: totalYield } = useReadContract({
+    address: STAKING_CONTRACT, abi: STAKING_ABI,
+    functionName: "totalYieldDistributed",
+  });
+  const { data: allowance } = useReadContract({
     address: BLUE_TOKEN, abi: ERC20_ABI,
     functionName: "allowance", args: [address, STAKING_CONTRACT],
   });
@@ -106,8 +117,13 @@ function StakingPanel({ address }: { address: `0x${string}` }) {
   function handleClaim() {
     writeContract({ address: STAKING_CONTRACT, abi: STAKING_ABI, functionName: "claim", args: [] });
   }
+  function handleClaimYield() {
+    writeContract({ address: STAKING_CONTRACT, abi: STAKING_ABI, functionName: "claimYield", args: [] });
+  }
 
-  const cooldownDays = cooldown ? Math.ceil(Number(cooldown) / 86400) : 0;
+  const cooldownDays  = cooldown ? Math.ceil(Number(cooldown) / 86400) : 0;
+  const yieldUSDC     = yieldPending ? Number(yieldPending) / 1_000_000 : 0;
+  const totalYieldFmt = totalYield ? `$${(Number(totalYield) / 1_000_000).toFixed(2)}` : "$0";
 
   return (
     <div className="bg-[#0a0a14] border border-[#1A1A2E] rounded-xl p-5 space-y-4">
@@ -155,6 +171,29 @@ function StakingPanel({ address }: { address: `0x${string}` }) {
           </div>
         </div>
       )}
+
+      {/* Unstake controls */}
+      {/* Yield panel */}
+      <div className="border border-[#4FC3F7]/15 bg-[#4FC3F7]/5 rounded-lg p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">⚡ USDC YIELD</p>
+          <p className="font-mono text-[10px] text-slate-600">Total paid out: {totalYieldFmt}</p>
+        </div>
+        <div className="flex items-center justify-between">
+          <p className="font-mono text-xs text-white font-bold">
+            ${yieldUSDC.toFixed(4)} USDC
+          </p>
+          <button onClick={handleClaimYield} disabled={inTx || yieldUSDC === 0}
+            className="border border-[#4FC3F7]/30 bg-[#4FC3F7]/10 text-[#4FC3F7]
+                       rounded-lg px-3 py-1 font-mono text-[10px]
+                       hover:opacity-80 disabled:opacity-30 transition-opacity">
+            {inTx ? "Confirming…" : "Claim"}
+          </button>
+        </div>
+        <p className="font-mono text-[10px] text-slate-700">
+          20% of every subscription payment · pro-rata by stake
+        </p>
+      </div>
 
       {/* Unstake controls */}
       {staked > 0n && (
