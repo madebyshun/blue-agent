@@ -1,184 +1,369 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
-import { useAccount, useConnect, useSignTypedData } from "wagmi";
+import { useAccount, useConnect, useSignTypedData, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { injected } from "wagmi/connectors";
+import { parseUnits, formatUnits } from "viem";
+import { fetchBlueBalance, getTierInfo, type TierInfo } from "@/lib/credits";
 
-const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
-const WEEKLY_PRICE = 5_000_000n; // $5.00 USDC
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const USDC_BASE  = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
+const BLUE_TOKEN = "0xf895783b2931c919955e18b5e3343e7c7c456ba3" as const;
+
+// TODO: replace after deploying BlueMarketStaking.sol to Base
+const STAKING_CONTRACT = "0x0000000000000000000000000000000000000000" as const;
+
+const DAILY_THRESHOLD  = parseUnits("25000000",  18); // 25M BLUE
+const WEEKLY_THRESHOLD = parseUnits("60000000",  18); // 60M BLUE
+const USDC_DAILY       = 10_000_000n; // $10/mo
+const USDC_WEEKLY      = 15_000_000n; // $15/mo
+
+const STAKING_ABI = [
+  { name: "stake",           type: "function", stateMutability: "nonpayable", inputs: [{ name: "amount", type: "uint256" }], outputs: [] },
+  { name: "requestUnstake",  type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { name: "cancelUnstake",   type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { name: "claim",           type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { name: "activeStake",     type: "function", stateMutability: "view",       inputs: [{ name: "user", type: "address" }], outputs: [{ type: "uint256" }] },
+  { name: "cooldownRemaining", type: "function", stateMutability: "view",     inputs: [{ name: "user", type: "address" }], outputs: [{ type: "uint256" }] },
+] as const;
+
+const ERC20_ABI = [
+  { name: "approve", type: "function", stateMutability: "nonpayable", inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }], outputs: [{ type: "bool" }] },
+  { name: "allowance", type: "function", stateMutability: "view", inputs: [{ name: "owner", type: "address" }, { name: "spender", type: "address" }], outputs: [{ type: "uint256" }] },
+] as const;
 
 function randomNonce(): `0x${string}` {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return `0x${Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("")}`;
 }
+function fmtUSDC(raw: bigint) { return `$${Number(raw) / 1_000_000}`; }
+function fmtBLUE(raw: bigint) { return `${(Number(formatUnits(raw, 18)) / 1_000_000).toFixed(0)}M`; }
 
-// ─── Mock archive data ────────────────────────────────────────────────────────
+// ─── Archive ──────────────────────────────────────────────────────────────────
 
 const ARCHIVE = [
-  {
-    date: "Thu, May 21 2026",
-    signal: "Ship something on Base today — builder activity and smart wallet adoption are at peak momentum.",
-    tags: ["Base", "Smart Wallets", "DeFi"],
-  },
-  {
-    date: "Wed, May 20 2026",
-    signal: "Uniswap v4 hooks on Base are the next builder unlock — position your protocol now.",
-    tags: ["Uniswap v4", "Base", "Hooks"],
-  },
-  {
-    date: "Tue, May 19 2026",
-    signal: "BaseNames hitting milestones signals mainstream onboarding is real — build consumer.",
-    tags: ["BaseNames", "Consumer", "Onboarding"],
-  },
+  { date: "Thu, May 21", signal: "Ship something on Base today — builder activity and smart wallet adoption are at peak momentum.",
+    ecosystem: "· Uniswap v4 hooks activity up 40% on Base\n· BaseNames registrations hit 2M milestone\n· New Base Grants wave opens: $50k–$500k",
+    coinbase:  "· Coinbase Wallet adds smart wallet passkey auth\n· Base testnet: EIP-7702 support next week\n· Coinbase Ventures led $12M round in Base yield",
+    market:    "· AI agent narrative dominating CT — up 28% WTD\n· DeFi rotation: LRT cooling, real-yield gaining\n· Builder sentiment bullish — hackathon +60% YoY",
+    onchain:   "· 847 new contracts deployed on Base in 24h\n· Smart wallet DAU crossed 180k\n· $USDC bridge inflows: $42M net positive" },
+  { date: "Wed, May 20", signal: "Uniswap v4 hooks on Base are the next builder unlock — position your protocol now.",
+    ecosystem: "· 3 new DeFi protocols launched on Base\n· Base builder grants round closes Friday\n· Smart wallet SDK v2 released",
+    coinbase:  "· Coinbase L2 fee reduction announcement\n· Base ecosystem fund expanded to $200M\n· New Coinbase developer docs launched",
+    market:    "· Hook-based AMMs gaining CT traction\n· Modular DeFi narrative building\n· Base TVL crossed $3B milestone",
+    onchain:   "· 620 new contract deployments\n· Uniswap v4 pool TVL up 18%\n· Smart wallet transactions +34% WoW" },
+  { date: "Tue, May 19", signal: "BaseNames hitting milestones signals mainstream onboarding is real — build consumer.",
+    ecosystem: "· BaseNames: 2M registrations milestone\n· Consumer app grants available\n· New Base onboarding SDK released",
+    coinbase:  "· Coinbase One adds Base perks\n· Farcaster × Base integration deepens\n· New partnership: Base × major neobank",
+    market:    "· Consumer crypto narrative gaining CT\n· Social/identity sector rotating up\n· Base memecoin activity slowing — utility wins",
+    onchain:   "· BaseNames registrations: 12k in 24h\n· Farcaster frames transactions +200%\n· New ERC-6551 deployments surging" },
 ];
 
-// ─── Subscribe form ───────────────────────────────────────────────────────────
+// ─── Staking panel ────────────────────────────────────────────────────────────
 
-type SubscribeStep = "idle" | "signing" | "paying" | "done" | "error";
+function StakingPanel({ address }: { address: `0x${string}` }) {
+  const [stakeInput, setStakeInput] = useState("");
 
-function SubscribeForm({ tier }: { tier: "daily" | "weekly" }) {
-  const [email, setEmail]   = useState("");
-  const [step, setStep]     = useState<SubscribeStep>("idle");
+  const { data: activeStake } = useReadContract({
+    address: STAKING_CONTRACT, abi: STAKING_ABI,
+    functionName: "activeStake", args: [address],
+  });
+  const { data: cooldown } = useReadContract({
+    address: STAKING_CONTRACT, abi: STAKING_ABI,
+    functionName: "cooldownRemaining", args: [address],
+  });
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({
+    address: BLUE_TOKEN, abi: ERC20_ABI,
+    functionName: "allowance", args: [address, STAKING_CONTRACT],
+  });
+
+  const { writeContract, data: txHash, isPending } = useWriteContract();
+  const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash: txHash });
+
+  const staked       = activeStake ?? 0n;
+  const hasDaily     = staked >= DAILY_THRESHOLD;
+  const hasWeekly    = staked >= WEEKLY_THRESHOLD;
+  const stakeAmtRaw  = stakeInput ? parseUnits(stakeInput, 18) : 0n;
+  const needsApprove = (allowance ?? 0n) < stakeAmtRaw;
+  const inTx         = isPending || isConfirming;
+
+  function handleApprove() {
+    writeContract({ address: BLUE_TOKEN, abi: ERC20_ABI, functionName: "approve",
+      args: [STAKING_CONTRACT, stakeAmtRaw] });
+  }
+  function handleStake() {
+    writeContract({ address: STAKING_CONTRACT, abi: STAKING_ABI, functionName: "stake",
+      args: [stakeAmtRaw] });
+  }
+  function handleRequestUnstake() {
+    writeContract({ address: STAKING_CONTRACT, abi: STAKING_ABI, functionName: "requestUnstake", args: [] });
+  }
+  function handleCancelUnstake() {
+    writeContract({ address: STAKING_CONTRACT, abi: STAKING_ABI, functionName: "cancelUnstake", args: [] });
+  }
+  function handleClaim() {
+    writeContract({ address: STAKING_CONTRACT, abi: STAKING_ABI, functionName: "claim", args: [] });
+  }
+
+  const cooldownDays = cooldown ? Math.ceil(Number(cooldown) / 86400) : 0;
+
+  return (
+    <div className="bg-[#0a0a14] border border-[#1A1A2E] rounded-xl p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">Your Stake</p>
+        <p className="font-mono text-xs text-white font-bold">{fmtBLUE(staked)} BLUE</p>
+      </div>
+
+      {/* Access status */}
+      <div className="grid grid-cols-2 gap-2">
+        {[
+          { label: "Daily Brief",    threshold: DAILY_THRESHOLD,  has: hasDaily,  color: "#4FC3F7" },
+          { label: "Weekly Report",  threshold: WEEKLY_THRESHOLD, has: hasWeekly, color: "#A78BFA" },
+        ].map(p => (
+          <div key={p.label} className="px-3 py-2 rounded-lg border"
+            style={{ background: p.has ? p.color + "10" : "#1A1A2E", borderColor: p.has ? p.color + "30" : "#1A1A2E30" }}>
+            <p className="font-mono text-[9px] tracking-widest mb-1" style={{ color: p.has ? p.color : "#475569" }}>
+              {p.has ? "✓ ACTIVE" : `NEED ${fmtBLUE(p.threshold)}`}
+            </p>
+            <p className="font-mono text-[10px]" style={{ color: p.has ? "#fff" : "#475569" }}>{p.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Stake input */}
+      {cooldownDays === 0 && (
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <input type="number" value={stakeInput} onChange={e => setStakeInput(e.target.value)}
+              placeholder="Amount to stake (BLUE)"
+              className="flex-1 bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2
+                         font-mono text-xs text-white placeholder-slate-700
+                         focus:outline-none focus:border-[#4FC3F7]/30 transition-colors" />
+            <button disabled={!stakeInput || inTx}
+              onClick={needsApprove ? handleApprove : handleStake}
+              className="border border-[#4FC3F7]/30 bg-[#4FC3F7]/10 text-[#4FC3F7]
+                         rounded-lg px-3 py-2 font-mono text-xs hover:opacity-80 disabled:opacity-40 transition-opacity whitespace-nowrap">
+              {inTx ? "Confirming…" : needsApprove ? "Approve" : "Stake"}
+            </button>
+          </div>
+          <div className="flex gap-2 text-[10px] font-mono text-slate-700">
+            <button onClick={() => setStakeInput("25000000")} className="hover:text-slate-400 transition-colors">25M (Daily)</button>
+            <span>·</span>
+            <button onClick={() => setStakeInput("60000000")} className="hover:text-slate-400 transition-colors">60M (Weekly)</button>
+          </div>
+        </div>
+      )}
+
+      {/* Unstake controls */}
+      {staked > 0n && (
+        <div className="border-t border-[#1A1A2E] pt-3 space-y-2">
+          {cooldownDays > 0 ? (
+            <div className="space-y-2">
+              <p className="font-mono text-[10px] text-slate-500">
+                Cooldown: {cooldownDays} day{cooldownDays !== 1 ? "s" : ""} remaining · access revoked
+              </p>
+              <div className="flex gap-2">
+                <button onClick={handleCancelUnstake} disabled={inTx}
+                  className="flex-1 border border-[#4FC3F7]/20 text-[#4FC3F7] bg-[#4FC3F7]/5
+                             rounded-lg py-2 font-mono text-xs hover:opacity-80 disabled:opacity-40 transition-opacity">
+                  {inTx ? "Confirming…" : "Cancel & restore access"}
+                </button>
+                {cooldownDays === 0 && (
+                  <button onClick={handleClaim} disabled={inTx}
+                    className="flex-1 border border-[#A78BFA]/20 text-[#A78BFA] bg-[#A78BFA]/5
+                               rounded-lg py-2 font-mono text-xs hover:opacity-80 disabled:opacity-40 transition-opacity">
+                    Claim tokens
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <button onClick={handleRequestUnstake} disabled={inTx}
+              className="w-full border border-[#1A1A2E] text-slate-600 rounded-lg py-2
+                         font-mono text-xs hover:text-slate-400 hover:border-slate-600 disabled:opacity-40 transition-all">
+              {inTx ? "Confirming…" : "Request unstake (7-day cooldown)"}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── x402 subscribe form ──────────────────────────────────────────────────────
+
+type SubStep = "idle" | "signing" | "paying" | "done" | "error";
+
+function USDCSubscribeForm({ planTier, price, accent }: {
+  planTier: "daily" | "weekly"; price: bigint; accent: string;
+}) {
+  const [email, setEmail]     = useState("");
+  const [step, setStep]       = useState<SubStep>("idle");
   const [message, setMessage] = useState("");
 
   const { address, isConnected } = useAccount();
   const { connect }               = useConnect();
   const { signTypedData }         = useSignTypedData();
 
-  const isWeekly = tier === "weekly";
-  const accent   = isWeekly ? "#A78BFA" : "#4FC3F7";
-
-  async function handleSubscribe() {
+  async function handlePay() {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setMessage("Enter a valid email.");
-      setStep("error");
-      return;
+      setMessage("Enter a valid email."); setStep("error"); return;
     }
-
-    if (isWeekly && !isConnected) {
-      connect({ connector: injected() });
-      return;
-    }
-
-    setStep(isWeekly ? "signing" : "paying");
-    setMessage("");
-
+    if (!isConnected) { connect({ connector: injected() }); return; }
+    setStep("signing"); setMessage("");
     try {
-      let paymentHeader: string | undefined;
-
-      // Weekly: sign EIP-3009 TransferWithAuthorization
-      if (isWeekly) {
-        const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
-        const nonce    = randomNonce();
-
-        const sig = await new Promise<`0x${string}`>((resolve, reject) => {
-          signTypedData(
-            {
-              domain: {
-                name:              "USD Coin",
-                version:           "2",
-                chainId:           8453,
-                verifyingContract: USDC_BASE,
-              },
-              types: {
-                TransferWithAuthorization: [
-                  { name: "from",        type: "address" },
-                  { name: "to",          type: "address" },
-                  { name: "value",       type: "uint256" },
-                  { name: "validAfter",  type: "uint256" },
-                  { name: "validBefore", type: "uint256" },
-                  { name: "nonce",       type: "bytes32" },
-                ],
-              },
-              primaryType: "TransferWithAuthorization",
-              message: {
-                from:        address!,
-                to:          "0x0000000000000000000000000000000000000000" as `0x${string}`,
-                value:       WEEKLY_PRICE,
-                validAfter:  0n,
-                validBefore: deadline,
-                nonce,
-              },
-            },
-            { onSuccess: resolve, onError: reject }
-          );
-        });
-
-        setStep("paying");
-        paymentHeader = JSON.stringify({
-          scheme: "exact", network: "base", token: USDC_BASE,
-          amount: WEEKLY_PRICE.toString(), from: address, nonce,
-          deadline: deadline.toString(), signature: sig,
-        });
-      }
-
-      const res = await fetch("/api/market/subscribe", {
-        method:  "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(paymentHeader ? { "X-PAYMENT": paymentHeader } : {}),
-        },
-        body: JSON.stringify({ email, tier }),
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
+      const nonce    = randomNonce();
+      const sig = await new Promise<`0x${string}`>((resolve, reject) => {
+        signTypedData({
+          domain: { name: "USD Coin", version: "2", chainId: 8453, verifyingContract: USDC_BASE },
+          types: { TransferWithAuthorization: [
+            { name: "from", type: "address" }, { name: "to", type: "address" },
+            { name: "value", type: "uint256" }, { name: "validAfter", type: "uint256" },
+            { name: "validBefore", type: "uint256" }, { name: "nonce", type: "bytes32" },
+          ]},
+          primaryType: "TransferWithAuthorization",
+          message: { from: address!, to: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+            value: price, validAfter: 0n, validBefore: deadline, nonce },
+        }, { onSuccess: resolve, onError: reject });
       });
-
+      setStep("paying");
+      const res = await fetch("/api/market/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json",
+          "X-PAYMENT": JSON.stringify({ scheme: "exact", network: "base", token: USDC_BASE,
+            amount: price.toString(), from: address, nonce, deadline: deadline.toString(), signature: sig }) },
+        body: JSON.stringify({ email, tier: planTier }),
+      });
       const data = await res.json() as { ok?: boolean; message?: string; error?: string };
-
-      if (!res.ok) throw new Error(data.error ?? "Subscribe failed");
-
-      setStep("done");
-      setMessage(data.message ?? "Subscribed!");
-      setEmail("");
-    } catch (err) {
-      setStep("error");
-      setMessage((err as Error).message);
-    }
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      setStep("done"); setMessage(data.message ?? "Subscribed!"); setEmail("");
+    } catch (err) { setStep("error"); setMessage((err as Error).message); }
   }
 
-  if (step === "done") {
-    return (
-      <div style={{ borderColor: accent + "40" }}
-        className="border rounded-lg p-4 text-center">
-        <p className="font-mono text-sm" style={{ color: accent }}>✓ {message}</p>
-      </div>
-    );
-  }
+  if (step === "done") return (
+    <div className="border rounded-lg p-3 text-center" style={{ borderColor: accent + "40" }}>
+      <p className="font-mono text-xs" style={{ color: accent }}>✓ {message}</p>
+    </div>
+  );
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div className="flex gap-2">
-        <input
-          type="email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && handleSubscribe()}
+        <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && handlePay()}
           placeholder="you@example.com"
-          className="flex-1 bg-[#0d0d1a] border border-[#1A1A2E] rounded-lg px-3 py-2.5
-                     font-mono text-sm text-white placeholder-slate-600
-                     focus:outline-none focus:border-[#4FC3F750] transition-colors"
-        />
-        <button
-          onClick={handleSubscribe}
-          disabled={step === "signing" || step === "paying"}
-          style={{ background: accent + "15", borderColor: accent + "40", color: accent }}
-          className="border rounded-lg px-4 py-2.5 font-mono text-sm font-medium
+          className="flex-1 bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2
+                     font-mono text-xs text-white placeholder-slate-700
+                     focus:outline-none focus:border-[#4FC3F7]/30 transition-colors" />
+        <button onClick={handlePay} disabled={step === "signing" || step === "paying"}
+          className="border rounded-lg px-3 py-2 font-mono text-xs font-medium
                      hover:opacity-80 transition-opacity disabled:opacity-40 whitespace-nowrap"
-        >
-          {step === "signing" ? "Signing…" :
-           step === "paying"  ? "Paying…"  :
-           isWeekly ? (isConnected ? "Pay $5 USDC" : "Connect wallet") :
-           "Subscribe free"}
+          style={{ background: accent + "15", borderColor: accent + "40", color: accent }}>
+          {step === "signing" ? "Signing…" : step === "paying" ? "Paying…" :
+           isConnected ? `Pay ${fmtUSDC(price)}/mo` : "Connect wallet"}
         </button>
       </div>
+      {step === "error" && message && <p className="font-mono text-[10px] text-red-400">{message}</p>}
+    </div>
+  );
+}
 
-      {step === "error" && message && (
-        <p className="font-mono text-xs text-red-400">{message}</p>
-      )}
+// ─── Plan card ────────────────────────────────────────────────────────────────
 
-      {isWeekly && isConnected && (
-        <p className="font-mono text-xs text-slate-600">
-          {address?.slice(0, 6)}…{address?.slice(-4)} · $5 USDC on Base
+function PlanCard({ planTier, accent, usdcPrice, stakeThreshold, features, description, address, hasAccess }: {
+  planTier: "daily" | "weekly"; accent: string; usdcPrice: bigint;
+  stakeThreshold: bigint; features: string[]; description: string;
+  address?: `0x${string}`; hasAccess: boolean;
+}) {
+  const [tab, setTab] = useState<"usdc" | "stake">("usdc");
+
+  return (
+    <div className="bg-[#0a0a14] rounded-xl p-5 flex flex-col gap-4 relative overflow-hidden"
+      style={{ border: `1px solid ${hasAccess ? accent + "50" : accent + "25"}` }}>
+      <div className="absolute top-0 right-0 w-28 h-28 rounded-full blur-2xl pointer-events-none"
+        style={{ background: accent + "08" }} />
+
+      {/* Header */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="font-mono text-[10px] tracking-widest uppercase" style={{ color: accent }}>
+            {planTier === "daily" ? "Daily Brief" : "Weekly Deep Report"}
+          </p>
+          {hasAccess ? (
+            <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border"
+              style={{ background: accent + "20", borderColor: accent + "40", color: accent }}>
+              ✓ Active
+            </span>
+          ) : (
+            <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border"
+              style={{ background: accent + "10", borderColor: accent + "20", color: accent }}>
+              {fmtUSDC(usdcPrice)}/mo
+            </span>
+          )}
+        </div>
+        <p className="font-mono text-sm text-white font-bold">
+          {planTier === "daily" ? "Every morning at 8am UTC" : "Every Monday"}
         </p>
+        <p className="font-mono text-[11px] text-slate-500 mt-1">{description}</p>
+      </div>
+
+      {/* Features */}
+      <div className="space-y-1.5 flex-1">
+        {features.map(s => (
+          <div key={s} className="flex items-center gap-2">
+            <span className="font-mono text-[10px]" style={{ color: accent + "60" }}>·</span>
+            <p className="font-mono text-[11px] text-slate-400">{s}</p>
+          </div>
+        ))}
+      </div>
+
+      {hasAccess ? (
+        <div className="border rounded-lg p-3 text-center" style={{ borderColor: accent + "30" }}>
+          <p className="font-mono text-xs text-slate-400">
+            Access active via stake ·{" "}
+            <span style={{ color: accent }}>{fmtBLUE(stakeThreshold)} BLUE</span>
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Tab switcher */}
+          <div className="flex bg-[#0D0D1A] rounded-lg p-1 gap-1">
+            {(["usdc", "stake"] as const).map(t => (
+              <button key={t} onClick={() => setTab(t)}
+                className={`flex-1 py-1.5 rounded-md font-mono text-[10px] transition-colors ${
+                  tab === t ? "bg-[#1A1A2E] text-white" : "text-slate-600 hover:text-slate-400"
+                }`}>
+                {t === "usdc" ? "Pay USDC" : "Stake BLUE"}
+              </button>
+            ))}
+          </div>
+
+          {tab === "usdc" ? (
+            <USDCSubscribeForm planTier={planTier} price={usdcPrice} accent={accent} />
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-3 py-2 bg-[#0D0D1A] rounded-lg">
+                <p className="font-mono text-[10px] text-slate-500">Required stake</p>
+                <p className="font-mono text-[10px] text-white">{fmtBLUE(stakeThreshold)} BLUE</p>
+              </div>
+              <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
+                Stake once, access forever while staked. Unstake anytime with 7-day cooldown.
+              </p>
+              {address ? (
+                <p className="font-mono text-[10px] text-slate-600">↓ Manage your stake below</p>
+              ) : (
+                <button onClick={() => useConnect()}
+                  className="w-full border border-[#1A1A2E] text-slate-500 rounded-lg py-2
+                             font-mono text-xs hover:text-white hover:border-slate-600 transition-all">
+                  Connect wallet to stake
+                </button>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -188,154 +373,189 @@ function SubscribeForm({ tier }: { tier: "daily" | "weekly" }) {
 
 export default function MarketPage() {
   const [activeArchive, setActiveArchive] = useState(0);
+  const [tierInfo, setTierInfo]           = useState<TierInfo | null>(null);
+
+  const { address, isConnected } = useAccount();
+  const { connect }               = useConnect();
+
+  useEffect(() => {
+    if (!address) { setTierInfo(null); return; }
+    fetchBlueBalance(address).then(bal => setTierInfo(getTierInfo(bal)));
+  }, [address]);
+
+  const { data: activeStake } = useReadContract({
+    address: STAKING_CONTRACT, abi: STAKING_ABI,
+    functionName: "activeStake", args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  });
+
+  const staked     = activeStake ?? 0n;
+  const hasDaily   = staked >= DAILY_THRESHOLD;
+  const hasWeekly  = staked >= WEEKLY_THRESHOLD;
 
   return (
-    <div className="min-h-screen bg-[#050508] text-slate-200">
+    <>
       <Navbar />
+      <div className="flex bg-[#050508] font-mono pt-16">
 
-      <main className="max-w-5xl mx-auto px-6 pt-24 pb-20">
+        {/* ── Sidebar ── */}
+        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] border-r border-[#1A1A2E]">
+          <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
+            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUE MARKET</p>
+            <p className="font-mono text-[10px] text-slate-700 mt-1">Daily intelligence for Base builders</p>
+          </div>
 
-        {/* ── Hero ── */}
-        <div className="mb-16 text-center">
-          <p className="font-mono text-xs text-slate-600 tracking-widest mb-4 uppercase">
-            Blue Agent × Aeon × MiroShark
-          </p>
-          <h1 className="font-mono text-4xl md:text-5xl font-bold text-white mb-4">
-            🔵 BLUE<span style={{ color: "#4FC3F7" }}>MARKET</span>
-          </h1>
-          <p className="font-mono text-slate-400 text-base md:text-lg max-w-xl mx-auto leading-relaxed">
-            Daily intelligence for Base builders and founders.
-            <br />
-            Ecosystem moves. Onchain signals. Market edge.
-          </p>
-        </div>
-
-        {/* ── Plans ── */}
-        <div className="grid md:grid-cols-2 gap-6 mb-16">
-
-          {/* Daily Brief — free */}
-          <div className="bg-[#0a0a14] border border-[#1A1A2E] rounded-xl p-6 flex flex-col">
-            <div className="mb-5">
-              <div className="flex items-center justify-between mb-3">
-                <p className="font-mono text-xs text-[#4FC3F7] tracking-widest uppercase">Daily Brief</p>
-                <span className="font-mono text-xs bg-[#4FC3F715] text-[#4FC3F7] border border-[#4FC3F730]
-                                 px-2 py-0.5 rounded-full">Free</span>
-              </div>
-              <p className="font-mono text-white text-lg font-bold mb-1">Every morning at 8am UTC</p>
-              <p className="font-mono text-slate-500 text-sm">5 sections, delivered to your inbox + Telegram</p>
-            </div>
-
-            <div className="space-y-2 mb-6 flex-1">
+          {/* Plans */}
+          <div className="px-4 pt-4 pb-3 border-b border-[#1A1A2E]">
+            <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">Plans</p>
+            <div className="space-y-1.5">
               {[
-                "🏗 Base Ecosystem — launches, builders, funding",
-                "🔷 Coinbase & Base — product news, announcements",
-                "📊 Market Signals — narratives, sentiment shifts",
-                "⛓ Onchain Intelligence — deployments, TVL, flows",
-                "⚡ Signal — 1 action for Base founders today",
-              ].map(item => (
-                <div key={item} className="flex items-start gap-2">
-                  <span className="font-mono text-xs text-slate-600 mt-0.5">·</span>
-                  <p className="font-mono text-xs text-slate-400">{item}</p>
+                { label: "Daily Brief",    sub: "8am UTC · every day",    price: "$10/mo", accent: "#4FC3F7", has: hasDaily  },
+                { label: "Weekly Report",  sub: "Every Monday",           price: "$15/mo", accent: "#A78BFA", has: hasWeekly },
+              ].map(p => (
+                <div key={p.label} className="flex items-center justify-between px-3 py-2 rounded-lg border"
+                  style={{ background: p.has ? p.accent + "10" : p.accent + "05", borderColor: p.has ? p.accent + "30" : p.accent + "15" }}>
+                  <div>
+                    <p className="font-mono text-xs text-white">{p.label}</p>
+                    <p className="font-mono text-[10px] text-slate-600">{p.sub}</p>
+                  </div>
+                  <span className="font-mono text-[10px]" style={{ color: p.accent }}>
+                    {p.has ? "✓" : p.price}
+                  </span>
                 </div>
               ))}
             </div>
-
-            <SubscribeForm tier="daily" />
           </div>
 
-          {/* Weekly Deep Report — paid */}
-          <div className="bg-[#0a0a14] border border-[#A78BFA30] rounded-xl p-6 flex flex-col
-                          relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 rounded-full
-                            bg-[#A78BFA08] blur-2xl pointer-events-none" />
-
-            <div className="mb-5">
-              <div className="flex items-center justify-between mb-3">
-                <p className="font-mono text-xs text-[#A78BFA] tracking-widest uppercase">Weekly Deep Report</p>
-                <span className="font-mono text-xs bg-[#A78BFA15] text-[#A78BFA] border border-[#A78BFA30]
-                                 px-2 py-0.5 rounded-full">$5 USDC</span>
-              </div>
-              <p className="font-mono text-white text-lg font-bold mb-1">Every Monday — deeper edge</p>
-              <p className="font-mono text-slate-500 text-sm">Pay once per report via x402 on Base. No subscription.</p>
-            </div>
-
-            <div className="space-y-2 mb-6 flex-1">
+          {/* Stake info */}
+          <div className="px-4 pt-4 pb-3 border-b border-[#1A1A2E]">
+            <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">Stake to Access</p>
+            <div className="space-y-1">
               {[
-                "🎯 Token Picks — high-conviction Base setups",
-                "🐋 Onchain Flows — whale moves, smart money",
-                "🔭 Builder Radar — who's shipping, what's next",
-                "📐 Market Edge — contrarian takes, positioning",
-                "⚡ Weekly Signal — 1 move a Base founder must make",
-                "Everything in Daily Brief included",
-              ].map(item => (
-                <div key={item} className="flex items-start gap-2">
-                  <span className="font-mono text-xs text-[#A78BFA80] mt-0.5">·</span>
-                  <p className="font-mono text-xs text-slate-400">{item}</p>
+                { label: "Daily Brief",    amount: "25M BLUE", color: "#4FC3F7" },
+                { label: "Weekly Report",  amount: "60M BLUE", color: "#A78BFA" },
+              ].map(t => (
+                <div key={t.label} className="flex items-center justify-between px-2 py-1.5">
+                  <span className="font-mono text-[10px] text-slate-600">{t.label}</span>
+                  <span className="font-mono text-[10px]" style={{ color: t.color }}>{t.amount}</span>
                 </div>
               ))}
             </div>
-
-            <SubscribeForm tier="weekly" />
-
-            <p className="font-mono text-xs text-slate-700 mt-3 text-center">
-              Pay with USDC on Base · powered by x402
-            </p>
+            <p className="font-mono text-[10px] text-slate-700 mt-2">7-day unstake cooldown</p>
           </div>
-        </div>
 
-        {/* ── Recent Briefs Archive ── */}
-        <div className="mb-6 flex items-center justify-between">
-          <p className="font-mono text-xs text-slate-500 tracking-widest uppercase">Recent Briefs</p>
-          <p className="font-mono text-xs text-slate-700">Archive</p>
-        </div>
-
-        <div className="border border-[#1A1A2E] rounded-xl overflow-hidden">
-          {/* Tabs */}
-          <div className="flex border-b border-[#1A1A2E]">
+          {/* Archive nav */}
+          <div className="flex-1 overflow-y-auto">
+            <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase px-5 pt-4 pb-2">Recent Briefs</p>
             {ARCHIVE.map((brief, i) => (
-              <button
-                key={i}
-                onClick={() => setActiveArchive(i)}
-                className={`flex-1 px-4 py-3 font-mono text-xs transition-colors text-left
-                  ${activeArchive === i
-                    ? "bg-[#0d0d1a] text-[#4FC3F7] border-b-2 border-[#4FC3F7]"
-                    : "text-slate-600 hover:text-slate-400"}`}
-              >
-                {brief.date}
+              <button key={i} onClick={() => setActiveArchive(i)}
+                className={`w-full text-left px-5 py-2.5 transition-all border-l-2 ${
+                  activeArchive === i
+                    ? "border-[#4FC3F7] bg-[#4FC3F7]/5 text-white"
+                    : "border-transparent text-slate-500 hover:text-white hover:bg-[#0D0D1A]"
+                }`}>
+                <p className="font-mono text-xs">{brief.date}</p>
+                <p className="font-mono text-[10px] text-slate-700 mt-0.5 truncate">{brief.signal.slice(0, 42)}…</p>
               </button>
             ))}
           </div>
 
-          {/* Content */}
-          <div className="p-6 bg-[#0a0a14]">
-            <div className="bg-[#4FC3F710] border border-[#4FC3F720] rounded-lg p-4 mb-4">
-              <p className="font-mono text-xs text-[#4FC3F7] mb-2 tracking-widest">⚡ SIGNAL</p>
-              <p className="font-mono text-sm text-white italic">
-                {ARCHIVE[activeArchive].signal}
-              </p>
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              {ARCHIVE[activeArchive].tags.map(tag => (
-                <span key={tag}
-                  className="font-mono text-xs bg-[#1A1A2E] text-slate-500 px-2 py-1 rounded">
-                  {tag}
-                </span>
-              ))}
-            </div>
+          <div className="px-5 py-4 border-t border-[#1A1A2E]">
+            <p className="font-mono text-[10px] text-slate-700">x402 · Stake-to-Access · Base</p>
           </div>
-        </div>
+        </aside>
 
-        {/* ── Footer note ── */}
-        <div className="mt-12 text-center">
-          <p className="font-mono text-xs text-slate-700">
-            Blue Agent × Aeon × MiroShark ·{" "}
-            <a href="https://blueagent.dev" className="text-[#4FC3F770] hover:text-[#4FC3F7] transition-colors">
-              blueagent.dev
-            </a>
-          </p>
-        </div>
+        {/* ── Main ── */}
+        <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
 
-      </main>
-    </div>
+          <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
+            <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-4 py-1.5 mb-6">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+              <span className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">BLUE MARKET</span>
+            </div>
+            <h1 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
+              🔵 BLUE<span className="text-[#4FC3F7]">MARKET</span>
+            </h1>
+            <p className="font-mono text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+              Daily intelligence for Base builders and founders.
+              <br />Pay USDC monthly or stake $BLUEAGENT for access.
+            </p>
+            {!isConnected && (
+              <button onClick={() => connect({ connector: injected() })}
+                className="mt-5 inline-flex items-center gap-2 border border-[#4FC3F7]/30 bg-[#4FC3F7]/5
+                           text-[#4FC3F7] rounded-full px-5 py-2 font-mono text-xs hover:opacity-80 transition-opacity">
+                Connect wallet
+              </button>
+            )}
+            {isConnected && staked > 0n && (
+              <div className="inline-flex items-center gap-2 mt-4 px-3 py-1.5 rounded-full border border-[#4FC3F7]/30 bg-[#4FC3F7]/5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7]" />
+                <span className="font-mono text-[10px] text-[#4FC3F7]">{fmtBLUE(staked)} BLUE staked</span>
+              </div>
+            )}
+          </div>
+
+          <div className="px-6 lg:px-10 py-8 max-w-4xl mx-auto w-full space-y-8">
+
+            {/* Plan cards */}
+            <div className="grid md:grid-cols-2 gap-5">
+              <PlanCard planTier="daily" accent="#4FC3F7" usdcPrice={USDC_DAILY}
+                stakeThreshold={DAILY_THRESHOLD} hasAccess={hasDaily} address={address}
+                description="Inbox + Telegram · 5 sections · every day"
+                features={["🏗 Base Ecosystem", "🔷 Coinbase & Base", "📊 Market Signals", "⛓ Onchain Intelligence", "⚡ Daily Signal"]} />
+              <PlanCard planTier="weekly" accent="#A78BFA" usdcPrice={USDC_WEEKLY}
+                stakeThreshold={WEEKLY_THRESHOLD} hasAccess={hasWeekly} address={address}
+                description="Email · deep report · every Monday"
+                features={["🎯 Token Picks — high-conviction setups", "🐋 Onchain Flows — whale & smart money", "🔭 Builder Radar — who's shipping next", "📐 Market Edge — contrarian takes", "⚡ Weekly Signal — 1 move to make"]} />
+            </div>
+
+            {/* Staking panel — shown when connected */}
+            {isConnected && address && (
+              <div>
+                <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">Manage Stake</p>
+                <StakingPanel address={address} />
+              </div>
+            )}
+
+            {/* Brief preview */}
+            <div className="border border-[#1A1A2E] rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-[#1A1A2E] bg-[#0a0a14]">
+                <p className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">
+                  Brief Preview — {ARCHIVE[activeArchive].date}
+                </p>
+                <div className="flex gap-1">
+                  {ARCHIVE.map((_, i) => (
+                    <button key={i} onClick={() => setActiveArchive(i)}
+                      className={`w-6 h-6 rounded font-mono text-[10px] transition-colors ${
+                        activeArchive === i ? "bg-[#4FC3F7]/15 text-[#4FC3F7]" : "text-slate-700 hover:text-slate-400"
+                      }`}>{i + 1}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="p-5 bg-[#080811] space-y-4">
+                <div className="bg-[#4FC3F7]/8 border border-[#4FC3F7]/15 rounded-lg p-4">
+                  <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest mb-2">⚡ SIGNAL</p>
+                  <p className="font-mono text-sm text-white italic leading-relaxed">{ARCHIVE[activeArchive].signal}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: "🏗 BASE ECOSYSTEM", content: ARCHIVE[activeArchive].ecosystem },
+                    { label: "🔷 COINBASE & BASE",  content: ARCHIVE[activeArchive].coinbase  },
+                    { label: "📊 MARKET SIGNALS",   content: ARCHIVE[activeArchive].market    },
+                    { label: "⛓ ONCHAIN",           content: ARCHIVE[activeArchive].onchain   },
+                  ].map(({ label, content }) => (
+                    <div key={label} className="bg-[#0a0a14] border border-[#1A1A2E] rounded-lg p-3">
+                      <p className="font-mono text-[9px] text-[#4FC3F7] tracking-widest mb-2">{label}</p>
+                      <p className="font-mono text-[10px] text-slate-400 leading-relaxed whitespace-pre-line">{content}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </main>
+      </div>
+    </>
   );
 }
