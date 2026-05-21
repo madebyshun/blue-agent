@@ -8,6 +8,7 @@ import { injected } from "wagmi/connectors";
 const NAV_LINKS = [
   { label: "Console",  href: "/console" },
   { label: "Hub",      href: "/hub" },
+  { label: "Market",   href: "/market" },
   { label: "Tools",    href: "/tools" },
   { label: "Docs",     href: "/docs" },
 ];
