@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import MarkdownOutput from "@/components/MarkdownOutput";
 import { useAccount, useConnect } from "wagmi";
 import { injected } from "wagmi/connectors";
+import { bestConnector } from "@/lib/wallet";
 import { fetchBlueBalance, getTierInfo, type TierInfo } from "@/lib/credits";
 
 type Command = {
@@ -138,7 +139,7 @@ export default function ConsolePage() {
               </div>
             ) : (
               <button
-                onClick={() => connect({ connector: injected() })}
+                onClick={() => connect({ connector: bestConnector() })}
                 disabled={isConnecting}
                 className="w-full font-mono text-[10px] font-semibold py-2 rounded border transition-all disabled:opacity-50"
                 style={{ borderColor: "#4FC3F7", color: "#4FC3F7", background: "#4FC3F710" }}
@@ -213,7 +214,7 @@ export default function ConsolePage() {
                 <p className="font-mono text-[10px] text-slate-600">Hold $BLUEAGENT · pay {selected.price} per run</p>
               </div>
               <button
-                onClick={() => connect({ connector: injected() })}
+                onClick={() => connect({ connector: bestConnector() })}
                 disabled={isConnecting}
                 className="shrink-0 font-mono text-xs font-semibold px-3 py-1.5 rounded border transition-all disabled:opacity-50"
                 style={{ borderColor: "#4FC3F7", color: "#4FC3F7", background: "#4FC3F710" }}
