@@ -4,6 +4,7 @@ import { useState } from "react";
 import Navbar from "@/components/Navbar";
 import { useAccount, useConnect, useSignTypedData } from "wagmi";
 import { injected } from "wagmi/connectors";
+import { bestConnector } from "@/lib/wallet";
 
 const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 
@@ -23,8 +24,10 @@ type Category = "all" | "intelligence" | "builder" | "trading" | "content" | "ag
 interface ToolInput { key: string; label: string; placeholder: string; required?: boolean; example?: string; }
 interface Tool {
   id: string; name: string; cat: Category; price: string;
-  agents: Agent[]; desc: string; inputs: ToolInput[];
+  agents: Agent[]; desc: string; inputs: ToolInput[]; featured?: boolean;
 }
+
+const FEATURED_IDS = ["launch-simulator", "investor-memo", "market-fit", "token-launch-readiness"];
 
 const TOOLS: Tool[] = [
   // Intelligence
@@ -572,7 +575,7 @@ function ToolRunner({ tool, onBack }: { tool: Tool; onBack: () => void }) {
               <p className="font-mono text-[10px] text-slate-600">Connect to pay {tool.price} USDC via x402 on Base</p>
             </div>
             <button
-              onClick={() => connect({ connector: injected() })}
+              onClick={() => connect({ connector: bestConnector() })}
               disabled={isConnecting}
               className="shrink-0 font-mono text-xs font-semibold px-3 py-1.5 rounded border transition-all disabled:opacity-50"
               style={{ borderColor: "#4FC3F7", color: "#4FC3F7", background: "#4FC3F710" }}
@@ -644,7 +647,9 @@ function ToolRunner({ tool, onBack }: { tool: Tool; onBack: () => void }) {
 // ─── Empty / browse state ─────────────────────────────────────────────────────
 
 function EmptyState({ onSelect }: { onSelect: (t: Tool) => void }) {
-  const featured = TOOLS.slice(0, 6);
+  const featuredTools = TOOLS.filter(t => FEATURED_IDS.includes(t.id));
+  const otherTools    = TOOLS.filter(t => !FEATURED_IDS.includes(t.id)).slice(0, 6);
+
   return (
     <div>
       {/* Page hero */}
@@ -659,7 +664,6 @@ function EmptyState({ onSelect }: { onSelect: (t: Tool) => void }) {
         <p className="font-mono text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
           34 tools. 3 agents. One call — Blue Agent strategy · Aeon signals · MiroShark consensus.
         </p>
-        {/* Agent legend */}
         <div className="flex items-center justify-center gap-5 mt-6">
           {(["blue","aeon","miroshark"] as Agent[]).map(a => (
             <div key={a} className="flex items-center gap-1.5">
@@ -672,29 +676,60 @@ function EmptyState({ onSelect }: { onSelect: (t: Tool) => void }) {
       </div>
 
       <div className="px-6 lg:px-10 py-8 max-w-4xl mx-auto w-full">
-      {/* Featured tools */}
-      <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-4">// FEATURED</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {featured.map(tool => (
-          <button key={tool.id} onClick={() => onSelect(tool)}
-            className="text-left card-surface card-hover rounded-xl p-5 transition-all group">
-            <div className="flex items-center gap-1.5 mb-3">
-              {tool.agents.map(a => (
-                <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-              ))}
-              <span className="font-mono text-[10px] text-slate-600 ml-auto">{tool.price}</span>
-            </div>
-            <p className="font-mono text-sm font-semibold text-white group-hover:text-[#4FC3F7] transition-colors mb-1">{tool.name}</p>
-            <p className="font-mono text-xs text-slate-500 leading-relaxed line-clamp-2">{tool.desc}</p>
-          </button>
-        ))}
-      </div>
 
-      {/* Waiting state */}
-      <div className="mt-8 card-surface rounded-xl p-8 text-center">
-        <p className="font-mono text-xs text-slate-700 mb-2">// select a tool from the sidebar</p>
-        <p className="font-mono text-[10px] text-slate-800">34 tools · 3 agents · x402 micropayments · Base</p>
-      </div>
+        {/* ── Featured for founders ── */}
+        <div className="flex items-center gap-3 mb-4">
+          <p className="font-mono text-xs text-[#A78BFA] tracking-widest">// FEATURED FOR FOUNDERS</p>
+          <div className="flex-1 h-px bg-[#A78BFA]/10" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10">
+          {featuredTools.map(tool => (
+            <button key={tool.id} onClick={() => onSelect(tool)}
+              className="text-left rounded-xl p-5 transition-all group border border-[#A78BFA]/20 bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 hover:border-[#A78BFA]/40">
+              <div className="flex items-center gap-2 mb-3">
+                {tool.agents.map(a => (
+                  <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
+                ))}
+                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-[#A78BFA]/30 text-[#A78BFA] ml-auto">
+                  {tool.price}
+                </span>
+              </div>
+              <p className="font-mono text-sm font-semibold text-white group-hover:text-[#A78BFA] transition-colors mb-1.5">
+                {tool.name}
+              </p>
+              <p className="font-mono text-xs text-slate-500 leading-relaxed line-clamp-2">{tool.desc}</p>
+              <p className="font-mono text-[10px] text-[#A78BFA]/50 mt-3">Run →</p>
+            </button>
+          ))}
+        </div>
+
+        {/* ── More tools ── */}
+        <div className="flex items-center gap-3 mb-4">
+          <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// MORE TOOLS</p>
+          <div className="flex-1 h-px bg-[#4FC3F7]/10" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {otherTools.map(tool => (
+            <button key={tool.id} onClick={() => onSelect(tool)}
+              className="text-left card-surface card-hover rounded-xl p-5 transition-all group">
+              <div className="flex items-center gap-1.5 mb-3">
+                {tool.agents.map(a => (
+                  <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
+                ))}
+                <span className="font-mono text-[10px] text-slate-600 ml-auto">{tool.price}</span>
+              </div>
+              <p className="font-mono text-sm font-semibold text-white group-hover:text-[#4FC3F7] transition-colors mb-1">{tool.name}</p>
+              <p className="font-mono text-xs text-slate-500 leading-relaxed line-clamp-2">{tool.desc}</p>
+            </button>
+          ))}
+        </div>
+
+        {/* Waiting state */}
+        <div className="mt-8 card-surface rounded-xl p-6 text-center">
+          <p className="font-mono text-xs text-slate-700 mb-1">// or select any tool from the sidebar</p>
+          <p className="font-mono text-[10px] text-slate-800">34 tools · 3 agents · x402 micropayments · Base</p>
+        </div>
+
       </div>
     </div>
   );
@@ -755,22 +790,34 @@ export default function HubPage() {
             {filtered.length === 0 && (
               <p className="font-mono text-[10px] text-slate-700 px-6 py-4">No tools found</p>
             )}
-            {filtered.map(tool => (
-              <button key={tool.id} onClick={() => setSelected(tool)}
-                className={`w-full text-left px-4 py-2.5 transition-all border-l-2 ${
-                  selected?.id === tool.id
-                    ? "border-[#4FC3F7] bg-[#4FC3F7]/5 text-white"
-                    : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-[#1A1A2E]/50"
-                }`}>
-                <div className="flex items-center gap-1.5 mb-0.5">
-                  {tool.agents.map(a => (
-                    <span key={a} className="w-1 h-1 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-                  ))}
-                  <span className="font-mono text-[10px] text-slate-700 ml-auto">{tool.price}</span>
-                </div>
-                <span className="font-mono text-sm">{tool.name}</span>
-              </button>
-            ))}
+            {filtered.map(tool => {
+              const isFeatured = FEATURED_IDS.includes(tool.id);
+              return (
+                <button key={tool.id} onClick={() => setSelected(tool)}
+                  className={`w-full text-left px-4 py-2.5 transition-all border-l-2 ${
+                    selected?.id === tool.id
+                      ? "border-[#4FC3F7] bg-[#4FC3F7]/5 text-white"
+                      : isFeatured
+                      ? "border-[#A78BFA]/30 text-slate-400 hover:text-slate-300 hover:bg-[#A78BFA]/5"
+                      : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-[#1A1A2E]/50"
+                  }`}>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    {tool.agents.map(a => (
+                      <span key={a} className="w-1 h-1 rounded-full" style={{ background: AGENT_COLORS[a] }} />
+                    ))}
+                    <div className="ml-auto flex items-center gap-1.5">
+                      {isFeatured && (
+                        <span className="font-mono text-[9px] px-1 py-0.5 rounded border border-[#A78BFA]/40 text-[#A78BFA]">
+                          ★
+                        </span>
+                      )}
+                      <span className="font-mono text-[10px] text-slate-700">{tool.price}</span>
+                    </div>
+                  </div>
+                  <span className="font-mono text-sm">{tool.name}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Footer */}
