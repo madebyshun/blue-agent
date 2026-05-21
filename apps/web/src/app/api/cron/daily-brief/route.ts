@@ -294,28 +294,47 @@ async function sendEmail(to: string, subject: string, html: string): Promise<voi
 
 // ─── Route handler ────────────────────────────────────────────────────────────
 
+const MOCK_REPORT: ReportSection = {
+  ecosystem: "· Uniswap v4 hooks activity up 40% on Base — builders deploying custom AMM logic\n· BaseNames registrations hit 2M milestone\n· New Base Grants wave opens: $50k–$500k for infra & consumer apps",
+  coinbase:  "· Coinbase Wallet adds smart wallet passkey auth — no seed phrase onboarding\n· Base testnet upgrade scheduled for next week (EIP-7702 support)\n· Coinbase Ventures led $12M round in Base-native yield protocol",
+  market:    "· AI agent narrative dominating CT — tokens with agent utility up avg 28% WTD\n· DeFi rotation: LRT yield plays cooling, real-yield protocols gaining\n· Builder/founder sentiment bullish — Base hackathon submissions +60% YoY",
+  onchain:   "· 847 new contracts deployed on Base in last 24h — highest since March\n· Smart wallet DAU crossed 180k — consumer app traction real\n· $USDC bridge inflows: $42M net positive to Base this week",
+  signal:    "Ship something on Base today — builder activity and smart wallet adoption are at peak momentum, the window to get noticed is now.",
+};
+
 export async function GET(req: NextRequest) {
   // Auth: Vercel Cron sends Authorization header, or use secret param for manual trigger
   const authHeader = req.headers.get("authorization");
-  const secretParam = new URL(req.url).searchParams.get("secret");
+  const url        = new URL(req.url);
+  const secretParam = url.searchParams.get("secret");
   if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}` && secretParam !== CRON_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const isMock = url.searchParams.get("mock") === "1";
 
   const date = new Date().toLocaleDateString("en-US", {
     weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC",
   });
 
-  const results: Record<string, unknown> = { date, steps: [] };
+  const results: Record<string, unknown> = { date, mock: isMock, steps: [] };
 
   try {
-    // 1. Fetch onchain context
-    const onchainContext = await fetchBaseDeployments();
-    (results.steps as string[]).push("✓ onchain data fetched");
+    let report: ReportSection;
 
-    // 2. Generate report
-    const report = await generateReport(onchainContext);
-    (results.steps as string[]).push("✓ report generated");
+    if (isMock) {
+      // Skip LLM — use hardcoded mock data to test delivery pipeline
+      report = MOCK_REPORT;
+      (results.steps as string[]).push("✓ mock report loaded (no LLM call)");
+    } else {
+      // 1. Fetch onchain context
+      const onchainContext = await fetchBaseDeployments();
+      (results.steps as string[]).push("✓ onchain data fetched");
+
+      // 2. Generate report
+      report = await generateReport(onchainContext);
+      (results.steps as string[]).push("✓ report generated");
+    }
 
     // 3. Send Telegram
     if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
