@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import MarkdownOutput from "@/components/MarkdownOutput";
+import { useAccount, useConnect } from "wagmi";
+import { injected } from "wagmi/connectors";
+import { fetchBlueBalance, getTierInfo, type TierInfo } from "@/lib/credits";
 
 type Command = {
   id: string;
@@ -47,12 +50,23 @@ const COMMANDS: Command[] = [
   },
 ];
 
+function shortAddr(a: string) { return a.slice(0,6) + "…" + a.slice(-4); }
+
 export default function ConsolePage() {
   const [selected, setSelected] = useState<Command>(COMMANDS[0]);
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState("");
   const [error, setError] = useState("");
+
+  const { address, isConnected } = useAccount();
+  const { connect, isPending: isConnecting } = useConnect();
+  const [tier, setTier] = useState<TierInfo | null>(null);
+
+  useEffect(() => {
+    if (!address) { setTier(null); return; }
+    fetchBlueBalance(address).then(b => setTier(getTierInfo(b)));
+  }, [address]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -79,56 +93,87 @@ export default function ConsolePage() {
   return (
     <>
       <Navbar />
-      <div className="bg-[#050508] font-mono pt-16 min-h-screen">
-        <div className="max-w-7xl mx-auto flex">
+      <div className="flex bg-[#050508] font-mono pt-16">
 
         {/* ── Sidebar ──────────────────────────────────── */}
-        <aside className="hidden lg:flex flex-col w-56 shrink-0 sticky top-16 self-start h-[calc(100vh-4rem)] border-r border-[#1A1A2E] py-10 px-4">
-          <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest mb-4 px-2">COMMANDS</p>
-          <nav className="flex flex-col gap-1">
+        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] border-r border-[#1A1A2E]">
+          {/* Header */}
+          <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
+            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// COMMANDS</p>
+          </div>
+          {/* Nav */}
+          <nav className="flex-1 overflow-y-auto py-2">
             {COMMANDS.map((cmd) => (
               <button
                 key={cmd.id}
                 onClick={() => { setSelected(cmd); setResult(""); setError(""); }}
-                className={`text-left px-3 py-2.5 rounded-lg transition-all ${
+                className={`w-full text-left px-5 py-3 transition-all border-l-2 ${
                   selected.id === cmd.id
-                    ? "bg-[#4FC3F7]/8 text-[#4FC3F7]"
-                    : "text-slate-500 hover:text-slate-300 hover:bg-[#1A1A2E]/50"
+                    ? "border-[#4FC3F7] bg-[#4FC3F7]/5 text-white"
+                    : "border-transparent text-slate-500 hover:text-white hover:bg-[#0D0D1A]"
                 }`}
               >
                 <div className="font-mono text-sm flex items-center justify-between">
                   <span>{cmd.cmd}</span>
-                  <span className="font-mono text-[10px] text-slate-700">{cmd.price}</span>
+                  <span className="font-mono text-[10px] text-slate-700 ml-2">{cmd.price}</span>
                 </div>
                 <div className="font-mono text-[10px] text-slate-700 mt-0.5 leading-snug">{cmd.label} — {cmd.desc.slice(0, 40)}…</div>
               </button>
             ))}
           </nav>
-
-          <div className="mt-auto px-2 pt-6 border-t border-[#1A1A2E]">
-            <p className="font-mono text-[10px] text-slate-700 mb-2">run in terminal:</p>
-            <div className="bg-[#0D0D14] rounded-lg px-3 py-2">
-              <span className="font-mono text-[10px] text-slate-600">$ </span>
-              <span className="font-mono text-[10px] text-[#4FC3F7]">blue {selected.id}</span>
+          {/* Footer — wallet + terminal hint */}
+          <div className="px-5 py-4 border-t border-[#1A1A2E] space-y-3">
+            {/* Wallet state */}
+            {isConnected && address ? (
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full shrink-0"
+                  style={{ background: tier?.color ?? "#475569", boxShadow: `0 0 5px ${tier?.color ?? "#475569"}` }} />
+                <span className="font-mono text-[10px] text-slate-400 truncate">{shortAddr(address)}</span>
+                {tier && (
+                  <span className="font-mono text-[10px] ml-auto px-1.5 py-0.5 rounded"
+                    style={{ background: `${tier.color}20`, color: tier.color }}>
+                    {tier.tier}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => connect({ connector: injected() })}
+                disabled={isConnecting}
+                className="w-full font-mono text-[10px] font-semibold py-2 rounded border transition-all disabled:opacity-50"
+                style={{ borderColor: "#4FC3F7", color: "#4FC3F7", background: "#4FC3F710" }}
+              >
+                {isConnecting ? "Connecting…" : "Connect Wallet"}
+              </button>
+            )}
+            {/* Terminal hint */}
+            <div>
+              <p className="font-mono text-[10px] text-slate-700 mb-1.5">run in terminal:</p>
+              <div className="bg-[#0D0D14] rounded-lg px-3 py-2">
+                <span className="font-mono text-[10px] text-slate-600">$ </span>
+                <span className="font-mono text-[10px] text-[#4FC3F7]">blue {selected.id}</span>
+              </div>
             </div>
           </div>
         </aside>
 
         {/* ── Main content ─────────────────────────────── */}
-        <main className="flex-1 px-6 lg:px-10 py-10 max-w-4xl">
+        <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
 
-          {/* Page header */}
-          <div className="mb-10">
-            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-3">// CONSOLE</p>
-            <h1 className="font-mono text-4xl sm:text-5xl font-bold text-white mb-3">
+          {/* Page hero */}
+          <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
+            <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-4 py-1.5 mb-6">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+              <span className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">FOUNDER CONSOLE</span>
+            </div>
+            <h1 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
               BLUE<span className="text-[#4FC3F7]">AGENT</span> Console
             </h1>
-            <p className="font-mono text-base text-slate-400 max-w-xl">
+            <p className="font-mono text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
               5 AI commands for Base builders — grounded in real Base knowledge.
             </p>
-
             {/* Mobile command tabs */}
-            <div className="lg:hidden flex gap-2 mt-6 flex-wrap border-b border-[#1A1A2E] pb-4">
+            <div className="lg:hidden flex gap-2 mt-6 flex-wrap justify-center">
               {COMMANDS.map((cmd) => (
                 <button key={cmd.id}
                   onClick={() => { setSelected(cmd); setResult(""); setError(""); }}
@@ -140,6 +185,8 @@ export default function ConsolePage() {
               ))}
             </div>
           </div>
+
+          <div className="px-6 lg:px-10 py-8 max-w-4xl mx-auto w-full">
 
           {/* Command info */}
           <div className="mb-6 card-surface rounded-xl p-5">
@@ -158,6 +205,40 @@ export default function ConsolePage() {
             </div>
           </div>
 
+          {/* Wallet gate banner */}
+          {!isConnected && (
+            <div className="mb-6 card-surface rounded-xl p-4 border border-[#4FC3F7]/15 flex items-center justify-between gap-4">
+              <div>
+                <p className="font-mono text-xs text-slate-300 font-semibold mb-0.5">Connect to unlock Console</p>
+                <p className="font-mono text-[10px] text-slate-600">Hold $BLUEAGENT · pay {selected.price} per run</p>
+              </div>
+              <button
+                onClick={() => connect({ connector: injected() })}
+                disabled={isConnecting}
+                className="shrink-0 font-mono text-xs font-semibold px-3 py-1.5 rounded border transition-all disabled:opacity-50"
+                style={{ borderColor: "#4FC3F7", color: "#4FC3F7", background: "#4FC3F710" }}
+              >
+                {isConnecting ? "Connecting…" : "Connect →"}
+              </button>
+            </div>
+          )}
+
+          {/* Tier badge (connected) */}
+          {isConnected && tier && (
+            <div className="mb-4 flex items-center gap-2 px-1">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: tier.color }} />
+              <span className="font-mono text-[10px]" style={{ color: tier.color }}>{tier.tier}</span>
+              {tier.discount > 0 && (
+                <span className="font-mono text-[10px] text-green-400">{Math.round(tier.discount * 100)}% discount</span>
+              )}
+              {tier.nextTier && (
+                <span className="font-mono text-[10px] text-slate-700 ml-auto">
+                  {(tier.nextTier.need / 1000).toFixed(0)}K BLUE → {tier.nextTier.name}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Input */}
           <form onSubmit={handleSubmit} className="mb-6">
             <div className="card-surface rounded-xl p-1 flex gap-2">
@@ -167,9 +248,10 @@ export default function ConsolePage() {
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(e as unknown as React.FormEvent); } }}
                 placeholder={selected.example}
                 rows={3}
-                className="flex-1 bg-transparent px-3 py-2 font-mono text-sm text-white placeholder-slate-700 outline-none resize-none"
+                disabled={!isConnected}
+                className="flex-1 bg-transparent px-3 py-2 font-mono text-sm text-white placeholder-slate-700 outline-none resize-none disabled:opacity-40"
               />
-              <button type="submit" disabled={loading || !prompt.trim()}
+              <button type="submit" disabled={loading || !prompt.trim() || !isConnected}
                 className="self-end font-mono text-xs font-semibold bg-[#4FC3F7] text-[#050508] px-4 py-2 rounded-lg hover:bg-[#29ABE2] transition-colors disabled:opacity-50 disabled:cursor-not-allowed mb-1 mr-1">
                 {loading ? "…" : "Run →"}
               </button>
@@ -177,7 +259,7 @@ export default function ConsolePage() {
             <p className="font-mono text-[10px] text-slate-700 mt-1.5 px-1">Enter to submit · Shift+Enter for newline</p>
           </form>
 
-          {/* Output */}
+          {/* Output — error */}
           {error && (
             <div className="card-surface rounded-xl p-4 border border-[#4FC3F7]/10 mb-4">
               <p className="font-mono text-xs text-slate-500">// Coming soon for holders — hold $BLUEAGENT to unlock Console access</p>
@@ -204,12 +286,21 @@ export default function ConsolePage() {
 
           {!result && !loading && !error && (
             <div className="card-surface rounded-xl p-8 text-center">
-              <p className="font-mono text-xs text-slate-700 mb-2">// waiting for input</p>
-              <p className="font-mono text-[10px] text-slate-800">34 skills loaded · Base-grounded · Bankr LLM</p>
+              {isConnected ? (
+                <>
+                  <p className="font-mono text-xs text-slate-700 mb-2">// waiting for input</p>
+                  <p className="font-mono text-[10px] text-slate-800">34 skills loaded · Base-grounded · Bankr LLM</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-mono text-xs text-slate-700 mb-2">// connect wallet to run commands</p>
+                  <p className="font-mono text-[10px] text-slate-800">Hold $BLUEAGENT · pay per use · x402 on Base</p>
+                </>
+              )}
             </div>
           )}
+          </div>
         </main>
-        </div>
       </div>
     </>
   );

@@ -152,7 +152,7 @@ export default function AgentProfilePage() {
                     {/* Stack tags */}
                     <div className="flex flex-wrap gap-1">
                       {stackTags.map((tag) => (
-                        <span key={tag} className="font-mono text-[9px] text-slate-600 border border-[#1A1A2E] px-1.5 py-0.5 rounded">
+                        <span key={tag} className="font-mono text-[10px] text-slate-600 border border-[#1A1A2E] px-1.5 py-0.5 rounded">
                           {tag}
                         </span>
                       ))}

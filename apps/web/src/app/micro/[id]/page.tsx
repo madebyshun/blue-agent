@@ -261,7 +261,7 @@ export default function MicroDetailPage({ params }: { params: Promise<{ id: stri
               <div className="bg-[#0D0D14] rounded-lg px-3 py-2 border border-[#1A1A2E]">
                 <div className="font-mono text-[10px] text-slate-600 mb-0.5">Deadline</div>
                 <div className="font-mono text-xs text-slate-300">{daysUntil(task.deadline)}</div>
-                <div className="font-mono text-[9px] text-slate-700">{formatDate(task.deadline)}</div>
+                <div className="font-mono text-[10px] text-slate-700">{formatDate(task.deadline)}</div>
               </div>
               <div className="bg-[#0D0D14] rounded-lg px-3 py-2 border border-[#1A1A2E]">
                 <div className="font-mono text-[10px] text-slate-600 mb-0.5">Total budget</div>

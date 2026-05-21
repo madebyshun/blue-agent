@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { injected } from "wagmi/connectors";
 import {
   fetchBlueBalance,
   getTierInfo,
@@ -9,6 +11,8 @@ import {
   TierInfo,
 } from "@/lib/credits";
 
+const BLUE_ADDRESS = "0xf895783b2931c919955e18b5e3343e7c7c456ba3";
+
 interface WalletBarProps {
   onWalletChange?: (address: string | undefined, tier: TierInfo) => void;
 }
@@ -16,7 +20,6 @@ interface WalletBarProps {
 function shortAddr(addr: string) {
   return addr.slice(0, 6) + "…" + addr.slice(-4);
 }
-
 function fmtBlue(n: number) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
   if (n >= 1_000)     return (n / 1_000).toFixed(1) + "K";
@@ -24,117 +27,78 @@ function fmtBlue(n: number) {
 }
 
 export default function WalletBar({ onWalletChange }: WalletBarProps) {
-  const [address,   setAddress]   = useState<string | undefined>();
+  const { address, isConnected } = useAccount();
+  const { connect, isPending: isConnecting } = useConnect();
+  const { disconnect } = useDisconnect();
+
   const [tier,      setTier]      = useState<TierInfo>({ tier: "Explorer", blueBalance: 0, discount: 0, color: "#475569" });
   const [credits,   setCredits]   = useState(0);
-  const [loading,   setLoading]   = useState(false);
   const [showPanel, setShowPanel] = useState(false);
 
-  // Restore from localStorage on mount
+  // Fetch BLUE balance + set tier whenever address changes
   useEffect(() => {
-    const saved = typeof window !== "undefined" ? localStorage.getItem("blue_wallet") : null;
-    if (saved) loadWallet(saved);
-    else {
-      const g = ensureCredits(undefined);
-      setCredits(g);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const loadWallet = useCallback(async (addr: string) => {
-    setLoading(true);
-    try {
-      const balance = await fetchBlueBalance(addr);
-      const t       = getTierInfo(balance);
-      const cr      = ensureCredits(addr);
-      setAddress(addr);
+    if (!address) {
+      const t = { tier: "Explorer" as const, blueBalance: 0, discount: 0, color: "#475569" };
       setTier(t);
-      setCredits(cr);
-      localStorage.setItem("blue_wallet", addr);
-      onWalletChange?.(addr, t);
-    } finally {
-      setLoading(false);
-    }
-  }, [onWalletChange]);
-
-  const connect = useCallback(async () => {
-    const eth = (window as any).ethereum;
-    if (!eth) {
-      alert("MetaMask or Coinbase Wallet not detected.\nInstall a wallet extension to connect.");
+      setCredits(ensureCredits(undefined));
+      onWalletChange?.(undefined, t);
       return;
     }
-    setLoading(true);
-    try {
-      const accounts: string[] = await eth.request({ method: "eth_requestAccounts" });
-      if (accounts[0]) await loadWallet(accounts[0]);
-    } catch (err: any) {
-      if (err.code !== 4001) console.error("Wallet connect error:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [loadWallet]);
-
-  const disconnect = useCallback(() => {
-    localStorage.removeItem("blue_wallet");
-    const guestCredits = getCredits(undefined);
-    setAddress(undefined);
-    setTier({ tier: "Explorer", blueBalance: 0, discount: 0, color: "#475569" });
-    setCredits(guestCredits >= 0 ? guestCredits : 50);
-    setShowPanel(false);
-    onWalletChange?.(undefined, { tier: "Explorer", blueBalance: 0, discount: 0, color: "#475569" });
-  }, [onWalletChange]);
+    (async () => {
+      const balance = await fetchBlueBalance(address);
+      const t       = getTierInfo(balance);
+      const cr      = ensureCredits(address);
+      setTier(t);
+      setCredits(cr);
+      onWalletChange?.(address, t);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address]);
 
   // Refresh credits when panel opens
   useEffect(() => {
-    if (showPanel) setCredits(getCredits(address) ?? 0);
+    if (showPanel && address) setCredits(getCredits(address) ?? 0);
   }, [showPanel, address]);
 
-  if (!address) {
+  // ── Not connected ──────────────────────────────────────────────────────────
+  if (!isConnected || !address) {
     return (
       <div className="flex flex-col items-start gap-0.5">
         <button
-          onClick={connect}
-          disabled={loading}
+          onClick={() => connect({ connector: injected() })}
+          disabled={isConnecting}
           className="font-mono text-xs font-semibold px-3 py-1.5 rounded border transition-all disabled:opacity-60"
           style={{ borderColor: "#4FC3F7", color: "#4FC3F7", background: "#4FC3F718" }}
         >
-          {loading ? "Connecting…" : "Connect Wallet"}
+          {isConnecting ? "Connecting…" : "Connect Wallet"}
         </button>
-        {!loading && (
-          <span className="font-mono text-[9px] text-slate-600 px-0.5">→ 200 free credits</span>
+        {!isConnecting && (
+          <span className="font-mono text-[10px] text-slate-600 px-0.5">→ 200 free credits</span>
         )}
       </div>
     );
   }
 
+  // ── Connected ──────────────────────────────────────────────────────────────
   return (
     <div className="relative">
       <button
         onClick={() => setShowPanel((p) => !p)}
         className="flex items-center gap-2 font-mono text-xs px-3 py-1.5 rounded border border-[#1A1A2E] hover:border-[#4FC3F7]/30 transition-all bg-[#0D0D14]"
       >
-        {/* Tier dot */}
-        <span
-          className="w-2 h-2 rounded-full flex-shrink-0"
-          style={{ background: tier.color, boxShadow: `0 0 6px ${tier.color}` }}
-        />
-        {/* Address */}
+        <span className="w-2 h-2 rounded-full shrink-0"
+          style={{ background: tier.color, boxShadow: `0 0 6px ${tier.color}` }} />
         <span className="text-slate-300">{shortAddr(address)}</span>
-        {/* Credits */}
         <span className="text-slate-600">·</span>
         <span style={{ color: "#4FC3F7" }}>{credits} cr</span>
       </button>
 
       {showPanel && (
-        <div
-          className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-[#1A1A2E] bg-[#0D0D14] p-4 z-50 shadow-2xl"
-        >
+        <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-[#1A1A2E] bg-[#0D0D14] p-4 z-50 shadow-2xl">
           {/* Tier badge */}
           <div className="flex items-center justify-between mb-3">
-            <span
-              className="font-mono text-xs font-bold px-2 py-0.5 rounded"
-              style={{ background: `${tier.color}20`, color: tier.color, border: `1px solid ${tier.color}40` }}
-            >
+            <span className="font-mono text-xs font-bold px-2 py-0.5 rounded"
+              style={{ background: `${tier.color}20`, color: tier.color, border: `1px solid ${tier.color}40` }}>
               {tier.tier}
             </span>
             <span className="font-mono text-xs text-slate-500">{shortAddr(address)}</span>
@@ -171,34 +135,23 @@ export default function WalletBar({ onWalletChange }: WalletBarProps) {
 
           {/* Actions */}
           <div className="flex flex-col gap-2">
-            <a
-              href={`https://app.uniswap.org/swap?outputCurrency=${BLUE_ADDRESS}&chain=base`}
-              target="_blank"
-              rel="noopener noreferrer"
+            <a href={`https://app.uniswap.org/swap?outputCurrency=${BLUE_ADDRESS}&chain=base`}
+              target="_blank" rel="noopener noreferrer"
               className="font-mono text-[11px] text-center py-1.5 rounded-lg border transition-all"
-              style={{ borderColor: "#F59E0B", color: "#F59E0B", background: "#F59E0B10" }}
-            >
+              style={{ borderColor: "#F59E0B", color: "#F59E0B", background: "#F59E0B10" }}>
               Get more BLUE →
             </a>
-            <button
-              onClick={disconnect}
-              className="font-mono text-[11px] text-slate-500 hover:text-slate-300 transition-colors py-1"
-            >
+            <button onClick={() => { disconnect(); setShowPanel(false); }}
+              className="font-mono text-[11px] text-slate-500 hover:text-slate-300 transition-colors py-1">
               Disconnect
             </button>
           </div>
         </div>
       )}
 
-      {/* Click outside to close */}
       {showPanel && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setShowPanel(false)}
-        />
+        <div className="fixed inset-0 z-40" onClick={() => setShowPanel(false)} />
       )}
     </div>
   );
 }
-
-const BLUE_ADDRESS = "0xf895783b2931c919955e18b5e3343e7c7c456ba3";
