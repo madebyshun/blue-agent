@@ -317,8 +317,11 @@ function PlanCard({ planTier, accent, usdcPrice, stakeThreshold, features, descr
   stakeThreshold: bigint; features: string[]; description: string;
   address?: `0x${string}`; hasAccess: boolean;
 }) {
-  const [tab, setTab]   = useState<"usdc" | "stake">("usdc");
-  const { connect }     = useConnect();
+  const [tab, setTab]         = useState<"usdc" | "stake">("usdc");
+  const [connectErr, setConnectErr] = useState("");
+  const { connect }           = useConnect({
+    mutation: { onError: (e) => setConnectErr(e.message) },
+  });
 
   return (
     <div className="bg-[#0a0a14] rounded-xl p-5 flex flex-col gap-4 relative overflow-hidden"
@@ -395,11 +398,16 @@ function PlanCard({ planTier, accent, usdcPrice, stakeThreshold, features, descr
               {address ? (
                 <p className="font-mono text-[10px] text-slate-600">↓ Manage your stake below</p>
               ) : (
-                <button onClick={() => connect({ connector: injected() })}
-                  className="w-full border border-[#1A1A2E] text-slate-500 rounded-lg py-2
-                             font-mono text-xs hover:text-white hover:border-slate-600 transition-all">
-                  Connect wallet to stake
-                </button>
+                <>
+                  <button onClick={() => { setConnectErr(""); connect({ connector: injected() }); }}
+                    className="w-full border border-[#1A1A2E] text-slate-500 rounded-lg py-2
+                               font-mono text-xs hover:text-white hover:border-slate-600 transition-all">
+                    Connect wallet to stake
+                  </button>
+                  {connectErr && (
+                    <p className="font-mono text-[10px] text-red-400 mt-1">{connectErr}</p>
+                  )}
+                </>
               )}
             </div>
           )}

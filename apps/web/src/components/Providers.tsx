@@ -3,12 +3,16 @@
 import { createConfig, WagmiProvider } from "wagmi";
 import { base } from "wagmi/chains";
 import { http } from "viem";
-import { injected } from "wagmi/connectors";
+import { injected, coinbaseWallet, metaMask } from "wagmi/connectors";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const config = createConfig({
   chains: [base],
-  connectors: [injected()],
+  connectors: [
+    injected(),                                    // MetaMask, Rabby, etc.
+    coinbaseWallet({ appName: "Blue Agent" }),     // Coinbase Wallet
+    metaMask(),                                    // MetaMask SDK
+  ],
   transports: { [base.id]: http() },
   ssr: true,
 });
