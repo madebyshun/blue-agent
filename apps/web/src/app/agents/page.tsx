@@ -36,7 +36,7 @@ export default function AgentsPage() {
             <div key={card.title} className="card-surface rounded-lg p-5">
               <div className="flex items-center gap-2 mb-2">
                 <span className="font-mono text-sm text-white">{card.title}</span>
-                <span className="font-mono text-[9px] text-[#4FC3F7] border border-[#4FC3F7]/30 px-1 rounded">soon</span>
+                <span className="font-mono text-[10px] text-[#4FC3F7] border border-[#4FC3F7]/30 px-1 rounded">soon</span>
               </div>
               <p className="font-mono text-[10px] text-slate-600">{card.desc}</p>
             </div>

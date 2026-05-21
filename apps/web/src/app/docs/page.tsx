@@ -123,30 +123,33 @@ export default function DocsPage() {
   return (
     <>
       <Navbar />
-      <div className="bg-[#050508] font-mono pt-16 min-h-screen">
-        <div className="max-w-7xl mx-auto flex">
+      <div className="flex bg-[#050508] font-mono pt-16">
 
           {/* ── Sticky sidebar ───────────────────── */}
-          <aside className="hidden lg:flex flex-col w-56 shrink-0 sticky top-16 self-start h-[calc(100vh-4rem)] border-r border-[#1A1A2E] py-10 px-4">
-            <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest mb-4 px-2">DOCUMENTATION</p>
-            <nav className="flex flex-col gap-1">
+          <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] border-r border-[#1A1A2E]">
+            {/* Header */}
+            <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
+              <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// DOCUMENTATION</p>
+            </div>
+            {/* Nav */}
+            <nav className="flex-1 overflow-y-auto py-2">
               {NAV_ITEMS.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => scrollTo(item.id)}
-                  className={`flex items-center gap-2 text-left px-3 py-2 rounded-lg transition-all font-mono text-sm ${
+                  className={`w-full flex items-center gap-3 text-left px-5 py-3 transition-all border-l-2 font-mono text-sm ${
                     activeSection === item.id
-                      ? "text-[#4FC3F7] bg-[#4FC3F7]/8"
-                      : "text-slate-500 hover:text-slate-300 hover:bg-[#1A1A2E]/50"
+                      ? "border-[#4FC3F7] bg-[#4FC3F7]/5 text-white"
+                      : "border-transparent text-slate-500 hover:text-white hover:bg-[#0D0D1A]"
                   }`}
                 >
-                  <span className="text-[10px] text-slate-700 w-6 shrink-0">{item.num}</span>
+                  <span className="font-mono text-[10px] text-slate-700 w-5 shrink-0">{item.num}</span>
                   {item.label}
                 </button>
               ))}
             </nav>
-
-            <div className="mt-auto px-2 pt-6 border-t border-[#1A1A2E]">
+            {/* Footer */}
+            <div className="px-5 py-4 border-t border-[#1A1A2E]">
               <a href="https://github.com/madebyshun/blue-agent" target="_blank" rel="noopener noreferrer"
                 className="font-mono text-xs text-slate-700 hover:text-white transition-colors block mb-1">github →</a>
               <a href="https://x.com/blocky_agent" target="_blank" rel="noopener noreferrer"
@@ -157,20 +160,22 @@ export default function DocsPage() {
           </aside>
 
           {/* ── Main content ─────────────────────── */}
-          <main className="flex-1 px-6 lg:px-10 py-10 max-w-4xl">
+          <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
 
-            {/* Page header */}
-            <div className="mb-12">
-              <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-3">// DOCUMENTATION</p>
-              <h1 className="font-mono text-4xl sm:text-5xl font-bold text-white mb-3">
+            {/* Page hero */}
+            <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
+              <div className="inline-flex items-center gap-2 border border-[#FB923C]/20 bg-[#FB923C]/5 rounded-full px-4 py-1.5 mb-6">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#FB923C] animate-pulse" />
+                <span className="font-mono text-[10px] text-[#FB923C] tracking-widest">DOCUMENTATION</span>
+              </div>
+              <h1 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
                 BLUE<span className="text-[#4FC3F7]">AGENT</span> Docs
               </h1>
-              <p className="font-mono text-base text-slate-400 max-w-xl">
+              <p className="font-mono text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
                 Everything you need to build, score, and ship on Base.
               </p>
-
               {/* Mobile TOC */}
-              <div className="lg:hidden mt-6 card-surface rounded-xl p-4">
+              <div className="lg:hidden mt-6 max-w-sm mx-auto card-surface rounded-xl p-4">
                 <p className="font-mono text-xs text-slate-600 mb-3 tracking-widest">ON THIS PAGE</p>
                 <div className="grid grid-cols-2 gap-1">
                   {NAV_ITEMS.map((item) => (
@@ -182,6 +187,8 @@ export default function DocsPage() {
                 </div>
               </div>
             </div>
+
+            <div className="px-6 lg:px-10 py-8 max-w-4xl mx-auto w-full">
 
             {/* ── 01 Quick Start ──────────────────── */}
             <section id="quickstart" className="mb-16 scroll-mt-20">
@@ -215,7 +222,7 @@ export default function DocsPage() {
               <div className="card-surface rounded-xl overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-[#1A1A2E] bg-[#0A0A12]">
                   <span className="font-mono text-xs text-[#A78BFA] font-semibold">Alternative — Interactive TUI</span>
-                  <span className="font-mono text-[9px] text-[#A78BFA]/60 border border-[#A78BFA]/20 px-1.5 py-0.5 rounded">@blueagent/cli</span>
+                  <span className="font-mono text-[10px] text-[#A78BFA]/60 border border-[#A78BFA]/20 px-1.5 py-0.5 rounded">@blueagent/cli</span>
                 </div>
                 <div className="p-5 space-y-3 font-mono text-sm">
                   <div className="text-slate-600"># install the full TUI</div>
@@ -397,7 +404,7 @@ export default function DocsPage() {
                 <div className="card-surface rounded-xl p-5">
                   <p className="font-mono text-xs text-slate-600 tracking-widest mb-4">PACKAGES</p>
                   {/* Surface */}
-                  <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest mb-2">SURFACE — what users install</p>
+                  <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-2">SURFACE — what users install</p>
                   <div className="space-y-2 mb-5">
                     {[
                       { pkg: "@blueagent/cli", desc: "TUI + CLI · blueagent (interactive) · blue (direct commands) · 31 commands" },
@@ -451,8 +458,8 @@ export default function DocsPage() {
               </div>
             </section>
 
+            </div>
           </main>
-        </div>
       </div>
     </>
   );

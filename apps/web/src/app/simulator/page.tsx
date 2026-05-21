@@ -285,12 +285,11 @@ export default function SimulatorPage() {
   return (
     <>
       <Navbar />
-      <div className="bg-[#050508] font-mono pt-16 min-h-screen">
-        <div className="max-w-7xl mx-auto flex">
+      <div className="flex bg-[#050508] font-mono pt-16">
 
           {/* ── Sidebar ──────────────────────────────────── */}
-          <aside className="hidden lg:flex flex-col w-56 shrink-0 sticky top-16 self-start h-[calc(100vh-4rem)] border-r border-[#1A1A2E] py-10 px-4">
-            <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest mb-4 px-2">SIMULATION TIER</p>
+          <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto border-r border-[#1A1A2E] py-10 px-4">
+            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-4 px-2">SIMULATION TIER</p>
             <nav className="flex flex-col gap-1">
               {TIERS.map((t) => (
                 <button
@@ -348,7 +347,7 @@ export default function SimulatorPage() {
           </aside>
 
           {/* ── Main content ─────────────────────────────── */}
-          <main className="flex-1 px-6 lg:px-10 py-10 max-w-4xl">
+          <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto px-6 lg:px-10 py-10">
 
             {/* Page header */}
             <div className="mb-10">
@@ -523,7 +522,7 @@ export default function SimulatorPage() {
                         <p className="font-mono text-[10px] text-[#34d399] tracking-widest mb-1.5">STRENGTHS</p>
                         <ul className="space-y-1 mb-3">
                           {result.blue_agent.strengths.map((s, i) => (
-                            <li key={i} className="font-mono text-[11px] text-slate-400 leading-snug">· {s}</li>
+                            <li key={i} className="font-mono text-xs text-slate-400 leading-snug">· {s}</li>
                           ))}
                         </ul>
                       </>
@@ -533,7 +532,7 @@ export default function SimulatorPage() {
                         <p className="font-mono text-[10px] text-[#f87171] tracking-widest mb-1.5">RISKS</p>
                         <ul className="space-y-1">
                           {result.blue_agent.risks.map((r, i) => (
-                            <li key={i} className="font-mono text-[11px] text-slate-400 leading-snug">· {r}</li>
+                            <li key={i} className="font-mono text-xs text-slate-400 leading-snug">· {r}</li>
                           ))}
                         </ul>
                       </>
@@ -547,7 +546,7 @@ export default function SimulatorPage() {
                         <div className="w-2 h-2 rounded-full bg-[#A78BFA]" />
                         <span className="font-mono text-xs text-[#A78BFA] tracking-widest">AEON</span>
                       </div>
-                      <span className={`font-mono text-[9px] border px-1.5 py-0.5 rounded ${
+                      <span className={`font-mono text-[10px] border px-1.5 py-0.5 rounded ${
                         result.aeon.status === "live"
                           ? "text-[#A78BFA] border-[#A78BFA]/40"
                           : "text-slate-700 border-slate-800"
@@ -563,7 +562,7 @@ export default function SimulatorPage() {
                     <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-2">ECOSYSTEM SIGNALS</p>
                     <ul className="space-y-2">
                       {result.aeon.signals?.map((s, i) => (
-                        <li key={i} className="font-mono text-[11px] text-slate-400 flex gap-2 leading-snug">
+                        <li key={i} className="font-mono text-xs text-slate-400 flex gap-2 leading-snug">
                           <span className="text-[#A78BFA] shrink-0">→</span> {s}
                         </li>
                       ))}
@@ -577,7 +576,7 @@ export default function SimulatorPage() {
                         <div className="w-2 h-2 rounded-full bg-[#34d399]" />
                         <span className="font-mono text-xs text-[#34d399] tracking-widest">MIROSHARK</span>
                       </div>
-                      <span className={`font-mono text-[9px] border px-1.5 py-0.5 rounded ${
+                      <span className={`font-mono text-[10px] border px-1.5 py-0.5 rounded ${
                         result.miroshark.status === "live"
                           ? "text-[#34d399] border-[#34d399]/40"
                           : "text-slate-700 border-slate-800"
@@ -655,7 +654,6 @@ export default function SimulatorPage() {
               </div>
             )}
           </main>
-        </div>
       </div>
     </>
   );

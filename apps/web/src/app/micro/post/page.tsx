@@ -325,7 +325,7 @@ export default function MicroPostPage() {
                       }`}
                     >
                       <div className="font-mono text-[10px] font-bold mb-0.5">{a.label}</div>
-                      <div className="font-mono text-[9px] leading-tight opacity-80">{a.desc}</div>
+                      <div className="font-mono text-[10px] leading-tight opacity-80">{a.desc}</div>
                     </button>
                   ))}
                 </div>
@@ -436,7 +436,7 @@ export default function MicroPostPage() {
                       <span className="font-mono text-sm font-bold text-[#4FC3F7]">${escrowNeeded.toFixed(2)} USDC</span>
                     </div>
                   </div>
-                  <p className="font-mono text-[9px] text-slate-700 mt-3 leading-relaxed">
+                  <p className="font-mono text-[10px] text-slate-700 mt-3 leading-relaxed">
                     Funds locked in escrow. Released to doers on approval. Refunded if task expires with unfilled slots.
                   </p>
                 </div>
