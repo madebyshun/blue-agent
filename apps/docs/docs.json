@@ -77,6 +77,15 @@
             "pages": ["api/overview", "api/console", "api/chat", "api/x402"]
           }
         ]
+      },
+      {
+        "tab": "Changelog",
+        "groups": [
+          {
+            "group": "Changelog",
+            "pages": ["changelog/overview", "changelog/2026-05-22"]
+          }
+        ]
       }
     ]
   },
