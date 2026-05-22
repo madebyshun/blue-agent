@@ -1,0 +1,60 @@
+---
+title: "Week of May 22, 2026"
+description: "Blue Market launches with staking yield, Launch Simulator goes live, and wallet connect arrives."
+---
+
+## New features
+
+### Blue Market
+
+A new subscription marketplace for Blue Agent intelligence reports.
+
+- **Weekly reports** — Subscribe via x402 to receive curated weekly market briefings.
+- **Daily brief** — Opt in to daily updates delivered to Telegram and email.
+- **Staking yield** — Stake to earn 20% of subscription revenue, distributed pro-rata to stakers.
+
+See [Skills overview](/skills/overview) to learn how subscriptions integrate with your workflow.
+
+### Launch Simulator
+
+Pre-launch intelligence built with Aeon and MiroShark, available in three tiers behind x402 payment gating. Each tier scales depth and signal coverage so you can pick what fits your launch stage. Live Aeon market data flows through a webhook + cache layer for fresh signals on every run.
+
+Learn more in the [Launch command reference](/cli/launch).
+
+### Wallet connect + x402 checkout
+
+Connect a wallet directly in the Console to pay for x402-gated services.
+
+- MetaMask and Coinbase Wallet connectors supported.
+- Coinbase Wallet is used automatically when no browser extension is detected.
+- Redesigned checkout UI with clearer plan selection and connect-error messages.
+
+### Multi-agent tools
+
+33 new multi-agent tools shipped through the Blue Agent × Aeon × MiroShark collaboration, plus 31 synced x402 services. Browse the full catalog in the [API overview](/api/overview).
+
+### Agent discovery
+
+Blue Agent now exposes `/.well-known/agent.json` for discovery by other agents and platforms.
+
+### Expanded CLI
+
+The TUI now includes dedicated categories for **Setup**, **Chat**, **Score**, **Discovery**, **Launch**, and **Microtasks**. See the [TUI reference](/cli/tui).
+
+### Console API + CLI entry point
+
+A new `/api/console` route and CLI binary entry point make it easier to script against Blue Agent. See the [Console API reference](/api/console).
+
+## Updates
+
+- **Mock mode** — Add `?mock=1` to delivery endpoints to test pipelines without consuming LLM credits.
+- **Logo refresh** — Updated logomark in the navbar and favicon.
+- **Launch UI** — Refreshed launch flow and tool surface in the Console.
+
+## Bug fixes
+
+- Telegram delivery no longer sends blank messages — switched to HTML formatting.
+- Daily brief falls back to the Anthropic API when Bankr credits are exhausted.
+- `doctor` command now reads `BANKR_API_KEY` from `config.toml` in addition to the environment.
+- Fixed a runtime crash when handling empty LLM response content.
+- Connect button in plan cards now wires up the wallet hook correctly.
