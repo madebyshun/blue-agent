@@ -50,6 +50,7 @@ export interface Finding {
   target:      string;
   targetType:  "address" | "domain" | "token";
   summary:     string;
+  indicators:  string[];
   chain:       "base";
   detectedAt:  string;
   alerted:     boolean;
