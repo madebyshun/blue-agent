@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { useAccount, useSignTypedData } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
@@ -1132,6 +1133,22 @@ export default function HubPage() {
                 </button>
               );
             })}
+          </div>
+
+          {/* Sentinel link */}
+          <div className="px-4 pb-2 border-t border-[#1A1A2E] pt-3">
+            <Link
+              href="/hub/sentinel"
+              className="flex items-center gap-2 w-full px-2 py-2 rounded-lg hover:bg-red-500/5 transition-colors group"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+              <span className="font-mono text-[11px] text-slate-500 group-hover:text-red-400 transition-colors">
+                🛡️ Blue Sentinel
+              </span>
+              <span className="ml-auto font-mono text-[9px] text-slate-700 group-hover:text-red-500">
+                24/7
+              </span>
+            </Link>
           </div>
 
           {/* Footer */}

@@ -51,7 +51,7 @@ export function CategoryMenu({ categories, onSelect }: Props) {
         <Text dimColor>{HR}</Text>
         <Box justifyContent="space-between">
           <Text dimColor> ↑↓ navigate  enter select  ctrl+c quit</Text>
-          <Text dimColor>@blocky_agent </Text>
+          <Text dimColor>@blueagent_ </Text>
         </Box>
       </Box>
     </Box>

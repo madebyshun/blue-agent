@@ -103,5 +103,5 @@ All payments are in USDC on Base (chain ID 8453).
 
 - [Blue Agent](https://blueagent.xyz)
 - [Blocky Studio](https://blocky.studio)
-- [Twitter/X](https://x.com/blocky_agent)
+- [Twitter/X](https://x.com/blueagent_)
 - [Telegram](https://t.me/blueagent_hub)
