@@ -1,0 +1,22 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "blue-agent-plugins",
+  "description": "Claude Code plugins for Base builders — AI founder console, Hub tools, and onchain intelligence",
+  "owner": {
+    "name": "Blocky Studio",
+    "email": "shun@blocky.studio"
+  },
+  "plugins": [
+    {
+      "name": "blue-agent",
+      "description": "AI founder console for Base — idea, build, audit, ship, raise + 15 Hub tools for market intelligence, security, and fundraising",
+      "author": {
+        "name": "Blocky Studio",
+        "email": "shun@blocky.studio"
+      },
+      "source": "./blue-agent",
+      "category": "development",
+      "homepage": "https://blueagent.dev"
+    }
+  ]
+}
