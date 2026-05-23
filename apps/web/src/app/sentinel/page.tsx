@@ -17,6 +17,7 @@ interface Finding {
   target:     string;
   targetType: string;
   summary:    string;
+  indicators: string[];
   detectedAt: string;
   alerted:    boolean;
 }
@@ -113,6 +114,18 @@ function FindingCard({ f, onDismiss }: { f: Finding; onDismiss: (id: string) => 
         <span className="font-mono text-[10px] text-slate-700 ml-auto capitalize">{f.category}</span>
         {f.alerted && <span className="font-mono text-[9px] text-emerald-600">✓ alerted</span>}
       </div>
+      {f.indicators?.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {f.indicators.slice(0, 4).map(ind => (
+            <span key={ind} className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-[#0D0D1A] border border-[#1A1A2E] text-slate-500">
+              {ind}
+            </span>
+          ))}
+          {f.indicators.length > 4 && (
+            <span className="font-mono text-[9px] text-slate-700">+{f.indicators.length - 4}</span>
+          )}
+        </div>
+      )}
       <p className="font-mono text-xs text-slate-500 leading-relaxed line-clamp-2">{f.summary}</p>
     </div>
   );

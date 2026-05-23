@@ -319,6 +319,7 @@ async function scanTarget(watch: WatchSubscription): Promise<Finding[]> {
       target:     watch.target,
       targetType: watch.targetType,
       summary:    result.summary,
+      indicators: result.indicators,
       chain:      "base",
       detectedAt: new Date().toISOString(),
       alerted:    false,
