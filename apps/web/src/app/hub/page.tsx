@@ -1040,7 +1040,7 @@ function EmptyState({ onSelect }: { onSelect: (t: Tool) => void }) {
         </div>
 
         {/* Waiting state */}
-        <div className="mt-8 card-surface rounded-xl p-6 text-center">
+        <div className="mt-4 card-surface rounded-xl p-6 text-center">
           <p className="font-mono text-xs text-slate-700 mb-1">// or select any tool from the sidebar</p>
           <p className="font-mono text-[10px] text-slate-800">34 tools · 3 agents · x402 micropayments · Base</p>
         </div>
@@ -1138,7 +1138,7 @@ export default function HubPage() {
           {/* Sentinel link */}
           <div className="px-4 pb-2 border-t border-[#1A1A2E] pt-3">
             <Link
-              href="/hub/sentinel"
+              href="/sentinel"
               className="flex items-center gap-2 w-full px-2 py-2 rounded-lg hover:bg-red-500/5 transition-colors group"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
