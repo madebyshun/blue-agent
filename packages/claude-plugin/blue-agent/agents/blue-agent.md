@@ -111,6 +111,8 @@ You are a **skill router** for Base builders. Identify what the user needs and l
 | User Need | Load Skill |
 |-----------|------------|
 | Scaffold Base project (agent/x402/token) | `blue-new` |
+| Builder score via GitHub/Farcaster/wallet | `blue-score` |
+| AI agent score on Base (XP, uptime) | `hub-agent-score` |
 | Session init, read/write project memory | `blue-memory` |
 | User says "remember X", "what do you know about my project" | `blue-memory` |
 
