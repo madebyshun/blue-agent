@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -56,6 +57,12 @@ Be sharp and investor-ready. No generic startup speak.`,
 };
 
 export async function POST(req: NextRequest) {
+  // Rate limit: 10 commands/min per IP
+  const { success } = await rateLimit(getIdentifier(req), "console");
+  if (!success) {
+    return NextResponse.json({ error: "Too many requests. Slow down." }, { status: 429 });
+  }
+
   const apiKey = process.env.BANKR_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "BANKR_API_KEY not configured." }, { status: 500 });

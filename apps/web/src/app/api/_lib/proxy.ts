@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 
 /**
  * Shared bankr.bot x402 proxy.
  * - Forwards X-Payment header from client → bankr.bot
  * - Safely handles empty / non-JSON responses
  * - Returns 502 on network errors
+ * - Rate limited: 20 tool runs/min per IP
  */
 export async function proxyTool(req: NextRequest, endpoint: string): Promise<NextResponse> {
+  const { success } = await rateLimit(getIdentifier(req), "hub");
+  if (!success) {
+    return NextResponse.json({ error: "Too many requests. Slow down." }, { status: 429 });
+  }
   // Parse request body (optional)
   let body = "{}";
   try { body = await req.text(); } catch {}
