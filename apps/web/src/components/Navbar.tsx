@@ -5,10 +5,10 @@ import { usePathname } from "next/navigation";
 import { ConnectButton } from "@/components/ConnectModal";
 
 const NAV_LINKS = [
+  { label: "Chat",     href: "/chat" },
   { label: "Console",  href: "/console" },
   { label: "Hub",      href: "/hub" },
   { label: "Market",   href: "/market" },
-  { label: "Tools",    href: "/tools" },
   { label: "Docs",     href: "/docs" },
 ];
 
