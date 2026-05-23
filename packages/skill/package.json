@@ -1,7 +1,7 @@
 {
   "name": "@blueagent/skill",
-  "version": "0.1.1",
-  "description": "MCP server for Blue Agent — exposes blue_idea, blue_build, blue_audit, blue_ship, blue_raise as MCP tools",
+  "version": "0.2.0",
+  "description": "MCP server for Blue Agent — 22 tools: 5 console commands + 15 Hub tools + blue_score + blue_new",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
