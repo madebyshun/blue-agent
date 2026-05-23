@@ -16,18 +16,51 @@ import { SENTINEL_KV } from "@/lib/sentinel/catalog";
 
 export const runtime = "nodejs";
 
-// ─── GET — status ─────────────────────────────────────────────────────────────
+// ─── Health helpers ───────────────────────────────────────────────────────────
+
+type HealthStatus = "healthy" | "degraded" | "down";
+
+function getHealth(opts: {
+  enabled:    boolean;
+  lastScan:   string | null;
+  isLocked:   boolean;
+}): { status: HealthStatus; reason: string } {
+  if (!opts.enabled) return { status: "down",    reason: "scheduler stopped" };
+  if (opts.isLocked) return { status: "degraded", reason: "scan currently running" };
+  if (!opts.lastScan) return { status: "degraded", reason: "no scan completed yet" };
+
+  const ageMs = Date.now() - new Date(opts.lastScan).getTime();
+  const ageMin = Math.floor(ageMs / 60_000);
+
+  if (ageMin > 60)  return { status: "down",    reason: `last scan ${ageMin}m ago — may be stuck` };
+  if (ageMin > 20)  return { status: "degraded", reason: `last scan ${ageMin}m ago — slightly delayed` };
+  return { status: "healthy", reason: `last scan ${ageMin}m ago` };
+}
+
+// ─── GET — status + health ────────────────────────────────────────────────────
 
 export async function GET() {
-  const [status, lastScan] = await Promise.all([
+  const [status, lastScan, lockVal, stats] = await Promise.all([
     getStatus(),
     kvGet<string>(SENTINEL_KV.scanLast),
+    kvGet<string>("sentinel:scan:running"),
+    kvGet<{ totalScans: number; totalFindings: number; totalDiscovered: number }>(SENTINEL_KV.scanStats),
   ]);
 
+  const isLocked = !!lockVal;
+  const health   = getHealth({
+    enabled:  status.config.enabled,
+    lastScan: lastScan ?? null,
+    isLocked,
+  });
+
   return NextResponse.json({
-    ok: true,
+    ok:       true,
     ...status,
     lastScan: lastScan ?? null,
+    isLocked,
+    health,
+    stats:    stats ?? { totalScans: 0, totalFindings: 0, totalDiscovered: 0 },
   });
 }
 
