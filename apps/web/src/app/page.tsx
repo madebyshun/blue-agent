@@ -587,7 +587,7 @@ type Section = "overview" | "commands" | "skills" | "hub" | "ecosystem" | "integ
 const NAV: { key: Section; label: string; sub: string }[] = [
   { key: "overview",     label: "Overview",      sub: "What is Blue Agent" },
   { key: "commands",     label: "Commands",      sub: "30 commands" },
-  { key: "skills",       label: "Skills",        sub: "34 grounding files" },
+  { key: "skills",       label: "Grounding",     sub: "34 knowledge files" },
   { key: "hub",          label: "Hub",           sub: "34 collab tools" },
   { key: "ecosystem",    label: "Ecosystem",     sub: "9 npm packages" },
   { key: "integrations", label: "Integrations",  sub: "Quick start" },
