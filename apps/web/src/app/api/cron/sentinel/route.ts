@@ -33,10 +33,11 @@ export const maxDuration = 60;
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const CRON_SECRET        = process.env.CRON_SECRET ?? "";
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? "";
-const TELEGRAM_CHAT_ID   = process.env.TELEGRAM_CHAT_ID ?? "";
-const BASE_URL           = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+const CRON_SECRET          = process.env.CRON_SECRET ?? "";
+const TELEGRAM_BOT_TOKEN   = process.env.TELEGRAM_BOT_TOKEN ?? "";
+const TELEGRAM_CHAT_ID     = process.env.TELEGRAM_CHAT_ID ?? "";
+const TELEGRAM_THREAD_ID   = process.env.TELEGRAM_THREAD_ID ?? "";
+const BASE_URL             = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 // Only alert on these severities
 const ALERT_THRESHOLD: ThreatSeverity = "high";
@@ -157,6 +158,33 @@ function extractIndicatorsFromText(text: string): string[] {
   return [...new Set(found)];
 }
 
+/**
+ * Catalog-based detection — checks target directly against known-bad
+ * addresses/domains in the seed catalog. Works without BANKR credits.
+ */
+function catalogCheck(target: string): HubResult | null {
+  const t = target.toLowerCase();
+  for (const entry of THREAT_CATALOG) {
+    if (entry.domains?.some(d => d.toLowerCase() === t)) {
+      return {
+        safe:       false,
+        severity:   entry.severity,
+        indicators: ["known_bad_domain", ...entry.indicators.slice(0, 3)],
+        summary:    `Domain "${target}" matched catalog entry: ${entry.name}. ${entry.description}`,
+      };
+    }
+    if (entry.addresses?.some(a => a.toLowerCase() === t)) {
+      return {
+        safe:       false,
+        severity:   entry.severity,
+        indicators: ["known_bad_address", ...entry.indicators.slice(0, 3)],
+        summary:    `Address "${target}" matched catalog entry: ${entry.name}. ${entry.description}`,
+      };
+    }
+  }
+  return null;
+}
+
 function mapTargetTypeToCategory(targetType: WatchSubscription["targetType"]): ThreatCategory[] {
   switch (targetType) {
     case "address": return ["aml", "exploit", "drain", "malicious_approval"];
@@ -206,14 +234,17 @@ async function sendTelegramAlert(finding: Finding, chatId?: string): Promise<voi
     `<a href="https://blueagent.dev/hub">blueagent.dev/hub</a>`,
   ].join("\n");
 
+  const threadId = TELEGRAM_THREAD_ID ? parseInt(TELEGRAM_THREAD_ID, 10) : undefined;
+
   await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      chat_id:    target,
-      text:       msg,
-      parse_mode: "HTML",
+      chat_id:            target,
+      text:               msg,
+      parse_mode:         "HTML",
       disable_web_page_preview: true,
+      ...(threadId ? { message_thread_id: threadId } : {}),
     }),
     signal: AbortSignal.timeout(15000),
   });
@@ -240,6 +271,13 @@ async function scanTarget(watch: WatchSubscription): Promise<Finding[]> {
   const findings: Finding[] = [];
   const results: HubResult[] = [];
 
+  // ── Step 1: catalog check (no BANKR credit needed) ──────────────────────────
+  const catalogHit = catalogCheck(watch.target);
+  if (catalogHit) {
+    results.push(catalogHit);
+  }
+
+  // ── Step 2: Hub tool scan (needs BANKR credit) ───────────────────────────────
   if (watch.targetType === "domain") {
     results.push(await callPhishingScan(watch.target));
   } else if (watch.targetType === "token") {
