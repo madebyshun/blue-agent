@@ -1,75 +1,87 @@
 /**
  * Blue Agent — KV Store
- * Wraps @vercel/kv with graceful fallback to in-memory Map.
- * Works in local dev without KV env vars, auto-upgrades in production.
+ * Uses @upstash/redis when KV_REST_API_URL + KV_REST_API_TOKEN are set.
+ * Falls back to in-memory Map for local dev (no env vars needed).
  */
 
 // ─── In-memory fallback ───────────────────────────────────────────────────────
-const memStore = new Map<string, unknown>();
+const memStore = new Map<string, { value: unknown; expiresAt?: number }>();
+
+function memClean(key: string) {
+  const entry = memStore.get(key);
+  if (entry?.expiresAt && Date.now() > entry.expiresAt) {
+    memStore.delete(key);
+    return true;
+  }
+  return false;
+}
 
 const fallback = {
   async get<T>(key: string): Promise<T | null> {
-    return (memStore.get(key) as T) ?? null;
+    if (memClean(key)) return null;
+    return (memStore.get(key)?.value as T) ?? null;
   },
   async set(key: string, value: unknown, opts?: { ex?: number }): Promise<void> {
-    memStore.set(key, value);
-    if (opts?.ex) {
-      setTimeout(() => memStore.delete(key), opts.ex * 1000);
-    }
+    memStore.set(key, {
+      value,
+      expiresAt: opts?.ex ? Date.now() + opts.ex * 1000 : undefined,
+    });
   },
   async del(...keys: string[]): Promise<void> {
     keys.forEach((k) => memStore.delete(k));
   },
   async incr(key: string): Promise<number> {
-    const val = ((memStore.get(key) as number) ?? 0) + 1;
-    memStore.set(key, val);
+    if (memClean(key)) memStore.set(key, { value: 0 });
+    const entry = memStore.get(key);
+    const val = ((entry?.value as number) ?? 0) + 1;
+    memStore.set(key, { value: val, expiresAt: entry?.expiresAt });
     return val;
-  },
-  async expire(key: string, seconds: number): Promise<void> {
-    const val = memStore.get(key);
-    if (val !== undefined) {
-      setTimeout(() => memStore.delete(key), seconds * 1000);
-    }
   },
 };
 
-// ─── KV singleton ────────────────────────────────────────────────────────────
-type KVClient = typeof fallback;
+// ─── Upstash Redis client ─────────────────────────────────────────────────────
+type KVClient = {
+  get<T>(key: string): Promise<T | null>;
+  set(key: string, value: unknown, opts?: { ex?: number }): Promise<void>;
+  del(...keys: string[]): Promise<void>;
+  incr(key: string): Promise<number>;
+};
 
 function getKV(): KVClient {
-  if (
-    process.env.KV_REST_API_URL &&
-    process.env.KV_REST_API_TOKEN
-  ) {
+  const url   = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+
+  if (url && token) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { kv } = require("@vercel/kv");
-    return kv as KVClient;
+    const { Redis } = require("@upstash/redis");
+    const redis = new Redis({ url, token });
+    return {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      get:  <T>(key: string) => redis.get(key) as Promise<T | null>,
+      set:  (key: string, value: unknown, opts?: { ex?: number }) =>
+              opts?.ex ? redis.set(key, value, { ex: opts.ex }) : redis.set(key, value),
+      del:  (...keys: string[]) => redis.del(...keys),
+      incr: (key: string) => redis.incr(key),
+    };
   }
+
   return fallback;
 }
 
 export const kv = getKV();
 
-// ─── Typed helpers ────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 export async function kvGet<T>(key: string): Promise<T | null> {
-  try {
-    return await kv.get<T>(key);
-  } catch {
-    return null;
-  }
+  try { return await kv.get<T>(key); } catch { return null; }
 }
 
 export async function kvSet(key: string, value: unknown, ttlSeconds?: number): Promise<void> {
-  try {
-    await kv.set(key, value, ttlSeconds ? { ex: ttlSeconds } : undefined);
-  } catch {}
+  try { await kv.set(key, value, ttlSeconds ? { ex: ttlSeconds } : undefined); } catch {}
 }
 
 export async function kvDel(...keys: string[]): Promise<void> {
-  try {
-    await kv.del(...keys);
-  } catch {}
+  try { await kv.del(...keys); } catch {}
 }
 
 export const isKVEnabled = (): boolean =>
