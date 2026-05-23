@@ -48,6 +48,20 @@ interface DiscoveryInfo {
   scannedAt: string;
 }
 
+interface ScanLog {
+  runId:        string;
+  startedAt:    string;
+  finishedAt:   string;
+  durationMs:   number;
+  userWatches:  number;
+  autoTargets:  number;
+  totalScanned: number;
+  findings:     number;
+  alerted:      number;
+  errors:       number;
+  log:          string[];
+}
+
 interface SchedulerConfig {
   enabled:         boolean;
   intervalMinutes: number;
@@ -209,6 +223,8 @@ export default function SentinelPage() {
   const [watches,     setWatches]     = useState<Watch[]>([]);
   const [scheduler,   setScheduler]   = useState<SchedulerConfig | null>(null);
   const [discovery,   setDiscovery]   = useState<DiscoveryInfo | null>(null);
+  const [scanLogs,    setScanLogs]    = useState<ScanLog[]>([]);
+  const [logsOpen,    setLogsOpen]    = useState(false);
   const [loading,     setLoading]     = useState(true);
   const [scanning,    setScanning]    = useState(false);
   const [scanResult,  setScanResult]  = useState<string | null>(null);
@@ -218,19 +234,22 @@ export default function SentinelPage() {
 
   const load = useCallback(async () => {
     try {
-      const [watchRes, ctrlRes, discRes] = await Promise.all([
+      const [watchRes, ctrlRes, discRes, logsRes] = await Promise.all([
         fetch("/api/sentinel/watch"),
         fetch("/api/sentinel/control"),
         fetch("/api/sentinel/discovery"),
+        fetch("/api/sentinel/logs"),
       ]);
       const watchData = await watchRes.json() as { stats: Stats; findings: Finding[]; watches: Watch[] };
       const ctrlData  = await ctrlRes.json() as { config: SchedulerConfig };
       const discData  = discRes.ok ? await discRes.json() as DiscoveryInfo : null;
+      const logsData  = logsRes.ok ? await logsRes.json() as { logs: ScanLog[] } : null;
       setStats(watchData.stats);
       setFindings(watchData.findings ?? []);
       setWatches((watchData.watches ?? []).filter(w => w.active));
       setScheduler(ctrlData.config ?? null);
       if (discData) setDiscovery(discData);
+      if (logsData) setScanLogs(logsData.logs ?? []);
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, []);
@@ -402,6 +421,38 @@ export default function SentinelPage() {
             )}
           </div>
 
+          {/* Scan logs summary */}
+          {scanLogs.length > 0 && (
+            <div className="px-4 pt-3 pb-3 border-t border-[#1A1A2E]">
+              <button onClick={() => setLogsOpen(v => !v)}
+                className="w-full flex items-center justify-between group">
+                <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">
+                  Scan Logs · <span className="text-[#4FC3F7]">{scanLogs.length}</span>
+                </p>
+                <span className="font-mono text-[9px] text-slate-700 group-hover:text-slate-400 transition-colors">
+                  {logsOpen ? "▲" : "▼"}
+                </span>
+              </button>
+              {logsOpen && (
+                <div className="mt-2 space-y-1.5 max-h-48 overflow-y-auto">
+                  {scanLogs.slice(0, 10).map(l => (
+                    <div key={l.runId} className="border border-[#1A1A2E] rounded-lg px-2.5 py-2">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="font-mono text-[9px] text-slate-500">{timeAgo(l.startedAt)}</span>
+                        <span className={`font-mono text-[9px] ${l.errors > 0 ? "text-red-400" : "text-emerald-400"}`}>
+                          {l.errors > 0 ? `✗ ${l.errors} err` : "✓ ok"}
+                        </span>
+                      </div>
+                      <p className="font-mono text-[9px] text-slate-600">
+                        {l.totalScanned} scanned · {l.findings} found · {l.alerted} alerted · {l.durationMs}ms
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Footer */}
           <div className="px-5 py-4 border-t border-[#1A1A2E]">
             <div className="space-y-1.5">
@@ -409,9 +460,9 @@ export default function SentinelPage() {
                 className="font-mono text-[10px] text-slate-700 hover:text-red-400 transition-colors block">
                 🚨 test alert →
               </a>
-              <a href="/api/sentinel/findings"
+              <a href="/api/sentinel/logs"
                 className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors block">
-                findings API →
+                scan logs API →
               </a>
               <Link href="/hub"
                 className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors block">
