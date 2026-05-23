@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "blue-agent": {
+      "type": "http",
+      "url": "https://blueagent.dev/api/mcp"
+    }
+  }
+}

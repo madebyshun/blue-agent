@@ -1,0 +1,9 @@
+{
+  "name": "blue-agent",
+  "version": "1.0.0",
+  "description": "AI founder console for Base builders — idea, build, audit, ship, raise + Hub tools for market intelligence, security, and fundraising",
+  "author": {
+    "name": "Blocky Studio"
+  },
+  "keywords": ["base", "defi", "ai", "builder", "founder", "crypto", "blockchain", "mcp"]
+}
