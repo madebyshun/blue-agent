@@ -12,7 +12,9 @@ import { kvGet, kvSet } from "@/lib/kv";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const QSTASH_URL  = "https://qstash.upstash.io/v2";
+// EU region: https://qstash-eu-central-1.upstash.io
+// Global:    https://qstash.upstash.io
+const QSTASH_BASE  = (process.env.QSTASH_URL ?? "https://qstash.upstash.io").replace(/\/$/, "");
 const QSTASH_TOKEN = process.env.QSTASH_TOKEN ?? "";
 const APP_URL     = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
 const CRON_SECRET = process.env.CRON_SECRET ?? "";
@@ -64,7 +66,7 @@ const scanUrl = (): string =>
 async function qstashCreate(intervalMinutes: number): Promise<string | null> {
   if (!QSTASH_TOKEN) return null;
   try {
-    const res = await fetch(`${QSTASH_URL}/schedules`, {
+    const res = await fetch(`${QSTASH_BASE}/v2/schedules`, {
       method:  "POST",
       headers: {
         "Authorization": `Bearer ${QSTASH_TOKEN}`,
@@ -76,10 +78,14 @@ async function qstashCreate(intervalMinutes: number): Promise<string | null> {
       }),
       signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error("[QStash] create schedule failed:", res.status, await res.text().catch(() => ""));
+      return null;
+    }
     const data = await res.json() as { scheduleId: string };
     return data.scheduleId ?? null;
-  } catch {
+  } catch (e) {
+    console.error("[QStash] create schedule error:", e);
     return null;
   }
 }
@@ -87,7 +93,7 @@ async function qstashCreate(intervalMinutes: number): Promise<string | null> {
 async function qstashDelete(scheduleId: string): Promise<boolean> {
   if (!QSTASH_TOKEN || !scheduleId) return false;
   try {
-    const res = await fetch(`${QSTASH_URL}/schedules/${scheduleId}`, {
+    const res = await fetch(`${QSTASH_BASE}/v2/schedules/${scheduleId}`, {
       method:  "DELETE",
       headers: { "Authorization": `Bearer ${QSTASH_TOKEN}` },
       signal:  AbortSignal.timeout(10000),
@@ -127,7 +133,7 @@ export async function startScheduler(opts: {
 
   const message = scheduleId
     ? `🛡️ Sentinel scanning every ${interval}min via QStash`
-    : `🛡️ Sentinel enabled (manual mode — QSTASH_TOKEN not set)`;
+    : `🛡️ Sentinel enabled (manual mode — QStash schedule not created, check logs)`;
 
   return { ok: true, config: cfg, message };
 }
