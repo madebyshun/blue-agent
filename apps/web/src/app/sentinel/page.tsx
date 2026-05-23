@@ -42,21 +42,21 @@ interface Stats {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SEV: Record<Severity, { badge: string; left: string; label: string }> = {
-  critical: { badge: "text-red-400 border-red-500/40 bg-red-500/10",         left: "border-l-red-500",    label: "🚨 CRITICAL" },
-  high:     { badge: "text-orange-400 border-orange-500/40 bg-orange-500/10", left: "border-l-orange-500", label: "⚠️ HIGH"     },
-  medium:   { badge: "text-yellow-400 border-yellow-500/40 bg-yellow-500/10", left: "border-l-yellow-500", label: "🟡 MEDIUM"  },
-  low:      { badge: "text-emerald-400 border-emerald-500/40 bg-emerald-500/10", left: "border-l-emerald-500", label: "🟢 LOW" },
+  critical: { badge: "text-red-400 border-red-500/40 bg-red-500/10",           left: "border-l-red-500",    label: "🚨 CRITICAL" },
+  high:     { badge: "text-orange-400 border-orange-500/40 bg-orange-500/10",   left: "border-l-orange-500", label: "⚠️ HIGH"     },
+  medium:   { badge: "text-yellow-400 border-yellow-500/40 bg-yellow-500/10",   left: "border-l-yellow-500", label: "🟡 MEDIUM"   },
+  low:      { badge: "text-emerald-400 border-emerald-500/40 bg-emerald-500/10", left: "border-l-emerald-500", label: "🟢 LOW"    },
 };
 
 const THREAT_CATS = [
-  { icon: "🍯", name: "Honeypot",     color: "#f87171", desc: "Token blocks sells after buy" },
-  { icon: "🏃", name: "Rug Pull",     color: "#fb923c", desc: "Unlocked LP, unlimited mint"  },
-  { icon: "🎣", name: "Phishing",     color: "#fbbf24", desc: "Fake Coinbase / Uniswap domains" },
-  { icon: "🌀", name: "Mixer / AML",  color: "#a78bfa", desc: "Tornado Cash, sanctions exposure" },
-  { icon: "⚡", name: "Exploit",      color: "#f472b6", desc: "Flash loan, reentrancy patterns" },
-  { icon: "🩸", name: "Drain",        color: "#ef4444", desc: "Approval drainers, NFT sweeps"  },
-  { icon: "🎭", name: "Scam Token",   color: "#60a5fa", desc: "Impersonating USDC / ETH"       },
-  { icon: "🔓", name: "Bad Approval", color: "#34d399", desc: "Infinite approval to unverified" },
+  { icon: "🍯", name: "Honeypot",     color: "#f87171", desc: "Token blocks sells after buy"      },
+  { icon: "🏃", name: "Rug Pull",     color: "#fb923c", desc: "Unlocked LP, unlimited mint"       },
+  { icon: "🎣", name: "Phishing",     color: "#fbbf24", desc: "Fake Coinbase / Uniswap domains"   },
+  { icon: "🌀", name: "Mixer / AML",  color: "#a78bfa", desc: "Tornado Cash, sanctions exposure"  },
+  { icon: "⚡", name: "Exploit",      color: "#f472b6", desc: "Flash loan, reentrancy patterns"   },
+  { icon: "🩸", name: "Drain",        color: "#ef4444", desc: "Approval drainers, NFT sweeps"     },
+  { icon: "🎭", name: "Scam Token",   color: "#60a5fa", desc: "Impersonating USDC / ETH"          },
+  { icon: "🔓", name: "Bad Approval", color: "#34d399", desc: "Infinite approval to unverified"   },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -141,7 +141,6 @@ function AddWatchForm({ onAdded }: { onAdded: () => void }) {
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-3">
-          {/* Type selector */}
           <div className="flex gap-1.5">
             {(["address","token","domain"] as TargetType[]).map(t => (
               <button key={t} type="button" onClick={() => setType(t)}
@@ -152,21 +151,17 @@ function AddWatchForm({ onAdded }: { onAdded: () => void }) {
                 }`}>{t}</button>
             ))}
           </div>
-
           <input
-            className="w-full px-3 py-2 rounded-lg font-mono text-sm bg-[#050508] border border-[#1A1A2E] text-white placeholder:text-slate-700 outline-none focus:border-[#4FC3F7]/40 transition-colors"
+            className="w-full px-3 py-2 rounded-lg font-mono text-xs bg-[#050508] border border-[#1A1A2E] text-white placeholder:text-slate-700 outline-none focus:border-[#4FC3F7]/40 transition-colors"
             placeholder={type === "domain" ? "example.com or https://…" : "0x… address"}
             value={target} onChange={e => setTarget(e.target.value)} required
           />
-
           <input
-            className="w-full px-3 py-2 rounded-lg font-mono text-sm bg-[#050508] border border-[#1A1A2E] text-white placeholder:text-slate-700 outline-none focus:border-[#4FC3F7]/40 transition-colors"
+            className="w-full px-3 py-2 rounded-lg font-mono text-xs bg-[#050508] border border-[#1A1A2E] text-white placeholder:text-slate-700 outline-none focus:border-[#4FC3F7]/40 transition-colors"
             placeholder="Label (optional) — e.g. My wallet, USDC contract"
             value={label} onChange={e => setLabel(e.target.value)}
           />
-
           {err && <p className="font-mono text-[10px] text-red-400">{err}</p>}
-
           <button type="submit" disabled={loading || !target.trim()}
             className="w-full py-2.5 bg-[#4FC3F7]/10 hover:bg-[#4FC3F7]/15 border border-[#4FC3F7]/30 text-[#4FC3F7] font-mono text-xs rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
             {loading ? "Adding…" : "🛡️ Watch this target →"}
@@ -232,258 +227,250 @@ export default function SentinelPage() {
       <div className="flex bg-[#050508] font-mono pt-16">
 
         {/* ── Sidebar ──────────────────────────────────── */}
-        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto border-r border-[#1A1A2E] py-10 px-4">
+        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] border-r border-[#1A1A2E]">
 
-          {/* Primary label */}
-          <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-1 px-2">BLUE SENTINEL</p>
-          <p className="font-mono text-[10px] text-slate-700 mb-6 px-2">24/7 onchain security · Base</p>
-
-          {/* Stat grid */}
-          <div className="grid grid-cols-2 gap-2 px-2 mb-6">
-            {[
-              { label: "Critical", value: stats?.criticalFindings ?? 0, color: "text-red-400" },
-              { label: "High",     value: stats?.highFindings     ?? 0, color: "text-orange-400" },
-              { label: "Findings", value: stats?.totalFindings    ?? 0, color: "text-white" },
-              { label: "Scans",    value: stats?.totalScans       ?? 0, color: "text-slate-400" },
-            ].map(s => (
-              <div key={s.label} className="card-surface rounded-lg p-2.5">
-                <p className={`font-mono text-xl font-bold ${s.color}`}>{s.value}</p>
-                <p className="font-mono text-[9px] text-slate-700 mt-0.5 uppercase tracking-widest">{s.label}</p>
-              </div>
-            ))}
+          {/* Header */}
+          <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
+            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUE SENTINEL</p>
+            <p className="font-mono text-[10px] text-slate-700 mt-1">24/7 onchain security monitor · Base</p>
           </div>
 
-          {/* Scan trigger */}
-          <div className="mt-6 pt-6 border-t border-[#1A1A2E]">
-            <p className="font-mono text-[10px] text-slate-700 tracking-widest mb-3 px-2">SCAN</p>
-            <div className="px-2">
-              <button onClick={handleScan} disabled={scanning}
-                className={`w-full font-mono text-xs px-3 py-2.5 rounded-lg border transition-all ${
-                  scanning
-                    ? "border-[#4FC3F7]/20 text-[#4FC3F7]/50 cursor-not-allowed"
-                    : "border-[#4FC3F7]/30 text-[#4FC3F7] hover:bg-[#4FC3F7]/5"
-                }`}>
-                {scanning ? "↺ scanning…" : "↺ trigger scan"}
-              </button>
-              {scanResult && (
-                <p className="font-mono text-[10px] text-emerald-400 mt-2">{scanResult}</p>
-              )}
-              {stats?.lastScan && (
-                <p className="font-mono text-[10px] text-slate-700 mt-1.5">
-                  last scan {timeAgo(stats.lastScan)}
-                </p>
-              )}
-              <p className="font-mono text-[10px] text-slate-800 mt-1">cron: daily 12:00 UTC</p>
+          {/* Stats */}
+          <div className="px-4 pt-4 pb-3 border-b border-[#1A1A2E]">
+            <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">Threat Summary</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: "Critical", value: stats?.criticalFindings ?? 0, color: "#ef4444" },
+                { label: "High",     value: stats?.highFindings     ?? 0, color: "#f97316" },
+                { label: "Findings", value: stats?.totalFindings    ?? 0, color: "#e2e8f0" },
+                { label: "Scans",    value: stats?.totalScans       ?? 0, color: "#64748b" },
+              ].map(s => (
+                <div key={s.label} className="card-surface rounded-lg p-2.5">
+                  <p className="font-mono text-xl font-bold" style={{ color: s.color }}>{s.value}</p>
+                  <p className="font-mono text-[9px] text-slate-700 mt-0.5 uppercase tracking-widest">{s.label}</p>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Watched targets */}
-          <div className="mt-6 pt-6 border-t border-[#1A1A2E]">
-            <p className="font-mono text-[10px] text-slate-700 tracking-widest mb-3 px-2">
-              WATCHES · <span className="text-[#4FC3F7]">{watches.length}</span>
+          {/* Scan trigger */}
+          <div className="px-4 pt-4 pb-3 border-b border-[#1A1A2E]">
+            <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">Scan</p>
+            <button onClick={handleScan} disabled={scanning}
+              className={`w-full font-mono text-xs px-3 py-2 rounded-lg border transition-all ${
+                scanning
+                  ? "border-[#4FC3F7]/20 text-[#4FC3F7]/50 cursor-not-allowed"
+                  : "border-[#4FC3F7]/30 text-[#4FC3F7] hover:bg-[#4FC3F7]/5"
+              }`}>
+              {scanning ? "↺ scanning…" : "↺ trigger scan"}
+            </button>
+            {scanResult && (
+              <p className="font-mono text-[10px] text-emerald-400 mt-2">{scanResult}</p>
+            )}
+            <div className="flex items-center justify-between mt-2">
+              {stats?.lastScan ? (
+                <p className="font-mono text-[10px] text-slate-700">last {timeAgo(stats.lastScan)}</p>
+              ) : (
+                <p className="font-mono text-[10px] text-slate-800">no scans yet</p>
+              )}
+              <p className="font-mono text-[10px] text-slate-800">cron 12:00 UTC</p>
+            </div>
+          </div>
+
+          {/* Watched targets — scrollable */}
+          <div className="flex-1 overflow-y-auto">
+            <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase px-5 pt-4 pb-2">
+              Watches · <span className="text-[#4FC3F7]">{watches.length}</span>
             </p>
             {watches.length === 0 ? (
-              <p className="font-mono text-[10px] text-slate-800 px-2">No active watches</p>
+              <p className="font-mono text-[10px] text-slate-800 px-5 py-2">No active watches</p>
             ) : (
-              <div className="flex flex-col gap-1 max-h-52 overflow-y-auto px-2">
-                {watches.map(w => (
-                  <div key={w.id} className="card-surface rounded-lg px-3 py-2 flex items-start gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-0.5 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      {w.label && (
-                        <p className="font-mono text-[10px] text-white truncate mb-0.5">{w.label}</p>
-                      )}
-                      <code className="font-mono text-[9px] text-[#4FC3F7] block truncate">
-                        {trunc(w.target, 20)}
-                      </code>
-                      <span className="font-mono text-[9px] text-slate-700 capitalize">{w.targetType}</span>
-                    </div>
-                    <button onClick={() => removeWatch(w.id)}
-                      className="font-mono text-[9px] text-slate-800 hover:text-red-400 transition-colors shrink-0">
-                      ✕
-                    </button>
+              watches.map(w => (
+                <div key={w.id}
+                  className="w-full text-left px-5 py-2.5 transition-all border-l-2 border-transparent hover:bg-[#0D0D1A] flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    {w.label && (
+                      <p className="font-mono text-xs text-white truncate">{w.label}</p>
+                    )}
+                    <code className="font-mono text-[10px] text-[#4FC3F7] block truncate">{trunc(w.target, 22)}</code>
+                    <span className="font-mono text-[9px] text-slate-700 capitalize">{w.targetType}</span>
                   </div>
-                ))}
-              </div>
+                  <button onClick={() => removeWatch(w.id)}
+                    className="font-mono text-[9px] text-slate-800 hover:text-red-400 transition-colors mt-0.5">✕</button>
+                </div>
+              ))
             )}
           </div>
 
           {/* Footer */}
-          <div className="mt-auto px-2 pt-6 border-t border-[#1A1A2E] space-y-2">
-            <a href="/api/sentinel/test-alert"
-              className="font-mono text-xs text-slate-700 hover:text-red-400 transition-colors block">
-              🚨 test alert →
-            </a>
-            <a href="/api/sentinel/findings"
-              className="font-mono text-xs text-slate-700 hover:text-white transition-colors block">
-              findings API →
-            </a>
-            <Link href="/hub"
-              className="font-mono text-xs text-slate-700 hover:text-white transition-colors block">
-              ← hub
-            </Link>
-            <a href="https://t.me/blueagent_hub" target="_blank" rel="noreferrer"
-              className="font-mono text-xs text-slate-700 hover:text-white transition-colors block">
-              @blueagent_hub →
-            </a>
+          <div className="px-5 py-4 border-t border-[#1A1A2E]">
+            <div className="space-y-1.5">
+              <a href="/api/sentinel/test-alert"
+                className="font-mono text-[10px] text-slate-700 hover:text-red-400 transition-colors block">
+                🚨 test alert →
+              </a>
+              <a href="/api/sentinel/findings"
+                className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors block">
+                findings API →
+              </a>
+              <Link href="/hub"
+                className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors block">
+                ← hub
+              </Link>
+            </div>
           </div>
         </aside>
 
         {/* ── Main content ─────────────────────────────── */}
-        <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto px-6 lg:px-10 py-10">
+        <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
 
-          {/* Page header */}
-          <div className="mb-10">
-            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-3">// ONCHAIN SECURITY MONITOR</p>
-            <h1 className="font-mono text-4xl sm:text-5xl font-bold text-white mb-3">
+          {/* Hero header */}
+          <div className="px-8 py-10 border-b border-[#1A1A2E]">
+            <div className="inline-flex items-center gap-2 border border-red-500/20 bg-red-500/5 rounded-full px-4 py-1.5 mb-6">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+              <span className="font-mono text-[10px] text-red-400 tracking-widest">LIVE · BASE CHAIN 8453</span>
+            </div>
+            <h1 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-3">
               Blue<span className="text-red-400">Sentinel</span>
             </h1>
-            <p className="font-mono text-base text-slate-400 max-w-xl">
+            <p className="font-mono text-sm text-slate-400 max-w-lg leading-relaxed">
               Watch wallets, tokens, and domains. Get instant Telegram alerts when threats are detected on Base.
             </p>
+          </div>
 
-            {/* Mobile severity tabs */}
-            <div className="lg:hidden flex gap-2 mt-6 flex-wrap border-b border-[#1A1A2E] pb-4">
-              {(["all","critical","high","medium","low"] as const).map(s => (
-                <button key={s} onClick={() => setSevFilter(s)}
-                  className={`font-mono text-xs px-3 py-1.5 rounded-lg transition-all capitalize ${
-                    sevFilter === s
-                      ? "bg-[#4FC3F7]/10 text-[#4FC3F7] border border-[#4FC3F7]/30"
-                      : "text-slate-500 hover:text-white"
-                  }`}>{s}</button>
+          {/* Content */}
+          <div className="px-6 lg:px-10 py-8 max-w-5xl w-full space-y-8">
+
+            {/* Stat cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: "Critical",       value: stats?.criticalFindings ?? 0, color: "text-red-400",    border: "border-l-red-500"    },
+                { label: "High",           value: stats?.highFindings     ?? 0, color: "text-orange-400", border: "border-l-orange-500" },
+                { label: "Active Watches", value: stats?.activeWatches    ?? 0, color: "text-[#4FC3F7]",  border: "border-l-[#4FC3F7]"  },
+                { label: "Total Scans",    value: stats?.totalScans       ?? 0, color: "text-slate-300",  border: "border-l-[#1A1A2E]"  },
+              ].map(s => (
+                <div key={s.label} className={`card-surface rounded-xl p-4 border-l-4 ${s.border}`}>
+                  <p className={`font-mono text-3xl font-bold ${s.color}`}>{s.value}</p>
+                  <p className="font-mono text-[10px] text-slate-600 mt-1 uppercase tracking-widest">{s.label}</p>
+                </div>
               ))}
             </div>
-          </div>
 
-          {/* Stat cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-            {[
-              { label: "Critical",       value: stats?.criticalFindings ?? 0, color: "text-red-400",    border: "border-l-red-500"    },
-              { label: "High",           value: stats?.highFindings     ?? 0, color: "text-orange-400", border: "border-l-orange-500" },
-              { label: "Active Watches", value: stats?.activeWatches    ?? 0, color: "text-[#4FC3F7]",  border: "border-l-[#4FC3F7]"  },
-              { label: "Total Scans",    value: stats?.totalScans       ?? 0, color: "text-white",      border: "border-l-[#1A1A2E]"  },
-            ].map(s => (
-              <div key={s.label} className={`card-surface rounded-xl p-4 border-l-4 ${s.border}`}>
-                <p className={`font-mono text-3xl font-bold ${s.color}`}>{s.value}</p>
-                <p className="font-mono text-[10px] text-slate-600 mt-1 uppercase tracking-widest">{s.label}</p>
-              </div>
-            ))}
-          </div>
+            {/* Findings + add watch */}
+            <div className="grid lg:grid-cols-3 gap-6">
 
-          {/* Findings + add watch */}
-          <div className="grid lg:grid-cols-3 gap-6 mb-8">
-
-            {/* Findings feed */}
-            <div className="lg:col-span-2">
-              <div className="flex items-center justify-between mb-4">
-                <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// LIVE FINDINGS</p>
-                <div className="flex gap-1">
-                  {(["all","critical","high","medium","low"] as const).map(s => (
-                    <button key={s} onClick={() => setSevFilter(s)}
-                      className={`font-mono text-[9px] px-2 py-1 rounded border transition-colors capitalize ${
-                        sevFilter === s
-                          ? "border-[#4FC3F7]/40 text-[#4FC3F7] bg-[#4FC3F7]/10"
-                          : "border-[#1A1A2E] text-slate-700 hover:text-slate-400"
-                      }`}>{s}</button>
-                  ))}
+              {/* Findings feed */}
+              <div className="lg:col-span-2">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">Live Findings</p>
+                  <div className="flex gap-1">
+                    {(["all","critical","high","medium","low"] as const).map(s => (
+                      <button key={s} onClick={() => setSevFilter(s)}
+                        className={`font-mono text-[9px] px-2 py-1 rounded border transition-colors capitalize ${
+                          sevFilter === s
+                            ? "border-[#4FC3F7]/40 text-[#4FC3F7] bg-[#4FC3F7]/10"
+                            : "border-[#1A1A2E] text-slate-700 hover:text-slate-400"
+                        }`}>{s}</button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              {loading ? (
-                <div className="card-surface rounded-xl p-10 text-center">
-                  <p className="font-mono text-xs text-slate-700 animate-pulse">loading…</p>
-                </div>
-              ) : filtered.length === 0 ? (
-                <div className="card-surface rounded-xl p-12 text-center">
-                  <p className="text-3xl mb-3">🛡️</p>
-                  <p className="font-mono text-sm text-slate-400 mb-1">No findings</p>
-                  <p className="font-mono text-[10px] text-slate-700">
-                    {watches.length === 0 ? "Add a target to start monitoring" : "All watched targets look clean"}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {filtered.map(f => (
-                    <FindingCard key={f.id} f={f} onDismiss={dismissFinding} />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Add watch + mobile watches */}
-            <div className="space-y-4">
-              <AddWatchForm onAdded={load} />
-
-              {/* Mobile watches list */}
-              <div className="card-surface rounded-xl p-5 lg:hidden">
-                <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-3">
-                  // WATCHES · {watches.length}
-                </p>
-                {watches.length === 0 ? (
-                  <p className="font-mono text-[10px] text-slate-700">No active watches</p>
+                {loading ? (
+                  <div className="card-surface rounded-xl p-10 text-center">
+                    <p className="font-mono text-xs text-slate-700 animate-pulse">loading…</p>
+                  </div>
+                ) : filtered.length === 0 ? (
+                  <div className="card-surface rounded-xl p-12 text-center">
+                    <p className="text-3xl mb-3">🛡️</p>
+                    <p className="font-mono text-sm text-slate-400 mb-1">No findings</p>
+                    <p className="font-mono text-[10px] text-slate-700">
+                      {watches.length === 0 ? "Add a target to start monitoring" : "All watched targets look clean"}
+                    </p>
+                  </div>
                 ) : (
-                  <div className="space-y-2">
-                    {watches.map(w => (
-                      <div key={w.id} className="flex items-center gap-2 border-b border-[#1A1A2E] pb-2 last:border-0 last:pb-0">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          {w.label && <p className="font-mono text-[10px] text-white truncate">{w.label}</p>}
-                          <code className="font-mono text-[9px] text-[#4FC3F7] block truncate">{trunc(w.target, 20)}</code>
-                        </div>
-                        <button onClick={() => removeWatch(w.id)}
-                          className="font-mono text-[9px] text-slate-700 hover:text-red-400 transition-colors">remove</button>
-                      </div>
+                  <div className="space-y-3">
+                    {filtered.map(f => (
+                      <FindingCard key={f.id} f={f} onDismiss={dismissFinding} />
                     ))}
                   </div>
                 )}
               </div>
-            </div>
-          </div>
 
-          {/* Threat catalog */}
-          <div className="mb-8">
-            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-4">// THREAT CATALOG · 8 CATEGORIES</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-              {THREAT_CATS.map(t => (
-                <div key={t.name}
-                  className="card-surface card-hover rounded-xl p-3 text-center">
-                  <p className="text-2xl mb-2">{t.icon}</p>
-                  <p className="font-mono text-[10px] font-bold mb-1" style={{ color: t.color }}>{t.name}</p>
-                  <p className="font-mono text-[9px] text-slate-700 leading-tight hidden sm:block">{t.desc}</p>
+              {/* Add watch + mobile watches */}
+              <div className="space-y-4">
+                <AddWatchForm onAdded={load} />
+
+                {/* Mobile watches */}
+                <div className="card-surface rounded-xl p-5 lg:hidden">
+                  <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">
+                    Watches · {watches.length}
+                  </p>
+                  {watches.length === 0 ? (
+                    <p className="font-mono text-[10px] text-slate-700">No active watches</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {watches.map(w => (
+                        <div key={w.id} className="flex items-center gap-2 border-b border-[#1A1A2E] pb-2 last:border-0 last:pb-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            {w.label && <p className="font-mono text-[10px] text-white truncate">{w.label}</p>}
+                            <code className="font-mono text-[9px] text-[#4FC3F7] block truncate">{trunc(w.target, 20)}</code>
+                          </div>
+                          <button onClick={() => removeWatch(w.id)}
+                            className="font-mono text-[9px] text-slate-700 hover:text-red-400 transition-colors">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))}
+              </div>
             </div>
-          </div>
 
-          {/* How it works */}
-          <div className="mb-8">
-            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-4">// HOW IT WORKS</p>
-            <div className="grid sm:grid-cols-3 gap-3">
-              {[
-                { step: "01", color: "#4FC3F7", title: "Watch",  desc: "Add any wallet, token contract, or domain. Sentinel registers it for continuous monitoring on Base." },
-                { step: "02", color: "#A78BFA", title: "Scan",   desc: "Each cycle checks targets against threat catalog + Hub security tools: honeypot, AML, phishing." },
-                { step: "03", color: "#34D399", title: "Alert",  desc: "Critical and high-severity findings trigger instant Telegram alerts — before damage is done." },
-              ].map(h => (
-                <div key={h.step} className="card-surface rounded-xl p-5">
-                  <p className="font-mono text-4xl font-bold mb-3" style={{ color: h.color + "30" }}>{h.step}</p>
-                  <p className="font-mono text-sm font-bold mb-2" style={{ color: h.color }}>{h.title}</p>
-                  <p className="font-mono text-xs text-slate-500 leading-relaxed">{h.desc}</p>
-                </div>
-              ))}
+            {/* Threat catalog */}
+            <div>
+              <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">Threat Catalog · 8 Categories</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+                {THREAT_CATS.map(t => (
+                  <div key={t.name} className="card-surface card-hover rounded-xl p-3 text-center">
+                    <p className="text-2xl mb-2">{t.icon}</p>
+                    <p className="font-mono text-[10px] font-bold mb-1" style={{ color: t.color }}>{t.name}</p>
+                    <p className="font-mono text-[9px] text-slate-700 leading-tight hidden sm:block">{t.desc}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
 
-          {/* Footer */}
-          <div className="border-t border-[#1A1A2E] pt-5 flex items-center justify-between flex-wrap gap-3">
-            <p className="font-mono text-[10px] text-slate-800">
-              Blue<span className="text-red-400/40">Sentinel</span> · {stats?.totalFindings ?? 0} threats detected · Base chain 8453
-            </p>
-            <div className="flex items-center gap-4">
-              <a href="https://x.com/blueagent_" target="_blank" rel="noreferrer"
-                className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors">@blueagent_</a>
-              <a href="https://t.me/blueagent_hub" target="_blank" rel="noreferrer"
-                className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors">Telegram</a>
-              <Link href="/hub" className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors">Hub →</Link>
+            {/* How it works */}
+            <div>
+              <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">How It Works</p>
+              <div className="grid sm:grid-cols-3 gap-3">
+                {[
+                  { step: "01", color: "#4FC3F7", title: "Watch",  desc: "Add any wallet, token contract, or domain. Sentinel registers it for continuous monitoring on Base." },
+                  { step: "02", color: "#A78BFA", title: "Scan",   desc: "Each cycle checks targets against threat catalog + Hub security tools: honeypot, AML, phishing." },
+                  { step: "03", color: "#34D399", title: "Alert",  desc: "Critical and high-severity findings trigger instant Telegram alerts — before damage is done." },
+                ].map(h => (
+                  <div key={h.step} className="card-surface rounded-xl p-5">
+                    <p className="font-mono text-4xl font-bold mb-3" style={{ color: h.color + "30" }}>{h.step}</p>
+                    <p className="font-mono text-sm font-bold mb-2" style={{ color: h.color }}>{h.title}</p>
+                    <p className="font-mono text-xs text-slate-500 leading-relaxed">{h.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-[#1A1A2E] pt-5 flex items-center justify-between flex-wrap gap-3">
+              <p className="font-mono text-[10px] text-slate-800">
+                Blue<span className="text-red-400/40">Sentinel</span> · {stats?.totalFindings ?? 0} threats detected · Base 8453
+              </p>
+              <div className="flex items-center gap-4">
+                <a href="https://x.com/blueagent_" target="_blank" rel="noreferrer"
+                  className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors">@blueagent_</a>
+                <a href="https://t.me/blueagent_hub" target="_blank" rel="noreferrer"
+                  className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors">Telegram</a>
+                <Link href="/hub" className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors">Hub →</Link>
+              </div>
             </div>
           </div>
 
