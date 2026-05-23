@@ -1,0 +1,376 @@
+/**
+ * Blue Sentinel — Threat Catalog
+ *
+ * Canonical definitions of threat types Blue Sentinel monitors.
+ * Each entry has:
+ *   - category + severity
+ *   - detection indicators (pattern strings / heuristics)
+ *   - known-bad seed addresses / domains
+ *
+ * The cron scan loop loads this catalog and checks watched targets
+ * against each entry's indicators.
+ */
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type ThreatCategory =
+  | "honeypot"
+  | "rug"
+  | "phishing"
+  | "mixer"
+  | "exploit"
+  | "drain"
+  | "aml"
+  | "scam_token"
+  | "malicious_approval";
+
+export type ThreatSeverity = "critical" | "high" | "medium" | "low";
+
+export interface ThreatEntry {
+  id:          string;
+  category:    ThreatCategory;
+  severity:    ThreatSeverity;
+  name:        string;
+  description: string;
+  /** Heuristic strings / keywords used to detect this threat. */
+  indicators:  string[];
+  /** Known-bad Base addresses associated with this threat. */
+  addresses?:  string[];
+  /** Known-bad domains associated with this threat. */
+  domains?:    string[];
+  updatedAt:   string;
+}
+
+export interface Finding {
+  id:          string;
+  threatId:    string;
+  threatName:  string;
+  category:    ThreatCategory;
+  severity:    ThreatSeverity;
+  target:      string;
+  targetType:  "address" | "domain" | "token";
+  summary:     string;
+  chain:       "base";
+  detectedAt:  string;
+  alerted:     boolean;
+}
+
+export interface WatchSubscription {
+  id:            string;
+  target:        string;
+  targetType:    "address" | "domain" | "token";
+  label?:        string;
+  alertChannels: ("telegram" | "webhook")[];
+  webhookUrl?:   string;
+  telegramChatId?: string;  // override global chat if set
+  createdAt:     string;
+  active:        boolean;
+}
+
+// ─── KV Keys ─────────────────────────────────────────────────────────────────
+
+export const SENTINEL_KV = {
+  catalog:          "sentinel:catalog",
+  findings:         "sentinel:findings:latest",
+  findingsHistory:  "sentinel:findings:history",
+  watches:          "sentinel:watches",
+  scanLast:         "sentinel:scan:last",
+  scanStats:        "sentinel:scan:stats",
+} as const;
+
+export const SENTINEL_TTL = {
+  findings:        60 * 60 * 24 * 7,   // 7 days
+  findingsHistory: 60 * 60 * 24 * 30,  // 30 days
+  watches:         0,                   // no TTL — persistent
+  stats:           60 * 60 * 24 * 7,   // 7 days
+} as const;
+
+// ─── Seed Catalog ─────────────────────────────────────────────────────────────
+
+export const THREAT_CATALOG: ThreatEntry[] = [
+  // ── Honeypot ────────────────────────────────────────────────────────────────
+  {
+    id:          "honeypot-erc20-v1",
+    category:    "honeypot",
+    severity:    "critical",
+    name:        "ERC-20 Honeypot Token",
+    description: "Token contract allows buys but blocks sells via owner-controlled transfer restrictions, hidden fee >50%, or blacklist mechanism.",
+    indicators:  [
+      "sell_blocked",
+      "transfer_restriction",
+      "hidden_fee_above_50",
+      "owner_can_blacklist",
+      "buy_only_contract",
+      "max_tx_manipulation",
+    ],
+    updatedAt: "2026-05-23",
+  },
+  {
+    id:          "honeypot-nft-v1",
+    category:    "honeypot",
+    severity:    "high",
+    name:        "NFT Honeypot",
+    description: "NFT contract mints freely but transfer/sell is gated or permanently disabled after mint.",
+    indicators:  [
+      "nft_transfer_disabled",
+      "soulbound_undisclosed",
+      "approve_blocked_post_mint",
+    ],
+    updatedAt: "2026-05-23",
+  },
+
+  // ── Rug Pull ─────────────────────────────────────────────────────────────────
+  {
+    id:          "rug-liquidity-v1",
+    category:    "rug",
+    severity:    "critical",
+    name:        "Liquidity Rug Pull",
+    description: "Team can withdraw all liquidity from the pool — LP tokens not locked, renounce pattern missing.",
+    indicators:  [
+      "lp_unlocked",
+      "owner_can_remove_liquidity",
+      "no_lock_contract",
+      "dev_wallet_holds_lp",
+      "single_lp_provider",
+    ],
+    updatedAt: "2026-05-23",
+  },
+  {
+    id:          "rug-mint-v1",
+    category:    "rug",
+    severity:    "critical",
+    name:        "Unlimited Mint / Supply Inflation",
+    description: "Owner retains unrestricted mint capability, enabling infinite supply dilution.",
+    indicators:  [
+      "owner_can_mint",
+      "mint_function_not_renounced",
+      "uncapped_supply",
+      "mint_to_arbitrary_address",
+    ],
+    updatedAt: "2026-05-23",
+  },
+  {
+    id:          "rug-ownership-v1",
+    category:    "rug",
+    severity:    "high",
+    name:        "Unrenounced Dangerous Ownership",
+    description: "Contract ownership not renounced and owner has write access to critical parameters (fees, pausing, blacklisting).",
+    indicators:  [
+      "owner_not_renounced",
+      "owner_can_pause",
+      "owner_can_change_fee",
+      "owner_can_blacklist",
+      "proxy_upgrade_no_timelock",
+    ],
+    updatedAt: "2026-05-23",
+  },
+
+  // ── Phishing ─────────────────────────────────────────────────────────────────
+  {
+    id:          "phishing-domain-v1",
+    category:    "phishing",
+    severity:    "critical",
+    name:        "Phishing Domain",
+    description: "Domain impersonates a legitimate Base/DeFi protocol to steal wallet approvals or seed phrases.",
+    indicators:  [
+      "domain_typosquat",
+      "lookalike_domain",
+      "fake_coinbase_domain",
+      "fake_uniswap_domain",
+      "fake_base_domain",
+      "drain_approval_pattern",
+    ],
+    domains: [
+      "base-airdrop.xyz",
+      "coinbase-claim.net",
+      "uniswap-v4-base.com",
+      "blueagent-airdrop.xyz",
+      "base-rewards.io",
+      "claim-base.org",
+    ],
+    updatedAt: "2026-05-23",
+  },
+  {
+    id:          "phishing-approval-v1",
+    category:    "phishing",
+    severity:    "critical",
+    name:        "Malicious Wallet Approval Drainer",
+    description: "Contract requests unlimited ERC-20 approval then drains wallet in a follow-up transaction.",
+    indicators:  [
+      "unlimited_approval_request",
+      "drain_after_approval",
+      "approval_to_unknown_contract",
+      "setApprovalForAll_nft_drain",
+    ],
+    updatedAt: "2026-05-23",
+  },
+
+  // ── Mixer / Money Laundering ──────────────────────────────────────────────────
+  {
+    id:          "mixer-tornado-v1",
+    category:    "mixer",
+    severity:    "high",
+    name:        "Tornado Cash / Mixer Exposure",
+    description: "Address has direct interaction with Tornado Cash or known Base chain mixer contracts.",
+    indicators:  [
+      "tornado_cash_interaction",
+      "mixer_deposit",
+      "mixer_withdrawal",
+      "layered_hops_through_mixer",
+    ],
+    addresses: [
+      "0x4447eF57E6F7bA1FbB5f01E809d56B67F62B001E", // TC on Base (example placeholder — verify)
+    ],
+    updatedAt: "2026-05-23",
+  },
+
+  // ── Exploit ───────────────────────────────────────────────────────────────────
+  {
+    id:          "exploit-flash-loan-v1",
+    category:    "exploit",
+    severity:    "critical",
+    name:        "Flash Loan Attack Pattern",
+    description: "Transaction pattern consistent with flash loan price manipulation or oracle attack.",
+    indicators:  [
+      "flash_loan_borrow_repay_single_tx",
+      "price_oracle_manipulation",
+      "abnormal_reserve_change",
+      "multi_protocol_single_tx",
+    ],
+    updatedAt: "2026-05-23",
+  },
+  {
+    id:          "exploit-reentrancy-v1",
+    category:    "exploit",
+    severity:    "critical",
+    name:        "Reentrancy Vulnerability",
+    description: "Contract code pattern suggests reentrancy vulnerability — state changes after external calls.",
+    indicators:  [
+      "external_call_before_state_change",
+      "missing_reentrancy_guard",
+      "recursive_call_pattern",
+    ],
+    updatedAt: "2026-05-23",
+  },
+
+  // ── Wallet Drain ──────────────────────────────────────────────────────────────
+  {
+    id:          "drain-approve-v1",
+    category:    "drain",
+    severity:    "critical",
+    name:        "Token Approval Drain",
+    description: "Known drainer contract pattern — requests approvals via social engineering then sweeps assets.",
+    indicators:  [
+      "known_drainer_address",
+      "approval_to_drainer",
+      "nft_approval_to_drainer",
+      "permit2_abuse",
+    ],
+    updatedAt: "2026-05-23",
+  },
+  {
+    id:          "drain-airdrop-v1",
+    category:    "drain",
+    severity:    "high",
+    name:        "Fake Airdrop Drain",
+    description: "Fake airdrop contract requires approval or 'claiming fee' that enables asset drain.",
+    indicators:  [
+      "fake_airdrop_claim",
+      "approval_required_to_claim",
+      "fee_to_claim_airdrop",
+      "zero_liquidity_airdrop_token",
+    ],
+    updatedAt: "2026-05-23",
+  },
+
+  // ── AML / Sanctions ───────────────────────────────────────────────────────────
+  {
+    id:          "aml-sanctions-v1",
+    category:    "aml",
+    severity:    "critical",
+    name:        "OFAC Sanctioned Address",
+    description: "Address appears on OFAC SDN list or has direct interaction with a sanctioned entity.",
+    indicators:  [
+      "ofac_sdn_match",
+      "interaction_with_sanctioned_address",
+      "chainalysis_severe_risk",
+    ],
+    updatedAt: "2026-05-23",
+  },
+  {
+    id:          "aml-high-risk-v1",
+    category:    "aml",
+    severity:    "high",
+    name:        "High-Risk AML Pattern",
+    description: "Address shows layering, structuring, or high-risk counterparty exposure patterns.",
+    indicators:  [
+      "layering_pattern",
+      "structuring_below_threshold",
+      "darknet_market_exposure",
+      "high_risk_exchange_source",
+    ],
+    updatedAt: "2026-05-23",
+  },
+
+  // ── Scam Token ────────────────────────────────────────────────────────────────
+  {
+    id:          "scam-token-impersonation-v1",
+    category:    "scam_token",
+    severity:    "high",
+    name:        "Token Impersonation",
+    description: "Token uses same name/symbol as a legitimate token with no relation — designed to confuse users.",
+    indicators:  [
+      "duplicate_symbol",
+      "impersonates_major_token",
+      "similar_name_zero_utility",
+      "airdropped_to_holders_of_real_token",
+    ],
+    updatedAt: "2026-05-23",
+  },
+
+  // ── Malicious Approval ────────────────────────────────────────────────────────
+  {
+    id:          "malicious-approval-infinite-v1",
+    category:    "malicious_approval",
+    severity:    "high",
+    name:        "Infinite Token Approval to Unverified Contract",
+    description: "Wallet has granted unlimited token spend approval to an unverified or suspicious contract.",
+    indicators:  [
+      "infinite_approval",
+      "approval_to_unverified",
+      "approval_to_proxy_with_no_audit",
+      "stale_unlimited_approval",
+    ],
+    updatedAt: "2026-05-23",
+  },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** All known-bad addresses from the catalog */
+export function getAllBadAddresses(): string[] {
+  return THREAT_CATALOG.flatMap(t => t.addresses ?? []);
+}
+
+/** All known-bad domains from the catalog */
+export function getAllBadDomains(): string[] {
+  return THREAT_CATALOG.flatMap(t => t.domains ?? []);
+}
+
+/** Get entries by severity */
+export function getBySeverity(severity: ThreatSeverity): ThreatEntry[] {
+  return THREAT_CATALOG.filter(t => t.severity === severity);
+}
+
+/** Get entries by category */
+export function getByCategory(category: ThreatCategory): ThreatEntry[] {
+  return THREAT_CATALOG.filter(t => t.category === category);
+}
+
+/** Severity numeric weight — used for sorting/scoring */
+export const SEVERITY_WEIGHT: Record<ThreatSeverity, number> = {
+  critical: 4,
+  high:     3,
+  medium:   2,
+  low:      1,
+};
