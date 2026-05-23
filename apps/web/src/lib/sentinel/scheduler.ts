@@ -70,8 +70,8 @@ const scanUrl = (): string =>
 async function qstashCreate(intervalMinutes: number): Promise<string | null> {
   if (!QSTASH_TOKEN) return null;
   try {
-    const url = encodeURIComponent(scanUrl());
-    const res = await fetch(`${QSTASH_BASE}/v2/schedules/${url}`, {
+    // QStash v2: destination URL goes directly in path — do NOT encodeURIComponent
+    const res = await fetch(`${QSTASH_BASE}/v2/schedules/${scanUrl()}`, {
       method:  "POST",
       headers: {
         "Authorization":  `Bearer ${QSTASH_TOKEN}`,
