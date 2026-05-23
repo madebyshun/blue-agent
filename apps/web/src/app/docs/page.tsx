@@ -93,13 +93,18 @@ const SKILLS_DOCS = [
 ];
 
 const NAV_ITEMS = [
+  { id: "ecosystem",  label: "Ecosystem",       num: "00" },
   { id: "quickstart", label: "Quick Start",     num: "01" },
-  { id: "commands",   label: "Commands",        num: "02" },
-  { id: "microtasks", label: "Microtasks",      num: "03" },
-  { id: "skills",     label: "Skills",          num: "04" },
-  { id: "mcp",        label: "MCP Setup",       num: "05" },
-  { id: "api",        label: "API Reference",   num: "06" },
-  { id: "devs",       label: "For Developers",  num: "07" },
+  { id: "bluehub",    label: "BlueHub",         num: "02" },
+  { id: "bluechat",   label: "BlueChat",        num: "03" },
+  { id: "bluemarket", label: "BlueMarket",      num: "04" },
+  { id: "bluescore",  label: "BlueScore",       num: "05" },
+  { id: "commands",   label: "Commands",        num: "06" },
+  { id: "microtasks", label: "Microtasks",      num: "07" },
+  { id: "skills",     label: "Skills",          num: "08" },
+  { id: "mcp",        label: "MCP Setup",       num: "09" },
+  { id: "api",        label: "API Reference",   num: "10" },
+  { id: "devs",       label: "For Developers",  num: "11" },
 ];
 
 function SectionHeader({ num, title, subtitle }: { num: string; title: string; subtitle?: string }) {
@@ -190,6 +195,55 @@ export default function DocsPage() {
 
             <div className="px-6 lg:px-10 py-8 max-w-4xl mx-auto w-full">
 
+            {/* ── 00 Ecosystem ────────────────────── */}
+            <section id="ecosystem" className="mb-16 scroll-mt-20">
+              <SectionHeader num="00" title="Ecosystem" subtitle="One founder console. Seven products. All built on Base." />
+              <p className="font-mono text-sm text-slate-500 mb-8">
+                Blue Agent is an AI-native ecosystem for Base builders and AI agents — from idea to launch, all grounded in verified Base knowledge, paid per use via x402.
+              </p>
+
+              <div className="grid sm:grid-cols-2 gap-3 mb-8">
+                {[
+                  { name: "BlueHub",    color: "#4FC3F7", desc: "34 AI tools · 3-agent consensus (Blue × Aeon × MiroShark) · pay per use via x402", link: "/hub" },
+                  { name: "BlueChat",   color: "#A78BFA", desc: "AI chat for Base builders · Haiku / Sonnet / Opus · credit system", link: "/chat" },
+                  { name: "BlueCLI",    color: "#34D399", desc: "@blueagent/cli · 30 commands · Terminal + TUI · blue idea/build/audit/ship/raise", link: "/docs" },
+                  { name: "BlueTools",  color: "#F59E0B", desc: "34 skills · 31 tools · 30 commands · grounded Base knowledge", link: "/tools" },
+                  { name: "BlueTasks",  color: "#60A5FA", desc: "Micropay work hub · post tasks + escrow USDC · agents earn", link: "/micro" },
+                  { name: "BlueMarket", color: "#FB923C", desc: "Stake $BLUEAGENT · daily Base ecosystem brief · USDC or stake", link: "/market" },
+                  { name: "BlueScore",  color: "#E879F9", desc: "Builder Score + Agent Score · 0–100 · onchain reputation", link: "/score" },
+                ].map((p) => (
+                  <a key={p.name} href={p.link}
+                    className="card-surface rounded-xl p-5 hover:border-[#1A1A2E] transition-all group"
+                    style={{ borderColor: `${p.color}20` }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-2 h-2 rounded-full" style={{ background: p.color }} />
+                      <span className="font-mono text-sm font-bold text-white group-hover:text-white transition-colors" style={{ color: p.color }}>{p.name}</span>
+                    </div>
+                    <p className="font-mono text-xs text-slate-500 leading-relaxed">{p.desc}</p>
+                  </a>
+                ))}
+              </div>
+
+              <div className="card-surface rounded-xl p-5">
+                <p className="font-mono text-xs text-slate-600 tracking-widest mb-4">FOUNDATION</p>
+                <div className="flex flex-wrap gap-4">
+                  {[
+                    { label: "Bankr LLM", desc: "llm.bankr.bot — AI backbone for all commands and chat", color: "#4FC3F7" },
+                    { label: "x402", desc: "Pay per call in USDC — no subscription, no signup", color: "#34D399" },
+                    { label: "Base", desc: "All onchain actions on Base (chain ID 8453)", color: "#0052FF" },
+                  ].map((f) => (
+                    <div key={f.label} className="flex items-start gap-3 flex-1 min-w-[200px]">
+                      <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: f.color }} />
+                      <div>
+                        <span className="font-mono text-sm font-bold text-white block">{f.label}</span>
+                        <span className="font-mono text-xs text-slate-500">{f.desc}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
             {/* ── 01 Quick Start ──────────────────── */}
             <section id="quickstart" className="mb-16 scroll-mt-20">
               <SectionHeader num="01" title="Quick Start" subtitle="Install, init, and run your first command" />
@@ -236,7 +290,161 @@ export default function DocsPage() {
               </p>
             </section>
 
-            {/* ── 02 Commands ─────────────────────── */}
+            {/* ── 02 BlueHub ──────────────────────── */}
+            <section id="bluehub" className="mb-16 scroll-mt-20">
+              <SectionHeader num="02" title="BlueHub" subtitle="34 AI tools · 3-agent consensus · pay per use via x402" />
+              <p className="font-mono text-sm text-slate-500 mb-6">
+                Every tool runs through Blue Agent, Aeon, and MiroShark simultaneously — you get one sharp, consensus output. Pay per call in USDC via x402. No subscription.
+              </p>
+              <div className="grid sm:grid-cols-3 gap-3 mb-6">
+                {[
+                  { agent: "Blue", color: "#4FC3F7", role: "Strategy · builder intelligence · Base ecosystem" },
+                  { agent: "Aeon", color: "#A78BFA", role: "Market signals · narrative tracking · research" },
+                  { agent: "MiroShark", color: "#34D399", role: "Crowd sentiment · trading signals · consensus" },
+                ].map((a) => (
+                  <div key={a.agent} className="card-surface rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-2 h-2 rounded-full" style={{ background: a.color }} />
+                      <span className="font-mono text-sm font-bold" style={{ color: a.color }}>{a.agent}</span>
+                    </div>
+                    <p className="font-mono text-xs text-slate-500">{a.role}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="card-surface rounded-xl p-5 mb-4">
+                <p className="font-mono text-xs text-slate-600 tracking-widest mb-4">TOOL CATEGORIES</p>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {[
+                    { cat: "Token & Trading", tools: "Token Pick Signal · Narrative Position · Momentum Scanner · Whale Copy Signal · DeFi Opportunity · Portfolio Rebalancer", price: "$0.10–$0.25" },
+                    { cat: "Builder Tools", tools: "Market Fit · Competitor Scan · Stack Recommender · Repo Health · Roadmap Validator · GTM Brief · Builder Score", price: "$0.15–$0.35" },
+                    { cat: "Launch", tools: "Token Launch Readiness · Pitch Intelligence · Investor Memo · Fundraise Timing · Base Grant Finder · Launch Simulator", price: "$0.20–$0.50" },
+                    { cat: "Agent Tools", tools: "Agent Performance · Agent Token Strategy · Revenue Optimizer · Collab Match · Multi-Agent Workflow · Protocol Risk", price: "$0.12–$0.25" },
+                    { cat: "Research", tools: "Ecosystem Digest · Base Protocol Comparison · Builder Deep DD · Community Sentiment · Thread Intelligence", price: "$0.08–$0.35" },
+                  ].map((c) => (
+                    <div key={c.cat} className="border border-[#1A1A2E] rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-mono text-xs font-bold text-white">{c.cat}</span>
+                        <span className="font-mono text-[10px] text-[#4FC3F7]">{c.price}</span>
+                      </div>
+                      <p className="font-mono text-[11px] text-slate-600">{c.tools}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <a href="/hub" className="inline-flex items-center gap-2 font-mono text-sm text-[#4FC3F7] hover:underline">
+                Open Blue Hub →
+              </a>
+            </section>
+
+            {/* ── 03 BlueChat ─────────────────────── */}
+            <section id="bluechat" className="mb-16 scroll-mt-20">
+              <SectionHeader num="03" title="BlueChat" subtitle="AI chat for Base builders · multi-model · credit system" />
+              <p className="font-mono text-sm text-slate-500 mb-6">
+                AI chat grounded in verified Base knowledge. Ask anything about smart contracts, DeFi, token launches, x402, agents — no hallucinated addresses.
+              </p>
+              <div className="grid sm:grid-cols-3 gap-3 mb-6">
+                {[
+                  { tier: "Fast",  model: "Haiku",  color: "#64748b", cost: "1 credit/msg",  desc: "Quick answers, low latency" },
+                  { tier: "Pro",   model: "Sonnet", color: "#4FC3F7", cost: "3 credits/msg", desc: "Balanced — recommended" },
+                  { tier: "Max",   model: "Opus",   color: "#A78BFA", cost: "10 credits/msg", desc: "Best quality, complex tasks" },
+                ].map((t) => (
+                  <div key={t.tier} className="card-surface rounded-xl p-4 border" style={{ borderColor: `${t.color}30` }}>
+                    <span className="font-mono text-sm font-bold block mb-1" style={{ color: t.color }}>{t.tier}</span>
+                    <span className="font-mono text-xs text-white block mb-1">{t.model}</span>
+                    <span className="font-mono text-xs text-slate-500 block mb-2">{t.cost}</span>
+                    <span className="font-mono text-[11px] text-slate-600">{t.desc}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="card-surface rounded-xl p-5 mb-4">
+                <p className="font-mono text-xs text-slate-600 tracking-widest mb-3">CREDIT TIERS (based on $BLUEAGENT held)</p>
+                <div className="space-y-2">
+                  {[
+                    { tier: "Explorer", balance: "0",        credits: "5 credits",    color: "#475569" },
+                    { tier: "Builder",  balance: "10,000+",  credits: "10 credits/day", color: "#4FC3F7" },
+                    { tier: "Founder",  balance: "100,000+", credits: "50 credits/day", color: "#A78BFA" },
+                    { tier: "Whale",    balance: "1,000,000+", credits: "200 credits/day", color: "#F59E0B" },
+                  ].map((t) => (
+                    <div key={t.tier} className="flex items-center justify-between border border-[#1A1A2E] rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full" style={{ background: t.color }} />
+                        <span className="font-mono text-sm text-white">{t.tier}</span>
+                        <span className="font-mono text-xs text-slate-600">{t.balance} $BLUEAGENT</span>
+                      </div>
+                      <span className="font-mono text-xs" style={{ color: t.color }}>{t.credits}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <a href="/chat" className="inline-flex items-center gap-2 font-mono text-sm text-[#A78BFA] hover:underline">
+                Open BlueChat →
+              </a>
+            </section>
+
+            {/* ── 04 BlueMarket ───────────────────── */}
+            <section id="bluemarket" className="mb-16 scroll-mt-20">
+              <SectionHeader num="04" title="BlueMarket" subtitle="Stake $BLUEAGENT · daily brief · USDC or stake" />
+              <p className="font-mono text-sm text-slate-500 mb-6">
+                Blue Market is the token utility layer of Blue Agent. Stake $BLUEAGENT to access the daily Base ecosystem brief and earn a share of protocol revenue.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3 mb-6">
+                {[
+                  { title: "Daily Brief", desc: "AI-generated daily digest of Base ecosystem — top builders, protocols, narratives, and market signals. Delivered every morning.", color: "#FB923C" },
+                  { title: "Stake to Earn", desc: "Stake $BLUEAGENT → earn daily credits for BlueChat and Hub tools. The more you stake, the higher your tier.", color: "#4FC3F7" },
+                  { title: "Revenue Share", desc: "20% of protocol revenue distributed to stakers proportionally. Earn USDC passively from x402 tool usage.", color: "#34D399" },
+                  { title: "Token: $BLUEAGENT", desc: `0xf895783b2931c919955e18b5e3343e7c7c456ba3 · Base · Uniswap v4`, color: "#A78BFA" },
+                ].map((f) => (
+                  <div key={f.title} className="card-surface rounded-xl p-4">
+                    <span className="font-mono text-sm font-bold block mb-2" style={{ color: f.color }}>{f.title}</span>
+                    <p className="font-mono text-xs text-slate-500 leading-relaxed">{f.desc}</p>
+                  </div>
+                ))}
+              </div>
+              <a href="/market" className="inline-flex items-center gap-2 font-mono text-sm text-[#FB923C] hover:underline">
+                Open BlueMarket →
+              </a>
+            </section>
+
+            {/* ── 05 BlueScore ────────────────────── */}
+            <section id="bluescore" className="mb-16 scroll-mt-20">
+              <SectionHeader num="05" title="BlueScore" subtitle="Onchain reputation · Builder Score + Agent Score · 0–100" />
+              <p className="font-mono text-sm text-slate-500 mb-6">
+                BlueScore generates AI-powered reputation scores for builders and AI agents on Base. Input any X handle, GitHub repo, npm package, or agent URL.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-4 mb-6">
+                <div className="card-surface rounded-xl p-5">
+                  <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-3">BUILDER SCORE</p>
+                  <p className="font-mono text-sm text-slate-400 mb-4">Score any Base builder by X handle. Evaluates 5 dimensions:</p>
+                  <div className="space-y-1">
+                    {["Activity (25pts)", "Social presence (25pts)", "Uniqueness (20pts)", "Thesis clarity (20pts)", "Community (10pts)"].map(d => (
+                      <div key={d} className="flex items-center gap-2">
+                        <span className="text-[#4FC3F7] text-xs">·</span>
+                        <span className="font-mono text-xs text-slate-500">{d}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <code className="font-mono text-xs text-[#4FC3F7] block mt-4">blue score @handle</code>
+                </div>
+                <div className="card-surface rounded-xl p-5">
+                  <p className="font-mono text-xs text-[#A78BFA] tracking-widest mb-3">AGENT SCORE</p>
+                  <p className="font-mono text-sm text-slate-400 mb-4">Score any AI agent. Accepts handle, npm, GitHub, or URL:</p>
+                  <div className="space-y-1">
+                    {["Skill depth (25pts)", "Onchain activity (25pts)", "Reliability (20pts)", "Interoperability (20pts)", "Reputation (10pts)"].map(d => (
+                      <div key={d} className="flex items-center gap-2">
+                        <span className="text-[#A78BFA] text-xs">·</span>
+                        <span className="font-mono text-xs text-slate-500">{d}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <code className="font-mono text-xs text-[#A78BFA] block mt-4">blue agent-score npm:@blueagent/cli</code>
+                </div>
+              </div>
+              <a href="/score" className="inline-flex items-center gap-2 font-mono text-sm text-[#E879F9] hover:underline">
+                Open BlueScore →
+              </a>
+            </section>
+
+            {/* ── 06 Commands ─────────────────────── */}
             <section id="commands" className="mb-16 scroll-mt-20">
               <SectionHeader num="02" title="Commands" subtitle="30 commands — workflow, setup, score, discovery, tasks, microtasks" />
               <div className="space-y-10">
