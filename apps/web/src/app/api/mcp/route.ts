@@ -11,7 +11,7 @@
  *   }
  *
  * Protocol: JSON-RPC 2.0 over HTTP POST
- * Tools: 22 — 5 console commands + 15 Hub tools + blue_score + blue_new
+ * Tools: 50 — 5 console commands + 43 Hub tools + blue_score + blue_new
  * Docs: https://blueagent.dev/api-docs
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -175,6 +175,152 @@ const TOOLS = [
       required: ["project"],
     },
   },
+  // ── Security (extended) ──────────────────────────────────────────────────
+  {
+    name: "hub_contract_trust",
+    description: "Trust score for any smart contract — code quality, upgrade risk, ownership, audit history.",
+    inputSchema: { type: "object", properties: { contract: { type: "string", description: "Contract address 0x..." } }, required: ["contract"] },
+  },
+  {
+    name: "hub_aml_screen",
+    description: "AML screening for a wallet address — sanctions, mixer exposure, illicit flow patterns.",
+    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
+  },
+  {
+    name: "hub_allowance_audit",
+    description: "Audit dangerous token approvals for a wallet — find unlimited allowances and revoke recommendations.",
+    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
+  },
+  {
+    name: "hub_phishing_scan",
+    description: "Scan a URL or domain for phishing patterns targeting crypto users.",
+    inputSchema: { type: "object", properties: { url: { type: "string", description: "URL or domain to scan" } }, required: ["url"] },
+  },
+  {
+    name: "hub_key_exposure",
+    description: "Check if a wallet's public key is exposed on-chain (quantum vulnerability risk).",
+    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
+  },
+  // ── Research (extended) ───────────────────────────────────────────────────
+  {
+    name: "hub_token_momentum",
+    description: "Token momentum scanner — price velocity, volume spikes, social acceleration for Base tokens.",
+    inputSchema: { type: "object", properties: { token: { type: "string", description: "Token address or symbol" }, limit: { type: "number", description: "Number of tokens to scan (default 10)" } } },
+  },
+  {
+    name: "hub_whale_tracker",
+    description: "Smart money flow analysis — track top wallet moves across Base in real time.",
+    inputSchema: { type: "object", properties: { focus: { type: "string", description: "Sector or token to focus on (optional)" } } },
+  },
+  {
+    name: "hub_community_sentiment",
+    description: "Community sentiment for a token or project — CT mindshare, Farcaster buzz, Telegram signals.",
+    inputSchema: { type: "object", properties: { target: { type: "string", description: "Token symbol, project name, or contract address" } }, required: ["target"] },
+  },
+  // ── Builder (extended) ────────────────────────────────────────────────────
+  {
+    name: "hub_launch_simulator",
+    description: "Simulate a token or product launch — model price action, liquidity, community growth scenarios.",
+    inputSchema: { type: "object", properties: { project: { type: "string", description: "Project/token description" }, supply: { type: "string", description: "Token supply (optional)" } }, required: ["project"] },
+  },
+  {
+    name: "hub_token_launch",
+    description: "Token launch readiness score (0-100) — narrative fit, liquidity, community, timing. Returns GO/WAIT + action items.",
+    inputSchema: { type: "object", properties: { name: { type: "string" }, ticker: { type: "string" }, description: { type: "string" } }, required: ["name", "ticker", "description"] },
+  },
+  {
+    name: "hub_builder_dd",
+    description: "Deep due diligence on a builder — onchain history, shipped projects, GitHub activity, reputation signals.",
+    inputSchema: { type: "object", properties: { handle: { type: "string", description: "X handle, GitHub handle, or wallet" } }, required: ["handle"] },
+  },
+  {
+    name: "hub_brand_score",
+    description: "Brand score for a Base project — visibility, narrative alignment, community resonance.",
+    inputSchema: { type: "object", properties: { project: { type: "string", description: "Project name or URL" } }, required: ["project"] },
+  },
+  {
+    name: "hub_roadmap",
+    description: "Validate a product roadmap — feasibility, sequencing, market timing, missing milestones.",
+    inputSchema: { type: "object", properties: { roadmap: { type: "string", description: "Roadmap or milestones" }, stage: { type: "string" } }, required: ["roadmap"] },
+  },
+  {
+    name: "hub_gtm",
+    description: "Go-to-market brief — distribution channels, launch sequence, community strategy for a Base project.",
+    inputSchema: { type: "object", properties: { project: { type: "string" }, target: { type: "string", description: "Target audience (optional)" } }, required: ["project"] },
+  },
+  {
+    name: "hub_pitch_intel",
+    description: "Pitch intelligence — analyze and strengthen a pitch deck or fundraising narrative with investor-lens feedback.",
+    inputSchema: { type: "object", properties: { pitch: { type: "string", description: "Pitch text or deck outline" } }, required: ["pitch"] },
+  },
+  // ── Premium ───────────────────────────────────────────────────────────────
+  {
+    name: "hub_wallet_pnl",
+    description: "Full PnL report for a wallet — realized/unrealized gains, win rate, best/worst trades on Base.",
+    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
+  },
+  {
+    name: "hub_wallet_strategy",
+    description: "Analyze a wallet's trading strategy — pattern recognition, risk profile, alpha sources.",
+    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
+  },
+  {
+    name: "hub_portfolio",
+    description: "Portfolio rebalancer — optimal allocation across Base DeFi positions based on risk tolerance.",
+    inputSchema: { type: "object", properties: { address: { type: "string" }, risk: { type: "string", description: "conservative | moderate | aggressive" } }, required: ["address"] },
+  },
+  {
+    name: "hub_defi_opportunity",
+    description: "Best DeFi yield opportunities on Base — APY rankings, risk-adjusted returns, protocol safety.",
+    inputSchema: { type: "object", properties: { amount: { type: "string", description: "Amount in USD (optional)" }, risk: { type: "string" } } },
+  },
+  {
+    name: "hub_protocol_risk",
+    description: "Real-time risk monitor for a Base DeFi protocol — TVL changes, exploit signals, governance risks.",
+    inputSchema: { type: "object", properties: { protocol: { type: "string", description: "Protocol name or contract address" } }, required: ["protocol"] },
+  },
+  // ── Multi-agent ───────────────────────────────────────────────────────────
+  {
+    name: "hub_multi_agent",
+    description: "Orchestrate a multi-agent workflow — route tasks across Blue Agent + Aeon + MiroShark for complex analysis.",
+    inputSchema: { type: "object", properties: { task: { type: "string", description: "Task for the agent collective" } }, required: ["task"] },
+  },
+  {
+    name: "hub_agent_match",
+    description: "Find the best collaborator agent for a task — match your project with Base agents by capability.",
+    inputSchema: { type: "object", properties: { task: { type: "string" } }, required: ["task"] },
+  },
+  {
+    name: "hub_agent_perf",
+    description: "Performance analytics for an AI agent — response quality, task success rate, user satisfaction.",
+    inputSchema: { type: "object", properties: { agent: { type: "string", description: "Agent handle or name" } }, required: ["agent"] },
+  },
+  {
+    name: "hub_agent_revenue",
+    description: "Revenue optimizer for an AI agent — pricing strategy, tool monetization, x402 fee recommendations.",
+    inputSchema: { type: "object", properties: { agent: { type: "string" }, tools: { type: "string", description: "Tools offered (optional)" } }, required: ["agent"] },
+  },
+  {
+    name: "hub_agent_token",
+    description: "Token strategy for an AI agent — should you launch, how to structure it, timing on Base.",
+    inputSchema: { type: "object", properties: { agent: { type: "string", description: "Agent description and traction" } }, required: ["agent"] },
+  },
+  // ── Community ─────────────────────────────────────────────────────────────
+  {
+    name: "hub_community_growth",
+    description: "Community growth playbook — channels, content strategy, retention loops, milestones for a Base project.",
+    inputSchema: { type: "object", properties: { project: { type: "string" }, current_size: { type: "string", description: "Current size (optional)" } }, required: ["project"] },
+  },
+  {
+    name: "hub_thread_intel",
+    description: "Thread intelligence — analyze a CT thread or topic for signal vs noise, key takes, actionable insights.",
+    inputSchema: { type: "object", properties: { thread: { type: "string", description: "Thread URL or topic" } }, required: ["thread"] },
+  },
+  {
+    name: "hub_narrative_pulse",
+    description: "Real-time narrative pulse — what's being talked about right now on Base CT, velocity and sentiment.",
+    inputSchema: { type: "object", properties: { focus: { type: "string", description: "Topic or token to focus on (optional)" } } },
+  },
   // ── Utility ───────────────────────────────────────────────────────────────
   {
     name: "blue_score",
@@ -213,6 +359,40 @@ const HUB_MAP: Record<string, string> = {
   hub_deep_analysis:    "deep-analysis",
   hub_whale_signal:     "whale-copy-signal",
   hub_fundraise_timing: "fundraise-timing",
+  // Security (extended)
+  hub_contract_trust:       "contract-trust",
+  hub_aml_screen:           "aml-screen",
+  hub_allowance_audit:      "allowance-audit",
+  hub_phishing_scan:        "phishing-scan",
+  hub_key_exposure:         "key-exposure",
+  // Research (extended)
+  hub_token_momentum:       "token-momentum-scanner",
+  hub_whale_tracker:        "whale-tracker",
+  hub_community_sentiment:  "community-sentiment",
+  // Builder (extended)
+  hub_launch_simulator:     "launch-simulator",
+  hub_token_launch:         "token-launch-readiness",
+  hub_builder_dd:           "builder-deep-dd",
+  hub_brand_score:          "builder-brand-score",
+  hub_roadmap:              "roadmap-validator",
+  hub_gtm:                  "gtm-brief",
+  hub_pitch_intel:          "pitch-intelligence",
+  // Premium
+  hub_wallet_pnl:           "wallet-pnl",
+  hub_wallet_strategy:      "wallet-strategy-analyzer",
+  hub_portfolio:            "portfolio-rebalancer",
+  hub_defi_opportunity:     "defi-opportunity",
+  hub_protocol_risk:        "protocol-risk-monitor",
+  // Multi-agent
+  hub_multi_agent:          "multi-agent-workflow",
+  hub_agent_match:          "agent-collab-match",
+  hub_agent_perf:           "agent-performance",
+  hub_agent_revenue:        "agent-revenue-optimizer",
+  hub_agent_token:          "agent-token-strategy",
+  // Community
+  hub_community_growth:     "community-growth-playbook",
+  hub_thread_intel:         "thread-intelligence",
+  hub_narrative_pulse:      "narrative-pulse",
 };
 
 const CONSOLE_MAP: Record<string, string> = {
