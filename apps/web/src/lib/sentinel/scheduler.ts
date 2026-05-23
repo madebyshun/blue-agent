@@ -12,9 +12,8 @@ import { kvGet, kvSet } from "@/lib/kv";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-// EU region: https://qstash-eu-central-1.upstash.io
-// Global:    https://qstash.upstash.io
-const QSTASH_BASE  = (process.env.QSTASH_URL ?? "https://qstash.upstash.io").replace(/\/$/, "");
+// QStash REST API base — always global URL regardless of region token
+const QSTASH_BASE  = "https://qstash.upstash.io";
 const QSTASH_TOKEN = process.env.QSTASH_TOKEN ?? "";
 const APP_URL     = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
 const CRON_SECRET = process.env.CRON_SECRET ?? "";
