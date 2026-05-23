@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/sentinel",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }
