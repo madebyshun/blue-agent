@@ -78,8 +78,10 @@ async function persistScanLog(entry: ScanLog): Promise<void> {
 
 const BATCH_SIZE = 10;
 
-async function scanInBatches(targets: WatchSubscription[]): Promise<Array<{ watch: WatchSubscription; findings: Finding[] }>> {
-  const results: Array<{ watch: WatchSubscription; findings: Finding[] }> = [];
+type ScanTarget = WatchSubscription & { catalogOnly: boolean };
+
+async function scanInBatches(targets: ScanTarget[]): Promise<Array<{ watch: ScanTarget; findings: Finding[] }>> {
+  const results: Array<{ watch: ScanTarget; findings: Finding[] }> = [];
   for (let i = 0; i < targets.length; i += BATCH_SIZE) {
     const batch = targets.slice(i, i + BATCH_SIZE);
     const batchResults = await Promise.allSettled(
@@ -348,7 +350,7 @@ async function sendWebhookAlert(finding: Finding, webhookUrl: string): Promise<v
 
 // ─── Scan one target ──────────────────────────────────────────────────────────
 
-async function scanTarget(watch: WatchSubscription): Promise<Finding[]> {
+async function scanTarget(watch: WatchSubscription & { catalogOnly?: boolean }): Promise<Finding[]> {
   const findings: Finding[] = [];
   const results: HubResult[] = [];
 
@@ -358,22 +360,24 @@ async function scanTarget(watch: WatchSubscription): Promise<Finding[]> {
     results.push(catalogHit);
   }
 
-  // ── Step 2: Hub tool scan (needs BANKR credit) ───────────────────────────────
-  if (watch.targetType === "domain") {
-    results.push(await callPhishingScan(watch.target));
-  } else if (watch.targetType === "token") {
-    const [honeypot, risk] = await Promise.all([
-      callHoneypotCheck(watch.target),
-      callRiskGate(watch.target),
-    ]);
-    results.push(honeypot, risk);
-  } else {
-    // address
-    const [risk, aml] = await Promise.all([
-      callRiskGate(watch.target),
-      callAmlScreen(watch.target),
-    ]);
-    results.push(risk, aml);
+  // ── Step 2: Hub tool scan — skip if catalogOnly (saves credits) ──────────────
+  if (!watch.catalogOnly) {
+    if (watch.targetType === "domain") {
+      results.push(await callPhishingScan(watch.target));
+    } else if (watch.targetType === "token") {
+      const [honeypot, risk] = await Promise.all([
+        callHoneypotCheck(watch.target),
+        callRiskGate(watch.target),
+      ]);
+      results.push(honeypot, risk);
+    } else {
+      // address
+      const [risk, aml] = await Promise.all([
+        callRiskGate(watch.target),
+        callAmlScreen(watch.target),
+      ]);
+      results.push(risk, aml);
+    }
   }
 
   for (const result of results) {
@@ -453,7 +457,7 @@ export async function GET(req: NextRequest) {
 
     // Merge — skip targets already in user watches
     const userTargetSet = new Set(active.map(w => w.target.toLowerCase()));
-    const discoveredWatches: WatchSubscription[] = discovered
+    const discoveredWatches: (WatchSubscription & { catalogOnly: boolean })[] = discovered
       .filter(d => !userTargetSet.has(d.target.toLowerCase()))
       .map(d => ({
         id:            `auto:${d.source}:${d.target}`,
@@ -463,9 +467,14 @@ export async function GET(req: NextRequest) {
         active:        true,
         createdAt:     new Date().toISOString(),
         alertChannels: ["telegram"] as ("telegram" | "webhook")[],
+        catalogOnly:   d.catalogOnly ?? false,
       }));
 
-    const allTargets: WatchSubscription[] = [...active, ...discoveredWatches];
+    // User watches never catalogOnly
+    const allTargets: (WatchSubscription & { catalogOnly: boolean })[] = [
+      ...active.map(w => ({ ...w, catalogOnly: false })),
+      ...discoveredWatches,
+    ];
     log.push(`✓ scanning ${allTargets.length} total (${active.length} user · ${discoveredWatches.length} auto) in batches of ${BATCH_SIZE}`);
 
     if (allTargets.length === 0) {

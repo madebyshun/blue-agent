@@ -7,16 +7,43 @@
  * Sources:
  *   A. DexScreener   — new tokens on Base (free, no key)
  *   B. URLhaus       — crypto-related malicious URLs (free, no key)
- *   C. Pattern list  — known phishing domain patterns (built-in)
+ *   C. Pattern list  — known phishing domain patterns (built-in, catalog-check only)
+ *
+ * Optimizations:
+ *   - DexScreener tokens: KV-cached seen set (24h TTL) — only return NEW tokens
+ *   - Pattern domains: flagged as catalogOnly=true — skip expensive hub scan
+ *   - URLhaus domains: always fresh (malicious URLs change every cycle)
  */
+
+import { kvGet, kvSet } from "@/lib/kv";
 
 export type DiscoverySource = "dexscreener" | "urlhaus" | "pattern";
 
 export interface DiscoveredTarget {
-  target:     string;
-  targetType: "address" | "token" | "domain";
-  source:     DiscoverySource;
-  reason:     string;
+  target:      string;
+  targetType:  "address" | "token" | "domain";
+  source:      DiscoverySource;
+  reason:      string;
+  /** If true, only run catalog check — skip hub tool scan (saves credits) */
+  catalogOnly?: boolean;
+}
+
+// ─── Seen-token cache ─────────────────────────────────────────────────────────
+
+const SEEN_TOKENS_KEY = "sentinel:discovery:seen_tokens";
+const SEEN_TOKENS_TTL = 60 * 60 * 24; // 24h
+
+async function getSeenTokens(): Promise<Set<string>> {
+  const arr = (await kvGet<string[]>(SEEN_TOKENS_KEY)) ?? [];
+  return new Set(arr.map(t => t.toLowerCase()));
+}
+
+async function markTokensSeen(tokens: string[]): Promise<void> {
+  if (tokens.length === 0) return;
+  const existing = (await kvGet<string[]>(SEEN_TOKENS_KEY)) ?? [];
+  const merged   = [...new Set([...existing, ...tokens.map(t => t.toLowerCase())])];
+  // Cap at 500 to avoid KV bloat
+  await kvSet(SEEN_TOKENS_KEY, merged.slice(-500), SEEN_TOKENS_TTL);
 }
 
 // ─── A. DexScreener — new Base tokens ─────────────────────────────────────────
@@ -33,7 +60,9 @@ interface DexBoost {
 }
 
 async function discoverNewBaseTokens(): Promise<DiscoveredTarget[]> {
+  const seen    = await getSeenTokens();
   const results: DiscoveredTarget[] = [];
+  const newTokens: string[] = [];
 
   // 1. Token profiles (newest tokens with metadata)
   try {
@@ -44,13 +73,14 @@ async function discoverNewBaseTokens(): Promise<DiscoveredTarget[]> {
     if (res.ok) {
       const profiles = await res.json() as DexProfile[];
       for (const p of profiles) {
-        if (p.chainId === "base" && p.tokenAddress) {
+        if (p.chainId === "base" && p.tokenAddress && !seen.has(p.tokenAddress.toLowerCase())) {
           results.push({
             target:     p.tokenAddress,
             targetType: "token",
             source:     "dexscreener",
             reason:     "New token profile on Base",
           });
+          newTokens.push(p.tokenAddress);
         }
       }
     }
@@ -65,17 +95,24 @@ async function discoverNewBaseTokens(): Promise<DiscoveredTarget[]> {
     if (res.ok) {
       const boosts = await res.json() as DexBoost[];
       for (const b of boosts) {
-        if (b.chainId === "base" && b.tokenAddress) {
-          results.push({
-            target:     b.tokenAddress,
-            targetType: "token",
-            source:     "dexscreener",
-            reason:     "Token boost on Base — elevated scam risk",
-          });
+        if (b.chainId === "base" && b.tokenAddress && !seen.has(b.tokenAddress.toLowerCase())) {
+          // Avoid duplicate if already added from profiles
+          if (!newTokens.includes(b.tokenAddress)) {
+            results.push({
+              target:     b.tokenAddress,
+              targetType: "token",
+              source:     "dexscreener",
+              reason:     "Token boost on Base — elevated scam risk",
+            });
+            newTokens.push(b.tokenAddress);
+          }
         }
       }
     }
   } catch { /* silent */ }
+
+  // Mark all discovered tokens as seen (24h)
+  await markTokensSeen(newTokens);
 
   return results;
 }
@@ -151,10 +188,11 @@ const PHISHING_PATTERNS: string[] = [
 
 function discoverFromPatterns(): DiscoveredTarget[] {
   return PHISHING_PATTERNS.map(domain => ({
-    target:     domain,
-    targetType: "domain" as const,
-    source:     "pattern" as const,
-    reason:     `Phishing pattern match: ${domain}`,
+    target:      domain,
+    targetType:  "domain" as const,
+    source:      "pattern" as const,
+    reason:      `Phishing pattern match: ${domain}`,
+    catalogOnly: true, // static list — catalog check only, no hub credit needed
   }));
 }
 

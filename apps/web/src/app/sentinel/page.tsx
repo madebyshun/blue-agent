@@ -70,6 +70,11 @@ interface SchedulerConfig {
   scheduleId?:     string;
 }
 
+interface Health {
+  status: "healthy" | "degraded" | "down";
+  reason: string;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SEV: Record<Severity, { badge: string; left: string; label: string }> = {
@@ -222,6 +227,7 @@ export default function SentinelPage() {
   const [findings,    setFindings]    = useState<Finding[]>([]);
   const [watches,     setWatches]     = useState<Watch[]>([]);
   const [scheduler,   setScheduler]   = useState<SchedulerConfig | null>(null);
+  const [health,      setHealth]      = useState<Health | null>(null);
   const [discovery,   setDiscovery]   = useState<DiscoveryInfo | null>(null);
   const [scanLogs,    setScanLogs]    = useState<ScanLog[]>([]);
   const [logsOpen,    setLogsOpen]    = useState(false);
@@ -241,13 +247,14 @@ export default function SentinelPage() {
         fetch("/api/sentinel/logs"),
       ]);
       const watchData = await watchRes.json() as { stats: Stats; findings: Finding[]; watches: Watch[] };
-      const ctrlData  = await ctrlRes.json() as { config: SchedulerConfig };
+      const ctrlData  = await ctrlRes.json() as { config: SchedulerConfig; health?: Health };
       const discData  = discRes.ok ? await discRes.json() as DiscoveryInfo : null;
       const logsData  = logsRes.ok ? await logsRes.json() as { logs: ScanLog[] } : null;
       setStats(watchData.stats);
       setFindings(watchData.findings ?? []);
       setWatches((watchData.watches ?? []).filter(w => w.active));
       setScheduler(ctrlData.config ?? null);
+      if (ctrlData.health) setHealth(ctrlData.health);
       if (discData) setDiscovery(discData);
       if (logsData) setScanLogs(logsData.logs ?? []);
     } catch { /* ignore */ }
@@ -311,8 +318,22 @@ export default function SentinelPage() {
 
           {/* Header */}
           <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
-            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUE SENTINEL</p>
-            <p className="font-mono text-[10px] text-slate-700 mt-1">24/7 onchain security monitor · Base</p>
+            <div className="flex items-center justify-between mb-1">
+              <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUE SENTINEL</p>
+              {health && (
+                <span className={`font-mono text-[9px] px-1.5 py-0.5 rounded border ${
+                  health.status === "healthy"  ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" :
+                  health.status === "degraded" ? "text-yellow-400 border-yellow-500/30 bg-yellow-500/10" :
+                                                 "text-red-400 border-red-500/30 bg-red-500/10"
+                }`}>
+                  {health.status === "healthy" ? "● healthy" : health.status === "degraded" ? "◐ degraded" : "○ down"}
+                </span>
+              )}
+            </div>
+            <p className="font-mono text-[10px] text-slate-700">24/7 onchain security monitor · Base</p>
+            {health && health.status !== "healthy" && (
+              <p className="font-mono text-[9px] text-yellow-600 mt-1">{health.reason}</p>
+            )}
           </div>
 
           {/* Stats */}
