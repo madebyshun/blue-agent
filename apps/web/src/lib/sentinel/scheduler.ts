@@ -62,19 +62,22 @@ const scanUrl = (): string =>
     ? `${APP_URL}/api/cron/sentinel?secret=${CRON_SECRET}`
     : `${APP_URL}/api/cron/sentinel`;
 
+/**
+ * QStash v2 API: URL goes in the request path, cron in the Upstash-Cron header
+ * POST /v2/schedules/{url}  → { scheduleId }
+ * DELETE /v2/schedules/{scheduleId}
+ */
 async function qstashCreate(intervalMinutes: number): Promise<string | null> {
   if (!QSTASH_TOKEN) return null;
   try {
-    const res = await fetch(`${QSTASH_BASE}/v2/schedules`, {
+    const url = encodeURIComponent(scanUrl());
+    const res = await fetch(`${QSTASH_BASE}/v2/schedules/${url}`, {
       method:  "POST",
       headers: {
-        "Authorization": `Bearer ${QSTASH_TOKEN}`,
-        "Content-Type":  "application/json",
+        "Authorization":  `Bearer ${QSTASH_TOKEN}`,
+        "Upstash-Cron":   toCron(intervalMinutes),
+        "Content-Type":   "application/json",
       },
-      body: JSON.stringify({
-        destination: scanUrl(),
-        cron:        toCron(intervalMinutes),
-      }),
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) {
