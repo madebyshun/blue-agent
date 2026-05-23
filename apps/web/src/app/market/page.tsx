@@ -7,6 +7,23 @@ import { ConnectButton } from "@/components/ConnectModal";
 import { parseUnits, formatUnits } from "viem";
 import { fetchBlueBalance, getTierInfo, type TierInfo } from "@/lib/credits";
 
+// ─── Signal types ─────────────────────────────────────────────────────────────
+type SignalType = "build" | "shift" | "risk" | "grant" | "collab";
+interface Signal {
+  type: SignalType; title: string; body: string;
+  action: string; confidence: number; timestamp: string;
+}
+const SIGNAL_EMOJI: Record<SignalType, string> = {
+  build: "🔨", shift: "📡", risk: "🛡️", grant: "💰", collab: "🤝",
+};
+const SIGNAL_LABEL: Record<SignalType, string> = {
+  build: "Build Opportunity", shift: "Ecosystem Shift",
+  risk: "Risk Alert", grant: "Grant Signal", collab: "Collab Signal",
+};
+const SIGNAL_COLOR: Record<SignalType, string> = {
+  build: "#4FC3F7", shift: "#A78BFA", risk: "#EF4444", grant: "#F59E0B", collab: "#34D399",
+};
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const USDC_BASE  = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
@@ -411,6 +428,8 @@ function PlanCard({ planTier, accent, usdcPrice, stakeThreshold, features, descr
 export default function MarketPage() {
   const [activeArchive, setActiveArchive] = useState(0);
   const [tierInfo, setTierInfo]           = useState<TierInfo | null>(null);
+  const [signals, setSignals]             = useState<Signal[]>([]);
+  const [signalsLoading, setSignalsLoading] = useState(true);
 
   const { address, isConnected } = useAccount();
 
@@ -418,6 +437,17 @@ export default function MarketPage() {
     if (!address) { setTierInfo(null); return; }
     fetchBlueBalance(address).then(bal => setTierInfo(getTierInfo(bal)));
   }, [address]);
+
+  // Load Research Loop signals from KV
+  useEffect(() => {
+    fetch("/api/signals")
+      .then(r => r.json())
+      .then((data: { signals: Signal[] }) => {
+        setSignals(data.signals ?? []);
+        setSignalsLoading(false);
+      })
+      .catch(() => setSignalsLoading(false));
+  }, []);
 
   const { data: activeStake } = useReadContract({
     address: STAKING_CONTRACT, abi: STAKING_ABI,
@@ -550,6 +580,63 @@ export default function MarketPage() {
                 <StakingPanel address={address} />
               </div>
             )}
+
+            {/* Research Signals — live from KV */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">🔬 Research Signals</p>
+                {!signalsLoading && signals.length > 0 && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+                    <span className="font-mono text-[10px] text-[#4FC3F7]">live</span>
+                  </span>
+                )}
+              </div>
+
+              {signalsLoading ? (
+                <div className="border border-[#1A1A2E] rounded-xl p-6 flex items-center gap-3">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+                  <span className="font-mono text-xs text-slate-600">Loading signals…</span>
+                </div>
+              ) : signals.length === 0 ? (
+                <div className="border border-[#1A1A2E] rounded-xl p-6 text-center">
+                  <p className="font-mono text-xs text-slate-600">Research loop runs at 6:00 AM UTC daily.</p>
+                  <p className="font-mono text-[10px] text-slate-700 mt-1">Next signals incoming soon.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {[...signals]
+                    .sort((a, b) => b.confidence - a.confidence)
+                    .slice(0, 3)
+                    .map((signal, i) => {
+                      const color = SIGNAL_COLOR[signal.type] ?? "#4FC3F7";
+                      return (
+                        <div key={i} className="border rounded-xl p-4 space-y-2"
+                          style={{ borderColor: color + "25", background: color + "08" }}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">{SIGNAL_EMOJI[signal.type]}</span>
+                              <span className="font-mono text-[10px] tracking-widest" style={{ color }}>
+                                {SIGNAL_LABEL[signal.type].toUpperCase()}
+                              </span>
+                            </div>
+                            <span className="font-mono text-[10px] px-2 py-0.5 rounded-full"
+                              style={{ background: color + "20", color }}>
+                              {signal.confidence}%
+                            </span>
+                          </div>
+                          <p className="font-mono text-sm text-white font-semibold leading-snug">{signal.title}</p>
+                          <p className="font-mono text-[11px] text-slate-400 leading-relaxed">{signal.body}</p>
+                          <div className="flex items-start gap-2 pt-1 border-t border-white/5">
+                            <span className="font-mono text-[10px] text-slate-600 mt-0.5">→</span>
+                            <p className="font-mono text-[10px] text-slate-400 italic leading-relaxed">{signal.action}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
 
             {/* Brief preview */}
             <div className="border border-[#1A1A2E] rounded-xl overflow-hidden">
