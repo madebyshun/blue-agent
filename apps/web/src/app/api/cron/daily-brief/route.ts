@@ -16,6 +16,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { kvGet } from "@/lib/kv";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -47,6 +48,21 @@ interface ReportSection {
   market:     string;
   onchain:    string;
   signal:     string;
+  researchTeaser?: string; // from Research Loop KV
+}
+
+/** Load Research Loop summary from KV — used as teaser in brief */
+async function loadResearchTeaser(): Promise<string | null> {
+  try {
+    const signals = await kvGet<{ title: string; type: string; confidence: number }[]>(
+      "research:signals:latest"
+    );
+    if (!signals?.length) return null;
+    const top = [...signals].sort((a, b) => b.confidence - a.confidence)[0];
+    return `${top.title} [${top.confidence}%]`;
+  } catch {
+    return null;
+  }
 }
 
 // ─── Data fetchers ────────────────────────────────────────────────────────────
@@ -184,6 +200,12 @@ function formatTelegram(report: ReportSection, date: string): string {
   if (report.signal) {
     lines.push(`⚡ <b>Signal</b>`);
     lines.push(`<i>${esc(report.signal)}</i>`);
+    lines.push(``);
+  }
+  if (report.researchTeaser) {
+    lines.push(`🔬 <b>Research Loop</b>`);
+    lines.push(`<i>${esc(report.researchTeaser)}</i>`);
+    lines.push(`→ <a href="https://blueagent.dev/market">Full signals at blueagent.dev/market</a>`);
     lines.push(``);
   }
   if (report.ecosystem) {
@@ -334,6 +356,13 @@ export async function GET(req: NextRequest) {
       // 2. Generate report
       report = await generateReport(onchainContext);
       (results.steps as string[]).push("✓ report generated");
+
+      // 3. Inject Research Loop teaser from KV
+      const teaser = await loadResearchTeaser();
+      if (teaser) {
+        report.researchTeaser = teaser;
+        (results.steps as string[]).push("✓ research teaser injected");
+      }
     }
 
     // 3. Send Telegram
