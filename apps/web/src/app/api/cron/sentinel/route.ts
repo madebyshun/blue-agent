@@ -27,6 +27,7 @@ import {
   type ThreatSeverity,
   type ThreatCategory,
 } from "@/lib/sentinel/catalog";
+import { isDuplicate, markSeen } from "@/lib/sentinel/dedup";
 
 export const runtime    = "nodejs";
 export const maxDuration = 60;
@@ -304,6 +305,10 @@ async function scanTarget(watch: WatchSubscription): Promise<Finding[]> {
     const tId    = pickThreatId(result.indicators, cat);
     const entry  = THREAT_CATALOG.find(t => t.id === tId);
 
+    // ── Deduplication: skip if same target+threat seen within 24h ────────────
+    const dup = await isDuplicate({ target: watch.target, threatId: tId, severity: result.severity });
+    if (dup) continue;
+
     const finding: Finding = {
       id:         nanoid(),
       threatId:   tId,
@@ -317,6 +322,9 @@ async function scanTarget(watch: WatchSubscription): Promise<Finding[]> {
       detectedAt: new Date().toISOString(),
       alerted:    false,
     };
+
+    // Mark as seen immediately so parallel scans don't double-fire
+    await markSeen({ target: watch.target, threatId: tId, severity: result.severity, alerted: false });
 
     findings.push(finding);
   }
@@ -385,6 +393,17 @@ export async function GET(req: NextRequest) {
     }
 
     await Promise.allSettled(alertTasks);
+
+    // Update dedup record to mark as alerted
+    if (finding.alerted) {
+      await markSeen({
+        target:   finding.target,
+        threatId: finding.threatId,
+        severity: finding.severity,
+        alerted:  true,
+      });
+    }
+
     alertCount++;
   }
   log.push(`✓ ${alertCount} alert(s) sent`);
