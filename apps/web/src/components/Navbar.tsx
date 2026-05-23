@@ -9,6 +9,8 @@ const NAV_LINKS = [
   { label: "Console",  href: "/console" },
   { label: "Hub",      href: "/hub" },
   { label: "Market",   href: "/market" },
+  { label: "Skills",   href: "/skills" },
+  { label: "API",      href: "/api-docs" },
   { label: "Docs",     href: "/docs" },
 ];
 
