@@ -6,8 +6,8 @@ import { injected, coinbaseWallet } from "wagmi/connectors";
  * - coinbaseWallet() as fallback (works via QR code / mobile app)
  */
 export function bestConnector() {
-  if (typeof window !== "undefined" && window.ethereum) {
+  if (typeof window !== "undefined" && (window as Window & { ethereum?: unknown }).ethereum) {
     return injected({ shimDisconnect: true });
   }
-  return coinbaseWallet({ appName: "Blue Agent", preference: "all" });
+  return coinbaseWallet({ appName: "Blue Agent", preference: { options: "all" } });
 }

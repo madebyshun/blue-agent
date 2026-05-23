@@ -11,7 +11,7 @@ const config = createConfig({
   connectors: [
     coinbaseWallet({
       appName: "Blue Agent",
-      preference: "all", // extension + QR code fallback
+      preference: { options: "all" }, // extension + QR code fallback
     }),
     injected({ shimDisconnect: true }), // MetaMask/Rabby if installed
   ],

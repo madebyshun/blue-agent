@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
-import { useAccount, useConnect, useSignTypedData, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { injected } from "wagmi/connectors";
-import { bestConnector } from "@/lib/wallet";
+import { useAccount, useSignTypedData, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { ConnectButton } from "@/components/ConnectModal";
 import { parseUnits, formatUnits } from "viem";
 import { fetchBlueBalance, getTierInfo, type TierInfo } from "@/lib/credits";
 
@@ -244,14 +243,13 @@ function USDCSubscribeForm({ planTier, price, accent }: {
   const [message, setMessage] = useState("");
 
   const { address, isConnected } = useAccount();
-  const { connect }               = useConnect();
   const { signTypedData }         = useSignTypedData();
 
   async function handlePay() {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setMessage("Enter a valid email."); setStep("error"); return;
     }
-    if (!isConnected) { connect({ connector: bestConnector() }); return; }
+    if (!isConnected) { setMessage("Connect your wallet first."); setStep("error"); return; }
     setStep("signing"); setMessage("");
     try {
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
@@ -319,10 +317,6 @@ function PlanCard({ planTier, accent, usdcPrice, stakeThreshold, features, descr
   address?: `0x${string}`; hasAccess: boolean;
 }) {
   const [tab, setTab]         = useState<"usdc" | "stake">("usdc");
-  const [connectErr, setConnectErr] = useState("");
-  const { connect }           = useConnect({
-    mutation: { onError: (e) => setConnectErr(e.message) },
-  });
 
   return (
     <div className="bg-[#0a0a14] rounded-xl p-5 flex flex-col gap-4 relative overflow-hidden"
@@ -399,16 +393,10 @@ function PlanCard({ planTier, accent, usdcPrice, stakeThreshold, features, descr
               {address ? (
                 <p className="font-mono text-[10px] text-slate-600">↓ Manage your stake below</p>
               ) : (
-                <>
-                  <button onClick={() => { setConnectErr(""); connect({ connector: bestConnector() }); }}
-                    className="w-full border border-[#1A1A2E] text-slate-500 rounded-lg py-2
-                               font-mono text-xs hover:text-white hover:border-slate-600 transition-all">
-                    Connect wallet to stake
-                  </button>
-                  {connectErr && (
-                    <p className="font-mono text-[10px] text-red-400 mt-1">{connectErr}</p>
-                  )}
-                </>
+                <ConnectButton
+                  label="Connect wallet to stake"
+                  className="w-full border border-[#1A1A2E] text-slate-500 rounded-lg py-2 font-mono text-xs hover:text-white hover:border-slate-600 transition-all"
+                />
               )}
             </div>
           )}
@@ -425,7 +413,6 @@ export default function MarketPage() {
   const [tierInfo, setTierInfo]           = useState<TierInfo | null>(null);
 
   const { address, isConnected } = useAccount();
-  const { connect }               = useConnect();
 
   useEffect(() => {
     if (!address) { setTierInfo(null); return; }
@@ -530,11 +517,9 @@ export default function MarketPage() {
               <br />Pay USDC monthly or stake $BLUEAGENT for access.
             </p>
             {!isConnected && (
-              <button onClick={() => connect({ connector: bestConnector() })}
-                className="mt-5 inline-flex items-center gap-2 border border-[#4FC3F7]/30 bg-[#4FC3F7]/5
-                           text-[#4FC3F7] rounded-full px-5 py-2 font-mono text-xs hover:opacity-80 transition-opacity">
-                Connect wallet
-              </button>
+              <div className="mt-5 flex justify-center">
+                <ConnectButton label="Connect wallet" />
+              </div>
             )}
             {isConnected && staked > 0n && (
               <div className="inline-flex items-center gap-2 mt-4 px-3 py-1.5 rounded-full border border-[#4FC3F7]/30 bg-[#4FC3F7]/5">

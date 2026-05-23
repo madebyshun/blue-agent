@@ -3,20 +3,24 @@ import "./globals.css";
 import Providers from "@/components/Providers";
 
 export const metadata: Metadata = {
-  title: "Blue Agent — Base-native founder console",
+  title: "Blue Agent — AI founder console for Base builders",
   description:
-    "Blue Agent is the Base-native founder console for building, launching, and monetizing agents and apps with Bankr.",
-  keywords: ["Blue Agent", "Base", "Bankr", "founder console", "AI agents", "x402", "Base builders"],
+    "34 AI tools. 3-agent consensus. Pay per use via x402 USDC on Base. Blue Hub, Blue Market, and the AI-native console for Base builders.",
+  keywords: ["Blue Agent", "Base", "Blue Hub", "AI tools", "x402", "founder console", "Base builders", "BLUEAGENT"],
+  metadataBase: new URL("https://blueagent.dev"),
   openGraph: {
-    title: "Blue Agent — Base-native founder console",
-    description: "Build, audit, ship, launch, and monetize agents and apps on Base with Bankr.",
+    title: "Blue Agent — AI founder console for Base builders",
+    description: "34 AI tools. 3-agent consensus (Blue × Aeon × MiroShark). Pay per use via x402 USDC on Base.",
     type: "website",
+    url: "https://blueagent.dev",
+    siteName: "Blue Agent",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Blue Agent — Base-native founder console",
-    description: "Build, audit, ship, launch, and monetize agents and apps on Base with Bankr.",
-    creator: "@blocky_agent",
+    title: "Blue Agent — AI founder console for Base builders",
+    description: "34 AI tools. 3-agent consensus. Pay per use via x402 USDC on Base.",
+    creator: "@blueagent_",
+    site: "@blueagent_",
   },
 };
 

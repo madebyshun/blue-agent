@@ -339,8 +339,8 @@ export default function SimulatorPage() {
                 </div>
               ) : null}
               <div>
-                <a href="https://x.com/blocky_agent" target="_blank" rel="noopener noreferrer"
-                  className="font-mono text-xs text-slate-700 hover:text-white transition-colors block mb-1">@blocky_agent →</a>
+                <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer"
+                  className="font-mono text-xs text-slate-700 hover:text-white transition-colors block mb-1">@blueagent_ →</a>
                 <a href="/docs" className="font-mono text-xs text-slate-700 hover:text-white transition-colors block">docs →</a>
               </div>
             </div>
