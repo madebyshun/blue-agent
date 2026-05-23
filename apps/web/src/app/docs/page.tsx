@@ -23,14 +23,14 @@ const COMMANDS_DOCS = [
   { group: "SCORE", items: [
     { cmd: "blue score [handle]",            desc: "Builder Score for an X handle — activity, social, thesis (0-100)",          example: "blue score @blockyagent" },
     { cmd: "blue agent-score [input]",       desc: "@handle / npm:@pkg / github.com/repo / https://url → Agent Score",          example: "blue agent-score npm:@blueagent/cli" },
-    { cmd: "blue compare [a] [b]",           desc: "Compare two builders or agents side by side",                               example: "blue compare @vitalik @blocky_agent" },
+    { cmd: "blue compare [a] [b]",           desc: "Compare two builders or agents side by side",                               example: "blue compare @vitalik @blueagent_" },
   ]},
   { group: "DISCOVERY", items: [
     { cmd: "blue search [query]",            desc: "Search builders, agents, projects, and tokens on Base",                     example: 'blue search "AI agent"' },
     { cmd: "blue trending [filter]",         desc: "Trending on Base — builders / agents / tokens (optional filter)",           example: "blue trending agents" },
     { cmd: "blue watch [target]",            desc: "Watch a wallet, handle, or token for activity",                             example: "blue watch 0x1234..." },
     { cmd: "blue alert add",                 desc: "Configure price or activity alerts",                                        example: "blue alert add" },
-    { cmd: "blue history [input]",           desc: "Activity history for a builder or agent — @handle / npm / github",          example: "blue history @blocky_agent" },
+    { cmd: "blue history [input]",           desc: "Activity history for a builder or agent — @handle / npm / github",          example: "blue history @blueagent_" },
   ]},
   { group: "LAUNCH / MARKET", items: [
     { cmd: "blue launch [mode]",             desc: "Launch wizard — token on Base (token) or agent on Bankr (agent)",           example: "blue launch token" },
@@ -152,8 +152,8 @@ export default function DocsPage() {
             <div className="px-5 py-4 border-t border-[#1A1A2E]">
               <a href="https://github.com/madebyshun/blue-agent" target="_blank" rel="noopener noreferrer"
                 className="font-mono text-xs text-slate-700 hover:text-white transition-colors block mb-1">github →</a>
-              <a href="https://x.com/blocky_agent" target="_blank" rel="noopener noreferrer"
-                className="font-mono text-xs text-slate-700 hover:text-white transition-colors block mb-1">@blocky_agent →</a>
+              <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer"
+                className="font-mono text-xs text-slate-700 hover:text-white transition-colors block mb-1">@blueagent_ →</a>
               <a href="https://t.me/blueagent_hub" target="_blank" rel="noopener noreferrer"
                 className="font-mono text-xs text-slate-700 hover:text-white transition-colors block">telegram →</a>
             </div>

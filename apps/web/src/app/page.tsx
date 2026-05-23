@@ -255,7 +255,7 @@ function PanelOverview() {
             <span className="w-1 h-1 rounded-full bg-[#4FC3F7] animate-pulse" />
             <span className="text-[10px] text-slate-700">$BLUEAGENT</span>
           </span>
-          <a href="https://x.com/blocky_agent" target="_blank" rel="noopener noreferrer"
+          <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer"
             className="text-xs text-slate-700 hover:text-white transition-colors">X</a>
           <a href="https://github.com/madebyshun/blue-agent" target="_blank" rel="noopener noreferrer"
             className="text-xs text-slate-700 hover:text-white transition-colors">GitHub</a>
@@ -661,7 +661,7 @@ export default function Home() {
 
           <div className="px-5 py-3 border-t border-[#1A1A2E]">
             <div className="flex items-center gap-3 font-mono text-[10px] text-slate-700">
-              <a href="https://x.com/blocky_agent" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">X</a>
+              <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">X</a>
               <a href="https://github.com/madebyshun/blue-agent" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">GitHub</a>
               <a href="https://t.me/blueagent_hub" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Telegram</a>
             </div>

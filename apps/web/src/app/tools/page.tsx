@@ -137,14 +137,14 @@ const COMMANDS = [
   { group: "SCORE", items: [
     { cmd: "blue score [handle]",           arrow: "@handle → Builder Score",      desc: "Builder Score for an X handle — activity, social, thesis (0-100)", example: "blue score @vitalik" },
     { cmd: "blue agent-score [input]",      arrow: "→ Agent Score",                desc: "@handle / npm:@pkg / github.com/repo / https://url",               example: "blue agent-score npm:@blueagent/builder" },
-    { cmd: "blue compare [a] [b]",          arrow: "side-by-side comparison",      desc: "Compare two builders or agents head to head",                      example: "blue compare @vitalik @blocky_agent" },
+    { cmd: "blue compare [a] [b]",          arrow: "side-by-side comparison",      desc: "Compare two builders or agents head to head",                      example: "blue compare @vitalik @blueagent_" },
   ]},
   { group: "DISCOVERY", items: [
     { cmd: "blue search [query]",           arrow: "search Base ecosystem",        desc: "Search builders, agents, projects, and tokens on Base",            example: "blue search \"AI agent\"" },
     { cmd: "blue trending [filter]",        arrow: "trending on Base",             desc: "Trending builders / agents / tokens (optional filter)",            example: "blue trending agents" },
     { cmd: "blue watch [target]",           arrow: "watch for activity",           desc: "Watch a wallet, handle, or token for activity",                    example: "blue watch 0x1234..." },
     { cmd: "blue alert add",                arrow: "set up alert",                 desc: "Configure price or activity alerts",                               example: "blue alert add" },
-    { cmd: "blue history [input]",          arrow: "activity history",             desc: "Activity history for a builder or agent",                          example: "blue history @blocky_agent" },
+    { cmd: "blue history [input]",          arrow: "activity history",             desc: "Activity history for a builder or agent",                          example: "blue history @blueagent_" },
   ]},
   { group: "LAUNCH / MARKET", items: [
     { cmd: "blue launch [mode]",            arrow: "token | agent",                desc: "Launch wizard — token on Base or agent on Bankr marketplace",      example: "blue launch token" },
@@ -245,8 +245,8 @@ export default function ToolsPage() {
           </nav>
           {/* Footer */}
           <div className="px-5 py-4 border-t border-[#1A1A2E]">
-            <a href="https://x.com/blocky_agent" target="_blank" rel="noopener noreferrer"
-              className="font-mono text-xs text-slate-700 hover:text-white transition-colors block mb-1">@blocky_agent →</a>
+            <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer"
+              className="font-mono text-xs text-slate-700 hover:text-white transition-colors block mb-1">@blueagent_ →</a>
             <a href="/docs" className="font-mono text-xs text-slate-700 hover:text-white transition-colors block">docs →</a>
           </div>
         </aside>
