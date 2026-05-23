@@ -1,9 +1,23 @@
+/**
+ * Blue Agent — Chat API with Hub Tool Routing
+ *
+ * Flow:
+ *   1. Non-streaming LLM call with tool definitions → detect intent
+ *   2a. Tool use detected → execute Hub tool → streaming LLM call to format result
+ *   2b. No tool use → convert response to SSE stream
+ *
+ * When Bankr is down: tool calls gracefully return an error message,
+ * LLM falls back to answering from knowledge. Nothing breaks.
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
 const BANKR_LLM = "https://llm.bankr.bot/v1/messages";
+const BASE_URL   = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
+
+// ─── Models ───────────────────────────────────────────────────────────────────
 
 const MODELS: Record<string, { id: string; maxTokens: number }> = {
   fast: { id: "claude-haiku-4-5",  maxTokens: 1024 },
@@ -11,13 +25,278 @@ const MODELS: Record<string, { id: string; maxTokens: number }> = {
   max:  { id: "claude-sonnet-4-6", maxTokens: 4096 },
 };
 
+// ─── System prompt ────────────────────────────────────────────────────────────
+
 const BASE_SYSTEM = `You are Blue Agent — the Base-native AI assistant for builders.
 You help founders and developers on Base with idea generation, smart contract architecture, DeFi design, agent development, and launch strategy.
 Be direct, technical, and actionable. Prefer Base, USDC, Coinbase tools, and the Bankr ecosystem.
-If the user has memory context below, use it to personalize your responses — reference their project, remember what they're building, pick up where they left off.`;
+
+You have access to real-time Hub tools. Use them when the user asks about:
+- Token picks, market signals, whale activity → hub_token_pick, hub_whale_signal, hub_narrative
+- Market fit, competitor analysis, investor memos → hub_market_fit, hub_competitor_scan, hub_investor_memo
+- Security checks, honeypots, risk screening → hub_risk_gate, hub_honeypot, hub_deep_analysis
+- Builder scores, repo health, grants → hub_builder_score, hub_repo_health, hub_base_grant
+- Fundraising timing, ecosystem digest → hub_fundraise_timing, hub_ecosystem
+
+If a tool is unavailable, answer from your own knowledge and note that live data is unavailable.
+If the user has memory context below, use it to personalize responses — reference their project, remember what they're building.`;
+
+// ─── Hub tool definitions (Anthropic tool format) ─────────────────────────────
+
+const HUB_TOOLS = [
+  {
+    name: "hub_token_pick",
+    description: "Get an AI token pick on Base — falsifiable thesis, entry point, sizing, and kill criterion. Use when user asks: 'what should I buy', 'token pick', 'best token today', 'what's a good trade'.",
+    input_schema: {
+      type: "object",
+      properties: { context: { type: "string", description: "Optional market context or narrative to consider" } },
+    },
+  },
+  {
+    name: "hub_narrative",
+    description: "Get the current narrative map — mindshare scores, velocity, phase (Emerging/Rising/Peak/Fading), and position calls (FRONT-RUN/RIDE/FADE/WATCH). Use when user asks about narratives, trends, what's running on CT.",
+    input_schema: {
+      type: "object",
+      properties: { focus: { type: "string", description: "Specific narratives to focus on (optional)" } },
+    },
+  },
+  {
+    name: "hub_whale_signal",
+    description: "Get whale copy-trade signals for a specific token — track large wallet moves. Use when user asks about whale activity, smart money, what whales are buying.",
+    input_schema: {
+      type: "object",
+      properties: {
+        token: { type: "string", description: "Token contract address on Base" },
+        min_usd: { type: "number", description: "Minimum trade size in USD (default 10000)" },
+      },
+      required: ["token"],
+    },
+  },
+  {
+    name: "hub_deep_analysis",
+    description: "Comprehensive token fundamentals — on-chain activity, holder distribution, risk signals. Use when user asks for DD, due diligence, or deep analysis on a token.",
+    input_schema: {
+      type: "object",
+      properties: { token: { type: "string", description: "Token contract address" } },
+      required: ["token"],
+    },
+  },
+  {
+    name: "hub_honeypot",
+    description: "Detect honeypot tokens that cannot be sold after purchase. Use when user asks if a token is safe, is a honeypot, or wants to verify a contract before buying.",
+    input_schema: {
+      type: "object",
+      properties: { token: { type: "string", description: "Token contract address on Base" } },
+      required: ["token"],
+    },
+  },
+  {
+    name: "hub_risk_gate",
+    description: "Screen any transaction before execution — rug check, AML, malicious contract patterns. Use when user wants to verify a transaction, address, or contract is safe.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: { type: "string", description: "transfer | swap | approve | call" },
+        to: { type: "string", description: "Target address 0x..." },
+        value: { type: "string", description: "Amount in Wei (optional)" },
+      },
+      required: ["action", "to"],
+    },
+  },
+  {
+    name: "hub_market_fit",
+    description: "Market fit analysis for a project — problem clarity, timing, competition, demand signals. Use when user describes a project and wants to validate it.",
+    input_schema: {
+      type: "object",
+      properties: {
+        project: { type: "string", description: "Project description" },
+        url: { type: "string", description: "Project URL (optional)" },
+      },
+      required: ["project"],
+    },
+  },
+  {
+    name: "hub_competitor_scan",
+    description: "Competitor analysis — direct/indirect competitors and defensible edge. Use when user asks about competition for their project.",
+    input_schema: {
+      type: "object",
+      properties: {
+        project: { type: "string", description: "Project description" },
+        category: { type: "string", description: "Category e.g. DeFi lending, AI agent" },
+      },
+      required: ["project"],
+    },
+  },
+  {
+    name: "hub_investor_memo",
+    description: "Generate a full investor memo — thesis, market, moat, risks, ask. Use when user wants to write a pitch, investor memo, or fundraising doc.",
+    input_schema: {
+      type: "object",
+      properties: {
+        project: { type: "string", description: "Project name" },
+        description: { type: "string", description: "Description and traction" },
+        ask: { type: "string", description: "Raise ask e.g. $500k pre-seed" },
+      },
+      required: ["project", "description"],
+    },
+  },
+  {
+    name: "hub_fundraise_timing",
+    description: "Assess if now is the right time to raise — market conditions, stage readiness, investor appetite. Use when user asks about fundraising timing.",
+    input_schema: {
+      type: "object",
+      properties: {
+        project: { type: "string", description: "Project description" },
+        stage: { type: "string", description: "Stage and key metrics" },
+      },
+      required: ["project"],
+    },
+  },
+  {
+    name: "hub_base_grant",
+    description: "Find active grants and funding for Base projects. Use when user asks about grants, funding opportunities, or how to get funded on Base.",
+    input_schema: {
+      type: "object",
+      properties: {
+        project: { type: "string", description: "Project description" },
+        stage: { type: "string", description: "idea | build | live" },
+      },
+      required: ["project"],
+    },
+  },
+  {
+    name: "hub_builder_score",
+    description: "Get Builder Score for an X/Twitter handle — on-chain activity, shipping history, community (0-100). Use when user asks about builder score or their reputation.",
+    input_schema: {
+      type: "object",
+      properties: { handle: { type: "string", description: "X/Twitter handle without @" } },
+      required: ["handle"],
+    },
+  },
+  {
+    name: "hub_repo_health",
+    description: "GitHub repo health — commit velocity, test coverage, dependency risk, bus factor. Use when user asks about code quality or repo metrics.",
+    input_schema: {
+      type: "object",
+      properties: { url: { type: "string", description: "GitHub repository URL" } },
+      required: ["url"],
+    },
+  },
+  {
+    name: "hub_ecosystem",
+    description: "Daily Base ecosystem digest — top launches, protocol updates, builder activity. Use when user asks what's happening on Base today, latest news, or ecosystem updates.",
+    input_schema: {
+      type: "object",
+      properties: { focus: { type: "string", description: "Focus area e.g. DeFi, AI agents, NFT (optional)" } },
+    },
+  },
+  {
+    name: "hub_agent_score",
+    description: "Agent Score for AI agents on Base — XP, interactions, uptime. Use when user asks about an AI agent's score or performance.",
+    input_schema: {
+      type: "object",
+      properties: { handle: { type: "string", description: "Agent handle or name" } },
+      required: ["handle"],
+    },
+  },
+];
+
+// ─── Tool → internal API mapping ──────────────────────────────────────────────
+
+const TOOL_ENDPOINT: Record<string, string> = {
+  hub_token_pick:       "token-pick-signal",
+  hub_narrative:        "narrative-position",
+  hub_whale_signal:     "whale-copy-signal",
+  hub_deep_analysis:    "deep-analysis",
+  hub_honeypot:         "honeypot-check",
+  hub_risk_gate:        "risk-gate",
+  hub_market_fit:       "market-fit",
+  hub_competitor_scan:  "competitor-scan",
+  hub_investor_memo:    "investor-memo",
+  hub_fundraise_timing: "fundraise-timing",
+  hub_base_grant:       "base-grant-finder",
+  hub_builder_score:    "builder-score",
+  hub_repo_health:      "repo-health",
+  hub_ecosystem:        "ecosystem-digest",
+  hub_agent_score:      "agent-score",
+};
+
+// ─── Internal Hub tool caller ─────────────────────────────────────────────────
+
+async function callHubTool(toolName: string, args: Record<string, unknown>): Promise<string> {
+  const endpoint = TOOL_ENDPOINT[toolName];
+  if (!endpoint) return `[Unknown tool: ${toolName}]`;
+
+  try {
+    const res = await fetch(`${BASE_URL}/api/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    if (res.status === 402) {
+      return `[${toolName}: requires x402 payment — data unavailable in free chat]`;
+    }
+    if (!res.ok) {
+      return `[${toolName}: service returned ${res.status} — using knowledge base instead]`;
+    }
+
+    const text = await res.text();
+    try {
+      return JSON.stringify(JSON.parse(text), null, 2);
+    } catch {
+      return text;
+    }
+  } catch (e) {
+    return `[${toolName}: unavailable (${(e as Error).message}) — answering from knowledge]`;
+  }
+}
+
+// ─── Text → SSE stream ────────────────────────────────────────────────────────
+
+const SSE_HEADERS = {
+  "Content-Type":      "text/event-stream",
+  "Cache-Control":     "no-cache",
+  "X-Accel-Buffering": "no",
+};
+
+function textToSSE(text: string): Response {
+  const encoder = new TextEncoder();
+  const stream  = new ReadableStream({
+    start(controller) {
+      // Chunk into ~40-char pieces for a natural stream feel
+      const size = 40;
+      for (let i = 0; i < text.length; i += size) {
+        const chunk = text.slice(i, i + size);
+        const line  = `data: ${JSON.stringify({ delta: { text: chunk } })}\n\n`;
+        controller.enqueue(encoder.encode(line));
+      }
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  return new Response(stream, { headers: SSE_HEADERS });
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type LLMMessage = { role: string; content: string | unknown[] };
+
+interface LLMResponse {
+  stop_reason: string;
+  content: Array<{
+    type:  string;
+    text?: string;
+    id?:   string;
+    name?: string;
+    input?: Record<string, unknown>;
+  }>;
+}
+
+// ─── Route ────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  // Rate limit: 30 messages/min per IP
   const { success, remaining } = await rateLimit(getIdentifier(req), "chat");
   if (!success) {
     return NextResponse.json(
@@ -25,14 +304,14 @@ export async function POST(req: NextRequest) {
       { status: 429, headers: { "X-RateLimit-Remaining": "0" } }
     );
   }
+  void remaining;
 
   const apiKey = process.env.BANKR_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "BANKR_API_KEY not configured." }, { status: 500 });
   }
-  void remaining; // used for header logging
 
-  let body: { messages?: { role: string; content: string }[]; tier?: string; memoryContext?: string } = {};
+  let body: { messages?: LLMMessage[]; tier?: string; memoryContext?: string } = {};
   try {
     body = await req.json();
   } catch {
@@ -40,41 +319,101 @@ export async function POST(req: NextRequest) {
   }
 
   const { messages, tier = "pro", memoryContext } = body;
-  const system = memoryContext
-    ? `${BASE_SYSTEM}\n\n${memoryContext}`
-    : BASE_SYSTEM;
   if (!messages?.length) {
     return NextResponse.json({ error: "messages array required." }, { status: 400 });
   }
 
-  const model = MODELS[tier] ?? MODELS.pro;
+  const system = memoryContext ? `${BASE_SYSTEM}\n\n${memoryContext}` : BASE_SYSTEM;
+  const model  = MODELS[tier as string] ?? MODELS.pro;
 
-  const upstream = await fetch(BANKR_LLM, {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: model.id,
-      system,
-      messages,
-      max_tokens: model.maxTokens,
-      stream: true,
-    }),
-  });
+  const lmHeaders = {
+    "x-api-key":           apiKey,
+    "Content-Type":        "application/json",
+    "anthropic-version":   "2023-06-01",
+  };
 
-  if (!upstream.ok) {
-    const err = await upstream.text();
-    return NextResponse.json({ error: `Bankr LLM error: ${upstream.status}`, detail: err }, { status: upstream.status });
+  // ── Phase 1: intent detection (non-streaming + tools) ─────────────────────
+  let firstData: LLMResponse;
+  try {
+    const firstRes = await fetch(BANKR_LLM, {
+      method:  "POST",
+      headers: lmHeaders,
+      body: JSON.stringify({
+        model:      model.id,
+        system,
+        messages,
+        tools:      HUB_TOOLS,
+        max_tokens: model.maxTokens,
+      }),
+    });
+
+    if (!firstRes.ok) {
+      const err = await firstRes.text();
+      return NextResponse.json(
+        { error: `Bankr LLM error: ${firstRes.status}`, detail: err },
+        { status: firstRes.status }
+      );
+    }
+
+    firstData = await firstRes.json() as LLMResponse;
+  } catch (e) {
+    return NextResponse.json(
+      { error: `LLM request failed: ${(e as Error).message}` },
+      { status: 502 }
+    );
   }
 
-  return new Response(upstream.body, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      "X-Accel-Buffering": "no",
-    },
-  });
+  // ── No tool use: return text as SSE directly ───────────────────────────────
+  if (firstData.stop_reason !== "tool_use") {
+    const text = firstData.content.find((b) => b.type === "text")?.text ?? "";
+    return textToSSE(text);
+  }
+
+  // ── Tool use: execute tools ────────────────────────────────────────────────
+  const toolUseBlocks = firstData.content.filter((b) => b.type === "tool_use");
+
+  const toolResults = await Promise.all(
+    toolUseBlocks.map(async (block) => ({
+      type:        "tool_result" as const,
+      tool_use_id: block.id!,
+      content:     await callHubTool(block.name!, block.input ?? {}),
+    }))
+  );
+
+  // ── Phase 2: streaming response with tool results ─────────────────────────
+  const secondMessages: LLMMessage[] = [
+    ...messages,
+    { role: "assistant", content: firstData.content },
+    { role: "user",      content: toolResults },
+  ];
+
+  let streamRes: Response;
+  try {
+    streamRes = await fetch(BANKR_LLM, {
+      method:  "POST",
+      headers: lmHeaders,
+      body: JSON.stringify({
+        model:      model.id,
+        system,
+        messages:   secondMessages,
+        max_tokens: model.maxTokens,
+        stream:     true,
+      }),
+    });
+  } catch (e) {
+    return NextResponse.json(
+      { error: `LLM stream failed: ${(e as Error).message}` },
+      { status: 502 }
+    );
+  }
+
+  if (!streamRes.ok) {
+    const err = await streamRes.text();
+    return NextResponse.json(
+      { error: `Bankr LLM stream error: ${streamRes.status}`, detail: err },
+      { status: streamRes.status }
+    );
+  }
+
+  return new Response(streamRes.body, { headers: SSE_HEADERS });
 }
