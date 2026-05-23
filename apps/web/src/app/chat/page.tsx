@@ -10,6 +10,11 @@ import {
   getCredits,
   deductCredits,
 } from "@/lib/credits";
+import {
+  buildMemoryContext,
+  updateMemoryAfterChat,
+  getMemory,
+} from "@/lib/memory";
 import WalletBar from "@/components/WalletBar";
 
 type ChatTier = "fast" | "pro" | "max";
@@ -91,10 +96,16 @@ export default function ChatPage() {
     abortRef.current = new AbortController();
 
     try {
+      const memoryContext = buildMemoryContext(walletAddr);
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next, tier: chatTier }),
+        body: JSON.stringify({
+          messages: next,
+          tier: chatTier,
+          ...(memoryContext ? { memoryContext } : {}),
+        }),
         signal: abortRef.current.signal,
       });
 
@@ -136,6 +147,15 @@ export default function ChatPage() {
           } catch {}
         }
       }
+      // Update persistent memory after completed exchange
+      setMessages((prev) => {
+        const lastAssistant = prev[prev.length - 1];
+        if (lastAssistant?.role === "assistant" && lastAssistant.content) {
+          updateMemoryAfterChat(walletAddr, userMsg, lastAssistant.content);
+        }
+        return prev;
+      });
+
     } catch (err: unknown) {
       if ((err as Error).name !== "AbortError") {
         const msg = err instanceof Error ? err.message : String(err);
@@ -269,6 +289,9 @@ export default function ChatPage() {
             )}
           </div>
         </div>
+
+        {/* Memory */}
+        <MemoryWidget wallet={walletAddr} />
 
         {/* Wallet */}
         <div className="px-3 py-4 mt-auto border-t border-[#1A1A2E]">
@@ -455,6 +478,48 @@ export default function ChatPage() {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Memory Widget ────────────────────────────────────────────────────────────
+
+function MemoryWidget({ wallet }: { wallet?: string }) {
+  const memory = getMemory(wallet);
+  const hasMemory =
+    memory.currentProject ||
+    memory.recentTopics.length > 0 ||
+    memory.commandHistory.length > 0;
+
+  if (!hasMemory) return null;
+
+  return (
+    <div className="px-3 py-4 border-b border-[#1A1A2E]">
+      <p className="font-mono text-[10px] text-slate-600 tracking-widest px-1 mb-2">MEMORY</p>
+      <div className="px-3 py-2 rounded-lg bg-[#050508] border border-[#1A1A2E] space-y-1.5">
+        {memory.currentProject && (
+          <div>
+            <span className="font-mono text-[10px] text-slate-600">project · </span>
+            <span className="font-mono text-[10px] text-[#4FC3F7]">{memory.currentProject.name}</span>
+            {memory.currentProject.stage && (
+              <span className="font-mono text-[10px] text-slate-600"> · {memory.currentProject.stage}</span>
+            )}
+          </div>
+        )}
+        {memory.commandHistory.length > 0 && (
+          <div>
+            <span className="font-mono text-[10px] text-slate-600">last cmd · </span>
+            <span className="font-mono text-[10px] text-slate-400">
+              blue {memory.commandHistory[0].command}
+            </span>
+          </div>
+        )}
+        {memory.recentTopics.length > 0 && (
+          <div className="font-mono text-[10px] text-slate-600 truncate">
+            {memory.recentTopics[0].slice(0, 40)}…
+          </div>
+        )}
       </div>
     </div>
   );

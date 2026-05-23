@@ -10,9 +10,10 @@ const MODELS: Record<string, { id: string; maxTokens: number }> = {
   max:  { id: "claude-sonnet-4-6", maxTokens: 4096 },
 };
 
-const SYSTEM = `You are Blue Agent — the Base-native AI assistant for builders.
+const BASE_SYSTEM = `You are Blue Agent — the Base-native AI assistant for builders.
 You help founders and developers on Base with idea generation, smart contract architecture, DeFi design, agent development, and launch strategy.
-Be direct, technical, and actionable. Prefer Base, USDC, Coinbase tools, and the Bankr ecosystem.`;
+Be direct, technical, and actionable. Prefer Base, USDC, Coinbase tools, and the Bankr ecosystem.
+If the user has memory context below, use it to personalize your responses — reference their project, remember what they're building, pick up where they left off.`;
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.BANKR_API_KEY;
@@ -20,14 +21,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "BANKR_API_KEY not configured." }, { status: 500 });
   }
 
-  let body: { messages?: { role: string; content: string }[]; tier?: string } = {};
+  let body: { messages?: { role: string; content: string }[]; tier?: string; memoryContext?: string } = {};
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { messages, tier = "pro" } = body;
+  const { messages, tier = "pro", memoryContext } = body;
+  const system = memoryContext
+    ? `${BASE_SYSTEM}\n\n${memoryContext}`
+    : BASE_SYSTEM;
   if (!messages?.length) {
     return NextResponse.json({ error: "messages array required." }, { status: 400 });
   }
@@ -43,7 +47,7 @@ export async function POST(req: NextRequest) {
     },
     body: JSON.stringify({
       model: model.id,
-      system: SYSTEM,
+      system,
       messages,
       max_tokens: model.maxTokens,
       stream: true,
