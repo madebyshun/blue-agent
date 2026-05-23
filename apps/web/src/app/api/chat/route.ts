@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 const BANKR_LLM = "https://llm.bankr.bot/v1/messages";
 
@@ -16,10 +17,20 @@ Be direct, technical, and actionable. Prefer Base, USDC, Coinbase tools, and the
 If the user has memory context below, use it to personalize your responses — reference their project, remember what they're building, pick up where they left off.`;
 
 export async function POST(req: NextRequest) {
+  // Rate limit: 30 messages/min per IP
+  const { success, remaining } = await rateLimit(getIdentifier(req), "chat");
+  if (!success) {
+    return NextResponse.json(
+      { error: "Too many requests. Slow down." },
+      { status: 429, headers: { "X-RateLimit-Remaining": "0" } }
+    );
+  }
+
   const apiKey = process.env.BANKR_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "BANKR_API_KEY not configured." }, { status: 500 });
   }
+  void remaining; // used for header logging
 
   let body: { messages?: { role: string; content: string }[]; tier?: string; memoryContext?: string } = {};
   try {
