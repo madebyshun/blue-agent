@@ -33,10 +33,18 @@ interface Watch {
 interface Stats {
   totalScans:       number;
   totalFindings:    number;
+  totalDiscovered?: number;
   lastScan:         string | null;
   activeWatches:    number;
   criticalFindings: number;
   highFindings:     number;
+}
+
+interface DiscoveryInfo {
+  count:     number;
+  tokens:    number;
+  domains:   number;
+  scannedAt: string;
 }
 
 interface SchedulerConfig {
@@ -187,6 +195,7 @@ export default function SentinelPage() {
   const [findings,    setFindings]    = useState<Finding[]>([]);
   const [watches,     setWatches]     = useState<Watch[]>([]);
   const [scheduler,   setScheduler]   = useState<SchedulerConfig | null>(null);
+  const [discovery,   setDiscovery]   = useState<DiscoveryInfo | null>(null);
   const [loading,     setLoading]     = useState(true);
   const [scanning,    setScanning]    = useState(false);
   const [scanResult,  setScanResult]  = useState<string | null>(null);
@@ -196,21 +205,30 @@ export default function SentinelPage() {
 
   const load = useCallback(async () => {
     try {
-      const [watchRes, ctrlRes] = await Promise.all([
+      const [watchRes, ctrlRes, discRes] = await Promise.all([
         fetch("/api/sentinel/watch"),
         fetch("/api/sentinel/control"),
+        fetch("/api/sentinel/discovery"),
       ]);
       const watchData = await watchRes.json() as { stats: Stats; findings: Finding[]; watches: Watch[] };
       const ctrlData  = await ctrlRes.json() as { config: SchedulerConfig };
+      const discData  = discRes.ok ? await discRes.json() as DiscoveryInfo : null;
       setStats(watchData.stats);
       setFindings(watchData.findings ?? []);
       setWatches((watchData.watches ?? []).filter(w => w.active));
       setScheduler(ctrlData.config ?? null);
+      if (discData) setDiscovery(discData);
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const id = setInterval(() => { void load(); }, 30_000);
+    return () => clearInterval(id);
+  }, [load]);
 
   async function handleScan() {
     setScanning(true); setScanResult(null);
@@ -413,10 +431,10 @@ export default function SentinelPage() {
             {/* Stat cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
-                { label: "Critical",       value: stats?.criticalFindings ?? 0, color: "text-red-400",    border: "border-l-red-500"    },
-                { label: "High",           value: stats?.highFindings     ?? 0, color: "text-orange-400", border: "border-l-orange-500" },
-                { label: "Active Watches", value: stats?.activeWatches    ?? 0, color: "text-[#4FC3F7]",  border: "border-l-[#4FC3F7]"  },
-                { label: "Total Scans",    value: stats?.totalScans       ?? 0, color: "text-slate-300",  border: "border-l-[#1A1A2E]"  },
+                { label: "Critical",    value: stats?.criticalFindings ?? 0, color: "text-red-400",    border: "border-l-red-500"    },
+                { label: "High",        value: stats?.highFindings     ?? 0, color: "text-orange-400", border: "border-l-orange-500" },
+                { label: "Auto-scanned", value: discovery?.count ?? (stats?.totalDiscovered ?? 0), color: "text-[#4FC3F7]", border: "border-l-[#4FC3F7]" },
+                { label: "Total Scans", value: stats?.totalScans       ?? 0, color: "text-slate-300",  border: "border-l-[#1A1A2E]"  },
               ].map(s => (
                 <div key={s.label} className={`card-surface rounded-xl p-4 border-l-4 ${s.border}`}>
                   <p className={`font-mono text-3xl font-bold ${s.color}`}>{s.value}</p>
@@ -425,13 +443,30 @@ export default function SentinelPage() {
               ))}
             </div>
 
-            {/* Findings + add watch */}
-            <div className="grid lg:grid-cols-3 gap-6">
+            {/* Auto-discovery status bar */}
+            {discovery && (
+              <div className="card-surface rounded-xl px-5 py-3 flex flex-wrap items-center gap-x-6 gap-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+                  <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest uppercase">Auto Discovery</p>
+                </div>
+                <p className="font-mono text-[10px] text-slate-400">
+                  <span className="text-white">{discovery.count}</span> targets last cycle
+                  · <span className="text-emerald-400">{discovery.tokens}</span> tokens
+                  · <span className="text-purple-400">{discovery.domains}</span> domains
+                </p>
+                <p className="font-mono text-[10px] text-slate-700 ml-auto">
+                  DexScreener · URLhaus · Patterns · refreshed {timeAgo(discovery.scannedAt)}
+                </p>
+              </div>
+            )}
 
-              {/* Findings feed */}
-              <div className="lg:col-span-2">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">Live Findings</p>
+            {/* Findings feed — full width */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">Live Findings</p>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[9px] text-slate-700">auto-refresh 30s</span>
                   <div className="flex gap-1">
                     {(["all","critical","high","medium","low"] as const).map(s => (
                       <button key={s} onClick={() => setSevFilter(s)}
@@ -443,56 +478,51 @@ export default function SentinelPage() {
                     ))}
                   </div>
                 </div>
-
-                {loading ? (
-                  <div className="card-surface rounded-xl p-10 text-center">
-                    <p className="font-mono text-xs text-slate-700 animate-pulse">loading…</p>
-                  </div>
-                ) : filtered.length === 0 ? (
-                  <div className="card-surface rounded-xl p-12 text-center">
-                    <p className="text-3xl mb-3">🛡️</p>
-                    <p className="font-mono text-sm text-slate-400 mb-1">No findings</p>
-                    <p className="font-mono text-[10px] text-slate-700">
-                      {watches.length === 0 ? "Add a target to start monitoring" : "All watched targets look clean"}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {filtered.map(f => (
-                      <FindingCard key={f.id} f={f} onDismiss={dismissFinding} />
-                    ))}
-                  </div>
-                )}
               </div>
 
-              {/* Add watch + mobile watches */}
-              <div className="space-y-4">
-                <AddWatchForm onAdded={load} />
-
-                {/* Mobile watches */}
-                <div className="card-surface rounded-xl p-5 lg:hidden">
-                  <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">
-                    Watches · {watches.length}
-                  </p>
-                  {watches.length === 0 ? (
-                    <p className="font-mono text-[10px] text-slate-700">No active watches</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {watches.map(w => (
-                        <div key={w.id} className="flex items-center gap-2 border-b border-[#1A1A2E] pb-2 last:border-0 last:pb-0">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            {w.label && <p className="font-mono text-[10px] text-white truncate">{w.label}</p>}
-                            <code className="font-mono text-[9px] text-[#4FC3F7] block truncate">{trunc(w.target, 20)}</code>
-                          </div>
-                          <button onClick={() => removeWatch(w.id)}
-                            className="font-mono text-[9px] text-slate-700 hover:text-red-400 transition-colors">✕</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+              {loading ? (
+                <div className="card-surface rounded-xl p-10 text-center">
+                  <p className="font-mono text-xs text-slate-700 animate-pulse">loading…</p>
                 </div>
-              </div>
+              ) : filtered.length === 0 ? (
+                <div className="card-surface rounded-xl p-12 text-center">
+                  <p className="text-3xl mb-3">🛡️</p>
+                  <p className="font-mono text-sm text-slate-400 mb-1">No findings</p>
+                  <p className="font-mono text-[10px] text-slate-700">
+                    Sentinel is scanning Base automatically — alerts fire when threats are found
+                  </p>
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {filtered.map(f => (
+                    <FindingCard key={f.id} f={f} onDismiss={dismissFinding} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Mobile watches */}
+            <div className="card-surface rounded-xl p-5 lg:hidden">
+              <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">
+                Watches · {watches.length}
+              </p>
+              {watches.length === 0 ? (
+                <p className="font-mono text-[10px] text-slate-700">No user watches — auto-discovery is active</p>
+              ) : (
+                <div className="space-y-2">
+                  {watches.map(w => (
+                    <div key={w.id} className="flex items-center gap-2 border-b border-[#1A1A2E] pb-2 last:border-0 last:pb-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        {w.label && <p className="font-mono text-[10px] text-white truncate">{w.label}</p>}
+                        <code className="font-mono text-[9px] text-[#4FC3F7] block truncate">{trunc(w.target, 20)}</code>
+                      </div>
+                      <button onClick={() => removeWatch(w.id)}
+                        className="font-mono text-[9px] text-slate-700 hover:text-red-400 transition-colors">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Threat catalog */}

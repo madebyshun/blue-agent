@@ -28,6 +28,7 @@ import {
   type ThreatCategory,
 } from "@/lib/sentinel/catalog";
 import { isDuplicate, markSeen } from "@/lib/sentinel/dedup";
+import { discoverAll } from "@/lib/sentinel/discovery";
 
 export const runtime    = "nodejs";
 export const maxDuration = 60;
@@ -344,20 +345,49 @@ export async function GET(req: NextRequest) {
   const startAt = Date.now();
   const log: string[] = [];
 
-  // 1. Load watches
+  // 1. Load user watches
   const watches = (await kvGet<WatchSubscription[]>(SENTINEL_KV.watches)) ?? [];
   const active  = watches.filter(w => w.active);
   log.push(`✓ loaded ${active.length} active watches`);
 
-  if (active.length === 0) {
+  // 2. Auto-discovery — find tokens, domains, addresses to scan
+  const discovered = await discoverAll();
+  log.push(`✓ discovered ${discovered.length} targets (${discovered.filter(d => d.targetType === "token").length} tokens, ${discovered.filter(d => d.targetType === "domain").length} domains)`);
+
+  // Persist discovery count for dashboard
+  await kvSet("sentinel:discovery:last", {
+    count:    discovered.length,
+    tokens:   discovered.filter(d => d.targetType === "token").length,
+    domains:  discovered.filter(d => d.targetType === "domain").length,
+    scannedAt: new Date().toISOString(),
+  });
+
+  // Merge user watches + discovered targets (no duplicates)
+  const userTargetSet = new Set(active.map(w => w.target.toLowerCase()));
+  const discoveredWatches: WatchSubscription[] = discovered
+    .filter(d => !userTargetSet.has(d.target.toLowerCase()))
+    .map(d => ({
+      id:            `auto:${d.source}:${d.target}`,
+      target:        d.target,
+      targetType:    d.targetType,
+      label:         `[auto] ${d.reason}`,
+      active:        true,
+      createdAt:     new Date().toISOString(),
+      alertChannels: ["telegram"] as ("telegram" | "webhook")[],
+    }));
+
+  const allTargets: WatchSubscription[] = [...active, ...discoveredWatches];
+  log.push(`✓ scanning ${allTargets.length} total targets (${active.length} user + ${discoveredWatches.length} auto)`);
+
+  if (allTargets.length === 0) {
     await kvSet(SENTINEL_KV.scanLast, new Date().toISOString());
     return NextResponse.json({ ok: true, scanned: 0, findings: 0, log });
   }
 
-  // 2. Scan all targets
+  // 3. Scan all targets
   const allFindings: Finding[] = [];
   const scanResults = await Promise.allSettled(
-    active.map(w => scanTarget(w).then(f => ({ watch: w, findings: f })))
+    allTargets.map(w => scanTarget(w).then(f => ({ watch: w, findings: f })))
   );
 
   for (const result of scanResults) {
@@ -371,12 +401,12 @@ export async function GET(req: NextRequest) {
       allFindings.push(...findings);
     }
   }
-  log.push(`✓ scanned ${active.length} targets — ${allFindings.length} finding(s)`);
+  log.push(`✓ scanned ${allTargets.length} targets — ${allFindings.length} finding(s)`);
 
-  // 3. Alert + mark alerted
+  // 4. Alert + mark alerted
   let alertCount = 0;
   for (const finding of allFindings) {
-    const watch = active.find(w => w.target === finding.target);
+    const watch = allTargets.find(w => w.target === finding.target);
     const channels = watch?.alertChannels ?? [];
 
     const alertTasks: Promise<void>[] = [];
@@ -408,18 +438,19 @@ export async function GET(req: NextRequest) {
   }
   log.push(`✓ ${alertCount} alert(s) sent`);
 
-  // 4. Persist findings
+  // 5. Persist findings
   const existing = (await kvGet<Finding[]>(SENTINEL_KV.findings)) ?? [];
   const merged   = [...allFindings, ...existing].slice(0, 100); // keep last 100
   await kvSet(SENTINEL_KV.findings, merged, SENTINEL_TTL.findings);
 
-  // 5. Update stats
-  type Stats = { totalScans: number; totalFindings: number; lastScan: string };
+  // 6. Update stats
+  type Stats = { totalScans: number; totalFindings: number; lastScan: string; totalDiscovered: number };
   const stats = (await kvGet<Stats>(SENTINEL_KV.scanStats)) ?? {
-    totalScans: 0, totalFindings: 0, lastScan: "",
+    totalScans: 0, totalFindings: 0, lastScan: "", totalDiscovered: 0,
   };
   stats.totalScans++;
-  stats.totalFindings += allFindings.length;
+  stats.totalFindings   += allFindings.length;
+  stats.totalDiscovered  = (stats.totalDiscovered ?? 0) + discovered.length;
   stats.lastScan = new Date().toISOString();
   await kvSet(SENTINEL_KV.scanStats, stats, SENTINEL_TTL.stats);
   await kvSet(SENTINEL_KV.scanLast, stats.lastScan);
@@ -427,10 +458,12 @@ export async function GET(req: NextRequest) {
   log.push(`✓ findings stored · took ${Date.now() - startAt}ms`);
 
   return NextResponse.json({
-    ok:       true,
-    scanned:  active.length,
-    findings: allFindings.length,
-    alerted:  alertCount,
+    ok:         true,
+    scanned:    allTargets.length,
+    userWatches: active.length,
+    autoTargets: discoveredWatches.length,
+    findings:   allFindings.length,
+    alerted:    alertCount,
     log,
     stats,
   });
