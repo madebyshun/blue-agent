@@ -5,19 +5,22 @@
  * No human input needed.
  *
  * Sources:
- *   A. DexScreener   — new tokens on Base (free, no key)
- *   B. URLhaus       — crypto-related malicious URLs (free, no key)
- *   C. Pattern list  — known phishing domain patterns (built-in, catalog-check only)
+ *   A. DexScreener    — new tokens on Base (free, no key)
+ *   B. URLhaus        — crypto-related malicious URLs (free, no key)
+ *   C. Pattern list   — known phishing domain patterns (built-in, catalog-check only)
+ *   D. UpgradeWatcher — recent proxy upgrades on Base (EIP-1967 Upgraded events)
  *
  * Optimizations:
  *   - DexScreener tokens: KV-cached seen set (24h TTL) — only return NEW tokens
  *   - Pattern domains: flagged as catalogOnly=true — skip expensive hub scan
  *   - URLhaus domains: always fresh (malicious URLs change every cycle)
+ *   - Upgrade events: block checkpoint in KV — never re-scan same block twice
  */
 
 import { kvGet, kvSet } from "@/lib/kv";
+import { discoverUpgrades } from "@/lib/sentinel/upgrade-watcher";
 
-export type DiscoverySource = "dexscreener" | "urlhaus" | "pattern";
+export type DiscoverySource = "dexscreener" | "urlhaus" | "pattern" | "upgrade_watcher";
 
 export interface DiscoveredTarget {
   target:      string;
@@ -26,6 +29,8 @@ export interface DiscoveredTarget {
   reason:      string;
   /** If true, only run catalog check — skip hub tool scan (saves credits) */
   catalogOnly?: boolean;
+  /** Extra metadata passed to scanner (e.g. newImpl for proxy upgrades) */
+  metadata?:   Record<string, string>;
 }
 
 // ─── Seen-token cache ─────────────────────────────────────────────────────────
@@ -196,17 +201,38 @@ function discoverFromPatterns(): DiscoveredTarget[] {
   }));
 }
 
+// ─── D. Upgrade Watcher — recent proxy upgrades on Base ──────────────────────
+
+async function discoverFromUpgradeWatcher(): Promise<DiscoveredTarget[]> {
+  try {
+    const upgrades = await discoverUpgrades();
+    return upgrades.map(u => ({
+      target:     u.proxyAddress,
+      targetType: "address" as const,
+      source:     "upgrade_watcher" as const,
+      reason:     `Proxy upgraded → new impl ${u.newImpl.slice(0, 10)}… (block ${u.blockNumber})`,
+      metadata:   {
+        newImpl:     u.newImpl,
+        blockNumber: String(u.blockNumber),
+        txHash:      u.txHash,
+      },
+    }));
+  } catch { return []; }
+}
+
 // ─── Main: discoverAll ────────────────────────────────────────────────────────
 
 export async function discoverAll(): Promise<DiscoveredTarget[]> {
-  const [tokensResult, urlhausResult] = await Promise.allSettled([
+  const [tokensResult, urlhausResult, upgradeResult] = await Promise.allSettled([
     discoverNewBaseTokens(),
     discoverFromURLhaus(),
+    discoverFromUpgradeWatcher(),
   ]);
 
   const all: DiscoveredTarget[] = [
     ...(tokensResult.status  === "fulfilled" ? tokensResult.value  : []),
     ...(urlhausResult.status === "fulfilled" ? urlhausResult.value : []),
+    ...(upgradeResult.status === "fulfilled" ? upgradeResult.value : []),
     ...discoverFromPatterns(),
   ];
 

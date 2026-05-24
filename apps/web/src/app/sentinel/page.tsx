@@ -85,14 +85,15 @@ const SEV: Record<Severity, { badge: string; left: string; label: string }> = {
 };
 
 const THREAT_CATS = [
-  { icon: "🍯", name: "Honeypot",     color: "#f87171", desc: "Token blocks sells after buy"      },
-  { icon: "🏃", name: "Rug Pull",     color: "#fb923c", desc: "Unlocked LP, unlimited mint"       },
-  { icon: "🎣", name: "Phishing",     color: "#fbbf24", desc: "Fake Coinbase / Uniswap domains"   },
-  { icon: "🌀", name: "Mixer / AML",  color: "#a78bfa", desc: "Tornado Cash, sanctions exposure"  },
-  { icon: "⚡", name: "Exploit",      color: "#f472b6", desc: "Flash loan, reentrancy patterns"   },
-  { icon: "🩸", name: "Drain",        color: "#ef4444", desc: "Approval drainers, NFT sweeps"     },
-  { icon: "🎭", name: "Scam Token",   color: "#60a5fa", desc: "Impersonating USDC / ETH"          },
-  { icon: "🔓", name: "Bad Approval", color: "#34d399", desc: "Infinite approval to unverified"   },
+  { icon: "🍯", name: "Honeypot",       color: "#f87171", desc: "Token blocks sells after buy"         },
+  { icon: "🏃", name: "Rug Pull",       color: "#fb923c", desc: "Unlocked LP, unlimited mint"          },
+  { icon: "🎣", name: "Phishing",       color: "#fbbf24", desc: "Fake Coinbase / Uniswap domains"      },
+  { icon: "🌀", name: "Mixer / AML",    color: "#a78bfa", desc: "Tornado Cash, sanctions exposure"     },
+  { icon: "⚡", name: "Exploit",        color: "#f472b6", desc: "Flash loan, reentrancy patterns"      },
+  { icon: "🩸", name: "Drain",          color: "#ef4444", desc: "Approval drainers, NFT sweeps"        },
+  { icon: "🎭", name: "Scam Token",     color: "#60a5fa", desc: "Impersonating USDC / ETH"             },
+  { icon: "🔓", name: "Bad Approval",   color: "#34d399", desc: "Infinite approval to unverified"      },
+  { icon: "🔄", name: "Proxy Upgrade",  color: "#c084fc", desc: "Malicious implementation upgrade"     },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -612,7 +613,7 @@ export default function SentinelPage() {
 
             {/* Threat catalog */}
             <div>
-              <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">Threat Catalog · 8 Categories</p>
+              <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">Threat Catalog · 9 Categories</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
                 {THREAT_CATS.map(t => (
                   <div key={t.name} className="card-surface card-hover rounded-xl p-3 text-center">
