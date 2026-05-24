@@ -135,6 +135,18 @@ export interface HealthCheck {
   reason: string;
 }
 
+// ─── Timeline ────────────────────────────────────────────────────────────────
+
+export interface DailySnapshot {
+  /** UTC date string — "2026-05-24" */
+  date:        string;
+  total:       number;
+  bySeverity:  { critical: number; high: number; medium: number; low: number };
+  byCategory:  Partial<Record<ThreatCategory, number>>;
+  /** Unique targets flagged on this day */
+  targets:     string[];
+}
+
 // ─── Discovery ────────────────────────────────────────────────────────────────
 
 export type DiscoverySource = "dexscreener" | "urlhaus" | "pattern" | "upgrade_watcher" | "liquidity_watcher";

@@ -9,6 +9,24 @@ import Navbar from "@/components/Navbar";
 type Severity   = "critical" | "high" | "medium" | "low";
 type TargetType = "address" | "token" | "domain";
 
+interface DailySnapshot {
+  date:        string;
+  total:       number;
+  bySeverity:  { critical: number; high: number; medium: number; low: number };
+  byCategory:  Record<string, number>;
+  targets:     string[];
+}
+
+interface TimelineStats {
+  totalThreats:  number;
+  totalTargets:  number;
+  bySeverity:    { critical: number; high: number; medium: number; low: number };
+  byCategory:    Record<string, number>;
+  dailyPeak:     number;
+  activeDays:    number;
+  snapshots:     DailySnapshot[];
+}
+
 interface Finding {
   id:         string;
   threatName: string;
@@ -153,6 +171,141 @@ function FindingCard({ f, onDismiss }: { f: Finding; onDismiss: (id: string) => 
   );
 }
 
+// ─── Threat Timeline chart ────────────────────────────────────────────────────
+
+function ThreatTimeline({ stats }: { stats: TimelineStats }) {
+  const { snapshots, totalThreats, totalTargets, bySeverity, dailyPeak, activeDays } = stats;
+
+  // Format date label — "Mon 24"
+  function dayLabel(dateStr: string): string {
+    const d = new Date(dateStr + "T00:00:00Z");
+    return d.toLocaleDateString("en-US", { weekday: "short", day: "numeric", timeZone: "UTC" });
+  }
+
+  const peak = dailyPeak || 1; // avoid division by zero
+
+  return (
+    <div className="card-surface rounded-xl p-5">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-5 gap-4 flex-wrap">
+        <div>
+          <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-1">Threat Timeline · Last 7 Days</p>
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <span className="font-mono text-4xl font-bold text-white">{totalThreats}</span>
+            <span className="font-mono text-sm text-slate-500">threats detected</span>
+            {totalThreats > 0 && (
+              <span className="font-mono text-[10px] text-slate-700">across {totalTargets} unique target{totalTargets !== 1 ? "s" : ""}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Severity breakdown */}
+        <div className="flex gap-3 flex-wrap">
+          {([
+            { key: "critical", color: "text-red-400",    label: "Critical" },
+            { key: "high",     color: "text-orange-400", label: "High"     },
+            { key: "medium",   color: "text-yellow-400", label: "Medium"   },
+          ] as const).map(({ key, color, label }) => (
+            bySeverity[key] > 0 && (
+              <div key={key} className="text-center">
+                <p className={`font-mono text-xl font-bold ${color}`}>{bySeverity[key]}</p>
+                <p className="font-mono text-[9px] text-slate-700 uppercase tracking-widest">{label}</p>
+              </div>
+            )
+          ))}
+          <div className="text-center">
+            <p className="font-mono text-xl font-bold text-slate-400">{activeDays}</p>
+            <p className="font-mono text-[9px] text-slate-700 uppercase tracking-widest">Active days</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Bar chart */}
+      <div className="flex items-end gap-1.5 h-24">
+        {snapshots.map((s) => {
+          const heightPct = s.total === 0 ? 0 : Math.max((s.total / peak) * 100, 4);
+          const critPct   = s.total > 0 ? (s.bySeverity.critical / s.total) * 100 : 0;
+          const highPct   = s.total > 0 ? (s.bySeverity.high     / s.total) * 100 : 0;
+          const restPct   = 100 - critPct - highPct;
+          const isToday   = s.date === new Date().toISOString().slice(0, 10);
+
+          return (
+            <div key={s.date} className="flex-1 flex flex-col items-center gap-1 group">
+              {/* Tooltip on hover */}
+              <div className="relative w-full flex justify-center">
+                {s.total > 0 && (
+                  <div className="absolute bottom-full mb-1 hidden group-hover:block z-10 pointer-events-none">
+                    <div className="card-surface border border-[#1A1A2E] rounded-lg px-2 py-1.5 text-center whitespace-nowrap shadow-lg">
+                      <p className="font-mono text-[10px] text-white font-bold">{s.total} threat{s.total !== 1 ? "s" : ""}</p>
+                      {s.bySeverity.critical > 0 && (
+                        <p className="font-mono text-[9px] text-red-400">🚨 {s.bySeverity.critical} critical</p>
+                      )}
+                      {s.bySeverity.high > 0 && (
+                        <p className="font-mono text-[9px] text-orange-400">⚠️ {s.bySeverity.high} high</p>
+                      )}
+                      <p className="font-mono text-[9px] text-slate-600">{s.targets.length} target{s.targets.length !== 1 ? "s" : ""}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* The bar itself */}
+                <div
+                  className={`w-full rounded-t-sm transition-all duration-300 overflow-hidden flex flex-col justify-end ${
+                    s.total === 0 ? "bg-[#0D0D1A]" : ""
+                  } ${isToday ? "ring-1 ring-[#4FC3F7]/20" : ""}`}
+                  style={{ height: "96px" }}
+                >
+                  {s.total > 0 ? (
+                    <div className="w-full flex flex-col" style={{ height: `${heightPct}%` }}>
+                      {/* Critical (red) at top */}
+                      {critPct > 0 && (
+                        <div className="w-full bg-red-500/80" style={{ height: `${critPct}%` }} />
+                      )}
+                      {/* High (orange) */}
+                      {highPct > 0 && (
+                        <div className="w-full bg-orange-500/70" style={{ height: `${highPct}%` }} />
+                      )}
+                      {/* Rest (yellow/slate) */}
+                      {restPct > 0 && (
+                        <div className="w-full bg-yellow-500/40" style={{ height: `${restPct}%` }} />
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-full bg-[#0D0D1A]" style={{ height: "4px" }} />
+                  )}
+                </div>
+              </div>
+
+              {/* Day label */}
+              <p className={`font-mono text-[8px] text-center leading-tight ${isToday ? "text-[#4FC3F7]" : "text-slate-700"}`}>
+                {dayLabel(s.date).split(" ")[0]}<br />
+                {dayLabel(s.date).split(" ")[1]}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 mt-3 pt-3 border-t border-[#1A1A2E] flex-wrap">
+        {[
+          { color: "bg-red-500/80",    label: "Critical" },
+          { color: "bg-orange-500/70", label: "High"     },
+          { color: "bg-yellow-500/40", label: "Medium / Low" },
+        ].map(l => (
+          <div key={l.label} className="flex items-center gap-1.5">
+            <div className={`w-2.5 h-2.5 rounded-sm ${l.color}`} />
+            <span className="font-mono text-[9px] text-slate-700">{l.label}</span>
+          </div>
+        ))}
+        {totalThreats === 0 && (
+          <p className="font-mono text-[10px] text-slate-800 ml-auto">No threats detected in the last 7 days 🛡️</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Add watch form ───────────────────────────────────────────────────────────
 
 function AddWatchForm({ onAdded }: { onAdded: () => void }) {
@@ -233,6 +386,7 @@ export default function SentinelPage() {
   const [health,      setHealth]      = useState<Health | null>(null);
   const [discovery,   setDiscovery]   = useState<DiscoveryInfo | null>(null);
   const [scanLogs,    setScanLogs]    = useState<ScanLog[]>([]);
+  const [timeline,    setTimeline]    = useState<TimelineStats | null>(null);
   const [logsOpen,    setLogsOpen]    = useState(false);
   const [loading,     setLoading]     = useState(true);
   const [scanning,    setScanning]    = useState(false);
@@ -243,16 +397,18 @@ export default function SentinelPage() {
 
   const load = useCallback(async () => {
     try {
-      const [watchRes, ctrlRes, discRes, logsRes] = await Promise.all([
+      const [watchRes, ctrlRes, discRes, logsRes, histRes] = await Promise.all([
         fetch("/api/sentinel/watch"),
         fetch("/api/sentinel/control"),
         fetch("/api/sentinel/discovery"),
         fetch("/api/sentinel/logs"),
+        fetch("/api/sentinel/history?days=7"),
       ]);
       const watchData = await watchRes.json() as { stats: Stats; findings: Finding[]; watches: Watch[] };
       const ctrlData  = await ctrlRes.json() as { config: SchedulerConfig; health?: Health };
       const discData  = discRes.ok ? await discRes.json() as DiscoveryInfo : null;
       const logsData  = logsRes.ok ? await logsRes.json() as { logs: ScanLog[] } : null;
+      const histData  = histRes.ok ? await histRes.json() as { stats: TimelineStats } : null;
       setStats(watchData.stats);
       setFindings(watchData.findings ?? []);
       setWatches((watchData.watches ?? []).filter(w => w.active));
@@ -260,6 +416,7 @@ export default function SentinelPage() {
       if (ctrlData.health) setHealth(ctrlData.health);
       if (discData) setDiscovery(discData);
       if (logsData) setScanLogs(logsData.logs ?? []);
+      if (histData?.stats) setTimeline(histData.stats);
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, []);
@@ -531,6 +688,9 @@ export default function SentinelPage() {
               ))}
             </div>
 
+            {/* Threat Timeline */}
+            {timeline && <ThreatTimeline stats={timeline} />}
+
             {/* Auto-discovery status bar */}
             {discovery && (
               <div className="card-surface rounded-xl px-5 py-3 flex flex-wrap items-center gap-x-6 gap-y-1.5">
@@ -615,7 +775,7 @@ export default function SentinelPage() {
 
             {/* Threat catalog */}
             <div>
-              <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">Threat Catalog · 9 Categories</p>
+              <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">Threat Catalog · {THREAT_CATS.length} Categories</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
                 {THREAT_CATS.map(t => (
                   <div key={t.name} className="card-surface card-hover rounded-xl p-3 text-center">
