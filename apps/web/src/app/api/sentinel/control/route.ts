@@ -12,28 +12,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStatus, startScheduler, stopScheduler } from "@/lib/sentinel/scheduler";
 import { kvGet } from "@/lib/kv";
-import { SENTINEL_KV } from "@/lib/sentinel/catalog";
+import { SENTINEL_KV, HEALTH_CONFIG, VALID_INTERVALS } from "@/lib/sentinel/constants";
+import type { HealthStatus } from "@/lib/sentinel/types";
 
 export const runtime = "nodejs";
 
 // ─── Health helpers ───────────────────────────────────────────────────────────
-
-type HealthStatus = "healthy" | "degraded" | "down";
 
 function getHealth(opts: {
   enabled:    boolean;
   lastScan:   string | null;
   isLocked:   boolean;
 }): { status: HealthStatus; reason: string } {
-  if (!opts.enabled) return { status: "down",    reason: "scheduler stopped" };
-  if (opts.isLocked) return { status: "degraded", reason: "scan currently running" };
+  if (!opts.enabled)  return { status: "down",     reason: "scheduler stopped" };
+  if (opts.isLocked)  return { status: "degraded", reason: "scan currently running" };
   if (!opts.lastScan) return { status: "degraded", reason: "no scan completed yet" };
 
-  const ageMs = Date.now() - new Date(opts.lastScan).getTime();
-  const ageMin = Math.floor(ageMs / 60_000);
+  const ageMin = Math.floor((Date.now() - new Date(opts.lastScan).getTime()) / 60_000);
 
-  if (ageMin > 60)  return { status: "down",    reason: `last scan ${ageMin}m ago — may be stuck` };
-  if (ageMin > 20)  return { status: "degraded", reason: `last scan ${ageMin}m ago — slightly delayed` };
+  if (ageMin > HEALTH_CONFIG.downAfterMin)     return { status: "down",     reason: `last scan ${ageMin}m ago — may be stuck` };
+  if (ageMin > HEALTH_CONFIG.degradedAfterMin) return { status: "degraded", reason: `last scan ${ageMin}m ago — slightly delayed` };
   return { status: "healthy", reason: `last scan ${ageMin}m ago` };
 }
 
@@ -77,9 +75,8 @@ export async function POST(req: NextRequest) {
 
   if (action === "start") {
     // Validate interval
-    const VALID_INTERVALS = [5, 15, 30, 60, 240];
     const interval = intervalMinutes
-      ? VALID_INTERVALS.find(v => v === intervalMinutes) ?? 15
+      ? (VALID_INTERVALS as readonly number[]).includes(intervalMinutes) ? intervalMinutes : 15
       : 15;
 
     const result = await startScheduler({ intervalMinutes: interval, startedBy });
