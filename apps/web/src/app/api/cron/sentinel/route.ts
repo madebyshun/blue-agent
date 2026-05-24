@@ -16,7 +16,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { kvGet, kvSet } from "@/lib/kv";
+import { kvGet, kvSet, kvSetNX } from "@/lib/kv";
 import { THREAT_CATALOG } from "@/lib/sentinel/catalog";
 import {
   SENTINEL_KV,
@@ -51,10 +51,8 @@ export const maxDuration = 60;
 // ─── Scan lock (prevent concurrent runs) ─────────────────────────────────────
 
 async function acquireLock(): Promise<boolean> {
-  const existing = await kvGet<string>(SENTINEL_KV.scanLock);
-  if (existing) return false;
-  await kvSet(SENTINEL_KV.scanLock, new Date().toISOString(), SENTINEL_TTL.scanLock);
-  return true;
+  // Atomic SET NX EX — single Redis op, no race condition between read and write
+  return kvSetNX(SENTINEL_KV.scanLock, new Date().toISOString(), SENTINEL_TTL.scanLock);
 }
 
 async function releaseLock(): Promise<void> {
@@ -73,10 +71,13 @@ async function persistScanLog(entry: ScanLog): Promise<void> {
 
 async function scanInBatches(targets: ScanTarget[]): Promise<Array<{ watch: ScanTarget; findings: Finding[] }>> {
   const results: Array<{ watch: ScanTarget; findings: Finding[] }> = [];
+  // In-memory seen set shared across ALL batches in this run
+  // Prevents duplicates even if KV write is slow or two targets resolve simultaneously
+  const runSeen = new Set<string>();
   for (let i = 0; i < targets.length; i += SCAN_CONFIG.batchSize) {
     const batch = targets.slice(i, i + SCAN_CONFIG.batchSize);
     const batchResults = await Promise.allSettled(
-      batch.map(w => scanTarget(w).then(f => ({ watch: w, findings: f })))
+      batch.map(w => scanTarget(w, runSeen).then(f => ({ watch: w, findings: f })))
     );
     for (const r of batchResults) {
       if (r.status === "fulfilled") results.push(r.value);
@@ -326,7 +327,7 @@ async function sendWebhookAlert(finding: Finding, webhookUrl: string): Promise<v
 
 // ─── Scan one target ──────────────────────────────────────────────────────────
 
-async function scanTarget(watch: ScanTarget): Promise<Finding[]> {
+async function scanTarget(watch: ScanTarget, runSeen: Set<string>): Promise<Finding[]> {
   const findings: Finding[] = [];
   const results: HubResult[] = [];
 
@@ -394,9 +395,17 @@ async function scanTarget(watch: ScanTarget): Promise<Finding[]> {
     const tId    = pickThreatId(result.indicators, cat);
     const entry  = THREAT_CATALOG.find(t => t.id === tId);
 
-    // ── Deduplication: skip if same target+threat seen within 24h ────────────
+    // ── Deduplication ────────────────────────────────────────────────────────
+    // Step 1: in-memory runSeen — instant, prevents within-run race conditions
+    const runKey = `${watch.target.toLowerCase()}:${tId}`;
+    if (runSeen.has(runKey)) continue;
+
+    // Step 2: KV dedup — prevents cross-run duplicates (24h window)
     const dup = await isDuplicate({ target: watch.target, threatId: tId, severity: result.severity });
     if (dup) continue;
+
+    // Mark in-memory immediately (before any async op) so sibling parallel scans see it
+    runSeen.add(runKey);
 
     const finding: Finding = {
       id:         nanoid(),
@@ -413,8 +422,9 @@ async function scanTarget(watch: ScanTarget): Promise<Finding[]> {
       alerted:    false,
     };
 
-    // Mark as seen immediately so parallel scans don't double-fire
-    await markSeen({ target: watch.target, threatId: tId, severity: result.severity, alerted: false });
+    // Persist to KV — catalogOnly (static pattern) domains use 7-day TTL to reduce noise
+    const dedupTtl = watch.catalogOnly ? SENTINEL_TTL.dedup * 7 : SENTINEL_TTL.dedup;
+    await markSeen({ target: watch.target, threatId: tId, severity: result.severity, alerted: false, ttl: dedupTtl });
 
     findings.push(finding);
   }
@@ -534,9 +544,17 @@ export async function GET(req: NextRequest) {
     }
     log.push(`✓ ${alertCount} alert(s) sent`);
 
-    // 5. Persist findings
+    // 5. Persist findings — dedup by target+threatId before saving
     const existing = (await kvGet<Finding[]>(SENTINEL_KV.findings)) ?? [];
-    const merged   = [...allFindings, ...existing].slice(0, 100);
+    const seenKeys = new Set<string>();
+    const merged   = [...allFindings, ...existing]
+      .filter(f => {
+        const k = `${f.target.toLowerCase()}:${f.threatId}`;
+        if (seenKeys.has(k)) return false;
+        seenKeys.add(k);
+        return true;
+      })
+      .slice(0, SCAN_CONFIG.maxFindings);
     await kvSet(SENTINEL_KV.findings, merged, SENTINEL_TTL.findings);
 
     // 6. Update stats

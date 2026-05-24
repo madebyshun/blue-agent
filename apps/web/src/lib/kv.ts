@@ -84,5 +84,33 @@ export async function kvDel(...keys: string[]): Promise<void> {
   try { await kv.del(...keys); } catch {}
 }
 
+/**
+ * Atomic SET if-not-exists with TTL.
+ * Returns true if the key was set (lock acquired), false if it already existed.
+ * Uses Redis SET NX EX — single atomic op, no race condition.
+ */
+export async function kvSetNX(key: string, value: unknown, ttlSeconds: number): Promise<boolean> {
+  try {
+    const url   = process.env.KV_REST_API_URL;
+    const token = process.env.KV_REST_API_TOKEN;
+    if (url && token) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { Redis } = require("@upstash/redis");
+      const redis  = new Redis({ url, token });
+      // SET key value NX EX ttl — atomic, returns "OK" or null
+      const result = await redis.set(key, value, { nx: true, ex: ttlSeconds });
+      return result === "OK";
+    }
+    // In-memory fallback: check expiry + set atomically
+    const existing = memStore.get(key);
+    const expired  = existing?.expiresAt ? Date.now() > existing.expiresAt : false;
+    if (existing && !expired) return false;
+    memStore.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const isKVEnabled = (): boolean =>
   !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
