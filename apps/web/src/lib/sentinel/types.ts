@@ -17,7 +17,9 @@ export type ThreatCategory =
   | "aml"
   | "scam_token"
   | "malicious_approval"
-  | "proxy_upgrade";
+  | "proxy_upgrade"
+  | "post_deploy"
+  | "liquidity_drain";
 
 export type ThreatSeverity = "critical" | "high" | "medium" | "low";
 
@@ -135,7 +137,7 @@ export interface HealthCheck {
 
 // ─── Discovery ────────────────────────────────────────────────────────────────
 
-export type DiscoverySource = "dexscreener" | "urlhaus" | "pattern" | "upgrade_watcher";
+export type DiscoverySource = "dexscreener" | "urlhaus" | "pattern" | "upgrade_watcher" | "liquidity_watcher";
 
 export interface DiscoveredTarget {
   target:      string;

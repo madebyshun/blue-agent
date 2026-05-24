@@ -5,23 +5,27 @@
  * No human input needed.
  *
  * Sources:
- *   A. DexScreener    — new tokens on Base (free, no key)
- *   B. URLhaus        — crypto-related malicious URLs (free, no key)
- *   C. Pattern list   — known phishing domain patterns (built-in, catalog-check only)
- *   D. UpgradeWatcher — recent proxy upgrades on Base (EIP-1967 Upgraded events)
+ *   A. DexScreener      — new tokens on Base (free, no key)
+ *   B. URLhaus          — crypto-related malicious URLs (free, no key)
+ *   C. Pattern list     — known phishing domain patterns (built-in, catalog-check only)
+ *   D. UpgradeWatcher   — recent proxy upgrades on Base (EIP-1967 Upgraded events)
+ *   E. OpenPhish        — live phishing feed (6h KV cache, crypto-filtered)
+ *   F. LiquidityWatcher — tokens with liquidity anomalies (DexScreener pair data)
  *
  * Optimizations:
  *   - DexScreener tokens: KV-cached seen set (24h TTL) — only return NEW tokens
  *   - Pattern domains: flagged as catalogOnly=true — skip expensive hub scan
  *   - URLhaus domains: always fresh (malicious URLs change every cycle)
  *   - Upgrade events: block checkpoint in KV — never re-scan same block twice
+ *   - Liquidity alerts: snapshot-based delta detection — only flag on change
  */
 
 import { kvGet, kvSet } from "@/lib/kv";
 import { discoverUpgrades } from "@/lib/sentinel/upgrade-watcher";
 import { discoverFromOpenPhish } from "@/lib/sentinel/phishing-dna";
+import { discoverTopBaseLiquidity } from "@/lib/sentinel/liquidity-watcher";
 
-export type DiscoverySource = "dexscreener" | "urlhaus" | "pattern" | "upgrade_watcher";
+export type DiscoverySource = "dexscreener" | "urlhaus" | "pattern" | "upgrade_watcher" | "liquidity_watcher";
 
 export interface DiscoveredTarget {
   target:      string;
@@ -224,11 +228,12 @@ async function discoverFromUpgradeWatcher(): Promise<DiscoveredTarget[]> {
 // ─── Main: discoverAll ────────────────────────────────────────────────────────
 
 export async function discoverAll(): Promise<DiscoveredTarget[]> {
-  const [tokensResult, urlhausResult, upgradeResult, openphishResult] = await Promise.allSettled([
+  const [tokensResult, urlhausResult, upgradeResult, openphishResult, liquidityResult] = await Promise.allSettled([
     discoverNewBaseTokens(),
     discoverFromURLhaus(),
     discoverFromUpgradeWatcher(),
     discoverFromOpenPhish(),
+    discoverTopBaseLiquidity(),
   ]);
 
   const all: DiscoveredTarget[] = [
@@ -236,6 +241,7 @@ export async function discoverAll(): Promise<DiscoveredTarget[]> {
     ...(urlhausResult.status   === "fulfilled" ? urlhausResult.value   : []),
     ...(upgradeResult.status   === "fulfilled" ? upgradeResult.value   : []),
     ...(openphishResult.status === "fulfilled" ? openphishResult.value : []),
+    ...(liquidityResult.status === "fulfilled" ? liquidityResult.value : []),
     ...discoverFromPatterns(),
   ];
 

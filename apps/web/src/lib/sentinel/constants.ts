@@ -22,6 +22,7 @@ export const SENTINEL_KV = {
   discoverySeenTokens: "sentinel:discovery:seen_tokens",
   upgradeLastBlock:  "sentinel:upgrade:last_block",
   openphishCache:    "sentinel:phishing:openphish",
+  liquiditySnapshot: "sentinel:liquidity:snapshot",
   dedupPrefix:       "sentinel:dedup",
 } as const;
 
@@ -37,6 +38,7 @@ export const SENTINEL_TTL = {
   seenTokens:        60 * 60 * 24,        // 24 hours
   upgradeBlock:      60 * 60 * 24,        // 24 hours
   openphish:         60 * 60 * 6,         //  6 hours
+  liquiditySnapshot: 60 * 60,             //  1 hour  (survives 4 cycles @ 15min)
   watches:           0,                   // no TTL — persistent
 } as const;
 

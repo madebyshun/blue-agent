@@ -227,7 +227,8 @@ function catalogCheck(target: string): HubResult | null {
 }
 
 function mapTargetTypeToCategory(targetType: WatchSubscription["targetType"], source?: string): ThreatCategory[] {
-  if (source === "upgrade_watcher") return ["proxy_upgrade"];
+  if (source === "upgrade_watcher")   return ["proxy_upgrade"];
+  if (source === "liquidity_watcher") return ["liquidity_drain"];
   switch (targetType) {
     case "address": return ["aml", "exploit", "drain", "malicious_approval"];
     case "token":   return ["honeypot", "rug", "scam_token"];
@@ -354,6 +355,18 @@ async function scanTarget(watch: ScanTarget): Promise<Finding[]> {
     // Upgrade watcher — audit new implementation
     if (watch.source === "upgrade_watcher" && watch.metadata?.newImpl) {
       results.push(await callUpgradeAudit(watch.target, watch.metadata.newImpl));
+
+    // Liquidity watcher — alert is pre-built in metadata, synthesize HubResult
+    } else if (watch.source === "liquidity_watcher" && watch.metadata?.threatId) {
+      const severity = (watch.metadata.severity ?? "high") as ThreatSeverity;
+      results.push({
+        safe:       false,
+        severity,
+        indicators: [watch.metadata.threatId, "liquidity_anomaly_detected"],
+        summary:    watch.label ?? `Liquidity anomaly detected for ${watch.target.slice(0, 10)}…`,
+        raw:        watch.metadata,
+      });
+
     } else if (watch.targetType === "domain") {
       results.push(await callPhishingScan(watch.target));
     } else if (watch.targetType === "token") {

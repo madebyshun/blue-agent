@@ -94,6 +94,8 @@ const THREAT_CATS = [
   { icon: "🎭", name: "Scam Token",     color: "#60a5fa", desc: "Impersonating USDC / ETH"             },
   { icon: "🔓", name: "Bad Approval",   color: "#34d399", desc: "Infinite approval to unverified"      },
   { icon: "🔄", name: "Proxy Upgrade",  color: "#c084fc", desc: "Malicious implementation upgrade"     },
+  { icon: "🚀", name: "Post-Deploy",    color: "#f59e0b", desc: "Backdoor or high-risk new contract"    },
+  { icon: "💧", name: "Liq. Drain",     color: "#38bdf8", desc: "Liquidity rug, price crash, vol abuse"  },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
