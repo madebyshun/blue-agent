@@ -78,7 +78,11 @@ async function persistScanLog(entry: ScanLog): Promise<void> {
 
 const BATCH_SIZE = 10;
 
-type ScanTarget = WatchSubscription & { catalogOnly: boolean };
+type ScanTarget = WatchSubscription & {
+  catalogOnly: boolean;
+  source?:     string;
+  metadata?:   Record<string, string>;
+};
 
 async function scanInBatches(targets: ScanTarget[]): Promise<Array<{ watch: ScanTarget; findings: Finding[] }>> {
   const results: Array<{ watch: ScanTarget; findings: Finding[] }> = [];
@@ -117,6 +121,45 @@ interface HubResult {
   indicators: string[];
   summary:    string;
   raw?:       unknown;
+}
+
+async function callUpgradeAudit(proxyAddress: string, newImpl: string): Promise<HubResult> {
+  try {
+    // Run risk gate on new implementation address
+    const res = await fetch(`${BASE_URL}/api/tool/hub_risk_gate`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        target: newImpl,
+        chain:  "base",
+        context: `This is a new proxy implementation for ${proxyAddress}. Check for: selfdestruct, arbitrary delegatecall, hidden owner backdoor, fee changes, new mint functions, unauthorized upgrade patterns.`,
+      }),
+      signal:  AbortSignal.timeout(25000),
+    });
+    const data = await res.json() as Record<string, unknown>;
+    const text = (data?.result as string) ?? JSON.stringify(data);
+
+    // Upgrade-specific pattern detection
+    const hasMalicious  = /selfdestruct|arbitrary.?delegatecall|backdoor|hidden.?owner|unauthorized/i.test(text);
+    const hasSuspicious = /fee.?chang|new.?mint|pause.*add|ownership.?transfer|unverified/i.test(text);
+
+    const sev: ThreatSeverity = hasMalicious ? "critical" : hasSuspicious ? "high" : extractSeverityFromText(text);
+    const inds: string[] = [
+      ...(hasMalicious  ? ["selfdestruct_in_implementation", "hidden_owner_backdoor"] : []),
+      ...(hasSuspicious ? ["fee_function_changed", "new_mint_function"] : []),
+      ...extractIndicatorsFromText(text),
+    ];
+
+    return {
+      safe:       sev === "low",
+      severity:   sev,
+      indicators: [...new Set(inds)],
+      summary:    `Proxy ${proxyAddress.slice(0, 10)}… upgraded → impl ${newImpl.slice(0, 10)}…\n${text.slice(0, 250)}`,
+      raw:        data,
+    };
+  } catch (e) {
+    return { safe: true, severity: "low", indicators: [], summary: `upgrade_scan_error: ${(e as Error).message}` };
+  }
 }
 
 async function callHoneypotCheck(address: string): Promise<HubResult> {
@@ -252,7 +295,8 @@ function catalogCheck(target: string): HubResult | null {
   return null;
 }
 
-function mapTargetTypeToCategory(targetType: WatchSubscription["targetType"]): ThreatCategory[] {
+function mapTargetTypeToCategory(targetType: WatchSubscription["targetType"], source?: string): ThreatCategory[] {
+  if (source === "upgrade_watcher") return ["proxy_upgrade"];
   switch (targetType) {
     case "address": return ["aml", "exploit", "drain", "malicious_approval"];
     case "token":   return ["honeypot", "rug", "scam_token"];
@@ -350,7 +394,7 @@ async function sendWebhookAlert(finding: Finding, webhookUrl: string): Promise<v
 
 // ─── Scan one target ──────────────────────────────────────────────────────────
 
-async function scanTarget(watch: WatchSubscription & { catalogOnly?: boolean }): Promise<Finding[]> {
+async function scanTarget(watch: ScanTarget): Promise<Finding[]> {
   const findings: Finding[] = [];
   const results: HubResult[] = [];
 
@@ -362,7 +406,10 @@ async function scanTarget(watch: WatchSubscription & { catalogOnly?: boolean }):
 
   // ── Step 2: Hub tool scan — skip if catalogOnly (saves credits) ──────────────
   if (!watch.catalogOnly) {
-    if (watch.targetType === "domain") {
+    // Upgrade watcher — audit new implementation
+    if (watch.source === "upgrade_watcher" && watch.metadata?.newImpl) {
+      results.push(await callUpgradeAudit(watch.target, watch.metadata.newImpl));
+    } else if (watch.targetType === "domain") {
       results.push(await callPhishingScan(watch.target));
     } else if (watch.targetType === "token") {
       const [honeypot, risk] = await Promise.all([
@@ -384,7 +431,7 @@ async function scanTarget(watch: WatchSubscription & { catalogOnly?: boolean }):
     if (result.safe) continue;
     if (SEVERITY_WEIGHT[result.severity] < SEVERITY_WEIGHT[ALERT_THRESHOLD]) continue;
 
-    const cats   = mapTargetTypeToCategory(watch.targetType);
+    const cats   = mapTargetTypeToCategory(watch.targetType, watch.source);
     const cat    = cats[0] ?? "exploit";
     const tId    = pickThreatId(result.indicators, cat);
     const entry  = THREAT_CATALOG.find(t => t.id === tId);
@@ -457,7 +504,7 @@ export async function GET(req: NextRequest) {
 
     // Merge — skip targets already in user watches
     const userTargetSet = new Set(active.map(w => w.target.toLowerCase()));
-    const discoveredWatches: (WatchSubscription & { catalogOnly: boolean })[] = discovered
+    const discoveredWatches: ScanTarget[] = discovered
       .filter(d => !userTargetSet.has(d.target.toLowerCase()))
       .map(d => ({
         id:            `auto:${d.source}:${d.target}`,
@@ -468,11 +515,13 @@ export async function GET(req: NextRequest) {
         createdAt:     new Date().toISOString(),
         alertChannels: ["telegram"] as ("telegram" | "webhook")[],
         catalogOnly:   d.catalogOnly ?? false,
+        source:        d.source,
+        metadata:      d.metadata,
       }));
 
-    // User watches never catalogOnly
-    const allTargets: (WatchSubscription & { catalogOnly: boolean })[] = [
-      ...active.map(w => ({ ...w, catalogOnly: false })),
+    // User watches: never catalogOnly, no special source
+    const allTargets: ScanTarget[] = [
+      ...active.map(w => ({ ...w, catalogOnly: false, source: "user" as const, metadata: undefined })),
       ...discoveredWatches,
     ];
     log.push(`✓ scanning ${allTargets.length} total (${active.length} user · ${discoveredWatches.length} auto) in batches of ${BATCH_SIZE}`);

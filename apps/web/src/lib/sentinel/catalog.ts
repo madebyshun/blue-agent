@@ -22,7 +22,8 @@ export type ThreatCategory =
   | "drain"
   | "aml"
   | "scam_token"
-  | "malicious_approval";
+  | "malicious_approval"
+  | "proxy_upgrade";
 
 export type ThreatSeverity = "critical" | "high" | "medium" | "low";
 
@@ -327,6 +328,38 @@ export const THREAT_CATALOG: ThreatEntry[] = [
       "airdropped_to_holders_of_real_token",
     ],
     updatedAt: "2026-05-23",
+  },
+
+  // ── Proxy Upgrade ─────────────────────────────────────────────────────────────
+  {
+    id:          "proxy-upgrade-malicious-v1",
+    category:    "proxy_upgrade",
+    severity:    "critical",
+    name:        "Malicious Proxy Upgrade",
+    description: "Contract implementation was upgraded and new bytecode contains dangerous patterns: selfdestruct, arbitrary delegatecall, hidden backdoor, or ownership theft.",
+    indicators:  [
+      "selfdestruct_in_implementation",
+      "arbitrary_delegatecall",
+      "hidden_owner_backdoor",
+      "implementation_rug_pattern",
+      "unauthorized_upgrade",
+    ],
+    updatedAt: "2026-05-24",
+  },
+  {
+    id:          "proxy-upgrade-suspicious-v1",
+    category:    "proxy_upgrade",
+    severity:    "high",
+    name:        "Suspicious Proxy Upgrade",
+    description: "Contract was upgraded with changes to critical functions: fee logic, pausing, minting, or ownership transfer patterns.",
+    indicators:  [
+      "fee_function_changed",
+      "new_mint_function",
+      "pause_mechanism_added",
+      "ownership_transfer_in_upgrade",
+      "unverified_new_implementation",
+    ],
+    updatedAt: "2026-05-24",
   },
 
   // ── Malicious Approval ────────────────────────────────────────────────────────
