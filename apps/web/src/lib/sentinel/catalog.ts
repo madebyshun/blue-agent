@@ -301,6 +301,108 @@ export const THREAT_CATALOG: ThreatEntry[] = [
     updatedAt: "2026-05-24",
   },
 
+  // ── Post-Deploy Risk ─────────────────────────────────────────────────────────
+  {
+    id:          "post-deploy-backdoor-v1",
+    category:    "post_deploy",
+    severity:    "critical",
+    name:        "Backdoor in Deployed Contract",
+    description: "Newly deployed contract contains a hidden backdoor: selfdestruct, arbitrary delegatecall, hidden owner, or privileged drain function discovered post-deployment.",
+    indicators:  [
+      "selfdestruct_callable",
+      "arbitrary_delegatecall",
+      "hidden_owner_function",
+      "privileged_drain_function",
+      "deploy_backdoor_pattern",
+    ],
+    updatedAt: "2026-05-24",
+  },
+  {
+    id:          "post-deploy-risk-v1",
+    category:    "post_deploy",
+    severity:    "high",
+    name:        "High-Risk Deployed Contract",
+    description: "Newly deployed contract shows high-risk patterns: unverified source, dangerous owner permissions, or honeypot-like transfer restrictions.",
+    indicators:  [
+      "unverified_source_code",
+      "owner_retains_full_control",
+      "transfer_restriction_on_deploy",
+      "deploy_risk_score_high",
+      "no_audit_on_deploy",
+    ],
+    updatedAt: "2026-05-24",
+  },
+  {
+    id:          "post-deploy-low-quality-v1",
+    category:    "post_deploy",
+    severity:    "medium",
+    name:        "Suspicious Deploy Pattern",
+    description: "Contract deployment shows low-quality or suspicious patterns: copy-paste bytecode, minimal testing, or copied from known scam templates.",
+    indicators:  [
+      "known_scam_template_bytecode",
+      "low_test_coverage",
+      "copied_contract_pattern",
+      "rapid_deploy_then_trade",
+    ],
+    updatedAt: "2026-05-24",
+  },
+
+  // ── Liquidity Drain ───────────────────────────────────────────────────────────
+  {
+    id:          "liquidity-critical-drop-v1",
+    category:    "liquidity_drain",
+    severity:    "critical",
+    name:        "Critical Liquidity Drop",
+    description: "Token liquidity dropped >70% in a single cycle — consistent with rug pull or coordinated LP removal.",
+    indicators:  [
+      "liquidity_drop_70pct",
+      "lp_removal_pattern",
+      "coordinated_sell_wall",
+      "single_cycle_rug",
+    ],
+    updatedAt: "2026-05-24",
+  },
+  {
+    id:          "liquidity-low-v1",
+    category:    "liquidity_drain",
+    severity:    "high",
+    name:        "Critically Low Liquidity",
+    description: "Token pool liquidity below $10,000 USD — extremely vulnerable to manipulation, price impact attacks, or exit scam.",
+    indicators:  [
+      "liquidity_below_10k",
+      "thin_pool_manipulation_risk",
+      "high_price_impact",
+    ],
+    updatedAt: "2026-05-24",
+  },
+  {
+    id:          "liquidity-vol-ratio-v1",
+    category:    "liquidity_drain",
+    severity:    "high",
+    name:        "Extreme Volume/Liquidity Ratio",
+    description: "24h trading volume >10x the liquidity pool size — indicates wash trading, pump-and-dump, or imminent exit scam.",
+    indicators:  [
+      "vol_liq_ratio_10x",
+      "wash_trading_pattern",
+      "pump_dump_vol_pattern",
+      "exit_scam_volume_signal",
+    ],
+    updatedAt: "2026-05-24",
+  },
+  {
+    id:          "liquidity-price-crash-v1",
+    category:    "liquidity_drain",
+    severity:    "high",
+    name:        "Rapid Price Crash",
+    description: "Token price dropped >50% in the last hour — may indicate rug pull, coordinated dump, or exploit.",
+    indicators:  [
+      "price_drop_50pct_1h",
+      "coordinated_dump_pattern",
+      "rug_price_signal",
+    ],
+    updatedAt: "2026-05-24",
+  },
+
   // ── Malicious Approval ────────────────────────────────────────────────────────
   {
     id:          "malicious-approval-infinite-v1",
