@@ -7,7 +7,7 @@
 
 import { NextResponse } from "next/server";
 import { kvGet } from "@/lib/kv";
-import type { ScanLog } from "@/app/api/cron/sentinel/route";
+import type { ScanLog } from "@/lib/sentinel/types";
 
 export const runtime = "nodejs";
 

@@ -17,87 +17,72 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { kvGet, kvSet } from "@/lib/kv";
+import { THREAT_CATALOG } from "@/lib/sentinel/catalog";
 import {
-  THREAT_CATALOG,
   SENTINEL_KV,
   SENTINEL_TTL,
   SEVERITY_WEIGHT,
-  type Finding,
-  type WatchSubscription,
-  type ThreatSeverity,
-  type ThreatCategory,
-} from "@/lib/sentinel/catalog";
+  SCAN_CONFIG,
+  ALERT_THRESHOLD,
+  HEALTH_CONFIG,
+} from "@/lib/sentinel/constants";
+import type {
+  Finding,
+  WatchSubscription,
+  ThreatSeverity,
+  ThreatCategory,
+  HubResult,
+  ScanTarget,
+  ScanLog,
+} from "@/lib/sentinel/types";
 import { isDuplicate, markSeen } from "@/lib/sentinel/dedup";
 import { discoverAll } from "@/lib/sentinel/discovery";
 import { scanDNA } from "@/lib/sentinel/phishing-dna";
+import {
+  wrapScanner,
+  extractSeverity,
+  extractIndicators,
+  parseHubResponse,
+} from "@/lib/sentinel/scanner";
 
 export const runtime     = "nodejs";
 export const maxDuration = 60;
 
 // ─── Scan lock (prevent concurrent runs) ─────────────────────────────────────
 
-const LOCK_KEY = "sentinel:scan:running";
-const LOCK_TTL = 90; // seconds — slightly longer than maxDuration
-
 async function acquireLock(): Promise<boolean> {
-  const existing = await kvGet<string>(LOCK_KEY);
+  const existing = await kvGet<string>(SENTINEL_KV.scanLock);
   if (existing) return false;
-  await kvSet(LOCK_KEY, new Date().toISOString(), LOCK_TTL);
+  await kvSet(SENTINEL_KV.scanLock, new Date().toISOString(), SENTINEL_TTL.scanLock);
   return true;
 }
 
 async function releaseLock(): Promise<void> {
-  await kvSet(LOCK_KEY, "", 1); // expire in 1s
+  await kvSet(SENTINEL_KV.scanLock, "", 1);
 }
 
 // ─── Scan log ─────────────────────────────────────────────────────────────────
 
-export interface ScanLog {
-  runId:        string;
-  startedAt:    string;
-  finishedAt:   string;
-  durationMs:   number;
-  userWatches:  number;
-  autoTargets:  number;
-  totalScanned: number;
-  findings:     number;
-  alerted:      number;
-  errors:       number;
-  log:          string[];
-}
-
-const SCAN_LOGS_KEY = "sentinel:scan:logs";
-const SCAN_LOGS_MAX = 20; // keep last 20 runs
-
 async function persistScanLog(entry: ScanLog): Promise<void> {
-  const existing = (await kvGet<ScanLog[]>(SCAN_LOGS_KEY)) ?? [];
-  const updated  = [entry, ...existing].slice(0, SCAN_LOGS_MAX);
-  await kvSet(SCAN_LOGS_KEY, updated, 60 * 60 * 24 * 7); // 7 days
+  const existing = (await kvGet<ScanLog[]>(SENTINEL_KV.scanLogs)) ?? [];
+  const updated  = [entry, ...existing].slice(0, SCAN_CONFIG.maxScanLogs);
+  await kvSet(SENTINEL_KV.scanLogs, updated, SENTINEL_TTL.scanLogs);
 }
 
-// ─── Batch scanner (rate-limit: max 10 concurrent) ────────────────────────────
-
-const BATCH_SIZE = 10;
-
-type ScanTarget = WatchSubscription & {
-  catalogOnly: boolean;
-  source?:     string;
-  metadata?:   Record<string, string>;
-};
+// ─── Batch scanner (rate-limit) ───────────────────────────────────────────────
 
 async function scanInBatches(targets: ScanTarget[]): Promise<Array<{ watch: ScanTarget; findings: Finding[] }>> {
   const results: Array<{ watch: ScanTarget; findings: Finding[] }> = [];
-  for (let i = 0; i < targets.length; i += BATCH_SIZE) {
-    const batch = targets.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < targets.length; i += SCAN_CONFIG.batchSize) {
+    const batch = targets.slice(i, i + SCAN_CONFIG.batchSize);
     const batchResults = await Promise.allSettled(
       batch.map(w => scanTarget(w).then(f => ({ watch: w, findings: f })))
     );
     for (const r of batchResults) {
       if (r.status === "fulfilled") results.push(r.value);
     }
-    // Small pause between batches to avoid hammering Bankr API
-    if (i + BATCH_SIZE < targets.length) {
-      await new Promise(res => setTimeout(res, 500));
+    if (i + SCAN_CONFIG.batchSize < targets.length) {
+      await new Promise(res => setTimeout(res, SCAN_CONFIG.batchPauseMs));
     }
   }
   return results;
@@ -105,74 +90,55 @@ async function scanInBatches(targets: ScanTarget[]): Promise<Array<{ watch: Scan
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const CRON_SECRET          = process.env.CRON_SECRET ?? "";
-const TELEGRAM_BOT_TOKEN   = process.env.TELEGRAM_BOT_TOKEN ?? "";
-const TELEGRAM_CHAT_ID     = process.env.TELEGRAM_CHAT_ID ?? "";
-const TELEGRAM_THREAD_ID   = process.env.TELEGRAM_THREAD_ID ?? "";
-const BASE_URL             = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-
-// Only alert on these severities
-const ALERT_THRESHOLD: ThreatSeverity = "high";
+const CRON_SECRET        = process.env.CRON_SECRET ?? "";
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? "";
+const TELEGRAM_CHAT_ID   = process.env.TELEGRAM_CHAT_ID ?? "";
+const TELEGRAM_THREAD_ID = process.env.TELEGRAM_THREAD_ID ?? "";
+const BASE_URL           = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 // ─── Hub tool callers ─────────────────────────────────────────────────────────
 
-interface HubResult {
-  safe:       boolean;
-  severity:   ThreatSeverity;
-  indicators: string[];
-  summary:    string;
-  raw?:       unknown;
-}
-
 async function callUpgradeAudit(proxyAddress: string, newImpl: string): Promise<HubResult> {
-  try {
-    // Run risk gate on new implementation address
-    const res = await fetch(`${BASE_URL}/api/tool/hub_risk_gate`, {
+  return wrapScanner("upgrade", proxyAddress, async () => {
+    const res  = await fetch(`${BASE_URL}/api/tool/hub_risk_gate`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({
-        target: newImpl,
-        chain:  "base",
-        context: `This is a new proxy implementation for ${proxyAddress}. Check for: selfdestruct, arbitrary delegatecall, hidden owner backdoor, fee changes, new mint functions, unauthorized upgrade patterns.`,
+        target:  newImpl,
+        chain:   "base",
+        context: `New proxy implementation for ${proxyAddress}. Check: selfdestruct, arbitrary delegatecall, hidden owner backdoor, fee changes, new mint functions, unauthorized upgrade patterns.`,
       }),
-      signal:  AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(SCAN_CONFIG.upgradeTimeout),
     });
     const data = await res.json() as Record<string, unknown>;
-    const text = (data?.result as string) ?? JSON.stringify(data);
-
-    // Upgrade-specific pattern detection
+    const text = parseHubResponse(data);
     const hasMalicious  = /selfdestruct|arbitrary.?delegatecall|backdoor|hidden.?owner|unauthorized/i.test(text);
     const hasSuspicious = /fee.?chang|new.?mint|pause.*add|ownership.?transfer|unverified/i.test(text);
-
-    const sev: ThreatSeverity = hasMalicious ? "critical" : hasSuspicious ? "high" : extractSeverityFromText(text);
-    const inds: string[] = [
-      ...(hasMalicious  ? ["selfdestruct_in_implementation", "hidden_owner_backdoor"] : []),
-      ...(hasSuspicious ? ["fee_function_changed", "new_mint_function"] : []),
-      ...extractIndicatorsFromText(text),
-    ];
-
+    const sev: ThreatSeverity = hasMalicious ? "critical" : hasSuspicious ? "high" : extractSeverity(text);
     return {
       safe:       sev === "low",
       severity:   sev,
-      indicators: [...new Set(inds)],
-      summary:    `Proxy ${proxyAddress.slice(0, 10)}… upgraded → impl ${newImpl.slice(0, 10)}…\n${text.slice(0, 250)}`,
-      raw:        data,
+      indicators: [...new Set([
+        ...(hasMalicious  ? ["selfdestruct_in_implementation", "hidden_owner_backdoor"] : []),
+        ...(hasSuspicious ? ["fee_function_changed", "new_mint_function"] : []),
+        ...extractIndicators(text),
+      ])],
+      summary: `Proxy ${proxyAddress.slice(0, 10)}… → impl ${newImpl.slice(0, 10)}…\n${text.slice(0, 250)}`,
+      raw:     data,
     };
-  } catch (e) {
-    return { safe: true, severity: "low", indicators: [], summary: `upgrade_scan_error: ${(e as Error).message}` };
-  }
+  });
 }
 
 async function callHoneypotCheck(address: string): Promise<HubResult> {
-  try {
-    const res = await fetch(`${BASE_URL}/api/tool/hub_honeypot`, {
+  return wrapScanner("honeypot", address, async () => {
+    const res  = await fetch(`${BASE_URL}/api/tool/hub_honeypot`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ contract_address: address, chain: "base" }),
-      signal:  AbortSignal.timeout(20000),
+      signal:  AbortSignal.timeout(SCAN_CONFIG.hubTimeout),
     });
     const data = await res.json() as Record<string, unknown>;
-    const text = (data?.result as string) ?? JSON.stringify(data);
+    const text = parseHubResponse(data);
     const isHoneypot = /honeypot|sell.*block|buy.*only/i.test(text);
     return {
       safe:       !isHoneypot,
@@ -181,57 +147,47 @@ async function callHoneypotCheck(address: string): Promise<HubResult> {
       summary:    text.slice(0, 300),
       raw:        data,
     };
-  } catch (e) {
-    return { safe: true, severity: "low", indicators: [], summary: `scan_error: ${(e as Error).message}` };
-  }
+  });
 }
 
 async function callRiskGate(address: string): Promise<HubResult> {
-  try {
-    const res = await fetch(`${BASE_URL}/api/tool/hub_risk_gate`, {
+  return wrapScanner("risk_gate", address, async () => {
+    const res  = await fetch(`${BASE_URL}/api/tool/hub_risk_gate`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ target: address, chain: "base" }),
-      signal:  AbortSignal.timeout(20000),
+      signal:  AbortSignal.timeout(SCAN_CONFIG.hubTimeout),
     });
     const data = await res.json() as Record<string, unknown>;
-    const text = (data?.result as string) ?? JSON.stringify(data);
-    const sev   = extractSeverityFromText(text);
-    const inds  = extractIndicatorsFromText(text);
-    return { safe: sev === "low", severity: sev, indicators: inds, summary: text.slice(0, 300), raw: data };
-  } catch (e) {
-    return { safe: true, severity: "low", indicators: [], summary: `scan_error: ${(e as Error).message}` };
-  }
+    const text = parseHubResponse(data);
+    return { safe: extractSeverity(text) === "low", severity: extractSeverity(text), indicators: extractIndicators(text), summary: text.slice(0, 300), raw: data };
+  });
 }
 
 async function callAmlScreen(address: string): Promise<HubResult> {
-  try {
-    const res = await fetch(`${BASE_URL}/api/tool/hub_aml_screen`, {
+  return wrapScanner("aml", address, async () => {
+    const res  = await fetch(`${BASE_URL}/api/tool/hub_aml_screen`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ address, chain: "base" }),
-      signal:  AbortSignal.timeout(20000),
+      signal:  AbortSignal.timeout(SCAN_CONFIG.hubTimeout),
     });
     const data = await res.json() as Record<string, unknown>;
-    const text = (data?.result as string) ?? JSON.stringify(data);
-    const sev   = extractSeverityFromText(text);
-    const inds  = extractIndicatorsFromText(text);
-    return { safe: sev === "low", severity: sev, indicators: inds, summary: text.slice(0, 300), raw: data };
-  } catch (e) {
-    return { safe: true, severity: "low", indicators: [], summary: `scan_error: ${(e as Error).message}` };
-  }
+    const text = parseHubResponse(data);
+    return { safe: extractSeverity(text) === "low", severity: extractSeverity(text), indicators: extractIndicators(text), summary: text.slice(0, 300), raw: data };
+  });
 }
 
 async function callPhishingScan(domain: string): Promise<HubResult> {
-  try {
-    const res = await fetch(`${BASE_URL}/api/tool/hub_phishing_scan`, {
+  return wrapScanner("phishing", domain, async () => {
+    const res  = await fetch(`${BASE_URL}/api/tool/hub_phishing_scan`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ url: domain }),
-      signal:  AbortSignal.timeout(20000),
+      signal:  AbortSignal.timeout(SCAN_CONFIG.hubTimeout),
     });
     const data = await res.json() as Record<string, unknown>;
-    const text = (data?.result as string) ?? JSON.stringify(data);
+    const text = parseHubResponse(data);
     const isPhishing = /phish|malicious|dangerous|scam/i.test(text);
     return {
       safe:       !isPhishing,
@@ -240,33 +196,7 @@ async function callPhishingScan(domain: string): Promise<HubResult> {
       summary:    text.slice(0, 300),
       raw:        data,
     };
-  } catch (e) {
-    return { safe: true, severity: "low", indicators: [], summary: `scan_error: ${(e as Error).message}` };
-  }
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function extractSeverityFromText(text: string): ThreatSeverity {
-  const t = text.toLowerCase();
-  if (/critical|severe|ofac|sanction|exploit/.test(t))  return "critical";
-  if (/high.?risk|dangerous|malicious|rug|honeypot/.test(t)) return "high";
-  if (/medium.?risk|moderate|suspicious/.test(t))         return "medium";
-  return "low";
-}
-
-function extractIndicatorsFromText(text: string): string[] {
-  const found: string[] = [];
-  const t = text.toLowerCase();
-  for (const entry of THREAT_CATALOG) {
-    for (const ind of entry.indicators) {
-      const readable = ind.replace(/_/g, " ");
-      if (t.includes(readable) || t.includes(ind)) {
-        found.push(ind);
-      }
-    }
-  }
-  return [...new Set(found)];
+  });
 }
 
 /**
@@ -539,7 +469,7 @@ export async function GET(req: NextRequest) {
       ...active.map(w => ({ ...w, catalogOnly: false, source: "user" as const, metadata: undefined })),
       ...discoveredWatches,
     ];
-    log.push(`✓ scanning ${allTargets.length} total (${active.length} user · ${discoveredWatches.length} auto) in batches of ${BATCH_SIZE}`);
+    log.push(`✓ scanning ${allTargets.length} total (${active.length} user · ${discoveredWatches.length} auto) in batches of ${SCAN_CONFIG.batchSize}`);
 
     if (allTargets.length === 0) {
       await kvSet(SENTINEL_KV.scanLast, new Date().toISOString());
@@ -605,7 +535,7 @@ export async function GET(req: NextRequest) {
     stats.totalFindings  += allFindings.length;
     stats.totalDiscovered = (stats.totalDiscovered ?? 0) + discovered.length;
     stats.lastScan        = new Date().toISOString();
-    await kvSet(SENTINEL_KV.scanStats, stats, SENTINEL_TTL.stats);
+    await kvSet(SENTINEL_KV.scanStats, stats, SENTINEL_TTL.scanStats);
     await kvSet(SENTINEL_KV.scanLast, stats.lastScan);
 
     const durationMs = Date.now() - startAt;

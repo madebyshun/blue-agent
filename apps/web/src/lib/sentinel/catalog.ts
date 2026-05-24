@@ -1,91 +1,30 @@
 /**
  * Blue Sentinel — Threat Catalog
  *
- * Canonical definitions of threat types Blue Sentinel monitors.
- * Each entry has:
- *   - category + severity
- *   - detection indicators (pattern strings / heuristics)
- *   - known-bad seed addresses / domains
- *
- * The cron scan loop loads this catalog and checks watched targets
- * against each entry's indicators.
+ * Canonical threat definitions — categories, indicators, known-bad seeds.
+ * Types live in types.ts, constants in constants.ts.
+ * This file contains only the THREAT_CATALOG data + catalog helpers.
  */
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// Re-export types for backward compatibility
+export type {
+  ThreatCategory,
+  ThreatSeverity,
+  ThreatEntry,
+  Finding,
+  WatchSubscription,
+} from "@/lib/sentinel/types";
 
-export type ThreatCategory =
-  | "honeypot"
-  | "rug"
-  | "phishing"
-  | "mixer"
-  | "exploit"
-  | "drain"
-  | "aml"
-  | "scam_token"
-  | "malicious_approval"
-  | "proxy_upgrade";
+// Re-export constants for backward compatibility (SEVERITY_WEIGHT excluded — import from constants directly)
+export {
+  SENTINEL_KV,
+  SENTINEL_TTL,
+} from "@/lib/sentinel/constants";
 
-export type ThreatSeverity = "critical" | "high" | "medium" | "low";
+export { SEVERITY_WEIGHT } from "@/lib/sentinel/constants";
 
-export interface ThreatEntry {
-  id:          string;
-  category:    ThreatCategory;
-  severity:    ThreatSeverity;
-  name:        string;
-  description: string;
-  /** Heuristic strings / keywords used to detect this threat. */
-  indicators:  string[];
-  /** Known-bad Base addresses associated with this threat. */
-  addresses?:  string[];
-  /** Known-bad domains associated with this threat. */
-  domains?:    string[];
-  updatedAt:   string;
-}
-
-export interface Finding {
-  id:          string;
-  threatId:    string;
-  threatName:  string;
-  category:    ThreatCategory;
-  severity:    ThreatSeverity;
-  target:      string;
-  targetType:  "address" | "domain" | "token";
-  summary:     string;
-  indicators:  string[];
-  chain:       "base";
-  detectedAt:  string;
-  alerted:     boolean;
-}
-
-export interface WatchSubscription {
-  id:            string;
-  target:        string;
-  targetType:    "address" | "domain" | "token";
-  label?:        string;
-  alertChannels: ("telegram" | "webhook")[];
-  webhookUrl?:   string;
-  telegramChatId?: string;  // override global chat if set
-  createdAt:     string;
-  active:        boolean;
-}
-
-// ─── KV Keys ─────────────────────────────────────────────────────────────────
-
-export const SENTINEL_KV = {
-  catalog:          "sentinel:catalog",
-  findings:         "sentinel:findings:latest",
-  findingsHistory:  "sentinel:findings:history",
-  watches:          "sentinel:watches",
-  scanLast:         "sentinel:scan:last",
-  scanStats:        "sentinel:scan:stats",
-} as const;
-
-export const SENTINEL_TTL = {
-  findings:        60 * 60 * 24 * 7,   // 7 days
-  findingsHistory: 60 * 60 * 24 * 30,  // 30 days
-  watches:         0,                   // no TTL — persistent
-  stats:           60 * 60 * 24 * 7,   // 7 days
-} as const;
+// Import types needed by THREAT_CATALOG data
+import type { ThreatEntry } from "@/lib/sentinel/types";
 
 // ─── Seed Catalog ─────────────────────────────────────────────────────────────
 
@@ -381,6 +320,8 @@ export const THREAT_CATALOG: ThreatEntry[] = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+import type { ThreatSeverity, ThreatCategory } from "@/lib/sentinel/types";
+
 /** All known-bad addresses from the catalog */
 export function getAllBadAddresses(): string[] {
   return THREAT_CATALOG.flatMap(t => t.addresses ?? []);
@@ -400,11 +341,3 @@ export function getBySeverity(severity: ThreatSeverity): ThreatEntry[] {
 export function getByCategory(category: ThreatCategory): ThreatEntry[] {
   return THREAT_CATALOG.filter(t => t.category === category);
 }
-
-/** Severity numeric weight — used for sorting/scoring */
-export const SEVERITY_WEIGHT: Record<ThreatSeverity, number> = {
-  critical: 4,
-  high:     3,
-  medium:   2,
-  low:      1,
-};
