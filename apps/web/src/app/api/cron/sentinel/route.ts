@@ -37,6 +37,7 @@ import type {
 } from "@/lib/sentinel/types";
 import { isDuplicate, markSeen } from "@/lib/sentinel/dedup";
 import { discoverAll } from "@/lib/sentinel/discovery";
+import { recordFindings } from "@/lib/sentinel/timeline";
 import { scanDNA } from "@/lib/sentinel/phishing-dna";
 import {
   wrapScanner,
@@ -543,6 +544,9 @@ export async function GET(req: NextRequest) {
       }
     }
     log.push(`✓ ${alertCount} alert(s) sent`);
+
+    // 5a. Record into daily timeline (for history chart)
+    await recordFindings(allFindings);
 
     // 5. Persist findings — dedup by target+threatId before saving
     const existing = (await kvGet<Finding[]>(SENTINEL_KV.findings)) ?? [];
