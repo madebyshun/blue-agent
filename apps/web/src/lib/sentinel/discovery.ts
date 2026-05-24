@@ -19,6 +19,7 @@
 
 import { kvGet, kvSet } from "@/lib/kv";
 import { discoverUpgrades } from "@/lib/sentinel/upgrade-watcher";
+import { discoverFromOpenPhish } from "@/lib/sentinel/phishing-dna";
 
 export type DiscoverySource = "dexscreener" | "urlhaus" | "pattern" | "upgrade_watcher";
 
@@ -223,16 +224,18 @@ async function discoverFromUpgradeWatcher(): Promise<DiscoveredTarget[]> {
 // ─── Main: discoverAll ────────────────────────────────────────────────────────
 
 export async function discoverAll(): Promise<DiscoveredTarget[]> {
-  const [tokensResult, urlhausResult, upgradeResult] = await Promise.allSettled([
+  const [tokensResult, urlhausResult, upgradeResult, openphishResult] = await Promise.allSettled([
     discoverNewBaseTokens(),
     discoverFromURLhaus(),
     discoverFromUpgradeWatcher(),
+    discoverFromOpenPhish(),
   ]);
 
   const all: DiscoveredTarget[] = [
-    ...(tokensResult.status  === "fulfilled" ? tokensResult.value  : []),
-    ...(urlhausResult.status === "fulfilled" ? urlhausResult.value : []),
-    ...(upgradeResult.status === "fulfilled" ? upgradeResult.value : []),
+    ...(tokensResult.status    === "fulfilled" ? tokensResult.value    : []),
+    ...(urlhausResult.status   === "fulfilled" ? urlhausResult.value   : []),
+    ...(upgradeResult.status   === "fulfilled" ? upgradeResult.value   : []),
+    ...(openphishResult.status === "fulfilled" ? openphishResult.value : []),
     ...discoverFromPatterns(),
   ];
 

@@ -29,6 +29,7 @@ import {
 } from "@/lib/sentinel/catalog";
 import { isDuplicate, markSeen } from "@/lib/sentinel/dedup";
 import { discoverAll } from "@/lib/sentinel/discovery";
+import { scanDNA } from "@/lib/sentinel/phishing-dna";
 
 export const runtime     = "nodejs";
 export const maxDuration = 60;
@@ -398,10 +399,24 @@ async function scanTarget(watch: ScanTarget): Promise<Finding[]> {
   const findings: Finding[] = [];
   const results: HubResult[] = [];
 
-  // ── Step 1: catalog check (no BANKR credit needed) ──────────────────────────
+  // ── Step 1a: catalog check (no BANKR credit needed) ─────────────────────────
   const catalogHit = catalogCheck(watch.target);
-  if (catalogHit) {
-    results.push(catalogHit);
+  if (catalogHit) results.push(catalogHit);
+
+  // ── Step 1b: Phishing DNA scan (domains only, no credit) ─────────────────────
+  if (watch.targetType === "domain") {
+    const dnaMatches = scanDNA(watch.target);
+    if (dnaMatches.length > 0) {
+      const topMatch  = dnaMatches.reduce((a, b) =>
+        (a.severity === "critical" ? 0 : 1) <= (b.severity === "critical" ? 0 : 1) ? a : b
+      );
+      results.push({
+        safe:       false,
+        severity:   topMatch.severity,
+        indicators: dnaMatches.map(m => m.signatureId),
+        summary:    `Phishing DNA: ${dnaMatches.map(m => m.name).join(", ")}. ${dnaMatches[0].reason}`,
+      });
+    }
   }
 
   // ── Step 2: Hub tool scan — skip if catalogOnly (saves credits) ──────────────
