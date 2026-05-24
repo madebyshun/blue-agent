@@ -389,11 +389,7 @@ export default function SentinelPage() {
   const [timeline,    setTimeline]    = useState<TimelineStats | null>(null);
   const [logsOpen,    setLogsOpen]    = useState(false);
   const [loading,     setLoading]     = useState(true);
-  const [scanning,    setScanning]    = useState(false);
-  const [scanResult,  setScanResult]  = useState<string | null>(null);
   const [sevFilter,   setSevFilter]   = useState<Severity | "all">("all");
-  const [ctrlLoading, setCtrlLoading] = useState(false);
-  const [interval,    setInterval_]   = useState(15);
 
   const load = useCallback(async () => {
     try {
@@ -428,31 +424,6 @@ export default function SentinelPage() {
     const id = setInterval(() => { void load(); }, 30_000);
     return () => clearInterval(id);
   }, [load]);
-
-  async function handleScan() {
-    setScanning(true); setScanResult(null);
-    try {
-      const res  = await fetch("/api/sentinel/scan");
-      const data = await res.json() as { findings?: number; alerted?: number };
-      setScanResult(`✓ ${data.findings ?? 0} finding(s) · ${data.alerted ?? 0} alerted`);
-      void load();
-    } catch { setScanResult("scan error"); }
-    finally { setScanning(false); }
-  }
-
-  async function handleControl(action: "start" | "stop") {
-    setCtrlLoading(true);
-    try {
-      const res  = await fetch("/api/sentinel/control", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ action, intervalMinutes: interval, startedBy: "web" }),
-      });
-      const data = await res.json() as { config: SchedulerConfig };
-      setScheduler(data.config);
-    } catch { /* ignore */ }
-    finally { setCtrlLoading(false); }
-  }
 
   async function dismissFinding(id: string) {
     await fetch(`/api/sentinel/findings?id=${id}`, { method: "DELETE" });
@@ -514,65 +485,23 @@ export default function SentinelPage() {
             </div>
           </div>
 
-          {/* Scheduler */}
-          <div className="px-4 pt-4 pb-3 border-b border-[#1A1A2E]">
-            <div className="flex items-center justify-between mb-3">
-              <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">Auto Scan</p>
+          {/* Scan status — read only */}
+          <div className="px-4 pt-4 pb-4 border-b border-[#1A1A2E] space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">Scan Engine</p>
               <span className={`font-mono text-[9px] px-1.5 py-0.5 rounded border ${
                 scheduler?.enabled
                   ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
                   : "text-slate-600 border-[#1A1A2E]"
               }`}>
-                {scheduler?.enabled ? "● RUNNING" : "○ STOPPED"}
+                {scheduler?.enabled ? "● autonomous" : "○ stopped"}
               </span>
             </div>
-
-            {/* Interval selector */}
-            <div className="flex gap-1 mb-2">
-              {[5, 15, 30, 60].map(v => (
-                <button key={v} onClick={() => setInterval_(v)}
-                  className={`font-mono text-[9px] flex-1 py-1 rounded border transition-colors ${
-                    interval === v
-                      ? "border-[#4FC3F7]/40 text-[#4FC3F7] bg-[#4FC3F7]/10"
-                      : "border-[#1A1A2E] text-slate-700 hover:text-slate-400"
-                  }`}>{v}m</button>
-              ))}
-            </div>
-
-            <div className="flex gap-1.5">
-              <button onClick={() => handleControl("start")} disabled={ctrlLoading}
-                className="flex-1 font-mono text-[10px] py-1.5 rounded border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/5 transition-colors disabled:opacity-40">
-                ▶ Start
-              </button>
-              <button onClick={() => handleControl("stop")} disabled={ctrlLoading}
-                className="flex-1 font-mono text-[10px] py-1.5 rounded border border-[#1A1A2E] text-slate-600 hover:text-red-400 hover:border-red-500/30 transition-colors disabled:opacity-40">
-                ■ Stop
-              </button>
-            </div>
-
-            {scheduler?.mode === "qstash" && scheduler.enabled && (
-              <p className="font-mono text-[9px] text-[#4FC3F7] mt-1.5">via QStash · every {scheduler.intervalMinutes}m</p>
-            )}
-            {scheduler?.mode === "manual" && scheduler.enabled && (
-              <p className="font-mono text-[9px] text-slate-700 mt-1.5">manual mode · set QSTASH_TOKEN</p>
-            )}
-          </div>
-
-          {/* Manual scan */}
-          <div className="px-4 pt-3 pb-3 border-b border-[#1A1A2E]">
-            <button onClick={handleScan} disabled={scanning}
-              className={`w-full font-mono text-xs px-3 py-2 rounded-lg border transition-all ${
-                scanning
-                  ? "border-[#4FC3F7]/20 text-[#4FC3F7]/50 cursor-not-allowed"
-                  : "border-[#4FC3F7]/30 text-[#4FC3F7] hover:bg-[#4FC3F7]/5"
-              }`}>
-              {scanning ? "↺ scanning…" : "↺ scan now"}
-            </button>
-            {scanResult && (
-              <p className="font-mono text-[10px] text-emerald-400 mt-1.5">{scanResult}</p>
-            )}
+            <p className="font-mono text-[9px] text-slate-700">
+              every {scheduler?.intervalMinutes ?? 15}m · QStash · Base 8453
+            </p>
             {stats?.lastScan && (
-              <p className="font-mono text-[10px] text-slate-700 mt-1">last {timeAgo(stats.lastScan)}</p>
+              <p className="font-mono text-[9px] text-slate-700">last scan {timeAgo(stats.lastScan)}</p>
             )}
           </div>
 
