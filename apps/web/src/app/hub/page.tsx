@@ -711,13 +711,15 @@ function ToolRunner({ tool, onBack }: { tool: Tool; onBack: () => void }) {
         }
 
         const d402 = await res.json() as {
-          accepts?: { payTo: string; maxAmountRequired: string; asset?: string; extra?: { name?: string; version?: string } }[];
-          paymentDetails?: { accepts?: typeof d402.accepts };
+          x402Version?: number;
+          accepts?: { scheme?: string; network?: string; payTo: string; maxAmountRequired: string; asset?: string; extra?: { name?: string; version?: string } }[];
+          paymentDetails?: { accepts?: { scheme?: string; network?: string; payTo: string; maxAmountRequired: string; asset?: string; extra?: { name?: string; version?: string } }[] };
         };
         const accepts = d402.accepts?.[0] ?? d402.paymentDetails?.accepts?.[0];
         if (!accepts) { setErr("Invalid payment response from server."); setStep("error"); return; }
 
-        const { payTo, maxAmountRequired, asset, extra } = accepts;
+        const { payTo, maxAmountRequired, asset, extra, scheme, network } = accepts;
+        const x402Version = d402.x402Version ?? 1;
         setPayAmount(usdcAmt(maxAmountRequired));
         setStep("signing");
 
@@ -754,9 +756,9 @@ function ToolRunner({ tool, onBack }: { tool: Tool; onBack: () => void }) {
 
         setStep("paying");
         const payment = {
-          x402Version: 1,
-          scheme:      "exact",
-          network:     "base-mainnet",
+          x402Version,
+          scheme:  scheme  ?? "exact",
+          network: network ?? "eip155:8453",
           payload: {
             signature,
             authorization: {
