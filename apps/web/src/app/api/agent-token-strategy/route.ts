@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
   const cloned = req.clone();
   const bankrRes = await proxyTool(req, ENDPOINT);
 
-  if (bankrRes.status !== 502) return bankrRes;
+  if (bankrRes.status < 500) return bankrRes; // 2xx success, 402 payment, 4xx errors pass through
 
   console.log("[agent-token-strategy] Bankr 502 → falling back to local handler");
   try {

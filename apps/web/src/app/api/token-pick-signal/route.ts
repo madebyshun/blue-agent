@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
   const cloned = req.clone();
   const bankrRes = await proxyTool(req, ENDPOINT);
 
-  if (bankrRes.status !== 502) return bankrRes; // 200 success, 402 payment request, 400 bad input — pass through
+  if (bankrRes.status < 500) return bankrRes; // 2xx success, 402 payment, 4xx errors pass through // 200 success, 402 payment request, 400 bad input — pass through
 
   // Bankr handler returned 502 (handler crashed) → execute locally using BANKR_API_KEY
   console.log("[token-pick-signal] Bankr 502 → falling back to local handler");

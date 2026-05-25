@@ -38,7 +38,7 @@ Schema: {"strategy_score":<0-100>,"wallet_archetype":"whale|smart_money|degen|yi
 export async function POST(req: NextRequest) {
   const cloned = req.clone();
   const bankrRes = await proxyTool(req, ENDPOINT);
-  if (bankrRes.status !== 502) return bankrRes;
+  if (bankrRes.status < 500) return bankrRes; // 2xx success, 402 payment, 4xx errors pass through
   console.log("[wallet-strategy-analyzer] Bankr 502 → local fallback");
   try {
     let body: Record<string, unknown> = {};
