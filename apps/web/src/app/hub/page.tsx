@@ -771,16 +771,32 @@ function ToolRunner({ tool, onBack }: { tool: Tool; onBack: () => void }) {
           },
         };
 
+        const xPaymentHeader = btoa(JSON.stringify(payment));
+
+        // Debug: log exact payment being sent
+        console.log("[x402] payment object:", JSON.stringify(payment, null, 2));
+        console.log("[x402] X-Payment header (first 80):", xPaymentHeader.slice(0, 80));
+        console.log("[x402] decoded back:", JSON.parse(atob(xPaymentHeader)));
+
+        // Also call debug endpoint to see raw Bankr response
+        fetch("/api/debug-payment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Payment": xPaymentHeader },
+          body: JSON.stringify(body),
+        }).then(r => r.json()).then(d => console.log("[x402] debug-payment response:", JSON.stringify(d, null, 2)));
+
         const r2 = await fetch(`/api/${tool.id}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Payment": btoa(JSON.stringify(payment)),
+            "X-Payment": xPaymentHeader,
           },
           body: JSON.stringify(body),
         });
+        const r2Status = r2.status;
         const d2 = await r2.json() as Record<string,unknown>;
-        if (!r2.ok) { setErr((d2.error as string) ?? (d2.message as string) ?? "Payment failed."); setStep("error"); return; }
+        console.log("[x402] tool response status:", r2Status, "body:", JSON.stringify(d2));
+        if (!r2.ok) { setErr(`[${r2Status}] ${(d2.error as string) ?? (d2.message as string) ?? "Payment failed."}`); setStep("error"); return; }
         setResult(d2);
         setStep("done");
         return;
