@@ -56,7 +56,7 @@ Schema: {
     "observer":   {"stance":"bull|bear|neutral","weight":0.5,"rationale":"<1 sentence>"}
   },
   "bull":<0-100>,"bear":<0-100>,"neutral":<0-100>,
-  "recommendation":"execute|alert_human|skip",
+  "recommendation":"go|wait|skip",
   "sentiment_summary":"<1 sentence>"
 }`,
     messages: [{ role: "user", content: `Evaluate market fit for:\nProject: ${name}\n${description}\n\nBrief:\n${JSON.stringify(brief)}\n\nEcosystem context:\n${narrativeRaw ?? "Base ecosystem active"}` }],
@@ -64,7 +64,7 @@ Schema: {
     maxTokens: 800,
   });
 
-  const consensus = extractJsonObject(msRaw) ?? { bull: 45, bear: 25, neutral: 30, recommendation: "alert_human", sentiment_summary: "Mixed signals — needs validation" };
+  const consensus = extractJsonObject(msRaw) ?? { bull: 45, bear: 25, neutral: 30, recommendation: "review_needed", sentiment_summary: "Mixed signals — needs validation" };
 
   // Step 4: Blue Agent final verdict
   const verdictRaw = await callBankrLLM({
