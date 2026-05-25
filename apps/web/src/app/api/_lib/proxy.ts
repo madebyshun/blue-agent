@@ -9,18 +9,14 @@ import { rateLimit, getIdentifier } from "@/lib/rate-limit";
  * - Rate limited: 20 tool runs/min per IP
  */
 export async function proxyTool(req: NextRequest, endpoint: string): Promise<NextResponse> {
-  const { success } = await rateLimit(getIdentifier(req), "hub");
-  if (!success) {
-    return NextResponse.json({ error: "Too many requests. Slow down." }, { status: 429 });
-  }
-  // Parse request body (optional)
-  let body = "{}";
-  try { body = await req.text(); } catch {}
-
   // Forward payment header if present
   const xPayment = req.headers.get("x-payment") ?? req.headers.get("X-Payment");
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (xPayment) headers["X-Payment"] = xPayment;
+
+  // Parse body the same way as launch-simulator (req.json, not req.text)
+  let body: Record<string, unknown> = {};
+  try { body = await req.json(); } catch {}
 
   // Call upstream
   let upstream: Response;
@@ -28,7 +24,7 @@ export async function proxyTool(req: NextRequest, endpoint: string): Promise<Nex
     upstream = await fetch(endpoint, {
       method: "POST",
       headers,
-      body,
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(120_000),
     });
   } catch (e) {
@@ -38,19 +34,10 @@ export async function proxyTool(req: NextRequest, endpoint: string): Promise<Nex
     );
   }
 
-  // Safely read and parse response
-  let text = "";
-  try { text = await upstream.text(); } catch {}
-
-  let data: unknown = text;
-  if (text) {
-    try { data = JSON.parse(text); } catch {}
-  } else {
-    // Empty body — synthesize minimal JSON so client doesn't crash
-    data = upstream.status === 402
-      ? { error: "Payment required" }
-      : { error: "Empty response from service" };
-  }
+  const ct = upstream.headers.get("content-type") ?? "";
+  const data = ct.includes("application/json")
+    ? await upstream.json().catch(() => ({ error: "Failed to parse response" }))
+    : await upstream.text().catch(() => "");
 
   return NextResponse.json(data, { status: upstream.status });
 }
