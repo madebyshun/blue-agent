@@ -39,15 +39,5 @@ Schema: {"revenue_score":<0-100>,"recommended_model":"<str>","revenue_streams":[
 }
 
 export async function POST(req: NextRequest) {
-  const cloned = req.clone();
-  const bankrRes = await proxyTool(req, ENDPOINT);
-  if (bankrRes.status < 500) return bankrRes; // 2xx success, 402 payment, 4xx errors pass through
-  console.log("[agent-revenue-optimizer] Bankr 502 → local fallback");
-  try {
-    let body: Record<string, unknown> = {};
-    try { body = await cloned.json(); } catch {}
-    return await handleLocally(body);
-  } catch (error) {
-    return NextResponse.json({ error: "Agent revenue optimizer failed", message: (error as Error).message }, { status: 500 });
-  }
+  return proxyTool(req, ENDPOINT);
 }

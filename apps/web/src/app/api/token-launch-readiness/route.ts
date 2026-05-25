@@ -80,21 +80,5 @@ Schema: {
 }
 
 export async function POST(req: NextRequest) {
-  const cloned = req.clone();
-  const bankrRes = await proxyTool(req, ENDPOINT);
-
-  if (bankrRes.status < 500) return bankrRes; // 2xx success, 402 payment, 4xx errors pass through
-
-  console.log("[token-launch-readiness] Bankr 502 → falling back to local handler");
-  try {
-    let body: Record<string, unknown> = {};
-    try { body = await cloned.json(); } catch {}
-    return await handleLocally(body);
-  } catch (error) {
-    console.error("[token-launch-readiness] Local handler failed:", error);
-    return NextResponse.json(
-      { error: "Token launch readiness check failed", message: (error as Error).message },
-      { status: 500 }
-    );
-  }
+  return proxyTool(req, ENDPOINT);
 }

@@ -43,15 +43,5 @@ Schema: {"comparison_score":<0-100>,"recommendation":"<str>","protocols":[{"name
 }
 
 export async function POST(req: NextRequest) {
-  const cloned = req.clone();
-  const bankrRes = await proxyTool(req, ENDPOINT);
-  if (bankrRes.status < 500) return bankrRes; // 2xx success, 402 payment, 4xx errors pass through
-  console.log("[base-protocol-comparison] Bankr 502 → local fallback");
-  try {
-    let body: Record<string, unknown> = {};
-    try { body = await cloned.json(); } catch {}
-    return await handleLocally(body);
-  } catch (error) {
-    return NextResponse.json({ error: "Base protocol comparison failed", message: (error as Error).message }, { status: 500 });
-  }
+  return proxyTool(req, ENDPOINT);
 }
