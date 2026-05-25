@@ -62,13 +62,16 @@ async function runAeonSkill(skill: string, varInput = ""): Promise<string | null
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { description?: string; name?: string } = {};
+    let body: { description?: string; product?: string; name?: string; stage?: string } = {};
     try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const url = new URL(req.url);
-    const description = body.description ?? url.searchParams.get("description") ?? "";
+    // Accept both "description" (API) and "product" (Hub UI field name)
+    const rawDesc = body.description ?? body.product ?? url.searchParams.get("description") ?? url.searchParams.get("product") ?? "";
+    const stage   = body.stage ?? url.searchParams.get("stage") ?? "";
+    const description = stage ? `${rawDesc}\n\nStage: ${stage}` : rawDesc;
     const name = body.name ?? url.searchParams.get("name") ?? "this project";
 
-    if (!description) return Response.json({ error: "description is required" }, { status: 400 });
+    if (!rawDesc) return Response.json({ error: "product description is required" }, { status: 400 });
 
     // Step 1: Blue Agent — expand the idea brief
     const briefRaw = await callBankrLLM({

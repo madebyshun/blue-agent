@@ -32,10 +32,14 @@ async function aeon(skill: string, focus = ""): Promise<string | null> {
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { project?: string; description?: string; ask?: string; stage?: string } = {};
+    let body: { project?: string; description?: string; pitch_summary?: string; ask?: string; stage?: string } = {};
     try { const t = await req.text(); if (t.trim().startsWith("{")) body = JSON.parse(t); } catch {}
-    const { project = "", description = "", ask = "", stage = "pre-seed" } = body;
-    if (!project || !description) return Response.json({ error: "project and description are required" }, { status: 400 });
+    // Accept "pitch_summary" (Hub UI) as alias for "description"
+    const project     = body.project ?? "";
+    const description = body.description ?? body.pitch_summary ?? "";
+    const ask         = body.ask ?? "";
+    const stage       = body.stage ?? "pre-seed";
+    if (!project || !description) return Response.json({ error: "project and pitch summary are required" }, { status: 400 });
 
     const [narrativeRaw, raiseRaw] = await Promise.all([
       aeon("narrative-tracker", `investor narrative relevance for ${project}: ${description}`),

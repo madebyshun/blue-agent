@@ -39,5 +39,9 @@ export async function proxyTool(req: NextRequest, endpoint: string): Promise<Nex
     ? await upstream.json().catch(() => ({ error: "Failed to parse response" }))
     : await upstream.text().catch(() => "");
 
+  if (upstream.status !== 200) {
+    console.error(`[proxy] upstream ${endpoint} → ${upstream.status}:`, JSON.stringify(data));
+  }
+
   return NextResponse.json(data, { status: upstream.status });
 }

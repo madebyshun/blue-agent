@@ -62,14 +62,15 @@ async function runAeonSkill(skill: string, varInput = ""): Promise<string | null
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { name?: string; ticker?: string; description?: string } = {};
+    let body: { name?: string; project?: string; ticker?: string; description?: string; traction?: string } = {};
     try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const url = new URL(req.url);
-    const name = body.name ?? url.searchParams.get("name") ?? "";
-    const ticker = body.ticker ?? url.searchParams.get("ticker") ?? "";
-    const description = body.description ?? url.searchParams.get("description") ?? "";
+    // Accept "project" (Hub UI) as alias for "name", "traction" as alias for "description"
+    const name        = body.name ?? body.project ?? url.searchParams.get("name") ?? url.searchParams.get("project") ?? "";
+    const ticker      = body.ticker ?? url.searchParams.get("ticker") ?? "";
+    const description = body.description ?? body.traction ?? url.searchParams.get("description") ?? url.searchParams.get("traction") ?? "";
 
-    if (!name) return Response.json({ error: "name is required" }, { status: 400 });
+    if (!name) return Response.json({ error: "project name is required" }, { status: 400 });
 
     // Step 1+2: Aeon token-movers + narrative-tracker in parallel
     const [moversRaw, narrativeRaw] = await Promise.all([

@@ -62,10 +62,11 @@ async function runAeonSkill(skill: string, varInput = ""): Promise<string | null
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { topic?: string } = {};
+    let body: { topic?: string; focus?: string } = {};
     try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const url = new URL(req.url);
-    const topic = body.topic ?? url.searchParams.get("topic") ?? "";
+    // Accept "focus" (Hub UI) as alias for "topic"
+    const topic = body.topic ?? body.focus ?? url.searchParams.get("topic") ?? url.searchParams.get("focus") ?? "";
 
     const varInput = topic
       ? `Focus on "${topic}" and related Base ecosystem narratives`

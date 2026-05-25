@@ -62,13 +62,14 @@ async function runAeonSkill(skill: string, varInput = ""): Promise<string | null
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { chain?: string; min_mcap?: number } = {};
+    let body: { chain?: string; min_mcap?: number; context?: string } = {};
     try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const url = new URL(req.url);
-    const chain = body.chain ?? url.searchParams.get("chain") ?? "base";
-    const minMcap = body.min_mcap ?? Number(url.searchParams.get("min_mcap") ?? "1000000");
+    const chain    = body.chain ?? url.searchParams.get("chain") ?? "base";
+    const minMcap  = body.min_mcap ?? Number(url.searchParams.get("min_mcap") ?? "1000000");
+    const context  = body.context ?? url.searchParams.get("context") ?? "";
 
-    const varInput = `chain=${chain}, min_mcap=$${minMcap.toLocaleString()}, focus on Base ecosystem tokens`;
+    const varInput = `chain=${chain}, min_mcap=$${minMcap.toLocaleString()}, focus on Base ecosystem tokens${context ? `. Additional context: ${context}` : ""}`;
 
     // Step 1 + 2: Run Aeon token-movers and token-pick in parallel
     const [moversRaw, pickRaw] = await Promise.all([
