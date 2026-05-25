@@ -81,23 +81,5 @@ Schema: {
 }
 
 export async function POST(req: NextRequest) {
-  // Try Bankr x402 first — if handler fails (502), fall back to local execution
-  const cloned = req.clone();
-  const bankrRes = await proxyTool(req, ENDPOINT);
-
-  if (bankrRes.status < 500) return bankrRes; // 2xx success, 402 payment, 4xx errors pass through // 200 success, 402 payment request, 400 bad input — pass through
-
-  // Bankr handler returned 502 (handler crashed) → execute locally using BANKR_API_KEY
-  console.log("[token-pick-signal] Bankr 502 → falling back to local handler");
-  try {
-    let body: Record<string, unknown> = {};
-    try { body = await cloned.json(); } catch {}
-    return await handleLocally(body);
-  } catch (error) {
-    console.error("[token-pick-signal] Local handler failed:", error);
-    return NextResponse.json(
-      { error: "Token pick signal failed", message: (error as Error).message },
-      { status: 500 }
-    );
-  }
+  return proxyTool(req, ENDPOINT);
 }

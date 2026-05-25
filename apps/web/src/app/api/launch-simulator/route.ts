@@ -133,21 +133,5 @@ Schema: {
 }
 
 export async function POST(req: NextRequest) {
-  const cloned = req.clone();
-  const bankrRes = await proxyTool(req, ENDPOINT);
-
-  if (bankrRes.status < 500) return bankrRes;
-
-  console.log("[launch-simulator] Bankr fallback → local handler");
-  try {
-    let body: Record<string, unknown> = {};
-    try { body = await cloned.json(); } catch {}
-    return await handleLocally(body);
-  } catch (error) {
-    console.error("[launch-simulator] Local handler failed:", error);
-    return NextResponse.json(
-      { error: "Launch simulator failed", message: (error as Error).message },
-      { status: 500 }
-    );
-  }
+  return proxyTool(req, ENDPOINT);
 }
