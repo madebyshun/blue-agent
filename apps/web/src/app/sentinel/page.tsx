@@ -96,24 +96,24 @@ interface Health {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SEV: Record<Severity, { badge: string; left: string; label: string }> = {
-  critical: { badge: "text-red-400 border-red-500/40 bg-red-500/10",           left: "border-l-red-500",    label: "🚨 CRITICAL" },
+  critical: { badge: "text-red-400 border-red-500/40 bg-red-500/10",            left: "border-l-red-500",    label: "🚨 CRITICAL" },
   high:     { badge: "text-orange-400 border-orange-500/40 bg-orange-500/10",   left: "border-l-orange-500", label: "⚠️ HIGH"     },
   medium:   { badge: "text-yellow-400 border-yellow-500/40 bg-yellow-500/10",   left: "border-l-yellow-500", label: "🟡 MEDIUM"   },
   low:      { badge: "text-emerald-400 border-emerald-500/40 bg-emerald-500/10", left: "border-l-emerald-500", label: "🟢 LOW"    },
 };
 
 const THREAT_CATS = [
-  { icon: "🍯", name: "Honeypot",       color: "#f87171", desc: "Token blocks sells after buy"         },
-  { icon: "🏃", name: "Rug Pull",       color: "#fb923c", desc: "Unlocked LP, unlimited mint"          },
-  { icon: "🎣", name: "Phishing",       color: "#fbbf24", desc: "Fake Coinbase / Uniswap domains"      },
-  { icon: "🌀", name: "Mixer / AML",    color: "#a78bfa", desc: "Tornado Cash, sanctions exposure"     },
-  { icon: "⚡", name: "Exploit",        color: "#f472b6", desc: "Flash loan, reentrancy patterns"      },
-  { icon: "🩸", name: "Drain",          color: "#ef4444", desc: "Approval drainers, NFT sweeps"        },
-  { icon: "🎭", name: "Scam Token",     color: "#60a5fa", desc: "Impersonating USDC / ETH"             },
-  { icon: "🔓", name: "Bad Approval",   color: "#34d399", desc: "Infinite approval to unverified"      },
-  { icon: "🔄", name: "Proxy Upgrade",  color: "#c084fc", desc: "Malicious implementation upgrade"     },
-  { icon: "🚀", name: "Post-Deploy",    color: "#f59e0b", desc: "Backdoor or high-risk new contract"    },
-  { icon: "💧", name: "Liq. Drain",     color: "#38bdf8", desc: "Liquidity rug, price crash, vol abuse"  },
+  { icon: "🍯", name: "Honeypot",      color: "#f87171", desc: "Token blocks sells after buy"          },
+  { icon: "🏃", name: "Rug Pull",      color: "#fb923c", desc: "Unlocked LP, unlimited mint"           },
+  { icon: "🎣", name: "Phishing",      color: "#fbbf24", desc: "Fake Coinbase / Uniswap domains"       },
+  { icon: "🌀", name: "Mixer / AML",   color: "#a78bfa", desc: "Tornado Cash, sanctions exposure"      },
+  { icon: "⚡", name: "Exploit",       color: "#f472b6", desc: "Flash loan, reentrancy patterns"       },
+  { icon: "🩸", name: "Drain",         color: "#ef4444", desc: "Approval drainers, NFT sweeps"         },
+  { icon: "🎭", name: "Scam Token",    color: "#60a5fa", desc: "Impersonating USDC / ETH"              },
+  { icon: "🔓", name: "Bad Approval",  color: "#34d399", desc: "Infinite approval to unverified"       },
+  { icon: "🔄", name: "Proxy Upgrade", color: "#c084fc", desc: "Malicious implementation upgrade"      },
+  { icon: "🚀", name: "Post-Deploy",   color: "#f59e0b", desc: "Backdoor or high-risk new contract"    },
+  { icon: "💧", name: "Liq. Drain",    color: "#38bdf8", desc: "Liquidity rug, price crash, vol abuse" },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -176,13 +176,12 @@ function FindingCard({ f, onDismiss }: { f: Finding; onDismiss: (id: string) => 
 function ThreatTimeline({ stats }: { stats: TimelineStats }) {
   const { snapshots, totalThreats, totalTargets, bySeverity, dailyPeak, activeDays } = stats;
 
-  // Format date label — "Mon 24"
   function dayLabel(dateStr: string): string {
     const d = new Date(dateStr + "T00:00:00Z");
     return d.toLocaleDateString("en-US", { weekday: "short", day: "numeric", timeZone: "UTC" });
   }
 
-  const peak = dailyPeak || 1; // avoid division by zero
+  const peak = dailyPeak || 1;
 
   return (
     <div className="card-surface rounded-xl p-5">
@@ -194,7 +193,9 @@ function ThreatTimeline({ stats }: { stats: TimelineStats }) {
             <span className="font-mono text-4xl font-bold text-white">{totalThreats}</span>
             <span className="font-mono text-sm text-slate-500">threats detected</span>
             {totalThreats > 0 && (
-              <span className="font-mono text-[10px] text-slate-700">across {totalTargets} unique target{totalTargets !== 1 ? "s" : ""}</span>
+              <span className="font-mono text-[10px] text-slate-700">
+                across {totalTargets} unique target{totalTargets !== 1 ? "s" : ""}
+              </span>
             )}
           </div>
         </div>
@@ -205,14 +206,14 @@ function ThreatTimeline({ stats }: { stats: TimelineStats }) {
             { key: "critical", color: "text-red-400",    label: "Critical" },
             { key: "high",     color: "text-orange-400", label: "High"     },
             { key: "medium",   color: "text-yellow-400", label: "Medium"   },
-          ] as const).map(({ key, color, label }) => (
+          ] as const).map(({ key, color, label }) =>
             bySeverity[key] > 0 && (
               <div key={key} className="text-center">
                 <p className={`font-mono text-xl font-bold ${color}`}>{bySeverity[key]}</p>
                 <p className="font-mono text-[9px] text-slate-700 uppercase tracking-widest">{label}</p>
               </div>
             )
-          ))}
+          )}
           <div className="text-center">
             <p className="font-mono text-xl font-bold text-slate-400">{activeDays}</p>
             <p className="font-mono text-[9px] text-slate-700 uppercase tracking-widest">Active days</p>
@@ -231,7 +232,6 @@ function ThreatTimeline({ stats }: { stats: TimelineStats }) {
 
           return (
             <div key={s.date} className="flex-1 flex flex-col items-center gap-1 group">
-              {/* Tooltip on hover */}
               <div className="relative w-full flex justify-center">
                 {s.total > 0 && (
                   <div className="absolute bottom-full mb-1 hidden group-hover:block z-10 pointer-events-none">
@@ -248,24 +248,20 @@ function ThreatTimeline({ stats }: { stats: TimelineStats }) {
                   </div>
                 )}
 
-                {/* The bar itself */}
                 <div
                   className={`w-full rounded-t-sm transition-all duration-300 overflow-hidden flex flex-col justify-end ${
-                    s.total === 0 ? "bg-[#0D0D1A]" : ""
-                  } ${isToday ? "ring-1 ring-[#4FC3F7]/20" : ""}`}
+                    isToday ? "ring-1 ring-[#4FC3F7]/20" : ""
+                  }`}
                   style={{ height: "96px" }}
                 >
                   {s.total > 0 ? (
                     <div className="w-full flex flex-col" style={{ height: `${heightPct}%` }}>
-                      {/* Critical (red) at top */}
                       {critPct > 0 && (
                         <div className="w-full bg-red-500/80" style={{ height: `${critPct}%` }} />
                       )}
-                      {/* High (orange) */}
                       {highPct > 0 && (
                         <div className="w-full bg-orange-500/70" style={{ height: `${highPct}%` }} />
                       )}
-                      {/* Rest (yellow/slate) */}
                       {restPct > 0 && (
                         <div className="w-full bg-yellow-500/40" style={{ height: `${restPct}%` }} />
                       )}
@@ -276,7 +272,6 @@ function ThreatTimeline({ stats }: { stats: TimelineStats }) {
                 </div>
               </div>
 
-              {/* Day label */}
               <p className={`font-mono text-[8px] text-center leading-tight ${isToday ? "text-[#4FC3F7]" : "text-slate-700"}`}>
                 {dayLabel(s.date).split(" ")[0]}<br />
                 {dayLabel(s.date).split(" ")[1]}
@@ -289,9 +284,9 @@ function ThreatTimeline({ stats }: { stats: TimelineStats }) {
       {/* Legend */}
       <div className="flex items-center gap-4 mt-3 pt-3 border-t border-[#1A1A2E] flex-wrap">
         {[
-          { color: "bg-red-500/80",    label: "Critical" },
-          { color: "bg-orange-500/70", label: "High"     },
-          { color: "bg-yellow-500/40", label: "Medium / Low" },
+          { color: "bg-red-500/80",    label: "Critical"      },
+          { color: "bg-orange-500/70", label: "High"          },
+          { color: "bg-yellow-500/40", label: "Medium / Low"  },
         ].map(l => (
           <div key={l.label} className="flex items-center gap-1.5">
             <div className={`w-2.5 h-2.5 rounded-sm ${l.color}`} />
@@ -299,79 +294,9 @@ function ThreatTimeline({ stats }: { stats: TimelineStats }) {
           </div>
         ))}
         {totalThreats === 0 && (
-          <p className="font-mono text-[10px] text-slate-800 ml-auto">No threats detected in the last 7 days 🛡️</p>
+          <p className="font-mono text-[10px] text-slate-800 ml-auto">No threats in the last 7 days 🛡️</p>
         )}
       </div>
-    </div>
-  );
-}
-
-// ─── Add watch form ───────────────────────────────────────────────────────────
-
-function AddWatchForm({ onAdded }: { onAdded: () => void }) {
-  const [target,  setTarget]  = useState("");
-  const [type,    setType]    = useState<TargetType>("address");
-  const [label,   setLabel]   = useState("");
-  const [loading, setLoading] = useState(false);
-  const [done,    setDone]    = useState(false);
-  const [err,     setErr]     = useState("");
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!target.trim()) return;
-    setLoading(true); setErr("");
-    try {
-      const res  = await fetch("/api/sentinel/watch", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ target: target.trim(), targetType: type, label: label.trim() || undefined }),
-      });
-      const data = await res.json() as { ok?: boolean; error?: string };
-      if (!data.ok) throw new Error(data.error ?? "Failed");
-      setDone(true); setTarget(""); setLabel("");
-      onAdded();
-      setTimeout(() => setDone(false), 3000);
-    } catch (e) { setErr((e as Error).message); }
-    finally { setLoading(false); }
-  }
-
-  return (
-    <div className="card-surface rounded-xl p-5">
-      <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-4">// ADD WATCH TARGET</p>
-
-      {done ? (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 text-center">
-          <p className="font-mono text-xs text-emerald-400">✓ Sentinel is now watching this target</p>
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="flex gap-1.5">
-            {(["address","token","domain"] as TargetType[]).map(t => (
-              <button key={t} type="button" onClick={() => setType(t)}
-                className={`font-mono text-[10px] px-2.5 py-1.5 rounded border transition-colors capitalize flex-1 ${
-                  type === t
-                    ? "border-[#4FC3F7]/40 text-[#4FC3F7] bg-[#4FC3F7]/10"
-                    : "border-[#1A1A2E] text-slate-600 hover:text-slate-300"
-                }`}>{t}</button>
-            ))}
-          </div>
-          <input
-            className="w-full px-3 py-2 rounded-lg font-mono text-xs bg-[#050508] border border-[#1A1A2E] text-white placeholder:text-slate-700 outline-none focus:border-[#4FC3F7]/40 transition-colors"
-            placeholder={type === "domain" ? "example.com or https://…" : "0x… address"}
-            value={target} onChange={e => setTarget(e.target.value)} required
-          />
-          <input
-            className="w-full px-3 py-2 rounded-lg font-mono text-xs bg-[#050508] border border-[#1A1A2E] text-white placeholder:text-slate-700 outline-none focus:border-[#4FC3F7]/40 transition-colors"
-            placeholder="Label (optional) — e.g. My wallet, USDC contract"
-            value={label} onChange={e => setLabel(e.target.value)}
-          />
-          {err && <p className="font-mono text-[10px] text-red-400">{err}</p>}
-          <button type="submit" disabled={loading || !target.trim()}
-            className="w-full py-2.5 bg-[#4FC3F7]/10 hover:bg-[#4FC3F7]/15 border border-[#4FC3F7]/30 text-[#4FC3F7] font-mono text-xs rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-            {loading ? "Adding…" : "🛡️ Watch this target →"}
-          </button>
-        </form>
-      )}
     </div>
   );
 }
@@ -379,17 +304,17 @@ function AddWatchForm({ onAdded }: { onAdded: () => void }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SentinelPage() {
-  const [stats,       setStats]       = useState<Stats | null>(null);
-  const [findings,    setFindings]    = useState<Finding[]>([]);
-  const [watches,     setWatches]     = useState<Watch[]>([]);
-  const [scheduler,   setScheduler]   = useState<SchedulerConfig | null>(null);
-  const [health,      setHealth]      = useState<Health | null>(null);
-  const [discovery,   setDiscovery]   = useState<DiscoveryInfo | null>(null);
-  const [scanLogs,    setScanLogs]    = useState<ScanLog[]>([]);
-  const [timeline,    setTimeline]    = useState<TimelineStats | null>(null);
-  const [logsOpen,    setLogsOpen]    = useState(false);
-  const [loading,     setLoading]     = useState(true);
-  const [sevFilter,   setSevFilter]   = useState<Severity | "all">("all");
+  const [stats,     setStats]     = useState<Stats | null>(null);
+  const [findings,  setFindings]  = useState<Finding[]>([]);
+  const [watches,   setWatches]   = useState<Watch[]>([]);
+  const [scheduler, setScheduler] = useState<SchedulerConfig | null>(null);
+  const [health,    setHealth]    = useState<Health | null>(null);
+  const [discovery, setDiscovery] = useState<DiscoveryInfo | null>(null);
+  const [scanLogs,  setScanLogs]  = useState<ScanLog[]>([]);
+  const [timeline,  setTimeline]  = useState<TimelineStats | null>(null);
+  const [logsOpen,  setLogsOpen]  = useState(false);
+  const [loading,   setLoading]   = useState(true);
+  const [sevFilter, setSevFilter] = useState<Severity | "all">("all");
 
   const load = useCallback(async () => {
     try {
@@ -402,16 +327,17 @@ export default function SentinelPage() {
       ]);
       const watchData = await watchRes.json() as { stats: Stats; findings: Finding[]; watches: Watch[] };
       const ctrlData  = await ctrlRes.json() as { config: SchedulerConfig; health?: Health };
-      const discData  = discRes.ok ? await discRes.json() as DiscoveryInfo : null;
-      const logsData  = logsRes.ok ? await logsRes.json() as { logs: ScanLog[] } : null;
-      const histData  = histRes.ok ? await histRes.json() as { stats: TimelineStats } : null;
+      const discData  = discRes.ok  ? await discRes.json() as DiscoveryInfo            : null;
+      const logsData  = logsRes.ok  ? await logsRes.json() as { logs: ScanLog[] }     : null;
+      const histData  = histRes.ok  ? await histRes.json() as { stats: TimelineStats } : null;
+
       setStats(watchData.stats);
       setFindings(watchData.findings ?? []);
       setWatches((watchData.watches ?? []).filter(w => w.active));
       setScheduler(ctrlData.config ?? null);
       if (ctrlData.health) setHealth(ctrlData.health);
-      if (discData) setDiscovery(discData);
-      if (logsData) setScanLogs(logsData.logs ?? []);
+      if (discData)        setDiscovery(discData);
+      if (logsData)        setScanLogs(logsData.logs ?? []);
       if (histData?.stats) setTimeline(histData.stats);
     } catch { /* ignore */ }
     finally { setLoading(false); }
@@ -419,7 +345,6 @@ export default function SentinelPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  // Auto-refresh every 30 seconds
   useEffect(() => {
     const id = setInterval(() => { void load(); }, 30_000);
     return () => clearInterval(id);
@@ -449,44 +374,12 @@ export default function SentinelPage() {
 
           {/* Header */}
           <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
-            <div className="flex items-center justify-between mb-1">
-              <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUE SENTINEL</p>
-              {health && (
-                <span className={`font-mono text-[9px] px-1.5 py-0.5 rounded border ${
-                  health.status === "healthy"  ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" :
-                  health.status === "degraded" ? "text-yellow-400 border-yellow-500/30 bg-yellow-500/10" :
-                                                 "text-red-400 border-red-500/30 bg-red-500/10"
-                }`}>
-                  {health.status === "healthy" ? "● healthy" : health.status === "degraded" ? "◐ degraded" : "○ down"}
-                </span>
-              )}
-            </div>
-            <p className="font-mono text-[10px] text-slate-700">24/7 onchain security monitor · Base</p>
-            {health && health.status !== "healthy" && (
-              <p className="font-mono text-[9px] text-yellow-600 mt-1">{health.reason}</p>
-            )}
+            <p className="font-mono text-xs text-red-400 tracking-widest">// BLUE SENTINEL</p>
+            <p className="font-mono text-[10px] text-slate-700 mt-1">24/7 autonomous threat monitor · Base</p>
           </div>
 
-          {/* Stats */}
-          <div className="px-4 pt-4 pb-3 border-b border-[#1A1A2E]">
-            <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">Threat Summary</p>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: "Critical", value: stats?.criticalFindings ?? 0, color: "#ef4444" },
-                { label: "High",     value: stats?.highFindings     ?? 0, color: "#f97316" },
-                { label: "Findings", value: stats?.totalFindings    ?? 0, color: "#e2e8f0" },
-                { label: "Scans",    value: stats?.totalScans       ?? 0, color: "#64748b" },
-              ].map(s => (
-                <div key={s.label} className="card-surface rounded-lg p-2.5">
-                  <p className="font-mono text-xl font-bold" style={{ color: s.color }}>{s.value}</p>
-                  <p className="font-mono text-[9px] text-slate-700 mt-0.5 uppercase tracking-widest">{s.label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Scan status — read only */}
-          <div className="px-4 pt-4 pb-4 border-b border-[#1A1A2E] space-y-2">
+          {/* Scan engine — read-only status */}
+          <div className="px-5 pt-4 pb-4 border-b border-[#1A1A2E] space-y-2">
             <div className="flex items-center justify-between">
               <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">Scan Engine</p>
               <span className={`font-mono text-[9px] px-1.5 py-0.5 rounded border ${
@@ -502,6 +395,14 @@ export default function SentinelPage() {
             </p>
             {stats?.lastScan && (
               <p className="font-mono text-[9px] text-slate-700">last scan {timeAgo(stats.lastScan)}</p>
+            )}
+            {health && (
+              <p className={`font-mono text-[9px] ${
+                health.status === "healthy"  ? "text-emerald-600" :
+                health.status === "degraded" ? "text-yellow-600"  : "text-red-500"
+              }`}>
+                {health.status === "healthy" ? "✓" : health.status === "degraded" ? "⚠" : "✗"} {health.status}
+              </p>
             )}
           </div>
 
@@ -531,9 +432,9 @@ export default function SentinelPage() {
             )}
           </div>
 
-          {/* Scan logs summary */}
+          {/* Scan logs — collapsible */}
           {scanLogs.length > 0 && (
-            <div className="px-4 pt-3 pb-3 border-t border-[#1A1A2E]">
+            <div className="px-5 pt-3 pb-3 border-t border-[#1A1A2E]">
               <button onClick={() => setLogsOpen(v => !v)}
                 className="w-full flex items-center justify-between group">
                 <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">
@@ -554,7 +455,7 @@ export default function SentinelPage() {
                         </span>
                       </div>
                       <p className="font-mono text-[9px] text-slate-600">
-                        {l.totalScanned} scanned · {l.findings} found · {l.alerted} alerted · {l.durationMs}ms
+                        {l.totalScanned} scanned · {l.findings} found · {l.durationMs}ms
                       </p>
                     </div>
                   ))}
@@ -563,7 +464,7 @@ export default function SentinelPage() {
             </div>
           )}
 
-          {/* Footer */}
+          {/* Footer links */}
           <div className="px-5 py-4 border-t border-[#1A1A2E]">
             <div className="space-y-1.5">
               <a href="/api/sentinel/test-alert"
@@ -585,8 +486,8 @@ export default function SentinelPage() {
         {/* ── Main content ─────────────────────────────── */}
         <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
 
-          {/* Hero header */}
-          <div className="px-8 py-10 border-b border-[#1A1A2E]">
+          {/* Hero — centered */}
+          <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
             <div className="inline-flex items-center gap-2 border border-red-500/20 bg-red-500/5 rounded-full px-4 py-1.5 mb-6">
               <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
               <span className="font-mono text-[10px] text-red-400 tracking-widest">LIVE · BASE CHAIN 8453</span>
@@ -594,21 +495,21 @@ export default function SentinelPage() {
             <h1 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-3">
               Blue<span className="text-red-400">Sentinel</span>
             </h1>
-            <p className="font-mono text-sm text-slate-400 max-w-lg leading-relaxed">
+            <p className="font-mono text-sm text-slate-400 max-w-lg mx-auto leading-relaxed">
               Watch wallets, tokens, and domains. Get instant Telegram alerts when threats are detected on Base.
             </p>
           </div>
 
           {/* Content */}
-          <div className="px-6 lg:px-10 py-8 max-w-5xl w-full space-y-8">
+          <div className="px-6 lg:px-10 py-8 max-w-4xl mx-auto w-full space-y-8">
 
             {/* Stat cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
-                { label: "Critical",    value: stats?.criticalFindings ?? 0, color: "text-red-400",    border: "border-l-red-500"    },
-                { label: "High",        value: stats?.highFindings     ?? 0, color: "text-orange-400", border: "border-l-orange-500" },
-                { label: "Auto-scanned", value: discovery?.count ?? (stats?.totalDiscovered ?? 0), color: "text-[#4FC3F7]", border: "border-l-[#4FC3F7]" },
-                { label: "Total Scans", value: stats?.totalScans       ?? 0, color: "text-slate-300",  border: "border-l-[#1A1A2E]"  },
+                { label: "Critical",     value: stats?.criticalFindings ?? 0,                              color: "text-red-400",    border: "border-l-red-500"    },
+                { label: "High",         value: stats?.highFindings     ?? 0,                              color: "text-orange-400", border: "border-l-orange-500" },
+                { label: "Auto-scanned", value: discovery?.count ?? (stats?.totalDiscovered ?? 0),         color: "text-[#4FC3F7]",  border: "border-l-[#4FC3F7]"  },
+                { label: "Total Scans",  value: stats?.totalScans       ?? 0,                              color: "text-slate-300",  border: "border-l-[#1A1A2E]"  },
               ].map(s => (
                 <div key={s.label} className={`card-surface rounded-xl p-4 border-l-4 ${s.border}`}>
                   <p className={`font-mono text-3xl font-bold ${s.color}`}>{s.value}</p>
@@ -633,15 +534,17 @@ export default function SentinelPage() {
                   · <span className="text-purple-400">{discovery.domains}</span> domains
                 </p>
                 <p className="font-mono text-[10px] text-slate-700 ml-auto">
-                  DexScreener · URLhaus · Patterns · refreshed {timeAgo(discovery.scannedAt)}
+                  DexScreener · URLhaus · refreshed {timeAgo(discovery.scannedAt)}
                 </p>
               </div>
             )}
 
-            {/* Findings feed — full width */}
+            {/* Live findings feed */}
             <div>
               <div className="flex items-center justify-between mb-4">
-                <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">Live Findings</p>
+                <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">
+                  Live Findings · <span className="text-white">{findings.length}</span>
+                </p>
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-[9px] text-slate-700">auto-refresh 30s</span>
                   <div className="flex gap-1">
@@ -666,7 +569,7 @@ export default function SentinelPage() {
                   <p className="text-3xl mb-3">🛡️</p>
                   <p className="font-mono text-sm text-slate-400 mb-1">No findings</p>
                   <p className="font-mono text-[10px] text-slate-700">
-                    Sentinel is scanning Base automatically — alerts fire when threats are found
+                    Sentinel scans Base automatically every 15m — alerts fire when threats are found
                   </p>
                 </div>
               ) : (
@@ -704,7 +607,9 @@ export default function SentinelPage() {
 
             {/* Threat catalog */}
             <div>
-              <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">Threat Catalog · {THREAT_CATS.length} Categories</p>
+              <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">
+                Threat Catalog · {THREAT_CATS.length} Categories
+              </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
                 {THREAT_CATS.map(t => (
                   <div key={t.name} className="card-surface card-hover rounded-xl p-3 text-center">
@@ -722,8 +627,8 @@ export default function SentinelPage() {
               <div className="grid sm:grid-cols-3 gap-3">
                 {[
                   { step: "01", color: "#4FC3F7", title: "Watch",  desc: "Add any wallet, token contract, or domain. Sentinel registers it for continuous monitoring on Base." },
-                  { step: "02", color: "#A78BFA", title: "Scan",   desc: "Each cycle checks targets against threat catalog + Hub security tools: honeypot, AML, phishing." },
-                  { step: "03", color: "#34D399", title: "Alert",  desc: "Critical and high-severity findings trigger instant Telegram alerts — before damage is done." },
+                  { step: "02", color: "#A78BFA", title: "Scan",   desc: "Each cycle checks targets against threat catalog + Hub security tools: honeypot, AML, phishing."   },
+                  { step: "03", color: "#34D399", title: "Alert",  desc: "Critical and high-severity findings trigger instant Telegram alerts — before damage is done."       },
                 ].map(h => (
                   <div key={h.step} className="card-surface rounded-xl p-5">
                     <p className="font-mono text-4xl font-bold mb-3" style={{ color: h.color + "30" }}>{h.step}</p>
@@ -747,8 +652,8 @@ export default function SentinelPage() {
                 <Link href="/hub" className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors">Hub →</Link>
               </div>
             </div>
-          </div>
 
+          </div>
         </main>
       </div>
     </>

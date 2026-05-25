@@ -7,12 +7,14 @@ import { ConnectButton } from "@/components/ConnectModal";
 const NAV_LINKS = [
   { label: "Chat",     href: "/chat" },
   { label: "Console",  href: "/console" },
-  { label: "Hub",      href: "/hub" },
-  { label: "Market",   href: "/market" },
   { label: "Skills",   href: "/skills" },
   { label: "API",      href: "/api-docs" },
   { label: "Docs",     href: "/docs" },
 ];
+
+// Hidden from nav — links still accessible directly
+// { label: "Hub",    href: "/hub" }
+// { label: "Market", href: "/market" }
 
 
 export default function Navbar() {

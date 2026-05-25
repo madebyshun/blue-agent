@@ -38,7 +38,7 @@ import type {
 import { isDuplicate, markSeen } from "@/lib/sentinel/dedup";
 import { discoverAll } from "@/lib/sentinel/discovery";
 import { recordFindings } from "@/lib/sentinel/timeline";
-import { scanDNA } from "@/lib/sentinel/phishing-dna";
+import { scanDNA, DOMAIN_SIGNATURES } from "@/lib/sentinel/phishing-dna";
 import {
   wrapScanner,
   extractSeverity,
@@ -58,6 +58,46 @@ async function acquireLock(): Promise<boolean> {
 
 async function releaseLock(): Promise<void> {
   await kvSet(SENTINEL_KV.scanLock, "", 1);
+}
+
+// ─── Domain liveness check (cached 6h) ───────────────────────────────────────
+// Verifies a domain actually resolves before creating a finding.
+// Prevents pattern-list noise from domains that no longer exist.
+
+const LIVE_CACHE_TTL = 6 * 60 * 60; // 6 hours
+
+async function checkDomainLive(domain: string): Promise<boolean> {
+  const safeKey = domain.toLowerCase().replace(/[^a-z0-9.-]/g, "_");
+  const cacheKey = `sentinel:live:${safeKey}`;
+
+  const cached = await kvGet<boolean>(cacheKey);
+  if (cached !== null && cached !== undefined) return cached;
+
+  try {
+    const res = await fetch(`https://${domain}`, {
+      method:  "HEAD",
+      signal:  AbortSignal.timeout(5000),
+      redirect: "follow",
+    });
+    const live = res.status < 500;
+    await kvSet(cacheKey, live, LIVE_CACHE_TTL);
+    return live;
+  } catch {
+    // Domain doesn't resolve or timed out → not live
+    await kvSet(cacheKey, false, LIVE_CACHE_TTL);
+    return false;
+  }
+}
+
+// ─── Resolve specific threat name from DNA signature indicators ───────────────
+// Maps ds-006 → "Blue Agent Impersonation" instead of falling back to "phishing-generic"
+
+function resolveThreatName(indicators: string[], fallback: string): string {
+  for (const ind of indicators) {
+    const sig = DOMAIN_SIGNATURES.find(s => s.id === ind);
+    if (sig) return sig.name;
+  }
+  return fallback;
 }
 
 // ─── Scan log ─────────────────────────────────────────────────────────────────
@@ -332,6 +372,14 @@ async function scanTarget(watch: ScanTarget, runSeen: Set<string>): Promise<Find
   const findings: Finding[] = [];
   const results: HubResult[] = [];
 
+  // ── Step 0: liveness gate — catalogOnly (pattern) domains only ───────────────
+  // Pattern domains are static and may no longer exist. Skip if not resolvable.
+  // Result is KV-cached 6h so we don't re-check every 15min cycle.
+  if (watch.catalogOnly && watch.targetType === "domain") {
+    const live = await checkDomainLive(watch.target);
+    if (!live) return []; // domain not live → no finding, no noise
+  }
+
   // ── Step 1a: catalog check (no BANKR credit needed) ─────────────────────────
   const catalogHit = catalogCheck(watch.target);
   if (catalogHit) results.push(catalogHit);
@@ -408,10 +456,16 @@ async function scanTarget(watch: ScanTarget, runSeen: Set<string>): Promise<Find
     // Mark in-memory immediately (before any async op) so sibling parallel scans see it
     runSeen.add(runKey);
 
+    // Resolve the most specific name available:
+    // 1. DNA signature name (e.g. "Blue Agent Impersonation")
+    // 2. Catalog entry name (e.g. "Phishing Domain")
+    // 3. Threat ID fallback
+    const resolvedName = resolveThreatName(result.indicators, entry?.name ?? tId);
+
     const finding: Finding = {
       id:         nanoid(),
       threatId:   tId,
-      threatName: entry?.name ?? tId,
+      threatName: resolvedName,
       category:   cat,
       severity:   result.severity,
       target:     watch.target,
@@ -423,8 +477,9 @@ async function scanTarget(watch: ScanTarget, runSeen: Set<string>): Promise<Find
       alerted:    false,
     };
 
-    // Persist to KV — catalogOnly (static pattern) domains use 7-day TTL to reduce noise
-    const dedupTtl = watch.catalogOnly ? SENTINEL_TTL.dedup * 7 : SENTINEL_TTL.dedup;
+    // Persist to KV — catalogOnly (static pattern) domains use 30-day TTL to reduce noise
+    // Live-verified findings still get a longer window since static patterns change slowly
+    const dedupTtl = watch.catalogOnly ? SENTINEL_TTL.dedup * 30 : SENTINEL_TTL.dedup;
     await markSeen({ target: watch.target, threatId: tId, severity: result.severity, alerted: false, ttl: dedupTtl });
 
     findings.push(finding);
