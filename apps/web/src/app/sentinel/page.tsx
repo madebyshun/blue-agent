@@ -326,6 +326,15 @@ export default function SentinelPage() {
   const [watchSuccess,  setWatchSuccess]  = useState(false);
   const [formOpen,      setFormOpen]      = useState(false);
 
+  // ── Instant scan bar state ────────────────────────────────────────────────
+  const [scanInput,     setScanInput]     = useState("");
+  const [scanLoading,   setScanLoading]   = useState(false);
+  const [scanResult,    setScanResult]    = useState<null | {
+    score: number; grade: string; risk_level: string; type: string;
+    indicators: string[]; summary: string; scan_ms: number; cached: boolean;
+    categories: Record<string, { severity: string; indicators: string[] }>;
+  }>(null);
+
   const load = useCallback(async () => {
     try {
       const [watchRes, ctrlRes, discRes, logsRes, histRes] = await Promise.all([
@@ -405,9 +414,39 @@ export default function SentinelPage() {
     }
   }
 
-  const filtered = findings
+  // Dedupe: collapse same target+category within same day into one finding
+  const deduped = findings.reduce<Finding[]>((acc, f) => {
+    const key = `${f.target.toLowerCase()}:${f.category}:${f.detectedAt.slice(0, 10)}`;
+    if (!acc.find(x => `${x.target.toLowerCase()}:${x.category}:${x.detectedAt.slice(0, 10)}` === key)) {
+      acc.push(f);
+    }
+    return acc;
+  }, []);
+
+  const filtered = deduped
     .filter(f => sevFilter === "all" || f.severity === sevFilter)
     .sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime());
+
+  async function clearAllFindings() {
+    await Promise.all(findings.map(f => fetch(`/api/sentinel/findings?id=${f.id}`, { method: "DELETE" })));
+    void load();
+  }
+
+  async function handleScan(e: React.FormEvent) {
+    e.preventDefault();
+    const target = scanInput.trim();
+    if (!target) return;
+    setScanLoading(true);
+    setScanResult(null);
+    try {
+      const isAddress = /^0x[0-9a-fA-F]{40}$/i.test(target);
+      const typeParam = isAddress ? "" : "&type=domain";
+      const res  = await fetch(`/api/sentinel/score?address=${encodeURIComponent(target)}${typeParam}`);
+      const data = await res.json();
+      setScanResult(data as typeof scanResult);
+    } catch { /* ignore */ }
+    finally { setScanLoading(false); }
+  }
 
   return (
     <>
@@ -592,13 +631,13 @@ export default function SentinelPage() {
           {/* Footer links */}
           <div className="px-5 py-4 border-t border-[#1A1A2E]">
             <div className="space-y-1.5">
-              <a href="/api/sentinel/test-alert"
-                className="font-mono text-[10px] text-slate-700 hover:text-red-400 transition-colors block">
-                🚨 test alert →
+              <a href="https://t.me/blockyagent_bot" target="_blank" rel="noreferrer"
+                className="font-mono text-[10px] text-slate-600 hover:text-[#4FC3F7] transition-colors block">
+                🤖 @blockyagent_bot → /start
               </a>
-              <a href="/api/sentinel/logs"
+              <a href="https://t.me/blueagent_hub" target="_blank" rel="noreferrer"
                 className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors block">
-                scan logs API →
+                💬 Telegram community →
               </a>
               <Link href="/hub"
                 className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors block">
@@ -611,18 +650,121 @@ export default function SentinelPage() {
         {/* ── Main content ─────────────────────────────── */}
         <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
 
-          {/* Hero — centered */}
-          <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
-            <div className="inline-flex items-center gap-2 border border-red-500/20 bg-red-500/5 rounded-full px-4 py-1.5 mb-6">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-              <span className="font-mono text-[10px] text-red-400 tracking-widest">LIVE · BASE CHAIN 8453</span>
+          {/* Hero + Instant Scan */}
+          <div className="py-10 px-8 border-b border-[#1A1A2E]">
+            <div className="max-w-2xl mx-auto">
+              {/* Badge */}
+              <div className="flex justify-center mb-5">
+                <div className="inline-flex items-center gap-2 border border-red-500/20 bg-red-500/5 rounded-full px-4 py-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                  <span className="font-mono text-[10px] text-red-400 tracking-widest">LIVE · BASE CHAIN 8453</span>
+                </div>
+              </div>
+              <h1 className="font-mono text-3xl sm:text-4xl font-bold text-white tracking-tight mb-2 text-center">
+                Blue<span className="text-red-400">Sentinel</span>
+              </h1>
+              <p className="font-mono text-xs text-slate-600 text-center mb-6">
+                24/7 threat monitor for Base — scan any address or domain instantly
+              </p>
+
+              {/* Scan bar */}
+              <form onSubmit={handleScan} className="flex gap-2">
+                <input
+                  type="text"
+                  value={scanInput}
+                  onChange={e => { setScanInput(e.target.value); setScanResult(null); }}
+                  placeholder="0x... or domain.xyz — check any address or domain"
+                  className="flex-1 font-mono text-sm bg-[#0D0D1A] border border-[#1A1A2E] rounded-xl px-4 py-3 text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/40 transition-colors"
+                />
+                <button
+                  type="submit"
+                  disabled={scanLoading || !scanInput.trim()}
+                  className="font-mono text-sm px-5 py-3 rounded-xl border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {scanLoading ? "Scanning…" : "Scan →"}
+                </button>
+              </form>
+
+              {/* Scan result */}
+              {scanResult && (() => {
+                const gradeColor: Record<string, string> = {
+                  A: "text-emerald-400", B: "text-emerald-400",
+                  C: "text-yellow-400",  D: "text-orange-400", F: "text-red-400",
+                };
+                const riskBorder: Record<string, string> = {
+                  safe: "border-emerald-500/30", low: "border-emerald-500/30",
+                  medium: "border-yellow-500/30", high: "border-orange-500/30", critical: "border-red-500/30",
+                };
+                const riskBg: Record<string, string> = {
+                  safe: "bg-emerald-500/5", low: "bg-emerald-500/5",
+                  medium: "bg-yellow-500/5", high: "bg-orange-500/5", critical: "bg-red-500/5",
+                };
+                const flagged = Object.entries(scanResult.categories ?? {});
+                return (
+                  <div className={`mt-3 rounded-xl border p-4 ${riskBorder[scanResult.risk_level] ?? "border-[#1A1A2E]"} ${riskBg[scanResult.risk_level] ?? ""}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <span className={`font-mono text-3xl font-bold ${gradeColor[scanResult.grade] ?? "text-white"}`}>
+                          {scanResult.grade}
+                        </span>
+                        <div>
+                          <p className="font-mono text-sm text-white font-bold">{scanResult.score}/100</p>
+                          <p className={`font-mono text-[10px] uppercase tracking-widest ${gradeColor[scanResult.grade] ?? "text-slate-400"}`}>
+                            {scanResult.risk_level}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-mono text-[10px] text-slate-600 capitalize">{scanResult.type}</p>
+                        <p className="font-mono text-[9px] text-slate-700">{scanResult.scan_ms}ms · {scanResult.cached ? "cached" : "live"}</p>
+                      </div>
+                    </div>
+
+                    {flagged.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {flagged.map(([cat, v]) => {
+                          const sev = v.severity;
+                          const c = sev === "critical" ? "text-red-400 border-red-500/30 bg-red-500/10"
+                            : sev === "high" ? "text-orange-400 border-orange-500/30 bg-orange-500/10"
+                            : "text-yellow-400 border-yellow-500/30 bg-yellow-500/10";
+                          return (
+                            <span key={cat} className={`font-mono text-[9px] px-2 py-0.5 rounded border uppercase tracking-wider ${c}`}>
+                              {cat.replace(/_/g, " ")}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {scanResult.indicators.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {scanResult.indicators.slice(0, 6).map(i => (
+                          <span key={i} className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-[#0D0D1A] border border-[#1A1A2E] text-slate-500">
+                            {i.replace(/_/g, " ")}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <p className="font-mono text-[10px] text-slate-500 leading-relaxed line-clamp-2">{scanResult.summary}</p>
+
+                    {scanResult.risk_level !== "safe" && scanResult.risk_level !== "low" && (
+                      <button
+                        onClick={() => {
+                          setWatchTarget(scanInput.trim());
+                          setWatchType(/^0x/i.test(scanInput.trim()) ? "address" : "domain");
+                          setFormOpen(true);
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        className="mt-3 w-full font-mono text-[10px] py-1.5 rounded-lg border border-[#4FC3F7]/20 text-[#4FC3F7] hover:bg-[#4FC3F7]/5 transition-colors"
+                      >
+                        + Monitor this address →
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
-            <h1 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-3">
-              Blue<span className="text-red-400">Sentinel</span>
-            </h1>
-            <p className="font-mono text-sm text-slate-400 max-w-lg mx-auto leading-relaxed">
-              Watch wallets, tokens, and domains. Get instant Telegram alerts when threats are detected on Base.
-            </p>
           </div>
 
           {/* Content */}
@@ -666,10 +808,23 @@ export default function SentinelPage() {
 
             {/* Live findings feed */}
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">
-                  Live Findings · <span className="text-white">{findings.length}</span>
-                </p>
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <div className="flex items-center gap-3">
+                  <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">
+                    Findings · <span className="text-white">{filtered.length}</span>
+                    {deduped.length < findings.length && (
+                      <span className="text-slate-700 ml-1">({findings.length - deduped.length} dupes hidden)</span>
+                    )}
+                  </p>
+                  {findings.length > 0 && (
+                    <button
+                      onClick={clearAllFindings}
+                      className="font-mono text-[9px] text-slate-700 hover:text-red-400 border border-[#1A1A2E] hover:border-red-500/30 px-2 py-0.5 rounded transition-colors"
+                    >
+                      clear all
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-[9px] text-slate-700">auto-refresh 30s</span>
                   <div className="flex gap-1">
@@ -706,13 +861,49 @@ export default function SentinelPage() {
               )}
             </div>
 
-            {/* Mobile watches */}
+            {/* Mobile watches + Add Watch form */}
             <div className="card-surface rounded-xl p-5 lg:hidden">
-              <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">
-                Watches · {watches.length}
-              </p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">
+                  Watches · {watches.length}
+                </p>
+                <button
+                  onClick={() => { setFormOpen(v => !v); setWatchError(""); }}
+                  className="font-mono text-[10px] text-slate-600 hover:text-[#4FC3F7] border border-[#1A1A2E] hover:border-[#4FC3F7]/30 px-2 py-0.5 rounded transition-colors"
+                >
+                  {formOpen ? "✕ cancel" : "+ add"}
+                </button>
+              </div>
+
+              {formOpen && (
+                <form onSubmit={addWatch} className="space-y-2 mb-4 pb-4 border-b border-[#1A1A2E]">
+                  <div className="flex gap-1">
+                    {(["address", "token", "domain"] as TargetType[]).map(t => (
+                      <button key={t} type="button" onClick={() => setWatchType(t)}
+                        className={`font-mono text-[9px] px-2 py-1 rounded border transition-colors capitalize ${
+                          watchType === t ? "border-[#4FC3F7]/40 text-[#4FC3F7] bg-[#4FC3F7]/10" : "border-[#1A1A2E] text-slate-700"
+                        }`}>{t}</button>
+                    ))}
+                  </div>
+                  <input type="text" value={watchTarget} onChange={e => setWatchTarget(e.target.value)}
+                    placeholder={watchType === "domain" ? "domain.xyz" : "0x…"} required
+                    className="w-full font-mono text-[10px] bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/40" />
+                  <input type="text" value={watchLabel} onChange={e => setWatchLabel(e.target.value)}
+                    placeholder="Label (optional)"
+                    className="w-full font-mono text-[10px] bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/40" />
+                  <input type="text" value={watchTgId} onChange={e => setWatchTgId(e.target.value)}
+                    placeholder="Telegram ID — get from @blockyagent_bot"
+                    className="w-full font-mono text-[10px] bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/40" />
+                  {watchError && <p className="font-mono text-[9px] text-red-400">{watchError}</p>}
+                  <button type="submit" disabled={watchAdding || !watchTarget.trim()}
+                    className="w-full font-mono text-[10px] py-2 rounded-lg border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 transition-colors disabled:opacity-40">
+                    {watchAdding ? "Adding…" : "Monitor this →"}
+                  </button>
+                </form>
+              )}
+
               {watches.length === 0 ? (
-                <p className="font-mono text-[10px] text-slate-700">No user watches — auto-discovery is active</p>
+                <p className="font-mono text-[10px] text-slate-700">No watches yet — add one above</p>
               ) : (
                 <div className="space-y-2">
                   {watches.map(w => (
