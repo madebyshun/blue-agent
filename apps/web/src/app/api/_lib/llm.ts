@@ -9,7 +9,16 @@ export async function callBankrLLM(opts: {
   messages: BankrMessage[];
   temperature?: number;
   maxTokens?: number;
+  /** Force JSON output via assistant prefill — auto-enabled when system contains "Return ONLY raw JSON" */
+  jsonMode?: boolean;
 }): Promise<string> {
+  // Auto-enable JSON prefill: inject `{"` as the start of the assistant turn so the
+  // model is forced to complete a JSON object (Anthropic assistant-prefill technique).
+  const wantsJson = opts.jsonMode ?? opts.system.includes("Return ONLY raw JSON");
+  const messages: BankrMessage[] = wantsJson
+    ? [...opts.messages, { role: "assistant", content: "{" }]
+    : opts.messages;
+
   const res = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
     headers: {
@@ -20,16 +29,19 @@ export async function callBankrLLM(opts: {
     body: JSON.stringify({
       model: opts.model ?? "claude-haiku-4-5",
       system: opts.system,
-      messages: opts.messages,
+      messages,
       temperature: opts.temperature ?? 0.5,
       max_tokens: opts.maxTokens ?? 1000,
     }),
   });
   if (!res.ok) throw new Error(`Bankr LLM ${res.status}: ${await res.text()}`);
   const d = await res.json() as { content?: { text: string }[]; text?: string };
-  if (d.content?.length) return d.content[0].text;
-  if (d.text) return d.text;
-  throw new Error("Invalid Bankr LLM response");
+  let text = "";
+  if (d.content?.length) text = d.content[0].text;
+  else if (d.text) text = d.text;
+  else throw new Error("Invalid Bankr LLM response");
+  // Re-attach the prefill character we injected so extractJsonObject gets complete JSON
+  return wantsJson ? "{" + text : text;
 }
 
 export function extractJsonObject(text: string): Record<string, unknown> | null {
