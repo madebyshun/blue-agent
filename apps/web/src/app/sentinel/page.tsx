@@ -448,13 +448,27 @@ export default function SentinelPage() {
     finally { setScanLoading(false); }
   }
 
+  // ── Scan result helpers (extracted for readability) ─────────────────────────
+  const gradeColor: Record<string, string> = {
+    A: "text-emerald-400", B: "text-emerald-400",
+    C: "text-yellow-400",  D: "text-orange-400", F: "text-red-400",
+  };
+  const riskBorder: Record<string, string> = {
+    safe: "border-emerald-500/30", low: "border-emerald-500/30",
+    medium: "border-yellow-500/30", high: "border-orange-500/30", critical: "border-red-500/30",
+  };
+  const riskBg: Record<string, string> = {
+    safe: "bg-emerald-500/5", low: "bg-emerald-500/5",
+    medium: "bg-yellow-500/5", high: "bg-orange-500/5", critical: "bg-red-500/5",
+  };
+
   return (
     <>
       <Navbar />
-      <div className="flex bg-[#050508] font-mono pt-16">
+      <div className="flex bg-[#050508] font-mono pt-16 h-screen overflow-hidden">
 
-        {/* ── Sidebar ──────────────────────────────────── */}
-        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] border-r border-[#1A1A2E]">
+        {/* ══ LEFT SIDEBAR (280px) ══════════════════════════════════════════════ */}
+        <aside className="hidden lg:flex flex-col w-[280px] shrink-0 h-full border-r border-[#1A1A2E] overflow-y-auto">
 
           {/* Header */}
           <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
@@ -647,330 +661,261 @@ export default function SentinelPage() {
           </div>
         </aside>
 
-        {/* ── Main content ─────────────────────────────── */}
-        <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
+        {/* ══ CENTER PANEL (flex-1, scrollable) ═══════════════════════════════ */}
+        <main className="flex-1 flex flex-col h-full overflow-hidden">
 
-          {/* Hero + Instant Scan */}
-          <div className="py-10 px-8 border-b border-[#1A1A2E]">
-            <div className="max-w-2xl mx-auto">
-              {/* Badge */}
-              <div className="flex justify-center mb-5">
-                <div className="inline-flex items-center gap-2 border border-red-500/20 bg-red-500/5 rounded-full px-4 py-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-                  <span className="font-mono text-[10px] text-red-400 tracking-widest">LIVE · BASE CHAIN 8453</span>
-                </div>
+          {/* Scan bar — sticky top */}
+          <div className="shrink-0 px-6 py-4 border-b border-[#1A1A2E] bg-[#050508]">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                <span className="font-mono text-[9px] text-red-400 tracking-widest uppercase">Blue Sentinel · Live · Base 8453</span>
               </div>
-              <h1 className="font-mono text-3xl sm:text-4xl font-bold text-white tracking-tight mb-2 text-center">
-                Blue<span className="text-red-400">Sentinel</span>
-              </h1>
-              <p className="font-mono text-xs text-slate-600 text-center mb-6">
-                24/7 threat monitor for Base — scan any address or domain instantly
-              </p>
+              <span className="font-mono text-[9px] text-slate-700 ml-auto">auto-refresh 30s</span>
+            </div>
+            <form onSubmit={handleScan} className="flex gap-2">
+              <input
+                type="text"
+                value={scanInput}
+                onChange={e => { setScanInput(e.target.value); setScanResult(null); }}
+                placeholder="0x... or domain.xyz — instant risk scan"
+                className="flex-1 font-mono text-sm bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-4 py-2.5 text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/40 transition-colors"
+              />
+              <button
+                type="submit"
+                disabled={scanLoading || !scanInput.trim()}
+                className="font-mono text-sm px-4 py-2.5 rounded-lg border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+              >
+                {scanLoading ? "…" : "Scan →"}
+              </button>
+            </form>
 
-              {/* Scan bar */}
-              <form onSubmit={handleScan} className="flex gap-2">
-                <input
-                  type="text"
-                  value={scanInput}
-                  onChange={e => { setScanInput(e.target.value); setScanResult(null); }}
-                  placeholder="0x... or domain.xyz — check any address or domain"
-                  className="flex-1 font-mono text-sm bg-[#0D0D1A] border border-[#1A1A2E] rounded-xl px-4 py-3 text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/40 transition-colors"
-                />
-                <button
-                  type="submit"
-                  disabled={scanLoading || !scanInput.trim()}
-                  className="font-mono text-sm px-5 py-3 rounded-xl border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-                >
-                  {scanLoading ? "Scanning…" : "Scan →"}
-                </button>
-              </form>
-
-              {/* Scan result */}
-              {scanResult && (() => {
-                const gradeColor: Record<string, string> = {
-                  A: "text-emerald-400", B: "text-emerald-400",
-                  C: "text-yellow-400",  D: "text-orange-400", F: "text-red-400",
-                };
-                const riskBorder: Record<string, string> = {
-                  safe: "border-emerald-500/30", low: "border-emerald-500/30",
-                  medium: "border-yellow-500/30", high: "border-orange-500/30", critical: "border-red-500/30",
-                };
-                const riskBg: Record<string, string> = {
-                  safe: "bg-emerald-500/5", low: "bg-emerald-500/5",
-                  medium: "bg-yellow-500/5", high: "bg-orange-500/5", critical: "bg-red-500/5",
-                };
-                const flagged = Object.entries(scanResult.categories ?? {});
-                return (
-                  <div className={`mt-3 rounded-xl border p-4 ${riskBorder[scanResult.risk_level] ?? "border-[#1A1A2E]"} ${riskBg[scanResult.risk_level] ?? ""}`}>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <span className={`font-mono text-3xl font-bold ${gradeColor[scanResult.grade] ?? "text-white"}`}>
-                          {scanResult.grade}
-                        </span>
-                        <div>
-                          <p className="font-mono text-sm text-white font-bold">{scanResult.score}/100</p>
-                          <p className={`font-mono text-[10px] uppercase tracking-widest ${gradeColor[scanResult.grade] ?? "text-slate-400"}`}>
-                            {scanResult.risk_level}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-mono text-[10px] text-slate-600 capitalize">{scanResult.type}</p>
-                        <p className="font-mono text-[9px] text-slate-700">{scanResult.scan_ms}ms · {scanResult.cached ? "cached" : "live"}</p>
-                      </div>
-                    </div>
-
-                    {flagged.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mb-3">
-                        {flagged.map(([cat, v]) => {
-                          const sev = v.severity;
-                          const c = sev === "critical" ? "text-red-400 border-red-500/30 bg-red-500/10"
-                            : sev === "high" ? "text-orange-400 border-orange-500/30 bg-orange-500/10"
-                            : "text-yellow-400 border-yellow-500/30 bg-yellow-500/10";
-                          return (
-                            <span key={cat} className={`font-mono text-[9px] px-2 py-0.5 rounded border uppercase tracking-wider ${c}`}>
-                              {cat.replace(/_/g, " ")}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {scanResult.indicators.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-2">
-                        {scanResult.indicators.slice(0, 6).map(i => (
-                          <span key={i} className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-[#0D0D1A] border border-[#1A1A2E] text-slate-500">
-                            {i.replace(/_/g, " ")}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    <p className="font-mono text-[10px] text-slate-500 leading-relaxed line-clamp-2">{scanResult.summary}</p>
-
-                    {scanResult.risk_level !== "safe" && scanResult.risk_level !== "low" && (
-                      <button
-                        onClick={() => {
-                          setWatchTarget(scanInput.trim());
-                          setWatchType(/^0x/i.test(scanInput.trim()) ? "address" : "domain");
-                          setFormOpen(true);
-                          window.scrollTo({ top: 0, behavior: "smooth" });
-                        }}
-                        className="mt-3 w-full font-mono text-[10px] py-1.5 rounded-lg border border-[#4FC3F7]/20 text-[#4FC3F7] hover:bg-[#4FC3F7]/5 transition-colors"
-                      >
-                        + Monitor this address →
-                      </button>
-                    )}
+            {/* Inline scan result */}
+            {scanResult && (
+              <div className={`mt-2 rounded-lg border px-4 py-3 ${riskBorder[scanResult.risk_level] ?? "border-[#1A1A2E]"} ${riskBg[scanResult.risk_level] ?? ""}`}>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className={`font-mono text-2xl font-bold ${gradeColor[scanResult.grade] ?? "text-white"}`}>{scanResult.grade}</span>
+                  <div>
+                    <span className="font-mono text-sm text-white font-bold">{scanResult.score}/100 </span>
+                    <span className={`font-mono text-[10px] uppercase ${gradeColor[scanResult.grade] ?? ""}`}>{scanResult.risk_level}</span>
                   </div>
-                );
-              })()}
-            </div>
-          </div>
-
-          {/* Content */}
-          <div className="px-6 lg:px-10 py-8 max-w-4xl mx-auto w-full space-y-8">
-
-            {/* Stat cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                { label: "Critical",     value: stats?.criticalFindings ?? 0,                              color: "text-red-400",    border: "border-l-red-500"    },
-                { label: "High",         value: stats?.highFindings     ?? 0,                              color: "text-orange-400", border: "border-l-orange-500" },
-                { label: "Auto-scanned", value: discovery?.count ?? (stats?.totalDiscovered ?? 0),         color: "text-[#4FC3F7]",  border: "border-l-[#4FC3F7]"  },
-                { label: "Total Scans",  value: stats?.totalScans       ?? 0,                              color: "text-slate-300",  border: "border-l-[#1A1A2E]"  },
-              ].map(s => (
-                <div key={s.label} className={`card-surface rounded-xl p-4 border-l-4 ${s.border}`}>
-                  <p className={`font-mono text-3xl font-bold ${s.color}`}>{s.value}</p>
-                  <p className="font-mono text-[10px] text-slate-600 mt-1 uppercase tracking-widest">{s.label}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Threat Timeline */}
-            {timeline && <ThreatTimeline stats={timeline} />}
-
-            {/* Auto-discovery status bar */}
-            {discovery && (
-              <div className="card-surface rounded-xl px-5 py-3 flex flex-wrap items-center gap-x-6 gap-y-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-                  <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest uppercase">Auto Discovery</p>
-                </div>
-                <p className="font-mono text-[10px] text-slate-400">
-                  <span className="text-white">{discovery.count}</span> targets last cycle
-                  · <span className="text-emerald-400">{discovery.tokens}</span> tokens
-                  · <span className="text-purple-400">{discovery.domains}</span> domains
-                </p>
-                <p className="font-mono text-[10px] text-slate-700 ml-auto">
-                  DexScreener · URLhaus · refreshed {timeAgo(discovery.scannedAt)}
-                </p>
-              </div>
-            )}
-
-            {/* Live findings feed */}
-            <div>
-              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                <div className="flex items-center gap-3">
-                  <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">
-                    Findings · <span className="text-white">{filtered.length}</span>
-                    {deduped.length < findings.length && (
-                      <span className="text-slate-700 ml-1">({findings.length - deduped.length} dupes hidden)</span>
-                    )}
-                  </p>
-                  {findings.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(scanResult.categories ?? {}).map(([cat, v]) => {
+                      const sev = v.severity;
+                      const c = sev === "critical" ? "text-red-400 border-red-500/30 bg-red-500/10"
+                        : sev === "high" ? "text-orange-400 border-orange-500/30 bg-orange-500/10"
+                        : "text-yellow-400 border-yellow-500/30 bg-yellow-500/10";
+                      return <span key={cat} className={`font-mono text-[9px] px-1.5 py-0.5 rounded border uppercase ${c}`}>{cat.replace(/_/g, " ")}</span>;
+                    })}
+                  </div>
+                  <span className="font-mono text-[9px] text-slate-700">{scanResult.scan_ms}ms · {scanResult.cached ? "cached" : "live"}</span>
+                  {scanResult.risk_level !== "safe" && scanResult.risk_level !== "low" && (
                     <button
-                      onClick={clearAllFindings}
-                      className="font-mono text-[9px] text-slate-700 hover:text-red-400 border border-[#1A1A2E] hover:border-red-500/30 px-2 py-0.5 rounded transition-colors"
-                    >
-                      clear all
-                    </button>
+                      onClick={() => { setWatchTarget(scanInput.trim()); setWatchType(/^0x/i.test(scanInput.trim()) ? "address" : "domain"); setFormOpen(true); }}
+                      className="font-mono text-[9px] px-2 py-1 rounded border border-[#4FC3F7]/20 text-[#4FC3F7] hover:bg-[#4FC3F7]/5 transition-colors ml-auto"
+                    >+ monitor →</button>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[9px] text-slate-700">auto-refresh 30s</span>
-                  <div className="flex gap-1">
-                    {(["all","critical","high","medium","low"] as const).map(s => (
-                      <button key={s} onClick={() => setSevFilter(s)}
-                        className={`font-mono text-[9px] px-2 py-1 rounded border transition-colors capitalize ${
-                          sevFilter === s
-                            ? "border-[#4FC3F7]/40 text-[#4FC3F7] bg-[#4FC3F7]/10"
-                            : "border-[#1A1A2E] text-slate-700 hover:text-slate-400"
-                        }`}>{s}</button>
+                {scanResult.indicators.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {scanResult.indicators.slice(0, 8).map(i => (
+                      <span key={i} className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-[#0D0D1A] border border-[#1A1A2E] text-slate-600">{i.replace(/_/g, " ")}</span>
                     ))}
                   </div>
-                </div>
+                )}
               </div>
+            )}
+          </div>
 
+          {/* Findings feed — scrollable */}
+          <div className="flex-1 overflow-y-auto">
+            {/* Findings header */}
+            <div className="sticky top-0 bg-[#050508] px-6 py-2.5 border-b border-[#1A1A2E] flex items-center gap-3 z-10">
+              <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">
+                Findings · <span className="text-white">{filtered.length}</span>
+                {deduped.length < findings.length && (
+                  <span className="text-slate-700 ml-1">({findings.length - deduped.length} dupes hidden)</span>
+                )}
+              </p>
+              {findings.length > 0 && (
+                <button onClick={clearAllFindings}
+                  className="font-mono text-[9px] text-slate-700 hover:text-red-400 border border-[#1A1A2E] hover:border-red-500/30 px-2 py-0.5 rounded transition-colors">
+                  clear all
+                </button>
+              )}
+              <div className="flex gap-1 ml-auto">
+                {(["all","critical","high","medium","low"] as const).map(s => (
+                  <button key={s} onClick={() => setSevFilter(s)}
+                    className={`font-mono text-[9px] px-2 py-1 rounded border transition-colors capitalize ${
+                      sevFilter === s
+                        ? "border-[#4FC3F7]/40 text-[#4FC3F7] bg-[#4FC3F7]/10"
+                        : "border-[#1A1A2E] text-slate-700 hover:text-slate-400"
+                    }`}>{s}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-4">
               {loading ? (
-                <div className="card-surface rounded-xl p-10 text-center">
+                <div className="flex items-center justify-center h-40">
                   <p className="font-mono text-xs text-slate-700 animate-pulse">loading…</p>
                 </div>
               ) : filtered.length === 0 ? (
-                <div className="card-surface rounded-xl p-12 text-center">
-                  <p className="text-3xl mb-3">🛡️</p>
+                <div className="flex flex-col items-center justify-center h-64 text-center">
+                  <p className="text-4xl mb-3">🛡️</p>
                   <p className="font-mono text-sm text-slate-400 mb-1">No findings</p>
-                  <p className="font-mono text-[10px] text-slate-700">
-                    Sentinel scans Base automatically every 15m — alerts fire when threats are found
-                  </p>
+                  <p className="font-mono text-[10px] text-slate-700 max-w-xs">Sentinel scans Base every 15m — alerts fire when threats are detected</p>
                 </div>
               ) : (
-                <div className="grid sm:grid-cols-2 gap-3">
-                  {filtered.map(f => (
-                    <FindingCard key={f.id} f={f} onDismiss={dismissFinding} />
-                  ))}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                  {filtered.map(f => <FindingCard key={f.id} f={f} onDismiss={dismissFinding} />)}
                 </div>
               )}
             </div>
+          </div>
+        </main>
 
-            {/* Mobile watches + Add Watch form */}
-            <div className="card-surface rounded-xl p-5 lg:hidden">
-              <div className="flex items-center justify-between mb-3">
-                <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">
-                  Watches · {watches.length}
-                </p>
-                <button
-                  onClick={() => { setFormOpen(v => !v); setWatchError(""); }}
-                  className="font-mono text-[10px] text-slate-600 hover:text-[#4FC3F7] border border-[#1A1A2E] hover:border-[#4FC3F7]/30 px-2 py-0.5 rounded transition-colors"
-                >
-                  {formOpen ? "✕ cancel" : "+ add"}
-                </button>
+        {/* ══ RIGHT PANEL (320px, sticky) ══════════════════════════════════════ */}
+        <aside className="hidden xl:flex flex-col w-[320px] shrink-0 h-full border-l border-[#1A1A2E] overflow-y-auto">
+
+          {/* Stat cards */}
+          <div className="p-4 border-b border-[#1A1A2E] grid grid-cols-2 gap-2">
+            {[
+              { label: "Critical",  value: stats?.criticalFindings ?? 0, color: "text-red-400",    border: "border-l-red-500"    },
+              { label: "High",      value: stats?.highFindings     ?? 0, color: "text-orange-400", border: "border-l-orange-500" },
+              { label: "Scanned",   value: discovery?.count ?? (stats?.totalDiscovered ?? 0), color: "text-[#4FC3F7]", border: "border-l-[#4FC3F7]" },
+              { label: "Total Runs",value: stats?.totalScans       ?? 0, color: "text-slate-300",  border: "border-l-[#1A1A2E]"  },
+            ].map(s => (
+              <div key={s.label} className={`card-surface rounded-lg p-3 border-l-4 ${s.border}`}>
+                <p className={`font-mono text-2xl font-bold ${s.color}`}>{s.value}</p>
+                <p className="font-mono text-[9px] text-slate-700 mt-0.5 uppercase tracking-widest">{s.label}</p>
               </div>
+            ))}
+          </div>
 
-              {formOpen && (
-                <form onSubmit={addWatch} className="space-y-2 mb-4 pb-4 border-b border-[#1A1A2E]">
-                  <div className="flex gap-1">
-                    {(["address", "token", "domain"] as TargetType[]).map(t => (
-                      <button key={t} type="button" onClick={() => setWatchType(t)}
-                        className={`font-mono text-[9px] px-2 py-1 rounded border transition-colors capitalize ${
-                          watchType === t ? "border-[#4FC3F7]/40 text-[#4FC3F7] bg-[#4FC3F7]/10" : "border-[#1A1A2E] text-slate-700"
-                        }`}>{t}</button>
-                    ))}
-                  </div>
-                  <input type="text" value={watchTarget} onChange={e => setWatchTarget(e.target.value)}
-                    placeholder={watchType === "domain" ? "domain.xyz" : "0x…"} required
-                    className="w-full font-mono text-[10px] bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/40" />
-                  <input type="text" value={watchLabel} onChange={e => setWatchLabel(e.target.value)}
-                    placeholder="Label (optional)"
-                    className="w-full font-mono text-[10px] bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/40" />
-                  <input type="text" value={watchTgId} onChange={e => setWatchTgId(e.target.value)}
-                    placeholder="Telegram ID — get from @blockyagent_bot"
-                    className="w-full font-mono text-[10px] bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/40" />
-                  {watchError && <p className="font-mono text-[9px] text-red-400">{watchError}</p>}
-                  <button type="submit" disabled={watchAdding || !watchTarget.trim()}
-                    className="w-full font-mono text-[10px] py-2 rounded-lg border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 transition-colors disabled:opacity-40">
-                    {watchAdding ? "Adding…" : "Monitor this →"}
-                  </button>
-                </form>
-              )}
-
-              {watches.length === 0 ? (
-                <p className="font-mono text-[10px] text-slate-700">No watches yet — add one above</p>
-              ) : (
-                <div className="space-y-2">
-                  {watches.map(w => (
-                    <div key={w.id} className="flex items-center gap-2 border-b border-[#1A1A2E] pb-2 last:border-0 last:pb-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        {w.label && <p className="font-mono text-[10px] text-white truncate">{w.label}</p>}
-                        <code className="font-mono text-[9px] text-[#4FC3F7] block truncate">{trunc(w.target, 20)}</code>
+          {/* Timeline */}
+          {timeline && (
+            <div className="p-4 border-b border-[#1A1A2E]">
+              <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-3">Threat Timeline · 7 Days</p>
+              <div className="flex items-end gap-1 h-16">
+                {timeline.snapshots.map(s => {
+                  const peak = timeline.dailyPeak || 1;
+                  const h = s.total === 0 ? 0 : Math.max((s.total / peak) * 100, 4);
+                  const isToday = s.date === new Date().toISOString().slice(0, 10);
+                  return (
+                    <div key={s.date} className="flex-1 flex flex-col items-center gap-0.5 group relative">
+                      {s.total > 0 && (
+                        <div className="absolute bottom-full mb-1 hidden group-hover:block z-10 whitespace-nowrap">
+                          <div className="card-surface border border-[#1A1A2E] rounded px-2 py-1 text-center shadow-lg">
+                            <p className="font-mono text-[9px] text-white">{s.total} threats</p>
+                          </div>
+                        </div>
+                      )}
+                      <div className="w-full flex flex-col justify-end" style={{ height: "56px" }}>
+                        {s.total > 0 ? (
+                          <div className="w-full rounded-t-sm overflow-hidden" style={{ height: `${h}%` }}>
+                            <div className="w-full h-full bg-red-500/70" />
+                          </div>
+                        ) : (
+                          <div className="w-full bg-[#0D0D1A] rounded-t-sm" style={{ height: "3px" }} />
+                        )}
                       </div>
-                      <button onClick={() => removeWatch(w.id)}
-                        className="font-mono text-[9px] text-slate-700 hover:text-red-400 transition-colors">✕</button>
+                      <p className={`font-mono text-[8px] ${isToday ? "text-[#4FC3F7]" : "text-slate-800"}`}>
+                        {new Date(s.date + "T00:00:00Z").toLocaleDateString("en", { weekday: "short", timeZone: "UTC" }).slice(0, 2)}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex gap-3 mt-2">
+                {(["critical","high","medium"] as const).map(k => timeline.bySeverity[k] > 0 && (
+                  <div key={k} className="text-center">
+                    <p className={`font-mono text-base font-bold ${k === "critical" ? "text-red-400" : k === "high" ? "text-orange-400" : "text-yellow-400"}`}>{timeline.bySeverity[k]}</p>
+                    <p className="font-mono text-[8px] text-slate-700 uppercase">{k.slice(0,4)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Auto-discovery */}
+          {discovery && (
+            <div className="px-4 py-3 border-b border-[#1A1A2E]">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+                <p className="font-mono text-[9px] text-[#4FC3F7] tracking-widest uppercase">Auto Discovery</p>
+              </div>
+              <p className="font-mono text-[10px] text-slate-400">
+                <span className="text-white">{discovery.count}</span> targets ·{" "}
+                <span className="text-emerald-400">{discovery.tokens}</span> tokens ·{" "}
+                <span className="text-purple-400">{discovery.domains}</span> domains
+              </p>
+              <p className="font-mono text-[9px] text-slate-700 mt-1">refreshed {timeAgo(discovery.scannedAt)}</p>
+            </div>
+          )}
+
+          {/* Scan logs */}
+          {scanLogs.length > 0 && (
+            <div className="px-4 py-3 border-b border-[#1A1A2E]">
+              <button onClick={() => setLogsOpen(v => !v)} className="w-full flex items-center justify-between mb-2">
+                <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">Scan Logs · {scanLogs.length}</p>
+                <span className="font-mono text-[9px] text-slate-700">{logsOpen ? "▲" : "▼"}</span>
+              </button>
+              {logsOpen && (
+                <div className="space-y-1.5">
+                  {scanLogs.slice(0, 8).map(l => (
+                    <div key={l.runId} className="border border-[#1A1A2E] rounded-lg px-2 py-1.5">
+                      <div className="flex justify-between mb-0.5">
+                        <span className="font-mono text-[9px] text-slate-500">{timeAgo(l.startedAt)}</span>
+                        <span className={`font-mono text-[9px] ${l.errors > 0 ? "text-red-400" : "text-emerald-400"}`}>
+                          {l.errors > 0 ? `✗ ${l.errors}` : "✓"}
+                        </span>
+                      </div>
+                      <p className="font-mono text-[9px] text-slate-600">{l.totalScanned} scanned · {l.findings} found</p>
                     </div>
                   ))}
                 </div>
               )}
             </div>
+          )}
 
-            {/* Threat catalog */}
-            <div>
-              <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">
-                Threat Catalog · {THREAT_CATS.length} Categories
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-                {THREAT_CATS.map(t => (
-                  <div key={t.name} className="card-surface card-hover rounded-xl p-3 text-center">
-                    <p className="text-2xl mb-2">{t.icon}</p>
-                    <p className="font-mono text-[10px] font-bold mb-1" style={{ color: t.color }}>{t.name}</p>
-                    <p className="font-mono text-[9px] text-slate-700 leading-tight hidden sm:block">{t.desc}</p>
-                  </div>
-                ))}
+          {/* How it works — compact */}
+          <div className="px-4 py-3 border-b border-[#1A1A2E] space-y-3">
+            <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">How It Works</p>
+            {[
+              { n: "01", color: "#4FC3F7", title: "Watch",  desc: "Add any wallet, token, or domain to monitor 24/7" },
+              { n: "02", color: "#A78BFA", title: "Scan",   desc: "Checks against 8 threat categories each cycle"    },
+              { n: "03", color: "#34D399", title: "Alert",  desc: "Critical threats trigger instant Telegram DM"     },
+            ].map(h => (
+              <div key={h.n} className="flex items-start gap-3">
+                <span className="font-mono text-xs font-bold shrink-0" style={{ color: h.color + "60" }}>{h.n}</span>
+                <div>
+                  <p className="font-mono text-[10px] font-bold mb-0.5" style={{ color: h.color }}>{h.title}</p>
+                  <p className="font-mono text-[9px] text-slate-600 leading-relaxed">{h.desc}</p>
+                </div>
               </div>
-            </div>
-
-            {/* How it works */}
-            <div>
-              <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">How It Works</p>
-              <div className="grid sm:grid-cols-3 gap-3">
-                {[
-                  { step: "01", color: "#4FC3F7", title: "Watch",  desc: "Add any wallet, token contract, or domain. Sentinel registers it for continuous monitoring on Base." },
-                  { step: "02", color: "#A78BFA", title: "Scan",   desc: "Each cycle checks targets against threat catalog + Hub security tools: honeypot, AML, phishing."   },
-                  { step: "03", color: "#34D399", title: "Alert",  desc: "Critical and high-severity findings trigger instant Telegram alerts — before damage is done."       },
-                ].map(h => (
-                  <div key={h.step} className="card-surface rounded-xl p-5">
-                    <p className="font-mono text-4xl font-bold mb-3" style={{ color: h.color + "30" }}>{h.step}</p>
-                    <p className="font-mono text-sm font-bold mb-2" style={{ color: h.color }}>{h.title}</p>
-                    <p className="font-mono text-xs text-slate-500 leading-relaxed">{h.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="border-t border-[#1A1A2E] pt-5 flex items-center justify-between flex-wrap gap-3">
-              <p className="font-mono text-[10px] text-slate-800">
-                Blue<span className="text-red-400/40">Sentinel</span> · {stats?.totalFindings ?? 0} threats detected · Base 8453
-              </p>
-              <div className="flex items-center gap-4">
-                <a href="https://x.com/blueagent_" target="_blank" rel="noreferrer"
-                  className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors">@blueagent_</a>
-                <a href="https://t.me/blueagent_hub" target="_blank" rel="noreferrer"
-                  className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors">Telegram</a>
-                <Link href="/hub" className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors">Hub →</Link>
-              </div>
-            </div>
-
+            ))}
           </div>
-        </main>
+
+          {/* Footer */}
+          <div className="px-4 py-3 mt-auto space-y-1.5">
+            <a href="https://t.me/blockyagent_bot" target="_blank" rel="noreferrer"
+              className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7] transition-colors block">
+              🤖 @blockyagent_bot → /start
+            </a>
+            <a href="https://t.me/blueagent_hub" target="_blank" rel="noreferrer"
+              className="font-mono text-[9px] text-slate-700 hover:text-white transition-colors block">
+              💬 Telegram community →
+            </a>
+            <Link href="/hub" className="font-mono text-[9px] text-slate-700 hover:text-white transition-colors block">
+              ← hub
+            </Link>
+            <p className="font-mono text-[9px] text-slate-800 pt-1">
+              {stats?.totalFindings ?? 0} threats · Base 8453
+            </p>
+          </div>
+        </aside>
+
       </div>
     </>
   );
