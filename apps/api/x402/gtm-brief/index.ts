@@ -32,10 +32,13 @@ async function aeon(skill: string, focus = ""): Promise<string | null> {
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { project?: string; description?: string; target?: string } = {};
+    let body: { project?: string; product?: string; description?: string; target?: string } = {};
     try { const t = await req.text(); if (t.trim().startsWith("{")) body = JSON.parse(t); } catch {}
-    const { project = "", description = "", target = "" } = body;
-    if (!project || !description) return Response.json({ error: "project and description are required" }, { status: 400 });
+    // Accept "product" (Hub UI) as alias for both "project" and "description"
+    const project     = body.project ?? body.product ?? "";
+    const description = body.description ?? body.product ?? "";
+    const target      = body.target ?? "";
+    if (!project || !description) return Response.json({ error: "product description is required" }, { status: 400 });
 
     const [narrativeRaw, ideaRaw] = await Promise.all([
       aeon("narrative-tracker", `GTM narrative for ${project}: ${description}`),
