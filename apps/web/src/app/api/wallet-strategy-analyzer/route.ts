@@ -36,5 +36,17 @@ Schema: {"strategy_score":<0-100>,"wallet_archetype":"whale|smart_money|degen|yi
 }
 
 export async function POST(req: NextRequest) {
-  return proxyTool(req, ENDPOINT);
+  const cloned = req.clone();
+  const bankrRes = await proxyTool(req, ENDPOINT);
+  if (bankrRes.status < 500) return bankrRes;
+  try {
+    let body: Record<string, unknown> = {};
+    try { body = await cloned.json(); } catch {}
+    return await handleLocally(body);
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Tool failed", message: (error as Error).message },
+      { status: 500 }
+    );
+  }
 }
