@@ -39,7 +39,7 @@ Schema: {"risk_score":<0-100>,"overall_risk":"critical|high|medium|low|minimal",
 export async function POST(req: NextRequest) {
   const cloned = req.clone();
   const bankrRes = await proxyTool(req, ENDPOINT);
-  if (bankrRes.status !== 502) return bankrRes;
+  if (bankrRes.status < 500) return bankrRes; // 2xx success, 402 payment, 4xx errors pass through
   console.log("[protocol-risk-monitor] Bankr 502 → local fallback");
   try {
     let body: Record<string, unknown> = {};
