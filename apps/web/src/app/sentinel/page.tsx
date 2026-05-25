@@ -316,6 +316,16 @@ export default function SentinelPage() {
   const [loading,   setLoading]   = useState(true);
   const [sevFilter, setSevFilter] = useState<Severity | "all">("all");
 
+  // ── Add Watch form state ───────────────────────────────────────────────────
+  const [watchTarget,   setWatchTarget]   = useState("");
+  const [watchLabel,    setWatchLabel]    = useState("");
+  const [watchTgId,     setWatchTgId]     = useState("");
+  const [watchType,     setWatchType]     = useState<TargetType>("address");
+  const [watchAdding,   setWatchAdding]   = useState(false);
+  const [watchError,    setWatchError]    = useState("");
+  const [watchSuccess,  setWatchSuccess]  = useState(false);
+  const [formOpen,      setFormOpen]      = useState(false);
+
   const load = useCallback(async () => {
     try {
       const [watchRes, ctrlRes, discRes, logsRes, histRes] = await Promise.all([
@@ -358,6 +368,41 @@ export default function SentinelPage() {
   async function removeWatch(id: string) {
     await fetch(`/api/sentinel/watch?id=${id}`, { method: "DELETE" });
     void load();
+  }
+
+  async function addWatch(e: React.FormEvent) {
+    e.preventDefault();
+    if (!watchTarget.trim()) return;
+    setWatchAdding(true);
+    setWatchError("");
+    setWatchSuccess(false);
+    try {
+      const res  = await fetch("/api/sentinel/watch", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          target:         watchTarget.trim(),
+          targetType:     watchType,
+          label:          watchLabel.trim() || undefined,
+          telegramChatId: watchTgId.trim() || undefined,
+        }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setWatchError(data.error ?? "Failed to add watch");
+      } else {
+        setWatchSuccess(true);
+        setWatchTarget("");
+        setWatchLabel("");
+        setWatchTgId("");
+        setFormOpen(false);
+        void load();
+      }
+    } catch {
+      setWatchError("Network error — try again");
+    } finally {
+      setWatchAdding(false);
+    }
   }
 
   const filtered = findings
@@ -408,11 +453,91 @@ export default function SentinelPage() {
 
           {/* Watched targets — scrollable */}
           <div className="flex-1 overflow-y-auto">
-            <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase px-5 pt-4 pb-2">
-              Watches · <span className="text-[#4FC3F7]">{watches.length}</span>
-            </p>
+            {/* Add Watch header + toggle */}
+            <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+              <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase">
+                Watches · <span className="text-[#4FC3F7]">{watches.length}</span>
+              </p>
+              <button
+                onClick={() => { setFormOpen(v => !v); setWatchError(""); setWatchSuccess(false); }}
+                className="font-mono text-[10px] text-slate-600 hover:text-[#4FC3F7] transition-colors border border-[#1A1A2E] hover:border-[#4FC3F7]/30 px-2 py-0.5 rounded"
+              >
+                {formOpen ? "✕ cancel" : "+ add"}
+              </button>
+            </div>
+
+            {/* Add Watch form */}
+            {formOpen && (
+              <form onSubmit={addWatch} className="px-5 pb-4 space-y-2 border-b border-[#1A1A2E]">
+                {/* Target type tabs */}
+                <div className="flex gap-1">
+                  {(["address", "token", "domain"] as TargetType[]).map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setWatchType(t)}
+                      className={`font-mono text-[9px] px-2 py-1 rounded border transition-colors capitalize ${
+                        watchType === t
+                          ? "border-[#4FC3F7]/40 text-[#4FC3F7] bg-[#4FC3F7]/10"
+                          : "border-[#1A1A2E] text-slate-700 hover:text-slate-400"
+                      }`}
+                    >{t}</button>
+                  ))}
+                </div>
+
+                {/* Target input */}
+                <input
+                  type="text"
+                  value={watchTarget}
+                  onChange={e => setWatchTarget(e.target.value)}
+                  placeholder={watchType === "domain" ? "coinbase-clone.xyz" : "0x…"}
+                  className="w-full font-mono text-[10px] bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/40"
+                  required
+                />
+
+                {/* Label input */}
+                <input
+                  type="text"
+                  value={watchLabel}
+                  onChange={e => setWatchLabel(e.target.value)}
+                  placeholder="Label (optional)"
+                  className="w-full font-mono text-[10px] bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/40"
+                />
+
+                {/* Telegram ID input */}
+                <div>
+                  <input
+                    type="text"
+                    value={watchTgId}
+                    onChange={e => setWatchTgId(e.target.value)}
+                    placeholder="Telegram ID (for DM alerts)"
+                    className="w-full font-mono text-[10px] bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/40"
+                  />
+                  <p className="font-mono text-[9px] text-slate-700 mt-1">
+                    Get your ID: <a href="https://t.me/blueagent_bot" target="_blank" rel="noreferrer" className="text-[#4FC3F7] hover:underline">t.me/blueagent_bot</a> → /start
+                  </p>
+                </div>
+
+                {/* Error / success */}
+                {watchError   && <p className="font-mono text-[9px] text-red-400">{watchError}</p>}
+                {watchSuccess && <p className="font-mono text-[9px] text-emerald-400">✓ Watch added</p>}
+
+                {/* Submit */}
+                <button
+                  type="submit"
+                  disabled={watchAdding || !watchTarget.trim()}
+                  className="w-full font-mono text-[10px] py-2 rounded-lg border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {watchAdding ? "Adding…" : "Monitor this →"}
+                </button>
+              </form>
+            )}
+
             {watches.length === 0 ? (
-              <p className="font-mono text-[10px] text-slate-800 px-5 py-2">No active watches</p>
+              <p className="font-mono text-[10px] text-slate-700 px-5 py-3">
+                No watches yet —{" "}
+                <button onClick={() => setFormOpen(true)} className="text-[#4FC3F7] hover:underline">add one above</button>
+              </p>
             ) : (
               watches.map(w => (
                 <div key={w.id}
