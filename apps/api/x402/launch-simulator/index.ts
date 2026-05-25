@@ -128,9 +128,9 @@ async function runMiroSharkSimulation(opts: {
       system: `You are MiroShark — 4-persona crypto consensus engine.
 Personas: Analyst(1.8x weight), Influencer(2.8x), Retail(1.0x), Observer(0.5x).
 Each gives stance: bull/bear/neutral. Weighted consensus → bull%/bear%/neutral%.
-Rule: bull>=55→execute, bear>=55→skip, else→alert_human.
+Rule: bull>=55→go, bear>=55→skip, else→review_needed.
 CRITICAL: Return ONLY raw JSON, no markdown.
-Schema: {"personas":{"analyst":{"stance":"bull|bear|neutral","weight":1.8,"rationale":"<1 sentence>"},"influencer":{"stance":"...","weight":2.8,"rationale":"..."},"retail":{"stance":"...","weight":1.0,"rationale":"..."},"observer":{"stance":"...","weight":0.5,"rationale":"..."}},"bull":<0-100>,"bear":<0-100>,"neutral":<0-100>,"recommendation":"execute|alert_human|skip","sentiment_summary":"<1 sentence>"}`,
+Schema: {"personas":{"analyst":{"stance":"bull|bear|neutral","weight":1.8,"rationale":"<1 sentence>"},"influencer":{"stance":"...","weight":2.8,"rationale":"..."},"retail":{"stance":"...","weight":1.0,"rationale":"..."},"observer":{"stance":"...","weight":0.5,"rationale":"..."}},"bull":<0-100>,"bear":<0-100>,"neutral":<0-100>,"recommendation":"execute|review_needed|skip","sentiment_summary":"<1 sentence>"}`,
       messages: [{ role: "user", content: `Simulate for: ${project} (${ticker||"TBD"})\n${description}${marketSection}` }],
       temperature: 0.5,
       maxTokens: 800,
