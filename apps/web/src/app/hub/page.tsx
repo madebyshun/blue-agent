@@ -771,8 +771,11 @@ function ToolRunner({ tool, onBack }: { tool: Tool; onBack: () => void }) {
 
         const r2 = await fetch(`/api/${tool.id}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...body, payment }),
+          headers: {
+            "Content-Type": "application/json",
+            "X-Payment": btoa(JSON.stringify(payment)),
+          },
+          body: JSON.stringify(body),
         });
         const d2 = await r2.json() as Record<string,unknown>;
         if (!r2.ok) { setErr((d2.error as string) ?? (d2.message as string) ?? "Payment failed."); setStep("error"); return; }
