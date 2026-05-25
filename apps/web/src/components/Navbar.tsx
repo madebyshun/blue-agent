@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { ConnectButton } from "@/components/ConnectModal";
 
 const NAV_LINKS = [
-  { label: "Chat",     href: "/chat" },
   { label: "Console",  href: "/console" },
   { label: "Skills",   href: "/skills" },
   { label: "API",      href: "/api-docs" },
@@ -13,6 +12,7 @@ const NAV_LINKS = [
 ];
 
 // Hidden from nav — links still accessible directly
+// { label: "Chat",   href: "/chat" }
 // { label: "Hub",    href: "/hub" }
 // { label: "Market", href: "/market" }
 
