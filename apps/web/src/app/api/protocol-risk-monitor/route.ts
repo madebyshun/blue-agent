@@ -1,41 +1,75 @@
 import { NextRequest, NextResponse } from "next/server";
 import { proxyTool } from "@/app/api/_lib/proxy";
-import { callBankrLLM, extractJsonObject, runAeonSkill } from "@/app/api/_lib/llm";
+import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
+import { searchBaseToken, formatTokensForLLM } from "@/app/api/_lib/realdata";
 
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/protocol-risk-monitor";
 
 async function handleLocally(body: Record<string, unknown>): Promise<NextResponse> {
   const protocol = (body.protocol as string) ?? "";
   const position = (body.position as string) ?? "";
-  if (!protocol) return NextResponse.json({ error: "protocol is required (e.g. 'Aerodrome', 'Aave Base')" }, { status: 400 });
+  if (!protocol) return NextResponse.json({ error: "protocol is required" }, { status: 400 });
 
-  // Use narrative-tracker as fallback since defi-monitor skill may not exist
-  const defiRaw = await runAeonSkill("narrative-tracker", `${protocol} on Base: current TVL health, liquidity depth, recent unusual activity, smart contract risk signals, exploit history, centralization risks, oracle dependencies.`);
+  // Fetch real token data for the protocol
+  const protocolTokens = await searchBaseToken(protocol);
+  const hasData = protocolTokens.length > 0;
 
-  const msRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are MiroShark analyst persona — DeFi risk specialist.
-CRITICAL: Return ONLY raw JSON.
-Schema: {"risk_level":"critical|high|medium|low|minimal","exit_urgency":"exit_now|reduce|hold|add","biggest_risk":"<str>","time_horizon":"<str>","analyst_verdict":"<str>"}`,
-    messages: [{ role: "user", content: `Protocol: ${protocol}\nPosition: ${position || "general exposure"}\nDeFi signals: ${defiRaw ?? "Base DeFi"}` }],
-    temperature: 0.3, maxTokens: 500,
+  const realData = [
+    `=== LIVE PROTOCOL DATA (DexScreener, ${new Date().toISOString()}) ===`,
+    `Protocol: ${protocol}`,
+    hasData
+      ? `Real token data:\n${formatTokensForLLM(protocolTokens)}`
+      : `No direct token match found on DexScreener for "${protocol}" — analysis based on general knowledge.`,
+    position ? `User position: ${position}` : "",
+    `\nDATA NOTE: DexScreener provides token/pair data. TVL and protocol-specific metrics require dedicated DeFi APIs (DeFi Llama, etc).`,
+  ].filter(Boolean).join("\n");
+
+  const [aeonRaw, narrativeRaw] = await Promise.all([
+    runAeonSkill("token-movers", `Assess risk signals for ${protocol} on Base:\n${realData}`),
+    runAeonSkill("narrative-tracker", `Is ${protocol} gaining or losing mindshare on Base? Real data:\n${realData}`),
+  ]);
+
+  const msRaw = await runMiroSharkSkill({
+    scenario: `Risk assessment for ${protocol} position on Base`,
+    context: { protocol, position: position || "general", live_data: realData.slice(0, 500) },
+    persona: "analyst — conservative risk evaluation, DeFi security focus",
+    outputSchema: `{"sentiment":"positive|neutral|negative","key_risk":"<specific concern>","exit_signal":"hold|reduce|exit","reasoning":"<based on available data>"}`,
+    maxTokens: 400,
   });
-  const analyst = extractJsonObject(msRaw) ?? {};
 
-  const resultRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are Blue Agent — protocol risk monitor for Base DeFi positions.
-CRITICAL: Return ONLY raw JSON.
-Schema: {"risk_score":<0-100>,"overall_risk":"critical|high|medium|low|minimal","action":"EXIT_NOW|REDUCE|HOLD|ADD","risk_dimensions":{"smart_contract":<0-10>,"liquidity":<0-10>,"oracle":<0-10>,"governance":<0-10>,"market":<0-10>},"active_risks":[{"risk":"<str>","severity":"critical|high|medium|low","description":"<str>"}],"watch_for":["<str>"],"safe_exit_path":"<str>","position_sizing":"<str>","summary":"<str>"}`,
-    messages: [{ role: "user", content: `Protocol: ${protocol}\nPosition: ${position}\nDeFi: ${defiRaw ?? "Base DeFi"}\nAnalyst: ${JSON.stringify(analyst)}` }],
-    temperature: 0.3, maxTokens: 1100,
+  const riskSignal = extractJsonObject(msRaw ?? "") ?? {};
+
+  const verdictRaw = await runBlueSkill({
+    task: `Assess risk for a Base DeFi protocol position. Be honest about data limitations.
+Do NOT fabricate TVL numbers, APY, or contract audit status not in the data.
+CRITICAL: Return ONLY raw JSON. No markdown.
+Schema: {
+  "protocol": "<name>",
+  "risk_score": <0-100>,
+  "risk_level": "low|medium|high|critical",
+  "token_health": ${hasData ? '{"price":"<real>","change_24h":"<real>","liquidity":"<real>","volume":"<real>"}' : '"data_unavailable"'},
+  "risk_factors": ["<specific risk based on available data>"],
+  "exit_signal": "hold|reduce|exit",
+  "alerts": ["<only real alerts based on data>"],
+  "recommendation": "<specific advice>",
+  "data_limitations": "<honest note about what could not be verified>",
+  "confidence": <0-100>
+}`,
+    skillFiles: ["base-ecosystem.md", "base-addresses.md"],
+    input: `${realData}\n\nAeon risk:\n${aeonRaw ?? ""}\n\nNarrative:\n${narrativeRaw ?? ""}\n\nRisk signal:\n${JSON.stringify(riskSignal)}`,
+    maxTokens: 900,
   });
-  const result = extractJsonObject(resultRaw);
-  if (!result) throw new Error("Failed to parse result");
 
-  return NextResponse.json({ tool: "protocol-risk-monitor", timestamp: new Date().toISOString(), protocol, position, analyst, ...result });
+  const verdict = extractJsonObject(verdictRaw ?? "");
+  if (!verdict) throw new Error("Failed to parse verdict");
+
+  return NextResponse.json({
+    tool: "protocol-risk-monitor", timestamp: new Date().toISOString(),
+    data_source: hasData ? "DexScreener live — Base chain" : "LLM knowledge (no live token data found)",
+    live_data_available: hasData, ...verdict,
+  });
 }
 
 export async function POST(req: NextRequest) {
-  return proxyTool(req, ENDPOINT);
+  return proxyTool(req, ENDPOINT, handleLocally);
 }

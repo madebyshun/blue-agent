@@ -1,81 +1,84 @@
 import { NextRequest, NextResponse } from "next/server";
 import { proxyTool } from "@/app/api/_lib/proxy";
-import { callBankrLLM, extractJsonObject, runAeonSkill } from "@/app/api/_lib/llm";
+import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
+import { fetchGitHubRepo, fetchGitHubCommits, fetchGitHubContents, formatRepoForLLM } from "@/app/api/_lib/realdata";
 
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/repo-health";
 
 async function handleLocally(body: Record<string, unknown>): Promise<NextResponse> {
-  const repo = (body.repo as string) ?? "";
-  const description = (body.description as string) ?? "";
+  const repoInput = (body.repo as string) ?? "";
+  if (!repoInput) return NextResponse.json({ error: "repo is required" }, { status: 400 });
 
-  if (!repo) {
-    return NextResponse.json({ error: "repo is required (e.g. 'user/repo' or full GitHub URL)" }, { status: 400 });
-  }
-
-  const [repoMonitor, auditRaw] = await Promise.all([
-    runAeonSkill("github-monitor", `${repo}: commit velocity, issues, docs quality, test coverage signals, last activity`),
-    callBankrLLM({
-      model: "claude-haiku-4-5",
-      system: `You are Blue Agent running 'blue audit'. Assess code quality and security signals for a Base project repo.
-CRITICAL: Return ONLY raw JSON.
-Schema: {"code_quality_score":<0-10>,"security_concerns":["<concern or 'none identified'>"],"missing_basics":["<e.g. no tests, no .env.example>"],"positive_signals":["<good practice found>"],"audit_note":"<1 sentence>"}`,
-      messages: [{ role: "user", content: `Repo: ${repo}\nDescription: ${description || "Base project"}` }],
-      temperature: 0.3,
-      maxTokens: 600,
-    }),
+  // Fetch real GitHub data
+  const [repo, commits, rootFiles] = await Promise.all([
+    fetchGitHubRepo(repoInput),
+    fetchGitHubCommits(repoInput),
+    fetchGitHubContents(repoInput),
   ]);
 
-  const audit = extractJsonObject(auditRaw) ?? {};
+  if (!repo) {
+    return NextResponse.json({ error: "Could not fetch repo. Check the URL/name is correct and repo is public." }, { status: 404 });
+  }
 
-  const msRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are MiroShark analyst persona.
-Review repo health signals from a technical investor perspective.
-CRITICAL: Return ONLY raw JSON.
-Schema: {"health_rating":"excellent|good|fair|poor","shipping_velocity":"high|medium|low|stalled","trust_score":<0-10>,"red_flags":["<flag>"],"green_flags":["<flag>"],"analyst_note":"<1 sentence>"}`,
-    messages: [{ role: "user", content: `Repo: ${repo}\nMonitor: ${repoMonitor ?? "Base project repo"}\nAudit: ${JSON.stringify(audit)}` }],
-    temperature: 0.3,
+  // Also check for skills/ or docs/ directory
+  const [skillFiles, docsFiles] = await Promise.all([
+    fetchGitHubContents(repoInput, "skills"),
+    fetchGitHubContents(repoInput, "docs"),
+  ]);
+
+  const realData = [
+    formatRepoForLLM(repo, commits, rootFiles),
+    skillFiles.length ? `\nSkill files: ${skillFiles.join(", ")}` : "\nNo skills/ directory found",
+    docsFiles.length  ? `\nDocs files: ${docsFiles.join(", ")}`  : "\nNo docs/ directory found",
+    `\nKey files present: ${["README.md","CLAUDE.md","package.json","agent.json",".github"].filter(f => rootFiles.includes(f)).join(", ") || "none detected"}`,
+  ].join("\n");
+
+  // Aeon — project health signals
+  const aeonRaw = await runAeonSkill("token-movers",
+    `Evaluate this GitHub repo health. Focus on activity, maintenance, and builder credibility:\n${realData}`
+  );
+
+  // MiroShark — community and developer perception
+  const msRaw = await runMiroSharkSkill({
+    scenario: `GitHub repo health audit: ${repo.fullName}`,
+    context: { repo_data: realData.slice(0, 600), aeon_analysis: aeonRaw ?? "" },
+    persona: "analyst — evaluates code quality, documentation, maintenance signals",
+    outputSchema: `{"impression":"strong|moderate|weak","strengths":["<real strength from data>"],"concerns":["<real concern from data>"],"developer_trust":"high|medium|low"}`,
     maxTokens: 500,
   });
-  const analyst = extractJsonObject(msRaw) ?? {};
 
-  const resultRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are Blue Agent — repo health report engine.
-CRITICAL: Return ONLY raw JSON.
+  const perception = extractJsonObject(msRaw ?? "") ?? {};
+
+  // Blue — final health report
+  const reportRaw = await runBlueSkill({
+    task: `Audit this GitHub repo for health, quality, and maintenance. Base ALL findings on the real data provided.
+CRITICAL: Return ONLY raw JSON. No markdown.
 Schema: {
   "health_score": <0-100>,
   "grade": "A|B|C|D|F",
-  "status": "healthy|needs_attention|at_risk|stalled",
-  "dimensions": {
-    "activity": <0-10>,
-    "code_quality": <0-10>,
-    "documentation": <0-10>,
-    "security": <0-10>,
-    "community": <0-10>
-  },
-  "critical_issues": ["<issue>"],
-  "quick_wins": ["<easy fix>"],
-  "summary": "<2 sentences>"
+  "verdict": "HEALTHY|NEEDS_WORK|AT_RISK|INACTIVE",
+  "repo": {"name":"<real>","stars":<real>,"language":"<real>","last_active":"<real>"},
+  "strengths": ["<real strength from actual data>"],
+  "issues": [{"severity":"critical|warning|info","issue":"<real issue>","fix":"<specific fix>"}],
+  "docs_quality": "good|basic|missing",
+  "activity": "active|sporadic|inactive",
+  "recommendation": "<specific next step based on real findings>"
 }`,
-    messages: [{ role: "user", content: `Repo: ${repo}\nMonitor: ${repoMonitor ?? "Base project"}\nAudit: ${JSON.stringify(audit)}\nAnalyst: ${JSON.stringify(analyst)}` }],
-    temperature: 0.3,
+    skillFiles: ["base-ecosystem.md"],
+    input: `${realData}\n\nAeon:\n${aeonRaw ?? ""}\n\nPerception:\n${JSON.stringify(perception)}`,
     maxTokens: 900,
   });
 
-  const result = extractJsonObject(resultRaw);
-  if (!result) throw new Error("Failed to parse result");
+  const report = extractJsonObject(reportRaw ?? "");
+  if (!report) throw new Error("Failed to parse report");
 
   return NextResponse.json({
-    tool: "repo-health",
-    timestamp: new Date().toISOString(),
-    repo,
-    audit,
-    analyst,
-    ...result,
+    tool: "repo-health", timestamp: new Date().toISOString(),
+    data_source: `GitHub API — ${repo.fullName}`,
+    ...report,
   });
 }
 
 export async function POST(req: NextRequest) {
-  return proxyTool(req, ENDPOINT);
+  return proxyTool(req, ENDPOINT, handleLocally);
 }

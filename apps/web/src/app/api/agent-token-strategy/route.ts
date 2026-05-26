@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { proxyTool } from "@/app/api/_lib/proxy";
-import { callBankrLLM, extractJsonObject, runAeonSkill } from "@/app/api/_lib/llm";
+import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
 
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/agent-token-strategy";
 
@@ -14,54 +14,39 @@ async function handleLocally(body: Record<string, unknown>): Promise<NextRespons
     return NextResponse.json({ error: "agent is required" }, { status: 400 });
   }
 
+  // Step 1+2: Aeon parallel — token movers (agent token patterns) + narrative tracker (agent token story)
   const [moversRaw, narrativeRaw] = await Promise.all([
     runAeonSkill("token-movers", `AI agent tokens on Base: what's working, what tokenomics patterns succeed for agent-owned projects. Examples like VIRTUAL, ARC, similar.`),
     runAeonSkill("narrative-tracker", `AI agent token narrative on Base: what story resonates for agent tokens? Utility vs memecoin positioning. ${agent} ${description}`),
   ]);
 
-  const msRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are MiroShark — retail perspective (1.0x weight) on agent token strategies.
-What makes retail buy and hold an agent token?
-CRITICAL: Return ONLY raw JSON.
-Schema: {
-  "retail_appeal": <0-10>,
-  "token_type_fit": "utility|governance|memecoin|hybrid",
-  "buy_trigger": "<what makes retail buy>",
-  "hold_reason": "<what makes retail hold>",
-  "retail_verdict": "<1 sentence>"
-}`,
-    messages: [{ role: "user", content: `Agent: ${agent}\nDescription: ${description}\nToken: ${token_name || "unnamed"}\nMovers: ${moversRaw ?? "agent tokens"}\nNarratives: ${narrativeRaw ?? "AI agent tokens"}` }],
-    temperature: 0.4,
+  // Step 3: MiroShark — analyst + retail consensus on agent token strategy
+  const msRaw = await runMiroSharkSkill({
+    scenario: `Evaluate token strategy for AI agent ${agent}${token_name ? ` — token: ${token_name}` : ""} — supply: ${total_supply}`,
+    context: {
+      agent,
+      description,
+      token_name: token_name || "unnamed",
+      total_supply,
+      market_movers: moversRaw ?? "agent tokens",
+      narratives: narrativeRaw ?? "AI agent tokens",
+    },
+    persona: "analyst — evaluates agent economics, token utility, market positioning",
+    outputSchema: `{"retail_appeal":<0-10>,"token_type_fit":"utility|governance|memecoin|hybrid","buy_trigger":"<what makes retail buy>","hold_reason":"<what makes retail hold>","retail_verdict":"<1 sentence>"}`,
     maxTokens: 500,
   });
-  const retail = extractJsonObject(msRaw) ?? {};
+  const retail = extractJsonObject(msRaw ?? "") ?? {};
 
-  const resultRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are Blue Agent — token strategy engine for AI agent projects on Base.
-CRITICAL: Return ONLY raw JSON.
-Schema: {
-  "strategy_score": <0-100>,
-  "recommended_type": "utility|governance|memecoin|hybrid",
-  "tokenomics": {
-    "total_supply": "<supply>",
-    "allocation": {"team":"<%>","community":"<%>","treasury":"<%>","liquidity":"<%>","rewards":"<%>"},
-    "vesting": "<team vesting schedule>",
-    "utility": ["<token use case>"]
-  },
-  "narrative_angle": "<the story to tell>",
-  "launch_sequence": ["<step 1>", "<step 2>", "<step 3>"],
-  "comparable_agents": ["<similar successful agent token>"],
-  "risks": ["<tokenomics risk>"],
-  "summary": "<2 sentences>"
-}`,
-    messages: [{ role: "user", content: `Agent: ${agent}\nDescription: ${description}\nToken: ${token_name}\nSupply: ${total_supply}\nMovers: ${moversRaw ?? "agent tokens"}\nNarratives: ${narrativeRaw ?? "Base"}\nRetail: ${JSON.stringify(retail)}` }],
-    temperature: 0.3,
+  // Step 4: Blue Agent synthesis — agent token strategy
+  const resultRaw = await runBlueSkill({
+    task: "Design optimal token strategy for this AI agent project on Base. CRITICAL: Return ONLY raw JSON. No markdown.",
+    skillFiles: ["base-ecosystem.md", "token-launch-guide.md"],
+    input: `Agent: ${agent}\nDescription: ${description}\nToken: ${token_name}\nSupply: ${total_supply}\nMarket movers: ${moversRaw ?? "agent tokens"}\nNarratives: ${narrativeRaw ?? "Base"}\nRetail: ${JSON.stringify(retail)}`,
+    outputSchema: `{"strategy_score":<0-100>,"recommended_type":"utility|governance|memecoin|hybrid","tokenomics":{"total_supply":"<supply>","allocation":{"team":"<%>","community":"<%>","treasury":"<%>","liquidity":"<%>","rewards":"<%>"},"vesting":"<team vesting schedule>","utility":["<token use case>"]},"narrative_angle":"<the story to tell>","launch_sequence":["<step 1>","<step 2>","<step 3>"],"comparable_agents":["<similar successful agent token>"],"risks":["<tokenomics risk>"],"summary":"<2 sentences>"}`,
     maxTokens: 1200,
   });
 
-  const result = extractJsonObject(resultRaw);
+  const result = extractJsonObject(resultRaw ?? "");
   if (!result) throw new Error("Failed to parse result");
 
   return NextResponse.json({
@@ -76,5 +61,5 @@ Schema: {
 }
 
 export async function POST(req: NextRequest) {
-  return proxyTool(req, ENDPOINT);
+  return proxyTool(req, ENDPOINT, handleLocally);
 }

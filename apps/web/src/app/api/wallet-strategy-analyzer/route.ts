@@ -1,40 +1,81 @@
 import { NextRequest, NextResponse } from "next/server";
 import { proxyTool } from "@/app/api/_lib/proxy";
-import { callBankrLLM, extractJsonObject, runAeonSkill } from "@/app/api/_lib/llm";
+import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
+import { fetchBaseTopMovers, formatTokensForLLM } from "@/app/api/_lib/realdata";
 
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/wallet-strategy-analyzer";
 
 async function handleLocally(body: Record<string, unknown>): Promise<NextResponse> {
   const address = (body.address as string) ?? "";
-  const focus = (body.focus as string) ?? "general";
-  if (!address) return NextResponse.json({ error: "address is required (wallet address 0x...)" }, { status: 400 });
+  const focus   = (body.focus   as string) ?? "";
+  if (!address) return NextResponse.json({ error: "wallet address is required" }, { status: 400 });
 
-  const moversRaw = await runAeonSkill("token-movers", `smart money wallet strategies on Base: what are top wallets holding, rotating into/out of, trading patterns that generate alpha. Context: analyzing ${address}`);
+  // Fetch real Base market context
+  // Note: reading actual wallet tx requires Alchemy/BaseScan API key — not available here
+  // We provide real market context and honest analysis framework instead
+  const topMovers = await fetchBaseTopMovers(15);
 
-  const msRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are MiroShark analyst persona — on-chain strategy specialist.
-CRITICAL: Return ONLY raw JSON.
-Schema: {"strategy_type":"momentum|value|narrative|degen|yield|mixed","sophistication":"whale|smart_money|retail|bot","edge":"<str>","copy_worthiness":<0-10>,"analyst_verdict":"<str>"}`,
-    messages: [{ role: "user", content: `Address: ${address}\nFocus: ${focus}\nMover signals: ${moversRaw ?? "Base chain"}` }],
-    temperature: 0.3, maxTokens: 500,
+  const realData = [
+    `=== LIVE BASE MARKET CONTEXT (DexScreener, ${new Date().toISOString()}) ===`,
+    `Wallet to analyze: ${address}`,
+    focus ? `Analysis focus: ${focus}` : "",
+    `\nCurrent Base market (for strategy contextualization):\n${formatTokensForLLM(topMovers.slice(0, 12))}`,
+    `\nDATA NOTE: Actual wallet transaction history requires BaseScan/Alchemy API.`,
+    `Analysis will be based on the wallet address pattern + current market context.`,
+    `For full onchain analysis, check: https://basescan.org/address/${address}`,
+  ].filter(Boolean).join("\n");
+
+  const [moversRaw, narrativeRaw] = await Promise.all([
+    runAeonSkill("token-movers", `Market context for wallet strategy analysis on Base:\n${formatTokensForLLM(topMovers.slice(0, 10))}`),
+    runAeonSkill("narrative-tracker", `Which Base narratives would a sophisticated wallet be positioning in right now?`),
+  ]);
+
+  const msRaw = await runMiroSharkSkill({
+    scenario: `Wallet strategy analysis for ${address.slice(0, 8)}...${address.slice(-6)} on Base`,
+    context: { address, focus: focus || "general strategy", market_context: formatTokensForLLM(topMovers.slice(0, 6)) },
+    persona: "analyst — pattern recognition, smart money behavior analysis",
+    outputSchema: `{"likely_strategy":"<educated analysis>","market_alignment":"<vs current Base market>","recommendation":"<based on market context>"}`,
+    maxTokens: 400,
   });
-  const analyst = extractJsonObject(msRaw) ?? {};
 
-  const resultRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are Blue Agent — wallet strategy analyzer for Base chain.
-CRITICAL: Return ONLY raw JSON.
-Schema: {"strategy_score":<0-100>,"wallet_archetype":"whale|smart_money|degen|yield_farmer|builder|mixed","strategy":{"primary":"<str>","timeframe":"scalp|swing|position|long_term","risk_profile":"aggressive|moderate|conservative","key_behaviors":["<str>"]},"holdings_pattern":{"dominant_sectors":["<str>"],"typical_position_size":"<str>","entry_style":"<str>"},"replicable_plays":["<str>"],"watch_signals":["<str>"],"risk_flags":["<str>"],"summary":"<str>"}`,
-    messages: [{ role: "user", content: `Address: ${address}\nFocus: ${focus}\nMovers: ${moversRaw ?? "Base chain"}\nAnalyst: ${JSON.stringify(analyst)}` }],
-    temperature: 0.3, maxTokens: 1100,
+  const signal = extractJsonObject(msRaw ?? "") ?? {};
+
+  const verdictRaw = await runBlueSkill({
+    task: `Analyze wallet strategy on Base. Be completely honest about data limitations.
+You do NOT have access to actual transaction history — say so clearly.
+Provide framework analysis based on wallet address + current market context.
+CRITICAL: Return ONLY raw JSON. No markdown.
+Schema: {
+  "wallet": "<address>",
+  "data_available": false,
+  "onchain_data_note": "Full transaction analysis requires BaseScan API — check basescan.org/address/<address>",
+  "market_context_analysis": "<what smart money likely does in current Base conditions>",
+  "strategy_frameworks": ["<general framework applicable to current market>"],
+  "current_base_opportunities": ["<real opportunity from live data>"],
+  "recommended_focus": "<based on real market conditions>",
+  "basescan_link": "https://basescan.org/address/<address>",
+  "confidence": <0-100>
+}`,
+    skillFiles: ["base-ecosystem.md", "base-addresses.md"],
+    input: `${realData}\n\nAeon market:\n${moversRaw ?? ""}\n\nNarrative:\n${narrativeRaw ?? ""}\n\nSignal:\n${JSON.stringify(signal)}`,
+    maxTokens: 900,
   });
-  const result = extractJsonObject(resultRaw);
-  if (!result) throw new Error("Failed to parse result");
 
-  return NextResponse.json({ tool: "wallet-strategy-analyzer", timestamp: new Date().toISOString(), address, focus, analyst, ...result });
+  const verdict = extractJsonObject(verdictRaw ?? "");
+  if (!verdict) throw new Error("Failed to parse verdict");
+
+  // Always inject honest data note
+  (verdict as Record<string,unknown>).data_available = false;
+  (verdict as Record<string,unknown>).basescan_link = `https://basescan.org/address/${address}`;
+  (verdict as Record<string,unknown>).onchain_data_note = `Full transaction history not available without BaseScan API. View real data at basescan.org/address/${address}`;
+
+  return NextResponse.json({
+    tool: "wallet-strategy-analyzer", timestamp: new Date().toISOString(),
+    data_source: "DexScreener market context + LLM analysis (no onchain tx data)",
+    ...verdict,
+  });
 }
 
 export async function POST(req: NextRequest) {
-  return proxyTool(req, ENDPOINT);
+  return proxyTool(req, ENDPOINT, handleLocally);
 }

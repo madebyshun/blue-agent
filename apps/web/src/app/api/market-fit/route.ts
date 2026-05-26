@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { proxyTool } from "@/app/api/_lib/proxy";
-import { callBankrLLM, extractJsonObject, runAeonSkill } from "@/app/api/_lib/llm";
+import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
 
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/market-fit";
 
@@ -14,11 +14,9 @@ async function handleLocally(body: Record<string, unknown>): Promise<NextRespons
     return NextResponse.json({ error: "product description is required" }, { status: 400 });
   }
 
-  // Step 1: Blue Agent — expand the idea brief
-  const briefRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are Blue Agent running the 'blue idea' command for Base builders.
-Expand a rough concept into a structured brief.
+  // Step 1: Blue Agent — expand idea brief using real identity + base-ecosystem skills
+  const briefRaw = await runBlueSkill({
+    task: `Run 'blue idea' for a Base builder. Expand their rough concept into a structured brief.
 CRITICAL: Return ONLY raw JSON. No markdown.
 Schema: {
   "problem": "<what problem does this solve>",
@@ -28,12 +26,12 @@ Schema: {
   "mvp_scope": "<minimum viable version>",
   "biggest_risk": "<top risk>"
 }`,
-    messages: [{ role: "user", content: `Project: ${name}\n\n${description}` }],
-    temperature: 0.4,
+    skillFiles: ["base-ecosystem.md"],
+    input: `Project: ${name}\n\n${description}`,
     maxTokens: 700,
   });
 
-  const brief = extractJsonObject(briefRaw) ?? { problem: description, why_now: "Market timing unclear", why_base: "Base ecosystem alignment", target_user: "Base builders", mvp_scope: "TBD", biggest_risk: "Unclear demand" };
+  const brief = extractJsonObject(briefRaw ?? "") ?? { problem: description, why_now: "Market timing unclear", why_base: "Base ecosystem alignment", target_user: "Base builders", mvp_scope: "TBD", biggest_risk: "Unclear demand" };
 
   // Step 2: Aeon narrative-tracker — ecosystem alignment
   const narrativeRaw = await runAeonSkill(
@@ -41,14 +39,18 @@ Schema: {
     `relevance to: ${description}. Focus on Base ecosystem narratives that align or conflict.`
   );
 
-  // Step 3: MiroShark 4-persona consensus
-  const msRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are MiroShark — 4-persona crypto consensus engine.
-Personas: Analyst(1.8x), Influencer(2.8x), Retail(1.0x), Observer(0.5x).
-Each evaluates market fit for this project on Base.
-CRITICAL: Return ONLY raw JSON. No markdown.
-Schema: {
+  // Step 3: MiroShark 4-persona crowd simulation
+  const msRaw = await runMiroSharkSkill({
+    scenario: `Market fit evaluation for: ${name} — ${rawDesc}`,
+    context: {
+      project: name,
+      description: rawDesc,
+      stage,
+      brief,
+      ecosystem_narratives: narrativeRaw ?? "Base ecosystem active",
+    },
+    persona: "4-persona consensus — Analyst(1.8x), Influencer(2.8x), Retail(1.0x), Observer(0.5x)",
+    outputSchema: `{
   "personas": {
     "analyst":    {"stance":"bull|bear|neutral","weight":1.8,"rationale":"<1 sentence>"},
     "influencer": {"stance":"bull|bear|neutral","weight":2.8,"rationale":"<1 sentence>"},
@@ -59,18 +61,14 @@ Schema: {
   "recommendation":"go|wait|skip",
   "sentiment_summary":"<1 sentence>"
 }`,
-    messages: [{ role: "user", content: `Evaluate market fit for:\nProject: ${name}\n${description}\n\nBrief:\n${JSON.stringify(brief)}\n\nEcosystem context:\n${narrativeRaw ?? "Base ecosystem active"}` }],
-    temperature: 0.5,
-    maxTokens: 800,
+    maxTokens: 900,
   });
 
-  const consensus = extractJsonObject(msRaw) ?? { bull: 45, bear: 25, neutral: 30, recommendation: "review_needed", sentiment_summary: "Mixed signals — needs validation" };
+  const consensus = extractJsonObject(msRaw ?? "") ?? { bull: 45, bear: 25, neutral: 30, recommendation: "review_needed", sentiment_summary: "Mixed signals — needs validation" };
 
-  // Step 4: Blue Agent final verdict
-  const verdictRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are Blue Agent — final verdict engine for Base builders.
-Synthesize idea brief + ecosystem signals + 4-persona consensus into a market fit verdict.
+  // Step 4: Blue Agent final verdict using real identity + base skills
+  const verdictRaw = await runBlueSkill({
+    task: `Synthesize idea brief + Base ecosystem signals + MiroShark 4-persona crowd simulation into a market fit verdict.
 CRITICAL: Return ONLY raw JSON. No markdown.
 Schema: {
   "verdict": "GO|WAIT|PIVOT",
@@ -83,12 +81,12 @@ Schema: {
   "timing": "now|3months|6months",
   "builder_note": "<1 sentence direct advice>"
 }`,
-    messages: [{ role: "user", content: `Project: ${name}\n\nBrief:\n${JSON.stringify(brief)}\n\nAeon narratives:\n${narrativeRaw ?? "Base ecosystem"}\n\nMiroShark consensus:\n${JSON.stringify(consensus)}` }],
-    temperature: 0.3,
+    skillFiles: ["base-ecosystem.md", "token-launch-guide.md"],
+    input: `Project: ${name}\n\nBrief:\n${JSON.stringify(brief)}\n\nAeon narratives:\n${narrativeRaw ?? "Base ecosystem"}\n\nMiroShark crowd simulation:\n${JSON.stringify(consensus)}`,
     maxTokens: 900,
   });
 
-  const verdict = extractJsonObject(verdictRaw);
+  const verdict = extractJsonObject(verdictRaw ?? "");
   if (!verdict) throw new Error("Failed to parse verdict");
 
   if (verdict.consensus && typeof verdict.consensus === "object") {
@@ -109,5 +107,5 @@ Schema: {
 }
 
 export async function POST(req: NextRequest) {
-  return proxyTool(req, ENDPOINT);
+  return proxyTool(req, ENDPOINT, handleLocally);
 }

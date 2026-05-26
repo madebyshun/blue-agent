@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { proxyTool } from "@/app/api/_lib/proxy";
-import { callBankrLLM, extractJsonObject, runAeonSkill } from "@/app/api/_lib/llm";
+import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
 
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/thread-intelligence";
 
@@ -9,48 +9,38 @@ async function handleLocally(body: Record<string, unknown>): Promise<NextRespons
   const audience = (body.audience as string) ?? "Base builders and crypto traders";
   const goal = (body.goal as string) ?? "engagement";
 
-  const narrativeRaw = await runAeonSkill("narrative-tracker", `what's resonating on CT right now: ${topic || "Base ecosystem, AI agents, DeFi"}. What angles get engagement? What's being discussed?`);
+  // Step 1+2: Aeon parallel — narrative tracker + token movers for CT context
+  const [narrativeRaw, moversRaw] = await Promise.all([
+    runAeonSkill("narrative-tracker", `what's resonating on CT right now: ${topic || "Base ecosystem, AI agents, DeFi"}. What angles get engagement? What's being discussed?`),
+    runAeonSkill("token-movers", `trending topics and market narratives relevant to ${topic || "Base ecosystem"} for CT content`),
+  ]);
 
-  const msRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are MiroShark — influencer persona (2.8x weight).
-You know what goes viral on CT. Evaluate thread potential.
-CRITICAL: Return ONLY raw JSON.
-Schema: {
-  "viral_potential": <0-10>,
-  "best_angle": "<the hook that will work>",
-  "posting_time": "<when to post: e.g. 9am EST, market open>",
-  "format": "thread|single|poll|reply",
-  "influencer_take": "<1-2 sentences on what makes this land>"
-}`,
-    messages: [{ role: "user", content: `Topic: ${topic || "Base ecosystem"}\nAudience: ${audience}\nGoal: ${goal}\nNarratives: ${narrativeRaw ?? "CT discourse"}` }],
-    temperature: 0.5,
+  // Step 3: MiroShark — influencer persona on thread virality
+  const msRaw = await runMiroSharkSkill({
+    scenario: `Evaluate CT thread potential for topic: ${topic || "Base ecosystem"}`,
+    context: {
+      topic: topic || "Base ecosystem",
+      audience,
+      goal,
+      narratives: narrativeRaw ?? "CT discourse",
+      market_movers: moversRaw ?? "Base ecosystem",
+    },
+    persona: "influencer — CT engagement focused, viral mechanics, audience growth",
+    outputSchema: `{"viral_potential":<0-10>,"best_angle":"<the hook that will work>","posting_time":"<when to post: e.g. 9am EST, market open>","format":"thread|single|poll|reply","influencer_take":"<1-2 sentences on what makes this land>"}`,
     maxTokens: 500,
   });
-  const influencer = extractJsonObject(msRaw) ?? {};
+  const influencer = extractJsonObject(msRaw ?? "") ?? {};
 
-  const resultRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are Blue Agent — content intelligence engine for Base builders.
-Generate actionable thread strategy.
-CRITICAL: Return ONLY raw JSON.
-Schema: {
-  "content_score": <0-100>,
-  "recommended_angle": "<the winning take>",
-  "thread_outline": ["<tweet 1>", "<tweet 2>", "<tweet 3>", "<CTA>"],
-  "hook_options": ["<hook 1>", "<hook 2>", "<hook 3>"],
-  "best_posting_window": "<time and day>",
-  "hashtags": ["<tag>"],
-  "avoid": ["<what not to say>"],
-  "engagement_prediction": "viral|high|medium|low",
-  "summary": "<1-2 sentences>"
-}`,
-    messages: [{ role: "user", content: `Topic: ${topic || "Base"}\nAudience: ${audience}\nGoal: ${goal}\nNarratives: ${narrativeRaw ?? "CT"}\nInfluencer: ${JSON.stringify(influencer)}` }],
-    temperature: 0.4,
+  // Step 4: Blue Agent synthesis — thread intelligence and content strategy
+  const resultRaw = await runBlueSkill({
+    task: "Generate actionable CT thread strategy and content plan for Base builders. CRITICAL: Return ONLY raw JSON. No markdown.",
+    skillFiles: ["base-ecosystem.md"],
+    input: `Topic: ${topic || "Base"}\nAudience: ${audience}\nGoal: ${goal}\nNarratives: ${narrativeRaw ?? "CT"}\nMarket movers: ${moversRaw ?? "Base"}\nInfluencer: ${JSON.stringify(influencer)}`,
+    outputSchema: `{"content_score":<0-100>,"recommended_angle":"<the winning take>","thread_outline":["<tweet 1>","<tweet 2>","<tweet 3>","<CTA>"],"hook_options":["<hook 1>","<hook 2>","<hook 3>"],"best_posting_window":"<time and day>","hashtags":["<tag>"],"avoid":["<what not to say>"],"engagement_prediction":"viral|high|medium|low","summary":"<1-2 sentences>"}`,
     maxTokens: 1000,
   });
 
-  const result = extractJsonObject(resultRaw);
+  const result = extractJsonObject(resultRaw ?? "");
   if (!result) throw new Error("Failed to parse result");
 
   return NextResponse.json({
@@ -65,5 +55,5 @@ Schema: {
 }
 
 export async function POST(req: NextRequest) {
-  return proxyTool(req, ENDPOINT);
+  return proxyTool(req, ENDPOINT, handleLocally);
 }

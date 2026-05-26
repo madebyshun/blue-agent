@@ -1,64 +1,70 @@
 import { NextRequest, NextResponse } from "next/server";
 import { proxyTool } from "@/app/api/_lib/proxy";
-import { callBankrLLM, extractJsonObject, runAeonSkill } from "@/app/api/_lib/llm";
+import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
+import { fetchBaseTopMovers, searchBaseToken, formatTokensForLLM } from "@/app/api/_lib/realdata";
 
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/whale-copy-signal";
 
 async function handleLocally(body: Record<string, unknown>): Promise<NextResponse> {
-  const token = (body.token as string) ?? "";
   const wallet = (body.wallet as string) ?? "";
+  const token  = (body.token  as string) ?? "";
 
-  const moversRaw = await runAeonSkill("token-movers", `smart money and whale activity${token ? ` for ${token}` : " on Base"}. Focus on wallet clustering, accumulation patterns, copy-trade setups.`);
+  // Fetch real market context
+  const [topMovers, tokenData] = await Promise.all([
+    fetchBaseTopMovers(20),
+    token ? searchBaseToken(token) : Promise.resolve([]),
+  ]);
 
-  const msRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are MiroShark analyst persona — data-driven, smart money focused.
-Identify copy-trade opportunities from whale/smart money signals.
-CRITICAL: Return ONLY raw JSON.
-Schema: {
-  "smart_money_signal": "accumulating|distributing|neutral",
-  "copy_confidence": <0-10>,
-  "entry_window": "<now|wait 24h|wait 48h+>",
-  "risk_level": "high|medium|low",
-  "analyst_take": "<1-2 sentences>"
-}`,
-    messages: [{ role: "user", content: `Token: ${token || "Base ecosystem"}\nWallet: ${wallet || "general"}\nMover signals: ${moversRaw ?? "Base chain"}` }],
-    temperature: 0.3,
+  const realData = [
+    `=== LIVE BASE MARKET DATA (DexScreener, ${new Date().toISOString()}) ===`,
+    `Top Base tokens by volume:\n${formatTokensForLLM(topMovers.slice(0, 12))}`,
+    tokenData.length ? `\nSpecific token data for "${token}":\n${formatTokensForLLM(tokenData)}` : "",
+    wallet ? `\nWallet to analyze: ${wallet}` : "\nNo specific wallet — analyzing top Base market movers",
+  ].filter(Boolean).join("\n");
+
+  const [moversRaw, narrativeRaw] = await Promise.all([
+    runAeonSkill("token-movers", `Real Base market data for whale copy analysis:\n${realData}`),
+    runAeonSkill("narrative-tracker", `What narratives are driving these real Base token moves?\n${formatTokensForLLM(topMovers.slice(0, 10))}`),
+  ]);
+
+  const msRaw = await runMiroSharkSkill({
+    scenario: "Whale copy trading signal based on real Base market data",
+    context: { live_data: realData.slice(0, 500), aeon_analysis: moversRaw ?? "", wallet: wallet || "top Base whales" },
+    persona: "analyst — evaluates smart money patterns and risk-adjusted entries",
+    outputSchema: `{"copy_signal":"strong|moderate|weak","best_entry_token":"<real symbol>","entry_reasoning":"<based on real data>","risk_level":"high|medium|low","timing":"<specific advice>"}`,
     maxTokens: 500,
   });
-  const analyst = extractJsonObject(msRaw) ?? {};
 
-  const resultRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are Blue Agent — smart money copy signal engine for Base.
-CRITICAL: Return ONLY raw JSON.
+  const copySignal = extractJsonObject(msRaw ?? "") ?? {};
+
+  const verdictRaw = await runBlueSkill({
+    task: `Generate whale copy trading signals based on real Base market data. Only reference real tokens from the data.
+Note: Onchain wallet analysis requires a blockchain explorer — base signal on real market data patterns.
+CRITICAL: Return ONLY raw JSON. No markdown.
 Schema: {
-  "signal": "STRONG_BUY|BUY|WATCH|PASS",
+  "signal": "copy|watch|avoid",
+  "wallet_note": "<note about wallet analysis limitations if no explorer access>",
+  "best_copy_opportunity": {"token":"<real symbol>","thesis":"<based on real data>","entry":"<price range from real data>","sizing":"small|medium|large"},
+  "market_context": "<real market condition from data>",
+  "risk_flags": ["<real risk based on data>"],
   "confidence": <0-100>,
-  "whale_activity": "accumulating|distributing|neutral|mixed",
-  "copy_targets": [{"token":"<name>","action":"buy|watch|avoid","size_hint":"<small|medium|large>","rationale":"<1 sentence>"}],
-  "entry_timing": "<immediate|wait for dip|wait for confirmation>",
-  "stop_loss_hint": "<price action trigger>",
-  "smart_money_wallets_active": <number>,
-  "summary": "<2 sentences>"
+  "note": "<honest caveat about data limitations>"
 }`,
-    messages: [{ role: "user", content: `Token: ${token || "Base"}\nMover data: ${moversRaw ?? "Base chain"}\nAnalyst: ${JSON.stringify(analyst)}` }],
-    temperature: 0.3,
-    maxTokens: 900,
+    skillFiles: ["base-ecosystem.md", "base-addresses.md"],
+    input: `${realData}\n\nAeon:\n${moversRaw ?? ""}\n\nNarrative:\n${narrativeRaw ?? ""}\n\nCopy signal:\n${JSON.stringify(copySignal)}`,
+    maxTokens: 800,
   });
 
-  const result = extractJsonObject(resultRaw);
-  if (!result) throw new Error("Failed to parse result");
+  const verdict = extractJsonObject(verdictRaw ?? "");
+  if (!verdict) throw new Error("Failed to parse verdict");
 
   return NextResponse.json({
-    tool: "whale-copy-signal",
-    timestamp: new Date().toISOString(),
-    token,
-    analyst,
-    ...result,
+    tool: "whale-copy-signal", timestamp: new Date().toISOString(),
+    data_source: "DexScreener live — Base chain",
+    tokens_analyzed: topMovers.length, ...verdict,
   });
 }
 
 export async function POST(req: NextRequest) {
-  return proxyTool(req, ENDPOINT);
+  return proxyTool(req, ENDPOINT, handleLocally);
 }
