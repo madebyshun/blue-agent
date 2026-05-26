@@ -1,70 +1,81 @@
 import { NextRequest, NextResponse } from "next/server";
 import { proxyTool } from "@/app/api/_lib/proxy";
-import { callBankrLLM, extractJsonObject, runAeonSkill } from "@/app/api/_lib/llm";
+import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
+import { searchBaseToken, fetchBaseTopMovers, formatTokensForLLM } from "@/app/api/_lib/realdata";
 
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/portfolio-rebalancer";
 
+function extractTickers(text: string): string[] {
+  const matches = text.toUpperCase().match(/\b([A-Z]{2,10})\b/g) ?? [];
+  const skip = new Set(["ETH","USDC","USDT","BTC","CBBTC","WETH","AND","THE","FOR","WITH","HIGH","LOW"]);
+  return [...new Set(matches.filter(m => !skip.has(m)))].slice(0, 6);
+}
+
 async function handleLocally(body: Record<string, unknown>): Promise<NextResponse> {
   const holdings = (body.holdings as string) ?? "";
-  const risk_profile = (body.risk_profile as string) ?? "medium";
-  const goal = (body.goal as string) ?? "growth";
+  const goal     = (body.goal     as string) ?? "";
+  if (!holdings) return NextResponse.json({ error: "holdings is required" }, { status: 400 });
 
-  const [moversRaw, narrativeRaw] = await Promise.all([
-    runAeonSkill("token-movers", `Base chain top performers and underperformers for portfolio rebalancing. Risk profile: ${risk_profile}.`),
-    runAeonSkill("narrative-tracker", `Base chain narratives to position for: ${goal}. What sectors are gaining vs losing momentum?`),
+  // Extract tickers from user input and fetch real prices
+  const tickers = extractTickers(holdings);
+  const [topMovers, ...tokenResults] = await Promise.all([
+    fetchBaseTopMovers(15),
+    ...tickers.map(t => searchBaseToken(t)),
   ]);
 
-  const msRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are MiroShark analyst persona — portfolio allocation specialist.
-Recommend rebalancing based on market signals.
-CRITICAL: Return ONLY raw JSON.
-Schema: {
-  "rebalance_urgency": "immediate|soon|optional|hold",
-  "market_regime": "risk_on|neutral|risk_off",
-  "add_exposure": ["<sector or token>"],
-  "reduce_exposure": ["<sector or token>"],
-  "analyst_rationale": "<2 sentences>"
-}`,
-    messages: [{ role: "user", content: `Holdings: ${holdings || "unspecified"}\nRisk: ${risk_profile}\nGoal: ${goal}\nMovers: ${moversRaw ?? "Base chain"}\nNarratives: ${narrativeRaw ?? "Base"}` }],
-    temperature: 0.3,
-    maxTokens: 600,
-  });
-  const analyst = extractJsonObject(msRaw) ?? {};
+  const userTokenData = tokenResults.flat().filter(t => t.symbol);
+  const realData = [
+    `=== LIVE PRICE DATA (DexScreener, ${new Date().toISOString()}) ===`,
+    `User portfolio tokens found on Base:\n${formatTokensForLLM(userTokenData)}`,
+    `\nBase market context (top movers):\n${formatTokensForLLM(topMovers.slice(0, 8))}`,
+    `\nUser holdings: ${holdings}`,
+    `Goal: ${goal || "optimize risk/reward"}`,
+  ].join("\n");
 
-  const resultRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are Blue Agent — portfolio rebalancer for Base chain assets.
-CRITICAL: Return ONLY raw JSON.
-Schema: {
-  "rebalance_score": <0-100>,
-  "action": "REBALANCE_NOW|TRIM|ACCUMULATE|HOLD",
-  "suggested_allocation": [{"asset":"<name>","current_pct":<number>,"target_pct":<number>,"action":"add|reduce|hold"}],
-  "rotate_from": ["<overweight positions>"],
-  "rotate_into": ["<underweight opportunities>"],
-  "reasoning": "<2-3 sentences>",
-  "risk_warnings": ["<warning>"],
-  "summary": "<2 sentences>"
-}`,
-    messages: [{ role: "user", content: `Holdings: ${holdings || "unspecified"}\nRisk: ${risk_profile}\nGoal: ${goal}\nMovers: ${moversRaw ?? "Base"}\nNarratives: ${narrativeRaw ?? "Base"}\nAnalyst: ${JSON.stringify(analyst)}` }],
-    temperature: 0.3,
-    maxTokens: 1000,
+  const [moversRaw, narrativeRaw] = await Promise.all([
+    runAeonSkill("token-movers", `Market conditions for portfolio rebalancing:\n${realData}`),
+    runAeonSkill("narrative-tracker", `Which narratives support or undermine these holdings:\n${formatTokensForLLM(userTokenData)}`),
+  ]);
+
+  const msRaw = await runMiroSharkSkill({
+    scenario: "Portfolio rebalancing recommendation based on real market data",
+    context: { live_prices: formatTokensForLLM(userTokenData), market: formatTokensForLLM(topMovers.slice(0, 6)), holdings, goal },
+    persona: "analyst — risk-adjusted portfolio strategy, not financial advice",
+    outputSchema: `{"overall_assessment":"<honest assessment>","key_risk":"<specific concern based on real data>","opportunity":"<real data based>"}`,
+    maxTokens: 400,
   });
 
-  const result = extractJsonObject(resultRaw);
-  if (!result) throw new Error("Failed to parse result");
+  const signal = extractJsonObject(msRaw ?? "") ?? {};
+
+  const verdictRaw = await runBlueSkill({
+    task: `Generate portfolio rebalancing recommendations based on real Base market prices.
+Use actual prices from data where available. Be honest when data is unavailable.
+DISCLAIMER: This is analysis only, not financial advice.
+CRITICAL: Return ONLY raw JSON. No markdown.
+Schema: {
+  "current_assessment": "<assessment based on real prices found>",
+  "recommended_allocation": {"token":"<symbol>","current_pct":"<from user input>","suggested_pct":"<recommendation>","reason":"<real data based>"},
+  "actions": [{"action":"reduce|add|hold","asset":"<real symbol>","reason":"<based on real price data>"}],
+  "market_alignment": "<how portfolio aligns with current Base market>",
+  "rationale": "<strategy rationale>",
+  "disclaimer": "Not financial advice — portfolio decisions should be made with full context",
+  "confidence": <0-100>
+}`,
+    skillFiles: ["base-ecosystem.md"],
+    input: `${realData}\n\nAeon market:\n${moversRaw ?? ""}\n\nNarrative:\n${narrativeRaw ?? ""}\n\nAnalysis:\n${JSON.stringify(signal)}`,
+    maxTokens: 900,
+  });
+
+  const verdict = extractJsonObject(verdictRaw ?? "");
+  if (!verdict) throw new Error("Failed to parse verdict");
 
   return NextResponse.json({
-    tool: "portfolio-rebalancer",
-    timestamp: new Date().toISOString(),
-    holdings,
-    risk_profile,
-    goal,
-    analyst,
-    ...result,
+    tool: "portfolio-rebalancer", timestamp: new Date().toISOString(),
+    data_source: "DexScreener live — Base chain",
+    tokens_with_live_data: userTokenData.length, ...verdict,
   });
 }
 
 export async function POST(req: NextRequest) {
-  return proxyTool(req, ENDPOINT);
+  return proxyTool(req, ENDPOINT, handleLocally);
 }

@@ -1,21 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
-import { useAccount, useSignTypedData } from "wagmi";
-import { ConnectButton } from "@/components/ConnectModal";
-
-const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
-
-function randomNonce(): `0x${string}` {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return `0x${Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("")}`;
-}
-function usdcAmt(raw: string) {
-  const n = Number(raw);
-  return isNaN(n) ? raw : `$${(n / 1_000_000).toFixed(4)}`;
-}
 
 // ─── Tool registry ──────────────────────────────────────────────────────────
 
@@ -32,151 +19,151 @@ const FEATURED_IDS = ["launch-simulator", "investor-memo", "market-fit", "token-
 const TOOLS: Tool[] = [
   // Intelligence
   { id: "token-pick-signal", name: "Token Pick Signal", cat: "intelligence", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "AI consensus on the highest-conviction asymmetric token setup on Base right now.", inputs: [
-    { key: "context", label: "Market context (optional)", placeholder: "e.g. low-cap DeFi thesis", example: "low-cap AI agent tokens on Base, early accumulation" },
+    { key: "context", label: "Market context (optional)", placeholder: "e.g. low-cap DeFi, AI agent tokens, memecoins" },
   ]},
   { id: "narrative-position", name: "Narrative Position", cat: "intelligence", price: "$0.15", agents: ["blue","aeon","miroshark"], desc: "Which narratives are building vs peaking on CT — and where to position.", inputs: [
-    { key: "focus", label: "Narrative focus (optional)", placeholder: "e.g. AI agents, RWA, Base DeFi", example: "AI agents, onchain payments, Base DeFi" },
+    { key: "focus", label: "Narrative focus (optional)", placeholder: "e.g. AI agents, RWA, Base DeFi" },
   ]},
   { id: "ecosystem-digest", name: "Ecosystem Digest", cat: "intelligence", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Weekly Base ecosystem intelligence: top builders, protocols, and narratives.", inputs: [
-    { key: "focus", label: "Focus area (optional)", placeholder: "e.g. DeFi protocols, NFT, gaming", example: "DeFi protocols and AI agent infrastructure" },
+    { key: "focus", label: "Focus area (optional)", placeholder: "e.g. DeFi protocols, AI agents, gaming" },
   ]},
   { id: "market-fit", name: "Market Fit Validator", cat: "intelligence", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Score your product's market fit with swarm intelligence across three personas.", inputs: [
-    { key: "description", label: "Product description", placeholder: "What you're building and for whom", required: true, example: "Blue Agent — AI founder console for Base builders. Idea, build, audit, ship, raise — all grounded in real Base knowledge." },
-    { key: "stage", label: "Stage", placeholder: "e.g. idea, MVP, live", example: "MVP — live at blueagent.dev" },
+    { key: "description", label: "Product description", placeholder: "What you're building, who it's for, and what problem it solves", required: true },
+    { key: "stage", label: "Stage", placeholder: "e.g. idea, MVP, live product" },
   ]},
   { id: "token-launch-readiness", name: "Token Launch Readiness", cat: "intelligence", price: "$0.30", agents: ["blue","aeon","miroshark"], desc: "Go/no-go signal on whether your project is ready to launch a token.", inputs: [
-    { key: "name", label: "Project / token name", placeholder: "e.g. $MYTOKEN or project name", required: true, example: "Blue Agent ($BLUEAGENT)" },
-    { key: "description", label: "Project description + traction", placeholder: "What the project does + key metrics", example: "AI-native founder console for Base. 5 commands, 34 skills, 34 Hub tools. x402 micropayments. 800+ Telegram members, $BLUEAGENT on Uniswap v4." },
+    { key: "name", label: "Project / token name", placeholder: "e.g. $MYTOKEN or your project name", required: true },
+    { key: "description", label: "Project description + traction", placeholder: "What the project does, current metrics, community size, any live product" },
   ]},
   // Builder
   { id: "roadmap-validator", name: "Roadmap Validator", cat: "builder", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Validate your roadmap against market timing, execution risk, and narrative fit.", inputs: [
-    { key: "project", label: "Project name", placeholder: "Project name", required: true, example: "Blue Agent" },
-    { key: "roadmap", label: "Roadmap milestones", placeholder: "Q1: X, Q2: Y…", required: true, example: "Q2: Hub 34 tools live, x402 payments. Q3: CLI v2, AgentKit plugin, 100 tools. Q4: Blue Hub marketplace, revenue sharing." },
+    { key: "project", label: "Project name", placeholder: "Your project name", required: true },
+    { key: "roadmap", label: "Roadmap milestones", placeholder: "Q1: X, Q2: Y, Q3: Z — be specific about what you plan to ship", required: true },
   ]},
   { id: "competitor-scan", name: "Competitor Scan", cat: "builder", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Identify direct/indirect competitors and surface your defensible edge.", inputs: [
-    { key: "project", label: "Your project", placeholder: "What you build", required: true, example: "Blue Agent — AI founder console for Base builders with 34 grounded skills" },
-    { key: "category", label: "Category", placeholder: "e.g. DeFi lending, AI agent", example: "AI agent tooling and developer console" },
+    { key: "project", label: "Your project", placeholder: "What you build and your main value prop", required: true },
+    { key: "category", label: "Category", placeholder: "e.g. DeFi lending, AI agent, NFT marketplace" },
   ]},
   { id: "pitch-intelligence", name: "Pitch Intelligence", cat: "builder", price: "$0.30", agents: ["blue","aeon","miroshark"], desc: "Transform your deck into investor-grade pitch intelligence with narrative scoring.", inputs: [
-    { key: "project", label: "Project", placeholder: "Project name", required: true, example: "Blue Agent" },
-    { key: "description", label: "Pitch summary", placeholder: "Problem, solution, traction, ask", required: true, example: "Problem: Base builders waste hours on hallucinated AI output. Solution: Blue Agent — 5 AI commands grounded in 34 verified skill files. Traction: $BLUEAGENT live, 34 Hub tools, 800+ community. Ask: $500k pre-seed to scale x402 revenue." },
+    { key: "project", label: "Project", placeholder: "Project name", required: true },
+    { key: "description", label: "Pitch summary", placeholder: "Problem you solve, your solution, traction so far, and funding ask", required: true },
   ]},
   { id: "fundraise-timing", name: "Fundraise Timing", cat: "builder", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Is now the right time to raise? Market conditions, stage readiness, investor appetite.", inputs: [
-    { key: "project", label: "Project", placeholder: "What you build", required: true, example: "Blue Agent — AI-native console for Base builders" },
-    { key: "stage", label: "Stage & metrics", placeholder: "e.g. seed, 1k users, $5k MRR", example: "Pre-seed. 800 Telegram members, token launched, 34 tools live, ~$200 MRR from x402." },
+    { key: "project", label: "Project", placeholder: "What you build", required: true },
+    { key: "stage", label: "Stage & metrics", placeholder: "e.g. pre-seed, current MRR, user count, what you've shipped" },
   ]},
   { id: "gtm-brief", name: "GTM Brief", cat: "builder", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Go-to-market playbook: channels, timing, messaging, and early adopter strategy.", inputs: [
-    { key: "project", label: "Project name", placeholder: "e.g. Blue Agent", required: true, example: "Blue Agent" },
-    { key: "description", label: "What you're launching", placeholder: "Product description + value prop", required: true, example: "Blue Hub — 34 AI tools powered by 3-agent consensus (Blue + Aeon + MiroShark), pay per use via x402" },
-    { key: "target", label: "Target audience", placeholder: "e.g. Base DeFi degens, indie devs", example: "Base builders, indie hackers, DeFi founders, AI agent devs" },
+    { key: "project", label: "Project name", placeholder: "Your project name", required: true },
+    { key: "description", label: "What you're launching", placeholder: "Product description and core value prop", required: true },
+    { key: "target", label: "Target audience", placeholder: "Who are your first 100 users?" },
   ]},
   { id: "stack-recommender", name: "Stack Recommender", cat: "builder", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Optimal tech stack for Base builders — infra, tooling, protocols, integrations.", inputs: [
-    { key: "project_type", label: "Project type", placeholder: "e.g. DeFi protocol, AI agent, NFT marketplace", required: true, example: "AI agent with x402 micropayments and onchain token rewards on Base" },
-    { key: "constraints", label: "Constraints", placeholder: "e.g. solo dev, 2-week timeline", example: "Solo dev, 1-month timeline, TypeScript only" },
+    { key: "project_type", label: "Project type", placeholder: "e.g. DeFi protocol, AI agent, consumer app, NFT marketplace", required: true },
+    { key: "constraints", label: "Constraints", placeholder: "e.g. solo dev, 2-week timeline, TypeScript only" },
   ]},
   { id: "investor-memo", name: "Investor Memo", cat: "builder", price: "$0.35", agents: ["blue","aeon","miroshark"], desc: "Full investor memo: thesis, market, moat, risks, and ask — ready to send.", inputs: [
-    { key: "project", label: "Project name", placeholder: "Project name", required: true, example: "Blue Agent" },
-    { key: "description", label: "Description + traction", placeholder: "What you do + key metrics", required: true, example: "AI-native founder console for Base. 5 commands, 34 skills, 34 Hub tools, x402 micropayments. $BLUEAGENT token live on Uniswap v4. 800+ Telegram, ~$200/mo revenue." },
-    { key: "ask", label: "Raise ask", placeholder: "e.g. $500k pre-seed", example: "$500k pre-seed" },
+    { key: "project", label: "Project name", placeholder: "Your project name", required: true },
+    { key: "description", label: "Description + traction", placeholder: "What you do, current metrics, revenue, community — use real numbers", required: true },
+    { key: "ask", label: "Raise ask", placeholder: "e.g. $500k pre-seed, $2M seed" },
   ]},
   { id: "token-distribution-plan", name: "Token Distribution Plan", cat: "builder", price: "$0.30", agents: ["blue","aeon","miroshark"], desc: "Token allocation framework: team, community, investors, treasury, liquidity.", inputs: [
-    { key: "token", label: "Token / project name", placeholder: "e.g. $BLUEAGENT or project name", required: true, example: "$BLUEAGENT" },
-    { key: "total_supply", label: "Total supply", placeholder: "e.g. 1,000,000,000", example: "1,000,000,000" },
-    { key: "description", label: "Stage & context", placeholder: "e.g. pre-launch, post-TGE, community focus", example: "Post-TGE, token live on Uniswap v4 Base. Community-first distribution strategy." },
+    { key: "token", label: "Token / project name", placeholder: "Your token ticker or project name", required: true },
+    { key: "total_supply", label: "Total supply", placeholder: "e.g. 1,000,000,000" },
+    { key: "description", label: "Stage & context", placeholder: "pre-launch or post-TGE? community focus or VC-backed?" },
   ]},
   { id: "agent-performance", name: "Agent Performance", cat: "builder", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Benchmark your AI agent's revenue, engagement, and retention metrics.", inputs: [
-    { key: "handle", label: "Agent X/Twitter handle", placeholder: "@handle or agent name", required: true, example: "@blueagent_" },
-    { key: "repo", label: "GitHub repo (optional)", placeholder: "user/repo or GitHub URL", example: "madebyshun/blue-agent" },
+    { key: "handle", label: "Agent X/Twitter handle", placeholder: "@yourhandle", required: true },
+    { key: "repo", label: "GitHub repo (optional)", placeholder: "user/repo" },
   ]},
   { id: "agent-collab-match", name: "Agent Collab Match", cat: "builder", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Find agents that complement your tool and surface collab opportunities.", inputs: [
-    { key: "agent_a", label: "Your agent", placeholder: "Your agent name + what it does", required: true, example: "Blue Agent — AI founder console for Base builders, strategy + builder intelligence" },
-    { key: "agent_b", label: "Target agent to collab with", placeholder: "Agent name or 'any'", required: true, example: "Aeon — market intelligence and token signals on Base" },
-    { key: "collab_goal", label: "Collab goal", placeholder: "e.g. joint tool, cross-promote", example: "Build joint tools combining market signals + builder intelligence" },
+    { key: "agent_a", label: "Your agent", placeholder: "Your agent name and what it does", required: true },
+    { key: "agent_b", label: "Target agent", placeholder: "Agent name to evaluate collab with, or 'any'", required: true },
+    { key: "collab_goal", label: "Collab goal", placeholder: "e.g. joint tool, cross-promote, revenue share" },
   ]},
   { id: "repo-health", name: "Repo Health", cat: "builder", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Audit your GitHub repo health: code quality, docs, CI, contributor signals.", inputs: [
-    { key: "repo", label: "GitHub repo", placeholder: "user/repo or full GitHub URL", required: true, example: "madebyshun/blue-agent" },
+    { key: "repo", label: "GitHub repo", placeholder: "user/repo or full GitHub URL", required: true },
   ]},
   { id: "community-sentiment", name: "Community Sentiment", cat: "builder", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Real-time sentiment analysis across your community channels.", inputs: [
-    { key: "project", label: "Project / token", placeholder: "Project name or ticker", required: true, example: "$BLUEAGENT" },
-    { key: "channels", label: "Channels", placeholder: "e.g. Twitter, Telegram, Discord", example: "Twitter (@blueagent_), Telegram (t.me/blueagent_hub)" },
+    { key: "project", label: "Project / token", placeholder: "Project name or token ticker", required: true },
+    { key: "channels", label: "Channels", placeholder: "e.g. Twitter @handle, Telegram link, Discord" },
   ]},
   { id: "defi-opportunity", name: "DeFi Opportunity", cat: "builder", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Scan Base DeFi for emerging yield, liquidity, and protocol opportunities.", inputs: [
-    { key: "focus", label: "Focus (optional)", placeholder: "e.g. stablecoin yield, LP opportunities", example: "stablecoin yield and LP opportunities on Aerodrome" },
-    { key: "risk_tolerance", label: "Risk tolerance", placeholder: "low / medium / high", example: "medium" },
+    { key: "focus", label: "Focus (optional)", placeholder: "e.g. stablecoin yield, LP, lending, new protocols" },
+    { key: "risk_tolerance", label: "Risk tolerance", placeholder: "low / medium / high" },
   ]},
   { id: "builder-deep-dd", name: "Builder Deep DD", cat: "builder", price: "$0.35", agents: ["blue","aeon","miroshark"], desc: "Full due diligence on a Base builder: onchain activity, shipped products, credibility.", inputs: [
-    { key: "target", label: "Builder handle or address", placeholder: "@handle or 0x…", required: true, example: "@madebyshun" },
+    { key: "target", label: "Builder handle or address", placeholder: "@twitterhandle or 0x… wallet address", required: true },
   ]},
   // Trading & Alpha
   { id: "whale-copy-signal", name: "Whale Copy Signal", cat: "trading", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Track and copy high-alpha whale wallets on Base — entry, size, and timing.", inputs: [
-    { key: "wallet", label: "Whale wallet (optional)", placeholder: "0x… or leave blank for top whales", example: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
-    { key: "token", label: "Token to watch (optional)", placeholder: "e.g. WETH, USDC, token ticker", example: "WETH" },
+    { key: "wallet", label: "Whale wallet (optional)", placeholder: "0x… leave blank to scan top Base whales" },
+    { key: "token", label: "Token to watch (optional)", placeholder: "e.g. WETH, USDC, or a specific token ticker" },
   ]},
   { id: "token-momentum-scanner", name: "Token Momentum Scanner", cat: "trading", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Real-time momentum scan for Base tokens — breakouts, volume spikes, narrative alignment.", inputs: [
-    { key: "timeframe", label: "Timeframe", placeholder: "e.g. 1h, 4h, 24h", example: "4h" },
-    { key: "filter", label: "Filter", placeholder: "e.g. >$100k volume, Base only", example: ">$50k volume, Base only, AI narrative" },
+    { key: "timeframe", label: "Timeframe", placeholder: "e.g. 1h, 4h, 24h" },
+    { key: "filter", label: "Filter", placeholder: "e.g. min $50k volume, specific narrative, mcap range" },
   ]},
   { id: "portfolio-rebalancer", name: "Portfolio Rebalancer", cat: "trading", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "AI-driven portfolio rebalancing plan based on current Base market conditions.", inputs: [
-    { key: "holdings", label: "Current portfolio", placeholder: "e.g. 50% ETH, 30% USDC, 20% altcoins", required: true, example: "40% ETH, 30% USDC, 20% BLUEAGENT, 10% cbBTC" },
-    { key: "goal", label: "Goal", placeholder: "e.g. reduce risk, maximize yield", example: "maximize yield while keeping 30% stable" },
+    { key: "holdings", label: "Current portfolio", placeholder: "e.g. 50% ETH, 30% USDC, 20% altcoins — use real %", required: true },
+    { key: "goal", label: "Goal", placeholder: "e.g. reduce risk, maximize yield, increase stablecoin exposure" },
   ]},
   // Content
   { id: "thread-intelligence", name: "Thread Intelligence", cat: "content", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Turn your alpha or project update into a high-engagement X thread.", inputs: [
-    { key: "topic", label: "Thread topic", placeholder: "What to write about", required: true, example: "Blue Hub launch — 34 AI tools powered by 3-agent consensus on Base" },
-    { key: "angle", label: "Angle", placeholder: "e.g. alpha, announcement, educational", example: "announcement + alpha" },
+    { key: "topic", label: "Thread topic", placeholder: "What do you want to write about?", required: true },
+    { key: "angle", label: "Angle", placeholder: "e.g. alpha drop, project update, educational, hot take" },
   ]},
   { id: "builder-brand-score", name: "Builder Brand Score", cat: "content", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Score your personal brand as a Base builder and get a growth playbook.", inputs: [
-    { key: "handle", label: "X / Twitter handle", placeholder: "@handle", required: true, example: "@madebyshun" },
-    { key: "focus", label: "What you build", placeholder: "e.g. DeFi tools, AI agents", example: "AI agents and developer tools on Base" },
+    { key: "handle", label: "X / Twitter handle", placeholder: "@yourhandle", required: true },
+    { key: "focus", label: "What you build", placeholder: "e.g. DeFi tools, AI agents, consumer apps" },
   ]},
   { id: "community-growth-playbook", name: "Community Growth Playbook", cat: "content", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Proven growth tactics for Base builder communities — from 0 to 1000 members.", inputs: [
-    { key: "project", label: "Project name", placeholder: "Your project", required: true, example: "Blue Agent" },
-    { key: "current_size", label: "Current community size", placeholder: "e.g. 50 Telegram, 200 Twitter", example: "800 Telegram, 1.2k Twitter followers" },
+    { key: "project", label: "Project name", placeholder: "Your project name", required: true },
+    { key: "current_size", label: "Current community size", placeholder: "e.g. 50 Telegram members, 200 Twitter followers" },
   ]},
   // Agent Economy
   { id: "agent-revenue-optimizer", name: "Agent Revenue Optimizer", cat: "agent-economy", price: "$0.30", agents: ["blue","aeon","miroshark"], desc: "Maximize your agent's x402 revenue: pricing, bundling, and distribution strategy.", inputs: [
-    { key: "agent", label: "Agent name", placeholder: "Agent name", required: true, example: "Blue Agent" },
-    { key: "description", label: "Current tools / services", placeholder: "List your tools and prices", example: "34 Hub tools ($0.15–$2.00), 5 console commands ($0.05–$1.00), simulator ($0.50–$2.00)" },
-    { key: "current_revenue", label: "Current revenue", placeholder: "e.g. $50/month", example: "$200/month from x402 micropayments" },
+    { key: "agent", label: "Agent name", placeholder: "Your agent name", required: true },
+    { key: "description", label: "Current tools / services", placeholder: "List your tools and current prices" },
+    { key: "current_revenue", label: "Current revenue", placeholder: "e.g. $50/month — use real number for accurate output" },
   ]},
   { id: "agent-token-strategy", name: "Agent Token Strategy", cat: "agent-economy", price: "$0.30", agents: ["blue","aeon","miroshark"], desc: "Design your agent token: utility, distribution, tokenomics, and launch strategy.", inputs: [
-    { key: "agent", label: "Agent name", placeholder: "Agent name", required: true, example: "Blue Agent" },
-    { key: "description", label: "Token use case", placeholder: "e.g. governance, access, rewards", example: "access gating for Hub tools, weekly rewards to builders, governance over skill file additions" },
+    { key: "agent", label: "Agent name", placeholder: "Your agent name", required: true },
+    { key: "description", label: "Token use case", placeholder: "e.g. governance, access gating, rewards, revenue share" },
   ]},
   { id: "multi-agent-workflow", name: "Multi-Agent Workflow", cat: "agent-economy", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Design an automated workflow combining multiple agents for complex tasks.", inputs: [
-    { key: "goal", label: "Workflow goal", placeholder: "What the workflow should accomplish", required: true, example: "Auto-generate weekly Base ecosystem report: Aeon scans market, MiroShark models crowd sentiment, Blue Agent synthesizes into thread" },
-    { key: "agents", label: "Agents to use (optional)", placeholder: "e.g. Blue Agent, Aeon, custom", example: "Blue Agent, Aeon, MiroShark" },
+    { key: "goal", label: "Workflow goal", placeholder: "What should this workflow accomplish end-to-end?", required: true },
+    { key: "agents", label: "Agents to use (optional)", placeholder: "e.g. Blue Agent, Aeon, MiroShark, or your own" },
   ]},
   // Base Ecosystem
   { id: "base-grant-finder", name: "Base Grant Finder", cat: "base-ecosystem", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Find active grants, hackathons, and funding programs for Base builders.", inputs: [
-    { key: "project", label: "Project type / description", placeholder: "e.g. DeFi, infrastructure, consumer app", required: true, example: "AI agent tooling and developer infrastructure for Base builders" },
-    { key: "stage", label: "Stage", placeholder: "e.g. idea, MVP, live", example: "MVP — live product with token" },
+    { key: "project", label: "Project type / description", placeholder: "What you're building — be specific about the category", required: true },
+    { key: "stage", label: "Stage", placeholder: "e.g. idea, MVP, live product with users" },
   ]},
   { id: "base-protocol-comparison", name: "Base Protocol Comparison", cat: "base-ecosystem", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Side-by-side comparison of Base protocols for integrations and partnerships.", inputs: [
-    { key: "protocol_a", label: "Protocol A", placeholder: "e.g. Aerodrome", required: true, example: "Aerodrome" },
-    { key: "protocol_b", label: "Protocol B", placeholder: "e.g. Uniswap v4", required: true, example: "Uniswap v4" },
-    { key: "use_case", label: "Your use case", placeholder: "What you need it for", example: "liquidity pool for agent token, low fee swaps" },
+    { key: "protocol_a", label: "Protocol A", placeholder: "e.g. Aerodrome, Aave, Uniswap v4", required: true },
+    { key: "protocol_b", label: "Protocol B", placeholder: "e.g. Morpho, Curve, Seamless", required: true },
+    { key: "use_case", label: "Your use case", placeholder: "What do you need this protocol for?" },
   ]},
   { id: "base-builder-network-match", name: "Builder Network Match", cat: "base-ecosystem", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Connect with Base builders who complement your skill set and project.", inputs: [
-    { key: "skills", label: "Your skills", placeholder: "e.g. Solidity, frontend, BD", required: true, example: "AI/LLM, Next.js, product, TypeScript" },
-    { key: "looking_for", label: "Looking for", placeholder: "e.g. co-founder, advisor, collaborator", example: "Solidity co-founder, BD advisor, growth hacker" },
+    { key: "skills", label: "Your skills", placeholder: "e.g. Solidity, frontend, product, BD, design", required: true },
+    { key: "looking_for", label: "Looking for", placeholder: "e.g. co-founder, technical advisor, growth lead" },
   ]},
   // On-chain Strategy
   { id: "wallet-strategy-analyzer", name: "Wallet Strategy Analyzer", cat: "on-chain", price: "$0.30", agents: ["blue","aeon","miroshark"], desc: "Deep analysis of any wallet's on-chain strategy, behavior patterns, and alpha signals.", inputs: [
-    { key: "address", label: "Wallet address", placeholder: "0x…", required: true, example: "0xf31f59e7b8b58555f7871f71973a394c8f1bffe5" },
-    { key: "focus", label: "Analysis focus (optional)", placeholder: "e.g. trading patterns, DeFi activity", example: "DeFi yield strategies and token accumulation patterns" },
+    { key: "address", label: "Wallet address", placeholder: "0x… Base wallet address", required: true },
+    { key: "focus", label: "Analysis focus (optional)", placeholder: "e.g. trading patterns, DeFi activity, token accumulation" },
   ]},
   { id: "protocol-risk-monitor", name: "Protocol Risk Monitor", cat: "on-chain", price: "$0.35", agents: ["blue","aeon","miroshark"], desc: "Real-time risk assessment for your DeFi positions — exit signals, risk scores.", inputs: [
-    { key: "protocol", label: "Protocol", placeholder: "e.g. Aerodrome, Aave Base, Uniswap v4", required: true, example: "Aerodrome" },
-    { key: "position", label: "Position details (optional)", placeholder: "e.g. ETH/USDC LP, $5k USDC lend", example: "ETH/USDC LP, $10k position" },
+    { key: "protocol", label: "Protocol", placeholder: "e.g. Aerodrome, Aave Base, Uniswap v4, Morpho", required: true },
+    { key: "position", label: "Position details (optional)", placeholder: "e.g. ETH/USDC LP, $5k USDC lend — helps get specific risk analysis" },
   ]},
   // Launch Simulator
   { id: "launch-simulator", name: "Launch Simulator", cat: "builder", price: "$0.50–$2.00", agents: ["blue","aeon","miroshark"], desc: "Simulate your token launch with 3-agent consensus: Blue strategy + Aeon market + MiroShark crowd.", inputs: [
-    { key: "token_name", label: "Token name", placeholder: "e.g. $MYTOKEN", required: true, example: "$BLUEAGENT" },
-    { key: "launch_price", label: "Launch price (USD)", placeholder: "e.g. 0.001", required: true, example: "0.001" },
-    { key: "total_supply", label: "Total supply", placeholder: "e.g. 1000000000", example: "1000000000" },
-    { key: "liquidity", label: "Initial liquidity (USD)", placeholder: "e.g. 50000", example: "50000" },
-    { key: "tier", label: "Analysis tier", placeholder: "standard / deep / ultra", example: "standard" },
+    { key: "token_name", label: "Token name", placeholder: "e.g. $MYTOKEN", required: true },
+    { key: "launch_price", label: "Launch price (USD)", placeholder: "e.g. 0.001", required: true },
+    { key: "total_supply", label: "Total supply", placeholder: "e.g. 1000000000" },
+    { key: "liquidity", label: "Initial liquidity (USD)", placeholder: "e.g. 50000" },
+    { key: "tier", label: "Analysis tier", placeholder: "standard / deep / ultra" },
   ]},
 ];
 
@@ -202,50 +189,167 @@ const AGENT_LABELS: Record<Agent, string> = {
   miroshark: "MiroShark",
 };
 
-// ─── Generic result renderer ────────────────────────────────────────────────
+// ─── Result renderer ─────────────────────────────────────────────────────────
 
-function Value({ v }: { v: unknown }) {
-  if (v === null || v === undefined) return <span className="text-slate-600">—</span>;
-  if (typeof v === "boolean") return (
-    <span className={v ? "text-[#34D399]" : "text-red-400"}>{v ? "✓ Yes" : "✗ No"}</span>
+const VERDICT_COLORS: Record<string, string> = {
+  GO: "#34D399", BUY: "#34D399", SAFE: "#34D399", BULL: "#34D399",
+  WAIT: "#FACC15", WATCH: "#FACC15", NEUTRAL: "#FACC15",
+  PIVOT: "#FB923C", REDUCE: "#FB923C",
+  NO_PICK: "#6B6B7E", SKIP: "#6B6B7E",
+  CRITICAL: "#F87171", HIGH: "#F87171", SELL: "#F87171",
+};
+
+function stanceColor(s: string): string {
+  const u = s.toUpperCase();
+  return VERDICT_COLORS[u] ?? "#C8C8D0";
+}
+
+function VerdictBadge({ value }: { value: string }) {
+  const color = VERDICT_COLORS[value.toUpperCase()] ?? "#6B6B7E";
+  return (
+    <span className="inline-block px-3 py-1 rounded-full text-sm font-bold font-mono" style={{ color, background: color + "15", border: `1px solid ${color}40` }}>
+      {value}
+    </span>
   );
-  if (typeof v === "number") return <span className="text-[#4FC3F7] font-semibold">{v}</span>;
-  if (typeof v === "string") {
-    const lower = v.toLowerCase();
-    if (["critical","exit_now","high"].includes(lower)) return <span className="text-red-400 font-semibold uppercase">{v}</span>;
-    if (["medium","reduce"].includes(lower)) return <span className="text-amber-400 font-semibold uppercase">{v}</span>;
-    if (["low","minimal","hold","add","yes","bullish","strong"].includes(lower)) return <span className="text-[#34D399] font-semibold uppercase">{v}</span>;
-    return <span className="text-slate-200">{v}</span>;
+}
+
+function ScoreBar({ value, max = 100 }: { value: number; max?: number }) {
+  const pct = Math.min(100, (value / max) * 100);
+  const color = pct >= 70 ? "#34D399" : pct >= 45 ? "#FACC15" : "#F87171";
+  return (
+    <div className="flex items-center gap-3">
+      <span className="font-mono text-xl font-bold" style={{ color }}>{value}</span>
+      <div className="flex-1 h-1.5 bg-[#1A1A2E] rounded-full overflow-hidden">
+        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <span className="font-mono text-[10px] text-slate-600">/{max}</span>
+    </div>
+  );
+}
+
+function StringList({ items, color }: { items: string[]; color?: string }) {
+  return (
+    <ul className="space-y-1.5 mt-1">
+      {items.map((s, i) => (
+        <li key={i} className="flex gap-2 text-xs">
+          <span style={{ color: color ?? "#4FC3F7" }} className="shrink-0 mt-0.5">›</span>
+          <span className="text-slate-300 leading-relaxed">{s}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PersonaCards({ personas }: { personas: Record<string, { stance: string; weight: number; rationale: string }> }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 mt-1">
+      {Object.entries(personas).map(([name, p]) => (
+        <div key={name} className="border border-[#1A1A2E] rounded-lg p-2.5">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">{name}</span>
+            <span className="text-[10px] font-mono font-bold" style={{ color: stanceColor(p.stance) }}>{p.stance.toUpperCase()}</span>
+          </div>
+          <p className="text-[10px] text-slate-500 leading-relaxed">{p.rationale}</p>
+          <p className="text-[10px] text-slate-700 mt-1">weight: {p.weight}x</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ChecklistItems({ items }: { items: { item: string; status: string; category?: string }[] }) {
+  const statusIcon = (s: string) => s === "done" ? "✓" : s === "critical" ? "!" : "○";
+  const statusColor = (s: string) => s === "done" ? "#34D399" : s === "critical" ? "#F87171" : "#FACC15";
+  return (
+    <ul className="space-y-1.5 mt-1">
+      {items.map((item, i) => (
+        <li key={i} className="flex gap-2 text-xs items-start">
+          <span style={{ color: statusColor(item.status) }} className="shrink-0 font-mono font-bold mt-0.5">{statusIcon(item.status)}</span>
+          <span className="text-slate-300">{item.item}</span>
+          {item.category && <span className="text-[10px] text-slate-600 ml-auto shrink-0">{item.category}</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// Semantic field keys
+const VERDICT_KEYS   = ["verdict", "blue_verdict", "recommendation", "timing", "action"];
+const SCORE_KEYS     = ["score", "readiness_score", "confidence", "bull", "bear", "neutral"];
+const STRENGTHS_KEYS = ["strengths", "opportunities", "pros", "positives"];
+const RISKS_KEYS     = ["risks", "blockers", "weaknesses", "concerns", "risk_flags", "action_items"];
+const SKIP_KEYS      = ["tool", "timestamp", "chain"];
+
+function SmartValue({ k, v }: { k: string; v: unknown }) {
+  if (v === null || v === undefined) return <span className="text-slate-600 text-xs">—</span>;
+
+  // Verdict / recommendation
+  if (VERDICT_KEYS.includes(k) && typeof v === "string") return <VerdictBadge value={v} />;
+
+  // Score bars
+  if (SCORE_KEYS.includes(k) && typeof v === "number") return <ScoreBar value={v} />;
+
+  // Boolean
+  if (typeof v === "boolean") return (
+    <span className={`text-xs font-mono font-semibold ${v ? "text-[#34D399]" : "text-red-400"}`}>{v ? "✓ Yes" : "✗ No"}</span>
+  );
+
+  // Plain number
+  if (typeof v === "number") return <span className="text-[#4FC3F7] font-mono font-semibold">{v}</span>;
+
+  // String arrays
+  if (Array.isArray(v) && v.length > 0 && typeof v[0] === "string") {
+    const color = STRENGTHS_KEYS.includes(k) ? "#34D399" : RISKS_KEYS.includes(k) ? "#F87171" : undefined;
+    return <StringList items={v as string[]} color={color} />;
   }
+
+  // Checklist array
+  if (Array.isArray(v) && v.length > 0 && typeof v[0] === "object" && (v[0] as Record<string,unknown>).item) {
+    return <ChecklistItems items={v as { item: string; status: string; category?: string }[]} />;
+  }
+
+  // Persona object
+  if (k === "personas" && typeof v === "object" && !Array.isArray(v)) {
+    return <PersonaCards personas={v as Record<string, { stance: string; weight: number; rationale: string }>} />;
+  }
+
+  // Nested object
+  if (typeof v === "object" && !Array.isArray(v)) {
+    return <ResultObj obj={v as Record<string, unknown>} nested />;
+  }
+
+  // Object array (fallback)
   if (Array.isArray(v)) {
-    if (v.length === 0) return <span className="text-slate-600">—</span>;
-    if (typeof v[0] === "string") return (
-      <ul className="mt-1 space-y-1">
-        {v.map((s, i) => <li key={i} className="text-slate-300 text-xs before:content-['·'] before:text-[#4FC3F7] before:mr-2">{s}</li>)}
-      </ul>
-    );
     return (
-      <div className="mt-1 space-y-2">
+      <div className="space-y-2 mt-1">
         {(v as Record<string,unknown>[]).map((obj, i) => (
           <div key={i} className="border border-[#1A1A2E] rounded p-2">
-            <ResultObj obj={obj} />
+            <ResultObj obj={obj} nested />
           </div>
         ))}
       </div>
     );
   }
-  if (typeof v === "object") return <ResultObj obj={v as Record<string, unknown>} />;
-  return <span className="text-slate-300">{String(v)}</span>;
+
+  // String with sentiment coloring
+  if (typeof v === "string") {
+    const upper = v.toUpperCase();
+    const color = VERDICT_COLORS[upper];
+    if (color && v.length < 20) return <span className="text-sm font-mono font-semibold" style={{ color }}>{v}</span>;
+    return <span className="text-slate-200 text-xs leading-relaxed">{v}</span>;
+  }
+
+  return <span className="text-slate-300 text-xs">{String(v)}</span>;
 }
 
-function ResultObj({ obj }: { obj: Record<string, unknown> }) {
-  const SKIP = ["tool","timestamp"];
+function ResultObj({ obj, nested = false }: { obj: Record<string, unknown>; nested?: boolean }) {
+  const SKIP = nested ? [] : SKIP_KEYS;
   return (
-    <dl className="space-y-2">
+    <dl className={nested ? "space-y-1.5" : "space-y-4"}>
       {Object.entries(obj).filter(([k]) => !SKIP.includes(k)).map(([k, v]) => (
         <div key={k}>
-          <dt className="font-mono text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">{k.replace(/_/g," ")}</dt>
-          <dd><Value v={v} /></dd>
+          <dt className="font-mono text-[10px] text-slate-500 uppercase tracking-wider mb-1">{k.replace(/_/g," ")}</dt>
+          <dd><SmartValue k={k} v={v} /></dd>
         </div>
       ))}
     </dl>
@@ -652,29 +756,174 @@ function getMockResult(tool: Tool): Record<string, unknown> {
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
+// ─── Agent scan log animation ─────────────────────────────────────────────────
+
+type LogLine = { agent: "aeon" | "miroshark" | "blue" | "sys"; text: string; delay: number };
+
+function buildScanScript(tool: Tool): LogLine[] {
+  const inp = Object.values(tool.inputs).map(i => i.key).join(", ");
+  return [
+    { agent: "sys",       text: `> initializing 3-agent consensus · tool=${tool.id}`,                      delay: 0   },
+    { agent: "sys",       text: `> inputs=[${inp}] · chain=base · endpoint=/api/${tool.id}`,               delay: 180 },
+    { agent: "aeon",      text: `[AEON] booting narrative-tracker…`,                                       delay: 420 },
+    { agent: "aeon",      text: `[AEON] scanning Base ecosystem · ${new Date().toISOString().split("T")[0]}`,delay: 680 },
+    { agent: "aeon",      text: `[AEON] pulling token-movers · filtering by vol > $50k`,                   delay: 960 },
+    { agent: "aeon",      text: `[AEON] narrative fit scored · writing context block`,                     delay: 1280},
+    { agent: "miroshark", text: `[MIROSHARK] loading collab prompt · madebyshun/blue-agent`,               delay: 1600},
+    { agent: "miroshark", text: `[MIROSHARK] spawning crowd agents · personas=[retail,analyst,influencer,observer]`, delay: 1900 },
+    { agent: "miroshark", text: `[MIROSHARK] running weighted consensus · bull/bear/neutral`,              delay: 2250},
+    { agent: "miroshark", text: `[MIROSHARK] fomo_level detected · sentiment locked`,                      delay: 2600},
+    { agent: "blue",      text: `[BLUE] loading identity · skills/blue-agent-identity.md`,                 delay: 2950},
+    { agent: "blue",      text: `[BLUE] injecting base-ecosystem.md · base-addresses.md`,                  delay: 3280},
+    { agent: "blue",      text: `[BLUE] synthesizing aeon + miroshark signals…`,                           delay: 3600},
+    { agent: "blue",      text: `[BLUE] generating verdict · confidence scoring…`,                         delay: 3980},
+    { agent: "sys",       text: `> streaming response · parsing JSON output…`,                             delay: 4350},
+  ];
+}
+
+function AgentScanLog({ tool }: { tool: Tool }) {
+  const [lines, setLines] = useState<LogLine[]>([]);
+  const [cursor, setCursor] = useState(true);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const script = useRef(buildScanScript(tool));
+
+  useEffect(() => {
+    // reset on new tool
+    setLines([]);
+    script.current = buildScanScript(tool);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    script.current.forEach(line => {
+      const t = setTimeout(() => {
+        setLines(prev => [...prev, line]);
+      }, line.delay);
+      timers.push(t);
+    });
+
+    // cursor blink
+    const cursorInterval = setInterval(() => setCursor(c => !c), 530);
+
+    return () => {
+      timers.forEach(clearTimeout);
+      clearInterval(cursorInterval);
+    };
+  }, [tool.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [lines]);
+
+  const agentColor: Record<string, string> = {
+    aeon:      "#A78BFA",
+    miroshark: "#34D399",
+    blue:      "#4FC3F7",
+    sys:       "#475569",
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full px-8 py-12">
+      {/* Agent status row */}
+      <div className="flex items-center gap-6 mb-8">
+        {(["aeon","miroshark","blue"] as const).map(a => {
+          const hasStarted = lines.some(l => l.agent === a);
+          const isDone     = lines.length > 0 && lines[lines.length - 1].agent === "sys" && lines.length >= script.current.length - 1;
+          return (
+            <div key={a} className="flex items-center gap-2">
+              <span
+                className={`w-2 h-2 rounded-full transition-all duration-500 ${hasStarted ? "animate-pulse" : "opacity-20"}`}
+                style={{ background: agentColor[a], boxShadow: hasStarted ? `0 0 6px ${agentColor[a]}` : "none" }}
+              />
+              <span
+                className="font-mono text-xs font-bold transition-all duration-500"
+                style={{ color: hasStarted ? agentColor[a] : "#1E293B" }}
+              >
+                {a === "blue" ? "Blue" : a === "aeon" ? "Aeon" : "MiroShark"}
+              </span>
+              {isDone && hasStarted && (
+                <span className="font-mono text-[9px] text-slate-600">✓</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Terminal */}
+      <div className="w-full max-w-lg bg-[#080810] border border-[#1A1A2E] rounded-xl overflow-hidden">
+        {/* Terminal titlebar */}
+        <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-[#1A1A2E] bg-[#0D0D1A]">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F57]" />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#FEBC2E]" />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#28C840]" />
+          <span className="font-mono text-[10px] text-slate-600 ml-3">blue-agent · 3-agent consensus</span>
+        </div>
+        {/* Log output */}
+        <div className="px-4 py-4 space-y-1.5 min-h-[200px] max-h-[280px] overflow-y-auto">
+          {lines.map((line, i) => (
+            <div key={i} className="flex gap-2 font-mono text-[11px] leading-relaxed animate-fadeIn">
+              <span style={{ color: agentColor[line.agent] }} className="shrink-0 opacity-70">
+                {line.agent === "sys" ? "›" : "○"}
+              </span>
+              <span style={{ color: line.agent === "sys" ? "#475569" : agentColor[line.agent] + "CC" }}>
+                {line.text}
+              </span>
+            </div>
+          ))}
+          {/* blinking cursor on last line */}
+          {lines.length > 0 && (
+            <div className="flex gap-2 font-mono text-[11px]">
+              <span className="text-slate-700">›</span>
+              <span className="text-slate-700">{cursor ? "█" : " "}</span>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+      </div>
+
+      <p className="font-mono text-[10px] text-slate-700 mt-5">
+        {lines.length < script.current.length
+          ? `processing · ${lines.length}/${script.current.length} steps`
+          : "finalizing output…"}
+      </p>
+    </div>
+  );
+}
+
 // ─── Tool runner ─────────────────────────────────────────────────────────────
 
-type RunStep = "idle" | "calling" | "signing" | "paying" | "done" | "error";
+type RunStep = "idle" | "calling" | "done" | "error";
 
-function ToolRunner({ tool, onBack }: { tool: Tool; onBack: () => void }) {
-  const { address, isConnected } = useAccount();
-  const { signTypedDataAsync } = useSignTypedData();
-
+function ToolRunner({ tool, onBack, cached, onResult }: {
+  tool: Tool;
+  onBack: () => void;
+  cached: ToolResult | null;
+  onResult: (r: ToolResult) => void;
+}) {
   const [vals, setVals]       = useState<Record<string,string>>({});
-  const [step, setStep]       = useState<RunStep>("idle");
-  const [result, setResult]   = useState<Record<string,unknown> | null>(null);
+  const [step, setStep]       = useState<RunStep>(cached ? "done" : "idle");
+  const [result, setResult]   = useState<Record<string,unknown> | null>(cached?.result ?? null);
   const [err, setErr]         = useState<string | null>(null);
-  const [payAmount, setPayAmount] = useState<string | null>(null);
-  const [isMock, setIsMock]   = useState(false);
-  const [mockReason, setMockReason] = useState<"dev" | "service-down">("dev");
+  const [isMock, setIsMock]   = useState(cached?.isMock ?? false);
+  const [mockReason, setMockReason] = useState<"dev" | "service-down">(cached?.mockReason ?? "dev");
+  const [copied, setCopied]   = useState(false);
 
-  const loading = step === "calling" || step === "signing" || step === "paying";
+  const loading = step === "calling";
+
+  function shareResult() {
+    if (!result) return;
+    const r: ToolResult = { result, isMock, mockReason };
+    const encoded = encodeShare(tool.id, r);
+    const url = `${window.location.origin}/hub#s=${encoded}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
 
   async function run() {
     const missing = tool.inputs.filter(i => i.required && !vals[i.key]?.trim());
     if (missing.length) { setErr(`Required: ${missing.map(i => i.label).join(", ")}`); return; }
 
-    setErr(null); setResult(null); setPayAmount(null); setIsMock(false);
+    setErr(null); setResult(null); setIsMock(false);
     setStep("calling");
 
     const body: Record<string,string> = {};
@@ -687,288 +936,177 @@ function ToolRunner({ tool, onBack }: { tool: Tool; onBack: () => void }) {
         body: JSON.stringify(body),
       });
 
-      // ── Dev mode: mock on any error ─────────────────────────────────────────
-      if (IS_DEV && (res.status === 402 || !res.ok)) {
-        await new Promise(r => setTimeout(r, 700));
-        setResult(getMockResult(tool));
-        setIsMock(true); setMockReason("dev");
-        setStep("done");
-        return;
-      }
-
       // ── Service down (5xx) → fall back to mock ───────────────────────────────
       if (res.status >= 500) {
         await new Promise(r => setTimeout(r, 700));
-        setResult(getMockResult(tool));
-        setIsMock(true); setMockReason("service-down");
+        const r = getMockResult(tool);
+        setResult(r); setIsMock(true); setMockReason("service-down");
         setStep("done");
+        onResult({ result: r, isMock: true, mockReason: "service-down" });
         return;
       }
 
-      // ── x402 Payment flow ───────────────────────────────────────────────────
-      if (res.status === 402) {
-        if (!address) {
-          setErr("Connect your wallet to pay for this tool.");
-          setStep("error");
-          return;
-        }
-
-        const d402 = await res.json() as {
-          x402Version?: number;
-          accepts?: { scheme?: string; network?: string; payTo: string; maxAmountRequired: string; asset?: string; extra?: { name?: string; version?: string } }[];
-          paymentDetails?: { accepts?: { scheme?: string; network?: string; payTo: string; maxAmountRequired: string; asset?: string; extra?: { name?: string; version?: string } }[] };
-        };
-        const accepts = d402.accepts?.[0] ?? d402.paymentDetails?.accepts?.[0];
-        if (!accepts) { setErr("Invalid payment response from server."); setStep("error"); return; }
-
-        const { payTo, maxAmountRequired, asset, extra, scheme, network } = accepts;
-        const x402Version = d402.x402Version ?? 1;
-        setPayAmount(usdcAmt(maxAmountRequired));
-        setStep("signing");
-
-        const nonce       = randomNonce();
-        const validBefore = BigInt(Math.floor(Date.now() / 1000) + 300);
-
-        const signature = await signTypedDataAsync({
-          domain: {
-            name:              extra?.name    ?? "USD Coin",
-            version:           extra?.version ?? "2",
-            chainId:           8453,
-            verifyingContract: (asset ?? USDC_BASE) as `0x${string}`,
-          },
-          types: {
-            TransferWithAuthorization: [
-              { name: "from",        type: "address" },
-              { name: "to",          type: "address" },
-              { name: "value",       type: "uint256" },
-              { name: "validAfter",  type: "uint256" },
-              { name: "validBefore", type: "uint256" },
-              { name: "nonce",       type: "bytes32" },
-            ],
-          },
-          primaryType: "TransferWithAuthorization",
-          message: {
-            from:        address,
-            to:          payTo as `0x${string}`,
-            value:       BigInt(maxAmountRequired),
-            validAfter:  BigInt(0),
-            validBefore,
-            nonce,
-          },
-        });
-
-        setStep("paying");
-        const payment = {
-          x402Version,
-          scheme:  scheme  ?? "exact",
-          network: network ?? "eip155:8453",
-          payload: {
-            signature,
-            authorization: {
-              from: address, to: payTo,
-              value: maxAmountRequired,
-              validAfter: "0",
-              validBefore: validBefore.toString(),
-              nonce,
-            },
-          },
-        };
-
-        const xPaymentHeader = btoa(JSON.stringify(payment));
-
-        const r2 = await fetch(`/api/${tool.id}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Payment": xPaymentHeader,
-          },
-          body: JSON.stringify(body),
-        });
-        const d2 = await r2.json() as Record<string,unknown>;
-        console.log("[Hub] r2 status:", r2.status, "body:", JSON.stringify(d2));
-        if (!r2.ok) {
-          const errMsg = (d2.error as string) ?? (d2.message as string) ?? (d2.reason as string) ?? "Payment failed.";
-          setErr(`[${r2.status}] ${errMsg} — ${JSON.stringify(d2)}`);
-          setStep("error");
-          return;
-        }
-        setResult(d2);
-        setStep("done");
-        return;
-      }
-
-      // ── Success (no payment required) ───────────────────────────────────────
+      // ── Success ──────────────────────────────────────────────────────────────
       const data = await res.json() as Record<string,unknown>;
       if (!res.ok) { setErr((data.message as string) ?? (data.error as string) ?? "Request failed"); setStep("error"); return; }
       setResult(data);
       setStep("done");
+      onResult({ result: data, isMock: false, mockReason: "dev" });
 
-    } catch (e: unknown) {
-      if (IS_DEV) {
-        await new Promise(r => setTimeout(r, 700));
-        setResult(getMockResult(tool));
-        setIsMock(true);
-        setStep("done");
-      } else {
-        // Network error → mock fallback
-        await new Promise(r => setTimeout(r, 700));
-        setResult(getMockResult(tool));
-        setIsMock(true); setMockReason("service-down");
-        setStep("done");
-      }
+    } catch {
+      // Network error → mock fallback
+      await new Promise(r => setTimeout(r, 700));
+      const r = getMockResult(tool);
+      setResult(r); setIsMock(true); setMockReason("service-down");
+      setStep("done");
+      onResult({ result: r, isMock: true, mockReason: "service-down" });
     }
   }
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
+
       {/* Back nav */}
-      <div className="px-6 py-3 border-b border-[#1A1A2E] flex items-center gap-2">
+      <div className="px-6 py-3 border-b border-[#1A1A2E] flex items-center gap-2 shrink-0">
         <button onClick={onBack} className="flex items-center gap-1.5 font-mono text-xs text-slate-500 hover:text-white transition-colors">
           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
           Hub
         </button>
         <span className="font-mono text-[10px] text-slate-700">/</span>
         <span className="font-mono text-xs text-slate-400 truncate">{tool.name}</span>
-        <span className="font-mono text-[10px] text-slate-700 ml-auto">{tool.price}</span>
-      </div>
-
-      {/* Page hero */}
-      <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
-        {/* Category badge */}
-        <div className="inline-flex items-center gap-2 border border-[#A78BFA]/20 bg-[#A78BFA]/5 rounded-full px-4 py-1.5 mb-6">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#A78BFA] animate-pulse" />
-          <span className="font-mono text-[10px] text-[#A78BFA] tracking-widest">
-            BLUE HUB · {tool.cat.replace(/-/g, " ").toUpperCase()}
-          </span>
-        </div>
-
-        {/* Title */}
-        <h1 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
-          {tool.name}
-        </h1>
-
-        {/* Description */}
-        <p className="font-mono text-sm text-slate-400 max-w-md mx-auto leading-relaxed mb-6">
-          {tool.desc}
-        </p>
-
-        {/* Agent tags */}
-        <div className="flex items-center justify-center gap-2">
+        <div className="ml-auto flex items-center gap-2">
           {tool.agents.map(a => (
-            <span key={a} className="font-mono text-[10px] px-2.5 py-1 rounded-full border"
-              style={{ color: AGENT_COLORS[a], borderColor: `${AGENT_COLORS[a]}30`, background: `${AGENT_COLORS[a]}08` }}>
+            <span key={a} className="font-mono text-[9px] px-1.5 py-0.5 rounded-full"
+              style={{ color: AGENT_COLORS[a], background: `${AGENT_COLORS[a]}10` }}>
               {AGENT_LABELS[a]}
             </span>
           ))}
         </div>
       </div>
 
-      {/* Form + output */}
-      <div className="px-6 lg:px-10 py-8 max-w-2xl mx-auto w-full">
+      {/* 2-column body */}
+      <div className="flex flex-1 overflow-hidden">
 
-        {/* Input form */}
-        <div className="card-surface rounded-xl p-5 mb-5">
-          <div className="flex items-center justify-between mb-4">
-            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// INPUT</p>
-            {tool.inputs.some(i => i.example) && (
-              <button
-                onClick={() => {
-                  const filled: Record<string,string> = {};
-                  tool.inputs.forEach(i => { if (i.example) filled[i.key] = i.example; });
-                  setVals(filled);
-                }}
-                className="font-mono text-[10px] text-slate-500 hover:text-[#4FC3F7] border border-[#1A1A2E] hover:border-[#4FC3F7]/30 px-2 py-1 rounded transition-all"
-              >
-                Fill example ↙
-              </button>
-            )}
+        {/* ── Left panel: tool info + form ── */}
+        <div className="w-[400px] xl:w-[440px] shrink-0 border-r border-[#1A1A2E] overflow-y-auto flex flex-col">
+
+          {/* Tool header */}
+          <div className="px-6 pt-6 pb-5 border-b border-[#1A1A2E]">
+            <div className="inline-flex items-center gap-2 border border-[#A78BFA]/20 bg-[#A78BFA]/5 rounded-full px-3 py-1 mb-4">
+              <span className="w-1 h-1 rounded-full bg-[#A78BFA] animate-pulse" />
+              <span className="font-mono text-[9px] text-[#A78BFA] tracking-widest">
+                {tool.cat.replace(/-/g, " ").toUpperCase()}
+              </span>
+            </div>
+            <h2 className="font-mono text-xl font-bold text-white mb-2">{tool.name}</h2>
+            <p className="font-mono text-xs text-slate-500 leading-relaxed">{tool.desc}</p>
           </div>
-          <div className="space-y-4">
-            {tool.inputs.map(input => (
-              <div key={input.key}>
-                <label className="block font-mono text-xs text-slate-500 mb-1.5">
-                  {input.label}{input.required && <span className="text-[#4FC3F7] ml-1">*</span>}
-                </label>
-                <textarea
-                  rows={input.placeholder.length > 60 ? 3 : 1}
-                  className="w-full bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 font-mono text-sm text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/40 transition-colors resize-none"
-                  placeholder={input.placeholder}
-                  value={vals[input.key] ?? ""}
-                  onChange={e => setVals(v => ({ ...v, [input.key]: e.target.value }))}
-                />
-              </div>
-            ))}
+
+          {/* Input form */}
+          <div className="px-6 py-5 flex-1">
+            <div className="flex items-center justify-between mb-1">
+              <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">// INPUT</p>
+            </div>
+            <p className="font-mono text-[10px] text-slate-700 mb-4">
+              Output quality depends on input accuracy — use real data for best results
+            </p>
+            <div className="space-y-4">
+              {tool.inputs.map(input => (
+                <div key={input.key}>
+                  <label className="block font-mono text-xs text-slate-500 mb-1.5">
+                    {input.label}{input.required && <span className="text-[#4FC3F7] ml-1">*</span>}
+                  </label>
+                  <textarea
+                    rows={input.placeholder.length > 60 ? 3 : 2}
+                    className="w-full bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 font-mono text-xs text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/40 transition-colors resize-none"
+                    placeholder={input.placeholder}
+                    value={vals[input.key] ?? ""}
+                    onChange={e => setVals(v => ({ ...v, [input.key]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Run button + error */}
+          <div className="px-6 pb-6 shrink-0">
+            {step === "error" && err && (
+              <p className="font-mono text-xs text-red-400 mb-3">{err}</p>
+            )}
+            <button
+              onClick={run}
+              disabled={loading}
+              className="w-full font-mono text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-6 py-3 rounded-xl hover:bg-[#29ABE2] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {loading ? "Calling agents…" : "Run →"}
+            </button>
           </div>
         </div>
 
-        {/* Wallet connect prompt (not connected) */}
-        {!isConnected && (
-          <div className="mb-5 card-surface rounded-xl p-4 border border-[#4FC3F7]/15 flex items-center justify-between gap-4">
-            <div>
-              <p className="font-mono text-xs text-slate-300 font-semibold mb-0.5">Wallet required</p>
-              <p className="font-mono text-[10px] text-slate-600">Connect to pay {tool.price} USDC via x402 on Base</p>
-            </div>
-            <ConnectButton label="Connect →" />
-          </div>
-        )}
+        {/* ── Right panel: output ── */}
+        <div className="flex-1 overflow-y-auto">
+          {loading && <AgentScanLog tool={tool} />}
 
-        {/* Error */}
-        {step === "error" && err && (
-          <p className="font-mono text-xs text-red-400 mb-4 px-1">{err}</p>
-        )}
-
-        {/* Run button */}
-        <button
-          onClick={run}
-          disabled={loading}
-          className="w-full font-mono text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-6 py-3 rounded-xl hover:bg-[#29ABE2] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {step === "calling" && "Calling agents…"}
-          {step === "signing" && `Sign payment${payAmount ? ` — ${payAmount}` : ""}…`}
-          {step === "paying"  && "Confirming payment…"}
-          {(step === "idle" || step === "done" || step === "error") && `Run — ${tool.price}`}
-        </button>
-
-        {/* Step feedback */}
-        {loading && (
-          <div className="mt-5 card-surface rounded-xl p-5 flex items-center gap-3">
-            <div className="glow-dot animate-pulse" />
-            <div>
-              <p className="font-mono text-xs text-slate-300">
-                {step === "calling" && "Calling 3-agent consensus…"}
-                {step === "signing" && `Sign ${payAmount ?? tool.price} USDC transfer in your wallet`}
-                {step === "paying"  && "Submitting payment on Base…"}
+          {step === "idle" && !result && (
+            <div className="flex flex-col items-center justify-center h-full gap-3 px-8">
+              <div className="flex items-center gap-3 mb-2">
+                {tool.agents.map(a => (
+                  <div key={a} className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full" style={{ background: AGENT_COLORS[a] }} />
+                    <span className="font-mono text-xs font-bold" style={{ color: AGENT_COLORS[a] }}>{AGENT_LABELS[a]}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="font-mono text-xs text-slate-600 text-center max-w-xs leading-relaxed">
+                Fill in the inputs and run to get 3-agent consensus output
               </p>
-              {step === "signing" && (
-                <p className="font-mono text-[10px] text-slate-600 mt-0.5">EIP-3009 · no gas required</p>
-              )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Result */}
-        {step === "done" && result && (
-          <div className="mt-5 card-surface rounded-xl p-6">
-            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[#1A1A2E]">
-              <div className="glow-dot" />
-              <span className="font-mono text-xs text-slate-400">{tool.name}</span>
+          {step === "done" && result && (
+            <div className="p-6 lg:p-8">
+              <div className="flex items-center gap-2 mb-6 pb-4 border-b border-[#1A1A2E]">
+                <div className="glow-dot" />
+                <span className="font-mono text-xs text-slate-400">{tool.name}</span>
+                {isMock && (
+                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-amber-500/30 text-amber-500 ml-2">
+                    PREVIEW
+                  </span>
+                )}
+                {cached && !loading && (
+                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-[#34D399]/30 text-[#34D399] ml-1">
+                    cached
+                  </span>
+                )}
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="font-mono text-xs text-slate-700 mr-1">Blue · Aeon · MiroShark</span>
+                  <button
+                    onClick={shareResult}
+                    className={`font-mono text-[10px] px-2 py-1 rounded border transition-all ${
+                      copied
+                        ? "text-[#34D399] border-[#34D399]/40 bg-[#34D399]/5"
+                        : "text-slate-500 border-[#1A1A2E] hover:text-[#4FC3F7] hover:border-[#4FC3F7]/30"
+                    }`}
+                  >
+                    {copied ? "✓ Copied!" : "Share ↗"}
+                  </button>
+                  <button
+                    onClick={() => { setResult(null); setStep("idle"); }}
+                    className="font-mono text-[10px] text-slate-600 hover:text-white border border-[#1A1A2E] hover:border-[#4FC3F7]/30 px-2 py-1 rounded transition-all"
+                  >
+                    Re-run ↺
+                  </button>
+                </div>
+              </div>
+              <ResultObj obj={result} />
               {isMock && (
-                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-amber-500/30 text-amber-500 ml-2">
-                  {mockReason === "service-down" ? "PREVIEW" : "MOCK"}
-                </span>
+                <p className="font-mono text-[10px] text-slate-700 mt-6 pt-4 border-t border-[#1A1A2E]">
+                  preview data — live results powered by 3-agent consensus
+                </p>
               )}
-              <span className="font-mono text-xs text-slate-700 ml-auto">Blue · Aeon · MiroShark</span>
             </div>
-            <ResultObj obj={result} />
-            {isMock && (
-              <p className="font-mono text-[10px] text-slate-700 mt-4 pt-3 border-t border-[#1A1A2E]">
-                {mockReason === "service-down"
-                  ? "preview data — live results require x402 USDC payment · bankr.bot service coming back online"
-                  : "dev mode — mock data · x402 payment required in production"}
-              </p>
-            )}
-          </div>
-        )}
+          )}
+        </div>
 
       </div>
     </div>
@@ -1003,7 +1141,19 @@ function EmptyState({ onSelect }: { onSelect: (t: Tool) => void }) {
             </div>
           ))}
         </div>
-        <p className="font-mono text-[10px] text-slate-700 mt-2">pay per use · x402 · Base</p>
+        <p className="font-mono text-[10px] text-slate-700 mt-2">Blue · Aeon · MiroShark · Base</p>
+        <div className="mt-5 flex items-center justify-center gap-3 flex-wrap">
+          <Link href="/hub/registry"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#0D0D1A] hover:bg-[#1A1A2E] border border-[#1A1A2E] hover:border-[#34D399]/20 rounded-lg font-mono text-xs text-slate-400 transition-all">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] animate-pulse" />
+            Agent Registry
+          </Link>
+          <Link href="/hub/tools"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#0D0D1A] hover:bg-[#1A1A2E] border border-[#1A1A2E] hover:border-[#F59E0B]/20 rounded-lg font-mono text-xs text-slate-400 transition-all">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-pulse" />
+            Agent Tools ✦
+          </Link>
+        </div>
       </div>
 
       <div className="px-6 lg:px-10 py-8 max-w-4xl mx-auto w-full">
@@ -1021,9 +1171,6 @@ function EmptyState({ onSelect }: { onSelect: (t: Tool) => void }) {
                 {tool.agents.map(a => (
                   <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
                 ))}
-                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-[#A78BFA]/30 text-[#A78BFA] ml-auto">
-                  {tool.price}
-                </span>
               </div>
               <p className="font-mono text-sm font-semibold text-white group-hover:text-[#A78BFA] transition-colors mb-1.5">
                 {tool.name}
@@ -1047,7 +1194,6 @@ function EmptyState({ onSelect }: { onSelect: (t: Tool) => void }) {
                 {tool.agents.map(a => (
                   <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
                 ))}
-                <span className="font-mono text-[10px] text-slate-600 ml-auto">{tool.price}</span>
               </div>
               <p className="font-mono text-sm font-semibold text-white group-hover:text-[#4FC3F7] transition-colors mb-1">{tool.name}</p>
               <p className="font-mono text-xs text-slate-500 leading-relaxed line-clamp-2">{tool.desc}</p>
@@ -1058,12 +1204,32 @@ function EmptyState({ onSelect }: { onSelect: (t: Tool) => void }) {
         {/* Waiting state */}
         <div className="mt-4 card-surface rounded-xl p-6 text-center">
           <p className="font-mono text-xs text-slate-700 mb-1">// or select any tool from the sidebar</p>
-          <p className="font-mono text-[10px] text-slate-800">34 tools · 3 agents · x402 micropayments · Base</p>
+          <p className="font-mono text-[10px] text-slate-800">34 tools · 3-agent consensus · Base</p>
         </div>
 
       </div>
     </div>
   );
+}
+
+// ─── Cached result type ───────────────────────────────────────────────────────
+
+type ToolResult = { result: Record<string,unknown>; isMock: boolean; mockReason: "dev" | "service-down" };
+
+// ─── Share encode / decode ────────────────────────────────────────────────────
+
+function encodeShare(toolId: string, r: ToolResult): string {
+  const payload = JSON.stringify({ toolId, ...r });
+  return btoa(unescape(encodeURIComponent(payload)));
+}
+
+function decodeShare(hash: string): { toolId: string } & ToolResult | null {
+  try {
+    const raw = decodeURIComponent(escape(atob(hash)));
+    const p = JSON.parse(raw) as { toolId: string } & ToolResult;
+    if (!p.toolId || !p.result) return null;
+    return p;
+  } catch { return null; }
 }
 
 // ─── Hub page ─────────────────────────────────────────────────────────────────
@@ -1072,6 +1238,27 @@ export default function HubPage() {
   const [cat, setCat]         = useState<Category>("all");
   const [selected, setSelected] = useState<Tool | null>(null);
   const [search, setSearch]   = useState("");
+  const [cache, setCache]     = useState<Map<string, ToolResult>>(new Map());
+
+  function saveResult(toolId: string, r: ToolResult) {
+    setCache(prev => new Map(prev).set(toolId, r));
+  }
+
+  // ── On mount: decode shared result from URL hash ──────────────────────────
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash.slice(1); // strip #
+    if (!hash.startsWith("s=")) return;
+    const shared = decodeShare(hash.slice(2));
+    if (!shared) return;
+    const tool = TOOLS.find(t => t.id === shared.toolId);
+    if (!tool) return;
+    const r: ToolResult = { result: shared.result, isMock: shared.isMock, mockReason: shared.mockReason };
+    setCache(new Map([[shared.toolId, r]]));
+    setSelected(tool);
+    // clean hash from URL without reload
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = TOOLS.filter(t =>
     (cat === "all" || t.cat === cat) &&
@@ -1123,6 +1310,7 @@ export default function HubPage() {
             )}
             {filtered.map(tool => {
               const isFeatured = FEATURED_IDS.includes(tool.id);
+              const hasCached  = cache.has(tool.id);
               return (
                 <button key={tool.id} onClick={() => setSelected(tool)}
                   className={`w-full text-left px-4 py-2.5 transition-all border-l-2 ${
@@ -1137,12 +1325,14 @@ export default function HubPage() {
                       <span key={a} className="w-1 h-1 rounded-full" style={{ background: AGENT_COLORS[a] }} />
                     ))}
                     <div className="ml-auto flex items-center gap-1.5">
+                      {hasCached && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" title="Result cached" />
+                      )}
                       {isFeatured && (
                         <span className="font-mono text-[9px] px-1 py-0.5 rounded border border-[#A78BFA]/40 text-[#A78BFA]">
                           ★
                         </span>
                       )}
-                      <span className="font-mono text-[10px] text-slate-700">{tool.price}</span>
                     </div>
                   </div>
                   <span className="font-mono text-sm">{tool.name}</span>
@@ -1169,15 +1359,20 @@ export default function HubPage() {
 
           {/* Footer */}
           <div className="px-4 py-4 border-t border-[#1A1A2E]">
-            <p className="font-mono text-[10px] text-slate-700">x402 micropayments · Base · 3-agent consensus</p>
+            <p className="font-mono text-[10px] text-slate-700">3-agent consensus · Base</p>
           </div>
         </aside>
 
         {/* ── Main content ─────────────────────────────── */}
-        <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
+        <main className="flex-1 h-[calc(100vh-4rem)] overflow-hidden flex flex-col">
           {selected
-            ? <ToolRunner tool={selected} onBack={() => setSelected(null)} />
-            : <EmptyState onSelect={setSelected} />
+            ? <ToolRunner
+                tool={selected}
+                onBack={() => setSelected(null)}
+                cached={cache.get(selected.id) ?? null}
+                onResult={(r) => saveResult(selected.id, r)}
+              />
+            : <div className="overflow-y-auto flex-1"><EmptyState onSelect={setSelected} /></div>
           }
         </main>
 

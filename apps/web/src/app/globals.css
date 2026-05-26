@@ -91,3 +91,12 @@ body {
   0%, 100% { opacity: 0.3; transform: scale(0.85); }
   50%       { opacity: 1;   transform: scale(1.1);  }
 }
+
+/* Log line fade-in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.18s ease-out forwards;
+}

@@ -1,73 +1,68 @@
 import { NextRequest, NextResponse } from "next/server";
 import { proxyTool } from "@/app/api/_lib/proxy";
-import { callBankrLLM, extractJsonObject, runAeonSkill } from "@/app/api/_lib/llm";
+import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
+import { fetchBaseTopMovers, formatTokensForLLM } from "@/app/api/_lib/realdata";
 
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/ecosystem-digest";
 
-async function handleLocally(_body: Record<string, unknown>): Promise<NextResponse> {
-  // Step 1+2: Aeon token-movers (Base) + narrative-tracker in parallel
+async function handleLocally(body: Record<string, unknown>): Promise<NextResponse> {
+  const focus = (body.focus as string) ?? "";
+
+  // Real live Base ecosystem data
+  const topMovers = await fetchBaseTopMovers(25);
+  const byVol     = [...topMovers].sort((a, b) => b.volume24h - a.volume24h).slice(0, 15);
+  const byChange  = [...topMovers].sort((a, b) => b.priceChange24h - a.priceChange24h).slice(0, 8);
+
+  const realData = [
+    `=== LIVE BASE ECOSYSTEM DATA (DexScreener, ${new Date().toISOString()}) ===`,
+    `\nTop tokens by volume:\n${formatTokensForLLM(byVol)}`,
+    `\nTop gainers today:\n${formatTokensForLLM(byChange)}`,
+    focus ? `\nFocus area: ${focus}` : "",
+  ].filter(Boolean).join("\n");
+
   const [moversRaw, narrativeRaw] = await Promise.all([
-    runAeonSkill("token-movers", "Base chain ecosystem tokens, chain=base, min_mcap=$1M"),
-    runAeonSkill("narrative-tracker", "Base ecosystem, AI agents, DeFi, builder economy"),
+    runAeonSkill("token-movers", `Analyze this real Base ecosystem data for weekly digest:\n${realData}`),
+    runAeonSkill("narrative-tracker", `What narratives and trends does this real Base data show?\n${formatTokensForLLM(byVol.slice(0, 10))}\n${focus ? `Focus: ${focus}` : ""}`),
   ]);
 
-  // Step 3: MiroShark observer — neutral temperature check
-  const msRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are MiroShark observer persona — neutral recorder, no strong bias, synthesizes what others say.
-Record the community temperature for the Base ecosystem this week.
-CRITICAL: Return ONLY raw JSON. No markdown.
-Schema: {
-  "temperature": "hot|warm|neutral|cool|cold",
-  "bull": <0-100>,
-  "bear": <0-100>,
-  "neutral": <0-100>,
-  "community_mood": "<1 sentence>",
-  "notable_events": ["<event>"],
-  "builder_activity": "high|medium|low",
-  "what_observers_say": "<1-2 sentences>"
-}`,
-    messages: [{ role: "user", content: `Base ecosystem this week:\n\nToken movers:\n${moversRaw ?? "Base tokens active"}\n\nNarratives:\n${narrativeRaw ?? "AI agents, DeFi narratives active"}` }],
-    temperature: 0.4,
+  const msRaw = await runMiroSharkSkill({
+    scenario: "Weekly Base ecosystem pulse — what are builders and traders actually doing?",
+    context: { live_data: realData.slice(0, 600), aeon_analysis: moversRaw ?? "", focus: focus || "full ecosystem" },
+    persona: "4-persona consensus — Analyst(1.8x), Influencer(2.8x), Retail(1.0x), Observer(0.5x)",
+    outputSchema: `{"ecosystem_mood":"bullish|bearish|neutral","key_trend":"<1 sentence from real data>","builder_signal":"<what builders should know>","trader_signal":"<what traders should know>"}`,
     maxTokens: 500,
   });
 
-  const observerTake = extractJsonObject(msRaw) ?? { temperature: "neutral", bull: 40, bear: 30, neutral: 30, community_mood: "Steady builder activity", notable_events: [], builder_activity: "medium", what_observers_say: "Base ecosystem continuing to grow" };
+  const pulse = extractJsonObject(msRaw ?? "") ?? {};
 
-  // Step 4: Blue Agent final digest synthesis
-  const synthesis = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are Blue Agent — AI-native intelligence for Base builders.
-Produce a concise weekly digest of the Base ecosystem.
+  const verdictRaw = await runBlueSkill({
+    task: `Create a Base ecosystem digest grounded in real live market data. Do not fabricate protocols, TVL, or metrics not in the data.
 CRITICAL: Return ONLY raw JSON. No markdown.
 Schema: {
-  "headline": "<1 sentence digest headline>",
-  "movers": [{"token":"<symbol>","change":"<+/-%>","note":"<1 sentence>"}],
-  "narratives": [{"name":"<narrative>","phase":"Emerging|Rising|Peak|Fading","key_point":"<1 sentence>"}],
-  "community": {"temperature":"<hot/warm/neutral/cool/cold>","bull":<0-100>,"bear":<0-100>,"neutral":<0-100>},
-  "what_moved": ["<key event or trend>"],
-  "what_matters": ["<actionable insight>"],
-  "what_to_watch": ["<upcoming catalyst or risk>"],
-  "builder_signal": "<1 sentence for builders>",
-  "week_rating": <1-10>
+  "week": "<current month + year>",
+  "ecosystem_health": "expanding|stable|contracting",
+  "top_tokens_by_volume": [{"symbol":"<real>","volume_24h":"<real $>","narrative":"<category>"}],
+  "top_gainers": [{"symbol":"<real>","change_24h":"<real %>","signal":"<why moving>"}],
+  "dominant_narrative": "<what's actually driving Base right now>",
+  "narrative_shifts": ["<real shift based on data>"],
+  "signal": "<overall ecosystem signal in 1 sentence>",
+  "confidence": <0-100>
 }`,
-    messages: [{ role: "user", content: `Aeon token-movers:\n${moversRaw ?? "Base tokens"}\n\nAeon narratives:\n${narrativeRaw ?? "Base narratives"}\n\nMiroShark observer:\n${JSON.stringify(observerTake)}` }],
-    temperature: 0.3,
-    maxTokens: 1200,
+    skillFiles: ["base-ecosystem.md"],
+    input: `${realData}\n\nAeon movers:\n${moversRaw ?? ""}\n\nAeon narratives:\n${narrativeRaw ?? ""}\n\nMiroShark pulse:\n${JSON.stringify(pulse)}`,
+    maxTokens: 1000,
   });
 
-  const result = extractJsonObject(synthesis);
-  if (!result) throw new Error("Failed to parse digest");
+  const verdict = extractJsonObject(verdictRaw ?? "");
+  if (!verdict) throw new Error("Failed to parse verdict");
 
   return NextResponse.json({
-    tool: "ecosystem-digest",
-    timestamp: new Date().toISOString(),
-    period: "weekly",
-    observer: observerTake,
-    ...result,
+    tool: "ecosystem-digest", timestamp: new Date().toISOString(),
+    data_source: "DexScreener live — Base chain",
+    tokens_analyzed: topMovers.length, ...verdict,
   });
 }
 
 export async function POST(req: NextRequest) {
-  return proxyTool(req, ENDPOINT);
+  return proxyTool(req, ENDPOINT, handleLocally);
 }

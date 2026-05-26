@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { proxyTool } from "@/app/api/_lib/proxy";
-import { callBankrLLM, extractJsonObject, runAeonSkill } from "@/app/api/_lib/llm";
+import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
 
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/agent-performance";
 
@@ -12,56 +12,39 @@ async function handleLocally(body: Record<string, unknown>): Promise<NextRespons
     return NextResponse.json({ error: "handle is required" }, { status: 400 });
   }
 
-  const [agentScoreRaw, repoHealthRaw] = await Promise.all([
-    callBankrLLM({
-      model: "claude-haiku-4-5",
-      system: `You are Blue Agent Agent Score system. Score an AI agent.
-Dimensions(total 100): skillDepth(0-25), onchainActivity(0-25), reliability(0-20), interoperability(0-20), reputation(0-10).
-Tiers: 0-24=Bot, 25-49=Specialist, 50-74=Operator, 75-100=Sovereign.
-CRITICAL: Return ONLY raw JSON.
-Schema: {"xp":<0-100>,"tier":"Bot|Specialist|Operator|Sovereign","status":"online|offline|unknown","dimensions":{"skillDepth":<0-25>,"onchainActivity":<0-25>,"reliability":<0-20>,"interoperability":<0-20>,"reputation":<0-10>},"strengths":["<strength>"],"gaps":["<gap>"]}`,
-      messages: [{ role: "user", content: `Score agent: ${handle}` }],
-      temperature: 0.3,
-      maxTokens: 600,
-    }),
-    repo ? runAeonSkill("github-monitor", `${repo} — activity health, commit velocity, open issues, docs quality`) : Promise.resolve(null),
+  // Step 1+2: Aeon parallel — agent research + repo health (or ecosystem context)
+  const [agentResearchRaw, repoHealthRaw] = await Promise.all([
+    runAeonSkill("deep-research", `AI agent ${handle}: capabilities, onchain activity on Base, skill depth, community presence, reliability signals, reputation in Base/crypto ecosystem.`),
+    repo
+      ? runAeonSkill("deep-research", `${repo} GitHub repo: activity health, commit velocity, open issues, docs quality, contributor activity.`)
+      : runAeonSkill("narrative-tracker", `AI agent economy on Base: agent performance benchmarks, what makes a top-tier agent, metrics for evaluating ${handle}.`),
   ]);
 
-  const agentScore = extractJsonObject(agentScoreRaw) ?? { xp: 30, tier: "Specialist" };
-
-  const msRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are MiroShark observer persona — neutral, records what's there.
-Observe this agent's public presence and performance signals.
-CRITICAL: Return ONLY raw JSON.
-Schema: {"activity_level":"high|medium|low","community_presence":"strong|moderate|weak","trust_signals":["<signal>"],"concern_signals":["<concern>"],"observer_note":"<1 sentence>"}`,
-    messages: [{ role: "user", content: `Agent: ${handle}\nScore: ${JSON.stringify(agentScore)}\nRepo: ${repoHealthRaw ?? "no repo data"}` }],
-    temperature: 0.3,
+  // Step 3: MiroShark — analyst persona on agent performance
+  const msRaw = await runMiroSharkSkill({
+    scenario: `Evaluate AI agent ${handle} — performance, trust signals, ecosystem standing`,
+    context: {
+      handle,
+      repo: repo || null,
+      agent_research: agentResearchRaw ?? handle,
+      repo_health: repoHealthRaw ?? "no repo data",
+    },
+    persona: "analyst — evaluates agent economics, token utility, market positioning",
+    outputSchema: `{"activity_level":"high|medium|low","community_presence":"strong|moderate|weak","trust_signals":["<signal>"],"concern_signals":["<concern>"],"observer_note":"<1 sentence>"}`,
     maxTokens: 400,
   });
-  const observerTake = extractJsonObject(msRaw) ?? {};
+  const observerTake = extractJsonObject(msRaw ?? "") ?? {};
 
-  const resultRaw = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: `You are Blue Agent — agent performance report engine.
-CRITICAL: Return ONLY raw JSON.
-Schema: {
-  "performance_score": <0-100>,
-  "tier": "<copy from agent score>",
-  "trend": "improving|stable|declining|unknown",
-  "dimensions": <copy from agent score>,
-  "top_strengths": ["<strength>"],
-  "improvement_areas": ["<area>"],
-  "recommended_next_skills": ["<skill to add>"],
-  "ecosystem_standing": "leading|active|emerging|dormant",
-  "report_summary": "<2-3 sentences>"
-}`,
-    messages: [{ role: "user", content: `Agent: ${handle}\nScore: ${JSON.stringify(agentScore)}\nRepo health: ${repoHealthRaw ?? "no data"}\nObserver: ${JSON.stringify(observerTake)}` }],
-    temperature: 0.3,
+  // Step 4: Blue Agent synthesis — agent performance report
+  const resultRaw = await runBlueSkill({
+    task: "Generate a comprehensive agent performance report with XP scoring. CRITICAL: Return ONLY raw JSON. No markdown.",
+    skillFiles: ["base-ecosystem.md"],
+    input: `Agent: ${handle}\nRepo: ${repo || "none"}\nAgent research: ${agentResearchRaw ?? handle}\nRepo health: ${repoHealthRaw ?? "no data"}\nObserver: ${JSON.stringify(observerTake)}`,
+    outputSchema: `{"performance_score":<0-100>,"xp":<0-100>,"tier":"Bot|Specialist|Operator|Sovereign","trend":"improving|stable|declining|unknown","dimensions":{"skillDepth":<0-25>,"onchainActivity":<0-25>,"reliability":<0-20>,"interoperability":<0-20>,"reputation":<0-10>},"top_strengths":["<strength>"],"improvement_areas":["<area>"],"recommended_next_skills":["<skill to add>"],"ecosystem_standing":"leading|active|emerging|dormant","report_summary":"<2-3 sentences>"}`,
     maxTokens: 900,
   });
 
-  const result = extractJsonObject(resultRaw);
+  const result = extractJsonObject(resultRaw ?? "");
   if (!result) throw new Error("Failed to parse result");
 
   return NextResponse.json({
@@ -69,12 +52,11 @@ Schema: {
     timestamp: new Date().toISOString(),
     handle,
     repo: repo || null,
-    agent_score: agentScore,
     observer: observerTake,
     ...result,
   });
 }
 
 export async function POST(req: NextRequest) {
-  return proxyTool(req, ENDPOINT);
+  return proxyTool(req, ENDPOINT, handleLocally);
 }
