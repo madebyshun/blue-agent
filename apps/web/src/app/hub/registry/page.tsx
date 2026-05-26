@@ -226,26 +226,80 @@ export default function RegistryPage() {
   return (
     <>
       <Navbar />
-      <div className="min-h-screen bg-[#050508] font-mono pt-16">
-        <div className="max-w-5xl mx-auto px-5 py-8">
+      <div className="flex bg-[#050508] font-mono pt-16">
 
-          {/* ── Header ── */}
-          <div className="mb-8">
+        {/* ── Sidebar ── */}
+        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] border-r border-[#1A1A2E]">
+          <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
             <Link href="/hub" className="font-mono text-[10px] text-slate-700 hover:text-slate-500 transition-colors tracking-widest">
               ← BLUE HUB
             </Link>
-            <div className="flex items-start justify-between gap-4 mt-4">
+            <p className="font-mono text-[10px] text-[#34D399] tracking-widest mt-3">// AGENT REGISTRY</p>
+            <p className="font-mono text-[10px] text-slate-700 mt-1">{filtered.length} of {agents.length} agents</p>
+          </div>
+
+          {/* Search */}
+          <div className="px-4 pt-3 pb-2">
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search agents…"
+              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#34D399]/30 rounded-lg px-3 py-2 font-mono text-xs text-white placeholder-slate-700 focus:outline-none transition-colors"
+            />
+          </div>
+
+          {/* Type filter */}
+          <div className="px-4 pb-4">
+            <p className="font-mono text-[10px] text-slate-700 mb-2 tracking-widest">TYPE</p>
+            <div className="flex flex-wrap gap-1">
+              {TYPES.map(t => (
+                <button key={t} onClick={() => setFilter(t)}
+                  className={`font-mono text-[10px] px-2 py-1 rounded transition-colors capitalize ${
+                    filter === t ? "bg-[#34D399]/15 text-[#34D399]" : "text-slate-600 hover:text-slate-300"
+                  }`}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="px-4 pt-3 border-t border-[#1A1A2E] space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[10px] text-slate-600">total agents</span>
+              <span className="font-mono text-sm font-bold text-white">{agents.length}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[10px] text-slate-600">grade A</span>
+              <span className="font-mono text-sm font-bold text-[#34D399]">{agents.filter(a => a.grade === "A").length}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[10px] text-slate-600">verified</span>
+              <span className="font-mono text-sm font-bold text-[#A78BFA]">{agents.filter(a => a.verified).length}</span>
+            </div>
+          </div>
+
+          <div className="mt-auto px-4 py-4 border-t border-[#1A1A2E]">
+            <p className="font-mono text-[10px] text-slate-700">3-agent audit · Blue · Aeon · MiroShark</p>
+          </div>
+        </aside>
+
+        {/* ── Main ── */}
+        <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto px-6 py-8">
+
+          {/* Header */}
+          <div className="mb-6">
+            <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] animate-pulse" />
                   <span className="font-mono text-[10px] text-[#34D399] tracking-widest">AGENT REGISTRY · BASE</span>
                 </div>
                 <h1 className="font-mono text-3xl font-bold text-white tracking-tight">
                   AGENT<span className="text-[#4FC3F7]">REGISTRY</span>
                 </h1>
-                <p className="font-mono text-xs text-slate-600 mt-2 max-w-lg leading-relaxed">
-                  Discover Base AI agents — automated audit by Blue Agent + Aeon + MiroShark.
-                  Submit your repo, get graded.
+                <p className="font-mono text-xs text-slate-600 mt-1 leading-relaxed">
+                  Discover Base AI agents. Submit your repo, get graded A–F.
                 </p>
               </div>
               <button
@@ -257,12 +311,12 @@ export default function RegistryPage() {
             </div>
           </div>
 
-          {/* ── Submit form ── */}
+          {/* Submit form */}
           {showSubmit && (
             <SubmitForm onSubmitted={handleSubmitted} onClose={() => setShowSubmit(false)} />
           )}
 
-          {/* ── New agent toast ── */}
+          {/* New agent toast */}
           {newAgent && (
             <div className="mb-6 px-4 py-3 border border-[#34D399]/20 bg-[#34D399]/5 rounded-xl flex items-center gap-3">
               <span className="font-mono text-[10px] text-[#34D399]">✓ submitted</span>
@@ -271,58 +325,14 @@ export default function RegistryPage() {
                 {newAgent.grade}
               </span>
               <span className="font-mono text-[10px] text-slate-600">{newAgent.health_score}/100</span>
-              <Link href={`/hub/registry/${newAgent.handle}`}
-                className="ml-auto font-mono text-[10px] text-[#4FC3F7] hover:underline">
+              <Link href={`/hub/registry/${newAgent.handle}`} className="ml-auto font-mono text-[10px] text-[#4FC3F7] hover:underline">
                 view profile →
               </Link>
               <button onClick={() => setNewAgent(null)} className="font-mono text-[10px] text-slate-700 hover:text-slate-400">✕</button>
             </div>
           )}
 
-          {/* ── Stats ── */}
-          <div className="flex items-center gap-6 mb-6 border-b border-[#1A1A2E] pb-4">
-            <div>
-              <span className="font-mono text-xl font-bold text-white">{agents.length}</span>
-              <span className="font-mono text-[10px] text-slate-600 ml-2">agents</span>
-            </div>
-            <div>
-              <span className="font-mono text-xl font-bold text-[#34D399]">{agents.filter(a => a.grade === "A").length}</span>
-              <span className="font-mono text-[10px] text-slate-600 ml-2">grade A</span>
-            </div>
-            <div>
-              <span className="font-mono text-xl font-bold text-[#A78BFA]">{agents.filter(a => a.verified).length}</span>
-              <span className="font-mono text-[10px] text-slate-600 ml-2">verified</span>
-            </div>
-            <div className="ml-auto">
-              <p className="font-mono text-[10px] text-slate-700">3-agent consensus · Blue · Aeon · MiroShark</p>
-            </div>
-          </div>
-
-          {/* ── Filters ── */}
-          <div className="flex items-center gap-4 mb-6 flex-wrap">
-            {/* Type filter */}
-            <div className="flex gap-1 flex-wrap">
-              {TYPES.map(t => (
-                <button key={t} onClick={() => setFilter(t)}
-                  className={`font-mono text-[10px] px-2 py-1 rounded transition-colors capitalize ${
-                    filter === t
-                      ? "bg-[#4FC3F7]/15 text-[#4FC3F7]"
-                      : "text-slate-600 hover:text-slate-300"
-                  }`}>
-                  {t}
-                </button>
-              ))}
-            </div>
-            {/* Search */}
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="search agents…"
-              className="ml-auto bg-[#0D0D1A] border border-[#1A1A2E] focus:border-[#4FC3F7]/30 rounded-lg px-3 py-1.5 font-mono text-xs text-white placeholder-slate-700 focus:outline-none transition-colors w-44"
-            />
-          </div>
-
-          {/* ── Grid ── */}
+          {/* Grid */}
           {loading ? (
             <div className="text-center py-20">
               <p className="font-mono text-xs text-slate-700 animate-pulse">loading registry…</p>
@@ -333,28 +343,19 @@ export default function RegistryPage() {
                 {agents.length === 0 ? "no agents registered yet — be the first" : "no agents match filter"}
               </p>
               {agents.length === 0 && (
-                <button onClick={() => setShowSubmit(true)}
-                  className="font-mono text-xs text-[#4FC3F7] hover:underline">
+                <button onClick={() => setShowSubmit(true)} className="font-mono text-xs text-[#4FC3F7] hover:underline">
                   → submit your agent
                 </button>
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {filtered.map(agent => (
                 <AgentCard key={agent.handle} agent={agent} />
               ))}
             </div>
           )}
-
-          {/* ── Footer ── */}
-          <div className="mt-12 pt-4 border-t border-[#1A1A2E] flex items-center justify-between">
-            <p className="font-mono text-[10px] text-slate-700">Blue Hub Agent Registry · Base chain</p>
-            <Link href="/hub" className="font-mono text-[10px] text-slate-700 hover:text-slate-500 transition-colors">
-              ← back to hub
-            </Link>
-          </div>
-        </div>
+        </main>
       </div>
     </>
   );
