@@ -384,10 +384,9 @@ export default function ToolsPage() {
   return (
     <>
       <Navbar />
-      <div className="min-h-screen bg-[#050508] font-mono pt-16">
-        <div className="flex">
+      <div className="flex bg-[#050508] font-mono pt-16">
           {/* ── Sidebar ── */}
-          <aside className="hidden lg:flex flex-col w-64 shrink-0 sticky top-16 h-[calc(100vh-4rem)] border-r border-[#1A1A2E]">
+          <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] border-r border-[#1A1A2E]">
             <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
               <Link href="/hub" className="font-mono text-[10px] text-slate-700 hover:text-slate-500 transition-colors tracking-widest">
                 ← BLUE HUB
@@ -460,7 +459,7 @@ export default function ToolsPage() {
           </aside>
 
           {/* ── Main ── */}
-          <main className="flex-1 px-6 py-8 max-w-5xl">
+          <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto px-6 py-8">
 
             {/* Header */}
             <div className="mb-8">
@@ -537,7 +536,6 @@ export default function ToolsPage() {
               </div>
             )}
           </main>
-        </div>
       </div>
     </>
   );
