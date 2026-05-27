@@ -388,7 +388,10 @@ export default function ToolsPage() {
       // ── x402 paid tool ──────────────────────────────────────────────────
       if (selected.x402Url && selected.x402Body) {
         const body = selected.x402Body(values);
-        await x402.run(selected.x402Url, body);
+        // localUrl = our own 3-agent pipeline (DexScreener → Aeon → MiroShark → Blue)
+        // called after Bankr verifies payment — better output than Bankr's pipeline
+        const localUrl = `/api/${selected.id}`;
+        await x402.run(selected.x402Url, body, localUrl);
         // result is in x402.result — sync it to local state
         // (handled via useEffect below)
         return;
