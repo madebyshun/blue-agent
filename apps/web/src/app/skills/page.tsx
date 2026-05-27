@@ -245,6 +245,45 @@ function SoulSection() {
             </div>
           </div>
         </div>
+
+        {/* Fork in 3 steps */}
+        <div className="card-surface rounded-xl p-5">
+          <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-4">// FORK IN 3 STEPS</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[
+              { step: "01", label: "Clone", cmd: "git clone github.com/madebyshun/blue-agent", desc: "Get the full Blue Agent repo with all skill files" },
+              { step: "02", label: "Edit SOUL.md", cmd: "nano SOUL.md", desc: "Update identity, values, communication style, hard limits" },
+              { step: "03", label: "Load", cmd: "bankr session --soul ./SOUL.md", desc: "Your personality file loads into any Bankr agent session" },
+            ].map(s => (
+              <div key={s.step} className="border border-[#1A1A2E] rounded-lg p-3">
+                <span className="font-mono text-[10px] text-[#4FC3F7]">{s.step}</span>
+                <p className="font-mono text-xs text-white mt-1 mb-1">{s.label}</p>
+                <p className="font-mono text-[10px] text-slate-600 leading-relaxed mb-2">{s.desc}</p>
+                <div className="font-mono text-[10px] text-[#A78BFA] bg-[#050508] border border-[#1A1A2E] rounded px-2 py-1 truncate">
+                  $ {s.cmd}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* What SOUL.md controls */}
+        <div className="card-surface rounded-xl p-5">
+          <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">// WHAT SOUL.md CONTROLS</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: "Identity", desc: "Name, role, chain, builder" },
+              { label: "Core Values", desc: "5 unbreakable principles" },
+              { label: "Communication", desc: "Tone, phrases, format" },
+              { label: "Hard Limits", desc: "What the agent won't do" },
+            ].map(item => (
+              <div key={item.label} className="border border-[#1A1A2E] rounded-lg p-3">
+                <p className="font-mono text-xs text-white mb-1">{item.label}</p>
+                <p className="font-mono text-[10px] text-slate-600 leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -272,7 +311,7 @@ function AeonSkillSection({ skill }: { skill: typeof AEON_SKILLS[number] }) {
       </div>
 
       {/* Content */}
-      <div className="px-6 lg:px-10 py-8 max-w-5xl mx-auto w-full space-y-4">
+      <div className="px-6 lg:px-10 py-8 w-full space-y-4">
 
         {/* Triggers */}
         <div className="card-surface rounded-xl p-5">
@@ -315,6 +354,37 @@ function AeonSkillSection({ skill }: { skill: typeof AEON_SKILLS[number] }) {
           <div className="font-mono text-xs">
             <span className="text-slate-700">$ </span>
             <span className="text-[#4FC3F7]">cp blue-agent/skills/{skill.name}.md ~/.blue-agent/skills/</span>
+          </div>
+        </div>
+
+        {/* How it runs */}
+        <div className="card-surface rounded-xl p-5">
+          <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-4">// HOW IT RUNS</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[
+              { step: "01", label: "Trigger", desc: `User types a matching phrase (e.g. "${skill.triggers[0]}")` },
+              { step: "02", label: "Parse", desc: `Aeon reads ${skill.name}.md and applies grounding rules` },
+              { step: "03", label: "Output", desc: "Structured signal — no hallucinations, source-attributed" },
+            ].map(s => (
+              <div key={s.step} className="border border-[#1A1A2E] rounded-lg p-3">
+                <span className="font-mono text-[10px]" style={{ color: skill.color }}>{s.step}</span>
+                <p className="font-mono text-xs text-white mt-1 mb-1">{s.label}</p>
+                <p className="font-mono text-[10px] text-slate-600 leading-relaxed">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* All triggers expanded */}
+        <div className="card-surface rounded-xl p-5">
+          <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">// ALL TRIGGER PHRASES ({skill.triggers.length})</p>
+          <div className="space-y-1.5">
+            {skill.triggers.map((t, i) => (
+              <div key={t} className="flex items-center gap-3">
+                <span className="font-mono text-[10px] text-slate-700 w-5">{i + 1}.</span>
+                <span className="font-mono text-xs text-slate-400">&ldquo;{t}&rdquo;</span>
+              </div>
+            ))}
           </div>
         </div>
 
