@@ -23,11 +23,11 @@ const AEON_FEED_TOKEN = process.env.AEON_FEED_TOKEN ?? "";
 
 // Map content/username patterns to skill IDs
 const SKILL_PATTERNS: Array<[RegExp, string]> = [
-  [/token.?pick|🎯.*pick|pick.*signal/i,       "token-pick"],
-  [/top movers|token movers|🏆.*movers/i,       "token-movers"],
-  [/narrative.*track|🌊|ct.*narrative/i,         "narrative-tracker"],
-  [/morning.*brief|☀️.*brief|gm.*base/i,         "morning-brief"],
-  [/defi.*monitor|yield.*opport|📈.*defi/i,      "defi-monitor"],
+  [/token.?pick|daily.?pick|🎯.*pick|pick.*signal|signal \d+\/10/i, "token-pick"],
+  [/top movers|token movers|🏆.*movers|gainers.*losers/i,           "token-movers"],
+  [/narrative.*track|🌊|ct.*narrative|front.?run.*ride.*fade/i,     "narrative-tracker"],
+  [/morning.*brief|☀️.*brief|gm.*base/i,                            "morning-brief"],
+  [/defi.*monitor|yield.*opport|📈.*defi/i,                         "defi-monitor"],
   [/deal.*flow|🤝.*deal|investment.*deal/i,      "deal-flow"],
   [/github.*trend|trending.*repo|💻.*trend/i,    "github-trending"],
   [/security.*digest|🔐|vulnerabilit/i,          "security-digest"],
