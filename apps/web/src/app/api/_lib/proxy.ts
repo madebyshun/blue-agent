@@ -60,8 +60,8 @@ export async function proxyTool(
     return NextResponse.json(data, { status: 402 });
   }
 
-  // 5xx from Bankr handler — use fallback if provided
-  if (upstream.status >= 500 && fallback) {
+  // Any non-2xx error from Bankr handler — use fallback if provided
+  if (!upstream.ok && fallback) {
     console.warn(`[proxy] upstream ${endpoint} → ${upstream.status}, using fallback`);
     return fallback(body);
   }
@@ -71,7 +71,13 @@ export async function proxyTool(
     ? await upstream.json().catch(() => ({ error: "Failed to parse response" }))
     : await upstream.text().catch(() => "");
 
-  if (upstream.status !== 200) {
+  // Bankr returned 200 but with an error body — fall back to local pipeline
+  if (upstream.ok && fallback && typeof data === "object" && data !== null && "error" in (data as object)) {
+    console.warn(`[proxy] upstream ${endpoint} → 200 but error body, using fallback:`, (data as Record<string,unknown>).error);
+    return fallback(body);
+  }
+
+  if (!upstream.ok) {
     console.error(`[proxy] upstream ${endpoint} → ${upstream.status}:`, JSON.stringify(data));
   }
 
