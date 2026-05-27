@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
+import { useX402Tool } from "@/hooks/useX402Tool";
+import { useAccount } from "wagmi";
 
 // ─── Tool registry ──────────────────────────────────────────────────────────
 
@@ -13,6 +15,8 @@ interface ToolInput { key: string; label: string; placeholder: string; required?
 interface Tool {
   id: string; name: string; cat: Category; price: string;
   agents: Agent[]; desc: string; inputs: ToolInput[]; featured?: boolean;
+  x402Url?: string;
+  x402Body?: (values: Record<string, string>) => Record<string, unknown>;
 }
 
 const FEATURED_IDS = ["launch-simulator", "investor-memo", "market-fit", "token-launch-readiness"];
@@ -30,6 +34,8 @@ const TOOLS: Tool[] = AGENT_TOOLS.map(t => ({
     :                               (["blue"]       as Agent[]),
   desc:   t.description,
   inputs: t.inputs,
+  x402Url:  t.x402Url,
+  x402Body: t.x402Body,
 }));
 
 const CATEGORIES: { key: Category; label: string }[] = [
@@ -755,7 +761,7 @@ function AgentScanLog({ tool }: { tool: Tool }) {
 
 // ─── Tool runner ─────────────────────────────────────────────────────────────
 
-type RunStep = "idle" | "calling" | "done" | "error";
+type RunStep = "idle" | "calling" | "signing" | "paying" | "done" | "error";
 
 function ToolRunner({ tool, onBack, cached, onResult }: {
   tool: Tool;
@@ -771,7 +777,35 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
   const [mockReason, setMockReason] = useState<"dev" | "service-down">(cached?.mockReason ?? "dev");
   const [copied, setCopied]   = useState(false);
 
-  const loading = step === "calling";
+  const x402 = useX402Tool();
+  const { isConnected } = useAccount();
+
+  const loading = step === "calling" || step === "signing" || step === "paying";
+
+  // Sync x402 hook state → local step
+  useEffect(() => {
+    if (x402.status === "idle") return;
+    if (x402.status === "calling") { setStep("calling"); return; }
+    if (x402.status === "signing") { setStep("signing"); return; }
+    if (x402.status === "paying")  { setStep("paying");  return; }
+    if (x402.status === "error") {
+      setErr(x402.error ?? "Payment failed");
+      setStep("error");
+      return;
+    }
+    if (x402.status === "done" && x402.result) {
+      try {
+        const parsed = JSON.parse(x402.result) as Record<string,unknown>;
+        setResult(parsed);
+        setStep("done");
+        onResult({ result: parsed, isMock: false, mockReason: "dev" });
+      } catch {
+        setResult({ output: x402.result });
+        setStep("done");
+        onResult({ result: { output: x402.result }, isMock: false, mockReason: "dev" });
+      }
+    }
+  }, [x402.status, x402.result, x402.error, onResult]);
 
   function shareResult() {
     if (!result) return;
@@ -789,10 +823,20 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
     if (missing.length) { setErr(`Required: ${missing.map(i => i.label).join(", ")}`); return; }
 
     setErr(null); setResult(null); setIsMock(false);
-    setStep("calling");
 
     const body: Record<string,string> = {};
     tool.inputs.forEach(i => { if (vals[i.key]) body[i.key] = vals[i.key]; });
+
+    // ── x402 flow: wallet connected + tool has payment URL ───────────────────
+    if (tool.x402Url && tool.x402Body && isConnected) {
+      x402.reset();
+      const x402Body = tool.x402Body(body);
+      await x402.run(tool.x402Url, x402Body, `/api/${tool.id}`);
+      return;
+    }
+
+    // ── Free flow: no wallet or no x402Url ───────────────────────────────────
+    setStep("calling");
 
     try {
       const res = await fetch(`/api/${tool.id}`, {
@@ -898,12 +942,20 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
             {step === "error" && err && (
               <p className="font-mono text-xs text-red-400 mb-3">{err}</p>
             )}
+            {tool.x402Url && !isConnected && (
+              <p className="font-mono text-[10px] text-amber-400/70 mb-2">
+                Connect wallet to pay {tool.price} USDC via x402
+              </p>
+            )}
             <button
               onClick={run}
               disabled={loading}
               className="w-full font-mono text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-6 py-3 rounded-xl hover:bg-[#29ABE2] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {loading ? "Calling agents…" : "Run →"}
+              {step === "signing" ? "Sign in wallet…" :
+               step === "paying"  ? "Paying USDC…"   :
+               loading            ? "Calling agents…" :
+               (tool.x402Url && isConnected) ? `Run · ${tool.price}` : "Run →"}
             </button>
           </div>
         </div>
