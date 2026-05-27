@@ -559,7 +559,7 @@ export default function MarketPage() {
             )}
           </div>
 
-          <div className="px-6 lg:px-10 py-8 max-w-4xl mx-auto w-full space-y-8">
+          <div className="px-6 lg:px-10 py-8 w-full space-y-8">
 
             {/* Plan cards */}
             <div className="grid md:grid-cols-2 gap-5">

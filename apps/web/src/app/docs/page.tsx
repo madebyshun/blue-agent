@@ -193,7 +193,7 @@ export default function DocsPage() {
               </div>
             </div>
 
-            <div className="px-6 lg:px-10 py-8 max-w-4xl mx-auto w-full">
+            <div className="px-6 lg:px-10 py-8 w-full">
 
             {/* ── 00 Ecosystem ────────────────────── */}
             <section id="ecosystem" className="mb-16 scroll-mt-20">

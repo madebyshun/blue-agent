@@ -280,7 +280,7 @@ export default function ToolsPage() {
             </div>
           </div>
 
-          <div className="px-6 lg:px-10 py-8 max-w-4xl mx-auto w-full">
+          <div className="px-6 lg:px-10 py-8 w-full">
 
           {/* ── TOOLS ──────────────────────────────────── */}
           {section === "tools" && (

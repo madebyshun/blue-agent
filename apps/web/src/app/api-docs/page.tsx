@@ -250,7 +250,7 @@ function OverviewSection() {
         </p>
       </div>
 
-      <div className="px-6 lg:px-10 py-8 max-w-5xl mx-auto w-full space-y-6">
+      <div className="px-6 lg:px-10 py-8 w-full space-y-6">
 
         {/* Stats row */}
         <div className="grid grid-cols-3 gap-3">
@@ -345,7 +345,7 @@ function AuthSection() {
         </p>
       </div>
 
-      <div className="px-6 lg:px-10 py-8 max-w-5xl mx-auto w-full space-y-4">
+      <div className="px-6 lg:px-10 py-8 w-full space-y-4">
 
         {/* Steps */}
         <div className="card-surface rounded-xl p-5">
@@ -430,7 +430,7 @@ function EndpointsSection({ category }: { category: typeof CATEGORIES[number] })
       </div>
 
       {/* Endpoints */}
-      <div className="px-6 lg:px-10 py-8 max-w-5xl mx-auto w-full space-y-3">
+      <div className="px-6 lg:px-10 py-8 w-full space-y-3">
         {category.tools.map((tool) => {
           const open = expanded === tool.name;
           return (
