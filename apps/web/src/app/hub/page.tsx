@@ -1010,11 +1010,6 @@ function EmptyState({ onSelect }: { onSelect: (t: Tool) => void }) {
             <span className="w-1 h-1 rounded-full bg-[#34D399] animate-pulse" />
             Registry
           </Link>
-          <Link href="/hub/tools"
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-[#1A1A2E] hover:border-[#F59E0B]/20 rounded-lg font-mono text-[10px] text-slate-500 hover:text-[#F59E0B] transition-all">
-            <span className="w-1 h-1 rounded-full bg-[#F59E0B] animate-pulse" />
-            Tools ✦
-          </Link>
         </div>
       </div>
 
