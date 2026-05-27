@@ -2,14 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { proxyTool } from "@/app/api/_lib/proxy";
 import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
 import { fetchBaseTopMovers, formatTokensForLLM } from "@/app/api/_lib/realdata";
+import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/ecosystem-digest";
 
 async function handleLocally(body: Record<string, unknown>): Promise<NextResponse> {
   const focus = (body.focus as string) ?? "";
 
-  // Real live Base ecosystem data
-  const topMovers = await fetchBaseTopMovers(25);
+  // Real live Base ecosystem data + real Aeon from KV
+  const [topMovers, realAeonBrief, realAeonNarrative] = await Promise.all([
+    fetchBaseTopMovers(25),
+    getAeonOutput("morning-brief"),
+    getAeonOutput("narrative-tracker"),
+  ]);
   const byVol     = [...topMovers].sort((a, b) => b.volume24h - a.volume24h).slice(0, 15);
   const byChange  = [...topMovers].sort((a, b) => b.priceChange24h - a.priceChange24h).slice(0, 8);
 
@@ -20,9 +25,15 @@ async function handleLocally(body: Record<string, unknown>): Promise<NextRespons
     focus ? `\nFocus area: ${focus}` : "",
   ].filter(Boolean).join("\n");
 
+  const dataSource = (realAeonBrief || realAeonNarrative) ? "DexScreener live + Real Aeon (KV)" : "DexScreener live";
+
   const [moversRaw, narrativeRaw] = await Promise.all([
-    runAeonSkill("token-movers", `Analyze this real Base ecosystem data for weekly digest:\n${realData}`),
-    runAeonSkill("narrative-tracker", `What narratives and trends does this real Base data show?\n${formatTokensForLLM(byVol.slice(0, 10))}\n${focus ? `Focus: ${focus}` : ""}`),
+    realAeonBrief
+      ? Promise.resolve(formatAeonForLLM(realAeonBrief))
+      : runAeonSkill("token-movers", `Analyze this real Base ecosystem data for weekly digest:\n${realData}`),
+    realAeonNarrative
+      ? Promise.resolve(formatAeonForLLM(realAeonNarrative))
+      : runAeonSkill("narrative-tracker", `What narratives and trends does this real Base data show?\n${formatTokensForLLM(byVol.slice(0, 10))}\n${focus ? `Focus: ${focus}` : ""}`),
   ]);
 
   const msRaw = await runMiroSharkSkill({
@@ -58,7 +69,7 @@ Schema: {
 
   return NextResponse.json({
     tool: "ecosystem-digest", timestamp: new Date().toISOString(),
-    data_source: "DexScreener live — Base chain",
+    data_source: dataSource,
     tokens_analyzed: topMovers.length, ...verdict,
   });
 }

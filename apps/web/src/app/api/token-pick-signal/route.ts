@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { proxyTool } from "@/app/api/_lib/proxy";
 import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
 import { fetchBaseTopMovers, searchBaseToken, formatTokensForLLM } from "@/app/api/_lib/realdata";
+import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/token-pick-signal";
 
@@ -9,10 +10,12 @@ async function handleLocally(body: Record<string, unknown>): Promise<NextRespons
   const chain   = (body.chain as string)   ?? "base";
   const context = (body.context as string) ?? "";
 
-  // ── Step 1: Fetch real Base token data from DexScreener ──────────────────
-  const [topMovers, contextTokens] = await Promise.all([
+  // ── Step 1: Fetch real Base token data from DexScreener + real Aeon from KV
+  const [topMovers, contextTokens, realAeonPick, realAeonMovers] = await Promise.all([
     fetchBaseTopMovers(20),
     context ? searchBaseToken(context) : Promise.resolve([]),
+    getAeonOutput("token-pick"),
+    getAeonOutput("token-movers"),
   ]);
 
   const realMarketData = [
@@ -22,10 +25,17 @@ async function handleLocally(body: Record<string, unknown>): Promise<NextRespons
     contextTokens.length ? `\nContext-relevant tokens:\n${formatTokensForLLM(contextTokens)}` : "",
   ].filter(Boolean).join("\n");
 
-  // ── Step 2: Aeon — analyze real data for narrative + pick ────────────────
+  const dataSource = realAeonPick ? "DexScreener live + Real Aeon (KV)" : "DexScreener live";
+  console.info(`[token-pick-signal] aeon-kv: pick=${!!realAeonPick} movers=${!!realAeonMovers}`);
+
+  // ── Step 2: Aeon — use real KV output or fall back to simulated pipeline ──
   const [moversRaw, narrativeRaw] = await Promise.all([
-    runAeonSkill("token-movers", `Analyze this REAL live data from Base chain:\n${realMarketData}\n${context ? `Focus: ${context}` : ""}`),
-    runAeonSkill("narrative-tracker", `Based on this real Base market data, identify dominant narratives:\n${formatTokensForLLM(topMovers.slice(0, 10))}`),
+    realAeonMovers
+      ? Promise.resolve(formatAeonForLLM(realAeonMovers))
+      : runAeonSkill("token-movers", `Analyze this REAL live data from Base chain:\n${realMarketData}\n${context ? `Focus: ${context}` : ""}`),
+    realAeonPick
+      ? Promise.resolve(formatAeonForLLM(realAeonPick))
+      : runAeonSkill("narrative-tracker", `Based on this real Base market data, identify dominant narratives:\n${formatTokensForLLM(topMovers.slice(0, 10))}`),
   ]);
 
   // ── Step 3: MiroShark — retail reaction to real pick ─────────────────────
@@ -88,7 +98,7 @@ Schema: {
   return NextResponse.json({
     tool:       "token-pick-signal",
     timestamp:  new Date().toISOString(),
-    data_source: "DexScreener live — Base chain",
+    data_source: dataSource,
     chain,
     tokens_analyzed: topMovers.length,
     ...result,
