@@ -28,7 +28,8 @@ export type X402ToolResult = {
   status: X402Status;
   result: string | null;
   error: string | null;
-  run: (x402Url: string, body: Record<string, unknown>) => Promise<void>;
+  /** localUrl: our own /api/<tool> route — called after Bankr verifies payment for better output */
+  run: (x402Url: string, body: Record<string, unknown>, localUrl?: string) => Promise<void>;
   reset: () => void;
 };
 
@@ -49,6 +50,7 @@ export function useX402Tool(): X402ToolResult {
   const run = useCallback(async (
     x402Url: string,
     body: Record<string, unknown>,
+    localUrl?: string,
   ) => {
     console.log("[x402] run called — walletClient:", !!walletClient, "address:", address);
     if (!walletClient || !address) {
@@ -192,6 +194,30 @@ export function useX402Tool(): X402ToolResult {
         throw new Error(`Payment rejected (${res2.status}): ${errText.slice(0, 200)}`);
       }
 
+      // ── Step 5: payment verified — use our own pipeline for best output ────
+      // Bankr verified the USDC transfer. Now call our /api/<tool> route which
+      // runs the real 3-agent pipeline: DexScreener → Aeon → MiroShark → Blue.
+      if (localUrl) {
+        try {
+          console.log("[x402] payment verified — calling local pipeline:", localUrl);
+          const localRes = await fetch(localUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (localRes.ok) {
+            const localData = await localRes.json() as Record<string, unknown>;
+            setResult(JSON.stringify(localData, null, 2));
+            setStatus("done");
+            return;
+          }
+          console.warn("[x402] local pipeline failed, falling back to Bankr result");
+        } catch (localErr) {
+          console.warn("[x402] local pipeline error:", localErr);
+        }
+      }
+
+      // Fallback: use Bankr's result
       const data2 = await res2.json() as Record<string, unknown>;
       setResult(typeof data2 === "string" ? data2 : JSON.stringify(data2, null, 2));
       setStatus("done");
