@@ -167,29 +167,23 @@ export default function DocsPage() {
           {/* ── Main content ─────────────────────── */}
           <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
 
-            {/* Page hero */}
-            <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
-              <div className="inline-flex items-center gap-2 border border-[#FB923C]/20 bg-[#FB923C]/5 rounded-full px-4 py-1.5 mb-6">
+            {/* Compact header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
+              <div className="flex items-center gap-3">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#FB923C] animate-pulse" />
-                <span className="font-mono text-[10px] text-[#FB923C] tracking-widest">DOCUMENTATION</span>
+                <h1 className="font-mono text-sm font-bold text-white">
+                  BLUE<span className="text-[#4FC3F7]">AGENT</span> Docs
+                </h1>
+                <span className="font-mono text-[10px] text-slate-600">Everything you need to build, score, and ship on Base</span>
               </div>
-              <h1 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
-                BLUE<span className="text-[#4FC3F7]">AGENT</span> Docs
-              </h1>
-              <p className="font-mono text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-                Everything you need to build, score, and ship on Base.
-              </p>
-              {/* Mobile TOC */}
-              <div className="lg:hidden mt-6 max-w-sm mx-auto card-surface rounded-xl p-4">
-                <p className="font-mono text-xs text-slate-600 mb-3 tracking-widest">ON THIS PAGE</p>
-                <div className="grid grid-cols-2 gap-1">
-                  {NAV_ITEMS.map((item) => (
-                    <button key={item.id} onClick={() => scrollTo(item.id)}
-                      className="text-left font-mono text-xs text-slate-500 hover:text-[#4FC3F7] py-1 transition-colors">
-                      {item.num} {item.label}
-                    </button>
-                  ))}
-                </div>
+              {/* Mobile TOC toggle */}
+              <div className="lg:hidden flex gap-1 flex-wrap">
+                {NAV_ITEMS.slice(0, 4).map((item) => (
+                  <button key={item.id} onClick={() => scrollTo(item.id)}
+                    className="font-mono text-[10px] text-slate-600 hover:text-[#4FC3F7] transition-colors">
+                    {item.num}
+                  </button>
+                ))}
               </div>
             </div>
 
