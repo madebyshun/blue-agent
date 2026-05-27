@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import { AGENT_TOOLS } from "@/lib/agent-tools";
 
 // ─── Tool registry ──────────────────────────────────────────────────────────
 
@@ -16,156 +17,20 @@ interface Tool {
 
 const FEATURED_IDS = ["launch-simulator", "investor-memo", "market-fit", "token-launch-readiness"];
 
-const TOOLS: Tool[] = [
-  // Intelligence
-  { id: "token-pick-signal", name: "Token Pick Signal", cat: "intelligence", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "AI consensus on the highest-conviction asymmetric token setup on Base right now.", inputs: [
-    { key: "context", label: "Market context (optional)", placeholder: "e.g. low-cap DeFi, AI agent tokens, memecoins" },
-  ]},
-  { id: "narrative-position", name: "Narrative Position", cat: "intelligence", price: "$0.15", agents: ["blue","aeon","miroshark"], desc: "Which narratives are building vs peaking on CT — and where to position.", inputs: [
-    { key: "focus", label: "Narrative focus (optional)", placeholder: "e.g. AI agents, RWA, Base DeFi" },
-  ]},
-  { id: "ecosystem-digest", name: "Ecosystem Digest", cat: "intelligence", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Weekly Base ecosystem intelligence: top builders, protocols, and narratives.", inputs: [
-    { key: "focus", label: "Focus area (optional)", placeholder: "e.g. DeFi protocols, AI agents, gaming" },
-  ]},
-  { id: "market-fit", name: "Market Fit Validator", cat: "intelligence", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Score your product's market fit with swarm intelligence across three personas.", inputs: [
-    { key: "description", label: "Product description", placeholder: "What you're building, who it's for, and what problem it solves", required: true },
-    { key: "stage", label: "Stage", placeholder: "e.g. idea, MVP, live product" },
-  ]},
-  { id: "token-launch-readiness", name: "Token Launch Readiness", cat: "intelligence", price: "$0.30", agents: ["blue","aeon","miroshark"], desc: "Go/no-go signal on whether your project is ready to launch a token.", inputs: [
-    { key: "name", label: "Project / token name", placeholder: "e.g. $MYTOKEN or your project name", required: true },
-    { key: "description", label: "Project description + traction", placeholder: "What the project does, current metrics, community size, any live product" },
-  ]},
-  // Builder
-  { id: "roadmap-validator", name: "Roadmap Validator", cat: "builder", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Validate your roadmap against market timing, execution risk, and narrative fit.", inputs: [
-    { key: "project", label: "Project name", placeholder: "Your project name", required: true },
-    { key: "roadmap", label: "Roadmap milestones", placeholder: "Q1: X, Q2: Y, Q3: Z — be specific about what you plan to ship", required: true },
-  ]},
-  { id: "competitor-scan", name: "Competitor Scan", cat: "builder", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Identify direct/indirect competitors and surface your defensible edge.", inputs: [
-    { key: "project", label: "Your project", placeholder: "What you build and your main value prop", required: true },
-    { key: "category", label: "Category", placeholder: "e.g. DeFi lending, AI agent, NFT marketplace" },
-  ]},
-  { id: "pitch-intelligence", name: "Pitch Intelligence", cat: "builder", price: "$0.30", agents: ["blue","aeon","miroshark"], desc: "Transform your deck into investor-grade pitch intelligence with narrative scoring.", inputs: [
-    { key: "project", label: "Project", placeholder: "Project name", required: true },
-    { key: "description", label: "Pitch summary", placeholder: "Problem you solve, your solution, traction so far, and funding ask", required: true },
-  ]},
-  { id: "fundraise-timing", name: "Fundraise Timing", cat: "builder", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Is now the right time to raise? Market conditions, stage readiness, investor appetite.", inputs: [
-    { key: "project", label: "Project", placeholder: "What you build", required: true },
-    { key: "stage", label: "Stage & metrics", placeholder: "e.g. pre-seed, current MRR, user count, what you've shipped" },
-  ]},
-  { id: "gtm-brief", name: "GTM Brief", cat: "builder", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Go-to-market playbook: channels, timing, messaging, and early adopter strategy.", inputs: [
-    { key: "project", label: "Project name", placeholder: "Your project name", required: true },
-    { key: "description", label: "What you're launching", placeholder: "Product description and core value prop", required: true },
-    { key: "target", label: "Target audience", placeholder: "Who are your first 100 users?" },
-  ]},
-  { id: "stack-recommender", name: "Stack Recommender", cat: "builder", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Optimal tech stack for Base builders — infra, tooling, protocols, integrations.", inputs: [
-    { key: "project_type", label: "Project type", placeholder: "e.g. DeFi protocol, AI agent, consumer app, NFT marketplace", required: true },
-    { key: "constraints", label: "Constraints", placeholder: "e.g. solo dev, 2-week timeline, TypeScript only" },
-  ]},
-  { id: "investor-memo", name: "Investor Memo", cat: "builder", price: "$0.35", agents: ["blue","aeon","miroshark"], desc: "Full investor memo: thesis, market, moat, risks, and ask — ready to send.", inputs: [
-    { key: "project", label: "Project name", placeholder: "Your project name", required: true },
-    { key: "description", label: "Description + traction", placeholder: "What you do, current metrics, revenue, community — use real numbers", required: true },
-    { key: "ask", label: "Raise ask", placeholder: "e.g. $500k pre-seed, $2M seed" },
-  ]},
-  { id: "token-distribution-plan", name: "Token Distribution Plan", cat: "builder", price: "$0.30", agents: ["blue","aeon","miroshark"], desc: "Token allocation framework: team, community, investors, treasury, liquidity.", inputs: [
-    { key: "token", label: "Token / project name", placeholder: "Your token ticker or project name", required: true },
-    { key: "total_supply", label: "Total supply", placeholder: "e.g. 1,000,000,000" },
-    { key: "description", label: "Stage & context", placeholder: "pre-launch or post-TGE? community focus or VC-backed?" },
-  ]},
-  { id: "agent-performance", name: "Agent Performance", cat: "builder", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Benchmark your AI agent's revenue, engagement, and retention metrics.", inputs: [
-    { key: "handle", label: "Agent X/Twitter handle", placeholder: "@yourhandle", required: true },
-    { key: "repo", label: "GitHub repo (optional)", placeholder: "user/repo" },
-  ]},
-  { id: "agent-collab-match", name: "Agent Collab Match", cat: "builder", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Find agents that complement your tool and surface collab opportunities.", inputs: [
-    { key: "agent_a", label: "Your agent", placeholder: "Your agent name and what it does", required: true },
-    { key: "agent_b", label: "Target agent", placeholder: "Agent name to evaluate collab with, or 'any'", required: true },
-    { key: "collab_goal", label: "Collab goal", placeholder: "e.g. joint tool, cross-promote, revenue share" },
-  ]},
-  { id: "repo-health", name: "Repo Health", cat: "builder", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Audit your GitHub repo health: code quality, docs, CI, contributor signals.", inputs: [
-    { key: "repo", label: "GitHub repo", placeholder: "user/repo or full GitHub URL", required: true },
-  ]},
-  { id: "community-sentiment", name: "Community Sentiment", cat: "builder", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Real-time sentiment analysis across your community channels.", inputs: [
-    { key: "project", label: "Project / token", placeholder: "Project name or token ticker", required: true },
-    { key: "channels", label: "Channels", placeholder: "e.g. Twitter @handle, Telegram link, Discord" },
-  ]},
-  { id: "defi-opportunity", name: "DeFi Opportunity", cat: "builder", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Scan Base DeFi for emerging yield, liquidity, and protocol opportunities.", inputs: [
-    { key: "focus", label: "Focus (optional)", placeholder: "e.g. stablecoin yield, LP, lending, new protocols" },
-    { key: "risk_tolerance", label: "Risk tolerance", placeholder: "low / medium / high" },
-  ]},
-  { id: "builder-deep-dd", name: "Builder Deep DD", cat: "builder", price: "$0.35", agents: ["blue","aeon","miroshark"], desc: "Full due diligence on a Base builder: onchain activity, shipped products, credibility.", inputs: [
-    { key: "target", label: "Builder handle or address", placeholder: "@twitterhandle or 0x… wallet address", required: true },
-  ]},
-  // Trading & Alpha
-  { id: "whale-copy-signal", name: "Whale Copy Signal", cat: "trading", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Track and copy high-alpha whale wallets on Base — entry, size, and timing.", inputs: [
-    { key: "wallet", label: "Whale wallet (optional)", placeholder: "0x… leave blank to scan top Base whales" },
-    { key: "token", label: "Token to watch (optional)", placeholder: "e.g. WETH, USDC, or a specific token ticker" },
-  ]},
-  { id: "token-momentum-scanner", name: "Token Momentum Scanner", cat: "trading", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Real-time momentum scan for Base tokens — breakouts, volume spikes, narrative alignment.", inputs: [
-    { key: "timeframe", label: "Timeframe", placeholder: "e.g. 1h, 4h, 24h" },
-    { key: "filter", label: "Filter", placeholder: "e.g. min $50k volume, specific narrative, mcap range" },
-  ]},
-  { id: "portfolio-rebalancer", name: "Portfolio Rebalancer", cat: "trading", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "AI-driven portfolio rebalancing plan based on current Base market conditions.", inputs: [
-    { key: "holdings", label: "Current portfolio", placeholder: "e.g. 50% ETH, 30% USDC, 20% altcoins — use real %", required: true },
-    { key: "goal", label: "Goal", placeholder: "e.g. reduce risk, maximize yield, increase stablecoin exposure" },
-  ]},
-  // Content
-  { id: "thread-intelligence", name: "Thread Intelligence", cat: "content", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Turn your alpha or project update into a high-engagement X thread.", inputs: [
-    { key: "topic", label: "Thread topic", placeholder: "What do you want to write about?", required: true },
-    { key: "angle", label: "Angle", placeholder: "e.g. alpha drop, project update, educational, hot take" },
-  ]},
-  { id: "builder-brand-score", name: "Builder Brand Score", cat: "content", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Score your personal brand as a Base builder and get a growth playbook.", inputs: [
-    { key: "handle", label: "X / Twitter handle", placeholder: "@yourhandle", required: true },
-    { key: "focus", label: "What you build", placeholder: "e.g. DeFi tools, AI agents, consumer apps" },
-  ]},
-  { id: "community-growth-playbook", name: "Community Growth Playbook", cat: "content", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Proven growth tactics for Base builder communities — from 0 to 1000 members.", inputs: [
-    { key: "project", label: "Project name", placeholder: "Your project name", required: true },
-    { key: "current_size", label: "Current community size", placeholder: "e.g. 50 Telegram members, 200 Twitter followers" },
-  ]},
-  // Agent Economy
-  { id: "agent-revenue-optimizer", name: "Agent Revenue Optimizer", cat: "agent-economy", price: "$0.30", agents: ["blue","aeon","miroshark"], desc: "Maximize your agent's x402 revenue: pricing, bundling, and distribution strategy.", inputs: [
-    { key: "agent", label: "Agent name", placeholder: "Your agent name", required: true },
-    { key: "description", label: "Current tools / services", placeholder: "List your tools and current prices" },
-    { key: "current_revenue", label: "Current revenue", placeholder: "e.g. $50/month — use real number for accurate output" },
-  ]},
-  { id: "agent-token-strategy", name: "Agent Token Strategy", cat: "agent-economy", price: "$0.30", agents: ["blue","aeon","miroshark"], desc: "Design your agent token: utility, distribution, tokenomics, and launch strategy.", inputs: [
-    { key: "agent", label: "Agent name", placeholder: "Your agent name", required: true },
-    { key: "description", label: "Token use case", placeholder: "e.g. governance, access gating, rewards, revenue share" },
-  ]},
-  { id: "multi-agent-workflow", name: "Multi-Agent Workflow", cat: "agent-economy", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Design an automated workflow combining multiple agents for complex tasks.", inputs: [
-    { key: "goal", label: "Workflow goal", placeholder: "What should this workflow accomplish end-to-end?", required: true },
-    { key: "agents", label: "Agents to use (optional)", placeholder: "e.g. Blue Agent, Aeon, MiroShark, or your own" },
-  ]},
-  // Base Ecosystem
-  { id: "base-grant-finder", name: "Base Grant Finder", cat: "base-ecosystem", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Find active grants, hackathons, and funding programs for Base builders.", inputs: [
-    { key: "project", label: "Project type / description", placeholder: "What you're building — be specific about the category", required: true },
-    { key: "stage", label: "Stage", placeholder: "e.g. idea, MVP, live product with users" },
-  ]},
-  { id: "base-protocol-comparison", name: "Base Protocol Comparison", cat: "base-ecosystem", price: "$0.25", agents: ["blue","aeon","miroshark"], desc: "Side-by-side comparison of Base protocols for integrations and partnerships.", inputs: [
-    { key: "protocol_a", label: "Protocol A", placeholder: "e.g. Aerodrome, Aave, Uniswap v4", required: true },
-    { key: "protocol_b", label: "Protocol B", placeholder: "e.g. Morpho, Curve, Seamless", required: true },
-    { key: "use_case", label: "Your use case", placeholder: "What do you need this protocol for?" },
-  ]},
-  { id: "base-builder-network-match", name: "Builder Network Match", cat: "base-ecosystem", price: "$0.20", agents: ["blue","aeon","miroshark"], desc: "Connect with Base builders who complement your skill set and project.", inputs: [
-    { key: "skills", label: "Your skills", placeholder: "e.g. Solidity, frontend, product, BD, design", required: true },
-    { key: "looking_for", label: "Looking for", placeholder: "e.g. co-founder, technical advisor, growth lead" },
-  ]},
-  // On-chain Strategy
-  { id: "wallet-strategy-analyzer", name: "Wallet Strategy Analyzer", cat: "on-chain", price: "$0.30", agents: ["blue","aeon","miroshark"], desc: "Deep analysis of any wallet's on-chain strategy, behavior patterns, and alpha signals.", inputs: [
-    { key: "address", label: "Wallet address", placeholder: "0x… Base wallet address", required: true },
-    { key: "focus", label: "Analysis focus (optional)", placeholder: "e.g. trading patterns, DeFi activity, token accumulation" },
-  ]},
-  { id: "protocol-risk-monitor", name: "Protocol Risk Monitor", cat: "on-chain", price: "$0.35", agents: ["blue","aeon","miroshark"], desc: "Real-time risk assessment for your DeFi positions — exit signals, risk scores.", inputs: [
-    { key: "protocol", label: "Protocol", placeholder: "e.g. Aerodrome, Aave Base, Uniswap v4, Morpho", required: true },
-    { key: "position", label: "Position details (optional)", placeholder: "e.g. ETH/USDC LP, $5k USDC lend — helps get specific risk analysis" },
-  ]},
-  // Launch Simulator
-  { id: "launch-simulator", name: "Launch Simulator", cat: "builder", price: "$0.50–$2.00", agents: ["blue","aeon","miroshark"], desc: "Simulate your token launch with 3-agent consensus: Blue strategy + Aeon market + MiroShark crowd.", inputs: [
-    { key: "token_name", label: "Token name", placeholder: "e.g. $MYTOKEN", required: true },
-    { key: "launch_price", label: "Launch price (USD)", placeholder: "e.g. 0.001", required: true },
-    { key: "total_supply", label: "Total supply", placeholder: "e.g. 1000000000" },
-    { key: "liquidity", label: "Initial liquidity (USD)", placeholder: "e.g. 50000" },
-    { key: "tier", label: "Analysis tier", placeholder: "standard / deep / ultra" },
-  ]},
-];
+// Derive TOOLS from AGENT_TOOLS — single source of truth
+const TOOLS: Tool[] = AGENT_TOOLS.map(t => ({
+  id:     t.id,
+  name:   t.name,
+  cat:    t.category as Exclude<Category, "all">,
+  price:  t.price ?? "",
+  agents: t.isComposite
+    ? (["blue", "aeon", "miroshark"] as Agent[])
+    : t.agentName === "Aeon"      ? (["aeon"]      as Agent[])
+    : t.agentName === "MiroShark" ? (["miroshark"] as Agent[])
+    :                               (["blue"]       as Agent[]),
+  desc:   t.description,
+  inputs: t.inputs,
+}));
 
 const CATEGORIES: { key: Category; label: string }[] = [
   { key: "all",           label: "All" },
