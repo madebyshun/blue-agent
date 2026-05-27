@@ -1,4 +1,5 @@
 {
+  "outputDirectory": "apps/web/.next",
   "crons": [
     {
       "path": "/api/cron/daily-brief",
