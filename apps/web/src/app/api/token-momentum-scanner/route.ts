@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { proxyTool } from "@/app/api/_lib/proxy";
 import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
 import { fetchBaseTopMovers, searchBaseToken, formatTokensForLLM } from "@/app/api/_lib/realdata";
+import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/token-momentum-scanner";
 
@@ -9,9 +10,10 @@ async function handleLocally(body: Record<string, unknown>): Promise<NextRespons
   const timeframe = (body.timeframe as string) ?? "24h";
   const filter    = (body.filter    as string) ?? "";
 
-  const [topMovers, filtered] = await Promise.all([
+  const [topMovers, filtered, realAeonMovers] = await Promise.all([
     fetchBaseTopMovers(25),
     filter ? searchBaseToken(filter) : Promise.resolve([]),
+    getAeonOutput("token-movers"),
   ]);
 
   const byChange = [...topMovers].sort((a, b) => Math.abs(b.priceChange24h) - Math.abs(a.priceChange24h));
@@ -26,8 +28,12 @@ async function handleLocally(body: Record<string, unknown>): Promise<NextRespons
     filtered.length ? `\nFilter-matched:\n${formatTokensForLLM(filtered)}` : "",
   ].filter(Boolean).join("\n");
 
+  const dataSource = realAeonMovers ? "DexScreener live + Real Aeon (KV)" : "DexScreener live";
+
   const [aeonRaw, msRaw] = await Promise.all([
-    runAeonSkill("token-movers", `Analyze REAL live Base momentum data:\n${realData}`),
+    realAeonMovers
+      ? Promise.resolve(formatAeonForLLM(realAeonMovers))
+      : runAeonSkill("token-movers", `Analyze REAL live Base momentum data:\n${realData}`),
     runMiroSharkSkill({
       scenario: "Which Base tokens will retail FOMO into based on real data?",
       context: { live_data: realData.slice(0, 600) },
@@ -59,7 +65,7 @@ Schema: {
 
   return NextResponse.json({
     tool: "token-momentum-scanner", timestamp: new Date().toISOString(),
-    data_source: "DexScreener live — Base chain", timeframe,
+    data_source: dataSource, timeframe,
     tokens_scanned: topMovers.length, ...verdict,
   });
 }

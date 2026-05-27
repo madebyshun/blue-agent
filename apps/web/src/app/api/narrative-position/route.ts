@@ -2,21 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { proxyTool } from "@/app/api/_lib/proxy";
 import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
 import { fetchBaseTopMovers, formatTokensForLLM } from "@/app/api/_lib/realdata";
+import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/narrative-position";
 
 async function handleLocally(body: Record<string, unknown>): Promise<NextResponse> {
   const focus = (body.focus as string) ?? "";
 
-  // Real live data from DexScreener
-  const topMovers = await fetchBaseTopMovers(20);
+  // Real live data from DexScreener + real Aeon from KV
+  const [topMovers, realAeonNarrative, realAeonMovers] = await Promise.all([
+    fetchBaseTopMovers(20),
+    getAeonOutput("narrative-tracker"),
+    getAeonOutput("token-movers"),
+  ]);
   const realData  = `=== LIVE BASE TOKEN DATA (DexScreener, ${new Date().toISOString()}) ===\n${formatTokensForLLM(topMovers)}`;
+  const dataSource = realAeonNarrative ? "DexScreener live + Real Aeon (KV)" : "DexScreener live";
 
   const [narrativeRaw, moversRaw] = await Promise.all([
-    runAeonSkill("narrative-tracker",
-      `Identify real narratives from this live Base market data. What themes/categories do these tokens represent?\n${realData}\n${focus ? `Focus on: ${focus}` : ""}`),
-    runAeonSkill("token-movers",
-      `Which narrative categories do these real Base tokens belong to?\n${formatTokensForLLM(topMovers.slice(0, 12))}`),
+    realAeonNarrative
+      ? Promise.resolve(formatAeonForLLM(realAeonNarrative))
+      : runAeonSkill("narrative-tracker",
+          `Identify real narratives from this live Base market data. What themes/categories do these tokens represent?\n${realData}\n${focus ? `Focus on: ${focus}` : ""}`),
+    realAeonMovers
+      ? Promise.resolve(formatAeonForLLM(realAeonMovers))
+      : runAeonSkill("token-movers",
+          `Which narrative categories do these real Base tokens belong to?\n${formatTokensForLLM(topMovers.slice(0, 12))}`),
   ]);
 
   const msRaw = await runMiroSharkSkill({
@@ -49,7 +59,7 @@ Schema: {
 
   return NextResponse.json({
     tool: "narrative-position", timestamp: new Date().toISOString(),
-    data_source: "DexScreener live — Base chain",
+    data_source: dataSource,
     tokens_analyzed: topMovers.length, ...verdict,
   });
 }
