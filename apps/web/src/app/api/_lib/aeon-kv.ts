@@ -15,7 +15,7 @@ export interface AeonOutput {
 }
 
 /** Max age before we consider KV output stale and fall back to our pipeline */
-const MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
+const MAX_AGE_MS = 25 * 60 * 60 * 1000; // 25 hours — Aeon runs daily, keep for full cycle
 
 /**
  * Retrieve a fresh Aeon output for a given skill.
