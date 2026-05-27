@@ -40,22 +40,86 @@ function parsePair(p: Record<string, unknown>): DexToken {
   };
 }
 
-/** Top movers on Base by volume — sorted by 24h volume desc */
-export async function fetchBaseTopMovers(limit = 15): Promise<DexToken[]> {
+/** CoinGecko: top Base ecosystem tokens by volume */
+async function fetchCoinGeckoBase(limit = 30): Promise<DexToken[]> {
+  try {
+    const apiKey = process.env.COINGECKO_API_KEY ?? "";
+    const headers: Record<string, string> = apiKey ? { "x-cg-demo-api-key": apiKey } : {};
+    // Try base-ecosystem category first, then base-meme-coins as fallback
+    for (const category of ["base-ecosystem", "base-meme-coins"]) {
+      const res = await fetch(
+        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&category=${category}&order=volume_desc&per_page=${limit}&sparkline=false&price_change_percentage=24h,7d`,
+        { headers, signal: AbortSignal.timeout(6000) }
+      );
+      if (!res.ok) continue;
+      const coins = await res.json() as Array<Record<string, unknown>>;
+      if (!coins.length) continue;
+      return coins.map(c => ({
+        symbol:         (c.symbol as string ?? "").toUpperCase(),
+        name:           c.name as string ?? "",
+        address:        (c.platforms as Record<string,string> ?? {})["base"] ?? "",
+        priceUsd:       String(c.current_price ?? 0),
+        priceChange24h: (c.price_change_percentage_24h as number) ?? 0,
+        volume24h:      (c.total_volume as number) ?? 0,
+        liquidity:      0,
+        fdv:            (c.fully_diluted_valuation as number) ?? (c.market_cap as number) ?? 0,
+        txns24h:        0,
+        pairAddress:    "",
+      }));
+    }
+    return [];
+  } catch { return []; }
+}
+
+/** DexScreener boosted tokens on Base */
+async function fetchDexScreenerBoosted(limit = 20): Promise<DexToken[]> {
   try {
     const res = await fetch(
-      `${DEXSCREENER}/latest/dex/tokens/0x4200000000000000000000000000000000000006`,
+      `${DEXSCREENER}/token-boosts/top/v1`,
       { signal: AbortSignal.timeout(5000) }
     );
     if (!res.ok) return [];
-    const d = await res.json() as { pairs?: Record<string, unknown>[] };
-    const pairs = (d.pairs ?? [])
-      .filter(p => (p.chainId as string) === "base" && ((p.volume as Record<string,number>)?.h24 ?? 0) > 10_000)
-      .sort((a, b) => ((b.volume as Record<string,number>)?.h24 ?? 0) - ((a.volume as Record<string,number>)?.h24 ?? 0))
+    const boosts = await res.json() as Array<{ chainId: string; tokenAddress: string }>;
+    const baseAddrs = boosts
+      .filter(b => b.chainId === "base")
       .slice(0, limit)
-      .map(parsePair);
-    return pairs;
+      .map(b => b.tokenAddress);
+    if (!baseAddrs.length) return [];
+    // Batch fetch in groups of 5
+    const results: DexToken[] = [];
+    for (let i = 0; i < baseAddrs.length; i += 5) {
+      const batch = baseAddrs.slice(i, i + 5);
+      const batchResults = await Promise.all(batch.map(addr => fetchTokenByAddress(addr).catch(() => null)));
+      results.push(...batchResults.filter((t): t is DexToken => t !== null));
+    }
+    return results;
   } catch { return []; }
+}
+
+/** Top movers on Base — CoinGecko primary, DexScreener boosted fallback, excludes WETH */
+export async function fetchBaseTopMovers(limit = 20): Promise<DexToken[]> {
+  const WETH = "0x4200000000000000000000000000000000000006";
+  const [cgTokens, boosted] = await Promise.all([
+    fetchCoinGeckoBase(30),
+    fetchDexScreenerBoosted(20),
+  ]);
+
+  // Merge: CoinGecko primary, boosted fills gaps
+  const seen = new Set<string>();
+  const merged: DexToken[] = [];
+  for (const t of [...cgTokens, ...boosted]) {
+    const key = t.symbol.toUpperCase();
+    if (key === "WETH" || key === "USDC" || key === "USDT" || t.address === WETH) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(t);
+  }
+
+  // Sort by volume desc
+  return merged
+    .filter(t => t.volume24h > 5_000)
+    .sort((a, b) => b.volume24h - a.volume24h)
+    .slice(0, limit);
 }
 
 /** Search Base tokens by keyword / ticker */

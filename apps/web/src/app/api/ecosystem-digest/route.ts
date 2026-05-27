@@ -10,10 +10,11 @@ async function handleLocally(body: Record<string, unknown>): Promise<NextRespons
   const focus = (body.focus as string) ?? "";
 
   // Real live Base ecosystem data + real Aeon from KV
-  const [topMovers, realAeonBrief, realAeonNarrative] = await Promise.all([
+  const [topMovers, realAeonBrief, realAeonNarrative, realAeonPick] = await Promise.all([
     fetchBaseTopMovers(25),
     getAeonOutput("morning-brief"),
     getAeonOutput("narrative-tracker"),
+    getAeonOutput("token-pick"),
   ]);
   const byVol     = [...topMovers].sort((a, b) => b.volume24h - a.volume24h).slice(0, 15);
   const byChange  = [...topMovers].sort((a, b) => b.priceChange24h - a.priceChange24h).slice(0, 8);
@@ -25,14 +26,15 @@ async function handleLocally(body: Record<string, unknown>): Promise<NextRespons
     focus ? `\nFocus area: ${focus}` : "",
   ].filter(Boolean).join("\n");
 
-  const dataSource = (realAeonBrief || realAeonNarrative) ? "DexScreener live + Real Aeon (KV)" : "DexScreener live";
+  const hasAeon = !!(realAeonBrief || realAeonNarrative || realAeonPick);
+  const dataSource = hasAeon ? "CoinGecko + DexScreener + Real Aeon (KV)" : "CoinGecko + DexScreener live";
 
   const [moversRaw, narrativeRaw] = await Promise.all([
-    realAeonBrief
-      ? Promise.resolve(formatAeonForLLM(realAeonBrief))
+    (realAeonBrief ?? realAeonPick)
+      ? Promise.resolve(formatAeonForLLM(realAeonBrief ?? realAeonPick!))
       : runAeonSkill("token-movers", `Analyze this real Base ecosystem data for weekly digest:\n${realData}`),
-    realAeonNarrative
-      ? Promise.resolve(formatAeonForLLM(realAeonNarrative))
+    (realAeonNarrative ?? realAeonPick)
+      ? Promise.resolve(formatAeonForLLM(realAeonNarrative ?? realAeonPick!))
       : runAeonSkill("narrative-tracker", `What narratives and trends does this real Base data show?\n${formatTokensForLLM(byVol.slice(0, 10))}\n${focus ? `Focus: ${focus}` : ""}`),
   ]);
 
