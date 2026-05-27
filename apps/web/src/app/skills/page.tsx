@@ -174,7 +174,7 @@ function SoulSection() {
       </div>
 
       {/* Content */}
-      <div className="px-6 lg:px-10 py-8 max-w-5xl mx-auto w-full">
+      <div className="px-6 lg:px-10 py-8 w-full">
         {/* File header */}
         <div className="card-surface rounded-xl overflow-hidden mb-6">
           <div className="flex items-center justify-between px-4 py-3 border-b border-[#1A1A2E] bg-[#0D0D14]">
