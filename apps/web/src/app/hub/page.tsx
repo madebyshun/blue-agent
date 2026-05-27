@@ -1117,96 +1117,89 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
 
 function EmptyState({ onSelect }: { onSelect: (t: Tool) => void }) {
   const featuredTools = TOOLS.filter(t => FEATURED_IDS.includes(t.id));
-  const otherTools    = TOOLS.filter(t => !FEATURED_IDS.includes(t.id)).slice(0, 6);
+  const otherTools    = TOOLS.filter(t => !FEATURED_IDS.includes(t.id));
 
   return (
-    <div>
-      {/* Page hero */}
-      <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
-        <div className="inline-flex items-center gap-2 border border-[#A78BFA]/20 bg-[#A78BFA]/5 rounded-full px-4 py-1.5 mb-6">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#A78BFA] animate-pulse" />
-          <span className="font-mono text-[10px] text-[#A78BFA] tracking-widest">3-AGENT COLLAB · 34 TOOLS</span>
+    <div className="flex flex-col h-full overflow-y-auto">
+
+      {/* ── Compact top bar ── */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E] shrink-0">
+        <div className="flex items-center gap-4">
+          <h1 className="font-mono text-2xl font-bold text-white tracking-tight">
+            BLUE<span className="text-[#A78BFA]">HUB</span>
+          </h1>
+          <div className="flex items-center gap-1 px-2.5 py-1 border border-[#A78BFA]/20 bg-[#A78BFA]/5 rounded-full">
+            <span className="w-1 h-1 rounded-full bg-[#A78BFA] animate-pulse" />
+            <span className="font-mono text-[9px] text-[#A78BFA] tracking-widest ml-1">3-AGENT · {TOOLS.length} TOOLS</span>
+          </div>
         </div>
-        <h1 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
-          BLUE<span className="text-[#A78BFA]">HUB</span>
-        </h1>
-        <p className="font-mono text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-          34 tools. 3 agents. One call — Blue Agent strategy · Aeon signals · MiroShark consensus.
-        </p>
-        <div className="flex items-center justify-center gap-5 mt-6">
+        <div className="flex items-center gap-4">
           {(["blue","aeon","miroshark"] as Agent[]).map(a => (
             <div key={a} className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-              <span className="font-mono text-base font-bold" style={{ color: AGENT_COLORS[a] }}>{AGENT_LABELS[a]}</span>
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
+              <span className="font-mono text-xs font-bold" style={{ color: AGENT_COLORS[a] }}>{AGENT_LABELS[a]}</span>
             </div>
           ))}
-        </div>
-        <p className="font-mono text-[10px] text-slate-700 mt-2">Blue · Aeon · MiroShark · Base</p>
-        <div className="mt-5 flex items-center justify-center gap-3 flex-wrap">
           <Link href="/hub/registry"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#0D0D1A] hover:bg-[#1A1A2E] border border-[#1A1A2E] hover:border-[#34D399]/20 rounded-lg font-mono text-xs text-slate-400 transition-all">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] animate-pulse" />
-            Agent Registry
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-[#1A1A2E] hover:border-[#34D399]/20 rounded-lg font-mono text-[10px] text-slate-500 hover:text-[#34D399] transition-all">
+            <span className="w-1 h-1 rounded-full bg-[#34D399] animate-pulse" />
+            Registry
           </Link>
           <Link href="/hub/tools"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#0D0D1A] hover:bg-[#1A1A2E] border border-[#1A1A2E] hover:border-[#F59E0B]/20 rounded-lg font-mono text-xs text-slate-400 transition-all">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-pulse" />
-            Agent Tools ✦
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-[#1A1A2E] hover:border-[#F59E0B]/20 rounded-lg font-mono text-[10px] text-slate-500 hover:text-[#F59E0B] transition-all">
+            <span className="w-1 h-1 rounded-full bg-[#F59E0B] animate-pulse" />
+            Tools ✦
           </Link>
         </div>
       </div>
 
-      <div className="px-6 lg:px-10 py-8 max-w-4xl mx-auto w-full">
+      {/* ── Content grid ── */}
+      <div className="flex-1 px-6 py-5 overflow-y-auto">
 
-        {/* ── Featured for founders ── */}
-        <div className="flex items-center gap-3 mb-4">
-          <p className="font-mono text-xs text-[#A78BFA] tracking-widest">// FEATURED FOR FOUNDERS</p>
+        {/* Featured for founders */}
+        <div className="flex items-center gap-3 mb-3">
+          <p className="font-mono text-[10px] text-[#A78BFA] tracking-widest">// FEATURED FOR FOUNDERS</p>
           <div className="flex-1 h-px bg-[#A78BFA]/10" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10">
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5 mb-5">
           {featuredTools.map(tool => (
             <button key={tool.id} onClick={() => onSelect(tool)}
-              className="text-left rounded-xl p-5 transition-all group border border-[#A78BFA]/20 bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 hover:border-[#A78BFA]/40">
-              <div className="flex items-center gap-2 mb-3">
+              className="text-left rounded-xl p-4 transition-all group border border-[#A78BFA]/20 bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 hover:border-[#A78BFA]/40">
+              <div className="flex items-center gap-1.5 mb-2.5">
                 {tool.agents.map(a => (
                   <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
                 ))}
               </div>
-              <p className="font-mono text-sm font-semibold text-white group-hover:text-[#A78BFA] transition-colors mb-1.5">
+              <p className="font-mono text-sm font-semibold text-white group-hover:text-[#A78BFA] transition-colors mb-1 leading-snug">
                 {tool.name}
               </p>
-              <p className="font-mono text-xs text-slate-500 leading-relaxed line-clamp-2">{tool.desc}</p>
-              <p className="font-mono text-[10px] text-[#A78BFA]/50 mt-3">Run →</p>
+              <p className="font-mono text-[10px] text-slate-500 leading-relaxed line-clamp-2">{tool.desc}</p>
+              <p className="font-mono text-[10px] text-[#A78BFA]/50 mt-2.5">Run →</p>
             </button>
           ))}
         </div>
 
-        {/* ── More tools ── */}
-        <div className="flex items-center gap-3 mb-4">
-          <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// MORE TOOLS</p>
-          <div className="flex-1 h-px bg-[#4FC3F7]/10" />
+        {/* More tools — all of them in a dense grid */}
+        <div className="flex items-center gap-3 mb-3">
+          <p className="font-mono text-[10px] text-slate-600 tracking-widest">// MORE TOOLS</p>
+          <div className="flex-1 h-px bg-[#1A1A2E]" />
+          <span className="font-mono text-[9px] text-slate-700">{otherTools.length} tools</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 xl:grid-cols-3 gap-2">
           {otherTools.map(tool => (
             <button key={tool.id} onClick={() => onSelect(tool)}
-              className="text-left card-surface card-hover rounded-xl p-5 transition-all group">
-              <div className="flex items-center gap-1.5 mb-3">
+              className="text-left bg-[#0D0D1A] border border-[#1A1A2E] hover:border-[#4FC3F7]/15 rounded-xl p-3.5 transition-all group">
+              <div className="flex items-center gap-1.5 mb-2">
                 {tool.agents.map(a => (
-                  <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
+                  <span key={a} className="w-1 h-1 rounded-full" style={{ background: AGENT_COLORS[a] }} />
                 ))}
+                <span className="font-mono text-[9px] text-slate-700 ml-auto">{tool.price}</span>
               </div>
-              <p className="font-mono text-sm font-semibold text-white group-hover:text-[#4FC3F7] transition-colors mb-1">{tool.name}</p>
-              <p className="font-mono text-xs text-slate-500 leading-relaxed line-clamp-2">{tool.desc}</p>
+              <p className="font-mono text-xs font-semibold text-white group-hover:text-[#4FC3F7] transition-colors mb-0.5 leading-snug">{tool.name}</p>
+              <p className="font-mono text-[10px] text-slate-600 leading-relaxed line-clamp-2">{tool.desc}</p>
             </button>
           ))}
         </div>
-
-        {/* Waiting state */}
-        <div className="mt-4 card-surface rounded-xl p-6 text-center">
-          <p className="font-mono text-xs text-slate-700 mb-1">// or select any tool from the sidebar</p>
-          <p className="font-mono text-[10px] text-slate-800">34 tools · 3-agent consensus · Base</p>
-        </div>
-
       </div>
     </div>
   );
