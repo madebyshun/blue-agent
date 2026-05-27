@@ -286,18 +286,56 @@ export default function ConsolePage() {
           )}
 
           {!result && !loading && !error && (
-            <div className="card-surface rounded-xl p-8 text-center">
-              {isConnected ? (
-                <>
-                  <p className="font-mono text-xs text-slate-700 mb-2">// waiting for input</p>
-                  <p className="font-mono text-[10px] text-slate-800">34 skills loaded · Base-grounded · Bankr LLM</p>
-                </>
-              ) : (
-                <>
-                  <p className="font-mono text-xs text-slate-700 mb-2">// connect wallet to run commands</p>
-                  <p className="font-mono text-[10px] text-slate-800">Hold $BLUEAGENT · pay per use · x402 on Base</p>
-                </>
-              )}
+            <div className="flex flex-col gap-4">
+              {/* Command context */}
+              <div className="card-surface rounded-xl p-5">
+                <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">// COMMAND CONTEXT</p>
+                <p className="font-mono text-xs text-slate-300 leading-relaxed mb-4">{selected.desc}</p>
+                <div className="flex items-start gap-3">
+                  <span className="font-mono text-[10px] text-[#4FC3F7] shrink-0 w-16 mt-0.5">example</span>
+                  <span className="font-mono text-[10px] text-slate-600 italic">{selected.example}</span>
+                </div>
+              </div>
+
+              {/* Skills grounding */}
+              <div className="card-surface rounded-xl p-5">
+                <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">// GROUNDING FILES LOADED</p>
+                <div className="flex flex-wrap gap-2">
+                  {selected.skills.map(s => (
+                    <span key={s} className="font-mono text-[10px] px-2.5 py-1 bg-[#050508] border border-[#1A1A2E] text-slate-500 rounded">
+                      [{s}]
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* How it works */}
+              <div className="card-surface rounded-xl p-5">
+                <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">// HOW IT WORKS</p>
+                <div className="grid grid-cols-3 gap-4">
+                  {[
+                    { step: "01", label: "Input", desc: "Describe your idea, project, or code" },
+                    { step: "02", label: "Ground", desc: "Blue Agent cross-refs 34 Base skill files" },
+                    { step: "03", label: "Output", desc: "Structured result · no hallucinations" },
+                  ].map(s => (
+                    <div key={s.step}>
+                      <span className="font-mono text-[10px] text-[#4FC3F7]">{s.step}</span>
+                      <p className="font-mono text-xs text-white mt-1 mb-1">{s.label}</p>
+                      <p className="font-mono text-[10px] text-slate-600 leading-relaxed">{s.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Status bar */}
+              <div className="flex items-center gap-3 px-4 py-3 border border-[#1A1A2E] rounded-xl">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] animate-pulse shrink-0" />
+                <span className="font-mono text-[10px] text-slate-700">
+                  {isConnected
+                    ? `34 skills loaded · Base-grounded · Bankr LLM · ${selected.price}/run`
+                    : "Connect wallet to run commands · Hold $BLUEAGENT · pay per use · x402 on Base"}
+                </span>
+              </div>
             </div>
           )}
           </div>
