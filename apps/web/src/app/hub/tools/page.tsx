@@ -5,7 +5,7 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import type { AgentTool, AgentToolInput } from "@/lib/agent-tools";
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
+// ─── Design tokens ─────────────────────────────────────────────────────────────
 
 const AGENT_COLORS: Record<string, string> = {
   "Aeon":        "#A78BFA",
@@ -14,338 +14,318 @@ const AGENT_COLORS: Record<string, string> = {
   "Blue + Aeon": "#F59E0B",
 };
 
-const CAT_LABELS: Record<string, string> = {
-  all:      "All",
-  market:   "Market",
-  defi:     "DeFi",
-  builder:  "Builder",
-  research: "Research",
-  security: "Security",
-};
+// Category tabs → maps to raw category values
+const TABS = [
+  { key: "all",          label: "All" },
+  { key: "intelligence", label: "Intelligence" },
+  { key: "builder",      label: "Builder" },
+  { key: "trading",      label: "Trading" },
+  { key: "security",     label: "Security" },
+];
 
-// ─── Scan log animation ───────────────────────────────────────────────────────
-
-type LogLine = { text: string; color: string };
-
-function ScanLog({ tool }: { tool: AgentTool }) {
-  const [lines, setLines] = useState<LogLine[]>([]);
-  const [cursor, setCursor] = useState(true);
-
-  useEffect(() => {
-    const agentColor = AGENT_COLORS[tool.agentName] ?? "#4FC3F7";
-    const scripts: LogLine[] = tool.isComposite && tool.compositeSkills
-      ? [
-          { text: `[sys] initializing composite tool: ${tool.name}`, color: "#475569" },
-          { text: `[sys] spawning ${tool.compositeSkills.length} agents...`, color: "#475569" },
-          ...tool.compositeSkills.map(cs => ({
-            text: `[aeon] running skill: ${cs.skillId}`,
-            color: AGENT_COLORS["Aeon"],
-          })),
-          { text: `[sys] waiting for parallel results...`, color: "#475569" },
-          { text: `[blue] synthesizing ${tool.compositeSkills.length} outputs...`, color: AGENT_COLORS["Blue Agent"] },
-          { text: `[blue] building unified intelligence brief...`, color: AGENT_COLORS["Blue Agent"] },
-          { text: `[sys] composite run complete`, color: "#34D399" },
-        ]
-      : [
-          { text: `[sys] loading skill: ${tool.skillId ?? tool.id}`, color: "#475569" },
-          { text: `[${tool.agentName.toLowerCase()}] fetching skill file...`, color: agentColor },
-          { text: `[${tool.agentName.toLowerCase()}] analyzing input...`, color: agentColor },
-          { text: `[${tool.agentName.toLowerCase()}] generating output...`, color: agentColor },
-          { text: `[sys] processing response...`, color: "#475569" },
-          { text: `[sys] done`, color: "#34D399" },
-        ];
-
-    let i = 0;
-    const timer = setInterval(() => {
-      if (i < scripts.length) {
-        setLines(prev => [...prev, scripts[i]]);
-        i++;
-      } else {
-        clearInterval(timer);
-      }
-    }, 520);
-
-    const cursorTimer = setInterval(() => setCursor(p => !p), 500);
-    return () => { clearInterval(timer); clearInterval(cursorTimer); };
-  }, [tool]);
-
-  return (
-    <div className="bg-[#050508] border border-[#1A1A2E] rounded-xl overflow-hidden">
-      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-[#1A1A2E]">
-        <span className="w-2.5 h-2.5 rounded-full bg-red-500/60" />
-        <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/60" />
-        <span className="w-2.5 h-2.5 rounded-full bg-green-500/60" />
-        <span className="font-mono text-[10px] text-slate-700 ml-2">
-          {tool.isComposite ? "composite-runner" : `${tool.agentName?.toLowerCase()}-skill`}
-        </span>
-      </div>
-      <div className="p-4 min-h-[140px] font-mono text-[11px] space-y-1">
-        {lines.map((l, i) => (
-          <p key={i} style={{ color: l.color }} className="animate-fadeIn">{l.text}</p>
-        ))}
-        {lines.length < 7 && (
-          <span className="inline-block w-1.5 h-3 bg-[#4FC3F7]" style={{ opacity: cursor ? 1 : 0 }} />
-        )}
-      </div>
-    </div>
-  );
+function tabMatch(rawCat: string, tab: string): boolean {
+  if (tab === "all") return true;
+  if (tab === "intelligence") return rawCat === "market" || rawCat === "research";
+  if (tab === "trading")      return rawCat === "defi";
+  return rawCat === tab;
 }
 
-// ─── Result renderer ──────────────────────────────────────────────────────────
+// Sub-tags
+const SUB_TAGS = ["Context", "Agent Economy", "Base Ecosystem", "On-chain"];
 
-function ToolResult({ result, tool }: { result: string; tool: AgentTool }) {
+// ─── Output renderer ───────────────────────────────────────────────────────────
+
+function OutputPanel({
+  tool,
+  result,
+  running,
+  log,
+}: {
+  tool: AgentTool | null;
+  result: string | null;
+  running: boolean;
+  log: string[];
+}) {
   const [copied, setCopied] = useState(false);
 
   function copy() {
-    try {
-      navigator.clipboard?.writeText(result).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      }).catch(() => {});
-    } catch {
-      // clipboard not available
-    }
+    if (!result) return;
+    try { navigator.clipboard?.writeText(result).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {}); } catch { /* noop */ }
   }
 
-  return (
-    <div className="bg-[#050508] border border-[#1A1A2E] rounded-xl overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#1A1A2E]">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
-        <span className="font-mono text-[10px] text-[#34D399] tracking-widest">OUTPUT · {tool.agentName.toUpperCase()}</span>
-        {tool.isComposite && (
-          <span className="font-mono text-[9px] px-1.5 py-0.5 border border-[#F59E0B]/30 text-[#F59E0B] rounded ml-1">
-            ✦ composite
-          </span>
-        )}
-        <button onClick={copy} className="ml-auto font-mono text-[10px] text-slate-600 hover:text-slate-400 transition-colors">
-          {copied ? "✓ copied" : "copy"}
-        </button>
-      </div>
-      <div className="p-4 max-h-[480px] overflow-y-auto">
-        <pre className="font-mono text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">{result}</pre>
-      </div>
-    </div>
-  );
-}
+  // Agents attribution
+  const agentNames = tool?.isComposite
+    ? ["Blue", "Aeon", "MiroShark"]
+    : tool?.agentName === "Aeon"
+    ? ["Aeon"]
+    : tool?.agentName === "MiroShark"
+    ? ["MiroShark"]
+    : ["Blue"];
 
-// ─── Tool runner panel ────────────────────────────────────────────────────────
-
-function ToolRunner({ tool, onBack }: { tool: AgentTool; onBack: () => void }) {
-  const [values, setValues]   = useState<Record<string, string>>({});
-  const [running, setRunning] = useState(false);
-  const [result, setResult]   = useState<string | null>(null);
-  const [error, setError]     = useState("");
-  const resultRef = useRef<HTMLDivElement>(null);
-
-  function setValue(key: string, val: string) {
-    setValues(prev => ({ ...prev, [key]: val }));
-  }
-
-  async function handleRun(e: React.FormEvent) {
-    e.preventDefault();
-    setError(""); setResult(null); setRunning(true);
-
-    const inputParts = tool.inputs
-      .map((inp: AgentToolInput) => values[inp.key] ? `${inp.label}: ${values[inp.key]}` : "")
-      .filter(Boolean);
-    const userInput = inputParts.join("\n") || "";
-
-    try {
-      const res = await fetch("/api/tool-runner", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toolId: tool.id, input: userInput }),
-      });
-      const data = await res.json() as { result?: string; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Run failed");
-      setResult(data.result ?? "");
-      setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Run failed");
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  const agentColor = AGENT_COLORS[tool.agentName] ?? "#4FC3F7";
+  const agentColorMap: Record<string, string> = {
+    Blue: "#4FC3F7", Aeon: "#A78BFA", MiroShark: "#34D399",
+  };
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-[#1A1A2E] flex items-center gap-3">
-        <button onClick={onBack} className="font-mono text-[10px] text-slate-700 hover:text-slate-400 transition-colors">
-          ← back
-        </button>
-        <div className="w-px h-4 bg-[#1A1A2E]" />
-        <div className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full" style={{ background: agentColor }} />
-          <span className="font-mono text-xs text-white">{tool.name}</span>
-          {tool.isComposite && (
-            <span className="font-mono text-[9px] px-1.5 py-0.5 border border-[#F59E0B]/30 text-[#F59E0B] rounded">✦ composite</span>
-          )}
+      {/* Top bar */}
+      <div className="flex items-center gap-3 px-5 py-3 border-b border-[#1A1A2E] shrink-0">
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-1.5 font-mono text-[10px] text-slate-700 tracking-widest">
+          <Link href="/hub" className="hover:text-slate-500 transition-colors">Hub</Link>
+          <span>/</span>
+          <span className={tool ? "text-slate-400" : "text-slate-700"}>
+            {tool ? tool.name : "Tools"}
+          </span>
         </div>
-        <span className="ml-auto font-mono text-[10px] text-slate-600">by {tool.agentName}</span>
-      </div>
 
-      {/* 2-column layout */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left: form */}
-        <div className="w-[380px] shrink-0 border-r border-[#1A1A2E] flex flex-col overflow-y-auto">
-          <div className="p-5 flex-1">
-            <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-1">// DESCRIPTION</p>
-            <p className="font-mono text-xs text-slate-400 leading-relaxed mb-5">{tool.description}</p>
-
-            {tool.isComposite && tool.compositeSkills && (
-              <div className="mb-5">
-                <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-2">// COMPOSITE SKILLS</p>
-                <div className="space-y-1">
-                  {tool.compositeSkills.map((cs, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <span className="font-mono text-[10px] text-[#A78BFA]">{i + 1}.</span>
-                      <span className="font-mono text-[10px] text-slate-400">{cs.label}</span>
-                      <span className="font-mono text-[9px] text-slate-700 ml-auto">{cs.agentType}</span>
-                    </div>
-                  ))}
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="font-mono text-[10px] text-[#4FC3F7]">→</span>
-                    <span className="font-mono text-[10px] text-[#4FC3F7]">Blue Agent synthesis</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <form onSubmit={handleRun} className="space-y-3">
-              <p className="font-mono text-[10px] text-slate-600 tracking-widest">// INPUT</p>
-              {tool.inputs.map((inp: AgentToolInput) => (
-                <div key={inp.key}>
-                  <label className="block font-mono text-[10px] text-slate-600 mb-1">
-                    {inp.label.toUpperCase()}{inp.required && " *"}
-                  </label>
-                  <input
-                    value={values[inp.key] ?? ""}
-                    onChange={e => setValue(inp.key, e.target.value)}
-                    placeholder={inp.placeholder}
-                    required={inp.required}
-                    className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/30 rounded-lg px-3 py-2 font-mono text-xs text-white placeholder-slate-700 focus:outline-none transition-colors"
-                  />
-                </div>
-              ))}
-
-              {error && <p className="font-mono text-[10px] text-red-400">{error}</p>}
-
-              <button
-                type="submit"
-                disabled={running}
-                className="w-full py-2 font-mono text-xs border transition-all disabled:opacity-40 disabled:cursor-not-allowed rounded-lg"
-                style={{
-                  background: `${agentColor}15`,
-                  borderColor: `${agentColor}30`,
-                  color: agentColor,
-                }}
+        <div className="ml-auto flex items-center gap-3">
+          {/* Agent attribution pills */}
+          <div className="flex items-center gap-1.5">
+            {agentNames.map(a => (
+              <span
+                key={a}
+                className="font-mono text-[10px]"
+                style={{ color: agentColorMap[a] ?? "#475569" }}
               >
-                {running ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="w-3 h-3 border border-current/30 border-t-current rounded-full animate-spin" />
-                    {tool.isComposite ? `running ${tool.compositeSkills?.length} skills…` : "running…"}
-                  </span>
-                ) : `→ run ${tool.isComposite ? "composite" : tool.agentName.toLowerCase()}`}
-              </button>
-
-              <p className="font-mono text-[10px] text-slate-700 text-center">
-                {tool.isComposite
-                  ? `${tool.compositeSkills?.length} skills run in parallel → Blue synthesis`
-                  : `powered by ${tool.agentName}`}
-              </p>
-            </form>
+                {a}
+              </span>
+            ))}
           </div>
         </div>
+      </div>
 
-        {/* Right: output */}
-        <div className="flex-1 overflow-y-auto p-5">
-          {running
-            ? <ScanLog tool={tool} />
-            : result !== null
-            ? <div ref={resultRef}><ToolResult result={result} tool={tool} /></div>
-            : (
-              <div className="h-full flex items-center justify-center">
-                <div className="text-center">
-                  <p className="font-mono text-[10px] text-slate-700 tracking-widest mb-2">// WAITING FOR INPUT</p>
-                  <p className="font-mono text-xs text-slate-700">Fill the form and run →</p>
-                </div>
-              </div>
-            )
-          }
+      {/* Sub-bar — only when tool selected */}
+      {tool && (
+        <div className="flex items-center gap-3 px-5 py-2 border-b border-[#1A1A2E] shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] animate-pulse" />
+          <span className="font-mono text-[11px] text-white">{tool.name}</span>
+          {result && (
+            <span className="font-mono text-[9px] px-1.5 py-0.5 border border-[#34D399]/30 text-[#34D399] rounded">
+              cached
+            </span>
+          )}
+          <div className="ml-auto flex items-center gap-3">
+            {agentNames.map(a => (
+              <span key={a} className="font-mono text-[10px]" style={{ color: agentColorMap[a] ?? "#475569" }}>{a}</span>
+            ))}
+            {result && (
+              <>
+                <button
+                  onClick={copy}
+                  className="font-mono text-[10px] text-slate-600 hover:text-slate-300 transition-colors"
+                >
+                  {copied ? "✓ copied" : "Share ↑"}
+                </button>
+              </>
+            )}
+          </div>
         </div>
+      )}
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        {running ? (
+          /* Scan log */
+          <div className="p-5">
+            <div className="bg-[#050508] border border-[#1A1A2E] rounded-xl overflow-hidden">
+              <div className="flex items-center gap-1.5 px-3 py-2 border-b border-[#1A1A2E]">
+                <span className="w-2 h-2 rounded-full bg-red-500/60" />
+                <span className="w-2 h-2 rounded-full bg-yellow-500/60" />
+                <span className="w-2 h-2 rounded-full bg-green-500/60" />
+                <span className="font-mono text-[10px] text-slate-700 ml-2">
+                  {tool?.isComposite ? "composite-runner" : `${tool?.agentName?.toLowerCase() ?? "agent"}-skill`}
+                </span>
+              </div>
+              <div className="p-4 min-h-[160px] space-y-1">
+                {log.map((l, i) => (
+                  <p key={i} className="font-mono text-[11px] text-slate-500 animate-fadeIn">{l}</p>
+                ))}
+                <span className="inline-block w-1.5 h-3.5 bg-[#4FC3F7] animate-pulse" />
+              </div>
+            </div>
+          </div>
+        ) : result !== null ? (
+          /* Result */
+          <StructuredOutput result={result} tool={tool!} />
+        ) : tool ? (
+          /* Waiting */
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-8">
+            <div className="w-10 h-10 rounded-full border border-[#1A1A2E] flex items-center justify-center">
+              <span className="w-2 h-2 rounded-full" style={{ background: AGENT_COLORS[tool.agentName] ?? "#475569" }} />
+            </div>
+            <p className="font-mono text-[10px] text-slate-700 tracking-widest">// WAITING FOR INPUT</p>
+            <p className="font-mono text-xs text-slate-700 leading-relaxed max-w-xs">
+              Fill in the form and click Run to get your {tool.name} analysis
+            </p>
+          </div>
+        ) : (
+          /* No tool selected */
+          <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-8">
+            <p className="font-mono text-[10px] text-slate-700 tracking-widest">// SELECT A TOOL</p>
+            <p className="font-mono text-xs text-slate-700 leading-relaxed max-w-xs">
+              Choose a tool from the list to get started. Single-agent and composite multi-agent tools available.
+            </p>
+            <div className="grid grid-cols-3 gap-3 mt-4 w-full max-w-sm">
+              {[
+                { label: "Intelligence", color: "#A78BFA", desc: "Market signals & research" },
+                { label: "Builder", color: "#4FC3F7", desc: "Architecture & code" },
+                { label: "Trading", color: "#34D399", desc: "DeFi & on-chain" },
+              ].map(c => (
+                <div key={c.label} className="bg-[#0D0D1A] border border-[#1A1A2E] rounded-xl p-3">
+                  <span className="font-mono text-[10px]" style={{ color: c.color }}>{c.label}</span>
+                  <p className="font-mono text-[9px] text-slate-700 mt-1 leading-relaxed">{c.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// ─── Tool card ────────────────────────────────────────────────────────────────
+// ─── Structured output ─────────────────────────────────────────────────────────
 
-function ToolCard({ tool, onSelect }: { tool: AgentTool; onSelect: () => void }) {
-  const agentColor = AGENT_COLORS[tool.agentName] ?? "#4FC3F7";
-  return (
-    <button
-      onClick={onSelect}
-      className="text-left w-full bg-[#0D0D1A] border border-[#1A1A2E] hover:border-[#4FC3F7]/20 rounded-xl p-4 transition-all group"
-    >
-      {/* Agent dot + composite badge */}
-      <div className="flex items-center gap-2 mb-2.5">
-        <span className="w-1.5 h-1.5 rounded-full" style={{ background: agentColor }} />
-        <span className="font-mono text-[10px]" style={{ color: agentColor }}>{tool.agentName}</span>
-        {tool.isComposite && (
-          <span className="font-mono text-[9px] px-1 py-0.5 border border-[#F59E0B]/30 text-[#F59E0B] rounded ml-auto">✦</span>
-        )}
-        {tool.featured && !tool.isComposite && (
-          <span className="font-mono text-[9px] text-[#A78BFA] ml-auto">★</span>
-        )}
+function StructuredOutput({ result, tool }: { result: string; tool: AgentTool }) {
+  // Try JSON parse first
+  let parsed: Record<string, unknown> | null = null;
+  try {
+    parsed = JSON.parse(result);
+  } catch { /* raw text */ }
+
+  if (parsed) {
+    return (
+      <div className="p-5 space-y-4">
+        {Object.entries(parsed).map(([key, val]) => (
+          <div key={key}>
+            <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-2 uppercase">{key.replace(/_/g, " ")}</p>
+            {typeof val === "object" && val !== null ? (
+              <div className="space-y-2">
+                {Array.isArray(val) ? (
+                  val.map((item, i) => (
+                    <p key={i} className="font-mono text-xs text-slate-300 leading-relaxed">{String(item)}</p>
+                  ))
+                ) : (
+                  Object.entries(val as Record<string, unknown>).map(([k, v]) => (
+                    <div key={k} className="flex items-start gap-3">
+                      <span className="font-mono text-[10px] text-slate-600 w-24 shrink-0 mt-0.5 uppercase">{k.replace(/_/g, " ")}</span>
+                      <span className="font-mono text-xs text-slate-300 leading-relaxed">{String(v)}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : typeof val === "number" ? (
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-1 bg-[#1A1A2E] rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.min(100, val)}%`,
+                      background: val >= 70 ? "#34D399" : val >= 40 ? "#F59E0B" : "#F87171",
+                    }}
+                  />
+                </div>
+                <span className="font-mono text-sm font-bold text-white w-8 text-right">{val}</span>
+              </div>
+            ) : (
+              <p className="font-mono text-xs text-slate-300 leading-relaxed">{String(val)}</p>
+            )}
+          </div>
+        ))}
       </div>
+    );
+  }
 
-      {/* Name */}
-      <p className="font-mono text-sm text-white group-hover:text-[#4FC3F7] transition-colors mb-1.5">
-        {tool.name}
-      </p>
+  // Plain text — render section-by-section
+  const lines = result.split("\n");
+  const sections: Array<{ header: string | null; lines: string[] }> = [];
+  let current: { header: string | null; lines: string[] } = { header: null, lines: [] };
 
-      {/* Description */}
-      <p className="font-mono text-[11px] text-slate-600 line-clamp-2 leading-relaxed mb-3">
-        {tool.description}
-      </p>
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Detect ALL-CAPS section headers (e.g. PROJECT, BRIEF, MIROSHARK)
+    if (/^[A-Z][A-Z0-9 _]{2,}$/.test(trimmed) && trimmed.length < 40) {
+      if (current.lines.some(l => l.trim())) sections.push(current);
+      current = { header: trimmed, lines: [] };
+    } else {
+      current.lines.push(line);
+    }
+  }
+  if (current.lines.some(l => l.trim())) sections.push(current);
 
-      {/* Composite skills preview */}
-      {tool.isComposite && tool.compositeSkills && (
-        <div className="flex flex-wrap gap-1 mb-2">
-          {tool.compositeSkills.map((cs, i) => (
-            <span key={cs.skillId ?? i} className="font-mono text-[9px] px-1.5 py-0.5 bg-[#050508] border border-[#1A1A2E] text-slate-600 rounded">
-              {cs.label}
-            </span>
-          ))}
-          <span className="font-mono text-[9px] text-[#4FC3F7]">→ synthesis</span>
-        </div>
-      )}
+  if (sections.length > 1) {
+    return (
+      <div className="p-5 space-y-5">
+        {sections.map((sec, i) => (
+          <div key={i}>
+            {sec.header && (
+              <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-2">{sec.header}</p>
+            )}
+            <div className="space-y-1">
+              {sec.lines.filter(l => l.trim()).map((l, j) => {
+                const t = l.trim();
+                // Score bars for lines like "BULL 72" or "BEAR 18"
+                const scoreMatch = t.match(/^(BULL|BEAR|NEUTRAL)\s+(\d+)$/i);
+                if (scoreMatch) {
+                  const score = parseInt(scoreMatch[2]);
+                  const label = scoreMatch[1].toUpperCase();
+                  const color = label === "BULL" ? "#34D399" : label === "BEAR" ? "#F87171" : "#F59E0B";
+                  return (
+                    <div key={j} className="flex items-center gap-3">
+                      <span className="font-mono text-[10px] w-16 shrink-0" style={{ color }}>{label}</span>
+                      <div className="flex-1 h-1 bg-[#1A1A2E] rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${score}%`, background: color }} />
+                      </div>
+                      <span className="font-mono text-xs font-bold text-white w-8 text-right">{score}</span>
+                    </div>
+                  );
+                }
+                // Key: value lines
+                const kvMatch = t.match(/^([A-Z][A-Z0-9 _]{1,20}):\s*(.+)$/);
+                if (kvMatch) {
+                  return (
+                    <div key={j} className="flex items-start gap-3">
+                      <span className="font-mono text-[10px] text-slate-600 w-28 shrink-0 mt-0.5">{kvMatch[1]}</span>
+                      <span className="font-mono text-xs text-slate-300 leading-relaxed">{kvMatch[2]}</span>
+                    </div>
+                  );
+                }
+                return (
+                  <p key={j} className="font-mono text-xs text-slate-400 leading-relaxed">{t}</p>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
-      {/* Run hint */}
-      <p className="font-mono text-[9px] text-slate-700 group-hover:text-[#4FC3F7]/60 transition-colors">
-        → run tool
-      </p>
-    </button>
+  // Fallback: pre
+  return (
+    <div className="p-5">
+      <pre className="font-mono text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">{result}</pre>
+    </div>
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── Main page ─────────────────────────────────────────────────────────────────
 
 type ToolsData = { tools: AgentTool[]; total: number; composite: number; agents: string[] };
 
-const CATS = Object.entries(CAT_LABELS);
-
 export default function ToolsPage() {
-  const [tools, setTools]       = useState<AgentTool[]>([]);
-  const [selected, setSelected] = useState<AgentTool | null>(null);
-  const [cat, setCat]           = useState("all");
-  const [agentFilter, setAgentFilter] = useState("all");
-  const [search, setSearch]     = useState("");
-  const [loading, setLoading]   = useState(true);
-  const [compositeOnly, setCompositeOnly] = useState(false);
+  const [tools, setTools]           = useState<AgentTool[]>([]);
+  const [selected, setSelected]     = useState<AgentTool | null>(null);
+  const [values, setValues]         = useState<Record<string, string>>({});
+  const [tab, setTab]               = useState("all");
+  const [subTag, setSubTag]         = useState<string | null>(null);
+  const [search, setSearch]         = useState("");
+  const [loading, setLoading]       = useState(true);
+  const [running, setRunning]       = useState(false);
+  const [result, setResult]         = useState<string | null>(null);
+  const [error, setError]           = useState("");
+  const [log, setLog]               = useState<string[]>([]);
 
   useEffect(() => {
     fetch("/api/tool-runner")
@@ -355,187 +335,314 @@ export default function ToolsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const agents = ["all", ...Array.from(new Set(tools.map(t => t.agentName)))];
+  function selectTool(t: AgentTool) {
+    setSelected(t);
+    setValues({});
+    setResult(null);
+    setError("");
+    setLog([]);
+  }
 
+  function setValue(key: string, val: string) {
+    setValues(prev => ({ ...prev, [key]: val }));
+  }
+
+  async function handleRun(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selected) return;
+    setError(""); setResult(null); setRunning(true); setLog([]);
+
+    // Animated log
+    const agentColor = AGENT_COLORS[selected.agentName] ?? "#4FC3F7";
+    const logLines = selected.isComposite && selected.compositeSkills
+      ? [
+          `[sys] initializing composite: ${selected.name}`,
+          `[sys] spawning ${selected.compositeSkills.length} agents…`,
+          ...selected.compositeSkills.map(cs => `[aeon] skill: ${cs.skillId}`),
+          `[blue] synthesizing ${selected.compositeSkills.length} outputs…`,
+          `[sys] done`,
+        ]
+      : [
+          `[sys] loading skill: ${selected.skillId ?? selected.id}`,
+          `[${selected.agentName.toLowerCase()}] analyzing input…`,
+          `[${selected.agentName.toLowerCase()}] generating output…`,
+          `[sys] processing…`,
+          `[sys] done`,
+        ];
+
+    let i = 0;
+    const logTimer = setInterval(() => {
+      if (i < logLines.length) { setLog(prev => [...prev, logLines[i]]); i++; }
+      else clearInterval(logTimer);
+    }, 480);
+
+    const inputParts = selected.inputs
+      .map((inp: AgentToolInput) => values[inp.key] ? `${inp.label}: ${values[inp.key]}` : "")
+      .filter(Boolean);
+
+    try {
+      const res = await fetch("/api/tool-runner", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toolId: selected.id, input: inputParts.join("\n") }),
+      });
+      const data = await res.json() as { result?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Run failed");
+      setResult(data.result ?? "");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Run failed");
+    } finally {
+      clearInterval(logTimer);
+      setRunning(false);
+    }
+  }
+
+  // Filtering
   const filtered = tools.filter(t => {
-    if (cat !== "all" && t.category !== cat) return false;
-    if (agentFilter !== "all" && t.agentName !== agentFilter) return false;
-    if (compositeOnly && !t.isComposite) return false;
+    if (!tabMatch(t.category, tab)) return false;
     if (search && !t.name.toLowerCase().includes(search.toLowerCase()) &&
         !t.description.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
-  const featured  = filtered.filter(t => t.featured);
-  const composite = filtered.filter(t => t.isComposite);
-  const regular   = filtered.filter(t => !t.isComposite && !t.featured);
-
-  if (selected) {
-    return (
-      <>
-        <Navbar />
-        <div className="bg-[#050508] font-mono pt-16 h-screen flex flex-col">
-          <ToolRunner tool={selected} onBack={() => setSelected(null)} />
-        </div>
-      </>
-    );
-  }
+  const agentColor = selected ? (AGENT_COLORS[selected.agentName] ?? "#4FC3F7") : "#4FC3F7";
 
   return (
     <>
       <Navbar />
-      <div className="flex bg-[#050508] font-mono pt-16">
-          {/* ── Sidebar ── */}
-          <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] border-r border-[#1A1A2E]">
-            <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
-              <Link href="/hub" className="font-mono text-[10px] text-slate-700 hover:text-slate-500 transition-colors tracking-widest">
-                ← BLUE HUB
-              </Link>
-              <p className="font-mono text-[10px] text-[#F59E0B] tracking-widest mt-3">// AGENT TOOLS</p>
-              <p className="font-mono text-[10px] text-slate-700 mt-1">{filtered.length} tools · {tools.filter(t=>t.isComposite).length} composite</p>
+      <div className="flex bg-[#050508] font-mono pt-16" style={{ height: "calc(100vh)" }}>
+
+        {/* ── Panel 1: Tool list ── */}
+        <aside className="hidden lg:flex flex-col w-48 shrink-0 border-r border-[#1A1A2E] h-[calc(100vh-4rem)] sticky top-16">
+          {/* Header */}
+          <div className="px-4 pt-4 pb-3 border-b border-[#1A1A2E]">
+            <p className="font-mono text-[10px] text-[#F59E0B] tracking-widest">// TOOLS</p>
+            <p className="font-mono text-[10px] text-slate-700 mt-0.5">
+              {filtered.length} of {tools.length} tools
+            </p>
+          </div>
+
+          {/* Search */}
+          <div className="px-3 pt-3 pb-2">
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search tools…"
+              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/30 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-white placeholder-slate-700 focus:outline-none transition-colors"
+            />
+          </div>
+
+          {/* Category tabs */}
+          <div className="px-3 pb-2">
+            <div className="flex flex-wrap gap-1">
+              {TABS.map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`font-mono text-[10px] px-2 py-0.5 rounded transition-colors ${
+                    tab === t.key
+                      ? "bg-[#4FC3F7]/15 text-[#4FC3F7]"
+                      : "text-slate-600 hover:text-slate-300"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
             </div>
+          </div>
 
-            {/* Search */}
-            <div className="px-4 pt-3 pb-2">
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search tools…"
-                className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/30 rounded-lg px-3 py-2 font-mono text-xs text-white placeholder-slate-700 focus:outline-none transition-colors"
-              />
+          {/* Sub-tags */}
+          <div className="px-3 pb-3 border-b border-[#1A1A2E]">
+            <div className="flex flex-wrap gap-1">
+              {SUB_TAGS.map(s => (
+                <button
+                  key={s}
+                  onClick={() => setSubTag(prev => prev === s ? null : s)}
+                  className={`font-mono text-[9px] px-1.5 py-0.5 rounded border transition-colors ${
+                    subTag === s
+                      ? "border-[#4FC3F7]/30 text-[#4FC3F7]"
+                      : "border-[#1A1A2E] text-slate-700 hover:text-slate-500"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
             </div>
+          </div>
 
-            {/* Category */}
-            <div className="px-4 pb-3">
-              <p className="font-mono text-[10px] text-slate-700 mb-2 tracking-widest">CATEGORY</p>
-              <div className="flex flex-wrap gap-1">
-                {CATS.map(([key, label]) => (
-                  <button key={key} onClick={() => setCat(key)}
-                    className={`font-mono text-[10px] px-2 py-1 rounded transition-colors ${
-                      cat === key ? "bg-[#4FC3F7]/15 text-[#4FC3F7]" : "text-slate-600 hover:text-slate-300"
-                    }`}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Agent filter */}
-            <div className="px-4 pb-3 border-t border-[#1A1A2E] pt-3">
-              <p className="font-mono text-[10px] text-slate-700 mb-2 tracking-widest">AGENT</p>
-              <div className="space-y-0.5">
-                {agents.map(a => (
-                  <button key={a} onClick={() => setAgentFilter(a)}
-                    className={`w-full text-left font-mono text-[11px] px-2 py-1 rounded transition-colors flex items-center gap-2 ${
-                      agentFilter === a ? "text-white" : "text-slate-600 hover:text-slate-300"
-                    }`}>
-                    {a !== "all" && (
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: AGENT_COLORS[a] ?? "#475569" }} />
-                    )}
-                    {a}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Composite toggle */}
-            <div className="px-4 pb-3 border-t border-[#1A1A2E] pt-3">
-              <button
-                onClick={() => setCompositeOnly(p => !p)}
-                className={`flex items-center gap-2 font-mono text-[10px] px-2 py-1 rounded transition-colors ${
-                  compositeOnly ? "bg-[#F59E0B]/15 text-[#F59E0B]" : "text-slate-600 hover:text-slate-300"
-                }`}>
-                <span>✦ composite only</span>
-              </button>
-            </div>
-
-            <div className="mt-auto px-4 py-4 border-t border-[#1A1A2E]">
-              <Link href="/hub/registry"
-                className="flex items-center gap-2 font-mono text-[10px] text-slate-600 hover:text-slate-400 transition-colors">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
-                Agent Registry
-              </Link>
-            </div>
-          </aside>
-
-          {/* ── Main ── */}
-          <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto px-6 py-8">
-
-            {/* Header */}
-            <div className="mb-8">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-pulse" />
-                <span className="font-mono text-[10px] text-[#F59E0B] tracking-widest">AGENT TOOLS · UNIFIED FEED</span>
-              </div>
-              <h1 className="font-mono text-3xl font-bold text-white tracking-tight">
-                AGENT<span className="text-[#F59E0B]">TOOLS</span>
-              </h1>
-              <p className="font-mono text-xs text-slate-600 mt-2 max-w-lg leading-relaxed">
-                Tools auto-generated from agent skills. Run any tool directly — single agent or composite multi-agent.
-              </p>
-            </div>
-
+          {/* Tool list */}
+          <div className="flex-1 overflow-y-auto py-2">
             {loading ? (
-              <p className="font-mono text-xs text-slate-700 animate-pulse">loading tools…</p>
+              <p className="font-mono text-[10px] text-slate-700 px-4 animate-pulse mt-3">loading…</p>
+            ) : filtered.length === 0 ? (
+              <p className="font-mono text-[10px] text-slate-700 px-4 mt-3">no tools</p>
             ) : (
-              <div className="space-y-8">
+              <div className="space-y-px">
+                {filtered.map(t => {
+                  const ac = AGENT_COLORS[t.agentName] ?? "#475569";
+                  const isActive = selected?.id === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => selectTool(t)}
+                      className={`w-full text-left flex items-center gap-2 px-3 py-2 transition-colors group ${
+                        isActive ? "bg-[#0D0D1A] border-r-2 border-[#4FC3F7]" : "hover:bg-[#0D0D1A]/50"
+                      }`}
+                    >
+                      {/* Dots / indicator */}
+                      <span className="font-mono text-[10px] text-slate-700 shrink-0 tracking-tight">
+                        {isActive ? "●" : "···"}
+                      </span>
+                      <span
+                        className={`font-mono text-[11px] leading-snug truncate transition-colors ${
+                          isActive ? "text-white" : "text-slate-500 group-hover:text-slate-300"
+                        }`}
+                      >
+                        {t.name}
+                      </span>
+                      {t.isComposite && (
+                        <span className="shrink-0 font-mono text-[9px] text-[#F59E0B]">✦</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
-                {/* Composite tools */}
-                {composite.length > 0 && !compositeOnly && (
-                  <section>
-                    <div className="flex items-center gap-3 mb-3">
-                      <p className="font-mono text-[10px] text-[#F59E0B] tracking-widest">// COMPOSITE · MULTI-AGENT</p>
-                      <div className="flex-1 h-px bg-[#F59E0B]/10" />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {composite.map(t => <ToolCard key={t.id} tool={t} onSelect={() => setSelected(t)} />)}
-                    </div>
-                  </section>
-                )}
+          {/* Footer */}
+          <div className="px-4 py-3 border-t border-[#1A1A2E]">
+            <Link href="/hub/registry" className="font-mono text-[10px] text-slate-700 hover:text-slate-400 transition-colors flex items-center gap-1.5">
+              <span className="w-1 h-1 rounded-full bg-[#34D399]" />
+              Registry
+            </Link>
+          </div>
+        </aside>
 
-                {/* Composite only view */}
-                {compositeOnly && (
-                  <section>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {filtered.map(t => <ToolCard key={t.id} tool={t} onSelect={() => setSelected(t)} />)}
+        {/* ── Panel 2: Input form ── */}
+        <div className="hidden lg:flex flex-col w-72 shrink-0 border-r border-[#1A1A2E] h-[calc(100vh-4rem)] sticky top-16">
+          {selected ? (
+            <>
+              {/* Tool name + description */}
+              <div className="px-5 pt-5 pb-4 border-b border-[#1A1A2E]">
+                <h2 className="font-mono text-base font-bold text-white mb-1.5 leading-snug">
+                  {selected.name}
+                </h2>
+                <p className="font-mono text-[11px] text-slate-500 leading-relaxed">
+                  {selected.description}
+                </p>
+                {selected.isComposite && selected.compositeSkills && (
+                  <div className="mt-3 space-y-1">
+                    {selected.compositeSkills.map((cs, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="font-mono text-[9px] text-[#A78BFA]">{i + 1}.</span>
+                        <span className="font-mono text-[10px] text-slate-500">{cs.label}</span>
+                        <span className="font-mono text-[9px] text-slate-700 ml-auto">{cs.agentType}</span>
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[10px] text-[#4FC3F7]">→</span>
+                      <span className="font-mono text-[10px] text-[#4FC3F7]">Blue Agent synthesis</span>
                     </div>
-                  </section>
-                )}
-
-                {/* Featured */}
-                {featured.length > 0 && !compositeOnly && (
-                  <section>
-                    <div className="flex items-center gap-3 mb-3">
-                      <p className="font-mono text-[10px] text-[#A78BFA] tracking-widest">// FEATURED</p>
-                      <div className="flex-1 h-px bg-[#A78BFA]/10" />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {featured.map(t => <ToolCard key={t.id} tool={t} onSelect={() => setSelected(t)} />)}
-                    </div>
-                  </section>
-                )}
-
-                {/* All tools */}
-                {regular.length > 0 && !compositeOnly && (
-                  <section>
-                    <div className="flex items-center gap-3 mb-3">
-                      <p className="font-mono text-[10px] text-slate-600 tracking-widest">// ALL TOOLS</p>
-                      <div className="flex-1 h-px bg-[#1A1A2E]" />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {regular.map(t => <ToolCard key={t.id} tool={t} onSelect={() => setSelected(t)} />)}
-                    </div>
-                  </section>
-                )}
-
-                {filtered.length === 0 && (
-                  <div className="text-center py-20 border border-[#1A1A2E] rounded-xl">
-                    <p className="font-mono text-xs text-slate-700">no tools match filter</p>
                   </div>
                 )}
               </div>
-            )}
-          </main>
+
+              {/* Form */}
+              <form onSubmit={handleRun} className="flex flex-col flex-1 overflow-hidden">
+                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                  <div>
+                    <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-1">// INPUT</p>
+                    <p className="font-mono text-[9px] text-slate-700 leading-relaxed">
+                      Output quality depends on input accuracy — use real data for best results
+                    </p>
+                  </div>
+
+                  {selected.inputs.map((inp: AgentToolInput) => (
+                    <div key={inp.key}>
+                      <label className="block font-mono text-[10px] text-slate-500 mb-1.5">
+                        {inp.label}{inp.required ? " *" : ""}
+                      </label>
+                      {inp.key === "description" || inp.key === "brief" || inp.key === "context" ? (
+                        <textarea
+                          value={values[inp.key] ?? ""}
+                          onChange={e => setValue(inp.key, e.target.value)}
+                          placeholder={inp.placeholder}
+                          required={inp.required}
+                          rows={4}
+                          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/30 rounded-lg px-3 py-2 font-mono text-[11px] text-white placeholder-slate-700 focus:outline-none transition-colors resize-none"
+                        />
+                      ) : (
+                        <input
+                          value={values[inp.key] ?? ""}
+                          onChange={e => setValue(inp.key, e.target.value)}
+                          placeholder={inp.placeholder}
+                          required={inp.required}
+                          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/30 rounded-lg px-3 py-2 font-mono text-[11px] text-white placeholder-slate-700 focus:outline-none transition-colors"
+                        />
+                      )}
+                    </div>
+                  ))}
+
+                  {error && (
+                    <p className="font-mono text-[10px] text-red-400">{error}</p>
+                  )}
+                </div>
+
+                {/* Run button */}
+                <div className="px-5 py-4 border-t border-[#1A1A2E] shrink-0">
+                  <button
+                    type="submit"
+                    disabled={running}
+                    className="w-full py-2.5 font-mono text-xs rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    style={{
+                      background: `${agentColor}20`,
+                      borderWidth: 1,
+                      borderStyle: "solid",
+                      borderColor: `${agentColor}40`,
+                      color: agentColor,
+                    }}
+                  >
+                    {running ? (
+                      <>
+                        <span className="w-3 h-3 border border-current/30 border-t-current rounded-full animate-spin" />
+                        {selected.isComposite
+                          ? `running ${selected.compositeSkills?.length} skills…`
+                          : "running…"}
+                      </>
+                    ) : (
+                      `Run →`
+                    )}
+                  </button>
+                  <p className="font-mono text-[9px] text-slate-700 text-center mt-2">
+                    {selected.isComposite
+                      ? `${selected.compositeSkills?.length} skills · Blue synthesis`
+                      : `powered by ${selected.agentName}`}
+                  </p>
+                </div>
+              </form>
+            </>
+          ) : (
+            /* Empty middle panel */
+            <div className="flex flex-col items-center justify-center h-full px-5 text-center gap-3">
+              <p className="font-mono text-[10px] text-slate-700 tracking-widest">// NO TOOL SELECTED</p>
+              <p className="font-mono text-[11px] text-slate-700 leading-relaxed">
+                Pick a tool from the list to see its inputs here
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* ── Panel 3: Output ── */}
+        <main className="flex-1 h-[calc(100vh-4rem)] overflow-hidden flex flex-col">
+          <OutputPanel
+            tool={selected}
+            result={result}
+            running={running}
+            log={log}
+          />
+        </main>
+
       </div>
     </>
   );
