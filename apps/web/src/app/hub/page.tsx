@@ -811,7 +811,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
       try {
         setStep("calling");
 
-        // Step 1: POST to /api/tool/<id> proxy — returns 402 details or result
+        // Step 1: GET 402 payment requirements via /api/tool proxy (always hits Bankr)
         const r1 = await fetch(`/api/tool/${tool.id}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -819,6 +819,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         });
         const d1 = await r1.json() as Record<string,unknown>;
 
+        // Not gated (shouldn't happen for priced tools, but handle gracefully)
         if (!d1.requiresPayment) {
           const res = (d1.result ?? d1) as Record<string,unknown>;
           setResult(res); setStep("done");
@@ -826,10 +827,10 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           return;
         }
 
-        // Step 2: parse payment requirements from 402 response
+        // Step 2: parse 402 payment requirements
         const paymentDetails = d1.paymentDetails as Record<string,unknown>;
         const accepts = paymentDetails?.accepts as Record<string,unknown>[] | undefined;
-        if (!accepts?.length) throw new Error("No payment details in 402 response");
+        if (!accepts?.length) throw new Error("No payment requirements in 402 response");
         const req = accepts[0] as {
           scheme: string; network: string;
           payTo: string; maxAmountRequired: string;
@@ -872,7 +873,8 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         });
 
         setStep("paying");
-        const payment = {
+        // Encode signed payment as base64 X-PAYMENT header (x402 standard)
+        const xPayment = btoa(JSON.stringify({
           x402Version, scheme: req.scheme ?? "exact", network: req.network ?? "eip155:8453",
           payload: {
             signature,
@@ -882,16 +884,18 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
               validAfter: "0", validBefore: validBefore.toString(), nonce,
             },
           },
-        };
+        }));
 
-        // Step 4: retry with payment
-        const r2 = await fetch(`/api/tool/${tool.id}`, {
+        // Step 4: call our local /api/<tool> WITH X-PAYMENT header.
+        // proxyTool forwards to Bankr for verification; if Bankr handler fails (5xx),
+        // it automatically falls back to our 3-agent local pipeline.
+        const r2 = await fetch(`/api/${tool.id}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ toolParams: tool.x402Body(body), payment }),
+          headers: { "Content-Type": "application/json", "X-PAYMENT": xPayment },
+          body: JSON.stringify(tool.x402Body(body)),
         });
         const d2 = await r2.json() as Record<string,unknown>;
-        if (d2.error) throw new Error(String(d2.error));
+        if (!r2.ok) throw new Error(String(d2.error ?? `Payment failed ${r2.status}`));
         const res2 = (d2.result ?? d2) as Record<string,unknown>;
         setResult(res2); setStep("done");
         onResult({ result: res2, isMock: false, mockReason: "dev" });
