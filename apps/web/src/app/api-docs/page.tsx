@@ -236,18 +236,18 @@ function OverviewSection() {
   const [lang, setLang] = useState<"curl" | "node" | "python">("curl");
   return (
     <div>
-      <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
-        <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-4 py-1.5 mb-6">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
+        <div className="flex items-center gap-3">
           <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-          <span className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">REST API · x402 · USDC ON BASE</span>
+          <h2 className="font-mono text-sm font-bold text-white">
+            Blue Agent <span className="text-[#4FC3F7]">API</span>
+          </h2>
+          <span className="font-mono text-[10px] text-slate-600">Pay per call · USDC on Base · no subscriptions</span>
         </div>
-        <h2 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
-          Blue Agent <span className="text-[#4FC3F7]">API</span>
-        </h2>
-        <p className="font-mono text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-          Pay per call with USDC. No subscriptions, no API keys.<br />
-          18 endpoints · all tools available.
-        </p>
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-[10px] text-slate-700">18 endpoints</span>
+          <span className="font-mono text-[9px] px-1.5 py-0.5 border border-[#4FC3F7]/30 text-[#4FC3F7] rounded">x402</span>
+        </div>
       </div>
 
       <div className="px-6 lg:px-10 py-8 w-full space-y-6">
@@ -331,18 +331,15 @@ function OverviewSection() {
 function AuthSection() {
   return (
     <div>
-      <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
-        <div className="inline-flex items-center gap-2 border border-[#fbbf24]/20 bg-[#fbbf24]/5 rounded-full px-4 py-1.5 mb-6">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
+        <div className="flex items-center gap-3">
           <span className="w-1.5 h-1.5 rounded-full bg-[#fbbf24] animate-pulse" />
-          <span className="font-mono text-[10px] text-[#fbbf24] tracking-widest">x402 · USDC · NO API KEY NEEDED</span>
+          <h2 className="font-mono text-sm font-bold text-white">
+            Pay per <span className="text-[#fbbf24]">call</span>
+          </h2>
+          <span className="font-mono text-[10px] text-slate-600">x402 · HTTP 402 micropayments · USDC on Base · no API key</span>
         </div>
-        <h2 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
-          Pay per <span className="text-[#fbbf24]">call</span>.
-        </h2>
-        <p className="font-mono text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-          x402 — HTTP 402 micropayments.<br />
-          Each call costs a small USDC amount paid directly onchain.
-        </p>
+        <span className="font-mono text-[9px] px-1.5 py-0.5 border border-[#fbbf24]/30 text-[#fbbf24] rounded">x402</span>
       </div>
 
       <div className="px-6 lg:px-10 py-8 w-full space-y-4">
@@ -412,21 +409,19 @@ function EndpointsSection({ category }: { category: typeof CATEGORIES[number] })
 
   return (
     <div>
-      {/* Hero */}
-      <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
-        <div className="inline-flex items-center gap-2 border rounded-full px-4 py-1.5 mb-6"
-          style={{ borderColor: `${category.color}30`, backgroundColor: `${category.color}08` }}>
-          <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: category.color }} />
-          <span className="font-mono text-[10px] tracking-widest" style={{ color: category.color }}>
-            {category.label.toUpperCase()} · {category.tools.length} TOOLS
-          </span>
+      {/* Compact header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
+        <div className="flex items-center gap-3">
+          <span className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0" style={{ backgroundColor: category.color }} />
+          <h2 className="font-mono text-sm font-bold text-white">
+            {category.label} <span style={{ color: category.color }}>tools</span>
+          </h2>
+          <span className="font-mono text-[10px] text-slate-600">{category.sub} · POST · JSON · x402</span>
         </div>
-        <h2 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
-          {category.label} <span style={{ color: category.color }}>tools</span>.
-        </h2>
-        <p className="font-mono text-sm text-slate-500 max-w-md mx-auto">
-          {category.tools.length} endpoints · POST · JSON · x402 payment
-        </p>
+        <span className="font-mono text-[10px] px-2 py-0.5 rounded"
+          style={{ color: category.color, backgroundColor: `${category.color}15` }}>
+          {category.tools.length} endpoints
+        </span>
       </div>
 
       {/* Endpoints */}

@@ -158,19 +158,23 @@ function SoulSection() {
   const [open, setOpen] = useState<string | null>("identity");
   return (
     <div>
-      {/* Hero */}
-      <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
-        <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-4 py-1.5 mb-6">
+      {/* Compact header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
+        <div className="flex items-center gap-3">
           <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-          <span className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">PERSONALITY CONFIG · FORKABLE</span>
+          <h2 className="font-mono text-sm font-bold text-white">
+            SOUL<span className="text-[#4FC3F7]">.md</span>
+          </h2>
+          <span className="font-mono text-[10px] text-slate-600">Personality config · Who Blue Agent is · how it thinks · forkable</span>
         </div>
-        <h2 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
-          SOUL<span className="text-[#4FC3F7]">.md</span>
-        </h2>
-        <p className="font-mono text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-          Who Blue Agent is · how it thinks · how it communicates.<br />
-          Fork this file to create your own agent personality.
-        </p>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[9px] px-1.5 py-0.5 border border-[#4FC3F7]/30 text-[#4FC3F7] rounded">FORKABLE</span>
+          <a href="https://github.com/madebyshun/blue-agent/blob/main/SOUL.md"
+            target="_blank" rel="noopener noreferrer"
+            className="font-mono text-[10px] text-slate-600 hover:text-[#4FC3F7] transition-colors">
+            GitHub →
+          </a>
+        </div>
       </div>
 
       {/* Content */}
@@ -292,22 +296,21 @@ function SoulSection() {
 function AeonSkillSection({ skill }: { skill: typeof AEON_SKILLS[number] }) {
   return (
     <div>
-      {/* Hero */}
-      <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
-        <div className="inline-flex items-center gap-2 border rounded-full px-4 py-1.5 mb-6"
-          style={{ borderColor: `${skill.color}30`, backgroundColor: `${skill.color}08` }}>
-          <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: skill.color }} />
-          <span className="font-mono text-[10px] tracking-widest" style={{ color: skill.color }}>
-            AEON SKILL · SOURCE: BANKRBOT/SKILLS
-          </span>
+      {/* Compact header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0" style={{ backgroundColor: skill.color }} />
+          <h2 className="font-mono text-sm font-bold text-white shrink-0">
+            {skill.icon} {skill.label}
+          </h2>
+          <span className="font-mono text-[10px] text-slate-600 truncate">{skill.desc}</span>
         </div>
-        <h2 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
-          {skill.icon} {skill.label}
-        </h2>
-        <p className="font-mono text-xs text-slate-600 mb-1">{skill.name}</p>
-        <p className="font-mono text-sm text-slate-500 max-w-md mx-auto leading-relaxed mt-2">
-          {skill.desc}
-        </p>
+        <div className="flex items-center gap-2 shrink-0 ml-4">
+          <span className="font-mono text-[9px] px-1.5 py-0.5 border rounded" style={{ borderColor: `${skill.color}30`, color: skill.color }}>
+            AEON SKILL
+          </span>
+          <span className="font-mono text-[10px] text-slate-700">{skill.name}</span>
+        </div>
       </div>
 
       {/* Content */}
