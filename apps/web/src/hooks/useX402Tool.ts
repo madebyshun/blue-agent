@@ -82,13 +82,7 @@ export function useX402Tool(): X402ToolResult {
         throw new Error(`Request failed (${res1.status}): ${errText.slice(0, 200)}`);
       }
 
-      // Parse payment requirements from header
-      const paymentRequiredHeader = res1.headers.get("X-Payment-Required");
-      if (!paymentRequiredHeader) {
-        throw new Error("402 response missing X-Payment-Required header");
-      }
-
-      let paymentRequired: {
+      type PaymentRequired = {
         x402Version: number;
         accepts: Array<{
           scheme: string;
@@ -101,12 +95,25 @@ export function useX402Tool(): X402ToolResult {
           asset: string;
           extra?: Record<string, unknown>;
         }>;
+        facilitator?: string;
       };
 
+      let paymentRequired: PaymentRequired;
+
+      // x402 v2: body IS the payment requirements (raw JSON).
+      // Header (X-Payment-Required) is base64-encoded — parse body instead.
       try {
-        paymentRequired = JSON.parse(paymentRequiredHeader);
-      } catch {
-        throw new Error("Failed to parse X-Payment-Required header");
+        const bodyData = await res1.json() as PaymentRequired;
+        if (bodyData?.accepts?.length) {
+          paymentRequired = bodyData;
+        } else {
+          // Fallback: decode base64 header
+          const h = res1.headers.get("X-Payment-Required");
+          if (!h) throw new Error("No payment requirements in 402 response");
+          paymentRequired = JSON.parse(atob(h)) as PaymentRequired;
+        }
+      } catch (parseErr) {
+        throw new Error(`Failed to parse payment requirements: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`);
       }
 
       const paymentReqs = paymentRequired.accepts;
