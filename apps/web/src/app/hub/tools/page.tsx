@@ -3,6 +3,9 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import { ConnectButton } from "@/components/ConnectModal";
+import { useAccount } from "wagmi";
+import { useX402Tool } from "@/hooks/useX402Tool";
 import type { AgentTool, AgentToolInput } from "@/lib/agent-tools";
 
 // ─── Design tokens ─────────────────────────────────────────────────────────────
@@ -327,6 +330,10 @@ export default function ToolsPage() {
   const [error, setError]           = useState("");
   const [log, setLog]               = useState<string[]>([]);
 
+  // x402 payment + wallet
+  const { isConnected } = useAccount();
+  const x402 = useX402Tool();
+
   useEffect(() => {
     fetch("/api/tool-runner")
       .then(r => r.json())
@@ -341,6 +348,7 @@ export default function ToolsPage() {
     setResult(null);
     setError("");
     setLog([]);
+    x402.reset();
   }
 
   function setValue(key: string, val: string) {
@@ -351,10 +359,18 @@ export default function ToolsPage() {
     e.preventDefault();
     if (!selected) return;
     setError(""); setResult(null); setRunning(true); setLog([]);
+    x402.reset();
 
     // Animated log
-    const agentColor = AGENT_COLORS[selected.agentName] ?? "#4FC3F7";
-    const logLines = selected.isComposite && selected.compositeSkills
+    const x402Log = selected.x402Url
+      ? [
+          `[sys] preparing x402 payment: ${selected.price}`,
+          `[wallet] signing EIP-3009 authorization…`,
+          `[x402] sending payment header…`,
+          `[${selected.agentName.toLowerCase()}] processing…`,
+          `[sys] done`,
+        ]
+      : selected.isComposite && selected.compositeSkills
       ? [
           `[sys] initializing composite: ${selected.name}`,
           `[sys] spawning ${selected.compositeSkills.length} agents…`,
@@ -372,15 +388,25 @@ export default function ToolsPage() {
 
     let i = 0;
     const logTimer = setInterval(() => {
-      if (i < logLines.length) { setLog(prev => [...prev, logLines[i]]); i++; }
+      if (i < x402Log.length) { setLog(prev => [...prev, x402Log[i]]); i++; }
       else clearInterval(logTimer);
     }, 480);
 
-    const inputParts = selected.inputs
-      .map((inp: AgentToolInput) => values[inp.key] ? `${inp.label}: ${values[inp.key]}` : "")
-      .filter(Boolean);
-
     try {
+      // ── x402 paid tool ──────────────────────────────────────────────────
+      if (selected.x402Url && selected.x402Body) {
+        const body = selected.x402Body(values);
+        await x402.run(selected.x402Url, body);
+        // result is in x402.result — sync it to local state
+        // (handled via useEffect below)
+        return;
+      }
+
+      // ── Free tool (no x402Url) ──────────────────────────────────────────
+      const inputParts = selected.inputs
+        .map((inp: AgentToolInput) => values[inp.key] ? `${inp.label}: ${values[inp.key]}` : "")
+        .filter(Boolean);
+
       const res = await fetch("/api/tool-runner", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -396,6 +422,25 @@ export default function ToolsPage() {
       setRunning(false);
     }
   }
+
+  // Sync x402 result/error back to local state
+  useEffect(() => {
+    if (x402.status === "done" && x402.result) {
+      setResult(x402.result);
+      setRunning(false);
+    }
+    if (x402.status === "error" && x402.error) {
+      setError(x402.error);
+      setRunning(false);
+    }
+    // Update log based on x402 signing status
+    if (x402.status === "signing") {
+      setLog(prev => [...prev.filter(l => !l.includes("wallet")), "[wallet] waiting for signature…"]);
+    }
+    if (x402.status === "paying") {
+      setLog(prev => [...prev.filter(l => !l.includes("x402")), "[x402] payment sent, awaiting result…"]);
+    }
+  }, [x402.status, x402.result, x402.error]);
 
   // Filtering
   const filtered = tools.filter(t => {
@@ -500,6 +545,9 @@ export default function ToolsPage() {
                       >
                         {t.name}
                       </span>
+                      {t.price && (
+                        <span className="shrink-0 font-mono text-[9px] text-[#34D399] ml-auto">{t.price}</span>
+                      )}
                       {t.isComposite && (
                         <span className="shrink-0 font-mono text-[9px] text-[#F59E0B]">✦</span>
                       )}
@@ -591,31 +639,68 @@ export default function ToolsPage() {
 
                 {/* Run button */}
                 <div className="px-5 py-4 border-t border-[#1A1A2E] shrink-0">
-                  <button
-                    type="submit"
-                    disabled={running}
-                    className="w-full py-2.5 font-mono text-xs rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    style={{
-                      background: `${agentColor}20`,
-                      borderWidth: 1,
-                      borderStyle: "solid",
-                      borderColor: `${agentColor}40`,
-                      color: agentColor,
-                    }}
-                  >
-                    {running ? (
-                      <>
-                        <span className="w-3 h-3 border border-current/30 border-t-current rounded-full animate-spin" />
-                        {selected.isComposite
-                          ? `running ${selected.compositeSkills?.length} skills…`
-                          : "running…"}
-                      </>
-                    ) : (
-                      `Run →`
-                    )}
-                  </button>
+                  {/* Price badge */}
+                  {selected.price && (
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="font-mono text-[10px] text-slate-600">Cost per run</span>
+                      <span className="font-mono text-xs font-bold text-[#34D399]">
+                        {selected.price} <span className="text-[10px] font-normal text-slate-600">USDC</span>
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Wallet gate for x402 tools */}
+                  {selected.x402Url && !isConnected ? (
+                    <div className="space-y-2">
+                      <p className="font-mono text-[10px] text-slate-600 text-center mb-2">
+                        Connect wallet to pay {selected.price} USDC
+                      </p>
+                      <div className="flex justify-center [&>button]:w-full [&>button]:font-mono [&>button]:text-xs [&>button]:py-2.5 [&>button]:rounded-lg">
+                        <ConnectButton />
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={running || x402.status === "signing"}
+                      className="w-full py-2.5 font-mono text-xs rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      style={{
+                        background: `${agentColor}20`,
+                        borderWidth: 1,
+                        borderStyle: "solid",
+                        borderColor: `${agentColor}40`,
+                        color: agentColor,
+                      }}
+                    >
+                      {x402.status === "signing" ? (
+                        <>
+                          <span className="w-3 h-3 border border-current/30 border-t-current rounded-full animate-spin" />
+                          sign in wallet…
+                        </>
+                      ) : x402.status === "paying" ? (
+                        <>
+                          <span className="w-3 h-3 border border-current/30 border-t-current rounded-full animate-spin" />
+                          paying {selected.price}…
+                        </>
+                      ) : running ? (
+                        <>
+                          <span className="w-3 h-3 border border-current/30 border-t-current rounded-full animate-spin" />
+                          {selected.isComposite
+                            ? `running ${selected.compositeSkills?.length} skills…`
+                            : "running…"}
+                        </>
+                      ) : selected.price ? (
+                        `Pay ${selected.price} & Run →`
+                      ) : (
+                        `Run →`
+                      )}
+                    </button>
+                  )}
+
                   <p className="font-mono text-[9px] text-slate-700 text-center mt-2">
-                    {selected.isComposite
+                    {selected.x402Url
+                      ? "x402 · USDC on Base · no subscription"
+                      : selected.isComposite
                       ? `${selected.compositeSkills?.length} skills · Blue synthesis`
                       : `powered by ${selected.agentName}`}
                   </p>

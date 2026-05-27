@@ -14,6 +14,8 @@ export type CompositeSkill = {
   label: string;
 };
 
+const X402_BASE = "https://x402.bankr.bot/0xf31f59e7b8b58555f7871f71973a394c8f1bffe5";
+
 export type AgentTool = {
   id: string;
   name: string;
@@ -28,6 +30,11 @@ export type AgentTool = {
   isComposite: boolean;
   compositeSkills?: CompositeSkill[];
   featured?: boolean;
+  // x402 payment
+  price?: string;          // e.g. "$0.20"
+  priceUSDC?: number;      // in USDC units (6 decimals), e.g. 200000 = $0.20
+  x402Url?: string;        // full x402 endpoint URL — if set, payment is required
+  x402Body?: (values: Record<string, string>) => Record<string, unknown>; // maps hub inputs → x402 body
 };
 
 // ─── Seeded tools ─────────────────────────────────────────────────────────────
@@ -46,6 +53,10 @@ export const AGENT_TOOLS: AgentTool[] = [
     inputs: [{ key: "focus", label: "Focus (optional)", placeholder: "e.g. Base tokens, L2, memecoins" }],
     isComposite: false,
     featured: true,
+    price: "$0.25",
+    priceUSDC: 250000,
+    x402Url: `${X402_BASE}/token-momentum-scanner`,
+    x402Body: (v) => ({ chain: "base", context: v.focus ?? "" }),
   },
   {
     id: "aeon-narrative-tracker",
@@ -59,6 +70,10 @@ export const AGENT_TOOLS: AgentTool[] = [
     inputs: [{ key: "focus", label: "Narrative focus (optional)", placeholder: "e.g. AI agents, RWA, DeFi" }],
     isComposite: false,
     featured: true,
+    price: "$0.25",
+    priceUSDC: 250000,
+    x402Url: `${X402_BASE}/narrative-position`,
+    x402Body: (v) => ({ topic: v.focus ?? "" }),
   },
   {
     id: "aeon-token-pick",
@@ -72,6 +87,10 @@ export const AGENT_TOOLS: AgentTool[] = [
     inputs: [{ key: "focus", label: "Category (optional)", placeholder: "e.g. low-cap DeFi, AI agent tokens" }],
     isComposite: false,
     featured: true,
+    price: "$0.20",
+    priceUSDC: 200000,
+    x402Url: `${X402_BASE}/token-pick-signal`,
+    x402Body: (v) => ({ chain: "base", context: v.focus ?? "" }),
   },
   {
     id: "aeon-deep-research",
@@ -86,6 +105,10 @@ export const AGENT_TOOLS: AgentTool[] = [
       { key: "topic", label: "Topic", placeholder: "Token name, project, or narrative to research", required: true },
     ],
     isComposite: false,
+    price: "$1.00",
+    priceUSDC: 1000000,
+    x402Url: `${X402_BASE}/builder-deep-dd`,
+    x402Body: (v) => ({ target: v.topic ?? "", type: "project" }),
   },
   {
     id: "aeon-morning-brief",
@@ -98,6 +121,10 @@ export const AGENT_TOOLS: AgentTool[] = [
     skillId: "morning-brief",
     inputs: [{ key: "focus", label: "Focus (optional)", placeholder: "e.g. DeFi, Base ecosystem, macro" }],
     isComposite: false,
+    price: "$0.20",
+    priceUSDC: 200000,
+    x402Url: `${X402_BASE}/ecosystem-digest`,
+    x402Body: (v) => ({ focus: v.focus ?? "" }),
   },
   {
     id: "aeon-digest",
@@ -110,6 +137,10 @@ export const AGENT_TOOLS: AgentTool[] = [
     skillId: "digest",
     inputs: [{ key: "focus", label: "Ecosystem focus", placeholder: "e.g. Base, Ethereum, AI agents" }],
     isComposite: false,
+    price: "$0.20",
+    priceUSDC: 200000,
+    x402Url: `${X402_BASE}/ecosystem-digest`,
+    x402Body: (v) => ({ focus: v.focus ?? "" }),
   },
   {
     id: "aeon-defi-monitor",
@@ -122,6 +153,10 @@ export const AGENT_TOOLS: AgentTool[] = [
     skillId: "defi-monitor",
     inputs: [{ key: "protocol", label: "Protocol (optional)", placeholder: "e.g. Aave, Aerodrome, Morpho" }],
     isComposite: false,
+    price: "$0.35",
+    priceUSDC: 350000,
+    x402Url: `${X402_BASE}/protocol-risk-monitor`,
+    x402Body: (v) => ({ protocol: v.protocol ?? "Base DeFi" }),
   },
   {
     id: "aeon-defi-overview",
@@ -134,6 +169,10 @@ export const AGENT_TOOLS: AgentTool[] = [
     skillId: "defi-overview",
     inputs: [{ key: "risk", label: "Risk tolerance", placeholder: "low / medium / high" }],
     isComposite: false,
+    price: "$0.35",
+    priceUSDC: 350000,
+    x402Url: `${X402_BASE}/defi-opportunity`,
+    x402Body: (v) => ({ strategy: "yield farming", risk_tolerance: v.risk ?? "medium" }),
   },
   {
     id: "aeon-competitor-launch-radar",
@@ -146,6 +185,10 @@ export const AGENT_TOOLS: AgentTool[] = [
     skillId: "competitor-launch-radar",
     inputs: [{ key: "market", label: "Your market", placeholder: "e.g. DeFi aggregators, AI agent tooling", required: true }],
     isComposite: false,
+    price: "$0.75",
+    priceUSDC: 750000,
+    x402Url: `${X402_BASE}/competitor-scan`,
+    x402Body: (v) => ({ project: v.market ?? "", description: v.market ?? "" }),
   },
   {
     id: "aeon-github-trending",
@@ -158,6 +201,10 @@ export const AGENT_TOOLS: AgentTool[] = [
     skillId: "github-trending",
     inputs: [{ key: "focus", label: "Focus (optional)", placeholder: "e.g. Solidity, TypeScript, AI agents" }],
     isComposite: false,
+    price: "$0.35",
+    priceUSDC: 350000,
+    x402Url: `${X402_BASE}/repo-health`,
+    x402Body: (v) => ({ description: v.focus ?? "Web3 trending repos" }),
   },
   {
     id: "aeon-deal-flow",
@@ -170,6 +217,10 @@ export const AGENT_TOOLS: AgentTool[] = [
     skillId: "deal-flow",
     inputs: [{ key: "stage", label: "Stage (optional)", placeholder: "e.g. seed, Series A, pre-launch" }],
     isComposite: false,
+    price: "$0.35",
+    priceUSDC: 350000,
+    x402Url: `${X402_BASE}/base-grant-finder`,
+    x402Body: (v) => ({ stage: v.stage ?? "early", sector: "DeFi / AI agents" }),
   },
   {
     id: "aeon-security",
@@ -182,6 +233,10 @@ export const AGENT_TOOLS: AgentTool[] = [
     skillId: "security",
     inputs: [{ key: "focus", label: "Focus (optional)", placeholder: "e.g. DeFi bridges, AMMs, lending" }],
     isComposite: false,
+    price: "$0.35",
+    priceUSDC: 350000,
+    x402Url: `${X402_BASE}/protocol-risk-monitor`,
+    x402Body: (v) => ({ protocol: v.focus ?? "Base DeFi", position: "security audit" }),
   },
 
   // ── Composite tools ──────────────────────────────────────────────────────
@@ -201,6 +256,10 @@ export const AGENT_TOOLS: AgentTool[] = [
       { agentType: "aeon", skillId: "token-pick",        label: "Token Pick" },
     ],
     featured: true,
+    price: "$0.35",
+    priceUSDC: 350000,
+    x402Url: `${X402_BASE}/market-fit`,
+    x402Body: (v) => ({ description: v.focus ?? "Base ecosystem market analysis", name: "Market Intel" }),
   },
   {
     id: "composite-builder-intel",
@@ -218,6 +277,10 @@ export const AGENT_TOOLS: AgentTool[] = [
       { agentType: "aeon", skillId: "github-trending",         label: "GitHub Trending" },
     ],
     featured: true,
+    price: "$1.00",
+    priceUSDC: 1000000,
+    x402Url: `${X402_BASE}/builder-deep-dd`,
+    x402Body: (v) => ({ target: v.market ?? "", type: "project", context: "Base ecosystem builder intelligence" }),
   },
   {
     id: "composite-defi-full-scan",
@@ -234,6 +297,10 @@ export const AGENT_TOOLS: AgentTool[] = [
       { agentType: "aeon", skillId: "defi-overview", label: "DeFi Overview" },
       { agentType: "aeon", skillId: "token-movers",  label: "Token Movers" },
     ],
+    price: "$0.35",
+    priceUSDC: 350000,
+    x402Url: `${X402_BASE}/defi-opportunity`,
+    x402Body: (v) => ({ strategy: v.focus ?? "yield farming", risk_tolerance: "medium" }),
   },
   {
     id: "composite-morning-alpha",
@@ -251,6 +318,10 @@ export const AGENT_TOOLS: AgentTool[] = [
       { agentType: "aeon", skillId: "narrative-tracker", label: "Narrative Tracker" },
     ],
     featured: true,
+    price: "$0.35",
+    priceUSDC: 350000,
+    x402Url: `${X402_BASE}/narrative-position`,
+    x402Body: (v) => ({ topic: v.focus ?? "Base ecosystem morning alpha" }),
   },
   {
     id: "composite-security-defi",
@@ -266,5 +337,9 @@ export const AGENT_TOOLS: AgentTool[] = [
       { agentType: "aeon", skillId: "security",     label: "Security Brief" },
       { agentType: "aeon", skillId: "defi-monitor", label: "DeFi Monitor" },
     ],
+    price: "$0.35",
+    priceUSDC: 350000,
+    x402Url: `${X402_BASE}/protocol-risk-monitor`,
+    x402Body: (v) => ({ protocol: v.focus ?? "Base DeFi", position: "security + DeFi scan" }),
   },
 ];
