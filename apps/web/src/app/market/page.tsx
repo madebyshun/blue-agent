@@ -534,32 +534,27 @@ export default function MarketPage() {
         {/* ── Main ── */}
         <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
 
-          <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
-            <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-4 py-1.5 mb-6">
+          {/* Compact header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E] shrink-0">
+            <div className="flex items-center gap-3">
               <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-              <span className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">BLUE MARKET</span>
+              <h1 className="font-mono text-sm font-bold text-white tracking-tight">
+                BLUE<span className="text-[#4FC3F7]">MARKET</span>
+              </h1>
+              <span className="font-mono text-[10px] text-slate-600">Daily intelligence · Stake-to-Access · Base</span>
             </div>
-            <h1 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
-              🔵 BLUE<span className="text-[#4FC3F7]">MARKET</span>
-            </h1>
-            <p className="font-mono text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-              Daily intelligence for Base builders and founders.
-              <br />Pay USDC monthly or stake $BLUEAGENT for access.
-            </p>
-            {!isConnected && (
-              <div className="mt-5 flex justify-center">
-                <ConnectButton label="Connect wallet" />
-              </div>
-            )}
-            {isConnected && staked > 0n && (
-              <div className="inline-flex items-center gap-2 mt-4 px-3 py-1.5 rounded-full border border-[#4FC3F7]/30 bg-[#4FC3F7]/5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7]" />
-                <span className="font-mono text-[10px] text-[#4FC3F7]">{fmtBLUE(staked)} BLUE staked</span>
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              {isConnected && staked > 0n && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[#4FC3F7]/30 bg-[#4FC3F7]/5">
+                  <span className="w-1 h-1 rounded-full bg-[#4FC3F7]" />
+                  <span className="font-mono text-[10px] text-[#4FC3F7]">{fmtBLUE(staked)} BLUE staked</span>
+                </div>
+              )}
+              {!isConnected && <ConnectButton label="Connect wallet" />}
+            </div>
           </div>
 
-          <div className="px-6 lg:px-10 py-8 w-full space-y-8">
+          <div className="px-6 lg:px-10 py-6 w-full space-y-6">
 
             {/* Plan cards */}
             <div className="grid md:grid-cols-2 gap-5">

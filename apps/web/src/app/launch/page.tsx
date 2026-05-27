@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 
 type LaunchMode = "token" | "agent";
 
@@ -82,37 +81,107 @@ export default function LaunchPage() {
   return (
     <>
       <Navbar />
-      <main className="max-w-5xl mx-auto px-6 py-16">
-        {/* Header */}
-        <div className="mb-10">
-          <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-4 py-1.5 mb-6">
-            <span className="font-mono text-xs text-[#4FC3F7] tracking-widest">LAUNCH WIZARD</span>
-          </div>
-          <h1 className="font-mono font-bold text-4xl sm:text-5xl text-white mb-4">
-            Launch on <span className="text-gradient-blue">Base</span>
-          </h1>
-          <p className="font-mono text-base text-slate-400 max-w-2xl">
-            Deploy a fair-launch token via Bankr + Clanker, or publish an agent to the Bankr marketplace.
-          </p>
-        </div>
+      <div className="flex bg-[#050508] font-mono pt-16">
 
-        {/* Mode toggle */}
-        <div className="flex gap-2 mb-10">
-          {(["token", "agent"] as LaunchMode[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => { setMode(m); setResult(null); setError(null); }}
-              className="font-mono px-5 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer"
-              style={{
-                background: mode === m ? "#4FC3F7" : "#0D0D14",
-                color: mode === m ? "#050508" : "#94a3b8",
-                border: mode === m ? "none" : "1px solid #1A1A2E",
-              }}
-            >
-              {m === "token" ? "Token Launch" : "Agent Launch"}
-            </button>
-          ))}
-        </div>
+        {/* ── Sidebar ── */}
+        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] border-r border-[#1A1A2E]">
+          <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
+            <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">// LAUNCH WIZARD</p>
+            <p className="font-mono text-[10px] text-slate-700 mt-1">Deploy on Base</p>
+          </div>
+
+          {/* Mode toggle */}
+          <div className="px-4 pt-4 pb-4 border-b border-[#1A1A2E]">
+            <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-2">MODE</p>
+            <div className="space-y-1">
+              {(["token", "agent"] as LaunchMode[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => { setMode(m); setResult(null); setError(null); }}
+                  className={`w-full text-left px-3 py-2.5 rounded-lg font-mono text-sm transition-all border-l-2 ${
+                    mode === m
+                      ? "border-[#4FC3F7] bg-[#4FC3F7]/5 text-white"
+                      : "border-transparent text-slate-500 hover:text-white hover:bg-[#0D0D1A]"
+                  }`}
+                >
+                  {m === "token" ? "Token Launch" : "Agent Launch"}
+                  <span className="font-mono text-[10px] text-slate-700 block mt-0.5">
+                    {m === "token" ? "Fair-launch via Bankr + Clanker" : "Publish to Bankr marketplace"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Fee info */}
+          {mode === "token" && (
+            <div className="px-5 pt-4 pb-4 border-b border-[#1A1A2E]">
+              <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">FEE STRUCTURE</p>
+              <div className="space-y-1.5">
+                {[
+                  { label: "You (creator)", pct: "40%", color: "#34D399" },
+                  { label: "Bankr",          pct: "40%", color: "#4FC3F7" },
+                  { label: "Clanker",        pct: "20%", color: "#A78BFA" },
+                ].map(r => (
+                  <div key={r.label} className="flex items-center justify-between">
+                    <span className="font-mono text-[10px] text-slate-500">{r.label}</span>
+                    <span className="font-mono text-xs font-bold" style={{ color: r.color }}>{r.pct}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="font-mono text-[10px] text-slate-700 mt-2">1% total fee per Uniswap V3 swap</p>
+            </div>
+          )}
+
+          {/* How it works */}
+          <div className="px-5 pt-4 pb-4">
+            <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">HOW IT WORKS</p>
+            <ol className="space-y-2">
+              {(mode === "token"
+                ? ["Fill in token details", "Get launch plan + Bankr prompt", "Paste into Bankr to deploy", "Earn 40% of every swap fee"]
+                : ["Name the agent", "Choose persona + model", "Set tools + price", "Publish to marketplace"]
+              ).map((step, i) => (
+                <li key={i} className="flex gap-2 font-mono text-[10px] text-slate-500">
+                  <span className="text-[#4FC3F7] shrink-0">{i + 1}.</span>
+                  {step}
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div className="mt-auto px-5 py-4 border-t border-[#1A1A2E]">
+            <p className="font-mono text-[10px] text-slate-700">Bankr · Clanker · Base · Uniswap V3</p>
+          </div>
+        </aside>
+
+        {/* ── Main ── */}
+        <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
+
+          {/* Compact header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
+            <div className="flex items-center gap-3">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+              <h1 className="font-mono text-sm font-bold text-white">
+                Launch on <span className="text-[#4FC3F7]">Base</span>
+              </h1>
+              <span className="font-mono text-[10px] text-slate-600">
+                {mode === "token" ? "Fair-launch token via Bankr + Clanker" : "Publish agent to Bankr marketplace"}
+              </span>
+            </div>
+            {/* Mobile mode tabs */}
+            <div className="lg:hidden flex gap-1.5">
+              {(["token", "agent"] as LaunchMode[]).map((m) => (
+                <button key={m} onClick={() => { setMode(m); setResult(null); setError(null); }}
+                  className={`font-mono text-[10px] px-2 py-1 rounded transition-all ${
+                    mode === m ? "bg-[#4FC3F7]/10 text-[#4FC3F7] border border-[#4FC3F7]/30" : "text-slate-600"
+                  }`}>
+                  {m === "token" ? "Token" : "Agent"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="px-6 py-6">
 
         {/* TOKEN LAUNCH */}
         {mode === "token" && (
@@ -341,8 +410,9 @@ export default function LaunchPage() {
             </div>
           </div>
         )}
-      </main>
-      <Footer />
+          </div>
+        </main>
+      </div>
     </>
   );
 }

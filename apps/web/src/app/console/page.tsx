@@ -161,25 +161,22 @@ export default function ConsolePage() {
         {/* ── Main content ─────────────────────────────── */}
         <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
 
-          {/* Page hero */}
-          <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
-            <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-4 py-1.5 mb-6">
+          {/* Compact header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E] shrink-0">
+            <div className="flex items-center gap-3">
               <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-              <span className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">FOUNDER CONSOLE</span>
+              <h1 className="font-mono text-sm font-bold text-white tracking-tight">
+                BLUE<span className="text-[#4FC3F7]">AGENT</span> Console
+              </h1>
+              <span className="font-mono text-[10px] text-slate-600">5 commands · grounded · Base</span>
             </div>
-            <h1 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
-              BLUE<span className="text-[#4FC3F7]">AGENT</span> Console
-            </h1>
-            <p className="font-mono text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-              5 AI commands for Base builders — grounded in real Base knowledge.
-            </p>
             {/* Mobile command tabs */}
-            <div className="lg:hidden flex gap-2 mt-6 flex-wrap justify-center">
+            <div className="lg:hidden flex gap-1.5 flex-wrap">
               {COMMANDS.map((cmd) => (
                 <button key={cmd.id}
                   onClick={() => { setSelected(cmd); setResult(""); setError(""); }}
-                  className={`font-mono text-xs px-3 py-1.5 rounded-lg transition-all ${
-                    selected.id === cmd.id ? "bg-[#4FC3F7]/10 text-[#4FC3F7] border border-[#4FC3F7]/30" : "text-slate-500 hover:text-white"
+                  className={`font-mono text-[10px] px-2 py-1 rounded transition-all ${
+                    selected.id === cmd.id ? "bg-[#4FC3F7]/10 text-[#4FC3F7] border border-[#4FC3F7]/30" : "text-slate-600 hover:text-white"
                   }`}>
                   {cmd.cmd}
                 </button>
@@ -187,7 +184,7 @@ export default function ConsolePage() {
             </div>
           </div>
 
-          <div className="px-6 lg:px-10 py-8 w-full">
+          <div className="px-6 lg:px-10 py-6 w-full">
 
           {/* Command info */}
           <div className="mb-6 card-surface rounded-xl p-5">
