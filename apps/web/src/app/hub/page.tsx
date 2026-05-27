@@ -4,8 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
-import { useX402Tool } from "@/hooks/useX402Tool";
-import { useAccount } from "wagmi";
+import { useAccount, useSignTypedData } from "wagmi";
 
 // ─── Tool registry ──────────────────────────────────────────────────────────
 
@@ -763,6 +762,11 @@ function AgentScanLog({ tool }: { tool: Tool }) {
 
 type RunStep = "idle" | "calling" | "signing" | "paying" | "done" | "error";
 
+function randomNonce(): `0x${string}` {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return `0x${Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("")}`;
+}
+
 function ToolRunner({ tool, onBack, cached, onResult }: {
   tool: Tool;
   onBack: () => void;
@@ -777,35 +781,10 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
   const [mockReason, setMockReason] = useState<"dev" | "service-down">(cached?.mockReason ?? "dev");
   const [copied, setCopied]   = useState(false);
 
-  const x402 = useX402Tool();
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
+  const { signTypedDataAsync }   = useSignTypedData();
 
   const loading = step === "calling" || step === "signing" || step === "paying";
-
-  // Sync x402 hook state → local step
-  useEffect(() => {
-    if (x402.status === "idle") return;
-    if (x402.status === "calling") { setStep("calling"); return; }
-    if (x402.status === "signing") { setStep("signing"); return; }
-    if (x402.status === "paying")  { setStep("paying");  return; }
-    if (x402.status === "error") {
-      setErr(x402.error ?? "Payment failed");
-      setStep("error");
-      return;
-    }
-    if (x402.status === "done" && x402.result) {
-      try {
-        const parsed = JSON.parse(x402.result) as Record<string,unknown>;
-        setResult(parsed);
-        setStep("done");
-        onResult({ result: parsed, isMock: false, mockReason: "dev" });
-      } catch {
-        setResult({ output: x402.result });
-        setStep("done");
-        onResult({ result: { output: x402.result }, isMock: false, mockReason: "dev" });
-      }
-    }
-  }, [x402.status, x402.result, x402.error, onResult]);
 
   function shareResult() {
     if (!result) return;
@@ -827,15 +806,99 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
     const body: Record<string,string> = {};
     tool.inputs.forEach(i => { if (vals[i.key]) body[i.key] = vals[i.key]; });
 
-    // ── x402 flow: wallet connected + tool has payment URL ───────────────────
-    if (tool.x402Url && tool.x402Body && isConnected) {
-      x402.reset();
-      const x402Body = tool.x402Body(body);
-      await x402.run(tool.x402Url, x402Body, `/api/${tool.id}`);
+    // ── x402 flow: wallet connected + tool has price ──────────────────────────
+    if (tool.x402Body && isConnected && address) {
+      try {
+        setStep("calling");
+
+        // Step 1: POST to /api/tool/<id> proxy — returns 402 details or result
+        const r1 = await fetch(`/api/tool/${tool.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ toolParams: tool.x402Body(body) }),
+        });
+        const d1 = await r1.json() as Record<string,unknown>;
+
+        if (!d1.requiresPayment) {
+          const res = (d1.result ?? d1) as Record<string,unknown>;
+          setResult(res); setStep("done");
+          onResult({ result: res, isMock: false, mockReason: "dev" });
+          return;
+        }
+
+        // Step 2: parse payment requirements from 402 response
+        const accepts = (d1.paymentDetails as Record<string,unknown>)?.accepts as Record<string,unknown>[] | undefined;
+        if (!accepts?.length) throw new Error("No payment details in 402 response");
+        const req = accepts[0] as { payTo: string; maxAmountRequired: string; asset?: string; extra?: Record<string,string> };
+
+        setStep("signing");
+        const nonce       = randomNonce();
+        const validBefore = BigInt(Math.floor(Date.now() / 1000) + 300);
+        const USDC_BASE   = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+
+        // Step 3: sign EIP-3009 TransferWithAuthorization
+        const signature = await signTypedDataAsync({
+          domain: {
+            name:             req.extra?.name    ?? "USD Coin",
+            version:          req.extra?.version ?? "2",
+            chainId:          8453,
+            verifyingContract: (req.asset ?? USDC_BASE) as `0x${string}`,
+          },
+          types: {
+            TransferWithAuthorization: [
+              { name: "from",         type: "address" },
+              { name: "to",           type: "address" },
+              { name: "value",        type: "uint256" },
+              { name: "validAfter",   type: "uint256" },
+              { name: "validBefore",  type: "uint256" },
+              { name: "nonce",        type: "bytes32" },
+            ],
+          },
+          primaryType: "TransferWithAuthorization",
+          message: {
+            from:        address,
+            to:          req.payTo as `0x${string}`,
+            value:       BigInt(req.maxAmountRequired),
+            validAfter:  BigInt(0),
+            validBefore,
+            nonce,
+          },
+        });
+
+        setStep("paying");
+        const payment = {
+          x402Version: 1, scheme: "exact", network: "base-mainnet",
+          payload: {
+            signature,
+            authorization: {
+              from: address, to: req.payTo,
+              value: req.maxAmountRequired,
+              validAfter: "0", validBefore: validBefore.toString(), nonce,
+            },
+          },
+        };
+
+        // Step 4: retry with payment
+        const r2 = await fetch(`/api/tool/${tool.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ toolParams: tool.x402Body(body), payment }),
+        });
+        const d2 = await r2.json() as Record<string,unknown>;
+        if (d2.error) throw new Error(String(d2.error));
+        const res2 = (d2.result ?? d2) as Record<string,unknown>;
+        setResult(res2); setStep("done");
+        onResult({ result: res2, isMock: false, mockReason: "dev" });
+
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setErr(msg.includes("rejected") || msg.includes("denied") ? "Signature cancelled" : msg);
+        setStep("error");
+      }
       return;
     }
 
-    // ── Free flow: no wallet or no x402Url ───────────────────────────────────
+    // ── Free flow: no wallet or no x402Body ──────────────────────────────────
     setStep("calling");
 
     try {
@@ -845,7 +908,6 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         body: JSON.stringify(body),
       });
 
-      // ── Service down (5xx) → fall back to mock ───────────────────────────────
       if (res.status >= 500) {
         await new Promise(r => setTimeout(r, 700));
         const r = getMockResult(tool);
@@ -855,7 +917,6 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         return;
       }
 
-      // ── Success ──────────────────────────────────────────────────────────────
       const data = await res.json() as Record<string,unknown>;
       if (!res.ok) { setErr((data.message as string) ?? (data.error as string) ?? "Request failed"); setStep("error"); return; }
       setResult(data);
@@ -863,7 +924,6 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
       onResult({ result: data, isMock: false, mockReason: "dev" });
 
     } catch {
-      // Network error → mock fallback
       await new Promise(r => setTimeout(r, 700));
       const r = getMockResult(tool);
       setResult(r); setIsMock(true); setMockReason("service-down");
@@ -942,9 +1002,9 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
             {step === "error" && err && (
               <p className="font-mono text-xs text-red-400 mb-3">{err}</p>
             )}
-            {tool.x402Url && !isConnected && (
+            {tool.x402Body && !isConnected && (
               <p className="font-mono text-[10px] text-amber-400/70 mb-2">
-                Connect wallet to pay {tool.price} USDC via x402
+                Connect wallet to pay {tool.price} via x402
               </p>
             )}
             <button
@@ -955,7 +1015,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
               {step === "signing" ? "Sign in wallet…" :
                step === "paying"  ? "Paying USDC…"   :
                loading            ? "Calling agents…" :
-               (tool.x402Url && isConnected) ? `Run · ${tool.price}` : "Run →"}
+               (tool.x402Body && isConnected) ? `Run · ${tool.price}` : "Run →"}
             </button>
           </div>
         </div>
