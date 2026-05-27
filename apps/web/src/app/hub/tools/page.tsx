@@ -6,7 +6,7 @@ import Navbar from "@/components/Navbar";
 import { ConnectButton } from "@/components/ConnectModal";
 import { useAccount } from "wagmi";
 import { useX402Tool } from "@/hooks/useX402Tool";
-import type { AgentTool, AgentToolInput } from "@/lib/agent-tools";
+import { AGENT_TOOLS, type AgentTool, type AgentToolInput } from "@/lib/agent-tools";
 
 // ─── Design tokens ─────────────────────────────────────────────────────────────
 
@@ -17,19 +17,20 @@ const AGENT_COLORS: Record<string, string> = {
   "Blue + Aeon": "#F59E0B",
 };
 
-// Category tabs → maps to raw category values
+// Category tabs
 const TABS = [
-  { key: "all",          label: "All" },
-  { key: "intelligence", label: "Intelligence" },
-  { key: "builder",      label: "Builder" },
-  { key: "trading",      label: "Trading" },
-  { key: "security",     label: "Security" },
+  { key: "all",           label: "All" },
+  { key: "intelligence",  label: "Intelligence" },
+  { key: "builder",       label: "Builder" },
+  { key: "trading",       label: "Trading" },
+  { key: "content",       label: "Content" },
+  { key: "agent-economy", label: "Agent Economy" },
+  { key: "base-ecosystem",label: "Base Ecosystem" },
+  { key: "on-chain",      label: "On-chain" },
 ];
 
 function tabMatch(rawCat: string, tab: string): boolean {
   if (tab === "all") return true;
-  if (tab === "intelligence") return rawCat === "market" || rawCat === "research";
-  if (tab === "trading")      return rawCat === "defi";
   return rawCat === tab;
 }
 
@@ -315,16 +316,15 @@ function StructuredOutput({ result, tool }: { result: string; tool: AgentTool })
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
-type ToolsData = { tools: AgentTool[]; total: number; composite: number; agents: string[] };
-
 export default function ToolsPage() {
-  const [tools, setTools]           = useState<AgentTool[]>([]);
+  // Load tools directly — do NOT fetch from API (x402Body functions are not JSON-serializable)
+  const [tools]                     = useState<AgentTool[]>(AGENT_TOOLS);
   const [selected, setSelected]     = useState<AgentTool | null>(null);
   const [values, setValues]         = useState<Record<string, string>>({});
   const [tab, setTab]               = useState("all");
   const [subTag, setSubTag]         = useState<string | null>(null);
   const [search, setSearch]         = useState("");
-  const [loading, setLoading]       = useState(true);
+  const loading                     = false;
   const [running, setRunning]       = useState(false);
   const [result, setResult]         = useState<string | null>(null);
   const [error, setError]           = useState("");
@@ -333,14 +333,6 @@ export default function ToolsPage() {
   // x402 payment + wallet
   const { isConnected } = useAccount();
   const x402 = useX402Tool();
-
-  useEffect(() => {
-    fetch("/api/tool-runner")
-      .then(r => r.json())
-      .then((d: ToolsData) => setTools(d.tools ?? []))
-      .catch(() => setTools([]))
-      .finally(() => setLoading(false));
-  }, []);
 
   function selectTool(t: AgentTool) {
     setSelected(t);

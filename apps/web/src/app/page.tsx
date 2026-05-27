@@ -271,30 +271,30 @@ function PanelOverview() {
 function PanelCommands() {
   return (
     <div>
-      <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
-        <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-4 py-1.5 mb-6">
+      {/* Compact header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
+        <div className="flex items-center gap-3">
           <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-          <span className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">BUILT FOR BASE · 5 COMMANDS</span>
+          <h2 className="font-mono text-sm font-bold text-white">Commands</h2>
+          <span className="font-mono text-[10px] text-slate-600">5 core commands · idea → build → audit → ship → raise</span>
         </div>
-        <h2 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
-          From idea to <span className="text-[#4FC3F7]">shipped</span>.
-        </h2>
-        <p className="font-mono text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-          5 commands · grounded by skill files · no hallucinations
-        </p>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] px-1.5 py-0.5 border border-[#4FC3F7]/30 text-[#4FC3F7] rounded">5 commands</span>
+          <span className="font-mono text-[10px] px-1.5 py-0.5 border border-[#1A1A2E] text-slate-600 rounded">30 total</span>
+        </div>
       </div>
 
-      <div className="p-8 lg:p-10 max-w-5xl mx-auto w-full">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-12">
+      <div className="p-6 lg:p-8 w-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 mb-10">
           {COMMANDS_DATA.map((c) => (
-            <div key={c.tag} className="card-surface card-hover rounded-lg p-6 flex flex-col gap-3">
+            <div key={c.tag} className="card-surface card-hover rounded-lg p-5 flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <span className="font-mono text-xs text-[#4FC3F7]">&lt;{c.tag}&gt;</span>
                 <span className="font-mono text-[10px] text-slate-700">{c.price}</span>
               </div>
-              <div className="font-mono text-base text-white font-semibold">{c.cmd}</div>
-              <p className="font-mono text-sm text-slate-400 leading-relaxed">{c.desc}</p>
-              <p className="font-mono text-xs text-slate-600">{c.detail}</p>
+              <div className="font-mono text-sm text-white font-semibold">{c.cmd}</div>
+              <p className="font-mono text-xs text-slate-400 leading-relaxed">{c.desc}</p>
+              <p className="font-mono text-[10px] text-slate-600">{c.detail}</p>
               <div className="flex flex-wrap gap-1 mt-auto pt-2 border-t border-[#1A1A2E]">
                 <span className="font-mono text-[10px] text-slate-700">skills:</span>
                 {c.skills.map((s) => (
@@ -305,20 +305,20 @@ function PanelCommands() {
           ))}
         </div>
 
-        <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest mb-2 mt-6">// ALL COMMANDS</p>
-        <h3 className="font-mono text-xl font-bold text-white mb-6">
-          {ALL_COMMANDS.reduce((s, g) => s + g.items.length, 0)} commands. Every step of the founder journey.
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+        <div className="flex items-center gap-3 mb-5">
+          <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">// ALL COMMANDS</p>
+          <span className="font-mono text-[10px] text-slate-700">{ALL_COMMANDS.reduce((s, g) => s + g.items.length, 0)} total · every step of the founder journey</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {ALL_COMMANDS.map((group) => (
             <div key={group.group}>
               <p className="font-mono text-[10px] text-slate-700 tracking-widest mb-3">{group.group}</p>
               <div className="space-y-2">
                 {group.items.map((item) => (
                   <div key={item.cmd} className="flex items-baseline gap-2">
-                    <span className="font-mono text-xs text-white shrink-0">{item.cmd}</span>
+                    <span className="font-mono text-[11px] text-white shrink-0">{item.cmd}</span>
                     <span className="font-mono text-[10px] text-slate-700">→</span>
-                    <span className="font-mono text-xs text-slate-500">{item.arrow}</span>
+                    <span className="font-mono text-[10px] text-slate-500">{item.arrow}</span>
                   </div>
                 ))}
               </div>
@@ -333,42 +333,42 @@ function PanelCommands() {
 function PanelSkills() {
   return (
     <div>
-      <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
-        <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-4 py-1.5 mb-6">
+      {/* Compact header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
+        <div className="flex items-center gap-3">
           <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-          <span className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">GROUNDING CONTRACT · 34 FILES</span>
+          <h2 className="font-mono text-sm font-bold text-white">Grounding</h2>
+          <span className="font-mono text-[10px] text-slate-600">34 skill files · loaded before every command · zero hallucinations</span>
         </div>
-        <h2 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
-          Zero <span className="text-[#4FC3F7]">hallucinations</span>.
-        </h2>
-        <p className="font-mono text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-          34 skill files · loaded before every command · verified Base data only
-        </p>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] px-1.5 py-0.5 border border-[#4FC3F7]/30 text-[#4FC3F7] rounded">34 files</span>
+          <span className="font-mono text-[10px] px-1.5 py-0.5 border border-[#1A1A2E] text-slate-600 rounded">verified Base only</span>
+        </div>
       </div>
 
-      <div className="p-8 lg:p-10 max-w-5xl mx-auto w-full">
-      <div className="space-y-6 mb-8">
-        {SKILLS_DATA.map((g) => (
-          <div key={g.group}>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="font-mono text-[10px] tracking-widest" style={{ color: g.color }}>{g.group.toUpperCase()}</span>
-              <span className="font-mono text-[10px] text-slate-700">{g.items.length} files</span>
+      <div className="p-6 lg:p-8 w-full">
+        <div className="space-y-6 mb-6">
+          {SKILLS_DATA.map((g) => (
+            <div key={g.group}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="font-mono text-[10px] tracking-widest" style={{ color: g.color }}>{g.group.toUpperCase()}</span>
+                <span className="font-mono text-[10px] text-slate-700">{g.items.length} files</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2">
+                {g.items.map((s) => (
+                  <div key={s.file} className="card-surface rounded-lg p-3 flex flex-col gap-1">
+                    <span className="font-mono text-[10px]" style={{ color: g.color }}>{s.file}</span>
+                    <span className="font-mono text-[9px] text-slate-600">{s.note}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-              {g.items.map((s) => (
-                <div key={s.file} className="card-surface rounded-lg p-3 flex flex-col gap-1">
-                  <span className="font-mono text-[11px]" style={{ color: g.color }}>{s.file}</span>
-                  <span className="font-mono text-xs text-slate-600">{s.note}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
 
-      <div className="card-surface rounded-lg p-4 inline-flex flex-col gap-1">
-        <span className="font-mono text-[10px] text-slate-600">$ <span className="text-[#4FC3F7]">blue init</span> <span className="text-slate-700">← install all 34 skills</span></span>
-      </div>
+        <div className="card-surface rounded-lg p-4 inline-flex flex-col gap-1">
+          <span className="font-mono text-[10px] text-slate-600">$ <span className="text-[#4FC3F7]">blue init</span> <span className="text-slate-700">← install all 34 skills</span></span>
+        </div>
       </div>
     </div>
   );
@@ -377,58 +377,49 @@ function PanelSkills() {
 function PanelHub() {
   return (
     <div>
-      <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
-        <div className="inline-flex items-center gap-2 border border-[#A78BFA]/20 bg-[#A78BFA]/5 rounded-full px-4 py-1.5 mb-6">
+      {/* Compact header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
+        <div className="flex items-center gap-3">
           <span className="w-1.5 h-1.5 rounded-full bg-[#A78BFA] animate-pulse" />
-          <span className="font-mono text-[10px] text-[#A78BFA] tracking-widest">3-AGENT COLLAB · 34 TOOLS</span>
+          <h2 className="font-mono text-sm font-bold text-white">Blue Hub</h2>
+          <span className="font-mono text-[10px] text-slate-600">34 collab tools · 3 agents · pay per use via x402</span>
         </div>
-        <h2 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
-          34 tools. 3 agents. <span className="text-[#A78BFA]">One call</span>.
-        </h2>
-        <p className="font-mono text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-          Blue Agent × Aeon × MiroShark · pay per use · USDC on Base
-        </p>
-      </div>
-      <div className="p-8 lg:p-10 max-w-5xl mx-auto w-full">
-
-      <div className="flex flex-wrap gap-3 mb-8">
-        {[
-          { name: "Blue Agent", role: "verdict + synthesis",  color: "#4FC3F7" },
-          { name: "Aeon",       role: "research + signals",   color: "#34D399" },
-          { name: "MiroShark",  role: "consensus + personas", color: "#A78BFA" },
-        ].map((a) => (
-          <div key={a.name} className="card-surface rounded-lg px-4 py-3 flex items-center gap-3">
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: a.color }} />
-            <div>
-              <p className="font-mono text-xs text-white">{a.name}</p>
-              <p className="font-mono text-[10px] text-slate-600">{a.role}</p>
-            </div>
-          </div>
-        ))}
+        <div className="flex items-center gap-2">
+          {[
+            { name: "Blue Agent", color: "#4FC3F7" },
+            { name: "Aeon",       color: "#34D399" },
+            { name: "MiroShark",  color: "#A78BFA" },
+          ].map((a) => (
+            <span key={a.name} className="font-mono text-[10px] flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: a.color }} />
+              <span className="text-slate-500">{a.name}</span>
+            </span>
+          ))}
+          <Link href="/hub" className="font-mono text-[10px] px-2 py-0.5 bg-[#A78BFA] text-[#050508] rounded font-semibold ml-2">
+            Explore →
+          </Link>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-8">
-        {HUB_CATEGORIES.map((cat) => (
-          <div key={cat.label} className="card-surface rounded-lg p-4">
-            <div className="flex items-baseline justify-between mb-3">
-              <span className="font-mono text-xs font-semibold" style={{ color: cat.color }}>{cat.label}</span>
-              <span className="font-mono text-[10px] text-slate-700">{cat.count}</span>
+      <div className="p-6 lg:p-8 w-full">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+          {HUB_CATEGORIES.map((cat) => (
+            <div key={cat.label} className="card-surface rounded-lg p-4">
+              <div className="flex items-baseline justify-between mb-3">
+                <span className="font-mono text-xs font-semibold" style={{ color: cat.color }}>{cat.label}</span>
+                <span className="font-mono text-[10px] text-slate-700">{cat.count}</span>
+              </div>
+              <div className="space-y-1.5">
+                {cat.tools.slice(0, 4).map((t) => (
+                  <p key={t} className="font-mono text-[9px] text-slate-600 truncate">{t}</p>
+                ))}
+                {cat.tools.length > 4 && (
+                  <p className="font-mono text-[9px] text-slate-700">+{cat.tools.length - 4} more</p>
+                )}
+              </div>
             </div>
-            <div className="space-y-1.5">
-              {cat.tools.slice(0, 4).map((t) => (
-                <p key={t} className="font-mono text-[10px] text-slate-600 truncate">{t}</p>
-              ))}
-              {cat.tools.length > 4 && (
-                <p className="font-mono text-[10px] text-slate-700">+{cat.tools.length - 4} more</p>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <Link href="/hub" className="inline-block font-mono text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-6 py-3 rounded hover:bg-[#29ABE2] transition-colors">
-        Explore Blue Hub →
-      </Link>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -437,62 +428,62 @@ function PanelHub() {
 function PanelEcosystem() {
   return (
     <div>
-      <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
-        <div className="inline-flex items-center gap-2 border border-[#34D399]/20 bg-[#34D399]/5 rounded-full px-4 py-1.5 mb-6">
+      {/* Compact header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
+        <div className="flex items-center gap-3">
           <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] animate-pulse" />
-          <span className="font-mono text-[10px] text-[#34D399] tracking-widest">OPEN SOURCE · 9 PACKAGES</span>
+          <h2 className="font-mono text-sm font-bold text-white">Ecosystem</h2>
+          <span className="font-mono text-[10px] text-slate-600">9 npm packages · surface → core → integrations</span>
         </div>
-        <h2 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
-          9 packages. <span className="text-[#34D399]">One ecosystem</span>.
-        </h2>
-        <p className="font-mono text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-          From TUI to SDK — every layer of the Blue Agent stack on npm
-        </p>
-      </div>
-      <div className="p-8 lg:p-10 max-w-5xl mx-auto w-full">
-
-      <div className="space-y-8">
-        {ECOSYSTEM_LAYERS.map((layer) => (
-          <div key={layer.layer}>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="font-mono text-[10px] tracking-widest px-2 py-0.5 rounded border"
-                style={{ color: layer.color, borderColor: `${layer.color}30`, background: `${layer.color}08` }}>
-                {layer.layer}
-              </span>
-              <span className="font-mono text-xs text-slate-600">{layer.label}</span>
-              <div className="flex-1 border-t border-dashed border-[#1A1A2E]" />
-              <span className="font-mono text-[10px] text-slate-700">{layer.packages.length} packages</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {layer.packages.map((p) => (
-                <div key={p.pkg} className="card-surface rounded-lg p-4 flex flex-col gap-2">
-                  <div className="flex items-start justify-between gap-1">
-                    <span className="font-mono text-xs text-white font-semibold leading-snug break-all">{p.pkg}</span>
-                    <span className="font-mono text-[10px] px-1.5 py-0.5 rounded shrink-0 mt-0.5"
-                      style={{ color: layer.color, background: `${layer.color}12`, border: `1px solid ${layer.color}25` }}>
-                      {p.badge}
-                    </span>
-                  </div>
-                  {p.cmd && <div className="font-mono text-[10px] text-[#4FC3F7]">$ {p.cmd}</div>}
-                  <p className="font-mono text-xs text-slate-500 leading-relaxed flex-1">{p.desc}</p>
-                  <div className="pt-2 border-t border-[#1A1A2E] flex items-center justify-between">
-                    <span className="font-mono text-[10px] text-slate-700">{p.version}</span>
-                    <span className="font-mono text-[10px] text-slate-700">npm →</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] px-1.5 py-0.5 border border-[#34D399]/30 text-[#34D399] rounded">9 packages</span>
+          <span className="font-mono text-[10px] px-1.5 py-0.5 border border-[#1A1A2E] text-slate-600 rounded">open source</span>
+        </div>
       </div>
 
-      <div className="mt-8 card-surface rounded-lg p-4 flex flex-wrap items-center gap-2">
-        <span className="font-mono text-[10px] text-[#4FC3F7]">@blueagent/cli</span>
-        <span className="font-mono text-[10px] text-slate-700">→ calls →</span>
-        <span className="font-mono text-[10px] text-[#A78BFA]">@blueagent/core</span>
-        <span className="font-mono text-[10px] text-slate-700">→ LLM via →</span>
-        <span className="font-mono text-[10px] text-slate-400">Bankr LLM (Base)</span>
-      </div>
+      <div className="p-6 lg:p-8 w-full">
+        <div className="space-y-6">
+          {ECOSYSTEM_LAYERS.map((layer) => (
+            <div key={layer.layer}>
+              <div className="flex items-center gap-3 mb-3">
+                <span className="font-mono text-[10px] tracking-widest px-2 py-0.5 rounded border"
+                  style={{ color: layer.color, borderColor: `${layer.color}30`, background: `${layer.color}08` }}>
+                  {layer.layer}
+                </span>
+                <span className="font-mono text-xs text-slate-600">{layer.label}</span>
+                <div className="flex-1 border-t border-dashed border-[#1A1A2E]" />
+                <span className="font-mono text-[10px] text-slate-700">{layer.packages.length} packages</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {layer.packages.map((p) => (
+                  <div key={p.pkg} className="card-surface rounded-lg p-4 flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-1">
+                      <span className="font-mono text-xs text-white font-semibold leading-snug break-all">{p.pkg}</span>
+                      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded shrink-0 mt-0.5"
+                        style={{ color: layer.color, background: `${layer.color}12`, border: `1px solid ${layer.color}25` }}>
+                        {p.badge}
+                      </span>
+                    </div>
+                    {p.cmd && <div className="font-mono text-[10px] text-[#4FC3F7]">$ {p.cmd}</div>}
+                    <p className="font-mono text-xs text-slate-500 leading-relaxed flex-1">{p.desc}</p>
+                    <div className="pt-2 border-t border-[#1A1A2E] flex items-center justify-between">
+                      <span className="font-mono text-[10px] text-slate-700">{p.version}</span>
+                      <span className="font-mono text-[10px] text-slate-700">npm →</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 card-surface rounded-lg p-4 flex flex-wrap items-center gap-2">
+          <span className="font-mono text-[10px] text-[#4FC3F7]">@blueagent/cli</span>
+          <span className="font-mono text-[10px] text-slate-700">→ calls →</span>
+          <span className="font-mono text-[10px] text-[#A78BFA]">@blueagent/core</span>
+          <span className="font-mono text-[10px] text-slate-700">→ LLM via →</span>
+          <span className="font-mono text-[10px] text-slate-400">Bankr LLM (Base)</span>
+        </div>
       </div>
     </div>
   );
@@ -525,56 +516,58 @@ function PanelIntegrations() {
 
   return (
     <div>
-      <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">
-        <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-4 py-1.5 mb-6">
+      {/* Compact header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
+        <div className="flex items-center gap-3">
           <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-          <span className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">QUICK START · 2 MINUTES</span>
+          <h2 className="font-mono text-sm font-bold text-white">Integrations</h2>
+          <span className="font-mono text-[10px] text-slate-600">Quick start · 2 min setup · plug into any stack</span>
         </div>
-        <h2 className="font-mono text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4">
-          Ready in <span className="text-[#4FC3F7]">2 minutes</span>.
-        </h2>
-        <p className="font-mono text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-          Install, init, and ship — that's the whole flow
-        </p>
-      </div>
-      <div className="p-8 lg:p-10 max-w-5xl mx-auto w-full">
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-12">
-        {quickstart.map((qs) => (
-          <div key={qs.label} className="card-surface rounded-lg overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-[#1A1A2E] bg-[#0D0D14]">
-              <span className="font-mono text-xs font-semibold" style={{ color: qs.color }}>{qs.label}</span>
-              <span className="font-mono text-[10px] px-1.5 rounded border" style={{ color: qs.color, borderColor: `${qs.color}30` }}>{qs.tag}</span>
-            </div>
-            <div className="p-4 space-y-2">
-              {qs.lines.map((l, i) => (
-                <div key={i} className="font-mono text-sm">
-                  {l.p && <span className="text-slate-700">{l.p} </span>}
-                  <span className={l.accent ? "" : l.muted ? "text-slate-700 text-xs" : "text-white"}
-                    style={l.accent ? { color: qs.color } : {}}>
-                    {l.cmd}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] px-1.5 py-0.5 border border-[#4FC3F7]/30 text-[#4FC3F7] rounded">5 SDKs</span>
+          <span className="font-mono text-[10px] px-1.5 py-0.5 border border-[#1A1A2E] text-slate-600 rounded">npm · pip</span>
+        </div>
       </div>
 
-      <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest mb-2 mt-2">// INTEGRATIONS</p>
-      <h3 className="font-mono text-xl font-bold text-white mb-6">Plug into any stack.</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {pkgs.map((pkg) => (
-          <div key={pkg.pkg} className="card-surface card-hover rounded-lg p-5 flex flex-col gap-3">
-            <span className="font-mono text-xs text-white font-semibold">{pkg.pkg}</span>
-            <p className="font-mono text-xs text-slate-500 leading-relaxed">{pkg.desc}</p>
-            <div className="mt-auto pt-3 border-t border-[#1A1A2E]">
-              <span className="font-mono text-[10px] text-slate-700 mr-2">{pkg.lang === "pip" ? "pip" : "$"}</span>
-              <span className="font-mono text-[10px] text-[#4FC3F7]">{pkg.install}</span>
+      <div className="p-6 lg:p-8 w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          {quickstart.map((qs) => (
+            <div key={qs.label} className="card-surface rounded-lg overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-[#1A1A2E] bg-[#0D0D14]">
+                <span className="font-mono text-xs font-semibold" style={{ color: qs.color }}>{qs.label}</span>
+                <span className="font-mono text-[10px] px-1.5 rounded border" style={{ color: qs.color, borderColor: `${qs.color}30` }}>{qs.tag}</span>
+              </div>
+              <div className="p-4 space-y-2">
+                {qs.lines.map((l, i) => (
+                  <div key={i} className="font-mono text-sm">
+                    {l.p && <span className="text-slate-700">{l.p} </span>}
+                    <span className={l.accent ? "" : l.muted ? "text-slate-700 text-xs" : "text-white"}
+                      style={l.accent ? { color: qs.color } : {}}>
+                      {l.cmd}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-3 mb-4">
+          <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">// INTEGRATIONS</p>
+          <span className="font-mono text-[10px] text-slate-700">plug into any stack</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+          {pkgs.map((pkg) => (
+            <div key={pkg.pkg} className="card-surface card-hover rounded-lg p-5 flex flex-col gap-3">
+              <span className="font-mono text-xs text-white font-semibold">{pkg.pkg}</span>
+              <p className="font-mono text-xs text-slate-500 leading-relaxed">{pkg.desc}</p>
+              <div className="mt-auto pt-3 border-t border-[#1A1A2E]">
+                <span className="font-mono text-[10px] text-slate-700 mr-2">{pkg.lang === "pip" ? "pip" : "$"}</span>
+                <span className="font-mono text-[10px] text-[#4FC3F7]">{pkg.install}</span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

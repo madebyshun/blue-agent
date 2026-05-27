@@ -4,7 +4,7 @@
 
 **Blue Agent** is an AI agent layer built on Base — it interacts with users, automates tasks, and generates onchain activity.
 
-Built by [Blocky Studio](https://blocky.studio) ([@madebyshun](https://x.com/blocky_agent)), Blue Agent is the flagship AI agent of the Base ecosystem. It is not just a chatbot — it is a full economic actor: it holds a wallet, executes onchain transactions, earns and distributes tokens, and powers a growing ecosystem of tools and services.
+Blue Agent is the flagship AI agent of the Base ecosystem. It is not just a chatbot — it is a full economic actor: it holds a wallet, executes onchain transactions, earns and distributes tokens, and powers a growing ecosystem of tools and services.
 
 **Three surfaces:**
 - **Telegram bot** — community hub, wallet, trading, rewards, builder tools
@@ -15,7 +15,7 @@ Built by [Blocky Studio](https://blocky.studio) ([@madebyshun](https://x.com/blo
 - `$BLUEAGENT` — `0xf895783b2931c919955e18b5e3343e7c7c456ba3` (Base, Uniswap v4)
 
 **Links:**
-- X/Twitter: [@blocky_agent](https://x.com/blocky_agent)
+- X/Twitter: [@blueagent_](https://x.com/blueagent_)
 - Telegram community: [t.me/blueagent_hub](https://t.me/blueagent_hub)
 - Bankr profile: [bankr.bot/agent/blue-agent](https://bankr.bot/agent/blue-agent)
 
