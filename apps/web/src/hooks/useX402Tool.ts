@@ -50,7 +50,9 @@ export function useX402Tool(): X402ToolResult {
     x402Url: string,
     body: Record<string, unknown>,
   ) => {
+    console.log("[x402] run called — walletClient:", !!walletClient, "address:", address);
     if (!walletClient || !address) {
+      console.warn("[x402] no walletClient or address — wallet not connected");
       setError("Connect your wallet first");
       setStatus("error");
       return;
@@ -62,6 +64,7 @@ export function useX402Tool(): X402ToolResult {
 
     try {
       // ── Step 1: initial request (no payment) ──────────────────────────────
+      console.log("[x402] step 1 — POST", x402Url, body);
       const res1 = await fetch(x402Url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -125,6 +128,7 @@ export function useX402Tool(): X402ToolResult {
       const req = paymentReqs[0];
 
       // ── Step 3: sign EIP-3009 with wallet ─────────────────────────────────
+      console.log("[x402] step 3 — signing with wallet, req:", req);
       setStatus("signing");
 
       // Build payment using x402 library (requires viem WalletClient)
