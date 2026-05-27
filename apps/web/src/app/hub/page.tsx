@@ -827,9 +827,15 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         }
 
         // Step 2: parse payment requirements from 402 response
-        const accepts = (d1.paymentDetails as Record<string,unknown>)?.accepts as Record<string,unknown>[] | undefined;
+        const paymentDetails = d1.paymentDetails as Record<string,unknown>;
+        const accepts = paymentDetails?.accepts as Record<string,unknown>[] | undefined;
         if (!accepts?.length) throw new Error("No payment details in 402 response");
-        const req = accepts[0] as { payTo: string; maxAmountRequired: string; asset?: string; extra?: Record<string,string> };
+        const req = accepts[0] as {
+          scheme: string; network: string;
+          payTo: string; maxAmountRequired: string;
+          asset?: string; extra?: Record<string,string>;
+        };
+        const x402Version = (paymentDetails.x402Version as number) ?? 2;
 
         setStep("signing");
         const nonce       = randomNonce();
@@ -867,7 +873,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
 
         setStep("paying");
         const payment = {
-          x402Version: 1, scheme: "exact", network: "base-mainnet",
+          x402Version, scheme: req.scheme ?? "exact", network: req.network ?? "eip155:8453",
           payload: {
             signature,
             authorization: {
