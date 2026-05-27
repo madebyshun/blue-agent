@@ -22,6 +22,7 @@
     "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\"",
     "build:core": "npm --workspace packages/core run build",
     "build:builder": "npm --workspace packages/builder run build",
-    "build:packages": "npm run build:core && npm run build:builder"
+    "build:packages": "npm run build:core && npm run build:builder",
+    "vercel-build": "npm run build:web"
   }
 }
