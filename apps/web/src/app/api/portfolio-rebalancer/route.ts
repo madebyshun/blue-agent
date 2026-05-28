@@ -3,6 +3,9 @@ import { proxyTool } from "@/app/api/_lib/proxy";
 import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
 import { searchBaseToken, fetchBaseTopMovers, formatTokensForLLM } from "@/app/api/_lib/realdata";
 
+export const runtime = "nodejs";
+export const maxDuration = 120;
+
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/portfolio-rebalancer";
 
 function extractTickers(text: string): string[] {

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { proxyTool } from "@/app/api/_lib/proxy";
 import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
 
+export const runtime = "nodejs";
+export const maxDuration = 120;
+
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/fundraise-timing";
 
 async function handleLocally(body: Record<string, unknown>): Promise<NextResponse> {

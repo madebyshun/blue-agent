@@ -4,15 +4,15 @@
  * Cron: every 15 minutes  ("* /15 * * * *" in vercel.json)
  * Auth: Authorization: Bearer <CRON_SECRET>
  *
- * What it does each run:
- *   1. Load watched targets from KV (sentinel:watches)
- *   2. For each active target, call the appropriate Hub tool
- *      (hub_honeypot / hub_risk_gate / hub_aml_screen / hub_phishing_scan)
- *   3. Parse responses — extract severity + indicators
- *   4. Any finding severity >= high → store as Finding + alert via Telegram
- *   5. Persist findings to KV + update scan stats
- *
- * Hub tools called internally via /api/* routes (same-origin fetch).
+ * 8 threat categories scanned per cycle:
+ *   1. honeypot        — token contracts blocking sells (Bankr LLM)
+ *   2. rug             — unlocked LP, unlimited mint, unrenounced ownership
+ *   3. phishing        — domains impersonating Coinbase, Uniswap, Base
+ *   4. drain           — drainer contracts, unlimited approval traps
+ *   5. aml             — OFAC sanctions, Tornado Cash interactions (Bankr LLM)
+ *   6. exploit         — flash loan patterns, reentrancy, price oracle abuse
+ *   7. scam_token      — tokens impersonating USDC, ETH, major assets
+ *   8. malicious_approval — infinite ERC-20 approvals to unverified contracts
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -24,7 +24,6 @@ import {
   SEVERITY_WEIGHT,
   SCAN_CONFIG,
   ALERT_THRESHOLD,
-  HEALTH_CONFIG,
 } from "@/lib/sentinel/constants";
 import type {
   Finding,
@@ -39,12 +38,11 @@ import { isDuplicate, markSeen } from "@/lib/sentinel/dedup";
 import { discoverAll } from "@/lib/sentinel/discovery";
 import { recordFindings } from "@/lib/sentinel/timeline";
 import { scanDNA, DOMAIN_SIGNATURES } from "@/lib/sentinel/phishing-dna";
-import {
-  wrapScanner,
-  extractSeverity,
-  extractIndicators,
-  parseHubResponse,
-} from "@/lib/sentinel/scanner";
+import { wrapScanner, extractSeverity, extractIndicators, parseHubResponse } from "@/lib/sentinel/scanner";
+import { scanRug } from "@/lib/sentinel/rug-scanner";
+import { scanDrain, scanMaliciousApprovals } from "@/lib/sentinel/drain-scanner";
+import { scanExploit } from "@/lib/sentinel/exploit-scanner";
+import { scanScamToken } from "@/lib/sentinel/scam-token-scanner";
 
 export const runtime     = "nodejs";
 export const maxDuration = 60;
@@ -273,7 +271,7 @@ function mapTargetTypeToCategory(targetType: WatchSubscription["targetType"], so
   if (source === "liquidity_watcher") return ["liquidity_drain"];
   switch (targetType) {
     case "address": return ["aml", "exploit", "drain", "malicious_approval"];
-    case "token":   return ["honeypot", "rug", "scam_token"];
+    case "token":   return ["honeypot", "rug", "scam_token", "malicious_approval"];
     case "domain":  return ["phishing"];
   }
 }
@@ -419,19 +417,25 @@ async function scanTarget(watch: ScanTarget, runSeen: Set<string>): Promise<Find
 
     } else if (watch.targetType === "domain") {
       results.push(await callPhishingScan(watch.target));
+
     } else if (watch.targetType === "token") {
-      const [honeypot, risk] = await Promise.all([
-        callHoneypotCheck(watch.target),
-        callRiskGate(watch.target),
+      // 4 threat categories for tokens: honeypot + rug + scam + malicious_approval
+      const [honeypot, rug, scam, approvals] = await Promise.all([
+        wrapScanner("honeypot", watch.target, () => callHoneypotCheck(watch.target)),
+        wrapScanner("rug",      watch.target, () => scanRug(watch.target)),
+        wrapScanner("scam",     watch.target, () => scanScamToken(watch.target)),
+        wrapScanner("approvals",watch.target, () => scanMaliciousApprovals(watch.target)),
       ]);
-      results.push(honeypot, risk);
+      results.push(honeypot, rug, scam, approvals);
+
     } else {
-      // address
-      const [risk, aml] = await Promise.all([
-        callRiskGate(watch.target),
-        callAmlScreen(watch.target),
+      // address — 4 threat categories: aml + exploit + drain + malicious_approval
+      const [aml, exploit, drain] = await Promise.all([
+        wrapScanner("aml",     watch.target, () => callAmlScreen(watch.target)),
+        wrapScanner("exploit", watch.target, () => scanExploit(watch.target)),
+        wrapScanner("drain",   watch.target, () => scanDrain(watch.target)),
       ]);
-      results.push(risk, aml);
+      results.push(aml, exploit, drain);
     }
   }
 
