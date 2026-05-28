@@ -7,10 +7,53 @@ import { rateLimit, getIdentifier } from "@/lib/rate-limit";
  * Routing logic:
  *   - No X-Payment + fallback provided → run locally via Bankr LLM (no payment gate)
  *   - No X-Payment + no fallback       → proxy to bankr.bot (returns 402 if unpaid)
- *   - X-Payment present                → forward to bankr.bot for payment verification
- *   - bankr.bot 5xx                    → use fallback if provided
+ *   - X-Payment present + fallback     → verify via Bankr facilitator → settle USDC → run local pipeline
+ *   - X-Payment present + no fallback  → forward to bankr.bot for payment verification
  *   - Network error                    → use fallback if provided
  */
+
+type PaymentRequirements = {
+  scheme: string; network: string;
+  payTo: string; maxAmountRequired: string;
+  resource: string; asset?: string; extra?: Record<string,string>;
+  maxTimeoutSeconds?: number;
+};
+
+async function verifyAndSettle(
+  facilitatorUrl: string,
+  paymentHeader: string,
+  paymentRequirements: PaymentRequirements,
+): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    const verifyRes = await fetch(`${facilitatorUrl}/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentHeader, paymentRequirements }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const verifyData = await verifyRes.json() as { isValid?: boolean; invalidReason?: string };
+    if (!verifyData.isValid) {
+      console.warn("[proxy] facilitator verify failed:", verifyData.invalidReason);
+      return { ok: false, reason: verifyData.invalidReason ?? "invalid_payment" };
+    }
+    // Settle in background — USDC transfer is submitted on-chain
+    fetch(`${facilitatorUrl}/settle`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentHeader, paymentRequirements }),
+      signal: AbortSignal.timeout(30_000),
+    }).then(r => r.json()).then(d => {
+      console.info("[proxy] settle:", JSON.stringify(d));
+    }).catch(e => {
+      console.warn("[proxy] settle error:", e);
+    });
+    return { ok: true };
+  } catch (e) {
+    console.warn("[proxy] facilitator error:", e);
+    return { ok: false, reason: "facilitator_error" };
+  }
+}
+
 export async function proxyTool(
   req: NextRequest,
   endpoint: string,
@@ -28,7 +71,42 @@ export async function proxyTool(
     return fallback(body);
   }
 
-  // ── Forward to bankr.bot (with or without X-Payment) ─────────────────────
+  // ── X-Payment present + fallback: verify via facilitator, run local pipeline ─
+  if (xPayment && fallback) {
+    // Fetch payment requirements fresh from Bankr (get the 402 body)
+    let paymentRequirements: PaymentRequirements | null = null;
+    let facilitatorUrl = "https://api.bankr.bot/facilitator";
+    try {
+      const reqsRes = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (reqsRes.status === 402) {
+        const d = await reqsRes.json() as { accepts?: PaymentRequirements[]; facilitator?: string };
+        paymentRequirements = d.accepts?.[0] ?? null;
+        if (d.facilitator) facilitatorUrl = d.facilitator;
+      }
+    } catch (e) {
+      console.warn("[proxy] could not fetch payment requirements:", e);
+    }
+
+    if (paymentRequirements) {
+      const { ok, reason } = await verifyAndSettle(facilitatorUrl, xPayment, paymentRequirements);
+      if (!ok) {
+        return NextResponse.json({ error: reason ?? "Payment verification failed" }, { status: 402 });
+      }
+      console.info(`[proxy] payment verified → running local pipeline: ${endpoint}`);
+    } else {
+      // Can't get requirements — still run locally (endpoint may not be gated)
+      console.warn("[proxy] could not get payment requirements, running local anyway");
+    }
+
+    return fallback(body);
+  }
+
+  // ── No fallback: forward directly to bankr.bot ────────────────────────────
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (xPayment) headers["X-Payment"] = xPayment;
 
@@ -41,10 +119,6 @@ export async function proxyTool(
       signal: AbortSignal.timeout(120_000),
     });
   } catch (e) {
-    if (fallback) {
-      console.warn(`[proxy] network error on ${endpoint}, using fallback`);
-      return fallback(body);
-    }
     return NextResponse.json(
       { error: "Could not reach service", message: (e as Error).message },
       { status: 502 }
@@ -60,22 +134,10 @@ export async function proxyTool(
     return NextResponse.json(data, { status: 402 });
   }
 
-  // Any non-2xx error from Bankr handler — use fallback if provided
-  if (!upstream.ok && fallback) {
-    console.warn(`[proxy] upstream ${endpoint} → ${upstream.status}, using fallback`);
-    return fallback(body);
-  }
-
   const ct = upstream.headers.get("content-type") ?? "";
   const data = ct.includes("application/json")
     ? await upstream.json().catch(() => ({ error: "Failed to parse response" }))
     : await upstream.text().catch(() => "");
-
-  // Bankr returned 200 but with an error body — fall back to local pipeline
-  if (upstream.ok && fallback && typeof data === "object" && data !== null && "error" in (data as object)) {
-    console.warn(`[proxy] upstream ${endpoint} → 200 but error body, using fallback:`, (data as Record<string,unknown>).error);
-    return fallback(body);
-  }
 
   if (!upstream.ok) {
     console.error(`[proxy] upstream ${endpoint} → ${upstream.status}:`, JSON.stringify(data));
