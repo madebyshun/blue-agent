@@ -48,11 +48,13 @@ async function verifyAndSettle(
   const facilitator = "https://www.x402.org/facilitator";
 
   try {
-    console.info("[proxy] facilitator/verify →", facilitator, JSON.stringify({ paymentRequirements, x402Version: paymentPayload.x402Version }));
+    const x402Version = paymentPayload.x402Version ?? 1;
+    console.info("[proxy] facilitator/verify →", facilitator, JSON.stringify({ paymentRequirements, x402Version }));
     const verifyRes = await fetch(`${facilitator}/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paymentPayload, paymentRequirements }),
+      // x402Version must be top-level alongside paymentPayload (x402 lib spec)
+      body: JSON.stringify({ x402Version, paymentPayload, paymentRequirements }),
       signal: AbortSignal.timeout(15_000),
     });
     const rawText = await verifyRes.text();
@@ -67,7 +69,7 @@ async function verifyAndSettle(
     fetch(`${facilitator}/settle`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paymentPayload, paymentRequirements }),
+      body: JSON.stringify({ x402Version, paymentPayload, paymentRequirements }),
       signal: AbortSignal.timeout(30_000),
     }).then(r => r.json()).then(d => {
       console.info("[proxy] settle:", JSON.stringify(d));
