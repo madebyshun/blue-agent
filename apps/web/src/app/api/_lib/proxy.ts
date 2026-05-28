@@ -28,7 +28,7 @@ async function verifyAndSettle(
     const verifyRes = await fetch(`${facilitatorUrl}/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paymentHeader, paymentRequirements }),
+      body: JSON.stringify({ paymentPayload: paymentHeader, paymentRequirements }),
       signal: AbortSignal.timeout(15_000),
     });
     const verifyData = await verifyRes.json() as { isValid?: boolean; invalidReason?: string };
@@ -40,7 +40,7 @@ async function verifyAndSettle(
     fetch(`${facilitatorUrl}/settle`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paymentHeader, paymentRequirements }),
+      body: JSON.stringify({ paymentPayload: paymentHeader, paymentRequirements }),
       signal: AbortSignal.timeout(30_000),
     }).then(r => r.json()).then(d => {
       console.info("[proxy] settle:", JSON.stringify(d));
