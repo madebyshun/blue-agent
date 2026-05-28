@@ -25,18 +25,34 @@ const NETWORK_MAP: Record<string, string> = {
   "eip155:84532": "base-sepolia",
 };
 
+// Facilitator expects paymentPayload as a PARSED object (not the raw base64 string)
+function decodePaymentHeader(b64: string): Record<string, unknown> | null {
+  try {
+    const json = Buffer.from(b64, "base64").toString("utf8");
+    return JSON.parse(json) as Record<string, unknown>;
+  } catch { return null; }
+}
+
 async function verifyAndSettle(
   facilitatorUrl: string,
   paymentHeader: string,
   paymentRequirements: PaymentRequirements,
 ): Promise<{ ok: boolean; reason?: string }> {
+  const paymentPayload = decodePaymentHeader(paymentHeader);
+  if (!paymentPayload) {
+    console.warn("[proxy] failed to decode payment header");
+    return { ok: false, reason: "invalid_payment_encoding" };
+  }
+
+  // Use x402.org facilitator (Coinbase-backed) — Bankr's facilitator returns 500
+  const facilitator = "https://www.x402.org/facilitator";
+
   try {
-    const reqBody = { paymentPayload: paymentHeader, paymentRequirements };
-    console.info("[proxy] facilitator/verify →", facilitatorUrl, JSON.stringify({ paymentRequirements, payloadPreview: paymentHeader.slice(0, 80) }));
-    const verifyRes = await fetch(`${facilitatorUrl}/verify`, {
+    console.info("[proxy] facilitator/verify →", facilitator, JSON.stringify({ paymentRequirements, x402Version: paymentPayload.x402Version }));
+    const verifyRes = await fetch(`${facilitator}/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(reqBody),
+      body: JSON.stringify({ paymentPayload, paymentRequirements }),
       signal: AbortSignal.timeout(15_000),
     });
     const rawText = await verifyRes.text();
@@ -47,11 +63,11 @@ async function verifyAndSettle(
       console.warn("[proxy] facilitator verify failed:", verifyData.invalidReason ?? rawText);
       return { ok: false, reason: verifyData.invalidReason ?? `facilitator_${verifyRes.status}` };
     }
-    // Settle in background — USDC transfer is submitted on-chain
-    fetch(`${facilitatorUrl}/settle`, {
+    // Settle in background — submits EIP-3009 TransferWithAuthorization on-chain
+    fetch(`${facilitator}/settle`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paymentPayload: paymentHeader, paymentRequirements }),
+      body: JSON.stringify({ paymentPayload, paymentRequirements }),
       signal: AbortSignal.timeout(30_000),
     }).then(r => r.json()).then(d => {
       console.info("[proxy] settle:", JSON.stringify(d));
