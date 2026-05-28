@@ -30,7 +30,12 @@ export async function proxyTool(
   // ── No payment + local fallback → run locally (free) ─────────────────────
   if (!xPayment && fallback) {
     console.info(`[proxy] no payment → local: ${endpoint}`);
-    return fallback(body);
+    try {
+      return await fallback(body);
+    } catch (e) {
+      console.error(`[proxy] local fallback threw:`, e);
+      return NextResponse.json({ error: "Tool error", message: (e as Error).message }, { status: 500 });
+    }
   }
 
   // ── Forward to Bankr with X-PAYMENT ──────────────────────────────────────
@@ -49,7 +54,11 @@ export async function proxyTool(
     // Network error — if fallback available, run locally
     if (fallback) {
       console.warn(`[proxy] Bankr unreachable, running local: ${(e as Error).message}`);
-      return fallback(body);
+      try {
+        return await fallback(body);
+      } catch (fe) {
+        return NextResponse.json({ error: "Tool error", message: (fe as Error).message }, { status: 500 });
+      }
     }
     return NextResponse.json(
       { error: "Could not reach service", message: (e as Error).message },
@@ -77,7 +86,11 @@ export async function proxyTool(
 
   if (fallback) {
     console.info(`[proxy] falling back to local pipeline: ${endpoint}`);
-    return fallback(body);
+    try {
+      return await fallback(body);
+    } catch (fe) {
+      return NextResponse.json({ error: "Tool error", message: (fe as Error).message }, { status: 500 });
+    }
   }
 
   return NextResponse.json(errorBody, { status: upstream.status });
