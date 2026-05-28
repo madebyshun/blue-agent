@@ -118,7 +118,7 @@ export default function ToolRunner({ toolId, price }: { toolId: string; price: s
         body: JSON.stringify({ toolParams: values, payment }),
       });
       const d2 = await r2.json();
-      if (d2.error) throw new Error(typeof d2.error === "string" ? d2.error : JSON.stringify(d2.error));
+      if (d2.error) throw new Error([d2.error, d2.reason, d2.message].filter(Boolean).join(" — "));
       setResult(d2.result ?? d2);
       setStep("done");
     } catch (e: unknown) {
