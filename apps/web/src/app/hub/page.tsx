@@ -834,14 +834,20 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         const req = accepts[0] as {
           scheme: string; network: string;
           payTo: string; maxAmountRequired: string;
+          maxTimeoutSeconds?: number;
           asset?: string; extra?: Record<string,string>;
         };
-        // x402 library uses version 1; facilitator also responds with x402Version: 1
+        // x402 library only supports version 1; "eip155:8453" must map to "base"
         const x402Version = 1;
+        const networkMap: Record<string, string> = { "eip155:8453": "base", "eip155:84532": "base-sepolia" };
+        const network = networkMap[req.network] ?? req.network;
+        const maxTimeoutSeconds = req.maxTimeoutSeconds ?? 60;
 
         setStep("signing");
         const nonce       = randomNonce();
-        const validBefore = BigInt(Math.floor(Date.now() / 1000) + 300);
+        const nowSec      = Math.floor(Date.now() / 1000);
+        const validAfterBig  = BigInt(nowSec - 600);  // 10 min before, matches x402 lib
+        const validBeforeBig = BigInt(nowSec + maxTimeoutSeconds);
         const USDC_BASE   = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
         // Step 3: sign EIP-3009 TransferWithAuthorization
@@ -867,22 +873,24 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
             from:        address,
             to:          req.payTo as `0x${string}`,
             value:       BigInt(req.maxAmountRequired),
-            validAfter:  BigInt(0),
-            validBefore,
+            validAfter:  validAfterBig,
+            validBefore: validBeforeBig,
             nonce,
           },
         });
 
         setStep("paying");
-        // Encode signed payment as base64 X-PAYMENT header (x402 standard)
+        // Encode signed payment as base64 X-PAYMENT header (x402 spec v1)
         const xPayment = btoa(JSON.stringify({
-          x402Version, scheme: req.scheme ?? "exact", network: req.network ?? "eip155:8453",
+          x402Version, scheme: req.scheme ?? "exact", network,
           payload: {
             signature,
             authorization: {
               from: address, to: req.payTo,
               value: req.maxAmountRequired,
-              validAfter: "0", validBefore: validBefore.toString(), nonce,
+              validAfter: validAfterBig.toString(),
+              validBefore: validBeforeBig.toString(),
+              nonce,
             },
           },
         }));

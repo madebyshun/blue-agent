@@ -19,6 +19,12 @@ type PaymentRequirements = {
   maxTimeoutSeconds?: number;
 };
 
+// Bankr 402 uses CAIP-2 format ("eip155:8453") but x402 lib only accepts short names ("base")
+const NETWORK_MAP: Record<string, string> = {
+  "eip155:8453":  "base",
+  "eip155:84532": "base-sepolia",
+};
+
 async function verifyAndSettle(
   facilitatorUrl: string,
   paymentHeader: string,
@@ -90,7 +96,11 @@ export async function proxyTool(
       });
       if (reqsRes.status === 402) {
         const d = await reqsRes.json() as { accepts?: PaymentRequirements[]; facilitator?: string };
-        paymentRequirements = d.accepts?.[0] ?? null;
+        const raw = d.accepts?.[0] ?? null;
+        if (raw) {
+          // Normalize network to x402 lib format ("eip155:8453" → "base")
+          paymentRequirements = { ...raw, network: NETWORK_MAP[raw.network] ?? raw.network };
+        }
         if (d.facilitator) facilitatorUrl = d.facilitator;
       }
     } catch (e) {
