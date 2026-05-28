@@ -837,10 +837,6 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           maxTimeoutSeconds?: number;
           asset?: string; extra?: Record<string,string>;
         };
-        // x402 library only supports version 1; "eip155:8453" must map to "base"
-        const x402Version = 1;
-        const networkMap: Record<string, string> = { "eip155:8453": "base", "eip155:84532": "base-sepolia" };
-        const network = networkMap[req.network] ?? req.network;
         const maxTimeoutSeconds = req.maxTimeoutSeconds ?? 60;
 
         setStep("signing");
@@ -880,9 +876,11 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         });
 
         setStep("paying");
-        // Encode signed payment as base64 X-PAYMENT header (x402 spec v1)
-        const xPayment = btoa(JSON.stringify({
-          x402Version, scheme: req.scheme ?? "exact", network,
+        // Build payment object for our /api/tool gateway (body-based, no Bankr dependency)
+        const paymentObj = {
+          x402Version: 2,
+          scheme: req.scheme ?? "exact",
+          network: req.network, // keep "eip155:8453" — gateway expects this
           payload: {
             signature,
             authorization: {
@@ -893,18 +891,17 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
               nonce,
             },
           },
-        }));
+        };
 
-        // Step 4: call our local /api/<tool> WITH X-PAYMENT header.
-        // proxyTool forwards to Bankr for verification; if Bankr handler fails (5xx),
-        // it automatically falls back to our 3-agent local pipeline.
-        const r2 = await fetch(`/api/${tool.id}`, {
+        // Step 4: send payment through /api/tool gateway — verifies locally via viem,
+        // runs tool, settles via facilitator. No Bankr Lambda dependency.
+        const r2 = await fetch(`/api/tool/${tool.id}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-PAYMENT": xPayment },
-          body: JSON.stringify(tool.x402Body(body)),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ toolParams: tool.x402Body(body), payment: paymentObj }),
         });
         const d2 = await r2.json() as Record<string,unknown>;
-        if (!r2.ok) throw new Error(String(d2.error ?? `Payment failed ${r2.status}`));
+        if (d2.error) throw new Error(String(d2.error));
         const res2 = (d2.result ?? d2) as Record<string,unknown>;
         setResult(res2); setStep("done");
         onResult({ result: res2, isMock: false, mockReason: "dev" });
