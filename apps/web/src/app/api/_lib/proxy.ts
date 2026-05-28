@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { recoverTypedDataAddress, createWalletClient, http, hexToSignature, parseAbi } from "viem";
+import { recoverTypedDataAddress, createWalletClient, createPublicClient, http, hexToSignature, parseAbi } from "viem";
 import { base } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 
@@ -104,7 +104,20 @@ async function verifyEip3009(
       return { ok: false, reason: "invalid_signature" };
     }
 
-    console.info("[proxy] EIP-3009 verified: payer", recovered, "amount", auth.value, "USDC atoms");
+    // Check on-chain USDC balance
+    const publicClient = createPublicClient({ chain: base, transport: http() });
+    const balance = await publicClient.readContract({
+      address: asset,
+      abi: parseAbi(["function balanceOf(address) view returns (uint256)"]),
+      functionName: "balanceOf",
+      args: [auth.from as `0x${string}`],
+    });
+    if (balance < BigInt(auth.value)) {
+      console.warn("[proxy] insufficient USDC balance:", balance.toString(), "<", auth.value);
+      return { ok: false, reason: "insufficient_funds" };
+    }
+
+    console.info("[proxy] EIP-3009 verified: payer", recovered, "balance", balance.toString(), "amount", auth.value);
     return { ok: true };
   } catch (e) {
     console.warn("[proxy] EIP-3009 verify error:", e);
