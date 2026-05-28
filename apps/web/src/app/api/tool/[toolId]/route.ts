@@ -161,14 +161,14 @@ export async function POST(
     const valueOk    = BigInt(auth.value) >= BigInt(meta.price);
     const expiryOk   = BigInt(auth.validBefore) > now;
 
-    if (!signerOk)  return NextResponse.json({ error: "Payment verification failed", reason: "signer_mismatch",    message: `signer ${signer} ≠ from ${auth.from}` }, { status: 402 });
-    if (!toOk)      return NextResponse.json({ error: "Payment verification failed", reason: "wrong_recipient",    message: `to ${auth.to} ≠ payTo ${PAY_TO}` },      { status: 402 });
-    if (!valueOk)   return NextResponse.json({ error: "Payment verification failed", reason: "insufficient_value", message: `value ${auth.value} < required ${meta.price}` }, { status: 402 });
-    if (!expiryOk)  return NextResponse.json({ error: "Payment verification failed", reason: "expired",            message: `validBefore ${auth.validBefore} ≤ now ${now}` }, { status: 402 });
+    if (!signerOk)  return NextResponse.json({ error: `verify failed: signer_mismatch — ${signer} ≠ ${auth.from}` }, { status: 402 });
+    if (!toOk)      return NextResponse.json({ error: `verify failed: wrong_recipient — auth.to=${auth.to} PAY_TO=${PAY_TO}` }, { status: 402 });
+    if (!valueOk)   return NextResponse.json({ error: `verify failed: insufficient_value — ${auth.value} < ${meta.price}` }, { status: 402 });
+    if (!expiryOk)  return NextResponse.json({ error: `verify failed: expired — validBefore=${auth.validBefore} now=${now}` }, { status: 402 });
 
     verified = true;
   } catch (e) {
-    return NextResponse.json({ error: "Payment verification error", message: (e as Error).message }, { status: 402 });
+    return NextResponse.json({ error: `verify error: ${(e as Error).message}` }, { status: 402 });
   }
 
   // ── Build requirement object for settle call ──────────────────────────────
