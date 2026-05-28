@@ -96,9 +96,9 @@ export default function ToolRunner({ toolId, price }: { toolId: string; price: s
 
       setStep("paying");
       const payment = {
-        x402Version: 1,
-        scheme: "exact",
-        network: "base-mainnet",
+        x402Version: 2,
+        scheme: accepts.scheme ?? "exact",
+        network: accepts.network ?? "eip155:8453",
         payload: {
           signature,
           authorization: {
