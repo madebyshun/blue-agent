@@ -112,9 +112,8 @@ export async function POST(
   }
 
   // ── Has payment → verify via x402 facilitator ─────────────────────────────
-  const xPaymentHeader = Buffer.from(JSON.stringify(payment)).toString("base64");
-
-  const requirements = [{
+  // verifyPayment takes the raw payment object (not base64) and a single requirement
+  const requirement = {
     scheme:            "exact" as const,
     network:           NETWORK,
     maxAmountRequired: BigInt(meta.price),
@@ -125,7 +124,7 @@ export async function POST(
     description:       meta.description,
     mimeType:          "application/json",
     extra:             { name: "USD Coin", version: "2" },
-  }];
+  };
 
   const server = getX402Server();
 
@@ -140,12 +139,12 @@ export async function POST(
 
   let verified = false;
   try {
-    const result = await server.verifyPayment(xPaymentHeader, requirements);
+    const result = await server.verifyPayment(payment, requirement);
     verified = result.isValid;
     if (!verified) {
-      console.warn("[x402] payment invalid:", result);
+      console.warn("[x402] payment invalid:", JSON.stringify(result));
       return NextResponse.json(
-        { error: "Payment verification failed", detail: String(result) },
+        { error: "Payment verification failed", reason: result.invalidReason, message: result.invalidMessage },
         { status: 402 }
       );
     }
@@ -162,7 +161,7 @@ export async function POST(
 
   // ── Settle USDC (after successful tool run) ───────────────────────────────
   if (verified) {
-    server.settlePayment(xPaymentHeader, requirements).catch(err =>
+    server.settlePayment(payment, requirement).catch(err =>
       console.error("[x402] settle failed:", err)
     );
   }
