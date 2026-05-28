@@ -4,15 +4,18 @@
  * x402 payment flow:
  *   1. POST without payment → 402 requirements (payTo = our wallet)
  *   2. Client signs EIP-3009 + retries with payment in body
- *   3. Route verifies via Coinbase x402 facilitator
- *   4. If valid → run tool → settle USDC → return result
+ *   3. Route calls facilitator.x402.org/verify (plain HTTP, no library)
+ *   4. If valid → run tool → call facilitator.x402.org/settle → return result
  */
 import { NextRequest, NextResponse } from "next/server";
-import { after } from "next/server";
-import { getX402Server, PAY_TO, NETWORK } from "@/lib/x402";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
+
+const PAY_TO  = process.env.PAYMENT_WALLET ?? "0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f";
+const NETWORK = "eip155:8453";
+const USDC    = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+const FACILITATOR = "https://facilitator.x402.org";
 
 const SELF_BASE = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -64,8 +67,6 @@ const TOOLS: Record<string, { price: string; usd: string; description: string }>
   "narrative-pulse":          { price: "250000",  usd: "$0.25", description: "Narrative pulse" },
 };
 
-const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-
 // ─── POST ────────────────────────────────────────────────────────────────────
 
 export async function POST(
@@ -86,7 +87,7 @@ export async function POST(
   try { body = await req.json(); } catch {}
 
   const toolParams = body.toolParams ?? {};
-  const payment = body.payment;
+  const payment   = body.payment;
 
   // ── No payment → return 402 requirements ─────────────────────────────────
   if (!payment) {
@@ -105,21 +106,20 @@ export async function POST(
           mimeType:          "application/json",
           payTo:             PAY_TO,
           maxTimeoutSeconds: 300,
-          asset:             USDC_BASE,
+          asset:             USDC,
           extra: { name: "USD Coin", version: "2" },
         }],
       },
     });
   }
 
-  // ── Has payment → verify via x402 facilitator ─────────────────────────────
-  // verifyPayment takes the raw payment object (not base64) and a single requirement
+  // ── Build requirement object for facilitator calls ────────────────────────
   const requirement = {
-    scheme:            "exact" as const,
+    scheme:            "exact",
     network:           NETWORK,
-    maxAmountRequired: BigInt(meta.price),
+    maxAmountRequired: meta.price,
     payTo:             PAY_TO,
-    asset:             USDC_BASE as `0x${string}`,
+    asset:             USDC,
     maxTimeoutSeconds: 300,
     resource:          `${SELF_BASE}/api/tool/${toolId}`,
     description:       meta.description,
@@ -127,32 +127,31 @@ export async function POST(
     extra:             { name: "USD Coin", version: "2" },
   };
 
-  const server = getX402Server();
+  const facilitatorBody = JSON.stringify({
+    x402Version:        payment.x402Version ?? 2,
+    paymentPayload:     payment,
+    paymentRequirements: requirement,
+  });
 
-  // Initialize on first call (fetches supported kinds from facilitator)
+  // ── Verify via facilitator.x402.org (plain HTTP, no library needed) ───────
+  let verifyResult: { isValid: boolean; invalidReason?: string; invalidMessage?: string };
   try {
-    await server.initialize();
-  } catch {
-    // fallback: skip verification if facilitator unreachable (dev mode)
-    console.warn("[x402] facilitator unreachable — running tool without payment verification");
+    const vRes = await fetch(`${FACILITATOR}/verify`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    facilitatorBody,
+      signal:  AbortSignal.timeout(15_000),
+    });
+    verifyResult = await vRes.json();
+  } catch (e) {
+    console.warn("[x402] facilitator unreachable — skipping verification (dev fallback)");
     return runTool(toolId, toolParams);
   }
 
-  let verified = false;
-  try {
-    const result = await server.verifyPayment(payment, requirement);
-    verified = result.isValid;
-    if (!verified) {
-      console.warn("[x402] payment invalid:", JSON.stringify(result));
-      return NextResponse.json(
-        { error: "Payment verification failed", reason: result.invalidReason, message: result.invalidMessage },
-        { status: 402 }
-      );
-    }
-  } catch (e) {
-    console.error("[x402] verify error:", e);
+  if (!verifyResult.isValid) {
+    console.warn("[x402] payment invalid:", verifyResult);
     return NextResponse.json(
-      { error: "Payment verification error", message: (e as Error).message },
+      { error: "Payment verification failed", reason: verifyResult.invalidReason, message: verifyResult.invalidMessage },
       { status: 402 }
     );
   }
@@ -160,19 +159,28 @@ export async function POST(
   // ── Run tool ─────────────────────────────────────────────────────────────
   const toolResult = await runTool(toolId, toolParams);
 
-  // ── Settle USDC — await so we capture errors, include settle status in response ───
+  // ── Settle via facilitator (await — must complete before Vercel tears down) ──
   let settleError: string | null = null;
-  if (verified) {
-    try {
-      await server.settlePayment(payment, requirement);
-      console.log("[x402] settle ok");
-    } catch (err) {
-      settleError = (err as Error).message;
-      console.error("[x402] settle failed:", err);
+  try {
+    const sRes = await fetch(`${FACILITATOR}/settle`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    facilitatorBody,
+      signal:  AbortSignal.timeout(20_000),
+    });
+    const settleData = await sRes.json().catch(() => ({}));
+    if (!sRes.ok) {
+      settleError = JSON.stringify(settleData);
+      console.error("[x402] settle failed:", settleData);
+    } else {
+      console.log("[x402] settle ok:", settleData);
     }
+  } catch (e) {
+    settleError = (e as Error).message;
+    console.error("[x402] settle error:", e);
   }
 
-  // Inject settle debug info into response (remove once stable)
+  // Include settle debug info in response temporarily
   const resultData = await toolResult.json().catch(() => null);
   return NextResponse.json({
     ...(typeof resultData === "object" && resultData !== null ? resultData : { raw: resultData }),
@@ -183,10 +191,10 @@ export async function POST(
 async function runTool(toolId: string, toolParams: Record<string, unknown>): Promise<NextResponse> {
   try {
     const res = await fetch(`${SELF_BASE}/api/${toolId}`, {
-      method: "POST",
+      method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(toolParams),
-      signal: AbortSignal.timeout(110_000),
+      body:    JSON.stringify(toolParams),
+      signal:  AbortSignal.timeout(110_000),
     });
     const data = await res.json().catch(() => ({ error: "Invalid response" }));
     return NextResponse.json({ result: data });
