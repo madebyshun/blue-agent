@@ -160,19 +160,24 @@ export async function POST(
   // ── Run tool ─────────────────────────────────────────────────────────────
   const toolResult = await runTool(toolId, toolParams);
 
-  // ── Settle USDC after response is sent (after() survives Vercel function teardown) ───
+  // ── Settle USDC — await so we capture errors, include settle status in response ───
+  let settleError: string | null = null;
   if (verified) {
-    after(async () => {
-      try {
-        await server.settlePayment(payment, requirement);
-        console.log("[x402] settle ok");
-      } catch (err) {
-        console.error("[x402] settle failed:", err);
-      }
-    });
+    try {
+      await server.settlePayment(payment, requirement);
+      console.log("[x402] settle ok");
+    } catch (err) {
+      settleError = (err as Error).message;
+      console.error("[x402] settle failed:", err);
+    }
   }
 
-  return toolResult;
+  // Inject settle debug info into response (remove once stable)
+  const resultData = await toolResult.json().catch(() => null);
+  return NextResponse.json({
+    ...(typeof resultData === "object" && resultData !== null ? resultData : { raw: resultData }),
+    _settle: settleError ? { ok: false, error: settleError } : { ok: true },
+  });
 }
 
 async function runTool(toolId: string, toolParams: Record<string, unknown>): Promise<NextResponse> {
