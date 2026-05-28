@@ -8,6 +8,7 @@
  *   4. If valid → run tool → settle USDC → return result
  */
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { getX402Server, PAY_TO, NETWORK } from "@/lib/x402";
 
 export const runtime = "nodejs";
@@ -159,11 +160,16 @@ export async function POST(
   // ── Run tool ─────────────────────────────────────────────────────────────
   const toolResult = await runTool(toolId, toolParams);
 
-  // ── Settle USDC (after successful tool run) ───────────────────────────────
+  // ── Settle USDC after response is sent (after() survives Vercel function teardown) ───
   if (verified) {
-    server.settlePayment(payment, requirement).catch(err =>
-      console.error("[x402] settle failed:", err)
-    );
+    after(async () => {
+      try {
+        await server.settlePayment(payment, requirement);
+        console.log("[x402] settle ok");
+      } catch (err) {
+        console.error("[x402] settle failed:", err);
+      }
+    });
   }
 
   return toolResult;
