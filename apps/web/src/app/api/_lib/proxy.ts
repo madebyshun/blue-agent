@@ -25,16 +25,21 @@ async function verifyAndSettle(
   paymentRequirements: PaymentRequirements,
 ): Promise<{ ok: boolean; reason?: string }> {
   try {
+    const reqBody = { paymentPayload: paymentHeader, paymentRequirements };
+    console.info("[proxy] facilitator/verify →", facilitatorUrl, JSON.stringify({ paymentRequirements, payloadPreview: paymentHeader.slice(0, 80) }));
     const verifyRes = await fetch(`${facilitatorUrl}/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paymentPayload: paymentHeader, paymentRequirements }),
+      body: JSON.stringify(reqBody),
       signal: AbortSignal.timeout(15_000),
     });
-    const verifyData = await verifyRes.json() as { isValid?: boolean; invalidReason?: string };
+    const rawText = await verifyRes.text();
+    console.info(`[proxy] facilitator/verify ← HTTP ${verifyRes.status}:`, rawText);
+    let verifyData: { isValid?: boolean; invalidReason?: string } = {};
+    try { verifyData = JSON.parse(rawText); } catch {}
     if (!verifyData.isValid) {
-      console.warn("[proxy] facilitator verify failed:", verifyData.invalidReason);
-      return { ok: false, reason: verifyData.invalidReason ?? "invalid_payment" };
+      console.warn("[proxy] facilitator verify failed:", verifyData.invalidReason ?? rawText);
+      return { ok: false, reason: verifyData.invalidReason ?? `facilitator_${verifyRes.status}` };
     }
     // Settle in background — USDC transfer is submitted on-chain
     fetch(`${facilitatorUrl}/settle`, {

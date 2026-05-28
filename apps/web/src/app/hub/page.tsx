@@ -836,7 +836,8 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           payTo: string; maxAmountRequired: string;
           asset?: string; extra?: Record<string,string>;
         };
-        const x402Version = (paymentDetails.x402Version as number) ?? 2;
+        // x402 library uses version 1; facilitator also responds with x402Version: 1
+        const x402Version = 1;
 
         setStep("signing");
         const nonce       = randomNonce();
