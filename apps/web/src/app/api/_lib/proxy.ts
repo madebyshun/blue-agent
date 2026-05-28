@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { recoverTypedDataAddress } from "viem";
+import { recoverTypedDataAddress, createWalletClient, http, hexToSignature, parseAbi } from "viem";
+import { base } from "viem/chains";
+import { privateKeyToAccount } from "viem/accounts";
 
 /**
  * Shared bankr.bot x402 proxy.
@@ -110,6 +112,56 @@ async function verifyEip3009(
   }
 }
 
+const USDC_ABI = parseAbi([
+  "function transferWithAuthorization(address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external",
+]);
+
+/**
+ * Submit transferWithAuthorization on-chain to actually deduct USDC.
+ * Runs in background — requires RELAYER_PRIVATE_KEY env var with ETH on Base.
+ */
+async function settleOnChain(
+  paymentPayload: Record<string, unknown>,
+  paymentRequirements: PaymentRequirements,
+): Promise<void> {
+  const relayerKey = process.env.RELAYER_PRIVATE_KEY;
+  if (!relayerKey) {
+    console.warn("[proxy] RELAYER_PRIVATE_KEY not set — skipping on-chain settlement");
+    return;
+  }
+  try {
+    const p = paymentPayload as { payload?: { signature?: string; authorization?: Record<string, string> } };
+    const auth = p.payload?.authorization;
+    const sig  = p.payload?.signature;
+    if (!auth || !sig) return;
+
+    const { v, r, s } = hexToSignature(sig as `0x${string}`);
+    const account = privateKeyToAccount(relayerKey as `0x${string}`);
+    const client  = createWalletClient({ account, chain: base, transport: http() });
+    const asset   = (paymentRequirements.asset ?? "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913") as `0x${string}`;
+
+    const hash = await client.writeContract({
+      address: asset,
+      abi: USDC_ABI,
+      functionName: "transferWithAuthorization",
+      args: [
+        auth.from        as `0x${string}`,
+        auth.to          as `0x${string}`,
+        BigInt(auth.value),
+        BigInt(auth.validAfter  ?? "0"),
+        BigInt(auth.validBefore ?? "0"),
+        auth.nonce       as `0x${string}`,
+        Number(v),
+        r,
+        s,
+      ],
+    });
+    console.info("[proxy] settlement tx submitted:", hash);
+  } catch (e) {
+    console.warn("[proxy] settlement error:", e);
+  }
+}
+
 export async function proxyTool(
   req: NextRequest,
   endpoint: string,
@@ -162,6 +214,10 @@ export async function proxyTool(
         console.warn("[proxy] payment verification failed:", reason);
         return NextResponse.json({ error: reason ?? "Payment verification failed" }, { status: 402 });
       }
+      // Settle in background — submit transferWithAuthorization on-chain
+      settleOnChain(paymentPayload, paymentRequirements).catch(e =>
+        console.warn("[proxy] background settle failed:", e)
+      );
     } else {
       console.warn("[proxy] could not get payment requirements, running local anyway");
     }
