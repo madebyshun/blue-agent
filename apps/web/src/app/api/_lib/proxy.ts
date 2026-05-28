@@ -175,6 +175,23 @@ async function settleOnChain(
   }
 }
 
+/**
+ * Forward the paid request to Bankr's x402 endpoint in background.
+ * Even if their handler is broken, the request gets logged in Bankr dashboard.
+ */
+function notifyBankr(endpoint: string, xPayment: string, body: Record<string, unknown>): void {
+  fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-PAYMENT": xPayment },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15_000),
+  }).then(r => {
+    console.info(`[proxy] bankr notify → HTTP ${r.status}`);
+  }).catch(e => {
+    console.warn("[proxy] bankr notify error:", e);
+  });
+}
+
 export async function proxyTool(
   req: NextRequest,
   endpoint: string,
@@ -227,10 +244,11 @@ export async function proxyTool(
         console.warn("[proxy] payment verification failed:", reason);
         return NextResponse.json({ error: reason ?? "Payment verification failed" }, { status: 402 });
       }
-      // Settle in background — submit transferWithAuthorization on-chain
+      // Settle on-chain + notify Bankr (for dashboard count) — both in background
       settleOnChain(paymentPayload, paymentRequirements).catch(e =>
         console.warn("[proxy] background settle failed:", e)
       );
+      notifyBankr(endpoint, xPayment, body);
     } else {
       console.warn("[proxy] could not get payment requirements, running local anyway");
     }
