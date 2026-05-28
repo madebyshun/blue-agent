@@ -118,7 +118,29 @@ export default function ToolRunner({ toolId, price }: { toolId: string; price: s
         body: JSON.stringify({ toolParams: values, payment }),
       });
       const d2 = await r2.json();
-      if (d2.error) throw new Error([d2.error, d2.reason, d2.message].filter(Boolean).join(" — "));
+      if (d2.error) {
+        // If payment verification failed, hit the debug endpoint to get exact check details
+        if (d2.error.includes("verify")) {
+          try {
+            const dbg = await fetch("/api/tool/_debug", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payment),
+            });
+            const dbgData = await dbg.json();
+            const detail = dbgData.recoverError
+              ? `recover_error: ${dbgData.recoverError}`
+              : Object.entries(dbgData.checks ?? {})
+                  .filter(([k, v]) => k.endsWith("Ok") && !v)
+                  .map(([k]) => k)
+                  .join(", ") || "all_checks_passed";
+            throw new Error(`${d2.error} | debug: ${detail} | signer=${dbgData.checks?.signer ?? "?"} from=${dbgData.checks?.expected_from ?? "?"} to_got=${dbgData.checks?.actual_to ?? "?"} to_want=${dbgData.PAY_TO ?? "?"}`);
+          } catch (dbgE: unknown) {
+            if (dbgE instanceof Error && dbgE.message !== d2.error) throw dbgE;
+          }
+        }
+        throw new Error([d2.error, d2.reason, d2.message].filter(Boolean).join(" — "));
+      }
       setResult(d2.result ?? d2);
       setStep("done");
     } catch (e: unknown) {
