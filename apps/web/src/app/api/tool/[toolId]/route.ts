@@ -8,13 +8,14 @@
  *   4. If valid → run tool → call facilitator.x402.org/settle → return result
  */
 import { NextRequest, NextResponse } from "next/server";
+import { recoverTypedDataAddress } from "viem";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const PAY_TO  = process.env.PAYMENT_WALLET ?? "0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f";
+const PAY_TO  = (process.env.PAYMENT_WALLET ?? "0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f").toLowerCase();
 const NETWORK = "eip155:8453";
-const USDC    = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+const USDC    = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 const FACILITATOR = "https://facilitator.x402.org";
 
 const SELF_BASE = process.env.VERCEL_URL
@@ -113,7 +114,64 @@ export async function POST(
     });
   }
 
-  // ── Build requirement object for facilitator calls ────────────────────────
+  // ── Verify EIP-3009 signature locally with viem ───────────────────────────
+  const auth = (payment.payload as Record<string, unknown>)?.authorization as Record<string, string> | undefined;
+  const sig  = (payment.payload as Record<string, unknown>)?.signature as string | undefined;
+
+  if (!auth || !sig) {
+    return NextResponse.json({ error: "Invalid payment payload: missing authorization or signature" }, { status: 402 });
+  }
+
+  const extra = (payment as Record<string, unknown>).extra as { name?: string; version?: string } | undefined;
+
+  let verified = false;
+  try {
+    const signer = await recoverTypedDataAddress({
+      domain: {
+        name:              extra?.name    ?? "USD Coin",
+        version:           extra?.version ?? "2",
+        chainId:           8453,
+        verifyingContract: USDC,
+      },
+      types: {
+        TransferWithAuthorization: [
+          { name: "from",        type: "address" },
+          { name: "to",          type: "address" },
+          { name: "value",       type: "uint256" },
+          { name: "validAfter",  type: "uint256" },
+          { name: "validBefore", type: "uint256" },
+          { name: "nonce",       type: "bytes32" },
+        ],
+      },
+      primaryType: "TransferWithAuthorization",
+      message: {
+        from:        auth.from        as `0x${string}`,
+        to:          auth.to          as `0x${string}`,
+        value:       BigInt(auth.value),
+        validAfter:  BigInt(auth.validAfter  ?? "0"),
+        validBefore: BigInt(auth.validBefore),
+        nonce:       auth.nonce       as `0x${string}`,
+      },
+      signature: sig as `0x${string}`,
+    });
+
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    const signerOk   = signer.toLowerCase() === auth.from.toLowerCase();
+    const toOk       = auth.to.toLowerCase() === PAY_TO;
+    const valueOk    = BigInt(auth.value) >= BigInt(meta.price);
+    const expiryOk   = BigInt(auth.validBefore) > now;
+
+    if (!signerOk)  return NextResponse.json({ error: "Payment verification failed", reason: "signer_mismatch",    message: `signer ${signer} ≠ from ${auth.from}` }, { status: 402 });
+    if (!toOk)      return NextResponse.json({ error: "Payment verification failed", reason: "wrong_recipient",    message: `to ${auth.to} ≠ payTo ${PAY_TO}` },      { status: 402 });
+    if (!valueOk)   return NextResponse.json({ error: "Payment verification failed", reason: "insufficient_value", message: `value ${auth.value} < required ${meta.price}` }, { status: 402 });
+    if (!expiryOk)  return NextResponse.json({ error: "Payment verification failed", reason: "expired",            message: `validBefore ${auth.validBefore} ≤ now ${now}` }, { status: 402 });
+
+    verified = true;
+  } catch (e) {
+    return NextResponse.json({ error: "Payment verification error", message: (e as Error).message }, { status: 402 });
+  }
+
+  // ── Build requirement object for settle call ──────────────────────────────
   const requirement = {
     scheme:            "exact",
     network:           NETWORK,
@@ -124,42 +182,19 @@ export async function POST(
     resource:          `${SELF_BASE}/api/tool/${toolId}`,
     description:       meta.description,
     mimeType:          "application/json",
-    extra:             { name: "USD Coin", version: "2" },
+    extra:             { name: extra?.name ?? "USD Coin", version: extra?.version ?? "2" },
   };
 
   const facilitatorBody = JSON.stringify({
-    x402Version:        payment.x402Version ?? 2,
-    paymentPayload:     payment,
+    x402Version:         (payment as Record<string, unknown>).x402Version ?? 2,
+    paymentPayload:      payment,
     paymentRequirements: requirement,
   });
-
-  // ── Verify via facilitator.x402.org (plain HTTP, no library needed) ───────
-  let verifyResult: { isValid: boolean; invalidReason?: string; invalidMessage?: string };
-  try {
-    const vRes = await fetch(`${FACILITATOR}/verify`, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    facilitatorBody,
-      signal:  AbortSignal.timeout(15_000),
-    });
-    verifyResult = await vRes.json();
-  } catch (e) {
-    console.warn("[x402] facilitator unreachable — skipping verification (dev fallback)");
-    return runTool(toolId, toolParams);
-  }
-
-  if (!verifyResult.isValid) {
-    console.warn("[x402] payment invalid:", verifyResult);
-    return NextResponse.json(
-      { error: "Payment verification failed", reason: verifyResult.invalidReason, message: verifyResult.invalidMessage },
-      { status: 402 }
-    );
-  }
 
   // ── Run tool ─────────────────────────────────────────────────────────────
   const toolResult = await runTool(toolId, toolParams);
 
-  // ── Settle via facilitator (await — must complete before Vercel tears down) ──
+  // ── Settle via facilitator ────────────────────────────────────────────────
   let settleError: string | null = null;
   try {
     const sRes = await fetch(`${FACILITATOR}/settle`, {
