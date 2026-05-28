@@ -113,15 +113,15 @@ export async function POST(req: NextRequest) {
 
     const now = BigInt(Math.floor(Date.now() / 1000));
     if (signer.toLowerCase() !== auth.from.toLowerCase())
-      return NextResponse.json({ error: "Payment verification failed", reason: "signer_mismatch" }, { status: 402 });
+      return NextResponse.json({ error: `verify failed: signer_mismatch — ${signer} ≠ ${auth.from}` }, { status: 402 });
     if (auth.to.toLowerCase() !== PAY_TO)
-      return NextResponse.json({ error: "Payment verification failed", reason: "wrong_recipient", message: `to ${auth.to} ≠ ${PAY_TO}` }, { status: 402 });
+      return NextResponse.json({ error: `verify failed: wrong_recipient — auth.to=${auth.to} PAY_TO=${PAY_TO}` }, { status: 402 });
     if (BigInt(auth.value) < BigInt(meta.price))
-      return NextResponse.json({ error: "Payment verification failed", reason: "insufficient_value" }, { status: 402 });
+      return NextResponse.json({ error: `verify failed: insufficient_value — ${auth.value} < ${meta.price}` }, { status: 402 });
     if (BigInt(auth.validBefore) <= now)
-      return NextResponse.json({ error: "Payment verification failed", reason: "expired" }, { status: 402 });
+      return NextResponse.json({ error: `verify failed: expired` }, { status: 402 });
   } catch (e) {
-    return NextResponse.json({ error: "Payment verification error", message: (e as Error).message }, { status: 402 });
+    return NextResponse.json({ error: `verify error: ${(e as Error).message}` }, { status: 402 });
   }
 
   // ── Run tool locally via /api/launch-simulator (has LLM fallback) ────────
