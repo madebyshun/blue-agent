@@ -71,7 +71,10 @@ async function cdpCall(
       body: JSON.stringify({ x402Version: 1, paymentPayload, paymentRequirements }),
       signal: AbortSignal.timeout(30_000),
     });
-    const detail = await res.json().catch(async () => (await res.text()).slice(0, 300));
+    // Read body ONCE as text, then try to parse JSON (avoids double-read error)
+    const raw = await res.text();
+    let detail: unknown;
+    try { detail = JSON.parse(raw); } catch { detail = raw.slice(0, 400); }
     return { ok: res.ok, status: res.status, detail };
   } catch (e) {
     return { ok: false, status: 0, detail: `CDP call error: ${(e as Error).message}` };
