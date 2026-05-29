@@ -811,10 +811,8 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
       try {
         setStep("calling");
 
-        const bankrUrl = tool.x402Url ?? `https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/${tool.id}`;
-
-        // Step 1: call Bankr directly (no payment) → get 402 requirements
-        const r1 = await fetch(bankrUrl, {
+        // Step 1: call our proxy (no payment) → forwards to Bankr → 402 requirements
+        const r1 = await fetch(`/api/${tool.id}`, {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
           body:    JSON.stringify(tool.x402Body(body)),
@@ -875,7 +873,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
 
         setStep("paying");
 
-        // Step 4: call Bankr WITH X-PAYMENT — Bankr verifies, settles USDC, runs tool
+        // Step 4: proxy forwards X-PAYMENT to Bankr — Bankr verifies, settles, runs
         const xPayment = btoa(JSON.stringify({
           x402Version: (d1.x402Version as number) ?? 2,
           scheme:      req.scheme  ?? "exact",
@@ -893,7 +891,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           },
         }));
 
-        const r2 = await fetch(bankrUrl, {
+        const r2 = await fetch(`/api/${tool.id}`, {
           method:  "POST",
           headers: { "Content-Type": "application/json", "X-PAYMENT": xPayment },
           body:    JSON.stringify(tool.x402Body(body)),
