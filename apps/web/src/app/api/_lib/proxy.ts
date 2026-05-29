@@ -91,9 +91,18 @@ export async function proxyTool(
     const isUnavailable = typeof data.error === "string" &&
       (data.error.includes("unavailable") || data.error.includes("Endpoint"));
     if (isUnavailable && fallback) {
+      // Only run local fallback if payment was provided — don't give free results
+      if (!xPayment) {
+        console.warn("[proxy] Bankr handler unavailable, no X-Payment → return 402");
+        return NextResponse.json({ error: "Payment Required", message: "This tool requires payment." }, { status: 402 });
+      }
       console.warn("[proxy] Bankr handler unavailable → local fallback + settle");
-      if (xPayment) settlePayment(xPayment, endpoint);
-      try { return await fallback(body); }
+      settlePayment(xPayment, endpoint);
+      try {
+        const result = await fallback(body);
+        const rd = await result.json().catch(() => null);
+        return NextResponse.json({ ...(rd ?? {}), _settle: "initiated" });
+      }
       catch (fe) { return NextResponse.json({ error: "Tool error", message: (fe as Error).message }, { status: 500 }); }
     }
     return NextResponse.json(data);
@@ -105,10 +114,13 @@ export async function proxyTool(
     return NextResponse.json(data, { status: 402 });
   }
 
-  // 5xx — Bankr handler broken → local fallback + settle USDC
+  // 5xx — Bankr handler broken → local fallback only if payment sent
   if (upstream.status >= 500 && fallback) {
+    if (!xPayment) {
+      return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
+    }
     console.warn(`[proxy] Bankr ${upstream.status} → local fallback + settle`);
-    if (xPayment) settlePayment(xPayment, endpoint);
+    settlePayment(xPayment, endpoint);
     try { return await fallback(body); }
     catch (fe) { return NextResponse.json({ error: "Tool error", message: (fe as Error).message }, { status: 500 }); }
   }
