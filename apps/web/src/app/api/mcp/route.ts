@@ -408,7 +408,7 @@ const CONSOLE_MAP: Record<string, string> = {
 const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
 
 async function callHubTool(toolId: string, args: Record<string, unknown>): Promise<string> {
-  const res = await fetch(`${BASE}/api/${toolId}`, {
+  const res = await fetch(`${BASE}/api/x402/${toolId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(args),
