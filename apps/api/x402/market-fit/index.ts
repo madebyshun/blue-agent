@@ -1,8 +1,3 @@
-// x402/market-fit/index.ts
-// Market Fit Validator — Blue idea + Aeon narrative-tracker + MiroShark 4-persona
-// Price: $0.35 — GO / WAIT / PIVOT verdict for your project idea
-// Fully self-contained — no external workspace imports
-
 type BankrMessage = { role: string; content: string };
 
 async function callBankrLLM(opts: {
@@ -65,7 +60,6 @@ export default async function handler(req: Request): Promise<Response> {
     let body: { description?: string; product?: string; name?: string; stage?: string } = {};
     try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const url = new URL(req.url);
-    // Accept both "description" (API) and "product" (Hub UI field name)
     const rawDesc = body.description ?? body.product ?? url.searchParams.get("description") ?? url.searchParams.get("product") ?? "";
     const stage   = body.stage ?? url.searchParams.get("stage") ?? "";
     const description = stage ? `${rawDesc}\n\nStage: ${stage}` : rawDesc;
@@ -73,7 +67,6 @@ export default async function handler(req: Request): Promise<Response> {
 
     if (!rawDesc) return Response.json({ error: "product description is required" }, { status: 400 });
 
-    // Step 1: Blue Agent — expand the idea brief
     const briefRaw = await callBankrLLM({
       model: "claude-haiku-4-5",
       system: `You are Blue Agent running the 'blue idea' command for Base builders.
@@ -94,13 +87,11 @@ Schema: {
 
     const brief = extractJsonObject(briefRaw) ?? { problem: description, why_now: "Market timing unclear", why_base: "Base ecosystem alignment", target_user: "Base builders", mvp_scope: "TBD", biggest_risk: "Unclear demand" };
 
-    // Step 2: Aeon narrative-tracker — ecosystem alignment
     const narrativeRaw = await runAeonSkill(
       "narrative-tracker",
       `relevance to: ${description}. Focus on Base ecosystem narratives that align or conflict.`
     );
 
-    // Step 3: MiroShark 4-persona consensus
     const msRaw = await callBankrLLM({
       model: "claude-haiku-4-5",
       system: `You are MiroShark — 4-persona crypto consensus engine.
@@ -125,7 +116,6 @@ Schema: {
 
     const consensus = extractJsonObject(msRaw) ?? { bull: 45, bear: 25, neutral: 30, recommendation: "review_needed", sentiment_summary: "Mixed signals — needs validation" };
 
-    // Step 4: Blue Agent final verdict
     const verdictRaw = await callBankrLLM({
       model: "claude-haiku-4-5",
       system: `You are Blue Agent — final verdict engine for Base builders.

@@ -6,7 +6,7 @@ import { fetchGitHubRepo, fetchGitHubCommits, fetchGitHubContents, formatRepoFor
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/repo-health";
+const ENDPOINT = "https://x402.bankr.bot/0xf31f59e7b8b58555f7871f71973a394c8f1bffe5/repo-health";
 
 async function handleLocally(body: Record<string, unknown>): Promise<NextResponse> {
   const repoInput = (body.repo as string) ?? "";

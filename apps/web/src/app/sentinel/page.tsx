@@ -907,6 +907,9 @@ export default function SentinelPage() {
               className="font-mono text-[9px] text-slate-700 hover:text-white transition-colors block">
               💬 Telegram community →
             </a>
+            <Link href="/approvals" className="font-mono text-[9px] text-[#60A5FA] hover:text-white transition-colors block">
+              🔐 Approval Tracker →
+            </Link>
             <Link href="/hub" className="font-mono text-[9px] text-slate-700 hover:text-white transition-colors block">
               ← hub
             </Link>
