@@ -885,6 +885,19 @@ export default function HubPage() {
     return new Set(combined.slice(0, 4));
   }, [usage]);
 
+  // ── On mount: deep-link ?tool=<id> (from /hub/[tool] pages) ───────────────
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const qTool = new URLSearchParams(window.location.search).get("tool");
+    if (qTool) {
+      const t = TOOLS.find(x => x.id === qTool);
+      if (t) {
+        setSelected(t);
+        window.history.replaceState(null, "", "/hub");
+      }
+    }
+  }, []);
+
   // ── On mount: decode shared result from URL hash ──────────────────────────
   useEffect(() => {
     if (typeof window === "undefined") return;
