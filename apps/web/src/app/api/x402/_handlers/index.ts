@@ -1,0 +1,72 @@
+// AUTO-GENERATED — self-hosted x402 handler registry (copied from apps/api/x402).
+import h0 from "./agent-collab-match";
+import h1 from "./agent-performance";
+import h2 from "./agent-revenue-optimizer";
+import h3 from "./agent-token-strategy";
+import h4 from "./base-builder-network-match";
+import h5 from "./base-grant-finder";
+import h6 from "./base-protocol-comparison";
+import h7 from "./builder-brand-score";
+import h8 from "./builder-deep-dd";
+import h9 from "./community-growth-playbook";
+import h10 from "./community-sentiment";
+import h11 from "./competitor-scan";
+import h12 from "./defi-opportunity";
+import h13 from "./ecosystem-digest";
+import h14 from "./fundraise-timing";
+import h15 from "./gtm-brief";
+import h16 from "./investor-memo";
+import h17 from "./launch-simulator";
+import h18 from "./market-fit";
+import h19 from "./multi-agent-workflow";
+import h20 from "./narrative-position";
+import h21 from "./pitch-intelligence";
+import h22 from "./portfolio-rebalancer";
+import h23 from "./protocol-risk-monitor";
+import h24 from "./repo-health";
+import h25 from "./roadmap-validator";
+import h26 from "./stack-recommender";
+import h27 from "./thread-intelligence";
+import h28 from "./token-distribution-plan";
+import h29 from "./token-launch-readiness";
+import h30 from "./token-momentum-scanner";
+import h31 from "./token-pick-signal";
+import h32 from "./wallet-strategy-analyzer";
+import h33 from "./whale-copy-signal";
+
+export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
+  "agent-collab-match": h0,
+  "agent-performance": h1,
+  "agent-revenue-optimizer": h2,
+  "agent-token-strategy": h3,
+  "base-builder-network-match": h4,
+  "base-grant-finder": h5,
+  "base-protocol-comparison": h6,
+  "builder-brand-score": h7,
+  "builder-deep-dd": h8,
+  "community-growth-playbook": h9,
+  "community-sentiment": h10,
+  "competitor-scan": h11,
+  "defi-opportunity": h12,
+  "ecosystem-digest": h13,
+  "fundraise-timing": h14,
+  "gtm-brief": h15,
+  "investor-memo": h16,
+  "launch-simulator": h17,
+  "market-fit": h18,
+  "multi-agent-workflow": h19,
+  "narrative-position": h20,
+  "pitch-intelligence": h21,
+  "portfolio-rebalancer": h22,
+  "protocol-risk-monitor": h23,
+  "repo-health": h24,
+  "roadmap-validator": h25,
+  "stack-recommender": h26,
+  "thread-intelligence": h27,
+  "token-distribution-plan": h28,
+  "token-launch-readiness": h29,
+  "token-momentum-scanner": h30,
+  "token-pick-signal": h31,
+  "wallet-strategy-analyzer": h32,
+  "whale-copy-signal": h33,
+};
