@@ -105,11 +105,63 @@ export async function callBankrLLM(opts: {
 
 export function extractJsonObject(text: string): Record<string, unknown> | null {
   let raw = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
-  const s = raw.indexOf("{"), e = raw.lastIndexOf("}");
-  if (s >= 0 && e > s) raw = raw.slice(s, e + 1);
+  const s = raw.indexOf("{");
+  if (s < 0) return null;
+  const e = raw.lastIndexOf("}");
+  if (e > s) raw = raw.slice(s, e + 1);
+  else raw = raw.slice(s); // no closing brace — truncated
+
+  // 1. Direct parse
   try { return JSON.parse(raw); } catch {}
+  // 2. Strip control chars
   try { return JSON.parse(raw.replace(/[\x00-\x1F\x7F]/g, " ")); } catch {}
+  // 3. Repair truncated JSON (LLM hit max_tokens mid-output)
+  try { return JSON.parse(repairTruncatedJson(raw)); } catch {}
   return null;
+}
+
+/**
+ * Repair JSON that was cut off mid-stream (e.g. LLM hit max_tokens).
+ * Walks the string tracking string/brace/bracket state, drops any
+ * trailing incomplete token, then closes all open structures.
+ */
+function repairTruncatedJson(raw: string): string {
+  const stack: string[] = [];
+  let inStr = false, escaped = false;
+  let lastSafe = 0; // index after the last closed container, closed string, or comma
+
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i];
+    if (inStr) {
+      if (escaped) escaped = false;
+      else if (c === "\\") escaped = true;
+      else if (c === '"') { inStr = false; lastSafe = i + 1; }
+      continue;
+    }
+    if (c === '"') { inStr = true; continue; }
+    else if (c === "{") stack.push("}");
+    else if (c === "[") stack.push("]");
+    else if (c === "}" || c === "]") { stack.pop(); lastSafe = i + 1; }
+    else if (c === ",") lastSafe = i; // safe to cut before the comma
+  }
+
+  // Roll back to last complete value, drop dangling comma, then drop a
+  // dangling key that has no value yet (model cut off after `"key":`)
+  let fixed = raw.slice(0, lastSafe).replace(/,\s*$/, "");
+  fixed = fixed.replace(/,?\s*"[^"]*"\s*:?\s*$/, "");
+  // Recompute open structures up to the cut point
+  const reopen: string[] = [];
+  let s2 = false, esc = false;
+  for (let i = 0; i < fixed.length; i++) {
+    const c = fixed[i];
+    if (s2) { if (esc) esc = false; else if (c === "\\") esc = true; else if (c === '"') s2 = false; continue; }
+    if (c === '"') s2 = true;
+    else if (c === "{") reopen.push("}");
+    else if (c === "[") reopen.push("]");
+    else if (c === "}" || c === "]") reopen.pop();
+  }
+  while (reopen.length) fixed += reopen.pop();
+  return fixed;
 }
 
 // ─── Aeon skill runner (fetches real skill from Aeon GitHub) ─────────────────
