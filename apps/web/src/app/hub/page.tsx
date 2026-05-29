@@ -809,46 +809,23 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
     // ── x402 flow: wallet connected + tool has price ──────────────────────────
     if (tool.x402Body && isConnected && address) {
       try {
-        setStep("calling");
-
-        // Step 1: call our proxy (no payment) → forwards to Bankr → 402 requirements
-        const r1 = await fetch(`/api/${tool.id}`, {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify(tool.x402Body(body)),
-        });
-        if (r1.status !== 402) {
-          const res = await r1.json() as Record<string,unknown>;
-          setResult(res); setStep("done");
-          onResult({ result: res, isMock: false, mockReason: "dev" });
-          return;
-        }
-
-        // Step 2: parse 402 requirements
-        const d1 = await r1.json() as Record<string,unknown>;
-        const accepts = d1.accepts as Record<string,unknown>[] | undefined;
-        if (!accepts?.length) throw new Error("No payment requirements in 402 response");
-        const req = accepts[0] as {
-          scheme: string; network: string;
-          payTo: string; maxAmountRequired: string;
-          maxTimeoutSeconds?: number;
-          asset?: string; extra?: Record<string,string>;
-        };
-        const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-        const maxTimeoutSeconds = req.maxTimeoutSeconds ?? 300;
-        const nowSec = Math.floor(Date.now() / 1000);
-        const validBeforeBig = BigInt(nowSec + maxTimeoutSeconds);
+        // Known constants — no discovery call needed
+        const USDC        = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
+        const BANKR_WALLET = "0x8AEE621035D93Deb3C0C1177fac252dC2dd501a0" as const;
+        const priceRaw    = tool.price.replace("$", "");
+        const priceUnits  = String(Math.round(parseFloat(priceRaw) * 1_000_000)); // USDC 6 decimals
+        const validBefore = BigInt(Math.floor(Date.now() / 1000) + 300);
 
         setStep("signing");
 
-        // Step 3: sign EIP-3009 TransferWithAuthorization
+        // Sign EIP-3009 TransferWithAuthorization
         const nonce = randomNonce();
         const signature = await signTypedDataAsync({
           domain: {
-            name:              req.extra?.name    ?? "USD Coin",
-            version:           req.extra?.version ?? "2",
+            name:              "USD Coin",
+            version:           "2",
             chainId:           8453,
-            verifyingContract: (req.asset ?? USDC_BASE) as `0x${string}`,
+            verifyingContract: USDC,
           },
           types: {
             TransferWithAuthorization: [
@@ -863,29 +840,29 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           primaryType: "TransferWithAuthorization",
           message: {
             from:        address,
-            to:          req.payTo as `0x${string}`,
-            value:       BigInt(req.maxAmountRequired),
+            to:          BANKR_WALLET,
+            value:       BigInt(priceUnits),
             validAfter:  BigInt(0),
-            validBefore: validBeforeBig,
+            validBefore: validBefore,
             nonce,
           },
         });
 
         setStep("paying");
 
-        // Step 4: proxy forwards X-PAYMENT to Bankr — Bankr verifies, settles, runs
+        // Single call with X-PAYMENT — proxy forwards to Bankr
         const xPayment = btoa(JSON.stringify({
-          x402Version: (d1.x402Version as number) ?? 2,
-          scheme:      req.scheme  ?? "exact",
-          network:     req.network ?? "eip155:8453",
+          x402Version: 2,
+          scheme:      "exact",
+          network:     "eip155:8453",
           payload: {
             signature,
             authorization: {
               from:        address,
-              to:          req.payTo,
-              value:       req.maxAmountRequired,
+              to:          BANKR_WALLET,
+              value:       priceUnits,
               validAfter:  "0",
-              validBefore: validBeforeBig.toString(),
+              validBefore: validBefore.toString(),
               nonce,
             },
           },
