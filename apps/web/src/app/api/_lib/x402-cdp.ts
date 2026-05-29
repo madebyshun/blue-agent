@@ -90,6 +90,18 @@ async function cdpCall(
   }
 }
 
+/** Verify a payment is valid (signature + funds) WITHOUT moving money. */
+export async function cdpVerify(
+  paymentPayload: unknown,
+  requirements: PaymentRequirements
+): Promise<SettleResult> {
+  const r = await cdpCall("/verify", paymentPayload, requirements);
+  const d = r.detail as Record<string, unknown> | string;
+  const valid = r.ok && (typeof d === "object" && d !== null ? d?.isValid !== false : true);
+  console.log(`[cdp] verify ${r.status}:`, JSON.stringify(r.detail).slice(0, 200));
+  return { ...r, ok: valid };
+}
+
 /** Settle on-chain via CDP. ok=true only if USDC moved. */
 export async function cdpSettle(
   paymentPayload: unknown,
