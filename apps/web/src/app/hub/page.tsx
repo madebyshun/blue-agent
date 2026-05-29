@@ -811,7 +811,8 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
       try {
         // Known constants — no discovery call needed
         const USDC        = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
-        const BANKR_WALLET = "0x8AEE621035D93Deb3C0C1177fac252dC2dd501a0" as const;
+        // Self-hosted x402: pay our Club wallet (CDP facilitator settles to it)
+        const BANKR_WALLET = "0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f" as const;
         const priceRaw    = tool.price.replace("$", "");
         const priceUnits  = String(Math.round(parseFloat(priceRaw) * 1_000_000)); // USDC 6 decimals
         const validBefore = BigInt(Math.floor(Date.now() / 1000) + 300);
