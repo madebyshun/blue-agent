@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { buildRequirements, cdpSettle } from "@/app/api/_lib/x402-cdp";
 import { HANDLERS } from "@/app/api/x402/_handlers";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
+import { kv } from "@/lib/kv";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -97,6 +98,8 @@ async function handle(
     });
     const resp = await handler(innerReq);
     const data = await resp.json().catch(() => ({}));
+    // Count this paid run for dynamic "Featured" ranking (atomic, awaited)
+    try { await kv.incr(`usage:${tool}`); } catch {}
     return NextResponse.json({ ...data, _settle: { ok: true, status: settle.status } });
   } catch (e) {
     return NextResponse.json(

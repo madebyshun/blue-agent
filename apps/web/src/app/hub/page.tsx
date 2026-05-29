@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
@@ -245,405 +245,6 @@ function ResultObj({ obj, nested = false }: { obj: Record<string, unknown>; nest
   );
 }
 
-// ─── Mock data generator (dev mode) ──────────────────────────────────────────
-
-function getMockResult(tool: Tool): Record<string, unknown> {
-  const base = { timestamp: new Date().toISOString() };
-
-  const MOCKS: Record<string, Record<string, unknown>> = {
-    "token-pick-signal": {
-      ...base,
-      signal: "bullish",
-      confidence: 84,
-      conviction: "high",
-      token: "$BLUEAGENT",
-      narrative: "AI agent tokens on Base — early accumulation phase before narrative peak",
-      entry_zone: "$0.0000020 – $0.0000028",
-      catalysts: ["Blue Hub launch", "Bankr ecosystem growth", "Agent token meta accelerating on CT"],
-      risk: "medium",
-      timeframe: "2–4 weeks",
-      recommendation: "Accumulate on dips. Target 3–5x from current levels.",
-    },
-    "narrative-position": {
-      ...base,
-      top_narratives: [
-        { name: "AI Agents on Base", momentum: "building", position: "early" },
-        { name: "x402 Micropayments", momentum: "emerging", position: "very early" },
-        { name: "RWA on Base", momentum: "peaking", position: "late" },
-        { name: "Base DeFi Season 2", momentum: "building", position: "mid" },
-      ],
-      best_position: "AI Agents on Base — still early, CT engagement accelerating",
-      avoid: "RWA narrative peaking, rotation risk high",
-      timeframe: "next 3–6 weeks",
-    },
-    "ecosystem-digest": {
-      ...base,
-      week: "May 2026",
-      top_builders: ["@madebyshun (Blue Agent)", "@bankrbot (Bankr)", "@aerodrome_fi"],
-      top_protocols: ["Aerodrome (+18% TVL)", "Uniswap v4 Base (new pools)", "Aave Base (record deposits)"],
-      narrative_shifts: ["AI agent tooling gaining VC attention", "x402 emerging as payment standard", "Base gas fees near zero"],
-      signal: "Base ecosystem in expansion phase — builder activity at ATH",
-    },
-    "market-fit": {
-      ...base,
-      overall_score: 81,
-      verdict: "strong",
-      blue_agent_score: 83,
-      aeon_score: 79,
-      miroshark_score: 80,
-      strengths: ["Clear ICP (Base builders)", "x402 monetization validated", "Grounded AI — no hallucinations"],
-      gaps: ["Discovery — builders don't know it exists yet", "Onboarding friction for non-crypto devs"],
-      pmf_signal: "Early PMF signals present. Push distribution hard.",
-      priority_action: "Ship 3 case studies from real builds using Blue Agent commands",
-    },
-    "token-launch-readiness": {
-      ...base,
-      verdict: "yes",
-      readiness_score: 76,
-      go_signal: true,
-      community_score: 72,
-      product_score: 85,
-      traction_score: 71,
-      risks: ["Token liquidity depth", "Market timing uncertainty"],
-      launch_checklist: ["Audit contract", "Seed liquidity pool ($50k+)", "CT narrative campaign 2 weeks prior", "Bankr listing day-1"],
-      recommended_timing: "Next 4–6 weeks if market holds",
-    },
-    "roadmap-validator": {
-      ...base,
-      verdict: "strong",
-      score: 79,
-      timing_risk: "low",
-      execution_risk: "medium",
-      narrative_fit: "high",
-      strong_milestones: ["Hub 34 tools", "x402 payments", "CLI v2"],
-      weak_milestones: ["Revenue sharing — too vague, needs mechanism design"],
-      suggested_changes: ["Add specific revenue targets per quarter", "Move marketplace to Q3 (earlier)"],
-      priority: "high",
-    },
-    "competitor-scan": {
-      ...base,
-      direct_competitors: [
-        { name: "Cursor for Web3", threat: "medium", moat: "IDE integration, not Base-native" },
-        { name: "Coinbase CDP", threat: "low", threat_reason: "infra layer, not AI workflow" },
-      ],
-      indirect_competitors: ["ChatGPT + Base docs", "Windsurf + web3 plugins"],
-      your_edge: "Grounded skills + x402 micropayments + Base-native context — no generic LLM can replicate",
-      defensibility: "high",
-      recommendation: "Focus on skill depth and Base exclusivity",
-    },
-    "pitch-intelligence": {
-      ...base,
-      narrative_score: 82,
-      investor_readiness: "ready",
-      hook: "Base builders waste 60% of dev time on hallucinated AI output. Blue Agent fixes this with verified, grounded intelligence.",
-      why_now: "x402 micropayments + Base's 10M users = monetizable AI agent layer for the first time",
-      why_win: "34 grounded skill files = unfakeable moat. Takes months to build, impossible to copy overnight.",
-      risks_to_address: ["Revenue scale timeline", "Dependency on Base ecosystem health"],
-      suggested_ask: "$500k pre-seed at $5M cap",
-    },
-    "fundraise-timing": {
-      ...base,
-      verdict: "raise now",
-      timing_score: 74,
-      market_conditions: "favorable",
-      stage_readiness: "yes",
-      investor_appetite: "high — AI agent + Base narratives both hot",
-      risks: ["Window may close in 6–8 weeks if market turns"],
-      recommended_format: "SAFE $500k, $5M cap",
-      target_investors: ["Coinbase Ventures", "Base Ecosystem Fund", "angel builders on Base"],
-    },
-    "gtm-brief": {
-      ...base,
-      primary_channel: "X/Twitter + Telegram (Base builder community)",
-      launch_sequence: ["Week 1: Ship case study thread", "Week 2: Bankr collab post", "Week 3: Base ecosystem tag"],
-      messaging: "Build on Base faster. Blue Agent — AI with verified Base knowledge.",
-      early_adopters: "Indie hackers shipping on Base, DeFi founders, AI agent devs",
-      growth_lever: "Every user who runs a command = shareable output = distribution",
-      kpi_30d: "200 Hub tool runs, 50 console commands, 5 case studies published",
-    },
-    "stack-recommender": {
-      ...base,
-      recommended_stack: {
-        chain: "Base (EVM, low fees, Coinbase ecosystem)",
-        payments: "x402 + USDC (EIP-3009 TransferWithAuthorization)",
-        frontend: "Next.js 15 + Wagmi v3 + Tailwind",
-        backend: "Next.js API routes / Edge functions",
-        ai: "Bankr LLM (grounded) + Anthropic fallback",
-        infra: "Vercel (deploy) + Basescan (verify)",
-      },
-      avoid: "Ethereum mainnet (gas), OpenAI direct (no web3 context)",
-      notes: "x402 requires Base for USDC EIP-3009 support",
-    },
-    "investor-memo": {
-      ...base,
-      memo_sections: {
-        thesis: "AI-native development layer for Base — the only grounded, monetizable AI toolset for the fastest-growing EVM ecosystem",
-        market: "$2B+ developer tools TAM on Base. 10M+ users. 200M+ transactions/month.",
-        product: "5 AI commands + 34 Hub tools + x402 micropayments. Grounded in 34 verified Base skill files.",
-        traction: "Token live on Uniswap v4. 800+ Telegram. ~$200 MRR from x402. Blue Hub shipped.",
-        moat: "Skill file depth + x402 monetization rails + Base-native grounding = 6-month head start",
-        ask: "$500k pre-seed · SAFE · $5M cap",
-      },
-      investor_fit: ["Coinbase Ventures", "Base Ecosystem Fund", "AI-native angels"],
-    },
-    "token-distribution-plan": {
-      ...base,
-      recommended_allocation: {
-        community_rewards: "40%",
-        team_and_advisors: "20%",
-        ecosystem_treasury: "20%",
-        liquidity: "12%",
-        investors: "8%",
-      },
-      vesting: "Team: 2yr cliff + 2yr linear. Investors: 6mo cliff + 18mo linear",
-      community_release: "Weekly builder rewards, Hub tool incentives, staking yield",
-      notes: "Front-load community allocation to drive adoption before team unlock",
-    },
-    "agent-performance": {
-      ...base,
-      performance_score: 78,
-      revenue_grade: "B+",
-      engagement_grade: "A-",
-      retention_grade: "B",
-      monthly_revenue: "$200 (x402 micropayments)",
-      active_users_30d: 143,
-      tool_runs_30d: 412,
-      top_tools: ["Token Pick Signal", "Market Fit Validator", "Investor Memo"],
-      bottleneck: "Discovery — most users find via Telegram, not organic search",
-      recommendation: "Add SEO landing pages per tool. Each tool = indexable page.",
-    },
-    "agent-collab-match": {
-      ...base,
-      top_matches: [
-        { agent: "Aeon", synergy: "high", collab: "Market signals + Blue strategy = 3-agent consensus already live" },
-        { agent: "MiroShark", synergy: "high", collab: "Crowd sentiment + builder intelligence = launch readiness tools" },
-        { agent: "Cookie3", synergy: "medium", collab: "Onchain analytics + AI recommendations" },
-      ],
-      recommended_collab: "Joint tool with Aeon: Token Launch Intel — Aeon market data + Blue strategic framing",
-      distribution_angle: "Cross-post to each agent's community = 3x reach per tool launch",
-    },
-    "repo-health": {
-      ...base,
-      health_score: 74,
-      grade: "B+",
-      code_quality: "good",
-      documentation: "partial",
-      ci_cd: "vercel deploy on push",
-      test_coverage: "low — needs unit tests for core packages",
-      issues: ["No tests for packages/core", "CLAUDE.md good but README outdated", "No contributing guide"],
-      quick_wins: ["Add jest tests for schemas.ts", "Update README with setup guide", "Add GitHub Actions CI"],
-    },
-    "community-sentiment": {
-      ...base,
-      overall_sentiment: "positive",
-      sentiment_score: 73,
-      telegram_sentiment: "high — active community, engaged builders",
-      twitter_sentiment: "neutral to positive — growing impressions",
-      top_themes: ["Excited about Blue Hub launch", "Requesting more tools", "Questions about token utility"],
-      alerts: [],
-      trend: "improving",
-      recommendation: "Amplify Hub launch content. Community ready for more tool announcements.",
-    },
-    "community-growth-playbook": {
-      ...base,
-      current_assessment: "800 Telegram, 1.2k Twitter — solid early traction",
-      growth_target: "5,000 Telegram by Q3 2026",
-      top_tactics: [
-        "Weekly builder spotlights (tag builders using Blue Agent)",
-        "Ship result threads — post real outputs from Hub tools",
-        "Co-host Base ecosystem spaces with Bankr/Aeon",
-        "Reward top community members with $BLUEAGENT",
-      ],
-      content_cadence: "3x Twitter/week · 1x Telegram digest/week · 1x case study/month",
-      estimated_growth: "+300% in 90 days with consistent execution",
-    },
-    "thread-intelligence": {
-      ...base,
-      hook: "We just shipped 34 AI tools for Base builders. Each one costs $0.15–$0.50 to run. Here's what they can do →",
-      thread_outline: [
-        "1/ Blue Hub is live — 34 tools, 3-agent consensus (Blue + Aeon + MiroShark)",
-        "2/ Token Pick Signal: AI consensus on highest-conviction Base setup right now",
-        "3/ Market Fit Validator: Score your product with swarm intelligence",
-        "4/ Investor Memo: Full memo in 30 seconds, $0.35",
-        "5/ All pay-per-use via x402 USDC. No subscriptions. No API keys.",
-        "6/ Try it: blueagent.dev/hub",
-      ],
-      estimated_engagement: "2,000–8,000 impressions, 80–200 engagements",
-      best_time: "Tuesday–Thursday, 9am–11am EST",
-    },
-    "builder-brand-score": {
-      ...base,
-      brand_score: 68,
-      grade: "B",
-      visibility: "growing",
-      credibility: "high — shipping consistently",
-      community: "engaged",
-      gaps: ["Limited SEO presence", "No long-form content yet", "Underutilizing video/demos"],
-      strengths: ["Consistent builder narrative", "Active on X", "Strong product shipping velocity"],
-      playbook: ["Post 1 demo video/week", "Write 1 deep-dive thread/month", "Get featured in Base newsletter"],
-    },
-    "defi-opportunity": {
-      ...base,
-      top_opportunities: [
-        { protocol: "Aerodrome", type: "LP yield", apy: "12–28%", risk: "low", recommendation: "USDC/ETH stable LP" },
-        { protocol: "Aave Base", type: "Supply yield", apy: "4.2%", risk: "low", recommendation: "USDC supply" },
-        { protocol: "Uniswap v4 Base", type: "Concentrated LP", apy: "35–80%", risk: "medium", recommendation: "ETH/USDC 0.05% pool" },
-      ],
-      signal: "DeFi yields on Base above Ethereum mainnet by 2–4x — capital efficiency window open",
-      avoid: "New unaudited forks. Stick to battle-tested protocols.",
-    },
-    "builder-deep-dd": {
-      ...base,
-      builder: "@madebyshun",
-      credibility_score: 88,
-      onchain_activity: "high — consistent deployments on Base",
-      shipped_products: ["Blue Agent", "Blue Hub (34 tools)", "BlueMarket", "x402 API services"],
-      token: "$BLUEAGENT on Uniswap v4 Base",
-      community: "800+ Telegram, 1.2k Twitter",
-      verdict: "high conviction builder — consistent shipper, Base-native, real revenue",
-      risks: ["Solo founder execution risk", "Bankr dependency"],
-    },
-    "whale-copy-signal": {
-      ...base,
-      signal: "accumulate",
-      whale_wallet: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
-      recent_moves: [
-        { action: "bought", token: "WETH", amount: "$45,000", timing: "6h ago" },
-        { action: "added LP", protocol: "Aerodrome", amount: "$120,000", timing: "1d ago" },
-      ],
-      copy_entry: "ETH at current — whale avg $2,280",
-      confidence: "high",
-      notes: "Whale has 94% win rate on Base over 90 days",
-    },
-    "token-momentum-scanner": {
-      ...base,
-      top_movers: [
-        { token: "$BLUEAGENT", change_4h: "+18%", volume_spike: "+420%", signal: "breakout" },
-        { token: "$VIRTUAL", change_4h: "+11%", volume_spike: "+180%", signal: "add" },
-        { token: "$AERO", change_4h: "+7%", volume_spike: "+95%", signal: "watch" },
-      ],
-      market_condition: "risk-on",
-      narrative_driving: "AI agent tokens + Base DeFi rotation",
-      recommendation: "Scale into $BLUEAGENT and $VIRTUAL on any dip",
-    },
-    "portfolio-rebalancer": {
-      ...base,
-      current_assessment: "Overweight ETH, underweight AI agent exposure",
-      recommended_allocation: { ETH: "35%", USDC: "25%", BLUEAGENT: "20%", cbBTC: "10%, other_base_defi: 10%" },
-      actions: [
-        { action: "reduce", asset: "ETH", from: "40%", to: "35%" },
-        { action: "add", asset: "BLUEAGENT", from: "20%", to: "25%" },
-        { action: "add", asset: "Aerodrome LP yield", amount: "10%" },
-      ],
-      rationale: "AI agent narrative building. ETH rangebound. USDC buffer for opportunities.",
-    },
-    "agent-revenue-optimizer": {
-      ...base,
-      current_revenue: "$200/month",
-      revenue_potential: "$2,400–$6,000/month",
-      top_levers: [
-        { lever: "Bundle pricing", impact: "high", action: "Offer 5-tool bundle at $0.99 vs $1.25 individual" },
-        { lever: "Bankr marketplace listing", impact: "high", action: "List all 34 tools with descriptions" },
-        { lever: "Subscriber discount", impact: "medium", action: "10% off for $BLUEAGENT stakers" },
-      ],
-      optimal_price_per_call: "$0.25 average",
-      monthly_target: "$1,000 MRR by end of Q2",
-    },
-    "agent-token-strategy": {
-      ...base,
-      token: "$BLUEAGENT",
-      utility_score: 72,
-      current_utility: ["Staking for Blue Market access", "Weekly rewards to builders"],
-      recommended_additions: [
-        { utility: "Hub tool discounts (10–20%)", priority: "high", effort: "low" },
-        { utility: "Governance over skill file additions", priority: "medium", effort: "medium" },
-        { utility: "Revenue share from x402 payments", priority: "high", effort: "medium" },
-      ],
-      tokenomics_health: "good",
-      launch_readiness: "yes",
-    },
-    "multi-agent-workflow": {
-      ...base,
-      workflow_name: "Base Ecosystem Weekly Intel",
-      agents: ["Aeon", "MiroShark", "Blue Agent"],
-      steps: [
-        { step: 1, agent: "Aeon", action: "Scan Base token movers + volume anomalies" },
-        { step: 2, agent: "MiroShark", action: "Model crowd sentiment from CT + Telegram signals" },
-        { step: 3, agent: "Blue Agent", action: "Synthesize into actionable brief with builder context" },
-      ],
-      output: "Weekly Base ecosystem report with signal, narrative, and 1 action",
-      automation: "Trigger every Monday 8am UTC via Vercel cron",
-      estimated_value: "$500–$2,000/week in builder intelligence",
-    },
-    "base-grant-finder": {
-      ...base,
-      active_programs: [
-        { name: "Base Ecosystem Fund", amount: "$5k–$50k", deadline: "rolling", fit: "high" },
-        { name: "Coinbase Ventures Scout Program", amount: "equity", deadline: "ongoing", fit: "medium" },
-        { name: "Gitcoin Grants Round 22", amount: "community matching", deadline: "Q3 2026", fit: "high" },
-        { name: "Optimism RetroPGF", amount: "variable", deadline: "Q4 2026", fit: "medium" },
-      ],
-      recommended_apply: ["Base Ecosystem Fund", "Gitcoin Round 22"],
-      application_angle: "AI tooling infrastructure for Base builders — measurable impact on Base ecosystem growth",
-    },
-    "base-protocol-comparison": {
-      ...base,
-      category: "DEX",
-      comparison: [
-        { protocol: "Aerodrome", tvl: "$800M", fees: "0.01–0.3%", best_for: "Stablecoin LPs, USDC pairs" },
-        { protocol: "Uniswap v4 Base", tvl: "$450M", fees: "0.01–1%", best_for: "Concentrated liquidity, high-volume pairs" },
-        { protocol: "Curve Base", tvl: "$120M", fees: "0.04%", best_for: "Stable swaps, cbBTC" },
-      ],
-      recommendation: "Aerodrome for liquidity depth + USDC pairs. Uniswap v4 for agent token launch.",
-    },
-    "base-builder-network-match": {
-      ...base,
-      matches: [
-        { builder: "@bankrbot", skills: "AI/LLM, agent infrastructure", synergy: "very high" },
-        { builder: "@aerodrome_fi", skills: "DeFi, liquidity", synergy: "high" },
-        { builder: "@coinbase_dev", skills: "Smart Wallet, CDP", synergy: "high" },
-      ],
-      best_match: "@bankrbot — already collabing, deepen technical integration",
-      events: ["Base Builder Summit (June 2026)", "ETH NYC side event (August 2026)"],
-    },
-    "wallet-strategy-analyzer": {
-      ...base,
-      wallet_type: "DeFi yield optimizer",
-      activity_score: 87,
-      win_rate: "71%",
-      avg_hold_time: "12 days",
-      top_strategies: ["Aerodrome LP rotation", "USDC yield stacking", "Momentum trading Base tokens"],
-      pnl_30d: "+18.4%",
-      pnl_90d: "+41.2%",
-      risk_profile: "medium",
-      alpha_signal: "Wallet entered $BLUEAGENT 3 days before +40% move",
-    },
-    "protocol-risk-monitor": {
-      ...base,
-      protocol: "Aerodrome",
-      risk_score: 28,
-      risk_level: "low",
-      tvl_7d: "+4.2%",
-      smart_contract_risk: "low — audited, battle-tested",
-      liquidity_risk: "low — deepest Base DEX",
-      governance_risk: "low",
-      exit_signal: "hold",
-      alerts: [],
-      recommendation: "Safe to maintain position. No risk signals detected.",
-    },
-  };
-
-  return MOCKS[tool.id] ?? {
-    ...base,
-    analysis: `${tool.name} — preview result`,
-    status: "complete",
-    signal: "positive",
-    summary: `Analysis for ${tool.name} complete. Core findings validated against current Base ecosystem conditions.`,
-    recommendation: "Connect wallet and pay with USDC to get live AI-generated results.",
-  };
-}
-
-const IS_DEV = process.env.NODE_ENV === "development";
 
 // ─── Agent scan log animation ─────────────────────────────────────────────────
 
@@ -923,28 +524,18 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-
-      if (res.status >= 500) {
-        await new Promise(r => setTimeout(r, 700));
-        const r = getMockResult(tool);
-        setResult(r); setIsMock(true); setMockReason("service-down");
-        setStep("done");
-        onResult({ result: r, isMock: true, mockReason: "service-down" });
+      const data = await res.json().catch(() => ({})) as Record<string,unknown>;
+      if (!res.ok) {
+        setErr((data.message as string) ?? (data.error as string) ?? "Service temporarily unavailable");
+        setStep("error");
         return;
       }
-
-      const data = await res.json() as Record<string,unknown>;
-      if (!res.ok) { setErr((data.message as string) ?? (data.error as string) ?? "Request failed"); setStep("error"); return; }
       setResult(data);
       setStep("done");
       onResult({ result: data, isMock: false, mockReason: "dev" });
-
-    } catch {
-      await new Promise(r => setTimeout(r, 700));
-      const r = getMockResult(tool);
-      setResult(r); setIsMock(true); setMockReason("service-down");
-      setStep("done");
-      onResult({ result: r, isMock: true, mockReason: "service-down" });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Request failed");
+      setStep("error");
     }
   }
 
@@ -1120,9 +711,9 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
 
 // ─── Empty / browse state ─────────────────────────────────────────────────────
 
-function EmptyState({ onSelect }: { onSelect: (t: Tool) => void }) {
-  const featuredTools = TOOLS.filter(t => FEATURED_IDS.includes(t.id));
-  const otherTools    = TOOLS.filter(t => !FEATURED_IDS.includes(t.id));
+function EmptyState({ onSelect, featuredIds }: { onSelect: (t: Tool) => void; featuredIds: Set<string> }) {
+  const featuredTools = TOOLS.filter(t => featuredIds.has(t.id));
+  const otherTools    = TOOLS.filter(t => !featuredIds.has(t.id));
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -1232,10 +823,25 @@ export default function HubPage() {
   const [selected, setSelected] = useState<Tool | null>(null);
   const [search, setSearch]   = useState("");
   const [cache, setCache]     = useState<Map<string, ToolResult>>(new Map());
+  const [usage, setUsage]     = useState<Record<string, number>>({});
 
   function saveResult(toolId: string, r: ToolResult) {
     setCache(prev => new Map(prev).set(toolId, r));
   }
+
+  // ── Fetch real usage counts → dynamic Featured (top by paid runs) ─────────
+  useEffect(() => {
+    fetch("/api/usage").then(r => r.json()).then(setUsage).catch(() => {});
+  }, []);
+
+  const featuredIds = useMemo<Set<string>>(() => {
+    const ranked = Object.entries(usage)
+      .filter(([, c]) => c > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([id]) => id);
+    return new Set(ranked.length >= 1 ? ranked : FEATURED_IDS); // fallback to static until traffic
+  }, [usage]);
 
   // ── On mount: decode shared result from URL hash ──────────────────────────
   useEffect(() => {
@@ -1302,7 +908,7 @@ export default function HubPage() {
               <p className="font-mono text-[10px] text-slate-700 px-6 py-4">No tools found</p>
             )}
             {filtered.map(tool => {
-              const isFeatured = FEATURED_IDS.includes(tool.id);
+              const isFeatured = featuredIds.has(tool.id);
               const hasCached  = cache.has(tool.id);
               return (
                 <button key={tool.id} onClick={() => setSelected(tool)}
@@ -1365,7 +971,7 @@ export default function HubPage() {
                 cached={cache.get(selected.id) ?? null}
                 onResult={(r) => saveResult(selected.id, r)}
               />
-            : <div className="overflow-y-auto flex-1"><EmptyState onSelect={setSelected} /></div>
+            : <div className="overflow-y-auto flex-1"><EmptyState onSelect={setSelected} featuredIds={featuredIds} /></div>
           }
         </main>
 
