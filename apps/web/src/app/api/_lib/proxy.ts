@@ -3,17 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 /**
  * Shared bankr.bot x402 proxy.
  *
- * Protocol-correct flow when X-Payment present + fallback available:
- *   1. Forward request WITH X-PAYMENT to Bankr endpoint
- *   2. Bankr verifies payment, logs to dashboard, settles USDC
- *   3. If Bankr returns 200      → return their result
- *   4. If Bankr returns 402      → payment invalid, return 402 to client
- *   5. If Bankr handler broken   → run our local 3-agent pipeline (fallback)
- *
- * Other cases:
- *   - No X-Payment + fallback    → run locally (free / dev mode)
- *   - No X-Payment + no fallback → proxy to Bankr (returns 402 to client)
- *   - X-Payment + no fallback    → forward to Bankr for full handling
+ * Simple flow:
+ *   - No X-Payment  → forward to Bankr (no payment) → Bankr returns 402 requirements
+ *   - X-Payment     → forward to Bankr with payment → Bankr verifies + runs tool
+ *                     If Bankr handler broken (5xx) → run local fallback pipeline
+ *                     If Bankr network error        → run local fallback pipeline
+ *                     If Bankr 402 (bad payment)    → pass 402 to client
  */
 
 export async function proxyTool(
@@ -23,74 +18,48 @@ export async function proxyTool(
 ): Promise<NextResponse> {
   const xPayment = req.headers.get("x-payment") ?? req.headers.get("X-Payment");
 
-  // Parse body once — shared across branches
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch {}
 
-  // ── No payment + local fallback → run locally (free) ─────────────────────
-  if (!xPayment && fallback) {
-    console.info(`[proxy] no payment → local: ${endpoint}`);
-    try {
-      return await fallback(body);
-    } catch (e) {
-      console.error(`[proxy] local fallback threw:`, e);
-      return NextResponse.json({ error: "Tool error", message: (e as Error).message }, { status: 500 });
-    }
-  }
-
-  // ── Forward to Bankr with X-PAYMENT ──────────────────────────────────────
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (xPayment) headers["X-Payment"] = xPayment;
 
   let upstream: Response;
   try {
     upstream = await fetch(endpoint, {
-      method: "POST",
+      method:  "POST",
       headers,
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(60_000),
+      body:    JSON.stringify(body),
+      signal:  AbortSignal.timeout(60_000),
     });
   } catch (e) {
-    // Network error — if fallback available, run locally
-    if (fallback) {
-      console.warn(`[proxy] Bankr unreachable, running local: ${(e as Error).message}`);
-      try {
-        return await fallback(body);
-      } catch (fe) {
-        return NextResponse.json({ error: "Tool error", message: (fe as Error).message }, { status: 500 });
-      }
+    // Bankr network error — fallback locally if X-PAYMENT was present
+    if (xPayment && fallback) {
+      console.warn(`[proxy] Bankr unreachable → local fallback: ${(e as Error).message}`);
+      try { return await fallback(body); }
+      catch (fe) { return NextResponse.json({ error: "Tool error", message: (fe as Error).message }, { status: 500 }); }
     }
-    return NextResponse.json(
-      { error: "Could not reach service", message: (e as Error).message },
-      { status: 502 }
-    );
+    return NextResponse.json({ error: "Service unavailable", message: (e as Error).message }, { status: 502 });
   }
 
-  // 402 — payment required or invalid → pass through to client
+  // 402 — no payment or bad payment → pass through to client
   if (upstream.status === 402) {
     const data = await upstream.json().catch(() => ({}));
-    console.info(`[proxy] Bankr → 402 (payment required)`);
     return NextResponse.json(data, { status: 402 });
   }
 
-  // 200 — Bankr handled it successfully (payment verified + settled)
+  // 200 — Bankr handled it (payment verified + settled)
   if (upstream.ok) {
     const data = await upstream.json().catch(() => ({ error: "Failed to parse response" }));
-    console.info(`[proxy] Bankr → 200 OK`);
     return NextResponse.json(data);
   }
 
-  // Non-200, non-402 (handler broken) — fall back to local pipeline if available
+  // 5xx — Bankr handler broken → local fallback if X-PAYMENT was sent
   const errorBody = await upstream.json().catch(() => ({}));
-  console.warn(`[proxy] Bankr → ${upstream.status} (handler broken):`, JSON.stringify(errorBody));
-
-  if (fallback) {
-    console.info(`[proxy] falling back to local pipeline: ${endpoint}`);
-    try {
-      return await fallback(body);
-    } catch (fe) {
-      return NextResponse.json({ error: "Tool error", message: (fe as Error).message }, { status: 500 });
-    }
+  console.warn(`[proxy] Bankr → ${upstream.status} → local fallback`);
+  if (xPayment && fallback) {
+    try { return await fallback(body); }
+    catch (fe) { return NextResponse.json({ error: "Tool error", message: (fe as Error).message }, { status: 500 }); }
   }
 
   return NextResponse.json(errorBody, { status: upstream.status });
