@@ -148,7 +148,8 @@ const VERDICT_KEYS   = ["verdict", "blue_verdict", "recommendation", "timing", "
 const SCORE_KEYS     = ["score", "readiness_score", "confidence", "bull", "bear", "neutral"];
 const STRENGTHS_KEYS = ["strengths", "opportunities", "pros", "positives"];
 const RISKS_KEYS     = ["risks", "blockers", "weaknesses", "concerns", "risk_flags", "action_items"];
-const SKIP_KEYS      = ["tool", "timestamp", "chain"];
+const SKIP_KEYS      = ["tool", "timestamp", "chain", "_settle", "period", "data_source", "tokens_analyzed", "headline"];
+const TITLE_KEYS     = ["token", "symbol", "ticker", "name", "protocol", "title", "handle", "project"];
 
 function SmartValue({ k, v }: { k: string; v: unknown }) {
   if (v === null || v === undefined) return <span className="text-slate-600 text-xs">—</span>;
@@ -188,15 +189,25 @@ function SmartValue({ k, v }: { k: string; v: unknown }) {
     return <ResultObj obj={v as Record<string, unknown>} nested />;
   }
 
-  // Object array (fallback)
+  // Object array — render as cards with a prominent title field
   if (Array.isArray(v)) {
     return (
       <div className="space-y-2 mt-1">
-        {(v as Record<string,unknown>[]).map((obj, i) => (
-          <div key={i} className="border border-[#1A1A2E] rounded p-2">
-            <ResultObj obj={obj} nested />
-          </div>
-        ))}
+        {(v as Record<string,unknown>[]).map((obj, i) => {
+          const titleKey = TITLE_KEYS.find(tk => obj?.[tk]);
+          const title = titleKey ? String(obj[titleKey]) : null;
+          const rest = titleKey
+            ? Object.fromEntries(Object.entries(obj).filter(([kk]) => kk !== titleKey))
+            : obj;
+          return (
+            <div key={i} className="border border-[#1A1A2E] rounded-lg p-2.5 bg-[#0A0A12]">
+              {title && (
+                <div className="font-mono text-sm font-bold text-[#4FC3F7] mb-1.5">{title}</div>
+              )}
+              <ResultObj obj={rest} nested />
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -214,15 +225,23 @@ function SmartValue({ k, v }: { k: string; v: unknown }) {
 
 function ResultObj({ obj, nested = false }: { obj: Record<string, unknown>; nested?: boolean }) {
   const SKIP = nested ? [] : SKIP_KEYS;
+  const headline = !nested && typeof obj.headline === "string" ? (obj.headline as string) : null;
   return (
-    <dl className={nested ? "space-y-1.5" : "space-y-4"}>
-      {Object.entries(obj).filter(([k]) => !SKIP.includes(k)).map(([k, v]) => (
-        <div key={k}>
-          <dt className="font-mono text-[10px] text-slate-500 uppercase tracking-wider mb-1">{k.replace(/_/g," ")}</dt>
-          <dd><SmartValue k={k} v={v} /></dd>
-        </div>
-      ))}
-    </dl>
+    <>
+      {headline && (
+        <p className="text-lg font-semibold text-white leading-snug mb-5 pb-4 border-b border-[#1A1A2E]">
+          {headline}
+        </p>
+      )}
+      <dl className={nested ? "space-y-1.5" : "space-y-4"}>
+        {Object.entries(obj).filter(([k]) => !SKIP.includes(k)).map(([k, v]) => (
+          <div key={k}>
+            <dt className="font-mono text-[10px] text-slate-500 uppercase tracking-wider mb-1">{k.replace(/_/g," ")}</dt>
+            <dd><SmartValue k={k} v={v} /></dd>
+          </div>
+        ))}
+      </dl>
+    </>
   );
 }
 
@@ -1052,6 +1071,11 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                     cached
                   </span>
                 )}
+                {!isMock && (result._settle as { ok?: boolean } | undefined)?.ok && (
+                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-[#34D399]/30 text-[#34D399] ml-1">
+                    ✓ Paid {tool.price}
+                  </span>
+                )}
                 <div className="ml-auto flex items-center gap-2">
                   <span className="font-mono text-xs text-slate-700 mr-1">Blue · Aeon · MiroShark</span>
                   <button
@@ -1073,9 +1097,16 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                 </div>
               </div>
               <ResultObj obj={result} />
-              {isMock && (
+              {isMock ? (
                 <p className="font-mono text-[10px] text-slate-700 mt-6 pt-4 border-t border-[#1A1A2E]">
                   preview data — live results powered by 3-agent consensus
+                </p>
+              ) : (
+                <p className="font-mono text-[10px] text-slate-700 mt-6 pt-4 border-t border-[#1A1A2E]">
+                  {[
+                    result.data_source ? `source: ${result.data_source}` : "3-agent consensus · Blue · Aeon · MiroShark",
+                    result.timestamp ? new Date(result.timestamp as string).toLocaleString() : null,
+                  ].filter(Boolean).join("  ·  ")}
                 </p>
               )}
             </div>
