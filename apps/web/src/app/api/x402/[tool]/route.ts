@@ -60,11 +60,27 @@ async function handle(
   const requirements = buildRequirements(String(priceUnits));
   const xPayment = req.headers.get("x-payment") ?? req.headers.get("X-Payment");
 
-  // No payment → 402 requirements
+  // No payment → 402 with self-describing metadata (name, description, inputs)
   if (!xPayment) {
+    const meta = AGENT_TOOLS.find(t => t.id === tool);
     return NextResponse.json(
-      { x402Version: 2, error: "Payment Required", accepts: [requirements] },
-      { status: 402 }
+      {
+        x402Version: 2,
+        error: "Payment Required",
+        accepts: [requirements],
+        tool: meta ? {
+          id: meta.id,
+          name: meta.name,
+          description: meta.description,
+          price: meta.price,
+          input: {
+            type: "object",
+            properties: Object.fromEntries(meta.inputs.map(i => [i.key, { type: "string", description: i.label }])),
+            required: meta.inputs.filter(i => i.required).map(i => i.key),
+          },
+        } : undefined,
+      },
+      { status: 402, headers: { "Access-Control-Allow-Origin": "*" } }
     );
   }
 
