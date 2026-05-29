@@ -747,9 +747,10 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
 
 // ─── Empty / browse state ─────────────────────────────────────────────────────
 
-function EmptyState({ onSelect, featuredIds, usage }: { onSelect: (t: Tool) => void; featuredIds: Set<string>; usage: Record<string, number> }) {
+function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t: Tool) => void; featuredIds: Set<string>; usage: Record<string, number>; recentIds: string[] }) {
   const featuredTools = TOOLS.filter(t => featuredIds.has(t.id));
   const otherTools    = TOOLS.filter(t => !featuredIds.has(t.id));
+  const recentTools   = recentIds.map(id => TOOLS.find(t => t.id === id)).filter((t): t is Tool => !!t).reverse();
   const totalRuns = Object.values(usage).reduce((a, b) => a + b, 0);
   const usdcPaid  = TOOLS.reduce((s, t) => s + (usage[t.id] ?? 0) * (parseFloat(t.price.replace("$", "")) || 0), 0);
   const runsOf = (id: string) => usage[id] ?? 0;
@@ -818,6 +819,26 @@ function EmptyState({ onSelect, featuredIds, usage }: { onSelect: (t: Tool) => v
 
       {/* ── Content grid ── */}
       <div className="flex-1 px-6 py-5 overflow-y-auto">
+
+        {/* Your recent results (cached, free to re-open) */}
+        {recentTools.length > 0 && (
+          <>
+            <div className="flex items-center gap-3 mb-3">
+              <p className="font-mono text-[10px] text-[#34D399] tracking-widest">// YOUR RECENT RESULTS</p>
+              <div className="flex-1 h-px bg-[#34D399]/10" />
+              <span className="font-mono text-[9px] text-slate-700">free to re-open</span>
+            </div>
+            <div className="flex flex-wrap gap-2 mb-5">
+              {recentTools.map(tool => (
+                <button key={tool.id} onClick={() => onSelect(tool)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#34D399]/20 bg-[#34D399]/5 hover:bg-[#34D399]/10 hover:border-[#34D399]/40 transition-all">
+                  <span className="w-1 h-1 rounded-full bg-[#34D399]" />
+                  <span className="font-mono text-[11px] text-slate-200">{tool.name}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Featured for founders */}
         <div className="flex items-center gap-3 mb-3">
@@ -904,9 +925,23 @@ export default function HubPage() {
   const [cache, setCache]     = useState<Map<string, ToolResult>>(new Map());
   const [usage, setUsage]     = useState<Record<string, number>>({});
 
+  const RESULTS_KEY = "bluehub_results";
+
   function saveResult(toolId: string, r: ToolResult) {
-    setCache(prev => new Map(prev).set(toolId, r));
+    setCache(prev => {
+      const next = new Map(prev).set(toolId, r);
+      try { localStorage.setItem(RESULTS_KEY, JSON.stringify(Object.fromEntries(next))); } catch {}
+      return next;
+    });
   }
+
+  // ── Load persisted results so paid runs survive refresh ───────────────────
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(RESULTS_KEY);
+      if (raw) setCache(new Map(Object.entries(JSON.parse(raw) as Record<string, ToolResult>)));
+    } catch {}
+  }, []);
 
   // ── Fetch real usage counts → dynamic Featured (top by paid runs) ─────────
   useEffect(() => {
@@ -946,7 +981,7 @@ export default function HubPage() {
     const tool = TOOLS.find(t => t.id === shared.toolId);
     if (!tool) return;
     const r: ToolResult = { result: shared.result, isMock: shared.isMock, mockReason: shared.mockReason };
-    setCache(new Map([[shared.toolId, r]]));
+    setCache(prev => new Map(prev).set(shared.toolId, r));
     setSelected(tool);
     // clean hash from URL without reload
     window.history.replaceState(null, "", window.location.pathname);
@@ -1064,7 +1099,7 @@ export default function HubPage() {
                 cached={cache.get(selected.id) ?? null}
                 onResult={(r) => saveResult(selected.id, r)}
               />
-            : <div className="overflow-y-auto flex-1"><EmptyState onSelect={setSelected} featuredIds={featuredIds} usage={usage} /></div>
+            : <div className="overflow-y-auto flex-1"><EmptyState onSelect={setSelected} featuredIds={featuredIds} usage={usage} recentIds={[...cache.keys()]} /></div>
           }
         </main>
 
