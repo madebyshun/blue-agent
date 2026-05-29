@@ -899,7 +899,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           body:    JSON.stringify(tool.x402Body(body)),
         });
         const d2 = await r2.json() as Record<string,unknown>;
-        if (!r2.ok) throw new Error(String(d2.error ?? `Payment failed ${r2.status}`));
+        if (!r2.ok) throw new Error([d2.error, d2.message].filter(Boolean).join(": ") || `Payment failed ${r2.status}`);
         const res2 = (d2.result ?? d2) as Record<string,unknown>;
         setResult(res2); setStep("done");
         onResult({ result: res2, isMock: false, mockReason: "dev" });
