@@ -811,21 +811,22 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
       try {
         setStep("calling");
 
-        // Step 1: call tool without payment → Bankr returns 402 requirements
-        const r1 = await fetch(`/api/${tool.id}`, {
+        const bankrUrl = tool.x402Url ?? `https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/${tool.id}`;
+
+        // Step 1: call Bankr directly (no payment) → get 402 requirements
+        const r1 = await fetch(bankrUrl, {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
           body:    JSON.stringify(tool.x402Body(body)),
         });
         if (r1.status !== 402) {
-          // Already got a result (shouldn't happen, but handle gracefully)
           const res = await r1.json() as Record<string,unknown>;
           setResult(res); setStep("done");
           onResult({ result: res, isMock: false, mockReason: "dev" });
           return;
         }
 
-        // Step 2: parse Bankr 402 requirements
+        // Step 2: parse 402 requirements
         const d1 = await r1.json() as Record<string,unknown>;
         const accepts = d1.accepts as Record<string,unknown>[] | undefined;
         if (!accepts?.length) throw new Error("No payment requirements in 402 response");
@@ -874,12 +875,11 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
 
         setStep("paying");
 
-        // Step 4: call tool WITH X-PAYMENT header → Bankr verifies + settles
-        // If Bankr handler broken → proxyTool falls back to local pipeline
+        // Step 4: call Bankr WITH X-PAYMENT — Bankr verifies, settles USDC, runs tool
         const xPayment = btoa(JSON.stringify({
-          x402Version: (d1.x402Version as number) ?? 1,
+          x402Version: (d1.x402Version as number) ?? 2,
           scheme:      req.scheme  ?? "exact",
-          network:     req.network ?? "base",
+          network:     req.network ?? "eip155:8453",
           payload: {
             signature,
             authorization: {
@@ -893,13 +893,13 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           },
         }));
 
-        const r2 = await fetch(`/api/${tool.id}`, {
+        const r2 = await fetch(bankrUrl, {
           method:  "POST",
           headers: { "Content-Type": "application/json", "X-PAYMENT": xPayment },
           body:    JSON.stringify(tool.x402Body(body)),
         });
         const d2 = await r2.json() as Record<string,unknown>;
-        if (!r2.ok) throw new Error([d2.error, d2.message].filter(Boolean).join(": ") || `Payment failed ${r2.status}`);
+        if (!r2.ok) throw new Error([d2.error, d2.message, d2.reason].filter(Boolean).join(": ") || `Payment failed ${r2.status}`);
         const res2 = (d2.result ?? d2) as Record<string,unknown>;
         setResult(res2); setStep("done");
         onResult({ result: res2, isMock: false, mockReason: "dev" });
