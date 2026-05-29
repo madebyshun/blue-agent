@@ -560,11 +560,11 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         </div>
       </div>
 
-      {/* 2-column body */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* 2-column body — stacks on mobile, side-by-side on desktop */}
+      <div className="flex flex-col lg:flex-row flex-1 overflow-y-auto lg:overflow-hidden">
 
         {/* ── Left panel: tool info + form ── */}
-        <div className="w-[400px] xl:w-[440px] shrink-0 border-r border-[#1A1A2E] overflow-y-auto flex flex-col">
+        <div className="w-full lg:w-[400px] xl:w-[440px] shrink-0 border-b lg:border-b-0 lg:border-r border-[#1A1A2E] lg:overflow-y-auto flex flex-col">
 
           {/* Tool header */}
           <div className="px-6 pt-6 pb-5 border-b border-[#1A1A2E]">
@@ -628,7 +628,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         </div>
 
         {/* ── Right panel: output ── */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 lg:overflow-y-auto min-h-[40vh] lg:min-h-0">
           {loading && <AgentScanLog tool={tool} />}
 
           {step === "idle" && !result && (
@@ -733,12 +733,14 @@ function EmptyState({ onSelect, featuredIds, usage }: { onSelect: (t: Tool) => v
           </div>
         </div>
         <div className="flex items-center gap-4">
-          {(["blue","aeon","miroshark"] as Agent[]).map(a => (
-            <div key={a} className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-              <span className="font-mono text-xs font-bold" style={{ color: AGENT_COLORS[a] }}>{AGENT_LABELS[a]}</span>
-            </div>
-          ))}
+          <div className="hidden sm:flex items-center gap-4">
+            {(["blue","aeon","miroshark"] as Agent[]).map(a => (
+              <div key={a} className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
+                <span className="font-mono text-xs font-bold" style={{ color: AGENT_COLORS[a] }}>{AGENT_LABELS[a]}</span>
+              </div>
+            ))}
+          </div>
           <Link href="/hub/registry"
             className="flex items-center gap-1.5 px-3 py-1.5 border border-[#1A1A2E] hover:border-[#34D399]/20 rounded-lg font-mono text-[10px] text-slate-500 hover:text-[#34D399] transition-all">
             <span className="w-1 h-1 rounded-full bg-[#34D399] animate-pulse" />
