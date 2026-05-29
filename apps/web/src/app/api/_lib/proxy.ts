@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const FACILITATOR = "https://facilitator.x402.org";
+const FACILITATOR = "https://x402.org/facilitator";
 const USDC        = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
 /**
