@@ -37,9 +37,16 @@ export async function proxyTool(
     return NextResponse.json({ error: "Service unavailable", message: (e as Error).message }, { status: 502 });
   }
 
-  // 200 — success
+  // 200 — check if Bankr handler actually ran or returned an "unavailable" error
   if (upstream.ok) {
     const data = await upstream.json().catch(() => ({ error: "Failed to parse response" }));
+    const isUnavailable = typeof data.error === "string" &&
+      (data.error.includes("unavailable") || data.error.includes("Endpoint"));
+    if (isUnavailable && fallback) {
+      console.warn("[proxy] Bankr handler unavailable → local fallback");
+      try { return await fallback(body); }
+      catch (fe) { return NextResponse.json({ error: "Tool error", message: (fe as Error).message }, { status: 500 }); }
+    }
     return NextResponse.json(data);
   }
 
