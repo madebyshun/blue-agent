@@ -876,12 +876,13 @@ export default function HubPage() {
   }, []);
 
   const featuredIds = useMemo<Set<string>>(() => {
+    // Most-run tools first, then pad with static FEATURED_IDS so we always show 4
     const ranked = Object.entries(usage)
       .filter(([, c]) => c > 0)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
       .map(([id]) => id);
-    return new Set(ranked.length >= 1 ? ranked : FEATURED_IDS); // fallback to static until traffic
+    const combined = [...ranked, ...FEATURED_IDS].filter((id, i, arr) => arr.indexOf(id) === i);
+    return new Set(combined.slice(0, 4));
   }, [usage]);
 
   // ── On mount: decode shared result from URL hash ──────────────────────────
