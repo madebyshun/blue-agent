@@ -1,28 +1,65 @@
 import { NextRequest, NextResponse } from "next/server";
+import { proxyTool } from "@/app/api/_lib/proxy";
+import { extractJsonObject, runAeonSkill, runMiroSharkSkill, runBlueSkill } from "@/app/api/_lib/llm";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const ENDPOINT = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/agent-performance";
 
-export async function POST(req: NextRequest) {
-  const xPayment = req.headers.get("x-payment") ?? req.headers.get("X-Payment");
-  let body: Record<string, unknown> = {};
-  try { body = await req.json(); } catch {}
+async function handleLocally(body: Record<string, unknown>): Promise<NextResponse> {
+  const handle = (body.handle as string) ?? "";
+  const repo = (body.repo as string) ?? "";
 
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (xPayment) headers["X-Payment"] = xPayment;
-
-  try {
-    const res = await fetch(ENDPOINT, {
-      method:  "POST",
-      headers,
-      body:    JSON.stringify(body),
-      signal:  AbortSignal.timeout(55_000),
-    });
-    const data = await res.json().catch(() => ({}));
-    return NextResponse.json(data, { status: res.status });
-  } catch (e) {
-    return NextResponse.json({ error: "Service unavailable", message: (e as Error).message }, { status: 502 });
+  if (!handle) {
+    return NextResponse.json({ error: "handle is required" }, { status: 400 });
   }
+
+  // Step 1+2: Aeon parallel — agent research + repo health (or ecosystem context)
+  const [agentResearchRaw, repoHealthRaw] = await Promise.all([
+    runAeonSkill("deep-research", `AI agent ${handle}: capabilities, onchain activity on Base, skill depth, community presence, reliability signals, reputation in Base/crypto ecosystem.`),
+    repo
+      ? runAeonSkill("deep-research", `${repo} GitHub repo: activity health, commit velocity, open issues, docs quality, contributor activity.`)
+      : runAeonSkill("narrative-tracker", `AI agent economy on Base: agent performance benchmarks, what makes a top-tier agent, metrics for evaluating ${handle}.`),
+  ]);
+
+  // Step 3: MiroShark — analyst persona on agent performance
+  const msRaw = await runMiroSharkSkill({
+    scenario: `Evaluate AI agent ${handle} — performance, trust signals, ecosystem standing`,
+    context: {
+      handle,
+      repo: repo || null,
+      agent_research: agentResearchRaw ?? handle,
+      repo_health: repoHealthRaw ?? "no repo data",
+    },
+    persona: "analyst — evaluates agent economics, token utility, market positioning",
+    outputSchema: `{"activity_level":"high|medium|low","community_presence":"strong|moderate|weak","trust_signals":["<signal>"],"concern_signals":["<concern>"],"observer_note":"<1 sentence>"}`,
+    maxTokens: 400,
+  });
+  const observerTake = extractJsonObject(msRaw ?? "") ?? {};
+
+  // Step 4: Blue Agent synthesis — agent performance report
+  const resultRaw = await runBlueSkill({
+    task: "Generate a comprehensive agent performance report with XP scoring. CRITICAL: Return ONLY raw JSON. No markdown.",
+    skillFiles: ["base-ecosystem.md"],
+    input: `Agent: ${handle}\nRepo: ${repo || "none"}\nAgent research: ${agentResearchRaw ?? handle}\nRepo health: ${repoHealthRaw ?? "no data"}\nObserver: ${JSON.stringify(observerTake)}`,
+    outputSchema: `{"performance_score":<0-100>,"xp":<0-100>,"tier":"Bot|Specialist|Operator|Sovereign","trend":"improving|stable|declining|unknown","dimensions":{"skillDepth":<0-25>,"onchainActivity":<0-25>,"reliability":<0-20>,"interoperability":<0-20>,"reputation":<0-10>},"top_strengths":["<strength>"],"improvement_areas":["<area>"],"recommended_next_skills":["<skill to add>"],"ecosystem_standing":"leading|active|emerging|dormant","report_summary":"<2-3 sentences>"}`,
+    maxTokens: 900,
+  });
+
+  const result = extractJsonObject(resultRaw ?? "");
+  if (!result) throw new Error("Failed to parse result");
+
+  return NextResponse.json({
+    tool: "agent-performance",
+    timestamp: new Date().toISOString(),
+    handle,
+    repo: repo || null,
+    observer: observerTake,
+    ...result,
+  });
+}
+
+export async function POST(req: NextRequest) {
+  return proxyTool(req, ENDPOINT, handleLocally);
 }
