@@ -9,8 +9,6 @@
  * Auth uses @coinbase/x402's createAuthHeader (CDP JWT). Requires env:
  *   CDP_API_KEY_ID, CDP_API_KEY_SECRET
  */
-import { createAuthHeader } from "@coinbase/x402";
-
 const CDP_HOST = "https://api.cdp.coinbase.com/platform/v2/x402";
 export const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 export const PAY_TO = "0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f"; // Bankr Club wallet — receives USDC
@@ -60,18 +58,24 @@ async function cdpCall(
     return { ok: false, status: 0, detail: "CDP_API_KEY_ID / CDP_API_KEY_SECRET not set" };
   }
 
-  const auth = await createAuthHeader(id, secret, "POST", CDP_HOST, path);
-  const res = await fetch(`${CDP_HOST}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: auth,
-    },
-    body: JSON.stringify({ x402Version: 1, paymentPayload, paymentRequirements }),
-    signal: AbortSignal.timeout(30_000),
-  });
-  const detail = await res.json().catch(async () => (await res.text()).slice(0, 300));
-  return { ok: res.ok, status: res.status, detail };
+  try {
+    // Dynamic import so any ESM/CJS load error is caught here, not at module init
+    const { createAuthHeader } = await import("@coinbase/x402");
+    const auth = await createAuthHeader(id, secret, "POST", CDP_HOST, path);
+    const res = await fetch(`${CDP_HOST}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: auth,
+      },
+      body: JSON.stringify({ x402Version: 1, paymentPayload, paymentRequirements }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    const detail = await res.json().catch(async () => (await res.text()).slice(0, 300));
+    return { ok: res.ok, status: res.status, detail };
+  } catch (e) {
+    return { ok: false, status: 0, detail: `CDP call error: ${(e as Error).message}` };
+  }
 }
 
 /** Settle the payment on-chain via CDP. Returns ok=true only if USDC moved. */

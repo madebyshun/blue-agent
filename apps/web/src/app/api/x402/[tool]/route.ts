@@ -31,6 +31,21 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ tool: string }> }
 ) {
+  try {
+    return await handle(req, params);
+  } catch (e) {
+    // Always return JSON so the client never hits "Unexpected end of JSON input"
+    return NextResponse.json(
+      { error: "Route crashed", message: (e as Error).message, stack: (e as Error).stack?.slice(0, 400) },
+      { status: 500 }
+    );
+  }
+}
+
+async function handle(
+  req: NextRequest,
+  params: Promise<{ tool: string }>
+): Promise<NextResponse> {
   const { tool } = await params;
   const compute = COMPUTE[tool];
   const priceUnits = PRICE_UNITS.get(tool);
