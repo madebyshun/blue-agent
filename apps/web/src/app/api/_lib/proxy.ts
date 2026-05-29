@@ -40,13 +40,19 @@ async function settlePayment(
       extra:             { name: "USD Coin", version: "2" },
     };
 
+    // Bankr's facilitator speaks x402 v1 (its error echoed x402Version:1).
+    // The EIP-3009 signature is over the authorization typed-data only, so
+    // changing the envelope version does NOT invalidate it.
+    const paymentV1 = { ...payment, x402Version: 1 };
+    const requirementV1 = { ...requirement };
+
     const res = await fetch(`${FACILITATOR}/settle`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({
-        x402Version:         payment.x402Version ?? 2,
-        paymentPayload:      payment,
-        paymentRequirements: requirement,
+        x402Version:         1,
+        paymentPayload:      paymentV1,
+        paymentRequirements: requirementV1,
       }),
       signal: AbortSignal.timeout(25_000),
     });
