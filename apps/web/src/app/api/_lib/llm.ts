@@ -74,65 +74,15 @@ export async function callBankrLLM(opts: {
     ? [...opts.messages, { role: "assistant", content: "{" }]
     : opts.messages;
 
-  // ── Try Bankr LLM first ──────────────────────────────────────────────────
-  const bankrKey = process.env.BANKR_API_KEY;
-  if (bankrKey) {
-    try {
-      const res = await fetch("https://llm.bankr.bot/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": bankrKey,
-          "Content-Type": "application/json",
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: opts.model ?? "claude-haiku-4-5",
-          system,
-          messages,
-          temperature: opts.temperature ?? 0.5,
-          max_tokens: opts.maxTokens ?? 1000,
-        }),
-        signal: AbortSignal.timeout(55_000),
-      });
-      if (res.ok) {
-        const d = await res.json() as { content?: { text: string }[]; text?: string };
-        let text = "";
-        if (d.content?.length) text = d.content[0].text;
-        else if (d.text) text = d.text;
-        else throw new Error("Invalid Bankr LLM response");
-        return wantsJson ? "{" + text : text;
-      }
-      const errText = await res.text();
-      console.warn(`[llm] Bankr LLM ${res.status} — falling back to Anthropic:`, errText.slice(0, 120));
-    } catch (e) {
-      console.warn("[llm] Bankr LLM unreachable — falling back to Anthropic:", (e as Error).message);
-    }
-  } else {
-    console.warn("[llm] BANKR_API_KEY not set — using Anthropic fallback");
-  }
-
-  // ── Anthropic API fallback ────────────────────────────────────────────────
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  if (!anthropicKey) {
-    throw new Error("No LLM API key available (set BANKR_API_KEY or ANTHROPIC_API_KEY)");
-  }
-
-  // Map model name: Bankr models → Anthropic models
-  const anthropicModel = (opts.model ?? "").includes("haiku")
-    ? "claude-haiku-4-5"
-    : (opts.model ?? "").includes("sonnet")
-    ? "claude-sonnet-4-5"
-    : "claude-haiku-4-5";
-
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
     headers: {
-      "x-api-key": anthropicKey,
+      "x-api-key": process.env.BANKR_API_KEY ?? "",
       "Content-Type": "application/json",
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: anthropicModel,
+      model: opts.model ?? "claude-haiku-4-5",
       system,
       messages,
       temperature: opts.temperature ?? 0.5,
@@ -142,12 +92,14 @@ export async function callBankrLLM(opts: {
   });
   if (!res.ok) {
     const errText = await res.text();
-    console.error(`[llm] Anthropic error ${res.status}:`, errText);
-    throw new Error(`Anthropic ${res.status}: ${errText}`);
+    console.error(`[llm] Bankr LLM error ${res.status}:`, errText);
+    throw new Error(`Bankr LLM ${res.status}: ${errText.slice(0, 200)}`);
   }
-  const d = await res.json() as { content?: { text: string }[] };
-  const text = d.content?.[0]?.text ?? "";
-  if (!text) throw new Error("Invalid Anthropic response");
+  const d = await res.json() as { content?: { text: string }[]; text?: string };
+  let text = "";
+  if (d.content?.length) text = d.content[0].text;
+  else if (d.text) text = d.text;
+  else throw new Error("Invalid Bankr LLM response");
   return wantsJson ? "{" + text : text;
 }
 
