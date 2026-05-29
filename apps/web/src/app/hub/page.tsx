@@ -868,7 +868,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           },
         }));
 
-        const r2 = await fetch(`/api/${tool.id}`, {
+        const r2 = await fetch(`/api/x402/${tool.id}`, {
           method:  "POST",
           headers: { "Content-Type": "application/json", "X-PAYMENT": xPayment },
           body:    JSON.stringify(tool.x402Body(body)),
@@ -887,11 +887,18 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
       return;
     }
 
-    // ── Free flow: no wallet or no x402Body ──────────────────────────────────
+    // ── Paid tool but wallet not connected → require connection, no free output ──
+    if (tool.x402Body) {
+      setErr("Connect your wallet to run this paid tool.");
+      setStep("error");
+      return;
+    }
+
+    // ── Free flow: only for genuinely free tools (no x402Body) ────────────────
     setStep("calling");
 
     try {
-      const res = await fetch(`/api/${tool.id}`, {
+      const res = await fetch(`/api/x402/${tool.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
