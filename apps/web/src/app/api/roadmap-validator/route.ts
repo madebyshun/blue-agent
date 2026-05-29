@@ -48,7 +48,7 @@ async function handleLocally(body: Record<string, unknown>): Promise<NextRespons
   });
 
   const verdict = extractJsonObject(verdictRaw ?? "");
-  if (!verdict) throw new Error("Failed to parse verdict");
+  if (!verdict) return NextResponse.json({ error: "LLM service temporarily unavailable", tool: "analysis", timestamp: new Date().toISOString() }, { status: 503 });
 
   return NextResponse.json({
     tool: "roadmap-validator",

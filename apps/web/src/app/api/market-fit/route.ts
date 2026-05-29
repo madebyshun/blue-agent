@@ -90,7 +90,7 @@ Schema: {
   });
 
   const verdict = extractJsonObject(verdictRaw ?? "");
-  if (!verdict) throw new Error("Failed to parse verdict");
+  if (!verdict) return NextResponse.json({ error: "LLM service temporarily unavailable", tool: "analysis", timestamp: new Date().toISOString() }, { status: 503 });
 
   if (verdict.consensus && typeof verdict.consensus === "object") {
     const c = verdict.consensus as Record<string, unknown>;
