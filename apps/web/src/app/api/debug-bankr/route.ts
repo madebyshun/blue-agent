@@ -1,40 +1,55 @@
 /**
- * /api/debug-bankr — Test BANKR_API_KEY live
- * GET → tests Bankr LLM and returns exact error if any
+ * /api/debug-bankr — Diagnose Bankr x402 + LLM
+ * GET → tests Bankr LLM key
+ * GET ?tool=ecosystem-digest → tests if Bankr x402 handler is registered
  */
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+const X402_BASE = "https://x402.bankr.bot/0xf31f59e7b8b58555f7871f71973a394c8f1bffe5";
+
+export async function GET(req: NextRequest) {
+  const tool = req.nextUrl.searchParams.get("tool");
+
+  // ── Test Bankr LLM key ──────────────────────────────────────────────────
   const key = process.env.BANKR_API_KEY;
-  if (!key) {
-    return NextResponse.json({ ok: false, error: "BANKR_API_KEY not set in Vercel env vars" });
+  const llmResult: Record<string, unknown> = { key_set: !!key };
+
+  if (key) {
+    try {
+      const r = await fetch("https://llm.bankr.bot/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": key, "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-haiku-4-5", system: "Reply OK only.", messages: [{ role: "user", content: "ping" }], max_tokens: 5 }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const body = await r.text();
+      llmResult.status = r.status;
+      llmResult.ok = r.ok;
+      llmResult.response = r.ok ? JSON.parse(body)?.content?.[0]?.text : body.slice(0, 200);
+    } catch (e) { llmResult.error = (e as Error).message; }
   }
 
-  try {
-    const r = await fetch("https://llm.bankr.bot/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": key,
-        "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5",
-        system: "You are a test. Reply with the word OK only.",
-        messages: [{ role: "user", content: "ping" }],
-        max_tokens: 10,
-      }),
-      signal: AbortSignal.timeout(10_000),
-    });
-
-    const body = await r.text();
-    if (r.ok) {
-      return NextResponse.json({ ok: true, status: r.status, response: JSON.parse(body) });
-    }
-    return NextResponse.json({ ok: false, status: r.status, error: body });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: (e as Error).message });
+  // ── Test Bankr x402 handler (no payment → expect 402) ──────────────────
+  let handlerResult: Record<string, unknown> = {};
+  if (tool) {
+    try {
+      const r = await fetch(`${X402_BASE}/${tool}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ test: true }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const body = await r.text();
+      let parsed: unknown;
+      try { parsed = JSON.parse(body); } catch { parsed = body.slice(0, 300); }
+      handlerResult = { status: r.status, body: parsed };
+    } catch (e) { handlerResult = { error: (e as Error).message }; }
   }
+
+  return NextResponse.json({
+    llm: llmResult,
+    ...(tool ? { handler: { tool, ...handlerResult } } : {}),
+  });
 }
