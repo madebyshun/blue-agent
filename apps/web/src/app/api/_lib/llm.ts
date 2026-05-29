@@ -17,7 +17,7 @@ async function loadSkillFile(url: string): Promise<string | null> {
     const text = await res.text();
     _skillCache.set(url, { text, ts: Date.now() });
     return text;
-  } catch { return null; }
+  } catch (e) { console.error("[llm] skill error:", (e as Error).message); return null; }
 }
 
 // ─── Real skill URLs ──────────────────────────────────────────────────────────
@@ -89,7 +89,11 @@ export async function callBankrLLM(opts: {
       max_tokens: opts.maxTokens ?? 1000,
     }),
   });
-  if (!res.ok) throw new Error(`Bankr LLM ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`[llm] Bankr LLM error ${res.status}:`, errText);
+    throw new Error(`Bankr LLM ${res.status}: ${errText}`);
+  }
   const d = await res.json() as { content?: { text: string }[]; text?: string };
   let text = "";
   if (d.content?.length) text = d.content[0].text;
@@ -123,7 +127,7 @@ export async function runAeonSkill(skill: string, varInput = ""): Promise<string
       maxTokens: 1200,
       _skipEnhance: true, // Aeon has its own identity
     });
-  } catch { return null; }
+  } catch (e) { console.error("[llm] skill error:", (e as Error).message); return null; }
 }
 
 // ─── MiroShark skill runner (uses real collab prompt) ────────────────────────
@@ -166,7 +170,7 @@ export async function runMiroSharkSkill(opts: {
       maxTokens: opts.maxTokens ?? 600,
       _skipEnhance: true, // already loaded real prompt above
     });
-  } catch { return null; }
+  } catch (e) { console.error("[llm] skill error:", (e as Error).message); return null; }
 }
 
 // ─── Blue Agent skill runner (uses real identity + skill files) ───────────────
@@ -210,5 +214,5 @@ export async function runBlueSkill(opts: {
       maxTokens: opts.maxTokens ?? 1000,
       _skipEnhance: true,
     });
-  } catch { return null; }
+  } catch (e) { console.error("[llm] skill error:", (e as Error).message); return null; }
 }
