@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const FACILITATOR = "https://x402.org/facilitator";
+// Bankr's own facilitator — relays gas + settles USDC to Bankr's payTo wallet.
+// (Discovered from the `facilitator` field in Bankr's 402 discovery response.)
+const FACILITATOR = "https://api.bankr.bot/facilitator";
 const USDC        = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
 /**
@@ -22,16 +24,19 @@ async function settlePayment(
     }
 
     const toolName = endpoint.split("/").pop() ?? "tool";
+    // Mirror Bankr's 402 discovery requirement shape exactly (maxTimeoutSeconds 60,
+    // empty mimeType) so its facilitator accepts the settle.
     const requirement = {
       scheme:            "exact",
       network:           "eip155:8453",
       maxAmountRequired: auth.value,
+      amount:            auth.value,
       payTo:             auth.to,
       asset:             USDC,
-      maxTimeoutSeconds: 300,
+      maxTimeoutSeconds: 60,
       resource:          endpoint,
       description:       `Blue Agent: ${toolName}`,
-      mimeType:          "application/json",
+      mimeType:          "",
       extra:             { name: "USD Coin", version: "2" },
     };
 
