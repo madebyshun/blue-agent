@@ -711,9 +711,12 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
 
 // ─── Empty / browse state ─────────────────────────────────────────────────────
 
-function EmptyState({ onSelect, featuredIds }: { onSelect: (t: Tool) => void; featuredIds: Set<string> }) {
+function EmptyState({ onSelect, featuredIds, usage }: { onSelect: (t: Tool) => void; featuredIds: Set<string>; usage: Record<string, number> }) {
   const featuredTools = TOOLS.filter(t => featuredIds.has(t.id));
   const otherTools    = TOOLS.filter(t => !featuredIds.has(t.id));
+  const totalRuns = Object.values(usage).reduce((a, b) => a + b, 0);
+  const usdcPaid  = TOOLS.reduce((s, t) => s + (usage[t.id] ?? 0) * (parseFloat(t.price.replace("$", "")) || 0), 0);
+  const runsOf = (id: string) => usage[id] ?? 0;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -744,6 +747,37 @@ function EmptyState({ onSelect, featuredIds }: { onSelect: (t: Tool) => void; fe
         </div>
       </div>
 
+      {/* ── Hero ── */}
+      <div className="relative overflow-hidden px-6 pt-8 pb-7 border-b border-[#1A1A2E] shrink-0">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#4FC3F7]/[0.07] via-transparent to-[#A78BFA]/[0.07] pointer-events-none" />
+        <div className="absolute -top-20 -right-10 w-72 h-72 rounded-full bg-[#4FC3F7]/10 blur-3xl pointer-events-none" />
+        <div className="relative max-w-3xl">
+          <h2 className="text-2xl xl:text-[28px] font-bold tracking-tight leading-tight">
+            <span className="bg-gradient-to-r from-[#4FC3F7] via-[#A78BFA] to-[#34D399] bg-clip-text text-transparent">
+              {TOOLS.length} AI agent tools.
+            </span>{" "}
+            <span className="text-white">Pay per call. No subscription.</span>
+          </h2>
+          <p className="font-mono text-xs text-slate-500 mt-2.5 max-w-xl leading-relaxed">
+            Blue · Aeon · MiroShark consensus on Base. Connect a wallet, pay in USDC per run —
+            no API key, no signup.
+          </p>
+          <div className="flex flex-wrap items-center gap-2 mt-5">
+            {[
+              { label: "tools",     value: String(TOOLS.length) },
+              { label: "runs",      value: totalRuns.toLocaleString() },
+              { label: "USDC paid", value: `$${usdcPaid.toFixed(2)}` },
+              { label: "agents",    value: "3" },
+            ].map(s => (
+              <div key={s.label} className="flex items-baseline gap-1.5 px-3 py-1.5 rounded-lg border border-[#1A1A2E] bg-[#0D0D1A]">
+                <span className="font-mono text-sm font-bold text-white">{s.value}</span>
+                <span className="font-mono text-[9px] text-slate-600 uppercase tracking-wider">{s.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* ── Content grid ── */}
       <div className="flex-1 px-6 py-5 overflow-y-auto">
 
@@ -765,7 +799,12 @@ function EmptyState({ onSelect, featuredIds }: { onSelect: (t: Tool) => void; fe
                 {tool.name}
               </p>
               <p className="font-mono text-[10px] text-slate-500 leading-relaxed line-clamp-2">{tool.desc}</p>
-              <p className="font-mono text-[10px] text-[#A78BFA]/50 mt-2.5">Run →</p>
+              <div className="flex items-center justify-between mt-2.5">
+                <span className="font-mono text-[10px] text-[#A78BFA]/50">Run →</span>
+                <span className="font-mono text-[9px] text-slate-600">
+                  {runsOf(tool.id) > 0 ? `${runsOf(tool.id)} runs · ` : ""}{tool.price}
+                </span>
+              </div>
             </button>
           ))}
         </div>
@@ -784,7 +823,9 @@ function EmptyState({ onSelect, featuredIds }: { onSelect: (t: Tool) => void; fe
                 {tool.agents.map(a => (
                   <span key={a} className="w-1 h-1 rounded-full" style={{ background: AGENT_COLORS[a] }} />
                 ))}
-                <span className="font-mono text-[9px] text-slate-700 ml-auto">{tool.price}</span>
+                <span className="font-mono text-[9px] text-slate-700 ml-auto">
+                  {runsOf(tool.id) > 0 ? `${runsOf(tool.id)} runs · ` : ""}{tool.price}
+                </span>
               </div>
               <p className="font-mono text-xs font-semibold text-white group-hover:text-[#4FC3F7] transition-colors mb-0.5 leading-snug">{tool.name}</p>
               <p className="font-mono text-[10px] text-slate-600 leading-relaxed line-clamp-2">{tool.desc}</p>
@@ -971,7 +1012,7 @@ export default function HubPage() {
                 cached={cache.get(selected.id) ?? null}
                 onResult={(r) => saveResult(selected.id, r)}
               />
-            : <div className="overflow-y-auto flex-1"><EmptyState onSelect={setSelected} featuredIds={featuredIds} /></div>
+            : <div className="overflow-y-auto flex-1"><EmptyState onSelect={setSelected} featuredIds={featuredIds} usage={usage} /></div>
           }
         </main>
 
