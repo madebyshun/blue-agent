@@ -100,7 +100,7 @@ async function handle(
     const data = await resp.json().catch(() => ({}));
     // Count this paid run for dynamic "Featured" ranking (atomic, awaited)
     try { await kv.incr(`usage:${tool}`); } catch {}
-    return NextResponse.json({ ...data, _settle: { ok: true, status: settle.status } });
+    return NextResponse.json({ ...data, _settle: { ok: true, status: settle.status, tx: settle.tx } });
   } catch (e) {
     return NextResponse.json(
       { error: "Tool error after payment", message: (e as Error).message, _settle: { ok: true } },

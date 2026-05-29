@@ -4,7 +4,13 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
-import { useAccount, useSignTypedData } from "wagmi";
+import { useAccount, useSignTypedData, useReadContract } from "wagmi";
+
+const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
+const ERC20_BAL_ABI = [{
+  name: "balanceOf", type: "function", stateMutability: "view",
+  inputs: [{ name: "account", type: "address" }], outputs: [{ type: "uint256" }],
+}] as const;
 
 // ─── Tool registry ──────────────────────────────────────────────────────────
 
@@ -404,6 +410,16 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
   const { address, isConnected } = useAccount();
   const { signTypedDataAsync }   = useSignTypedData();
 
+  const { data: usdcBalRaw } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: ERC20_BAL_ABI,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    chainId: 8453,
+    query: { enabled: !!address },
+  });
+  const usdcBalance = usdcBalRaw != null ? Number(usdcBalRaw) / 1e6 : null;
+
   const loading = step === "calling" || step === "signing" || step === "paying";
 
   function shareResult() {
@@ -434,8 +450,15 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         // Self-hosted x402: pay our Club wallet (CDP facilitator settles to it)
         const BANKR_WALLET = "0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f" as const;
         const priceRaw    = tool.price.replace("$", "");
-        const priceUnits  = String(Math.round(parseFloat(priceRaw) * 1_000_000)); // USDC 6 decimals
+        const priceVal    = parseFloat(priceRaw) || 0;
+        const priceUnits  = String(Math.round(priceVal * 1_000_000)); // USDC 6 decimals
         const validBefore = BigInt(Math.floor(Date.now() / 1000) + 300);
+
+        // Pre-check balance so we don't make the user sign a doomed payment
+        if (usdcBalance != null && usdcBalance < priceVal) {
+          setErr(`Insufficient USDC — you have $${usdcBalance.toFixed(2)}, need ${tool.price}. Top up your wallet on Base.`);
+          return;
+        }
 
         setStep("signing");
 
@@ -614,6 +637,16 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                 Connect wallet to pay {tool.price} via x402
               </p>
             )}
+            {tool.x402Body && isConnected && usdcBalance != null && (
+              <div className="flex items-center justify-between mb-2 px-1">
+                <span className="font-mono text-[10px] text-slate-600">USDC balance</span>
+                <span className={`font-mono text-[10px] font-semibold ${
+                  usdcBalance < (parseFloat(tool.price.replace("$", "")) || 0) ? "text-red-400" : "text-[#34D399]"
+                }`}>
+                  ${usdcBalance.toFixed(2)}
+                </span>
+              </div>
+            )}
             <button
               onClick={run}
               disabled={loading}
@@ -662,11 +695,14 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                     cached
                   </span>
                 )}
-                {!isMock && (result._settle as { ok?: boolean } | undefined)?.ok && (
-                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-[#34D399]/30 text-[#34D399] ml-1">
-                    ✓ Paid {tool.price}
-                  </span>
-                )}
+                {!isMock && (result._settle as { ok?: boolean; tx?: string } | undefined)?.ok && (() => {
+                  const settle = result._settle as { ok?: boolean; tx?: string };
+                  const cls = "font-mono text-[10px] px-1.5 py-0.5 rounded border border-[#34D399]/30 text-[#34D399] ml-1";
+                  return settle.tx
+                    ? <a href={`https://basescan.org/tx/${settle.tx}`} target="_blank" rel="noopener noreferrer"
+                         className={`${cls} hover:bg-[#34D399]/10 transition-colors`}>✓ Paid {tool.price} ↗</a>
+                    : <span className={cls}>✓ Paid {tool.price}</span>;
+                })()}
                 <div className="ml-auto flex items-center gap-2">
                   <span className="font-mono text-xs text-slate-700 mr-1">Blue · Aeon · MiroShark</span>
                   <button
