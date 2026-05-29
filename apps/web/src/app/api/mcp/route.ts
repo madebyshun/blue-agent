@@ -433,7 +433,7 @@ async function callConsole(command: string, prompt: string): Promise<string> {
 }
 
 async function callBuilderScore(handle: string): Promise<string> {
-  const res = await fetch(`https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/builder-score?handle=${encodeURIComponent(handle)}`);
+  const res = await fetch(`https://x402.bankr.bot/0xf31f59e7b8b58555f7871f71973a394c8f1bffe5/builder-score?handle=${encodeURIComponent(handle)}`);
   if (!res.ok) throw new Error(`Builder Score API: ${res.status}`);
   return JSON.stringify(await res.json(), null, 2);
 }
