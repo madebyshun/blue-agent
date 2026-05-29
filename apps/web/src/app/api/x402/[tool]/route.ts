@@ -57,8 +57,7 @@ async function handle(
     );
   }
 
-  const resource = `https://blueagent.dev/api/x402/${tool}`;
-  const requirements = buildRequirements(tool, String(priceUnits), resource);
+  const requirements = buildRequirements(String(priceUnits));
 
   const xPayment = req.headers.get("x-payment") ?? req.headers.get("X-Payment");
 
