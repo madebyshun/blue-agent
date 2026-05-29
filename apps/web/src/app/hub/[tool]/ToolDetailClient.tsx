@@ -39,6 +39,11 @@ export default function ToolDetailClient({ toolId }: { toolId: string }) {
     });
   };
 
+  const shareUrl = `https://blueagent.dev/hub/${toolId}`;
+  const shareText = `${tool.name} — pay-per-call AI tool for Base, in USDC. No API key.`;
+  const xUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
+  const fcUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}&embeds[]=${encodeURIComponent(shareUrl)}`;
+
   return (
     <>
       <Navbar />
@@ -84,17 +89,25 @@ export default function ToolDetailClient({ toolId }: { toolId: string }) {
                 </span>
               </div>
 
-              <div className="flex items-center gap-2.5 mt-6">
+              <div className="flex flex-wrap items-center gap-2.5 mt-6">
                 <Link href={`/hub?tool=${toolId}`}
                   className="px-5 py-2.5 rounded-xl bg-[#4FC3F7] text-[#050508] font-mono text-sm font-semibold hover:bg-[#29ABE2] transition-colors">
                   Run this tool →
                 </Link>
+                <a href={xUrl} target="_blank" rel="noopener noreferrer"
+                  className="px-4 py-2.5 rounded-xl border border-[#1A1A2E] text-slate-400 font-mono text-xs hover:text-white hover:border-white/30 transition-all">
+                  Share on X
+                </a>
+                <a href={fcUrl} target="_blank" rel="noopener noreferrer"
+                  className="px-4 py-2.5 rounded-xl border border-[#A78BFA]/20 text-[#A78BFA] font-mono text-xs hover:bg-[#A78BFA]/10 hover:border-[#A78BFA]/40 transition-all">
+                  Cast
+                </a>
                 <button onClick={share}
                   className={`px-4 py-2.5 rounded-xl border font-mono text-xs transition-all ${
                     copied ? "text-[#34D399] border-[#34D399]/40 bg-[#34D399]/5"
                            : "text-slate-400 border-[#1A1A2E] hover:text-[#4FC3F7] hover:border-[#4FC3F7]/30"
                   }`}>
-                  {copied ? "✓ Link copied" : "Share ↗"}
+                  {copied ? "✓ Copied" : "Copy link"}
                 </button>
               </div>
             </div>
