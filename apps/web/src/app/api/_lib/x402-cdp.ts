@@ -49,7 +49,7 @@ function toV2PaymentPayload(incoming: unknown, requirements: PaymentRequirements
   };
 }
 
-type SettleResult = { ok: boolean; status: number; detail: unknown };
+type SettleResult = { ok: boolean; status: number; detail: unknown; tx?: string };
 
 async function cdpCall(
   path: "/settle" | "/verify",
@@ -98,6 +98,10 @@ export async function cdpSettle(
   const r = await cdpCall("/settle", paymentPayload, requirements);
   const d = r.detail as Record<string, unknown> | string;
   const success = r.ok && (typeof d === "object" && d !== null ? d?.success !== false : true);
+  // x402 settle response carries the on-chain tx hash (field name varies)
+  const tx = typeof d === "object" && d !== null
+    ? (d.transaction ?? d.txHash ?? d.transactionHash) as string | undefined
+    : undefined;
   console.log(`[cdp] settle ${r.status}:`, JSON.stringify(r.detail).slice(0, 300));
-  return { ...r, ok: success };
+  return { ...r, ok: success, tx };
 }
