@@ -4,18 +4,24 @@ const FACILITATOR = "https://facilitator.x402.org";
 const USDC        = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
 /**
- * Decode X-Payment header and fire-and-forget USDC settlement via facilitator.
- * Called when local fallback runs (Bankr handler broken) so USDC is still deducted.
+ * Decode X-Payment header and settle USDC on-chain via facilitator.
+ * AWAITED (not fire-and-forget) so the on-chain transferWithAuthorization
+ * actually completes before the serverless function returns — otherwise
+ * Vercel freezes the lambda and the settle never runs.
+ * Returns a status object that callers surface in the response for visibility.
  */
-function settlePayment(xPayment: string, endpoint: string): void {
+async function settlePayment(
+  xPayment: string,
+  endpoint: string
+): Promise<{ ok: boolean; detail: unknown }> {
   try {
     const payment = JSON.parse(Buffer.from(xPayment, "base64").toString("utf-8"));
     const auth = payment?.payload?.authorization as Record<string, string> | undefined;
-    if (!auth?.to || !auth?.value || !auth?.from) return;
+    if (!auth?.to || !auth?.value || !auth?.from) {
+      return { ok: false, detail: "missing authorization fields" };
+    }
 
-    // Extract tool name from endpoint URL: .../0xf31f.../ecosystem-digest → ecosystem-digest
     const toolName = endpoint.split("/").pop() ?? "tool";
-
     const requirement = {
       scheme:            "exact",
       network:           "eip155:8453",
@@ -29,7 +35,7 @@ function settlePayment(xPayment: string, endpoint: string): void {
       extra:             { name: "USD Coin", version: "2" },
     };
 
-    fetch(`${FACILITATOR}/settle`, {
+    const res = await fetch(`${FACILITATOR}/settle`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({
@@ -37,13 +43,14 @@ function settlePayment(xPayment: string, endpoint: string): void {
         paymentPayload:      payment,
         paymentRequirements: requirement,
       }),
-      signal: AbortSignal.timeout(20_000),
-    })
-      .then(r => r.json().then(d => console.log("[proxy] settle:", JSON.stringify(d))))
-      .catch(e => console.error("[proxy] settle error:", (e as Error).message));
-
+      signal: AbortSignal.timeout(25_000),
+    });
+    const detail = await res.json().catch(async () => (await res.text()).slice(0, 200));
+    console.log(`[proxy] settle ${res.status}:`, JSON.stringify(detail));
+    return { ok: res.ok, detail };
   } catch (e) {
-    console.error("[proxy] settlePayment parse error:", (e as Error).message);
+    console.error("[proxy] settle error:", (e as Error).message);
+    return { ok: false, detail: (e as Error).message };
   }
 }
 
@@ -67,6 +74,26 @@ export async function proxyTool(
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (xPayment) headers["X-Payment"] = xPayment;
 
+  // Run local fallback AND settle USDC in parallel, then return merged result.
+  // settle is AWAITED so the on-chain transfer completes before we respond
+  // (Vercel freezes the lambda once the response is sent).
+  const localWithSettle = async (): Promise<NextResponse> => {
+    if (!xPayment || !fallback) {
+      return NextResponse.json({ error: "Payment Required", message: "This tool requires payment." }, { status: 402 });
+    }
+    const [resp, settle] = await Promise.all([
+      fallback(body).catch((fe: Error) =>
+        NextResponse.json({ error: "Tool error", message: fe.message }, { status: 500 })
+      ),
+      settlePayment(xPayment, endpoint),
+    ]);
+    const rd = await resp.json().catch(() => null);
+    return NextResponse.json(
+      { ...(rd ?? {}), _settle: settle },
+      { status: settle.ok ? 200 : resp.status }
+    );
+  };
+
   let upstream: Response;
   try {
     upstream = await fetch(endpoint, {
@@ -77,11 +104,7 @@ export async function proxyTool(
     });
   } catch (e) {
     // Bankr unreachable — fallback locally + settle USDC if payment was sent
-    if (xPayment && fallback) {
-      settlePayment(xPayment, endpoint);
-      try { return await fallback(body); }
-      catch (fe) { return NextResponse.json({ error: "Tool error", message: (fe as Error).message }, { status: 500 }); }
-    }
+    if (xPayment && fallback) return await localWithSettle();
     return NextResponse.json({ error: "Service unavailable", message: (e as Error).message }, { status: 502 });
   }
 
@@ -91,19 +114,8 @@ export async function proxyTool(
     const isUnavailable = typeof data.error === "string" &&
       (data.error.includes("unavailable") || data.error.includes("Endpoint"));
     if (isUnavailable && fallback) {
-      // Only run local fallback if payment was provided — don't give free results
-      if (!xPayment) {
-        console.warn("[proxy] Bankr handler unavailable, no X-Payment → return 402");
-        return NextResponse.json({ error: "Payment Required", message: "This tool requires payment." }, { status: 402 });
-      }
       console.warn("[proxy] Bankr handler unavailable → local fallback + settle");
-      settlePayment(xPayment, endpoint);
-      try {
-        const result = await fallback(body);
-        const rd = await result.json().catch(() => null);
-        return NextResponse.json({ ...(rd ?? {}), _settle: "initiated" });
-      }
-      catch (fe) { return NextResponse.json({ error: "Tool error", message: (fe as Error).message }, { status: 500 }); }
+      return await localWithSettle();
     }
     return NextResponse.json(data);
   }
@@ -114,15 +126,10 @@ export async function proxyTool(
     return NextResponse.json(data, { status: 402 });
   }
 
-  // 5xx — Bankr handler broken → local fallback only if payment sent
+  // 5xx — Bankr handler broken → local fallback + settle if payment sent
   if (upstream.status >= 500 && fallback) {
-    if (!xPayment) {
-      return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
-    }
     console.warn(`[proxy] Bankr ${upstream.status} → local fallback + settle`);
-    settlePayment(xPayment, endpoint);
-    try { return await fallback(body); }
-    catch (fe) { return NextResponse.json({ error: "Tool error", message: (fe as Error).message }, { status: 500 }); }
+    return await localWithSettle();
   }
 
   // Other errors — pass through
