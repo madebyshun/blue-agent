@@ -59,14 +59,18 @@ async function cdpCall(
   }
 
   try {
-    // Dynamic import so any ESM/CJS load error is caught here, not at module init
-    const { createAuthHeader } = await import("@coinbase/x402");
-    const auth = await createAuthHeader(id, secret, "POST", CDP_HOST, path);
-    const res = await fetch(`${CDP_HOST}${path}`, {
+    // Use the SDK's own facilitator config — it builds the correct CDP JWT
+    // headers (right `uri` claim) per endpoint. Reads CDP_API_KEY_ID/SECRET env.
+    const { facilitator } = await import("@coinbase/x402");
+    const base = facilitator.url ?? CDP_HOST;
+    const authHeaders = await facilitator.createAuthHeaders?.();
+    const endpointHeaders = path === "/settle" ? authHeaders?.settle : authHeaders?.verify;
+
+    const res = await fetch(`${base}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: auth,
+        ...(endpointHeaders ?? {}),
       },
       body: JSON.stringify({ x402Version: 1, paymentPayload, paymentRequirements }),
       signal: AbortSignal.timeout(30_000),
