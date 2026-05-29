@@ -811,25 +811,23 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
       try {
         setStep("calling");
 
-        // Step 1: GET 402 payment requirements via /api/tool proxy (always hits Bankr)
-        const r1 = await fetch(`/api/tool/${tool.id}`, {
-          method: "POST",
+        // Step 1: call tool without payment → Bankr returns 402 requirements
+        const r1 = await fetch(`/api/${tool.id}`, {
+          method:  "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ toolParams: tool.x402Body(body) }),
+          body:    JSON.stringify(tool.x402Body(body)),
         });
-        const d1 = await r1.json() as Record<string,unknown>;
-
-        // Not gated (shouldn't happen for priced tools, but handle gracefully)
-        if (!d1.requiresPayment) {
-          const res = (d1.result ?? d1) as Record<string,unknown>;
+        if (r1.status !== 402) {
+          // Already got a result (shouldn't happen, but handle gracefully)
+          const res = await r1.json() as Record<string,unknown>;
           setResult(res); setStep("done");
           onResult({ result: res, isMock: false, mockReason: "dev" });
           return;
         }
 
-        // Step 2: parse 402 payment requirements
-        const paymentDetails = d1.paymentDetails as Record<string,unknown>;
-        const accepts = paymentDetails?.accepts as Record<string,unknown>[] | undefined;
+        // Step 2: parse Bankr 402 requirements
+        const d1 = await r1.json() as Record<string,unknown>;
+        const accepts = d1.accepts as Record<string,unknown>[] | undefined;
         if (!accepts?.length) throw new Error("No payment requirements in 402 response");
         const req = accepts[0] as {
           scheme: string; network: string;
@@ -837,31 +835,30 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           maxTimeoutSeconds?: number;
           asset?: string; extra?: Record<string,string>;
         };
-        const maxTimeoutSeconds = req.maxTimeoutSeconds ?? 60;
+        const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+        const maxTimeoutSeconds = req.maxTimeoutSeconds ?? 300;
+        const nowSec = Math.floor(Date.now() / 1000);
+        const validBeforeBig = BigInt(nowSec + maxTimeoutSeconds);
 
         setStep("signing");
-        const nonce       = randomNonce();
-        const nowSec      = Math.floor(Date.now() / 1000);
-        const validAfterBig  = BigInt(nowSec - 600);  // 10 min before, matches x402 lib
-        const validBeforeBig = BigInt(nowSec + maxTimeoutSeconds);
-        const USDC_BASE   = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
         // Step 3: sign EIP-3009 TransferWithAuthorization
+        const nonce = randomNonce();
         const signature = await signTypedDataAsync({
           domain: {
-            name:             req.extra?.name    ?? "USD Coin",
-            version:          req.extra?.version ?? "2",
-            chainId:          8453,
+            name:              req.extra?.name    ?? "USD Coin",
+            version:           req.extra?.version ?? "2",
+            chainId:           8453,
             verifyingContract: (req.asset ?? USDC_BASE) as `0x${string}`,
           },
           types: {
             TransferWithAuthorization: [
-              { name: "from",         type: "address" },
-              { name: "to",           type: "address" },
-              { name: "value",        type: "uint256" },
-              { name: "validAfter",   type: "uint256" },
-              { name: "validBefore",  type: "uint256" },
-              { name: "nonce",        type: "bytes32" },
+              { name: "from",        type: "address" },
+              { name: "to",         type: "address" },
+              { name: "value",      type: "uint256" },
+              { name: "validAfter", type: "uint256" },
+              { name: "validBefore",type: "uint256" },
+              { name: "nonce",      type: "bytes32" },
             ],
           },
           primaryType: "TransferWithAuthorization",
@@ -869,39 +866,40 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
             from:        address,
             to:          req.payTo as `0x${string}`,
             value:       BigInt(req.maxAmountRequired),
-            validAfter:  validAfterBig,
+            validAfter:  BigInt(0),
             validBefore: validBeforeBig,
             nonce,
           },
         });
 
         setStep("paying");
-        // Build payment object for our /api/tool gateway (body-based, no Bankr dependency)
-        const paymentObj = {
-          x402Version: 2,
-          scheme: req.scheme ?? "exact",
-          network: req.network, // keep "eip155:8453" — gateway expects this
+
+        // Step 4: call tool WITH X-PAYMENT header → Bankr verifies + settles
+        // If Bankr handler broken → proxyTool falls back to local pipeline
+        const xPayment = btoa(JSON.stringify({
+          x402Version: (d1.x402Version as number) ?? 1,
+          scheme:      req.scheme  ?? "exact",
+          network:     req.network ?? "base",
           payload: {
             signature,
             authorization: {
-              from: address, to: req.payTo,
-              value: req.maxAmountRequired,
-              validAfter: validAfterBig.toString(),
+              from:        address,
+              to:          req.payTo,
+              value:       req.maxAmountRequired,
+              validAfter:  "0",
               validBefore: validBeforeBig.toString(),
               nonce,
             },
           },
-        };
+        }));
 
-        // Step 4: send payment through /api/tool gateway — verifies locally via viem,
-        // runs tool, settles via facilitator. No Bankr Lambda dependency.
-        const r2 = await fetch(`/api/tool/${tool.id}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ toolParams: tool.x402Body(body), payment: paymentObj }),
+        const r2 = await fetch(`/api/${tool.id}`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json", "X-PAYMENT": xPayment },
+          body:    JSON.stringify(tool.x402Body(body)),
         });
         const d2 = await r2.json() as Record<string,unknown>;
-        if (d2.error) throw new Error(String(d2.error));
+        if (!r2.ok) throw new Error(String(d2.error ?? `Payment failed ${r2.status}`));
         const res2 = (d2.result ?? d2) as Record<string,unknown>;
         setResult(res2); setStep("done");
         onResult({ result: res2, isMock: false, mockReason: "dev" });
