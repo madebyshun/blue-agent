@@ -1,0 +1,29 @@
+# Blue Hub
+
+> AI agent tools for Base builders — analysis, audits, and signals via 3-agent
+> consensus (Blue · Aeon · MiroShark). Pay per call in USDC over the x402
+> protocol. No API key, no signup, no subscription.
+
+Blue Hub exposes 34 paid tools. Any x402-capable agent can call a tool's
+endpoint directly and pay per request in USDC on Base (chain id 8453). When a
+request arrives without payment, the endpoint returns HTTP 402 with payment
+requirements; the agent signs an EIP-3009 authorization and retries with an
+X-Payment header. Settlement is on-chain via the Coinbase CDP facilitator.
+
+## Discovery
+- Machine-readable catalog (all tools, endpoints, prices, input schemas): https://blueagent.dev/api/catalog
+- MCP server (remote, no install): https://blueagent.dev/api/mcp
+- Human UI: https://blueagent.dev/hub
+
+## Payment
+- Protocol: x402 (version 2)
+- Network: eip155:8453 (Base mainnet)
+- Asset: USDC (0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913)
+- Endpoints: https://blueagent.dev/api/x402/{tool-id}  (POST)
+
+## Examples
+- Ecosystem digest: https://blueagent.dev/api/x402/ecosystem-digest
+- Token pick signal: https://blueagent.dev/api/x402/token-pick-signal
+- Market-fit validator: https://blueagent.dev/api/x402/market-fit
+
+See https://blueagent.dev/api/catalog for the full list with prices and inputs.
