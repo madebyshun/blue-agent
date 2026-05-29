@@ -59,7 +59,7 @@ Schema: {
   });
 
   const verdict = extractJsonObject(verdictRaw ?? "");
-  if (!verdict) throw new Error("Failed to parse verdict");
+  if (!verdict) return NextResponse.json({ error: "LLM service temporarily unavailable", tool: "analysis", timestamp: new Date().toISOString() }, { status: 503 });
 
   return NextResponse.json({
     tool: "whale-copy-signal", timestamp: new Date().toISOString(),
