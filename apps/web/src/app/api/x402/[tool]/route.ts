@@ -8,7 +8,7 @@
  * handlers copied into _handlers/ (registry). Only tools in HANDLERS are live.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { buildRequirements, cdpSettle } from "@/app/api/_lib/x402-cdp";
+import { buildRequirements, cdpVerify, cdpSettle } from "@/app/api/_lib/x402-cdp";
 import { HANDLERS } from "@/app/api/x402/_handlers";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { kv } from "@/lib/kv";
@@ -96,31 +96,44 @@ async function handle(
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch {}
 
-  // Settle USDC on-chain via CDP (charges user → our wallet)
-  const settle = await cdpSettle(paymentPayload, requirements);
-  if (!settle.ok) {
+  // 1. VERIFY the payment is valid (signature + funds) — no charge yet
+  const verify = await cdpVerify(paymentPayload, requirements);
+  if (!verify.ok) {
     return NextResponse.json(
-      { error: "Payment settlement failed", status: settle.status, detail: settle.detail },
+      { error: "Payment verification failed", status: verify.status, detail: verify.detail },
       { status: 402 }
     );
   }
 
-  // Run the tool handler (self-contained Request → Response)
+  // 2. RUN the tool handler (self-contained Request → Response)
+  let data: Record<string, unknown>;
+  let resp: Response;
   try {
     const innerReq = new Request(`https://blueagent.dev/api/x402/${tool}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    const resp = await handler(innerReq);
-    const data = await resp.json().catch(() => ({}));
-    // Count this paid run for dynamic "Featured" ranking (atomic, awaited)
-    try { await kv.incr(`usage:${tool}`); } catch {}
-    return NextResponse.json({ ...data, _settle: { ok: true, status: settle.status, tx: settle.tx } });
+    resp = await handler(innerReq);
+    data = await resp.json().catch(() => ({}));
   } catch (e) {
+    // Tool crashed — user is NOT charged (we never settled)
     return NextResponse.json(
-      { error: "Tool error after payment", message: (e as Error).message, _settle: { ok: true } },
-      { status: 500 }
+      { error: "Tool failed — you were not charged", message: (e as Error).message },
+      { status: 502 }
     );
   }
+
+  // If the handler itself returned an error, do NOT charge
+  if (!resp.ok || (typeof data.error === "string")) {
+    return NextResponse.json(
+      { error: "Tool failed — you were not charged", detail: data.error ?? `status ${resp.status}` },
+      { status: 502 }
+    );
+  }
+
+  // 3. SETTLE (charge) only after a successful run
+  const settle = await cdpSettle(paymentPayload, requirements);
+  try { await kv.incr(`usage:${tool}`); } catch {}
+  return NextResponse.json({ ...data, _settle: { ok: settle.ok, status: settle.status, tx: settle.tx } });
 }
