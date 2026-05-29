@@ -1,0 +1,90 @@
+---
+title: "Week of May 29, 2026"
+description: "Blue Hub v1 ships with 34 paid tools, Blue Sentinel goes live as a 24/7 Base security monitor, and a public MCP server opens the catalog to Claude and other agents."
+---
+
+## New features
+
+### Blue Hub v1
+
+A unified marketplace for running Blue Agent tools with pay-per-use x402 USDC checkout.
+
+- **34 tools live** — Run intelligence, scoring, and launch tools from a single Hub landing page.
+- **Wallet checkout** — Connect a wallet and pay per run in USDC on Base. Self-hosted via the Coinbase CDP facilitator.
+- **Shareable tool pages** — Every tool has its own SEO-friendly detail page with Open Graph previews. Share results on X or Farcaster directly from the result card.
+- **Recent results** — Your past runs are saved and resurface in a "Your recent results" row.
+- **Operator stats** — A gated `/hub/stats` dashboard surfaces usage and revenue for operators.
+- **Mobile responsive** — Tool runner and top bar now stack cleanly on phones.
+
+See the [API overview](/api/overview) for the full tool catalog.
+
+### Blue Sentinel
+
+A new 24/7 onchain security monitor for Base. Sentinel continuously scans new and watched contracts, flags threats, and alerts you in Telegram.
+
+- **Auto-discovery engine** — Finds new contracts on Base and runs them through the full threat pipeline.
+- **Threat library** — Phishing DNA (OpenPhish live feed + signature database), malicious proxy upgrade detection, Post-Deploy Auditor, and Liquidity Sentinel.
+- **Threat Timeline & History** — Browse and dedupe past findings, with per-finding indicators.
+- **Per-user Telegram alerts** — Add watches from the dashboard or via Telegram commands and receive DM alerts.
+- **Public scan endpoint** — Trigger a scan from your own automation.
+
+Visit `/sentinel` in the Console to set up watches.
+
+### Base Pulse
+
+A free live screener for the Base ecosystem — top-of-funnel discovery with no payment required. Pulls from CoinGecko's Base ecosystem list plus boosted tokens for fresh coverage.
+
+### Public MCP server
+
+Connect Blue Agent's full tool catalog to any MCP-compatible client (Claude Desktop, Cursor, and more).
+
+- **Remote MCP endpoint** at `/api/mcp` exposes 50 synced tools.
+- **`@blueagent/skill` v0.2.0** published with the latest catalog.
+
+See [MCP integration](/skills/mcp) for setup.
+
+### Claude Code plugin
+
+A new Claude Code plugin gives Claude direct access to Blue Agent tools, with persistent memory and per-session sandbox isolation.
+
+### Public API v1 + Skills browser
+
+- **`/api/v1` gateway** — A clean, x402-ready gateway with a manifest and healthz endpoint for programmatic access.
+- **Skills browser** at `/skills` and refreshed [API docs](/api/overview) make it easier to explore what Blue Agent can do.
+
+### Agent discovery
+
+Blue Agent is now fully discoverable by other agents and indexers.
+
+- `/.well-known/agent.json` includes a self-describing x402 block.
+- New `/api/catalog` and `llms.txt` expose the tool catalog without an API key.
+- `/api/health` and `/api/signal` endpoints for uptime and ecosystem signals.
+
+### Persistent memory + SOUL.md
+
+Blue Agent now carries persistent memory across sessions and uses a `SOUL.md` personality file for consistent voice and behavior.
+
+### Research loop
+
+An autonomous research loop now feeds market intelligence into the Market page and the daily brief, so signals stay fresh between manual runs.
+
+### SEO
+
+`sitemap.xml` and `robots.txt` are now live so Blue Agent pages are indexable.
+
+## Updates
+
+- **Payment UX** — The Hub now checks your USDC balance before a run and links to a Basescan receipt after settlement.
+- **Self-hosted x402** — All 34 Hub tools moved to a self-hosted facilitator via Coinbase CDP for faster, more reliable checkout.
+- **Dynamic Featured tools** — The Hub landing page now ranks Featured tools by real usage instead of a static list.
+- **Refreshed layouts** — Console, Market, Score, Launch, Skills, and API docs pages got a full-screen consistency pass.
+- **Chat redesign** — The Chat page now uses the standard navbar + sidebar layout to match the rest of the Console.
+- **Fresher Aeon data** — The KV freshness window was extended to 25 hours to match the daily skill cadence.
+
+## Bug fixes
+
+- x402 now verifies → runs → settles in the correct order, so you are never charged when a tool fails.
+- MCP hub-tool calls route to the correct endpoint (previously 404 after a route cleanup).
+- Featured tools on the Hub landing page always render 4 entries, padding with curated picks when usage data is sparse.
+- Aeon feed skill detection now recognizes daily-pick, gainers/losers, and front-run patterns.
+- Telegram alerts no longer race on dedupe thanks to an atomic lock.
