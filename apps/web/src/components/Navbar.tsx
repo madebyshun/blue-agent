@@ -6,7 +6,6 @@ import { ConnectButton } from "@/components/ConnectModal";
 
 const NAV_LINKS = [
   { label: "Hub",      href: "/hub" },
-  { label: "Pulse",    href: "/pulse" },
   { label: "Console",  href: "/console" },
   { label: "Skills",   href: "/skills" },
   { label: "API",      href: "/api-docs" },
