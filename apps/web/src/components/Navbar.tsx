@@ -24,50 +24,43 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[#1A1A2E] bg-[#050508]/90 backdrop-blur-xl">
-      <div className="flex items-center h-16 px-5 sm:px-8">
+      <div className="relative flex items-center h-16 px-5 sm:px-8">
 
-        {/* Left — logo — fixed w-64 on lg to align right-edge with sidebar (w-72 minus px-8 padding) */}
-        <div className="flex-1 lg:flex-none lg:w-64 flex items-center">
-          <Link href="/" className="flex items-center gap-2 shrink-0">
-            <img src="/logo.svg" alt="Blue Agent" className="h-7 w-7" />
-            <span className="font-mono font-semibold text-white tracking-widest text-sm">
-              BLUE<span className="text-[#4FC3F7]">AGENT</span>
-            </span>
-          </Link>
+        {/* Left — logo */}
+        <Link href="/" className="flex items-center gap-2 shrink-0">
+          <img src="/logo.svg" alt="Blue Agent" className="h-7 w-7" />
+          <span className="font-mono font-semibold text-white tracking-widest text-sm">
+            BLUE<span className="text-[#4FC3F7]">AGENT</span>
+          </span>
+        </Link>
+
+        {/* Center — absolutely centered on viewport so nav stays put regardless of left/right widths */}
+        <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-1">
+          {NAV_LINKS.map((item) => (
+            <Link key={item.href} href={item.href}
+              className={`font-mono text-sm px-4 py-1.5 rounded-lg transition-all ${
+                isActive(item.href)
+                  ? "text-[#4FC3F7] bg-[#4FC3F7]/10"
+                  : "text-slate-400 hover:text-white hover:bg-[#1A1A2E]/60"
+              }`}>
+              {item.label}
+            </Link>
+          ))}
         </div>
 
-        {/* Desktop: content-area header — flex-1 spacer · center nav · flex-1 actions */}
-        <div className="hidden md:flex flex-1 items-center">
-          {/* Left spacer */}
-          <div className="flex-1" />
-          {/* Center nav — centered in the content area (viewport minus sidebar) */}
-          <div className="flex items-center gap-1">
-            {NAV_LINKS.map((item) => (
-              <Link key={item.href} href={item.href}
-                className={`font-mono text-sm px-4 py-1.5 rounded-lg transition-all ${
-                  isActive(item.href)
-                    ? "text-[#4FC3F7] bg-[#4FC3F7]/10"
-                    : "text-slate-400 hover:text-white hover:bg-[#1A1A2E]/60"
-                }`}>
-                {item.label}
-              </Link>
-            ))}
-          </div>
-          {/* Right actions — flex-1 mirrors left spacer for symmetric centering */}
-          <div className="flex-1 flex items-center justify-end gap-2">
-            <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer"
-              className="text-slate-500 hover:text-white transition-colors p-1.5 rounded" aria-label="X / Twitter">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-              </svg>
-            </a>
-            {/* Wallet button */}
-            <ConnectButton />
-            <Link href="/console"
-              className="font-mono text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-4 py-1.5 rounded hover:bg-[#29ABE2] transition-colors">
-              Console
-            </Link>
-          </div>
+        {/* Right — actions */}
+        <div className="hidden md:flex ml-auto items-center gap-2">
+          <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer"
+            className="text-slate-500 hover:text-white transition-colors p-1.5 rounded" aria-label="X / Twitter">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+          </a>
+          <ConnectButton />
+          <Link href="/console"
+            className="font-mono text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-4 py-1.5 rounded hover:bg-[#29ABE2] transition-colors">
+            Console
+          </Link>
         </div>
 
         {/* Mobile hamburger */}
