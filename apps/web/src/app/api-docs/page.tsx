@@ -6,7 +6,7 @@ import Navbar from "@/components/Navbar";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
-const BASE_URL = "https://blueagent.dev/api/v1";
+const BASE_URL = "https://blueagent.dev/api/x402";
 
 interface Param { name: string; type: string; required: boolean; desc: string }
 interface Tool  { name: string; price: string; desc: string; params: Param[]; example: string }
@@ -173,7 +173,7 @@ const CATEGORIES: { id: string; label: string; color: string; sub: string; tools
 
 const CODE_SNIPPETS: Record<string, string> = {
   curl: `# builder-score — $0.001 per call
-curl -X POST https://blueagent.dev/api/v1/builder-score \\
+curl -X POST https://blueagent.dev/api/x402/builder-score \\
   -H "Content-Type: application/json" \\
   -H "X-Payment: <x402-payment-token>" \\
   -d '{"handle":"madebyshun"}'`,
@@ -181,7 +181,7 @@ curl -X POST https://blueagent.dev/api/v1/builder-score \\
   node: `// npm install node-fetch
 import fetch from "node-fetch";
 
-const res = await fetch("https://blueagent.dev/api/v1/builder-score", {
+const res = await fetch("https://blueagent.dev/api/x402/builder-score", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
@@ -195,7 +195,7 @@ console.log(data);`,
   python: `import requests
 
 resp = requests.post(
-    "https://blueagent.dev/api/v1/builder-score",
+    "https://blueagent.dev/api/x402/builder-score",
     headers={
         "Content-Type": "application/json",
         "X-Payment": "<x402-payment-token>",
@@ -255,7 +255,7 @@ function OverviewSection() {
         {/* Stats row */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: "Base URL", value: "blueagent.dev/api/v1", color: "#4FC3F7" },
+            { label: "Base URL", value: "blueagent.dev/api/x402", color: "#4FC3F7" },
             { label: "Protocol", value: "HTTPS · REST · JSON",  color: "#34d399" },
             { label: "Payment",  value: "x402 · USDC on Base",  color: "#fbbf24" },
           ].map((s) => (
@@ -439,7 +439,7 @@ function EndpointsSection({ category }: { category: typeof CATEGORIES[number] })
                   POST
                 </span>
                 <span className="font-mono text-xs text-white group-hover:text-[#4FC3F7] transition-colors text-left">
-                  /api/v1/{tool.name}
+                  /api/x402/{tool.name}
                 </span>
                 <span className="font-mono text-[10px] text-slate-600 text-left flex-1 hidden sm:block truncate">
                   {tool.desc}
@@ -554,7 +554,7 @@ export default function ApiDocsPage() {
           <div className="px-5 py-4 border-t border-[#1A1A2E] space-y-2">
             <div className="bg-[#0D0D14] rounded px-3 py-2">
               <p className="font-mono text-[10px] text-slate-700 mb-0.5">base url</p>
-              <p className="font-mono text-[10px] text-[#4FC3F7] break-all">blueagent.dev/api/v1</p>
+              <p className="font-mono text-[10px] text-[#4FC3F7] break-all">blueagent.dev/api/x402</p>
             </div>
             <Link href="/hub"
               className="flex items-center justify-between font-mono text-[10px] text-slate-600 hover:text-white border border-[#1A1A2E] hover:border-[#4FC3F7]/30 rounded px-3 py-2 transition-all">
