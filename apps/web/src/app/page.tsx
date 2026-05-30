@@ -175,19 +175,18 @@ function PanelOverview() {
         {/* Badge */}
         <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-4 py-1.5 mb-8">
           <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-          <span className="text-[10px] text-[#4FC3F7] tracking-widest">BUILT ON BASE · POWERED BY BANKR LLM</span>
+          <span className="text-[10px] text-[#4FC3F7] tracking-widest">30+ AI TOOLS · x402 NATIVE · BASE MAINNET</span>
         </div>
 
         {/* Heading */}
         <h1 className="text-6xl sm:text-7xl lg:text-8xl font-bold text-white tracking-tight leading-none mb-5">
           BLUE<span className="text-[#4FC3F7]">AGENT</span>
         </h1>
-        <p className="text-base text-slate-400 mb-2 max-w-lg leading-relaxed">
-          The AI founder console for Base builders.
+        <p className="text-base text-slate-300 mb-2 max-w-lg leading-relaxed">
+          <span className="bg-gradient-to-r from-[#4FC3F7] via-[#A78BFA] to-[#34D399] bg-clip-text text-transparent font-semibold">30+ AI tools</span> for Base builders. Pay per call in USDC.
         </p>
-        <p className="text-sm text-slate-600 mb-10 max-w-md leading-relaxed">
-          Idea → build → audit → ship → raise.<br />
-          Grounded in real Base knowledge. No hallucinations.
+        <p className="text-sm text-slate-500 mb-10 max-w-md leading-relaxed">
+          No subscription. No API key. Built for humans <span className="text-slate-300">and</span> agents — calls + payments are x402-native.
         </p>
 
         {/* Install command */}
@@ -200,19 +199,35 @@ function PanelOverview() {
         </p>
 
         {/* CTAs */}
-        <div className="flex flex-wrap justify-center gap-3">
-          <Link href="/console"
-            className="text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-6 py-2.5 rounded hover:bg-[#29ABE2] transition-colors">
-            Start building →
-          </Link>
+        <div className="flex flex-wrap justify-center gap-3 mb-7">
           <Link href="/hub"
+            className="text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-6 py-2.5 rounded hover:bg-[#29ABE2] transition-colors">
+            Open Blue Hub →
+          </Link>
+          <Link href="/console"
             className="text-sm text-[#4FC3F7] border border-[#4FC3F7]/30 px-6 py-2.5 rounded hover:bg-[#4FC3F7]/5 transition-all">
-            Explore Hub →
+            Try the CLI →
           </Link>
-          <Link href="/docs"
+          <Link href="/api-docs"
             className="text-sm text-slate-500 border border-[#1A1A2E] px-6 py-2.5 rounded hover:text-white hover:border-[#4FC3F7]/30 transition-all">
-            Read docs →
+            For agents →
           </Link>
+        </div>
+
+        {/* MCP one-liner — for the "agent" half of the audience */}
+        <div className="mx-auto max-w-2xl">
+          <p className="text-[10px] text-slate-700 tracking-widest mb-2 uppercase">// Use with any MCP client — no install</p>
+          <div className="bg-[#0D0D14] border border-[#1A1A2E] rounded-xl px-4 py-3 text-left font-mono text-[11px] text-slate-300 overflow-x-auto">
+            <span className="text-slate-600">{`{ `}</span>
+            <span className="text-[#A78BFA]">&quot;mcpServers&quot;</span>
+            <span className="text-slate-600">{`: { `}</span>
+            <span className="text-[#A78BFA]">&quot;blue-agent&quot;</span>
+            <span className="text-slate-600">{`: { `}</span>
+            <span className="text-[#A78BFA]">&quot;url&quot;</span>
+            <span className="text-slate-600">: </span>
+            <span className="text-[#34D399]">&quot;https://blueagent.dev/api/mcp&quot;</span>
+            <span className="text-slate-600">{` } } }`}</span>
+          </div>
         </div>
       </div>
 
@@ -579,9 +594,9 @@ type Section = "overview" | "commands" | "skills" | "hub" | "ecosystem" | "integ
 
 const NAV: { key: Section; label: string; sub: string }[] = [
   { key: "overview",     label: "Overview",      sub: "What is Blue Agent" },
+  { key: "hub",          label: "Hub",           sub: "30+ AI tools · x402" },
   { key: "commands",     label: "Commands",      sub: "30 commands" },
   { key: "skills",       label: "Grounding",     sub: "34 knowledge files" },
-  { key: "hub",          label: "Hub",           sub: "34 collab tools" },
   { key: "ecosystem",    label: "Ecosystem",     sub: "9 npm packages" },
   { key: "integrations", label: "Integrations",  sub: "Quick start" },
 ];
@@ -670,6 +685,12 @@ export default function Home() {
             <PanelOverview />
           </section>
 
+          <section id="hub"
+            ref={(el) => { if (el) sectionRefs.current.hub = el; }}
+            className="border-b border-[#1A1A2E]">
+            <PanelHub />
+          </section>
+
           <section id="commands"
             ref={(el) => { if (el) sectionRefs.current.commands = el; }}
             className="border-b border-[#1A1A2E]">
@@ -680,12 +701,6 @@ export default function Home() {
             ref={(el) => { if (el) sectionRefs.current.skills = el; }}
             className="border-b border-[#1A1A2E]">
             <PanelSkills />
-          </section>
-
-          <section id="hub"
-            ref={(el) => { if (el) sectionRefs.current.hub = el; }}
-            className="border-b border-[#1A1A2E]">
-            <PanelHub />
           </section>
 
           <section id="ecosystem"
