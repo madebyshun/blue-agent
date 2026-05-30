@@ -422,15 +422,28 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
 
   const loading = step === "calling" || step === "signing" || step === "paying";
 
-  function shareResult() {
+  async function shareResult() {
     if (!result) return;
-    const r: ToolResult = { result, isMock, mockReason };
-    const encoded = encodeShare(tool.id, r);
-    const url = `${window.location.origin}/hub#s=${encoded}`;
-    navigator.clipboard.writeText(url).then(() => {
+    try {
+      // Server-side short id so URLs are ~30 chars instead of 3 KB of base64
+      const res = await fetch("/api/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toolId: tool.id, result, isMock, mockReason }),
+      });
+      const data = await res.json() as { id?: string };
+      const url = data.id
+        ? `${window.location.origin}/hub#s=${data.id}`
+        : `${window.location.origin}/hub/${tool.id}`; // fallback to tool detail
+      await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    } catch {
+      // Fallback: copy plain tool detail link
+      await navigator.clipboard.writeText(`${window.location.origin}/hub/${tool.id}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   }
 
   async function run() {
@@ -971,20 +984,37 @@ export default function HubPage() {
     }
   }, []);
 
-  // ── On mount: decode shared result from URL hash ──────────────────────────
+  // ── On mount: load shared result from URL hash ────────────────────────────
+  // Two formats supported:
+  //   #s=<10-hex-id>      → short id, fetched from /api/share/[id]   (new)
+  //   #s=<base64 payload> → legacy inline payload (kept for old links)
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const hash = window.location.hash.slice(1); // strip #
+    const hash = window.location.hash.slice(1);
     if (!hash.startsWith("s=")) return;
-    const shared = decodeShare(hash.slice(2));
-    if (!shared) return;
-    const tool = TOOLS.find(t => t.id === shared.toolId);
-    if (!tool) return;
-    const r: ToolResult = { result: shared.result, isMock: shared.isMock, mockReason: shared.mockReason };
-    setCache(prev => new Map(prev).set(shared.toolId, r));
-    setSelected(tool);
-    // clean hash from URL without reload
-    window.history.replaceState(null, "", window.location.pathname);
+    const value = hash.slice(2);
+
+    const apply = (toolId: string, result: Record<string, unknown>, isMock: boolean, mockReason: "dev" | "service-down") => {
+      const tool = TOOLS.find(t => t.id === toolId);
+      if (!tool) return;
+      setCache(prev => new Map(prev).set(toolId, { result, isMock, mockReason }));
+      setSelected(tool);
+      window.history.replaceState(null, "", window.location.pathname);
+    };
+
+    if (/^[a-f0-9]{6,32}$/.test(value)) {
+      // Short id — fetch from server
+      fetch(`/api/share/${value}`)
+        .then(r => r.ok ? r.json() : null)
+        .then((p: { toolId?: string; result?: Record<string, unknown>; isMock?: boolean; mockReason?: "dev" | "service-down" } | null) => {
+          if (p?.toolId && p?.result) apply(p.toolId, p.result, !!p.isMock, p.mockReason ?? "dev");
+        })
+        .catch(() => {});
+    } else {
+      // Legacy inline base64 payload
+      const shared = decodeShare(value);
+      if (shared) apply(shared.toolId, shared.result, shared.isMock, shared.mockReason);
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = TOOLS.filter(t =>
