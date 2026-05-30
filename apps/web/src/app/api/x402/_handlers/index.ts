@@ -1,4 +1,9 @@
 // AUTO-GENERATED — self-hosted x402 handler registry (copied from apps/api/x402).
+import hBlueIdea  from "./blue-idea";
+import hBlueBuild from "./blue-build";
+import hBlueAudit from "./blue-audit";
+import hBlueShip  from "./blue-ship";
+import hBlueRaise from "./blue-raise";
 import h0 from "./agent-collab-match";
 import h1 from "./agent-performance";
 import h2 from "./agent-revenue-optimizer";
@@ -69,4 +74,9 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "token-pick-signal": h31,
   "wallet-strategy-analyzer": h32,
   "whale-copy-signal": h33,
+  "blue-idea":  hBlueIdea,
+  "blue-build": hBlueBuild,
+  "blue-audit": hBlueAudit,
+  "blue-ship":  hBlueShip,
+  "blue-raise": hBlueRaise,
 };
