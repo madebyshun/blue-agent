@@ -187,6 +187,7 @@ That said, Blue Hub composes cleanly with execution plugins:
 
 | Tool ID                   | Price  | What it returns                                              |
 |---------------------------|--------|--------------------------------------------------------------|
+| `contract-trust`          | $0.15  | SAFE / CAUTION / RED_FLAG verdict before swapping            |
 | `ecosystem-digest`        | $0.20  | Weekly Base pulse — movers, narratives, what to watch        |
 | `token-pick-signal`       | $0.20  | One actionable pick + entry, sizing, kill criterion          |
 | `narrative-position`      | $0.25  | Narrative map · FRONT-RUN / RIDE / FADE / IGNORE             |

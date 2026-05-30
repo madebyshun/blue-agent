@@ -694,6 +694,28 @@ export const AGENT_TOOLS: AgentTool[] = [
 
   // ── Console commands (paid x402) ────────────────────────────────────────────
   {
+    id: "contract-trust",
+    name: "Contract Trust",
+    description: "Audit any Base contract before swapping or interacting. Basescan verification + security scan + community signal. Verdict: SAFE / CAUTION / RED_FLAG.",
+    agentHandle: "composite",
+    agentName: "Blue + MiroShark",
+    agentType: "composite",
+    category: "security",
+    inputs: [
+      { key: "address", label: "Contract address", placeholder: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", required: true },
+      { key: "context", label: "What is this contract? (optional)", placeholder: "USDC token on Base", required: false },
+    ],
+    isComposite: true,
+    compositeSkills: [
+      { agentType: "blue", label: "Security analysis" },
+      { agentType: "miroshark", label: "Community trust signal" },
+    ],
+    featured: false,
+    price: "$0.15", priceUSDC: 150000,
+    x402Url: `https://blueagent.dev/api/x402/contract-trust`,
+    x402Body: (v) => ({ address: v.address ?? "", context: v.context ?? "" }),
+  },
+  {
     id: "blue-idea",
     name: "Blue Idea",
     description: "Turn a rough concept into a fundable brief — problem, why now, why Base, MVP scope, risks, 24h plan.",
