@@ -116,7 +116,7 @@ export default function ConsolePage() {
               >
                 <div className="font-mono text-sm flex items-center justify-between">
                   <span>{cmd.cmd}</span>
-                  <span className="font-mono text-[10px] text-slate-700 ml-2">{cmd.price}</span>
+                  <span className="font-mono text-[10px] text-[#34D399] ml-2">free</span>
                 </div>
                 <div className="font-mono text-[10px] text-slate-700 mt-0.5 leading-snug">{cmd.label} — {cmd.desc.slice(0, 40)}…</div>
               </button>
@@ -191,7 +191,7 @@ export default function ConsolePage() {
             <div className="flex items-center gap-2 mb-2">
               <span className="font-mono text-xs text-[#4FC3F7]">&lt;{selected.label}&gt;</span>
               <span className="font-mono text-sm text-white font-semibold">{selected.cmd}</span>
-              <span className="font-mono text-xs text-slate-700 ml-auto">{selected.price}</span>
+              <span className="font-mono text-xs text-[#34D399] ml-auto">free</span>
             </div>
             <p className="font-mono text-sm text-slate-400 mb-3 leading-relaxed">{selected.desc}</p>
             <div className="flex flex-wrap gap-1">
@@ -208,7 +208,7 @@ export default function ConsolePage() {
             <div className="mb-6 card-surface rounded-xl p-4 border border-[#4FC3F7]/15 flex items-center justify-between gap-4">
               <div>
                 <p className="font-mono text-xs text-slate-300 font-semibold mb-0.5">Connect to unlock Console</p>
-                <p className="font-mono text-[10px] text-slate-600">Hold $BLUEAGENT · pay {selected.price} per run</p>
+                <p className="font-mono text-[10px] text-slate-600">Free for builders · powered by Bankr LLM</p>
               </div>
               <button
                 onClick={() => connect({ connector: bestConnector() })}
@@ -329,8 +329,8 @@ export default function ConsolePage() {
                 <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] animate-pulse shrink-0" />
                 <span className="font-mono text-[10px] text-slate-700">
                   {isConnected
-                    ? `34 skills loaded · Base-grounded · Bankr LLM · ${selected.price}/run`
-                    : "Connect wallet to run commands · Hold $BLUEAGENT · pay per use · x402 on Base"}
+                    ? "34 skills loaded · Base-grounded · Bankr LLM · free"
+                    : "Connect wallet to unlock Console · free for builders · powered by Bankr LLM"}
                 </span>
               </div>
             </div>
