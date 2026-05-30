@@ -36,13 +36,8 @@ async function usdcBalance(): Promise<number | null> {
   } catch { return null; }
 }
 
-export async function GET(req: NextRequest) {
-  const key = req.nextUrl.searchParams.get("key");
-  const secret = process.env.STATS_SECRET ?? process.env.CRON_SECRET;
-  if (secret && key !== secret) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export async function GET(_req: NextRequest) {
+  // Public access — page itself is unlisted (no nav link, robots noindex)
   const rows = (await Promise.all(
     AGENT_TOOLS.map(async t => {
       const runs = (await kvGet<number>(`usage:${t.id}`)) ?? 0;
