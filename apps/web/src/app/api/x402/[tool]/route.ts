@@ -291,7 +291,9 @@ async function handle(
   }
 
   // 3. SETTLE (charge) only after a successful run
-  const settle = await cdpSettle(paymentPayload, requirements);
+  // Forward Bazaar extension so CDP can catalog via the settle call
+  // (the official x402 middleware sends extensions at settle time via processSettlement)
+  const settle = await cdpSettle(paymentPayload, requirements, resourceInfo, { bazaar: bazaarExt });
   try { await kv.incr(`usage:${tool}`); } catch {}
   return NextResponse.json({ ...data, _settle: { ok: settle.ok, status: settle.status, tx: settle.tx } });
 }

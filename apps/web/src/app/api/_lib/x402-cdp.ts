@@ -91,13 +91,14 @@ async function cdpCall(
     const endpointHeaders = path === "/settle" ? authHeaders?.settle : authHeaders?.verify;
 
     // Bazaar extension goes INSIDE paymentPayload (resource + extensions fields).
-    // The facilitator reads paymentPayload.resource.url and paymentPayload.extensions.bazaar
-    // to catalog the service — see x402 bazaar/facilitator.ts#extractDiscoveryInfo.
+    // The official x402 middleware sends extensions with the SETTLE call via processSettlement
+    // (see x402-next handleSettlement → processSettlement(paymentPayload, reqs, declaredExtensions)).
+    // We send on both /verify and /settle to maximize compatibility.
     const v2Payload = toV2PaymentPayload(
       paymentPayload,
       requirements,
-      path === "/verify" ? resource : undefined,
-      path === "/verify" ? extensions : undefined,
+      resource,
+      extensions,
     );
 
     const res = await fetch(`${base}${path}`, {
@@ -136,7 +137,7 @@ async function cdpCall(
 export async function cdpVerify(
   paymentPayload: unknown,
   requirements: PaymentRequirements,
-  resource?: { url: string; description?: string; mimeType?: string },
+  resource?: { url: string; description?: string; mimeType?: string; serviceName?: string; tags?: string[]; iconUrl?: string },
   extensions?: { bazaar?: BazaarExtension },
 ): Promise<SettleResult> {
   const r = await cdpCall("/verify", paymentPayload, requirements, resource, extensions);
@@ -149,9 +150,11 @@ export async function cdpVerify(
 /** Settle on-chain via CDP. ok=true only if USDC moved. */
 export async function cdpSettle(
   paymentPayload: unknown,
-  requirements: PaymentRequirements
+  requirements: PaymentRequirements,
+  resource?: { url: string; description?: string; mimeType?: string; serviceName?: string; tags?: string[]; iconUrl?: string },
+  extensions?: { bazaar?: BazaarExtension },
 ): Promise<SettleResult> {
-  const r = await cdpCall("/settle", paymentPayload, requirements);
+  const r = await cdpCall("/settle", paymentPayload, requirements, resource, extensions);
   const d = r.detail as Record<string, unknown> | string;
   const success = r.ok && (typeof d === "object" && d !== null ? d?.success !== false : true);
   // x402 settle response carries the on-chain tx hash (field name varies)
