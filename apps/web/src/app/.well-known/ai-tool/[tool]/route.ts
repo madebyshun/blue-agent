@@ -67,6 +67,11 @@ export async function GET(
       properties: inputProperties,
       ...(required.length > 0 ? { required } : {}),
     },
+    // outputs is required by @opensea/tool-sdk validation
+    outputs: {
+      result: { type: "string", description: "AI-generated output" },
+      command: { type: "string", description: "Tool identifier" },
+    },
     creatorAddress: CREATOR_ADDRESS,
     pricing: [
       {
