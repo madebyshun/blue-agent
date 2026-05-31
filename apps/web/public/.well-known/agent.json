@@ -19,7 +19,9 @@
     "console": "https://blueagent.dev/code",
     "signal": "https://blueagent.dev/api/signal",
     "simulate": "https://blueagent.dev/api/simulate",
-    "health": "https://blueagent.dev/api/health"
+    "health": "https://blueagent.dev/api/health",
+    "ai_plugin": "https://blueagent.dev/.well-known/ai-plugin.json",
+    "openapi": "https://blueagent.dev/.well-known/openapi.json"
   },
   "x402": {
     "protocol": "x402",
