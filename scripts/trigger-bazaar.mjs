@@ -85,6 +85,23 @@ if (!req) {
   process.exit(1);
 }
 
+// Extract PaymentRequired from the header (includes extensions.bazaar)
+// The client is supposed to copy extensions + resource into the X-Payment payload
+// so the facilitator can catalog the service in Bazaar (CDP discovery index).
+let paymentRequiredMeta = null;
+const prHeader = r1.headers.get("payment-required");
+if (prHeader) {
+  try {
+    paymentRequiredMeta = JSON.parse(Buffer.from(prHeader, "base64").toString("utf-8"));
+    console.log(`✓ payment-required header decoded (${prHeader.length} chars)`);
+    if (paymentRequiredMeta?.extensions?.bazaar) {
+      console.log(`✓ Bazaar extension found in payment-required header`);
+    }
+  } catch {
+    console.log(`⚠️  Could not decode payment-required header`);
+  }
+}
+
 console.log(`✓ Got requirements:`);
 console.log(`  amount:  ${req.amount} atoms (${Number(req.amount) / 1e6} USDC)`);
 console.log(`  payTo:   ${req.payTo}`);
@@ -141,6 +158,10 @@ const signature = await walletClient.signTypedData({
 console.log(`✓ Signature: ${signature.slice(0, 30)}...`);
 
 // ── Step 3: Build X-Payment header (x402 v2 format) ─────────────────────────
+// IMPORTANT: Copy resource + extensions from the 402 payment-required header
+// into the payment payload so the facilitator can catalog this service in Bazaar.
+// Per x402 spec: "For v2: Discovery info is in PaymentPayload.extensions
+// (client copied it from PaymentRequired)"
 
 const paymentPayload = {
   x402Version: 2,
@@ -157,10 +178,16 @@ const paymentPayload = {
       nonce,
     },
   },
+  // Copy resource + extensions from the 402 response → this is what triggers Bazaar indexing
+  ...(paymentRequiredMeta?.resource    ? { resource: paymentRequiredMeta.resource }       : {}),
+  ...(paymentRequiredMeta?.extensions  ? { extensions: paymentRequiredMeta.extensions }   : {}),
 };
 
 const xPaymentHeader = Buffer.from(JSON.stringify(paymentPayload)).toString("base64");
 console.log(`\n[3] X-Payment built (${xPaymentHeader.length} chars)`);
+if (paymentPayload.extensions?.bazaar) {
+  console.log(`    ✓ Bazaar extension included in X-Payment payload`);
+}
 
 // ── Step 4: POST with payment → triggers CDP verify + run + settle ────────────
 
@@ -169,7 +196,7 @@ const t0 = Date.now();
 
 // Tool-specific body (use minimal valid input)
 const TOOL_BODIES = {
-  "blue-idea":    { description: "AI-powered DeFi yield optimizer on Base" },
+  "blue-idea":    { prompt: "AI-powered DeFi yield optimizer on Base" },
   "blue-build":   { idea: "AI-powered DeFi yield optimizer on Base" },
   "blue-ship":    { project: "Blue Hub x402 API" },
   "blue-raise":   { project: "Blue Hub", traction: "35 tools, x402 payments" },
@@ -215,6 +242,29 @@ if (settle?.ok) {
   }
 } else {
   console.log(`⚠️  settle.ok = ${settle?.ok} | status: ${settle?.status}`);
+}
+
+// ── Step 5b: Check EXTENSION-RESPONSES header for Bazaar status ──────────────
+const extHeader = r2.headers.get("extension-responses") ?? r2.headers.get("EXTENSION-RESPONSES");
+console.log("\n══ Bazaar Indexing ═══════════════════════════════════");
+if (extHeader) {
+  try {
+    const extData = JSON.parse(Buffer.from(extHeader, "base64").toString("utf-8"));
+    const bazaar = extData.bazaar;
+    if (bazaar?.status === "success") {
+      console.log(`✅ Bazaar: INDEXED! (status: success)`);
+    } else if (bazaar?.status === "processing") {
+      console.log(`⏳ Bazaar: processing (async) — check agentic.market in ~2 min`);
+    } else if (bazaar?.status === "rejected") {
+      console.log(`❌ Bazaar REJECTED: ${bazaar.rejectedReason}`);
+    } else {
+      console.log(`⚠️  Bazaar response:`, JSON.stringify(extData));
+    }
+  } catch {
+    console.log(`⚠️  Could not parse EXTENSION-RESPONSES header: ${extHeader.slice(0, 100)}`);
+  }
+} else {
+  console.log(`ℹ️  No EXTENSION-RESPONSES header (CDP may not return this, or Bazaar not yet active)`);
 }
 
 console.log("\n══ Tool Output (preview) ════════════════════════════");

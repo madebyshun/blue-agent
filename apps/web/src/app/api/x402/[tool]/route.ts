@@ -30,35 +30,43 @@ const PRICE_UNITS = new Map<string, number>(
 
 /**
  * Build the Bazaar extension object for a tool.
- * Follows BodyDiscoveryExtension type from x402-extensions:
- *   info.input requires bodyType + body (example values)
- *   schema is a JSON Schema describing the info shape
+ * Format confirmed from agentic.clawbots.org (indexed service):
+ *   discoverable: true
+ *   info.description: string
+ *   info.input: { type, method, bodyType, body, inputSchema }
+ *   info.output: { example }
  */
 function buildBazaarExtension(meta: typeof AGENT_TOOLS[number] | undefined) {
-  // Example body: first required input gets a placeholder, optionals get empty string
+  // Example body: required inputs get placeholder, optionals get empty string
   const bodyExample = meta
     ? Object.fromEntries(meta.inputs.map(i => [i.key, i.required ? `<${i.key}>` : ""]))
     : {};
 
-  // Per-field body schema properties
+  // Per-field body schema properties (inputSchema goes inside info.input)
   const bodyProperties = meta
     ? Object.fromEntries(meta.inputs.map(i => [i.key, { type: "string", description: i.label }]))
     : {};
   const bodyRequired = meta ? meta.inputs.filter(i => i.required).map(i => i.key) : [];
 
+  const description = meta?.description ?? "Blue Hub AI tool for Base builders";
+
   return {
-    // routeTemplate normalizes /api/x402/blue-idea, /api/x402/token-pick-signal, etc.
-    // into a single catalog entry: /api/x402/:tool
-    routeTemplate: "/api/x402/:tool",
+    discoverable: true,
     info: {
+      description,
       input: {
         type: "http",
         method: "POST",
         bodyType: "json",
         body: bodyExample,
+        inputSchema: {
+          type: "object",
+          properties: bodyProperties,
+          required: bodyRequired,
+          additionalProperties: false,
+        },
       },
       output: {
-        type: "json",
         example: {
           tool: meta?.id ?? "tool",
           result: "AI-generated analysis",
@@ -66,29 +74,6 @@ function buildBazaarExtension(meta: typeof AGENT_TOOLS[number] | undefined) {
           _settle: { ok: true, status: 200, tx: "0x..." },
         },
       },
-    },
-    schema: {
-      $schema: "https://json-schema.org/draft/2020-12/schema",
-      type: "object",
-      properties: {
-        input: {
-          type: "object",
-          properties: {
-            type: { type: "string", const: "http" },
-            method: { type: "string", enum: ["POST"] },
-            bodyType: { type: "string", enum: ["json"] },
-            body: {
-              type: "object",
-              properties: bodyProperties,
-              required: bodyRequired,
-              additionalProperties: false,
-            },
-          },
-          required: ["type", "method", "bodyType", "body"],
-          additionalProperties: false,
-        },
-      },
-      required: ["input"],
     },
   };
 }
