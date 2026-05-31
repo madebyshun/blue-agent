@@ -28,6 +28,92 @@ const PRICE_UNITS = new Map<string, number>(
     .filter((e): e is readonly [string, number] => e[1] !== null)
 );
 
+/**
+ * Build the Bazaar extension object for a tool.
+ * Follows BodyDiscoveryExtension type from x402-extensions:
+ *   info.input requires bodyType + body (example values)
+ *   schema is a JSON Schema describing the info shape
+ */
+function buildBazaarExtension(meta: typeof AGENT_TOOLS[number] | undefined) {
+  // Example body: first required input gets a placeholder, optionals get empty string
+  const bodyExample = meta
+    ? Object.fromEntries(meta.inputs.map(i => [i.key, i.required ? `<${i.key}>` : ""]))
+    : {};
+
+  // Per-field body schema properties
+  const bodyProperties = meta
+    ? Object.fromEntries(meta.inputs.map(i => [i.key, { type: "string", description: i.label }]))
+    : {};
+  const bodyRequired = meta ? meta.inputs.filter(i => i.required).map(i => i.key) : [];
+
+  return {
+    info: {
+      input: {
+        type: "http",
+        method: "POST",
+        bodyType: "json",
+        body: bodyExample,
+      },
+      output: {
+        type: "json",
+        example: {
+          tool: meta?.id ?? "tool",
+          result: "AI-generated analysis",
+          verdict: "RESULT",
+          _settle: { ok: true, status: 200, tx: "0x..." },
+        },
+      },
+    },
+    schema: {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      properties: {
+        input: {
+          type: "object",
+          properties: {
+            type: { type: "string", const: "http" },
+            method: { type: "string", enum: ["POST"] },
+            bodyType: { type: "string", enum: ["json"] },
+            body: {
+              type: "object",
+              properties: bodyProperties,
+              required: bodyRequired,
+              additionalProperties: false,
+            },
+          },
+          required: ["type", "method", "bodyType", "body"],
+          additionalProperties: false,
+        },
+      },
+      required: ["input"],
+    },
+  };
+}
+
+/** Build the full payment-required payload (used in header + body) */
+function buildPaymentRequired(
+  tool: string,
+  requirements: ReturnType<typeof buildRequirements>,
+  meta: typeof AGENT_TOOLS[number] | undefined,
+) {
+  const endpointUrl = `https://blueagent.dev/api/x402/${tool}`;
+  return {
+    x402Version: 2,
+    accepts: [requirements],
+    resource: {
+      url: endpointUrl,
+      description: meta?.description ?? `Blue Hub tool: ${tool}`,
+      mimeType: "application/json",
+      serviceName: "Blue Hub",
+      tags: ["base", "ai", "defi", "agents"],
+      iconUrl: "https://blueagent.dev/icon.png",
+    },
+    extensions: {
+      bazaar: buildBazaarExtension(meta),
+    },
+  };
+}
+
 // GET with no X-Payment → 402 (Bazaar discovery + browser preview)
 export async function GET(
   _req: NextRequest,
@@ -43,32 +129,13 @@ export async function GET(
 
   const requirements = buildRequirements(String(priceUnits));
   const meta = AGENT_TOOLS.find(t => t.id === tool);
-  const endpointUrl = `https://blueagent.dev/api/x402/${tool}`;
+  const paymentRequired = buildPaymentRequired(tool, requirements, meta);
   const inputSchema = meta ? {
     type: "object",
     properties: Object.fromEntries(meta.inputs.map(i => [i.key, { type: "string", description: i.label }])),
     required: meta.inputs.filter(i => i.required).map(i => i.key),
   } : undefined;
-  const paymentRequired = {
-    x402Version: 2,
-    accepts: [requirements],
-    resource: {
-      url: endpointUrl,
-      description: meta?.description ?? `Blue Hub tool: ${tool}`,
-      mimeType: "application/json",
-      serviceName: "Blue Hub",
-      tags: ["base", "ai", "defi", "agents"],
-      iconUrl: "https://blueagent.dev/icon.png",
-    },
-    extensions: {
-      bazaar: {
-        info: {
-          input: { type: "http", method: "POST", bodySchema: inputSchema },
-          output: { type: "json" },
-        },
-      },
-    },
-  };
+
   const paymentRequiredHeader = Buffer.from(JSON.stringify(paymentRequired)).toString("base64");
   return NextResponse.json(
     {
@@ -129,32 +196,12 @@ async function handle(
   // No payment → 402 with self-describing metadata (name, description, inputs)
   if (!xPayment) {
     const meta = AGENT_TOOLS.find(t => t.id === tool);
-    const endpointUrl = `https://blueagent.dev/api/x402/${tool}`;
+    const paymentRequired = buildPaymentRequired(tool, requirements, meta);
     const inputSchema = meta ? {
       type: "object",
       properties: Object.fromEntries(meta.inputs.map(i => [i.key, { type: "string", description: i.label }])),
       required: meta.inputs.filter(i => i.required).map(i => i.key),
     } : undefined;
-    const paymentRequired = {
-      x402Version: 2,
-      accepts: [requirements],
-      resource: {
-        url: endpointUrl,
-        description: meta?.description ?? `Blue Hub tool: ${tool}`,
-        mimeType: "application/json",
-        serviceName: "Blue Hub",
-        tags: ["base", "ai", "defi", "agents"],
-        iconUrl: "https://blueagent.dev/icon.png",
-      },
-      extensions: {
-        bazaar: {
-          info: {
-            input: { type: "http", method: "POST", bodySchema: inputSchema },
-            output: { type: "json" },
-          },
-        },
-      },
-    };
     const paymentRequiredHeader = Buffer.from(JSON.stringify(paymentRequired)).toString("base64");
     return NextResponse.json(
       {
