@@ -14,7 +14,7 @@ import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { HANDLERS } from "@/app/api/x402/_handlers";
 
 const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-const CREATOR_ADDRESS = "0x62B45FF0fF8620d36A48dD981614fd27fA52A8A2"; // Blue Hub deployer wallet (signs ERC-8257 registrations)
+const CREATOR_ADDRESS = "0x62b45ff0ff8620d36a48dd981614fd27fa52a8a2"; // Blue Hub deployer wallet (signs ERC-8257 registrations)
 
 // Category → tags mapping
 const CATEGORY_TAGS: Record<string, string[]> = {
