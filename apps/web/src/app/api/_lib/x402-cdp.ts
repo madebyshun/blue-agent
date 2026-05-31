@@ -62,17 +62,12 @@ type SettleResult = { ok: boolean; status: number; detail: unknown; tx?: string 
 
 /** Bazaar extension payload — forwarded to CDP so it can catalog the service. */
 export type BazaarExtension = {
-  /** Must be true to opt into Bazaar discovery indexing */
-  discoverable: boolean;
   info: {
-    description?: string;
     input: {
       type: string;
       method: string;
       bodyType?: string;
       body?: Record<string, unknown>;
-      /** JSON Schema for the request body — goes inside info.input (not top-level) */
-      inputSchema?: Record<string, unknown>;
     };
     output: { example?: unknown };
   };
