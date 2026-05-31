@@ -38,7 +38,12 @@ export function buildRequirements(amountUnits: string): PaymentRequirements {
   };
 }
 
-/** Reshape the hub's X-Payment into a v2 PaymentPayload (adds `accepted`, `resource`, `extensions`). */
+/** Reshape the hub's X-Payment into a v2 PaymentPayload (adds `accepted`, `resource`, `extensions`).
+ *
+ * IMPORTANT: Preserve scheme/network/payload from the client's X-Payment so CDP can parse the
+ * full PaymentPayload. CDP's schema requires {x402Version, scheme, network, payload} — if we
+ * drop scheme/network, CDP may strip unknown fields (resource, extensions) before discovery.
+ */
 function toV2PaymentPayload(
   incoming: unknown,
   requirements: PaymentRequirements,
@@ -46,13 +51,13 @@ function toV2PaymentPayload(
   extensions?: { bazaar?: BazaarExtension },
 ) {
   const obj = (incoming ?? {}) as Record<string, unknown>;
-  const inner = (obj.payload ?? obj) as Record<string, unknown>; // { signature, authorization }
+  // Preserve all client fields (scheme, network, payload, etc.) so CDP validation passes.
+  // Then override/add: accepted, resource, extensions from server side.
   return {
+    ...obj,
     x402Version: 2,
     accepted: requirements,
-    payload: inner,
-    // Bazaar: resource.url + extensions are read from paymentPayload by the facilitator
-    // (see x402/typescript/packages/extensions/src/bazaar/facilitator.ts#extractDiscoveryInfo)
+    // Bazaar: resource.url + extensions are read by CDP facilitator's extractDiscoveryInfo
     ...(resource ? { resource } : {}),
     ...(extensions ? { extensions } : {}),
   };
