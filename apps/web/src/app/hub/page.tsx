@@ -758,15 +758,59 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
   );
 }
 
+// ─── Tool groups (Option A — labeled sections) ────────────────────────────────
+
+const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids: string[] }[] = [
+  {
+    id: "traders",
+    label: "For Traders",
+    desc: "Signals, market intel, portfolio tools",
+    color: "#4FC3F7",
+    ids: ["token-pick-signal", "narrative-position", "whale-copy-signal", "defi-opportunity", "token-momentum-scanner", "portfolio-rebalancer", "ecosystem-digest", "protocol-risk-monitor"],
+  },
+  {
+    id: "founders",
+    label: "For Founders",
+    desc: "Launch, market fit, growth, fundraising",
+    color: "#A78BFA",
+    ids: ["market-fit", "token-launch-readiness", "competitor-scan", "gtm-brief", "launch-simulator", "base-grant-finder", "roadmap-validator", "token-distribution-plan", "stack-recommender"],
+  },
+  {
+    id: "investors",
+    label: "For Investors",
+    desc: "Due diligence, memos, pitch intel",
+    color: "#34D399",
+    ids: ["builder-deep-dd", "investor-memo", "pitch-intelligence", "fundraise-timing", "builder-brand-score", "base-protocol-comparison"],
+  },
+  {
+    id: "automation",
+    label: "Analytics & Automation",
+    desc: "Monitor contracts, wallets, protocols",
+    color: "#FB923C",
+    ids: ["contract-trust", "wallet-strategy-analyzer", "repo-health", "base-builder-network-match"],
+  },
+  {
+    id: "agents",
+    label: "Agent Economy",
+    desc: "Multi-agent workflows, revenue, collab",
+    color: "#94A3B8",
+    ids: ["agent-performance", "agent-collab-match", "agent-revenue-optimizer", "agent-token-strategy", "multi-agent-workflow", "community-sentiment", "community-growth-playbook", "thread-intelligence"],
+  },
+];
+
 // ─── Empty / browse state ─────────────────────────────────────────────────────
 
 function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t: Tool) => void; featuredIds: Set<string>; usage: Record<string, number>; recentIds: string[] }) {
-  const featuredTools = TOOLS.filter(t => featuredIds.has(t.id));
-  const otherTools    = TOOLS.filter(t => !featuredIds.has(t.id));
-  const recentTools   = recentIds.map(id => TOOLS.find(t => t.id === id)).filter((t): t is Tool => !!t).reverse();
+  const recentTools = recentIds.map(id => TOOLS.find(t => t.id === id)).filter((t): t is Tool => !!t).reverse();
   const totalRuns = Object.values(usage).reduce((a, b) => a + b, 0);
   const usdcPaid  = TOOLS.reduce((s, t) => s + (usage[t.id] ?? 0) * (parseFloat(t.price.replace("$", "")) || 0), 0);
   const runsOf = (id: string) => usage[id] ?? 0;
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpand = (groupId: string) =>
+    setExpanded(prev => { const n = new Set(prev); n.has(groupId) ? n.delete(groupId) : n.add(groupId); return n; });
+
+  // suppress unused warning — featuredIds kept in props for future use
+  void featuredIds;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -853,57 +897,74 @@ function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t:
           </>
         )}
 
-        {/* Featured for founders */}
-        <div className="flex items-center gap-3 mb-3">
-          <p className="font-mono text-[10px] text-[#A78BFA] tracking-widest">// FEATURED FOR FOUNDERS</p>
-          <div className="flex-1 h-px bg-[#A78BFA]/10" />
-        </div>
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5 mb-5">
-          {featuredTools.map(tool => (
-            <button key={tool.id} onClick={() => onSelect(tool)}
-              className="text-left rounded-xl p-4 transition-all group border border-[#A78BFA]/20 bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 hover:border-[#A78BFA]/40">
-              <div className="flex items-center gap-1.5 mb-2.5">
-                {tool.agents.map(a => (
-                  <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-                ))}
-              </div>
-              <p className="font-mono text-sm font-semibold text-white group-hover:text-[#A78BFA] transition-colors mb-1 leading-snug">
-                {tool.name}
-              </p>
-              <p className="font-mono text-[10px] text-slate-500 leading-relaxed line-clamp-2">{tool.desc}</p>
-              <div className="flex items-center justify-between mt-2.5">
-                <span className="font-mono text-[10px] text-[#A78BFA]/50">Run →</span>
-                <span className="font-mono text-[9px] text-slate-600">
-                  {runsOf(tool.id) > 0 ? `${runsOf(tool.id)} runs · ` : ""}{tool.price}
-                </span>
-              </div>
-            </button>
-          ))}
-        </div>
+        {/* ── Grouped sections ── */}
+        {TOOL_GROUPS.map(group => {
+          const groupTools = group.ids.map(id => TOOLS.find(t => t.id === id)).filter((t): t is Tool => !!t);
+          if (!groupTools.length) return null;
+          const isExpanded = expanded.has(group.id);
+          const visible = isExpanded ? groupTools : groupTools.slice(0, 4);
+          const hiddenCount = groupTools.length - 4;
 
-        {/* More tools — all of them in a dense grid */}
-        <div className="flex items-center gap-3 mb-3">
-          <p className="font-mono text-[10px] text-slate-600 tracking-widest">// MORE TOOLS</p>
-          <div className="flex-1 h-px bg-[#1A1A2E]" />
-          <span className="font-mono text-[9px] text-slate-700">{otherTools.length} tools</span>
-        </div>
-        <div className="grid grid-cols-2 xl:grid-cols-3 gap-2">
-          {otherTools.map(tool => (
-            <button key={tool.id} onClick={() => onSelect(tool)}
-              className="text-left bg-[#0D0D1A] border border-[#1A1A2E] hover:border-[#4FC3F7]/15 rounded-xl p-3.5 transition-all group">
-              <div className="flex items-center gap-1.5 mb-2">
-                {tool.agents.map(a => (
-                  <span key={a} className="w-1 h-1 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-                ))}
-                <span className="font-mono text-[9px] text-slate-700 ml-auto">
-                  {runsOf(tool.id) > 0 ? `${runsOf(tool.id)} runs · ` : ""}{tool.price}
-                </span>
+          return (
+            <div key={group.id} className="mb-7">
+              {/* Section header */}
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: group.color }} />
+                  <p className="font-mono text-[10px] tracking-widest font-semibold" style={{ color: group.color }}>
+                    {group.label.toUpperCase()}
+                  </p>
+                </div>
+                <span className="font-mono text-[10px] text-slate-700">{group.desc}</span>
+                <div className="flex-1 h-px" style={{ background: group.color + "15" }} />
+                <span className="font-mono text-[9px] text-slate-700">{groupTools.length} tools</span>
               </div>
-              <p className="font-mono text-xs font-semibold text-white group-hover:text-[#4FC3F7] transition-colors mb-0.5 leading-snug">{tool.name}</p>
-              <p className="font-mono text-[10px] text-slate-600 leading-relaxed line-clamp-2">{tool.desc}</p>
-            </button>
-          ))}
-        </div>
+
+              {/* Tool cards */}
+              <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
+                {visible.map(tool => (
+                  <button key={tool.id} onClick={() => onSelect(tool)}
+                    className="text-left rounded-xl p-3.5 transition-all group border hover:bg-white/[0.02]"
+                    style={{ borderColor: group.color + "20", background: group.color + "05" }}
+                    onMouseEnter={e => (e.currentTarget.style.borderColor = group.color + "40")}
+                    onMouseLeave={e => (e.currentTarget.style.borderColor = group.color + "20")}
+                  >
+                    <div className="flex items-center gap-1 mb-2">
+                      {tool.agents.map(a => (
+                        <span key={a} className="w-1 h-1 rounded-full" style={{ background: AGENT_COLORS[a] }} />
+                      ))}
+                      <span className="font-mono text-[9px] text-slate-700 ml-auto">{tool.price}</span>
+                    </div>
+                    <p className="font-mono text-xs font-semibold text-white mb-0.5 leading-snug transition-colors"
+                      style={{ color: undefined }}
+                      onMouseEnter={e => ((e.target as HTMLElement).style.color = group.color)}
+                      onMouseLeave={e => ((e.target as HTMLElement).style.color = "white")}
+                    >
+                      {tool.name}
+                    </p>
+                    <p className="font-mono text-[10px] text-slate-600 leading-relaxed line-clamp-2">{tool.desc}</p>
+                    {runsOf(tool.id) > 0 && (
+                      <p className="font-mono text-[9px] text-slate-700 mt-1.5">{runsOf(tool.id)} runs</p>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* See all / Collapse */}
+              {hiddenCount > 0 && (
+                <button
+                  onClick={() => toggleExpand(group.id)}
+                  className="mt-2.5 font-mono text-[10px] transition-colors"
+                  style={{ color: group.color + "80" }}
+                  onMouseEnter={e => ((e.target as HTMLElement).style.color = group.color)}
+                  onMouseLeave={e => ((e.target as HTMLElement).style.color = group.color + "80")}
+                >
+                  {isExpanded ? "↑ Show less" : `→ See all ${groupTools.length} ${group.label.toLowerCase()} tools`}
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -1017,10 +1078,16 @@ export default function HubPage() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filtered = TOOLS.filter(t =>
-    (cat === "all" || t.cat === cat) &&
-    (!search || t.name.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = TOOLS.filter(t => {
+    const matchesSearch = !search || t.name.toLowerCase().includes(search.toLowerCase()) || t.desc.toLowerCase().includes(search.toLowerCase());
+    if (!matchesSearch) return false;
+    if (cat === "all") return true;
+    // Check if cat matches a group id
+    const group = TOOL_GROUPS.find(g => g.id === cat);
+    if (group) return group.ids.includes(t.id);
+    // Fallback to old category field
+    return t.cat === cat;
+  });
 
   return (
     <>
@@ -1046,16 +1113,22 @@ export default function HubPage() {
             />
           </div>
 
-          {/* Category filter */}
+          {/* Group filter */}
           <div className="px-4 pb-4 flex flex-wrap gap-1">
-            {CATEGORIES.map(c => (
-              <button key={c.key} onClick={() => { setCat(c.key); setSearch(""); }}
-                className={`font-mono text-[10px] px-2 py-1 rounded transition-colors ${
-                  cat === c.key
-                    ? "bg-[#4FC3F7]/15 text-[#4FC3F7]"
-                    : "text-slate-600 hover:text-slate-300"
-                }`}>
-                {c.label}
+            <button onClick={() => { setCat("all"); setSearch(""); }}
+              className={`font-mono text-[10px] px-2 py-1 rounded transition-colors ${cat === "all" ? "bg-[#4FC3F7]/15 text-[#4FC3F7]" : "text-slate-600 hover:text-slate-300"}`}>
+              All
+            </button>
+            {TOOL_GROUPS.map(g => (
+              <button key={g.id} onClick={() => { setSearch(""); setCat(g.id as Category); }}
+                className="font-mono text-[10px] px-2 py-1 rounded transition-colors"
+                style={cat === g.id
+                  ? { background: g.color + "20", color: g.color }
+                  : { color: "#475569" }}
+                onMouseEnter={e => { if (cat !== g.id) (e.currentTarget as HTMLElement).style.color = g.color; }}
+                onMouseLeave={e => { if (cat !== g.id) (e.currentTarget as HTMLElement).style.color = "#475569"; }}
+              >
+                {g.label}
               </button>
             ))}
           </div>
