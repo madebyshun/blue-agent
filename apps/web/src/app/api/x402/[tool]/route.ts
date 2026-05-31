@@ -44,6 +44,11 @@ export async function GET(
   const requirements = buildRequirements(String(priceUnits));
   const meta = AGENT_TOOLS.find(t => t.id === tool);
   const endpointUrl = `https://blueagent.dev/api/x402/${tool}`;
+  const inputSchema = meta ? {
+    type: "object",
+    properties: Object.fromEntries(meta.inputs.map(i => [i.key, { type: "string", description: i.label }])),
+    required: meta.inputs.filter(i => i.required).map(i => i.key),
+  } : undefined;
   const paymentRequired = {
     x402Version: 2,
     accepts: [requirements],
@@ -51,8 +56,18 @@ export async function GET(
       url: endpointUrl,
       description: meta?.description ?? `Blue Hub tool: ${tool}`,
       mimeType: "application/json",
+      serviceName: "Blue Hub",
+      tags: ["base", "ai", "defi", "agents"],
+      iconUrl: "https://blueagent.dev/icon.png",
     },
-    extensions: {},
+    extensions: {
+      bazaar: {
+        info: {
+          input: { type: "http", method: "POST", bodySchema: inputSchema },
+          output: { type: "json" },
+        },
+      },
+    },
   };
   const paymentRequiredHeader = Buffer.from(JSON.stringify(paymentRequired)).toString("base64");
   return NextResponse.json(
@@ -66,11 +81,7 @@ export async function GET(
         name: meta.name,
         description: meta.description,
         price: meta.price,
-        input: {
-          type: "object",
-          properties: Object.fromEntries(meta.inputs.map(i => [i.key, { type: "string", description: i.label }])),
-          required: meta.inputs.filter(i => i.required).map(i => i.key),
-        },
+        input: inputSchema,
       } : undefined,
     },
     {
@@ -119,6 +130,11 @@ async function handle(
   if (!xPayment) {
     const meta = AGENT_TOOLS.find(t => t.id === tool);
     const endpointUrl = `https://blueagent.dev/api/x402/${tool}`;
+    const inputSchema = meta ? {
+      type: "object",
+      properties: Object.fromEntries(meta.inputs.map(i => [i.key, { type: "string", description: i.label }])),
+      required: meta.inputs.filter(i => i.required).map(i => i.key),
+    } : undefined;
     const paymentRequired = {
       x402Version: 2,
       accepts: [requirements],
@@ -126,8 +142,18 @@ async function handle(
         url: endpointUrl,
         description: meta?.description ?? `Blue Hub tool: ${tool}`,
         mimeType: "application/json",
+        serviceName: "Blue Hub",
+        tags: ["base", "ai", "defi", "agents"],
+        iconUrl: "https://blueagent.dev/icon.png",
       },
-      extensions: {},
+      extensions: {
+        bazaar: {
+          info: {
+            input: { type: "http", method: "POST", bodySchema: inputSchema },
+            output: { type: "json" },
+          },
+        },
+      },
     };
     const paymentRequiredHeader = Buffer.from(JSON.stringify(paymentRequired)).toString("base64");
     return NextResponse.json(
@@ -141,11 +167,7 @@ async function handle(
           name: meta.name,
           description: meta.description,
           price: meta.price,
-          input: {
-            type: "object",
-            properties: Object.fromEntries(meta.inputs.map(i => [i.key, { type: "string", description: i.label }])),
-            required: meta.inputs.filter(i => i.required).map(i => i.key),
-          },
+          input: inputSchema,
         } : undefined,
       },
       {
