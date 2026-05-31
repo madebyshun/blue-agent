@@ -38,14 +38,23 @@ export function buildRequirements(amountUnits: string): PaymentRequirements {
   };
 }
 
-/** Reshape the hub's X-Payment into a v2 PaymentPayload (adds `accepted`). */
-function toV2PaymentPayload(incoming: unknown, requirements: PaymentRequirements) {
+/** Reshape the hub's X-Payment into a v2 PaymentPayload (adds `accepted`, `resource`, `extensions`). */
+function toV2PaymentPayload(
+  incoming: unknown,
+  requirements: PaymentRequirements,
+  resource?: { url: string; description?: string; mimeType?: string },
+  extensions?: { bazaar?: BazaarExtension },
+) {
   const obj = (incoming ?? {}) as Record<string, unknown>;
   const inner = (obj.payload ?? obj) as Record<string, unknown>; // { signature, authorization }
   return {
     x402Version: 2,
     accepted: requirements,
     payload: inner,
+    // Bazaar: resource.url + extensions are read from paymentPayload by the facilitator
+    // (see x402/typescript/packages/extensions/src/bazaar/facilitator.ts#extractDiscoveryInfo)
+    ...(resource ? { resource } : {}),
+    ...(extensions ? { extensions } : {}),
   };
 }
 
@@ -53,6 +62,8 @@ type SettleResult = { ok: boolean; status: number; detail: unknown; tx?: string 
 
 /** Bazaar extension payload — forwarded to CDP so it can catalog the service. */
 export type BazaarExtension = {
+  /** Colon-param route template for dynamic routes, e.g. "/api/x402/:tool" */
+  routeTemplate?: string;
   info: {
     input: { type: string; method: string; bodyType?: string; body?: Record<string, unknown> };
     output: { type: string; example?: unknown };
@@ -64,7 +75,8 @@ async function cdpCall(
   path: "/settle" | "/verify",
   paymentPayload: unknown,
   requirements: PaymentRequirements,
-  extensions?: { bazaar?: BazaarExtension }
+  resource?: { url: string; description?: string; mimeType?: string },
+  extensions?: { bazaar?: BazaarExtension },
 ): Promise<SettleResult> {
   const id = process.env.CDP_API_KEY_ID;
   const secret = process.env.CDP_API_KEY_SECRET;
@@ -78,23 +90,24 @@ async function cdpCall(
     const authHeaders = await facilitator.createAuthHeaders?.();
     const endpointHeaders = path === "/settle" ? authHeaders?.settle : authHeaders?.verify;
 
-    const v2Payload = toV2PaymentPayload(paymentPayload, requirements);
-
-    // Include Bazaar extension in the verify call so CDP can catalog the service.
-    // Only sent with /verify (discovery happens at verify time, not settle).
-    const bodyPayload: Record<string, unknown> = {
-      x402Version: 2,
-      paymentPayload: v2Payload,
-      paymentRequirements: requirements,
-    };
-    if (path === "/verify" && extensions?.bazaar) {
-      bodyPayload.extensions = extensions;
-    }
+    // Bazaar extension goes INSIDE paymentPayload (resource + extensions fields).
+    // The facilitator reads paymentPayload.resource.url and paymentPayload.extensions.bazaar
+    // to catalog the service — see x402 bazaar/facilitator.ts#extractDiscoveryInfo.
+    const v2Payload = toV2PaymentPayload(
+      paymentPayload,
+      requirements,
+      path === "/verify" ? resource : undefined,
+      path === "/verify" ? extensions : undefined,
+    );
 
     const res = await fetch(`${base}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(endpointHeaders ?? {}) },
-      body: JSON.stringify(bodyPayload),
+      body: JSON.stringify({
+        x402Version: 2,
+        paymentPayload: v2Payload,
+        paymentRequirements: requirements,
+      }),
       signal: AbortSignal.timeout(30_000),
     });
 
@@ -111,9 +124,10 @@ async function cdpCall(
 export async function cdpVerify(
   paymentPayload: unknown,
   requirements: PaymentRequirements,
-  extensions?: { bazaar?: BazaarExtension }
+  resource?: { url: string; description?: string; mimeType?: string },
+  extensions?: { bazaar?: BazaarExtension },
 ): Promise<SettleResult> {
-  const r = await cdpCall("/verify", paymentPayload, requirements, extensions);
+  const r = await cdpCall("/verify", paymentPayload, requirements, resource, extensions);
   const d = r.detail as Record<string, unknown> | string;
   const valid = r.ok && (typeof d === "object" && d !== null ? d?.isValid !== false : true);
   console.log(`[cdp] verify ${r.status}:`, JSON.stringify(r.detail).slice(0, 200));
