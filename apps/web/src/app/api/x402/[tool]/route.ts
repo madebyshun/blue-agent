@@ -44,15 +44,22 @@ export async function GET(
   const requirements = buildRequirements(String(priceUnits));
   const meta = AGENT_TOOLS.find(t => t.id === tool);
   const endpointUrl = `https://blueagent.dev/api/x402/${tool}`;
+  const paymentRequired = {
+    x402Version: 2,
+    accepts: [requirements],
+    resource: {
+      url: endpointUrl,
+      description: meta?.description ?? `Blue Hub tool: ${tool}`,
+      mimeType: "application/json",
+    },
+    extensions: {},
+  };
+  const paymentRequiredHeader = Buffer.from(JSON.stringify(paymentRequired)).toString("base64");
   return NextResponse.json(
     {
       x402Version: 2,
       error: "Payment Required",
-      resource: {
-        url: endpointUrl,
-        description: meta?.description ?? `Blue Hub tool: ${tool}`,
-        mimeType: "application/json",
-      },
+      resource: paymentRequired.resource,
       accepts: [requirements],
       tool: meta ? {
         id: meta.id,
@@ -66,7 +73,13 @@ export async function GET(
         },
       } : undefined,
     },
-    { status: 402, headers: { "Access-Control-Allow-Origin": "*" } }
+    {
+      status: 402,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "payment-required": paymentRequiredHeader,
+      },
+    }
   );
 }
 
@@ -106,15 +119,22 @@ async function handle(
   if (!xPayment) {
     const meta = AGENT_TOOLS.find(t => t.id === tool);
     const endpointUrl = `https://blueagent.dev/api/x402/${tool}`;
+    const paymentRequired = {
+      x402Version: 2,
+      accepts: [requirements],
+      resource: {
+        url: endpointUrl,
+        description: meta?.description ?? `Blue Hub tool: ${tool}`,
+        mimeType: "application/json",
+      },
+      extensions: {},
+    };
+    const paymentRequiredHeader = Buffer.from(JSON.stringify(paymentRequired)).toString("base64");
     return NextResponse.json(
       {
         x402Version: 2,
         error: "Payment Required",
-        resource: {
-          url: endpointUrl,
-          description: meta?.description ?? `Blue Hub tool: ${tool}`,
-          mimeType: "application/json",
-        },
+        resource: paymentRequired.resource,
         accepts: [requirements],
         tool: meta ? {
           id: meta.id,
@@ -128,7 +148,13 @@ async function handle(
           },
         } : undefined,
       },
-      { status: 402, headers: { "Access-Control-Allow-Origin": "*" } }
+      {
+        status: 402,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "payment-required": paymentRequiredHeader,
+        },
+      }
     );
   }
 
