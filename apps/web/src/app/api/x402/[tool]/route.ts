@@ -43,10 +43,16 @@ export async function GET(
 
   const requirements = buildRequirements(String(priceUnits));
   const meta = AGENT_TOOLS.find(t => t.id === tool);
+  const endpointUrl = `https://blueagent.dev/api/x402/${tool}`;
   return NextResponse.json(
     {
       x402Version: 2,
       error: "Payment Required",
+      resource: {
+        url: endpointUrl,
+        description: meta?.description ?? `Blue Hub tool: ${tool}`,
+        mimeType: "application/json",
+      },
       accepts: [requirements],
       tool: meta ? {
         id: meta.id,
@@ -99,10 +105,16 @@ async function handle(
   // No payment → 402 with self-describing metadata (name, description, inputs)
   if (!xPayment) {
     const meta = AGENT_TOOLS.find(t => t.id === tool);
+    const endpointUrl = `https://blueagent.dev/api/x402/${tool}`;
     return NextResponse.json(
       {
         x402Version: 2,
         error: "Payment Required",
+        resource: {
+          url: endpointUrl,
+          description: meta?.description ?? `Blue Hub tool: ${tool}`,
+          mimeType: "application/json",
+        },
         accepts: [requirements],
         tool: meta ? {
           id: meta.id,
