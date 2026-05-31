@@ -51,10 +51,20 @@ function toV2PaymentPayload(incoming: unknown, requirements: PaymentRequirements
 
 type SettleResult = { ok: boolean; status: number; detail: unknown; tx?: string };
 
+/** Bazaar extension payload — forwarded to CDP so it can catalog the service. */
+export type BazaarExtension = {
+  info: {
+    input: { type: string; method: string; bodyType?: string; body?: Record<string, unknown> };
+    output: { type: string; example?: unknown };
+  };
+  schema?: Record<string, unknown>;
+};
+
 async function cdpCall(
   path: "/settle" | "/verify",
   paymentPayload: unknown,
-  requirements: PaymentRequirements
+  requirements: PaymentRequirements,
+  extensions?: { bazaar?: BazaarExtension }
 ): Promise<SettleResult> {
   const id = process.env.CDP_API_KEY_ID;
   const secret = process.env.CDP_API_KEY_SECRET;
@@ -70,14 +80,21 @@ async function cdpCall(
 
     const v2Payload = toV2PaymentPayload(paymentPayload, requirements);
 
+    // Include Bazaar extension in the verify call so CDP can catalog the service.
+    // Only sent with /verify (discovery happens at verify time, not settle).
+    const bodyPayload: Record<string, unknown> = {
+      x402Version: 2,
+      paymentPayload: v2Payload,
+      paymentRequirements: requirements,
+    };
+    if (path === "/verify" && extensions?.bazaar) {
+      bodyPayload.extensions = extensions;
+    }
+
     const res = await fetch(`${base}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(endpointHeaders ?? {}) },
-      body: JSON.stringify({
-        x402Version: 2,
-        paymentPayload: v2Payload,
-        paymentRequirements: requirements,
-      }),
+      body: JSON.stringify(bodyPayload),
       signal: AbortSignal.timeout(30_000),
     });
 
@@ -93,9 +110,10 @@ async function cdpCall(
 /** Verify a payment is valid (signature + funds) WITHOUT moving money. */
 export async function cdpVerify(
   paymentPayload: unknown,
-  requirements: PaymentRequirements
+  requirements: PaymentRequirements,
+  extensions?: { bazaar?: BazaarExtension }
 ): Promise<SettleResult> {
-  const r = await cdpCall("/verify", paymentPayload, requirements);
+  const r = await cdpCall("/verify", paymentPayload, requirements, extensions);
   const d = r.detail as Record<string, unknown> | string;
   const valid = r.ok && (typeof d === "object" && d !== null ? d?.isValid !== false : true);
   console.log(`[cdp] verify ${r.status}:`, JSON.stringify(r.detail).slice(0, 200));
