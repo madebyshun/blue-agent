@@ -30,11 +30,9 @@ const PRICE_UNITS = new Map<string, number>(
 
 /**
  * Build the Bazaar extension object for a tool.
- * Format confirmed from agentic.clawbots.org (indexed service):
- *   discoverable: true
- *   info.description: string
- *   info.input: { type, method, bodyType, body, inputSchema }
- *   info.output: { example }
+ * Format confirmed from x402station.io (indexed in discovery/resources):
+ *   - NO discoverable, NO routeTemplate, NO schema
+ *   - Just info.input + info.output, matches exact CDP resource format
  */
 function buildBazaarExtension(meta: typeof AGENT_TOOLS[number] | undefined) {
   // Example body: required inputs get placeholder, optionals get empty string
@@ -42,35 +40,18 @@ function buildBazaarExtension(meta: typeof AGENT_TOOLS[number] | undefined) {
     ? Object.fromEntries(meta.inputs.map(i => [i.key, i.required ? `<${i.key}>` : ""]))
     : {};
 
-  // Per-field body schema properties (inputSchema goes inside info.input)
-  const bodyProperties = meta
-    ? Object.fromEntries(meta.inputs.map(i => [i.key, { type: "string", description: i.label }]))
-    : {};
-  const bodyRequired = meta ? meta.inputs.filter(i => i.required).map(i => i.key) : [];
-
-  const description = meta?.description ?? "Blue Hub AI tool for Base builders";
-
   return {
-    discoverable: true,
     info: {
-      description,
       input: {
         type: "http",
         method: "POST",
         bodyType: "json",
         body: bodyExample,
-        inputSchema: {
-          type: "object",
-          properties: bodyProperties,
-          required: bodyRequired,
-          additionalProperties: false,
-        },
       },
       output: {
         example: {
           tool: meta?.id ?? "tool",
           result: "AI-generated analysis",
-          verdict: "RESULT",
           _settle: { ok: true, status: 200, tx: "0x..." },
         },
       },
