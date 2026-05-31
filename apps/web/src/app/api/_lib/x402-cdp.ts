@@ -114,6 +114,18 @@ async function cdpCall(
     const raw = await res.text();
     let detail: unknown;
     try { detail = JSON.parse(raw); } catch { detail = raw.slice(0, 400); }
+
+    // Log Bazaar EXTENSION-RESPONSES header for debugging Bazaar cataloging
+    const extResp = res.headers.get("extension-responses") ?? res.headers.get("EXTENSION-RESPONSES");
+    if (extResp) {
+      try {
+        const decoded = JSON.parse(Buffer.from(extResp, "base64").toString("utf-8"));
+        console.log(`[cdp] ${path} EXTENSION-RESPONSES:`, JSON.stringify(decoded));
+      } catch {
+        console.log(`[cdp] ${path} EXTENSION-RESPONSES (raw):`, extResp.slice(0, 200));
+      }
+    }
+
     return { ok: res.ok, status: res.status, detail };
   } catch (e) {
     return { ok: false, status: 0, detail: `CDP call error: ${(e as Error).message}` };
