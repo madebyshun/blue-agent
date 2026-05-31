@@ -240,7 +240,10 @@ async function handle(
   try { body = await req.json(); } catch {}
 
   // 1. VERIFY the payment is valid (signature + funds) — no charge yet
-  const verify = await cdpVerify(paymentPayload, requirements);
+  // Pass Bazaar extension so CDP catalogs this service in its discovery index.
+  const meta = AGENT_TOOLS.find(t => t.id === tool);
+  const bazaarExt = buildBazaarExtension(meta);
+  const verify = await cdpVerify(paymentPayload, requirements, { bazaar: bazaarExt });
   if (!verify.ok) {
     return NextResponse.json(
       { error: "Payment verification failed", status: verify.status, detail: verify.detail },
