@@ -251,6 +251,9 @@ async function handle(
     url: `https://blueagent.dev/api/x402/${tool}`,
     description: meta?.description ?? `Blue Hub tool: ${tool}`,
     mimeType: "application/json",
+    serviceName: "Blue Hub",
+    tags: ["base", "ai", "defi", "agents", "builder"],
+    iconUrl: "https://blueagent.dev/icon.png",
   };
   const verify = await cdpVerify(paymentPayload, requirements, resourceInfo, { bazaar: bazaarExt });
   if (!verify.ok) {
