@@ -28,6 +28,42 @@ const PRICE_UNITS = new Map<string, number>(
     .filter((e): e is readonly [string, number] => e[1] !== null)
 );
 
+// GET with no X-Payment → 402 (Bazaar discovery + browser preview)
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ tool: string }> }
+) {
+  const { tool } = await params;
+  const handler = HANDLERS[tool];
+  const priceUnits = PRICE_UNITS.get(tool);
+
+  if (!handler || !priceUnits) {
+    return NextResponse.json({ error: "Tool not available", tool }, { status: 503 });
+  }
+
+  const requirements = buildRequirements(String(priceUnits));
+  const meta = AGENT_TOOLS.find(t => t.id === tool);
+  return NextResponse.json(
+    {
+      x402Version: 2,
+      error: "Payment Required",
+      accepts: [requirements],
+      tool: meta ? {
+        id: meta.id,
+        name: meta.name,
+        description: meta.description,
+        price: meta.price,
+        input: {
+          type: "object",
+          properties: Object.fromEntries(meta.inputs.map(i => [i.key, { type: "string", description: i.label }])),
+          required: meta.inputs.filter(i => i.required).map(i => i.key),
+        },
+      } : undefined,
+    },
+    { status: 402, headers: { "Access-Control-Allow-Origin": "*" } }
+  );
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ tool: string }> }
