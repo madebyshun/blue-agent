@@ -47,6 +47,9 @@ function buildBazaarExtension(meta: typeof AGENT_TOOLS[number] | undefined) {
   const bodyRequired = meta ? meta.inputs.filter(i => i.required).map(i => i.key) : [];
 
   return {
+    // routeTemplate normalizes /api/x402/blue-idea, /api/x402/token-pick-signal, etc.
+    // into a single catalog entry: /api/x402/:tool
+    routeTemplate: "/api/x402/:tool",
     info: {
       input: {
         type: "http",
@@ -240,10 +243,16 @@ async function handle(
   try { body = await req.json(); } catch {}
 
   // 1. VERIFY the payment is valid (signature + funds) — no charge yet
-  // Pass Bazaar extension so CDP catalogs this service in its discovery index.
+  // Pass resource + Bazaar extension so CDP catalogs this service in its discovery index.
+  // resource.url uses :tool template → all 35 tools share one catalog entry on agentic.market.
   const meta = AGENT_TOOLS.find(t => t.id === tool);
   const bazaarExt = buildBazaarExtension(meta);
-  const verify = await cdpVerify(paymentPayload, requirements, { bazaar: bazaarExt });
+  const resourceInfo = {
+    url: `https://blueagent.dev/api/x402/${tool}`,
+    description: meta?.description ?? `Blue Hub tool: ${tool}`,
+    mimeType: "application/json",
+  };
+  const verify = await cdpVerify(paymentPayload, requirements, resourceInfo, { bazaar: bazaarExt });
   if (!verify.ok) {
     return NextResponse.json(
       { error: "Payment verification failed", status: verify.status, detail: verify.detail },
