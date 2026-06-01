@@ -1,29 +1,80 @@
 # Blue Agent
 
-[![npm version](https://img.shields.io/npm/v/@blueagent/cli?color=4FC3F7&label=%40blueagent%2Fcli)](https://www.npmjs.com/package/@blueagent/cli)
-[![npm downloads](https://img.shields.io/npm/dm/@blueagent/cli?color=A78BFA)](https://www.npmjs.com/package/@blueagent/cli)
+[![npm](https://img.shields.io/npm/v/@blueagent/cli?color=4FC3F7&label=%40blueagent%2Fcli)](https://www.npmjs.com/package/@blueagent/cli)
+[![npm](https://img.shields.io/npm/v/@blueagent/x402?color=A78BFA&label=%40blueagent%2Fx402)](https://www.npmjs.com/package/@blueagent/x402)
 [![GitHub stars](https://img.shields.io/github/stars/madebyshun/blue-agent?color=4FC3F7)](https://github.com/madebyshun/blue-agent/stargazers)
 [![License: MIT](https://img.shields.io/badge/license-MIT-94A3B8)](LICENSE)
 [![Built on Base](https://img.shields.io/badge/built%20on-Base-0052FF)](https://base.org)
 [![Powered by x402](https://img.shields.io/badge/payments-x402-A78BFA)](https://x402.org)
 [![Website](https://img.shields.io/badge/website-blueagent.dev-4FC3F7)](https://blueagent.dev)
 
-**AI-native founder console for Base builders.**
+**AI-native founder console + tool marketplace for Base builders.**
 
 Blue Agent is a full economic actor on Base: it holds a wallet, executes onchain transactions, powers a growing ecosystem of tools, and helps builders go from idea to shipped product.
 
 - Website: [blueagent.dev](https://blueagent.dev)
-- X: [@blueagent_](https://x.com/blueagent_)
+- Hub: [blueagent.dev/hub](https://blueagent.dev/hub)
+- Terminal: [blueagent.dev/terminal](https://blueagent.dev/terminal)
+- X: [@blocky_agent](https://x.com/blocky_agent)
 - Telegram: [t.me/blueagent_hub](https://t.me/blueagent_hub)
 - Bankr: [bankr.bot/agents/blue-agent](https://bankr.bot/agents/blue-agent)
 
 ---
 
-## What is this repo
+## Blue Hub — 40 AI Tools on Base
 
-The `blue-agent` monorepo is the **founder console** — a workflow-first product for building on Base, powered by Bankr LLM and monetized via x402 micropayments.
+Blue Hub is a curated marketplace of 40 pay-per-call AI tools built on Base. Any agent or developer can call tools via x402 micropayments in USDC — no API key, no account, no human in the loop.
 
-Five core commands take a builder from zero to launch:
+```bash
+# Discover all tools + prices
+GET https://blueagent.dev/api/catalog
+
+# Machine-readable x402 pricing
+GET https://blueagent.dev/.well-known/pricing
+
+# Call any tool
+POST https://blueagent.dev/api/x402/{tool-id}
+X-Payment: <EIP-3009 USDC on Base>
+```
+
+**40 tools across 9 categories** — intelligence · builder · trading · security · investor · agent-economy · base-ecosystem · on-chain · content
+
+Registry: [ERC-8257 ToolRegistry](https://basescan.org/address/0x265BB2DBFC0A8165C9A1941Eb1372F349baD2cf1) · [agentic.market](https://agentic.market) · [CDP Bazaar](https://www.coinbase.com/developer-platform)
+
+---
+
+## x402 SDK
+
+```bash
+npm install @blueagent/x402
+```
+
+```typescript
+import { createX402Client } from "@blueagent/x402"
+
+const client = createX402Client({ privateKey: "0x..." })
+
+// 5 core commands
+const brief = await client.idea("gasless USDC tipping app on Base")
+const arch  = await client.build("...")
+const audit = await client.audit("0x<contract>")
+const ship  = await client.ship("...")
+const raise = await client.raise("...")
+
+// Any Hub tool
+const pick  = await client.tokenPick()
+const news  = await client.hub("ecosystem-digest", { focus: "DeFi" })
+
+// Discover pricing
+const manifest = await client.pricing()
+const price    = await client.priceOf("blue-audit") // { priceUSD: "$1.00" }
+```
+
+The SDK handles the full x402 flow: `402 → decode requirements → sign EIP-3009 → retry → 200 OK`
+
+---
+
+## 5 Core Commands
 
 | Command | What it does | Price |
 |---|---|---|
@@ -67,7 +118,18 @@ Navigate with `↑ ↓ Enter`. Press `Esc` to go back.
 blue doctor
 ```
 
-Checks node version, skills installed, `BANKR_API_KEY`, and config file.
+---
+
+## Blue Terminal
+
+Browser-based CLI at [blueagent.dev/terminal](https://blueagent.dev/terminal) — run all 40 Hub tools, 5 core commands, and onchain queries directly in the browser. No install required.
+
+```
+blue hub ls                    # list all 40 tools
+blue hub info token-pick-signal
+blue idea <prompt>             # $0.05 via Bankr LLM
+blue balance 0x...             # ETH + USDC on Base mainnet
+```
 
 ---
 
@@ -78,45 +140,28 @@ Tasks are local micropayment jobs — post work, accept it, submit proof. Data l
 ```bash
 # In TUI: Tasks → blue post-task
 title:       "Audit smart contract for reentrancy"
-description: "Review Solidity contract and report critical issues"
 reward:      5          # USDC
-category:    audit      # audit | content | art | dev
-handle:      madebyshun
+category:    audit
 
 # Doer accepts
 Tasks → blue accept → taskId + handle
 
 # Doer submits proof
 Tasks → blue submit → taskId + proof URL
-
-# List all tasks
-Tasks → blue tasks
 ```
 
-Fee = 5% platform cut. Doer receives 95% of reward.
+Fee = 5% platform cut. Doer receives 95%.
 
 ---
 
 ## Builder Score / Agent Score
-
-Scores are AI-powered reputation signals, not onchain data.
 
 ```bash
 # In TUI: Score → builder-score
 handle: madebyshun
 ```
 
-Builder Score dimensions (max 100):
-
-| Dimension | Max |
-|---|---|
-| activity | 25 |
-| social | 25 |
-| uniqueness | 20 |
-| thesis | 20 |
-| community | 10 |
-
-Requires `BANKR_API_KEY`.
+Builder Score dimensions (max 100): activity · social · uniqueness · thesis · community
 
 ---
 
@@ -125,34 +170,32 @@ Requires `BANKR_API_KEY`.
 ```
 blue-agent/
 ├── apps/
-│   ├── web/              # Next.js 15 — /idea, /build, /audit, /ship, /raise, /micro
-│   ├── api/              # x402 paid endpoints (deep-analysis, risk-gate, wallet-pnl, ...)
-│   └── worker/           # Background cron — task expiry, auto-approve, reputation sync
+│   └── web/              # Next.js 15 — /hub, /console, /terminal, /skills
 ├── packages/
+│   ├── x402-client/      # @blueagent/x402 — x402 SDK for Blue Hub
 │   ├── cli/              # @blueagent/cli — TUI (Ink + React)
-│   ├── builder/          # internal command engine behind @blueagent/cli
 │   ├── core/             # Shared schemas, pricing, tool-input specs
 │   ├── bankr/            # Bankr LLM client (callBankrLLM)
-│   ├── reputation/       # @blueagent/reputation — Builder Score + Agent Score
-│   ├── tasks/            # @blueagent/tasks — local task hub
 │   ├── payments/         # x402 payment helpers
-│   ├── skill/            # @blueagent/skill — grounding skill loader
-│   └── skills/           # Bundled .md skill files (34 skills)
+│   ├── reputation/       # @blueagent/reputation — Builder Score + Agent Score
+│   ├── skill/            # @blueagent/skill — MCP server
+│   └── skills/           # Bundled .md skill files
+├── bankr-skills/         # BankrBot/skills submissions (blue-hub + 5 commands)
 ├── commands/             # Command contract docs (idea.md, build.md, ...)
-├── agents/               # Agent runtime config (agent.json, tasks.json)
-├── skills/               # Public skills entrypoint for Gitlawb collab
-├── templates/            # Public starter templates for Gitlawb collab
-├── collab/               # Issues, bounties, evals, prompts, fixtures
+├── scripts/              # register-all-tools.sh — ERC-8257 registration
 └── docs/                 # Product brief, roadmap, quickstart
 ```
 
-## Gitlawb collab layers
+---
 
-- `skills/` — grounded knowledge files that others can fork and improve
-- `templates/` — starter kits and scaffolds for Base-native projects
-- `collab/` — issue packs, bounty board items, evals, prompts, and fixtures
+## Published packages
 
-If you want to contribute, start with one small item in the matching layer.
+| Package | Version | Description |
+|---|---|---|
+| [`@blueagent/x402`](https://npmjs.com/package/@blueagent/x402) | 0.1.0 | x402 SDK — call any Blue Hub tool |
+| [`@blueagent/cli`](https://npmjs.com/package/@blueagent/cli) | 1.3.14 | CLI/TUI — full builder console |
+| [`@blueagent/skill`](https://npmjs.com/package/@blueagent/skill) | 0.1.1 | MCP server for Blue Agent tools |
+| [`@blueagent/reputation`](https://npmjs.com/package/@blueagent/reputation) | 0.1.1 | Builder Score + Agent Score |
 
 ---
 
@@ -163,19 +206,9 @@ If you want to contribute, start with one small item in the matching layer.
 | Frontend | Next.js 15, App Router, Tailwind |
 | CLI/TUI | Ink (React for terminals) |
 | LLM | Bankr LLM — `https://llm.bankr.bot/v1/messages` |
-| Payments | x402 micropayments |
+| Payments | x402 v2 + USDC on Base |
 | Chain | Base only (chain ID 8453) |
-| Storage | JSON files at `~/.blue-agent/` |
-
----
-
-## Published packages
-
-| Package | Version | Description |
-|---|---|---|
-| `@blueagent/cli` | 1.3.14 | CLI/TUI — full builder console |
-| `@blueagent/reputation` | 0.1.1 | Builder Score + Agent Score |
-| `@blueagent/skill` | 0.1.1 | Skill loader |
+| Registry | ERC-8257 ToolRegistry on Base |
 
 ---
 
@@ -190,7 +223,7 @@ If you want to contribute, start with one small item in the matching layer.
 1. **Base chain only.** All addresses and transactions target Base (chain ID 8453).
 2. **All AI calls go through Bankr LLM.** `packages/bankr` → `callBankrLLM()`. No direct OpenAI or Anthropic calls.
 3. **Never invent contract addresses.** If an address is needed and not in the codebase, flag it.
-4. **Business logic in packages, not in apps.** Keep `apps/web` and `apps/api` thin.
+4. **Business logic in packages, not in apps.** Keep `apps/web` thin.
 
 ---
 
@@ -201,7 +234,6 @@ feat:     new feature
 fix:      bug fix
 skill:    new skill or grounding file
 cmd:      command contract change (commands/*.md)
-design:   UI / TUI design change
 docs:     documentation only
 refactor: restructure, no behavior change
 chore:    tooling, deps, config

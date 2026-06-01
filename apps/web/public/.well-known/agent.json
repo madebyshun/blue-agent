@@ -3,8 +3,8 @@
   "agent": {
     "name": "Blue Agent",
     "handle": "@blocky_agent",
-    "description": "Base-native AI agent for builders — idea, build, audit, ship, raise. Grounded in real Base knowledge. Powered by Bankr LLM.",
-    "version": "1.0.0",
+    "description": "Base-native AI agent for builders — idea, build, audit, ship, raise. 40 tools on Blue Hub, x402 pay-per-call. Powered by Bankr LLM.",
+    "version": "1.1.0",
     "network": "base",
     "chain_id": 8453,
     "treasury": "0xf31f59e7b8b58555f7871f71973a394c8f1bffe5",
@@ -13,10 +13,12 @@
   "endpoints": {
     "web": "https://blueagent.dev",
     "hub": "https://blueagent.dev/hub",
+    "terminal": "https://blueagent.dev/terminal",
+    "console": "https://blueagent.dev/console",
     "catalog": "https://blueagent.dev/api/catalog",
+    "pricing": "https://blueagent.dev/.well-known/pricing",
     "mcp": "https://blueagent.dev/api/mcp",
     "llms": "https://blueagent.dev/llms.txt",
-    "console": "https://blueagent.dev/code",
     "signal": "https://blueagent.dev/api/signal",
     "simulate": "https://blueagent.dev/api/simulate",
     "health": "https://blueagent.dev/api/health",
@@ -30,9 +32,12 @@
     "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     "payTo": "0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f",
     "catalog": "https://blueagent.dev/api/catalog",
+    "pricing": "https://blueagent.dev/.well-known/pricing",
     "endpoint_pattern": "https://blueagent.dev/api/x402/{tool-id}",
-    "tools": 34,
-    "note": "Any x402-capable agent can call a tool endpoint and pay per call in USDC — no API key. See catalog for the full list, prices, and input schemas."
+    "manifest_pattern": "https://blueagent.dev/.well-known/ai-tool/{tool-id}.json",
+    "tools": 40,
+    "sdk": "npm install @blueagent/x402",
+    "note": "Any x402-capable agent can call a tool endpoint and pay per call in USDC — no API key. Use /.well-known/pricing for machine-readable price discovery, or install @blueagent/x402 SDK."
   },
   "skills": [
     {
@@ -72,6 +77,13 @@
       "payment": "free"
     }
   ],
+  "sdk": {
+    "package": "@blueagent/x402",
+    "version": "0.1.0",
+    "install": "npm install @blueagent/x402",
+    "npm": "https://npmjs.com/package/@blueagent/x402",
+    "description": "x402 client SDK — call any Blue Hub tool with automatic payment handling"
+  },
   "mcp": {
     "package": "@blueagent/skill",
     "install": "npx skills add blueagent",
@@ -81,6 +93,13 @@
     "package": "@blueagent/cli",
     "install": "npm install -g @blueagent/cli",
     "commands": 31
+  },
+  "registry": {
+    "erc8257": "0x265BB2DBFC0A8165C9A1941Eb1372F349baD2cf1",
+    "network": "eip155:8453",
+    "tools_registered": 13,
+    "agentic_market": "https://agentic.market/blueagent-dev",
+    "bankr_skills": "https://github.com/BankrBot/skills/pull/432"
   },
   "collab": {
     "accepts_signals_from": ["aeon"],
@@ -95,6 +114,6 @@
     "telegram": "https://t.me/blueagent_hub",
     "x": "https://x.com/blocky_agent",
     "bankr": "https://bankr.bot/agents/blue-agent",
-    "npm": "https://npmjs.com/package/@blueagent/cli"
+    "npm": "https://npmjs.com/package/@blueagent/x402"
   }
 }
