@@ -1,7 +1,7 @@
 ---
 name: blue-hub
 description: Discover and call any of 40 AI tools on Blue Hub — Base-native tool marketplace with x402 pay-per-call in USDC
-triggers: "use blue hub", "call a blue hub tool", "what tools does blue agent have", "blue hub ls", "find a tool for", "blue hub info"
+triggers: "use blue hub", "call a blue hub tool", "what tools does blue agent have", "blue hub ls", "find a tool for", "blue hub info", "token pick on Base", "what narratives are running", "Base token alpha", "CT narrative", "what's pumping on Base"
 payment: x402
 network: base
 ---
@@ -16,6 +16,9 @@ Activate when:
 - User asks to "use a blue hub tool" or "find a tool for X"
 - Request matches a capability in the tool catalog (token intel, security audit, builder tools, investor tools)
 - Agent needs Base ecosystem intelligence, onchain analysis, or founder workflows
+- "Give me a token pick on Base" → use `token-pick-signal` ($0.25)
+- "What narratives are running on CT" → use `narrative-position` ($0.20)
+- "What's the Base meta / what's pumping" → use `narrative-position` or `ecosystem-digest`
 
 ## Tool Catalog
 
