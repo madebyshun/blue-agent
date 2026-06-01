@@ -12,7 +12,7 @@ const COMMANDS_DOCS = [
     { cmd: "blue raise [prompt]",            desc: "Pitch narrative — why this wins, traction, ask, Base investor map",         example: 'blue raise "Base DeFi protocol"' },
   ]},
   { group: "SETUP", items: [
-    { cmd: "blue init",                      desc: "Install 34 skill files to ~/.blue-agent/skills/ for local grounding",        example: "blue init" },
+    { cmd: "blue init",                      desc: "Install skill files to ~/.blue-agent/skills/ for local grounding",           example: "blue init" },
     { cmd: "blue new <name>",                desc: "Scaffold a new Base project — base-agent | base-x402 | base-token",         example: "blue new my-token --template base-token" },
     { cmd: "blue doctor",                    desc: "Verify node, skills, API key, config — full environment health check",      example: "blue doctor" },
     { cmd: "blue validate [dir]",            desc: "Project health check — Node, package.json, tsconfig, env, src/, git",       example: "blue validate ./my-project" },
@@ -105,6 +105,7 @@ const NAV_ITEMS = [
   { id: "mcp",        label: "MCP Setup",       num: "09" },
   { id: "api",        label: "API Reference",   num: "10" },
   { id: "devs",       label: "For Developers",  num: "11" },
+  { id: "x402sdk",    label: "x402 SDK",        num: "12" },
 ];
 
 function SectionHeader({ num, title, subtitle }: { num: string; title: string; subtitle?: string }) {
@@ -198,10 +199,10 @@ export default function DocsPage() {
 
               <div className="grid sm:grid-cols-2 gap-3 mb-8">
                 {[
-                  { name: "BlueHub",    color: "#4FC3F7", desc: "34 AI tools · 3-agent consensus (Blue × Aeon × MiroShark) · pay per use via x402", link: "/hub" },
+                  { name: "BlueHub",    color: "#4FC3F7", desc: "40 AI tools · 3-agent consensus (Blue × Aeon × MiroShark) · pay per use via x402", link: "/hub" },
                   { name: "BlueChat",   color: "#A78BFA", desc: "AI chat for Base builders · Haiku / Sonnet / Opus · credit system", link: "/chat" },
                   { name: "BlueCLI",    color: "#34D399", desc: "@blueagent/cli · 30 commands · Terminal + TUI · blue idea/build/audit/ship/raise", link: "/docs" },
-                  { name: "BlueTools",  color: "#F59E0B", desc: "34 skills · 31 tools · 30 commands · grounded Base knowledge", link: "/tools" },
+                  { name: "BlueTools",  color: "#F59E0B", desc: "34 skills · 40 tools · 30 commands · grounded Base knowledge", link: "/tools" },
                   { name: "BlueTasks",  color: "#60A5FA", desc: "Micropay work hub · post tasks + escrow USDC · agents earn", link: "/micro" },
                   { name: "BlueMarket", color: "#FB923C", desc: "Stake $BLUEAGENT · daily Base ecosystem brief · USDC or stake", link: "/market" },
                   { name: "BlueScore",  color: "#E879F9", desc: "Builder Score + Agent Score · 0–100 · onchain reputation", link: "/score" },
@@ -267,7 +268,7 @@ export default function DocsPage() {
               </p>
 
               {/* TUI option */}
-              <div className="card-surface rounded-xl overflow-hidden">
+              <div className="card-surface rounded-xl overflow-hidden mb-4">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-[#1A1A2E] bg-[#0A0A12]">
                   <span className="font-mono text-xs text-[#A78BFA] font-semibold">Alternative — Interactive TUI</span>
                   <span className="font-mono text-[10px] text-[#A78BFA]/60 border border-[#A78BFA]/20 px-1.5 py-0.5 rounded">@blueagent/cli</span>
@@ -279,14 +280,31 @@ export default function DocsPage() {
                   <div><span className="text-slate-600">$ </span><span className="text-[#A78BFA]">blueagent</span></div>
                 </div>
               </div>
+              <p className="font-mono text-xs text-slate-600 mb-4">
+                TUI includes all builder commands + 40 x402 tools + score + tasks in one interactive menu.
+              </p>
+
+              <div className="card-surface rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-[#1A1A2E] bg-[#0A0A12]">
+                  <span className="font-mono text-xs text-[#34D399] font-semibold">Alternative — Blue Terminal (browser)</span>
+                  <span className="font-mono text-[10px] text-[#34D399]/60 border border-[#34D399]/20 px-1.5 py-0.5 rounded">no install</span>
+                </div>
+                <div className="p-5 space-y-2 font-mono text-sm">
+                  <div className="text-slate-600"># run all 40 Hub tools in the browser — no install required</div>
+                  <div className="text-slate-600"># supports: blue idea/build/audit/ship/raise, hub ls, hub run, balance, score</div>
+                  <div className="pt-1">
+                    <a href="/terminal" className="text-[#34D399] hover:underline">blueagent.dev/terminal →</a>
+                  </div>
+                </div>
+              </div>
               <p className="font-mono text-xs text-slate-600 mt-2">
-                TUI includes all builder commands + 31 x402 tools + score + tasks in one interactive menu.
+                Blue Terminal is a full browser-based CLI — Tab autocomplete, command history, typewriter AI output.
               </p>
             </section>
 
             {/* ── 02 BlueHub ──────────────────────── */}
             <section id="bluehub" className="mb-16 scroll-mt-20">
-              <SectionHeader num="02" title="BlueHub" subtitle="34 AI tools · 3-agent consensus · pay per use via x402" />
+              <SectionHeader num="02" title="BlueHub" subtitle="40 AI tools · 3-agent consensus · pay per use via x402" />
               <p className="font-mono text-sm text-slate-500 mb-6">
                 Every tool runs through Blue Agent, Aeon, and MiroShark simultaneously — you get one sharp, consensus output. Pay per call in USDC via x402. No subscription.
               </p>
@@ -543,8 +561,42 @@ export default function DocsPage() {
 
             {/* ── 06 API Reference ────────────────── */}
             <section id="api" className="mb-16 scroll-mt-20">
-              <SectionHeader num="06" title="API Reference" subtitle="builder-score + agent-score REST endpoints" />
+              <SectionHeader num="06" title="API Reference" subtitle="REST endpoints — score, hub catalog, x402 pricing" />
               <div className="space-y-4">
+
+                {/* x402 / Hub endpoints */}
+                <div className="card-surface rounded-xl p-5">
+                  <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-4">BLUE HUB — x402 ENDPOINTS</p>
+                  <div className="space-y-3">
+                    {[
+                      { method: "GET",  endpoint: "/api/catalog",                        desc: "All 40 Hub tools — id, name, category, price, description" },
+                      { method: "GET",  endpoint: "/.well-known/pricing",                 desc: "Machine-readable x402 pricing manifest (Tavily-compatible) — all routes, USDC amounts, payTo, network" },
+                      { method: "GET",  endpoint: "/.well-known/ai-tool/{tool-id}.json",  desc: "Per-tool manifest — metadata, inputs, price, payment scheme" },
+                      { method: "POST", endpoint: "/api/x402/{tool-id}",                  desc: "Call any Hub tool — x402 pay-per-call in USDC. Returns 402 on first probe, 200 after payment." },
+                    ].map((api) => (
+                      <div key={api.endpoint} className="border border-[#1A1A2E] rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`font-mono text-xs border px-2 py-0.5 rounded ${api.method === "GET" ? "text-emerald-400 border-emerald-400/20 bg-emerald-400/5" : "text-[#4FC3F7] border-[#4FC3F7]/20 bg-[#4FC3F7]/5"}`}>{api.method}</span>
+                          <code className="font-mono text-sm text-white">{api.endpoint}</code>
+                        </div>
+                        <p className="font-mono text-xs text-slate-500 pl-12">{api.desc}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <pre className="font-mono text-xs text-slate-500 bg-[#0A0A12] p-4 rounded-lg overflow-x-auto border border-[#1A1A2E] leading-relaxed mt-4">{`// /.well-known/pricing — example route entry
+{
+  "path": "/api/x402/blue-audit",
+  "name": "Blue Audit",
+  "category": "security",
+  "scheme": "exact",
+  "network": "eip155:8453",
+  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "maxAmountRequired": "1000000",
+  "priceUSD": "$1.00"
+}`}</pre>
+                </div>
+
+                {/* Score endpoints */}
                 {[
                   {
                     method: "GET",
@@ -609,7 +661,8 @@ export default function DocsPage() {
                   <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-2">SURFACE — what users install</p>
                   <div className="space-y-2 mb-5">
                     {[
-                      { pkg: "@blueagent/cli", desc: "TUI + CLI · blueagent (interactive) · blue (direct commands) · 31 commands" },
+                      { pkg: "@blueagent/cli",  desc: "TUI + CLI · blueagent (interactive) · blue (direct commands) · 31 commands" },
+                      { pkg: "@blueagent/x402", desc: "x402 client SDK · call any Hub tool with auto payment · createX402Client()" },
                     ].map((p) => (
                       <div key={p.pkg} className="flex items-baseline gap-4">
                         <code className="font-mono text-sm text-[#4FC3F7] shrink-0 min-w-[200px]">{p.pkg}</code>
@@ -657,6 +710,94 @@ export default function DocsPage() {
                     Load order: <code className="text-white">BLUE_AGENT_SKILLS_DIR</code> → <code className="text-white">~/.blue-agent/skills/</code> → monorepo <code className="text-white">skills/</code>.
                   </p>
                 </div>
+              </div>
+            </section>
+
+            {/* ── 12 x402 SDK ─────────────────────── */}
+            <section id="x402sdk" className="mb-16 scroll-mt-20">
+              <SectionHeader num="12" title="x402 SDK" subtitle="@blueagent/x402 · call any Hub tool · auto payment · viem" />
+              <p className="font-mono text-sm text-slate-500 mb-6">
+                The <code className="text-[#4FC3F7]">@blueagent/x402</code> SDK handles the full x402 payment flow automatically — probe → 402 → sign EIP-3009 → retry → 200 OK. No API key. Pay per call in USDC on Base.
+              </p>
+
+              <div className="card-surface rounded-xl overflow-hidden mb-4">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-[#1A1A2E] bg-[#0A0A12]">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-green-500/50" />
+                  <span className="font-mono text-xs text-slate-700 ml-2">install</span>
+                </div>
+                <div className="p-5 font-mono text-sm">
+                  <div><span className="text-slate-600">$ </span><span className="text-white">npm install @blueagent/x402</span></div>
+                </div>
+              </div>
+
+              <div className="card-surface rounded-xl p-5 mb-4">
+                <p className="font-mono text-xs text-slate-600 tracking-widest mb-3">USAGE</p>
+                <pre className="font-mono text-sm text-[#4FC3F7] bg-[#0A0A12] p-4 rounded-lg overflow-x-auto border border-[#1A1A2E] leading-relaxed">{`import { createX402Client } from "@blueagent/x402"
+
+const client = createX402Client({ privateKey: "0x..." })
+
+// 5 core commands
+const brief  = await client.idea("gasless USDC tipping app on Base")
+const arch   = await client.build("...")
+const audit  = await client.audit("0x<contract>")
+const ship   = await client.ship("...")
+const raise  = await client.raise("...")
+
+// Any Hub tool
+const pick   = await client.tokenPick()
+const digest = await client.hub("ecosystem-digest", { focus: "DeFi" })
+
+// Price discovery
+const prices = await client.pricing()
+const price  = await client.priceOf("blue-audit") // { priceUSD: "$1.00" }`}</pre>
+              </div>
+
+              <div className="card-surface rounded-xl p-5 mb-4">
+                <p className="font-mono text-xs text-slate-600 tracking-widest mb-3">x402 PAYMENT FLOW</p>
+                <div className="space-y-2">
+                  {[
+                    { step: "1", label: "Probe",    desc: "POST /api/x402/{tool-id} → 402 + X-Payment-Requirements header" },
+                    { step: "2", label: "Decode",   desc: "Parse base64 requirements — asset, payTo, maxAmountRequired" },
+                    { step: "3", label: "Sign",     desc: "EIP-3009 USDC TransferWithAuthorization (EIP-712, Base chain ID 8453)" },
+                    { step: "4", label: "Retry",    desc: "POST with X-Payment header → 200 OK + tool output" },
+                  ].map((s) => (
+                    <div key={s.step} className="flex items-start gap-3">
+                      <span className="font-mono text-[10px] text-[#4FC3F7] border border-[#4FC3F7]/30 px-1.5 py-0.5 rounded shrink-0 mt-0.5">{s.step}</span>
+                      <div>
+                        <span className="font-mono text-sm text-white font-semibold">{s.label}</span>
+                        <span className="font-mono text-xs text-slate-500 ml-2">{s.desc}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid sm:grid-cols-3 gap-3 mb-4">
+                {[
+                  { label: "Network",  value: "Base (eip155:8453)",              color: "#0052FF" },
+                  { label: "Asset",    value: "USDC 0x833589...02913",           color: "#34D399" },
+                  { label: "Version",  value: "x402 v2 · EIP-3009 + EIP-712",   color: "#4FC3F7" },
+                ].map((info) => (
+                  <div key={info.label} className="card-surface rounded-xl p-4">
+                    <span className="font-mono text-xs text-slate-600 block mb-1">{info.label}</span>
+                    <span className="font-mono text-xs font-semibold" style={{ color: info.color }}>{info.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-4">
+                <a href="https://npmjs.com/package/@blueagent/x402" target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 font-mono text-sm text-[#4FC3F7] hover:underline">
+                  npm →
+                </a>
+                <a href="/api/catalog" className="inline-flex items-center gap-2 font-mono text-sm text-[#34D399] hover:underline">
+                  Browse tools →
+                </a>
+                <a href="/.well-known/pricing" className="inline-flex items-center gap-2 font-mono text-sm text-[#A78BFA] hover:underline">
+                  Pricing manifest →
+                </a>
               </div>
             </section>
 
