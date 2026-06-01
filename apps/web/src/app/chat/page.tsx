@@ -18,14 +18,34 @@ import {
   clearMemory,
 } from "@/lib/memory";
 
-type ChatTier = "fast" | "pro" | "max";
+type ChatTier = string;
 type Message  = { role: "user" | "assistant"; content: string };
 
-const CHAT_TIERS: { id: ChatTier; label: string; model: string; color: string; credits: number }[] = [
-  { id: "fast", label: "Fast",  model: "Haiku",   color: "#64748b", credits: 1 },
-  { id: "pro",  label: "Pro",   model: "Sonnet",  color: "#4FC3F7", credits: 3 },
-  { id: "max",  label: "Max",   model: "Opus",    color: "#A78BFA", credits: 10 },
+interface TierConfig {
+  id:        string;
+  label:     string;
+  model:     string;
+  color:     string;
+  provider:  "bankr" | "venice";
+  modelId?:  string;
+  badge?:    string;
+  note?:     string;
+}
+
+const BANKR_TIERS: TierConfig[] = [
+  { id: "fast", label: "Fast",   model: "Haiku",  color: "#64748b", provider: "bankr" },
+  { id: "pro",  label: "Pro",    model: "Sonnet", color: "#4FC3F7", provider: "bankr" },
+  { id: "max",  label: "Max",    model: "Opus",   color: "#A78BFA", provider: "bankr" },
 ];
+
+const VENICE_TIERS: TierConfig[] = [
+  { id: "venice-deepseek", label: "V4 Flash",   model: "DeepSeek", color: "#34D399", provider: "venice", modelId: "deepseek-v4-flash",              badge: "VENICE", note: "Fast · 1M ctx" },
+  { id: "venice-grok",     label: "Grok 4",     model: "xAI",      color: "#E879F9", provider: "venice", modelId: "grok-4-3",                        badge: "VENICE", note: "X search · crypto" },
+  { id: "venice-uncut",    label: "Uncensored", model: "Venice",   color: "#FB923C", provider: "venice", modelId: "venice-uncensored-1-2",           badge: "VENICE", note: "No filter" },
+  { id: "venice-mistral",  label: "Mistral",    model: "Mistral",  color: "#60A5FA", provider: "venice", modelId: "mistral-small-3-2-24b-instruct", badge: "VENICE", note: "256K ctx" },
+];
+
+const ALL_TIERS = [...BANKR_TIERS, ...VENICE_TIERS];
 
 const STARTERS = [
   { icon: "💡", text: "I want to build a USDC streaming payroll app on Base" },
@@ -71,7 +91,7 @@ export default function ChatPage() {
 
   const cost = creditCost(chatTier, holderTier);
   const outOfCredits = credits < cost;
-  const activeTier = CHAT_TIERS.find((t) => t.id === chatTier)!;
+  const activeTier = ALL_TIERS.find((t) => t.id === chatTier) ?? BANKR_TIERS[1];;
 
   const send = useCallback(async (text: string) => {
     const userMsg = text.trim();
@@ -102,6 +122,8 @@ export default function ChatPage() {
         body: JSON.stringify({
           messages: next,
           tier: chatTier,
+          provider: activeTier.provider,
+          ...(activeTier.modelId ? { modelId: activeTier.modelId } : {}),
           ...(memoryContext ? { memoryContext } : {}),
         }),
         signal: abortRef.current.signal,
@@ -207,9 +229,10 @@ export default function ChatPage() {
 
           {/* Model picker */}
           <div className="px-3 py-4 border-b border-[#1A1A2E]">
-            <p className="font-mono text-[10px] text-slate-600 tracking-widest px-2 mb-2">MODEL</p>
-            <div className="flex flex-col gap-0.5">
-              {CHAT_TIERS.map((t) => {
+            {/* Bankr / Claude */}
+            <p className="font-mono text-[10px] text-slate-600 tracking-widest px-2 mb-2">MODEL · BANKR</p>
+            <div className="flex flex-col gap-0.5 mb-3">
+              {BANKR_TIERS.map((t) => {
                 const c = creditCost(t.id, holderTier);
                 const isActive = chatTier === t.id;
                 return (
@@ -226,6 +249,38 @@ export default function ChatPage() {
                       <span className="w-1.5 h-1.5 rounded-full" style={{ background: isActive ? t.color : "#374151" }} />
                       <span className="font-mono text-sm">{t.label}</span>
                       <span className="font-mono text-[10px] text-slate-600">{t.model}</span>
+                    </div>
+                    <span className="font-mono text-[10px]" style={{ color: isActive ? t.color : "#374151" }}>
+                      {c} cr
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {/* Venice models */}
+            <div className="flex items-center gap-2 px-2 mb-2">
+              <p className="font-mono text-[10px] text-slate-600 tracking-widest">MODEL · VENICE</p>
+              <span className="font-mono text-[8px] text-[#34D399] border border-[#34D399]/30 px-1 py-0.5 rounded">PRIVACY</span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {VENICE_TIERS.map((t) => {
+                const c = creditCost(t.id, holderTier);
+                const isActive = chatTier === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setChatTier(t.id)}
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg transition-all text-left ${
+                      isActive
+                        ? "text-white border-l-2"
+                        : "text-slate-500 hover:text-white hover:bg-[#0D0D1A] border-l-2 border-transparent"
+                    }`}
+                    style={isActive ? { background: `${t.color}08`, borderLeftColor: t.color } : {}}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: isActive ? t.color : "#374151" }} />
+                      <span className="font-mono text-sm">{t.label}</span>
+                      {t.note && <span className="font-mono text-[9px] text-slate-700">{t.note}</span>}
                     </div>
                     <span className="font-mono text-[10px]" style={{ color: isActive ? t.color : "#374151" }}>
                       {c} cr
@@ -351,8 +406,11 @@ export default function ChatPage() {
                 {messages.map((msg, i) => (
                   <div key={i} className={`flex gap-4 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                     {msg.role === "assistant" && (
-                      <div className="w-7 h-7 rounded-full bg-[#4FC3F7]/10 border border-[#4FC3F7]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <div className="w-2 h-2 rounded-full bg-[#4FC3F7]" />
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                        style={{ background: `${activeTier.color}15`, border: `1px solid ${activeTier.color}30` }}
+                      >
+                        <div className="w-2 h-2 rounded-full" style={{ background: activeTier.color }} />
                       </div>
                     )}
                     <div
@@ -385,19 +443,22 @@ export default function ChatPage() {
             <div className="max-w-3xl mx-auto">
 
               {/* Mobile: tier picker */}
-              <div className="lg:hidden flex gap-2 mb-3">
-                {CHAT_TIERS.map((t) => (
+              <div className="lg:hidden flex gap-2 mb-3 flex-wrap">
+                {ALL_TIERS.map((t) => (
                   <button
                     key={t.id}
                     onClick={() => setChatTier(t.id)}
-                    className={`font-mono text-xs px-3 py-1.5 rounded-lg transition-all ${
+                    className={`font-mono text-xs px-3 py-1.5 rounded-lg transition-all border ${
                       chatTier === t.id
-                        ? "bg-[#4FC3F7]/10 border border-[#4FC3F7]/30"
-                        : "text-slate-500 hover:text-white border border-transparent"
+                        ? "border-opacity-30"
+                        : "text-slate-500 hover:text-white border-transparent"
                     }`}
-                    style={chatTier === t.id ? { color: t.color } : {}}
+                    style={chatTier === t.id
+                      ? { color: t.color, background: `${t.color}10`, borderColor: `${t.color}40` }
+                      : {}}
                   >
                     {t.label}
+                    {t.badge && <span className="ml-1 text-[8px] opacity-60">V</span>}
                   </button>
                 ))}
                 <span className="font-mono text-[10px] text-slate-600 ml-auto self-center">{credits} cr</span>
@@ -467,6 +528,9 @@ export default function ChatPage() {
                 </span>
                 <span className="font-mono text-[10px] text-slate-700">
                   {cost} credits/msg · {activeTier.label} ({activeTier.model})
+                  {activeTier.badge && (
+                    <span className="ml-1" style={{ color: activeTier.color }}>· {activeTier.badge}</span>
+                  )}
                 </span>
               </div>
             </div>

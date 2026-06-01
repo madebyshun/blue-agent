@@ -14,7 +14,8 @@ import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
-const BANKR_LLM = "https://llm.bankr.bot/v1/messages";
+const BANKR_LLM  = "https://llm.bankr.bot/v1/messages";
+const VENICE_API = "https://api.venice.ai/api/v1/chat/completions";
 const BASE_URL   = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
 
 // ─── Models ───────────────────────────────────────────────────────────────────
@@ -253,6 +254,84 @@ async function callHubTool(toolName: string, args: Record<string, unknown>): Pro
   }
 }
 
+// ─── Venice streaming proxy (OpenAI → Blue SSE) ──────────────────────────────
+
+async function callVeniceStream(
+  modelId:   string,
+  system:    string,
+  messages:  LLMMessage[],
+  maxTokens: number,
+): Promise<Response> {
+  const apiKey = process.env.VENICE_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json({ error: "VENICE_API_KEY not configured." }, { status: 500 });
+  }
+
+  // Convert Anthropic-style messages → OpenAI format (system as first message)
+  const openaiMsgs = [
+    { role: "system", content: system },
+    ...messages.map((m) => ({
+      role: m.role as string,
+      content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+    })),
+  ];
+
+  let veniceRes: Response;
+  try {
+    veniceRes = await fetch(VENICE_API, {
+      method:  "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: modelId, messages: openaiMsgs, stream: true, max_tokens: maxTokens }),
+      signal: AbortSignal.timeout(60_000),
+    });
+  } catch (e) {
+    return NextResponse.json({ error: `Venice request failed: ${(e as Error).message}` }, { status: 502 });
+  }
+
+  if (!veniceRes.ok) {
+    const err = await veniceRes.text();
+    return NextResponse.json({ error: `Venice error ${veniceRes.status}`, detail: err }, { status: veniceRes.status });
+  }
+
+  // Transform OpenAI SSE → Blue's SSE format: data: {"delta":{"text":"..."}}
+  const encoder = new TextEncoder();
+  const transformed = new ReadableStream({
+    async start(controller) {
+      const reader  = veniceRes.body!.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const raw = line.slice(6).trim();
+            if (raw === "[DONE]") {
+              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+              continue;
+            }
+            try {
+              const parsed = JSON.parse(raw) as { choices?: { delta?: { content?: string } }[] };
+              const text   = parsed?.choices?.[0]?.delta?.content ?? "";
+              if (text) {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta: { text } })}\n\n`));
+              }
+            } catch {}
+          }
+        }
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(transformed, { headers: SSE_HEADERS });
+}
+
 // ─── Text → SSE stream ────────────────────────────────────────────────────────
 
 const SSE_HEADERS = {
@@ -311,19 +390,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "BANKR_API_KEY not configured." }, { status: 500 });
   }
 
-  let body: { messages?: LLMMessage[]; tier?: string; memoryContext?: string } = {};
+  let body: {
+    messages?: LLMMessage[];
+    tier?: string;
+    memoryContext?: string;
+    provider?: string;
+    modelId?: string;
+  } = {};
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { messages, tier = "pro", memoryContext } = body;
+  const { messages, tier = "pro", memoryContext, provider, modelId } = body;
   if (!messages?.length) {
     return NextResponse.json({ error: "messages array required." }, { status: 400 });
   }
 
   const system = memoryContext ? `${BASE_SYSTEM}\n\n${memoryContext}` : BASE_SYSTEM;
+
+  // ── Venice provider: skip Bankr, call Venice directly ─────────────────────
+  if (provider === "venice" && modelId) {
+    return callVeniceStream(modelId, system, messages as LLMMessage[], 2048);
+  }
+
   const model  = MODELS[tier as string] ?? MODELS.pro;
 
   const lmHeaders = {

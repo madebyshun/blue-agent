@@ -46,9 +46,15 @@ export function getTierInfo(blueBalance: number): TierInfo {
 // ── Credit costs ──────────────────────────────────────────────────────────────
 
 export const BASE_COST: Record<string, number> = {
+  // Bankr / Claude tiers
   fast: 10,
   pro:  50,
   max:  200,
+  // Venice models
+  "venice-deepseek": 10,   // DeepSeek V4 Flash — budget
+  "venice-grok":     60,   // Grok 4.3 — premium
+  "venice-uncut":    20,   // Venice Uncensored
+  "venice-mistral":  10,   // Mistral Small — budget
 };
 
 /** Credit cost after holder discount */
