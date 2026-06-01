@@ -15,7 +15,7 @@ Blue Agent is a full economic actor on Base: it holds a wallet, executes onchain
 - Website: [blueagent.dev](https://blueagent.dev)
 - Hub: [blueagent.dev/hub](https://blueagent.dev/hub)
 - Terminal: [blueagent.dev/terminal](https://blueagent.dev/terminal)
-- X: [@blocky_agent](https://x.com/blocky_agent)
+- X: [@blueagent_](https://x.com/blueagent_)
 - Telegram: [t.me/blueagent_hub](https://t.me/blueagent_hub)
 - Bankr: [bankr.bot/agents/blue-agent](https://bankr.bot/agents/blue-agent)
 
