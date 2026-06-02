@@ -67,6 +67,8 @@ const TOOL_EXAMPLES: Record<string, Record<string, string>> = {
   "blue-audit":             { prompt: "ERC20 token with staking and revenue share — check for reentrancy and access control issues" },
   "blue-ship":              { prompt: "Base mainnet launch of BLUEAGENT token with Uniswap v4 pool" },
   "blue-raise":             { prompt: "AI agent tool marketplace on Base — 40 tools, $2k MRR, raising $750k pre-seed" },
+  "portfolio-rebalancer":   { holdings: "40% ETH, 30% USDC, 20% CBBTC, 10% AERO", goal: "reduce volatility and increase stablecoin exposure" },
+  "thread-intelligence":    { topic: "x402 pay-per-call changes how agents monetize on Base", angle: "alpha drop — explain the pattern, why it matters for agent builders" },
 };
 
 // Derive TOOLS from AGENT_TOOLS — single source of truth
@@ -742,12 +744,17 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
             <button
               onClick={run}
               disabled={loading}
-              className="w-full font-mono text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-6 py-3 rounded-xl hover:bg-[#29ABE2] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full font-mono text-sm font-bold px-6 py-3.5 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{
+                background: loading ? "#29ABE2" : "linear-gradient(135deg, #4FC3F7 0%, #29ABE2 100%)",
+                color: "#050508",
+                boxShadow: loading ? "none" : "0 0 20px rgba(79,195,247,0.25), 0 4px 12px rgba(79,195,247,0.15)",
+              }}
             >
-              {step === "signing" ? "Sign in wallet…" :
-               step === "paying"  ? "Paying USDC…"   :
-               loading            ? "Calling agents…" :
-               (tool.x402Body && isConnected) ? `Run · ${tool.price}` : "Run →"}
+              {step === "signing" ? "✍ Sign in wallet…" :
+               step === "paying"  ? "💸 Paying USDC…"  :
+               loading            ? "⚡ Calling agents…" :
+               (tool.x402Body && isConnected) ? `⚡ Run · ${tool.price}` : "⚡ Run →"}
             </button>
           </div>
         </div>
@@ -757,18 +764,39 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           {loading && <AgentScanLog tool={tool} />}
 
           {step === "idle" && !result && (
-            <div className="flex flex-col items-center justify-center h-full gap-3 px-8">
-              <div className="flex items-center gap-3 mb-2">
+            <div className="flex flex-col items-center justify-center h-full gap-4 px-8 py-10">
+              {/* Agent pills */}
+              <div className="flex items-center gap-3">
                 {tool.agents.map(a => (
-                  <div key={a} className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full" style={{ background: AGENT_COLORS[a] }} />
+                  <div key={a} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border" style={{ borderColor: AGENT_COLORS[a] + "30", background: AGENT_COLORS[a] + "08" }}>
+                    <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: AGENT_COLORS[a] }} />
                     <span className="font-mono text-xs font-bold" style={{ color: AGENT_COLORS[a] }}>{AGENT_LABELS[a]}</span>
                   </div>
                 ))}
               </div>
               <p className="font-mono text-xs text-slate-600 text-center max-w-xs leading-relaxed">
-                Fill in the inputs and run to get 3-agent consensus output
+                Fill in the inputs on the left, then hit <span className="text-[#4FC3F7]">Run</span> to get 3-agent consensus output.
               </p>
+              {/* Example prompt preview */}
+              {hasExamples && (
+                <div className="w-full max-w-sm rounded-xl border border-[#A78BFA]/15 bg-[#0D0D1A] overflow-hidden">
+                  <div className="px-3 py-2 border-b border-[#1A1A2E] flex items-center justify-between">
+                    <span className="font-mono text-[9px] text-[#A78BFA] tracking-widest">EXAMPLE INPUT</span>
+                    <button onClick={fillExample} className="font-mono text-[10px] text-[#A78BFA] hover:text-white transition-colors">
+                      Use this →
+                    </button>
+                  </div>
+                  <div className="px-3 py-2.5 space-y-1.5">
+                    {Object.entries(toolExamples).slice(0, 3).map(([k, v]) => (
+                      <div key={k}>
+                        <span className="font-mono text-[9px] text-slate-700 uppercase tracking-wider">{k.replace(/_/g, " ")}</span>
+                        <p className="font-mono text-[10px] text-slate-400 leading-relaxed truncate">{v}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p className="font-mono text-[10px] text-slate-700">Output from {tool.price} · USDC · Base · EIP-3009</p>
             </div>
           )}
 
@@ -889,14 +917,38 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
 
 // ─── Empty / browse state ─────────────────────────────────────────────────────
 
+type SortMode = "default" | "price-asc" | "price-desc" | "popular";
+
 function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t: Tool) => void; featuredIds: Set<string>; usage: Record<string, number>; recentIds: string[] }) {
   const recentTools = recentIds.map(id => TOOLS.find(t => t.id === id)).filter((t): t is Tool => !!t).reverse();
   const totalRuns = Object.values(usage).reduce((a, b) => a + b, 0);
   const usdcPaid  = TOOLS.reduce((s, t) => s + (usage[t.id] ?? 0) * (parseFloat(t.price.replace("$", "")) || 0), 0);
   const runsOf = (id: string) => usage[id] ?? 0;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [sortMode, setSortMode] = useState<SortMode>("default");
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const toggleExpand = (groupId: string) =>
     setExpanded(prev => { const n = new Set(prev); n.has(groupId) ? n.delete(groupId) : n.add(groupId); return n; });
+
+  // Load onboarding state from localStorage
+  useEffect(() => {
+    try {
+      const dismissed = localStorage.getItem("bluehub_onboarding_dismissed");
+      if (!dismissed) setOnboardingOpen(true);
+    } catch {}
+  }, []);
+
+  function dismissOnboarding() {
+    setOnboardingOpen(false);
+    try { localStorage.setItem("bluehub_onboarding_dismissed", "1"); } catch {}
+  }
+
+  function sortGroupTools(tools: Tool[]): Tool[] {
+    if (sortMode === "price-asc") return [...tools].sort((a, b) => (parseFloat(a.price.replace("$",""))||0) - (parseFloat(b.price.replace("$",""))||0));
+    if (sortMode === "price-desc") return [...tools].sort((a, b) => (parseFloat(b.price.replace("$",""))||0) - (parseFloat(a.price.replace("$",""))||0));
+    if (sortMode === "popular") return [...tools].sort((a, b) => (runsOf(b.id)) - (runsOf(a.id)));
+    return tools;
+  }
 
   // suppress unused warning — featuredIds kept in props for future use
   void featuredIds;
@@ -932,35 +984,98 @@ function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t:
         </div>
       </div>
 
-      {/* ── Hero — compact ── */}
-      <div className="relative overflow-hidden px-6 py-4 border-b border-[#1A1A2E] shrink-0">
-        <div className="absolute inset-0 bg-gradient-to-r from-[#4FC3F7]/[0.04] via-transparent to-[#A78BFA]/[0.04] pointer-events-none" />
-        <div className="relative flex flex-wrap items-center gap-4">
+      {/* ── Hero — medium ── */}
+      <div className="relative overflow-hidden px-6 py-5 border-b border-[#1A1A2E] shrink-0">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#4FC3F7]/[0.05] via-transparent to-[#A78BFA]/[0.06] pointer-events-none" />
+        <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <p className="font-mono text-sm font-bold text-white leading-tight">
+            <p className="font-mono text-base font-bold text-white leading-tight mb-1.5">
               <span className="text-[#4FC3F7]">{TOOLS.length} AI tools</span>
-              <span className="text-slate-500 font-normal ml-2">· pay per call · no subscription · USDC on Base</span>
+              <span className="text-slate-500 font-normal text-sm ml-2">· pay per call · no subscription</span>
             </p>
-            <p className="font-mono text-[10px] text-slate-600 mt-0.5">
-              Blue · Aeon · MiroShark 3-agent consensus
+            <p className="font-mono text-xs text-slate-400 leading-relaxed max-w-md">
+              Research, trade, build and ship on Base — 3-agent consensus (Blue · Aeon · MiroShark). Pay in USDC, no API key, no signup.
             </p>
+            <div className="flex items-center gap-3 mt-2">
+              <span className="font-mono text-[10px] text-slate-600">x402 · EIP-3009 · Base mainnet</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {[
-              { label: "runs",      value: totalRuns > 0 ? totalRuns.toLocaleString() : "—" },
-              { label: "USDC",      value: usdcPaid > 0 ? `$${usdcPaid.toFixed(2)}` : "—" },
-            ].map(s => (
-              <div key={s.label} className="flex items-baseline gap-1 px-2.5 py-1.5 rounded-lg border border-[#1A1A2E] bg-[#0D0D1A]">
-                <span className="font-mono text-sm font-bold text-white">{s.value}</span>
-                <span className="font-mono text-[9px] text-slate-600 uppercase tracking-wider">{s.label}</span>
-              </div>
-            ))}
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex items-center gap-2">
+              {[
+                { label: "tools",  value: String(TOOLS.length) },
+                { label: "runs",   value: totalRuns > 0 ? totalRuns.toLocaleString() : "—" },
+                { label: "USDC",   value: usdcPaid > 0 ? `$${usdcPaid.toFixed(2)}` : "—" },
+              ].map(s => (
+                <div key={s.label} className="flex items-baseline gap-1 px-2.5 py-1.5 rounded-lg border border-[#1A1A2E] bg-[#0D0D1A]">
+                  <span className="font-mono text-sm font-bold text-white">{s.value}</span>
+                  <span className="font-mono text-[9px] text-slate-600 uppercase tracking-wider">{s.label}</span>
+                </div>
+              ))}
+            </div>
+            <p className="font-mono text-[9px] text-slate-700">from $0.05 per call</p>
           </div>
         </div>
       </div>
 
+      {/* ── Onboarding strip ── */}
+      {onboardingOpen && (
+        <div className="px-6 py-3.5 border-b border-[#1A1A2E] bg-[#0D0D1A] shrink-0">
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">// HOW TO USE</span>
+              <span className="font-mono text-[9px] text-slate-700">3 steps to run any tool</span>
+            </div>
+            <button onClick={dismissOnboarding} className="font-mono text-[10px] text-slate-600 hover:text-slate-300 transition-colors">
+              dismiss ×
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {[
+              { step: "01", label: "Pick a tool", desc: "Browse by audience or search by keyword", color: "#4FC3F7" },
+              { step: "02", label: "Fill inputs", desc: "Use \"Try example →\" for instant prefill", color: "#A78BFA" },
+              { step: "03", label: "Pay & run", desc: "Connect wallet · sign EIP-3009 · get result", color: "#34D399" },
+            ].map(s => (
+              <div key={s.step} className="flex items-start gap-2.5 flex-1 min-w-[160px]">
+                <span className="font-mono text-lg font-bold shrink-0 leading-none" style={{ color: s.color + "40" }}>{s.step}</span>
+                <div>
+                  <p className="font-mono text-xs font-semibold text-white leading-tight">{s.label}</p>
+                  <p className="font-mono text-[10px] text-slate-600 leading-relaxed mt-0.5">{s.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Content grid ── */}
       <div className="flex-1 px-6 py-5 overflow-y-auto">
+
+        {/* Sort controls */}
+        <div className="flex items-center gap-2 mb-4">
+          <span className="font-mono text-[10px] text-slate-700">Sort:</span>
+          {([
+            { mode: "default",    label: "Default" },
+            { mode: "popular",    label: "Popular" },
+            { mode: "price-asc",  label: "Price ↑" },
+            { mode: "price-desc", label: "Price ↓" },
+          ] as { mode: SortMode; label: string }[]).map(s => (
+            <button key={s.mode} onClick={() => setSortMode(s.mode)}
+              className={`font-mono text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                sortMode === s.mode
+                  ? "text-[#4FC3F7] border-[#4FC3F7]/30 bg-[#4FC3F7]/5"
+                  : "text-slate-600 border-transparent hover:text-slate-300"
+              }`}>
+              {s.label}
+            </button>
+          ))}
+          {!onboardingOpen && (
+            <button onClick={() => setOnboardingOpen(true)}
+              className="ml-auto font-mono text-[10px] text-slate-700 hover:text-slate-400 transition-colors border border-transparent hover:border-[#1A1A2E] px-2 py-0.5 rounded">
+              ? How to use
+            </button>
+          )}
+        </div>
 
         {/* Your recent results (cached, free to re-open) */}
         {recentTools.length > 0 && (
@@ -984,7 +1099,8 @@ function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t:
 
         {/* ── Grouped sections ── */}
         {TOOL_GROUPS.map(group => {
-          const groupTools = group.ids.map(id => TOOLS.find(t => t.id === id)).filter((t): t is Tool => !!t);
+          const rawGroupTools = group.ids.map(id => TOOLS.find(t => t.id === id)).filter((t): t is Tool => !!t);
+          const groupTools = sortGroupTools(rawGroupTools);
           if (!groupTools.length) return null;
           const isExpanded = expanded.has(group.id);
           const visible = isExpanded ? groupTools : groupTools.slice(0, 4);
@@ -1007,9 +1123,11 @@ function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t:
 
               {/* Tool cards */}
               <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
-                {visible.map(tool => (
+                {visible.map(tool => {
+                  const hasExample = !!TOOL_EXAMPLES[tool.id];
+                  return (
                   <button key={tool.id} onClick={() => onSelect(tool)}
-                    className="text-left rounded-xl p-3.5 transition-all group border hover:bg-white/[0.02]"
+                    className="text-left rounded-xl p-3.5 transition-all group border hover:bg-white/[0.02] flex flex-col"
                     style={{ borderColor: group.color + "20", background: group.color + "05" }}
                     onMouseEnter={e => (e.currentTarget.style.borderColor = group.color + "40")}
                     onMouseLeave={e => (e.currentTarget.style.borderColor = group.color + "20")}
@@ -1027,12 +1145,20 @@ function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t:
                     >
                       {tool.name}
                     </p>
-                    <p className="font-mono text-[10px] text-slate-600 leading-relaxed line-clamp-2">{tool.desc}</p>
-                    {runsOf(tool.id) > 0 && (
-                      <p className="font-mono text-[9px] text-slate-700 mt-1.5">{runsOf(tool.id)} runs</p>
-                    )}
+                    <p className="font-mono text-[10px] text-slate-600 leading-relaxed line-clamp-2 flex-1">{tool.desc}</p>
+                    <div className="flex items-center justify-between mt-2.5 pt-2 border-t" style={{ borderColor: group.color + "15" }}>
+                      {runsOf(tool.id) > 0
+                        ? <span className="font-mono text-[9px] text-slate-700">{runsOf(tool.id)} runs</span>
+                        : <span className="font-mono text-[9px]" style={{ color: hasExample ? group.color + "60" : "transparent" }}>example ready</span>
+                      }
+                      <span className="font-mono text-[10px] font-semibold transition-colors group-hover:opacity-100 opacity-60"
+                        style={{ color: group.color }}>
+                        Try Now →
+                      </span>
+                    </div>
                   </button>
-                ))}
+                  );
+                })}
               </div>
 
               {/* See all / Collapse */}
