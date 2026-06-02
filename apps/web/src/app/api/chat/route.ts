@@ -254,6 +254,78 @@ async function callHubTool(toolName: string, args: Record<string, unknown>): Pro
   }
 }
 
+// ─── Slash command → system prompt injection ─────────────────────────────────
+
+function extractCommand(messages: LLMMessage[]): { cmd: string; args: string } | null {
+  const last = messages[messages.length - 1];
+  if (last?.role !== "user" || typeof last.content !== "string") return null;
+  const match = last.content.match(/^\/(\w+)(?:\s+([\s\S]*))?$/);
+  if (!match) return null;
+  return { cmd: match[1].toLowerCase(), args: (match[2] ?? "").trim() };
+}
+
+const COMMAND_PROMPTS: Record<string, string> = {
+  idea: `## COMMAND: /idea
+Generate a FUNDABLE BRIEF in this exact format:
+**Problem** — 1 crisp sentence
+**Why Now** — the timing catalyst that makes this urgent
+**Why Base** — specific Base advantage (onchain UX, USDC, Coinbase ecosystem, etc.)
+**MVP Scope** — 3 bullet points, each shippable in ≤2 weeks
+**Risks** — top 2 risks and how to mitigate
+**24h Plan** — the first 3 concrete actions to take today
+Be direct and opinionated. Avoid filler.`,
+
+  build: `## COMMAND: /build
+Generate a TECHNICAL ARCHITECTURE:
+**Stack** — exact packages, versions, why each
+**Folder Structure** — show key files as a tree
+**Key Integrations** — APIs, contracts, SDKs with setup notes
+**Critical Snippets** — 1-2 key code pieces
+**Test Plan** — what to write tests for first
+Optimize for Base + TypeScript + Next.js 15 + Vercel stack.`,
+
+  audit: `## COMMAND: /audit
+Perform a SECURITY + PRODUCT RISK REVIEW:
+**🔴 Critical** — blockers that must be fixed before launch
+**🟡 Medium** — important issues to address
+**🟢 Suggestions** — nice-to-have improvements
+**Verdict** — GO / NO-GO / GO WITH FIXES (bold, one line)
+Be specific. Cite exact attack vectors and severity.`,
+
+  ship: `## COMMAND: /ship
+Generate a DEPLOYMENT CHECKLIST for Base Mainnet:
+**Pre-Deploy** — env vars, contract verification, security scan
+**Deploy Steps** — ordered actions with commands
+**Verify** — post-deploy checks (contract on Basescan, x402 pricing, health endpoint)
+**Monitor** — first 24h metrics to watch
+**Release Note** — 2-sentence announcement ready to post
+Be precise, include exact CLI commands where relevant.`,
+
+  raise: `## COMMAND: /raise
+Write a PITCH NARRATIVE:
+**Framing** — market thesis in 1 punchy sentence
+**Why This Wins** — 3 specific unfair advantages
+**Traction** — key metrics in bullet form (fill with what user provides)
+**Ask** — raise amount + use of funds breakdown
+**Target Investors** — 5 specific Base/crypto funds or angels with why they fit
+Be bold. Think like a founder who knows they're going to win.`,
+
+  help: `## COMMAND: /help
+List all available Blue Chat slash commands in a clean format.
+Commands to document:
+/idea <concept> — Turn a rough idea into a fundable brief
+/build <project> — Get architecture, stack, folder structure
+/audit <code/plan> — Security + product risk review
+/ship <project> — Deployment checklist for Base Mainnet
+/raise <project> — Pitch narrative + investor targets
+/pick — AI token pick on Base
+/scan <token_address> — Honeypot + risk check for a token
+/wallet <address> — Wallet strategy analysis
+/clear — Clear conversation (handled locally)
+/help — Show this command list
+Format as a clean reference. Group by category.`,
+};
+
 // ─── Venice streaming proxy (OpenAI → Blue SSE) ──────────────────────────────
 
 async function callVeniceStream(
@@ -264,7 +336,10 @@ async function callVeniceStream(
 ): Promise<Response> {
   const apiKey = process.env.VENICE_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "VENICE_API_KEY not configured." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Venice is not configured on this server. Please use a Bankr model (Fast/Pro/Max)." },
+      { status: 503 }
+    );
   }
 
   // Convert Anthropic-style messages → OpenAI format (system as first message)
@@ -290,7 +365,12 @@ async function callVeniceStream(
 
   if (!veniceRes.ok) {
     const err = await veniceRes.text();
-    return NextResponse.json({ error: `Venice error ${veniceRes.status}`, detail: err }, { status: veniceRes.status });
+    const hint = veniceRes.status === 401
+      ? "Venice API key is invalid or expired. Please update VENICE_API_KEY."
+      : veniceRes.status === 429
+      ? "Venice rate limit hit. Try again in a moment."
+      : `Venice error ${veniceRes.status}`;
+    return NextResponse.json({ error: hint, detail: err }, { status: veniceRes.status });
   }
 
   // Transform OpenAI SSE → Blue's SSE format: data: {"delta":{"text":"..."}}
@@ -408,11 +488,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "messages array required." }, { status: 400 });
   }
 
-  const system = memoryContext ? `${BASE_SYSTEM}\n\n${memoryContext}` : BASE_SYSTEM;
+  // ── Command injection ─────────────────────────────────────────────────────
+  const detectedCmd = extractCommand(messages as LLMMessage[]);
+  const cmdPrompt = detectedCmd ? COMMAND_PROMPTS[detectedCmd.cmd] : null;
+  const system = [
+    memoryContext ? `${BASE_SYSTEM}\n\n${memoryContext}` : BASE_SYSTEM,
+    cmdPrompt ?? "",
+  ].filter(Boolean).join("\n\n");
+
+  // Strip the /command prefix from last message so LLM only sees args
+  let cleanMessages = messages as LLMMessage[];
+  if (detectedCmd?.args !== undefined && detectedCmd.cmd !== "pick" && detectedCmd.cmd !== "scan" && detectedCmd.cmd !== "wallet") {
+    cleanMessages = [
+      ...messages.slice(0, -1),
+      {
+        role: "user",
+        content: detectedCmd.args || `Run the /${detectedCmd.cmd} command — no specific input provided, give a general example.`,
+      },
+    ] as LLMMessage[];
+  }
 
   // ── Venice provider: skip Bankr, call Venice directly ─────────────────────
   if (provider === "venice" && modelId) {
-    return callVeniceStream(modelId, system, messages as LLMMessage[], 2048);
+    return callVeniceStream(modelId, system, cleanMessages, 2048);
   }
 
   const model  = MODELS[tier as string] ?? MODELS.pro;
@@ -432,7 +530,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model:      model.id,
         system,
-        messages,
+        messages:   cleanMessages,
         tools:      HUB_TOOLS,
         max_tokens: model.maxTokens,
       }),
@@ -473,7 +571,7 @@ export async function POST(req: NextRequest) {
 
   // ── Phase 2: streaming response with tool results ─────────────────────────
   const secondMessages: LLMMessage[] = [
-    ...messages,
+    ...cleanMessages,
     { role: "assistant", content: firstData.content },
     { role: "user",      content: toolResults },
   ];
