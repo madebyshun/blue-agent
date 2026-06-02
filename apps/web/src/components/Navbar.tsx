@@ -29,13 +29,13 @@ export default function Navbar() {
         {/* Left — logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
           <img src="/logo.svg" alt="Blue Agent" className="h-7 w-7" />
-          <span className="font-mono font-semibold text-white tracking-widest text-sm">
+          <span className="hidden sm:inline font-mono font-semibold text-white tracking-widest text-sm">
             BLUE<span className="text-[#4FC3F7]">AGENT</span>
           </span>
         </Link>
 
-        {/* Center — flex-1 so it sits between logo and actions, not pinned to viewport center */}
-        <div className="hidden md:flex flex-1 justify-center items-center gap-1">
+        {/* Center — viewport center on md (no sidebar), content-area center on lg (sidebar=288px → offset 144px) */}
+        <div className="hidden md:flex absolute left-1/2 lg:left-[calc(50%+144px)] -translate-x-1/2 items-center gap-1">
           {NAV_LINKS.map((item) => (
             <Link key={item.href} href={item.href}
               className={`font-mono text-sm px-4 py-1.5 rounded-lg transition-all ${
@@ -75,26 +75,28 @@ export default function Navbar() {
 
       {/* Mobile menu */}
       {open && (
-        <div className="md:hidden border-t border-[#1A1A2E] bg-[#050508]/95 px-4 py-3 flex flex-col gap-0.5">
-          {NAV_LINKS.map((item) => (
-            <Link key={item.href} href={item.href} onClick={() => setOpen(false)}
-              className={`font-mono text-sm px-3 py-2.5 rounded-lg transition-all ${
-                isActive(item.href)
-                  ? "text-[#4FC3F7] bg-[#4FC3F7]/10"
-                  : "text-slate-400 hover:text-white hover:bg-[#1A1A2E]/50"
-              }`}>
-              {item.label}
-            </Link>
-          ))}
-          <div className="border-t border-[#1A1A2E] mt-2 pt-3 flex items-center gap-3 px-3">
+        <div className="md:hidden border-t border-[#1A1A2E] bg-[#050508]/98 px-3 py-2 flex flex-col">
+          {/* Nav links */}
+          <div className="flex flex-col gap-0.5 py-2">
+            {NAV_LINKS.map((item) => (
+              <Link key={item.href} href={item.href} onClick={() => setOpen(false)}
+                className={`font-mono text-sm px-4 py-3 rounded-lg transition-all ${
+                  isActive(item.href)
+                    ? "text-[#4FC3F7] bg-[#4FC3F7]/10"
+                    : "text-slate-300 hover:text-white hover:bg-[#1A1A2E]/60"
+                }`}>
+                {item.label}
+              </Link>
+            ))}
+          </div>
+          {/* Bottom actions */}
+          <div className="border-t border-[#1A1A2E] py-3 flex items-center gap-3 px-2">
             <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer"
               className="font-mono text-sm text-slate-500 hover:text-white transition-colors">X</a>
-            <a href="https://github.com/madebyshun/blue-agent" target="_blank" rel="noopener noreferrer"
-              className="font-mono text-sm text-slate-500 hover:text-white transition-colors">GitHub</a>
             <div className="ml-auto flex items-center gap-2">
               <ConnectButton />
               <Link href="/console" onClick={() => setOpen(false)}
-                className="font-mono text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-3 py-1.5 rounded hover:bg-[#29ABE2] transition-colors">
+                className="font-mono text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-4 py-2 rounded hover:bg-[#29ABE2] transition-colors">
                 Console
               </Link>
             </div>
