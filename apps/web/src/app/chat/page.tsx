@@ -48,10 +48,32 @@ const VENICE_TIERS: TierConfig[] = [
 const ALL_TIERS = [...BANKR_TIERS, ...VENICE_TIERS];
 
 const STARTERS = [
-  { icon: "💡", text: "I want to build a USDC streaming payroll app on Base" },
-  { icon: "🛠️", text: "Help me architect an ERC-4337 agent wallet" },
-  { icon: "🛡️", text: "Audit my token launch plan for risks" },
-  { icon: "🚀", text: "How do I deploy a fair-launch token on Base?" },
+  { icon: "💡", text: "/idea USDC streaming payroll app on Base" },
+  { icon: "🛠️", text: "/build ERC-4337 agent wallet" },
+  { icon: "🛡️", text: "/audit my token launch plan" },
+  { icon: "🚀", text: "/pick" },
+];
+
+// ─── Slash commands ───────────────────────────────────────────────────────────
+
+interface SlashCommand {
+  cmd:     string;
+  icon:    string;
+  label:   string;
+  hint:    string;
+  example: string;
+}
+
+const SLASH_COMMANDS: SlashCommand[] = [
+  { cmd: "idea",   icon: "💡", label: "Idea Brief",     hint: "Fundable brief — problem, MVP, 24h plan",      example: "/idea <concept>" },
+  { cmd: "build",  icon: "🛠️", label: "Architecture",   hint: "Stack, folder structure, key integrations",    example: "/build <project>" },
+  { cmd: "audit",  icon: "🛡️", label: "Audit",          hint: "Security + product risk review, GO/NO-GO",    example: "/audit <code or plan>" },
+  { cmd: "ship",   icon: "🚀", label: "Ship Checklist", hint: "Deploy steps, verify, monitor for Base",       example: "/ship <project>" },
+  { cmd: "raise",  icon: "💰", label: "Pitch",          hint: "Narrative, ask, target investors",             example: "/raise <project>" },
+  { cmd: "pick",   icon: "🎯", label: "Token Pick",     hint: "AI-powered token pick on Base",               example: "/pick" },
+  { cmd: "scan",   icon: "🔍", label: "Scan Token",     hint: "Honeypot + risk check before buying",          example: "/scan <token_address>" },
+  { cmd: "wallet", icon: "👛", label: "Wallet Analysis",hint: "Analyze on-chain activity and strategy",      example: "/wallet <address>" },
+  { cmd: "help",   icon: "📖", label: "Help",           hint: "Show all available commands",                  example: "/help" },
 ];
 
 const EXPLORER_TIER: TierInfo = {
@@ -67,6 +89,8 @@ export default function ChatPage() {
   const [input,       setInput]       = useState("");
   const [streaming,   setStreaming]   = useState(false);
   const [error,       setError]       = useState<string | null>(null);
+  const [cmdMenu,     setCmdMenu]     = useState(false);
+  const [cmdFilter,   setCmdFilter]   = useState("");
 
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -195,7 +219,38 @@ export default function ChatPage() {
   }
 
   function stop()  { abortRef.current?.abort(); }
-  function clear() { setMessages([]); setError(null); setInput(""); textareaRef.current?.focus(); }
+  function clear() { setMessages([]); setError(null); setInput(""); setCmdMenu(false); textareaRef.current?.focus(); }
+
+  function handleInput(val: string) {
+    setInput(val);
+    if (val.startsWith("/")) {
+      const filter = val.slice(1).toLowerCase();
+      setCmdFilter(filter);
+      setCmdMenu(true);
+    } else {
+      setCmdMenu(false);
+      setCmdFilter("");
+    }
+  }
+
+  function selectCommand(cmd: SlashCommand) {
+    const needsArg = !["pick", "help"].includes(cmd.cmd);
+    setInput(needsArg ? `/${cmd.cmd} ` : `/${cmd.cmd}`);
+    setCmdMenu(false);
+    textareaRef.current?.focus();
+    // If it's a standalone command, send immediately
+    if (!needsArg) {
+      setTimeout(() => send(`/${cmd.cmd}`), 50);
+    }
+  }
+
+  const filteredCmds = SLASH_COMMANDS.filter(c =>
+    !cmdFilter || c.cmd.startsWith(cmdFilter) || c.label.toLowerCase().includes(cmdFilter)
+  );
+
+  // Detect active command from current input
+  const activeCmd = input.match(/^\/(\w+)/)?.[1]?.toLowerCase();
+  const activeCmdDef = SLASH_COMMANDS.find(c => c.cmd === activeCmd);
 
   const isEmpty = messages.length === 0;
   const memory  = getMemory(walletAddr);
@@ -396,6 +451,20 @@ export default function ChatPage() {
                   </button>
                 ))}
               </div>
+
+              {/* Commands quick ref */}
+              <div className="flex flex-wrap justify-center gap-2 mt-5 max-w-lg mx-auto">
+                {SLASH_COMMANDS.slice(0, 7).map((c) => (
+                  <button
+                    key={c.cmd}
+                    onClick={() => { const needsArg = !["pick","help"].includes(c.cmd); if (needsArg) { setInput(`/${c.cmd} `); textareaRef.current?.focus(); } else { send(`/${c.cmd}`); } }}
+                    disabled={outOfCredits}
+                    className="font-mono text-[11px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] text-slate-600 hover:text-[#4FC3F7] hover:border-[#4FC3F7]/30 transition-all disabled:opacity-30"
+                  >
+                    /{c.cmd}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -440,7 +509,43 @@ export default function ChatPage() {
 
           {/* ── Input bar ────────────────────────────────── */}
           <div className="border-t border-[#1A1A2E] bg-[#050508] px-6 py-4">
-            <div className="max-w-3xl mx-auto">
+            <div className="max-w-3xl mx-auto relative">
+
+              {/* Command autocomplete menu */}
+              {cmdMenu && filteredCmds.length > 0 && (
+                <div className="absolute bottom-full mb-2 left-0 right-0 bg-[#0D0D14] border border-[#2A2A4E] rounded-xl overflow-hidden shadow-2xl z-10">
+                  <div className="px-3 pt-2.5 pb-1.5 border-b border-[#1A1A2E]">
+                    <span className="font-mono text-[10px] text-slate-600 tracking-widest">COMMANDS</span>
+                  </div>
+                  {filteredCmds.map((c) => (
+                    <button
+                      key={c.cmd}
+                      onMouseDown={(e) => { e.preventDefault(); selectCommand(c); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[#1A1A2E] transition-colors text-left group"
+                    >
+                      <span className="text-base w-5 text-center">{c.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-[#4FC3F7]">/{c.cmd}</span>
+                          <span className="font-mono text-xs text-slate-400">{c.label}</span>
+                        </div>
+                        <span className="font-mono text-[10px] text-slate-600 truncate block">{c.hint}</span>
+                      </div>
+                      <span className="font-mono text-[10px] text-slate-700 group-hover:text-slate-500 shrink-0">{c.example}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Active command badge */}
+              {activeCmdDef && !cmdMenu && (
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <span className="font-mono text-[10px] text-[#4FC3F7] border border-[#4FC3F7]/30 bg-[#4FC3F7]/5 px-2 py-0.5 rounded">
+                    {activeCmdDef.icon} /{activeCmdDef.cmd} · {activeCmdDef.label}
+                  </span>
+                  <span className="font-mono text-[10px] text-slate-600">{activeCmdDef.hint}</span>
+                </div>
+              )}
 
               {/* Mobile: tier picker */}
               <div className="lg:hidden flex gap-2 mb-3 flex-wrap">
@@ -490,9 +595,9 @@ export default function ChatPage() {
                 <textarea
                   ref={textareaRef}
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={(e) => handleInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder={outOfCredits ? "No credits — get more $BLUEAGENT" : "Message Blue Agent…"}
+                  placeholder={outOfCredits ? "No credits — get more $BLUEAGENT" : "Message Blue Agent… or type / for commands"}
                   rows={1}
                   disabled={streaming || outOfCredits}
                   className="flex-1 resize-none bg-transparent outline-none font-mono text-sm text-white placeholder:text-slate-600 leading-relaxed"
@@ -503,6 +608,15 @@ export default function ChatPage() {
                     el.style.height = Math.min(el.scrollHeight, 160) + "px";
                   }}
                 />
+                {!streaming && (
+                  <button
+                    onMouseDown={(e) => { e.preventDefault(); handleInput("/"); setCmdMenu(true); textareaRef.current?.focus(); }}
+                    className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center font-mono text-sm text-slate-500 hover:text-[#4FC3F7] hover:bg-[#4FC3F7]/5 transition-all border border-transparent hover:border-[#4FC3F7]/20"
+                    title="Slash commands"
+                  >
+                    /
+                  </button>
+                )}
                 {streaming ? (
                   <button
                     onClick={stop}
@@ -524,7 +638,7 @@ export default function ChatPage() {
 
               <div className="flex items-center justify-between mt-2 px-1">
                 <span className="font-mono text-[10px] text-slate-700">
-                  Enter to send · Shift+Enter for newline
+                  Enter ↵ send · Shift+Enter newline · <span className="text-slate-600">/ commands</span>
                 </span>
                 <span className="font-mono text-[10px] text-slate-700">
                   {cost} credits/msg · {activeTier.label} ({activeTier.model})
