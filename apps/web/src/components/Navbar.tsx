@@ -24,7 +24,7 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[#1A1A2E] bg-[#050508]/90 backdrop-blur-xl">
-      <div className="relative flex items-center h-16 px-5 sm:px-8">
+      <div className="flex items-center h-16 px-5 sm:px-8 gap-4">
 
         {/* Left — logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
@@ -34,8 +34,8 @@ export default function Navbar() {
           </span>
         </Link>
 
-        {/* Center — absolutely centered on viewport so nav stays put regardless of left/right widths */}
-        <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-1">
+        {/* Center — flex-1 so it sits between logo and actions, not pinned to viewport center */}
+        <div className="hidden md:flex flex-1 justify-center items-center gap-1">
           {NAV_LINKS.map((item) => (
             <Link key={item.href} href={item.href}
               className={`font-mono text-sm px-4 py-1.5 rounded-lg transition-all ${
@@ -49,7 +49,7 @@ export default function Navbar() {
         </div>
 
         {/* Right — actions */}
-        <div className="hidden md:flex ml-auto items-center gap-2">
+        <div className="hidden md:flex items-center gap-2">
           <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer"
             className="text-slate-500 hover:text-white transition-colors p-1.5 rounded" aria-label="X / Twitter">
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
