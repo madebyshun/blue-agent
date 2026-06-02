@@ -65,15 +65,18 @@ interface SlashCommand {
 }
 
 const SLASH_COMMANDS: SlashCommand[] = [
-  { cmd: "idea",   icon: "💡", label: "Idea Brief",     hint: "Fundable brief — problem, MVP, 24h plan",      example: "/idea <concept>" },
-  { cmd: "build",  icon: "🛠️", label: "Architecture",   hint: "Stack, folder structure, key integrations",    example: "/build <project>" },
-  { cmd: "audit",  icon: "🛡️", label: "Audit",          hint: "Security + product risk review, GO/NO-GO",    example: "/audit <code or plan>" },
-  { cmd: "ship",   icon: "🚀", label: "Ship Checklist", hint: "Deploy steps, verify, monitor for Base",       example: "/ship <project>" },
-  { cmd: "raise",  icon: "💰", label: "Pitch",          hint: "Narrative, ask, target investors",             example: "/raise <project>" },
-  { cmd: "pick",   icon: "🎯", label: "Token Pick",     hint: "AI-powered token pick on Base",               example: "/pick" },
-  { cmd: "scan",   icon: "🔍", label: "Scan Token",     hint: "Honeypot + risk check before buying",          example: "/scan <token_address>" },
-  { cmd: "wallet", icon: "👛", label: "Wallet Analysis",hint: "Analyze on-chain activity and strategy",      example: "/wallet <address>" },
-  { cmd: "help",   icon: "📖", label: "Help",           hint: "Show all available commands",                  example: "/help" },
+  { cmd: "idea",   icon: "💡", label: "Idea Brief",      hint: "Fundable brief — problem, MVP, 24h plan",      example: "/idea <concept>" },
+  { cmd: "build",  icon: "🛠️", label: "Architecture",    hint: "Stack, folder structure, key integrations",    example: "/build <project>" },
+  { cmd: "audit",  icon: "🛡️", label: "Audit",           hint: "Security + product risk review, GO/NO-GO",    example: "/audit <code or plan>" },
+  { cmd: "ship",   icon: "🚀", label: "Ship Checklist",  hint: "Deploy steps, verify, monitor for Base",       example: "/ship <project>" },
+  { cmd: "raise",  icon: "💰", label: "Pitch",           hint: "Narrative, ask, target investors",             example: "/raise <project>" },
+  { cmd: "pick",   icon: "🎯", label: "Token Pick",      hint: "AI-powered token pick on Base",               example: "/pick" },
+  { cmd: "scan",   icon: "🔍", label: "Scan Token",      hint: "Honeypot + risk check before buying",          example: "/scan <token_address>" },
+  { cmd: "wallet", icon: "👛", label: "Wallet Analysis", hint: "Analyze on-chain activity and strategy",      example: "/wallet <address>" },
+  { cmd: "models", icon: "🤖", label: "Models",          hint: "List all available AI models + credit costs",  example: "/models" },
+  { cmd: "skills", icon: "⚡", label: "Skills / Tools",  hint: "List all Hub tools available in chat",         example: "/skills" },
+  { cmd: "status", icon: "📡", label: "Status",          hint: "Check Bankr, Venice, and Hub health",          example: "/status" },
+  { cmd: "help",   icon: "📖", label: "Help",            hint: "Show all available commands",                  example: "/help" },
 ];
 
 const EXPLORER_TIER: TierInfo = {
@@ -117,9 +120,88 @@ export default function ChatPage() {
   const outOfCredits = credits < cost;
   const activeTier = ALL_TIERS.find((t) => t.id === chatTier) ?? BANKR_TIERS[1];;
 
+  // ── Client-side command handlers (no credits, no API call) ──────────────────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  function handleClientCommand(userMsg: string): boolean {
+    const match = userMsg.match(/^\/(\w+)(?:\s+(.*))?$/s);
+    if (!match) return false;
+    const cmd  = match[1].toLowerCase();
+    const _args = (match[2] ?? "").trim();
+
+    let reply = "";
+
+    if (cmd === "models") {
+      reply = `## 🤖 Available Models\n\n### BANKR · Claude\n${BANKR_TIERS.map(t => {
+        const c = creditCost(t.id, holderTier);
+        return `**${t.label}** (${t.model}) — ${c} credits/msg`;
+      }).join("\n")}\n\n### VENICE · Privacy-first\n${VENICE_TIERS.map(t => {
+        const c = creditCost(t.id, holderTier);
+        return `**${t.label}** (${t.model}) — ${c} credits/msg · ${t.note ?? ""}`;
+      }).join("\n")}\n\nSelect a model in the sidebar. Venice requires VENICE_API_KEY to be configured.`;
+    }
+
+    else if (cmd === "skills" || cmd === "tools") {
+      const groups: Record<string, string[]> = {
+        "📈 Market Intel":   ["token-pick-signal","narrative-position","whale-copy-signal","token-momentum-scanner","community-sentiment"],
+        "🔍 Due Diligence":  ["deep-analysis","honeypot-check","risk-gate","contract-trust","protocol-risk-monitor"],
+        "🏗️ Builder Tools":  ["market-fit","competitor-scan","gtm-brief","stack-recommender","repo-health","builder-score"],
+        "💰 Fundraise":      ["investor-memo","fundraise-timing","pitch-intelligence","base-grant-finder"],
+        "🚀 Launch":         ["token-launch-readiness","launch-advisor","token-distribution-plan","agent-token-strategy"],
+        "🤝 Agent Network":  ["agent-collab-match","multi-agent-workflow","agent-revenue-optimizer","base-builder-network-match"],
+        "🌐 Ecosystem":      ["ecosystem-digest","base-protocol-comparison","defi-opportunity","wallet-strategy-analyzer"],
+      };
+      const lines = Object.entries(groups).map(([cat, tools]) =>
+        `**${cat}**\n${tools.map(t => `  /${t}`).join(" · ")}`
+      ).join("\n\n");
+      reply = `## ⚡ Hub Skills — ${Object.values(groups).flat().length} Tools\n\nAll tools are callable from Blue Chat via Hub tool routing.\nTrigger them naturally in conversation or use slash commands for direct access.\n\n${lines}\n\nFull catalog → [blueagent.dev/hub](/hub)`;
+    }
+
+    else if (cmd === "status") {
+      // Show loading then fetch
+      const userEntry: Message = { role: "user", content: userMsg };
+      const loadingEntry: Message = { role: "assistant", content: "📡 Checking services…" };
+      setMessages(prev => [...prev, userEntry, loadingEntry]);
+      setCmdMenu(false);
+      setInput("");
+
+      fetch("/api/status")
+        .then(r => r.json())
+        .then((data: { status: string; ts: string; services: Array<{ name: string; ok: boolean; latency: number | null; detail: string }> }) => {
+          const icon = data.status === "operational" ? "✅" : "⚠️";
+          const lines = data.services.map((s: { name: string; ok: boolean; latency: number | null; detail: string }) =>
+            `${s.ok ? "✅" : "❌"} **${s.name}** — ${s.detail}${s.latency != null ? ` (${s.latency}ms)` : ""}`
+          ).join("\n");
+          const statusReply = `## ${icon} System Status · ${data.status.toUpperCase()}\n\n${lines}\n\n_Checked at ${new Date(data.ts).toLocaleTimeString()}_`;
+          setMessages(prev => [...prev.slice(0, -1), { role: "assistant", content: statusReply }]);
+        })
+        .catch(e => {
+          setMessages(prev => [...prev.slice(0, -1), { role: "assistant", content: `❌ Status check failed: ${(e as Error).message}` }]);
+        });
+      return true;
+    }
+
+    else {
+      return false; // not a client-side command
+    }
+
+    if (reply) {
+      setMessages(prev => [
+        ...prev,
+        { role: "user",      content: userMsg },
+        { role: "assistant", content: reply   },
+      ]);
+      setCmdMenu(false);
+      setInput("");
+    }
+    return true;
+  }
+
   const send = useCallback(async (text: string) => {
     const userMsg = text.trim();
     if (!userMsg || streaming) return;
+
+    // Handle client-side commands first (no credits consumed)
+    if (handleClientCommand(userMsg)) return;
 
     const currentCredits = getCredits(walletAddr);
     if (currentCredits < cost) {
