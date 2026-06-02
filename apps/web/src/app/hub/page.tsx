@@ -5,6 +5,7 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { useAccount, useSignTypedData, useReadContract } from "wagmi";
+import { ConnectButton } from "@/components/ConnectModal";
 
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 const ERC20_BAL_ABI = [{
@@ -25,6 +26,48 @@ interface Tool {
 }
 
 const FEATURED_IDS = ["launch-simulator", "investor-memo", "market-fit", "token-launch-readiness"];
+
+// ─── Example inputs per tool ──────────────────────────────────────────────────
+const TOOL_EXAMPLES: Record<string, Record<string, string>> = {
+  "token-pick-signal":      { context: "low-cap AI agent tokens on Base" },
+  "narrative-position":     { focus: "AI agents, Base DeFi" },
+  "ecosystem-digest":       { focus: "DeFi protocols and AI agents" },
+  "market-fit":             { description: "Pay-per-use AI research tool for Base builders — $0.50/report via x402 USDC micropayments", stage: "MVP" },
+  "token-launch-readiness": { token_name: "BLUEAI", supply: "1000000000", launch_price: "0.0005", liquidity: "25000" },
+  "roadmap-validator":      { project: "x402 AI tool marketplace on Base", roadmap: "Q1: 10 tools, Q2: open marketplace, Q3: agent registry, Q4: Tool NFTs" },
+  "competitor-scan":        { project: "AI agent tool marketplace with x402 pay-per-call", market: "AI agent infrastructure" },
+  "pitch-intelligence":     { project: "Blue Agent — AI-native founder console for Base builders", stage: "Seed", ask: "$500k" },
+  "fundraise-timing":       { project: "x402 pay-per-call AI tool marketplace", traction: "40 tools, 200 weekly users, $2k MRR" },
+  "gtm-brief":              { product: "Blue Agent Hub — 40 AI tools for Base builders, pay per call in USDC" },
+  "stack-recommender":      { description: "Multi-agent x402 tool marketplace on Base mainnet with USDC micropayments" },
+  "investor-memo":          { project: "Blue Agent", description: "40 pay-per-use AI tools for Base builders via x402 micropayments", ask: "$750k pre-seed" },
+  "token-distribution-plan":{ token: "BLUEAGENT", supply: "1000000000", goal: "reward builders and agents on Base" },
+  "agent-performance":      { handle: "blue-agent" },
+  "agent-collab-match":     { agent: "Blue Agent — AI research + x402 tool execution on Base" },
+  "repo-health":            { repo: "madebyshun/blue-agent" },
+  "community-sentiment":    { project: "Base", topic: "AI agents and x402 payments" },
+  "defi-opportunity":       { focus: "Base DeFi yield opportunities above 10% APR" },
+  "builder-deep-dd":        { target: "@madebyshun" },
+  "launch-simulator":       { token_name: "BLUEAI", launch_price: "0.001", total_supply: "1000000000", liquidity: "50000", tier: "deep" },
+  "whale-copy-signal":      { token: "WETH" },
+  "token-momentum-scanner": { focus: "Base low-cap tokens with rising volume" },
+  "builder-brand-score":    { handle: "madebyshun" },
+  "community-growth-playbook": { project: "Blue Agent", current_size: "500 members", goal: "10k builders in 6 months" },
+  "agent-revenue-optimizer":{ agent: "Blue Agent", revenue: "$2k/month from x402 tool calls" },
+  "agent-token-strategy":   { agent: "Blue Agent", token: "BLUEAGENT", goal: "align agent incentives with token holders" },
+  "multi-agent-workflow":   { task: "Research top 5 AI agent tokens on Base and generate a buy/sell signal", agents: "Blue Agent, Aeon, MiroShark" },
+  "base-grant-finder":      { project: "AI tool marketplace with x402 pay-per-call micropayments on Base", stage: "MVP" },
+  "base-protocol-comparison":{ protocols: "Aerodrome, Uniswap v4, Aave", metric: "TVL, fees, developer activity" },
+  "base-builder-network-match": { builder: "Building an AI agent platform with x402 payments on Base" },
+  "wallet-strategy-analyzer":{ wallet: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
+  "protocol-risk-monitor":  { protocol: "Aerodrome Finance", address: "0x420DD381b31aEf6683db6B902084cB0FFECe40D" },
+  "contract-trust":         { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", context: "USDC token on Base" },
+  "blue-idea":              { prompt: "gasless USDC tipping app for Base builders — reward good code reviews" },
+  "blue-build":             { prompt: "x402 pay-per-call AI tool marketplace on Base with USDC micropayments" },
+  "blue-audit":             { prompt: "ERC20 token with staking and revenue share — check for reentrancy and access control issues" },
+  "blue-ship":              { prompt: "Base mainnet launch of BLUEAGENT token with Uniswap v4 pool" },
+  "blue-raise":             { prompt: "AI agent tool marketplace on Base — 40 tools, $2k MRR, raising $750k pre-seed" },
+};
 
 // Derive TOOLS from AGENT_TOOLS — single source of truth
 const TOOLS: Tool[] = AGENT_TOOLS.map(t => ({
@@ -406,6 +449,24 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
   const [isMock, setIsMock]   = useState(cached?.isMock ?? false);
   const [mockReason, setMockReason] = useState<"dev" | "service-down">(cached?.mockReason ?? "dev");
   const [copied, setCopied]   = useState(false);
+  const [copiedJson, setCopiedJson] = useState(false);
+
+  const toolExamples = TOOL_EXAMPLES[tool.id] ?? {};
+  const hasExamples  = Object.keys(toolExamples).length > 0;
+
+  function fillExample() {
+    setVals(toolExamples);
+    setErr(null);
+  }
+
+  async function copyJson() {
+    if (!result) return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(result, null, 2));
+      setCopiedJson(true);
+      setTimeout(() => setCopiedJson(false), 2000);
+    } catch {}
+  }
 
   const { address, isConnected } = useAccount();
   const { signTypedDataAsync }   = useSignTypedData();
@@ -533,7 +594,9 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         const d2 = await r2.json() as Record<string,unknown>;
         if (!r2.ok) throw new Error([d2.error, d2.message, d2.reason].filter(Boolean).join(": ") || `Payment failed ${r2.status}`);
         const res2 = (d2.result ?? d2) as Record<string,unknown>;
-        setResult(res2); setStep("done");
+        // Show result immediately — don't block behind animation
+        setResult(res2);
+        setStep("done");
         onResult({ result: res2, isMock: false, mockReason: "dev" });
 
       } catch (e) {
@@ -618,6 +681,14 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           <div className="px-6 py-5 flex-1">
             <div className="flex items-center justify-between mb-1">
               <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">// INPUT</p>
+              {hasExamples && (
+                <button
+                  onClick={fillExample}
+                  className="font-mono text-[10px] text-[#A78BFA] hover:text-white border border-[#A78BFA]/30 hover:border-[#A78BFA]/60 px-2 py-0.5 rounded transition-all"
+                >
+                  Try example →
+                </button>
+              )}
             </div>
             <p className="font-mono text-[10px] text-slate-700 mb-4">
               Output quality depends on input accuracy — use real data for best results
@@ -646,9 +717,17 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
               <p className="font-mono text-xs text-red-400 mb-3">{err}</p>
             )}
             {tool.x402Body && !isConnected && (
-              <p className="font-mono text-[10px] text-amber-400/70 mb-2">
-                Connect wallet to pay {tool.price} via x402
-              </p>
+              <div className="mb-3 px-4 py-3 rounded-xl bg-[#0D0D1A] border border-[#1A1A2E] flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-mono text-xs text-white font-semibold">{tool.price} · pay via x402</p>
+                  <p className="font-mono text-[10px] text-slate-600 mt-0.5">USDC on Base · EIP-3009 · no signup</p>
+                </div>
+                <ConnectButton
+                  label="Connect Wallet"
+                  className="font-mono text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all shrink-0"
+                  style={{ borderColor: "#4FC3F7", color: "#4FC3F7", background: "#4FC3F710" }}
+                />
+              </div>
             )}
             {tool.x402Body && isConnected && usdcBalance != null && (
               <div className="flex items-center justify-between mb-2 px-1">
@@ -718,6 +797,16 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                 })()}
                 <div className="ml-auto flex items-center gap-2">
                   <span className="font-mono text-xs text-slate-700 mr-1">Blue · Aeon · MiroShark</span>
+                  <button
+                    onClick={copyJson}
+                    className={`font-mono text-[10px] px-2 py-1 rounded border transition-all ${
+                      copiedJson
+                        ? "text-[#A78BFA] border-[#A78BFA]/40 bg-[#A78BFA]/5"
+                        : "text-slate-500 border-[#1A1A2E] hover:text-[#A78BFA] hover:border-[#A78BFA]/30"
+                    }`}
+                  >
+                    {copiedJson ? "✓ JSON!" : "{ } JSON"}
+                  </button>
                   <button
                     onClick={shareResult}
                     className={`font-mono text-[10px] px-2 py-1 rounded border transition-all ${
@@ -843,29 +932,25 @@ function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t:
         </div>
       </div>
 
-      {/* ── Hero ── */}
-      <div className="relative overflow-hidden px-6 pt-8 pb-7 border-b border-[#1A1A2E] shrink-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#4FC3F7]/[0.07] via-transparent to-[#A78BFA]/[0.07] pointer-events-none" />
-        <div className="absolute -top-20 -right-10 w-72 h-72 rounded-full bg-[#4FC3F7]/10 blur-3xl pointer-events-none" />
-        <div className="relative max-w-3xl">
-          <h2 className="text-2xl xl:text-[28px] font-bold tracking-tight leading-tight">
-            <span className="bg-gradient-to-r from-[#4FC3F7] via-[#A78BFA] to-[#34D399] bg-clip-text text-transparent">
-              {TOOLS.length} AI agent tools.
-            </span>{" "}
-            <span className="text-white">Pay per call. No subscription.</span>
-          </h2>
-          <p className="font-mono text-xs text-slate-500 mt-2.5 max-w-xl leading-relaxed">
-            Blue · Aeon · MiroShark consensus on Base. Connect a wallet, pay in USDC per run —
-            no API key, no signup.
-          </p>
-          <div className="flex flex-wrap items-center gap-2 mt-5">
+      {/* ── Hero — compact ── */}
+      <div className="relative overflow-hidden px-6 py-4 border-b border-[#1A1A2E] shrink-0">
+        <div className="absolute inset-0 bg-gradient-to-r from-[#4FC3F7]/[0.04] via-transparent to-[#A78BFA]/[0.04] pointer-events-none" />
+        <div className="relative flex flex-wrap items-center gap-4">
+          <div className="flex-1 min-w-0">
+            <p className="font-mono text-sm font-bold text-white leading-tight">
+              <span className="text-[#4FC3F7]">{TOOLS.length} AI tools</span>
+              <span className="text-slate-500 font-normal ml-2">· pay per call · no subscription · USDC on Base</span>
+            </p>
+            <p className="font-mono text-[10px] text-slate-600 mt-0.5">
+              Blue · Aeon · MiroShark 3-agent consensus
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
             {[
-              { label: "tools",     value: String(TOOLS.length) },
-              { label: "runs",      value: totalRuns.toLocaleString() },
-              { label: "USDC paid", value: `$${usdcPaid.toFixed(2)}` },
-              { label: "agents",    value: "3" },
+              { label: "runs",      value: totalRuns > 0 ? totalRuns.toLocaleString() : "—" },
+              { label: "USDC",      value: usdcPaid > 0 ? `$${usdcPaid.toFixed(2)}` : "—" },
             ].map(s => (
-              <div key={s.label} className="flex items-baseline gap-1.5 px-3 py-1.5 rounded-lg border border-[#1A1A2E] bg-[#0D0D1A]">
+              <div key={s.label} className="flex items-baseline gap-1 px-2.5 py-1.5 rounded-lg border border-[#1A1A2E] bg-[#0D0D1A]">
                 <span className="font-mono text-sm font-bold text-white">{s.value}</span>
                 <span className="font-mono text-[9px] text-slate-600 uppercase tracking-wider">{s.label}</span>
               </div>
@@ -998,6 +1083,7 @@ export default function HubPage() {
   const [search, setSearch]   = useState("");
   const [cache, setCache]     = useState<Map<string, ToolResult>>(new Map());
   const [usage, setUsage]     = useState<Record<string, number>>({});
+  const searchRef             = useRef<HTMLInputElement>(null);
 
   const RESULTS_KEY = "bluehub_results";
 
@@ -1031,6 +1117,19 @@ export default function HubPage() {
     const combined = [...ranked, ...FEATURED_IDS].filter((id, i, arr) => arr.indexOf(id) === i);
     return new Set(combined.slice(0, 4));
   }, [usage]);
+
+  // ── Keyboard shortcut: "/" focuses search, Esc closes tool ──────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "/" && !selected && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+      if (e.key === "Escape" && selected) setSelected(null);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [selected]);
 
   // ── On mount: deep-link ?tool=<id> (from /hub/[tool] pages) ───────────────
   useEffect(() => {
@@ -1106,8 +1205,9 @@ export default function HubPage() {
           {/* Search */}
           <div className="px-4 pt-3 pb-2">
             <input
+              ref={searchRef}
               className="w-full bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 font-mono text-xs text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/30 transition-colors"
-              placeholder="Search tools…"
+              placeholder="Search tools… ( / )"
               value={search}
               onChange={e => { setSearch(e.target.value); setCat("all"); }}
             />
@@ -1195,6 +1295,34 @@ export default function HubPage() {
 
         {/* ── Main content ─────────────────────────────── */}
         <main className="flex-1 h-[calc(100vh-4rem)] overflow-hidden flex flex-col">
+
+          {/* Mobile search + filter chips (browse state only) */}
+          {!selected && (
+            <div className="lg:hidden px-4 pt-3 pb-2 border-b border-[#1A1A2E] shrink-0 space-y-2">
+              <input
+                className="w-full bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 font-mono text-xs text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/30 transition-colors"
+                placeholder="Search tools…"
+                value={search}
+                onChange={e => { setSearch(e.target.value); }}
+              />
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                <button onClick={() => setSearch("")}
+                  className={`font-mono text-[10px] px-2.5 py-1 rounded-full whitespace-nowrap border transition-colors shrink-0 ${!search ? "bg-[#4FC3F7]/15 text-[#4FC3F7] border-[#4FC3F7]/30" : "text-slate-600 border-transparent"}`}>
+                  All
+                </button>
+                {TOOL_GROUPS.map(g => (
+                  <button key={g.id}
+                    onClick={() => setSearch(g.label.toLowerCase())}
+                    className="font-mono text-[10px] px-2.5 py-1 rounded-full whitespace-nowrap border border-transparent shrink-0"
+                    style={{ color: g.color + "99" }}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {selected
             ? <ToolRunner
                 tool={selected}
