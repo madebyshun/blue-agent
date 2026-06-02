@@ -395,7 +395,7 @@ function AgentScanLog({ tool }: { tool: Tool }) {
           <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F57]" />
           <span className="w-2.5 h-2.5 rounded-full bg-[#FEBC2E]" />
           <span className="w-2.5 h-2.5 rounded-full bg-[#28C840]" />
-          <span className="font-mono text-[10px] text-slate-600 ml-3">blue-agent · 3-agent consensus</span>
+          <span className="font-mono text-[10px] text-slate-600 ml-3">blue-agent · multi-agent</span>
         </div>
         {/* Log output */}
         <div className="px-4 py-4 space-y-1.5 min-h-[200px] max-h-[280px] overflow-y-auto">
@@ -449,6 +449,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
   const [result, setResult]   = useState<Record<string,unknown> | null>(cached?.result ?? null);
   const [err, setErr]         = useState<string | null>(null);
   const [isMock, setIsMock]   = useState(cached?.isMock ?? false);
+  const [mobileTab, setMobileTab] = useState<"input" | "output">(cached ? "output" : "input");
   const [mockReason, setMockReason] = useState<"dev" | "service-down">(cached?.mockReason ?? "dev");
   const [copied, setCopied]   = useState(false);
   const [copiedJson, setCopiedJson] = useState(false);
@@ -599,6 +600,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         // Show result immediately — don't block behind animation
         setResult(res2);
         setStep("done");
+        setMobileTab("output");
         onResult({ result: res2, isMock: false, mockReason: "dev" });
 
       } catch (e) {
@@ -633,6 +635,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
       }
       setResult(data);
       setStep("done");
+      setMobileTab("output");
       onResult({ result: data, isMock: false, mockReason: "dev" });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Request failed");
@@ -661,11 +664,26 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         </div>
       </div>
 
-      {/* 2-column body — stacks on mobile, side-by-side on desktop */}
+      {/* Mobile tab bar — Input / Output */}
+      <div className="lg:hidden flex border-b border-[#1A1A2E] shrink-0">
+        {(["input", "output"] as const).map(tab => (
+          <button key={tab} onClick={() => setMobileTab(tab)}
+            className={`flex-1 py-2.5 font-mono text-xs font-semibold transition-colors ${
+              mobileTab === tab
+                ? "text-[#4FC3F7] border-b-2 border-[#4FC3F7]"
+                : "text-slate-600"
+            }`}
+          >
+            {tab === "input" ? "⌨ Input" : step === "done" ? "✓ Output" : "◎ Output"}
+          </button>
+        ))}
+      </div>
+
+      {/* 2-column body — tab-controlled on mobile, side-by-side on desktop */}
       <div className="flex flex-col lg:flex-row flex-1 overflow-y-auto lg:overflow-hidden">
 
         {/* ── Left panel: tool info + form ── */}
-        <div className="w-full lg:w-[400px] xl:w-[440px] shrink-0 border-b lg:border-b-0 lg:border-r border-[#1A1A2E] lg:overflow-y-auto flex flex-col">
+        <div className={`w-full lg:w-[400px] xl:w-[440px] shrink-0 border-b lg:border-b-0 lg:border-r border-[#1A1A2E] lg:overflow-y-auto flex flex-col ${mobileTab === "output" ? "hidden lg:flex" : ""}`}>
 
           {/* Tool header */}
           <div className="px-6 pt-6 pb-5 border-b border-[#1A1A2E]">
@@ -760,7 +778,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         </div>
 
         {/* ── Right panel: output ── */}
-        <div className="flex-1 lg:overflow-y-auto min-h-[40vh] lg:min-h-0">
+        <div className={`flex-1 lg:overflow-y-auto lg:min-h-0 ${mobileTab === "input" ? "hidden lg:block" : "min-h-[60vh] lg:min-h-0"}`}>
           {loading && <AgentScanLog tool={tool} />}
 
           {step === "idle" && !result && (
@@ -775,7 +793,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                 ))}
               </div>
               <p className="font-mono text-xs text-slate-600 text-center max-w-xs leading-relaxed">
-                Fill in the inputs on the left, then hit <span className="text-[#4FC3F7]">Run</span> to get 3-agent consensus output.
+                Fill in the inputs, then hit <span className="text-[#4FC3F7]">Run</span> to get multi-agent AI output.
               </p>
               {/* Example prompt preview */}
               {hasExamples && (
@@ -956,19 +974,22 @@ function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t:
   return (
     <div className="flex flex-col h-full overflow-y-auto">
 
-      {/* ── Compact top bar ── */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E] shrink-0">
-        <div className="flex items-center gap-4">
-          <h1 className="font-mono text-2xl font-bold text-white tracking-tight">
+      {/* ── Top bar ── */}
+      <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-[#1A1A2E] shrink-0 gap-3">
+        {/* Left: brand + badge */}
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          <h1 className="font-mono text-xl sm:text-2xl font-bold text-white tracking-tight shrink-0">
             BLUE<span className="text-[#A78BFA]">HUB</span>
           </h1>
-          <div className="flex items-center gap-1 px-2.5 py-1 border border-[#A78BFA]/20 bg-[#A78BFA]/5 rounded-full">
+          <div className="flex items-center gap-1 px-2 sm:px-2.5 py-1 border border-[#A78BFA]/20 bg-[#A78BFA]/5 rounded-full shrink-0">
             <span className="w-1 h-1 rounded-full bg-[#A78BFA] animate-pulse" />
-            <span className="font-mono text-[9px] text-[#A78BFA] tracking-widest ml-1">3-AGENT · {TOOLS.length} TOOLS</span>
+            <span className="font-mono text-[9px] text-[#A78BFA] tracking-widest ml-1 hidden xs:inline">MULTI-AGENT · </span>
+            <span className="font-mono text-[9px] text-[#A78BFA] tracking-widest">{TOOLS.length} TOOLS</span>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="hidden sm:flex items-center gap-4">
+        {/* Right: agent dots (desktop) + links */}
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+          <div className="hidden sm:flex items-center gap-3">
             {(["blue","aeon","miroshark"] as Agent[]).map(a => (
               <div key={a} className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
@@ -976,31 +997,41 @@ function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t:
               </div>
             ))}
           </div>
+          {/* Mobile: just 3 colored dots */}
+          <div className="flex sm:hidden items-center gap-1">
+            {(["blue","aeon","miroshark"] as Agent[]).map(a => (
+              <span key={a} className="w-2 h-2 rounded-full" style={{ background: AGENT_COLORS[a] }} />
+            ))}
+          </div>
           <Link href="/hub/registry"
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-[#1A1A2E] hover:border-[#34D399]/20 rounded-lg font-mono text-[10px] text-slate-500 hover:text-[#34D399] transition-all">
+            className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 border border-[#1A1A2E] hover:border-[#34D399]/20 rounded-lg font-mono text-[10px] text-slate-500 hover:text-[#34D399] transition-all">
             <span className="w-1 h-1 rounded-full bg-[#34D399] animate-pulse" />
-            Registry
+            <span className="hidden sm:inline">Registry</span>
+            <span className="sm:hidden">v2</span>
           </Link>
         </div>
       </div>
 
       {/* ── Hero — medium ── */}
-      <div className="relative overflow-hidden px-6 py-5 border-b border-[#1A1A2E] shrink-0">
+      <div className="relative overflow-hidden px-4 sm:px-6 py-4 sm:py-5 border-b border-[#1A1A2E] shrink-0">
         <div className="absolute inset-0 bg-gradient-to-br from-[#4FC3F7]/[0.05] via-transparent to-[#A78BFA]/[0.06] pointer-events-none" />
-        <div className="relative flex flex-wrap items-start justify-between gap-4">
+        <div className="relative flex items-start justify-between gap-3">
+          {/* Text block */}
           <div className="flex-1 min-w-0">
-            <p className="font-mono text-base font-bold text-white leading-tight mb-1.5">
+            <p className="font-mono text-sm sm:text-base font-bold text-white leading-tight mb-1.5">
               <span className="text-[#4FC3F7]">{TOOLS.length} AI tools</span>
-              <span className="text-slate-500 font-normal text-sm ml-2">· pay per call · no subscription</span>
+              <span className="text-slate-500 font-normal text-xs sm:text-sm ml-2">· pay per call · no subscription</span>
             </p>
-            <p className="font-mono text-xs text-slate-400 leading-relaxed max-w-md">
-              Research, trade, build and ship on Base — 3-agent consensus (Blue · Aeon · MiroShark). Pay in USDC, no API key, no signup.
+            <p className="font-mono text-[11px] sm:text-xs text-slate-400 leading-relaxed max-w-md">
+              Research, trade, build and ship on Base — built by multi-agent AI. Pay in USDC, no API key, no signup.
             </p>
-            <div className="flex items-center gap-3 mt-2">
-              <span className="font-mono text-[10px] text-slate-600">x402 · EIP-3009 · Base mainnet</span>
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <span className="font-mono text-[10px] text-slate-600">x402 · EIP-3009 · Base</span>
+              <span className="font-mono text-[9px] px-1.5 py-0.5 rounded border border-[#A78BFA]/20 text-[#A78BFA]">Blue Hub v2</span>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-2 shrink-0">
+          {/* Stats — hidden on mobile, shown on sm+ */}
+          <div className="hidden sm:flex flex-col items-end gap-2 shrink-0">
             <div className="flex items-center gap-2">
               {[
                 { label: "tools",  value: String(TOOLS.length) },
@@ -1030,14 +1061,14 @@ function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t:
               dismiss ×
             </button>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             {[
-              { step: "01", label: "Pick a tool", desc: "Browse by audience or search by keyword", color: "#4FC3F7" },
-              { step: "02", label: "Fill inputs", desc: "Use \"Try example →\" for instant prefill", color: "#A78BFA" },
-              { step: "03", label: "Pay & run", desc: "Connect wallet · sign EIP-3009 · get result", color: "#34D399" },
+              { step: "01", label: "Pick a tool", desc: "Browse by audience or search", color: "#4FC3F7" },
+              { step: "02", label: "Fill inputs", desc: "\"Try example →\" for instant prefill", color: "#A78BFA" },
+              { step: "03", label: "Pay & run", desc: "Connect wallet · EIP-3009 · get result", color: "#34D399" },
             ].map(s => (
-              <div key={s.step} className="flex items-start gap-2.5 flex-1 min-w-[160px]">
-                <span className="font-mono text-lg font-bold shrink-0 leading-none" style={{ color: s.color + "40" }}>{s.step}</span>
+              <div key={s.step} className="flex items-center sm:items-start gap-3 sm:gap-2.5">
+                <span className="font-mono text-2xl sm:text-lg font-bold shrink-0 leading-none w-8 text-center" style={{ color: s.color + "40" }}>{s.step}</span>
                 <div>
                   <p className="font-mono text-xs font-semibold text-white leading-tight">{s.label}</p>
                   <p className="font-mono text-[10px] text-slate-600 leading-relaxed mt-0.5">{s.desc}</p>
@@ -1415,7 +1446,7 @@ export default function HubPage() {
 
           {/* Footer */}
           <div className="px-4 py-4 border-t border-[#1A1A2E]">
-            <p className="font-mono text-[10px] text-slate-700">3-agent consensus · Base</p>
+            <p className="font-mono text-[10px] text-slate-700">multi-agent · Blue Hub v2 · Base</p>
           </div>
         </aside>
 
@@ -1426,21 +1457,23 @@ export default function HubPage() {
           {!selected && (
             <div className="lg:hidden px-4 pt-3 pb-2 border-b border-[#1A1A2E] shrink-0 space-y-2">
               <input
-                className="w-full bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 font-mono text-xs text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/30 transition-colors"
+                className="w-full bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2.5 font-mono text-sm text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/30 transition-colors"
                 placeholder="Search tools…"
                 value={search}
-                onChange={e => { setSearch(e.target.value); }}
+                onChange={e => { setSearch(e.target.value); setCat("all"); }}
               />
-              <div className="flex gap-1.5 overflow-x-auto pb-1">
-                <button onClick={() => setSearch("")}
-                  className={`font-mono text-[10px] px-2.5 py-1 rounded-full whitespace-nowrap border transition-colors shrink-0 ${!search ? "bg-[#4FC3F7]/15 text-[#4FC3F7] border-[#4FC3F7]/30" : "text-slate-600 border-transparent"}`}>
+              <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                <button onClick={() => { setSearch(""); setCat("all"); }}
+                  className={`font-mono text-[10px] px-3 py-1.5 rounded-full whitespace-nowrap border transition-colors shrink-0 ${cat === "all" && !search ? "bg-[#4FC3F7]/15 text-[#4FC3F7] border-[#4FC3F7]/30" : "text-slate-600 border-[#1A1A2E]"}`}>
                   All
                 </button>
                 {TOOL_GROUPS.map(g => (
                   <button key={g.id}
-                    onClick={() => setSearch(g.label.toLowerCase())}
-                    className="font-mono text-[10px] px-2.5 py-1 rounded-full whitespace-nowrap border border-transparent shrink-0"
-                    style={{ color: g.color + "99" }}
+                    onClick={() => { setSearch(""); setCat(g.id as Category); }}
+                    className={`font-mono text-[10px] px-3 py-1.5 rounded-full whitespace-nowrap border shrink-0 transition-colors`}
+                    style={cat === g.id
+                      ? { background: g.color + "15", color: g.color, borderColor: g.color + "40" }
+                      : { color: g.color + "80", borderColor: "#1A1A2E" }}
                   >
                     {g.label}
                   </button>
