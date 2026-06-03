@@ -31,14 +31,14 @@ export default function WalletBar({ onWalletChange }: WalletBarProps) {
   const { connect, isPending: isConnecting } = useConnect();
   const { disconnect } = useDisconnect();
 
-  const [tier,      setTier]      = useState<TierInfo>({ tier: "Explorer", blueBalance: 0, dailyCr: 150, discount: 0, color: "#475569" });
+  const [tier,      setTier]      = useState<TierInfo>({ tier: "Starter", blueBalance: 0, dailyCr: 200, discount: 0, color: "#4FC3F7" });
   const [credits,   setCredits]   = useState(0);
   const [showPanel, setShowPanel] = useState(false);
 
   // Fetch BLUE balance + set tier whenever address changes
   useEffect(() => {
     if (!address) {
-      const t = { tier: "Explorer" as const, blueBalance: 0, dailyCr: 150, discount: 0, color: "#475569" };
+      const t = { tier: "Starter" as const, blueBalance: 0, dailyCr: 200, discount: 0, color: "#4FC3F7" };
       setTier(t);
       const result = refreshCreditsIfNeeded(0, undefined);
       setCredits(result.credits);
@@ -74,7 +74,7 @@ export default function WalletBar({ onWalletChange }: WalletBarProps) {
           {isConnecting ? "Connecting…" : "Connect Wallet"}
         </button>
         {!isConnecting && (
-          <span className="font-mono text-[10px] text-slate-600 px-0.5">→ 200 free credits</span>
+          <span className="font-mono text-[10px] text-slate-600 px-0.5">→ 200 cr/day free</span>
         )}
       </div>
     );

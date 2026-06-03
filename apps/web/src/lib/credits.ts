@@ -5,23 +5,21 @@
  * No purchase needed — just hold BLUE.
  *
  * Tiers (at $BLUEAGENT $0.000001/token):
- *   Guest     (no wallet):   30 cr/day
- *   Explorer  (0 BLUE):     150 cr/day
- *   Starter   (100K BLUE):  500 cr/day  (~$0.10)
- *   Builder   (500K BLUE): 2000 cr/day  (~$0.50)
- *   Pro       (2M BLUE):   6000 cr/day  (~$2)
- *   Whale     (10M BLUE):    ∞  cr/day  (~$10)
+ *   Guest    (no wallet):    30 cr/day
+ *   Starter  (0+ BLUE):    200 cr/day  (just connect wallet)
+ *   Pro      (500K BLUE): 1500 cr/day  (~$0.50)
+ *   Max      (5M BLUE):      ∞ cr/day  (~$5)
  */
 
 export const BLUE_TOKEN = "0xf895783b2931c919955e18b5e3343e7c7c456ba3";
 export const BASE_RPC   = "https://mainnet.base.org";
 
 const REFRESH_MS = 24 * 60 * 60 * 1000; // 24 hours
-const WHALE_CAP  = 50_000;              // "unlimited" practical cap
+const MAX_CAP    = 50_000;              // "unlimited" practical cap
 
 // ── Tiers ─────────────────────────────────────────────────────────────────────
 
-export type HolderTier = "Guest" | "Explorer" | "Starter" | "Builder" | "Pro" | "Whale";
+export type HolderTier = "Guest" | "Starter" | "Pro" | "Max";
 
 export interface TierInfo {
   tier:        HolderTier;
@@ -33,11 +31,9 @@ export interface TierInfo {
 }
 
 const TIERS: { min: number; tier: HolderTier; dailyCr: number; discount: number; color: string }[] = [
-  { min: 10_000_000, tier: "Whale",   dailyCr: -1,    discount: 0.50, color: "#F59E0B" },
-  { min:  2_000_000, tier: "Pro",     dailyCr: 6_000, discount: 0.30, color: "#A78BFA" },
-  { min:    500_000, tier: "Builder", dailyCr: 2_000, discount: 0.20, color: "#34D399" },
-  { min:    100_000, tier: "Starter", dailyCr:   500, discount: 0.10, color: "#4FC3F7" },
-  { min:          0, tier: "Explorer",dailyCr:   150, discount: 0,    color: "#475569" },
+  { min: 5_000_000, tier: "Max",     dailyCr: -1,    discount: 0.40, color: "#F59E0B" },
+  { min:   500_000, tier: "Pro",     dailyCr: 1_500, discount: 0.20, color: "#A78BFA" },
+  { min:         0, tier: "Starter", dailyCr:   200, discount: 0,    color: "#4FC3F7" },
 ];
 
 /** Guest = no wallet connected */
@@ -61,7 +57,7 @@ export function getTierInfo(blueBalance: number): TierInfo {
 
 export function getDailyCr(tier: TierInfo, hasWallet: boolean): number {
   if (!hasWallet) return GUEST_DAILY;
-  return tier.dailyCr === -1 ? WHALE_CAP : tier.dailyCr;
+  return tier.dailyCr === -1 ? MAX_CAP : tier.dailyCr;
 }
 
 // ── Credit costs ──────────────────────────────────────────────────────────────
