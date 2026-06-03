@@ -27,12 +27,11 @@ export default function TasksPanel() {
 
   function handleSelect(id: string) {
     selectTask(id);
-    setSidebarTab("none"); // collapse panel → max chat area
+    // setSidebarTab not needed — sidebar stays open on desktop
   }
 
   function handleNew() {
     createNewTask();
-    setSidebarTab("none");
   }
 
   return (
