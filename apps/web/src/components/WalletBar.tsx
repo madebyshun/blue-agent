@@ -6,7 +6,7 @@ import { injected } from "wagmi/connectors";
 import {
   fetchBlueBalance,
   getTierInfo,
-  ensureCredits,
+  refreshCreditsIfNeeded,
   getCredits,
   TierInfo,
 } from "@/lib/credits";
@@ -31,25 +31,26 @@ export default function WalletBar({ onWalletChange }: WalletBarProps) {
   const { connect, isPending: isConnecting } = useConnect();
   const { disconnect } = useDisconnect();
 
-  const [tier,      setTier]      = useState<TierInfo>({ tier: "Explorer", blueBalance: 0, discount: 0, color: "#475569" });
+  const [tier,      setTier]      = useState<TierInfo>({ tier: "Explorer", blueBalance: 0, dailyCr: 150, discount: 0, color: "#475569" });
   const [credits,   setCredits]   = useState(0);
   const [showPanel, setShowPanel] = useState(false);
 
   // Fetch BLUE balance + set tier whenever address changes
   useEffect(() => {
     if (!address) {
-      const t = { tier: "Explorer" as const, blueBalance: 0, discount: 0, color: "#475569" };
+      const t = { tier: "Explorer" as const, blueBalance: 0, dailyCr: 150, discount: 0, color: "#475569" };
       setTier(t);
-      setCredits(ensureCredits(undefined));
+      const result = refreshCreditsIfNeeded(0, undefined);
+      setCredits(result.credits);
       onWalletChange?.(undefined, t);
       return;
     }
     (async () => {
       const balance = await fetchBlueBalance(address);
       const t       = getTierInfo(balance);
-      const cr      = ensureCredits(address);
+      const result  = refreshCreditsIfNeeded(balance, address);
       setTier(t);
-      setCredits(cr);
+      setCredits(result.credits);
       onWalletChange?.(address, t);
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
