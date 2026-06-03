@@ -165,7 +165,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [chatTier,     setChatTier]    = useState("pro");
 
-  // Load tasks on wallet change, migrate old chat
+  // Load tasks on wallet change, migrate old chat, or create a fresh default task
   useEffect(() => {
     const loaded = loadTasks(walletAddr);
     if (loaded.length === 0) {
@@ -176,10 +176,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         saveTasks([migrated], walletAddr);
         return;
       }
+      // No history at all — put a fresh unsaved task in state so send() has something to attach to
+      const fresh = createTask("pro", "blue-agent");
+      setTasksState([fresh]);       // in-memory only, NOT saved yet
+      setActiveTaskId(fresh.id);
+      return;
     }
-    setTasksState(loaded);
-    if (loaded.length > 0) setActiveTaskId(loaded[0].id);
-    else setActiveTaskId(null);
+    // Sort by most recent and activate the latest
+    const sorted = [...loaded].sort((a, b) => b.updatedAt - a.updatedAt);
+    setTasksState(sorted);
+    setActiveTaskId(sorted[0].id);
   }, [walletAddr]);
 
   const setTasks = useCallback((ts: ChatTask[]) => {
@@ -333,19 +339,43 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
 
     setError(null);
-    const baseMessages = activeTask?.messages ?? [];
+
+    // ── Ensure an active task exists. If not (first-ever message), create one.
+    // We capture the task ID in a local variable so all async closures below use
+    // the same ID even before React flushes the state update.
+    let tid = activeTaskId;
+    let baseMessages: Message[] = activeTask?.messages ?? [];
+
+    if (!tid) {
+      const freshTask = createTask(chatTier, personaId);
+      tid = freshTask.id;
+      // Add to state AND persist immediately so it survives a refresh
+      setTasksState(prev => {
+        const updated = [freshTask, ...prev];
+        saveTasks(updated, walletAddr);
+        return updated;
+      });
+      setActiveTaskId(tid);
+      baseMessages = [];
+    }
+
     const next: Message[] = [...baseMessages, { role: "user", content: userMsg }];
 
     // Auto-title task on first message
-    if (!activeTask?.title && activeTaskId) {
+    if (!activeTask?.title) {
       setTasksState(prev => prev.map(t =>
-        t.id === activeTaskId
-          ? { ...t, title: userMsg.slice(0, 50) }
-          : t,
+        t.id === tid ? { ...t, title: userMsg.slice(0, 50) } : t,
       ));
     }
 
-    updateMessages([...next, { role: "assistant", content: "" }]);
+    // Push messages with empty assistant placeholder
+    setTasksState(prev => {
+      const msgs: Message[] = [...next, { role: "assistant", content: "" }];
+      const updated = prev.map(t => t.id === tid ? { ...t, messages: msgs, updatedAt: Date.now() } : t);
+      saveTasks(updated, walletAddr);
+      return updated;
+    });
+
     setInput("");
     setStreaming(true);
 
@@ -403,7 +433,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
             if (parsed.type === "tool_start") {
               setTasksState(prev => {
-                const task = prev.find(t => t.id === activeTaskId);
+                const task = prev.find(t => t.id === tid);
                 if (!task) return prev;
                 const msgs = [...task.messages];
                 const last = msgs[msgs.length - 1];
@@ -411,11 +441,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   const logs = [...(last.toolLogs ?? []), { tool: parsed.tool!, status: "running" as const }];
                   msgs[msgs.length - 1] = { ...last, toolLogs: logs };
                 }
-                return prev.map(t => t.id === activeTaskId ? { ...t, messages: msgs } : t);
+                return prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
               });
             } else if (parsed.type === "tool_done") {
               setTasksState(prev => {
-                const task = prev.find(t => t.id === activeTaskId);
+                const task = prev.find(t => t.id === tid);
                 if (!task) return prev;
                 const msgs = [...task.messages];
                 const last = msgs[msgs.length - 1];
@@ -425,20 +455,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   );
                   msgs[msgs.length - 1] = { ...last, toolLogs: logs };
                 }
-                return prev.map(t => t.id === activeTaskId ? { ...t, messages: msgs } : t);
+                return prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
               });
             } else {
               const delta = parsed?.delta?.text ?? parsed?.delta?.value ?? "";
               if (delta) {
                 setTasksState(prev => {
-                  const task = prev.find(t => t.id === activeTaskId);
+                  const task = prev.find(t => t.id === tid);
                   if (!task) return prev;
                   const msgs = [...task.messages];
                   const last = msgs[msgs.length - 1];
                   if (last?.role === "assistant") {
                     msgs[msgs.length - 1] = { ...last, content: last.content + delta };
                   }
-                  return prev.map(t => t.id === activeTaskId ? { ...t, messages: msgs } : t);
+                  return prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
                 });
               }
             }
@@ -446,15 +476,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Persist + update memory
+      // Persist final state + update memory
       setTasksState(prev => {
-        const task = prev.find(t => t.id === activeTaskId);
+        const task = prev.find(t => t.id === tid);
         if (task) {
           const last = task.messages[task.messages.length - 1];
           if (last?.role === "assistant" && last.content) {
             updateMemoryAfterChat(walletAddr, userMsg, last.content);
           }
-          saveTasks(prev.map(t => t.id === activeTaskId ? { ...t, updatedAt: Date.now() } : t), walletAddr);
+          const updated = prev.map(t => t.id === tid ? { ...t, updatedAt: Date.now() } : t);
+          saveTasks(updated, walletAddr);
+          return updated;
         }
         return prev;
       });
@@ -462,12 +494,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (err: unknown) {
       if ((err as Error).name !== "AbortError") {
         setError(err instanceof Error ? err.message : String(err));
-        // Remove the empty assistant message
+        // Remove the empty assistant placeholder
         setTasksState(prev => {
-          const task = prev.find(t => t.id === activeTaskId);
+          const task = prev.find(t => t.id === tid);
           if (!task) return prev;
           const msgs = task.messages.slice(0, -1);
-          return prev.map(t => t.id === activeTaskId ? { ...t, messages: msgs } : t);
+          return prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
         });
       }
     } finally {

@@ -5,7 +5,9 @@ export type SkillCategory =
   | "Fundraise"
   | "Launch"
   | "Agent Network"
-  | "Ecosystem";
+  | "Ecosystem"
+  | "On-chain"
+  | "Base Native";
 
 export interface HubSkill {
   id:          string;
@@ -18,6 +20,7 @@ export interface HubSkill {
 export const SKILL_CATEGORIES: SkillCategory[] = [
   "Market Intel", "Due Diligence", "Builder Tools",
   "Fundraise", "Launch", "Agent Network", "Ecosystem",
+  "On-chain", "Base Native",
 ];
 
 export const CATEGORY_ICONS: Record<SkillCategory, string> = {
@@ -28,6 +31,8 @@ export const CATEGORY_ICONS: Record<SkillCategory, string> = {
   "Launch":        "🚀",
   "Agent Network": "🤝",
   "Ecosystem":     "🌐",
+  "On-chain":      "⛓",
+  "Base Native":   "🔵",
 };
 
 export const HUB_SKILLS: HubSkill[] = [
@@ -76,4 +81,26 @@ export const HUB_SKILLS: HubSkill[] = [
   { id: "base-protocol-comparison",category: "Ecosystem",   name: "Protocol Comparison",       description: "Compare Base DeFi protocols across TVL, fees, and growth",         trigger: "Compare these Base protocols: " },
   { id: "defi-opportunity",       category: "Ecosystem",     name: "DeFi Opportunity Scanner", description: "Find yield and liquidity opportunities across Base DeFi",          trigger: "Find DeFi opportunities on Base" },
   { id: "wallet-strategy-analyzer",category:"Ecosystem",    name: "Wallet Strategy Analyzer",  description: "Analyze wallet on-chain activity and derive strategy insights",    trigger: "/wallet " },
+
+  // ── On-chain (Bankr) ──────────────────────────────────────────────────────────
+  { id: "wallet-portfolio",        category: "On-chain",    name: "Wallet Portfolio",          description: "Full on-chain portfolio breakdown — tokens, NFTs, DeFi positions",  trigger: "/wallet " },
+  { id: "token-price-check",       category: "On-chain",    name: "Token Price",               description: "Get live price, volume, and market cap for any Base token",         trigger: "What's the current price of " },
+  { id: "top-holders",             category: "On-chain",    name: "Top Holders",               description: "List top holders and whale concentration for a token",             trigger: "Show top holders for token " },
+  { id: "token-transfers",         category: "On-chain",    name: "Recent Transfers",          description: "Latest token transfers and wallet activity for an address",        trigger: "Show recent transfers for wallet " },
+  { id: "lp-positions",            category: "On-chain",    name: "LP Positions",              description: "Check active Uniswap V3/V4 liquidity positions on Base",           trigger: "Show LP positions for " },
+  { id: "token-unlock-calendar",   category: "On-chain",    name: "Token Unlock Calendar",     description: "Upcoming token unlock events and vesting schedules on Base",       trigger: "Show token unlock schedule for " },
+  { id: "bankr-wallet-pnl",        category: "On-chain",    name: "Wallet PnL",                description: "Realized and unrealized PnL for any wallet on Base via Bankr",     trigger: "What's the PnL for wallet " },
+  { id: "nft-floor-tracker",       category: "On-chain",    name: "NFT Floor Tracker",         description: "Track floor price and volume for Base NFT collections",            trigger: "Track NFT floor for " },
+
+  // ── Base Native ───────────────────────────────────────────────────────────────
+  { id: "base-gas-oracle",         category: "Base Native", name: "Base Gas Oracle",           description: "Current Base L2 gas prices and fee estimation for transactions",   trigger: "What are current Base gas prices?" },
+  { id: "base-block-info",         category: "Base Native", name: "Base Block Info",           description: "Latest Base block height, timestamp, and network health",          trigger: "Show latest Base block information" },
+  { id: "base-contract-read",      category: "Base Native", name: "Read Contract",             description: "Read public state from any verified contract on Base",             trigger: "Read the state of Base contract " },
+  { id: "base-name-lookup",        category: "Base Native", name: "Base Name Lookup",          description: "Resolve a .base.eth or Basename to an address",                   trigger: "Resolve this basename: " },
+  { id: "coinbase-smart-wallet",   category: "Base Native", name: "Coinbase Smart Wallet",     description: "Set up or analyze a Coinbase Smart Wallet on Base",                trigger: "Help me set up a Coinbase Smart Wallet" },
+  { id: "paymaster-check",         category: "Base Native", name: "Paymaster Check",           description: "Check if a contract qualifies for Base gas sponsorship via Paymaster", trigger: "Is contract eligible for Base Paymaster? " },
+  { id: "base-bridge-status",      category: "Base Native", name: "Base Bridge",               description: "Check L1→L2 bridge status and estimate bridge time/cost",          trigger: "What's the current Base bridge status?" },
+  { id: "base-mcp-contract-deploy",category: "Base Native", name: "Deploy to Base",            description: "Step-by-step deployment guide for contracts on Base with Hardhat/Foundry", trigger: "/ship " },
+  { id: "base-account-abstraction",category: "Base Native", name: "Account Abstraction",       description: "Implement ERC-4337 smart accounts on Base with Coinbase Bundler",  trigger: "/build ERC-4337 account abstraction on Base" },
+  { id: "base-mcp-token-launch",   category: "Base Native", name: "Base Token Launch",         description: "Full token launch pipeline on Base — contract, pool, launch, list", trigger: "Help me launch a token on Base" },
 ];
