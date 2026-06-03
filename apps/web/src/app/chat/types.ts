@@ -64,4 +64,4 @@ export interface CronTask {
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-export type SidebarTab = "tasks" | "skills" | "cron";
+export type SidebarTab = "tasks" | "skills" | "cron" | "settings" | "none";
