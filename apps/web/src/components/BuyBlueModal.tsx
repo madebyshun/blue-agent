@@ -68,12 +68,12 @@ async function fetchLifiQuote(blueTargetTokens: number, fromAddress: string): Pr
   const probe = await probeRes.json() as { estimate?: { toAmount: string; fromAmount: string } };
   if (!probe.estimate) throw new Error("No route found");
 
+  // Rate: human BLUE per human USDC
+  // toAmount (18 decimals) / fromAmount (6 decimals) / 1e12 = BLUE/USDC
   const bluePerUsdc = Number(probe.estimate.toAmount) / Number(probe.estimate.fromAmount) / 1e12;
-  // bluePerUsdc: BLUE (18dec) per USDC micro → convert to human-readable
-  const bluePerHumanUsdc = bluePerUsdc * 1e6; // BLUE per 1 USDC
 
-  const usdcNeeded = (blueTargetTokens / bluePerHumanUsdc) * 1_000_000; // USDC micros
-  const usdcMicro  = Math.ceil(usdcNeeded * 1.01); // +1% buffer
+  // USDC micros needed = target BLUE / (BLUE per USDC) * 1e6
+  const usdcMicro = Math.ceil((blueTargetTokens / bluePerUsdc) * 1_000_000 * 1.01); // +1% slippage buffer
 
   // Actual quote with real amount
   const quoteRes = await fetch(
