@@ -4,7 +4,7 @@ import { creditCost } from "@/lib/credits";
 import { getMemory, clearMemory } from "@/lib/memory";
 import WalletBar from "@/components/WalletBar";
 import TaskList from "./TaskList";
-import SkillsTab from "./SkillsTab";
+import ToolsTab from "./ToolsTab";
 import CronPanel from "./CronPanel";
 import PersonaSelector from "./PersonaSelector";
 
@@ -82,7 +82,7 @@ export default function SidebarContent() {
       {/* ── Tab content ── */}
       <div className="flex-1 overflow-y-auto py-3 min-h-0">
         {sidebarTab === "tasks"  && <TaskList />}
-        {sidebarTab === "skills" && <SkillsTab />}
+        {sidebarTab === "skills" && <ToolsTab />}
         {sidebarTab === "cron"   && <CronPanel />}
       </div>
 

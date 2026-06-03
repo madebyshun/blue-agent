@@ -1,6 +1,7 @@
 "use client";
 
 import type { ActiveTab } from "../page";
+
 import { useChat } from "../ChatContext";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -36,12 +37,12 @@ const NAV_ITEMS: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
     ),
   },
   {
-    id: "tasks",
-    label: "Tasks",
+    id: "tools",
+    label: "Tools",
     icon: (
       <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
       </svg>
     ),
   },
@@ -94,8 +95,7 @@ export default function AppSidebar({
   const activeCrons = crons.filter(c => c.active).length;
 
   function badge(id: ActiveTab): number | null {
-    if (id === "tasks" && tasks.length > 1) return tasks.length;
-    if (id === "cron"  && activeCrons > 0)  return activeCrons;
+    if (id === "cron" && activeCrons > 0) return activeCrons;
     return null;
   }
 
@@ -112,7 +112,7 @@ export default function AppSidebar({
         <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUE CHAT</p>
         <p className="font-mono text-[10px] text-slate-700 mt-1">
           {tasks.length} conversation{tasks.length !== 1 ? "s" : ""}
-          {activeCrons > 0 && ` · ${activeCrons} cron active`}
+          {activeCrons > 0 && ` · ${activeCrons} scheduled`}
         </p>
       </div>
 

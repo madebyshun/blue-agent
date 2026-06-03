@@ -21,7 +21,7 @@ import { creditCost } from "@/lib/credits";
 import { getMemory, clearMemory } from "@/lib/memory";
 import WalletBar from "@/components/WalletBar";
 import PersonaSelector from "./PersonaSelector";
-import SkillsTab from "./SkillsTab";
+import ToolsTab from "./ToolsTab";
 import CronPanel from "./CronPanel";
 
 const BANKR = [
@@ -170,7 +170,7 @@ export default function Sidebar({ collapsed, onToggle }: { collapsed: boolean; o
         badge="50"
       >
         <div className="max-h-80 overflow-hidden">
-          <SkillsTab />
+          <ToolsTab />
         </div>
       </AccordionSection>
 
