@@ -1,9 +1,9 @@
 "use client";
-import type { SidebarTab } from "../types";
+import type { ActiveTab } from "../page";
 import { useChat } from "../ChatContext";
 
 interface RailItem {
-  id:    SidebarTab | "chat";
+  id:    ActiveTab;
   icon:  React.ReactNode;
   label: string;
 }
@@ -69,8 +69,8 @@ export default function NavRail({
   activePanel,
   onSelect,
 }: {
-  activePanel: SidebarTab | "chat";
-  onSelect: (id: SidebarTab | "chat") => void;
+  activePanel: ActiveTab;
+  onSelect: (id: ActiveTab) => void;
 }) {
   const { tasks, crons, credits, isUnlimited, holderTier, artifacts, artifactsPanelOpen, setArtifactsPanelOpen } = useChat();
 
