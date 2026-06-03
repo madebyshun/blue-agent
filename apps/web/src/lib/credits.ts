@@ -40,7 +40,21 @@ const TIERS: { min: number; tier: HolderTier; dailyCr: number; discount: number;
 export const GUEST_DAILY = 30;
 
 export function getTierInfo(blueBalance: number): TierInfo {
-  const idx  = TIERS.findIndex((t) => blueBalance >= t.min);
+  const idx = TIERS.findIndex((t) => blueBalance >= t.min);
+
+  // Wallet connected but balance below Starter threshold — show as Guest+ with next-tier hint
+  if (idx === -1) {
+    const lowestTier = TIERS[TIERS.length - 1]; // Starter (500K)
+    return {
+      tier:        "Starter",
+      blueBalance,
+      dailyCr:     GUEST_DAILY,  // same as Guest until threshold reached
+      discount:    0,
+      color:       "#475569",
+      nextTier:    { name: lowestTier.tier, need: Math.ceil(lowestTier.min - blueBalance), dailyCr: lowestTier.dailyCr },
+    };
+  }
+
   const t    = TIERS[idx];
   const next = TIERS[idx - 1];
   return {
