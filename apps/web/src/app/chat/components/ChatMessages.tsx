@@ -49,34 +49,52 @@ export default function ChatMessages() {
   return (
     <div className="flex-1 overflow-y-auto">
       {isEmpty ? (
-        /* ── Hero / empty state ── */
-        <div className="text-center pt-16 pb-10 px-8">
-          <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-4 py-1.5 mb-5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-            <span className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">BLUE CHAT</span>
+        /* ── Empty state ── */
+        <div className="flex flex-col items-center justify-center h-full px-8 py-12 text-center">
+
+          {/* Agent badge */}
+          <div className="flex items-center gap-2 mb-6">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ background: `${tierColor}15`, border: `1px solid ${tierColor}30` }}
+            >
+              <span className="font-mono text-sm font-black" style={{ color: tierColor }}>B</span>
+            </div>
+            <div className="text-left">
+              <p className="font-mono text-sm font-bold text-white">Blue Agent</p>
+              <p className="font-mono text-[10px] text-slate-600">20 skills · 50 tools · Base-native</p>
+            </div>
           </div>
-          <h1 className="font-mono text-3xl sm:text-4xl font-bold text-white tracking-tight mb-3">
-            Chat with <span className="text-[#4FC3F7]">Blue Agent</span>
-          </h1>
-          <p className="font-mono text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-            AI-native assistant for Base builders. Ask anything — ideas, code, audits, launches.
+
+          <h2 className="font-mono text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2">
+            What are you building?
+          </h2>
+          <p className="font-mono text-sm text-slate-500 max-w-sm mx-auto leading-relaxed mb-8">
+            Ideas, architecture, audits, launches, fundraising — grounded in Base.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-xl mx-auto mt-8">
+          {/* Starter prompts */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg mx-auto mb-6">
             {STARTERS.map((s) => (
               <button
                 key={s.text}
                 onClick={() => send(s.text)}
                 disabled={outOfCredits}
-                className="text-left px-4 py-3 rounded-xl bg-[#0D0D14] border border-[#1A1A2E] hover:border-[#4FC3F7]/30 hover:bg-[#1A1A2E]/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
+                className="text-left px-4 py-3 rounded-xl border transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
+                style={{ background: "#0D0D14", borderColor: "#1A1A2E" }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = `${tierColor}30`)}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = "#1A1A2E")}
               >
-                <div className="text-base mb-1">{s.icon}</div>
-                <div className="font-mono text-xs text-slate-400 group-hover:text-slate-300 leading-relaxed">{s.text}</div>
+                <span className="text-base">{s.icon}</span>
+                <p className="font-mono text-xs text-slate-400 group-hover:text-slate-300 mt-1 leading-relaxed">
+                  {s.text}
+                </p>
               </button>
             ))}
           </div>
 
-          <div className="flex flex-wrap justify-center gap-2 mt-5 max-w-lg mx-auto">
+          {/* Quick commands */}
+          <div className="flex flex-wrap justify-center gap-1.5">
             {QUICK_CMDS.map((cmd) => (
               <button
                 key={cmd}
@@ -91,6 +109,13 @@ export default function ChatMessages() {
               </button>
             ))}
           </div>
+
+          {/* Credits status */}
+          {outOfCredits && (
+            <p className="font-mono text-[10px] text-red-400 mt-4">
+              Out of credits — stake $BLUEAGENT to refill
+            </p>
+          )}
         </div>
       ) : (
         /* ── Message list ── */
@@ -113,22 +138,41 @@ export default function ChatMessages() {
                     : "text-slate-300 rounded-tl-sm"
                 }`}
               >
-                {/* Tool logs */}
+                {/* Tool execution logs — Manus-style */}
                 {msg.role === "assistant" && msg.toolLogs && msg.toolLogs.length > 0 && (
-                  <div className="flex flex-col gap-0.5 mb-2 px-1">
-                    {msg.toolLogs.map((log, j) => (
-                      <div key={j} className="flex items-center gap-2 text-[11px]">
-                        <span className={log.status === "running" ? "text-[#4FC3F7] animate-spin" : "text-[#34D399]"}>
-                          {log.status === "running" ? "◌" : "✓"}
-                        </span>
-                        <span className={log.status === "running" ? "text-[#4FC3F7] animate-pulse" : "text-slate-500"}>
-                          {log.tool.replace("hub_", "")}
-                        </span>
-                        {log.ms !== undefined && (
-                          <span className="text-slate-700">{(log.ms / 1000).toFixed(1)}s</span>
-                        )}
-                      </div>
-                    ))}
+                  <div className="flex flex-col gap-1 mb-3 px-1">
+                    {msg.toolLogs.map((log, j) => {
+                      const name = log.tool.replace(/^hub_/, "").replace(/_/g, " ");
+                      const provider = log.tool.includes("bankr") || log.tool.includes("wallet") || log.tool.includes("price") || log.tool.includes("holder") || log.tool.includes("nft") || log.tool.includes("lp") || log.tool.includes("transfer")
+                        ? { icon: "🔮", color: "#A78BFA", label: "Bankr" }
+                        : log.tool.includes("base") || log.tool.includes("contract") || log.tool.includes("gas") || log.tool.includes("block") || log.tool.includes("deploy") || log.tool.includes("bridge")
+                        ? { icon: "🔵", color: "#34D399", label: "Base MCP" }
+                        : { icon: "⚡", color: "#4FC3F7", label: "Blue Agent" };
+                      const isRunning = log.status === "running";
+                      return (
+                        <div
+                          key={j}
+                          className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border"
+                          style={{
+                            borderColor: `${provider.color}20`,
+                            background: `${provider.color}06`,
+                          }}
+                        >
+                          <span className="text-xs shrink-0">{provider.icon}</span>
+                          <span className="font-mono text-[10px] font-semibold shrink-0" style={{ color: provider.color }}>
+                            {provider.label}
+                          </span>
+                          <span className="font-mono text-[10px] text-slate-500 flex-1 truncate capitalize">{name}</span>
+                          {isRunning ? (
+                            <span className="font-mono text-[9px] text-slate-600 animate-pulse shrink-0">running…</span>
+                          ) : (
+                            <span className="font-mono text-[9px] shrink-0" style={{ color: "#34D399" }}>
+                              ✓{log.ms !== undefined ? ` ${(log.ms / 1000).toFixed(1)}s` : ""}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
