@@ -38,7 +38,10 @@ export default function SkillsTab() {
 
   function use(trigger: string) {
     setInput(trigger);
-    setSidebarTab("tasks");
+    // On mobile setSidebarTab("tasks") would switch tab; on desktop sidebar stays
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setSidebarTab("none" as Parameters<typeof setSidebarTab>[0]);
+    }
   }
 
   return (
