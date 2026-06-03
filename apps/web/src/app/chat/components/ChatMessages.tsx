@@ -52,17 +52,19 @@ export default function ChatMessages() {
         /* ── Empty state ── */
         <div className="flex flex-col items-center justify-center h-full px-8 py-12 text-center">
 
-          {/* Agent badge */}
-          <div className="flex items-center gap-2 mb-6">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ background: `${tierColor}15`, border: `1px solid ${tierColor}30` }}
-            >
-              <span className="font-mono text-sm font-black" style={{ color: tierColor }}>B</span>
+          {/* Agent logo — horizontal */}
+          <div className="flex flex-col items-center gap-2 mb-8">
+            <div className="flex items-center gap-2.5">
+              <img src="/logo.svg" alt="Blue Agent" className="h-8 w-8" />
+              <span className="font-mono text-xl font-bold text-white tracking-widest">
+                BLUE<span style={{ color: tierColor }}>AGENT</span>
+              </span>
             </div>
-            <div className="text-left">
-              <p className="font-mono text-sm font-bold text-white">Blue Agent</p>
-              <p className="font-mono text-[10px] text-slate-600">20 skills · 50 tools · Base-native</p>
+            <div className="flex items-center gap-2">
+              <span className="w-1 h-1 rounded-full bg-[#34D399]" />
+              <p className="font-mono text-[10px] text-slate-500">
+                20 skills · 50 tools · Base-native
+              </p>
             </div>
           </div>
 
