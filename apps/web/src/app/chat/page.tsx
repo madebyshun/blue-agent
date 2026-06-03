@@ -6,32 +6,32 @@ import BuyBlueModal  from "@/components/BuyBlueModal";
 import { ChatProvider, useChat } from "./ChatContext";
 
 import AppSidebar    from "./components/AppSidebar";
-import TasksPanel    from "./components/TasksPanel";
-import SkillsTab     from "./components/SkillsTab";
+import ToolsTab      from "./components/ToolsTab";
+import SkillsPanel   from "./components/SkillsPanel";
 import CronPanel     from "./components/CronPanel";
 import SettingsPanel from "./components/SettingsPanel";
 import ChatMessages  from "./components/ChatMessages";
 import ChatInput     from "./components/ChatInput";
 import ArtifactsPanel from "./components/ArtifactsPanel";
 
-export type ActiveTab = "chat" | "tasks" | "skills" | "cron" | "settings";
+export type ActiveTab = "chat" | "tools" | "skills" | "cron" | "settings";
 
-// ── Mobile tab bar config ──────────────────────────────────────────────────────
+// ── Tab metadata ───────────────────────────────────────────────────────────────
+const TAB_META: Record<Exclude<ActiveTab, "chat">, { title: string; subtitle: string }> = {
+  tools:    { title: "Tools",    subtitle: "50 hub tools · click to run in chat" },
+  skills:   { title: "Skills",   subtitle: "Agent capabilities · Blue Agent · Bankr · Base MCP" },
+  cron:     { title: "Cron",     subtitle: "Scheduled agent tasks" },
+  settings: { title: "Settings", subtitle: "Model · Persona · Credits · Wallet" },
+};
+
+// ── Mobile tab bar ─────────────────────────────────────────────────────────────
 const MOBILE_TABS: { id: ActiveTab; label: string; icon: string }[] = [
   { id: "chat",     label: "Chat",     icon: "💬" },
-  { id: "tasks",    label: "Tasks",    icon: "📋" },
+  { id: "tools",    label: "Tools",    icon: "🔧" },
   { id: "skills",   label: "Skills",   icon: "⚡" },
   { id: "cron",     label: "Cron",     icon: "⏱" },
   { id: "settings", label: "Settings", icon: "⚙️" },
 ];
-
-// ── Page header for non-chat tabs ──────────────────────────────────────────────
-const TAB_META: Record<Exclude<ActiveTab, "chat">, { title: string; subtitle: string }> = {
-  tasks:    { title: "Tasks",    subtitle: "Conversation history" },
-  skills:   { title: "Skills",   subtitle: "50 tools · 9 toolsets" },
-  cron:     { title: "Cron",     subtitle: "Scheduled tasks" },
-  settings: { title: "Settings", subtitle: "Models · Credits · Wallet" },
-};
 
 // ── Shell ──────────────────────────────────────────────────────────────────────
 function ChatShell() {
@@ -52,26 +52,27 @@ function ChatShell() {
 
       <Navbar />
 
-      {/* ── Full app layout (below navbar) ── */}
       <div className="flex bg-[#050508] font-mono pt-16 h-screen overflow-hidden">
 
-        {/* ── Sidebar (desktop only) ── */}
+        {/* ── Sidebar (desktop) ── */}
         <AppSidebar activeTab={activeTab} onSelect={setActiveTab} />
 
         {/* ── Main content area ── */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
 
-          {/* Tab page header (non-chat tabs, desktop) */}
+          {/* Tab header (non-chat, desktop) */}
           {!isChat && meta && (
-            <div className="hidden lg:flex items-center gap-3 px-6 pt-6 pb-4 border-b border-[#1A1A2E] flex-shrink-0">
+            <div className="hidden lg:flex items-center px-6 pt-6 pb-4 border-b border-[#1A1A2E] flex-shrink-0">
               <div>
-                <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// {meta.title.toUpperCase()}</p>
+                <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">
+                  // {meta.title.toUpperCase()}
+                </p>
                 <p className="font-mono text-[10px] text-slate-700 mt-1">{meta.subtitle}</p>
               </div>
             </div>
           )}
 
-          {/* Tab content */}
+          {/* Content area */}
           <div className="flex-1 flex min-h-0 overflow-hidden">
 
             {/* 💬 Chat */}
@@ -89,17 +90,17 @@ function ChatShell() {
               </>
             )}
 
-            {/* 📋 Tasks */}
-            {activeTab === "tasks" && (
+            {/* 🔧 Tools */}
+            {activeTab === "tools" && (
               <div className="flex-1 h-full overflow-hidden">
-                <TasksPanel />
+                <ToolsTab />
               </div>
             )}
 
             {/* ⚡ Skills */}
             {activeTab === "skills" && (
               <div className="flex-1 h-full overflow-hidden">
-                <SkillsTab />
+                <SkillsPanel />
               </div>
             )}
 
