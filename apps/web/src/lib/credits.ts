@@ -107,6 +107,13 @@ export function deductCredits(amount: number, address?: string): number {
   return next;
 }
 
+export function addCredits(amount: number, address?: string): number {
+  const current = Math.max(0, getCredits(address));
+  const next    = current + amount;
+  setCredits(next, address);
+  return next;
+}
+
 // ── BLUE balance via Base RPC ─────────────────────────────────────────────────
 
 /** Fetch $BLUEAGENT balance for a wallet address (no signing needed) */

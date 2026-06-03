@@ -558,51 +558,91 @@ export async function POST(req: NextRequest) {
     return textToSSE(text);
   }
 
-  // ── Tool use: execute tools ────────────────────────────────────────────────
+  // ── Tool use: merged stream (tool events → Phase 2 stream) ───────────────
   const toolUseBlocks = firstData.content.filter((b) => b.type === "tool_use");
+  const enc = new TextEncoder();
 
-  const toolResults = await Promise.all(
-    toolUseBlocks.map(async (block) => ({
-      type:        "tool_result" as const,
-      tool_use_id: block.id!,
-      content:     await callHubTool(block.name!, block.input ?? {}),
-    }))
-  );
+  const mergedStream = new ReadableStream({
+    async start(controller) {
+      try {
+        // 1. tool_start events
+        for (const block of toolUseBlocks) {
+          controller.enqueue(enc.encode(
+            `data: ${JSON.stringify({ type: "tool_start", tool: block.name })}\n\n`
+          ));
+        }
 
-  // ── Phase 2: streaming response with tool results ─────────────────────────
-  const secondMessages: LLMMessage[] = [
-    ...cleanMessages,
-    { role: "assistant", content: firstData.content },
-    { role: "user",      content: toolResults },
-  ];
+        // 2. Execute tools in parallel
+        const t0 = Date.now();
+        const toolResults = await Promise.all(
+          toolUseBlocks.map(async (block) => ({
+            type:        "tool_result" as const,
+            tool_use_id: block.id!,
+            content:     await callHubTool(block.name!, block.input ?? {}),
+          }))
+        );
+        const elapsed = Date.now() - t0;
 
-  let streamRes: Response;
-  try {
-    streamRes = await fetch(BANKR_LLM, {
-      method:  "POST",
-      headers: lmHeaders,
-      body: JSON.stringify({
-        model:      model.id,
-        system,
-        messages:   secondMessages,
-        max_tokens: model.maxTokens,
-        stream:     true,
-      }),
-    });
-  } catch (e) {
-    return NextResponse.json(
-      { error: `LLM stream failed: ${(e as Error).message}` },
-      { status: 502 }
-    );
-  }
+        // 3. tool_done events
+        for (const block of toolUseBlocks) {
+          controller.enqueue(enc.encode(
+            `data: ${JSON.stringify({ type: "tool_done", tool: block.name, ms: elapsed })}\n\n`
+          ));
+        }
 
-  if (!streamRes.ok) {
-    const err = await streamRes.text();
-    return NextResponse.json(
-      { error: `Bankr LLM stream error: ${streamRes.status}`, detail: err },
-      { status: streamRes.status }
-    );
-  }
+        // 4. Phase 2 — streaming synthesis
+        const secondMessages: LLMMessage[] = [
+          ...cleanMessages,
+          { role: "assistant", content: firstData.content },
+          { role: "user",      content: toolResults },
+        ];
 
-  return new Response(streamRes.body, { headers: SSE_HEADERS });
+        let streamRes: Response;
+        try {
+          streamRes = await fetch(BANKR_LLM, {
+            method:  "POST",
+            headers: lmHeaders,
+            body: JSON.stringify({
+              model:      model.id,
+              system,
+              messages:   secondMessages,
+              max_tokens: model.maxTokens,
+              stream:     true,
+            }),
+          });
+        } catch (e) {
+          const msg = `[LLM stream failed: ${(e as Error).message}]`;
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ delta: { text: msg } })}\n\n`));
+          controller.enqueue(enc.encode("data: [DONE]\n\n"));
+          controller.close();
+          return;
+        }
+
+        if (!streamRes.ok) {
+          const err = await streamRes.text();
+          const msg = `[Stream error ${streamRes.status}: ${err.slice(0, 120)}]`;
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ delta: { text: msg } })}\n\n`));
+          controller.enqueue(enc.encode("data: [DONE]\n\n"));
+          controller.close();
+          return;
+        }
+
+        // Pipe Phase 2 into merged stream
+        const reader = streamRes.body!.getReader();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            controller.enqueue(value);
+          }
+        } finally {
+          controller.close();
+        }
+      } catch (e) {
+        controller.error(e);
+      }
+    },
+  });
+
+  return new Response(mergedStream, { headers: SSE_HEADERS });
 }
