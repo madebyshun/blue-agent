@@ -60,12 +60,6 @@ export default function ChatMessages() {
                 BLUE<span style={{ color: tierColor }}>AGENT</span>
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="w-1 h-1 rounded-full bg-[#34D399]" />
-              <p className="font-mono text-[10px] text-slate-500">
-                20 skills · 50 tools · Base-native
-              </p>
-            </div>
           </div>
 
           <h2 className="font-mono text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2">
