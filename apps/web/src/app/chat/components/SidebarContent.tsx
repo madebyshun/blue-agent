@@ -34,6 +34,7 @@ export default function SidebarContent() {
     credits, countdown, isUnlimited, daily,
     buyOpen: _, setBuyOpen,
     artifacts, setArtifactsPanelOpen, artifactsPanelOpen,
+    walletRefresh,
   } = useChat();
 
   const memory   = getMemory(walletAddr);
@@ -240,7 +241,7 @@ export default function SidebarContent() {
       {/* ── Wallet ── */}
       <div className="px-3 py-4 border-t border-[#1A1A2E] flex-shrink-0 mt-auto">
         <p className="font-mono text-[10px] text-slate-600 tracking-widest px-2 mb-2">WALLET</p>
-        <WalletBar onWalletChange={onWalletChange} />
+        <WalletBar onWalletChange={onWalletChange} refreshTrigger={walletRefresh} />
         {holderTier.blueBalance > 0 && (
           <div
             className="mt-2 mx-1 px-3 py-1.5 rounded-lg font-mono text-xs"

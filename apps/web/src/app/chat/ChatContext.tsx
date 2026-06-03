@@ -74,16 +74,18 @@ interface ChatContextValue {
   setBuyOpen: (v: boolean) => void;
 
   // Wallet / credits
-  walletAddr:   string | undefined;
-  holderTier:   TierInfo;
-  credits:      number;
-  countdown:    string;
-  isUnlimited:  boolean;
-  daily:        number;
-  cost:         number;
-  outOfCredits: boolean;
+  walletAddr:     string | undefined;
+  holderTier:     TierInfo;
+  credits:        number;
+  countdown:      string;
+  isUnlimited:    boolean;
+  daily:          number;
+  cost:           number;
+  outOfCredits:   boolean;
   onWalletChange: (addr: string | undefined, tier: TierInfo) => void;
-  setCredits:   (n: number) => void;
+  setCredits:     (n: number) => void;
+  walletRefresh:  number;          // increment to force WalletBar balance re-fetch
+  triggerWalletRefresh: () => void;
 
   // Slash cmd menu
   cmdMenu:    boolean;
@@ -110,11 +112,13 @@ const ChatCtx = createContext<ChatContextValue | null>(null);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   // ── Wallet / credits ──────────────────────────────────────────────────────
-  const [walletAddr,  setWalletAddr]  = useState<string | undefined>();
-  const [holderTier,  setHolderTier]  = useState<TierInfo>(STARTER_TIER);
-  const [credits,     setCredits]     = useState(0);
-  const [countdown,   setCountdown]   = useState("");
-  const [buyOpen,     setBuyOpen]     = useState(false);
+  const [walletAddr,    setWalletAddr]    = useState<string | undefined>();
+  const [holderTier,    setHolderTier]    = useState<TierInfo>(STARTER_TIER);
+  const [credits,       setCredits]       = useState(0);
+  const [countdown,     setCountdown]     = useState("");
+  const [buyOpen,       setBuyOpen]       = useState(false);
+  const [walletRefresh, setWalletRefresh] = useState(0);
+  const triggerWalletRefresh = useCallback(() => setWalletRefresh(n => n + 1), []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -488,7 +492,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     sidebarTab, setSidebarTab,
     buyOpen, setBuyOpen,
     walletAddr, holderTier, credits, countdown, isUnlimited, daily, cost, outOfCredits,
-    onWalletChange, setCredits,
+    onWalletChange, setCredits, walletRefresh, triggerWalletRefresh,
     cmdMenu, setCmdMenu, cmdFilter, setCmdFilter,
   };
 

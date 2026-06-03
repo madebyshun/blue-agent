@@ -10,7 +10,7 @@ import ArtifactsPanel from "./components/ArtifactsPanel";
 
 // ── Inner shell (must be inside ChatProvider) ──────────────────────────────────
 function ChatShell() {
-  const { buyOpen, setBuyOpen, artifactsPanelOpen } = useChat();
+  const { buyOpen, setBuyOpen, artifactsPanelOpen, triggerWalletRefresh } = useChat();
 
   return (
     <>
@@ -18,7 +18,8 @@ function ChatShell() {
         <BuyBlueModal
           onClose={() => setBuyOpen(false)}
           onSuccess={() => {
-            // WalletBar detects new balance and fires onWalletChange → credit refresh
+            // Re-fetch BLUE balance → WalletBar fires onWalletChange → credits update
+            triggerWalletRefresh();
           }}
         />
       )}

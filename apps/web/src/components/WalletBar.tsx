@@ -15,6 +15,7 @@ const BLUE_ADDRESS = "0xf895783b2931c919955e18b5e3343e7c7c456ba3";
 
 interface WalletBarProps {
   onWalletChange?: (address: string | undefined, tier: TierInfo) => void;
+  refreshTrigger?: number; // increment to force balance re-fetch
 }
 
 function shortAddr(addr: string) {
@@ -26,7 +27,7 @@ function fmtBlue(n: number) {
   return n.toFixed(0);
 }
 
-export default function WalletBar({ onWalletChange }: WalletBarProps) {
+export default function WalletBar({ onWalletChange, refreshTrigger = 0 }: WalletBarProps) {
   const { address, isConnected } = useAccount();
   const { connect, isPending: isConnecting } = useConnect();
   const { disconnect } = useDisconnect();
@@ -35,7 +36,7 @@ export default function WalletBar({ onWalletChange }: WalletBarProps) {
   const [credits,   setCredits]   = useState(0);
   const [showPanel, setShowPanel] = useState(false);
 
-  // Fetch BLUE balance + set tier whenever address changes
+  // Fetch BLUE balance + set tier whenever address or refreshTrigger changes
   useEffect(() => {
     if (!address) {
       const t = { tier: "Starter" as const, blueBalance: 0, dailyCr: 200, discount: 0, color: "#4FC3F7" };
@@ -54,7 +55,7 @@ export default function WalletBar({ onWalletChange }: WalletBarProps) {
       onWalletChange?.(address, t);
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address]);
+  }, [address, refreshTrigger]);
 
   // Refresh credits when panel opens
   useEffect(() => {
