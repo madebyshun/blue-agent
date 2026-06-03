@@ -155,10 +155,12 @@ export function refreshCreditsIfNeeded(
   const now     = Date.now();
   const current = getCredits(address);
 
-  const isFirstTime = current === -1;
-  const isDue       = now - last >= REFRESH_MS;
+  const isFirstTime  = current === -1;
+  const isDue        = now - last >= REFRESH_MS;
+  // Tier upgrade: user bought more BLUE and now gets more daily credits
+  const tierUpgraded = current >= 0 && daily > current;
 
-  if (isFirstTime || isDue) {
+  if (isFirstTime || isDue || tierUpgraded) {
     setCredits(daily, address);
     localStorage.setItem(refreshKey(address), String(now));
     return { credits: daily, refreshed: true, daily };
