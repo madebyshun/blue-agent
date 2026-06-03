@@ -251,6 +251,13 @@ export default function ChatPage() {
     // Handle client-side commands first (no credits consumed)
     if (handleClientCommand(userMsg)) return;
 
+    // Buy intent — open modal instead of calling API
+    const buyIntent = /\b(buy|mua|get|top.?up)\b.{0,30}\b(credits?|blue(agent)?|token)\b/i;
+    if (buyIntent.test(userMsg)) {
+      setBuyOpen(true);
+      return;
+    }
+
     const currentCredits = getCredits(walletAddr);
     if (currentCredits < cost) {
       setError(`Not enough credits. Need ${cost}, have ${currentCredits}.`);
@@ -435,7 +442,10 @@ export default function ChatPage() {
 
   return (
     <>
-      {buyOpen && <BuyBlueModal onClose={() => setBuyOpen(false)} />}
+      {buyOpen && <BuyBlueModal onClose={() => setBuyOpen(false)} onSuccess={() => {
+        // Refresh balance → will re-trigger refreshCreditsIfNeeded via useEffect
+        setHolderTier(prev => ({ ...prev })); // force re-render trigger
+      }} />}
       <Navbar />
       <div className="flex bg-[#050508] font-mono pt-16 h-screen overflow-hidden">
 
