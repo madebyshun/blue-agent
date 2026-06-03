@@ -251,13 +251,6 @@ export default function ChatPage() {
     // Handle client-side commands first (no credits consumed)
     if (handleClientCommand(userMsg)) return;
 
-    // Buy intent — open modal instead of calling API
-    const buyIntent = /\b(buy|mua|get|top.?up)\b.{0,30}\b(credits?|blue(agent)?|token)\b/i;
-    if (buyIntent.test(userMsg)) {
-      setBuyOpen(true);
-      return;
-    }
-
     const currentCredits = getCredits(walletAddr);
     if (currentCredits < cost) {
       setError(`Not enough credits. Need ${cost}, have ${currentCredits}.`);
