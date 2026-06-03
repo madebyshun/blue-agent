@@ -108,12 +108,25 @@ export default function AppSidebar({
     <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] border-r border-[#1A1A2E]">
 
       {/* ── Header ── */}
-      <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E] flex-shrink-0">
-        <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUE CHAT</p>
-        <p className="font-mono text-[10px] text-slate-700 mt-1">
-          {tasks.length} conversation{tasks.length !== 1 ? "s" : ""}
-          {activeCrons > 0 && ` · ${activeCrons} scheduled`}
-        </p>
+      <div className="px-5 pt-5 pb-4 border-b border-[#1A1A2E] flex-shrink-0">
+        <div className="flex items-center justify-between mb-3">
+          <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUE CHAT</p>
+          <p className="font-mono text-[10px] text-slate-700">
+            {tasks.length} conv{activeCrons > 0 ? ` · ${activeCrons} cron` : ""}
+          </p>
+        </div>
+        {/* New Chat button — prominent like Claude */}
+        <button
+          onClick={() => { createNewTask(); onSelect("chat"); }}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border transition-all text-left group"
+          style={{ borderColor: "#4FC3F730", background: "#4FC3F708" }}
+        >
+          <svg className="w-3.5 h-3.5 text-[#4FC3F7] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          <span className="font-mono text-xs text-[#4FC3F7] font-semibold">New chat</span>
+          <span className="ml-auto font-mono text-[9px] text-slate-700 group-hover:text-slate-500">⌘N</span>
+        </button>
       </div>
 
       {/* ── Nav ── */}
