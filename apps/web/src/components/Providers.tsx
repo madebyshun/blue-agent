@@ -5,7 +5,6 @@ import { base } from "wagmi/chains";
 import { http } from "viem";
 import { coinbaseWallet, injected } from "wagmi/connectors";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-
 const config = createConfig({
   chains: [base],
   connectors: [
