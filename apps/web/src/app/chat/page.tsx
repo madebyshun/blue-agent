@@ -4,14 +4,14 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import WalletBar from "@/components/WalletBar";
-import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import {
   TierInfo,
   creditCost,
-  ensureCredits,
   getCredits,
   deductCredits,
-  addCredits,
+  getNextRefresh,
+  refreshCreditsIfNeeded,
+  getDailyCr,
 } from "@/lib/credits";
 import {
   buildMemoryContext,
@@ -20,20 +20,17 @@ import {
   clearMemory,
 } from "@/lib/memory";
 
-// ─── USDC top-up config ───────────────────────────────────────────────────────
-const USDC_BASE    = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
-const TREASURY     = (process.env.NEXT_PUBLIC_BLUE_TREASURY ?? "0x0000000000000000000000000000000000000000") as `0x${string}`;
-const ERC20_ABI    = [{ name: "transfer", type: "function", inputs: [{ name: "to", type: "address" }, { name: "amount", type: "uint256" }], outputs: [{ name: "", type: "bool" }], stateMutability: "nonpayable" }] as const;
-
-interface CreditPkg { id: string; label: string; credits: number; usdc: number; badge?: string }
-const CREDIT_PKGS: CreditPkg[] = [
-  { id: "spark",   label: "Spark",   credits:  500, usdc: 0.50 },
-  { id: "builder", label: "Builder", credits: 2000, usdc: 1.50, badge: "POPULAR" },
-  { id: "pro",     label: "Pro",     credits: 8000, usdc: 5.00 },
-];
-
 // ─── Chat persistence ─────────────────────────────────────────────────────────
 const chatKey = (addr?: string) => `blue_chat_v1_${addr ?? "guest"}`;
+
+// ─── Countdown helper ─────────────────────────────────────────────────────────
+function formatCountdown(ms: number): string {
+  if (ms <= 0) return "now";
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
 
 type ChatTier = string;
 type ToolLog  = { tool: string; status: "running" | "done"; ms?: number };
@@ -98,7 +95,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
 ];
 
 const EXPLORER_TIER: TierInfo = {
-  tier: "Explorer", blueBalance: 0, discount: 0, color: "#475569",
+  tier: "Explorer", blueBalance: 0, dailyCr: 150, discount: 0, color: "#475569",
 };
 
 export default function ChatPage() {
@@ -112,24 +109,27 @@ export default function ChatPage() {
   const [error,       setError]       = useState<string | null>(null);
   const [cmdMenu,     setCmdMenu]     = useState(false);
   const [cmdFilter,   setCmdFilter]   = useState("");
-  const [topUpOpen,   setTopUpOpen]   = useState(false);
-  const [topUpPkg,    setTopUpPkg]    = useState<CreditPkg | null>(null);
   const [shareId,     setShareId]     = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
+  const [countdown,   setCountdown]   = useState("");
 
-  // wagmi write contract for USDC top-up
-  const { writeContract, data: txHash, isPending: txPending } = useWriteContract();
-  const { isSuccess: txSuccess } = useWaitForTransactionReceipt({ hash: txHash });
-
-  // Credit top-up: grant credits on tx confirm
+  // Daily refresh on wallet/balance change
   useEffect(() => {
-    if (txSuccess && topUpPkg) {
-      const next = addCredits(topUpPkg.credits, walletAddr);
-      setCredits(next);
-      setTopUpPkg(null);
-      setTopUpOpen(false);
+    if (typeof window === "undefined") return;
+    const result = refreshCreditsIfNeeded(holderTier.blueBalance, walletAddr);
+    setCredits(result.credits);
+  }, [walletAddr, holderTier.blueBalance]);
+
+  // Countdown timer — update every 60s
+  useEffect(() => {
+    function tick() {
+      const next = getNextRefresh(walletAddr);
+      setCountdown(formatCountdown(next - Date.now()));
     }
-  }, [txSuccess, topUpPkg, walletAddr]);
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, [walletAddr]);
 
   // Chat persistence — load
   useEffect(() => {
@@ -152,24 +152,18 @@ export default function ChatPage() {
   const abortRef    = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    const saved = typeof window !== "undefined" ? localStorage.getItem("blue_wallet") : null;
-    const cr = ensureCredits(saved ?? undefined);
-    setCredits(cr);
-  }, []);
-
-  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const handleWalletChange = useCallback((addr: string | undefined, tier: TierInfo) => {
     setWalletAddr(addr);
     setHolderTier(tier);
-    const cr = ensureCredits(addr);
-    setCredits(cr);
   }, []);
 
-  const cost = creditCost(chatTier, holderTier);
-  const outOfCredits = credits < cost;
+  const cost         = creditCost(chatTier, holderTier);
+  const isUnlimited  = holderTier.dailyCr === -1 && !!walletAddr;
+  const daily        = getDailyCr(holderTier, !!walletAddr);
+  const outOfCredits = !isUnlimited && credits < cost;
   const activeTier = ALL_TIERS.find((t) => t.id === chatTier) ?? BANKR_TIERS[1];;
 
   // ── Client-side command handlers (no credits, no API call) ──────────────────
@@ -439,67 +433,6 @@ export default function ChatPage() {
 
   return (
     <>
-    {/* ── Top-up Modal ────────────────────────────────────────────────── */}
-    {topUpOpen && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
-        <div className="bg-[#0D0D14] border border-[#2A2A4E] rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest mb-1">BLUE CHAT</p>
-              <h2 className="font-mono text-lg font-bold text-white">Top up credits</h2>
-            </div>
-            <button onClick={() => setTopUpOpen(false)} className="text-slate-500 hover:text-white transition-colors text-xl leading-none">×</button>
-          </div>
-
-          <div className="flex flex-col gap-2 mb-5">
-            {CREDIT_PKGS.map((pkg) => (
-              <button
-                key={pkg.id}
-                onClick={() => setTopUpPkg(pkg)}
-                className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-left ${
-                  topUpPkg?.id === pkg.id
-                    ? "border-[#4FC3F7] bg-[#4FC3F7]/5"
-                    : "border-[#1A1A2E] hover:border-[#2A2A4E]"
-                }`}
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm text-white">{pkg.label}</span>
-                    {pkg.badge && (
-                      <span className="font-mono text-[9px] text-[#4FC3F7] border border-[#4FC3F7]/30 px-1.5 py-0.5 rounded">{pkg.badge}</span>
-                    )}
-                  </div>
-                  <span className="font-mono text-[11px] text-slate-500">{pkg.credits.toLocaleString()} credits · ~{Math.floor(pkg.credits / 50)} Pro msgs</span>
-                </div>
-                <span className="font-mono text-sm font-bold text-white">${pkg.usdc.toFixed(2)}</span>
-              </button>
-            ))}
-          </div>
-
-          <button
-            disabled={!topUpPkg || txPending || !walletAddr}
-            onClick={() => {
-              if (!topUpPkg || !walletAddr) return;
-              writeContract({
-                address: USDC_BASE,
-                abi: ERC20_ABI,
-                functionName: "transfer",
-                args: [TREASURY, BigInt(Math.round(topUpPkg.usdc * 1_000_000))],
-              });
-            }}
-            className="w-full py-3 rounded-xl font-mono text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: "#4FC3F7", color: "#050508" }}
-          >
-            {txPending ? "Confirming…" : !walletAddr ? "Connect wallet first" : topUpPkg ? `Pay ${topUpPkg.usdc} USDC` : "Select a package"}
-          </button>
-
-          {!walletAddr && (
-            <p className="font-mono text-[10px] text-slate-600 text-center mt-3">Connect your wallet in the sidebar to purchase credits</p>
-          )}
-          <p className="font-mono text-[10px] text-slate-700 text-center mt-2">USDC on Base · Credits added instantly on confirmation</p>
-        </div>
-      </div>
-    )}
       <Navbar />
       <div className="flex bg-[#050508] font-mono pt-16 h-screen overflow-hidden">
 
@@ -608,35 +541,57 @@ export default function ChatPage() {
           <div className="px-3 py-4 border-b border-[#1A1A2E]">
             <div className="flex items-center justify-between px-2 mb-2">
               <p className="font-mono text-[10px] text-slate-600 tracking-widest">CREDITS</p>
-              <button
-                onClick={() => setTopUpOpen(true)}
-                className="font-mono text-[10px] text-[#4FC3F7] hover:text-white transition-colors px-1.5 py-0.5 rounded border border-[#4FC3F7]/20 hover:border-[#4FC3F7]/50"
-              >
-                + top up
-              </button>
+              <span className="font-mono text-[9px] px-1.5 py-0.5 rounded"
+                style={{ color: holderTier.color, background: `${holderTier.color}15`, border: `1px solid ${holderTier.color}25` }}>
+                {holderTier.tier}
+              </span>
             </div>
-            <div className="mx-1 px-3 py-2 rounded-lg bg-[#050508] border border-[#1A1A2E]">
-              <div className="flex items-baseline justify-between">
-                <span className="font-mono text-xl font-bold" style={{ color: credits <= 20 ? "#EF4444" : "#4FC3F7" }}>
-                  {credits}
+            <div className="mx-1 px-3 py-2.5 rounded-lg bg-[#050508] border border-[#1A1A2E]">
+              {/* Balance */}
+              <div className="flex items-baseline justify-between mb-1">
+                <span className="font-mono text-xl font-bold"
+                  style={{ color: isUnlimited ? holderTier.color : credits <= 20 ? "#EF4444" : "#4FC3F7" }}>
+                  {isUnlimited ? "∞" : credits.toLocaleString()}
                 </span>
-                <span className="font-mono text-[10px] text-slate-600">credits</span>
+                {!isUnlimited && (
+                  <span className="font-mono text-[10px] text-slate-600">/ {daily.toLocaleString()} today</span>
+                )}
               </div>
-              {holderTier.discount > 0 && (
-                <div className="font-mono text-[10px] mt-1" style={{ color: holderTier.color }}>
-                  {Math.round(holderTier.discount * 100)}% holder discount
+              {/* Progress bar */}
+              {!isUnlimited && daily > 0 && (
+                <div className="h-0.5 bg-[#1A1A2E] rounded-full overflow-hidden mb-1.5">
+                  <div className="h-full rounded-full transition-all"
+                    style={{ width: `${Math.min(100, (credits / daily) * 100)}%`, background: holderTier.color }} />
                 </div>
               )}
-              {credits <= 20 && (
-                <a
-                  href="https://app.uniswap.org/swap?outputCurrency=0xf895783b2931c919955e18b5e3343e7c7c456ba3&chain=base"
+              {/* Reset countdown */}
+              <div className="font-mono text-[9px] text-slate-600">
+                resets in {countdown}
+              </div>
+              {/* Discount badge */}
+              {holderTier.discount > 0 && (
+                <div className="font-mono text-[9px] mt-1" style={{ color: holderTier.color }}>
+                  {Math.round(holderTier.discount * 100)}% discount on Hub tools
+                </div>
+              )}
+              {/* Low credits CTA */}
+              {!isUnlimited && credits <= 30 && (
+                <a href="https://app.uniswap.org/swap?outputCurrency=0xf895783b2931c919955e18b5e3343e7c7c456ba3&chain=base"
                   target="_blank" rel="noopener noreferrer"
-                  className="block font-mono text-[10px] text-[#F59E0B] hover:underline mt-1"
-                >
-                  Get more BLUE →
+                  className="block font-mono text-[10px] text-[#F59E0B] hover:underline mt-1.5">
+                  Hold more $BLUEAGENT →
                 </a>
               )}
             </div>
+            {/* Next tier hint */}
+            {holderTier.nextTier && (
+              <p className="font-mono text-[9px] text-slate-700 px-2 mt-1.5">
+                {holderTier.nextTier.need.toLocaleString()} more BLUE →{" "}
+                <span style={{ color: holderTier.color }}>
+                  {holderTier.nextTier.dailyCr === -1 ? "∞" : holderTier.nextTier.dailyCr.toLocaleString()} cr/day
+                </span>
+              </p>
+            )}
           </div>
 
           {/* Memory */}
