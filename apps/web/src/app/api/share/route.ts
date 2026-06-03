@@ -1,26 +1,41 @@
 /**
- * POST /api/share — store a tool result in KV under a short id, return that id.
- * The hub uses this to make share links short (a few chars instead of 3 KB
- * of base64). Results auto-expire after 30 days.
+ * Blue Chat — Share conversation
+ * POST /api/share  { messages }  → { id }
+ * GET  /api/share?id=<id>        → { messages }
  */
 import { NextRequest, NextResponse } from "next/server";
-import { kvSet } from "@/lib/kv";
-import { randomBytes } from "crypto";
 
 export const runtime = "nodejs";
 
-const TTL_SEC = 60 * 60 * 24 * 30; // 30 days
+const store = new Map<string, { messages: unknown[]; ts: number }>();
+const TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function evict() {
+  const now = Date.now();
+  for (const [k, v] of store) { if (now - v.ts > TTL_MS) store.delete(k); }
+}
+
+function genId(): string { return Math.random().toString(36).slice(2, 8).toUpperCase(); }
 
 export async function POST(req: NextRequest) {
-  let body: unknown;
+  let body: { messages?: unknown[] } = {};
   try { body = await req.json(); } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const payload = body as Record<string, unknown>;
-  if (!payload.toolId || !payload.result) {
-    return NextResponse.json({ error: "Missing toolId or result" }, { status: 400 });
-  }
-  const id = randomBytes(5).toString("hex"); // 10 hex chars, ~1 in 10^12 collisions
-  await kvSet(`share:${id}`, payload, TTL_SEC);
+  if (!Array.isArray(body.messages) || body.messages.length === 0)
+    return NextResponse.json({ error: "messages required" }, { status: 400 });
+
+  evict();
+  let id = genId();
+  while (store.has(id)) id = genId();
+  store.set(id, { messages: body.messages, ts: Date.now() });
   return NextResponse.json({ id });
+}
+
+export async function GET(req: NextRequest) {
+  const id = req.nextUrl.searchParams.get("id")?.toUpperCase();
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  const entry = store.get(id);
+  if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json({ messages: entry.messages });
 }

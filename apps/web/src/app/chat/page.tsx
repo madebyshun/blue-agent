@@ -4,12 +4,14 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import WalletBar from "@/components/WalletBar";
+import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import {
   TierInfo,
   creditCost,
   ensureCredits,
   getCredits,
   deductCredits,
+  addCredits,
 } from "@/lib/credits";
 import {
   buildMemoryContext,
@@ -18,8 +20,24 @@ import {
   clearMemory,
 } from "@/lib/memory";
 
+// ─── USDC top-up config ───────────────────────────────────────────────────────
+const USDC_BASE    = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
+const TREASURY     = (process.env.NEXT_PUBLIC_BLUE_TREASURY ?? "0x0000000000000000000000000000000000000000") as `0x${string}`;
+const ERC20_ABI    = [{ name: "transfer", type: "function", inputs: [{ name: "to", type: "address" }, { name: "amount", type: "uint256" }], outputs: [{ name: "", type: "bool" }], stateMutability: "nonpayable" }] as const;
+
+interface CreditPkg { id: string; label: string; credits: number; usdc: number; badge?: string }
+const CREDIT_PKGS: CreditPkg[] = [
+  { id: "spark",   label: "Spark",   credits:  500, usdc: 0.50 },
+  { id: "builder", label: "Builder", credits: 2000, usdc: 1.50, badge: "POPULAR" },
+  { id: "pro",     label: "Pro",     credits: 8000, usdc: 5.00 },
+];
+
+// ─── Chat persistence ─────────────────────────────────────────────────────────
+const chatKey = (addr?: string) => `blue_chat_v1_${addr ?? "guest"}`;
+
 type ChatTier = string;
-type Message  = { role: "user" | "assistant"; content: string };
+type ToolLog  = { tool: string; status: "running" | "done"; ms?: number };
+type Message  = { role: "user" | "assistant"; content: string; toolLogs?: ToolLog[] };
 
 interface TierConfig {
   id:        string;
@@ -94,6 +112,40 @@ export default function ChatPage() {
   const [error,       setError]       = useState<string | null>(null);
   const [cmdMenu,     setCmdMenu]     = useState(false);
   const [cmdFilter,   setCmdFilter]   = useState("");
+  const [topUpOpen,   setTopUpOpen]   = useState(false);
+  const [topUpPkg,    setTopUpPkg]    = useState<CreditPkg | null>(null);
+  const [shareId,     setShareId]     = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+
+  // wagmi write contract for USDC top-up
+  const { writeContract, data: txHash, isPending: txPending } = useWriteContract();
+  const { isSuccess: txSuccess } = useWaitForTransactionReceipt({ hash: txHash });
+
+  // Credit top-up: grant credits on tx confirm
+  useEffect(() => {
+    if (txSuccess && topUpPkg) {
+      const next = addCredits(topUpPkg.credits, walletAddr);
+      setCredits(next);
+      setTopUpPkg(null);
+      setTopUpOpen(false);
+    }
+  }, [txSuccess, topUpPkg, walletAddr]);
+
+  // Chat persistence — load
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = localStorage.getItem(chatKey(walletAddr));
+    if (saved) {
+      try { setMessages(JSON.parse(saved) as Message[]); } catch { /* ignore */ }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletAddr]);
+
+  // Chat persistence — save
+  useEffect(() => {
+    if (typeof window === "undefined" || messages.length === 0) return;
+    localStorage.setItem(chatKey(walletAddr), JSON.stringify(messages));
+  }, [messages, walletAddr]);
 
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -259,16 +311,42 @@ export default function ChatPage() {
           const raw = line.slice(6).trim();
           if (raw === "[DONE]") break;
           try {
-            const parsed = JSON.parse(raw) as { delta?: { text?: string; value?: string } };
-            const delta  = parsed?.delta?.text ?? parsed?.delta?.value ?? "";
-            if (delta) {
+            const parsed = JSON.parse(raw) as {
+              type?: string; tool?: string; ms?: number;
+              delta?: { text?: string; value?: string };
+            };
+
+            if (parsed.type === "tool_start") {
               setMessages((prev) => {
                 const last = prev[prev.length - 1];
                 if (last?.role === "assistant") {
-                  return [...prev.slice(0, -1), { role: "assistant", content: last.content + delta }];
+                  const logs = [...(last.toolLogs ?? []), { tool: parsed.tool!, status: "running" as const }];
+                  return [...prev.slice(0, -1), { ...last, toolLogs: logs }];
                 }
                 return prev;
               });
+            } else if (parsed.type === "tool_done") {
+              setMessages((prev) => {
+                const last = prev[prev.length - 1];
+                if (last?.role === "assistant") {
+                  const logs = (last.toolLogs ?? []).map((l) =>
+                    l.tool === parsed.tool ? { ...l, status: "done" as const, ms: parsed.ms } : l
+                  );
+                  return [...prev.slice(0, -1), { ...last, toolLogs: logs }];
+                }
+                return prev;
+              });
+            } else {
+              const delta = parsed?.delta?.text ?? parsed?.delta?.value ?? "";
+              if (delta) {
+                setMessages((prev) => {
+                  const last = prev[prev.length - 1];
+                  if (last?.role === "assistant") {
+                    return [...prev.slice(0, -1), { ...last, content: last.content + delta }];
+                  }
+                  return prev;
+                });
+              }
             }
           } catch {}
         }
@@ -301,7 +379,28 @@ export default function ChatPage() {
   }
 
   function stop()  { abortRef.current?.abort(); }
-  function clear() { setMessages([]); setError(null); setInput(""); setCmdMenu(false); textareaRef.current?.focus(); }
+  function clear() {
+    setMessages([]); setError(null); setInput(""); setCmdMenu(false); setShareId(null);
+    if (typeof window !== "undefined") localStorage.removeItem(chatKey(walletAddr));
+    textareaRef.current?.focus();
+  }
+
+  async function shareConversation() {
+    if (!messages.length) return;
+    try {
+      const res = await fetch("/api/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages }),
+      });
+      const { id } = await res.json() as { id: string };
+      setShareId(id);
+      const url = `${window.location.origin}/chat?s=${id}`;
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2500);
+    } catch { /* ignore */ }
+  }
 
   function handleInput(val: string) {
     setInput(val);
@@ -340,6 +439,67 @@ export default function ChatPage() {
 
   return (
     <>
+    {/* ── Top-up Modal ────────────────────────────────────────────────── */}
+    {topUpOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+        <div className="bg-[#0D0D14] border border-[#2A2A4E] rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest mb-1">BLUE CHAT</p>
+              <h2 className="font-mono text-lg font-bold text-white">Top up credits</h2>
+            </div>
+            <button onClick={() => setTopUpOpen(false)} className="text-slate-500 hover:text-white transition-colors text-xl leading-none">×</button>
+          </div>
+
+          <div className="flex flex-col gap-2 mb-5">
+            {CREDIT_PKGS.map((pkg) => (
+              <button
+                key={pkg.id}
+                onClick={() => setTopUpPkg(pkg)}
+                className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-left ${
+                  topUpPkg?.id === pkg.id
+                    ? "border-[#4FC3F7] bg-[#4FC3F7]/5"
+                    : "border-[#1A1A2E] hover:border-[#2A2A4E]"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm text-white">{pkg.label}</span>
+                    {pkg.badge && (
+                      <span className="font-mono text-[9px] text-[#4FC3F7] border border-[#4FC3F7]/30 px-1.5 py-0.5 rounded">{pkg.badge}</span>
+                    )}
+                  </div>
+                  <span className="font-mono text-[11px] text-slate-500">{pkg.credits.toLocaleString()} credits · ~{Math.floor(pkg.credits / 50)} Pro msgs</span>
+                </div>
+                <span className="font-mono text-sm font-bold text-white">${pkg.usdc.toFixed(2)}</span>
+              </button>
+            ))}
+          </div>
+
+          <button
+            disabled={!topUpPkg || txPending || !walletAddr}
+            onClick={() => {
+              if (!topUpPkg || !walletAddr) return;
+              writeContract({
+                address: USDC_BASE,
+                abi: ERC20_ABI,
+                functionName: "transfer",
+                args: [TREASURY, BigInt(Math.round(topUpPkg.usdc * 1_000_000))],
+              });
+            }}
+            className="w-full py-3 rounded-xl font-mono text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ background: "#4FC3F7", color: "#050508" }}
+          >
+            {txPending ? "Confirming…" : !walletAddr ? "Connect wallet first" : topUpPkg ? `Pay ${topUpPkg.usdc} USDC` : "Select a package"}
+          </button>
+
+          {!walletAddr && (
+            <p className="font-mono text-[10px] text-slate-600 text-center mt-3">Connect your wallet in the sidebar to purchase credits</p>
+          )}
+          <p className="font-mono text-[10px] text-slate-700 text-center mt-2">USDC on Base · Credits added instantly on confirmation</p>
+        </div>
+      </div>
+    )}
       <Navbar />
       <div className="flex bg-[#050508] font-mono pt-16 h-screen overflow-hidden">
 
@@ -351,17 +511,33 @@ export default function ChatPage() {
             <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUE CHAT</p>
           </div>
 
-          {/* New chat */}
-          <div className="px-3 py-3 border-b border-[#1A1A2E]">
+          {/* New chat + Share */}
+          <div className="px-3 py-3 border-b border-[#1A1A2E] flex gap-1">
             <button
               onClick={clear}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg font-mono text-xs text-slate-400 hover:text-white hover:bg-[#1A1A2E] transition-all"
+              className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg font-mono text-xs text-slate-400 hover:text-white hover:bg-[#1A1A2E] transition-all"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              New conversation
+              New
             </button>
+            {messages.length > 0 && (
+              <button
+                onClick={shareConversation}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-mono text-xs transition-all"
+                style={shareCopied
+                  ? { color: "#34D399", background: "#34D39915" }
+                  : { color: "#64748b" }}
+                title="Share conversation"
+              >
+                {shareCopied ? "✓ Copied" : (
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                )}
+              </button>
+            )}
           </div>
 
           {/* Model picker */}
@@ -430,7 +606,15 @@ export default function ChatPage() {
 
           {/* Credits */}
           <div className="px-3 py-4 border-b border-[#1A1A2E]">
-            <p className="font-mono text-[10px] text-slate-600 tracking-widest px-2 mb-2">CREDITS</p>
+            <div className="flex items-center justify-between px-2 mb-2">
+              <p className="font-mono text-[10px] text-slate-600 tracking-widest">CREDITS</p>
+              <button
+                onClick={() => setTopUpOpen(true)}
+                className="font-mono text-[10px] text-[#4FC3F7] hover:text-white transition-colors px-1.5 py-0.5 rounded border border-[#4FC3F7]/20 hover:border-[#4FC3F7]/50"
+              >
+                + top up
+              </button>
+            </div>
             <div className="mx-1 px-3 py-2 rounded-lg bg-[#050508] border border-[#1A1A2E]">
               <div className="flex items-baseline justify-between">
                 <span className="font-mono text-xl font-bold" style={{ color: credits <= 20 ? "#EF4444" : "#4FC3F7" }}>
@@ -565,16 +749,41 @@ export default function ChatPage() {
                       </div>
                     )}
                     <div
-                      className={`max-w-[80%] px-4 py-3 rounded-2xl font-mono text-sm leading-relaxed whitespace-pre-wrap ${
+                      className={`max-w-[80%] rounded-2xl font-mono text-sm leading-relaxed ${
                         msg.role === "user"
-                          ? "bg-[#1A1A2E] text-slate-200 rounded-tr-sm"
+                          ? "bg-[#1A1A2E] text-slate-200 rounded-tr-sm px-4 py-3 whitespace-pre-wrap"
                           : "text-slate-300 rounded-tl-sm"
                       }`}
                     >
-                      {msg.content || (
-                        <span className="flex gap-1 items-center">
-                          <Dot delay={0} /><Dot delay={160} /><Dot delay={320} />
-                        </span>
+                      {/* Tool execution logs */}
+                      {msg.role === "assistant" && msg.toolLogs && msg.toolLogs.length > 0 && (
+                        <div className="flex flex-col gap-0.5 mb-2 px-1">
+                          {msg.toolLogs.map((log, j) => (
+                            <div key={j} className="flex items-center gap-2 text-[11px]">
+                              <span className={log.status === "running" ? "text-[#4FC3F7] animate-spin" : "text-[#34D399]"}>
+                                {log.status === "running" ? "◌" : "✓"}
+                              </span>
+                              <span className={log.status === "running" ? "text-[#4FC3F7] animate-pulse" : "text-slate-500"}>
+                                {log.tool.replace("hub_", "")}
+                              </span>
+                              {log.ms !== undefined && (
+                                <span className="text-slate-700">{(log.ms / 1000).toFixed(1)}s</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {/* Message content */}
+                      {msg.role === "assistant" ? (
+                        <div className="px-1 py-1 whitespace-pre-wrap">
+                          {msg.content || (
+                            <span className="flex gap-1 items-center">
+                              <Dot delay={0} /><Dot delay={160} /><Dot delay={320} />
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        msg.content
                       )}
                     </div>
                     {msg.role === "user" && (
@@ -737,6 +946,7 @@ export default function ChatPage() {
     </>
   );
 }
+
 
 function Dot({ delay }: { delay: number }) {
   return (
