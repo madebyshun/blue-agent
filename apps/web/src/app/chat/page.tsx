@@ -36,8 +36,7 @@ const TAB_META: Record<Exclude<ActiveTab, "chat">, { title: string; subtitle: st
 // ── Shell ──────────────────────────────────────────────────────────────────────
 function ChatShell() {
   const { buyOpen, setBuyOpen, triggerWalletRefresh, artifactsPanelOpen } = useChat();
-  const [activeTab,  setActiveTab]  = useState<ActiveTab>("chat");
-  const [collapsed,  setCollapsed]  = useState(false);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("chat");
 
   const isChat = activeTab === "chat";
   const meta   = !isChat ? TAB_META[activeTab] : null;
@@ -57,22 +56,17 @@ function ChatShell() {
       <div className="flex bg-[#050508] font-mono pt-16 h-screen overflow-hidden">
 
         {/* ── Sidebar (desktop only) ── */}
-        <AppSidebar
-          activeTab={activeTab}
-          onSelect={setActiveTab}
-          collapsed={collapsed}
-          onToggleCollapse={() => setCollapsed(v => !v)}
-        />
+        <AppSidebar activeTab={activeTab} onSelect={setActiveTab} />
 
         {/* ── Main content area ── */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
 
-          {/* Tab page header (non-chat tabs) */}
+          {/* Tab page header (non-chat tabs, desktop) */}
           {!isChat && meta && (
-            <div className="hidden lg:flex items-center gap-3 px-6 pt-5 pb-4 border-b border-[#1A1A2E] flex-shrink-0">
+            <div className="hidden lg:flex items-center gap-3 px-6 pt-6 pb-4 border-b border-[#1A1A2E] flex-shrink-0">
               <div>
-                <h1 className="font-mono text-sm font-bold text-white">{meta.title}</h1>
-                <p className="font-mono text-[10px] text-slate-600 mt-0.5">{meta.subtitle}</p>
+                <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// {meta.title.toUpperCase()}</p>
+                <p className="font-mono text-[10px] text-slate-700 mt-1">{meta.subtitle}</p>
               </div>
             </div>
           )}
