@@ -94,13 +94,13 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { cmd: "help",   icon: "📖", label: "Help",            hint: "Show all available commands",                  example: "/help" },
 ];
 
-const EXPLORER_TIER: TierInfo = {
-  tier: "Explorer", blueBalance: 0, dailyCr: 150, discount: 0, color: "#475569",
+const STARTER_TIER: TierInfo = {
+  tier: "Starter", blueBalance: 0, dailyCr: 200, discount: 0, color: "#4FC3F7",
 };
 
 export default function ChatPage() {
   const [chatTier,    setChatTier]    = useState<ChatTier>("pro");
-  const [holderTier,  setHolderTier]  = useState<TierInfo>(EXPLORER_TIER);
+  const [holderTier,  setHolderTier]  = useState<TierInfo>(STARTER_TIER);
   const [walletAddr,  setWalletAddr]  = useState<string | undefined>();
   const [credits,     setCredits]     = useState(0);
   const [messages,    setMessages]    = useState<Message[]>([]);
@@ -541,57 +541,68 @@ export default function ChatPage() {
           <div className="px-3 py-4 border-b border-[#1A1A2E]">
             <div className="flex items-center justify-between px-2 mb-2">
               <p className="font-mono text-[10px] text-slate-600 tracking-widest">CREDITS</p>
+              {/* Tier badge */}
               <span className="font-mono text-[9px] px-1.5 py-0.5 rounded"
                 style={{ color: holderTier.color, background: `${holderTier.color}15`, border: `1px solid ${holderTier.color}25` }}>
-                {holderTier.tier}
+                {walletAddr ? holderTier.tier : "Guest"}
               </span>
             </div>
+
+            {/* Credit balance card */}
             <div className="mx-1 px-3 py-2.5 rounded-lg bg-[#050508] border border-[#1A1A2E]">
-              {/* Balance */}
               <div className="flex items-baseline justify-between mb-1">
                 <span className="font-mono text-xl font-bold"
                   style={{ color: isUnlimited ? holderTier.color : credits <= 20 ? "#EF4444" : "#4FC3F7" }}>
                   {isUnlimited ? "∞" : credits.toLocaleString()}
                 </span>
                 {!isUnlimited && (
-                  <span className="font-mono text-[10px] text-slate-600">/ {daily.toLocaleString()} today</span>
+                  <span className="font-mono text-[10px] text-slate-600">/ {daily.toLocaleString()} /day</span>
                 )}
               </div>
-              {/* Progress bar */}
               {!isUnlimited && daily > 0 && (
                 <div className="h-0.5 bg-[#1A1A2E] rounded-full overflow-hidden mb-1.5">
                   <div className="h-full rounded-full transition-all"
                     style={{ width: `${Math.min(100, (credits / daily) * 100)}%`, background: holderTier.color }} />
                 </div>
               )}
-              {/* Reset countdown */}
               <div className="font-mono text-[9px] text-slate-600">
                 resets in {countdown}
               </div>
-              {/* Discount badge */}
               {holderTier.discount > 0 && (
                 <div className="font-mono text-[9px] mt-1" style={{ color: holderTier.color }}>
-                  {Math.round(holderTier.discount * 100)}% discount on Hub tools
+                  {Math.round(holderTier.discount * 100)}% off all models
                 </div>
               )}
-              {/* Low credits CTA */}
-              {!isUnlimited && credits <= 30 && (
-                <a href="https://app.uniswap.org/swap?outputCurrency=0xf895783b2931c919955e18b5e3343e7c7c456ba3&chain=base"
-                  target="_blank" rel="noopener noreferrer"
-                  className="block font-mono text-[10px] text-[#F59E0B] hover:underline mt-1.5">
-                  Hold more $BLUEAGENT →
-                </a>
-              )}
             </div>
+
             {/* Next tier hint */}
-            {holderTier.nextTier && (
+            {holderTier.nextTier && walletAddr && (
               <p className="font-mono text-[9px] text-slate-700 px-2 mt-1.5">
-                {holderTier.nextTier.need.toLocaleString()} more BLUE →{" "}
+                {holderTier.nextTier.need >= 1_000_000
+                  ? `${(holderTier.nextTier.need / 1_000_000).toFixed(1)}M`
+                  : holderTier.nextTier.need >= 1_000
+                  ? `${(holderTier.nextTier.need / 1_000).toFixed(0)}K`
+                  : holderTier.nextTier.need.toLocaleString()} more BLUE →{" "}
                 <span style={{ color: holderTier.color }}>
                   {holderTier.nextTier.dailyCr === -1 ? "∞" : holderTier.nextTier.dailyCr.toLocaleString()} cr/day
                 </span>
               </p>
             )}
+
+            {/* Buy $BLUEAGENT button */}
+            <div className="mx-1 mt-2.5">
+              <a
+                href="https://app.uniswap.org/swap?outputCurrency=0xf895783b2931c919955e18b5e3343e7c7c456ba3&chain=base"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg font-mono text-[11px] font-semibold transition-all hover:opacity-90"
+                style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B30" }}
+              >
+                <span>⬆</span>
+                Buy $BLUEAGENT
+              </a>
+              <p className="font-mono text-[9px] text-slate-700 text-center mt-1">Hold BLUE → more credits/day</p>
+            </div>
           </div>
 
           {/* Memory */}
@@ -630,7 +641,7 @@ export default function ChatPage() {
           <div className="px-3 py-4 mt-auto border-t border-[#1A1A2E]">
             <p className="font-mono text-[10px] text-slate-600 tracking-widest px-2 mb-2">WALLET</p>
             <WalletBar onWalletChange={handleWalletChange} />
-            {holderTier.tier !== "Explorer" && (
+            {holderTier.blueBalance > 0 && (
               <div
                 className="mt-2 mx-1 px-3 py-1.5 rounded-lg font-mono text-xs"
                 style={{ background: `${holderTier.color}15`, color: holderTier.color, border: `1px solid ${holderTier.color}25` }}
