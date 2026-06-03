@@ -19,6 +19,7 @@ import {
   getMemory,
   clearMemory,
 } from "@/lib/memory";
+import BuyBlueModal from "@/components/BuyBlueModal";
 
 // ─── Chat persistence ─────────────────────────────────────────────────────────
 const chatKey = (addr?: string) => `blue_chat_v1_${addr ?? "guest"}`;
@@ -95,7 +96,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
 ];
 
 const STARTER_TIER: TierInfo = {
-  tier: "Starter", blueBalance: 0, dailyCr: 200, discount: 0, color: "#4FC3F7",
+  tier: "Starter", blueBalance: 0, dailyCr: 500, discount: 0, color: "#4FC3F7",
 };
 
 export default function ChatPage() {
@@ -112,6 +113,7 @@ export default function ChatPage() {
   const [shareId,     setShareId]     = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
   const [countdown,   setCountdown]   = useState("");
+  const [buyOpen,     setBuyOpen]     = useState(false);
 
   // Daily refresh on wallet/balance change
   useEffect(() => {
@@ -433,6 +435,7 @@ export default function ChatPage() {
 
   return (
     <>
+      {buyOpen && <BuyBlueModal onClose={() => setBuyOpen(false)} />}
       <Navbar />
       <div className="flex bg-[#050508] font-mono pt-16 h-screen overflow-hidden">
 
@@ -591,16 +594,14 @@ export default function ChatPage() {
 
             {/* Buy $BLUEAGENT button */}
             <div className="mx-1 mt-2.5">
-              <a
-                href="https://app.uniswap.org/swap?outputCurrency=0xf895783b2931c919955e18b5e3343e7c7c456ba3&chain=base"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg font-mono text-[11px] font-semibold transition-all hover:opacity-90"
+              <button
+                onClick={() => setBuyOpen(true)}
+                className="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg font-mono text-[11px] font-semibold transition-all hover:opacity-90 active:scale-95"
                 style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B30" }}
               >
-                <span>⬆</span>
+                <span>💰</span>
                 Buy $BLUEAGENT
-              </a>
+              </button>
               <p className="font-mono text-[9px] text-slate-700 text-center mt-1">Hold BLUE → more credits/day</p>
             </div>
           </div>
