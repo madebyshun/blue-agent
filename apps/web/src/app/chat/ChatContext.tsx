@@ -307,7 +307,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [streaming, setStreaming] = useState(false);
   const [error,     setError]     = useState<string | null>(null);
   const [input,     setInput]     = useState("");
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("tasks");
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("none");
   const [cmdMenu,   setCmdMenu]   = useState(false);
   const [cmdFilter, setCmdFilter] = useState("");
   const abortRef = useRef<AbortController | null>(null);
