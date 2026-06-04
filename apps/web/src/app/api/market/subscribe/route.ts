@@ -32,6 +32,67 @@ const PRICES: Record<string, string> = {
 // 20% of each payment goes to stakers as yield
 const YIELD_BPS = 20; // 20%
 
+// ─── transferWithAuthorization (EIP-3009) ─────────────────────────────────────
+
+interface TransferAuth {
+  from: `0x${string}`; to: `0x${string}`; value: bigint;
+  validAfter: bigint; validBefore: bigint;
+  nonce: `0x${string}`; signature: `0x${string}`;
+}
+
+/**
+ * Submits transferWithAuthorization to USDC on Base using the backend wallet.
+ * Requires DISTRIBUTOR_PRIVATE_KEY set as env var.
+ * Uses viem if available, falls back to raw RPC.
+ */
+async function executeTransferWithAuthorization(auth: TransferAuth): Promise<void> {
+  // Dynamic import viem — bundled in Next.js; fail hard if not available
+  const { createWalletClient, createPublicClient, http, privateKeyToAccount } = await import("viem");
+  const { base } = await import("viem/chains");
+
+  const account = privateKeyToAccount(DISTRIBUTOR_KEY as `0x${string}`);
+  const publicClient  = createPublicClient({ chain: base, transport: http(BASE_RPC) });
+  const walletClient  = createWalletClient({ account, chain: base, transport: http(BASE_RPC) });
+
+  // ABI for transferWithAuthorization
+  const ABI = [{
+    name: "transferWithAuthorization",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "from",        type: "address"  },
+      { name: "to",          type: "address"  },
+      { name: "value",       type: "uint256"  },
+      { name: "validAfter",  type: "uint256"  },
+      { name: "validBefore", type: "uint256"  },
+      { name: "nonce",       type: "bytes32"  },
+      { name: "v",           type: "uint8"    },
+      { name: "r",           type: "bytes32"  },
+      { name: "s",           type: "bytes32"  },
+    ],
+    outputs: [],
+  }] as const;
+
+  // Split signature into v, r, s
+  const sig = auth.signature.startsWith("0x") ? auth.signature.slice(2) : auth.signature;
+  const r = ("0x" + sig.slice(0, 64))   as `0x${string}`;
+  const s = ("0x" + sig.slice(64, 128)) as `0x${string}`;
+  const v = parseInt(sig.slice(128, 130), 16);
+
+  const { request } = await publicClient.simulateContract({
+    account,
+    address: USDC_BASE as `0x${string}`,
+    abi: ABI,
+    functionName: "transferWithAuthorization",
+    args: [auth.from, auth.to, auth.value, auth.validAfter, auth.validBefore, auth.nonce, v, r, s],
+  });
+
+  const hash = await walletClient.writeContract(request);
+  // Wait for 1 confirmation
+  await publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+  console.log(`[subscribe] USDC transfer confirmed: ${hash}`);
+}
+
 // ─── Yield distribution ───────────────────────────────────────────────────────
 
 /**
@@ -176,8 +237,46 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── Payment confirmed — distribute 20% yield to stakers ───────────────────
-  // Fire-and-forget, don't block subscribe on yield tx
+  // ── Verify payment header has required fields ──────────────────────────────
+  let payment: { from?: string; value?: string; nonce?: string; deadline?: string; signature?: string };
+  try { payment = JSON.parse(paymentHeader); }
+  catch { return NextResponse.json({ error: "Invalid X-PAYMENT header" }, { status: 400 }); }
+
+  if (!payment.signature || !payment.from || !payment.nonce) {
+    return NextResponse.json({ error: "X-PAYMENT missing required fields (from, nonce, signature)" }, { status: 400 });
+  }
+
+  // ── Guard: refuse if treasury not configured ───────────────────────────────
+  if (PAYMENT_RECIPIENT === "0x0000000000000000000000000000000000000000") {
+    console.error("[subscribe] PAYMENT_RECIPIENT not set — rejecting payment");
+    return NextResponse.json({ error: "Subscription payments not yet enabled" }, { status: 503 });
+  }
+
+  // ── Execute transferWithAuthorization on USDC contract ────────────────────
+  // Verify the EIP-3009 signature is for the correct amount + recipient,
+  // then submit the transfer transaction from the backend distributor wallet.
+  if (!DISTRIBUTOR_KEY) {
+    // No backend wallet configured — cannot execute transfer
+    console.error("[subscribe] DISTRIBUTOR_PRIVATE_KEY not set — cannot settle payment");
+    return NextResponse.json({ error: "Payment settlement not configured" }, { status: 503 });
+  }
+
+  try {
+    await executeTransferWithAuthorization({
+      from:        payment.from as `0x${string}`,
+      to:          PAYMENT_RECIPIENT as `0x${string}`,
+      value:       BigInt(price),
+      validAfter:  0n,
+      validBefore: BigInt(payment.deadline ?? Math.floor(Date.now() / 1000) + 3600),
+      nonce:       payment.nonce as `0x${string}`,
+      signature:   payment.signature as `0x${string}`,
+    });
+  } catch (err) {
+    console.error("[subscribe] transferWithAuthorization failed:", (err as Error).message);
+    return NextResponse.json({ error: "Payment failed: " + (err as Error).message }, { status: 402 });
+  }
+
+  // ── Payment settled — distribute 20% yield to stakers ─────────────────────
   distributeYieldToStakers(price).catch(console.warn);
 
   // ── Send welcome email ────────────────────────────────────────────────────
