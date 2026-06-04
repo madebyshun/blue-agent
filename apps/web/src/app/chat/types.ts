@@ -13,6 +13,7 @@ export interface Attachment {
 export interface Message {
   role:             "user" | "assistant";
   content:          string;
+  createdAt?:       number;   // epoch ms — for timestamp display
   thinkingContent?: string;   // Venice reasoning trace (inside <think>…</think>)
   isThinking?:      boolean;  // true while the <think> block is still streaming
   modelUsed?:       string;   // tier ID e.g. "venice-deepseek-pro"

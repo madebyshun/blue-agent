@@ -16,11 +16,16 @@ function Dot({ delay }: { delay: number }) {
   );
 }
 
-// ── Thinking block (Venice reasoning trace) ───────────────────────────────────
+// ── Time formatter ────────────────────────────────────────────────────────────
 
-function ThinkingBlock({
-  content, isStreaming = false,
-}: { content: string; isStreaming?: boolean }) {
+function fmtTime(ts?: number): string {
+  if (!ts) return "";
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+// ── Venice thinking block ─────────────────────────────────────────────────────
+
+function ThinkingBlock({ content, isStreaming = false }: { content: string; isStreaming?: boolean }) {
   const [open, setOpen] = useState(false);
   const lines = content.trim().split("\n").filter(Boolean).length;
 
@@ -34,15 +39,11 @@ function ThinkingBlock({
         <span className="font-mono text-[10px] text-slate-500 tracking-wide flex-1">
           {isStreaming ? "Reasoning…" : `Thinking · ${lines} line${lines !== 1 ? "s" : ""}`}
         </span>
-        {isStreaming ? (
-          <span className="flex gap-1 mr-1"><Dot delay={0} /><Dot delay={160} /><Dot delay={320} /></span>
-        ) : (
-          <span className="font-mono text-[10px] text-slate-700 select-none">
-            {open ? "▲" : "▼"}
-          </span>
-        )}
+        {isStreaming
+          ? <span className="flex gap-1 mr-1"><Dot delay={0} /><Dot delay={160} /><Dot delay={320} /></span>
+          : <span className="font-mono text-[10px] text-slate-700 select-none">{open ? "▲" : "▼"}</span>
+        }
       </button>
-
       {(open || isStreaming) && content && (
         <div className="px-4 py-3.5 border-t border-[#1E1E30] bg-[#060610]">
           <p className="font-mono text-[12px] text-slate-600 leading-relaxed whitespace-pre-wrap break-words">
@@ -60,7 +61,6 @@ function renderInline(text: string): React.ReactNode[] {
   const re = /(\*\*(.+?)\*\*|\*([^*\n]+)\*|`([^`\n]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\))/g;
   const result: React.ReactNode[] = [];
   let last = 0, match: RegExpExecArray | null, idx = 0;
-
   while ((match = re.exec(text)) !== null) {
     if (match.index > last) result.push(text.slice(last, match.index));
     idx++;
@@ -92,9 +92,9 @@ function renderInline(text: string): React.ReactNode[] {
 // ── Block markdown renderer ───────────────────────────────────────────────────
 
 function MarkdownRenderer({ content }: { content: string }) {
-  const lines   = content.split("\n");
+  const lines = content.split("\n");
   const elems: React.ReactNode[] = [];
-  let i         = 0;
+  let i = 0;
   let listType: "ul" | "ol" | null = null;
   let listItems: React.ReactNode[] = [];
 
@@ -108,55 +108,46 @@ function MarkdownRenderer({ content }: { content: string }) {
     listItems = []; listType = null;
   }
 
-  // ── Table detection helper ──────────────────────────────────────────────────
   function tryTable(): boolean {
     if (!lines[i]?.trim().startsWith("|")) return false;
-    const headerLine = lines[i];
-    const sepLine    = lines[i + 1] ?? "";
+    const sepLine = lines[i + 1] ?? "";
     if (!sepLine.match(/^\|[\s\-|:]+\|?\s*$/)) return false;
-
-    const headers = headerLine.split("|").map(s => s.trim()).filter(Boolean);
+    const headers  = lines[i].split("|").map(s => s.trim()).filter(Boolean);
     const dataRows: string[][] = [];
     let j = i + 2;
     while (j < lines.length && lines[j].trim().startsWith("|")) {
       dataRows.push(lines[j].split("|").map(s => s.trim()).filter(Boolean));
       j++;
     }
-
     elems.push(
       <div key={`tbl-${i}`} className="my-4 overflow-x-auto rounded-xl border border-[#1E1E32]">
         <table className="w-full font-mono text-[13px]">
           <thead className="bg-[#0D0D18]">
-            <tr>
-              {headers.map((h, hi) => (
-                <th key={hi} className="px-4 py-2.5 text-left text-slate-400 font-semibold border-b border-[#1E1E32] whitespace-nowrap">
-                  {renderInline(h)}
-                </th>
+            <tr>{headers.map((h, hi) => (
+              <th key={hi} className="px-4 py-2.5 text-left text-slate-400 font-semibold border-b border-[#1E1E32] whitespace-nowrap">
+                {renderInline(h)}
+              </th>
+            ))}</tr>
+          </thead>
+          <tbody>{dataRows.map((row, ri) => (
+            <tr key={ri} className={ri % 2 === 0 ? "bg-[#08080F]" : "bg-[#0A0A14]"}>
+              {row.map((cell, ci) => (
+                <td key={ci} className="px-4 py-2.5 text-slate-300 border-b border-[#141420]">
+                  {renderInline(cell)}
+                </td>
               ))}
             </tr>
-          </thead>
-          <tbody>
-            {dataRows.map((row, ri) => (
-              <tr key={ri} className={ri % 2 === 0 ? "bg-[#08080F]" : "bg-[#0A0A14]"}>
-                {row.map((cell, ci) => (
-                  <td key={ci} className="px-4 py-2.5 text-slate-300 border-b border-[#141420]">
-                    {renderInline(cell)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
+          ))}</tbody>
         </table>
       </div>
     );
-    i = j - 1; // will be incremented at end of loop
+    i = j - 1;
     return true;
   }
 
   while (i < lines.length) {
     const line = lines[i];
 
-    // ── Fenced code block ─────────────────────────────────────────────────────
     if (line.startsWith("```")) {
       flushList();
       const lang = line.slice(3).trim();
@@ -168,10 +159,8 @@ function MarkdownRenderer({ content }: { content: string }) {
         <div key={`code-${i}`} className="my-4 rounded-xl overflow-hidden border border-[#1E1E32] group/code">
           <div className="flex items-center justify-between px-4 py-1.5 bg-[#0B0B16] border-b border-[#1E1E32]">
             <span className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">{lang || "code"}</span>
-            <button
-              onClick={() => navigator.clipboard?.writeText(codeStr)}
-              className="font-mono text-[10px] text-slate-700 hover:text-[#4FC3F7] transition-colors opacity-0 group-hover/code:opacity-100"
-            >
+            <button onClick={() => navigator.clipboard?.writeText(codeStr)}
+              className="font-mono text-[10px] text-slate-700 hover:text-[#4FC3F7] transition-colors opacity-0 group-hover/code:opacity-100">
               copy
             </button>
           </div>
@@ -183,11 +172,9 @@ function MarkdownRenderer({ content }: { content: string }) {
       i++; continue;
     }
 
-    // ── Table ──────────────────────────────────────────────────────────────────
     flushList();
     if (tryTable()) { i++; continue; }
 
-    // ── Headers ───────────────────────────────────────────────────────────────
     const h1 = line.match(/^# (.+)/);
     const h2 = line.match(/^## (.+)/);
     const h3 = line.match(/^### (.+)/);
@@ -200,25 +187,16 @@ function MarkdownRenderer({ content }: { content: string }) {
     } else if (h3) {
       elems.push(<h3 key={i} className="text-[15px] font-semibold text-slate-100 mt-4 mb-2 leading-tight">{renderInline(h3[1])}</h3>);
     } else if (h4) {
-      elems.push(<h4 key={i} className="text-[13px] font-semibold text-slate-400 mt-3 mb-1.5 uppercase tracking-widest">{renderInline(h4[1])}</h4>);
-    }
-
-    // ── HR ────────────────────────────────────────────────────────────────────
-    else if (/^---+$/.test(line.trim())) {
+      elems.push(<h4 key={i} className="text-[12px] font-semibold text-slate-500 mt-3 mb-1.5 uppercase tracking-widest">{renderInline(h4[1])}</h4>);
+    } else if (/^---+$/.test(line.trim())) {
       elems.push(<hr key={i} className="border-[#1E1E32] my-5" />);
-    }
-
-    // ── Blockquote ────────────────────────────────────────────────────────────
-    else if (line.startsWith("> ")) {
+    } else if (line.startsWith("> ")) {
       elems.push(
         <blockquote key={i} className="my-3 pl-4 border-l-2 border-[#4FC3F740] text-slate-400 italic text-[14px] leading-relaxed">
           {renderInline(line.slice(2))}
         </blockquote>
       );
-    }
-
-    // ── Bullet list ───────────────────────────────────────────────────────────
-    else if (/^[-*] (.+)/.test(line)) {
+    } else if (/^[-*] (.+)/.test(line)) {
       const text = line.match(/^[-*] (.+)/)![1];
       if (listType !== "ul") { flushList(); listType = "ul"; }
       listItems.push(
@@ -227,10 +205,7 @@ function MarkdownRenderer({ content }: { content: string }) {
           <span>{renderInline(text)}</span>
         </li>
       );
-    }
-
-    // ── Nested bullet (2-space indent) ────────────────────────────────────────
-    else if (/^  [-*] (.+)/.test(line)) {
+    } else if (/^  [-*] (.+)/.test(line)) {
       const text = line.match(/^  [-*] (.+)/)![1];
       if (listType !== "ul") { flushList(); listType = "ul"; }
       listItems.push(
@@ -239,10 +214,7 @@ function MarkdownRenderer({ content }: { content: string }) {
           <span>{renderInline(text)}</span>
         </li>
       );
-    }
-
-    // ── Numbered list ─────────────────────────────────────────────────────────
-    else if (/^\d+\. (.+)/.test(line)) {
+    } else if (/^\d+\. (.+)/.test(line)) {
       const text = line.match(/^\d+\. (.+)/)![1];
       const num  = line.match(/^(\d+)\./)![1];
       if (listType !== "ol") { flushList(); listType = "ol"; }
@@ -252,21 +224,14 @@ function MarkdownRenderer({ content }: { content: string }) {
           <span>{renderInline(text)}</span>
         </li>
       );
-    }
-
-    // ── Empty line ────────────────────────────────────────────────────────────
-    else if (line.trim() === "") {
+    } else if (line.trim() === "") {
       flushList();
-    }
-
-    // ── Paragraph ─────────────────────────────────────────────────────────────
-    else {
+    } else {
       flushList();
       elems.push(
         <p key={i} className="text-[15px] text-slate-300 leading-[1.75]">{renderInline(line)}</p>
       );
     }
-
     i++;
   }
 
@@ -274,33 +239,26 @@ function MarkdownRenderer({ content }: { content: string }) {
   return <div className="space-y-2.5">{elems}</div>;
 }
 
-// ── Model label map (short names for footer) ──────────────────────────────────
+// ── Model label / color maps ───────────────────────────────────────────────────
 
 const MODEL_LABELS: Record<string, string> = {
-  fast:                  "Haiku · Fast",
-  pro:                   "Sonnet · Pro",
-  max:                   "Sonnet · Max",
-  "venice-deepseek":     "DeepSeek V4 Flash",
-  "venice-deepseek-pro": "DeepSeek V4 Pro",
-  "venice-kimi":         "Kimi K2",
-  "venice-claude":       "Claude Opus 4",
-  "venice-grok":         "Grok 4",
-  "venice-qwen":         "Qwen3 235B",
-  "venice-mistral":      "Mistral Small",
-  "venice-uncut":        "Uncensored",
-  "venice-e2ee-venice":  "Private Venice",
-  "venice-e2ee-gemma":   "Private Gemma",
-  "venice-e2ee-qwen":    "Private Qwen",
+  fast: "Haiku · Fast", pro: "Sonnet · Pro", max: "Sonnet · Max",
+  "venice-deepseek": "DeepSeek V4 Flash", "venice-deepseek-pro": "DeepSeek V4 Pro",
+  "venice-kimi": "Kimi K2", "venice-claude": "Claude Opus 4",
+  "venice-grok": "Grok 4", "venice-qwen": "Qwen3 235B",
+  "venice-mistral": "Mistral Small", "venice-uncut": "Uncensored",
+  "venice-e2ee-venice": "Private Venice", "venice-e2ee-gemma": "Private Gemma",
+  "venice-e2ee-qwen": "Private Qwen",
 };
 
 const MODEL_COLORS: Record<string, string> = {
   fast: "#64748b", pro: "#4FC3F7", max: "#A78BFA",
-  "venice-deepseek":     "#34D399", "venice-deepseek-pro": "#2DD4BF",
-  "venice-kimi":         "#818CF8", "venice-claude":       "#F472B6",
-  "venice-grok":         "#E879F9", "venice-qwen":         "#FB923C",
-  "venice-mistral":      "#60A5FA", "venice-uncut":        "#F59E0B",
-  "venice-e2ee-venice":  "#6EE7B7", "venice-e2ee-gemma":   "#6EE7B7",
-  "venice-e2ee-qwen":    "#6EE7B7",
+  "venice-deepseek": "#34D399", "venice-deepseek-pro": "#2DD4BF",
+  "venice-kimi": "#818CF8", "venice-claude": "#F472B6",
+  "venice-grok": "#E879F9", "venice-qwen": "#FB923C",
+  "venice-mistral": "#60A5FA", "venice-uncut": "#F59E0B",
+  "venice-e2ee-venice": "#6EE7B7", "venice-e2ee-gemma": "#6EE7B7",
+  "venice-e2ee-qwen": "#6EE7B7",
 };
 
 // ── Starters ──────────────────────────────────────────────────────────────────
@@ -317,32 +275,31 @@ const QUICK_CMDS = ["idea", "build", "audit", "ship", "raise", "pick", "scan"];
 
 export default function ChatMessages() {
   const {
-    activeTask, streaming, outOfCredits, send, setInput, chatTier, holderTier, cost,
+    activeTask, streaming, outOfCredits, send, setInput, chatTier,
   } = useChat();
 
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const messages  = activeTask?.messages ?? [];
-  const isEmpty   = messages.length === 0;
+  const bottomRef  = useRef<HTMLDivElement>(null);
+  const messages   = activeTask?.messages ?? [];
+  const isEmpty    = messages.length === 0;
+  const tierColor  = MODEL_COLORS[chatTier] ?? "#4FC3F7";
 
   // Thinking timer
-  const [elapsed, setElapsed]  = useState(0);
-  const streamStartRef         = useRef<number | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const timerStart = useRef<number | null>(null);
 
   useEffect(() => {
     if (streaming) {
-      streamStartRef.current = Date.now();
+      timerStart.current = Date.now();
       setElapsed(0);
       const id = setInterval(() => {
-        if (streamStartRef.current !== null)
-          setElapsed(Math.floor((Date.now() - streamStartRef.current) / 1000));
+        if (timerStart.current !== null)
+          setElapsed(Math.floor((Date.now() - timerStart.current) / 1000));
       }, 500);
       return () => clearInterval(id);
     } else {
-      streamStartRef.current = null;
+      timerStart.current = null;
     }
   }, [streaming]);
-
-  const tierColor = MODEL_COLORS[chatTier] ?? "#4FC3F7";
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -354,19 +311,17 @@ export default function ChatMessages() {
         /* ── Empty state ─────────────────────────────────────────────────── */
         <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 text-center">
           <div className="flex items-center gap-3 mb-8">
-            <img src="/logo.svg" alt="Blue Agent" className="h-9 w-9" />
+            <img src="/logo.svg" alt="Blue Agent" className="h-10 w-10" />
             <span className="font-mono text-2xl font-bold text-white tracking-widest">
               BLUE<span style={{ color: tierColor }}>AGENT</span>
             </span>
           </div>
-
           <h2 className="font-mono text-3xl sm:text-4xl font-bold text-white tracking-tight mb-3">
             What are you building?
           </h2>
           <p className="font-mono text-sm text-slate-500 max-w-sm mx-auto leading-relaxed mb-10">
             Ideas, architecture, audits, launches, fundraising — grounded in Base.
           </p>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl mx-auto mb-8">
             {STARTERS.map(s => (
               <button key={s.text} onClick={() => send(s.text)} disabled={outOfCredits}
@@ -380,7 +335,6 @@ export default function ChatMessages() {
               </button>
             ))}
           </div>
-
           <div className="flex flex-wrap justify-center gap-2">
             {QUICK_CMDS.map(cmd => (
               <button key={cmd}
@@ -390,92 +344,91 @@ export default function ChatMessages() {
               >/{cmd}</button>
             ))}
           </div>
-
           {outOfCredits && (
             <p className="font-mono text-[10px] text-red-400 mt-5">Out of credits — stake $BLUEAGENT to refill</p>
           )}
         </div>
       ) : (
         /* ── Message list ────────────────────────────────────────────────── */
-        <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 space-y-7">
-          {messages.map((msg, i) => (
-            <div key={i} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+        <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 space-y-1">
+          {messages.map((msg, i) => {
+            const isAssistant = msg.role === "assistant";
 
-              {/* ── Assistant avatar ──────────────────────────────────────── */}
-              {msg.role === "assistant" && (
-                <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-1"
-                  style={{ background: `${tierColor}18`, border: `1px solid ${tierColor}35` }}>
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ background: tierColor }} />
-                </div>
-              )}
+            return (
+              <div key={i}
+                className={`group/row flex gap-4 px-3 py-2 rounded-xl transition-colors hover:bg-white/[0.02] ${
+                  isAssistant ? "" : "justify-end"
+                }`}
+              >
+                {/* ── Avatar ─────────────────────────────────────────────── */}
+                {isAssistant ? (
+                  /* Blue Agent avatar — logo in rounded square */
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 overflow-hidden"
+                    style={{ background: `${tierColor}18`, border: `1px solid ${tierColor}30` }}>
+                    <img src="/logo.svg" alt="Blue Agent" className="w-5 h-5 object-contain" />
+                  </div>
+                ) : (
+                  /* User avatar — shown on right, after content */
+                  null
+                )}
 
-              {/* ── Bubble ───────────────────────────────────────────────── */}
-              <div className={`font-mono leading-relaxed ${
-                msg.role === "user"
-                  ? "max-w-[78%] rounded-2xl rounded-tr-md bg-[#0F0F1E] border border-[#1E1E32] text-slate-200 px-5 py-3.5 text-[15px]"
-                  : "flex-1 min-w-0"
-              }`}>
+                {/* ── Content column ──────────────────────────────────────── */}
+                <div className={`flex-1 min-w-0 ${isAssistant ? "" : "flex flex-col items-end"}`}>
 
-                {/* Tool execution logs */}
-                {msg.role === "assistant" && !!msg.toolLogs?.length && (
-                  <div className="flex flex-col gap-1.5 mb-4">
-                    {msg.toolLogs.map((log, j) => {
-                      const name = log.tool.replace(/^hub_/, "").replace(/_/g, " ");
-                      const prov = log.tool === "hub_crypto_rpc"
-                        ? { icon: "🌐", color: "#34D399", label: "Venice RPC" }
-                        : log.tool.includes("base") || log.tool.includes("contract") || log.tool.includes("deploy")
-                        ? { icon: "🔵", color: "#34D399", label: "Base MCP" }
-                        : { icon: "⚡", color: "#4FC3F7", label: "Blue Agent" };
-                      return (
-                        <div key={j} className="flex items-center gap-2.5 px-3 py-2 rounded-lg border"
-                          style={{ borderColor: `${prov.color}20`, background: `${prov.color}07` }}>
-                          <span className="text-xs shrink-0">{prov.icon}</span>
-                          <span className="font-mono text-[10px] font-semibold shrink-0" style={{ color: prov.color }}>{prov.label}</span>
-                          <span className="font-mono text-[10px] text-slate-500 flex-1 truncate capitalize">{name}</span>
-                          {log.status === "running"
-                            ? <span className="font-mono text-[9px] text-slate-600 animate-pulse shrink-0">running…</span>
-                            : <span className="font-mono text-[9px] shrink-0" style={{ color: "#34D399" }}>✓{log.ms !== undefined ? ` ${(log.ms / 1000).toFixed(1)}s` : ""}</span>
-                          }
+                  {/* Name + timestamp header */}
+                  <div className={`flex items-baseline gap-2 mb-1 ${isAssistant ? "" : "flex-row-reverse"}`}>
+                    <span className="font-mono text-[13px] font-bold text-white">
+                      {isAssistant ? "Blue Agent" : "You"}
+                    </span>
+                    {msg.createdAt && (
+                      <span className="font-mono text-[11px] text-slate-600">
+                        {fmtTime(msg.createdAt)}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* ── Assistant message body ────────────────────────────── */}
+                  {isAssistant ? (
+                    <div className="group/msg relative">
+
+                      {/* Tool execution logs */}
+                      {!!msg.toolLogs?.length && (
+                        <div className="flex flex-col gap-1.5 mb-4">
+                          {msg.toolLogs.map((log, j) => {
+                            const name = log.tool.replace(/^hub_/, "").replace(/_/g, " ");
+                            const prov = log.tool === "hub_crypto_rpc"
+                              ? { icon: "🌐", color: "#34D399", label: "Venice RPC" }
+                              : log.tool.includes("base") || log.tool.includes("contract") || log.tool.includes("deploy")
+                              ? { icon: "🔵", color: "#34D399", label: "Base MCP" }
+                              : { icon: "⚡", color: "#4FC3F7", label: "Blue Agent" };
+                            return (
+                              <div key={j} className="flex items-center gap-2.5 px-3 py-2 rounded-lg border"
+                                style={{ borderColor: `${prov.color}20`, background: `${prov.color}07` }}>
+                                <span className="text-xs shrink-0">{prov.icon}</span>
+                                <span className="font-mono text-[10px] font-semibold shrink-0" style={{ color: prov.color }}>{prov.label}</span>
+                                <span className="font-mono text-[10px] text-slate-500 flex-1 truncate capitalize">{name}</span>
+                                {log.status === "running"
+                                  ? <span className="font-mono text-[9px] text-slate-600 animate-pulse shrink-0">running…</span>
+                                  : <span className="font-mono text-[9px] shrink-0" style={{ color: "#34D399" }}>✓{log.ms !== undefined ? ` ${(log.ms / 1000).toFixed(1)}s` : ""}</span>
+                                }
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* File attachment chips (user) */}
-                {msg.role === "user" && !!msg.attachments?.length && (
-                  <div className="flex flex-wrap gap-1.5 mb-2.5">
-                    {msg.attachments.map((f, j) => (
-                      <div key={j} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-mono text-[10px]"
-                        style={{ borderColor: "#4FC3F720", background: "#4FC3F708", color: "#64748b" }}>
-                        <span>{f.mimeType.startsWith("image/") ? "🖼" : f.name.endsWith(".pdf") ? "📄" : "📎"}</span>
-                        <span className="max-w-[140px] truncate">{f.name}</span>
-                        <span className="text-slate-700">({(f.size / 1024).toFixed(0)}KB)</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* ── Assistant content bubble ──────────────────────────── */}
-                {msg.role === "assistant" ? (
-                  <div className="group/msg relative">
-                    <div className="rounded-2xl rounded-tl-md px-5 py-4 border"
-                      style={{ background: "#08080F", borderColor: "#161624" }}>
+                      )}
 
                       {/* Venice thinking block */}
                       {msg.thinkingContent !== undefined && (
-                        <ThinkingBlock
-                          content={msg.thinkingContent}
-                          isStreaming={msg.isThinking === true}
-                        />
+                        <ThinkingBlock content={msg.thinkingContent} isStreaming={msg.isThinking === true} />
                       )}
 
                       {/* Main content */}
                       {msg.content ? (
-                        <MarkdownRenderer content={msg.content} />
+                        <div className="font-mono">
+                          <MarkdownRenderer content={msg.content} />
+                        </div>
                       ) : !msg.thinkingContent ? (
-                        /* No content + no thinking = initial loading dots */
-                        <span className="flex gap-1.5 items-center">
+                        <span className="flex gap-1.5 items-center mt-1">
                           <Dot delay={0} /><Dot delay={160} /><Dot delay={320} />
                           {streaming && elapsed > 0 && (
                             <span className="font-mono text-[10px] text-slate-700 ml-1">{elapsed}s</span>
@@ -483,9 +436,9 @@ export default function ChatMessages() {
                         </span>
                       ) : null}
 
-                      {/* Response metadata footer */}
+                      {/* Response metadata */}
                       {msg.modelUsed && msg.responseMs !== undefined && (
-                        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-[#161624]">
+                        <div className="flex items-center gap-2 mt-3">
                           <span className="w-1.5 h-1.5 rounded-full shrink-0"
                             style={{ background: MODEL_COLORS[msg.modelUsed] ?? "#4FC3F7" }} />
                           <span className="font-mono text-[10px] text-slate-700">
@@ -497,34 +450,48 @@ export default function ChatMessages() {
                           </span>
                         </div>
                       )}
-                    </div>
 
-                    {/* Hover action bar */}
-                    {msg.content && (
-                      <div className="absolute -bottom-6 left-0 flex gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => navigator.clipboard?.writeText(msg.content)}
-                          className="font-mono text-[10px] text-slate-700 hover:text-slate-400 px-2 py-0.5 rounded border border-[#1A1A2E] bg-[#08080F] transition-colors"
-                        >
-                          copy
-                        </button>
-                      </div>
-                    )}
+                      {/* Hover copy */}
+                      {msg.content && (
+                        <div className="flex gap-1 mt-1 opacity-0 group-hover/msg:opacity-100 transition-opacity">
+                          <button onClick={() => navigator.clipboard?.writeText(msg.content)}
+                            className="font-mono text-[10px] text-slate-700 hover:text-slate-400 px-2 py-0.5 rounded border border-[#1A1A2E] bg-[#08080F] transition-colors">
+                            copy
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* ── User message body ─────────────────────────────────── */
+                    <div>
+                      {/* Attachments */}
+                      {!!msg.attachments?.length && (
+                        <div className="flex flex-wrap gap-1.5 mb-2 justify-end">
+                          {msg.attachments.map((f, j) => (
+                            <div key={j} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-mono text-[10px]"
+                              style={{ borderColor: "#4FC3F720", background: "#4FC3F708", color: "#64748b" }}>
+                              <span>{f.mimeType.startsWith("image/") ? "🖼" : f.name.endsWith(".pdf") ? "📄" : "📎"}</span>
+                              <span className="max-w-[140px] truncate">{f.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <p className="font-mono text-[15px] text-slate-200 leading-relaxed whitespace-pre-wrap text-right">
+                        {msg.content}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* User avatar — right side */}
+                {!isAssistant && (
+                  <div className="w-9 h-9 rounded-xl bg-[#0F0F1E] border border-[#1E1E32] flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="font-mono text-[10px] text-slate-500">you</span>
                   </div>
-                ) : (
-                  /* User message */
-                  <span className="whitespace-pre-wrap">{msg.content}</span>
                 )}
               </div>
-
-              {/* ── User avatar ──────────────────────────────────────────── */}
-              {msg.role === "user" && (
-                <div className="w-8 h-8 rounded-full bg-[#0F0F1E] border border-[#1E1E32] flex items-center justify-center flex-shrink-0 mt-1">
-                  <span className="font-mono text-[10px] text-slate-500">you</span>
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
 
           {/* Streaming wait indicator */}
           {streaming
@@ -533,13 +500,15 @@ export default function ChatMessages() {
             && !messages[messages.length - 1]?.toolLogs?.length
             && !messages[messages.length - 1]?.thinkingContent
             && (
-            <div className="flex gap-3 justify-start">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-1"
-                style={{ background: `${tierColor}18`, border: `1px solid ${tierColor}35` }}>
-                <div className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ background: tierColor }} />
+            <div className="flex gap-4 px-3 py-2">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: `${tierColor}18`, border: `1px solid ${tierColor}30` }}>
+                <img src="/logo.svg" alt="Blue Agent" className="w-5 h-5 object-contain animate-pulse" />
               </div>
-              <div className="rounded-2xl rounded-tl-md px-5 py-4 border"
-                style={{ background: "#08080F", borderColor: "#161624" }}>
+              <div className="flex-1 pt-1">
+                <div className="flex items-baseline gap-2 mb-2">
+                  <span className="font-mono text-[13px] font-bold text-white">Blue Agent</span>
+                </div>
                 <span className="flex gap-1.5 items-center">
                   <Dot delay={0} /><Dot delay={160} /><Dot delay={320} />
                   {elapsed > 0 && (
