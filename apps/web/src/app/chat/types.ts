@@ -11,10 +11,14 @@ export interface Attachment {
 }
 
 export interface Message {
-  role:        "user" | "assistant";
-  content:     string;
-  toolLogs?:   ToolLog[];
-  attachments?: Attachment[];
+  role:             "user" | "assistant";
+  content:          string;
+  thinkingContent?: string;   // Venice reasoning trace (inside <think>…</think>)
+  isThinking?:      boolean;  // true while the <think> block is still streaming
+  modelUsed?:       string;   // tier ID e.g. "venice-deepseek-pro"
+  responseMs?:      number;   // total response time in ms
+  toolLogs?:        ToolLog[];
+  attachments?:     Attachment[];
 }
 
 // ── Task (conversation) ────────────────────────────────────────────────────────

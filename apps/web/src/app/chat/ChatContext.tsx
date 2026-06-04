@@ -330,7 +330,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [cmdFilter,    setCmdFilter]   = useState("");
   const [webSearch,    setWebSearch]   = useState(false);
   const [pendingFiles, setPendingFiles] = useState<Attachment[]>([]);
-  const abortRef = useRef<AbortController | null>(null);
+  const abortRef       = useRef<AbortController | null>(null);
+  const streamStartRef = useRef<number>(0);
 
   const cost = creditCost(chatTier, holderTier);
   const isUnlimited = holderTier.dailyCr === -1 && !!walletAddr;
@@ -416,6 +417,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     setInput("");
     setStreaming(true);
+    streamStartRef.current = Date.now();
 
     abortRef.current = new AbortController();
 
@@ -489,7 +491,40 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               delta?: { text?: string; value?: string };
             };
 
-            if (parsed.type === "tool_start") {
+            if (parsed.type === "thinking_start") {
+              setTasksState(prev => {
+                const task = prev.find(t => t.id === tid);
+                if (!task) return prev;
+                const msgs = [...task.messages];
+                const last = msgs[msgs.length - 1];
+                if (last?.role === "assistant") {
+                  msgs[msgs.length - 1] = { ...last, isThinking: true, thinkingContent: "" };
+                }
+                return prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
+              });
+            } else if (parsed.type === "thinking_delta") {
+              setTasksState(prev => {
+                const task = prev.find(t => t.id === tid);
+                if (!task) return prev;
+                const msgs = [...task.messages];
+                const last = msgs[msgs.length - 1];
+                if (last?.role === "assistant") {
+                  msgs[msgs.length - 1] = { ...last, thinkingContent: (last.thinkingContent ?? "") + ((parsed as { text?: string }).text ?? "") };
+                }
+                return prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
+              });
+            } else if (parsed.type === "thinking_end") {
+              setTasksState(prev => {
+                const task = prev.find(t => t.id === tid);
+                if (!task) return prev;
+                const msgs = [...task.messages];
+                const last = msgs[msgs.length - 1];
+                if (last?.role === "assistant") {
+                  msgs[msgs.length - 1] = { ...last, isThinking: false };
+                }
+                return prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
+              });
+            } else if (parsed.type === "tool_start") {
               setTasksState(prev => {
                 const task = prev.find(t => t.id === tid);
                 if (!task) return prev;
@@ -534,34 +569,41 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Persist final state + update memory
+      // Persist final state + stamp metadata + update memory
+      const responseMs = Date.now() - streamStartRef.current;
       setTasksState(prev => {
         const task = prev.find(t => t.id === tid);
-        if (task) {
-          const last = task.messages[task.messages.length - 1];
-          if (last?.role === "assistant" && last.content) {
-            updateMemoryAfterChat(walletAddr, userMsg, last.content);
+        if (!task) return prev;
 
-            // Store a semantic memory chunk and embed it in background
-            const chunkText = `Q: ${userMsg.slice(0, 200)}\nA: ${last.content.slice(0, 400)}`;
-            const chunkId = addChunk(chunkText, walletAddr);
-            // Fire-and-forget: embed and store (does not block the UI)
-            fetch("/api/memory/embed", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ text: chunkText.slice(0, 1024) }),
-              signal: AbortSignal.timeout(10_000),
-            }).then(r => r.ok ? r.json() : null)
-              .then((d: { embedding?: number[] } | null) => {
-                if (d?.embedding) setChunkEmbedding(chunkId, d.embedding, walletAddr);
-              })
-              .catch(() => { /* embedding failed — chunk still stored, no embedding */ });
-          }
-          const updated = prev.map(t => t.id === tid ? { ...t, updatedAt: Date.now() } : t);
-          saveTasks(updated, walletAddr);
-          return updated;
+        const lastIdx  = task.messages.length - 1;
+        const last     = task.messages[lastIdx];
+
+        // Stamp model + timing on the completed assistant message
+        const finalMsgs = task.messages.map((m, i) =>
+          i === lastIdx && m.role === "assistant"
+            ? { ...m, modelUsed: chatTier, responseMs, isThinking: false }
+            : m
+        );
+
+        if (last?.role === "assistant" && last.content) {
+          updateMemoryAfterChat(walletAddr, userMsg, last.content);
+          const chunkText = `Q: ${userMsg.slice(0, 200)}\nA: ${last.content.slice(0, 400)}`;
+          const chunkId = addChunk(chunkText, walletAddr);
+          fetch("/api/memory/embed", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: chunkText.slice(0, 1024) }),
+            signal: AbortSignal.timeout(10_000),
+          }).then(r => r.ok ? r.json() : null)
+            .then((d: { embedding?: number[] } | null) => {
+              if (d?.embedding) setChunkEmbedding(chunkId, d.embedding, walletAddr);
+            })
+            .catch(() => {});
         }
-        return prev;
+
+        const updated = prev.map(t => t.id === tid ? { ...t, messages: finalMsgs, updatedAt: Date.now() } : t);
+        saveTasks(updated, walletAddr);
+        return updated;
       });
 
     } catch (err: unknown) {
