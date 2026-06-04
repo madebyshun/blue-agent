@@ -396,6 +396,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const userMessage: Message = {
       role: "user",
       content: userMsg,
+      createdAt: Date.now(),
       ...(files.length > 0 ? { attachments: files } : {}),
     };
     const next: Message[] = [...baseMessages, userMessage];
@@ -409,7 +410,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     // Push messages with empty assistant placeholder
     setTasksState(prev => {
-      const msgs: Message[] = [...next, { role: "assistant", content: "" }];
+      const msgs: Message[] = [...next, { role: "assistant", content: "", createdAt: Date.now() }];
       const updated = prev.map(t => t.id === tid ? { ...t, messages: msgs, updatedAt: Date.now() } : t);
       saveTasks(updated, walletAddr);
       return updated;
