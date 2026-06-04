@@ -122,12 +122,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // ── Wallet / credits ──────────────────────────────────────────────────────
   const [walletAddr,    setWalletAddr]    = useState<string | undefined>();
   const [holderTier,    setHolderTier]    = useState<TierInfo>(STARTER_TIER);
-  // Lazy-init credits from localStorage so there's no "0 credits" flash on mount
-  const [credits, setCredits] = useState<number>(() => {
-    if (typeof window === "undefined") return 0;
-    const raw = localStorage.getItem("blue_cr_guest");
-    return raw !== null ? Math.max(0, parseInt(raw, 10)) : 30; // 30 = guest default
-  });
+  const [credits,       setCredits]       = useState(0);
+  // walletReady: true once wallet detection has completed (even if no wallet found)
+  // Prevents "out of credits" flash before we know the user's real balance
+  const [walletReady,   setWalletReady]   = useState(false);
   const [countdown,     setCountdown]     = useState("");
   const [buyOpen,       setBuyOpen]       = useState(false);
   const [walletRefresh, setWalletRefresh] = useState(0);
@@ -152,6 +150,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const onWalletChange = useCallback((addr: string | undefined, tier: TierInfo) => {
     setWalletAddr(addr);
     setHolderTier(tier);
+    setWalletReady(true); // wallet detection completed — safe to evaluate outOfCredits
   }, []);
 
   // ── Persona ───────────────────────────────────────────────────────────────
@@ -330,7 +329,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const cost = creditCost(chatTier, holderTier);
   const isUnlimited = holderTier.dailyCr === -1 && !!walletAddr;
   const daily = getDailyCr(holderTier, !!walletAddr);
-  const outOfCredits = !isUnlimited && credits < cost;
+  // Only block sending after wallet detection is done — avoids false "out of credits" on F5
+  const outOfCredits = walletReady && !isUnlimited && credits < cost;
 
   // ── Tier config (same as before) ──────────────────────────────────────────
   const ALL_TIERS_IDS = ["fast","pro","max","venice-deepseek","venice-grok","venice-uncut","venice-mistral"];
