@@ -31,7 +31,7 @@ async function ping(url: string, opts: RequestInit, label: string): Promise<Serv
 
 export async function GET() {
   const bankrKey  = process.env.BANKR_API_KEY;
-  const veniceKey = process.env.VENICE_API_KEY;
+  const veniceKey = process.env.VENICE_INFERENCE_KEY ?? process.env.VENICE_API_KEY;
 
   const checks = await Promise.all([
     // Bankr — model list endpoint (lightweight, no token usage)

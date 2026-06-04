@@ -15,7 +15,7 @@ const VENICE_EMBEDDINGS = "https://api.venice.ai/api/v1/embeddings";
 const EMBED_MODEL       = "text-embedding-bge-m3";
 
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.VENICE_API_KEY;
+  const apiKey = process.env.VENICE_INFERENCE_KEY ?? process.env.VENICE_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "Venice not configured." }, { status: 503 });
   }

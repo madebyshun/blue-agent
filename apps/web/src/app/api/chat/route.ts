@@ -407,7 +407,7 @@ async function callVeniceStream(
   maxTokens:       number,
   enableWebSearch: boolean = false,
 ): Promise<Response> {
-  const apiKey = process.env.VENICE_API_KEY;
+  const apiKey = process.env.VENICE_INFERENCE_KEY ?? process.env.VENICE_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
       { error: "Venice is not configured on this server. Please use a Bankr model (Fast/Pro/Max)." },
