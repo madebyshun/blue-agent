@@ -26,8 +26,9 @@ const SIGNAL_COLOR: Record<SignalType, string> = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const USDC_BASE  = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
-const BLUE_TOKEN = "0xf895783b2931c919955e18b5e3343e7c7c456ba3" as const;
+const USDC_BASE        = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
+const BLUE_TOKEN       = "0xf895783b2931c919955e18b5e3343e7c7c456ba3" as const;
+const PAY_TO           = "0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f" as const;
 
 // TODO: replace after deploying BlueMarketStaking.sol to Base
 const STAKING_CONTRACT = "0x0000000000000000000000000000000000000000" as const;
@@ -280,7 +281,7 @@ function USDCSubscribeForm({ planTier, price, accent }: {
             { name: "validBefore", type: "uint256" }, { name: "nonce", type: "bytes32" },
           ]},
           primaryType: "TransferWithAuthorization",
-          message: { from: address!, to: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+          message: { from: address!, to: PAY_TO as `0x${string}`,
             value: price, validAfter: 0n, validBefore: deadline, nonce },
         }, { onSuccess: resolve, onError: reject });
       });
@@ -407,14 +408,12 @@ function PlanCard({ planTier, accent, usdcPrice, stakeThreshold, features, descr
               <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
                 Stake once, access forever while staked. Unstake anytime with 7-day cooldown.
               </p>
-              {address ? (
-                <p className="font-mono text-[10px] text-slate-600">↓ Manage your stake below</p>
-              ) : (
-                <ConnectButton
-                  label="Connect wallet to stake"
-                  className="w-full border border-[#1A1A2E] text-slate-500 rounded-lg py-2 font-mono text-xs hover:text-white hover:border-slate-600 transition-all"
-                />
-              )}
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-[#FACC15]/20 bg-[#FACC15]/5">
+                <span className="font-mono text-[10px] text-[#FACC15]">⚡</span>
+                <p className="font-mono text-[10px] text-[#FACC15]">
+                  Staking contract deploying soon · subscribe via USDC for now
+                </p>
+              </div>
             </div>
           )}
         </>
@@ -568,8 +567,8 @@ export default function MarketPage() {
                 features={["🎯 Token Picks — high-conviction setups", "🐋 Onchain Flows — whale & smart money", "🔭 Builder Radar — who's shipping next", "📐 Market Edge — contrarian takes", "⚡ Weekly Signal — 1 move to make"]} />
             </div>
 
-            {/* Staking panel — shown when connected */}
-            {isConnected && address && (
+            {/* Staking panel — hidden until contract deployed */}
+            {isConnected && address && STAKING_CONTRACT !== "0x0000000000000000000000000000000000000000" && (
               <div>
                 <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">Manage Stake</p>
                 <StakingPanel address={address} />
