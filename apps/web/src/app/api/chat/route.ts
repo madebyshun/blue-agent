@@ -26,6 +26,35 @@ const MODELS: Record<string, { id: string; maxTokens: number }> = {
   max:  { id: "claude-sonnet-4-6", maxTokens: 4096 },
 };
 
+// ─── Model display names ──────────────────────────────────────────────────────
+
+const VENICE_DISPLAY: Record<string, string> = {
+  "deepseek-v4-flash":                  "DeepSeek V4 Flash (Venice)",
+  "deepseek-v4-pro":                    "DeepSeek V4 Pro (Venice)",
+  "kimi-k2-6":                          "Kimi K2 (Venice)",
+  "claude-opus-4-7":                    "Claude Opus 4 (Venice)",
+  "grok-4-3":                           "Grok 4 (Venice)",
+  "qwen3-235b-a22b-instruct-2507":      "Qwen3 235B (Venice)",
+  "mistral-small-3-2-24b-instruct":     "Mistral Small 3.2 (Venice)",
+  "venice-uncensored-1-2":              "Venice Uncensored 1.2 (Venice)",
+  "e2ee-venice-uncensored-24b-p":       "Venice Uncensored 24B · E2EE (Venice Privacy)",
+  "e2ee-gemma-3-27b-p":                 "Gemma 3 27B · E2EE (Venice Privacy)",
+  "e2ee-qwen3-6-35b-a3b":               "Qwen3 35B · E2EE (Venice Privacy)",
+};
+
+const BANKR_DISPLAY: Record<string, string> = {
+  fast: "Claude Haiku 4.5 (Bankr · Fast)",
+  pro:  "Claude Sonnet 4.6 (Bankr · Pro)",
+  max:  "Claude Sonnet 4.6 (Bankr · Max)",
+};
+
+function getModelLabel(tier: string, modelId?: string, provider?: string): string {
+  if (provider === "venice" && modelId) {
+    return VENICE_DISPLAY[modelId] ?? `${modelId} (Venice)`;
+  }
+  return BANKR_DISPLAY[tier] ?? `${tier}`;
+}
+
 // ─── System prompt ────────────────────────────────────────────────────────────
 
 const BASE_SYSTEM = `You are Blue Agent — the Base-native AI assistant for builders.
@@ -614,8 +643,12 @@ export async function POST(req: NextRequest) {
   // ── Command injection ─────────────────────────────────────────────────────
   const detectedCmd = extractCommand(messages as LLMMessage[]);
   const cmdPrompt = detectedCmd ? COMMAND_PROMPTS[detectedCmd.cmd] : null;
+  const modelLabel = getModelLabel(tier, modelId, provider);
+  const modelLine = `## Active model\nYou are currently running as: **${modelLabel}**. When asked "what model are you?", "which AI are you?", "what are you running on?", or similar — answer precisely with this model name.`;
   const system = [
-    memoryContext ? `${BASE_SYSTEM}\n\n${memoryContext}` : BASE_SYSTEM,
+    BASE_SYSTEM,
+    modelLine,
+    memoryContext ?? "",
     cmdPrompt ?? "",
   ].filter(Boolean).join("\n\n");
 
