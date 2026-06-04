@@ -55,6 +55,27 @@ function getModelLabel(tier: string, modelId?: string, provider?: string): strin
   return BANKR_DISPLAY[tier] ?? `${tier}`;
 }
 
+// ─── Per-model max_tokens ─────────────────────────────────────────────────────
+
+const VENICE_MAX_TOKENS: Record<string, number> = {
+  "deepseek-v4-flash":                 4096,
+  "deepseek-v4-pro":                   8192,
+  "kimi-k2-6":                         4096,
+  "claude-opus-4-7":                   4096,
+  "grok-4-3":                          4096,
+  "qwen3-235b-a22b-instruct-2507":     8192,
+  "mistral-small-3-2-24b-instruct":    4096,
+  "venice-uncensored-1-2":             4096,
+  // E2EE — smaller models, conservative limit
+  "e2ee-venice-uncensored-24b-p":      2048,
+  "e2ee-gemma-3-27b-p":                2048,
+  "e2ee-qwen3-6-35b-a3b":              2048,
+};
+
+function veniceMaxTokens(modelId: string): number {
+  return VENICE_MAX_TOKENS[modelId] ?? 4096;
+}
+
 // ─── System prompt ────────────────────────────────────────────────────────────
 
 const BASE_SYSTEM = `You are Blue Agent — the Base-native AI assistant for builders.
@@ -273,6 +294,13 @@ Default to "base" for Base-related queries. Always use the correct network for t
   },
 ];
 
+// ─── Venice tools (OpenAI function-calling format) ───────────────────────────
+// Mirrors HUB_TOOLS but wrapped in { type: "function", function: {...} }
+const VENICE_TOOLS = HUB_TOOLS.map(t => ({
+  type: "function" as const,
+  function: { name: t.name, description: t.description, parameters: t.input_schema },
+}));
+
 // ─── Tool → internal API mapping ──────────────────────────────────────────────
 
 const TOOL_ENDPOINT: Record<string, string> = {
@@ -324,6 +352,170 @@ async function callHubTool(toolName: string, args: Record<string, unknown>): Pro
   } catch (e) {
     return `[${toolName}: unavailable (${(e as Error).message}) — answering from knowledge]`;
   }
+}
+
+// ─── Venice Phase 1: non-streaming tool detection ────────────────────────────
+
+interface VeniceToolCall {
+  id: string; type: "function";
+  function: { name: string; arguments: string };
+}
+interface VenicePhase1Resp {
+  choices: Array<{ message: { tool_calls?: VeniceToolCall[] }; finish_reason: string }>;
+}
+
+async function callVenicePhase1(
+  apiKey:          string,
+  modelId:         string,
+  openaiMsgs:      object[],
+  maxTokens:       number,
+  enableWebSearch: boolean,
+): Promise<VenicePhase1Resp | null> {
+  try {
+    const res = await fetch(VENICE_API, {
+      method:  "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model:       modelId,
+        messages:    openaiMsgs,
+        tools:       VENICE_TOOLS,
+        tool_choice: "auto",
+        stream:      false,
+        max_tokens:  Math.min(maxTokens, 1024), // intent only — keep short
+        venice_parameters: {
+          include_venice_system_prompt: false,
+          ...(enableWebSearch ? { enable_web_search: "on" } : {}),
+        },
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) return null;
+    return await res.json() as VenicePhase1Resp;
+  } catch { return null; }
+}
+
+// ─── Venice Phase 2: tool synthesis stream ────────────────────────────────────
+
+async function veniceToolStream(
+  apiKey:          string,
+  modelId:         string,
+  openaiMsgs:      object[],
+  toolCalls:       VeniceToolCall[],
+  maxTokens:       number,
+  enableWebSearch: boolean,
+): Promise<Response> {
+  const enc = new TextEncoder();
+
+  // Shared <think> parser (same logic as callVeniceStream)
+  function makeThinkParser(controller: ReadableStreamDefaultController) {
+    let textBuf = ""; let inThink = false;
+    const emit = (obj: object) =>
+      controller.enqueue(enc.encode(`data: ${JSON.stringify(obj)}\n\n`));
+    function flush(isFinal = false) {
+      let guard = 0;
+      while (textBuf.length > 0 && guard++ < 200) {
+        if (!inThink) {
+          const si = textBuf.indexOf("<think>");
+          if (si === -1) {
+            const safe = isFinal ? textBuf : textBuf.slice(0, Math.max(0, textBuf.length - 6));
+            if (safe) { emit({ delta: { text: safe } }); textBuf = textBuf.slice(safe.length); }
+            break;
+          }
+          if (si > 0) emit({ delta: { text: textBuf.slice(0, si) } });
+          textBuf = textBuf.slice(si + 7); inThink = true; emit({ type: "thinking_start" });
+        } else {
+          const ei = textBuf.indexOf("</think>");
+          if (ei === -1) {
+            const safe = isFinal ? textBuf : textBuf.slice(0, Math.max(0, textBuf.length - 7));
+            if (safe) { emit({ type: "thinking_delta", text: safe }); textBuf = textBuf.slice(safe.length); }
+            break;
+          }
+          if (ei > 0) emit({ type: "thinking_delta", text: textBuf.slice(0, ei) });
+          textBuf = textBuf.slice(ei + 8); inThink = false; emit({ type: "thinking_end" });
+        }
+      }
+    }
+    return { push: (chunk: string) => { textBuf += chunk; flush(); }, end: () => flush(true) };
+  }
+
+  const merged = new ReadableStream({
+    async start(controller) {
+      const emit = (obj: object) =>
+        controller.enqueue(enc.encode(`data: ${JSON.stringify(obj)}\n\n`));
+      try {
+        // 1. tool_start events
+        for (const tc of toolCalls)
+          emit({ type: "tool_start", tool: tc.function.name });
+
+        // 2. Execute tools in parallel
+        const t0 = Date.now();
+        const toolResults = await Promise.all(toolCalls.map(async tc => {
+          let args: Record<string, unknown> = {};
+          try { args = JSON.parse(tc.function.arguments); } catch {}
+          return { role: "tool" as const, tool_call_id: tc.id,
+                   content: await callHubTool(tc.function.name, args) };
+        }));
+        const elapsed = Date.now() - t0;
+
+        // 3. tool_done events
+        for (const tc of toolCalls)
+          emit({ type: "tool_done", tool: tc.function.name, ms: elapsed });
+
+        // 4. Phase 2 streaming synthesis
+        const phase2Msgs = [
+          ...openaiMsgs,
+          { role: "assistant", content: null, tool_calls: toolCalls },
+          ...toolResults,
+        ];
+
+        let streamRes: Response;
+        try {
+          streamRes = await fetch(VENICE_API, {
+            method:  "POST",
+            headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: modelId, messages: phase2Msgs, stream: true, max_tokens: maxTokens,
+              venice_parameters: { include_venice_system_prompt: false,
+                ...(enableWebSearch ? { enable_web_search: "on" } : {}) },
+            }),
+            signal: AbortSignal.timeout(60_000),
+          });
+        } catch (e) {
+          emit({ delta: { text: `[Venice tool synthesis failed: ${(e as Error).message}]` } });
+          controller.enqueue(enc.encode("data: [DONE]\n\n")); controller.close(); return;
+        }
+        if (!streamRes.ok) {
+          const err = await streamRes.text();
+          emit({ delta: { text: `[Venice error ${streamRes.status}: ${err.slice(0, 100)}]` } });
+          controller.enqueue(enc.encode("data: [DONE]\n\n")); controller.close(); return;
+        }
+
+        // Pipe with <think> parsing
+        const think = makeThinkParser(controller);
+        const reader = streamRes.body!.getReader(); const dec = new TextDecoder(); let rawBuf = "";
+        try {
+          while (true) {
+            const { done, value } = await reader.read(); if (done) break;
+            rawBuf += dec.decode(value, { stream: true });
+            const lines = rawBuf.split("\n"); rawBuf = lines.pop() ?? "";
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              const raw = line.slice(6).trim();
+              if (raw === "[DONE]") { think.end(); controller.enqueue(enc.encode("data: [DONE]\n\n")); continue; }
+              try {
+                const p = JSON.parse(raw) as { choices?: { delta?: { content?: string } }[] };
+                const chunk = p?.choices?.[0]?.delta?.content ?? "";
+                if (chunk) think.push(chunk);
+              } catch {}
+            }
+          }
+          think.end();
+        } finally { controller.close(); }
+      } catch (e) { controller.error(e); }
+    },
+  });
+
+  return new Response(merged, { headers: SSE_HEADERS });
 }
 
 // ─── Slash command → system prompt injection ─────────────────────────────────
@@ -398,32 +590,15 @@ Commands to document:
 Format as a clean reference. Group by category.`,
 };
 
-// ─── Venice streaming proxy (OpenAI → Blue SSE) ──────────────────────────────
+// ─── Venice direct stream (no tools) ─────────────────────────────────────────
 
 async function callVeniceStream(
+  apiKey:          string,
   modelId:         string,
-  system:          string,
-  messages:        LLMMessage[],
+  openaiMsgs:      object[],
   maxTokens:       number,
   enableWebSearch: boolean = false,
 ): Promise<Response> {
-  const apiKey = process.env.VENICE_INFERENCE_KEY ?? process.env.VENICE_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "Venice is not configured on this server. Please use a Bankr model (Fast/Pro/Max)." },
-      { status: 503 }
-    );
-  }
-
-  // Convert Anthropic-style messages → OpenAI format (system as first message)
-  const openaiMsgs = [
-    { role: "system", content: system },
-    ...messages.map((m) => ({
-      role: m.role as string,
-      content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
-    })),
-  ];
-
   let veniceRes: Response;
   try {
     veniceRes = await fetch(VENICE_API, {
@@ -435,24 +610,24 @@ async function callVeniceStream(
         stream:     true,
         max_tokens: maxTokens,
         venice_parameters: {
-          include_venice_system_prompt: false,  // Use Blue Agent personality only
+          include_venice_system_prompt: false,
           ...(enableWebSearch ? { enable_web_search: "on" } : {}),
         },
       }),
       signal: AbortSignal.timeout(60_000),
     });
   } catch (e) {
-    return NextResponse.json({ error: `Venice request failed: ${(e as Error).message}` }, { status: 502 });
+    return textToSSE(`[Venice request failed: ${(e as Error).message}]`);
   }
 
   if (!veniceRes.ok) {
     const err = await veniceRes.text();
     const hint = veniceRes.status === 401
-      ? "Venice API key is invalid or expired. Please update VENICE_API_KEY."
+      ? "Venice API key is invalid or expired — please contact support."
       : veniceRes.status === 429
       ? "Venice rate limit hit. Try again in a moment."
-      : `Venice error ${veniceRes.status}`;
-    return NextResponse.json({ error: hint, detail: err }, { status: veniceRes.status });
+      : `Venice error ${veniceRes.status}: ${err.slice(0, 120)}`;
+    return textToSSE(`[${hint}]`);
   }
 
   // Transform OpenAI SSE → Blue SSE with <think> block extraction
@@ -709,10 +884,39 @@ export async function POST(req: NextRequest) {
     ] as LLMMessage[];
   }
 
-  // ── Venice provider: skip Bankr, call Venice directly ─────────────────────
+  // ── Venice provider ───────────────────────────────────────────────────────
   if (provider === "venice" && modelId) {
+    const apiKey = process.env.VENICE_INFERENCE_KEY ?? process.env.VENICE_API_KEY;
+    if (!apiKey) {
+      return textToSSE("[Venice is not configured on this server. Please use a Bankr model (Fast / Pro / Max).]");
+    }
+
     const veniceMessages = injectAttachments(cleanMessages, attachments, "venice");
-    return callVeniceStream(modelId, system, veniceMessages, 2048, webSearch);
+    const maxTok     = veniceMaxTokens(modelId);
+    // Grok 4 always uses web search (internet-native model)
+    const autoSearch = webSearch || modelId.startsWith("grok-");
+    // E2EE models skip tool use — smaller models, tool calling unreliable
+    const isE2EE     = modelId.startsWith("e2ee-");
+
+    const openaiMsgs = [
+      { role: "system", content: system },
+      ...veniceMessages.map((m) => ({
+        role:    m.role as string,
+        content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+      })),
+    ];
+
+    if (!isE2EE) {
+      // Phase 1: detect tool intent
+      const phase1    = await callVenicePhase1(apiKey, modelId, openaiMsgs, maxTok, autoSearch);
+      const toolCalls = phase1?.choices?.[0]?.message?.tool_calls;
+      if (toolCalls?.length) {
+        return veniceToolStream(apiKey, modelId, openaiMsgs, toolCalls, maxTok, autoSearch);
+      }
+    }
+
+    // No tools (or E2EE): direct stream
+    return callVeniceStream(apiKey, modelId, openaiMsgs, maxTok, autoSearch);
   }
 
   // ── Inject attachments for Bankr (Anthropic) ──────────────────────────────
