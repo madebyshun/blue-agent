@@ -122,7 +122,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // ── Wallet / credits ──────────────────────────────────────────────────────
   const [walletAddr,    setWalletAddr]    = useState<string | undefined>();
   const [holderTier,    setHolderTier]    = useState<TierInfo>(STARTER_TIER);
-  const [credits,       setCredits]       = useState(0);
+  // Lazy-init credits from localStorage so there's no "0 credits" flash on mount
+  const [credits, setCredits] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    const raw = localStorage.getItem("blue_cr_guest");
+    return raw !== null ? Math.max(0, parseInt(raw, 10)) : 30; // 30 = guest default
+  });
   const [countdown,     setCountdown]     = useState("");
   const [buyOpen,       setBuyOpen]       = useState(false);
   const [walletRefresh, setWalletRefresh] = useState(0);

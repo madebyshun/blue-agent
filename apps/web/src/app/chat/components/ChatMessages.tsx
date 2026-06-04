@@ -47,10 +47,10 @@ export default function ChatMessages() {
   }, [messages]);
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto flex flex-col">
       {isEmpty ? (
         /* ── Empty state ── */
-        <div className="flex flex-col items-center justify-center h-full px-8 py-12 text-center">
+        <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 text-center">
 
           {/* Agent logo — horizontal */}
           <div className="flex flex-col items-center gap-2 mb-8">
