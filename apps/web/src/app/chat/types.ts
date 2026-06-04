@@ -2,10 +2,19 @@
 
 export type ToolLog = { tool: string; status: "running" | "done"; ms?: number };
 
+export interface Attachment {
+  name:     string;   // filename e.g. "Contract.sol"
+  mimeType: string;   // "text/plain", "application/pdf", "image/png", etc.
+  size:     number;   // bytes
+  data:     string;   // base64 (binary) or raw text (isText=true)
+  isText:   boolean;  // true = plain text content, false = base64 binary
+}
+
 export interface Message {
-  role: "user" | "assistant";
-  content: string;
-  toolLogs?: ToolLog[];
+  role:        "user" | "assistant";
+  content:     string;
+  toolLogs?:   ToolLog[];
+  attachments?: Attachment[];
 }
 
 // ── Task (conversation) ────────────────────────────────────────────────────────
