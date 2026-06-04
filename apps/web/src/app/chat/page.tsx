@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Navbar        from "@/components/Navbar";
 import BuyBlueModal  from "@/components/BuyBlueModal";
+import WalletBar     from "@/components/WalletBar";
 import { ChatProvider, useChat } from "./ChatContext";
 
 import AppSidebar    from "./components/AppSidebar";
@@ -35,7 +36,7 @@ const MOBILE_TABS: { id: ActiveTab; label: string; icon: string }[] = [
 
 // ── Shell ──────────────────────────────────────────────────────────────────────
 function ChatShell() {
-  const { buyOpen, setBuyOpen, triggerWalletRefresh, artifactsPanelOpen } = useChat();
+  const { buyOpen, setBuyOpen, triggerWalletRefresh, artifactsPanelOpen, onWalletChange, walletRefresh } = useChat();
   const [activeTab, setActiveTab] = useState<ActiveTab>("chat");
 
   const isChat = activeTab === "chat";
@@ -43,6 +44,11 @@ function ChatShell() {
 
   return (
     <>
+      {/* Hidden wallet detector — always mounted so onWalletChange fires on load */}
+      <div className="hidden">
+        <WalletBar onWalletChange={onWalletChange} refreshTrigger={walletRefresh} />
+      </div>
+
       {buyOpen && (
         <BuyBlueModal
           onClose={() => setBuyOpen(false)}
