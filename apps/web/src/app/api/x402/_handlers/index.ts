@@ -5,6 +5,11 @@ import hBlueAudit     from "./blue-audit";
 import hBlueShip      from "./blue-ship";
 import hBlueRaise     from "./blue-raise";
 import hContractTrust from "./contract-trust";
+import hHoneypotCheck from "./honeypot-check";
+import hRiskGate      from "./risk-gate";
+import hDeepAnalysis  from "./deep-analysis";
+import hBuilderScore  from "./builder-score";
+import hAgentScore    from "./agent-score";
 import h0 from "./agent-collab-match";
 import h1 from "./agent-performance";
 import h2 from "./agent-revenue-optimizer";
@@ -81,4 +86,9 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "blue-ship":      hBlueShip,
   "blue-raise":     hBlueRaise,
   "contract-trust": hContractTrust,
+  "honeypot-check": hHoneypotCheck,
+  "risk-gate":      hRiskGate,
+  "deep-analysis":  hDeepAnalysis,
+  "builder-score":  hBuilderScore,
+  "agent-score":    hAgentScore,
 };

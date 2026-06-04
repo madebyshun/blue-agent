@@ -333,8 +333,13 @@ async function callHubTool(toolName: string, args: Record<string, unknown>): Pro
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (INTERNAL_KEY) headers["X-Blue-Internal"] = INTERNAL_KEY;
 
+  // crypto-rpc routes directly to /api/crypto-rpc (not x402 — no payment gate)
+  const apiPath = toolName === "hub_crypto_rpc"
+    ? `${BASE_URL}/api/crypto-rpc`
+    : `${BASE_URL}/api/x402/${endpoint}`;
+
   try {
-    const res = await fetch(`${BASE_URL}/api/x402/${endpoint}`, {
+    const res = await fetch(apiPath, {
       method: "POST",
       headers,
       body: JSON.stringify(args),
