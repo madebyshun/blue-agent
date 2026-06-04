@@ -17,6 +17,10 @@ export const BASE_RPC   = "https://mainnet.base.org";
 const REFRESH_MS = 24 * 60 * 60 * 1000; // 24 hours
 const MAX_CAP    = 50_000;              // "unlimited" practical cap
 
+// ── LocalStorage key for last-known daily allowance ───────────────────────────
+// Used to detect real tier upgrades (user bought more BLUE) vs normal deductions
+const dailyKey = (a?: string) => a ? `blue_cr_daily_${a.toLowerCase()}` : "blue_cr_daily_guest";
+
 // ── Tiers ─────────────────────────────────────────────────────────────────────
 
 export type HolderTier = "Guest" | "Starter" | "Pro" | "Max";
@@ -165,15 +169,26 @@ export function refreshCreditsIfNeeded(
   const now     = Date.now();
   const current = getCredits(address);
 
-  const isFirstTime  = current === -1;
-  const isDue        = now - last >= REFRESH_MS;
-  // Tier upgrade: user bought more BLUE and now gets more daily credits
-  const tierUpgraded = current >= 0 && daily > current;
+  const isFirstTime = current === -1;
+  const isDue       = now - last >= REFRESH_MS;
+
+  // Tier upgrade: only fires when daily QUOTA itself increased (user bought more BLUE).
+  // Compare against last-known daily rather than current credits — otherwise any deduction
+  // would look like a "tier upgrade" and reset credits back to full. Bug fix: was previously
+  // `daily > current` which reset credits after every WalletBar re-fetch cycle.
+  const lastKnownDaily = parseInt(localStorage.getItem(dailyKey(address)) ?? "0", 10);
+  const tierUpgraded   = current >= 0 && lastKnownDaily > 0 && daily > lastKnownDaily;
 
   if (isFirstTime || isDue || tierUpgraded) {
     setCredits(daily, address);
     localStorage.setItem(refreshKey(address), String(now));
+    localStorage.setItem(dailyKey(address), String(daily));
     return { credits: daily, refreshed: true, daily };
+  }
+
+  // First time we've seen a daily value — store it (without resetting credits)
+  if (lastKnownDaily === 0 && current >= 0) {
+    localStorage.setItem(dailyKey(address), String(daily));
   }
 
   return { credits: Math.max(0, current), refreshed: false, daily };
