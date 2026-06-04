@@ -16,6 +16,8 @@ import { kv } from "@/lib/kv";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
+const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY ?? "";
+
 // tool id → price in USDC micro-units (6 decimals), parsed from "$0.20"
 function priceToUnits(price?: string): number | null {
   if (!price) return null;
@@ -160,7 +162,29 @@ async function handle(
   }
 
   const requirements = buildRequirements(String(priceUnits));
-  const xPayment = req.headers.get("x-payment") ?? req.headers.get("X-Payment");
+  const xPayment    = req.headers.get("x-payment") ?? req.headers.get("X-Payment");
+  const xInternal   = req.headers.get("x-blue-internal") ?? req.headers.get("X-Blue-Internal");
+
+  // ── Internal bypass — skip payment for server-to-server calls ─────────────
+  if (INTERNAL_KEY && xInternal === INTERNAL_KEY) {
+    let body: Record<string, unknown> = {};
+    try { body = await req.json(); } catch {}
+    const innerReq = new Request(`https://blueagent.dev/api/x402/${tool}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    try {
+      const resp = await handler(innerReq);
+      const data = await resp.json().catch(() => ({}));
+      return NextResponse.json(data, { status: resp.ok ? 200 : resp.status });
+    } catch (e) {
+      return NextResponse.json(
+        { error: "Tool failed", message: (e as Error).message },
+        { status: 502 }
+      );
+    }
+  }
 
   // No payment → 402 with self-describing metadata (name, description, inputs)
   if (!xPayment) {

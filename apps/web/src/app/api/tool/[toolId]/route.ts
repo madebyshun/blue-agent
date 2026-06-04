@@ -13,10 +13,11 @@ import { recoverTypedDataAddress } from "viem";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const PAY_TO  = (process.env.PAYMENT_WALLET ?? "0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f").toLowerCase();
-const NETWORK = "eip155:8453";
-const USDC    = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
-const FACILITATOR = "https://facilitator.x402.org";
+const PAY_TO          = (process.env.PAYMENT_WALLET ?? "0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f").toLowerCase();
+const NETWORK         = "eip155:8453";
+const USDC            = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
+const FACILITATOR     = "https://facilitator.x402.org";
+const INTERNAL_KEY    = process.env.INTERNAL_SERVICE_KEY ?? "";
 
 const SELF_BASE = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -89,6 +90,16 @@ export async function POST(
 
   const toolParams = body.toolParams ?? {};
   const payment   = body.payment;
+
+  // ── Internal service bypass — skip x402 for server-to-server calls ────────
+  const internalHeader = req.headers.get("X-Blue-Internal");
+  if (INTERNAL_KEY && internalHeader === INTERNAL_KEY) {
+    const toolResult = await runTool(toolId, toolParams);
+    const resultData = await toolResult.json().catch(() => null);
+    return NextResponse.json(
+      typeof resultData === "object" && resultData !== null ? resultData : { raw: resultData }
+    );
+  }
 
   // ── No payment → return 402 requirements ─────────────────────────────────
   if (!payment) {
@@ -225,9 +236,12 @@ export async function POST(
 
 async function runTool(toolId: string, toolParams: Record<string, unknown>): Promise<NextResponse> {
   try {
-    const res = await fetch(`${SELF_BASE}/api/${toolId}`, {
+    const res = await fetch(`${SELF_BASE}/api/x402/${toolId}`, {
       method:  "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(INTERNAL_KEY ? { "X-Blue-Internal": INTERNAL_KEY } : {}),
+      },
       body:    JSON.stringify(toolParams),
       signal:  AbortSignal.timeout(110_000),
     });
