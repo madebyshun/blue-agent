@@ -362,10 +362,14 @@ export default function ChatMessages() {
               >
                 {/* ── Avatar ─────────────────────────────────────────────── */}
                 {isAssistant ? (
-                  /* Blue Agent avatar — logo in rounded square */
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 overflow-hidden"
-                    style={{ background: `${tierColor}18`, border: `1px solid ${tierColor}30` }}>
-                    <img src="/logo.svg" alt="Blue Agent" className="w-5 h-5 object-contain" />
+                  /* Blue Agent avatar */
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
+                    style={{ background: `${tierColor}18`, border: `1px solid ${tierColor}35` }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" fill={tierColor} fillOpacity="0.15"/>
+                      <circle cx="12" cy="12" r="4" fill={tierColor}/>
+                      <circle cx="12" cy="12" r="7" stroke={tierColor} strokeWidth="1.2" strokeOpacity="0.5"/>
+                    </svg>
                   </div>
                 ) : (
                   /* User avatar — shown on right, after content */
@@ -493,31 +497,7 @@ export default function ChatMessages() {
             );
           })}
 
-          {/* Streaming wait indicator */}
-          {streaming
-            && messages[messages.length - 1]?.role === "assistant"
-            && messages[messages.length - 1]?.content === ""
-            && !messages[messages.length - 1]?.toolLogs?.length
-            && !messages[messages.length - 1]?.thinkingContent
-            && (
-            <div className="flex gap-4 px-3 py-2">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: `${tierColor}18`, border: `1px solid ${tierColor}30` }}>
-                <img src="/logo.svg" alt="Blue Agent" className="w-5 h-5 object-contain animate-pulse" />
-              </div>
-              <div className="flex-1 pt-1">
-                <div className="flex items-baseline gap-2 mb-2">
-                  <span className="font-mono text-[13px] font-bold text-white">Blue Agent</span>
-                </div>
-                <span className="flex gap-1.5 items-center">
-                  <Dot delay={0} /><Dot delay={160} /><Dot delay={320} />
-                  {elapsed > 0 && (
-                    <span className="font-mono text-[10px] text-slate-700 ml-1">{elapsed}s</span>
-                  )}
-                </span>
-              </div>
-            </div>
-          )}
+          {/* Streaming wait indicator removed — dots shown inside message placeholder */}
 
           <div ref={bottomRef} />
         </div>
