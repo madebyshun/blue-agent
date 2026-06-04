@@ -42,6 +42,14 @@ const ALL_COMMANDS = [
   "blue balance", "blue score", "blue stats",
 ];
 
+// Shorthand aliases — allow typing without "blue" prefix
+const ALIASES: Record<string, string> = {
+  idea: "blue idea", build: "blue build", audit: "blue audit",
+  ship: "blue ship", raise: "blue raise",
+  balance: "blue balance", score: "blue score", stats: "blue stats",
+  hub: "blue hub",
+};
+
 const WELCOME_LINES: { type: LineType; text: string }[] = [
   { type: "system",  text: "Blue Terminal v" + VERSION + " · " + NETWORK + " · " + CHAIN_ID },
   { type: "output",  text: AGENT_TOOLS.length + " tools · x402 payments · Bankr LLM" },
@@ -121,11 +129,17 @@ export default function TerminalPage() {
   // ── Command processor ─────────────────────────────────────────────────────
 
   const runCommand = useCallback(async (raw: string) => {
-    const cmd = raw.trim();
-    if (!cmd) return;
+    const trimmed = raw.trim();
+    if (!trimmed) return;
 
-    push(mkLine("input", "> " + cmd));
-    setHistory(p => [cmd, ...p.filter(h => h !== cmd)].slice(0, 50));
+    // Expand shorthand aliases (e.g. "stats" → "blue stats foo" → "blue stats foo")
+    const firstWord = trimmed.split(/\s+/)[0].toLowerCase();
+    const cmd = ALIASES[firstWord]
+      ? ALIASES[firstWord] + trimmed.slice(firstWord.length)
+      : trimmed;
+
+    push(mkLine("input", "> " + trimmed));
+    setHistory(p => [trimmed, ...p.filter(h => h !== trimmed)].slice(0, 50));
     setHistIdx(-1);
 
     const parts = cmd.split(/\s+/);
@@ -201,6 +215,7 @@ export default function TerminalPage() {
         mkLine("output",  "    blue stats                 Hub analytics"),
         mkLine("blank",   ""),
         mkLine("output",  "  ↑↓ history · Tab autocomplete · Ctrl+L clear"),
+        mkLine("output",  "  Shortcuts: idea / build / audit / ship / raise / score / balance / stats"),
         mkLine("blank",   ""),
       );
       return;
@@ -430,9 +445,14 @@ export default function TerminalPage() {
     }
 
     // ── unknown ───────────────────────────────────────────────────────────
+    const suggest = ALL_COMMANDS.find(c =>
+      c.split(" ").some(w => w.startsWith(parts[0].toLowerCase()))
+    );
     push(
-      mkLine("error",  "  command not found: " + cmd),
-      mkLine("output", "  type 'help' to see available commands"),
+      mkLine("error",  "  command not found: " + parts[0]),
+      suggest
+        ? mkLine("output", "  did you mean: " + suggest + "?  (type 'help' for all commands)")
+        : mkLine("output", "  type 'help' to see available commands"),
     );
   }, [push, typewrite]);
 
@@ -463,8 +483,19 @@ export default function TerminalPage() {
     }
     if (e.key === "Tab") {
       e.preventDefault();
-      const match = ALL_COMMANDS.find(c => c.startsWith(input) && c !== input);
-      if (match) setInput(match + " ");
+      const lc = input.toLowerCase();
+      // Try full prefix match first, then alias match, then last-word match
+      const match =
+        ALL_COMMANDS.find(c => c.startsWith(lc) && c !== lc) ??
+        Object.keys(ALIASES).find(a => a.startsWith(lc) && a !== lc) ??
+        ALL_COMMANDS.find(c => {
+          const lastPart = c.split(" ").at(-1) ?? "";
+          return lastPart.startsWith(lc) && c !== lc;
+        });
+      if (match) {
+        // If matched an alias, expand to full command; else use as-is
+        setInput((ALIASES[match] ?? match) + " ");
+      }
     }
     if (e.key === "l" && e.ctrlKey) {
       e.preventDefault();
