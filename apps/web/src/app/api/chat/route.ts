@@ -14,9 +14,10 @@ import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
-const BANKR_LLM  = "https://llm.bankr.bot/v1/messages";
-const VENICE_API = "https://api.venice.ai/api/v1/chat/completions";
-const BASE_URL   = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
+const BANKR_LLM       = "https://llm.bankr.bot/v1/messages";
+const VENICE_API      = "https://api.venice.ai/api/v1/chat/completions";
+const BASE_URL        = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
+const INTERNAL_KEY    = process.env.INTERNAL_SERVICE_KEY ?? "";
 
 // ─── Models ───────────────────────────────────────────────────────────────────
 
@@ -328,27 +329,29 @@ async function callHubTool(toolName: string, args: Record<string, unknown>): Pro
   const endpoint = TOOL_ENDPOINT[toolName];
   if (!endpoint) return `[Unknown tool: ${toolName}]`;
 
+  // Internal bypass: call /api/x402/<id> directly with X-Blue-Internal header
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (INTERNAL_KEY) headers["X-Blue-Internal"] = INTERNAL_KEY;
+
   try {
-    const res = await fetch(`${BASE_URL}/api/${endpoint}`, {
+    const res = await fetch(`${BASE_URL}/api/x402/${endpoint}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(args),
       signal: AbortSignal.timeout(30_000),
     });
 
     if (res.status === 402) {
-      return `[${toolName}: requires x402 payment — data unavailable in free chat]`;
+      return `[${toolName}: payment required — set INTERNAL_SERVICE_KEY env var to enable]`;
     }
     if (!res.ok) {
-      return `[${toolName}: service returned ${res.status} — using knowledge base instead]`;
+      return `[${toolName}: service returned ${res.status} — answering from knowledge]`;
     }
 
-    const text = await res.text();
-    try {
-      return JSON.stringify(JSON.parse(text), null, 2);
-    } catch {
-      return text;
-    }
+    const data = await res.json().catch(() => null);
+    // Unwrap nested { result: ... } if present
+    const payload = (data as Record<string, unknown>)?.result ?? data;
+    return typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
   } catch (e) {
     return `[${toolName}: unavailable (${(e as Error).message}) — answering from knowledge]`;
   }
