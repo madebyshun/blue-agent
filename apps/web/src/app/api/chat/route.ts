@@ -339,10 +339,11 @@ Format as a clean reference. Group by category.`,
 // ─── Venice streaming proxy (OpenAI → Blue SSE) ──────────────────────────────
 
 async function callVeniceStream(
-  modelId:   string,
-  system:    string,
-  messages:  LLMMessage[],
-  maxTokens: number,
+  modelId:         string,
+  system:          string,
+  messages:        LLMMessage[],
+  maxTokens:       number,
+  enableWebSearch: boolean = false,
 ): Promise<Response> {
   const apiKey = process.env.VENICE_API_KEY;
   if (!apiKey) {
@@ -366,7 +367,13 @@ async function callVeniceStream(
     veniceRes = await fetch(VENICE_API, {
       method:  "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: modelId, messages: openaiMsgs, stream: true, max_tokens: maxTokens }),
+      body: JSON.stringify({
+        model:      modelId,
+        messages:   openaiMsgs,
+        stream:     true,
+        max_tokens: maxTokens,
+        ...(enableWebSearch ? { venice_parameters: { enable_web_search: "on" } } : {}),
+      }),
       signal: AbortSignal.timeout(60_000),
     });
   } catch (e) {
@@ -452,6 +459,77 @@ function textToSSE(text: string): Response {
 
 type LLMMessage = { role: string; content: string | unknown[] };
 
+interface Attachment {
+  name:     string;
+  mimeType: string;
+  size:     number;
+  data:     string;
+  isText:   boolean;
+}
+
+// ─── Inject file attachments into last user message ───────────────────────────
+
+function injectAttachments(messages: LLMMessage[], attachments: Attachment[], provider: string): LLMMessage[] {
+  if (!attachments.length) return messages;
+  const msgs = [...messages];
+  const last  = msgs[msgs.length - 1];
+  if (!last || last.role !== "user") return msgs;
+
+  const textFiles  = attachments.filter(a => a.isText);
+  const imageFiles = attachments.filter(a => !a.isText && a.mimeType.startsWith("image/"));
+  const pdfFiles   = attachments.filter(a => !a.isText && a.mimeType === "application/pdf");
+
+  const baseText = typeof last.content === "string" ? last.content : "";
+
+  // Always prepend text/code file contents inline
+  const textBlocks = textFiles.map(f =>
+    `\n\n--- File: ${f.name} ---\n${f.data}\n--- End of ${f.name} ---`
+  ).join("");
+
+  if (provider === "venice") {
+    // OpenAI multimodal format
+    const contentParts: unknown[] = [];
+    if (baseText || textBlocks) {
+      contentParts.push({ type: "text", text: (baseText + textBlocks).trim() });
+    }
+    for (const img of imageFiles) {
+      contentParts.push({
+        type: "image_url",
+        image_url: { url: `data:${img.mimeType};base64,${img.data}` },
+      });
+    }
+    for (const pdf of pdfFiles) {
+      // Venice supports PDF as base64 image_url with application/pdf
+      contentParts.push({
+        type: "image_url",
+        image_url: { url: `data:application/pdf;base64,${pdf.data}` },
+      });
+    }
+    msgs[msgs.length - 1] = { role: "user", content: contentParts.length ? contentParts : baseText + textBlocks };
+  } else {
+    // Anthropic multimodal format
+    const contentParts: unknown[] = [];
+    if (baseText || textBlocks) {
+      contentParts.push({ type: "text", text: (baseText + textBlocks).trim() });
+    }
+    for (const img of imageFiles) {
+      contentParts.push({
+        type: "image",
+        source: { type: "base64", media_type: img.mimeType, data: img.data },
+      });
+    }
+    for (const pdf of pdfFiles) {
+      contentParts.push({
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data: pdf.data },
+      });
+    }
+    msgs[msgs.length - 1] = { role: "user", content: contentParts.length ? contentParts : baseText + textBlocks };
+  }
+
+  return msgs;
+}
+
 interface LLMResponse {
   stop_reason: string;
   content: Array<{
@@ -481,11 +559,13 @@ export async function POST(req: NextRequest) {
   }
 
   let body: {
-    messages?: LLMMessage[];
-    tier?: string;
+    messages?:    LLMMessage[];
+    tier?:        string;
     memoryContext?: string;
-    provider?: string;
-    modelId?: string;
+    provider?:    string;
+    modelId?:     string;
+    webSearch?:   boolean;
+    attachments?: Attachment[];
   } = {};
   try {
     body = await req.json();
@@ -493,7 +573,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { messages, tier = "pro", memoryContext, provider, modelId } = body;
+  const { messages, tier = "pro", memoryContext, provider, modelId, webSearch = false, attachments = [] } = body;
   if (!messages?.length) {
     return NextResponse.json({ error: "messages array required." }, { status: 400 });
   }
@@ -520,8 +600,12 @@ export async function POST(req: NextRequest) {
 
   // ── Venice provider: skip Bankr, call Venice directly ─────────────────────
   if (provider === "venice" && modelId) {
-    return callVeniceStream(modelId, system, cleanMessages, 2048);
+    const veniceMessages = injectAttachments(cleanMessages, attachments, "venice");
+    return callVeniceStream(modelId, system, veniceMessages, 2048, webSearch);
   }
+
+  // ── Inject attachments for Bankr (Anthropic) ──────────────────────────────
+  cleanMessages = injectAttachments(cleanMessages, attachments, "bankr") as LLMMessage[];
 
   const model  = MODELS[tier as string] ?? MODELS.pro;
 

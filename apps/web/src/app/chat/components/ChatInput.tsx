@@ -1,7 +1,16 @@
 "use client";
-import { useRef } from "react";
+import { useRef, useCallback } from "react";
 import { useChat } from "../ChatContext";
 import { creditCost } from "@/lib/credits";
+import type { Attachment } from "../types";
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+const TEXT_EXTS = new Set([
+  "sol", "ts", "tsx", "js", "jsx", "py", "rs", "go",
+  "md", "txt", "json", "yaml", "yml", "toml", "env",
+  "html", "css", "sh", "bash", "zsh",
+]);
 
 interface SlashCommand {
   cmd: string; icon: string; label: string; hint: string; example: string;
@@ -40,10 +49,47 @@ export default function ChatInput() {
     input, setInput, send, stop, streaming, outOfCredits,
     error, credits, cost, chatTier, holderTier, setChatTier,
     cmdMenu, setCmdMenu, cmdFilter, setCmdFilter,
-    setBuyOpen,
+    setBuyOpen, webSearch, setWebSearch, pendingFiles, setPendingFiles,
   } = useChat();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFiles = useCallback(async (fileList: FileList | null) => {
+    if (!fileList) return;
+    const newFiles: Attachment[] = [];
+
+    for (const file of Array.from(fileList)) {
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`${file.name} is too large (max 10MB)`);
+        continue;
+      }
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+      const isText = TEXT_EXTS.has(ext) || file.type.startsWith("text/");
+
+      const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        if (isText) {
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsText(file);
+        } else {
+          reader.onload = () => {
+            const result = reader.result as string;
+            // strip data:...;base64, prefix
+            resolve(result.split(",")[1] ?? result);
+          };
+          reader.readAsDataURL(file);
+        }
+        reader.onerror = reject;
+      });
+
+      newFiles.push({ name: file.name, mimeType: file.type || "application/octet-stream", size: file.size, data, isText });
+    }
+
+    if (newFiles.length) setPendingFiles([...pendingFiles, ...newFiles]);
+    // reset input so same file can be re-attached
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }, [pendingFiles, setPendingFiles]);
 
   const activeTier = ALL_TIERS.find(t => t.id === chatTier) ?? BANKR_TIERS[1];
 
@@ -164,6 +210,37 @@ export default function ChatInput() {
           <p className="font-mono text-xs mb-2 px-1 text-red-400">{error}</p>
         )}
 
+        {/* File attachment chips */}
+        {pendingFiles.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {pendingFiles.map((f, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-mono text-[10px]"
+                style={{ borderColor: "#4FC3F730", background: "#4FC3F708", color: "#94A3B8" }}
+              >
+                <span>{f.mimeType.startsWith("image/") ? "🖼" : f.name.endsWith(".pdf") ? "📄" : "📎"}</span>
+                <span className="max-w-[120px] truncate">{f.name}</span>
+                <span className="text-slate-600">({(f.size / 1024).toFixed(0)}KB)</span>
+                <button
+                  onClick={() => setPendingFiles(pendingFiles.filter((_, j) => j !== i))}
+                  className="ml-0.5 text-slate-600 hover:text-red-400 transition-colors"
+                >×</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          multiple
+          accept=".sol,.ts,.tsx,.js,.jsx,.py,.rs,.go,.md,.txt,.json,.yaml,.yml,.toml,.pdf,.png,.jpg,.jpeg,.gif,.webp"
+          onChange={e => handleFiles(e.target.files)}
+        />
+
         {/* Input box */}
         <div
           className="flex gap-3 items-end rounded-xl px-4 py-3 border transition-colors"
@@ -186,18 +263,51 @@ export default function ChatInput() {
             }}
           />
           {!streaming && (
-            <button
-              onMouseDown={(e) => {
-                e.preventDefault();
-                handleInput("/");
-                setCmdMenu(true);
-                textareaRef.current?.focus();
-              }}
-              className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center font-mono text-sm text-slate-500 hover:text-[#4FC3F7] hover:bg-[#4FC3F7]/5 transition-all border border-transparent hover:border-[#4FC3F7]/20"
-              title="Slash commands"
-            >
-              /
-            </button>
+            <>
+              {/* Slash commands */}
+              <button
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleInput("/");
+                  setCmdMenu(true);
+                  textareaRef.current?.focus();
+                }}
+                className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center font-mono text-sm text-slate-500 hover:text-[#4FC3F7] hover:bg-[#4FC3F7]/5 transition-all border border-transparent hover:border-[#4FC3F7]/20"
+                title="Slash commands"
+              >
+                /
+              </button>
+
+              {/* Attach file */}
+              <button
+                onMouseDown={(e) => { e.preventDefault(); fileInputRef.current?.click(); }}
+                className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all border"
+                style={pendingFiles.length > 0
+                  ? { color: "#4FC3F7", background: "#4FC3F710", borderColor: "#4FC3F730" }
+                  : { color: "#475569", borderColor: "transparent" }}
+                title="Attach file (.sol, .ts, .pdf, image…)"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                    d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+              </button>
+
+              {/* Web search toggle — Venice models only */}
+              <button
+                onMouseDown={(e) => { e.preventDefault(); setWebSearch(!webSearch); }}
+                className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all border"
+                style={webSearch
+                  ? { color: "#34D399", background: "#34D39910", borderColor: "#34D39930" }
+                  : { color: "#475569", borderColor: "transparent" }}
+                title={webSearch ? "Web search ON (Venice only)" : "Enable web search (Venice models)"}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                    d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                </svg>
+              </button>
+            </>
           )}
           {streaming ? (
             <button
@@ -220,8 +330,13 @@ export default function ChatInput() {
 
         {/* Footer hint */}
         <div className="flex items-center justify-between mt-2 px-1">
-          <span className="font-mono text-[10px] text-slate-700">
+          <span className="font-mono text-[10px] text-slate-700 flex items-center gap-2">
             Enter ↵ send · Shift+Enter newline · <span className="text-slate-600">/ commands</span>
+            {webSearch && (
+              <span className="font-mono text-[9px] px-1.5 py-0.5 rounded" style={{ color: "#34D399", background: "#34D39912", border: "1px solid #34D39930" }}>
+                🌐 web search on
+              </span>
+            )}
           </span>
           <span className="font-mono text-[10px] text-slate-700">
             {cost} credits/msg · {activeTier.label}

@@ -6,7 +6,7 @@ import {
 } from "react";
 import {
   type Message, type ChatTask, type Artifact,
-  type CronTask, type PersonaId, type SidebarTab,
+  type CronTask, type PersonaId, type SidebarTab, type Attachment,
 } from "./types";
 import type { TierInfo } from "@/lib/credits";
 import {
@@ -86,6 +86,14 @@ interface ChatContextValue {
   setCredits:     (n: number) => void;
   walletRefresh:  number;          // increment to force WalletBar balance re-fetch
   triggerWalletRefresh: () => void;
+
+  // Web search
+  webSearch:    boolean;
+  setWebSearch: (v: boolean) => void;
+
+  // File attachments (pending, cleared after send)
+  pendingFiles:    Attachment[];
+  setPendingFiles: (f: Attachment[]) => void;
 
   // Slash cmd menu
   cmdMenu:    boolean;
@@ -304,12 +312,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Chat state ─────────────────────────────────────────────────────────────
-  const [streaming, setStreaming] = useState(false);
-  const [error,     setError]     = useState<string | null>(null);
-  const [input,     setInput]     = useState("");
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("none");
-  const [cmdMenu,   setCmdMenu]   = useState(false);
-  const [cmdFilter, setCmdFilter] = useState("");
+  const [streaming,    setStreaming]    = useState(false);
+  const [error,        setError]       = useState<string | null>(null);
+  const [input,        setInput]       = useState("");
+  const [sidebarTab,   setSidebarTab]  = useState<SidebarTab>("none");
+  const [cmdMenu,      setCmdMenu]     = useState(false);
+  const [cmdFilter,    setCmdFilter]   = useState("");
+  const [webSearch,    setWebSearch]   = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<Attachment[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   const cost = creditCost(chatTier, holderTier);
@@ -359,7 +369,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       baseMessages = [];
     }
 
-    const next: Message[] = [...baseMessages, { role: "user", content: userMsg }];
+    // Capture and clear pending files before async work
+    const files = pendingFiles;
+    setPendingFiles([]);
+
+    const userMessage: Message = {
+      role: "user",
+      content: userMsg,
+      ...(files.length > 0 ? { attachments: files } : {}),
+    };
+    const next: Message[] = [...baseMessages, userMessage];
 
     // Auto-title task on first message
     if (!activeTask?.title) {
@@ -398,6 +417,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           ...(modelId       ? { modelId }       : {}),
           ...(memoryContext ? { memoryContext }  : {}),
           ...(personaPrompt ? { persona: personaPrompt } : {}),
+          ...(webSearch     ? { webSearch: true } : {}),
+          ...(files.length  ? { attachments: files } : {}),
         }),
         signal: abortRef.current.signal,
       });
@@ -509,6 +530,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [
     streaming, activeTask, activeTaskId, chatTier, walletAddr, cost,
     isUnlimited, personaId, customPersonaPrompt, activeTierProvider,
+    webSearch, pendingFiles,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stop = useCallback(() => abortRef.current?.abort(), []);
@@ -525,6 +547,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     buyOpen, setBuyOpen,
     walletAddr, holderTier, credits, countdown, isUnlimited, daily, cost, outOfCredits,
     onWalletChange, setCredits, walletRefresh, triggerWalletRefresh,
+    webSearch, setWebSearch, pendingFiles, setPendingFiles,
     cmdMenu, setCmdMenu, cmdFilter, setCmdFilter,
   };
 

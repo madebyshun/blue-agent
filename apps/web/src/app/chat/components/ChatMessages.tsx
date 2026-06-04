@@ -172,6 +172,23 @@ export default function ChatMessages() {
                   </div>
                 )}
 
+                {/* File attachment chips on user messages */}
+                {msg.role === "user" && msg.attachments && msg.attachments.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {msg.attachments.map((f, j) => (
+                      <div
+                        key={j}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-mono text-[10px]"
+                        style={{ borderColor: "#4FC3F720", background: "#4FC3F708", color: "#64748b" }}
+                      >
+                        <span>{f.mimeType.startsWith("image/") ? "🖼" : f.name.endsWith(".pdf") ? "📄" : "📎"}</span>
+                        <span className="max-w-[140px] truncate">{f.name}</span>
+                        <span className="text-slate-700">({(f.size / 1024).toFixed(0)}KB)</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Content */}
                 {msg.role === "assistant" ? (
                   <div className="px-1 py-1 whitespace-pre-wrap">
