@@ -154,6 +154,7 @@ async function handle(
   const handler = HANDLERS[tool];
   const priceUnits = PRICE_UNITS.get(tool);
 
+  // Guard: checked BEFORE internal bypass to prevent calling undefined handler
   if (!handler || !priceUnits) {
     return NextResponse.json(
       { error: "Tool not available", tool },
