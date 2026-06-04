@@ -20,7 +20,10 @@ import {
   creditCost, getCredits, deductCredits,
   getNextRefresh, refreshCreditsIfNeeded, getDailyCr,
 } from "@/lib/credits";
-import { buildMemoryContext, updateMemoryAfterChat } from "@/lib/memory";
+import {
+  buildMemoryContext, updateMemoryAfterChat,
+  addChunk, setChunkEmbedding, searchChunks,
+} from "@/lib/memory";
 
 // ── Context type ──────────────────────────────────────────────────────────────
 
@@ -419,7 +422,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     // Build persona system prompt
     const persona = getPersona(personaId);
     const personaPrompt = personaId === "custom" ? customPersonaPrompt : persona.systemPrompt;
-    const memoryContext = buildMemoryContext(walletAddr);
+
+    // Semantic memory: embed query and find relevant past conversations
+    // This runs quickly using local cosine similarity against stored embeddings
+    let queryEmbedding: number[] | null = null;
+    try {
+      const embedRes = await fetch("/api/memory/embed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: userMsg.slice(0, 512) }),
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (embedRes.ok) {
+        const { embedding } = await embedRes.json() as { embedding?: number[] };
+        queryEmbedding = embedding ?? null;
+      }
+    } catch { /* fall back to recency-based memory */ }
+
+    const semanticChunks = searchChunks(queryEmbedding, walletAddr, 3);
+    const memoryContext = buildMemoryContext(walletAddr, semanticChunks.length > 0 ? semanticChunks : undefined);
     const modelId = VENICE_MODEL_IDS[chatTier];
 
     try {
@@ -520,6 +541,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           const last = task.messages[task.messages.length - 1];
           if (last?.role === "assistant" && last.content) {
             updateMemoryAfterChat(walletAddr, userMsg, last.content);
+
+            // Store a semantic memory chunk and embed it in background
+            const chunkText = `Q: ${userMsg.slice(0, 200)}\nA: ${last.content.slice(0, 400)}`;
+            const chunkId = addChunk(chunkText, walletAddr);
+            // Fire-and-forget: embed and store (does not block the UI)
+            fetch("/api/memory/embed", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text: chunkText.slice(0, 1024) }),
+              signal: AbortSignal.timeout(10_000),
+            }).then(r => r.ok ? r.json() : null)
+              .then((d: { embedding?: number[] } | null) => {
+                if (d?.embedding) setChunkEmbedding(chunkId, d.embedding, walletAddr);
+              })
+              .catch(() => { /* embedding failed — chunk still stored, no embedding */ });
           }
           const updated = prev.map(t => t.id === tid ? { ...t, updatedAt: Date.now() } : t);
           saveTasks(updated, walletAddr);
