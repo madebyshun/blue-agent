@@ -311,19 +311,7 @@ export default function ChatMessages() {
         /* ── Empty state ─────────────────────────────────────────────────── */
         <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 text-center">
           <div className="flex items-center gap-3 mb-8">
-            {/* Blue Agent logomark — rounded square, blue gradient, 2 white blocks */}
-            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
-              <defs>
-                <radialGradient id="ba-logo-grad" cx="30%" cy="22%" r="85%" gradientUnits="objectBoundingBox">
-                  <stop offset="0%"   stopColor="#55CCFF"/>
-                  <stop offset="50%"  stopColor="#1155FF"/>
-                  <stop offset="100%" stopColor="#4400CC"/>
-                </radialGradient>
-              </defs>
-              <rect width="40" height="40" rx="10" fill="url(#ba-logo-grad)"/>
-              <rect x="11" y="12" width="7"  height="14" rx="2"   fill="white"/>
-              <rect x="22" y="12" width="7"  height="14" rx="2"   fill="white"/>
-            </svg>
+            <img src="/logomark.svg" alt="Blue Agent" width={44} height={44} className="rounded-xl" />
             <span className="font-mono text-2xl font-bold text-white tracking-widest">
               BLUE<span style={{ color: tierColor }}>AGENT</span>
             </span>
@@ -374,19 +362,14 @@ export default function ChatMessages() {
               >
                 {/* ── Avatar ─────────────────────────────────────────────── */}
                 {isAssistant ? (
-                  /* Blue Agent avatar — logomark */
-                  <svg width="30" height="30" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0 mt-1 rounded-lg overflow-hidden">
-                    <defs>
-                      <radialGradient id="ba-avatar-grad" cx="30%" cy="22%" r="85%" gradientUnits="objectBoundingBox">
-                        <stop offset="0%"   stopColor="#55CCFF"/>
-                        <stop offset="50%"  stopColor="#1155FF"/>
-                        <stop offset="100%" stopColor="#4400CC"/>
-                      </radialGradient>
-                    </defs>
-                    <rect width="36" height="36" rx="9" fill="url(#ba-avatar-grad)"/>
-                    <rect x="10" y="11" width="6" height="12" rx="1.8" fill="white"/>
-                    <rect x="20" y="11" width="6" height="12" rx="1.8" fill="white"/>
-                  </svg>
+                  /* Blue Agent avatar — logomark.svg (avoids duplicate inline gradient IDs) */
+                  <img
+                    src="/logomark.svg"
+                    alt="Blue Agent"
+                    width={32} height={32}
+                    className="shrink-0 mt-1 rounded-lg"
+                    style={{ imageRendering: "crisp-edges" }}
+                  />
                 ) : null}
 
                 {/* ── Content column ──────────────────────────────────────── */}
