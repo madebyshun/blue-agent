@@ -335,14 +335,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Only block sending after wallet detection is done — avoids false "out of credits" on F5
   const outOfCredits = walletReady && !isUnlimited && credits < cost;
 
-  // ── Tier config (same as before) ──────────────────────────────────────────
-  const ALL_TIERS_IDS = ["fast","pro","max","venice-deepseek","venice-grok","venice-uncut","venice-mistral"];
-  const activeTierProvider = ALL_TIERS_IDS.includes(chatTier) && chatTier.startsWith("venice") ? "venice" : "bankr";
+  // ── Tier config ────────────────────────────────────────────────────────────
+  const activeTierProvider = chatTier.startsWith("venice") ? "venice" : "bankr";
   const VENICE_MODEL_IDS: Record<string, string> = {
-    "venice-deepseek": "deepseek-v4-flash",
-    "venice-grok":     "grok-4-3",
-    "venice-uncut":    "venice-uncensored-1-2",
-    "venice-mistral":  "mistral-small-3-2-24b-instruct",
+    // Venice — standard
+    "venice-deepseek":      "deepseek-v4-flash",
+    "venice-deepseek-pro":  "deepseek-v4-pro",
+    "venice-kimi":          "kimi-k2-6",
+    "venice-claude":        "claude-opus-4-7",
+    "venice-grok":          "grok-4-3",
+    "venice-qwen":          "qwen3-235b-a22b-instruct-2507",
+    "venice-mistral":       "mistral-small-3-2-24b-instruct",
+    "venice-uncut":         "venice-uncensored-1-2",
+    // Venice — Privacy / E2EE
+    "venice-e2ee-venice":   "e2ee-venice-uncensored-24b-p",
+    "venice-e2ee-gemma":    "e2ee-gemma-3-27b-p",
+    "venice-e2ee-qwen":     "e2ee-qwen3-6-35b-a3b",
   };
 
   // ── send() ────────────────────────────────────────────────────────────────

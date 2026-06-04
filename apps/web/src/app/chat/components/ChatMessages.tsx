@@ -36,9 +36,21 @@ export default function ChatMessages() {
   const isEmpty = messages.length === 0;
 
   const MODEL_COLORS: Record<string, string> = {
+    // Bankr
     fast: "#64748b", pro: "#4FC3F7", max: "#A78BFA",
-    "venice-deepseek": "#34D399", "venice-grok": "#E879F9",
-    "venice-uncut": "#FB923C", "venice-mistral": "#60A5FA",
+    // Venice — standard
+    "venice-deepseek":      "#34D399",
+    "venice-deepseek-pro":  "#2DD4BF",
+    "venice-kimi":          "#818CF8",
+    "venice-claude":        "#F472B6",
+    "venice-grok":          "#E879F9",
+    "venice-qwen":          "#FB923C",
+    "venice-mistral":       "#60A5FA",
+    "venice-uncut":         "#F59E0B",
+    // Venice — Privacy / E2EE
+    "venice-e2ee-venice":   "#6EE7B7",
+    "venice-e2ee-gemma":    "#6EE7B7",
+    "venice-e2ee-qwen":     "#6EE7B7",
   };
   const tierColor = MODEL_COLORS[chatTier] ?? "#4FC3F7";
 

@@ -30,18 +30,37 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { cmd: "help",   icon: "📖", label: "Help",            hint: "Show all available commands",               example: "/help" },
 ];
 
-const BANKR_TIERS = [
-  { id: "fast", label: "Fast",   model: "Haiku",  color: "#64748b", badge: "",  note: "Fastest" },
-  { id: "pro",  label: "Pro",    model: "Sonnet", color: "#4FC3F7", badge: "",  note: "Balanced" },
-  { id: "max",  label: "Max",    model: "Opus",   color: "#A78BFA", badge: "",  note: "Smartest" },
+export interface ModelTier {
+  id: string; label: string; model: string;
+  color: string; badge: string; note: string;
+  group: "bankr" | "venice" | "privacy";
+  credits: number; // cost per msg
+}
+
+export const BANKR_TIERS: ModelTier[] = [
+  { id: "fast",  label: "Fast",    model: "Haiku",   color: "#64748b", badge: "",  note: "Fastest",   group: "bankr",  credits: 10 },
+  { id: "pro",   label: "Pro",     model: "Sonnet",  color: "#4FC3F7", badge: "",  note: "Balanced",  group: "bankr",  credits: 50 },
+  { id: "max",   label: "Max",     model: "Opus",    color: "#A78BFA", badge: "",  note: "Smartest",  group: "bankr",  credits: 200 },
 ];
-const VENICE_TIERS = [
-  { id: "venice-deepseek", label: "V4 Flash",   model: "DeepSeek", color: "#34D399", badge: "V", note: "1M ctx" },
-  { id: "venice-grok",     label: "Grok 4",     model: "xAI",      color: "#E879F9", badge: "V", note: "X search" },
-  { id: "venice-uncut",    label: "Uncensored", model: "Venice",   color: "#FB923C", badge: "V", note: "No filter" },
-  { id: "venice-mistral",  label: "Mistral",    model: "Mistral",  color: "#60A5FA", badge: "V", note: "256K ctx" },
+
+export const VENICE_TIERS: ModelTier[] = [
+  { id: "venice-deepseek",  label: "V4 Flash",   model: "deepseek-v4-flash",                   color: "#34D399", badge: "V", note: "Fastest · 1M ctx",  group: "venice", credits: 10 },
+  { id: "venice-deepseek-pro", label: "V4 Pro",  model: "deepseek-v4-pro",                     color: "#2DD4BF", badge: "V", note: "Smarter · 1M ctx",  group: "venice", credits: 30 },
+  { id: "venice-kimi",      label: "Kimi K2",    model: "kimi-k2-6",                           color: "#818CF8", badge: "V", note: "256K ctx",           group: "venice", credits: 20 },
+  { id: "venice-claude",    label: "Claude Opus",model: "claude-opus-4-7",                     color: "#F472B6", badge: "V", note: "Smartest",           group: "venice", credits: 80 },
+  { id: "venice-grok",      label: "Grok 4",     model: "grok-4-3",                            color: "#E879F9", badge: "V", note: "X search",           group: "venice", credits: 60 },
+  { id: "venice-qwen",      label: "Qwen 235B",  model: "qwen3-235b-a22b-instruct-2507",       color: "#FB923C", badge: "V", note: "Huge · reasoning",  group: "venice", credits: 40 },
+  { id: "venice-mistral",   label: "Mistral",    model: "mistral-small-3-2-24b-instruct",      color: "#60A5FA", badge: "V", note: "Fast · 256K ctx",   group: "venice", credits: 10 },
+  { id: "venice-uncut",     label: "Uncensored", model: "venice-uncensored-1-2",               color: "#F59E0B", badge: "V", note: "No filter",          group: "venice", credits: 20 },
 ];
-const ALL_TIERS = [...BANKR_TIERS, ...VENICE_TIERS];
+
+export const PRIVACY_TIERS: ModelTier[] = [
+  { id: "venice-e2ee-venice",  label: "Private Venice", model: "e2ee-venice-uncensored-24b-p", color: "#6EE7B7", badge: "🔒", note: "E2EE · No logs",   group: "privacy", credits: 30 },
+  { id: "venice-e2ee-gemma",   label: "Private Gemma",  model: "e2ee-gemma-3-27b-p",           color: "#6EE7B7", badge: "🔒", note: "E2EE · No logs",   group: "privacy", credits: 30 },
+  { id: "venice-e2ee-qwen",    label: "Private Qwen",   model: "e2ee-qwen3-6-35b-a3b",         color: "#6EE7B7", badge: "🔒", note: "E2EE · No logs",   group: "privacy", credits: 40 },
+];
+
+export const ALL_TIERS: ModelTier[] = [...BANKR_TIERS, ...VENICE_TIERS, ...PRIVACY_TIERS];
 
 export default function ChatInput() {
   const {
@@ -178,54 +197,32 @@ export default function ChatInput() {
 
         {/* ── Model selector popover ───────────────────────────────────────── */}
         {modelOpen && (
-          <div className="absolute bottom-full mb-2 left-0 bg-[#0D0D14] border border-[#2A2A4E] rounded-xl overflow-hidden shadow-2xl z-20 w-64">
-            <div className="px-3 pt-2.5 pb-1.5 border-b border-[#1A1A2E]">
+          <div className="absolute bottom-full mb-2 left-0 bg-[#0D0D14] border border-[#2A2A4E] rounded-xl overflow-hidden shadow-2xl z-20 w-72 max-h-[480px] overflow-y-auto">
+            <div className="px-3 pt-2.5 pb-1.5 border-b border-[#1A1A2E] sticky top-0 bg-[#0D0D14]">
               <span className="font-mono text-[10px] text-slate-600 tracking-widest">SELECT MODEL</span>
             </div>
+
             {/* Bankr */}
-            <div className="px-3 pt-2 pb-1">
-              <p className="font-mono text-[9px] text-slate-700 tracking-widest mb-1">BANKR</p>
-              {BANKR_TIERS.map(t => {
-                const c = creditCost(t.id, holderTier);
-                return (
-                  <button
-                    key={t.id}
-                    onMouseDown={(e) => { e.preventDefault(); setChatTier(t.id); setModelOpen(false); textareaRef.current?.focus(); }}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-[#1A1A2E] transition-colors text-left group mb-0.5"
-                    style={chatTier === t.id ? { background: `${t.color}10` } : {}}
-                  >
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: t.color }} />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-mono text-xs text-slate-300 group-hover:text-white">{t.label}</p>
-                      <p className="font-mono text-[9px] text-slate-600">{t.model} · {t.note}</p>
-                    </div>
-                    <span className="font-mono text-[9px] shrink-0" style={{ color: t.color }}>{c}cr</span>
-                  </button>
-                );
-              })}
-            </div>
+            <ModelGroup
+              label="BANKR" tiers={BANKR_TIERS}
+              active={chatTier} holderTier={holderTier}
+              onSelect={(id) => { setChatTier(id); setModelOpen(false); textareaRef.current?.focus(); }}
+            />
+
             {/* Venice */}
-            <div className="px-3 pt-1 pb-2 border-t border-[#1A1A2E]">
-              <p className="font-mono text-[9px] text-slate-700 tracking-widest mt-1.5 mb-1">VENICE</p>
-              {VENICE_TIERS.map(t => {
-                const c = creditCost(t.id, holderTier);
-                return (
-                  <button
-                    key={t.id}
-                    onMouseDown={(e) => { e.preventDefault(); setChatTier(t.id); setModelOpen(false); textareaRef.current?.focus(); }}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-[#1A1A2E] transition-colors text-left group mb-0.5"
-                    style={chatTier === t.id ? { background: `${t.color}10` } : {}}
-                  >
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: t.color }} />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-mono text-xs text-slate-300 group-hover:text-white">{t.label}</p>
-                      <p className="font-mono text-[9px] text-slate-600">{t.model} · {t.note}</p>
-                    </div>
-                    <span className="font-mono text-[9px] shrink-0" style={{ color: t.color }}>{c}cr</span>
-                  </button>
-                );
-              })}
-            </div>
+            <ModelGroup
+              label="VENICE" tiers={VENICE_TIERS}
+              active={chatTier} holderTier={holderTier}
+              onSelect={(id) => { setChatTier(id); setModelOpen(false); textareaRef.current?.focus(); }}
+            />
+
+            {/* Privacy / E2EE */}
+            <ModelGroup
+              label="🔒 PRIVACY · E2EE" tiers={PRIVACY_TIERS}
+              active={chatTier} holderTier={holderTier}
+              onSelect={(id) => { setChatTier(id); setModelOpen(false); textareaRef.current?.focus(); }}
+              description="Zero logs · hardware-secured"
+            />
           </div>
         )}
 
@@ -399,6 +396,53 @@ export default function ChatInput() {
           </span>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Model group sub-component ─────────────────────────────────────────────────
+
+import type { TierInfo } from "@/lib/credits";
+
+function ModelGroup({
+  label, tiers, active, holderTier, onSelect, description,
+}: {
+  label: string;
+  tiers: ModelTier[];
+  active: string;
+  holderTier: TierInfo;
+  onSelect: (id: string) => void;
+  description?: string;
+}) {
+  return (
+    <div className="px-3 pt-2 pb-2 border-t border-[#1A1A2E] first:border-t-0">
+      <div className="flex items-center gap-2 mb-1.5">
+        <p className="font-mono text-[9px] text-slate-700 tracking-widest">{label}</p>
+        {description && <p className="font-mono text-[9px] text-slate-700 opacity-60">{description}</p>}
+      </div>
+      {tiers.map(t => {
+        const c = creditCost(t.id, holderTier);
+        const isActive = active === t.id;
+        return (
+          <button
+            key={t.id}
+            onMouseDown={(e) => { e.preventDefault(); onSelect(t.id); }}
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-[#1A1A2E] transition-colors text-left group mb-0.5"
+            style={isActive ? { background: `${t.color}12`, outline: `1px solid ${t.color}30` } : {}}
+          >
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: t.color }} />
+            <div className="flex-1 min-w-0">
+              <p className="font-mono text-[11px] text-slate-300 group-hover:text-white flex items-center gap-1.5">
+                {t.label}
+                {t.badge && <span className="text-[8px] opacity-50 font-normal">{t.badge}</span>}
+                {isActive && <span className="text-[8px] ml-1" style={{ color: t.color }}>✓</span>}
+              </p>
+              <p className="font-mono text-[9px] text-slate-600 truncate">{t.note}</p>
+            </div>
+            <span className="font-mono text-[9px] shrink-0" style={{ color: t.color }}>{c}cr</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
