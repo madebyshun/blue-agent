@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none">
+  <defs>
+    <radialGradient id="g" cx="30%" cy="22%" r="85%" gradientUnits="objectBoundingBox">
+      <stop offset="0%"   stop-color="#55CCFF"/>
+      <stop offset="50%"  stop-color="#1155FF"/>
+      <stop offset="100%" stop-color="#4400CC"/>
+    </radialGradient>
+  </defs>
+  <rect width="40" height="40" rx="10" fill="url(#g)"/>
+  <rect x="11" y="12" width="7"  height="14" rx="2"   fill="white"/>
+  <rect x="22" y="12" width="7"  height="14" rx="2"   fill="white"/>
+</svg>

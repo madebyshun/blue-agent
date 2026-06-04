@@ -311,7 +311,19 @@ export default function ChatMessages() {
         /* ── Empty state ─────────────────────────────────────────────────── */
         <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 text-center">
           <div className="flex items-center gap-3 mb-8">
-            <img src="/logo.svg" alt="Blue Agent" className="h-10 w-10" />
+            {/* Blue Agent logomark — rounded square, blue gradient, 2 white blocks */}
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
+              <defs>
+                <radialGradient id="ba-logo-grad" cx="30%" cy="22%" r="85%" gradientUnits="objectBoundingBox">
+                  <stop offset="0%"   stopColor="#55CCFF"/>
+                  <stop offset="50%"  stopColor="#1155FF"/>
+                  <stop offset="100%" stopColor="#4400CC"/>
+                </radialGradient>
+              </defs>
+              <rect width="40" height="40" rx="10" fill="url(#ba-logo-grad)"/>
+              <rect x="11" y="12" width="7"  height="14" rx="2"   fill="white"/>
+              <rect x="22" y="12" width="7"  height="14" rx="2"   fill="white"/>
+            </svg>
             <span className="font-mono text-2xl font-bold text-white tracking-widest">
               BLUE<span style={{ color: tierColor }}>AGENT</span>
             </span>
@@ -362,15 +374,19 @@ export default function ChatMessages() {
               >
                 {/* ── Avatar ─────────────────────────────────────────────── */}
                 {isAssistant ? (
-                  /* Blue Agent avatar */
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                    style={{ background: `${tierColor}18`, border: `1px solid ${tierColor}35` }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" fill={tierColor} fillOpacity="0.15"/>
-                      <circle cx="12" cy="12" r="4" fill={tierColor}/>
-                      <circle cx="12" cy="12" r="7" stroke={tierColor} strokeWidth="1.2" strokeOpacity="0.5"/>
-                    </svg>
-                  </div>
+                  /* Blue Agent avatar — logomark */
+                  <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0 mt-0.5 rounded-xl overflow-hidden">
+                    <defs>
+                      <radialGradient id="ba-avatar-grad" cx="30%" cy="22%" r="85%" gradientUnits="objectBoundingBox">
+                        <stop offset="0%"   stopColor="#55CCFF"/>
+                        <stop offset="50%"  stopColor="#1155FF"/>
+                        <stop offset="100%" stopColor="#4400CC"/>
+                      </radialGradient>
+                    </defs>
+                    <rect width="36" height="36" rx="9" fill="url(#ba-avatar-grad)"/>
+                    <rect x="10" y="11" width="6" height="12" rx="1.8" fill="white"/>
+                    <rect x="20" y="11" width="6" height="12" rx="1.8" fill="white"/>
+                  </svg>
                 ) : (
                   /* User avatar — shown on right, after content */
                   null
