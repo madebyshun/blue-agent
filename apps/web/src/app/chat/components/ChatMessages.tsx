@@ -322,7 +322,7 @@ export default function ChatMessages() {
           <p className="font-mono text-sm text-slate-500 max-w-lg mx-auto leading-relaxed mb-10">
             Ideas, architecture, audits, launches, fundraising — grounded in Base.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 w-full max-w-4xl mx-auto mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 w-full max-w-3xl mx-auto mb-8">
             {STARTERS.map(s => (
               <button key={s.text} onClick={() => send(s.text)} disabled={outOfCredits}
                 className="text-left px-5 py-4 rounded-2xl border transition-all disabled:opacity-40 group"
@@ -350,7 +350,7 @@ export default function ChatMessages() {
         </div>
       ) : (
         /* ── Message list ────────────────────────────────────────────────── */
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-1">
+        <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-1">
           {messages.map((msg, i) => {
             const isAssistant = msg.role === "assistant";
 
