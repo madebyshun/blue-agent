@@ -2,6 +2,11 @@
  * Blue Agent — Persistent Memory
  * Stores user context in localStorage, keyed by wallet address.
  * Injected into system prompt on every chat call.
+ *
+ * Two layers:
+ * 1. Structured UserMemory — project, topics, command history (recency-based)
+ * 2. MemoryChunks — conversation summaries with optional Venice embeddings
+ *    for semantic retrieval (cosine similarity)
  */
 
 export interface ProjectContext {
@@ -32,9 +37,98 @@ export interface UserMemory {
   updatedAt: number;
 }
 
-const STORAGE_KEY = (wallet?: string) => `blue_memory_${wallet ?? "anon"}`;
-const MAX_TOPICS  = 10;
-const MAX_HISTORY = 20;
+const STORAGE_KEY        = (wallet?: string) => `blue_memory_${wallet ?? "anon"}`;
+const CHUNKS_KEY         = (wallet?: string) => `blue_chunks_${wallet ?? "anon"}`;
+const MAX_TOPICS         = 10;
+const MAX_HISTORY        = 20;
+const MAX_CHUNKS         = 50;   // max stored memory chunks
+const CHUNK_PREVIEW_LEN  = 200;  // chars to store per chunk for context
+
+// ─── Memory chunks (semantic) ────────────────────────────────────────────────
+
+export interface MemoryChunk {
+  id:        string;
+  text:      string;          // summary / key content from the exchange
+  embedding: number[] | null; // Venice BGE-M3 embedding (1024-dim) or null if pending
+  createdAt: number;
+}
+
+export function getChunks(wallet?: string): MemoryChunk[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(CHUNKS_KEY(wallet));
+    return raw ? (JSON.parse(raw) as MemoryChunk[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveChunks(chunks: MemoryChunk[], wallet?: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(CHUNKS_KEY(wallet), JSON.stringify(chunks));
+  } catch {}
+}
+
+export function clearChunks(wallet?: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(CHUNKS_KEY(wallet));
+}
+
+/** Add a chunk. Embedding is set later (async background call). */
+export function addChunk(text: string, wallet?: string): string {
+  const chunks = getChunks(wallet);
+  const id = Math.random().toString(36).slice(2, 10);
+  const chunk: MemoryChunk = { id, text: text.slice(0, CHUNK_PREVIEW_LEN * 4), embedding: null, createdAt: Date.now() };
+  const updated = [chunk, ...chunks].slice(0, MAX_CHUNKS);
+  saveChunks(updated, wallet);
+  return id;
+}
+
+/** Store the embedding for a chunk (called after background fetch resolves). */
+export function setChunkEmbedding(id: string, embedding: number[], wallet?: string): void {
+  const chunks = getChunks(wallet);
+  const updated = chunks.map(c => c.id === id ? { ...c, embedding } : c);
+  saveChunks(updated, wallet);
+}
+
+// ─── Cosine similarity ───────────────────────────────────────────────────────
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length) return 0;
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot   += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
+}
+
+/**
+ * Find the top-k most semantically relevant chunks for a query embedding.
+ * Falls back to the k most recent chunks if no embeddings are stored yet.
+ */
+export function searchChunks(queryEmbedding: number[] | null, wallet?: string, k = 3): MemoryChunk[] {
+  const chunks = getChunks(wallet);
+  if (chunks.length === 0) return [];
+
+  const withEmbeddings = chunks.filter(c => c.embedding !== null);
+
+  // Not enough embeddings yet — fall back to recency
+  if (!queryEmbedding || withEmbeddings.length < 3) {
+    return chunks.slice(0, k);
+  }
+
+  // Score and rank
+  const scored = withEmbeddings.map(c => ({
+    chunk: c,
+    score: cosineSimilarity(queryEmbedding, c.embedding!),
+  }));
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, k).map(s => s.chunk);
+}
 
 // ─── Read / Write ────────────────────────────────────────────────────────────
 
@@ -109,7 +203,12 @@ export function addAgentNote(wallet: string | undefined, note: string): void {
 
 // ─── Build memory context string for system prompt ──────────────────────────
 
-export function buildMemoryContext(wallet?: string): string {
+/**
+ * Build the memory context to inject into the system prompt.
+ * If semanticChunks are provided (from embedding search), they are appended
+ * as "Related conversations" for richer context.
+ */
+export function buildMemoryContext(wallet?: string, semanticChunks?: MemoryChunk[]): string {
   const memory = getMemory(wallet);
   const parts: string[] = [];
 
@@ -136,6 +235,16 @@ export function buildMemoryContext(wallet?: string): string {
 
   if (memory.agentNotes.length > 0) {
     parts.push(`Agent notes: ${memory.agentNotes.slice(0, 3).join(" · ")}`);
+  }
+
+  // Semantic memory chunks (most relevant past conversations)
+  if (semanticChunks && semanticChunks.length > 0) {
+    const chunkLines = semanticChunks.map((c, i) => {
+      const ago = Math.round((Date.now() - c.createdAt) / 60_000);
+      const timeStr = ago < 60 ? `${ago}m ago` : ago < 1440 ? `${Math.round(ago / 60)}h ago` : `${Math.round(ago / 1440)}d ago`;
+      return `  [${i + 1}] (${timeStr}) ${c.text.slice(0, CHUNK_PREVIEW_LEN)}`;
+    });
+    parts.push(`Related conversations:\n${chunkLines.join("\n")}`);
   }
 
   if (parts.length === 0) return "";
