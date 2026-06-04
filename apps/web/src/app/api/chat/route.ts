@@ -434,7 +434,10 @@ async function callVeniceStream(
         messages:   openaiMsgs,
         stream:     true,
         max_tokens: maxTokens,
-        ...(enableWebSearch ? { venice_parameters: { enable_web_search: "on" } } : {}),
+        venice_parameters: {
+          include_venice_system_prompt: false,  // Use Blue Agent personality only
+          ...(enableWebSearch ? { enable_web_search: "on" } : {}),
+        },
       }),
       signal: AbortSignal.timeout(60_000),
     });
@@ -452,36 +455,78 @@ async function callVeniceStream(
     return NextResponse.json({ error: hint, detail: err }, { status: veniceRes.status });
   }
 
-  // Transform OpenAI SSE → Blue's SSE format: data: {"delta":{"text":"..."}}
+  // Transform OpenAI SSE → Blue SSE with <think> block extraction
+  //   data: { type: "thinking_start" }
+  //   data: { type: "thinking_delta", text: "..." }
+  //   data: { type: "thinking_end" }
+  //   data: { delta: { text: "..." } }     ← normal content
   const encoder = new TextEncoder();
   const transformed = new ReadableStream({
     async start(controller) {
       const reader  = veniceRes.body!.getReader();
       const decoder = new TextDecoder();
-      let buf = "";
+      let rawBuf  = "";
+      let textBuf = "";
+      let inThink = false;
+
+      const emit = (obj: object) =>
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+
+      // Flush textBuf through state machine — routes text to thinking vs content
+      function flush(isFinal = false) {
+        let guard = 0;
+        while (textBuf.length > 0 && guard++ < 200) {
+          if (!inThink) {
+            const si = textBuf.indexOf("<think>");
+            if (si === -1) {
+              // Keep last 6 chars buffered in case "<think>" spans chunks
+              const safe = isFinal ? textBuf : textBuf.slice(0, Math.max(0, textBuf.length - 6));
+              if (safe) { emit({ delta: { text: safe } }); textBuf = textBuf.slice(safe.length); }
+              break;
+            }
+            if (si > 0) emit({ delta: { text: textBuf.slice(0, si) } });
+            textBuf = textBuf.slice(si + 7);
+            inThink = true;
+            emit({ type: "thinking_start" });
+          } else {
+            const ei = textBuf.indexOf("</think>");
+            if (ei === -1) {
+              const safe = isFinal ? textBuf : textBuf.slice(0, Math.max(0, textBuf.length - 7));
+              if (safe) { emit({ type: "thinking_delta", text: safe }); textBuf = textBuf.slice(safe.length); }
+              break;
+            }
+            if (ei > 0) emit({ type: "thinking_delta", text: textBuf.slice(0, ei) });
+            textBuf = textBuf.slice(ei + 8);
+            inThink = false;
+            emit({ type: "thinking_end" });
+          }
+        }
+      }
+
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split("\n");
-          buf = lines.pop() ?? "";
+          rawBuf += decoder.decode(value, { stream: true });
+          const lines = rawBuf.split("\n");
+          rawBuf = lines.pop() ?? "";
+
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
             const raw = line.slice(6).trim();
             if (raw === "[DONE]") {
+              flush(true);
               controller.enqueue(encoder.encode("data: [DONE]\n\n"));
               continue;
             }
             try {
               const parsed = JSON.parse(raw) as { choices?: { delta?: { content?: string } }[] };
-              const text   = parsed?.choices?.[0]?.delta?.content ?? "";
-              if (text) {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta: { text } })}\n\n`));
-              }
+              const chunk  = parsed?.choices?.[0]?.delta?.content ?? "";
+              if (chunk) { textBuf += chunk; flush(); }
             } catch {}
           }
         }
+        flush(true); // drain on stream end
       } finally {
         controller.close();
       }
