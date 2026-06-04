@@ -151,7 +151,9 @@ export default function ChatMessages() {
                   <div className="flex flex-col gap-1 mb-3 px-1">
                     {msg.toolLogs.map((log, j) => {
                       const name = log.tool.replace(/^hub_/, "").replace(/_/g, " ");
-                      const provider = log.tool.includes("bankr") || log.tool.includes("wallet") || log.tool.includes("price") || log.tool.includes("holder") || log.tool.includes("nft") || log.tool.includes("lp") || log.tool.includes("transfer")
+                      const provider = log.tool === "hub_crypto_rpc"
+                        ? { icon: "🌐", color: "#34D399", label: "Venice RPC" }
+                        : log.tool.includes("bankr") || log.tool.includes("wallet") || log.tool.includes("price") || log.tool.includes("holder") || log.tool.includes("nft") || log.tool.includes("lp") || log.tool.includes("transfer")
                         ? { icon: "🔮", color: "#A78BFA", label: "Bankr" }
                         : log.tool.includes("base") || log.tool.includes("contract") || log.tool.includes("gas") || log.tool.includes("block") || log.tool.includes("deploy") || log.tool.includes("bridge")
                         ? { icon: "🔵", color: "#34D399", label: "Base MCP" }

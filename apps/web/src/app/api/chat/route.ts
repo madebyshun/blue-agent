@@ -48,6 +48,7 @@ You have access to real-time Hub tools. Use them when the user asks about:
 - Security checks, honeypots, risk screening → hub_risk_gate, hub_honeypot, hub_deep_analysis
 - Builder scores, repo health, grants → hub_builder_score, hub_repo_health, hub_base_grant
 - Fundraising timing, ecosystem digest → hub_fundraise_timing, hub_ecosystem
+- Live onchain data: balance, tx, block, gas, contract calls → hub_crypto_rpc (21 chains: base, ethereum, arbitrum, optimism, polygon, etc.)
 
 If a tool is unavailable, answer from your own knowledge and note that live data is unavailable.
 If the user has memory context below, use it to personalize responses — reference their project, remember what they're building.`;
@@ -210,6 +211,37 @@ const HUB_TOOLS = [
       required: ["handle"],
     },
   },
+  {
+    name: "hub_crypto_rpc",
+    description: `Make a live onchain JSON-RPC call via Venice Crypto RPC. Use this when the user asks for:
+- wallet balance of an address on any chain
+- token balance (ERC-20 balanceOf)
+- transaction details or receipt (by hash)
+- block number, gas price, or fee data
+- contract call (eth_call) results
+- ENS lookup or any other live onchain data
+Supported networks: base, ethereum, arbitrum, optimism, polygon, avalanche, bsc, fantom, gnosis, zksync, linea, scroll, mantle, blast, mode, zora, celo, moonbeam, cronos, kava, metis.
+Default to "base" for Base-related queries. Always use the correct network for the user's request.`,
+    input_schema: {
+      type: "object",
+      properties: {
+        network: {
+          type: "string",
+          description: "Network name: base | ethereum | arbitrum | optimism | polygon | avalanche | bsc | fantom | gnosis | zksync | linea | scroll | mantle | blast | mode | zora | celo | moonbeam | cronos | kava | metis. Default: base",
+        },
+        method: {
+          type: "string",
+          description: "JSON-RPC method: eth_getBalance | eth_call | eth_getTransactionByHash | eth_getTransactionReceipt | eth_blockNumber | eth_gasPrice | eth_estimateGas | eth_getLogs | eth_getCode | eth_getStorageAt",
+        },
+        params: {
+          type: "array",
+          description: "JSON-RPC params array. Examples: eth_getBalance → [\"0xAddress\", \"latest\"], eth_call → [{to: \"0xContract\", data: \"0xCalldata\"}, \"latest\"]",
+          items: {},
+        },
+      },
+      required: ["method"],
+    },
+  },
 ];
 
 // ─── Tool → internal API mapping ──────────────────────────────────────────────
@@ -230,6 +262,7 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_repo_health:      "repo-health",
   hub_ecosystem:        "ecosystem-digest",
   hub_agent_score:      "agent-score",
+  hub_crypto_rpc:       "crypto-rpc",
 };
 
 // ─── Internal Hub tool caller ─────────────────────────────────────────────────
