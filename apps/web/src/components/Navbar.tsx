@@ -28,7 +28,7 @@ export default function Navbar() {
 
         {/* Left — logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
-          <img src="/logo.svg" alt="Blue Agent" className="h-7 w-7" />
+          <img src="/logomark.svg" alt="Blue Agent" className="h-7 w-7 rounded-lg" />
           <span className="hidden sm:inline font-mono font-semibold text-white tracking-widest text-sm">
             BLUE<span className="text-[#4FC3F7]">AGENT</span>
           </span>
