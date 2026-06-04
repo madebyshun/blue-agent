@@ -17,17 +17,156 @@ const CAT_COLORS: Record<SkillCategory, string> = {
 };
 
 // How many skill tags to show before "+ N more"
-const MAX_VISIBLE_TAGS = 4;
+const MAX_VISIBLE = 3;
 
+// ── Sub-components ─────────────────────────────────────────────────────────────
+
+function CategoryCard({
+  cat,
+  expanded,
+  onToggle,
+  onUse,
+}: {
+  cat: SkillCategory;
+  expanded: boolean;
+  onToggle: () => void;
+  onUse: (trigger: string) => void;
+}) {
+  const skills  = HUB_SKILLS.filter(s => s.category === cat);
+  const color   = CAT_COLORS[cat];
+  const visible = expanded ? skills : skills.slice(0, MAX_VISIBLE);
+  const hidden  = skills.length - MAX_VISIBLE;
+
+  return (
+    <div
+      className="rounded-2xl border transition-all"
+      style={{
+        borderColor: expanded ? `${color}30` : "#141420",
+        background:  expanded ? `${color}06` : "#0A0A12",
+      }}
+    >
+      {/* Header */}
+      <button
+        className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+        onClick={onToggle}
+      >
+        <span className="text-base shrink-0">{CATEGORY_ICONS[cat]}</span>
+        <div className="flex-1 min-w-0">
+          <p className="font-mono text-sm text-slate-200 font-medium">{cat}</p>
+          <p className="font-mono text-[10px] text-slate-600">{skills.length} tools</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            className="font-mono text-[8px] px-1.5 py-0.5 rounded border uppercase tracking-wider"
+            style={{ color, borderColor: `${color}35`, background: `${color}10` }}
+          >
+            ENABLED
+          </span>
+          <svg
+            className="w-3.5 h-3.5 text-slate-600 transition-transform duration-200"
+            style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </button>
+
+      {/* Tags row — always visible */}
+      <div className="px-4 pb-3">
+        <div className="flex flex-wrap gap-1.5">
+          {visible.map(skill => (
+            <button
+              key={skill.id}
+              onClick={() => onUse(skill.trigger)}
+              title={skill.description}
+              className="font-mono text-[10px] px-2.5 py-1 rounded-lg border transition-all hover:opacity-100"
+              style={{
+                color,
+                borderColor: `${color}30`,
+                background:  `${color}10`,
+                opacity:     expanded ? 1 : 0.75,
+              }}
+            >
+              {skill.name}
+            </button>
+          ))}
+          {!expanded && hidden > 0 && (
+            <button
+              onClick={onToggle}
+              className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] text-slate-600 hover:text-slate-400 transition-colors"
+            >
+              +{hidden} more
+            </button>
+          )}
+        </div>
+
+        {/* Expanded: full list with descriptions */}
+        {expanded && (
+          <div className="mt-3 space-y-0.5">
+            <div className="h-px bg-[#1A1A2E] mb-3" />
+            {skills.map(skill => (
+              <button
+                key={skill.id}
+                onClick={() => onUse(skill.trigger)}
+                className="group w-full flex items-start justify-between gap-3 px-3 py-2 rounded-xl hover:bg-[#050508] transition-colors text-left"
+              >
+                <div className="min-w-0">
+                  <p className="font-mono text-sm text-slate-300 group-hover:text-white transition-colors">{skill.name}</p>
+                  <p className="font-mono text-[10px] text-slate-600 leading-relaxed">{skill.description}</p>
+                </div>
+                <span
+                  className="font-mono text-[9px] shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-0.5 rounded"
+                  style={{ color, background: `${color}15` }}
+                >
+                  run →
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Search result row ──────────────────────────────────────────────────────────
+function SearchRow({
+  name, description, trigger, category, onUse,
+}: {
+  name: string; description: string; trigger: string; category: SkillCategory;
+  onUse: (t: string) => void;
+}) {
+  const color = CAT_COLORS[category];
+  return (
+    <button
+      onClick={() => onUse(trigger)}
+      className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl border border-[#141420] hover:border-[#1A1A2E] bg-[#0A0A12] hover:bg-[#0D0D16] transition-all group"
+    >
+      <span className="text-base shrink-0">{CATEGORY_ICONS[category]}</span>
+      <div className="flex-1 min-w-0">
+        <p className="font-mono text-sm text-slate-200 group-hover:text-white transition-colors">{name}</p>
+        <p className="font-mono text-[10px] text-slate-600 truncate">{description}</p>
+      </div>
+      <span
+        className="shrink-0 font-mono text-[9px] px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+        style={{ color, background: `${color}15` }}
+      >
+        run →
+      </span>
+    </button>
+  );
+}
+
+// ── Main ───────────────────────────────────────────────────────────────────────
 export default function ToolsTab() {
   const { setInput, setSidebarTab } = useChat();
   const [search, setSearch]         = useState("");
   const [expanded, setExpanded]     = useState<SkillCategory | null>(null);
 
-  const lc = search.trim().toLowerCase();
+  const lc          = search.trim().toLowerCase();
   const isSearching = !!lc;
 
-  // Skills that match the search
   const searchResults = isSearching
     ? HUB_SKILLS.filter(s =>
         s.name.toLowerCase().includes(lc) ||
@@ -38,195 +177,95 @@ export default function ToolsTab() {
 
   function use(trigger: string) {
     setInput(trigger);
-    // On mobile setSidebarTab("tasks") would switch tab; on desktop sidebar stays
     if (typeof window !== "undefined" && window.innerWidth < 1024) {
       setSidebarTab("none" as Parameters<typeof setSidebarTab>[0]);
     }
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Toolbar */}
-      <div className="flex-shrink-0 border-b border-[#1A1A2E]">
-        <div className="max-w-3xl mx-auto px-6 py-3">
-          <div className="relative">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-            </svg>
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search tools…"
-              className="w-full bg-[#0D0D14] border border-[#1A1A2E] rounded-xl pl-9 pr-4 py-2 font-mono text-xs text-white placeholder:text-slate-700 outline-none focus:border-[#2A2A4E] transition-colors"
-            />
-            {search && (
-              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-400 text-sm">
-                ×
-              </button>
-            )}
+    <div className="flex flex-col h-full bg-[#050508] overflow-hidden">
+
+      {/* ── Header ── */}
+      <div className="px-6 py-5 border-b border-[#1A1A2E] flex-shrink-0">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-mono text-xs text-white tracking-widest">// HUB TOOLS</h2>
+            <p className="font-mono text-[10px] text-slate-700 mt-0.5">
+              {HUB_SKILLS.length} tools · {SKILL_CATEGORIES.length} categories · click to run
+            </p>
           </div>
+          <span
+            className="font-mono text-[9px] px-2 py-1 rounded-lg border"
+            style={{ color: "#4FC3F7", borderColor: "#4FC3F730", background: "#4FC3F710" }}
+          >
+            BLUE HUB
+          </span>
+        </div>
+
+        {/* Search */}
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+          </svg>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search tools…"
+            className="w-full bg-[#0A0A12] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-xl pl-9 pr-8 py-2.5 font-mono text-sm text-white placeholder:text-slate-700 outline-none transition-colors"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto pb-3">
-        <div className="max-w-3xl mx-auto px-6 pt-3 space-y-2">
+      {/* ── Content ── */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-6 py-4 space-y-3">
 
-        {isSearching ? (
-          /* ── Search results — compact list ── */
-          searchResults.length === 0 ? (
-            <p className="font-mono text-[10px] text-slate-700 text-center py-6">No skills found</p>
+          {isSearching ? (
+            /* Search results */
+            searchResults.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="font-mono text-sm text-slate-500">No tools found</p>
+                <p className="font-mono text-[10px] text-slate-700 mt-1">Try a different search term</p>
+              </div>
+            ) : (
+              <>
+                <p className="font-mono text-[10px] text-slate-600 mb-2">{searchResults.length} results</p>
+                {searchResults.map(skill => (
+                  <SearchRow
+                    key={skill.id}
+                    name={skill.name}
+                    description={skill.description}
+                    trigger={skill.trigger}
+                    category={skill.category}
+                    onUse={use}
+                  />
+                ))}
+              </>
+            )
           ) : (
-            searchResults.map(skill => (
-              <SkillTag
-                key={skill.id}
-                name={skill.name}
-                description={skill.description}
-                trigger={skill.trigger}
-                color={CAT_COLORS[skill.category]}
-                catIcon={CATEGORY_ICONS[skill.category]}
+            /* Category cards */
+            SKILL_CATEGORIES.map(cat => (
+              <CategoryCard
+                key={cat}
+                cat={cat}
+                expanded={expanded === cat}
+                onToggle={() => setExpanded(expanded === cat ? null : cat)}
                 onUse={use}
               />
             ))
-          )
-        ) : (
-          /* ── Toolset cards — one card per category ── */
-          SKILL_CATEGORIES.map(cat => {
-            const skills  = HUB_SKILLS.filter(s => s.category === cat);
-            const color   = CAT_COLORS[cat];
-            const isOpen  = expanded === cat;
-            const visible = isOpen ? skills : skills.slice(0, MAX_VISIBLE_TAGS);
-            const hidden  = skills.length - MAX_VISIBLE_TAGS;
-
-            return (
-              <div
-                key={cat}
-                className="rounded-xl border transition-all"
-                style={{ borderColor: isOpen ? `${color}30` : "#1A1A2E", background: isOpen ? `${color}05` : "#050508" }}
-              >
-                {/* Card header */}
-                <button
-                  className="w-full flex items-center gap-2 px-3 py-2.5 text-left"
-                  onClick={() => setExpanded(isOpen ? null : cat)}
-                >
-                  <span className="text-sm">{CATEGORY_ICONS[cat]}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-mono text-xs text-slate-300 truncate">{cat}</p>
-                    <p className="font-mono text-[9px] text-slate-600">{skills.length} skills</p>
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <span
-                      className="font-mono text-[8px] px-1.5 py-0.5 rounded border"
-                      style={{ color, borderColor: `${color}40`, background: `${color}12` }}
-                    >
-                      ENABLED
-                    </span>
-                    <svg
-                      className="w-3 h-3 text-slate-600 transition-transform"
-                      style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </button>
-
-                {/* Skill tags */}
-                <div className="px-3 pb-2.5">
-                  <div className="flex flex-wrap gap-1">
-                    {visible.map(skill => (
-                      <button
-                        key={skill.id}
-                        onClick={() => use(skill.trigger)}
-                        title={skill.description}
-                        className="font-mono text-[9px] px-2 py-0.5 rounded border transition-all hover:opacity-100"
-                        style={{
-                          color,
-                          borderColor: `${color}30`,
-                          background:  `${color}08`,
-                          opacity: isOpen ? 1 : 0.7,
-                        }}
-                      >
-                        {skill.name}
-                      </button>
-                    ))}
-                    {!isOpen && hidden > 0 && (
-                      <button
-                        onClick={() => setExpanded(cat)}
-                        className="font-mono text-[9px] px-2 py-0.5 rounded border border-[#1A1A2E] text-slate-600 hover:text-slate-400 transition-colors"
-                      >
-                        +{hidden} more
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Expanded: show descriptions */}
-                  {isOpen && (
-                    <div className="mt-2 space-y-1">
-                      {skills.map(skill => (
-                        <div
-                          key={skill.id}
-                          className="flex items-start justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors group cursor-pointer"
-                          onClick={() => use(skill.trigger)}
-                        >
-                          <div className="min-w-0">
-                            <p className="font-mono text-[10px] text-slate-300 group-hover:text-white transition-colors truncate">{skill.name}</p>
-                            <p className="font-mono text-[9px] text-slate-600 truncate">{skill.description}</p>
-                          </div>
-                          <span
-                            className="flex-shrink-0 font-mono text-[8px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                            style={{ color, background: `${color}15` }}
-                          >
-                            use →
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })
-        )}
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="flex-shrink-0 border-t border-[#1A1A2E]">
-        <div className="max-w-3xl mx-auto px-6 py-2">
-          <p className="font-mono text-[9px] text-slate-700">
-            {HUB_SKILLS.length} tools · {SKILL_CATEGORIES.length} categories · click to run
-          </p>
+          )}
         </div>
       </div>
     </div>
-  );
-}
-
-// ── Compact skill tag row for search results ───────────────────────────────────
-function SkillTag({
-  name, description, trigger, color, catIcon, onUse,
-}: {
-  name: string; description: string; trigger: string;
-  color: string; catIcon: string;
-  onUse: (t: string) => void;
-}) {
-  return (
-    <button
-      onClick={() => onUse(trigger)}
-      className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl border border-[#1A1A2E] hover:border-[#2A2A4E] bg-[#050508] hover:bg-[#0D0D14] transition-all group"
-    >
-      <span className="text-sm flex-shrink-0">{catIcon}</span>
-      <div className="flex-1 min-w-0">
-        <p className="font-mono text-[10px] text-slate-300 group-hover:text-white transition-colors truncate">{name}</p>
-        <p className="font-mono text-[9px] text-slate-600 truncate">{description}</p>
-      </div>
-      <span
-        className="flex-shrink-0 font-mono text-[8px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-        style={{ color, background: `${color}15` }}
-      >
-        use
-      </span>
-    </button>
   );
 }
