@@ -360,23 +360,19 @@ export default function ChatMessages() {
                   isAssistant ? "" : "justify-end"
                 }`}
               >
-                {/* ── Avatar ─────────────────────────────────────────────── */}
-                {isAssistant ? (
-                  /* Blue Agent avatar — logomark.svg (avoids duplicate inline gradient IDs) */
-                  <img
-                    src="/logomark.svg"
-                    alt="Blue Agent"
-                    width={32} height={32}
-                    className="shrink-0 mt-1 rounded-lg"
-                    style={{ imageRendering: "crisp-edges" }}
-                  />
-                ) : null}
-
                 {/* ── Content column ──────────────────────────────────────── */}
                 <div className={`flex-1 min-w-0 ${isAssistant ? "" : "flex flex-col items-end"}`}>
 
-                  {/* Name + timestamp header */}
-                  <div className={`flex items-baseline gap-2 mb-1 ${isAssistant ? "" : "flex-row-reverse"}`}>
+                  {/* Name + timestamp header — logo inline with name */}
+                  <div className={`flex items-center gap-2 mb-1.5 ${isAssistant ? "" : "flex-row-reverse"}`}>
+                    {isAssistant && (
+                      <img
+                        src="/logomark.svg"
+                        alt="Blue Agent"
+                        width={20} height={20}
+                        className="rounded-md shrink-0"
+                      />
+                    )}
                     <span className="font-mono text-[12px] font-bold text-white">
                       {isAssistant ? "Blue Agent" : "You"}
                     </span>
@@ -487,11 +483,6 @@ export default function ChatMessages() {
                 </div>
 
                 {/* User avatar — right side */}
-                {!isAssistant && (
-                  <div className="w-[30px] h-[30px] rounded-lg bg-[#131325] border border-[#1E1E35] flex items-center justify-center flex-shrink-0 mt-1 shrink-0">
-                    <span className="font-mono text-[9px] font-bold text-slate-500">YOU</span>
-                  </div>
-                )}
               </div>
             );
           })}
