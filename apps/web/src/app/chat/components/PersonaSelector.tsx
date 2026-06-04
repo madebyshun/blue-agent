@@ -4,44 +4,53 @@ import { PERSONAS } from "../personas";
 
 export default function PersonaSelector() {
   const { personaId, setPersonaId, customPersonaPrompt, setCustomPersonaPrompt } = useChat();
-  const active = PERSONAS.find(p => p.id === personaId) ?? PERSONAS[0];
 
   return (
-    <div>
-      <p className="font-mono text-[9px] text-slate-600 tracking-widest px-2 mb-2">PERSONA</p>
-      <div className="flex flex-wrap gap-1 px-1">
-        {PERSONAS.map(p => (
+    <div className="space-y-1.5">
+      {PERSONAS.map(p => {
+        const isActive = personaId === p.id;
+        return (
           <button
             key={p.id}
             onClick={() => setPersonaId(p.id)}
-            title={p.label}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg font-mono text-[10px] transition-all border"
-            style={personaId === p.id
-              ? { color: p.color, background: `${p.color}12`, borderColor: `${p.color}35` }
-              : { color: "#475569", borderColor: "transparent" }}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left border"
+            style={isActive
+              ? { background: `${p.color}12`, borderColor: `${p.color}35` }
+              : { borderColor: "transparent" }}
           >
-            <span>{p.icon}</span>
-            <span className="hidden xl:inline">{p.label}</span>
+            {/* Color dot */}
+            <span
+              className="w-2 h-2 rounded-full shrink-0 transition-all"
+              style={{
+                background: isActive ? p.color : "#1E293B",
+                boxShadow: isActive ? `0 0 6px ${p.color}70` : "none",
+              }}
+            />
+            {/* Icon + label */}
+            <span className="text-sm shrink-0">{p.icon}</span>
+            <span
+              className="font-mono text-sm font-medium flex-1"
+              style={{ color: isActive ? p.color : "#64748b" }}
+            >
+              {p.label}
+            </span>
+            {isActive && (
+              <span className="font-mono text-[9px] shrink-0" style={{ color: p.color }}>active</span>
+            )}
           </button>
-        ))}
-      </div>
+        );
+      })}
 
       {personaId === "custom" && (
-        <div className="mt-2 mx-1">
+        <div className="pt-1">
           <textarea
             value={customPersonaPrompt}
             onChange={e => setCustomPersonaPrompt(e.target.value)}
             placeholder="Enter custom system prompt…"
-            rows={3}
-            className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#FB923C]/40 rounded-lg px-3 py-2 font-mono text-[10px] text-slate-300 placeholder:text-slate-700 outline-none resize-none transition-colors"
+            rows={4}
+            className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#FB923C]/40 rounded-xl px-3 py-2.5 font-mono text-xs text-slate-300 placeholder:text-slate-700 outline-none resize-none transition-colors"
           />
         </div>
-      )}
-
-      {personaId !== "blue-agent" && personaId !== "custom" && (
-        <p className="font-mono text-[9px] text-slate-700 px-2 mt-1" style={{ color: `${active.color}80` }}>
-          {active.label} mode active
-        </p>
       )}
     </div>
   );
