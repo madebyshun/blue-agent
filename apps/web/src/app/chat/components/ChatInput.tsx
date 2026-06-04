@@ -221,7 +221,7 @@ export default function ChatInput() {
               label="🔒 PRIVACY · E2EE" tiers={PRIVACY_TIERS}
               active={chatTier} holderTier={holderTier}
               onSelect={(id) => { setChatTier(id); setModelOpen(false); textareaRef.current?.focus(); }}
-              description="Zero logs · hardware-secured"
+              description="Transmitted over HTTPS · client-side key mgmt coming soon"
             />
           </div>
         )}
