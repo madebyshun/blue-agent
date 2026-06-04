@@ -77,13 +77,23 @@ export function getDailyCr(tier: TierInfo, hasWallet: boolean): number {
 // ── Credit costs ──────────────────────────────────────────────────────────────
 
 export const BASE_COST: Record<string, number> = {
-  fast:              10,
-  pro:               50,
-  max:              200,
-  "venice-deepseek": 10,
-  "venice-grok":     60,
-  "venice-uncut":    20,
-  "venice-mistral":  10,
+  // Bankr (Anthropic)
+  fast:                   10,
+  pro:                    50,
+  max:                   200,
+  // Venice — standard
+  "venice-deepseek":      10,
+  "venice-deepseek-pro":  30,
+  "venice-kimi":          20,
+  "venice-claude":        80,
+  "venice-grok":          60,
+  "venice-qwen":          40,
+  "venice-mistral":       10,
+  "venice-uncut":         20,
+  // Venice — Privacy / E2EE
+  "venice-e2ee-venice":   30,
+  "venice-e2ee-gemma":    30,
+  "venice-e2ee-qwen":     40,
 };
 
 export function creditCost(chatTier: string, holderTier: TierInfo): number {
