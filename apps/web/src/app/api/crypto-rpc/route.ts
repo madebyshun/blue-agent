@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 const VENICE_RPC = "https://api.venice.ai/api/v1/crypto/rpc";
 
 // Supported Venice networks (venice network ID → display name)
-export const VENICE_NETWORKS: Record<string, string> = {
+const VENICE_NETWORKS: Record<string, string> = {
   base:             "Base",
   ethereum:         "Ethereum",
   arbitrum:         "Arbitrum One",
