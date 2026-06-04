@@ -82,6 +82,7 @@ interface ChatContextValue {
   daily:          number;
   cost:           number;
   outOfCredits:   boolean;
+  walletReady:    boolean;
   onWalletChange: (addr: string | undefined, tier: TierInfo) => void;
   setCredits:     (n: number) => void;
   walletRefresh:  number;          // increment to force WalletBar balance re-fetch
@@ -131,11 +132,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [walletRefresh, setWalletRefresh] = useState(0);
   const triggerWalletRefresh = useCallback(() => setWalletRefresh(n => n + 1), []);
 
+  // Only refresh credits after wallet detection completes — avoids 30-credit flash
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (!walletReady) return;
     const result = refreshCreditsIfNeeded(holderTier.blueBalance, walletAddr);
     setCredits(result.credits);
-  }, [walletAddr, holderTier.blueBalance]);
+  }, [walletReady, walletAddr, holderTier.blueBalance]);
 
   useEffect(() => {
     function tick() {
@@ -551,7 +554,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     sidebarTab, setSidebarTab,
     buyOpen, setBuyOpen,
     walletAddr, holderTier, credits, countdown, isUnlimited, daily, cost, outOfCredits,
-    onWalletChange, setCredits, walletRefresh, triggerWalletRefresh,
+    walletReady, onWalletChange, setCredits, walletRefresh, triggerWalletRefresh,
     webSearch, setWebSearch, pendingFiles, setPendingFiles,
     cmdMenu, setCmdMenu, cmdFilter, setCmdFilter,
   };

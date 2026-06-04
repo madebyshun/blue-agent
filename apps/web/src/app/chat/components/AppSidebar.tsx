@@ -89,7 +89,7 @@ export default function AppSidebar({
 }) {
   const {
     tasks, activeTaskId, createNewTask, selectTask, deleteTask,
-    crons, credits, isUnlimited, holderTier,
+    crons, credits, isUnlimited, holderTier, walletReady,
   } = useChat();
 
   const activeCrons = crons.filter(c => c.active).length;
@@ -237,15 +237,15 @@ export default function AppSidebar({
           <span
             className="w-1.5 h-1.5 rounded-full shrink-0"
             style={{
-              background: isUnlimited ? holderTier.color : credits <= 20 ? "#EF4444" : "#475569",
-              boxShadow: isUnlimited ? `0 0 5px ${holderTier.color}` : undefined,
+              background: !walletReady ? "#334155" : isUnlimited ? holderTier.color : credits <= 20 ? "#EF4444" : "#475569",
+              boxShadow: isUnlimited && walletReady ? `0 0 5px ${holderTier.color}` : undefined,
             }}
           />
           <span
             className="font-mono text-[10px]"
             style={{ color: isUnlimited ? holderTier.color : credits <= 20 ? "#EF4444" : "#64748b" }}
           >
-            {isUnlimited ? "∞" : credits > 999 ? `${Math.floor(credits / 1000)}k` : credits} credits
+            {!walletReady ? "…" : isUnlimited ? "∞" : credits > 999 ? `${Math.floor(credits / 1000)}k` : credits} credits
           </span>
           {isUnlimited && (
             <span
