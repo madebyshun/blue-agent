@@ -6,7 +6,6 @@ import { injected } from "wagmi/connectors";
 import {
   fetchBlueBalance,
   getTierInfo,
-  refreshCreditsIfNeeded,
   getCredits,
   TierInfo,
 } from "@/lib/credits";
@@ -36,22 +35,25 @@ export default function WalletBar({ onWalletChange, refreshTrigger = 0 }: Wallet
   const [credits,   setCredits]   = useState(0);
   const [showPanel, setShowPanel] = useState(false);
 
-  // Fetch BLUE balance + set tier whenever address or refreshTrigger changes
+  // Fetch BLUE balance + set tier whenever address or refreshTrigger changes.
+  // NOTE: WalletBar does NOT call refreshCreditsIfNeeded — that is handled exclusively
+  // by ChatContext's useEffect after onWalletChange fires. This prevents WalletBar from
+  // resetting credits before ChatContext can read the correct (deducted) value.
   useEffect(() => {
     if (!address) {
       const t = { tier: "Starter" as const, blueBalance: 0, dailyCr: 200, discount: 0, color: "#4FC3F7" };
       setTier(t);
-      const result = refreshCreditsIfNeeded(0, undefined);
-      setCredits(result.credits);
+      setCredits(getCredits(undefined) ?? 0);
       onWalletChange?.(undefined, t);
       return;
     }
     (async () => {
       const balance = await fetchBlueBalance(address);
       const t       = getTierInfo(balance);
-      const result  = refreshCreditsIfNeeded(balance, address);
       setTier(t);
-      setCredits(result.credits);
+      // Read current credits from localStorage — don't refresh/reset here.
+      // ChatContext will call refreshCreditsIfNeeded once after receiving onWalletChange.
+      setCredits(Math.max(0, getCredits(address) ?? 0));
       onWalletChange?.(address, t);
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
