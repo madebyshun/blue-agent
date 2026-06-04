@@ -331,10 +331,10 @@ export default function ChatMessages() {
           <h2 className="font-mono text-3xl sm:text-4xl font-bold text-white tracking-tight mb-3">
             What are you building?
           </h2>
-          <p className="font-mono text-sm text-slate-500 max-w-sm mx-auto leading-relaxed mb-10">
+          <p className="font-mono text-sm text-slate-500 max-w-lg mx-auto leading-relaxed mb-10">
             Ideas, architecture, audits, launches, fundraising — grounded in Base.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl mx-auto mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 w-full max-w-4xl mx-auto mb-8">
             {STARTERS.map(s => (
               <button key={s.text} onClick={() => send(s.text)} disabled={outOfCredits}
                 className="text-left px-5 py-4 rounded-2xl border transition-all disabled:opacity-40 group"
@@ -362,20 +362,20 @@ export default function ChatMessages() {
         </div>
       ) : (
         /* ── Message list ────────────────────────────────────────────────── */
-        <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 space-y-1">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-1">
           {messages.map((msg, i) => {
             const isAssistant = msg.role === "assistant";
 
             return (
               <div key={i}
-                className={`group/row flex gap-4 px-3 py-2 rounded-xl transition-colors hover:bg-white/[0.02] ${
+                className={`group/row flex gap-3 px-2 py-1.5 rounded-xl transition-colors hover:bg-white/[0.015] ${
                   isAssistant ? "" : "justify-end"
                 }`}
               >
                 {/* ── Avatar ─────────────────────────────────────────────── */}
                 {isAssistant ? (
                   /* Blue Agent avatar — logomark */
-                  <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0 mt-0.5 rounded-xl overflow-hidden">
+                  <svg width="30" height="30" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0 mt-1 rounded-lg overflow-hidden">
                     <defs>
                       <radialGradient id="ba-avatar-grad" cx="30%" cy="22%" r="85%" gradientUnits="objectBoundingBox">
                         <stop offset="0%"   stopColor="#55CCFF"/>
@@ -387,21 +387,18 @@ export default function ChatMessages() {
                     <rect x="10" y="11" width="6" height="12" rx="1.8" fill="white"/>
                     <rect x="20" y="11" width="6" height="12" rx="1.8" fill="white"/>
                   </svg>
-                ) : (
-                  /* User avatar — shown on right, after content */
-                  null
-                )}
+                ) : null}
 
                 {/* ── Content column ──────────────────────────────────────── */}
                 <div className={`flex-1 min-w-0 ${isAssistant ? "" : "flex flex-col items-end"}`}>
 
                   {/* Name + timestamp header */}
                   <div className={`flex items-baseline gap-2 mb-1 ${isAssistant ? "" : "flex-row-reverse"}`}>
-                    <span className="font-mono text-[13px] font-bold text-white">
+                    <span className="font-mono text-[12px] font-bold text-white">
                       {isAssistant ? "Blue Agent" : "You"}
                     </span>
                     {msg.createdAt && (
-                      <span className="font-mono text-[11px] text-slate-600">
+                      <span className="font-mono text-[10px] text-slate-700">
                         {fmtTime(msg.createdAt)}
                       </span>
                     )}
@@ -482,8 +479,8 @@ export default function ChatMessages() {
                       )}
                     </div>
                   ) : (
-                    /* ── User message body ─────────────────────────────────── */
-                    <div>
+                    /* ── User message body — compact bubble ────────────────── */
+                    <div className="max-w-[70%]">
                       {/* Attachments */}
                       {!!msg.attachments?.length && (
                         <div className="flex flex-wrap gap-1.5 mb-2 justify-end">
@@ -496,17 +493,20 @@ export default function ChatMessages() {
                           ))}
                         </div>
                       )}
-                      <p className="font-mono text-[15px] text-slate-200 leading-relaxed whitespace-pre-wrap text-right">
-                        {msg.content}
-                      </p>
+                      <div className="px-3.5 py-2.5 rounded-2xl rounded-tr-sm"
+                        style={{ background: "#0F0F1E", border: "1px solid #1E1E32" }}>
+                        <p className="font-mono text-[13px] text-slate-200 leading-relaxed whitespace-pre-wrap">
+                          {msg.content}
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
 
                 {/* User avatar — right side */}
                 {!isAssistant && (
-                  <div className="w-9 h-9 rounded-xl bg-[#0F0F1E] border border-[#1E1E32] flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="font-mono text-[10px] text-slate-500">you</span>
+                  <div className="w-[30px] h-[30px] rounded-lg bg-[#131325] border border-[#1E1E35] flex items-center justify-center flex-shrink-0 mt-1 shrink-0">
+                    <span className="font-mono text-[9px] font-bold text-slate-500">YOU</span>
                   </div>
                 )}
               </div>

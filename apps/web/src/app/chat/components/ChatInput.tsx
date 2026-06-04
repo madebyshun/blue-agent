@@ -144,8 +144,8 @@ export default function ChatInput() {
   const activeCmdDef = SLASH_COMMANDS.find(c => c.cmd === activeCmd);
 
   return (
-    <div className="border-t border-[#1A1A2E] bg-[#050508] px-4 sm:px-6 py-3 flex-shrink-0">
-      <div className="max-w-3xl mx-auto relative">
+    <div className="border-t border-[#1A1A2E] bg-[#050508] px-4 sm:px-6 lg:px-8 py-3 flex-shrink-0">
+      <div className="relative">
 
         {/* ── Slash command menu (typed /) ─────────────────────────────────── */}
         {cmdMenu && filteredCmds.length > 0 && (
