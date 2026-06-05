@@ -247,72 +247,71 @@ export default function RewardsPage() {
       <Navbar />
 
       {/* Hero gradient */}
-      <div className="absolute inset-x-0 top-0 h-[340px] pointer-events-none overflow-hidden">
+      <div className="absolute inset-x-0 top-0 h-[500px] pointer-events-none overflow-hidden">
         <div className="absolute inset-0"
-          style={{ background: "radial-gradient(ellipse 80% 60% at 50% -10%, #4FC3F712 0%, transparent 70%)" }} />
+          style={{ background: "radial-gradient(ellipse 100% 50% at 50% -5%, #4FC3F718 0%, transparent 65%)" }} />
       </div>
 
-      <div className="relative max-w-[680px] mx-auto px-4 pt-24 pb-24">
+      <div className="relative max-w-[900px] mx-auto px-6 pt-28 pb-24">
 
         {/* ── Header ── */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#4FC3F730] bg-[#4FC3F708] mb-4">
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#4FC3F730] bg-[#4FC3F708] mb-5">
             <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
             <span className="font-mono text-[11px] text-[#4FC3F7] tracking-widest">BASE MAINNET · LIVE</span>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight mb-2">
+          <h1 className="text-5xl font-bold tracking-tight mb-3">
             Blue Chat <span className="text-[#4FC3F7]">Rewards</span>
           </h1>
-          <p className="text-slate-500 text-sm">
+          <p className="text-slate-500 text-base max-w-md mx-auto">
             Stake $BLUEAGENT → credits accrue on-chain · earn USDC from x402 revenue
           </p>
 
           {/* Protocol stats */}
-          <div className="flex items-center justify-center gap-6 mt-5">
+          <div className="inline-flex items-center gap-8 mt-8 px-8 py-4 rounded-2xl border border-[#1A1A2E] bg-[#0d0d12]">
             <div className="text-center">
-              <div className="font-mono text-base font-bold text-white">
+              <div className="font-mono text-xl font-bold text-white">
                 {globalStaked ? fmtBlue(globalStaked) : "—"}
               </div>
-              <div className="font-mono text-[10px] text-slate-600 mt-0.5">TOTAL STAKED</div>
+              <div className="font-mono text-[10px] text-slate-600 mt-1 tracking-widest">TOTAL STAKED</div>
             </div>
-            <div className="w-px h-6 bg-[#1A1A2E]" />
+            <div className="w-px h-8 bg-[#1A1A2E]" />
             <div className="text-center">
-              <div className="font-mono text-base font-bold text-[#22C55E]">20%</div>
-              <div className="font-mono text-[10px] text-slate-600 mt-0.5">x402 REVENUE</div>
+              <div className="font-mono text-xl font-bold text-[#22C55E]">20%</div>
+              <div className="font-mono text-[10px] text-slate-600 mt-1 tracking-widest">x402 REVENUE</div>
             </div>
-            <div className="w-px h-6 bg-[#1A1A2E]" />
+            <div className="w-px h-8 bg-[#1A1A2E]" />
             <div className="text-center">
-              <div className="font-mono text-base font-bold text-[#A78BFA]">1 day</div>
-              <div className="font-mono text-[10px] text-slate-600 mt-0.5">COOLDOWN</div>
+              <div className="font-mono text-xl font-bold text-[#A78BFA]">1 day</div>
+              <div className="font-mono text-[10px] text-slate-600 mt-1 tracking-widest">COOLDOWN</div>
             </div>
           </div>
         </div>
 
         {!isConnected ? (
           /* ── Not connected ── */
-          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-10 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-[#4FC3F710] border border-[#4FC3F720] flex items-center justify-center mx-auto mb-5">
-              <span className="text-2xl">⚡</span>
+          <div className="max-w-[600px] mx-auto rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-12 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-[#4FC3F710] border border-[#4FC3F720] flex items-center justify-center mx-auto mb-6">
+              <span className="text-3xl">⚡</span>
             </div>
-            <p className="text-slate-400 text-sm mb-6">
+            <p className="text-slate-400 mb-8">
               Connect wallet to stake BLUE and earn credits
             </p>
             <ConnectButton label="Connect Wallet" />
 
             {/* Tier preview */}
-            <div className="mt-8 grid grid-cols-3 gap-3">
+            <div className="mt-10 grid grid-cols-3 gap-4">
               {TIERS.slice(1).map(t => (
-                <div key={t.name} className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3 text-left">
-                  <div className="font-mono text-[10px] tracking-widest mb-1.5" style={{ color: t.color }}>
+                <div key={t.name} className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 text-left">
+                  <div className="font-mono text-[10px] tracking-widest mb-2" style={{ color: t.color }}>
                     {t.name.toUpperCase()}
                   </div>
-                  <div className="font-mono text-sm font-bold text-white">
+                  <div className="font-mono text-base font-bold text-white">
                     {t.credits === 9999 ? "∞" : t.credits.toLocaleString()}
-                    <span className="text-[10px] text-slate-600 ml-1">cr/day</span>
+                    <span className="text-[11px] text-slate-600 ml-1">cr/day</span>
                   </div>
-                  <div className="font-mono text-[10px] text-slate-600 mt-1">
-                    {(t.min / 1_000_000).toFixed(t.min < 1_000_000 ? 1 : 0)}
-                    {t.min < 1_000_000 ? "K" : "M"} BLUE
+                  <div className="font-mono text-[11px] text-slate-600 mt-1.5">
+                    {t.min >= 1_000_000 ? `${(t.min / 1_000_000).toFixed(0)}M` : `${(t.min / 1_000).toFixed(0)}K`} BLUE
                   </div>
                 </div>
               ))}
@@ -320,42 +319,40 @@ export default function RewardsPage() {
           </div>
         ) : (
           <>
-            {/* ── Position card ── */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-6 mb-4"
-              style={{ boxShadow: staked > 0 ? `0 0 40px ${tier.color}08` : "none" }}>
+            {/* ── 2-col layout: Position left, Actions right ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4 mb-4">
 
-              <div className="flex items-start justify-between mb-5">
+            {/* ── Position card ── */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-8"
+              style={{ boxShadow: staked > 0 ? `0 0 60px ${tier.color}0a` : "none" }}>
+
+              <div className="flex items-start justify-between mb-6">
                 <div>
-                  <div className="font-mono text-[10px] text-slate-600 tracking-widest mb-1">YOUR POSITION</div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-bold tracking-tight" style={{ color: staked > 0 ? tier.color : "#475569" }}>
+                  <div className="font-mono text-[10px] text-slate-600 tracking-widest mb-2">YOUR POSITION</div>
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-6xl font-bold tracking-tight" style={{ color: staked > 0 ? tier.color : "#2a2a3e" }}>
                       {fmtBlue(stakedWei)}
                     </span>
-                    <span className="font-mono text-sm text-slate-600">BLUE staked</span>
+                    <span className="font-mono text-base text-slate-600">BLUE</span>
                   </div>
                 </div>
-                {/* Tier badge */}
-                <div className="px-3 py-1.5 rounded-lg border font-mono text-xs font-bold tracking-widest"
-                  style={{
-                    color: tier.color,
-                    background: `${tier.color}10`,
-                    borderColor: `${tier.color}30`,
-                  }}>
+                <div className="px-4 py-2 rounded-xl border font-mono text-sm font-bold tracking-widest"
+                  style={{ color: tier.color, background: `${tier.color}12`, borderColor: `${tier.color}35` }}>
                   {tier.name === "None" ? "NO TIER" : tier.name.toUpperCase()}
                 </div>
               </div>
 
               {/* Stats row */}
-              <div className="grid grid-cols-3 gap-3 mb-5">
-                <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-3">
-                  <div className="font-mono text-[10px] text-slate-600 mb-1">CREDITS / DAY</div>
-                  <div className="font-mono text-lg font-bold text-[#4FC3F7]">
+              <div className="grid grid-cols-3 gap-3 mb-7">
+                <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-4">
+                  <div className="font-mono text-[10px] text-slate-600 mb-2 tracking-widest">CREDITS / DAY</div>
+                  <div className="font-mono text-2xl font-bold text-[#4FC3F7]">
                     {Number(dailyCr).toLocaleString()}
                   </div>
                 </div>
-                <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-3">
-                  <div className="font-mono text-[10px] text-slate-600 mb-1">TOTAL EARNED</div>
-                  <div className="font-mono text-lg font-bold text-white">
+                <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-4">
+                  <div className="font-mono text-[10px] text-slate-600 mb-2 tracking-widest">TOTAL EARNED</div>
+                  <div className="font-mono text-2xl font-bold text-white">
                     {totalCredits !== undefined
                       ? Number(totalCredits) < 1
                         ? Number(totalCredits).toFixed(4)
@@ -363,9 +360,9 @@ export default function RewardsPage() {
                       : "—"}
                   </div>
                 </div>
-                <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-3">
-                  <div className="font-mono text-[10px] text-slate-600 mb-1">USDC YIELD</div>
-                  <div className="font-mono text-lg font-bold text-[#22C55E]">
+                <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-4">
+                  <div className="font-mono text-[10px] text-slate-600 mb-2 tracking-widest">USDC YIELD</div>
+                  <div className="font-mono text-2xl font-bold text-[#22C55E]">
                     ${(Number(pendingUSDC) / 1e6).toFixed(4)}
                   </div>
                 </div>
@@ -373,33 +370,34 @@ export default function RewardsPage() {
 
               {/* Tier progress bar */}
               <div>
-                <div className="flex justify-between items-center mb-1.5">
-                  <span className="font-mono text-[10px] text-slate-600">
-                    {nextTier ? `${fmtBlue(BigInt(Math.round(nextTier.need * 1e18)))} more → ${nextTier.tier.name}` : "Max tier reached"}
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-mono text-[11px] text-slate-500">
+                    {nextTier
+                      ? <>{fmtBlue(BigInt(Math.round(nextTier.need * 1e18)))} more → <span style={{ color: nextTier.tier.color }}>{nextTier.tier.name}</span></>
+                      : <span style={{ color: tier.color }}>Max tier reached 🏆</span>}
                   </span>
-                  <span className="font-mono text-[10px]" style={{ color: tier.color }}>
-                    {progress.toFixed(0)}%
+                  <span className="font-mono text-[11px]" style={{ color: tier.color }}>
+                    {progress.toFixed(1)}%
                   </span>
                 </div>
-                <div className="h-1 bg-[#1A1A2E] rounded-full overflow-hidden">
+                <div className="h-1.5 bg-[#1A1A2E] rounded-full overflow-hidden">
                   <div className="h-full rounded-full transition-all duration-700"
                     style={{
                       width: `${Math.max(Math.min(progress, 100), staked > 0 ? 2 : 0)}%`,
-                      background: `linear-gradient(90deg, ${tier.color}80, ${tier.color})`,
-                      boxShadow: `0 0 6px ${tier.color}60`,
+                      background: `linear-gradient(90deg, ${tier.color}70, ${tier.color})`,
+                      boxShadow: `0 0 8px ${tier.color}80`,
                     }} />
                 </div>
-                {/* Tier markers */}
-                <div className="flex justify-between mt-1">
+                <div className="flex justify-between mt-1.5">
                   {["0", "500K", "2M", "10M"].map((label, i) => (
-                    <span key={i} className="font-mono text-[9px] text-slate-700">{label}</span>
+                    <span key={i} className="font-mono text-[10px] text-slate-700">{label}</span>
                   ))}
                 </div>
               </div>
             </div>
 
             {/* ── Action panel ── */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden mb-4">
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden">
 
               {/* Tabs */}
               <div className="flex border-b border-[#1A1A2E]">
@@ -601,9 +599,12 @@ export default function RewardsPage() {
               </div>
             </div>
 
+            </div>{/* end action panel */}
+            </div>{/* end 2-col grid */}
+
             {/* Tx status */}
             {(txStatus || isBusy) && (
-              <div className="rounded-xl border border-[#4FC3F730] bg-[#4FC3F708] px-4 py-3 font-mono text-sm text-[#4FC3F7] mb-4">
+              <div className="rounded-xl border border-[#4FC3F730] bg-[#4FC3F708] px-5 py-3.5 font-mono text-sm text-[#4FC3F7] mb-4">
                 {isConfirming ? "⏳ Confirming on Base..." : txStatus}
               </div>
             )}
@@ -611,20 +612,20 @@ export default function RewardsPage() {
         )}
 
         {/* ── Footer info ── */}
-        <div className="mt-6 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-5 py-4">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-2 font-mono text-[11px] text-slate-600">
+        <div className="mt-4 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-6 py-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 font-mono text-[11px] text-slate-600 mb-4">
             <div>📌 Credits accrue continuously on-chain</div>
             <div>💬 Unlock Blue Chat AI tools</div>
             <div>💵 20% of x402 revenue → stakers</div>
             <div>⏳ 1-day cooldown to unstake</div>
           </div>
-          <div className="mt-3 pt-3 border-t border-[#1A1A2E] flex items-center justify-between">
+          <div className="pt-4 border-t border-[#1A1A2E] flex items-center justify-between">
             <a href={`https://basescan.org/address/${STAKING_ADDRESS}`}
               target="_blank" rel="noopener noreferrer"
               className="font-mono text-[10px] text-slate-700 hover:text-slate-500 transition-colors">
               {STAKING_ADDRESS.slice(0, 10)}…{STAKING_ADDRESS.slice(-8)} ↗
             </a>
-            <Link href="/chat" className="font-mono text-[11px] text-[#4FC3F760] hover:text-[#4FC3F7] transition-colors">
+            <Link href="/chat" className="font-mono text-[12px] text-[#4FC3F760] hover:text-[#4FC3F7] transition-colors">
               Blue Chat →
             </Link>
           </div>
