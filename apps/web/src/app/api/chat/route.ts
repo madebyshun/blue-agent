@@ -263,6 +263,85 @@ const HUB_TOOLS = [
     },
   },
   {
+    name: "hub_wallet_pnl",
+    description: "Deep PnL report for any Base wallet — realized gains, trading style, smart money score. Use when user asks about wallet PnL, profit/loss, trading history.",
+    input_schema: {
+      type: "object",
+      properties: { address: { type: "string", description: "Wallet address 0x..." } },
+      required: ["address"],
+    },
+  },
+  {
+    name: "hub_aml",
+    description: "AML compliance screening for any wallet — clean/suspicious/flagged verdict with risk score. Use when user asks if a wallet is clean, safe to receive funds from, or needs AML check.",
+    input_schema: {
+      type: "object",
+      properties: { address: { type: "string", description: "Wallet address 0x..." } },
+      required: ["address"],
+    },
+  },
+  {
+    name: "hub_whale_tracker",
+    description: "Smart money and whale flow analysis for any token — top holders, recent large moves, accumulation/distribution. Use when user asks about whale activity for a specific token.",
+    input_schema: {
+      type: "object",
+      properties: { token: { type: "string", description: "Token contract address on Base" } },
+      required: ["token"],
+    },
+  },
+  {
+    name: "hub_dex_flow",
+    description: "Live DEX buy/sell pressure and liquidity flow for a token. Use when user asks about DEX volume, buy pressure, sell walls, liquidity.",
+    input_schema: {
+      type: "object",
+      properties: { token: { type: "string", description: "Token contract address on Base" } },
+      required: ["token"],
+    },
+  },
+  {
+    name: "hub_airdrop",
+    description: "Check Base airdrop eligibility for a wallet — activity score, eligible protocols, estimated allocation. Use when user asks about airdrops, eligibility, or airdrop farming.",
+    input_schema: {
+      type: "object",
+      properties: { address: { type: "string", description: "Wallet address 0x..." } },
+      required: ["address"],
+    },
+  },
+  {
+    name: "hub_quantum",
+    description: "Quantum vulnerability score for a wallet — checks if the public key is exposed and at risk from future quantum computers. Use when user asks about quantum risk, wallet security, or key exposure.",
+    input_schema: {
+      type: "object",
+      properties: { address: { type: "string", description: "Wallet address 0x..." } },
+      required: ["address"],
+    },
+  },
+  {
+    name: "hub_yield",
+    description: "Best APY opportunities on Base DeFi — live data from DeFiLlama. Use when user asks about yield, APY, staking rewards, or where to put idle USDC/ETH.",
+    input_schema: {
+      type: "object",
+      properties: {
+        risk_tolerance: { type: "string", description: "low | medium | high (default: medium)" },
+        asset: { type: "string", description: "Specific asset to optimize e.g. USDC, ETH (optional)" },
+      },
+    },
+  },
+  {
+    name: "hub_launch_sim",
+    description: "Token launch simulation — 3-agent consensus on launch price, liquidity, FDV, week-1 performance. Use when user asks how a token launch will perform, launch strategy, or wants to simulate a launch.",
+    input_schema: {
+      type: "object",
+      properties: {
+        token_name: { type: "string", description: "Token name or symbol" },
+        description: { type: "string", description: "Project description" },
+        launch_price: { type: "string", description: "Planned launch price in USD" },
+        liquidity: { type: "string", description: "Initial liquidity in USD" },
+      },
+      required: ["token_name", "description"],
+    },
+  },
+  {
     name: "hub_crypto_rpc",
     description: `Make a live onchain JSON-RPC call via Venice Crypto RPC. Use this when the user asks for:
 - wallet balance of an address on any chain
@@ -320,6 +399,14 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_repo_health:      "repo-health",
   hub_ecosystem:        "ecosystem-digest",
   hub_agent_score:      "agent-score",
+  hub_wallet_pnl:       "wallet-pnl",
+  hub_aml:              "aml-screen",
+  hub_whale_tracker:    "whale-tracker",
+  hub_dex_flow:         "dex-flow",
+  hub_airdrop:          "airdrop-check",
+  hub_quantum:          "quantum-premium",
+  hub_yield:            "yield-optimizer",
+  hub_launch_sim:       "launch-simulator",
   hub_crypto_rpc:       "crypto-rpc",
 };
 
