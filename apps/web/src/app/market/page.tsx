@@ -424,7 +424,7 @@ function PlanCard({ planTier, accent, usdcPrice, stakeThreshold, features, descr
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function MarketPage() {
+export default function MarketPage({ inShell = false }: { inShell?: boolean }) {
   const [activeArchive, setActiveArchive] = useState(0);
   const [tierInfo, setTierInfo]           = useState<TierInfo | null>(null);
   const [signals, setSignals]             = useState<Signal[]>([]);
@@ -460,11 +460,11 @@ export default function MarketPage() {
 
   return (
     <>
-      <Navbar />
-      <div className="flex bg-[#050508] font-mono pt-14">
+      {!inShell && <Navbar />}
+      <div className={`flex bg-[#050508] font-mono ${inShell ? "h-full overflow-hidden" : "pt-14"}`}>
 
         {/* ── Sidebar ── */}
-        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] border-r border-[#1A1A2E]">
+        <aside className={`hidden lg:flex flex-col w-72 shrink-0 border-r border-[#1A1A2E] ${inShell ? "h-full" : "sticky top-14 h-[calc(100vh-3.5rem)]"}`}>
           <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
             <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUE MARKET</p>
             <p className="font-mono text-[10px] text-slate-700 mt-1">Daily intelligence for Base builders</p>
@@ -531,7 +531,7 @@ export default function MarketPage() {
         </aside>
 
         {/* ── Main ── */}
-        <main className="flex-1 h-[calc(100vh-3.5rem)] overflow-y-auto">
+        <main className="flex-1 h-full overflow-y-auto">
 
           {/* Compact header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E] shrink-0">

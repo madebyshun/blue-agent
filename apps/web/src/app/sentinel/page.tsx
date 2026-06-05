@@ -303,7 +303,7 @@ function ThreatTimeline({ stats }: { stats: TimelineStats }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function SentinelPage() {
+export default function SentinelPage({ inShell = false }: { inShell?: boolean }) {
   const [stats,     setStats]     = useState<Stats | null>(null);
   const [findings,  setFindings]  = useState<Finding[]>([]);
   const [watches,   setWatches]   = useState<Watch[]>([]);
@@ -464,8 +464,8 @@ export default function SentinelPage() {
 
   return (
     <>
-      <Navbar />
-      <div className="flex bg-[#050508] font-mono pt-14 h-screen overflow-hidden">
+      {!inShell && <Navbar />}
+      <div className={`flex bg-[#050508] font-mono overflow-hidden ${inShell ? "h-full" : "pt-14 h-screen"}`}>
 
         {/* ══ LEFT SIDEBAR (280px) ══════════════════════════════════════════════ */}
         <aside className="hidden lg:flex flex-col w-[280px] shrink-0 h-full border-r border-[#1A1A2E] overflow-y-auto">
