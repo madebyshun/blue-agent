@@ -1,0 +1,130 @@
+// x402/aml-screen — AML compliance screening for any wallet
+// Price: $0.25 — Fully self-contained, no external workspace imports
+
+type BankrMessage = { role: string; content: string };
+
+async function callBankrLLM(opts: {
+  model?: string; system: string; messages: BankrMessage[];
+  temperature?: number; maxTokens?: number;
+}): Promise<string> {
+  const res = await fetch("https://llm.bankr.bot/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "",
+      "Content-Type": "application/json",
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: opts.model ?? "claude-haiku-4-5",
+      system: opts.system,
+      messages: opts.messages,
+      temperature: opts.temperature ?? 0.5,
+      max_tokens: opts.maxTokens ?? 1000,
+    }),
+  });
+  if (!res.ok) throw new Error(`Bankr LLM ${res.status}: ${await res.text()}`);
+  const d = await res.json() as { content?: { text: string }[]; text?: string };
+  if (d.content?.length) return d.content[0].text;
+  if (d.text) return d.text;
+  throw new Error("Invalid Bankr LLM response");
+}
+
+function extractJsonObject(text: string): Record<string, unknown> | null {
+  let raw = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
+  const s = raw.indexOf("{"), e = raw.lastIndexOf("}");
+  if (s >= 0 && e > s) raw = raw.slice(s, e + 1);
+  try { return JSON.parse(raw); } catch {}
+  try { return JSON.parse(raw.replace(/[\x00-\x1F\x7F]/g, " ")); } catch {}
+  return null;
+}
+
+async function getBasescanData(address: string) {
+  const key = process.env.BASESCAN_API_KEY ?? "";
+  const [txRes, tokenRes] = await Promise.all([
+    fetch(`https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&sort=desc&offset=100&apikey=${key}`, { signal: AbortSignal.timeout(8000) }).catch(() => null),
+    fetch(`https://api.etherscan.io/v2/api?chainid=8453&module=account&action=tokentx&address=${address}&sort=desc&offset=50&apikey=${key}`, { signal: AbortSignal.timeout(8000) }).catch(() => null),
+  ]);
+  type ApiResp = { status: string; result?: unknown[] };
+  const txData = (txRes ? await txRes.json().catch(() => ({ status: "0" })) : { status: "0" }) as ApiResp;
+  const tokenData = (tokenRes ? await tokenRes.json().catch(() => ({ status: "0" })) : { status: "0" }) as ApiResp;
+  return {
+    txs: txData.status === "1" ? (txData.result ?? []) : [],
+    tokenTxs: tokenData.status === "1" ? (tokenData.result ?? []) : [],
+  };
+}
+
+const SYSTEM = `You are an AML (Anti-Money Laundering) compliance specialist analyzing blockchain wallets for financial crime risk.
+
+Analyze transaction patterns for AML red flags:
+- Structuring (many small transactions to avoid thresholds)
+- Layering (rapid fund movement through multiple wallets)
+- Mixer/tumbler interactions (Tornado Cash or similar)
+- High-frequency transfers with round numbers
+- Connections to known high-risk addresses
+- Unusual transaction velocity
+- Cross-chain bridge abuse
+
+Note: This is an AI-based screening tool, not a regulatory compliance product. Results are indicative only.
+
+Return ONLY valid JSON:
+
+{
+  "amlRisk": "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
+  "riskScore": number (0-100),
+  "verdict": "CLEAN" | "MONITOR" | "SUSPICIOUS" | "HIGH_RISK",
+  "flags": ["flag1", "flag2"],
+  "patterns": ["pattern1", "pattern2"],
+  "transactionProfile": "string (brief description of wallet behavior)",
+  "recommendedAction": "APPROVE" | "MANUAL_REVIEW" | "REJECT",
+  "disclaimer": "AI screening only — not regulatory compliance",
+  "recommendation": "string"
+}`;
+
+export default async function handler(req: Request): Promise<Response> {
+  try {
+    let body: { address?: string } = {};
+    try {
+      const text = await req.text();
+      if (text?.trim().startsWith("{")) body = JSON.parse(text);
+    } catch {}
+    const url = new URL(req.url);
+    if (!body.address) body.address = url.searchParams.get("address") || undefined;
+
+    const { address } = body;
+    if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      return Response.json({ error: "Provide a valid wallet address (0x...)" }, { status: 400 });
+    }
+
+    console.log(`[AMLScreen] Screening: ${address}`);
+
+    const { txs, tokenTxs } = await getBasescanData(address).catch(() => ({ txs: [], tokenTxs: [] }));
+
+    type Tx = { from?: string; to?: string; value?: string; timeStamp?: string };
+    type TokenTx = { tokenSymbol?: string };
+
+    const profile = {
+      totalTx: txs.length,
+      uniqueCounterparties: new Set([...(txs as Tx[]).map(t => t.from), ...(txs as Tx[]).map(t => t.to)]).size,
+      tokenTypes: [...new Set((tokenTxs as TokenTx[]).map(t => t.tokenSymbol))].slice(0, 10),
+      recentActivity: (txs as Tx[]).slice(0, 5).map(tx => ({
+        direction: tx.from?.toLowerCase() === address.toLowerCase() ? "OUT" : "IN",
+        to: tx.to?.slice(0, 10),
+        value: tx.value,
+        timestamp: tx.timeStamp ? new Date(parseInt(tx.timeStamp) * 1000).toISOString() : null,
+      })),
+    };
+
+    const llmResponse = await callBankrLLM({
+      system: SYSTEM,
+      messages: [{ role: "user", content: `AML screening for wallet: ${address}\n\nTransaction profile:\n${JSON.stringify(profile, null, 2)}\n\nAssess for money laundering risk patterns.` }],
+      temperature: 0.2,
+      maxTokens: 700,
+    });
+    const result = extractJsonObject(llmResponse);
+    if (!result) throw new Error("Failed to parse AML report");
+    return Response.json(result);
+  } catch (error) {
+    console.error("[AMLScreen] Error:", error);
+    return Response.json({ error: "AML screening failed", message: (error as Error).message }, { status: 500 });
+  }
+}

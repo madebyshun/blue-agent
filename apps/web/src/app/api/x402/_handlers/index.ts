@@ -44,6 +44,25 @@ import h30 from "./token-momentum-scanner";
 import h31 from "./token-pick-signal";
 import h32 from "./wallet-strategy-analyzer";
 import h33 from "./whale-copy-signal";
+import h34 from "./quantum-premium";
+import h35 from "./quantum-batch";
+import h36 from "./quantum-migrate";
+import h37 from "./quantum-timeline";
+import h38 from "./key-exposure";
+import h39 from "./wallet-pnl";
+import h40 from "./aml-screen";
+import h41 from "./airdrop-check";
+import h42 from "./whale-tracker";
+import h43 from "./dex-flow";
+import h44 from "./yield-optimizer";
+import h45 from "./lp-analyzer";
+import h46 from "./tax-report";
+import h47 from "./alert-subscribe";
+import h48 from "./alert-check";
+import h49 from "./launch-simulator-2";
+import h50 from "./launch-simulator-3";
+import h51 from "./launch-advisor";
+import h52 from "./grant-evaluator";
 
 export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "agent-collab-match": h0,
@@ -91,4 +110,23 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "deep-analysis":  hDeepAnalysis,
   "builder-score":  hBuilderScore,
   "agent-score":    hAgentScore,
+  "quantum-premium": h34,
+  "quantum-batch":   h35,
+  "quantum-migrate": h36,
+  "quantum-timeline": h37,
+  "key-exposure":    h38,
+  "wallet-pnl":      h39,
+  "aml-screen":      h40,
+  "airdrop-check":   h41,
+  "whale-tracker":   h42,
+  "dex-flow":        h43,
+  "yield-optimizer": h44,
+  "lp-analyzer":     h45,
+  "tax-report":      h46,
+  "alert-subscribe": h47,
+  "alert-check":     h48,
+  "launch-simulator-2": h49,
+  "launch-simulator-3": h50,
+  "launch-advisor":  h51,
+  "grant-evaluator": h52,
 };
