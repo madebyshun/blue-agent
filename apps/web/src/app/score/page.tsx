@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Navbar from "@/components/Navbar";
 
-export default function ScorePage() {
+export default function ScorePage({ inShell = false }: { inShell?: boolean }) {
   const [handle, setHandle] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -38,11 +38,11 @@ export default function ScorePage() {
 
   return (
     <>
-      <Navbar />
-      <div className="flex bg-[#050508] font-mono pt-14">
+      {!inShell && <Navbar />}
+      <div className={`flex bg-[#050508] font-mono ${inShell ? "h-full overflow-hidden" : "pt-14"}`}>
 
         {/* ── Sidebar ── */}
-        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] border-r border-[#1A1A2E]">
+        <aside className={`hidden lg:flex flex-col w-72 shrink-0 border-r border-[#1A1A2E] ${inShell ? "h-full" : "sticky top-14 h-[calc(100vh-3.5rem)]"}`}>
           <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
             <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">// BUILDER SCORE</p>
             <p className="font-mono text-[10px] text-slate-700 mt-1">Proof of build on Base</p>
@@ -96,7 +96,7 @@ export default function ScorePage() {
         </aside>
 
         {/* ── Main ── */}
-        <main className="flex-1 h-[calc(100vh-3.5rem)] overflow-y-auto">
+        <main className="flex-1 h-full overflow-y-auto">
 
           {/* Compact header */}
           <div className="flex items-center gap-3 px-6 py-4 border-b border-[#1A1A2E]">

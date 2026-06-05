@@ -82,7 +82,7 @@ const LINE_COLOR: Record<LineType, string> = {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export default function TerminalPage() {
+export default function TerminalPage({ inShell = false }: { inShell?: boolean }) {
   const [lines,   setLines]   = useState<OutputLine[]>(() =>
     WELCOME_LINES.map(w => ({ id: uid(), ...w }))
   );
@@ -507,19 +507,21 @@ export default function TerminalPage() {
 
   return (
     <>
-      <Navbar />
+      {!inShell && <Navbar />}
 
-      <div className="min-h-screen bg-[#050508] pt-14">
+      <div className={`bg-[#050508] ${inShell ? "h-full overflow-y-auto" : "min-h-screen pt-14"}`}>
         {/* grid bg */}
-        <div
-          className="fixed inset-0 pointer-events-none"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgba(79,195,247,0.02) 1px,transparent 1px)," +
-              "linear-gradient(90deg,rgba(79,195,247,0.02) 1px,transparent 1px)",
-            backgroundSize: "40px 40px",
-          }}
-        />
+        {!inShell && (
+          <div
+            className="fixed inset-0 pointer-events-none"
+            style={{
+              backgroundImage:
+                "linear-gradient(rgba(79,195,247,0.02) 1px,transparent 1px)," +
+                "linear-gradient(90deg,rgba(79,195,247,0.02) 1px,transparent 1px)",
+              backgroundSize: "40px 40px",
+            }}
+          />
+        )}
 
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 py-6">
 
