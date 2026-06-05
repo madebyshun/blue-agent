@@ -161,6 +161,8 @@ export default function RewardsPage() {
 
   // ── Writes ──────────────────────────────────────────────────────────────────
 
+  const [lastAction, setLastAction] = useState<"approve" | "stake" | "other" | null>(null);
+
   const { writeContract, data: txHash, isPending: isWriting } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: txSuccess } =
     useWaitForTransactionReceipt({ hash: txHash });
@@ -175,12 +177,28 @@ export default function RewardsPage() {
 
   useEffect(() => {
     if (txSuccess) {
-      setTxStatus("✅ Transaction confirmed");
       refetchAll();
-      setStakeInput("");
-      setTimeout(() => setTxStatus(null), 4000);
+      if (lastAction === "approve") {
+        // Auto-proceed to stake after approval
+        setTxStatus("✅ Approved! Staking now...");
+        setTimeout(() => {
+          writeContract({
+            address: STAKING_ADDRESS,
+            abi: STAKING_ABI,
+            functionName: "stake",
+            args: [stakeAmountWei],
+          });
+          setLastAction("stake");
+          setTxStatus("Staking BLUE...");
+        }, 500);
+      } else {
+        setTxStatus("✅ Transaction confirmed");
+        setStakeInput("");
+        setLastAction(null);
+        setTimeout(() => setTxStatus(null), 4000);
+      }
     }
-  }, [txSuccess, refetchAll]);
+  }, [txSuccess, refetchAll, lastAction]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived state ────────────────────────────────────────────────────────────
 
@@ -201,33 +219,39 @@ export default function RewardsPage() {
   // ── Actions ──────────────────────────────────────────────────────────────────
 
   function handleApprove() {
+    setLastAction("approve");
     setTxStatus("Approving BLUE...");
     writeContract({ address: BLUE_ADDRESS, abi: ERC20_ABI, functionName: "approve",
       args: [STAKING_ADDRESS, stakeAmountWei] });
   }
 
   function handleStake() {
+    setLastAction("stake");
     setTxStatus("Staking BLUE...");
     writeContract({ address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "stake",
       args: [stakeAmountWei] });
   }
 
   function handleRequestUnstake() {
+    setLastAction("other");
     setTxStatus("Requesting unstake...");
     writeContract({ address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "requestUnstake" });
   }
 
   function handleCancelUnstake() {
+    setLastAction("other");
     setTxStatus("Cancelling unstake...");
     writeContract({ address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "cancelUnstake" });
   }
 
   function handleUnstake() {
+    setLastAction("other");
     setTxStatus("Unstaking...");
     writeContract({ address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "unstake" });
   }
 
   function handleClaimYield() {
+    setLastAction("other");
     setTxStatus("Claiming USDC yield...");
     writeContract({ address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "claimYield" });
   }
