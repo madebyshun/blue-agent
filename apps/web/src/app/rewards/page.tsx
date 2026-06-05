@@ -356,7 +356,11 @@ export default function RewardsPage() {
                 <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-3">
                   <div className="font-mono text-[10px] text-slate-600 mb-1">TOTAL EARNED</div>
                   <div className="font-mono text-lg font-bold text-white">
-                    {totalCredits !== undefined ? Number(totalCredits).toLocaleString() : "—"}
+                    {totalCredits !== undefined
+                      ? Number(totalCredits) < 1
+                        ? Number(totalCredits).toFixed(4)
+                        : Number(totalCredits).toFixed(2)
+                      : "—"}
                   </div>
                 </div>
                 <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-3">
@@ -380,7 +384,7 @@ export default function RewardsPage() {
                 <div className="h-1 bg-[#1A1A2E] rounded-full overflow-hidden">
                   <div className="h-full rounded-full transition-all duration-700"
                     style={{
-                      width: `${Math.min(progress, 100)}%`,
+                      width: `${Math.max(Math.min(progress, 100), staked > 0 ? 2 : 0)}%`,
                       background: `linear-gradient(90deg, ${tier.color}80, ${tier.color})`,
                       boxShadow: `0 0 6px ${tier.color}60`,
                     }} />
