@@ -587,6 +587,26 @@ Write a PITCH NARRATIVE:
 **Target Investors** — 5 specific Base/crypto funds or angels with why they fit
 Be bold. Think like a founder who knows they're going to win.`,
 
+  scan: `## COMMAND: /scan <token_address>
+The user wants a security scan of a Base token contract address.
+YOU MUST call ALL THREE tools in parallel (do not skip any):
+1. hub_honeypot — with { token: "<address>" }
+2. hub_risk_gate — with { action: "scan", to: "<address>" }
+3. hub_deep_analysis — with { token: "<address>" }
+NEVER call hub_crypto_rpc for /scan. NEVER answer from knowledge alone.
+After tools return, present: honeypot verdict, risk score, and composite analysis score together.`,
+
+  pick: `## COMMAND: /pick
+The user wants an AI token pick on Base right now.
+YOU MUST call hub_token_pick immediately with {} or { context: "" }.
+Present the pick with: token symbol, thesis, entry point, target, kill criterion, sizing.`,
+
+  wallet: `## COMMAND: /wallet <address>
+The user wants wallet strategy analysis.
+YOU MUST call hub_whale_signal with { token: "<address>" } for whale tracking,
+and hub_deep_analysis with { address: "<address>" } for fundamentals.
+Present: trading style, PnL signals, portfolio strategy.`,
+
   help: `## COMMAND: /help
 List all available Blue Chat slash commands in a clean format.
 Commands to document:
@@ -887,7 +907,8 @@ export async function POST(req: NextRequest) {
 
   // Strip the /command prefix from last message so LLM only sees args
   let cleanMessages = messages as LLMMessage[];
-  if (detectedCmd?.args !== undefined && detectedCmd.cmd !== "pick" && detectedCmd.cmd !== "scan" && detectedCmd.cmd !== "wallet") {
+  if (detectedCmd?.args !== undefined && COMMAND_PROMPTS[detectedCmd.cmd]) {
+    // Strip the /command prefix — pass only args to the model (e.g. "0x..." for /scan)
     cleanMessages = [
       ...messages.slice(0, -1),
       {
