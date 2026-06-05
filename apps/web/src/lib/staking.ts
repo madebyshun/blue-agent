@@ -4,7 +4,7 @@
  * Reads on-chain stake data and credit accrual from BlueMarketStaking.
  * Backend uses pendingCreditsSince() to check credits earned since last sync.
  *
- * Contract: TBD after deploy (set NEXT_PUBLIC_STAKING_CONTRACT env var)
+ * Contract: 0x69e539684EE48F71eCDAd58618d8e8a2423E279d (Base mainnet)
  * BLUE:     0xf895783b2931c919955e18b5e3343e7c7c456ba3
  * USDC:     0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
  */

@@ -36,31 +36,19 @@ echo ""
 echo "▶ Compiling..."
 forge build --quiet
 
-# Deploy
+# Deploy (all args on one line to avoid shell continuation issues)
 echo "▶ Deploying..."
 if [ "$NO_VERIFY" = "--no-verify" ] || [ -z "$BASESCAN_API_KEY" ]; then
-  DEPLOY_OUT=$(forge create contracts/BlueMarketStaking.sol:BlueMarketStaking \
-    --rpc-url "$RPC" \
-    --private-key "$PRIVATE_KEY" \
-    --constructor-args "$BLUE" "$USDC" \
-    --broadcast \
-    2>&1)
+  forge create contracts/BlueMarketStaking.sol:BlueMarketStaking --rpc-url "$RPC" --private-key "$PRIVATE_KEY" --broadcast --constructor-args "$BLUE" "$USDC" 2>&1 | tee /tmp/deploy-staking-out.txt
 else
-  DEPLOY_OUT=$(forge create contracts/BlueMarketStaking.sol:BlueMarketStaking \
-    --rpc-url "$RPC" \
-    --private-key "$PRIVATE_KEY" \
-    --constructor-args "$BLUE" "$USDC" \
-    --broadcast \
-    --verify \
-    --etherscan-api-key "$BASESCAN_API_KEY" \
-    2>&1)
+  forge create contracts/BlueMarketStaking.sol:BlueMarketStaking --rpc-url "$RPC" --private-key "$PRIVATE_KEY" --broadcast --verify --etherscan-api-key "$BASESCAN_API_KEY" --constructor-args "$BLUE" "$USDC" 2>&1 | tee /tmp/deploy-staking-out.txt
 fi
 
-echo "$DEPLOY_OUT"
+DEPLOY_OUT=$(cat /tmp/deploy-staking-out.txt)
 
 # Extract deployed address
-CONTRACT=$(echo "$DEPLOY_OUT" | grep -oE "Deployed to: 0x[0-9a-fA-F]{40}" | awk '{print $3}')
-TX=$(echo "$DEPLOY_OUT" | grep -oE "Transaction hash: 0x[0-9a-fA-F]{64}" | awk '{print $3}')
+CONTRACT=$(echo "$DEPLOY_OUT" | grep -oE "Deployed to: 0x[0-9a-fA-F]{40}" | awk '{print $3}' || true)
+TX=$(echo "$DEPLOY_OUT" | grep -oE "Transaction hash: 0x[0-9a-fA-F]{64}" | awk '{print $3}' || true)
 
 if [ -z "$CONTRACT" ]; then
   echo "❌ Could not extract contract address from output"
@@ -74,7 +62,7 @@ echo "Tx:        $TX"
 echo "Basescan:  https://basescan.org/address/$CONTRACT"
 echo ""
 echo "Next steps:"
-echo "  1. Add to Vercel env: STAKING_CONTRACT=$CONTRACT"
+echo "  1. Add to Vercel env: NEXT_PUBLIC_STAKING_CONTRACT=$CONTRACT"
 echo "  2. Set yieldDistributor to backend wallet:"
 echo "     cast send $CONTRACT 'setYieldDistributor(address)' <BACKEND_WALLET> --rpc-url $RPC --private-key \$PRIVATE_KEY"
 echo "  3. Update apps/web/src/lib/staking.ts with contract address"

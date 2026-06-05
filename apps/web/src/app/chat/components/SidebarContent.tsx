@@ -202,7 +202,15 @@ export default function SidebarContent() {
             <span>💰</span>
             Buy $BLUEAGENT
           </button>
-          <p className="font-mono text-[9px] text-slate-700 text-center mt-1">Hold BLUE → more credits/day</p>
+          <a
+            href="/rewards"
+            className="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg font-mono text-[11px] font-semibold transition-all hover:opacity-90 active:scale-95 mt-1.5"
+            style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730", textDecoration: "none" }}
+          >
+            <span>⚡</span>
+            Stake & Earn Credits
+          </a>
+          <p className="font-mono text-[9px] text-slate-700 text-center mt-1">Stake BLUE → credits/day + USDC yield</p>
         </div>
       </div>
 
