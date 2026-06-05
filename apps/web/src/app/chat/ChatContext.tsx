@@ -582,7 +582,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         // Stamp model + timing on the completed assistant message
         const finalMsgs = task.messages.map((m, i) =>
           i === lastIdx && m.role === "assistant"
-            ? { ...m, modelUsed: chatTier, responseMs, isThinking: false }
+            ? { ...m, modelUsed: chatTier, responseMs, creditsUsed: cost, isThinking: false }
             : m
         );
 
