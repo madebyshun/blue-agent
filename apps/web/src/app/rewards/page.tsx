@@ -12,7 +12,7 @@ import {
 } from "wagmi";
 import { parseUnits, formatUnits } from "viem";
 
-// ── Contract addresses ────────────────────────────────────────────────────────
+// ── Addresses ─────────────────────────────────────────────────────────────────
 
 const STAKING_ADDRESS = (
   process.env.NEXT_PUBLIC_STAKING_CONTRACT ??
@@ -72,511 +72,558 @@ const STAKING_ABI = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function formatBlue(wei: bigint): string {
+function fmtBlue(wei: bigint): string {
   const n = Number(formatUnits(wei, 18));
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + "M";
-  if (n >= 1_000)     return (n / 1_000).toFixed(0) + "K";
+  if (n >= 1_000)     return (n / 1_000).toFixed(1) + "K";
   return n.toFixed(0);
 }
 
-function formatCooldown(secs: bigint): string {
+function fmtCooldown(secs: bigint): string {
   const s = Number(secs);
-  if (s <= 0) return "Ready";
+  if (s <= 0) return "Ready to unstake";
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
+  return h > 0 ? `${h}h ${m}m remaining` : `${m}m remaining`;
 }
 
 // ── Tiers ─────────────────────────────────────────────────────────────────────
 
 const TIERS = [
-  { name: "Starter", blue: 500_000,    credits: 500,  color: "#4FC3F7" },
-  { name: "Pro",     blue: 2_000_000,  credits: 2000, color: "#A78BFA" },
-  { name: "Max",     blue: 10_000_000, credits: 9999, color: "#F59E0B" },
+  { name: "None",    min: 0,          max: 500_000,    credits: 0,    color: "#475569" },
+  { name: "Starter", min: 500_000,    max: 2_000_000,  credits: 500,  color: "#4FC3F7" },
+  { name: "Pro",     min: 2_000_000,  max: 10_000_000, credits: 2000, color: "#A78BFA" },
+  { name: "Max",     min: 10_000_000, max: Infinity,   credits: 9999, color: "#F59E0B" },
 ];
 
-function getTier(blueWei: bigint) {
-  const blue = Number(formatUnits(blueWei, 18));
-  if (blue >= 10_000_000) return TIERS[2];
-  if (blue >= 2_000_000)  return TIERS[1];
-  if (blue >= 500_000)    return TIERS[0];
+function getTier(blue: number) {
+  if (blue >= 10_000_000) return TIERS[3];
+  if (blue >= 2_000_000)  return TIERS[2];
+  if (blue >= 500_000)    return TIERS[1];
+  return TIERS[0];
+}
+
+function getNextTier(blue: number) {
+  if (blue < 500_000)    return { tier: TIERS[1], need: 500_000 - blue };
+  if (blue < 2_000_000)  return { tier: TIERS[2], need: 2_000_000 - blue };
+  if (blue < 10_000_000) return { tier: TIERS[3], need: 10_000_000 - blue };
   return null;
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+function tierProgress(blue: number): number {
+  if (blue >= 10_000_000) return 100;
+  if (blue >= 2_000_000)  return ((blue - 2_000_000) / (10_000_000 - 2_000_000)) * 100;
+  if (blue >= 500_000)    return ((blue - 500_000) / (2_000_000 - 500_000)) * 100;
+  return (blue / 500_000) * 100;
+}
+
+// ── Action tab ────────────────────────────────────────────────────────────────
+
+type ActionTab = "stake" | "unstake" | "claim";
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function RewardsPage() {
   const { address, isConnected } = useAccount();
-  const [stakeInput, setStakeInput] = useState("");
-  const [txStatus, setTxStatus] = useState<string | null>(null);
+  const [tab, setTab]             = useState<ActionTab>("stake");
+  const [input, setInput]         = useState("");
+  const [txStatus, setTxStatus]   = useState<string | null>(null);
+  const [lastAction, setLastAction] = useState<"approve" | "stake" | "other" | null>(null);
 
-  // ── Reads ───────────────────────────────────────────────────────────────────
+  // ── Contract reads ────────────────────────────────────────────────────────
 
-  const { data: blueBalance, refetch: refetchBalance } = useReadContract({
-    address: BLUE_ADDRESS,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address },
+  const { data: blueBalance, refetch: refetchBal } = useReadContract({
+    address: BLUE_ADDRESS, abi: ERC20_ABI, functionName: "balanceOf",
+    args: address ? [address] : undefined, query: { enabled: !!address },
   });
 
-  const { data: allowance, refetch: refetchAllowance } = useReadContract({
-    address: BLUE_ADDRESS,
-    abi: ERC20_ABI,
-    functionName: "allowance",
-    args: address ? [address, STAKING_ADDRESS] : undefined,
-    query: { enabled: !!address },
+  const { data: allowance, refetch: refetchAllow } = useReadContract({
+    address: BLUE_ADDRESS, abi: ERC20_ABI, functionName: "allowance",
+    args: address ? [address, STAKING_ADDRESS] : undefined, query: { enabled: !!address },
   });
 
-  const { data: stakeInfo, refetch: refetchStakeInfo } = useReadContract({
-    address: STAKING_ADDRESS,
-    abi: STAKING_ABI,
-    functionName: "stakeInfo",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address },
+  const { data: stakeInfo, refetch: refetchInfo } = useReadContract({
+    address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "stakeInfo",
+    args: address ? [address] : undefined, query: { enabled: !!address },
   });
 
-  const { data: totalCredits, refetch: refetchCredits } = useReadContract({
-    address: STAKING_ADDRESS,
-    abi: STAKING_ABI,
-    functionName: "totalCreditsAccrued",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address },
+  const { data: totalCredits, refetch: refetchCr } = useReadContract({
+    address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "totalCreditsAccrued",
+    args: address ? [address] : undefined, query: { enabled: !!address },
   });
 
-  const { data: stakeRaw, refetch: refetchStakeRaw } = useReadContract({
-    address: STAKING_ADDRESS,
-    abi: STAKING_ABI,
-    functionName: "stakes",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address },
+  const { data: stakeRaw, refetch: refetchRaw } = useReadContract({
+    address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "stakes",
+    args: address ? [address] : undefined, query: { enabled: !!address },
   });
 
   const { data: globalStaked } = useReadContract({
-    address: STAKING_ADDRESS,
-    abi: STAKING_ABI,
-    functionName: "totalStaked",
+    address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "totalStaked",
   });
 
-  // ── Writes ──────────────────────────────────────────────────────────────────
-
-  const [lastAction, setLastAction] = useState<"approve" | "stake" | "other" | null>(null);
+  // ── Writes ────────────────────────────────────────────────────────────────
 
   const { writeContract, data: txHash, isPending: isWriting } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: txSuccess } =
     useWaitForTransactionReceipt({ hash: txHash });
 
   const refetchAll = useCallback(() => {
-    refetchBalance();
-    refetchAllowance();
-    refetchStakeInfo();
-    refetchCredits();
-    refetchStakeRaw();
-  }, [refetchBalance, refetchAllowance, refetchStakeInfo, refetchCredits, refetchStakeRaw]);
+    refetchBal(); refetchAllow(); refetchInfo(); refetchCr(); refetchRaw();
+  }, [refetchBal, refetchAllow, refetchInfo, refetchCr, refetchRaw]);
 
-  useEffect(() => {
-    if (txSuccess) {
-      refetchAll();
-      if (lastAction === "approve") {
-        // Auto-proceed to stake after approval
-        setTxStatus("✅ Approved! Staking now...");
-        setTimeout(() => {
-          writeContract({
-            address: STAKING_ADDRESS,
-            abi: STAKING_ABI,
-            functionName: "stake",
-            args: [stakeAmountWei],
-          });
-          setLastAction("stake");
-          setTxStatus("Staking BLUE...");
-        }, 500);
-      } else {
-        setTxStatus("✅ Transaction confirmed");
-        setStakeInput("");
-        setLastAction(null);
-        setTimeout(() => setTxStatus(null), 4000);
-      }
-    }
-  }, [txSuccess, refetchAll, lastAction]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Derived
+  const stakedWei   = stakeInfo?.[0] ?? 0n;
+  const dailyCr     = stakeInfo?.[2] ?? 0n;
+  const cooldown    = stakeInfo?.[3] ?? 0n;
+  const pendingUSDC = stakeInfo?.[4] ?? 0n;
+  const unstakeReq  = stakeRaw?.[4] ?? 0n;
+  const hasCooldown = unstakeReq > 0n;
+  const canUnstake  = hasCooldown && cooldown === 0n;
 
-  // ── Derived state ────────────────────────────────────────────────────────────
+  const staked     = Number(formatUnits(stakedWei, 18));
+  const walletBal  = blueBalance ? Number(formatUnits(blueBalance, 18)) : 0;
+  const tier       = getTier(staked);
+  const nextTier   = getNextTier(staked);
+  const progress   = tierProgress(staked);
 
-  const stakedAmount      = stakeInfo?.[0] ?? 0n;
-  const dailyCredits      = stakeInfo?.[2] ?? 0n;
-  const cooldownSecs      = stakeInfo?.[3] ?? 0n;
-  const pendingUsdc       = stakeInfo?.[4] ?? 0n;
-  const unstakeReqAt      = stakeRaw?.[4] ?? 0n;
-  const hasPendingUnstake = unstakeReqAt > 0n;
-  const canUnstake        = hasPendingUnstake && cooldownSecs === 0n;
-
-  const stakeAmountWei = stakeInput
-    ? (() => { try { return parseUnits(stakeInput, 18); } catch { return 0n; } })()
+  const amtWei = input
+    ? (() => { try { return parseUnits(input, 18); } catch { return 0n; } })()
     : 0n;
-  const needsApproval = (allowance ?? 0n) < stakeAmountWei && stakeAmountWei > 0n;
-  const tier = getTier(stakedAmount);
+  const needsApproval = (allowance ?? 0n) < amtWei && amtWei > 0n;
 
-  // ── Actions ──────────────────────────────────────────────────────────────────
-
-  function handleApprove() {
-    setLastAction("approve");
-    setTxStatus("Approving BLUE...");
-    writeContract({ address: BLUE_ADDRESS, abi: ERC20_ABI, functionName: "approve",
-      args: [STAKING_ADDRESS, stakeAmountWei] });
-  }
-
-  function handleStake() {
-    setLastAction("stake");
-    setTxStatus("Staking BLUE...");
-    writeContract({ address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "stake",
-      args: [stakeAmountWei] });
-  }
-
-  function handleRequestUnstake() {
-    setLastAction("other");
-    setTxStatus("Requesting unstake...");
-    writeContract({ address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "requestUnstake" });
-  }
-
-  function handleCancelUnstake() {
-    setLastAction("other");
-    setTxStatus("Cancelling unstake...");
-    writeContract({ address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "cancelUnstake" });
-  }
-
-  function handleUnstake() {
-    setLastAction("other");
-    setTxStatus("Unstaking...");
-    writeContract({ address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "unstake" });
-  }
-
-  function handleClaimYield() {
-    setLastAction("other");
-    setTxStatus("Claiming USDC yield...");
-    writeContract({ address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "claimYield" });
-  }
+  // Auto-stake after approve
+  useEffect(() => {
+    if (!txSuccess) return;
+    refetchAll();
+    if (lastAction === "approve") {
+      setTxStatus("✅ Approved! Staking now...");
+      setTimeout(() => {
+        writeContract({ address: STAKING_ADDRESS, abi: STAKING_ABI,
+          functionName: "stake", args: [amtWei] });
+        setLastAction("stake");
+        setTxStatus("Staking BLUE...");
+      }, 600);
+    } else {
+      setTxStatus("✅ Done!");
+      if (lastAction === "stake") setInput("");
+      setLastAction(null);
+      setTimeout(() => setTxStatus(null), 4000);
+    }
+  }, [txSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isBusy = isWriting || isConfirming;
 
-  // ── UI ───────────────────────────────────────────────────────────────────────
+  function doApprove() {
+    setLastAction("approve"); setTxStatus("Approving BLUE...");
+    writeContract({ address: BLUE_ADDRESS, abi: ERC20_ABI,
+      functionName: "approve", args: [STAKING_ADDRESS, amtWei] });
+  }
+  function doStake() {
+    setLastAction("stake"); setTxStatus("Staking BLUE...");
+    writeContract({ address: STAKING_ADDRESS, abi: STAKING_ABI,
+      functionName: "stake", args: [amtWei] });
+  }
+  function doRequestUnstake() {
+    setLastAction("other"); setTxStatus("Requesting unstake...");
+    writeContract({ address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "requestUnstake" });
+  }
+  function doCancelUnstake() {
+    setLastAction("other"); setTxStatus("Cancelling...");
+    writeContract({ address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "cancelUnstake" });
+  }
+  function doUnstake() {
+    setLastAction("other"); setTxStatus("Unstaking...");
+    writeContract({ address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "unstake" });
+  }
+  function doClaimYield() {
+    setLastAction("other"); setTxStatus("Claiming yield...");
+    writeContract({ address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: "claimYield" });
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0a0a", color: "#e8e8e8", fontFamily: "system-ui, sans-serif" }}>
+    <div className="min-h-screen bg-[#050508] text-white">
       <Navbar />
 
-      <div style={{ maxWidth: 760, margin: "0 auto", padding: "40px 20px 80px" }}>
+      {/* Hero gradient */}
+      <div className="absolute inset-x-0 top-0 h-[340px] pointer-events-none overflow-hidden">
+        <div className="absolute inset-0"
+          style={{ background: "radial-gradient(ellipse 80% 60% at 50% -10%, #4FC3F712 0%, transparent 70%)" }} />
+      </div>
 
-        {/* Header */}
-        <div style={{ marginBottom: 40 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-            <span style={{ fontSize: 28 }}>⚡</span>
-            <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: "#fff" }}>
-              Blue Chat Rewards
-            </h1>
+      <div className="relative max-w-[680px] mx-auto px-4 pt-24 pb-24">
+
+        {/* ── Header ── */}
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#4FC3F730] bg-[#4FC3F708] mb-4">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+            <span className="font-mono text-[11px] text-[#4FC3F7] tracking-widest">BASE MAINNET · LIVE</span>
           </div>
-          <p style={{ margin: 0, color: "#888", fontSize: 15 }}>
-            Stake $BLUEAGENT → earn Blue Chat credits + USDC yield from x402 revenue
+          <h1 className="text-3xl font-bold tracking-tight mb-2">
+            Blue Chat <span className="text-[#4FC3F7]">Rewards</span>
+          </h1>
+          <p className="text-slate-500 text-sm">
+            Stake $BLUEAGENT → credits accrue on-chain · earn USDC from x402 revenue
           </p>
-        </div>
 
-        {/* Tier table */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 32 }}>
-          {TIERS.map(t => (
-            <div key={t.name} style={{
-              background: "#141414",
-              border: `1px solid ${tier?.name === t.name ? t.color : "#222"}`,
-              borderRadius: 10, padding: "16px 14px",
-              boxShadow: tier?.name === t.name ? `0 0 12px ${t.color}22` : "none",
-            }}>
-              <div style={{ fontSize: 11, color: t.color, fontWeight: 700, letterSpacing: 1, marginBottom: 6 }}>
-                {t.name.toUpperCase()}
+          {/* Protocol stats */}
+          <div className="flex items-center justify-center gap-6 mt-5">
+            <div className="text-center">
+              <div className="font-mono text-base font-bold text-white">
+                {globalStaked ? fmtBlue(globalStaked) : "—"}
               </div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", marginBottom: 2 }}>
-                {t.credits === 9999 ? "∞ credits" : `${t.credits.toLocaleString()} cr/day`}
-              </div>
-              <div style={{ fontSize: 12, color: "#666" }}>
-                {t.blue >= 1_000_000
-                  ? `${(t.blue / 1_000_000).toFixed(0)}M`
-                  : `${(t.blue / 1_000).toFixed(0)}K`} BLUE staked
-              </div>
+              <div className="font-mono text-[10px] text-slate-600 mt-0.5">TOTAL STAKED</div>
             </div>
-          ))}
+            <div className="w-px h-6 bg-[#1A1A2E]" />
+            <div className="text-center">
+              <div className="font-mono text-base font-bold text-[#22C55E]">20%</div>
+              <div className="font-mono text-[10px] text-slate-600 mt-0.5">x402 REVENUE</div>
+            </div>
+            <div className="w-px h-6 bg-[#1A1A2E]" />
+            <div className="text-center">
+              <div className="font-mono text-base font-bold text-[#A78BFA]">1 day</div>
+              <div className="font-mono text-[10px] text-slate-600 mt-0.5">COOLDOWN</div>
+            </div>
+          </div>
         </div>
 
-        {/* Connect or Dashboard */}
         {!isConnected ? (
-          <div style={{
-            background: "#141414", border: "1px solid #222",
-            borderRadius: 12, padding: 32, textAlign: "center",
-          }}>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>🔗</div>
-            <p style={{ color: "#888", marginBottom: 20 }}>
-              Connect your wallet to stake BLUE and earn credits
+          /* ── Not connected ── */
+          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-10 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-[#4FC3F710] border border-[#4FC3F720] flex items-center justify-center mx-auto mb-5">
+              <span className="text-2xl">⚡</span>
+            </div>
+            <p className="text-slate-400 text-sm mb-6">
+              Connect wallet to stake BLUE and earn credits
             </p>
             <ConnectButton label="Connect Wallet" />
+
+            {/* Tier preview */}
+            <div className="mt-8 grid grid-cols-3 gap-3">
+              {TIERS.slice(1).map(t => (
+                <div key={t.name} className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3 text-left">
+                  <div className="font-mono text-[10px] tracking-widest mb-1.5" style={{ color: t.color }}>
+                    {t.name.toUpperCase()}
+                  </div>
+                  <div className="font-mono text-sm font-bold text-white">
+                    {t.credits === 9999 ? "∞" : t.credits.toLocaleString()}
+                    <span className="text-[10px] text-slate-600 ml-1">cr/day</span>
+                  </div>
+                  <div className="font-mono text-[10px] text-slate-600 mt-1">
+                    {(t.min / 1_000_000).toFixed(t.min < 1_000_000 ? 1 : 0)}
+                    {t.min < 1_000_000 ? "K" : "M"} BLUE
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           <>
-            {/* Stats row */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 20 }}>
+            {/* ── Position card ── */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-6 mb-4"
+              style={{ boxShadow: staked > 0 ? `0 0 40px ${tier.color}08` : "none" }}>
 
-              {/* Staked */}
-              <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 10, padding: "18px 20px" }}>
-                <div style={{ fontSize: 11, color: "#666", letterSpacing: 1, marginBottom: 6 }}>STAKED</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: "#fff" }}>
-                  {formatBlue(stakedAmount)} <span style={{ fontSize: 13, color: "#555" }}>BLUE</span>
+              <div className="flex items-start justify-between mb-5">
+                <div>
+                  <div className="font-mono text-[10px] text-slate-600 tracking-widest mb-1">YOUR POSITION</div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-bold tracking-tight" style={{ color: staked > 0 ? tier.color : "#475569" }}>
+                      {fmtBlue(stakedWei)}
+                    </span>
+                    <span className="font-mono text-sm text-slate-600">BLUE staked</span>
+                  </div>
                 </div>
-                {tier ? (
-                  <div style={{ fontSize: 12, color: tier.color, marginTop: 4 }}>{tier.name} tier</div>
-                ) : stakedAmount > 0n ? (
-                  <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>Below Starter</div>
-                ) : null}
-              </div>
-
-              {/* Credits/day */}
-              <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 10, padding: "18px 20px" }}>
-                <div style={{ fontSize: 11, color: "#666", letterSpacing: 1, marginBottom: 6 }}>CREDITS / DAY</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: "#4FC3F7" }}>
-                  {Number(dailyCredits).toLocaleString()}
-                </div>
-                <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
-                  {totalCredits !== undefined
-                    ? `${Number(totalCredits).toLocaleString()} total earned`
-                    : "—"}
+                {/* Tier badge */}
+                <div className="px-3 py-1.5 rounded-lg border font-mono text-xs font-bold tracking-widest"
+                  style={{
+                    color: tier.color,
+                    background: `${tier.color}10`,
+                    borderColor: `${tier.color}30`,
+                  }}>
+                  {tier.name === "None" ? "NO TIER" : tier.name.toUpperCase()}
                 </div>
               </div>
 
-              {/* USDC Yield */}
-              <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 10, padding: "18px 20px" }}>
-                <div style={{ fontSize: 11, color: "#666", letterSpacing: 1, marginBottom: 6 }}>PENDING USDC</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: "#22C55E" }}>
-                  ${(Number(pendingUsdc) / 1e6).toFixed(4)}
+              {/* Stats row */}
+              <div className="grid grid-cols-3 gap-3 mb-5">
+                <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-3">
+                  <div className="font-mono text-[10px] text-slate-600 mb-1">CREDITS / DAY</div>
+                  <div className="font-mono text-lg font-bold text-[#4FC3F7]">
+                    {Number(dailyCr).toLocaleString()}
+                  </div>
                 </div>
-                {pendingUsdc > 0n && (
-                  <button
-                    onClick={handleClaimYield}
-                    disabled={isBusy}
+                <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-3">
+                  <div className="font-mono text-[10px] text-slate-600 mb-1">TOTAL EARNED</div>
+                  <div className="font-mono text-lg font-bold text-white">
+                    {totalCredits !== undefined ? Number(totalCredits).toLocaleString() : "—"}
+                  </div>
+                </div>
+                <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-3">
+                  <div className="font-mono text-[10px] text-slate-600 mb-1">USDC YIELD</div>
+                  <div className="font-mono text-lg font-bold text-[#22C55E]">
+                    ${(Number(pendingUSDC) / 1e6).toFixed(4)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tier progress bar */}
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="font-mono text-[10px] text-slate-600">
+                    {nextTier ? `${fmtBlue(BigInt(Math.round(nextTier.need * 1e18)))} more → ${nextTier.tier.name}` : "Max tier reached"}
+                  </span>
+                  <span className="font-mono text-[10px]" style={{ color: tier.color }}>
+                    {progress.toFixed(0)}%
+                  </span>
+                </div>
+                <div className="h-1 bg-[#1A1A2E] rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-700"
                     style={{
-                      marginTop: 8, padding: "4px 12px", fontSize: 12,
-                      background: "#22C55E22", color: "#22C55E",
-                      border: "1px solid #22C55E44", borderRadius: 6,
-                      cursor: isBusy ? "not-allowed" : "pointer",
-                      opacity: isBusy ? 0.5 : 1,
-                    }}
-                  >
-                    Claim USDC
-                  </button>
-                )}
-              </div>
-
-              {/* Wallet balance */}
-              <div style={{ background: "#141414", border: "1px solid #222", borderRadius: 10, padding: "18px 20px" }}>
-                <div style={{ fontSize: 11, color: "#666", letterSpacing: 1, marginBottom: 6 }}>WALLET BALANCE</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: "#fff" }}>
-                  {blueBalance !== undefined ? formatBlue(blueBalance) : "—"}{" "}
-                  <span style={{ fontSize: 13, color: "#555" }}>BLUE</span>
+                      width: `${Math.min(progress, 100)}%`,
+                      background: `linear-gradient(90deg, ${tier.color}80, ${tier.color})`,
+                      boxShadow: `0 0 6px ${tier.color}60`,
+                    }} />
                 </div>
-                <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
-                  {globalStaked !== undefined ? `${formatBlue(globalStaked)} total staked globally` : ""}
+                {/* Tier markers */}
+                <div className="flex justify-between mt-1">
+                  {["0", "500K", "2M", "10M"].map((label, i) => (
+                    <span key={i} className="font-mono text-[9px] text-slate-700">{label}</span>
+                  ))}
                 </div>
               </div>
             </div>
 
-            {/* Stake form */}
-            {!hasPendingUnstake && (
-              <div style={{
-                background: "#141414", border: "1px solid #222",
-                borderRadius: 12, padding: 24, marginBottom: 16,
-              }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", marginBottom: 14 }}>
-                  Stake BLUE
-                </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <div style={{ flex: 1, position: "relative" }}>
-                    <input
-                      type="number"
-                      placeholder="Amount (e.g. 500000)"
-                      value={stakeInput}
-                      onChange={e => setStakeInput(e.target.value)}
-                      style={{
-                        width: "100%", padding: "10px 80px 10px 14px", fontSize: 14,
-                        background: "#0d0d0d", border: "1px solid #2a2a2a",
-                        borderRadius: 8, color: "#fff", outline: "none",
-                        boxSizing: "border-box",
-                      }}
-                    />
-                    {blueBalance !== undefined && blueBalance > 0n && (
+            {/* ── Action panel ── */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden mb-4">
+
+              {/* Tabs */}
+              <div className="flex border-b border-[#1A1A2E]">
+                {(["stake", "unstake", "claim"] as ActionTab[]).map(t => (
+                  <button
+                    key={t}
+                    onClick={() => setTab(t)}
+                    className="flex-1 py-3 font-mono text-xs tracking-widest transition-all border-b-2"
+                    style={tab === t
+                      ? { color: "#4FC3F7", borderBottomColor: "#4FC3F7", background: "#4FC3F708" }
+                      : { color: "#475569", borderBottomColor: "transparent" }}
+                  >
+                    {t.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+
+              <div className="p-5">
+
+                {/* ── Stake tab ── */}
+                {tab === "stake" && (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="font-mono text-[11px] text-slate-500">
+                        Wallet: <span className="text-white">{walletBal >= 1000 ? fmtBlue(blueBalance ?? 0n) : walletBal.toFixed(0)} BLUE</span>
+                      </span>
+                      {hasCooldown && (
+                        <span className="font-mono text-[10px] text-amber-500">Cancel unstake first</span>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2 mb-3">
+                      <div className="relative flex-1">
+                        <input
+                          type="number"
+                          placeholder="0"
+                          value={input}
+                          onChange={e => setInput(e.target.value)}
+                          disabled={hasCooldown}
+                          className="w-full h-11 px-4 pr-16 bg-[#0a0a0f] border border-[#1A1A2E] rounded-xl font-mono text-sm text-white placeholder-slate-700 outline-none focus:border-[#4FC3F740] transition-colors disabled:opacity-40"
+                        />
+                        {!hasCooldown && (blueBalance ?? 0n) > 0n && (
+                          <button
+                            onClick={() => setInput(formatUnits(blueBalance!, 18))}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[10px] text-[#4FC3F7] hover:text-white transition-colors"
+                          >
+                            MAX
+                          </button>
+                        )}
+                      </div>
                       <button
-                        onClick={() => setStakeInput(formatUnits(blueBalance, 18))}
+                        onClick={needsApproval ? doApprove : doStake}
+                        disabled={isBusy || !input || amtWei === 0n || hasCooldown}
+                        className="h-11 px-5 rounded-xl font-mono text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                         style={{
-                          position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
-                          padding: "2px 8px", fontSize: 11, background: "#1e1e1e",
-                          border: "1px solid #333", borderRadius: 4, color: "#888", cursor: "pointer",
+                          background: needsApproval
+                            ? "linear-gradient(135deg, #F59E0B, #D97706)"
+                            : "linear-gradient(135deg, #4FC3F7, #29ABE2)",
+                          color: "#050508",
+                          boxShadow: isBusy ? "none" : needsApproval
+                            ? "0 0 16px #F59E0B30"
+                            : "0 0 16px #4FC3F730",
                         }}
                       >
-                        MAX
+                        {isBusy ? "..." : needsApproval ? "Approve" : "Stake"}
                       </button>
+                    </div>
+
+                    {/* Presets */}
+                    <div className="flex gap-2">
+                      {[{ l: "500K", v: "500000" }, { l: "2M", v: "2000000" }, { l: "10M", v: "10000000" }].map(p => (
+                        <button
+                          key={p.l}
+                          onClick={() => setInput(p.v)}
+                          disabled={hasCooldown}
+                          className="px-3 py-1 rounded-lg font-mono text-[11px] border transition-all disabled:opacity-30"
+                          style={input === p.v
+                            ? { color: "#4FC3F7", background: "#4FC3F710", borderColor: "#4FC3F730" }
+                            : { color: "#475569", background: "transparent", borderColor: "#1A1A2E" }}
+                        >
+                          {p.l}
+                        </button>
+                      ))}
+                    </div>
+
+                    {input && amtWei > 0n && !hasCooldown && (
+                      <div className="mt-3 px-3 py-2 rounded-lg bg-[#0a0a0f] border border-[#1A1A2E]">
+                        <div className="flex justify-between font-mono text-[11px]">
+                          <span className="text-slate-600">Credits/day after stake</span>
+                          <span className="text-[#4FC3F7]">
+                            {Math.floor((staked + Number(formatUnits(amtWei, 18))) * 1e-3).toLocaleString()} cr
+                          </span>
+                        </div>
+                        <div className="flex justify-between font-mono text-[11px] mt-1">
+                          <span className="text-slate-600">New tier</span>
+                          <span style={{ color: getTier(staked + Number(formatUnits(amtWei, 18))).color }}>
+                            {getTier(staked + Number(formatUnits(amtWei, 18))).name}
+                          </span>
+                        </div>
+                      </div>
                     )}
                   </div>
-                  <button
-                    onClick={needsApproval ? handleApprove : handleStake}
-                    disabled={isBusy || !stakeInput || stakeAmountWei === 0n}
-                    style={{
-                      padding: "10px 20px", fontSize: 14, fontWeight: 600,
-                      background: needsApproval ? "#F59E0B" : "#4FC3F7",
-                      color: "#000", border: "none", borderRadius: 8,
-                      cursor: isBusy || !stakeInput ? "not-allowed" : "pointer",
-                      opacity: isBusy || !stakeInput ? 0.5 : 1,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {isBusy ? "..." : needsApproval ? "Approve BLUE" : "Stake"}
-                  </button>
-                </div>
+                )}
 
-                {/* Quick presets */}
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  {[{ label: "500K", val: "500000" }, { label: "2M", val: "2000000" }, { label: "10M", val: "10000000" }].map(p => (
-                    <button
-                      key={p.label}
-                      onClick={() => setStakeInput(p.val)}
-                      style={{
-                        padding: "4px 10px", fontSize: 11,
-                        background: stakeInput === p.val ? "#4FC3F722" : "#1a1a1a",
-                        border: `1px solid ${stakeInput === p.val ? "#4FC3F744" : "#2a2a2a"}`,
-                        borderRadius: 6, color: stakeInput === p.val ? "#4FC3F7" : "#888",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Unstake flow */}
-            {stakedAmount > 0n && (
-              <div style={{
-                background: "#141414", border: "1px solid #222",
-                borderRadius: 12, padding: 24, marginBottom: 16,
-              }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", marginBottom: 14 }}>
-                  Unstake
-                </div>
-
-                {!hasPendingUnstake ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <button
-                      onClick={handleRequestUnstake}
-                      disabled={isBusy}
-                      style={{
-                        padding: "10px 18px", fontSize: 13, fontWeight: 600,
-                        background: "transparent", color: "#ef4444",
-                        border: "1px solid #ef444444", borderRadius: 8,
-                        cursor: isBusy ? "not-allowed" : "pointer", opacity: isBusy ? 0.5 : 1,
-                      }}
-                    >
-                      Request Unstake
-                    </button>
-                    <span style={{ fontSize: 12, color: "#555" }}>1-day cooldown — credits stop accruing</span>
+                {/* ── Unstake tab ── */}
+                {tab === "unstake" && (
+                  <div>
+                    {stakedWei === 0n ? (
+                      <p className="text-slate-600 font-mono text-sm text-center py-4">Nothing staked yet</p>
+                    ) : !hasCooldown ? (
+                      <div>
+                        <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-4 mb-4">
+                          <div className="font-mono text-[10px] text-slate-600 mb-1">WILL UNSTAKE</div>
+                          <div className="font-mono text-xl font-bold">{fmtBlue(stakedWei)} BLUE</div>
+                        </div>
+                        <button
+                          onClick={doRequestUnstake}
+                          disabled={isBusy}
+                          className="w-full h-11 rounded-xl font-mono text-sm font-bold border border-red-500/30 text-red-400 bg-red-500/5 hover:bg-red-500/10 transition-all disabled:opacity-40"
+                        >
+                          {isBusy ? "..." : "Request Unstake"}
+                        </button>
+                        <p className="font-mono text-[10px] text-slate-700 text-center mt-2">
+                          Credits stop accruing · 1-day cooldown begins
+                        </p>
+                      </div>
+                    ) : canUnstake ? (
+                      <div>
+                        <div className="rounded-xl bg-[#22C55E08] border border-[#22C55E20] p-4 mb-4 text-center">
+                          <div className="font-mono text-xs text-[#22C55E] mb-1">✅ Cooldown complete</div>
+                          <div className="font-mono text-xl font-bold">{fmtBlue(stakedWei)} BLUE ready</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={doUnstake}
+                            disabled={isBusy}
+                            className="flex-1 h-11 rounded-xl font-mono text-sm font-bold bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-40"
+                          >
+                            {isBusy ? "..." : "Unstake"}
+                          </button>
+                          <button
+                            onClick={doCancelUnstake}
+                            disabled={isBusy}
+                            className="h-11 px-4 rounded-xl font-mono text-sm text-slate-500 border border-[#1A1A2E] hover:text-white hover:border-[#2a2a3e] transition-all disabled:opacity-40"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="rounded-xl bg-[#F59E0B08] border border-[#F59E0B20] p-4 mb-4 text-center">
+                          <div className="font-mono text-xs text-[#F59E0B] mb-1">⏳ Cooldown active</div>
+                          <div className="font-mono text-sm text-white">{fmtCooldown(cooldown)}</div>
+                        </div>
+                        <button
+                          onClick={doCancelUnstake}
+                          disabled={isBusy}
+                          className="w-full h-11 rounded-xl font-mono text-sm text-slate-500 border border-[#1A1A2E] hover:text-white hover:border-[#2a2a3e] transition-all disabled:opacity-40"
+                        >
+                          {isBusy ? "..." : "Cancel Unstake"}
+                        </button>
+                      </div>
+                    )}
                   </div>
-                ) : canUnstake ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <button
-                      onClick={handleUnstake}
-                      disabled={isBusy}
-                      style={{
-                        padding: "10px 18px", fontSize: 13, fontWeight: 600,
-                        background: "#ef444422", color: "#ef4444",
-                        border: "1px solid #ef444444", borderRadius: 8,
-                        cursor: isBusy ? "not-allowed" : "pointer", opacity: isBusy ? 0.5 : 1,
-                      }}
-                    >
-                      Unstake {formatBlue(stakedAmount)} BLUE
-                    </button>
-                    <button
-                      onClick={handleCancelUnstake}
-                      disabled={isBusy}
-                      style={{
-                        padding: "10px 18px", fontSize: 13,
-                        background: "transparent", color: "#888",
-                        border: "1px solid #333", borderRadius: 8,
-                        cursor: isBusy ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{
-                      padding: "10px 18px", fontSize: 13, color: "#F59E0B",
-                      background: "#F59E0B11", border: "1px solid #F59E0B33", borderRadius: 8,
-                    }}>
-                      ⏳ Cooldown: {formatCooldown(cooldownSecs)}
+                )}
+
+                {/* ── Claim tab ── */}
+                {tab === "claim" && (
+                  <div>
+                    <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-5 mb-4 text-center">
+                      <div className="font-mono text-[10px] text-slate-600 mb-2">PENDING USDC YIELD</div>
+                      <div className="font-mono text-3xl font-bold text-[#22C55E] mb-1">
+                        ${(Number(pendingUSDC) / 1e6).toFixed(6)}
+                      </div>
+                      <div className="font-mono text-[10px] text-slate-600">from x402 API revenue</div>
                     </div>
+
                     <button
-                      onClick={handleCancelUnstake}
-                      disabled={isBusy}
+                      onClick={doClaimYield}
+                      disabled={isBusy || pendingUSDC === 0n}
+                      className="w-full h-11 rounded-xl font-mono text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                       style={{
-                        padding: "10px 18px", fontSize: 13,
-                        background: "transparent", color: "#888",
-                        border: "1px solid #333", borderRadius: 8,
-                        cursor: isBusy ? "not-allowed" : "pointer",
+                        background: pendingUSDC > 0n
+                          ? "linear-gradient(135deg, #22C55E, #16A34A)"
+                          : "#1A1A2E",
+                        color: pendingUSDC > 0n ? "#050508" : "#475569",
+                        boxShadow: pendingUSDC > 0n && !isBusy ? "0 0 20px #22C55E25" : "none",
                       }}
                     >
-                      Cancel Unstake
+                      {isBusy ? "..." : pendingUSDC === 0n ? "No yield yet" : "Claim USDC"}
                     </button>
+
+                    <p className="font-mono text-[10px] text-slate-700 text-center mt-2">
+                      USDC sent directly to your wallet on Base
+                    </p>
                   </div>
                 )}
               </div>
-            )}
+            </div>
 
             {/* Tx status */}
             {(txStatus || isBusy) && (
-              <div style={{
-                padding: "12px 16px", borderRadius: 8, fontSize: 13,
-                background: "#4FC3F711", border: "1px solid #4FC3F733", color: "#4FC3F7",
-                marginBottom: 16,
-              }}>
-                {isConfirming ? "⏳ Confirming transaction on Base..." : txStatus}
+              <div className="rounded-xl border border-[#4FC3F730] bg-[#4FC3F708] px-4 py-3 font-mono text-sm text-[#4FC3F7] mb-4">
+                {isConfirming ? "⏳ Confirming on Base..." : txStatus}
               </div>
             )}
           </>
         )}
 
-        {/* How it works */}
-        <div style={{
-          marginTop: 40, padding: "20px 24px",
-          background: "#0f0f0f", borderRadius: 10, border: "1px solid #1a1a1a",
-        }}>
-          <div style={{ fontSize: 12, color: "#555", lineHeight: 1.9 }}>
-            <div style={{ color: "#666", fontWeight: 600, marginBottom: 8, fontSize: 13 }}>How it works</div>
-            <div>📌 Stake $BLUEAGENT → credits accrue continuously on-chain (no claiming needed)</div>
-            <div>💬 Credits unlock Blue Chat — AI tools, multi-agent consensus, deep research</div>
-            <div>💵 20% of x402 API revenue distributed pro-rata to stakers in USDC</div>
-            <div>⏳ 1-day cooldown to unstake — credits stop accruing on request</div>
-            <div style={{ marginTop: 12 }}>
-              <a
-                href={`https://basescan.org/address/${STAKING_ADDRESS}`}
-                target="_blank" rel="noopener noreferrer"
-                style={{ color: "#4FC3F755", textDecoration: "none", fontSize: 11 }}
-              >
-                Contract: {STAKING_ADDRESS} ↗
-              </a>
-            </div>
+        {/* ── Footer info ── */}
+        <div className="mt-6 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-5 py-4">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2 font-mono text-[11px] text-slate-600">
+            <div>📌 Credits accrue continuously on-chain</div>
+            <div>💬 Unlock Blue Chat AI tools</div>
+            <div>💵 20% of x402 revenue → stakers</div>
+            <div>⏳ 1-day cooldown to unstake</div>
           </div>
-        </div>
-
-        {/* Nav links */}
-        <div style={{ marginTop: 24, display: "flex", gap: 20, justifyContent: "center" }}>
-          <Link href="/chat" style={{ color: "#4FC3F7", fontSize: 13, textDecoration: "none" }}>
-            ← Blue Chat
-          </Link>
-          <Link href="/hub" style={{ color: "#555", fontSize: 13, textDecoration: "none" }}>
-            Blue Hub →
-          </Link>
+          <div className="mt-3 pt-3 border-t border-[#1A1A2E] flex items-center justify-between">
+            <a href={`https://basescan.org/address/${STAKING_ADDRESS}`}
+              target="_blank" rel="noopener noreferrer"
+              className="font-mono text-[10px] text-slate-700 hover:text-slate-500 transition-colors">
+              {STAKING_ADDRESS.slice(0, 10)}…{STAKING_ADDRESS.slice(-8)} ↗
+            </a>
+            <Link href="/chat" className="font-mono text-[11px] text-[#4FC3F760] hover:text-[#4FC3F7] transition-colors">
+              Blue Chat →
+            </Link>
+          </div>
         </div>
 
       </div>
