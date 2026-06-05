@@ -5,17 +5,12 @@ import { usePathname } from "next/navigation";
 import { ConnectButton } from "@/components/ConnectModal";
 
 const NAV_LINKS = [
-  { label: "Hub",      href: "/hub" },
-  { label: "Console",  href: "/console" },
-  { label: "Rewards",  href: "/rewards" },
-  { label: "Skills",   href: "/skills" },
-  { label: "API",      href: "/api-docs" },
-  { label: "Docs",     href: "/docs" },
+  { label: "Hub",     href: "/hub" },
+  { label: "About",   href: "/about" },
+  { label: "Skills",  href: "/skills" },
+  { label: "API",     href: "/api-docs" },
+  { label: "Docs",    href: "/docs" },
 ];
-
-// Hidden from nav — links still accessible directly
-// { label: "Chat",   href: "/chat" }
-// { label: "Market", href: "/market" }
 
 
 export default function Navbar() {
@@ -58,9 +53,9 @@ export default function Navbar() {
             </svg>
           </a>
           <ConnectButton />
-          <Link href="/console"
+          <Link href="/app/chat"
             className="font-mono text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-4 py-1.5 rounded hover:bg-[#29ABE2] transition-colors">
-            Console
+            Launch App →
           </Link>
         </div>
 
@@ -96,9 +91,9 @@ export default function Navbar() {
               className="font-mono text-sm text-slate-500 hover:text-white transition-colors">X</a>
             <div className="ml-auto flex items-center gap-2">
               <ConnectButton />
-              <Link href="/console" onClick={() => setOpen(false)}
+              <Link href="/app/chat" onClick={() => setOpen(false)}
                 className="font-mono text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-4 py-2 rounded hover:bg-[#29ABE2] transition-colors">
-                Console
+                Launch App →
               </Link>
             </div>
           </div>
