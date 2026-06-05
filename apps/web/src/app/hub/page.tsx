@@ -1309,7 +1309,7 @@ function decodeShare(hash: string): { toolId: string } & ToolResult | null {
 
 // ─── Hub page ─────────────────────────────────────────────────────────────────
 
-export default function HubPage() {
+export default function HubPage({ inShell = false }: { inShell?: boolean }) {
   const [cat, setCat]         = useState<Category>("all");
   const [selected, setSelected] = useState<Tool | null>(null);
   const [search, setSearch]   = useState("");
@@ -1422,11 +1422,11 @@ export default function HubPage() {
 
   return (
     <>
-      <Navbar />
-      <div className="flex bg-[#050508] font-mono pt-14">
+      {!inShell && <Navbar />}
+      <div className={`flex bg-[#050508] font-mono ${inShell ? "h-full overflow-hidden" : "pt-14"}`}>
 
         {/* ── Sidebar ──────────────────────────────────── */}
-        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] border-r border-[#1A1A2E]">
+        <aside className={`hidden lg:flex flex-col w-72 shrink-0 border-r border-[#1A1A2E] ${inShell ? "h-full" : "sticky top-14 h-[calc(100vh-3.5rem)]"}`}>
 
           {/* Header */}
           <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
@@ -1526,7 +1526,7 @@ export default function HubPage() {
         </aside>
 
         {/* ── Main content ─────────────────────────────── */}
-        <main className="flex-1 h-[calc(100vh-3.5rem)] overflow-hidden flex flex-col">
+        <main className="flex-1 h-full overflow-hidden flex flex-col">
 
           {/* Mobile search + filter chips (browse state only) */}
           {!selected && (

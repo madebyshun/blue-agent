@@ -18,7 +18,7 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[#1A1A2E] bg-[#050508]/90 backdrop-blur-xl">
-      <div className="flex items-center h-14 px-6 sm:px-10">
+      <div className="relative flex items-center h-14 px-6 sm:px-10">
 
         {/* ── Logo ── */}
         <Link href="/" className="flex items-center gap-2.5 shrink-0 mr-8">
@@ -28,8 +28,8 @@ export default function Navbar() {
           </span>
         </Link>
 
-        {/* ── Desktop nav ── */}
-        <div className="hidden md:flex items-center gap-0.5 flex-1">
+        {/* ── Desktop nav — absolutely centered ── */}
+        <div className="hidden md:flex items-center gap-0.5 absolute left-1/2 -translate-x-1/2">
           {NAV_LINKS.map((item) => {
             const active = isActive(item.href);
             return (

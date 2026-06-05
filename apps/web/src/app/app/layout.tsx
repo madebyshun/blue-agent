@@ -31,7 +31,7 @@ const APP_NAV = [
   {
     id: "hub",
     label: "Hub",
-    href: "/hub",
+    href: "/app/hub",
     icon: (
       <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round"
@@ -42,7 +42,7 @@ const APP_NAV = [
   {
     id: "market",
     label: "Market",
-    href: "/market",
+    href: "/app/market",
     icon: (
       <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round"
@@ -53,7 +53,7 @@ const APP_NAV = [
   {
     id: "sentinel",
     label: "Sentinel",
-    href: "/sentinel",
+    href: "/app/sentinel",
     icon: (
       <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round"
