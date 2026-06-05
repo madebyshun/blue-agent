@@ -242,26 +242,35 @@ export default function AppRewardsPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="h-full overflow-y-auto bg-[#050508] text-white">
+    <div className="relative h-full overflow-y-auto bg-[#050508] text-white">
 
-      {/* Hero gradient */}
-      <div className="absolute inset-x-0 top-0 h-[400px] pointer-events-none overflow-hidden">
+      {/* Ambient glow */}
+      <div className="pointer-events-none overflow-hidden absolute inset-x-0 top-0 h-[400px]">
         <div className="absolute inset-0"
-          style={{ background: "radial-gradient(ellipse 100% 50% at 50% -5%, #4FC3F718 0%, transparent 65%)" }} />
+          style={{ background: "radial-gradient(ellipse 100% 60% at 50% -10%, #4FC3F718 0%, transparent 70%)" }} />
       </div>
 
-      <div className="relative max-w-[900px] mx-auto px-6 pt-10 pb-24">
+      {/* Page header — consistent with app shell */}
+      <div className="relative flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E] shrink-0">
+        <div className="flex items-center gap-3">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+          <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// STAKE</p>
+          <p className="font-mono text-[10px] text-slate-700 hidden sm:block">Stake $BLUEAGENT · earn credits · share x402 revenue</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] px-1.5 py-0.5 border border-[#4FC3F7]/30 text-[#4FC3F7] rounded">Base Mainnet</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" />
+        </div>
+      </div>
+
+      <div className="relative max-w-[900px] mx-auto px-6 pt-8 pb-24">
 
         {/* ── Header ── */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#4FC3F730] bg-[#4FC3F708] mb-5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-            <span className="font-mono text-[11px] text-[#4FC3F7] tracking-widest">BASE MAINNET · LIVE</span>
-          </div>
           <h1 className="text-4xl font-bold tracking-tight mb-3">
-            Blue Chat <span className="text-[#4FC3F7]">Rewards</span>
+            Blue Chat <span className="text-[#4FC3F7]">Stake</span>
           </h1>
-          <p className="text-slate-500 text-base max-w-md mx-auto">
+          <p className="text-slate-500 text-sm max-w-md mx-auto">
             Stake $BLUEAGENT → credits accrue on-chain · earn USDC from x402 revenue
           </p>
 
