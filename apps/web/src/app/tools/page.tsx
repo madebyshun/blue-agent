@@ -198,10 +198,10 @@ export default function ToolsPage() {
   return (
     <>
       <Navbar />
-      <div className="flex bg-[#050508] font-mono pt-16">
+      <div className="flex bg-[#050508] font-mono pt-14">
 
         {/* ── Sidebar ──────────────────────────────────── */}
-        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] border-r border-[#1A1A2E]">
+        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] border-r border-[#1A1A2E]">
           {/* Header */}
           <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
             <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// REFERENCE</p>
@@ -252,7 +252,7 @@ export default function ToolsPage() {
         </aside>
 
         {/* ── Main content ─────────────────────────────── */}
-        <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
+        <main className="flex-1 h-[calc(100vh-3.5rem)] overflow-y-auto">
 
           {/* Page hero */}
           <div className="text-center py-12 px-8 border-b border-[#1A1A2E]">

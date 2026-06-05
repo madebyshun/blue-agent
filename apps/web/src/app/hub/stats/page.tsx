@@ -266,7 +266,7 @@ export default function StatsPage() {
         .row-fade { animation: fadeSlideUp 0.4s ease-out forwards; opacity: 0; }
       `}</style>
 
-      <div className="min-h-screen bg-[#050508] font-mono pt-16 text-slate-200">
+      <div className="min-h-screen bg-[#050508] font-mono pt-14 text-slate-200">
         {/* Grid background */}
         <div
           className="fixed inset-0 pointer-events-none"

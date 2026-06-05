@@ -11,7 +11,7 @@ export default function AgentsPage() {
     <>
       <Navbar />
       <main
-        className="bg-[#050508] font-mono min-h-screen flex flex-col items-center justify-center px-6 pt-16 text-center"
+        className="bg-[#050508] font-mono min-h-screen flex flex-col items-center justify-center px-6 pt-14 text-center"
         style={GRID_BG}
       >
         <p className="font-mono text-xs tracking-[0.3em] text-slate-600 mb-3 uppercase">

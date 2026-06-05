@@ -285,10 +285,10 @@ export default function SimulatorPage() {
   return (
     <>
       <Navbar />
-      <div className="flex bg-[#050508] font-mono pt-16">
+      <div className="flex bg-[#050508] font-mono pt-14">
 
           {/* ── Sidebar ──────────────────────────────────── */}
-          <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto border-r border-[#1A1A2E] py-10 px-4">
+          <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto border-r border-[#1A1A2E] py-10 px-4">
             <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-4 px-2">SIMULATION TIER</p>
             <nav className="flex flex-col gap-1">
               {TIERS.map((t) => (
@@ -347,7 +347,7 @@ export default function SimulatorPage() {
           </aside>
 
           {/* ── Main content ─────────────────────────────── */}
-          <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto px-6 lg:px-10 py-10">
+          <main className="flex-1 h-[calc(100vh-3.5rem)] overflow-y-auto px-6 lg:px-10 py-10">
 
             {/* Page header */}
             <div className="mb-10">

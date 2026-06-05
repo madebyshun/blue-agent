@@ -32,7 +32,7 @@ export default function ProfilePage() {
     <>
       <Navbar />
       <main
-        className="bg-[#050508] font-mono min-h-screen flex flex-col items-center justify-center px-6 pt-16"
+        className="bg-[#050508] font-mono min-h-screen flex flex-col items-center justify-center px-6 pt-14"
         style={GRID_BG}
       >
         <div className="max-w-md w-full text-center">

@@ -465,7 +465,7 @@ export default function SentinelPage() {
   return (
     <>
       <Navbar />
-      <div className="flex bg-[#050508] font-mono pt-16 h-screen overflow-hidden">
+      <div className="flex bg-[#050508] font-mono pt-14 h-screen overflow-hidden">
 
         {/* ══ LEFT SIDEBAR (280px) ══════════════════════════════════════════════ */}
         <aside className="hidden lg:flex flex-col w-[280px] shrink-0 h-full border-r border-[#1A1A2E] overflow-y-auto">

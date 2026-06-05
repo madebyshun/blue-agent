@@ -135,7 +135,7 @@ export default function MicroPostPage() {
     return (
       <>
         <Navbar />
-        <main className="bg-[#050508] font-mono min-h-screen pt-16" style={GRID_BG}>
+        <main className="bg-[#050508] font-mono min-h-screen pt-14" style={GRID_BG}>
           <div className="max-w-lg mx-auto px-4 py-20 text-center">
             <div className="text-4xl mb-4">✓</div>
             <h1 className="font-mono text-xl font-bold text-white mb-2">Task posted!</h1>
@@ -172,7 +172,7 @@ export default function MicroPostPage() {
   return (
     <>
       <Navbar />
-      <main className="bg-[#050508] font-mono min-h-screen pt-16" style={GRID_BG}>
+      <main className="bg-[#050508] font-mono min-h-screen pt-14" style={GRID_BG}>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
 
           {/* Header */}

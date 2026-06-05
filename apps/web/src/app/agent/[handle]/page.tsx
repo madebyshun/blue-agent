@@ -104,7 +104,7 @@ export default function AgentProfilePage() {
   return (
     <>
       <Navbar />
-      <main className="bg-[#050508] font-mono min-h-screen pt-16" style={GRID_BG}>
+      <main className="bg-[#050508] font-mono min-h-screen pt-14" style={GRID_BG}>
         <div className="max-w-2xl mx-auto px-6 py-16">
           {/* Back */}
           <a href="/profile" className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors mb-8 block">

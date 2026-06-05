@@ -213,8 +213,8 @@ export default function ApprovalsPage() {
   return (
     <>
       <Navbar />
-      <div className="flex bg-[#050508] font-mono pt-16 text-[#C8C8D0]">
-      <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
+      <div className="flex bg-[#050508] font-mono pt-14 text-[#C8C8D0]">
+      <main className="flex-1 h-[calc(100vh-3.5rem)] overflow-y-auto">
 
       {/* ── Header ── */}
       <div className="pb-6 px-6 lg:px-10 pt-8 border-b border-[#1A1A2E]">
