@@ -11,9 +11,9 @@ const BASE_URL = "https://blueagent.dev/api/x402";
 interface Param { name: string; type: string; required: boolean; desc: string }
 interface Tool  { name: string; price: string; desc: string; params: Param[]; example: string }
 
-const CATEGORIES: { id: string; label: string; color: string; sub: string; tools: Tool[] }[] = [
+const CATEGORIES: { id: string; label: string; color: string; sub: string; icon: string; tools: Tool[] }[] = [
   {
-    id: "security", label: "Security", color: "#f87171", sub: "4 tools",
+    id: "security", label: "Security", color: "#f87171", sub: "4 tools · $0.005–$0.05", icon: "🔐",
     tools: [
       {
         name: "honeypot-check", price: "$0.01",
@@ -45,7 +45,7 @@ const CATEGORIES: { id: string; label: string; color: string; sub: string; tools
     ],
   },
   {
-    id: "research", label: "Research", color: "#60a5fa", sub: "5 tools",
+    id: "research", label: "Research", color: "#60a5fa", sub: "5 tools · $0.001–$0.01", icon: "🔭",
     tools: [
       {
         name: "deep-analysis", price: "$0.001",
@@ -89,7 +89,7 @@ const CATEGORIES: { id: string; label: string; color: string; sub: string; tools
     ],
   },
   {
-    id: "builder", label: "Builder", color: "#34d399", sub: "6 tools",
+    id: "builder", label: "Builder", color: "#34d399", sub: "6 tools · $0.001–$0.01", icon: "🛠️",
     tools: [
       {
         name: "builder-score", price: "$0.001",
@@ -136,7 +136,7 @@ const CATEGORIES: { id: string; label: string; color: string; sub: string; tools
     ],
   },
   {
-    id: "premium", label: "Premium", color: "#a78bfa", sub: "3 tools",
+    id: "premium", label: "Premium", color: "#a78bfa", sub: "3 tools · $0.005–$0.05", icon: "⚡",
     tools: [
       {
         name: "risk-gate", price: "$0.05",
@@ -205,18 +205,17 @@ resp = requests.post(
 print(resp.json())`,
 };
 
-type Section = "overview" | "auth" | "security" | "research" | "builder" | "premium";
+// ─── Components ───────────────────────────────────────────────────────────────
 
-const SIDEBAR_NAV: { key: Section; label: string; sub: string }[] = [
-  { key: "overview",  label: "Overview",  sub: "Base URL · protocol · payment" },
-  { key: "auth",      label: "Auth",      sub: "x402 USDC payment flow" },
-  { key: "security",  label: "Security",  sub: "4 tools · $0.005–$0.05" },
-  { key: "research",  label: "Research",  sub: "5 tools · $0.001–$0.01" },
-  { key: "builder",   label: "Builder",   sub: "6 tools · $0.001–$0.01" },
-  { key: "premium",   label: "Premium",   sub: "3 tools · $0.005–$0.05" },
-];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="inline-flex items-center gap-2 mb-6">
+      <div className="h-px w-8 bg-[#4FC3F740]" />
+      <span className="font-mono text-[11px] text-[#4FC3F7] tracking-[0.2em] uppercase">{children}</span>
+      <div className="h-px w-8 bg-[#4FC3F740]" />
+    </div>
+  );
+}
 
 function CopyBtn({ text, label = "Copy" }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
@@ -230,147 +229,219 @@ function CopyBtn({ text, label = "Copy" }: { text: string; label?: string }) {
   );
 }
 
-// ─── Section components ───────────────────────────────────────────────────────
-
-function OverviewSection() {
-  const [lang, setLang] = useState<"curl" | "node" | "python">("curl");
+function EndpointCard({ tool, color }: { tool: Tool; color: string }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div>
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
-        <div className="flex items-center gap-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-          <h2 className="font-mono text-sm font-bold text-white">
-            Blue Agent <span className="text-[#4FC3F7]">API</span>
-          </h2>
-          <span className="font-mono text-[10px] text-slate-600">Pay per call · USDC on Base · no subscriptions</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-[10px] text-slate-700">18 endpoints</span>
-          <span className="font-mono text-[9px] px-1.5 py-0.5 border border-[#4FC3F7]/30 text-[#4FC3F7] rounded">x402</span>
-        </div>
-      </div>
+    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-4 px-5 py-4 hover:bg-[#0a0a0f] transition-colors group"
+      >
+        <span className="font-mono text-[10px] px-2 py-0.5 rounded font-semibold shrink-0"
+          style={{ backgroundColor: `${color}15`, color }}>
+          POST
+        </span>
+        <span className="font-mono text-sm text-white group-hover:text-[#4FC3F7] transition-colors text-left flex-1 truncate">
+          /api/x402/{tool.name}
+        </span>
+        <span className="font-mono text-[10px] px-2 py-1 rounded shrink-0 hidden sm:block"
+          style={{ backgroundColor: `${color}10`, color }}>
+          {tool.price}
+        </span>
+        <svg className={`w-3.5 h-3.5 text-slate-600 transition-transform shrink-0 ${open ? "rotate-180" : ""}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
 
-      <div className="px-6 lg:px-10 py-8 w-full space-y-6">
+      {open && (
+        <div className="border-t border-[#1A1A2E] px-5 py-5 space-y-4">
+          <p className="text-slate-400 text-sm leading-relaxed">{tool.desc}</p>
 
-        {/* Stats row */}
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: "Base URL", value: "blueagent.dev/api/x402", color: "#4FC3F7" },
-            { label: "Protocol", value: "HTTPS · REST · JSON",  color: "#34d399" },
-            { label: "Payment",  value: "x402 · USDC on Base",  color: "#fbbf24" },
-          ].map((s) => (
-            <div key={s.label} className="card-surface rounded-lg p-4">
-              <p className="font-mono text-[10px] text-slate-600 mb-1">{s.label}</p>
-              <p className="font-mono text-xs font-semibold" style={{ color: s.color }}>{s.value}</p>
+          <div>
+            <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-2">// PARAMETERS</p>
+            <div className="rounded-xl border border-[#1A1A2E] overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[#1A1A2E] bg-[#0a0a0f]">
+                    {["name", "type", "required", "description"].map((h) => (
+                      <th key={h} className="font-mono text-[10px] text-slate-600 font-normal text-left px-3 py-2">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tool.params.map((p) => (
+                    <tr key={p.name} className="border-b border-[#1A1A2E] last:border-0">
+                      <td className="font-mono text-[10px] text-[#4FC3F7] px-3 py-2">{p.name}</td>
+                      <td className="font-mono text-[10px] text-[#34d399] px-3 py-2">{p.type}</td>
+                      <td className="px-3 py-2">
+                        <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded ${
+                          p.required ? "bg-red-500/10 text-red-400" : "bg-[#1A1A2E] text-slate-600"
+                        }`}>{p.required ? "required" : "optional"}</span>
+                      </td>
+                      <td className="font-mono text-[10px] text-slate-500 px-3 py-2">{p.desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
-        </div>
+          </div>
 
-        {/* Quick start */}
-        <div className="card-surface rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-[#1A1A2E] bg-[#0D0D14]">
-            <div className="flex gap-1">
-              {(["curl", "node", "python"] as const).map((l) => (
-                <button key={l} onClick={() => setLang(l)}
-                  className={`font-mono text-[10px] px-3 py-1.5 rounded transition-all ${
-                    lang === l ? "bg-[#4FC3F7]/10 text-[#4FC3F7]" : "text-slate-600 hover:text-slate-300"
-                  }`}>
-                  {l}
-                </button>
-              ))}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="font-mono text-[10px] text-slate-600 tracking-widest">// EXAMPLE</p>
+              <CopyBtn text={tool.example.replace(/\\n/g, "\n")} />
             </div>
-            <CopyBtn text={CODE_SNIPPETS[lang]} />
-          </div>
-          <pre className="font-mono text-xs text-slate-300 p-5 overflow-x-auto leading-relaxed whitespace-pre">
-            {CODE_SNIPPETS[lang]}
-          </pre>
-        </div>
-
-        {/* Catalog overview */}
-        <div className="card-surface rounded-xl p-5">
-          <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">// AVAILABLE TOOLS</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {CATEGORIES.map((cat) => (
-              <div key={cat.id} className="rounded-lg border border-[#1A1A2E] p-3">
-                <p className="font-mono text-lg font-bold mb-1" style={{ color: cat.color }}>{cat.tools.length}</p>
-                <p className="font-mono text-[10px] text-slate-600">{cat.label}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 pt-3 border-t border-[#1A1A2E] flex items-center gap-2">
-            <span className="font-mono text-[10px] text-slate-700">40+ total tools via gateway —</span>
-            <Link href="/hub" className="font-mono text-[10px] text-[#4FC3F7] hover:underline">see Hub for full catalog →</Link>
+            <pre className="font-mono text-xs text-slate-300 bg-[#0a0a0f] border border-[#1A1A2E] rounded-xl p-4 overflow-x-auto leading-relaxed">
+              {tool.example}
+            </pre>
           </div>
         </div>
-
-        {/* Errors */}
-        <div>
-          <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest mb-3">// ERROR CODES</p>
-          <div className="card-surface rounded-xl overflow-hidden">
-            {[
-              { code: "400", title: "Bad Request",         desc: "Missing or invalid parameters." },
-              { code: "402", title: "Payment Required",     desc: "No X-Payment header or payment insufficient." },
-              { code: "429", title: "Too Many Requests",    desc: "Rate limit exceeded — 100 req/min per IP." },
-              { code: "502", title: "Bad Gateway",          desc: "Upstream service unreachable. Retry shortly." },
-            ].map((e, i, arr) => (
-              <div key={e.code}
-                className={`flex items-start gap-4 px-5 py-3 ${i < arr.length - 1 ? "border-b border-[#1A1A2E]" : ""}`}>
-                <span className="font-mono text-xs font-bold text-red-400 w-8 shrink-0">{e.code}</span>
-                <span className="font-mono text-xs text-white w-32 shrink-0">{e.title}</span>
-                <span className="font-mono text-[10px] text-slate-600">{e.desc}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-      </div>
+      )}
     </div>
   );
 }
 
-function AuthSection() {
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function ApiDocsPage() {
+  const [lang, setLang] = useState<"curl" | "node" | "python">("curl");
+
   return (
-    <div>
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
-        <div className="flex items-center gap-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#fbbf24] animate-pulse" />
-          <h2 className="font-mono text-sm font-bold text-white">
-            Pay per <span className="text-[#fbbf24]">call</span>
-          </h2>
-          <span className="font-mono text-[10px] text-slate-600">x402 · HTTP 402 micropayments · USDC on Base · no API key</span>
-        </div>
-        <span className="font-mono text-[9px] px-1.5 py-0.5 border border-[#fbbf24]/30 text-[#fbbf24] rounded">x402</span>
+    <div className="min-h-screen bg-[#050508] text-white">
+      <Navbar />
+
+      {/* Ambient glow */}
+      <div className="fixed inset-x-0 top-0 h-[600px] pointer-events-none overflow-hidden">
+        <div style={{ background: "radial-gradient(ellipse 70% 40% at 50% -5%, #fbbf2410 0%, transparent 70%)" }} className="absolute inset-0" />
       </div>
 
-      <div className="px-6 lg:px-10 py-8 w-full space-y-4">
+      <div className="relative">
 
-        {/* Steps */}
-        <div className="card-surface rounded-xl p-5">
-          <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-4">// PAYMENT FLOW</p>
-          <div className="space-y-4">
+        {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
+        <section className="max-w-5xl mx-auto px-6 pt-32 pb-20 text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#fbbf2430] bg-[#fbbf2408] mb-8">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#fbbf24] animate-pulse" />
+            <span className="font-mono text-[11px] text-[#fbbf24] tracking-widest">x402 · USDC ON BASE · NO SUBSCRIPTION</span>
+          </div>
+
+          <h1 className="text-5xl sm:text-6xl font-bold tracking-tight mb-6 leading-tight">
+            API<br />
+            <span className="text-[#4FC3F7]">Reference</span>
+          </h1>
+
+          <p className="text-slate-400 text-lg max-w-2xl mx-auto leading-relaxed mb-12">
+            18 endpoints. Pay per call in USDC on Base via x402.
+            No API key, no subscription — first call returns HTTP 402 with exact payment requirements.
+          </p>
+
+          <div className="inline-grid grid-cols-4 gap-px bg-[#1A1A2E] rounded-2xl overflow-hidden border border-[#1A1A2E] mb-12">
             {[
-              { n: "01", title: "Request without payment",   desc: "The API returns HTTP 402 with a payment requirement object specifying the exact USDC amount." },
-              { n: "02", title: "Sign payment with wallet",  desc: "Use the x402 client or Bankr facilitator to create a signed EIP-3009 TransferWithAuthorization." },
-              { n: "03", title: "Retry with X-Payment header", desc: "Include the signed token in X-Payment. The request processes and result is returned immediately." },
-            ].map((step) => (
-              <div key={step.n} className="flex gap-4">
-                <span className="font-mono text-[10px] text-[#4FC3F7] w-6 shrink-0 mt-0.5">{step.n}</span>
-                <div>
-                  <p className="font-mono text-xs text-white mb-0.5">{step.title}</p>
-                  <p className="font-mono text-[10px] text-slate-600 leading-relaxed">{step.desc}</p>
-                </div>
+              { value: "18",   label: "Endpoints", color: "#4FC3F7" },
+              { value: "x402", label: "Protocol",  color: "#fbbf24" },
+              { value: "USDC", label: "Payment",   color: "#34D399" },
+              { value: "Base", label: "Network",   color: "#2563EB" },
+            ].map((s) => (
+              <div key={s.label} className="bg-[#0d0d12] px-6 py-5 text-center">
+                <div className="font-mono text-xl font-bold mb-1" style={{ color: s.color }}>{s.value}</div>
+                <div className="font-mono text-[10px] text-slate-600 tracking-widest">{s.label.toUpperCase()}</div>
               </div>
             ))}
           </div>
-        </div>
 
-        {/* 402 response example */}
-        <div className="card-surface rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-[#1A1A2E] bg-[#0D0D14]">
-            <span className="font-mono text-[10px] text-slate-600">HTTP 402 response</span>
-            <span className="font-mono text-[10px] text-red-400 border border-red-500/20 px-2 py-0.5 rounded">402 Payment Required</span>
+          <div className="flex items-center justify-center gap-4 flex-wrap">
+            <Link href="/hub"
+              className="px-6 py-3 rounded-xl font-mono text-sm font-bold transition-all hover:opacity-90"
+              style={{ background: "linear-gradient(135deg, #4FC3F7, #29ABE2)", color: "#050508", boxShadow: "0 0 24px #4FC3F730" }}>
+              Try in Hub UI →
+            </Link>
+            <a href="/api/catalog"
+              className="px-6 py-3 rounded-xl font-mono text-sm border border-[#2a2a3e] text-slate-400 hover:text-white hover:border-[#4FC3F740] transition-all">
+              Browse catalog →
+            </a>
+            <a href="/.well-known/pricing"
+              className="px-6 py-3 rounded-xl font-mono text-sm border border-[#2a2a3e] text-slate-400 hover:text-white hover:border-[#4FC3F740] transition-all">
+              Pricing manifest →
+            </a>
           </div>
-          <pre className="font-mono text-xs text-[#34d399] p-5 overflow-x-auto leading-relaxed">{`{
+        </section>
+
+        {/* ══ QUICK START ═══════════════════════════════════════════════════════ */}
+        <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
+          <div className="text-center mb-14">
+            <SectionLabel>Quick Start</SectionLabel>
+            <h2 className="text-3xl font-bold">Call your first endpoint</h2>
+            <p className="text-slate-500 mt-3 text-sm max-w-xl mx-auto">
+              Base URL: <code className="font-mono text-[#4FC3F7]">https://blueagent.dev/api/x402</code> · All requests: POST · All responses: JSON
+            </p>
+          </div>
+
+          {/* Code tabs */}
+          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden mb-8">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#1A1A2E] bg-[#0a0a0f]">
+              <div className="flex gap-1">
+                {(["curl", "node", "python"] as const).map((l) => (
+                  <button key={l} onClick={() => setLang(l)}
+                    className={`font-mono text-[10px] px-3 py-1.5 rounded transition-all ${
+                      lang === l ? "bg-[#4FC3F7]/10 text-[#4FC3F7]" : "text-slate-600 hover:text-slate-300"
+                    }`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              <CopyBtn text={CODE_SNIPPETS[lang]} />
+            </div>
+            <pre className="font-mono text-sm text-slate-300 p-5 overflow-x-auto leading-relaxed whitespace-pre">
+              {CODE_SNIPPETS[lang]}
+            </pre>
+          </div>
+
+          {/* Stats by category */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {CATEGORIES.map((cat) => (
+              <div key={cat.id} className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 text-center">
+                <div className="text-2xl mb-2">{cat.icon}</div>
+                <div className="font-mono text-2xl font-bold mb-1" style={{ color: cat.color }}>{cat.tools.length}</div>
+                <div className="font-mono text-[10px] text-slate-600 tracking-widest">{cat.label.toUpperCase()}</div>
+                <div className="font-mono text-[10px] text-slate-700 mt-1">{cat.sub.split(" · ")[1]}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ══ PAYMENT FLOW ══════════════════════════════════════════════════════ */}
+        <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
+          <div className="text-center mb-14">
+            <SectionLabel>Authentication</SectionLabel>
+            <h2 className="text-3xl font-bold">x402 · Pay per call</h2>
+            <p className="text-slate-500 mt-3 text-sm max-w-xl mx-auto">
+              No API key. No signup. HTTP 402 micropayments in USDC on Base. One signed transfer per call.
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-4 gap-4 mb-8">
+            {[
+              { n: "01", title: "Probe",  desc: "POST to endpoint → HTTP 402 with payment requirements", color: "#4FC3F7" },
+              { n: "02", title: "Decode", desc: "Parse requirements — asset, payTo, maxAmountRequired", color: "#A78BFA" },
+              { n: "03", title: "Sign",   desc: "EIP-3009 USDC TransferWithAuthorization on Base", color: "#fbbf24" },
+              { n: "04", title: "Retry",  desc: "POST with X-Payment header → 200 OK + result", color: "#34D399" },
+            ].map((step) => (
+              <div key={step.n} className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 text-center">
+                <div className="font-mono text-[10px] mb-3 px-2 py-0.5 rounded border inline-block"
+                  style={{ color: step.color, borderColor: `${step.color}30` }}>{step.n}</div>
+                <div className="font-bold text-white mb-2">{step.title}</div>
+                <div className="font-mono text-[11px] text-slate-600 leading-relaxed">{step.desc}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* 402 response */}
+          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden mb-6">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#1A1A2E] bg-[#0a0a0f]">
+              <span className="font-mono text-[10px] text-slate-600">HTTP 402 response — payment requirements</span>
+              <span className="font-mono text-[10px] text-red-400 border border-red-500/20 px-2 py-0.5 rounded">402 Payment Required</span>
+            </div>
+            <pre className="font-mono text-xs text-[#34d399] p-5 overflow-x-auto leading-relaxed">{`{
   "error": "Payment required",
   "x402": {
     "version": 1,
@@ -379,216 +450,132 @@ function AuthSection() {
       "network":            "base-mainnet",
       "maxAmountRequired":  "10000",
       "asset":              "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-      "payTo":              "0x...",
-      "description":        "Blue Agent — honeypot-check"
+      "payTo":              "0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f",
+      "description":        "Blue Agent — honeypot-check ($0.01)"
     }]
   }
 }`}</pre>
-        </div>
-
-        {/* Pricing note */}
-        <div className="card-surface rounded-lg p-4 flex items-start gap-3">
-          <span className="font-mono text-[10px] text-[#fbbf24] shrink-0 mt-0.5">$</span>
-          <div>
-            <p className="font-mono text-xs text-white mb-1">USDC on Base — 6 decimals</p>
-            <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
-              1 USDC = 1,000,000 units. A $0.01 tool returns{" "}
-              <span className="text-[#4FC3F7]">maxAmountRequired: &quot;10000&quot;</span>.
-              All prices denominated in USDC on Base (chain ID 8453).
-            </p>
           </div>
-        </div>
 
-      </div>
-    </div>
-  );
-}
-
-function EndpointsSection({ category }: { category: typeof CATEGORIES[number] }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
-
-  return (
-    <div>
-      {/* Compact header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
-        <div className="flex items-center gap-3">
-          <span className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0" style={{ backgroundColor: category.color }} />
-          <h2 className="font-mono text-sm font-bold text-white">
-            {category.label} <span style={{ color: category.color }}>tools</span>
-          </h2>
-          <span className="font-mono text-[10px] text-slate-600">{category.sub} · POST · JSON · x402</span>
-        </div>
-        <span className="font-mono text-[10px] px-2 py-0.5 rounded"
-          style={{ color: category.color, backgroundColor: `${category.color}15` }}>
-          {category.tools.length} endpoints
-        </span>
-      </div>
-
-      {/* Endpoints */}
-      <div className="px-6 lg:px-10 py-8 w-full space-y-3">
-        {category.tools.map((tool) => {
-          const open = expanded === tool.name;
-          return (
-            <div key={tool.name} className="card-surface rounded-xl overflow-hidden">
-              <button
-                onClick={() => setExpanded(open ? null : tool.name)}
-                className="w-full flex items-center gap-4 px-5 py-4 hover:bg-[#0D0D14]/50 transition-colors group"
-              >
-                <span className="font-mono text-[10px] px-2 py-0.5 rounded font-semibold shrink-0"
-                  style={{ backgroundColor: `${category.color}15`, color: category.color }}>
-                  POST
-                </span>
-                <span className="font-mono text-xs text-white group-hover:text-[#4FC3F7] transition-colors text-left">
-                  /api/x402/{tool.name}
-                </span>
-                <span className="font-mono text-[10px] text-slate-600 text-left flex-1 hidden sm:block truncate">
-                  {tool.desc}
-                </span>
-                <span className="font-mono text-[10px] px-2 py-1 rounded shrink-0"
-                  style={{ backgroundColor: `${category.color}10`, color: category.color }}>
-                  {tool.price}
-                </span>
-                <svg className={`w-3.5 h-3.5 text-slate-700 transition-transform shrink-0 ${open ? "rotate-180" : ""}`}
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-
-              {open && (
-                <div className="border-t border-[#1A1A2E] px-5 py-5 space-y-4">
-                  <p className="font-mono text-xs text-slate-400 leading-relaxed">{tool.desc}</p>
-
-                  {/* Params table */}
-                  <div>
-                    <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-2">// PARAMETERS</p>
-                    <div className="border border-[#1A1A2E] rounded-lg overflow-hidden">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-[#1A1A2E] bg-[#0D0D14]">
-                            {["name","type","required","description"].map((h) => (
-                              <th key={h} className="font-mono text-[10px] text-slate-600 font-normal text-left px-3 py-2">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {tool.params.map((p) => (
-                            <tr key={p.name} className="border-b border-[#1A1A2E] last:border-b-0">
-                              <td className="font-mono text-[10px] text-[#4FC3F7] px-3 py-2">{p.name}</td>
-                              <td className="font-mono text-[10px] text-[#34d399] px-3 py-2">{p.type}</td>
-                              <td className="px-3 py-2">
-                                <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded ${
-                                  p.required ? "bg-red-500/10 text-red-400" : "bg-[#1A1A2E] text-slate-600"
-                                }`}>{p.required ? "required" : "optional"}</span>
-                              </td>
-                              <td className="font-mono text-[10px] text-slate-500 px-3 py-2">{p.desc}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* Example */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="font-mono text-[10px] text-slate-600 tracking-widest">// EXAMPLE</p>
-                      <CopyBtn text={tool.example.replace(/\\n/g, "\n").replace(/\\\n/g, "\\\n")} />
-                    </div>
-                    <pre className="font-mono text-xs text-slate-300 bg-[#0D0D14] border border-[#1A1A2E] rounded-lg p-4 overflow-x-auto leading-relaxed">
-                      {tool.example}
-                    </pre>
-                  </div>
-                </div>
-              )}
+          {/* Error codes */}
+          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-[#1A1A2E] bg-[#0a0a0f]">
+              <span className="font-mono text-[10px] text-slate-600 tracking-widest">ERROR CODES</span>
             </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
-export default function ApiDocsPage() {
-  const [active, setActive] = useState<Section>("overview");
-
-  const endpointCat = CATEGORIES.find((c) => c.id === active);
-
-  return (
-    <>
-      <Navbar />
-      <div className="flex bg-[#050508] font-mono pt-14">
-
-        {/* ── Sidebar ── */}
-        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] border-r border-[#1A1A2E]">
-          <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
-            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// API REFERENCE</p>
-          </div>
-
-          <nav className="flex-1 overflow-y-auto py-2">
-            {SIDEBAR_NAV.map((item) => {
-              const cat = CATEGORIES.find((c) => c.id === item.key);
-              return (
-                <button key={item.key} onClick={() => setActive(item.key)}
-                  className={`w-full text-left px-5 py-3 transition-all border-l-2 ${
-                    active === item.key
-                      ? "border-[#4FC3F7] bg-[#4FC3F7]/5 text-white"
-                      : "border-transparent text-slate-500 hover:text-white hover:bg-[#0D0D1A]"
-                  }`}>
-                  <div className="flex items-center justify-between">
-                    <p className="font-mono text-xs font-medium">{item.label}</p>
-                    {cat && (
-                      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded"
-                        style={{ color: cat.color, backgroundColor: `${cat.color}10` }}>
-                        {cat.tools.length}
-                      </span>
-                    )}
-                  </div>
-                  <p className="font-mono text-[10px] text-slate-700 mt-0.5">{item.sub}</p>
-                </button>
-              );
-            })}
-          </nav>
-
-          <div className="px-5 py-4 border-t border-[#1A1A2E] space-y-2">
-            <div className="bg-[#0D0D14] rounded px-3 py-2">
-              <p className="font-mono text-[10px] text-slate-700 mb-0.5">base url</p>
-              <p className="font-mono text-[10px] text-[#4FC3F7] break-all">blueagent.dev/api/x402</p>
-            </div>
-            <Link href="/hub"
-              className="flex items-center justify-between font-mono text-[10px] text-slate-600 hover:text-white border border-[#1A1A2E] hover:border-[#4FC3F7]/30 rounded px-3 py-2 transition-all">
-              <span>Try tools in Hub UI</span><span className="text-[#4FC3F7]">→</span>
-            </Link>
-          </div>
-        </aside>
-
-        {/* ── Main ── */}
-        <main className="flex-1 h-[calc(100vh-3.5rem)] overflow-y-auto">
-
-          {/* Mobile tabs */}
-          <div className="lg:hidden flex overflow-x-auto gap-1 px-4 py-3 border-b border-[#1A1A2E] bg-[#050508]">
-            {SIDEBAR_NAV.map((item) => (
-              <button key={item.key} onClick={() => setActive(item.key)}
-                className={`font-mono text-xs px-3 py-1.5 rounded shrink-0 transition-all ${
-                  active === item.key
-                    ? "bg-[#4FC3F7]/10 text-[#4FC3F7] border border-[#4FC3F7]/30"
-                    : "text-slate-500 hover:text-white"
-                }`}>
-                {item.label}
-              </button>
+            {[
+              { code: "400", title: "Bad Request",      desc: "Missing or invalid parameters." },
+              { code: "402", title: "Payment Required", desc: "No X-Payment header or payment insufficient." },
+              { code: "429", title: "Rate Limited",     desc: "100 req/min per IP." },
+              { code: "502", title: "Bad Gateway",      desc: "Upstream service unreachable. Retry shortly." },
+            ].map((e, i, arr) => (
+              <div key={e.code}
+                className={`flex items-center gap-4 px-5 py-3.5 ${i < arr.length - 1 ? "border-b border-[#1A1A2E]" : ""}`}>
+                <span className="font-mono text-sm font-bold text-red-400 w-10 shrink-0">{e.code}</span>
+                <span className="font-mono text-sm text-white w-32 shrink-0">{e.title}</span>
+                <span className="font-mono text-[11px] text-slate-600">{e.desc}</span>
+              </div>
             ))}
           </div>
+        </section>
 
-          {/* Content */}
-          {active === "overview" && <OverviewSection />}
-          {active === "auth"     && <AuthSection />}
-          {endpointCat && active !== "overview" && active !== "auth" && (
-            <EndpointsSection category={endpointCat} />
-          )}
+        {/* ══ ENDPOINTS ═════════════════════════════════════════════════════════ */}
+        {CATEGORIES.map((cat, idx) => (
+          <section key={cat.id} className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
+            <div className="text-center mb-14">
+              <SectionLabel>{cat.label} Tools</SectionLabel>
+              <h2 className="text-3xl font-bold">
+                <span style={{ color: cat.color }}>{cat.icon}</span> {cat.label}
+              </h2>
+              <p className="text-slate-500 mt-3 text-sm">{cat.sub}</p>
+            </div>
 
-        </main>
+            <div className="space-y-3">
+              {cat.tools.map((tool) => (
+                <EndpointCard key={tool.name} tool={tool} color={cat.color} />
+              ))}
+            </div>
+          </section>
+        ))}
+
+        {/* ══ SDK ══════════════════════════════════════════════════════════════ */}
+        <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
+          <div className="text-center mb-14">
+            <SectionLabel>SDK</SectionLabel>
+            <h2 className="text-3xl font-bold">@blueagent/x402</h2>
+            <p className="text-slate-500 mt-3 text-sm max-w-xl mx-auto">
+              Auto payment flow — probe → 402 → sign EIP-3009 → retry → 200 OK. No API key. Pay per call.
+            </p>
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-6">
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-[#1A1A2E] bg-[#0a0a0f]">
+                <div className="flex gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-green-500/50" />
+                </div>
+                <span className="font-mono text-xs text-slate-600 ml-1">install</span>
+              </div>
+              <pre className="font-mono text-sm text-[#4FC3F7] p-5 leading-relaxed">{`$ npm install @blueagent/x402`}</pre>
+            </div>
+
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-[#1A1A2E] bg-[#0a0a0f]">
+                <span className="font-mono text-xs text-slate-600">usage</span>
+              </div>
+              <pre className="font-mono text-xs text-slate-300 p-5 overflow-x-auto leading-relaxed">{`import { createX402Client } from "@blueagent/x402"
+
+const client = createX402Client({ privateKey: "0x..." })
+
+const brief = await client.idea("DeFi protocol on Base")
+const audit = await client.audit("0x<contract>")
+const pick  = await client.tokenPick()
+const price = await client.priceOf("blue-audit")`}</pre>
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-3 gap-3 mt-6">
+            {[
+              { label: "Network", value: "Base (eip155:8453)",            color: "#2563EB" },
+              { label: "Asset",   value: "USDC 0x8335…02913",            color: "#34D399" },
+              { label: "Scheme",  value: "x402 v2 · EIP-3009 + EIP-712", color: "#4FC3F7" },
+            ].map((info) => (
+              <div key={info.label} className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-4 text-center">
+                <div className="font-mono text-[10px] text-slate-600 mb-1 tracking-widest">{info.label.toUpperCase()}</div>
+                <div className="font-mono text-sm font-bold" style={{ color: info.color }}>{info.value}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ══ CTA ══════════════════════════════════════════════════════════════ */}
+        <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
+          <div className="rounded-2xl border border-[#4FC3F720] bg-[#4FC3F705] p-12 text-center"
+            style={{ boxShadow: "0 0 60px #4FC3F708" }}>
+            <h2 className="text-3xl font-bold mb-4">Ready to integrate?</h2>
+            <p className="text-slate-500 mb-8 max-w-md mx-auto text-sm leading-relaxed">
+              18 endpoints. Pay per call in USDC on Base. No signup. No subscriptions.
+            </p>
+            <div className="flex items-center justify-center gap-4 flex-wrap">
+              <a href="/api/catalog"
+                className="px-8 py-3.5 rounded-xl font-mono text-sm font-bold transition-all hover:opacity-90"
+                style={{ background: "linear-gradient(135deg, #4FC3F7, #29ABE2)", color: "#050508", boxShadow: "0 0 24px #4FC3F730" }}>
+                Browse catalog →
+              </a>
+              <Link href="/hub"
+                className="px-8 py-3.5 rounded-xl font-mono text-sm border border-[#2a2a3e] text-slate-400 hover:text-white hover:border-[#4FC3F740] transition-all">
+                Try in Hub UI
+              </Link>
+              <Link href="/docs"
+                className="px-8 py-3.5 rounded-xl font-mono text-sm border border-[#2a2a3e] text-slate-400 hover:text-white hover:border-[#4FC3F740] transition-all">
+                Full Docs →
+              </Link>
+            </div>
+          </div>
+        </section>
+
       </div>
-    </>
+    </div>
   );
 }
