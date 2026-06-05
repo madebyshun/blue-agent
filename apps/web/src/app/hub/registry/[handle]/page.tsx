@@ -94,7 +94,7 @@ export default function AgentProfilePage() {
     return (
       <>
         <Navbar />
-        <div className="flex bg-[#050508] font-mono pt-16 h-screen items-center justify-center">
+        <div className="flex bg-[#050508] font-mono pt-14 h-screen items-center justify-center">
           <p className="font-mono text-xs text-slate-700 animate-pulse">loading agent profile…</p>
         </div>
       </>
@@ -105,7 +105,7 @@ export default function AgentProfilePage() {
     return (
       <>
         <Navbar />
-        <div className="flex bg-[#050508] font-mono pt-16 h-screen items-center justify-center">
+        <div className="flex bg-[#050508] font-mono pt-14 h-screen items-center justify-center">
           <div className="text-center">
             <p className="font-mono text-xs text-red-400 mb-4">{error || "agent not found"}</p>
             <Link href="/hub/registry" className="font-mono text-[10px] text-[#4FC3F7] hover:underline">← back to registry</Link>
@@ -123,8 +123,8 @@ export default function AgentProfilePage() {
   return (
     <>
       <Navbar />
-      <div className="flex bg-[#050508] font-mono pt-16">
-        <div className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto px-6 py-8 max-w-4xl">
+      <div className="flex bg-[#050508] font-mono pt-14">
+        <div className="flex-1 h-[calc(100vh-3.5rem)] overflow-y-auto px-6 py-8 max-w-4xl">
 
           {/* ── Breadcrumb ── */}
           <div className="flex items-center gap-2 mb-6 font-mono text-[10px] text-slate-700 tracking-widest">

@@ -71,7 +71,7 @@ export default function MicroPage() {
   return (
     <>
       <Navbar />
-      <main className="bg-[#050508] font-mono min-h-screen pt-16" style={GRID_BG}>
+      <main className="bg-[#050508] font-mono min-h-screen pt-14" style={GRID_BG}>
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
 
           {/* Header */}

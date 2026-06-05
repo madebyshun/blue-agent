@@ -461,10 +461,10 @@ export default function MarketPage() {
   return (
     <>
       <Navbar />
-      <div className="flex bg-[#050508] font-mono pt-16">
+      <div className="flex bg-[#050508] font-mono pt-14">
 
         {/* ── Sidebar ── */}
-        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] border-r border-[#1A1A2E]">
+        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] border-r border-[#1A1A2E]">
           <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
             <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUE MARKET</p>
             <p className="font-mono text-[10px] text-slate-700 mt-1">Daily intelligence for Base builders</p>
@@ -531,7 +531,7 @@ export default function MarketPage() {
         </aside>
 
         {/* ── Main ── */}
-        <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
+        <main className="flex-1 h-[calc(100vh-3.5rem)] overflow-y-auto">
 
           {/* Compact header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E] shrink-0">

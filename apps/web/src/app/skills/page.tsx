@@ -406,10 +406,10 @@ export default function SkillsPage() {
   return (
     <>
       <Navbar />
-      <div className="flex bg-[#050508] font-mono pt-16">
+      <div className="flex bg-[#050508] font-mono pt-14">
 
         {/* ── Sidebar ── */}
-        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] border-r border-[#1A1A2E]">
+        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] border-r border-[#1A1A2E]">
           {/* Header */}
           <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
             <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// SKILLS</p>
@@ -448,7 +448,7 @@ export default function SkillsPage() {
         </aside>
 
         {/* ── Main ── */}
-        <main className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto">
+        <main className="flex-1 h-[calc(100vh-3.5rem)] overflow-y-auto">
 
           {/* Mobile tabs */}
           <div className="lg:hidden flex overflow-x-auto gap-1 px-4 py-3 border-b border-[#1A1A2E] bg-[#050508]">

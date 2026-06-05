@@ -90,7 +90,7 @@ export default function MicroProfilePage({ params }: { params: Promise<{ handle:
     return (
       <>
         <Navbar />
-        <main className="bg-[#050508] min-h-screen pt-16 font-mono" style={GRID_BG}>
+        <main className="bg-[#050508] min-h-screen pt-14 font-mono" style={GRID_BG}>
           <div className="max-w-3xl mx-auto px-4 py-12">
             <div className="card-surface rounded-xl p-6 border border-[#1A1A2E] animate-pulse-slow h-64" />
           </div>
@@ -103,7 +103,7 @@ export default function MicroProfilePage({ params }: { params: Promise<{ handle:
     return (
       <>
         <Navbar />
-        <main className="bg-[#050508] min-h-screen pt-16 font-mono" style={GRID_BG}>
+        <main className="bg-[#050508] min-h-screen pt-14 font-mono" style={GRID_BG}>
           <div className="max-w-3xl mx-auto px-4 py-20 text-center">
             <div className="font-mono text-slate-500 text-2xl mb-3">○</div>
             <p className="font-mono text-sm text-slate-500 mb-2">@{handle} not found</p>
@@ -125,7 +125,7 @@ export default function MicroProfilePage({ params }: { params: Promise<{ handle:
   return (
     <>
       <Navbar />
-      <main className="bg-[#050508] font-mono min-h-screen pt-16" style={GRID_BG}>
+      <main className="bg-[#050508] font-mono min-h-screen pt-14" style={GRID_BG}>
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
 
           {/* Breadcrumb */}

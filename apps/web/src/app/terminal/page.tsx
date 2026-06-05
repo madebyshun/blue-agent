@@ -509,7 +509,7 @@ export default function TerminalPage() {
     <>
       <Navbar />
 
-      <div className="min-h-screen bg-[#050508] pt-16">
+      <div className="min-h-screen bg-[#050508] pt-14">
         {/* grid bg */}
         <div
           className="fixed inset-0 pointer-events-none"

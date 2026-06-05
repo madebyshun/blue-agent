@@ -105,7 +105,7 @@ export default function AppSidebar({
     .filter(g => g.items.length > 0);
 
   return (
-    <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-16 h-[calc(100vh-4rem)] border-r border-[#1A1A2E]">
+    <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] border-r border-[#1A1A2E]">
 
       {/* ── Header ── */}
       <div className="px-5 pt-5 pb-4 border-b border-[#1A1A2E] flex-shrink-0">

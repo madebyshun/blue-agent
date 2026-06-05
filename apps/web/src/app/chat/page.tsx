@@ -58,7 +58,7 @@ function ChatShell() {
 
       <Navbar />
 
-      <div className="flex bg-[#050508] font-mono pt-16 h-screen overflow-hidden">
+      <div className="flex bg-[#050508] font-mono pt-14 h-screen overflow-hidden">
 
         {/* ── Sidebar (desktop) ── */}
         <AppSidebar activeTab={activeTab} onSelect={setActiveTab} />

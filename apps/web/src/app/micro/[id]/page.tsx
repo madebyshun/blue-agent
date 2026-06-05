@@ -184,7 +184,7 @@ export default function MicroDetailPage({ params }: { params: Promise<{ id: stri
     return (
       <>
         <Navbar />
-        <main className="bg-[#050508] min-h-screen pt-16 font-mono" style={GRID_BG}>
+        <main className="bg-[#050508] min-h-screen pt-14 font-mono" style={GRID_BG}>
           <div className="max-w-3xl mx-auto px-4 py-12">
             <div className="card-surface rounded-xl p-6 border border-[#1A1A2E] animate-pulse-slow h-64" />
           </div>
@@ -197,7 +197,7 @@ export default function MicroDetailPage({ params }: { params: Promise<{ id: stri
     return (
       <>
         <Navbar />
-        <main className="bg-[#050508] min-h-screen pt-16 font-mono" style={GRID_BG}>
+        <main className="bg-[#050508] min-h-screen pt-14 font-mono" style={GRID_BG}>
           <div className="max-w-3xl mx-auto px-4 py-12 text-center">
             <p className="font-mono text-slate-500 mb-4">Task not found</p>
             <Link href="/micro" className="font-mono text-xs text-[#4FC3F7] hover:underline">← Back to marketplace</Link>
@@ -216,7 +216,7 @@ export default function MicroDetailPage({ params }: { params: Promise<{ id: stri
   return (
     <>
       <Navbar />
-      <main className="bg-[#050508] font-mono min-h-screen pt-16" style={GRID_BG}>
+      <main className="bg-[#050508] font-mono min-h-screen pt-14" style={GRID_BG}>
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
 
           {/* Breadcrumb */}
