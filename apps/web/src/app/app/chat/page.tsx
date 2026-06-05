@@ -127,7 +127,7 @@ function ChatShell() {
       </div>
 
       {/* ── Mobile bottom tab bar ── */}
-      <div className="lg:hidden fixed bottom-14 left-0 right-0 z-40 flex bg-[#050508] border-t border-[#1A1A2E] h-14">
+      <div className="lg:hidden fixed bottom-14 md:bottom-0 left-0 right-0 z-40 flex bg-[#050508] border-t border-[#1A1A2E] h-14">
         {MOBILE_TABS.map(tab => {
           const isActive = activeTab === tab.id;
           return (
