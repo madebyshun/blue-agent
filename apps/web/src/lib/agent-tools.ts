@@ -14,7 +14,7 @@ export type CompositeSkill = {
   label: string;
 };
 
-const X402_BASE = "https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f";
+const X402_BASE = "https://blueagent.dev/api/x402";
 
 export type AgentTool = {
   id: string;
@@ -37,7 +37,7 @@ export type AgentTool = {
   x402Body?: (values: Record<string, string>) => Record<string, unknown>; // maps hub inputs → x402 body
 };
 
-// ─── All 34 tools ─────────────────────────────────────────────────────────────
+// ─── All 53 tools ─────────────────────────────────────────────────────────────
 
 export const AGENT_TOOLS: AgentTool[] = [
 
@@ -883,5 +883,317 @@ export const AGENT_TOOLS: AgentTool[] = [
     price: "$0.20", priceUSDC: 200000,
     x402Url: `${X402_BASE}/blue-raise`,
     x402Body: (v) => ({ prompt: v.prompt ?? "" }),
+  },
+
+  // ── Security / Quantum ───────────────────────────────────────────────────────
+
+  {
+    id: "quantum-premium",
+    name: "Quantum Risk Report",
+    description: "Quantum vulnerability score for any wallet — public key exposure, threat timeline, migration steps.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "security",
+    inputs: [
+      { key: "address", label: "Wallet address", placeholder: "0x...", required: true },
+      { key: "chain", label: "Chain (optional)", placeholder: "base" },
+    ],
+    isComposite: true,
+    price: "$1.50", priceUSDC: 1500000,
+    x402Url: `${X402_BASE}/quantum-premium`,
+    x402Body: (v) => ({ address: v.address ?? "", chain: v.chain ?? "base" }),
+  },
+  {
+    id: "quantum-batch",
+    name: "Quantum Batch Scan",
+    description: "Batch quantum scan — 1-10 wallets at $0.25 each. Pay only for what you scan.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "security",
+    inputs: [
+      { key: "addresses", label: "Wallet addresses (comma-separated)", placeholder: "0x..., 0x...", required: true },
+    ],
+    isComposite: true,
+    price: "$2.50", priceUSDC: 2500000,
+    x402Url: `${X402_BASE}/quantum-batch`,
+    x402Body: (v) => ({ addresses: (v.addresses ?? "").split(",").map((a: string) => a.trim()).filter(Boolean) }),
+  },
+  {
+    id: "quantum-migrate",
+    name: "Quantum Migration Plan",
+    description: "Step-by-step quantum-safe wallet migration plan — tools, timeline, priority actions.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "security",
+    inputs: [
+      { key: "address", label: "Wallet address to migrate", placeholder: "0x...", required: true },
+      { key: "urgencyLevel", label: "Urgency (optional)", placeholder: "CRITICAL | HIGH | MEDIUM | LOW" },
+    ],
+    isComposite: true,
+    price: "$2.00", priceUSDC: 2000000,
+    x402Url: `${X402_BASE}/quantum-migrate`,
+    x402Body: (v) => ({ address: v.address ?? "", urgencyLevel: v.urgencyLevel ?? undefined }),
+  },
+  {
+    id: "quantum-timeline",
+    name: "Quantum Threat Timeline",
+    description: "Quantum threat timeline — when CRQC arrives, milestone events, what it means for your wallet.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "security",
+    inputs: [
+      { key: "address", label: "Wallet address (optional)", placeholder: "0x... or leave blank" },
+      { key: "concern", label: "Specific concern (optional)", placeholder: "e.g. harvest-now-decrypt-later" },
+    ],
+    isComposite: true,
+    price: "$0.40", priceUSDC: 400000,
+    x402Url: `${X402_BASE}/quantum-timeline`,
+    x402Body: (v) => ({ address: v.address ?? "", concern: v.concern ?? "" }),
+  },
+  {
+    id: "key-exposure",
+    name: "Key Exposure Check",
+    description: "Check if wallet's public key is exposed on-chain — the #1 quantum risk factor.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "security",
+    inputs: [
+      { key: "address", label: "Wallet address", placeholder: "0x...", required: true },
+    ],
+    isComposite: true,
+    price: "$0.50", priceUSDC: 500000,
+    x402Url: `${X402_BASE}/key-exposure`,
+    x402Body: (v) => ({ address: v.address ?? "" }),
+  },
+
+  // ── On-chain ─────────────────────────────────────────────────────────────────
+
+  {
+    id: "wallet-pnl",
+    name: "Wallet PnL Report",
+    description: "Wallet PnL report — trading style, win rate, smart money score, top tokens on Base.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "on-chain",
+    inputs: [
+      { key: "address", label: "Base wallet address", placeholder: "0x...", required: true },
+    ],
+    isComposite: true,
+    price: "$1.00", priceUSDC: 1000000,
+    x402Url: `${X402_BASE}/wallet-pnl`,
+    x402Body: (v) => ({ address: v.address ?? "" }),
+  },
+  {
+    id: "aml-screen",
+    name: "AML Screen",
+    description: "AML compliance screening for any wallet — transaction patterns, risk flags, clean/suspicious verdict.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "on-chain",
+    inputs: [
+      { key: "address", label: "Wallet address to screen", placeholder: "0x...", required: true },
+    ],
+    isComposite: true,
+    price: "$0.25", priceUSDC: 250000,
+    x402Url: `${X402_BASE}/aml-screen`,
+    x402Body: (v) => ({ address: v.address ?? "" }),
+  },
+  {
+    id: "airdrop-check",
+    name: "Airdrop Check",
+    description: "Base airdrop eligibility check — which protocols, activity score, estimated value.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "on-chain",
+    inputs: [
+      { key: "address", label: "Wallet address", placeholder: "0x...", required: true },
+    ],
+    isComposite: true,
+    price: "$0.10", priceUSDC: 100000,
+    x402Url: `${X402_BASE}/airdrop-check`,
+    x402Body: (v) => ({ address: v.address ?? "" }),
+  },
+  {
+    id: "whale-tracker",
+    name: "Whale Tracker",
+    description: "Smart money and whale flow analysis — accumulation vs distribution signal for any token.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "on-chain",
+    inputs: [
+      { key: "address", label: "Token or wallet address", placeholder: "0x...", required: true },
+    ],
+    isComposite: true,
+    price: "$0.10", priceUSDC: 100000,
+    x402Url: `${X402_BASE}/whale-tracker`,
+    x402Body: (v) => ({ address: v.address ?? "" }),
+  },
+  {
+    id: "dex-flow",
+    name: "DEX Flow",
+    description: "DEX volume, buy/sell pressure and liquidity flow for any Base token — live DexScreener data.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "on-chain",
+    inputs: [
+      { key: "token", label: "Token contract address or ticker", placeholder: "0x... or BRETT", required: true },
+    ],
+    isComposite: true,
+    price: "$0.15", priceUSDC: 150000,
+    x402Url: `${X402_BASE}/dex-flow`,
+    x402Body: (v) => ({ token: v.token ?? "" }),
+  },
+
+  // ── Earn ─────────────────────────────────────────────────────────────────────
+
+  {
+    id: "yield-optimizer",
+    name: "Yield Optimizer",
+    description: "Best APY opportunities on Base DeFi — live DeFiLlama data, risk-adjusted recommendations.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "earn",
+    inputs: [
+      { key: "token", label: "Token to optimize yield for", placeholder: "USDC, ETH, BRETT", required: true },
+    ],
+    isComposite: true,
+    price: "$0.15", priceUSDC: 150000,
+    x402Url: `${X402_BASE}/yield-optimizer`,
+    x402Body: (v) => ({ token: v.token ?? "" }),
+  },
+  {
+    id: "lp-analyzer",
+    name: "LP Analyzer",
+    description: "LP position analysis — impermanent loss, fee income, rebalance recommendation.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "earn",
+    inputs: [
+      { key: "token0", label: "Token 0", placeholder: "ETH or 0x...", required: true },
+      { key: "token1", label: "Token 1", placeholder: "USDC or 0x..." },
+      { key: "entryPrice", label: "Entry price (optional)", placeholder: "e.g. 2400" },
+      { key: "investedAmount", label: "Invested amount USD (optional)", placeholder: "e.g. 5000" },
+    ],
+    isComposite: true,
+    price: "$0.25", priceUSDC: 250000,
+    x402Url: `${X402_BASE}/lp-analyzer`,
+    x402Body: (v) => ({ token0: v.token0 ?? "", token1: v.token1 ?? "", entryPrice: v.entryPrice ?? "", investedAmount: v.investedAmount ?? "" }),
+  },
+  {
+    id: "tax-report",
+    name: "Tax Report",
+    description: "On-chain tax summary — realized gains, taxable events, P&L.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "earn",
+    inputs: [
+      { key: "address", label: "Wallet address", placeholder: "0x...", required: true },
+      { key: "year", label: "Tax year (optional)", placeholder: "e.g. 2024" },
+      { key: "country", label: "Country (optional)", placeholder: "US, UK, etc." },
+    ],
+    isComposite: true,
+    price: "$2.00", priceUSDC: 2000000,
+    x402Url: `${X402_BASE}/tax-report`,
+    x402Body: (v) => ({ address: v.address ?? "", year: v.year ?? "", country: v.country ?? "US" }),
+  },
+
+  // ── Alerts ───────────────────────────────────────────────────────────────────
+
+  {
+    id: "alert-subscribe",
+    name: "Alert Subscribe",
+    description: "Subscribe to real-time alerts via webhook — whale, circuit breaker, quantum exposure.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "alerts",
+    inputs: [
+      { key: "webhookUrl", label: "Webhook URL", placeholder: "https://your-server.com/webhook", required: true },
+      { key: "topics", label: "Topics (comma-separated)", placeholder: "whale_movement, rug_risk, quantum_exposure", required: true },
+      { key: "addresses", label: "Addresses to watch (optional)", placeholder: "0x..., 0x... or leave blank for global" },
+    ],
+    isComposite: true,
+    price: "$0.50", priceUSDC: 500000,
+    x402Url: `${X402_BASE}/alert-subscribe`,
+    x402Body: (v) => ({
+      webhookUrl: v.webhookUrl ?? "",
+      topics: (v.topics ?? "").split(",").map((t: string) => t.trim()).filter(Boolean),
+      addresses: v.addresses ? (v.addresses as string).split(",").map((a: string) => a.trim()).filter(Boolean) : [],
+    }),
+  },
+  {
+    id: "alert-check",
+    name: "Alert Check",
+    description: "Check active alert triggers for any address.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "alerts",
+    inputs: [
+      { key: "address", label: "Wallet or token address", placeholder: "0x...", required: true },
+    ],
+    isComposite: true,
+    price: "$0.10", priceUSDC: 100000,
+    x402Url: `${X402_BASE}/alert-check`,
+    x402Body: (v) => ({ address: v.address ?? "" }),
+  },
+
+  // ── Builder (launch & grants) ─────────────────────────────────────────────────
+
+  {
+    id: "launch-simulator-2",
+    name: "Launch Simulator Tier 2",
+    description: "Deep Signal launch simulation with live DexScreener market data — price, volume, liquidity.",
+    agentHandle: "composite", agentName: "Blue + Aeon + MiroShark", agentType: "composite",
+    category: "builder",
+    inputs: [
+      { key: "project", label: "Project name", placeholder: "Your project name", required: true },
+      { key: "description", label: "Project description", placeholder: "What it does, target audience, current stage" },
+      { key: "ticker", label: "Token ticker (optional)", placeholder: "e.g. $BLUE" },
+      { key: "contract", label: "Contract address (optional)", placeholder: "0x... for live market data" },
+    ],
+    isComposite: true,
+    price: "$0.35", priceUSDC: 350000,
+    x402Url: `${X402_BASE}/launch-simulator-2`,
+    x402Body: (v) => ({ project: v.project ?? "", description: v.description ?? "", ticker: v.ticker ?? "", contract: v.contract ?? "" }),
+  },
+  {
+    id: "launch-simulator-3",
+    name: "Launch Simulator Tier 3",
+    description: "Full Simulation — complete multi-agent report with risk matrix and timeline recommendation.",
+    agentHandle: "composite", agentName: "Blue + Aeon + MiroShark", agentType: "composite",
+    category: "builder",
+    inputs: [
+      { key: "project", label: "Project name", placeholder: "Your project name", required: true },
+      { key: "description", label: "Project description", placeholder: "What it does, target audience, current stage" },
+      { key: "ticker", label: "Token ticker (optional)", placeholder: "e.g. $BLUE" },
+      { key: "contract", label: "Contract address (optional)", placeholder: "0x... for live market data" },
+    ],
+    isComposite: true,
+    featured: true,
+    price: "$0.50", priceUSDC: 500000,
+    x402Url: `${X402_BASE}/launch-simulator-3`,
+    x402Body: (v) => ({ project: v.project ?? "", description: v.description ?? "", ticker: v.ticker ?? "", contract: v.contract ?? "" }),
+  },
+  {
+    id: "launch-advisor",
+    name: "Launch Advisor",
+    description: "Full token launch playbook — tokenomics, 8-week timeline, marketing strategy, KPIs.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "builder",
+    inputs: [
+      { key: "projectName", label: "Project name", placeholder: "Your project name", required: true },
+      { key: "description", label: "Project description", placeholder: "What it does, why Base, target users", required: true },
+      { key: "targetAudience", label: "Target audience (optional)", placeholder: "e.g. Base builders and DeFi traders" },
+      { key: "teamSize", label: "Team size (optional)", placeholder: "e.g. solo, 3 people" },
+      { key: "budget", label: "Budget (optional)", placeholder: "e.g. $10k for launch" },
+      { key: "tokenSupply", label: "Token supply (optional)", placeholder: "e.g. 1,000,000,000" },
+    ],
+    isComposite: true,
+    price: "$3.00", priceUSDC: 3000000,
+    x402Url: `${X402_BASE}/launch-advisor`,
+    x402Body: (v) => ({ projectName: v.projectName ?? "", description: v.description ?? "", targetAudience: v.targetAudience ?? "", teamSize: v.teamSize ?? "", budget: v.budget ?? "", tokenSupply: v.tokenSupply ?? "" }),
+  },
+  {
+    id: "grant-evaluator",
+    name: "Grant Evaluator",
+    description: "Base ecosystem grant scoring — innovation, feasibility, impact, team quality.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "builder",
+    inputs: [
+      { key: "projectName", label: "Project name", placeholder: "Your project name", required: true },
+      { key: "description", label: "Project description", placeholder: "What you're building and why it matters for Base", required: true },
+      { key: "teamBackground", label: "Team background (optional)", placeholder: "Experience, previous projects, GitHub" },
+      { key: "requestedAmount", label: "Requested grant amount (optional)", placeholder: "e.g. $25,000" },
+      { key: "milestones", label: "Milestones (optional)", placeholder: "What you'll deliver and when" },
+      { key: "githubUrl", label: "GitHub URL (optional)", placeholder: "https://github.com/..." },
+    ],
+    isComposite: true,
+    price: "$5.00", priceUSDC: 5000000,
+    x402Url: `${X402_BASE}/grant-evaluator`,
+    x402Body: (v) => ({ projectName: v.projectName ?? "", description: v.description ?? "", teamBackground: v.teamBackground ?? "", requestedAmount: v.requestedAmount ?? "", milestones: v.milestones ?? "", githubUrl: v.githubUrl ?? "" }),
   },
 ];
