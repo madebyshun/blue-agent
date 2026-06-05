@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { useChat } from "../ChatContext";
+import { ToolResultCard } from "./ToolCards";
 
 // ── Animated dot ──────────────────────────────────────────────────────────────
 
@@ -387,7 +388,7 @@ export default function ChatMessages() {
                   {isAssistant ? (
                     <div className="group/msg relative">
 
-                      {/* Tool execution logs */}
+                      {/* Tool execution logs + result cards */}
                       {!!msg.toolLogs?.length && (
                         <div className="flex flex-col gap-1.5 mb-4">
                           {msg.toolLogs.map((log, j) => {
@@ -398,16 +399,22 @@ export default function ChatMessages() {
                               ? { icon: "🔵", color: "#34D399", label: "Base MCP" }
                               : { icon: "⚡", color: "#4FC3F7", label: "Blue Agent" };
                             return (
-                              <div key={j} className="flex items-center gap-2.5 px-3 py-2 rounded-lg border"
-                                style={{ borderColor: `${prov.color}20`, background: `${prov.color}07` }}>
-                                <span className="text-xs shrink-0">{prov.icon}</span>
-                                <span className="font-mono text-[10px] font-semibold shrink-0" style={{ color: prov.color }}>{prov.label}</span>
-                                <span className="font-mono text-[10px] text-slate-500 flex-1 truncate capitalize">{name}</span>
-                                {log.status === "running"
-                                  ? <span className="font-mono text-[9px] text-slate-600 animate-pulse shrink-0">running…</span>
-                                  : <span className="font-mono text-[9px] shrink-0" style={{ color: "#34D399" }}>✓{log.ms !== undefined ? ` ${(log.ms / 1000).toFixed(1)}s` : ""}</span>
-                                }
-                              </div>
+                              <React.Fragment key={j}>
+                                <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg border"
+                                  style={{ borderColor: `${prov.color}20`, background: `${prov.color}07` }}>
+                                  <span className="text-xs shrink-0">{prov.icon}</span>
+                                  <span className="font-mono text-[10px] font-semibold shrink-0" style={{ color: prov.color }}>{prov.label}</span>
+                                  <span className="font-mono text-[10px] text-slate-500 flex-1 truncate capitalize">{name}</span>
+                                  {log.status === "running"
+                                    ? <span className="font-mono text-[9px] text-slate-600 animate-pulse shrink-0">running…</span>
+                                    : <span className="font-mono text-[9px] shrink-0" style={{ color: "#34D399" }}>✓{log.ms !== undefined ? ` ${(log.ms / 1000).toFixed(1)}s` : ""}</span>
+                                  }
+                                </div>
+                                {/* Inline result card — rendered when tool has a result */}
+                                {log.status === "done" && log.result != null && (
+                                  <ToolResultCard tool={log.tool} result={log.result as Record<string, unknown>} />
+                                )}
+                              </React.Fragment>
                             );
                           })}
                         </div>

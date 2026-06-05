@@ -325,9 +325,9 @@ const TOOL_ENDPOINT: Record<string, string> = {
 
 // ─── Internal Hub tool caller ─────────────────────────────────────────────────
 
-async function callHubTool(toolName: string, args: Record<string, unknown>): Promise<string> {
+async function callHubTool(toolName: string, args: Record<string, unknown>): Promise<{ text: string; result?: unknown }> {
   const endpoint = TOOL_ENDPOINT[toolName];
-  if (!endpoint) return `[Unknown tool: ${toolName}]`;
+  if (!endpoint) return { text: `[Unknown tool: ${toolName}]` };
 
   // Internal bypass: call /api/x402/<id> directly with X-Blue-Internal header
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -347,18 +347,19 @@ async function callHubTool(toolName: string, args: Record<string, unknown>): Pro
     });
 
     if (res.status === 402) {
-      return `[${toolName}: payment required — set INTERNAL_SERVICE_KEY env var to enable]`;
+      return { text: `[${toolName}: payment required — set INTERNAL_SERVICE_KEY env var to enable]` };
     }
     if (!res.ok) {
-      return `[${toolName}: service returned ${res.status} — answering from knowledge]`;
+      return { text: `[${toolName}: service returned ${res.status} — answering from knowledge]` };
     }
 
     const data = await res.json().catch(() => null);
     // Unwrap nested { result: ... } if present
     const payload = (data as Record<string, unknown>)?.result ?? data;
-    return typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
+    const text = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
+    return { text, result: payload };
   } catch (e) {
-    return `[${toolName}: unavailable (${(e as Error).message}) — answering from knowledge]`;
+    return { text: `[${toolName}: unavailable (${(e as Error).message}) — answering from knowledge]` };
   }
 }
 
@@ -457,17 +458,21 @@ async function veniceToolStream(
 
         // 2. Execute tools in parallel
         const t0 = Date.now();
-        const toolResults = await Promise.all(toolCalls.map(async tc => {
+        const veniceOutputs = await Promise.all(toolCalls.map(async tc => {
           let args: Record<string, unknown> = {};
           try { args = JSON.parse(tc.function.arguments); } catch {}
-          return { role: "tool" as const, tool_call_id: tc.id,
-                   content: await callHubTool(tc.function.name, args) };
+          const out = await callHubTool(tc.function.name, args);
+          return { tc, out };
         }));
         const elapsed = Date.now() - t0;
 
-        // 3. tool_done events
-        for (const tc of toolCalls)
-          emit({ type: "tool_done", tool: tc.function.name, ms: elapsed });
+        const toolResults = veniceOutputs.map(({ tc, out }) => ({
+          role: "tool" as const, tool_call_id: tc.id, content: out.text,
+        }));
+
+        // 3. tool_done events (include raw result for card rendering)
+        for (const { tc, out } of veniceOutputs)
+          emit({ type: "tool_done", tool: tc.function.name, ms: elapsed, result: out.result });
 
         // 4. Phase 2 streaming synthesis
         const phase2Msgs = [
@@ -991,19 +996,24 @@ export async function POST(req: NextRequest) {
 
         // 2. Execute tools in parallel
         const t0 = Date.now();
-        const toolResults = await Promise.all(
-          toolUseBlocks.map(async (block) => ({
-            type:        "tool_result" as const,
-            tool_use_id: block.id!,
-            content:     await callHubTool(block.name!, block.input ?? {}),
-          }))
+        const toolOutputs = await Promise.all(
+          toolUseBlocks.map(async (block) => {
+            const out = await callHubTool(block.name!, block.input ?? {});
+            return { block, out };
+          })
         );
         const elapsed = Date.now() - t0;
 
-        // 3. tool_done events
-        for (const block of toolUseBlocks) {
+        const toolResults = toolOutputs.map(({ block, out }) => ({
+          type:        "tool_result" as const,
+          tool_use_id: block.id!,
+          content:     out.text,
+        }));
+
+        // 3. tool_done events (include raw result for card rendering)
+        for (const { block, out } of toolOutputs) {
           controller.enqueue(enc.encode(
-            `data: ${JSON.stringify({ type: "tool_done", tool: block.name, ms: elapsed })}\n\n`
+            `data: ${JSON.stringify({ type: "tool_done", tool: block.name, ms: elapsed, result: out.result })}\n\n`
           ));
         }
 
