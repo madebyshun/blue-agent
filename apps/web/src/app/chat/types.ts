@@ -18,6 +18,7 @@ export interface Message {
   isThinking?:      boolean;  // true while the <think> block is still streaming
   modelUsed?:       string;   // tier ID e.g. "venice-deepseek-pro"
   responseMs?:      number;   // total response time in ms
+  creditsUsed?:     number;   // credits deducted for this message
   toolLogs?:        ToolLog[];
   attachments?:     Attachment[];
 }

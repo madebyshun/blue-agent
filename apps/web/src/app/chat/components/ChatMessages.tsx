@@ -439,9 +439,9 @@ export default function ChatMessages() {
                         </span>
                       ) : null}
 
-                      {/* Response metadata */}
+                      {/* Response metadata + cost summary */}
                       {msg.modelUsed && msg.responseMs !== undefined && (
-                        <div className="flex items-center gap-2 mt-3">
+                        <div className="flex items-center gap-2 mt-3 flex-wrap">
                           <span className="w-1.5 h-1.5 rounded-full shrink-0"
                             style={{ background: MODEL_COLORS[msg.modelUsed] ?? "#4FC3F7" }} />
                           <span className="font-mono text-[10px] text-slate-700">
@@ -451,6 +451,22 @@ export default function ChatMessages() {
                           <span className="font-mono text-[10px] text-slate-700">
                             {(msg.responseMs / 1000).toFixed(1)}s
                           </span>
+                          {!!msg.toolLogs?.length && (
+                            <>
+                              <span className="font-mono text-[10px] text-slate-800">·</span>
+                              <span className="font-mono text-[10px] text-slate-700">
+                                {msg.toolLogs.length} tool{msg.toolLogs.length > 1 ? "s" : ""}
+                              </span>
+                            </>
+                          )}
+                          {msg.creditsUsed !== undefined && msg.creditsUsed > 0 && (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono text-[9px] font-semibold"
+                              style={{ background: "#4FC3F715", color: "#4FC3F7" }}
+                            >
+                              ⚡ {msg.creditsUsed} cr
+                            </span>
+                          )}
                         </div>
                       )}
 

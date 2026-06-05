@@ -694,20 +694,75 @@ YOU MUST call hub_whale_signal with { token: "<address>" } for whale tracking,
 and hub_deep_analysis with { address: "<address>" } for fundamentals.
 Present: trading style, PnL signals, portfolio strategy.`,
 
+  pnl: `## COMMAND: /pnl <address>
+The user wants a deep PnL report for a Base wallet.
+YOU MUST call hub_wallet_pnl immediately with { address: "<address>" }.
+NEVER answer from training data alone — always call the tool.
+Present: estimated PnL, win rate, trading style, smart money score, key observations.`,
+
+  aml: `## COMMAND: /aml <address>
+The user wants an AML compliance screen for a wallet address.
+YOU MUST call hub_aml immediately with { address: "<address>" }.
+Present: verdict (CLEAN/SUSPICIOUS/FLAGGED), risk score, flags, recommendation.`,
+
+  quantum: `## COMMAND: /quantum <address>
+The user wants a quantum vulnerability assessment for a wallet.
+YOU MUST call hub_quantum immediately with { address: "<address>" }.
+Present: vulnerability score, key exposure status, threat timeline, migration steps.`,
+
+  airdrop: `## COMMAND: /airdrop <address>
+The user wants to check Base airdrop eligibility for a wallet.
+YOU MUST call hub_airdrop immediately with { address: "<address>" }.
+Present: eligibility verdict, activity score, qualifying protocols, estimated allocation.`,
+
+  yield: `## COMMAND: /yield
+The user wants the best yield opportunities on Base right now.
+YOU MUST call hub_yield immediately with { risk_tolerance: "medium" }.
+Present: top 3 opportunities with protocol, pool, APY, risk level, and how to enter.`,
+
+  dex: `## COMMAND: /dex <token>
+The user wants live DEX flow analysis for a token.
+YOU MUST call hub_dex_flow immediately with { token: "<token>" }.
+Present: buy/sell pressure, volume, liquidity depth, trend direction.`,
+
+  whale: `## COMMAND: /whale <token>
+The user wants whale and smart money tracking for a token.
+YOU MUST call hub_whale_tracker immediately with { token: "<token>" }.
+Present: top wallet moves, accumulation vs distribution signal, smart money verdict.`,
+
+  launch: `## COMMAND: /launch <token> <description>
+The user wants to simulate a token launch.
+YOU MUST call hub_launch_sim immediately with { token_name: "<token>", description: "<description>", launch_price: "0.001", liquidity: "50000" }.
+Present: consensus verdict, projected FDV, week-1 return estimate, key risks, go/no-go.`,
+
   help: `## COMMAND: /help
 List all available Blue Chat slash commands in a clean format.
 Commands to document:
-/idea <concept> — Turn a rough idea into a fundable brief
-/build <project> — Get architecture, stack, folder structure
-/audit <code/plan> — Security + product risk review
+── Builder ──
+/idea <concept> — Fundable brief: problem, MVP, 24h plan
+/build <project> — Architecture, stack, folder structure
+/audit <code/plan> — Security + product risk, GO/NO-GO
 /ship <project> — Deployment checklist for Base Mainnet
 /raise <project> — Pitch narrative + investor targets
+── Trading & Alpha ──
 /pick — AI token pick on Base
-/scan <token_address> — Honeypot + risk check for a token
+/scan <address> — Honeypot + risk check for a token
+/whale <token> — Smart money flow tracking
+/dex <token> — Live DEX buy/sell pressure
+── Wallet ──
 /wallet <address> — Wallet strategy analysis
-/clear — Clear conversation (handled locally)
-/help — Show this command list
-Format as a clean reference. Group by category.`,
+/pnl <address> — Deep PnL report
+/aml <address> — AML compliance screen
+/quantum <address> — Quantum vulnerability scan
+/airdrop <address> — Base airdrop eligibility check
+── DeFi ──
+/yield — Best APY on Base right now
+/launch <token> <desc> — Token launch simulation
+── Meta ──
+/models — Available AI models + costs
+/skills — All Hub tools in chat
+/help — This command list
+Format as a clean grouped reference.`,
 };
 
 // ─── Venice direct stream (no tools) ─────────────────────────────────────────

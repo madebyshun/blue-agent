@@ -25,9 +25,17 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { cmd: "pick",   icon: "🎯", label: "Token Pick",      hint: "AI-powered token pick on Base",             example: "/pick" },
   { cmd: "scan",   icon: "🔍", label: "Scan Token",      hint: "Honeypot + risk check before buying",       example: "/scan <address>" },
   { cmd: "wallet", icon: "👛", label: "Wallet Analysis", hint: "Analyze on-chain activity and strategy",    example: "/wallet <address>" },
-  { cmd: "models", icon: "🤖", label: "Models",          hint: "List all available AI models + costs",      example: "/models" },
-  { cmd: "skills", icon: "⚡", label: "Skills / Tools",  hint: "List all Hub tools available in chat",      example: "/skills" },
-  { cmd: "help",   icon: "📖", label: "Help",            hint: "Show all available commands",               example: "/help" },
+  { cmd: "pnl",     icon: "📊", label: "Wallet PnL",      hint: "Deep PnL report for any Base wallet",        example: "/pnl <address>" },
+  { cmd: "aml",     icon: "🛡️", label: "AML Screen",      hint: "AML compliance — CLEAN / SUSPICIOUS",        example: "/aml <address>" },
+  { cmd: "quantum", icon: "⚛",  label: "Quantum Scan",    hint: "Quantum vulnerability score for a wallet",   example: "/quantum <address>" },
+  { cmd: "airdrop", icon: "🪂", label: "Airdrop Check",   hint: "Base airdrop eligibility + activity score",  example: "/airdrop <address>" },
+  { cmd: "yield",   icon: "💰", label: "Yield Optimizer", hint: "Best APY opportunities on Base DeFi",        example: "/yield" },
+  { cmd: "dex",     icon: "📈", label: "DEX Flow",        hint: "Live buy/sell pressure for a token",         example: "/dex <token>" },
+  { cmd: "whale",   icon: "🐋", label: "Whale Tracker",   hint: "Smart money flow for any token",             example: "/whale <token>" },
+  { cmd: "launch",  icon: "🚀", label: "Launch Sim",      hint: "Simulate your token launch — 3-agent",       example: "/launch <token> <description>" },
+  { cmd: "models",  icon: "🤖", label: "Models",          hint: "List all available AI models + costs",       example: "/models" },
+  { cmd: "skills",  icon: "⚡", label: "Skills / Tools",  hint: "List all Hub tools available in chat",       example: "/skills" },
+  { cmd: "help",    icon: "📖", label: "Help",            hint: "Show all available commands",                example: "/help" },
 ];
 
 export interface ModelTier {
