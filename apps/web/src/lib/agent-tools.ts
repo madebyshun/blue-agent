@@ -37,7 +37,7 @@ export type AgentTool = {
   x402Body?: (values: Record<string, string>) => Record<string, unknown>; // maps hub inputs → x402 body
 };
 
-// ─── All 53 tools ─────────────────────────────────────────────────────────────
+// ─── All 64 tools ─────────────────────────────────────────────────────────────
 
 export const AGENT_TOOLS: AgentTool[] = [
 
