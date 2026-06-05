@@ -582,6 +582,249 @@ export function ContractTrustCard({ result }: { result: ContractTrustResult }) {
   );
 }
 
+// ── MarketFitCard ─────────────────────────────────────────────────────────────
+
+const VERDICT_COLORS: Record<string, { bg: string; text: string; icon: string }> = {
+  GO:    { bg: "#16a34a15", text: "#4ade80", icon: "✓" },
+  WAIT:  { bg: "#d9770615", text: "#fb923c", icon: "⏸" },
+  PIVOT: { bg: "#dc262615", text: "#f87171", icon: "↻" },
+};
+
+function MarketFitCard({ result }: { result: Record<string, unknown> }) {
+  const verdict  = String(result.verdict ?? "");
+  const score    = Number(result.score ?? result.market_fit_score ?? 0);
+  const summary  = String(result.summary ?? result.suggested_change ?? "");
+  const risks    = Array.isArray(result.risks) ? result.risks as string[] : [];
+  const brief    = result.brief as Record<string, string> | undefined;
+  const color    = verdict === "GO" ? "#4ade80" : verdict === "WAIT" ? "#fb923c" : "#f87171";
+  return (
+    <Card accentColor={color}>
+      <CardHeader accentColor={color}>
+        <span className="font-mono text-[11px] font-bold text-slate-300">Market Fit</span>
+        <div className="flex items-center gap-2">
+          <VerdictBadge verdict={verdict || "—"} colorMap={VERDICT_COLORS} />
+          {score > 0 && <span className="font-mono text-[10px]" style={{ color }}>{score}/100</span>}
+        </div>
+      </CardHeader>
+      <CardBody>
+        {score > 0 && <ScoreBar score={score} color={color} />}
+        {brief && (
+          <div className="grid grid-cols-1 gap-1.5">
+            {Object.entries(brief).slice(0, 3).map(([k, v]) => (
+              <div key={k}>
+                <p className="font-mono text-[9px] text-slate-600 uppercase tracking-wider">{k}</p>
+                <p className="font-mono text-[11px] text-slate-300 leading-snug">{v}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        {risks.length > 0 && <FlagList flags={risks} color="#fb923c" />}
+        {summary && <p className="font-mono text-[11px] text-slate-400 leading-snug">{summary}</p>}
+      </CardBody>
+    </Card>
+  );
+}
+
+// ── WalletPnlCard ─────────────────────────────────────────────────────────────
+
+function WalletPnlCard({ result }: { result: Record<string, unknown> }) {
+  const pnl   = String(result.estimatedPnL ?? result.pnl ?? "");
+  const wr    = String(result.winRate ?? result.win_rate ?? "");
+  const style = String(result.tradingStyle ?? result.trading_style ?? "");
+  const score = Number(result.smartMoneyScore ?? result.smart_money_score ?? 0);
+  const summary = String(result.summary ?? "");
+  const isPos = pnl.startsWith("+");
+  const color = isPos ? "#4ade80" : pnl.startsWith("-") ? "#f87171" : "#4FC3F7";
+  return (
+    <Card accentColor={color}>
+      <CardHeader accentColor={color}>
+        <span className="font-mono text-[11px] font-bold text-slate-300">Wallet PnL</span>
+        {pnl && <span className="font-mono text-[13px] font-bold" style={{ color }}>{pnl}</span>}
+      </CardHeader>
+      <CardBody>
+        <div className="grid grid-cols-3 gap-3">
+          {wr    && <div><p className="font-mono text-[9px] text-slate-600 uppercase">Win Rate</p><p className="font-mono text-[12px]" style={{ color: "#4ade80" }}>{wr}</p></div>}
+          {style && <div><p className="font-mono text-[9px] text-slate-600 uppercase">Style</p><p className="font-mono text-[11px] text-slate-300">{style}</p></div>}
+          {score > 0 && <div><p className="font-mono text-[9px] text-slate-600 uppercase">Smart $</p><ScoreBar score={score} color="#A78BFA" /></div>}
+        </div>
+        {summary && <p className="font-mono text-[11px] text-slate-400 leading-snug">{summary}</p>}
+      </CardBody>
+    </Card>
+  );
+}
+
+// ── AmlCard ───────────────────────────────────────────────────────────────────
+
+const AML_COLORS: Record<string, { bg: string; text: string; icon: string }> = {
+  CLEAN:      { bg: "#16a34a15", text: "#4ade80", icon: "✓" },
+  SUSPICIOUS: { bg: "#d9770615", text: "#fb923c", icon: "⚠" },
+  FLAGGED:    { bg: "#dc262615", text: "#f87171", icon: "✕" },
+};
+
+function AmlCard({ result }: { result: Record<string, unknown> }) {
+  const verdict = String(result.verdict ?? result.status ?? "");
+  const score   = Number(result.riskScore ?? result.risk_score ?? 0);
+  const flags   = Array.isArray(result.flags) ? result.flags as string[] : [];
+  const summary = String(result.summary ?? "");
+  const color   = verdict === "CLEAN" ? "#4ade80" : verdict === "FLAGGED" ? "#f87171" : "#fb923c";
+  return (
+    <Card accentColor={color}>
+      <CardHeader accentColor={color}>
+        <span className="font-mono text-[11px] font-bold text-slate-300">AML Screen</span>
+        <div className="flex items-center gap-2">
+          <VerdictBadge verdict={verdict || "—"} colorMap={AML_COLORS} />
+          {score > 0 && <span className="font-mono text-[10px]" style={{ color }}>Risk {score}</span>}
+        </div>
+      </CardHeader>
+      <CardBody>
+        {score > 0 && <ScoreBar score={score} color={color} />}
+        {flags.length > 0 && <FlagList flags={flags} color="#fb923c" />}
+        {summary && <p className="font-mono text-[11px] text-slate-400 leading-snug">{summary}</p>}
+      </CardBody>
+    </Card>
+  );
+}
+
+// ── QuantumCard ───────────────────────────────────────────────────────────────
+
+function QuantumCard({ result }: { result: Record<string, unknown> }) {
+  const score    = Number(result.vulnerabilityScore ?? result.score ?? result.quantum_score ?? 0);
+  const verdict  = String(result.verdict ?? result.risk_level ?? "");
+  const exposed  = result.keyExposed ?? result.key_exposed;
+  const timeline = String(result.timeline ?? result.threat_timeline ?? "");
+  const recs     = Array.isArray(result.recommendations) ? result.recommendations as string[] : [];
+  const color    = score > 70 ? "#f87171" : score > 40 ? "#fb923c" : "#4ade80";
+  return (
+    <Card accentColor={color}>
+      <CardHeader accentColor={color}>
+        <span className="font-mono text-[11px] font-bold text-slate-300">⚛ Quantum Scan</span>
+        <div className="flex items-center gap-2">
+          {verdict && <span className="font-mono text-[10px] font-bold" style={{ color }}>{verdict}</span>}
+          {score > 0 && <span className="font-mono text-[10px] text-slate-500">Score {score}</span>}
+        </div>
+      </CardHeader>
+      <CardBody>
+        {score > 0 && <ScoreBar score={score} color={color} />}
+        {exposed !== undefined && (
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[9px] text-slate-600 uppercase">Key Exposed</span>
+            <span className="font-mono text-[11px]" style={{ color: exposed ? "#f87171" : "#4ade80" }}>{exposed ? "Yes ⚠" : "No ✓"}</span>
+          </div>
+        )}
+        {timeline && <p className="font-mono text-[11px] text-slate-400 leading-snug">{timeline}</p>}
+        {recs.length > 0 && <FlagList flags={recs} color="#A78BFA" />}
+      </CardBody>
+    </Card>
+  );
+}
+
+// ── YieldCard ─────────────────────────────────────────────────────────────────
+
+function YieldCard({ result }: { result: Record<string, unknown> }) {
+  const opps = Array.isArray(result.opportunities) ? result.opportunities as Record<string, unknown>[] : [];
+  const summary = String(result.summary ?? result.top_opportunity ?? "");
+  return (
+    <Card accentColor="#34D399">
+      <CardHeader accentColor="#34D399">
+        <span className="font-mono text-[11px] font-bold text-slate-300">💰 Yield Optimizer</span>
+        {opps.length > 0 && <span className="font-mono text-[10px] text-[#34D399]">{opps.length} opportunities</span>}
+      </CardHeader>
+      <CardBody>
+        {opps.slice(0, 3).map((o, i) => (
+          <div key={i} className="flex items-center justify-between py-1 border-b border-slate-800 last:border-0">
+            <div>
+              <p className="font-mono text-[11px] text-slate-200">{String(o.protocol ?? o.name ?? "")}</p>
+              <p className="font-mono text-[9px] text-slate-600">{String(o.asset ?? o.pool ?? "")}</p>
+            </div>
+            <span className="font-mono text-[12px] font-bold text-[#34D399]">{String(o.apy ?? o.apr ?? "")}</span>
+          </div>
+        ))}
+        {opps.length === 0 && summary && <p className="font-mono text-[11px] text-slate-400">{summary}</p>}
+      </CardBody>
+    </Card>
+  );
+}
+
+// ── LaunchSimCard ─────────────────────────────────────────────────────────────
+
+function LaunchSimCard({ result }: { result: Record<string, unknown> }) {
+  const verdict    = String(result.verdict ?? result.consensus ?? "");
+  const score      = Number(result.score ?? result.launch_score ?? 0);
+  const fdv        = String(result.projectedFDV ?? result.projected_fdv ?? result.fdv ?? "");
+  const week1      = String(result.week1Return ?? result.week_1_return ?? "");
+  const risks      = Array.isArray(result.risks) ? result.risks as string[] : [];
+  const summary    = String(result.summary ?? "");
+  const isPositive = score >= 60;
+  const color      = isPositive ? "#A78BFA" : "#fb923c";
+  return (
+    <Card accentColor={color}>
+      <CardHeader accentColor={color}>
+        <span className="font-mono text-[11px] font-bold text-slate-300">🚀 Launch Simulator</span>
+        <div className="flex items-center gap-2">
+          {verdict && <span className="font-mono text-[10px] font-bold" style={{ color }}>{verdict}</span>}
+          {score > 0 && <span className="font-mono text-[10px] text-slate-500">{score}/100</span>}
+        </div>
+      </CardHeader>
+      <CardBody>
+        {score > 0 && <ScoreBar score={score} color={color} />}
+        <div className="grid grid-cols-2 gap-3">
+          {fdv   && <div><p className="font-mono text-[9px] text-slate-600 uppercase">Projected FDV</p><p className="font-mono text-[12px] text-slate-200">{fdv}</p></div>}
+          {week1 && <div><p className="font-mono text-[9px] text-slate-600 uppercase">Week 1 Return</p><p className="font-mono text-[12px]" style={{ color: week1.startsWith("+") ? "#4ade80" : "#f87171" }}>{week1}</p></div>}
+        </div>
+        {risks.length > 0 && <FlagList flags={risks} color="#fb923c" />}
+        {summary && <p className="font-mono text-[11px] text-slate-400 leading-snug">{summary}</p>}
+      </CardBody>
+    </Card>
+  );
+}
+
+// ── GenericCard — fallback for any tool without a specific card ───────────────
+
+const SKIP_KEYS = new Set(["raw", "prompt", "_meta", "model", "tool", "command"]);
+
+function GenericCard({ tool, result }: { tool: string; result: Record<string, unknown> }) {
+  const label = tool.replace(/^hub_/, "").replace(/_/g, " ");
+
+  // Pick the most informative fields to surface
+  const topFields = Object.entries(result)
+    .filter(([k, v]) => !SKIP_KEYS.has(k) && v !== null && v !== undefined && v !== "")
+    .slice(0, 6);
+
+  if (topFields.length === 0) return null;
+
+  return (
+    <Card accentColor="#4FC3F7">
+      <CardHeader accentColor="#4FC3F7">
+        <span className="font-mono text-[11px] font-bold text-slate-300 capitalize">{label}</span>
+      </CardHeader>
+      <CardBody>
+        <div className="grid grid-cols-1 gap-2">
+          {topFields.map(([k, v]) => {
+            const isArray  = Array.isArray(v);
+            const isObject = typeof v === "object" && !isArray;
+            const display  = isArray
+              ? (v as unknown[]).slice(0, 3).map(String).join(" · ")
+              : isObject
+              ? JSON.stringify(v).slice(0, 120)
+              : String(v).slice(0, 200);
+            const isScore  = /score|rating|pct|percent/i.test(k) && typeof v === "number";
+            const key      = k.replace(/_/g, " ");
+            return (
+              <div key={k}>
+                <p className="font-mono text-[9px] text-slate-600 uppercase tracking-wider">{key}</p>
+                {isScore
+                  ? <ScoreBar score={Number(v)} color="#4FC3F7" />
+                  : <p className="font-mono text-[11px] text-slate-300 leading-snug">{display}</p>
+                }
+              </div>
+            );
+          })}
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
+
 // ── Router — pick the right card for a tool ───────────────────────────────────
 
 export function ToolResultCard({ tool, result }: { tool: string; result: Record<string, unknown> }) {
@@ -589,18 +832,18 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
   const r = result;
 
   switch (tool) {
-    case "hub_honeypot":
-      return <HoneypotCard result={r as HoneypotResult} />;
-    case "hub_risk_gate":
-      return <RiskGateCard result={r as RiskGateResult} />;
-    case "hub_deep_analysis":
-      return <DeepAnalysisCard result={r as DeepAnalysisResult} />;
-    case "hub_token_pick":
-      return <TokenPickCard result={r as TokenPickResult} />;
+    case "hub_honeypot":      return <HoneypotCard    result={r as HoneypotResult} />;
+    case "hub_risk_gate":     return <RiskGateCard    result={r as RiskGateResult} />;
+    case "hub_deep_analysis": return <DeepAnalysisCard result={r as DeepAnalysisResult} />;
+    case "hub_token_pick":    return <TokenPickCard   result={r as TokenPickResult} />;
     case "hub_contract_trust":
-    case "hub_whale_signal":  // contract-trust also applies here if used for addresses
-      return <ContractTrustCard result={r as ContractTrustResult} />;
-    default:
-      return null;
+    case "hub_whale_signal":  return <ContractTrustCard result={r as ContractTrustResult} />;
+    case "hub_market_fit":    return <MarketFitCard   result={r} />;
+    case "hub_wallet_pnl":    return <WalletPnlCard   result={r} />;
+    case "hub_aml":           return <AmlCard         result={r} />;
+    case "hub_quantum":       return <QuantumCard      result={r} />;
+    case "hub_yield":         return <YieldCard        result={r} />;
+    case "hub_launch_sim":    return <LaunchSimCard    result={r} />;
+    default:                  return <GenericCard      tool={tool} result={r} />;
   }
 }
