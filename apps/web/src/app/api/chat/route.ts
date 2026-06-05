@@ -629,6 +629,24 @@ function extractCommand(messages: LLMMessage[]): { cmd: string; args: string } |
 }
 
 const COMMAND_PROMPTS: Record<string, string> = {
+  credits: `## COMMAND: /credits
+Show the user their credit system status. Format it cleanly:
+
+**Credit Tiers**
+| Tier | BLUE Required | Credits/day | Discount |
+|------|--------------|-------------|---------|
+| Guest | 0 | 30 | — |
+| Starter | 500K | 500 | — |
+| Pro | 2M | 2,000 | 20% off Hub |
+| Max | 10M | ∞ | 40% off Hub |
+
+**How to earn more credits:**
+- Hold $BLUEAGENT on Base → credits refresh daily automatically
+- Buy $BLUEAGENT: click "Buy BLUE" in the sidebar or type /idea to get started
+- $BLUEAGENT contract: 0xf895783b2931c919955e18b5e3343e7c7c456ba3 (Base)
+
+Keep it short, practical, and actionable.`,
+
   idea: `## COMMAND: /idea
 Generate a FUNDABLE BRIEF in this exact format:
 **Problem** — 1 crisp sentence
@@ -759,6 +777,7 @@ Commands to document:
 /yield — Best APY on Base right now
 /launch <token> <desc> — Token launch simulation
 ── Meta ──
+/credits — Credit balance, tier, how to earn more
 /models — Available AI models + costs
 /skills — All Hub tools in chat
 /help — This command list
