@@ -79,6 +79,36 @@ const TOOL_EXAMPLES: Record<string, Record<string, string>> = {
   "blue-audit": { prompt: "ERC20 token with staking and revenue share — check for reentrancy and access control issues" },
   "blue-ship":  { prompt: "Base mainnet launch of BLUEAGENT token with Uniswap v4 pool" },
   "blue-raise": { prompt: "AI agent tool marketplace on Base — 40 tools, $2k MRR, raising $750k pre-seed" },
+  // ── Security ──────────────────────────────────────────────────────────────────
+  "honeypot-check":  { token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
+  "risk-gate":       { action: "buy token on Uniswap", contractAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", amount: "$50" },
+  "deep-analysis":   { token: "0xf895783b2931c919955e18b5e3343e7c7c456ba3" },
+  "builder-score":   { handle: "@madebyshun" },
+  "agent-score":     { handle: "@blueagent_" },
+  // ── Quantum ───────────────────────────────────────────────────────────────────
+  "quantum-premium": { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
+  "quantum-batch":   { addresses: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045,0xab5801a7d398351b8be11c439e05c5b3259aec9b" },
+  "quantum-migrate": { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
+  "quantum-timeline":{ context: "DeFi wallet with $50k in assets on Base" },
+  "key-exposure":    { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
+  // ── On-chain Data ─────────────────────────────────────────────────────────────
+  "wallet-pnl":      { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
+  "aml-screen":      { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
+  "airdrop-check":   { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
+  "whale-tracker":   { token: "0xf895783b2931c919955e18b5e3343e7c7c456ba3" },
+  "dex-flow":        { token: "0xf895783b2931c919955e18b5e3343e7c7c456ba3" },
+  // ── Earn ──────────────────────────────────────────────────────────────────────
+  "yield-optimizer": { risk_tolerance: "medium", amount: "10000" },
+  "lp-analyzer":     { pool: "WETH/USDC 0.05%", position: "$5000 deployed" },
+  "tax-report":      { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", year: "2024" },
+  // ── Alerts ────────────────────────────────────────────────────────────────────
+  "alert-subscribe": { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", webhook: "https://your-server.com/webhook", events: "large_transfer,whale_buy" },
+  "alert-check":     { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
+  // ── Launch (extended) ─────────────────────────────────────────────────────────
+  "launch-simulator-2": { token_name: "BLUEAI", launch_price: "0.001", total_supply: "1000000000", liquidity: "50000" },
+  "launch-simulator-3": { token_name: "BLUEAI", launch_price: "0.001", total_supply: "1000000000", liquidity: "50000" },
+  "launch-advisor":     { token_name: "BLUEAI", description: "AI agent tooling on Base — 64 live tools, 500 weekly users, $5k MRR", raise: "$750k" },
+  "grant-evaluator":    { project: "Blue Agent", description: "64 pay-per-use AI tools for Base builders via x402 micropayments. 500 weekly users, $5k MRR.", ask: "$50k" },
 };
 
 // Derive TOOLS from AGENT_TOOLS — single source of truth
@@ -918,21 +948,56 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
     label: "For Founders",
     desc: "Launch, market fit, growth, fundraising",
     color: "#A78BFA",
-    ids: ["market-fit", "token-launch-readiness", "competitor-scan", "gtm-brief", "launch-simulator", "base-grant-finder", "roadmap-validator", "token-distribution-plan", "stack-recommender"],
+    ids: ["market-fit", "token-launch-readiness", "competitor-scan", "gtm-brief", "launch-simulator", "launch-simulator-2", "launch-simulator-3", "launch-advisor", "base-grant-finder", "grant-evaluator", "roadmap-validator", "token-distribution-plan", "stack-recommender"],
   },
   {
     id: "investors",
     label: "For Investors",
     desc: "Due diligence, memos, pitch intel",
     color: "#34D399",
-    ids: ["builder-deep-dd", "investor-memo", "pitch-intelligence", "fundraise-timing", "builder-brand-score", "base-protocol-comparison"],
+    ids: ["builder-deep-dd", "investor-memo", "pitch-intelligence", "fundraise-timing", "builder-brand-score", "base-protocol-comparison", "builder-score", "agent-score"],
+  },
+  {
+    id: "blue",
+    label: "Blue Commands",
+    desc: "Idea → build → audit → ship → raise",
+    color: "#60A5FA",
+    ids: ["blue-idea", "blue-build", "blue-audit", "blue-ship", "blue-raise"],
+  },
+  {
+    id: "security",
+    label: "Security & Safety",
+    desc: "Honeypot, risk gate, deep analysis, quantum protection",
+    color: "#F87171",
+    ids: ["honeypot-check", "risk-gate", "deep-analysis", "contract-trust", "quantum-premium", "quantum-batch", "quantum-migrate", "quantum-timeline", "key-exposure"],
+  },
+  {
+    id: "onchain",
+    label: "On-chain Data",
+    desc: "Wallet PnL, AML, airdrops, whale tracking, DEX flow",
+    color: "#FACC15",
+    ids: ["wallet-pnl", "aml-screen", "airdrop-check", "whale-tracker", "dex-flow", "wallet-strategy-analyzer"],
+  },
+  {
+    id: "earn",
+    label: "Earn & DeFi",
+    desc: "Yield optimization, LP analysis, tax reporting",
+    color: "#34D399",
+    ids: ["yield-optimizer", "lp-analyzer", "tax-report"],
+  },
+  {
+    id: "alerts",
+    label: "Alerts",
+    desc: "Real-time webhook alerts for on-chain events",
+    color: "#FB923C",
+    ids: ["alert-subscribe", "alert-check"],
   },
   {
     id: "automation",
     label: "Analytics & Automation",
-    desc: "Monitor contracts, wallets, protocols",
+    desc: "Repo health, builder network, protocol monitoring",
     color: "#FB923C",
-    ids: ["contract-trust", "wallet-strategy-analyzer", "repo-health", "base-builder-network-match"],
+    ids: ["repo-health", "base-builder-network-match"],
   },
   {
     id: "agents",
