@@ -47,7 +47,8 @@ interface TransferAuth {
  */
 async function executeTransferWithAuthorization(auth: TransferAuth): Promise<void> {
   // Dynamic import viem — bundled in Next.js; fail hard if not available
-  const { createWalletClient, createPublicClient, http, privateKeyToAccount } = await import("viem");
+  const { createWalletClient, createPublicClient, http } = await import("viem");
+  const { privateKeyToAccount } = await import("viem/accounts");
   const { base } = await import("viem/chains");
 
   const account = privateKeyToAccount(DISTRIBUTOR_KEY as `0x${string}`);
