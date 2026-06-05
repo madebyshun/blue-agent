@@ -33,6 +33,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { cmd: "dex",     icon: "📈", label: "DEX Flow",        hint: "Live buy/sell pressure for a token",         example: "/dex <token>" },
   { cmd: "whale",   icon: "🐋", label: "Whale Tracker",   hint: "Smart money flow for any token",             example: "/whale <token>" },
   { cmd: "launch",  icon: "🚀", label: "Launch Sim",      hint: "Simulate your token launch — 3-agent",       example: "/launch <token> <description>" },
+  { cmd: "credits", icon: "⚡", label: "Credits",         hint: "Show balance, tier, and how to earn more",   example: "/credits" },
   { cmd: "models",  icon: "🤖", label: "Models",          hint: "List all available AI models + costs",       example: "/models" },
   { cmd: "skills",  icon: "⚡", label: "Skills / Tools",  hint: "List all Hub tools available in chat",       example: "/skills" },
   { cmd: "help",    icon: "📖", label: "Help",            hint: "Show all available commands",                example: "/help" },
@@ -262,11 +263,50 @@ export default function ChatInput() {
           </div>
         )}
 
-        {/* ── Out-of-credits banner ────────────────────────────────────────── */}
+        {/* ── Out-of-credits upgrade card ──────────────────────────────── */}
         {outOfCredits && (
-          <div className="mb-2 px-4 py-2 rounded-xl bg-[#EF444410] border border-[#EF444430] font-mono text-xs text-red-400 flex items-center justify-between gap-3">
-            <span>Out of credits ({credits} left, need {cost}).</span>
-            <button onClick={() => setBuyOpen(true)} className="flex-shrink-0 text-[#F59E0B] hover:underline">Buy BLUE →</button>
+          <div className="mb-2 rounded-xl border border-[#F59E0B20] bg-[#F59E0B06] overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#F59E0B15]">
+              <div className="flex items-center gap-2">
+                <span className="text-xs">⚡</span>
+                <span className="font-mono text-[11px] font-bold text-[#F59E0B]">Out of credits</span>
+                <span className="font-mono text-[10px] text-slate-600">
+                  {credits} left · need {cost}/msg
+                </span>
+              </div>
+              <button
+                onClick={() => setBuyOpen(true)}
+                className="font-mono text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all"
+                style={{ background: "#F59E0B18", color: "#F59E0B", border: "1px solid #F59E0B30" }}
+              >
+                Buy BLUE →
+              </button>
+            </div>
+            <div className="flex items-center gap-4 px-4 py-2">
+              {/* Current tier */}
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: holderTier.color }} />
+                <span className="font-mono text-[10px]" style={{ color: holderTier.color }}>{holderTier.tier}</span>
+                <span className="font-mono text-[10px] text-slate-600">
+                  {holderTier.dailyCr === -1 ? "∞" : holderTier.dailyCr} cr/day
+                </span>
+              </div>
+              {/* Arrow + next tier */}
+              {holderTier.nextTier && (
+                <>
+                  <span className="font-mono text-[10px] text-slate-700">→</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-[10px] text-slate-400 font-bold">{holderTier.nextTier.name}</span>
+                    <span className="font-mono text-[10px] text-slate-600">
+                      {holderTier.nextTier.dailyCr === -1 ? "∞" : holderTier.nextTier.dailyCr} cr/day
+                    </span>
+                    <span className="font-mono text-[9px] text-slate-700">
+                      (+{(holderTier.nextTier.need / 1_000_000).toFixed(1)}M BLUE)
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         )}
         {error && !outOfCredits && (
