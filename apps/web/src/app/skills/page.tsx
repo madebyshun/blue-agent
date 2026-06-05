@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import Navbar from "@/components/Navbar";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -11,11 +12,11 @@ const SOUL_SECTIONS = [
     label: "Identity",
     sub: "Who Blue Agent is",
     content: [
-      { k: "name",    v: "Blue Agent" },
-      { k: "role",    v: "AI founder agent for Base builders" },
-      { k: "chain",   v: "Base (chain ID 8453) — exclusively" },
-      { k: "built by",v: "Blocky Studio — @madebyshun" },
-      { k: "token",   v: "$BLUEAGENT · 0xf895783b2931c919955e18b5e3343e7c7c456ba3" },
+      { k: "name",     v: "Blue Agent" },
+      { k: "role",     v: "AI founder agent for Base builders" },
+      { k: "chain",    v: "Base (chain ID 8453) — exclusively" },
+      { k: "built by", v: "Blocky Studio — @madebyshun" },
+      { k: "token",    v: "$BLUEAGENT · 0xf895783b2931c919955e18b5e3343e7c7c456ba3" },
     ],
   },
   {
@@ -45,9 +46,9 @@ const SOUL_SECTIONS = [
     label: "Decision Rules",
     sub: "How Blue Agent chooses",
     content: [
-      { k: "uncertain",  v: "Pick the option that ships faster → more Base-native → less attack surface" },
-      { k: "chains",     v: "Answer for Base first. Never suggest Ethereum mainnet as the default path." },
-      { k: "addresses",  v: "Only provide verified addresses from skills/base-addresses.md. Never guess." },
+      { k: "uncertain", v: "Pick the option that ships faster → more Base-native → less attack surface" },
+      { k: "chains",    v: "Answer for Base first. Never suggest Ethereum mainnet as the default path." },
+      { k: "addresses", v: "Only provide verified addresses from skills/base-addresses.md. Never guess." },
     ],
   },
   {
@@ -71,7 +72,7 @@ const AEON_SKILLS = [
     label: "Token Movers",
     color: "#34d399",
     icon: "📈",
-    desc: "Top movers, losers, and trending coins from CoinGecko with pump-risk flags — low liquidity, fresh listing, volume-no-mcap, cex-only. No API key required.",
+    desc: "Top movers, losers, and trending coins from CoinGecko with pump-risk flags — low liquidity, fresh listing, volume-no-mcap, cex-only.",
     triggers: ["top movers today", "what's pumping", "biggest losers 24h", "trending coins"],
     requires: "None — public CoinGecko API",
     github: "https://github.com/madebyshun/blue-agent/blob/main/skills/aeon-token-movers.md",
@@ -83,7 +84,7 @@ const AEON_SKILLS = [
     label: "Token Pick",
     color: "#fbbf24",
     icon: "🎯",
-    desc: "One token recommendation per run with falsifiable thesis, entry, sizing, and kill criterion. Fires NO_PICK when no candidate has a named/dated catalyst — discipline is the skip branch.",
+    desc: "One token recommendation per run with falsifiable thesis, entry, sizing, and kill criterion. Fires NO_PICK when no candidate has a named catalyst.",
     triggers: ["give me a token pick", "what should I trade today", "is there an asymmetric setup"],
     requires: "None — skip branch is a valid output",
     github: "https://github.com/madebyshun/blue-agent/blob/main/skills/aeon-token-pick.md",
@@ -95,7 +96,7 @@ const AEON_SKILLS = [
     label: "Narrative Tracker",
     color: "#4FC3F7",
     icon: "🧭",
-    desc: "Daily narrative map — mindshare score (1-5), velocity arrow (↑↑ ↑ → ↓ ↓↓), phase label (Emerging / Rising / Peak / Fading), named drivers, and position calls: FRONT-RUN / RIDE / FADE / WATCH / IGNORE.",
+    desc: "Daily narrative map — mindshare score (1-5), velocity arrow, phase label (Emerging / Rising / Peak / Fading), and position calls: FRONT-RUN / RIDE / FADE / WATCH / IGNORE.",
     triggers: ["what's running on CT", "narrative positions today", "is X peaking"],
     requires: "Optional: XAI_API_KEY for deeper signal threads",
     github: "https://github.com/madebyshun/blue-agent/blob/main/skills/aeon-narrative-tracker.md",
@@ -107,7 +108,7 @@ const AEON_SKILLS = [
     label: "Deep Research",
     color: "#a78bfa",
     icon: "🔬",
-    desc: "Exhaustive multi-source research with attributed claims and adversarial counterpoint. Claims tagged by source class — primary / expert / secondary / market signal — with confidence scores.",
+    desc: "Exhaustive multi-source research with attributed claims and adversarial counterpoint. Claims tagged by source class with confidence scores.",
     triggers: ["deep research X", "DD on Y", "build me a memo on Z", "contrarian take on X"],
     requires: "None — uses web search",
     github: "https://github.com/madebyshun/blue-agent/blob/main/skills/aeon-deep-research.md",
@@ -119,7 +120,7 @@ const AEON_SKILLS = [
     label: "Distribute Tokens",
     color: "#fb923c",
     icon: "💸",
-    desc: "Batch token payouts via Bankr Wallet API with per-recipient idempotency, two-phase resolve→execute, dry-run preview, and recovery from partial runs. Re-runs on same UTC day skip completed rows.",
+    desc: "Batch token payouts via Bankr Wallet API with per-recipient idempotency, two-phase resolve→execute, dry-run preview, and recovery from partial runs.",
     triggers: ["distribute tokens", "pay contributors", "weekly payout", "send USDC to this list"],
     requires: "BANKR_API_KEY with Wallet write scope",
     github: "https://github.com/madebyshun/blue-agent/blob/main/skills/aeon-distribute-tokens.md",
@@ -127,18 +128,17 @@ const AEON_SKILLS = [
   },
 ];
 
-type Section = "soul" | "token-movers" | "token-pick" | "narrative-tracker" | "deep-research" | "distribute-tokens";
+// ─── Components ───────────────────────────────────────────────────────────────
 
-const SIDEBAR_NAV: { key: Section; label: string; sub: string }[] = [
-  { key: "soul",              label: "SOUL.md",          sub: "Agent personality config" },
-  { key: "token-movers",      label: "Token Movers",      sub: "CoinGecko · pump-risk flags" },
-  { key: "token-pick",        label: "Token Pick",        sub: "Falsifiable thesis · kill criterion" },
-  { key: "narrative-tracker", label: "Narrative Tracker", sub: "Mindshare · velocity · position" },
-  { key: "deep-research",     label: "Deep Research",     sub: "Multi-source · attributed claims" },
-  { key: "distribute-tokens", label: "Distribute Tokens", sub: "Batch payouts · idempotent" },
-];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="inline-flex items-center gap-2 mb-6">
+      <div className="h-px w-8 bg-[#4FC3F740]" />
+      <span className="font-mono text-[11px] text-[#4FC3F7] tracking-[0.2em] uppercase">{children}</span>
+      <div className="h-px w-8 bg-[#4FC3F740]" />
+    </div>
+  );
+}
 
 function CopyBtn({ text, label = "Copy" }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
@@ -152,324 +152,301 @@ function CopyBtn({ text, label = "Copy" }: { text: string; label?: string }) {
   );
 }
 
-// ─── Section components ───────────────────────────────────────────────────────
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
-function SoulSection() {
-  const [open, setOpen] = useState<string | null>("identity");
+export default function SkillsPage() {
+  const [openSection, setOpenSection] = useState<string | null>("identity");
+
   return (
-    <div>
-      {/* Compact header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
-        <div className="flex items-center gap-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-          <h2 className="font-mono text-sm font-bold text-white">
-            SOUL<span className="text-[#4FC3F7]">.md</span>
-          </h2>
-          <span className="font-mono text-[10px] text-slate-600">Personality config · Who Blue Agent is · how it thinks · forkable</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[9px] px-1.5 py-0.5 border border-[#4FC3F7]/30 text-[#4FC3F7] rounded">FORKABLE</span>
-          <a href="https://github.com/madebyshun/blue-agent/blob/main/SOUL.md"
-            target="_blank" rel="noopener noreferrer"
-            className="font-mono text-[10px] text-slate-600 hover:text-[#4FC3F7] transition-colors">
-            GitHub →
-          </a>
-        </div>
+    <div className="min-h-screen bg-[#050508] text-white">
+      <Navbar />
+
+      {/* Ambient glow */}
+      <div className="fixed inset-x-0 top-0 h-[600px] pointer-events-none overflow-hidden">
+        <div style={{ background: "radial-gradient(ellipse 70% 40% at 50% -5%, #4FC3F714 0%, transparent 70%)" }} className="absolute inset-0" />
       </div>
 
-      {/* Content */}
-      <div className="px-6 lg:px-10 py-8 w-full">
-        {/* File header */}
-        <div className="card-surface rounded-xl overflow-hidden mb-6">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#1A1A2E] bg-[#0D0D14]">
-            <div className="flex items-center gap-3">
-              <div className="flex gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
-                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
-                <div className="w-2.5 h-2.5 rounded-full bg-green-500/50" />
-              </div>
-              <span className="font-mono text-xs text-slate-400">SOUL.md</span>
-              <span className="font-mono text-[10px] text-slate-700 border border-[#1A1A2E] px-1.5 py-0.5 rounded">v0.1.0</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CopyBtn text="https://raw.githubusercontent.com/madebyshun/blue-agent/main/SOUL.md" label="Copy raw URL" />
-              <a href="https://github.com/madebyshun/blue-agent/blob/main/SOUL.md"
-                target="_blank" rel="noopener noreferrer"
-                className="font-mono text-[10px] px-2 py-1 rounded border border-[#4FC3F7]/30 text-[#4FC3F7] hover:bg-[#4FC3F7]/5 transition-all">
-                Fork on GitHub →
-              </a>
-            </div>
+      <div className="relative">
+
+        {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
+        <section className="max-w-5xl mx-auto px-6 pt-32 pb-20 text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#4FC3F730] bg-[#4FC3F708] mb-8">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+            <span className="font-mono text-[11px] text-[#4FC3F7] tracking-widest">6 SKILLS · OPEN SOURCE · MIT</span>
           </div>
 
-          {/* Accordion */}
-          {SOUL_SECTIONS.map((sec) => (
-            <div key={sec.id} className="border-b border-[#1A1A2E] last:border-b-0">
-              <button
-                onClick={() => setOpen(open === sec.id ? null : sec.id)}
-                className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-[#0D0D14]/60 transition-colors group"
-              >
-                <div className="text-left">
-                  <span className="font-mono text-xs text-white group-hover:text-[#4FC3F7] transition-colors">
-                    ## {sec.label}
-                  </span>
-                  <span className="font-mono text-[10px] text-slate-700 ml-3">{sec.sub}</span>
-                </div>
-                <svg className={`w-3.5 h-3.5 text-slate-700 transition-transform shrink-0 ${open === sec.id ? "rotate-180" : ""}`}
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              {open === sec.id && (
-                <div className="px-5 pb-4 pt-1 space-y-2">
-                  {sec.content.map((row) => (
-                    <div key={row.k} className="flex gap-3 items-baseline">
-                      <span className={`font-mono text-[10px] shrink-0 w-20 ${row.k === "✕" ? "text-red-500" : "text-slate-600"}`}>
-                        {row.k}
-                      </span>
-                      <span className="font-mono text-xs text-slate-300 leading-relaxed">{row.v}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+          <h1 className="text-5xl sm:text-6xl font-bold tracking-tight mb-6 leading-tight">
+            Agent<br />
+            <span className="text-[#4FC3F7]">Skills</span>
+          </h1>
 
-        {/* Fork callout */}
-        <div className="card-surface rounded-lg p-4 flex items-start gap-3">
-          <span className="font-mono text-[10px] text-[#4FC3F7] shrink-0 mt-0.5">⚡</span>
-          <div>
-            <p className="font-mono text-xs text-white mb-1">Fork SOUL.md → create your own agent personality</p>
-            <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
-              Clone the repo · edit SOUL.md · update identity + values + hard limits · load into any Bankr-compatible agent session.
+          <p className="text-slate-400 text-lg max-w-2xl mx-auto leading-relaxed mb-12">
+            SOUL.md defines who Blue Agent is. Five Aeon skills define what it knows.
+            All open source, forkable, and loadable into any Bankr-compatible agent session.
+          </p>
+
+          <div className="inline-grid grid-cols-3 gap-px bg-[#1A1A2E] rounded-2xl overflow-hidden border border-[#1A1A2E] mb-12">
+            {[
+              { value: "6",    label: "Skills",  color: "#4FC3F7" },
+              { value: "MIT",  label: "License", color: "#34D399" },
+              { value: "Base", label: "Network", color: "#2563EB" },
+            ].map((s) => (
+              <div key={s.label} className="bg-[#0d0d12] px-8 py-5 text-center">
+                <div className="font-mono text-2xl font-bold mb-1" style={{ color: s.color }}>{s.value}</div>
+                <div className="font-mono text-[10px] text-slate-600 tracking-widest">{s.label.toUpperCase()}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-center gap-4">
+            <Link href="/app/chat"
+              className="px-6 py-3 rounded-xl font-mono text-sm font-bold transition-all hover:opacity-90"
+              style={{ background: "linear-gradient(135deg, #4FC3F7, #29ABE2)", color: "#050508", boxShadow: "0 0 24px #4FC3F730" }}>
+              Try in Blue Chat →
+            </Link>
+            <a href="https://github.com/madebyshun/blue-agent" target="_blank" rel="noopener noreferrer"
+              className="px-6 py-3 rounded-xl font-mono text-sm border border-[#2a2a3e] text-slate-400 hover:text-white hover:border-[#4FC3F740] transition-all">
+              GitHub →
+            </a>
+          </div>
+        </section>
+
+        {/* ══ SOUL.md ═══════════════════════════════════════════════════════════ */}
+        <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
+          <div className="text-center mb-14">
+            <SectionLabel>Identity</SectionLabel>
+            <h2 className="text-3xl font-bold">SOUL.md</h2>
+            <p className="text-slate-500 mt-3 text-sm max-w-xl mx-auto">
+              Personality config — who Blue Agent is, how it thinks, what it won't do. Fork it to create your own agent.
             </p>
-            <div className="mt-2 font-mono text-[10px]">
-              <span className="text-slate-700">$ </span>
-              <span className="text-[#4FC3F7]">git clone https://github.com/madebyshun/blue-agent</span>
-            </div>
           </div>
-        </div>
 
-        {/* Fork in 3 steps */}
-        <div className="card-surface rounded-xl p-5">
-          <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-4">// FORK IN 3 STEPS</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[
-              { step: "01", label: "Clone", cmd: "git clone github.com/madebyshun/blue-agent", desc: "Get the full Blue Agent repo with all skill files" },
-              { step: "02", label: "Edit SOUL.md", cmd: "nano SOUL.md", desc: "Update identity, values, communication style, hard limits" },
-              { step: "03", label: "Load", cmd: "bankr session --soul ./SOUL.md", desc: "Your personality file loads into any Bankr agent session" },
-            ].map(s => (
-              <div key={s.step} className="border border-[#1A1A2E] rounded-lg p-3">
-                <span className="font-mono text-[10px] text-[#4FC3F7]">{s.step}</span>
-                <p className="font-mono text-xs text-white mt-1 mb-1">{s.label}</p>
-                <p className="font-mono text-[10px] text-slate-600 leading-relaxed mb-2">{s.desc}</p>
-                <div className="font-mono text-[10px] text-[#A78BFA] bg-[#050508] border border-[#1A1A2E] rounded px-2 py-1 truncate">
-                  $ {s.cmd}
+          {/* File card with accordion */}
+          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden mb-8">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#1A1A2E] bg-[#0a0a0f]">
+              <div className="flex items-center gap-3">
+                <div className="flex gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-green-500/50" />
                 </div>
+                <span className="font-mono text-sm text-white">SOUL.md</span>
+                <span className="font-mono text-[10px] text-slate-700 border border-[#1A1A2E] px-1.5 py-0.5 rounded">v0.1.0</span>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* What SOUL.md controls */}
-        <div className="card-surface rounded-xl p-5">
-          <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">// WHAT SOUL.md CONTROLS</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: "Identity", desc: "Name, role, chain, builder" },
-              { label: "Core Values", desc: "5 unbreakable principles" },
-              { label: "Communication", desc: "Tone, phrases, format" },
-              { label: "Hard Limits", desc: "What the agent won't do" },
-            ].map(item => (
-              <div key={item.label} className="border border-[#1A1A2E] rounded-lg p-3">
-                <p className="font-mono text-xs text-white mb-1">{item.label}</p>
-                <p className="font-mono text-[10px] text-slate-600 leading-relaxed">{item.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AeonSkillSection({ skill }: { skill: typeof AEON_SKILLS[number] }) {
-  return (
-    <div>
-      {/* Compact header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E]">
-        <div className="flex items-center gap-3 min-w-0">
-          <span className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0" style={{ backgroundColor: skill.color }} />
-          <h2 className="font-mono text-sm font-bold text-white shrink-0">
-            {skill.icon} {skill.label}
-          </h2>
-          <span className="font-mono text-[10px] text-slate-600 truncate">{skill.desc}</span>
-        </div>
-        <div className="flex items-center gap-2 shrink-0 ml-4">
-          <span className="font-mono text-[9px] px-1.5 py-0.5 border rounded" style={{ borderColor: `${skill.color}30`, color: skill.color }}>
-            AEON SKILL
-          </span>
-          <span className="font-mono text-[10px] text-slate-700">{skill.name}</span>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="px-6 lg:px-10 py-8 w-full space-y-4">
-
-        {/* Triggers */}
-        <div className="card-surface rounded-xl p-5">
-          <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">// TRIGGER PHRASES</p>
-          <div className="flex flex-wrap gap-2">
-            {skill.triggers.map((t) => (
-              <span key={t}
-                className="font-mono text-xs px-3 py-1.5 rounded-lg border"
-                style={{ color: skill.color, borderColor: `${skill.color}30`, backgroundColor: `${skill.color}08` }}>
-                &ldquo;{t}&rdquo;
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Requirements + fork row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="card-surface rounded-xl p-5">
-            <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-2">// REQUIRES</p>
-            <p className="font-mono text-xs text-slate-300">{skill.requires}</p>
-          </div>
-          <div className="card-surface rounded-xl p-5">
-            <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-2">// FILE</p>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-xs text-slate-400">{skill.name}.md</span>
-              <div className="flex items-center gap-2 ml-auto">
-                <CopyBtn text={skill.raw} label="Copy raw" />
-                <a href={skill.github} target="_blank" rel="noopener noreferrer"
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[9px] px-1.5 py-0.5 border border-[#4FC3F7]/30 text-[#4FC3F7] rounded">FORKABLE</span>
+                <CopyBtn text="https://raw.githubusercontent.com/madebyshun/blue-agent/main/SOUL.md" label="Copy raw" />
+                <a href="https://github.com/madebyshun/blue-agent/blob/main/SOUL.md"
+                  target="_blank" rel="noopener noreferrer"
                   className="font-mono text-[10px] px-2 py-1 rounded border text-[#4FC3F7] border-[#4FC3F7]/30 hover:bg-[#4FC3F7]/5 transition-all">
                   GitHub →
                 </a>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Install hint */}
-        <div className="card-surface rounded-lg p-4">
-          <p className="font-mono text-[10px] text-slate-700 mb-1">install this skill:</p>
-          <div className="font-mono text-xs">
-            <span className="text-slate-700">$ </span>
-            <span className="text-[#4FC3F7]">cp blue-agent/skills/{skill.name}.md ~/.blue-agent/skills/</span>
+            {SOUL_SECTIONS.map((sec) => (
+              <div key={sec.id} className="border-b border-[#1A1A2E] last:border-0">
+                <button
+                  onClick={() => setOpenSection(openSection === sec.id ? null : sec.id)}
+                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-[#0a0a0f] transition-colors group"
+                >
+                  <div className="text-left">
+                    <span className="font-mono text-sm text-white group-hover:text-[#4FC3F7] transition-colors">
+                      ## {sec.label}
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-600 ml-3">{sec.sub}</span>
+                  </div>
+                  <svg className={`w-3.5 h-3.5 text-slate-600 transition-transform shrink-0 ${openSection === sec.id ? "rotate-180" : ""}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {openSection === sec.id && (
+                  <div className="px-6 pb-5 pt-1 space-y-2.5">
+                    {sec.content.map((row) => (
+                      <div key={row.k} className="flex gap-4 items-baseline">
+                        <span className={`font-mono text-[11px] shrink-0 w-20 ${row.k === "✕" ? "text-red-400" : "text-slate-600"}`}>
+                          {row.k}
+                        </span>
+                        <span className="font-mono text-sm text-slate-300 leading-relaxed">{row.v}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
-        </div>
 
-        {/* How it runs */}
-        <div className="card-surface rounded-xl p-5">
-          <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-4">// HOW IT RUNS</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Fork in 3 steps */}
+          <div className="grid sm:grid-cols-3 gap-4">
             {[
-              { step: "01", label: "Trigger", desc: `User types a matching phrase (e.g. "${skill.triggers[0]}")` },
-              { step: "02", label: "Parse", desc: `Aeon reads ${skill.name}.md and applies grounding rules` },
-              { step: "03", label: "Output", desc: "Structured signal — no hallucinations, source-attributed" },
-            ].map(s => (
-              <div key={s.step} className="border border-[#1A1A2E] rounded-lg p-3">
-                <span className="font-mono text-[10px]" style={{ color: skill.color }}>{s.step}</span>
-                <p className="font-mono text-xs text-white mt-1 mb-1">{s.label}</p>
-                <p className="font-mono text-[10px] text-slate-600 leading-relaxed">{s.desc}</p>
+              { step: "01", label: "Clone",       cmd: "git clone github.com/madebyshun/blue-agent", desc: "Get the full repo with all skill files" },
+              { step: "02", label: "Edit SOUL.md", cmd: "nano SOUL.md",                               desc: "Update identity, values, hard limits" },
+              { step: "03", label: "Load",         cmd: "bankr session --soul ./SOUL.md",             desc: "Load into any Bankr agent session" },
+            ].map((s) => (
+              <div key={s.step} className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5">
+                <div className="font-mono text-[10px] text-[#4FC3F7] mb-2">{s.step}</div>
+                <div className="font-bold text-white text-sm mb-1">{s.label}</div>
+                <div className="font-mono text-[11px] text-slate-600 mb-3 leading-relaxed">{s.desc}</div>
+                <div className="font-mono text-[10px] text-[#a78bfa] bg-[#050508] border border-[#1A1A2E] rounded-lg px-3 py-2 truncate">
+                  $ {s.cmd}
+                </div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
 
-        {/* All triggers expanded */}
-        <div className="card-surface rounded-xl p-5">
-          <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">// ALL TRIGGER PHRASES ({skill.triggers.length})</p>
-          <div className="space-y-1.5">
-            {skill.triggers.map((t, i) => (
-              <div key={t} className="flex items-center gap-3">
-                <span className="font-mono text-[10px] text-slate-700 w-5">{i + 1}.</span>
-                <span className="font-mono text-xs text-slate-400">&ldquo;{t}&rdquo;</span>
+        {/* ══ AEON SKILLS ═══════════════════════════════════════════════════════ */}
+        <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
+          <div className="text-center mb-14">
+            <SectionLabel>Aeon Skills</SectionLabel>
+            <h2 className="text-3xl font-bold">5 grounding skills</h2>
+            <p className="text-slate-500 mt-3 text-sm max-w-xl mx-auto">
+              Trigger-activated knowledge files — structured outputs, source-attributed, no hallucinations.
+              Load on demand or install all with <code className="text-[#4FC3F7] font-mono">blue init</code>.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            {AEON_SKILLS.map((skill) => (
+              <div key={skill.id}
+                className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-6 flex flex-col"
+                style={{ boxShadow: `0 0 30px ${skill.color}06` }}>
+
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
+                      style={{ background: `${skill.color}12`, border: `1px solid ${skill.color}25` }}>
+                      {skill.icon}
+                    </div>
+                    <div>
+                      <div className="font-bold text-white">{skill.label}</div>
+                      <div className="font-mono text-[10px]" style={{ color: skill.color }}>{skill.name}.md</div>
+                    </div>
+                  </div>
+                  <span className="font-mono text-[9px] px-1.5 py-0.5 border rounded shrink-0"
+                    style={{ color: skill.color, borderColor: `${skill.color}30` }}>AEON</span>
+                </div>
+
+                <p className="text-slate-500 text-sm leading-relaxed flex-1 mb-4">{skill.desc}</p>
+
+                {/* Trigger chips */}
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {skill.triggers.slice(0, 2).map((t) => (
+                    <span key={t} className="font-mono text-[10px] px-2.5 py-1 rounded-lg border"
+                      style={{ color: skill.color, borderColor: `${skill.color}25`, background: `${skill.color}08` }}>
+                      &ldquo;{t}&rdquo;
+                    </span>
+                  ))}
+                  {skill.triggers.length > 2 && (
+                    <span className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] text-slate-600">
+                      +{skill.triggers.length - 2} more
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-4 border-t border-[#1A1A2E]">
+                  <span className="font-mono text-[10px] text-slate-700 truncate max-w-[60%]">{skill.requires}</span>
+                  <div className="flex gap-2 shrink-0">
+                    <CopyBtn text={skill.raw} label="raw" />
+                    <a href={skill.github} target="_blank" rel="noopener noreferrer"
+                      className="font-mono text-[10px] px-2 py-1 rounded border text-[#4FC3F7] border-[#4FC3F7]/30 hover:bg-[#4FC3F7]/5 transition-all">
+                      GitHub →
+                    </a>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
-        </div>
+
+          {/* Install all */}
+          <div className="rounded-2xl border border-[#4FC3F720] bg-[#4FC3F705] p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <div className="font-bold text-white mb-1">Install all 5 Aeon skills</div>
+              <div className="font-mono text-[11px] text-slate-500">Copies all skill files to ~/.blue-agent/skills/ — loaded before every command</div>
+            </div>
+            <div className="font-mono text-sm text-[#4FC3F7] bg-[#050508] border border-[#1A1A2E] rounded-xl px-5 py-3 shrink-0">
+              $ blue init
+            </div>
+          </div>
+        </section>
+
+        {/* ══ HOW SKILLS WORK ═══════════════════════════════════════════════════ */}
+        <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
+          <div className="text-center mb-14">
+            <SectionLabel>How it works</SectionLabel>
+            <h2 className="text-3xl font-bold">Trigger → Parse → Output</h2>
+            <p className="text-slate-500 mt-3 text-sm max-w-xl mx-auto">
+              Skills are read-to-apply markdown files. No plugins, no setup beyond <code className="font-mono text-[#4FC3F7]">blue init</code>.
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-3 gap-4 mb-12">
+            {[
+              { step: "01", title: "Trigger", icon: "💬", desc: "User types a matching phrase — e.g. \"what's pumping\" or \"give me a token pick\"", color: "#4FC3F7" },
+              { step: "02", title: "Parse",   icon: "⚙️", desc: "Blue Agent reads the skill .md file and applies its grounding rules and output format", color: "#A78BFA" },
+              { step: "03", title: "Output",  icon: "📊", desc: "Structured signal — source-attributed, falsifiable, no hallucinated data or addresses", color: "#34D399" },
+            ].map((s) => (
+              <div key={s.step} className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-6 text-center">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4"
+                  style={{ background: `${s.color}12`, border: `1px solid ${s.color}25` }}>
+                  {s.icon}
+                </div>
+                <div className="font-mono text-[10px] mb-2" style={{ color: s.color }}>{s.step}</div>
+                <div className="font-bold text-white mb-2">{s.title}</div>
+                <div className="font-mono text-[11px] text-slate-600 leading-relaxed">{s.desc}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Install command */}
+          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-[#1A1A2E] bg-[#0a0a0f]">
+              <div className="flex gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
+                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
+                <div className="w-2.5 h-2.5 rounded-full bg-green-500/50" />
+              </div>
+              <span className="font-mono text-xs text-slate-600 ml-1">terminal</span>
+            </div>
+            <div className="p-5 space-y-2 font-mono text-sm">
+              <div><span className="text-slate-600"># install all skills</span></div>
+              <div><span className="text-slate-600">$ </span><span className="text-[#4FC3F7]">blue init</span></div>
+              <div className="pt-2"><span className="text-slate-600"># install a single skill</span></div>
+              <div><span className="text-slate-600">$ </span><span className="text-white">cp blue-agent/skills/aeon-token-movers.md ~/.blue-agent/skills/</span></div>
+              <div className="pt-2"><span className="text-slate-600"># check installation</span></div>
+              <div><span className="text-slate-600">$ </span><span className="text-white">blue doctor</span></div>
+            </div>
+          </div>
+        </section>
+
+        {/* ══ CTA ══════════════════════════════════════════════════════════════ */}
+        <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
+          <div className="rounded-2xl border border-[#4FC3F720] bg-[#4FC3F705] p-12 text-center"
+            style={{ boxShadow: "0 0 60px #4FC3F708" }}>
+            <h2 className="text-3xl font-bold mb-4">Try the skills in Blue Chat</h2>
+            <p className="text-slate-500 mb-8 max-w-md mx-auto text-sm leading-relaxed">
+              All 6 skills are pre-loaded. Type any trigger phrase and the agent responds with structured, grounded signal.
+            </p>
+            <div className="flex items-center justify-center gap-4 flex-wrap">
+              <Link href="/app/chat"
+                className="px-8 py-3.5 rounded-xl font-mono text-sm font-bold transition-all hover:opacity-90"
+                style={{ background: "linear-gradient(135deg, #4FC3F7, #29ABE2)", color: "#050508", boxShadow: "0 0 24px #4FC3F730" }}>
+                Launch App →
+              </Link>
+              <a href="https://github.com/madebyshun/blue-agent" target="_blank" rel="noopener noreferrer"
+                className="px-8 py-3.5 rounded-xl font-mono text-sm border border-[#2a2a3e] text-slate-400 hover:text-white hover:border-[#4FC3F740] transition-all">
+                Fork on GitHub →
+              </a>
+              <Link href="/docs"
+                className="px-8 py-3.5 rounded-xl font-mono text-sm border border-[#2a2a3e] text-slate-400 hover:text-white hover:border-[#4FC3F740] transition-all">
+                Read Docs →
+              </Link>
+            </div>
+          </div>
+        </section>
 
       </div>
     </div>
-  );
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
-export default function SkillsPage() {
-  const [active, setActive] = useState<Section>("soul");
-
-  const currentSkill = AEON_SKILLS.find((s) => s.id === active);
-
-  return (
-    <>
-      <Navbar />
-      <div className="flex bg-[#050508] font-mono pt-14">
-
-        {/* ── Sidebar ── */}
-        <aside className="hidden lg:flex flex-col w-72 shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] border-r border-[#1A1A2E]">
-          {/* Header */}
-          <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
-            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// SKILLS</p>
-          </div>
-
-          {/* Nav */}
-          <nav className="flex-1 overflow-y-auto py-2">
-            {SIDEBAR_NAV.map((item) => (
-              <button key={item.key} onClick={() => setActive(item.key)}
-                className={`w-full text-left px-5 py-3 transition-all border-l-2 ${
-                  active === item.key
-                    ? "border-[#4FC3F7] bg-[#4FC3F7]/5 text-white"
-                    : "border-transparent text-slate-500 hover:text-white hover:bg-[#0D0D1A]"
-                }`}>
-                <p className="font-mono text-xs font-medium">
-                  {item.key === "soul" ? "◆ " : ""}
-                  {item.label}
-                </p>
-                <p className="font-mono text-[10px] text-slate-700 mt-0.5">{item.sub}</p>
-              </button>
-            ))}
-          </nav>
-
-          {/* Footer */}
-          <div className="px-5 py-4 border-t border-[#1A1A2E] space-y-2">
-            <p className="font-mono text-[10px] text-slate-700 mb-1">install all aeon skills:</p>
-            <div className="bg-[#0D0D14] rounded px-3 py-2">
-              <span className="font-mono text-[10px] text-slate-600">$ </span>
-              <span className="font-mono text-[10px] text-[#4FC3F7]">blue init</span>
-            </div>
-            <a href="https://github.com/madebyshun/blue-agent" target="_blank" rel="noopener noreferrer"
-              className="font-mono text-[10px] text-slate-700 hover:text-white transition-colors block mt-2">
-              github.com/madebyshun/blue-agent →
-            </a>
-          </div>
-        </aside>
-
-        {/* ── Main ── */}
-        <main className="flex-1 h-[calc(100vh-3.5rem)] overflow-y-auto">
-
-          {/* Mobile tabs */}
-          <div className="lg:hidden flex overflow-x-auto gap-1 px-4 py-3 border-b border-[#1A1A2E] bg-[#050508]">
-            {SIDEBAR_NAV.map((item) => (
-              <button key={item.key} onClick={() => setActive(item.key)}
-                className={`font-mono text-xs px-3 py-1.5 rounded shrink-0 transition-all ${
-                  active === item.key
-                    ? "bg-[#4FC3F7]/10 text-[#4FC3F7] border border-[#4FC3F7]/30"
-                    : "text-slate-500 hover:text-white"
-                }`}>
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Content */}
-          {active === "soul" && <SoulSection />}
-          {currentSkill && active !== "soul" && <AeonSkillSection skill={currentSkill} />}
-
-        </main>
-      </div>
-    </>
   );
 }
