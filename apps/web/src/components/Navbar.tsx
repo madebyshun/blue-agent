@@ -2,16 +2,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ConnectButton } from "@/components/ConnectModal";
 
 const NAV_LINKS = [
-  { label: "Hub",     href: "/hub" },
-  { label: "About",   href: "/about" },
-  { label: "Skills",  href: "/skills" },
-  { label: "API",     href: "/api-docs" },
-  { label: "Docs",    href: "/docs" },
+  { label: "Hub",    href: "/hub" },
+  { label: "About",  href: "/about" },
+  { label: "Skills", href: "/skills" },
+  { label: "API",    href: "/api-docs" },
+  { label: "Docs",   href: "/docs" },
 ];
-
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
@@ -20,82 +18,127 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[#1A1A2E] bg-[#050508]/90 backdrop-blur-xl">
-      <div className="flex items-center h-16 px-5 sm:px-8 gap-4">
+      <div className="flex items-center h-14 px-6 sm:px-10">
 
-        {/* Left — logo */}
-        <Link href="/" className="flex items-center gap-2 shrink-0">
-          <img src="/logomark.svg" alt="Blue Agent" className="h-7 w-7 rounded-lg" />
-          <span className="hidden sm:inline font-mono font-semibold text-white tracking-widest text-sm">
+        {/* ── Logo ── */}
+        <Link href="/" className="flex items-center gap-2.5 shrink-0 mr-8">
+          <img src="/logomark.svg" alt="Blue Agent" className="h-6 w-6 rounded-md" />
+          <span className="hidden sm:inline font-mono font-bold text-white tracking-widest text-[13px]">
             BLUE<span className="text-[#4FC3F7]">AGENT</span>
           </span>
         </Link>
 
-        {/* Center — viewport center on md (no sidebar), content-area center on lg (sidebar=288px → offset 144px) */}
-        <div className="hidden md:flex absolute left-1/2 lg:left-[calc(50%+144px)] -translate-x-1/2 items-center gap-1">
-          {NAV_LINKS.map((item) => (
-            <Link key={item.href} href={item.href}
-              className={`font-mono text-sm px-4 py-1.5 rounded-lg transition-all ${
-                isActive(item.href)
-                  ? "text-[#4FC3F7] bg-[#4FC3F7]/10"
-                  : "text-slate-400 hover:text-white hover:bg-[#1A1A2E]/60"
-              }`}>
-              {item.label}
-            </Link>
-          ))}
+        {/* ── Desktop nav ── */}
+        <div className="hidden md:flex items-center gap-0.5 flex-1">
+          {NAV_LINKS.map((item) => {
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="relative font-mono text-[13px] px-4 py-1.5 rounded-lg transition-all"
+                style={active
+                  ? { color: "#4FC3F7" }
+                  : { color: "#64748b" }}
+              >
+                <span className="relative z-10 hover:text-slate-200 transition-colors">
+                  {item.label}
+                </span>
+                {active && (
+                  <span
+                    className="absolute inset-0 rounded-lg"
+                    style={{ background: "#4FC3F710", border: "1px solid #4FC3F720" }}
+                  />
+                )}
+              </Link>
+            );
+          })}
         </div>
 
-        {/* Right — actions */}
-        <div className="hidden md:flex items-center gap-2">
-          <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer"
-            className="text-slate-500 hover:text-white transition-colors p-1.5 rounded" aria-label="X / Twitter">
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+        {/* ── Right actions ── */}
+        <div className="hidden md:flex items-center gap-3 ml-auto shrink-0">
+          {/* X / Twitter */}
+          <a
+            href="https://x.com/blueagent_"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="X / Twitter"
+            className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-[#1A1A2E] transition-all"
+          >
+            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
             </svg>
           </a>
-          <ConnectButton />
-          <Link href="/app/chat"
-            className="font-mono text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-4 py-1.5 rounded hover:bg-[#29ABE2] transition-colors">
+
+          {/* Divider */}
+          <div className="w-px h-4 bg-[#1A1A2E]" />
+
+          {/* CTA */}
+          <Link
+            href="/app/chat"
+            className="font-mono text-[12px] font-semibold px-4 py-1.5 rounded-lg transition-all hover:opacity-90 active:scale-95"
+            style={{
+              background: "linear-gradient(135deg, #4FC3F7, #29ABE2)",
+              color: "#050508",
+              boxShadow: "0 0 16px #4FC3F730",
+            }}
+          >
             Launch App →
           </Link>
         </div>
 
-        {/* Mobile hamburger */}
-        <button className="md:hidden text-slate-400 hover:text-white p-1 ml-auto" onClick={() => setOpen(!open)} aria-label="Toggle menu">
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        {/* ── Mobile hamburger ── */}
+        <button
+          className="md:hidden ml-auto text-slate-500 hover:text-white p-1.5 rounded-lg transition-colors"
+          onClick={() => setOpen(!open)}
+          aria-label="Toggle menu"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             {open
-              ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />}
+              ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              : <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />}
           </svg>
         </button>
       </div>
 
-      {/* Mobile menu */}
+      {/* ── Mobile menu ── */}
       {open && (
-        <div className="md:hidden border-t border-[#1A1A2E] bg-[#050508]/98 px-3 py-2 flex flex-col">
-          {/* Nav links */}
-          <div className="flex flex-col gap-0.5 py-2">
+        <div className="md:hidden border-t border-[#1A1A2E] bg-[#050508] px-4 py-3">
+          <div className="flex flex-col gap-0.5 mb-3">
             {NAV_LINKS.map((item) => (
-              <Link key={item.href} href={item.href} onClick={() => setOpen(false)}
-                className={`font-mono text-sm px-4 py-3 rounded-lg transition-all ${
-                  isActive(item.href)
-                    ? "text-[#4FC3F7] bg-[#4FC3F7]/10"
-                    : "text-slate-300 hover:text-white hover:bg-[#1A1A2E]/60"
-                }`}>
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                className="font-mono text-sm px-4 py-2.5 rounded-lg transition-all"
+                style={isActive(item.href)
+                  ? { color: "#4FC3F7", background: "#4FC3F710" }
+                  : { color: "#94a3b8" }}
+              >
                 {item.label}
               </Link>
             ))}
           </div>
-          {/* Bottom actions */}
-          <div className="border-t border-[#1A1A2E] py-3 flex items-center gap-3 px-2">
-            <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer"
-              className="font-mono text-sm text-slate-500 hover:text-white transition-colors">X</a>
-            <div className="ml-auto flex items-center gap-2">
-              <ConnectButton />
-              <Link href="/app/chat" onClick={() => setOpen(false)}
-                className="font-mono text-sm font-semibold bg-[#4FC3F7] text-[#050508] px-4 py-2 rounded hover:bg-[#29ABE2] transition-colors">
-                Launch App →
-              </Link>
-            </div>
+          <div className="border-t border-[#1A1A2E] pt-3 flex items-center justify-between px-1">
+            <a
+              href="https://x.com/blueagent_"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-xs text-slate-600 hover:text-slate-400 transition-colors tracking-wider"
+            >
+              @blueagent_
+            </a>
+            <Link
+              href="/app/chat"
+              onClick={() => setOpen(false)}
+              className="font-mono text-[12px] font-semibold px-4 py-1.5 rounded-lg"
+              style={{
+                background: "linear-gradient(135deg, #4FC3F7, #29ABE2)",
+                color: "#050508",
+              }}
+            >
+              Launch App →
+            </Link>
           </div>
         </div>
       )}
