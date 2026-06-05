@@ -1,6 +1,6 @@
 // Blue Chat v2 — Shared Types
 
-export type ToolLog = { tool: string; status: "running" | "done"; ms?: number };
+export type ToolLog = { tool: string; status: "running" | "done"; ms?: number; result?: unknown };
 
 export interface Attachment {
   name:     string;   // filename e.g. "Contract.sol"

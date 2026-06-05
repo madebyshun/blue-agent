@@ -488,7 +488,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           if (raw === "[DONE]") break;
           try {
             const parsed = JSON.parse(raw) as {
-              type?: string; tool?: string; ms?: number;
+              type?: string; tool?: string; ms?: number; result?: unknown;
               delta?: { text?: string; value?: string };
             };
 
@@ -545,7 +545,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 const last = msgs[msgs.length - 1];
                 if (last?.role === "assistant") {
                   const logs = (last.toolLogs ?? []).map(l =>
-                    l.tool === parsed.tool ? { ...l, status: "done" as const, ms: parsed.ms } : l
+                    l.tool === parsed.tool ? { ...l, status: "done" as const, ms: parsed.ms, result: parsed.result } : l
                   );
                   msgs[msgs.length - 1] = { ...last, toolLogs: logs };
                 }
