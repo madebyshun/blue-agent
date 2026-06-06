@@ -13,8 +13,7 @@ import SettingsPanel from "@/app/chat/components/SettingsPanel";
 import ChatMessages  from "@/app/chat/components/ChatMessages";
 import ChatInput     from "@/app/chat/components/ChatInput";
 import ArtifactsPanel from "@/app/chat/components/ArtifactsPanel";
-
-export type ActiveTab = "chat" | "tools" | "skills" | "cron" | "settings";
+import type { ActiveTab } from "@/app/chat/types";
 
 // ── Tab metadata ───────────────────────────────────────────────────────────────
 const TAB_META: Record<Exclude<ActiveTab, "chat">, { title: string; subtitle: string }> = {

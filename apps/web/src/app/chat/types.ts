@@ -1,5 +1,7 @@
 // Blue Chat v2 — Shared Types
 
+export type ActiveTab = "chat" | "tools" | "skills" | "cron" | "settings";
+
 export type ToolLog = { tool: string; status: "running" | "done"; ms?: number; result?: unknown };
 
 export interface Attachment {
