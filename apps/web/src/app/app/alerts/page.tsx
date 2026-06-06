@@ -158,7 +158,7 @@ export default function AlertsPage() {
   const selectedType    = ALERT_TYPES.find(t => t.id === type)!;
 
   return (
-    <div className="relative h-full overflow-y-auto bg-[#050508] text-white font-mono">
+    <div className="flex flex-col h-full bg-[#050508] text-white font-mono overflow-hidden">
 
       <AppPageHeader
         label="ALERTS"
@@ -167,7 +167,8 @@ export default function AlertsPage() {
         right={activeAlerts.length > 0 ? <span style={{ color: "#F59E0B" }}>{activeAlerts.length} active</span> : undefined}
       />
 
-      <div className="relative px-6 py-6 max-w-2xl mx-auto">
+      <div className="flex-1 overflow-y-auto">
+      <div className="px-6 py-6 max-w-2xl mx-auto">
 
         {/* Coming soon banner */}
         <div className="rounded-2xl border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-5 py-4 mb-6 flex items-start gap-3">
@@ -341,6 +342,7 @@ export default function AlertsPage() {
             </div>
           </div>
         </AppCard>
+      </div>
       </div>
     </div>
   );

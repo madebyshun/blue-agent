@@ -123,13 +123,7 @@ export default function PortfolioPage() {
   }
 
   return (
-    <div className="relative h-full overflow-y-auto bg-[#050508] text-white font-mono">
-
-      {/* Ambient glow */}
-      <div className="pointer-events-none overflow-hidden absolute inset-x-0 top-0 h-[300px]">
-        <div className="absolute inset-0"
-          style={{ background: "radial-gradient(ellipse 80% 50% at 50% -10%, #22C55E08 0%, transparent 70%)" }} />
-      </div>
+    <div className="flex flex-col h-full bg-[#050508] text-white font-mono overflow-hidden">
 
       <AppPageHeader
         label="PORTFOLIO"
@@ -137,6 +131,12 @@ export default function PortfolioPage() {
         accent="#22C55E"
       />
 
+      <div className="flex-1 overflow-y-auto relative">
+      {/* Ambient glow */}
+      <div className="pointer-events-none overflow-hidden absolute inset-x-0 top-0 h-[300px]">
+        <div className="absolute inset-0"
+          style={{ background: "radial-gradient(ellipse 80% 50% at 50% -10%, #22C55E08 0%, transparent 70%)" }} />
+      </div>
       <div className="relative px-6 py-6 max-w-2xl mx-auto">
 
         {!isConnected ? (
@@ -281,6 +281,7 @@ export default function PortfolioPage() {
             </div>
           </>
         )}
+      </div>
       </div>
     </div>
   );
