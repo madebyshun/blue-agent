@@ -168,9 +168,10 @@ export default function ConsolePage({ inShell = false }: { inShell?: boolean }) 
         </aside>
 
         {/* ── Main content ─────────────────────────────── */}
-        <main className="flex-1 h-[calc(100vh-3.5rem)] overflow-y-auto">
+        <main className={`flex-1 overflow-y-auto ${inShell ? "h-full" : "h-[calc(100vh-3.5rem)]"}`}>
 
-          {/* Compact header */}
+          {/* Compact header — only outside app shell */}
+          {!inShell && (
           <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E] shrink-0">
             <div className="flex items-center gap-3">
               <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
@@ -192,6 +193,7 @@ export default function ConsolePage({ inShell = false }: { inShell?: boolean }) 
               ))}
             </div>
           </div>
+          )}
 
           <div className="px-6 lg:px-10 py-6 w-full">
 
