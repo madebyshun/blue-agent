@@ -154,7 +154,6 @@ function AppSideNav() {
             <Link
               key={item.id}
               href={item.href}
-              title={item.label}
               className="group relative flex flex-col items-center justify-center gap-0.5 w-full h-[50px] rounded-xl transition-all"
               style={
                 active
@@ -191,7 +190,6 @@ function AppSideNav() {
             <Link
               key={item.id}
               href={item.href}
-              title={item.label}
               className="group relative flex flex-col items-center justify-center gap-0.5 w-full h-[46px] rounded-xl transition-all"
               style={
                 active
@@ -215,7 +213,6 @@ function AppSideNav() {
         {/* Back to marketing site */}
         <Link
           href="/"
-          title="Home"
           className="group relative flex flex-col items-center justify-center gap-0.5 w-full h-[46px] rounded-xl text-[#283040] hover:text-slate-500 transition-colors"
         >
           <svg style={{ width: 16, height: 16 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

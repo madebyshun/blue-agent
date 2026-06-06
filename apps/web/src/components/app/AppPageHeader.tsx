@@ -15,16 +15,16 @@ export default function AppPageHeader({
 }: AppPageHeaderProps) {
   return (
     <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E] shrink-0">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
         <span
           className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0"
           style={{ background: accent }}
         />
-        <p className="font-mono text-xs tracking-widest" style={{ color: accent }}>
+        <p className="font-mono text-xs tracking-widest shrink-0" style={{ color: accent }}>
           // {label}
         </p>
         {subtitle && (
-          <p className="font-mono text-[10px] text-slate-700 hidden sm:block">{subtitle}</p>
+          <p className="font-mono text-[10px] text-slate-700 hidden sm:block truncate">{subtitle}</p>
         )}
       </div>
       {right && (
