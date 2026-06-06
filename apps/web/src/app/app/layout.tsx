@@ -133,9 +133,9 @@ function AppSideNav() {
   };
 
   return (
-    <aside className="hidden md:flex flex-col w-14 shrink-0 border-r border-[#1A1A2E] h-full bg-[#050508]">
+    <aside className="hidden md:flex flex-col w-[72px] shrink-0 border-r border-[#1A1A2E] h-full bg-[#050508]">
 
-      {/* Logo — same height as marketing navbar */}
+      {/* Logo */}
       <div className="flex items-center justify-center h-14 border-b border-[#1A1A2E] shrink-0">
         <Link href="/" title="blueagent.dev">
           <img
@@ -155,7 +155,7 @@ function AppSideNav() {
               key={item.id}
               href={item.href}
               title={item.label}
-              className="group relative flex items-center justify-center w-10 h-10 rounded-xl transition-all"
+              className="group relative flex flex-col items-center justify-center gap-0.5 w-full h-[50px] rounded-xl transition-all"
               style={
                 active
                   ? { color: "#4FC3F7", background: "#4FC3F712", boxShadow: "0 0 0 1px #4FC3F720" }
@@ -165,18 +165,18 @@ function AppSideNav() {
               <span className="group-hover:text-slate-300 transition-colors">
                 {item.icon}
               </span>
+              <span
+                className="font-mono text-[7px] tracking-wide transition-colors group-hover:text-slate-400 truncate max-w-[56px] text-center"
+                style={{ color: active ? "#4FC3F7" : undefined }}
+              >
+                {item.label}
+              </span>
 
               {/* Active left-bar indicator */}
               {active && (
                 <span className="absolute -left-2 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-[#4FC3F7]"
                   style={{ boxShadow: "0 0 6px #4FC3F780" }} />
               )}
-
-              {/* Tooltip */}
-              <span className="absolute left-full ml-3 px-2.5 py-1.5 rounded-lg bg-[#0D0D1A] border border-[#1A1A2E] font-mono text-[11px] text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50"
-                style={{ boxShadow: "0 4px 12px #00000060" }}>
-                {item.label}
-              </span>
             </Link>
           );
         })}
@@ -192,7 +192,7 @@ function AppSideNav() {
               key={item.id}
               href={item.href}
               title={item.label}
-              className="group relative flex items-center justify-center w-10 h-10 rounded-xl transition-all"
+              className="group relative flex flex-col items-center justify-center gap-0.5 w-full h-[46px] rounded-xl transition-all"
               style={
                 active
                   ? { color: "#4FC3F7", background: "#4FC3F712" }
@@ -202,7 +202,7 @@ function AppSideNav() {
               <span className="group-hover:text-slate-400 transition-colors">
                 {item.icon}
               </span>
-              <span className="absolute left-full ml-3 px-2.5 py-1.5 rounded-lg bg-[#0D0D1A] border border-[#1A1A2E] font-mono text-[11px] text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+              <span className="font-mono text-[7px] tracking-wide text-slate-700 group-hover:text-slate-500 transition-colors">
                 {item.label}
               </span>
             </Link>
@@ -210,19 +210,19 @@ function AppSideNav() {
         })}
 
         {/* Divider */}
-        <div className="w-5 h-px bg-[#1A1A2E] my-0.5" />
+        <div className="w-8 h-px bg-[#1A1A2E] my-0.5" />
 
         {/* Back to marketing site */}
         <Link
           href="/"
           title="Home"
-          className="group relative flex items-center justify-center w-10 h-10 rounded-xl text-[#283040] hover:text-slate-500 transition-colors"
+          className="group relative flex flex-col items-center justify-center gap-0.5 w-full h-[46px] rounded-xl text-[#283040] hover:text-slate-500 transition-colors"
         >
           <svg style={{ width: 16, height: 16 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round"
               d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
           </svg>
-          <span className="absolute left-full ml-3 px-2.5 py-1.5 rounded-lg bg-[#0D0D1A] border border-[#1A1A2E] font-mono text-[11px] text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+          <span className="font-mono text-[7px] tracking-wide text-slate-700 group-hover:text-slate-500 transition-colors">
             Home
           </span>
         </Link>
