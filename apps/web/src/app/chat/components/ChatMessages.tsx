@@ -265,10 +265,10 @@ const MODEL_COLORS: Record<string, string> = {
 // ── Starters ──────────────────────────────────────────────────────────────────
 
 const STARTERS = [
-  { icon: "💡", text: "/idea USDC streaming payroll app on Base" },
-  { icon: "🛠️", text: "/build ERC-4337 agent wallet" },
-  { icon: "🛡️", text: "/audit my token launch plan" },
-  { icon: "🚀", text: "/pick" },
+  { icon: "💡", label: "Idea Brief",   text: "/idea USDC streaming payroll app on Base",  color: "#4FC3F7" },
+  { icon: "🛠️", label: "Architecture", text: "/build ERC-4337 agent wallet",               color: "#A78BFA" },
+  { icon: "🛡️", label: "Audit",        text: "/audit my token launch plan",                color: "#F87171" },
+  { icon: "🚀", label: "Token Pick",   text: "/pick",                                      color: "#34D399" },
 ];
 const QUICK_CMDS = ["idea", "build", "audit", "ship", "raise", "pick", "scan"];
 
@@ -310,41 +310,62 @@ export default function ChatMessages() {
     <div className="flex-1 overflow-y-auto flex flex-col">
       {isEmpty ? (
         /* ── Empty state ─────────────────────────────────────────────────── */
-        <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 text-center">
-          <div className="flex items-center gap-3 mb-8">
-            <img src="/logomark.svg" alt="Blue Agent" width={44} height={44} className="rounded-xl" />
-            <span className="font-mono text-2xl font-bold text-white tracking-widest">
-              BLUE<span style={{ color: tierColor }}>AGENT</span>
-            </span>
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 text-center">
+
+          {/* Logo */}
+          <div className="mb-6">
+            <img src="/logomark.svg" alt="Blue Agent" width={48} height={48} className="rounded-2xl mx-auto mb-4" />
+            <h2 className="font-mono text-2xl sm:text-3xl font-bold text-white tracking-tight">
+              What are you building?
+            </h2>
+            <p className="font-mono text-sm text-slate-600 mt-2">
+              Ideas, audits, launches, fundraising — grounded in Base.
+            </p>
           </div>
-          <h2 className="font-mono text-3xl sm:text-4xl font-bold text-white tracking-tight mb-3">
-            What are you building?
-          </h2>
-          <p className="font-mono text-sm text-slate-500 max-w-lg mx-auto leading-relaxed mb-10">
-            Ideas, architecture, audits, launches, fundraising — grounded in Base.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 w-full max-w-3xl mx-auto mb-8">
+
+          {/* Starter cards — 2×2 grid */}
+          <div className="grid grid-cols-2 gap-2.5 w-full max-w-md mx-auto mb-6">
             {STARTERS.map(s => (
-              <button key={s.text} onClick={() => send(s.text)} disabled={outOfCredits}
-                className="text-left px-5 py-4 rounded-2xl border transition-all disabled:opacity-40 group"
+              <button
+                key={s.text}
+                onClick={() => send(s.text)}
+                disabled={outOfCredits}
+                className="text-left px-4 py-4 rounded-2xl border transition-all disabled:opacity-40 group"
                 style={{ background: "#0D0D14", borderColor: "#1A1A2E" }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = `${tierColor}35`)}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = "#1A1A2E")}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = `${s.color}30`;
+                  e.currentTarget.style.background = `${s.color}08`;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = "#1A1A2E";
+                  e.currentTarget.style.background = "#0D0D14";
+                }}
               >
-                <span className="text-xl">{s.icon}</span>
-                <p className="font-mono text-xs text-slate-400 group-hover:text-slate-300 mt-2 leading-relaxed">{s.text}</p>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-base">{s.icon}</span>
+                  <span className="font-mono text-[10px] font-semibold tracking-widest" style={{ color: s.color }}>
+                    {s.label.toUpperCase()}
+                  </span>
+                </div>
+                <p className="font-mono text-[11px] text-slate-500 group-hover:text-slate-400 leading-relaxed">
+                  {s.text}
+                </p>
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap justify-center gap-2">
+
+          {/* Quick command chips */}
+          <div className="flex flex-wrap justify-center gap-1.5">
             {QUICK_CMDS.map(cmd => (
-              <button key={cmd}
+              <button
+                key={cmd}
                 onClick={() => { if (cmd === "pick") send(`/${cmd}`); else setInput(`/${cmd} `); }}
                 disabled={outOfCredits}
-                className="font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-600 hover:text-[#4FC3F7] hover:border-[#4FC3F7]/30 transition-all disabled:opacity-30"
+                className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] text-slate-600 hover:text-[#4FC3F7] hover:border-[#4FC3F7]/20 transition-all disabled:opacity-30"
               >/{cmd}</button>
             ))}
           </div>
+
           {outOfCredits && (
             <p className="font-mono text-[10px] text-red-400 mt-5">Out of credits — stake $BLUEAGENT to refill</p>
           )}
