@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, KeyboardEvent } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
+import AppPageHeader from "@/components/app/AppPageHeader";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -509,7 +510,7 @@ export default function TerminalPage({ inShell = false }: { inShell?: boolean })
     <>
       {!inShell && <Navbar />}
 
-      <div className={`bg-[#050508] ${inShell ? "h-full overflow-y-auto" : "min-h-screen pt-14"}`}>
+      <div className={`bg-[#050508] ${inShell ? "h-full flex flex-col overflow-hidden" : "min-h-screen pt-14"}`}>
         {/* grid bg */}
         {!inShell && (
           <div
@@ -523,53 +524,79 @@ export default function TerminalPage({ inShell = false }: { inShell?: boolean })
           />
         )}
 
-        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 py-6">
-
-          {/* ── Header ───────────────────────────────────────────────── */}
-          <div className="flex items-start justify-between mb-5">
-            <div>
-              {/* breadcrumb */}
-              <div className="flex items-center gap-2 font-mono text-xs mb-3">
-                <Link href="/" className="text-slate-600 hover:text-[#4FC3F7] transition-colors">Home</Link>
-                <span className="text-slate-800">/</span>
-                <span className="text-slate-500">Terminal</span>
+        {/* ── Shell header (replaces breadcrumb when inside app shell) ── */}
+        {inShell ? (
+          <AppPageHeader
+            label="TERMINAL"
+            subtitle={`Base-native CLI · ${AGENT_TOOLS.length} tools · x402 · Bankr LLM`}
+            accent="#4FC3F7"
+            right={
+              <div className="flex items-center gap-2">
+                {busy && (
+                  <span className="flex items-center gap-1.5 text-[10px] text-[#FACC15]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#FACC15] animate-pulse" />
+                    running
+                  </span>
+                )}
+                <span className="text-[10px] text-slate-700 border border-[#1A1A2E] rounded px-2 py-0.5">{NETWORK}</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" style={{ boxShadow: "0 0 6px #34D399" }} />
+                  <span className="text-[10px] text-[#34D399]">live</span>
+                </span>
               </div>
-              <div className="flex items-center gap-3 mb-1">
-                <h1 className="font-mono text-xl font-bold text-white tracking-tight">Blue Terminal</h1>
+            }
+          />
+        ) : null}
+
+        <div className={`relative ${inShell ? "flex-1 px-4 sm:px-6 py-4 overflow-hidden flex flex-col" : "max-w-5xl mx-auto px-4 sm:px-6 py-6"}`}>
+
+          {/* ── Public page header (breadcrumb) ───────────────────────── */}
+          {!inShell && (
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                {/* breadcrumb */}
+                <div className="flex items-center gap-2 font-mono text-xs mb-3">
+                  <Link href="/" className="text-slate-600 hover:text-[#4FC3F7] transition-colors">Home</Link>
+                  <span className="text-slate-800">/</span>
+                  <span className="text-slate-500">Terminal</span>
+                </div>
+                <div className="flex items-center gap-3 mb-1">
+                  <h1 className="font-mono text-xl font-bold text-white tracking-tight">Blue Terminal</h1>
+                  <span className="font-mono text-[10px] text-slate-700 border border-[#1A1A2E] rounded px-2 py-0.5">
+                    v{VERSION}
+                  </span>
+                </div>
+                <p className="font-mono text-[11px] text-slate-600">
+                  Base-native CLI · {AGENT_TOOLS.length} tools · x402 payments · Bankr LLM
+                </p>
+              </div>
+
+              {/* status badges */}
+              <div className="flex items-center gap-2 shrink-0">
+                {busy && (
+                  <span className="flex items-center gap-1.5 font-mono text-[10px] text-[#FACC15]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#FACC15] animate-pulse" />
+                    running
+                  </span>
+                )}
                 <span className="font-mono text-[10px] text-slate-700 border border-[#1A1A2E] rounded px-2 py-0.5">
-                  v{VERSION}
+                  {NETWORK} · {CHAIN_ID}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span
+                    className="w-1.5 h-1.5 rounded-full bg-[#34D399]"
+                    style={{ boxShadow: "0 0 6px #34D399" }}
+                  />
+                  <span className="font-mono text-[10px] text-[#34D399]">live</span>
                 </span>
               </div>
-              <p className="font-mono text-[11px] text-slate-600">
-                Base-native CLI · {AGENT_TOOLS.length} tools · x402 payments · Bankr LLM
-              </p>
             </div>
-
-            {/* status badges */}
-            <div className="flex items-center gap-2 shrink-0">
-              {busy && (
-                <span className="flex items-center gap-1.5 font-mono text-[10px] text-[#FACC15]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#FACC15] animate-pulse" />
-                  running
-                </span>
-              )}
-              <span className="font-mono text-[10px] text-slate-700 border border-[#1A1A2E] rounded px-2 py-0.5">
-                {NETWORK} · {CHAIN_ID}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span
-                  className="w-1.5 h-1.5 rounded-full bg-[#34D399]"
-                  style={{ boxShadow: "0 0 6px #34D399" }}
-                />
-                <span className="font-mono text-[10px] text-[#34D399]">live</span>
-              </span>
-            </div>
-          </div>
+          )}
 
           {/* ── Terminal window ───────────────────────────────────────── */}
           <div
-            className="rounded-xl border border-[#1A1A2E] bg-[#0A0A12] overflow-hidden flex flex-col"
-            style={{ height: "calc(100vh - 220px)", minHeight: "480px" }}
+            className={`rounded-xl border border-[#1A1A2E] bg-[#0A0A12] overflow-hidden flex flex-col ${inShell ? "flex-1" : ""}`}
+            style={inShell ? undefined : { height: "calc(100vh - 220px)", minHeight: "480px" }}
             onClick={focusInput}
           >
             {/* window chrome */}
