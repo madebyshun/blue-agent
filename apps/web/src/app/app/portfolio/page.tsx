@@ -4,7 +4,9 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAccount, useReadContracts } from "wagmi";
 import { formatUnits } from "viem";
-import { ConnectButton } from "@/components/ConnectModal";
+import AppPageHeader from "@/components/app/AppPageHeader";
+import AppConnectPrompt from "@/components/app/AppConnectPrompt";
+import AppCard, { AppSectionLabel } from "@/components/app/AppCard";
 
 // ── Token list ────────────────────────────────────────────────────────────────
 
@@ -126,31 +128,28 @@ export default function PortfolioPage() {
       {/* Ambient glow */}
       <div className="pointer-events-none overflow-hidden absolute inset-x-0 top-0 h-[300px]">
         <div className="absolute inset-0"
-          style={{ background: "radial-gradient(ellipse 80% 50% at 50% -10%, #22C55E0a 0%, transparent 70%)" }} />
+          style={{ background: "radial-gradient(ellipse 80% 50% at 50% -10%, #22C55E08 0%, transparent 70%)" }} />
       </div>
 
-      {/* Header */}
-      <div className="relative flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E] shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" />
-          <p className="text-xs text-[#22C55E] tracking-widest">// PORTFOLIO</p>
-          <p className="text-[10px] text-slate-700 hidden sm:block">Token balances · staking position · PnL · Base Mainnet</p>
-        </div>
-      </div>
+      <AppPageHeader
+        label="PORTFOLIO"
+        subtitle="Token balances · staking position · PnL · Base Mainnet"
+        accent="#22C55E"
+      />
 
-      <div className="relative px-6 py-8 max-w-3xl mx-auto">
+      <div className="relative px-6 py-6 max-w-2xl mx-auto">
 
         {!isConnected ? (
-          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-12 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-[#22C55E]/10 border border-[#22C55E]/20 flex items-center justify-center mx-auto mb-6">
-              <svg className="w-7 h-7 text-[#22C55E]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <AppConnectPrompt
+            accent="#22C55E"
+            title="Connect to view portfolio"
+            subtitle="Token balances, staking position, and PnL on Base"
+            icon={
+              <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
               </svg>
-            </div>
-            <h2 className="text-lg font-bold mb-2">Connect to view portfolio</h2>
-            <p className="text-slate-500 text-sm mb-8 max-w-xs mx-auto">Token balances, staking position, and PnL on Base</p>
-            <ConnectButton label="Connect Wallet" />
-          </div>
+            }
+          />
         ) : (
           <>
             {/* Staking position highlight */}
@@ -171,11 +170,12 @@ export default function PortfolioPage() {
             )}
 
             {/* Token balances */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 mb-4">
+            <AppCard className="mb-4">
               <div className="flex items-center justify-between mb-4">
-                <p className="text-[10px] text-slate-600 tracking-widest">TOKEN BALANCES</p>
+                <AppSectionLabel>TOKEN BALANCES</AppSectionLabel>
                 <span className="text-[10px] text-slate-700">Base Mainnet</span>
               </div>
+
 
               {balancesLoading ? (
                 <div className="flex items-center gap-2 py-4">
@@ -222,10 +222,10 @@ export default function PortfolioPage() {
                   )}
                 </div>
               )}
-            </div>
+            </AppCard>
 
             {/* PnL section */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 mb-4">
+            <AppCard className="mb-4">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <p className="text-[10px] text-slate-600 tracking-widest">WALLET PnL</p>
@@ -270,7 +270,7 @@ export default function PortfolioPage() {
                   <p className="text-[10px] text-slate-700 mt-1">Uses 1 credit · powered by Blue Hub</p>
                 </div>
               )}
-            </div>
+            </AppCard>
 
             {/* Links */}
             <div className="flex flex-wrap gap-3 text-[10px] text-slate-700">
