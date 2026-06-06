@@ -265,27 +265,25 @@ export default function AppRewardsPage() {
         <div className="absolute inset-0"
           style={{ background: "radial-gradient(ellipse 80% 50% at 50% -10%, #4FC3F710 0%, transparent 70%)" }} />
       </div>
-      <div className="relative max-w-2xl mx-auto px-6 pt-6 pb-16">
+      <div className="relative max-w-3xl mx-auto px-6 pt-6 pb-16">
 
         {/* Protocol stats */}
-        <AppCard className="flex items-center justify-around px-6 py-4 mb-4">
-          <div className="text-center">
-            <div className="font-mono text-xl font-bold text-white">
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <AppCard className="py-4 text-center">
+            <div className="font-mono text-xl font-bold text-[#4FC3F7]">
               {globalStaked ? fmtBlue(globalStaked) : "—"}
             </div>
             <div className="font-mono text-[10px] text-slate-600 mt-1 tracking-widest">TOTAL STAKED</div>
-          </div>
-          <div className="w-px h-8 bg-[#1A1A2E]" />
-          <div className="text-center">
+          </AppCard>
+          <AppCard className="py-4 text-center">
             <div className="font-mono text-xl font-bold text-[#22C55E]">20%</div>
             <div className="font-mono text-[10px] text-slate-600 mt-1 tracking-widest">x402 REVENUE</div>
-          </div>
-          <div className="w-px h-8 bg-[#1A1A2E]" />
-          <div className="text-center">
+          </AppCard>
+          <AppCard className="py-4 text-center">
             <div className="font-mono text-xl font-bold text-[#A78BFA]">1 day</div>
             <div className="font-mono text-[10px] text-slate-600 mt-1 tracking-widest">COOLDOWN</div>
-          </div>
-        </AppCard>
+          </AppCard>
+        </div>
 
         {!isConnected ? (
           /* ── Not connected ── */
@@ -319,7 +317,7 @@ export default function AppRewardsPage() {
         ) : (
           <>
             {/* ── 2-col layout: Position left, Actions right ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-4 mb-4">
 
             {/* ── Position card ── */}
             <AppCard className="p-8" accent={staked > 0 ? tier.color : undefined}>
@@ -343,23 +341,25 @@ export default function AppRewardsPage() {
               {/* Stats row */}
               <div className="grid grid-cols-3 gap-3 mb-7">
                 <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-4">
-                  <div className="font-mono text-[10px] text-slate-600 mb-2 tracking-widest">CREDITS / DAY</div>
+                  <div className="font-mono text-[9px] text-slate-600 mb-2 tracking-widest">CREDITS/DAY</div>
                   <div className="font-mono text-2xl font-bold text-[#4FC3F7]">
                     {Number(dailyCr).toLocaleString()}
                   </div>
                 </div>
                 <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-4">
-                  <div className="font-mono text-[10px] text-slate-600 mb-2 tracking-widest">TOTAL EARNED</div>
+                  <div className="font-mono text-[9px] text-slate-600 mb-2 tracking-widest">TOTAL EARNED</div>
                   <div className="font-mono text-2xl font-bold text-white">
                     {totalCredits !== undefined
                       ? Number(totalCredits) < 1
-                        ? Number(totalCredits).toFixed(4)
-                        : Number(totalCredits).toFixed(2)
+                        ? Number(totalCredits).toFixed(2)
+                        : Number(totalCredits) >= 1000
+                          ? (Number(totalCredits) / 1000).toFixed(1) + "K"
+                          : Number(totalCredits).toFixed(0)
                       : "—"}
                   </div>
                 </div>
                 <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-4">
-                  <div className="font-mono text-[10px] text-slate-600 mb-2 tracking-widest">USDC YIELD</div>
+                  <div className="font-mono text-[9px] text-slate-600 mb-2 tracking-widest">USDC YIELD</div>
                   <div className="font-mono text-2xl font-bold text-[#22C55E]">
                     ${(Number(pendingUSDC) / 1e6).toFixed(4)}
                   </div>
@@ -420,7 +420,7 @@ export default function AppRewardsPage() {
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <span className="font-mono text-[11px] text-slate-500">
-                        Wallet: <span className="text-white">{walletBal >= 1000 ? fmtBlue(blueBalance ?? 0n) : walletBal.toFixed(0)} BLUE</span>
+                        Available: <span className="text-white">{walletBal >= 1000 ? fmtBlue(blueBalance ?? 0n) : walletBal.toFixed(0)} BLUE</span>
                       </span>
                       {hasCooldown && (
                         <span className="font-mono text-[10px] text-amber-500">Cancel unstake first</span>
@@ -610,11 +610,18 @@ export default function AppRewardsPage() {
 
         {/* ── Footer info ── */}
         <AppCard className="mt-4 px-6 py-5">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 font-mono text-[11px] text-slate-600 mb-4">
-            <div>📌 Credits accrue continuously on-chain</div>
-            <div>💬 Unlock Blue Chat AI tools</div>
-            <div>💵 20% of x402 revenue → stakers</div>
-            <div>⏳ 1-day cooldown to unstake</div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            {[
+              { icon: "📌", text: "Credits accrue on-chain" },
+              { icon: "💬", text: "Unlock Blue Chat AI" },
+              { icon: "💵", text: "20% x402 revenue → stakers" },
+              { icon: "⏳", text: "1-day cooldown to unstake" },
+            ].map(item => (
+              <div key={item.text} className="flex items-start gap-2">
+                <span className="text-sm shrink-0">{item.icon}</span>
+                <span className="font-mono text-[10px] text-slate-600 leading-snug">{item.text}</span>
+              </div>
+            ))}
           </div>
           <div className="pt-4 border-t border-[#1A1A2E] flex items-center justify-between">
             <a href={`https://basescan.org/address/${STAKING_ADDRESS}`}
@@ -622,7 +629,7 @@ export default function AppRewardsPage() {
               className="font-mono text-[10px] text-slate-700 hover:text-slate-500 transition-colors">
               {STAKING_ADDRESS.slice(0, 10)}…{STAKING_ADDRESS.slice(-8)} ↗
             </a>
-            <Link href="/app/chat" className="font-mono text-[12px] text-[#4FC3F760] hover:text-[#4FC3F7] transition-colors">
+            <Link href="/app/chat" className="font-mono text-[11px] text-[#4FC3F760] hover:text-[#4FC3F7] transition-colors">
               Blue Chat →
             </Link>
           </div>
