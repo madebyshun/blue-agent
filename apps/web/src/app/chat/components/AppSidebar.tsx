@@ -101,14 +101,14 @@ export default function AppSidebar({
   return (
     <aside className="hidden lg:flex flex-col w-64 shrink-0 h-full border-r border-[#1A1A2E] bg-[#050508]">
 
-      {/* ── Identity + New Chat ── */}
-      <div className="px-4 pt-5 pb-3 shrink-0">
-        {/* Label row — no logo, logo is in the main icon nav */}
-        <div className="flex items-center gap-2 mb-4">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0" />
-          <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">// BLUE CHAT</p>
-        </div>
+      {/* ── Identity ── aligned with main sidebar h-14 logo row */}
+      <div className="px-4 h-14 flex items-center border-b border-[#1A1A2E] shrink-0">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0 mr-2" />
+        <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">// BLUE CHAT</p>
+      </div>
 
+      {/* ── New Chat ── */}
+      <div className="px-4 pt-3 pb-3 shrink-0">
         {/* New Chat */}
         <button
           onClick={() => { createNewTask(); onSelect("chat"); }}

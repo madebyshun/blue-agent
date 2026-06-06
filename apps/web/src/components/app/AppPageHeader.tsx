@@ -14,7 +14,7 @@ export default function AppPageHeader({
   right,
 }: AppPageHeaderProps) {
   return (
-    <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E] shrink-0">
+    <div className="flex items-center justify-between px-6 h-14 border-b border-[#1A1A2E] shrink-0">
       <div className="flex items-center gap-3 min-w-0 flex-1">
         <span
           className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0"
