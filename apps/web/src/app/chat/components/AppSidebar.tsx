@@ -102,14 +102,10 @@ export default function AppSidebar({
     <aside className="hidden lg:flex flex-col w-64 shrink-0 h-full border-r border-[#1A1A2E] bg-[#050508]">
 
       {/* ── Identity + New Chat ── */}
-      <div className="px-4 pt-5 pb-3 shrink-0">
-        {/* Logo + title */}
-        <div className="flex items-center gap-2.5 mb-4">
-          <img src="/logomark.svg" alt="Blue Agent" width={28} height={28} className="rounded-lg shrink-0" />
-          <div>
-            <p className="font-mono text-sm font-bold text-white leading-none">Blue Agent</p>
-            <p className="font-mono text-[9px] text-slate-600 mt-0.5">AI for Base builders</p>
-          </div>
+      <div className="px-4 pt-4 pb-3 shrink-0">
+        {/* Title (no logo — already in nav sidebar) */}
+        <div className="mb-3">
+          <p className="font-mono text-[10px] font-bold text-slate-400 tracking-widest uppercase">Conversations</p>
         </div>
 
         {/* New Chat */}

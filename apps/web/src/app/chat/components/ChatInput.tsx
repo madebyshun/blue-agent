@@ -327,19 +327,19 @@ export default function ChatInput() {
         {/* ── Main input card ──────────────────────────────────────────────── */}
         <div
           className="rounded-2xl border transition-colors overflow-hidden"
-          style={{ background: "#0D0D14", borderColor: outOfCredits ? "#EF444430" : "#2A2A4E" }}
+          style={{ background: "#0D0D14", borderColor: outOfCredits ? "#EF444430" : "#1E1E30" }}
         >
           {/* Textarea row */}
-          <div className="flex items-end gap-3 px-4 pt-3 pb-2">
+          <div className="flex items-end gap-2 px-4 pt-3.5 pb-3">
             <textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => handleInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={outOfCredits ? "No credits — get more $BLUEAGENT" : "Message Blue Agent… or type / for commands"}
+              placeholder={outOfCredits ? "No credits — get more $BLUEAGENT" : "Message Blue Agent… or / for commands"}
               rows={1}
               disabled={streaming || outOfCredits}
-              className="flex-1 resize-none bg-transparent outline-none font-mono text-sm text-white placeholder:text-slate-600 leading-relaxed"
+              className="flex-1 resize-none bg-transparent outline-none font-mono text-sm text-white placeholder:text-slate-700 leading-relaxed"
               style={{ maxHeight: 160, overflowY: "auto" }}
               onInput={(e) => {
                 const el = e.currentTarget;
@@ -351,97 +351,98 @@ export default function ChatInput() {
             {streaming ? (
               <button
                 onClick={stop}
-                className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center bg-[#EF444415] border border-[#EF444430] text-red-400 hover:bg-[#EF444425] transition-all font-mono text-xs mb-0.5"
+                className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center bg-[#EF444415] border border-[#EF444430] text-red-400 hover:bg-[#EF444425] transition-all font-mono text-xs"
               >■</button>
             ) : (
               <button
                 onClick={() => send(input)}
-                disabled={!input.trim() && pendingFiles.length === 0 || outOfCredits}
-                className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center font-bold transition-all disabled:opacity-30 mb-0.5"
+                disabled={(!input.trim() && pendingFiles.length === 0) || outOfCredits}
+                className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center font-bold transition-all disabled:opacity-25"
                 style={{ background: activeTier.color, color: "#050508" }}
               >↑</button>
             )}
           </div>
 
           {/* Toolbar row */}
-          <div className="flex items-center gap-1.5 px-3 pb-2.5 pt-1 border-t border-[#1A1A2E]/60">
+          <div className="flex items-center gap-1 px-3 pb-3 pt-0">
 
             {/* Attach file */}
             <label
               htmlFor="blue-chat-file-input"
-              className="flex items-center justify-center w-7 h-7 rounded-lg cursor-pointer transition-all border"
+              className="flex items-center justify-center w-7 h-7 rounded-lg cursor-pointer transition-all"
               style={pendingFiles.length > 0
-                ? { color: "#4FC3F7", background: "#4FC3F710", borderColor: "#4FC3F730" }
-                : { color: "#64748b", borderColor: "transparent" }}
+                ? { color: "#4FC3F7", background: "#4FC3F710" }
+                : { color: "#3A4560" }}
               title="Attach file"
+              onMouseEnter={e => { if (!pendingFiles.length) e.currentTarget.style.color = "#64748b"; }}
+              onMouseLeave={e => { if (!pendingFiles.length) e.currentTarget.style.color = "#3A4560"; }}
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-                  d="M12 4v16m8-8H4" />
+                  d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
               </svg>
             </label>
+
+            {/* Commands button — icon only */}
+            <button
+              onMouseDown={(e) => { e.preventDefault(); setCmdOpen(!cmdOpen); setModelOpen(false); }}
+              className="flex items-center justify-center w-7 h-7 rounded-lg border font-mono text-sm transition-all"
+              style={cmdOpen
+                ? { color: "#4FC3F7", background: "#4FC3F710", borderColor: "#4FC3F730" }
+                : { color: "#3A4560", borderColor: "transparent" }}
+              title="Slash commands"
+              onMouseEnter={e => { if (!cmdOpen) e.currentTarget.style.color = "#64748b"; }}
+              onMouseLeave={e => { if (!cmdOpen) e.currentTarget.style.color = "#3A4560"; }}
+            >
+              /
+            </button>
+
+            {/* Web search toggle — icon only */}
+            <button
+              onMouseDown={(e) => { e.preventDefault(); setWebSearch(!webSearch); }}
+              className="flex items-center justify-center w-7 h-7 rounded-lg border transition-all"
+              style={webSearch
+                ? { color: "#34D399", background: "#34D39910", borderColor: "#34D39930" }
+                : { color: "#3A4560", borderColor: "transparent" }}
+              title={webSearch ? "Web search ON — click to disable" : "Web search OFF — click to enable"}
+              onMouseEnter={e => { if (!webSearch) e.currentTarget.style.color = "#64748b"; }}
+              onMouseLeave={e => { if (!webSearch) e.currentTarget.style.color = "#3A4560"; }}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                  d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+              </svg>
+            </button>
+
+            {/* Divider */}
+            <div className="w-px h-4 bg-[#1A1A2E] mx-1" />
 
             {/* Model selector pill */}
             <button
               onMouseDown={(e) => { e.preventDefault(); setModelOpen(!modelOpen); setCmdOpen(false); }}
               className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg border font-mono text-[11px] font-medium transition-all"
-              style={{ color: activeTier.color, background: `${activeTier.color}10`, borderColor: `${activeTier.color}30` }}
+              style={{ color: activeTier.color, background: `${activeTier.color}10`, borderColor: `${activeTier.color}25` }}
             >
               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: activeTier.color }} />
               {activeTier.label}
               {activeTier.badge && <span className="text-[8px] opacity-60">{activeTier.badge}</span>}
-              <svg className="w-2.5 h-2.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-2.5 h-2.5 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
               </svg>
-            </button>
-
-            {/* Commands button */}
-            <button
-              onMouseDown={(e) => { e.preventDefault(); setCmdOpen(!cmdOpen); setModelOpen(false); }}
-              className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg border font-mono text-[11px] transition-all"
-              style={cmdOpen
-                ? { color: "#4FC3F7", background: "#4FC3F710", borderColor: "#4FC3F730" }
-                : { color: "#475569", borderColor: "transparent" }}
-              title="Commands"
-            >
-              <span className="text-[11px]">/</span>
-              <span className="hidden sm:inline">Cmds</span>
-            </button>
-
-            {/* Web search toggle */}
-            <button
-              onMouseDown={(e) => { e.preventDefault(); setWebSearch(!webSearch); }}
-              className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg border font-mono text-[11px] transition-all"
-              style={webSearch
-                ? { color: "#34D399", background: "#34D39910", borderColor: "#34D39930" }
-                : { color: "#475569", borderColor: "transparent" }}
-              title={webSearch ? "Web search ON" : "Web search OFF"}
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-                  d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-              </svg>
-              <span className="hidden sm:inline">{webSearch ? "Search on" : "Search"}</span>
             </button>
 
             {/* Spacer */}
             <div className="flex-1" />
 
-            {/* Cost indicator */}
-            <span className="font-mono text-[10px] text-slate-700">
-              {cost}cr/msg
+            {/* Hint + cost */}
+            <span className="font-mono text-[10px] text-[#2A3550] hidden sm:block">
+              ↵ send · ⇧↵ newline
+            </span>
+            <div className="w-px h-3 bg-[#1A1A2E] mx-1.5 hidden sm:block" />
+            <span className="font-mono text-[10px]" style={{ color: `${activeTier.color}60` }}>
+              {cost}cr
             </span>
           </div>
-        </div>
-
-        {/* ── Footer hint ──────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between mt-1.5 px-1">
-          <span className="font-mono text-[10px] text-slate-700">
-            Enter ↵ send · Shift+Enter newline
-          </span>
-          <span className="font-mono text-[10px] text-slate-700">
-            {credits} credits left
-          </span>
         </div>
       </div>
     </div>
