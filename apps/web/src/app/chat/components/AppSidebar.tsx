@@ -1,6 +1,6 @@
 "use client";
 
-import type { ActiveTab } from "../page";
+import type { ActiveTab } from "../types";
 import { useChat } from "../ChatContext";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
