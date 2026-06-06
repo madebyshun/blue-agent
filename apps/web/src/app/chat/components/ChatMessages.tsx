@@ -312,25 +312,30 @@ export default function ChatMessages() {
         /* ── Empty state ─────────────────────────────────────────────────── */
         <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 text-center">
 
-          {/* Logo */}
-          <div className="mb-6">
-            <img src="/logomark.svg" alt="Blue Agent" width={48} height={48} className="rounded-2xl mx-auto mb-4" />
-            <h2 className="font-mono text-2xl sm:text-3xl font-bold text-white tracking-tight">
-              What are you building?
-            </h2>
-            <p className="font-mono text-sm text-slate-600 mt-2">
-              Ideas, audits, launches, fundraising — grounded in Base.
-            </p>
+          {/* Logo + wordmark */}
+          <div className="flex items-center gap-3 mb-6">
+            <img src="/logomark.svg" alt="Blue Agent" width={48} height={48} className="rounded-2xl shrink-0" />
+            <span className="font-mono text-2xl font-bold tracking-widest">
+              BLUE<span style={{ color: "#4FC3F7" }}>AGENT</span>
+            </span>
           </div>
 
-          {/* Starter cards — 2×2 grid */}
-          <div className="grid grid-cols-2 gap-2.5 w-full max-w-md mx-auto mb-6">
+          {/* Heading */}
+          <h2 className="font-mono text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2">
+            What are you building?
+          </h2>
+          <p className="font-mono text-sm text-slate-600 mb-8">
+            Ideas, architecture, audits, launches, fundraising — grounded in Base.
+          </p>
+
+          {/* Starter cards — 4-column single row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-2xl mx-auto mb-6">
             {STARTERS.map(s => (
               <button
                 key={s.text}
                 onClick={() => send(s.text)}
                 disabled={outOfCredits}
-                className="text-left px-4 py-4 rounded-2xl border transition-all disabled:opacity-40 group"
+                className="text-left px-4 py-5 rounded-2xl border transition-all disabled:opacity-40 group"
                 style={{ background: "#0D0D14", borderColor: "#1A1A2E" }}
                 onMouseEnter={e => {
                   e.currentTarget.style.borderColor = `${s.color}30`;
@@ -341,13 +346,8 @@ export default function ChatMessages() {
                   e.currentTarget.style.background = "#0D0D14";
                 }}
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-base">{s.icon}</span>
-                  <span className="font-mono text-[10px] font-semibold tracking-widest" style={{ color: s.color }}>
-                    {s.label.toUpperCase()}
-                  </span>
-                </div>
-                <p className="font-mono text-[11px] text-slate-500 group-hover:text-slate-400 leading-relaxed">
+                <span className="text-2xl mb-3 block">{s.icon}</span>
+                <p className="font-mono text-[11px] text-slate-500 group-hover:text-slate-300 leading-relaxed transition-colors">
                   {s.text}
                 </p>
               </button>
