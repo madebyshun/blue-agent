@@ -298,7 +298,7 @@ export default function SimulatorPage({ inShell = false }: { inShell?: boolean }
 
           {/* ── Sidebar ──────────────────────────────────── */}
           <aside className={`hidden lg:flex flex-col w-72 shrink-0 overflow-y-auto border-r border-[#1A1A2E] px-4 ${inShell ? "h-full py-5" : "sticky top-14 h-[calc(100vh-3.5rem)] py-10"}`}>
-            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-4 px-2">SIMULATION TIER</p>
+            <p className="font-mono text-xs text-[#A78BFA] tracking-widest mb-4 px-2">// TIER</p>
             <nav className="flex flex-col gap-1">
               {TIERS.map((t) => (
                 <button
@@ -320,7 +320,7 @@ export default function SimulatorPage({ inShell = false }: { inShell?: boolean }
             </nav>
 
             <div className="mt-6 pt-6 border-t border-[#1A1A2E]">
-              <p className="font-mono text-[10px] text-slate-700 tracking-widest mb-3 px-2">AGENTS</p>
+              <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-3 px-2">// AGENTS</p>
               <div className="flex flex-col gap-2 px-2">
                 {[
                   { dot: "#4FC3F7", label: "Blue Agent", note: "analysis" },
