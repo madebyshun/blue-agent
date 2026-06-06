@@ -15,7 +15,7 @@ export default function Footer() {
         <div className="flex items-center gap-5 flex-wrap justify-center">
           {[
             { label: "Console",  href: "/code" },
-            { label: "Chat",     href: "/chat" },
+            { label: "Chat",     href: "/app/chat" },
             { label: "Launch",   href: "/launch" },
             { label: "Rewards",  href: "/rewards" },
             { label: "Telegram", href: "https://t.me/blueagent_hub" },

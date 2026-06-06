@@ -19,6 +19,7 @@ import { getPersona } from "./personas";
 import {
   creditCost, getCredits, deductCredits,
   getNextRefresh, refreshCreditsIfNeeded, getDailyCr,
+  setCredits as setCreditsLS,
 } from "@/lib/credits";
 import {
   buildMemoryContext, updateMemoryAfterChat,
@@ -139,6 +140,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!walletReady) return;
+
+    // If wallet just connected and has no saved credits, migrate from guest credits
+    if (walletAddr) {
+      const walletCr = getCredits(walletAddr);
+      if (walletCr === -1) { // never initialized for this address
+        const guestCr = getCredits(undefined);
+        if (guestCr > 0) {
+          // Carry guest credits over to wallet address (don't double-grant, just transfer)
+          setCreditsLS(guestCr, walletAddr);
+        }
+      }
+    }
+
     const result = refreshCreditsIfNeeded(holderTier.blueBalance, walletAddr);
     setCredits(result.credits);
   }, [walletReady, walletAddr, holderTier.blueBalance]);
@@ -187,12 +201,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const loaded = loadTasks(walletAddr);
     if (loaded.length === 0) {
+      // Try old single-chat format migration first
       const migrated = migrateOldChat(walletAddr);
       if (migrated) {
         setTasksState([migrated]);
         setActiveTaskId(migrated.id);
         saveTasks([migrated], walletAddr);
         return;
+      }
+      // If wallet just connected, migrate any guest history across
+      if (walletAddr) {
+        const guestTasks = loadTasks(undefined); // blue_tasks_v1_guest
+        if (guestTasks.length > 0) {
+          saveTasks(guestTasks, walletAddr);
+          const sorted = [...guestTasks].sort((a, b) => b.updatedAt - a.updatedAt);
+          setTasksState(sorted);
+          setActiveTaskId(sorted[0].id);
+          return;
+        }
       }
       // No history at all — put a fresh unsaved task in state so send() has something to attach to
       const fresh = createTask("pro", "blue-agent");
