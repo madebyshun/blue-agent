@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import AppPageHeader from "@/components/app/AppPageHeader";
+import AppCard from "@/components/app/AppCard";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -158,25 +160,14 @@ export default function AlertsPage() {
   return (
     <div className="relative h-full overflow-y-auto bg-[#050508] text-white font-mono">
 
-      {/* Ambient glow */}
-      <div className="pointer-events-none overflow-hidden absolute inset-x-0 top-0 h-[250px]">
-        <div className="absolute inset-0"
-          style={{ background: "radial-gradient(ellipse 80% 50% at 50% -10%, #F59E0B08 0%, transparent 70%)" }} />
-      </div>
+      <AppPageHeader
+        label="ALERTS"
+        subtitle="Price alerts · whale moves · Base Mainnet"
+        accent="#F59E0B"
+        right={activeAlerts.length > 0 ? <span style={{ color: "#F59E0B" }}>{activeAlerts.length} active</span> : undefined}
+      />
 
-      {/* Header */}
-      <div className="relative flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E] shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-pulse" />
-          <p className="text-xs text-[#F59E0B] tracking-widest">// ALERTS</p>
-          <p className="text-[10px] text-slate-700 hidden sm:block">Price alerts · whale moves · Base Mainnet</p>
-        </div>
-        {activeAlerts.length > 0 && (
-          <span className="text-[10px] text-[#F59E0B]">{activeAlerts.length} active</span>
-        )}
-      </div>
-
-      <div className="relative px-6 py-8 max-w-2xl mx-auto">
+      <div className="relative px-6 py-6 max-w-2xl mx-auto">
 
         {/* Coming soon banner */}
         <div className="rounded-2xl border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-5 py-4 mb-6 flex items-start gap-3">
@@ -326,15 +317,15 @@ export default function AlertsPage() {
             </div>
           </div>
         ) : !showForm && (
-          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-8 text-center">
+          <AppCard className="p-8 text-center">
             <p className="text-2xl mb-3">🔔</p>
             <p className="text-sm text-slate-400 mb-1">No active alerts</p>
             <p className="text-[10px] text-slate-600">Create an alert to get notified when conditions are met</p>
-          </div>
+          </AppCard>
         )}
 
         {/* Connect to Sentinel CTA */}
-        <div className="mt-8 rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5">
+        <AppCard className="mt-8">
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 rounded-xl bg-[#34D399]/10 border border-[#34D399]/20 flex items-center justify-center shrink-0">
               <svg className="w-4 h-4 text-[#34D399]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -349,7 +340,7 @@ export default function AlertsPage() {
               </p>
             </div>
           </div>
-        </div>
+        </AppCard>
       </div>
     </div>
   );

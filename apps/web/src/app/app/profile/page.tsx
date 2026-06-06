@@ -4,7 +4,9 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAccount, useReadContract, useReadContracts } from "wagmi";
 import { formatUnits } from "viem";
-import { ConnectButton } from "@/components/ConnectModal";
+import AppPageHeader from "@/components/app/AppPageHeader";
+import AppConnectPrompt from "@/components/app/AppConnectPrompt";
+import AppCard, { AppStat, AppSectionLabel } from "@/components/app/AppCard";
 
 // ── Contracts ─────────────────────────────────────────────────────────────────
 
@@ -160,36 +162,31 @@ export default function ProfilePage() {
       {/* Ambient glow */}
       <div className="pointer-events-none overflow-hidden absolute inset-x-0 top-0 h-[300px]">
         <div className="absolute inset-0"
-          style={{ background: "radial-gradient(ellipse 80% 50% at 50% -10%, #A78BFA10 0%, transparent 70%)" }} />
+          style={{ background: "radial-gradient(ellipse 80% 50% at 50% -10%, #A78BFA08 0%, transparent 70%)" }} />
       </div>
 
-      {/* Header */}
-      <div className="relative flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E] shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#A78BFA] animate-pulse" />
-          <p className="text-xs text-[#A78BFA] tracking-widest">// PROFILE</p>
-          <p className="text-[10px] text-slate-700 hidden sm:block">Wallet identity · on-chain footprint · activity</p>
-        </div>
-      </div>
+      <AppPageHeader
+        label="PROFILE"
+        subtitle="Wallet identity · on-chain footprint · activity"
+        accent="#A78BFA"
+      />
 
-      <div className="relative px-6 py-8 max-w-3xl mx-auto">
+      <div className="relative px-6 py-6 max-w-2xl mx-auto">
 
         {!isConnected ? (
-          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-12 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-[#A78BFA]/10 border border-[#A78BFA]/20 flex items-center justify-center mx-auto mb-6">
-              <svg className="w-7 h-7 text-[#A78BFA]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <AppConnectPrompt
+            accent="#A78BFA"
+            title="Connect to view profile"
+            subtitle="Your on-chain identity, staking history, and activity stats"
+            icon={
+              <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
               </svg>
-            </div>
-            <h2 className="text-lg font-bold mb-2">Connect to view profile</h2>
-            <p className="text-slate-500 text-sm mb-8 max-w-xs mx-auto">Your on-chain identity, staking history, and activity stats</p>
-            <ConnectButton label="Connect Wallet" />
-          </div>
+            }
+          />
         ) : (
           <>
-            {/* Identity card */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-6 mb-4"
-              style={{ boxShadow: `0 0 40px ${tier.color}0a` }}>
+            <AppCard className="p-6 mb-4" accent={tier.color}>
               <div className="flex items-start justify-between mb-5">
                 <div className="flex items-center gap-4">
                   {/* Avatar */}
@@ -241,29 +238,21 @@ export default function ProfilePage() {
                   </div>
                 ))}
               </div>
-            </div>
+            </AppCard>
 
             {/* Balances row */}
             <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-4">
-                <div className="text-[10px] text-slate-600 tracking-widest mb-2">BLUE BALANCE</div>
-                <div className="text-xl font-bold text-[#4FC3F7]">
-                  {blueBalance !== undefined ? fmtBlue(blueBalance) : "—"}
-                </div>
-                <div className="text-[10px] text-slate-700 mt-1">in wallet</div>
-              </div>
-              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-4">
-                <div className="text-[10px] text-slate-600 tracking-widest mb-2">USDC BALANCE</div>
-                <div className="text-xl font-bold text-[#22C55E]">
-                  {usdcBalance !== undefined ? `$${(Number(usdcBalance) / 1e6).toFixed(2)}` : "—"}
-                </div>
-                <div className="text-[10px] text-slate-700 mt-1">on Base</div>
-              </div>
+              <AppCard className="p-4">
+                <AppStat label="BLUE BALANCE" value={blueBalance !== undefined ? fmtBlue(blueBalance) : "—"} sub="in wallet" color="#4FC3F7" />
+              </AppCard>
+              <AppCard className="p-4">
+                <AppStat label="USDC BALANCE" value={usdcBalance !== undefined ? `$${(Number(usdcBalance) / 1e6).toFixed(2)}` : "—"} sub="on Base" color="#22C55E" />
+              </AppCard>
             </div>
 
             {/* Chat activity */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 mb-4">
-              <p className="text-[10px] text-slate-600 tracking-widest mb-4">BLUE CHAT ACTIVITY</p>
+            <AppCard className="mb-4">
+              <AppSectionLabel>BLUE CHAT ACTIVITY</AppSectionLabel>
               <div className="grid grid-cols-3 gap-4 mb-5">
                 {[
                   { label: "SESSIONS", value: chatStats.totalSessions },
@@ -303,7 +292,7 @@ export default function ProfilePage() {
                   Start your first chat session →
                 </Link>
               )}
-            </div>
+            </AppCard>
 
             {/* Links */}
             <div className="flex flex-wrap gap-3 text-[10px] text-slate-700">

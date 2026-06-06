@@ -6,6 +6,7 @@ import Navbar from "@/components/Navbar";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { useAccount, useSignTypedData, useReadContract } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
+import AppPageHeader from "@/components/app/AppPageHeader";
 
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 const ERC20_BAL_ABI = [{
@@ -1423,7 +1424,19 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
   return (
     <>
       {!inShell && <Navbar />}
-      <div className={`flex bg-[#050508] font-mono ${inShell ? "h-full overflow-hidden" : "pt-14"}`}>
+      <div className={`flex flex-col bg-[#050508] font-mono ${inShell ? "h-full overflow-hidden" : "pt-14"}`}>
+
+        {/* ── Shell header ── */}
+        {inShell && (
+          <AppPageHeader
+            label="HUB"
+            subtitle="AI tools · multi-agent · x402 · Base"
+            accent="#4FC3F7"
+            right={<span style={{ color: "#4FC3F7" }}>{TOOLS.length} tools</span>}
+          />
+        )}
+
+        <div className={`flex ${inShell ? "flex-1 overflow-hidden" : ""}`}>
 
         {/* ── Sidebar ──────────────────────────────────── */}
         <aside className={`hidden lg:flex flex-col w-72 shrink-0 border-r border-[#1A1A2E] ${inShell ? "h-full" : "sticky top-14 h-[calc(100vh-3.5rem)]"}`}>
@@ -1568,6 +1581,7 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
           }
         </main>
 
+        </div>{/* end flex row */}
       </div>
     </>
   );

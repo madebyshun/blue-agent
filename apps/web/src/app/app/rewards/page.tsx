@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { ConnectButton } from "@/components/ConnectModal";
+import AppPageHeader from "@/components/app/AppPageHeader";
+import AppCard, { AppStat } from "@/components/app/AppCard";
+import AppConnectPrompt from "@/components/app/AppConnectPrompt";
 import {
   useAccount,
   useReadContract,
@@ -242,28 +245,27 @@ export default function AppRewardsPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="relative h-full overflow-y-auto bg-[#050508] text-white">
+    <div className="relative h-full overflow-y-auto bg-[#050508] text-white font-mono">
 
       {/* Ambient glow */}
-      <div className="pointer-events-none overflow-hidden absolute inset-x-0 top-0 h-[400px]">
+      <div className="pointer-events-none overflow-hidden absolute inset-x-0 top-0 h-[300px]">
         <div className="absolute inset-0"
-          style={{ background: "radial-gradient(ellipse 100% 60% at 50% -10%, #4FC3F718 0%, transparent 70%)" }} />
+          style={{ background: "radial-gradient(ellipse 80% 50% at 50% -10%, #4FC3F710 0%, transparent 70%)" }} />
       </div>
 
-      {/* Page header — consistent with app shell */}
-      <div className="relative flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E] shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-          <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// STAKE</p>
-          <p className="font-mono text-[10px] text-slate-700 hidden sm:block">Stake $BLUEAGENT · earn credits · share x402 revenue</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[10px] px-1.5 py-0.5 border border-[#4FC3F7]/30 text-[#4FC3F7] rounded">Base Mainnet</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" />
-        </div>
-      </div>
+      <AppPageHeader
+        label="STAKE"
+        subtitle="Stake $BLUEAGENT · earn credits · share x402 revenue"
+        accent="#4FC3F7"
+        right={
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] px-1.5 py-0.5 border border-[#4FC3F7]/30 text-[#4FC3F7] rounded">Base Mainnet</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" />
+          </div>
+        }
+      />
 
-      <div className="relative max-w-[900px] mx-auto px-6 pt-8 pb-24">
+      <div className="relative max-w-2xl mx-auto px-6 pt-6 pb-24">
 
         {/* ── Header ── */}
         <div className="text-center mb-10">
@@ -275,7 +277,7 @@ export default function AppRewardsPage() {
           </p>
 
           {/* Protocol stats */}
-          <div className="inline-flex items-center gap-8 mt-7 px-8 py-4 rounded-2xl border border-[#1A1A2E] bg-[#0d0d12]">
+          <AppCard className="inline-flex items-center gap-8 mt-7 px-8 py-4">
             <div className="text-center">
               <div className="font-mono text-xl font-bold text-white">
                 {globalStaked ? fmtBlue(globalStaked) : "—"}
@@ -292,12 +294,12 @@ export default function AppRewardsPage() {
               <div className="font-mono text-xl font-bold text-[#A78BFA]">1 day</div>
               <div className="font-mono text-[10px] text-slate-600 mt-1 tracking-widest">COOLDOWN</div>
             </div>
-          </div>
+          </AppCard>
         </div>
 
         {!isConnected ? (
           /* ── Not connected ── */
-          <div className="max-w-[600px] mx-auto rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-12 text-center">
+          <AppCard className="max-w-[600px] mx-auto p-12 text-center">
             <div className="w-16 h-16 rounded-2xl bg-[#4FC3F710] border border-[#4FC3F720] flex items-center justify-center mx-auto mb-6">
               <span className="text-3xl">⚡</span>
             </div>
@@ -323,15 +325,14 @@ export default function AppRewardsPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </AppCard>
         ) : (
           <>
             {/* ── 2-col layout: Position left, Actions right ── */}
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4 mb-4">
 
             {/* ── Position card ── */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-8"
-              style={{ boxShadow: staked > 0 ? `0 0 60px ${tier.color}0a` : "none" }}>
+            <AppCard className="p-8" accent={staked > 0 ? tier.color : undefined}>
 
               <div className="flex items-start justify-between mb-6">
                 <div>
@@ -401,10 +402,10 @@ export default function AppRewardsPage() {
                   ))}
                 </div>
               </div>
-            </div>
+            </AppCard>
 
             {/* ── Action panel ── */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden">
+            <AppCard noPad className="overflow-hidden">
 
               {/* Tabs */}
               <div className="flex border-b border-[#1A1A2E]">
@@ -604,7 +605,7 @@ export default function AppRewardsPage() {
                   </div>
                 )}
               </div>
-            </div>
+            </AppCard>
 
             </div>{/* end 2-col grid */}
 
@@ -618,7 +619,7 @@ export default function AppRewardsPage() {
         )}
 
         {/* ── Footer info ── */}
-        <div className="mt-4 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-6 py-5">
+        <AppCard className="mt-4 px-6 py-5">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 font-mono text-[11px] text-slate-600 mb-4">
             <div>📌 Credits accrue continuously on-chain</div>
             <div>💬 Unlock Blue Chat AI tools</div>
@@ -635,7 +636,7 @@ export default function AppRewardsPage() {
               Blue Chat →
             </Link>
           </div>
-        </div>
+        </AppCard>
 
       </div>
     </div>
