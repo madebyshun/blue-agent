@@ -265,37 +265,27 @@ export default function AppRewardsPage() {
         }
       />
 
-      <div className="relative max-w-2xl mx-auto px-6 pt-6 pb-24">
+      <div className="relative max-w-2xl mx-auto px-6 pt-6 pb-16">
 
-        {/* ── Header ── */}
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-bold tracking-tight mb-3">
-            Blue Chat <span className="text-[#4FC3F7]">Stake</span>
-          </h1>
-          <p className="text-slate-500 text-sm max-w-md mx-auto">
-            Stake $BLUEAGENT → credits accrue on-chain · earn USDC from x402 revenue
-          </p>
-
-          {/* Protocol stats */}
-          <AppCard className="inline-flex items-center gap-8 mt-7 px-8 py-4">
-            <div className="text-center">
-              <div className="font-mono text-xl font-bold text-white">
-                {globalStaked ? fmtBlue(globalStaked) : "—"}
-              </div>
-              <div className="font-mono text-[10px] text-slate-600 mt-1 tracking-widest">TOTAL STAKED</div>
+        {/* Protocol stats */}
+        <AppCard className="flex items-center justify-around px-6 py-4 mb-4">
+          <div className="text-center">
+            <div className="font-mono text-xl font-bold text-white">
+              {globalStaked ? fmtBlue(globalStaked) : "—"}
             </div>
-            <div className="w-px h-8 bg-[#1A1A2E]" />
-            <div className="text-center">
-              <div className="font-mono text-xl font-bold text-[#22C55E]">20%</div>
-              <div className="font-mono text-[10px] text-slate-600 mt-1 tracking-widest">x402 REVENUE</div>
-            </div>
-            <div className="w-px h-8 bg-[#1A1A2E]" />
-            <div className="text-center">
-              <div className="font-mono text-xl font-bold text-[#A78BFA]">1 day</div>
-              <div className="font-mono text-[10px] text-slate-600 mt-1 tracking-widest">COOLDOWN</div>
-            </div>
-          </AppCard>
-        </div>
+            <div className="font-mono text-[10px] text-slate-600 mt-1 tracking-widest">TOTAL STAKED</div>
+          </div>
+          <div className="w-px h-8 bg-[#1A1A2E]" />
+          <div className="text-center">
+            <div className="font-mono text-xl font-bold text-[#22C55E]">20%</div>
+            <div className="font-mono text-[10px] text-slate-600 mt-1 tracking-widest">x402 REVENUE</div>
+          </div>
+          <div className="w-px h-8 bg-[#1A1A2E]" />
+          <div className="text-center">
+            <div className="font-mono text-xl font-bold text-[#A78BFA]">1 day</div>
+            <div className="font-mono text-[10px] text-slate-600 mt-1 tracking-widest">COOLDOWN</div>
+          </div>
+        </AppCard>
 
         {!isConnected ? (
           /* ── Not connected ── */
