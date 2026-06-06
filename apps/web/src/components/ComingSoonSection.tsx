@@ -5,7 +5,7 @@ const PRODUCTS: Product[] = [
     title:  "Model Picker Chat",
     desc:   "Choose a Bankr model, pay with credits or USDC, and get the right quality level for the task.",
     price:  "Pay per call",
-    href:   "/chat",
+    href:   "/app/chat",
     live:   true,
   },
   {
