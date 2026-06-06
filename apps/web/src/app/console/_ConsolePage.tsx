@@ -108,7 +108,7 @@ export default function ConsolePage({ inShell = false }: { inShell?: boolean }) 
         {/* ── Sidebar ──────────────────────────────────── */}
         <aside className={`hidden lg:flex flex-col w-72 shrink-0 border-r border-[#1A1A2E] ${inShell ? "h-full" : "sticky top-14 h-[calc(100vh-3.5rem)]"}`}>
           {/* Header */}
-          <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
+          <div className="px-5 h-14 flex items-center border-b border-[#1A1A2E]">
             <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// COMMANDS</p>
           </div>
           {/* Nav */}

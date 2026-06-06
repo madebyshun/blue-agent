@@ -67,7 +67,7 @@ function ChatShell() {
 
           {/* Tab header (non-chat, desktop) */}
           {!isChat && meta && (
-            <div className="hidden lg:flex items-center px-6 pt-6 pb-4 border-b border-[#1A1A2E] flex-shrink-0">
+            <div className="hidden lg:flex items-center px-6 h-14 border-b border-[#1A1A2E] flex-shrink-0">
               <div>
                 <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">
                   // {meta.title.toUpperCase()}
