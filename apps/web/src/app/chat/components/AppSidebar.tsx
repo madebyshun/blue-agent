@@ -102,10 +102,11 @@ export default function AppSidebar({
     <aside className="hidden lg:flex flex-col w-64 shrink-0 h-full border-r border-[#1A1A2E] bg-[#050508]">
 
       {/* ── Identity + New Chat ── */}
-      <div className="px-4 pt-4 pb-3 shrink-0">
-        {/* Title (no logo — already in nav sidebar) */}
-        <div className="mb-3">
-          <p className="font-mono text-[10px] font-bold text-slate-400 tracking-widest uppercase">Conversations</p>
+      <div className="px-4 pt-5 pb-3 shrink-0">
+        {/* Label row — no logo, logo is in the main icon nav */}
+        <div className="flex items-center gap-2 mb-4">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0" />
+          <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">// BLUE CHAT</p>
         </div>
 
         {/* New Chat */}

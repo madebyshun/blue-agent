@@ -297,7 +297,7 @@ export default function SimulatorPage({ inShell = false }: { inShell?: boolean }
       <div className={`flex bg-[#050508] font-mono ${inShell ? "flex-1 overflow-hidden" : "pt-14"}`}>
 
           {/* ── Sidebar ──────────────────────────────────── */}
-          <aside className={`hidden lg:flex flex-col w-72 shrink-0 overflow-y-auto border-r border-[#1A1A2E] py-10 px-4 ${inShell ? "h-full" : "sticky top-14 h-[calc(100vh-3.5rem)]"}`}>
+          <aside className={`hidden lg:flex flex-col w-72 shrink-0 overflow-y-auto border-r border-[#1A1A2E] px-4 ${inShell ? "h-full py-5" : "sticky top-14 h-[calc(100vh-3.5rem)] py-10"}`}>
             <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-4 px-2">SIMULATION TIER</p>
             <nav className="flex flex-col gap-1">
               {TIERS.map((t) => (
@@ -356,9 +356,10 @@ export default function SimulatorPage({ inShell = false }: { inShell?: boolean }
           </aside>
 
           {/* ── Main content ─────────────────────────────── */}
-          <main className="flex-1 h-[calc(100vh-3.5rem)] overflow-y-auto px-6 lg:px-10 py-10">
+          <main className={`flex-1 overflow-y-auto px-6 lg:px-10 py-8 ${inShell ? "h-full" : "h-[calc(100vh-3.5rem)] py-10"}`}>
 
-            {/* Page header */}
+            {/* Page header — only outside app shell */}
+            {!inShell && (
             <div className="mb-10">
               <p className="font-mono text-xs text-[#4FC3F7] tracking-widest mb-3">// PRE-LAUNCH INTELLIGENCE</p>
               <h1 className="font-mono text-4xl sm:text-5xl font-bold text-white mb-3">
@@ -381,6 +382,7 @@ export default function SimulatorPage({ inShell = false }: { inShell?: boolean }
                 ))}
               </div>
             </div>
+            )}
 
             {/* Tier info card */}
             <div className="mb-6 card-surface rounded-xl p-5">
