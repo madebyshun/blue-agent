@@ -7,6 +7,7 @@ import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { useAccount, useSignTypedData, useReadContract } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
 import AppPageHeader from "@/components/app/AppPageHeader";
+import HubHome from "./_components/HubHome";
 
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 const ERC20_BAL_ABI = [{
@@ -29,6 +30,9 @@ interface Tool {
   aiReady?:        boolean;
   builderAddress?: string;
   releasedAt?:    number;
+  // Phase 3 — community-submitted tools: when set, ToolRunner POSTs here
+  // instead of /api/x402/[id]. Hub registry proxy → builder's endpoint.
+  callPath?:       string;
 }
 
 const FEATURED_IDS = ["launch-simulator", "investor-memo", "market-fit", "token-launch-readiness"];
@@ -639,7 +643,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           },
         }));
 
-        const r2 = await fetch(`/api/x402/${tool.id}`, {
+        const r2 = await fetch(tool.callPath ?? `/api/x402/${tool.id}`, {
           method:  "POST",
           headers: { "Content-Type": "application/json", "X-PAYMENT": xPayment },
           body:    JSON.stringify(tool.x402Body(body)),
@@ -672,7 +676,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
     setStep("calling");
 
     try {
-      const res = await fetch(`/api/x402/${tool.id}`, {
+      const res = await fetch(tool.callPath ?? `/api/x402/${tool.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -1023,280 +1027,37 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
 type SortMode = "popular" | "newest" | "price-asc" | "price-desc";
 type ViewMode = "grid" | "list";
 
-function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t: Tool) => void; featuredIds: Set<string>; usage: Record<string, number>; recentIds: string[] }) {
-  const recentTools = recentIds.map(id => TOOLS.find(t => t.id === id)).filter((t): t is Tool => !!t).reverse();
-  const totalRuns = Object.values(usage).reduce((a, b) => a + b, 0);
-  const usdcPaid  = TOOLS.reduce((s, t) => s + (usage[t.id] ?? 0) * (parseFloat(t.price.replace("$", "")) || 0), 0);
-  const runsOf = (id: string) => usage[id] ?? 0;
-  const [sortMode,  setSortMode]  = useState<SortMode>("popular");
-  const [viewMode,  setViewMode]  = useState<ViewMode>("grid");
-  const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [onboardingOpen, setOnboardingOpen] = useState(false);
-
-  // Load onboarding state from localStorage
-  useEffect(() => {
-    try {
-      const dismissed = localStorage.getItem("bluehub_onboarding_dismissed");
-      if (!dismissed) setOnboardingOpen(true);
-    } catch {}
-  }, []);
-
-  function dismissOnboarding() {
-    setOnboardingOpen(false);
-    try { localStorage.setItem("bluehub_onboarding_dismissed", "1"); } catch {}
-  }
-
-  function sortTools(tools: Tool[]): Tool[] {
-    const price = (t: Tool) => parseFloat(t.price.replace("$", "")) || 0;
-    if (sortMode === "price-asc")  return [...tools].sort((a, b) => price(a) - price(b));
-    if (sortMode === "price-desc") return [...tools].sort((a, b) => price(b) - price(a));
-    if (sortMode === "newest")     return [...tools].sort((a, b) => (b.releasedAt ?? 0) - (a.releasedAt ?? 0));
-    // popular (default)
-    return [...tools].sort((a, b) => runsOf(b.id) - runsOf(a.id));
-  }
-
-  // ── Featured tools ── prefer real usage; pad with curated FEATURED_IDS
-  const featuredTools: Tool[] = (() => {
-    const byUsage = [...TOOLS]
-      .filter(t => runsOf(t.id) > 0)
-      .sort((a, b) => runsOf(b.id) - runsOf(a.id))
-      .slice(0, 8);
-    if (byUsage.length >= 8) return byUsage;
-    const seen   = new Set(byUsage.map(t => t.id));
-    const padIds = [...featuredIds, ...FEATURED_IDS].filter(id => !seen.has(id));
-    const padded = padIds.map(id => TOOLS.find(t => t.id === id)).filter((t): t is Tool => !!t);
-    return [...byUsage, ...padded].slice(0, 8);
-  })();
-
-  // ── All tools (sorted + filtered by Verified toggle) ──
-  const allTools = sortTools(verifiedOnly ? TOOLS.filter(t => t.verified) : TOOLS);
-
+function EmptyState({
+  tools, onSelect, featuredIds, usage, recentIds,
+  search, setSearch, cat, setCat, filtered,
+}: {
+  tools:       Tool[];
+  onSelect:   (t: Tool) => void;
+  featuredIds: Set<string>;
+  usage:      Record<string, number>;
+  recentIds:  string[];
+  search:     string;
+  setSearch:  (s: string) => void;
+  cat:        Category;
+  setCat:     (c: Category) => void;
+  filtered:   Tool[];
+}) {
+  // Thin wrapper around HubHome (in _components/) — keeps page.tsx focused on
+  // routing / state, while HubHome owns the marketplace UX.
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
-
-      {/* ── Top bar ── */}
-      <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-[#1A1A2E] shrink-0 gap-3">
-        {/* Left: brand + badge */}
-        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-          <h1 className="font-mono text-xl sm:text-2xl font-bold text-white tracking-tight shrink-0">
-            BLUE<span className="text-[#A78BFA]">HUB</span>
-          </h1>
-          <div className="flex items-center gap-1 px-2 sm:px-2.5 py-1 border border-[#A78BFA]/20 bg-[#A78BFA]/5 rounded-full shrink-0">
-            <span className="w-1 h-1 rounded-full bg-[#A78BFA] animate-pulse" />
-            <span className="font-mono text-[9px] text-[#A78BFA] tracking-widest ml-1 hidden xs:inline">MULTI-AGENT · </span>
-            <span className="font-mono text-[9px] text-[#A78BFA] tracking-widest">{TOOLS.length} TOOLS</span>
-          </div>
-        </div>
-        {/* Right: agent dots (desktop) + links */}
-        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-          <div className="hidden sm:flex items-center gap-3">
-            {(["blue","aeon","miroshark"] as Agent[]).map(a => (
-              <div key={a} className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-                <span className="font-mono text-xs font-bold" style={{ color: AGENT_COLORS[a] }}>{AGENT_LABELS[a]}</span>
-              </div>
-            ))}
-          </div>
-          {/* Mobile: just 3 colored dots */}
-          <div className="flex sm:hidden items-center gap-1">
-            {(["blue","aeon","miroshark"] as Agent[]).map(a => (
-              <span key={a} className="w-2 h-2 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-            ))}
-          </div>
-          <Link href="/hub/registry"
-            className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 border border-[#1A1A2E] hover:border-[#34D399]/20 rounded-lg font-mono text-[10px] text-slate-500 hover:text-[#34D399] transition-all">
-            <span className="w-1 h-1 rounded-full bg-[#34D399] animate-pulse" />
-            <span className="hidden sm:inline">Registry</span>
-            <span className="sm:hidden">v2</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* ── Hero — medium ── */}
-      <div className="relative overflow-hidden px-4 sm:px-6 py-4 sm:py-5 border-b border-[#1A1A2E] shrink-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#4FC3F7]/[0.05] via-transparent to-[#A78BFA]/[0.06] pointer-events-none" />
-        <div className="relative flex items-start justify-between gap-3">
-          {/* Text block */}
-          <div className="flex-1 min-w-0">
-            <p className="font-mono text-sm sm:text-base font-bold text-white leading-tight mb-1.5">
-              <span className="text-[#4FC3F7]">{TOOLS.length} AI tools</span>
-              <span className="text-slate-500 font-normal text-xs sm:text-sm ml-2">· pay per call · no subscription</span>
-            </p>
-            <p className="font-mono text-[11px] sm:text-xs text-slate-400 leading-relaxed max-w-md">
-              Research, trade, build and ship on Base — built by multi-agent AI. Pay in USDC, no API key, no signup.
-            </p>
-            <div className="flex items-center gap-2 mt-2 flex-wrap">
-              <span className="font-mono text-[10px] text-slate-600">x402 · EIP-3009 · Base</span>
-              <span className="font-mono text-[9px] px-1.5 py-0.5 rounded border border-[#A78BFA]/20 text-[#A78BFA]">Blue Hub v2</span>
-            </div>
-          </div>
-          {/* Stats — hidden on mobile, shown on sm+ */}
-          <div className="hidden sm:flex flex-col items-end gap-2 shrink-0">
-            <div className="flex items-center gap-2">
-              {[
-                { label: "tools",  value: String(TOOLS.length) },
-                { label: "runs",   value: totalRuns > 0 ? totalRuns.toLocaleString() : "—" },
-                { label: "USDC",   value: usdcPaid > 0 ? `$${usdcPaid.toFixed(2)}` : "—" },
-              ].map(s => (
-                <div key={s.label} className="flex items-baseline gap-1 px-2.5 py-1.5 rounded-lg border border-[#1A1A2E] bg-[#0D0D1A]">
-                  <span className="font-mono text-sm font-bold text-white">{s.value}</span>
-                  <span className="font-mono text-[9px] text-slate-600 uppercase tracking-wider">{s.label}</span>
-                </div>
-              ))}
-            </div>
-            <p className="font-mono text-[9px] text-slate-700">from $0.05 per call</p>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Onboarding strip ── */}
-      {onboardingOpen && (
-        <div className="px-6 py-3.5 border-b border-[#1A1A2E] bg-[#0D0D1A] shrink-0">
-          <div className="flex items-center justify-between mb-2.5">
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">// HOW TO USE</span>
-              <span className="font-mono text-[9px] text-slate-700">3 steps to run any tool</span>
-            </div>
-            <button onClick={dismissOnboarding} className="font-mono text-[10px] text-slate-600 hover:text-slate-300 transition-colors">
-              dismiss ×
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            {[
-              { step: "01", label: "Pick a tool", desc: "Browse by audience or search", color: "#4FC3F7" },
-              { step: "02", label: "Fill inputs", desc: "\"Try example →\" for instant prefill", color: "#A78BFA" },
-              { step: "03", label: "Pay & run", desc: "Connect wallet · EIP-3009 · get result", color: "#34D399" },
-            ].map(s => (
-              <div key={s.step} className="flex items-center sm:items-start gap-3 sm:gap-2.5">
-                <span className="font-mono text-2xl sm:text-lg font-bold shrink-0 leading-none w-8 text-center" style={{ color: s.color + "40" }}>{s.step}</span>
-                <div>
-                  <p className="font-mono text-xs font-semibold text-white leading-tight">{s.label}</p>
-                  <p className="font-mono text-[10px] text-slate-600 leading-relaxed mt-0.5">{s.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Content grid ── */}
-      <div className="flex-1 px-6 py-5 overflow-y-auto">
-
-        {/* Sort + View + Filter controls */}
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <span className="font-mono text-[10px] text-slate-700">Sort:</span>
-          {([
-            { mode: "popular",    label: "Popular" },
-            { mode: "newest",     label: "Newest" },
-            { mode: "price-asc",  label: "Price ↑" },
-            { mode: "price-desc", label: "Price ↓" },
-          ] as { mode: SortMode; label: string }[]).map(s => (
-            <button key={s.mode} onClick={() => setSortMode(s.mode)}
-              className={`font-mono text-[10px] px-2 py-0.5 rounded border transition-colors ${
-                sortMode === s.mode
-                  ? "text-[#4FC3F7] border-[#4FC3F7]/30 bg-[#4FC3F7]/5"
-                  : "text-slate-600 border-transparent hover:text-slate-300"
-              }`}>
-              {s.label}
-            </button>
-          ))}
-
-          {/* Divider */}
-          <span className="w-px h-3 bg-[#1A1A2E] mx-1" />
-
-          {/* Verified-only filter */}
-          <button onClick={() => setVerifiedOnly(v => !v)}
-            className={`font-mono text-[10px] px-2 py-0.5 rounded border transition-colors flex items-center gap-1 ${
-              verifiedOnly
-                ? "text-[#34D399] border-[#34D399]/30 bg-[#34D399]/5"
-                : "text-slate-600 border-transparent hover:text-slate-300"
-            }`}>
-            <span>✓</span><span>Verified only</span>
-          </button>
-
-          {/* View toggle */}
-          <div className="ml-auto flex items-center gap-1 border border-[#1A1A2E] rounded p-0.5">
-            {(["grid", "list"] as ViewMode[]).map(m => (
-              <button key={m} onClick={() => setViewMode(m)}
-                title={m === "grid" ? "Grid view" : "List view"}
-                className={`font-mono text-[10px] px-2 py-0.5 rounded transition-colors ${
-                  viewMode === m
-                    ? "bg-[#4FC3F7]/10 text-[#4FC3F7]"
-                    : "text-slate-600 hover:text-slate-400"
-                }`}>
-                {m === "grid" ? "▦" : "≡"}
-              </button>
-            ))}
-          </div>
-
-          {!onboardingOpen && (
-            <button onClick={() => setOnboardingOpen(true)}
-              className="font-mono text-[10px] text-slate-700 hover:text-slate-400 transition-colors border border-transparent hover:border-[#1A1A2E] px-2 py-0.5 rounded">
-              ? How to use
-            </button>
-          )}
-        </div>
-
-        {/* Your recent results (compact strip) */}
-        {recentTools.length > 0 && (
-          <div className="mb-6">
-            <div className="flex items-center gap-3 mb-2">
-              <p className="font-mono text-[10px] text-[#34D399] tracking-widest">// YOUR RECENT RESULTS</p>
-              <div className="flex-1 h-px bg-[#34D399]/10" />
-              <span className="font-mono text-[9px] text-slate-700">free to re-open</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {recentTools.map(tool => (
-                <button key={tool.id} onClick={() => onSelect(tool)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#34D399]/20 bg-[#34D399]/5 hover:bg-[#34D399]/10 hover:border-[#34D399]/40 transition-all">
-                  <span className="w-1 h-1 rounded-full bg-[#34D399]" />
-                  <span className="font-mono text-[11px] text-slate-200">{tool.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Featured grid (4-col big cards, Orbis pattern) ── */}
-        {featuredTools.length > 0 && (
-          <div className="mb-7">
-            <div className="flex items-center gap-3 mb-3">
-              <p className="font-mono text-[10px] tracking-widest font-semibold text-[#A78BFA]">★ FEATURED</p>
-              <span className="font-mono text-[10px] text-slate-700">Most-run multi-agent tools right now</span>
-              <div className="flex-1 h-px bg-[#A78BFA]/10" />
-              <span className="font-mono text-[9px] text-slate-700">{featuredTools.length} tools</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-              {featuredTools.map(tool => (
-                <ToolCardBig key={tool.id} tool={tool} runs={runsOf(tool.id)} onSelect={onSelect} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── All Tools — flat sorted list (with view toggle) ── */}
-        <div className="mb-7">
-          <div className="flex items-center gap-3 mb-3">
-            <p className="font-mono text-[10px] tracking-widest font-semibold text-[#4FC3F7]">// ALL TOOLS</p>
-            <span className="font-mono text-[10px] text-slate-700">{allTools.length} of {TOOLS.length} · sorted by {sortMode}</span>
-            <div className="flex-1 h-px bg-[#4FC3F7]/10" />
-          </div>
-          {viewMode === "grid" ? (
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
-              {allTools.map(tool => (
-                <ToolCardCompact key={tool.id} tool={tool} runs={runsOf(tool.id)} onSelect={onSelect} />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-[#1A1A2E] overflow-hidden">
-              {allTools.map(tool => (
-                <ToolRow key={tool.id} tool={tool} runs={runsOf(tool.id)} onSelect={onSelect} />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+    <HubHome
+      tools={tools as unknown as import("./_components/HubHome").HubTool[]}
+      filtered={filtered as unknown as import("./_components/HubHome").HubTool[]}
+      groups={TOOL_GROUPS as unknown as import("./_components/HubHome").HubGroup[]}
+      usage={usage}
+      featuredIds={featuredIds}
+      recentIds={recentIds}
+      search={search}
+      cat={cat}
+      onSearch={setSearch}
+      onPickCat={(id) => setCat(id as Category)}
+      onSelect={(t) => onSelect(t as unknown as Tool)}
+    />
   );
 }
 
@@ -1369,6 +1130,106 @@ function ToolCardCompact({ tool, runs, onSelect }: { tool: Tool; runs: number; o
   );
 }
 
+/**
+ * Horizontal scrolling row — App Store style "shelf".
+ * Hides overflow on small screens, snap-scrolls on touch.
+ */
+function SectionRow({
+  label, sub, accent, tools, runsOf, onSelect, compact,
+}: {
+  label: string;
+  sub: string;
+  accent: string;
+  tools: Tool[];
+  runsOf: (id: string) => number;
+  onSelect: (t: Tool) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div className="mb-7">
+      <div className="flex items-center gap-3 mb-3">
+        <p className="font-mono text-[10px] tracking-widest font-semibold" style={{ color: accent }}>{label}</p>
+        <span className="font-mono text-[10px] text-slate-700">{sub}</span>
+        <div className="flex-1 h-px" style={{ background: `${accent}20` }} />
+        <span className="font-mono text-[9px] text-slate-700">{tools.length}</span>
+      </div>
+      <div className="-mx-2 flex overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-thin">
+        {tools.map(tool => (
+          <div key={tool.id} className={`px-2 shrink-0 snap-start ${compact ? "w-56" : "w-64"}`}>
+            <ShelfCard tool={tool} runs={runsOf(tool.id)} onSelect={onSelect} accent={accent} compact={compact} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Shelf-style tool card — fits in horizontal scroll rows. */
+function ShelfCard({
+  tool, runs, onSelect, accent, compact,
+}: { tool: Tool; runs: number; onSelect: (t: Tool) => void; accent: string; compact?: boolean }) {
+  return (
+    <button onClick={() => onSelect(tool)}
+      className="w-full text-left rounded-xl p-3.5 transition-all group border flex flex-col h-full"
+      style={{ borderColor: `${accent}25`, background: `${accent}06` }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = `${accent}55`)}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = `${accent}25`)}>
+      <div className="flex items-center gap-1.5 mb-2">
+        {tool.agents.map(a => (
+          <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
+        ))}
+        <span className="font-mono text-[9px] text-slate-700 ml-auto">{tool.price}</span>
+      </div>
+      <p className="font-mono text-xs font-bold text-white mb-0.5 leading-snug group-hover:opacity-80 transition-opacity">{tool.name}</p>
+      <p className={`font-mono text-[10px] text-slate-600 leading-relaxed line-clamp-2 ${compact ? "mb-2" : "mb-2"} flex-1`}>{tool.desc}</p>
+      <div className="mb-2"><VerifiedAiBadges tool={tool} /></div>
+      <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: `${accent}20` }}>
+        <span className="font-mono text-[9px] text-slate-700">{runs > 0 ? `${runs} calls` : "new"}</span>
+        <span className="font-mono text-[10px] font-semibold transition-opacity opacity-70 group-hover:opacity-100" style={{ color: accent }}>Try →</span>
+      </div>
+    </button>
+  );
+}
+
+/** Provider showcase card — agent identity + stats. */
+function ProviderCard({ provider }: { provider: { agent: Agent; toolCount: number; totalCalls: number } }) {
+  const color = AGENT_COLORS[provider.agent];
+  const label = AGENT_LABELS[provider.agent];
+  const blurb =
+    provider.agent === "blue"      ? "Multi-agent orchestration + console commands · idea → ship"
+    : provider.agent === "aeon"    ? "Ecosystem signals, narrative tracking, token picks on Base"
+    :                                "Sentiment consensus + crowd intelligence for trade decisions";
+  return (
+    <div className="rounded-2xl p-4 border flex flex-col" style={{ borderColor: `${color}25`, background: `${color}06` }}>
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0"
+          style={{ background: `${color}18`, color, border: `1px solid ${color}40` }}>
+          {label.slice(0, 2)}
+        </div>
+        <div className="min-w-0">
+          <p className="font-mono text-sm font-bold" style={{ color }}>{label}</p>
+          <p className="font-mono text-[10px] text-slate-700">Provider</p>
+        </div>
+        <span className="font-mono text-[9px] px-1.5 py-0.5 rounded border ml-auto"
+          style={{ borderColor: `${color}40`, color, background: `${color}10` }}>
+          ✓ Verified
+        </span>
+      </div>
+      <p className="font-mono text-[10px] text-slate-500 leading-relaxed mb-3 flex-1">{blurb}</p>
+      <div className="grid grid-cols-2 gap-2 pt-2 border-t" style={{ borderColor: `${color}15` }}>
+        <div>
+          <p className="font-mono text-[9px] text-slate-700">TOOLS</p>
+          <p className="font-mono text-sm font-bold text-white tabular-nums">{provider.toolCount}</p>
+        </div>
+        <div>
+          <p className="font-mono text-[9px] text-slate-700">CALLS</p>
+          <p className="font-mono text-sm font-bold tabular-nums" style={{ color }}>{provider.totalCalls > 0 ? provider.totalCalls.toLocaleString() : "—"}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ToolRow({ tool, runs, onSelect }: { tool: Tool; runs: number; onSelect: (t: Tool) => void }) {
   return (
     <button onClick={() => onSelect(tool)}
@@ -1417,7 +1278,11 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
   const [search, setSearch]   = useState("");
   const [cache, setCache]     = useState<Map<string, ToolResult>>(new Map());
   const [usage, setUsage]     = useState<Record<string, number>>({});
+  const [communityTools, setCommunityTools] = useState<Tool[]>([]);
   const searchRef             = useRef<HTMLInputElement>(null);
+
+  // ── Merge first-party (TOOLS) + community-submitted (registered) ──────────
+  const allTools = useMemo<Tool[]>(() => [...TOOLS, ...communityTools], [communityTools]);
 
   const RESULTS_KEY = "bluehub_results";
 
@@ -1440,6 +1305,50 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
   // ── Fetch real usage counts → dynamic Featured (top by paid runs) ─────────
   useEffect(() => {
     fetch("/api/usage").then(r => r.json()).then(setUsage).catch(() => {});
+  }, []);
+
+  // ── Fetch community-submitted tools from the Builder Registry ──────────────
+  // Maps RegisteredTool shape → local Tool shape and routes calls through the
+  // Hub proxy (which forwards to the builder's endpoint + tracks usage).
+  useEffect(() => {
+    type Registered = {
+      id: string; name: string; description: string; category: string;
+      price: string; priceUSDC: number;
+      inputs: { key: string; label: string; placeholder: string; required?: boolean }[];
+      verified: boolean; aiReady: boolean;
+      builderAddress: string; submittedAt: number;
+      callCount?: number;
+    };
+    fetch("/api/hub/tools")
+      .then(r => r.ok ? r.json() : { tools: [] })
+      .then((d: { tools: Registered[] }) => {
+        const mapped: Tool[] = (d.tools ?? []).map(r => ({
+          id:             r.id,
+          name:           r.name,
+          cat:            (["intelligence","builder","trading","content","agent-economy","base-ecosystem","on-chain"] as const).includes(r.category as never)
+                            ? (r.category as Exclude<Category, "all">)
+                            : ("intelligence" as Exclude<Category, "all">),
+          price:          r.price,
+          // Community tools default to a single "community" agent dot until
+          // Phase 4 introduces per-builder agent identity.
+          agents:         ["blue"],
+          desc:           r.description,
+          inputs:         r.inputs.map(i => ({ key: i.key, label: i.label, placeholder: i.placeholder, required: !!i.required })),
+          verified:       r.verified,
+          aiReady:        r.aiReady,
+          builderAddress: r.builderAddress,
+          releasedAt:    r.submittedAt,
+          // Route through Hub proxy (forwards to builder endpoint + tracks usage/revenue)
+          callPath:       `/api/hub/tools/${r.id}/call`,
+          // Build a body mapper so the existing ToolRunner x402 path works:
+          // for priced community tools, we still require a wallet + signature.
+          x402Body:       r.priceUSDC > 0
+                            ? (vals: Record<string, string>) => vals as Record<string, unknown>
+                            : undefined,
+        }));
+        setCommunityTools(mapped);
+      })
+      .catch(() => {});
   }, []);
 
   const featuredIds = useMemo<Set<string>>(() => {
@@ -1470,7 +1379,7 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
     if (typeof window === "undefined") return;
     const qTool = new URLSearchParams(window.location.search).get("tool");
     if (qTool) {
-      const t = TOOLS.find(x => x.id === qTool);
+      const t = allTools.find(x => x.id === qTool);
       if (t) {
         setSelected(t);
         window.history.replaceState(null, "", "/hub");
@@ -1489,7 +1398,7 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
     const value = hash.slice(2);
 
     const apply = (toolId: string, result: Record<string, unknown>, isMock: boolean, mockReason: "dev" | "service-down") => {
-      const tool = TOOLS.find(t => t.id === toolId);
+      const tool = allTools.find(t => t.id === toolId);
       if (!tool) return;
       setCache(prev => new Map(prev).set(toolId, { result, isMock, mockReason }));
       setSelected(tool);
@@ -1511,7 +1420,7 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filtered = TOOLS.filter(t => {
+  const filtered = allTools.filter(t => {
     const matchesSearch = !search || t.name.toLowerCase().includes(search.toLowerCase()) || t.desc.toLowerCase().includes(search.toLowerCase());
     if (!matchesSearch) return false;
     if (cat === "all") return true;
@@ -1533,7 +1442,7 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
             label="HUB"
             subtitle="AI tools · multi-agent · x402 · Base"
             accent="#4FC3F7"
-            right={<span style={{ color: "#4FC3F7" }}>{TOOLS.length} tools</span>}
+            right={<span style={{ color: "#4FC3F7" }}>{allTools.length} tools</span>}
           />
         )}
 
@@ -1545,7 +1454,7 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
           {/* Header */}
           <div className="px-5 h-14 flex items-center gap-3 border-b border-[#1A1A2E] shrink-0">
             <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// TOOLS</p>
-            <span className="font-mono text-[10px] text-slate-700">{filtered.length} of {TOOLS.length}</span>
+            <span className="font-mono text-[10px] text-slate-700">{filtered.length} of {allTools.length}</span>
           </div>
 
           {/* Search */}
@@ -1617,6 +1526,31 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
             })}
           </div>
 
+          {/* Builder actions (v2) */}
+          <div className="px-4 pb-2 border-t border-[#1A1A2E] pt-3 space-y-1">
+            <Link
+              href="/hub/submit"
+              className="flex items-center gap-2 w-full px-2 py-2 rounded-lg hover:bg-[#A78BFA]/5 transition-colors group"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-[#A78BFA] animate-pulse shrink-0" />
+              <span className="font-mono text-[11px] text-slate-500 group-hover:text-[#A78BFA] transition-colors">
+                + Submit a tool
+              </span>
+              <span className="ml-auto font-mono text-[9px] text-slate-700 group-hover:text-[#A78BFA]">
+                80/20
+              </span>
+            </Link>
+            <Link
+              href="/hub/dashboard"
+              className="flex items-center gap-2 w-full px-2 py-2 rounded-lg hover:bg-[#34D399]/5 transition-colors group"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] shrink-0" />
+              <span className="font-mono text-[11px] text-slate-500 group-hover:text-[#34D399] transition-colors">
+                Builder dashboard
+              </span>
+            </Link>
+          </div>
+
           {/* Sentinel link */}
           <div className="px-4 pb-2 border-t border-[#1A1A2E] pt-3">
             <Link
@@ -1678,7 +1612,18 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
                 cached={cache.get(selected.id) ?? null}
                 onResult={(r) => saveResult(selected.id, r)}
               />
-            : <div className="overflow-y-auto flex-1"><EmptyState onSelect={setSelected} featuredIds={featuredIds} usage={usage} recentIds={[...cache.keys()]} /></div>
+            : <div className="overflow-y-auto flex-1"><EmptyState
+                tools={allTools}
+                onSelect={setSelected}
+                featuredIds={featuredIds}
+                usage={usage}
+                recentIds={[...cache.keys()]}
+                search={search}
+                setSearch={setSearch}
+                cat={cat}
+                setCat={setCat}
+                filtered={filtered}
+              /></div>
           }
         </main>
 
