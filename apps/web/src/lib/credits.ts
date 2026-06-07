@@ -11,8 +11,9 @@
  *   Max      (10M BLUE):      ∞ cr/day  (~$10)
  */
 
-export const BLUE_TOKEN = "0xf895783b2931c919955e18b5e3343e7c7c456ba3";
-export const BASE_RPC   = "https://mainnet.base.org";
+export const BLUE_TOKEN     = "0xf895783b2931c919955e18b5e3343e7c7c456ba3";
+export const BASE_RPC       = "https://mainnet.base.org";
+export const STAKING_ADDRESS = "0x69e539684EE48F71eCDAd58618d8e8a2423E279d";
 
 const REFRESH_MS = 24 * 60 * 60 * 1000; // 24 hours
 const MAX_CAP    = 50_000;              // "unlimited" practical cap
@@ -196,24 +197,48 @@ export function refreshCreditsIfNeeded(
 
 // ── BLUE balance via Base RPC ─────────────────────────────────────────────────
 
-export async function fetchBlueBalance(address: string): Promise<number> {
-  const data = "0x70a08231" + address.slice(2).padStart(64, "0");
+/** Convert wei (18 decimals) hex string to BLUE units with 2-decimal precision */
+function weiHexToBlue(hex: string | undefined): number {
+  if (!hex || hex === "0x") return 0;
   try {
-    const res  = await fetch(BASE_RPC, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: 1,
-        method: "eth_call",
-        params: [{ to: BLUE_TOKEN, data }, "latest"],
-      }),
-      signal: AbortSignal.timeout(5000),
-    });
-    const json = await res.json() as { result?: string };
-    const hex  = json.result;
-    if (!hex || hex === "0x") return 0;
     const raw = BigInt(hex);
     return Math.floor(Number(raw / BigInt(10 ** 16))) / 100;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Returns EFFECTIVE BLUE balance = wallet ERC-20 balanceOf + staked amount.
+ * Stakers count toward tier (e.g., Starter tier at 500K BLUE staked OR held).
+ */
+export async function fetchBlueBalance(address: string): Promise<number> {
+  // ERC-20 balanceOf(address) — selector 0x70a08231
+  const balanceOfData = "0x70a08231" + address.slice(2).padStart(64, "0");
+  // BlueMarketStaking.stakeInfo(address) — selector 0x1601e641
+  // (Returns tuple (amount, stakedAt, dailyCredits, cooldown, pendingUsdc) — we only read amount = first 32 bytes of result)
+  const stakeInfoData = "0x1601e641" + address.slice(2).padStart(64, "0");
+
+  try {
+    const res = await fetch(BASE_RPC, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        { jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: BLUE_TOKEN,     data: balanceOfData }, "latest"] },
+        { jsonrpc: "2.0", id: 2, method: "eth_call", params: [{ to: STAKING_ADDRESS, data: stakeInfoData }, "latest"] },
+      ]),
+      signal: AbortSignal.timeout(5000),
+    });
+    const json = await res.json() as { id: number; result?: string }[];
+    const walletHex = json.find(r => r.id === 1)?.result;
+    const stakeHex  = json.find(r => r.id === 2)?.result;
+
+    const wallet = weiHexToBlue(walletHex);
+    // stakeInfo returns 5 uint256 values — amount is the first 32 bytes (after 0x prefix).
+    const stakedAmountHex = stakeHex && stakeHex.length >= 66 ? "0x" + stakeHex.slice(2, 66) : undefined;
+    const staked = weiHexToBlue(stakedAmountHex);
+
+    return wallet + staked;
   } catch {
     return 0;
   }
