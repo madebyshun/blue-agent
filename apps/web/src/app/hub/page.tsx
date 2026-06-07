@@ -1442,9 +1442,9 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
         <aside className={`hidden lg:flex flex-col w-72 shrink-0 border-r border-[#1A1A2E] ${inShell ? "h-full" : "sticky top-14 h-[calc(100vh-3.5rem)]"}`}>
 
           {/* Header */}
-          <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
+          <div className="px-5 h-14 flex items-center gap-3 border-b border-[#1A1A2E] shrink-0">
             <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// TOOLS</p>
-            <p className="font-mono text-[10px] text-slate-700 mt-1">{filtered.length} of {TOOLS.length} tools</p>
+            <span className="font-mono text-[10px] text-slate-700">{filtered.length} of {TOOLS.length}</span>
           </div>
 
           {/* Search */}

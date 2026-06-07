@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAccount, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { formatUnits } from "viem";
 import { ConnectButton } from "@/components/ConnectModal";
+import AppPageHeader from "@/components/app/AppPageHeader";
 
 // ── Known tokens on Base ──────────────────────────────────────────────────────
 
@@ -105,21 +106,19 @@ export default function ApprovalsPage() {
   const isBusy = isPending || isConfirming;
 
   return (
-    <div className="relative h-full overflow-y-auto bg-[#050508] text-white font-mono">
+    <div className="flex flex-col h-full bg-[#050508] text-white font-mono overflow-hidden">
 
       {/* Page header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E] shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-pulse" />
-          <p className="text-xs text-[#F59E0B] tracking-widest">// APPROVALS</p>
-          <p className="text-[10px] text-slate-700 hidden sm:block">Manage ERC-20 token approvals · Base Mainnet</p>
-        </div>
-        {isConnected && activeRows.length > 0 && (
-          <span className="text-[10px] text-[#F59E0B]">{activeRows.length} active approval{activeRows.length !== 1 ? "s" : ""}</span>
-        )}
-      </div>
+      <AppPageHeader
+        label="APPROVALS"
+        subtitle="Manage ERC-20 token approvals · Base Mainnet"
+        accent="#F59E0B"
+        right={isConnected && activeRows.length > 0
+          ? <span className="text-[#F59E0B]">{activeRows.length} active approval{activeRows.length !== 1 ? "s" : ""}</span>
+          : undefined}
+      />
 
-      <div className="px-6 py-8 max-w-3xl mx-auto">
+      <div className="flex-1 overflow-y-auto px-6 py-8 max-w-3xl mx-auto w-full">
 
         {!isConnected ? (
           <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-12 text-center">

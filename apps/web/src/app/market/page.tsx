@@ -465,9 +465,9 @@ export default function MarketPage({ inShell = false }: { inShell?: boolean }) {
 
         {/* ── Sidebar ── */}
         <aside className={`hidden lg:flex flex-col w-72 shrink-0 border-r border-[#1A1A2E] ${inShell ? "h-full" : "sticky top-14 h-[calc(100vh-3.5rem)]"}`}>
-          <div className="px-5 pt-6 pb-4 border-b border-[#1A1A2E]">
+          <div className="px-5 h-14 flex items-center gap-3 border-b border-[#1A1A2E] shrink-0">
             <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUE MARKET</p>
-            <p className="font-mono text-[10px] text-slate-700 mt-1">Daily intelligence for Base builders</p>
+            <p className="font-mono text-[10px] text-slate-700 hidden xl:block truncate">Daily intelligence</p>
           </div>
 
           {/* Plans */}
@@ -534,7 +534,7 @@ export default function MarketPage({ inShell = false }: { inShell?: boolean }) {
         <main className="flex-1 h-full overflow-y-auto">
 
           {/* Compact header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[#1A1A2E] shrink-0">
+          <div className="flex items-center justify-between px-6 h-14 border-b border-[#1A1A2E] shrink-0">
             <div className="flex items-center gap-3">
               <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
               <h1 className="font-mono text-sm font-bold text-white tracking-tight">
