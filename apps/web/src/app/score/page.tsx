@@ -99,7 +99,7 @@ export default function ScorePage({ inShell = false }: { inShell?: boolean }) {
         <main className="flex-1 h-full overflow-y-auto">
 
           {/* Compact header */}
-          <div className="flex items-center gap-3 px-6 py-4 border-b border-[#1A1A2E]">
+          <div className="flex items-center gap-3 px-6 h-14 border-b border-[#1A1A2E] shrink-0">
             <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
             <h1 className="font-mono text-sm font-bold text-white">Builder Score</h1>
             <span className="font-mono text-[10px] text-slate-600">Score any Base builder from their X handle</span>

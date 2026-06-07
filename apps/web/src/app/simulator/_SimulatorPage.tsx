@@ -297,17 +297,21 @@ export default function SimulatorPage({ inShell = false }: { inShell?: boolean }
       <div className={`flex bg-[#050508] font-mono ${inShell ? "flex-1 overflow-hidden" : "pt-14"}`}>
 
           {/* ── Sidebar ──────────────────────────────────── */}
-          <aside className={`hidden lg:flex flex-col w-72 shrink-0 overflow-y-auto border-r border-[#1A1A2E] px-4 ${inShell ? "h-full py-5" : "sticky top-14 h-[calc(100vh-3.5rem)] py-10"}`}>
-            <p className="font-mono text-xs text-[#A78BFA] tracking-widest mb-4 px-2">// TIER</p>
-            <nav className="flex flex-col gap-1">
+          <aside className={`hidden lg:flex flex-col w-72 shrink-0 border-r border-[#1A1A2E] ${inShell ? "h-full" : "sticky top-14 h-[calc(100vh-3.5rem)]"}`}>
+            {/* Header */}
+            <div className="px-5 h-14 flex items-center border-b border-[#1A1A2E] shrink-0">
+              <p className="font-mono text-xs text-[#A78BFA] tracking-widest">// TIER</p>
+            </div>
+            {/* Nav */}
+            <nav className="flex-1 overflow-y-auto py-2">
               {TIERS.map((t) => (
                 <button
                   key={t.tier}
                   onClick={() => setTier(t.tier)}
-                  className={`text-left px-3 py-2.5 rounded-lg transition-all ${
+                  className={`w-full text-left px-5 py-3 transition-all border-l-2 ${
                     tier === t.tier
-                      ? "bg-[#4FC3F7]/8 text-[#4FC3F7]"
-                      : "text-slate-500 hover:text-slate-300 hover:bg-[#1A1A2E]/50"
+                      ? "border-[#A78BFA] bg-[#A78BFA]/5 text-white"
+                      : "border-transparent text-slate-500 hover:text-white hover:bg-[#0D0D1A]"
                   }`}
                 >
                   <div className="font-mono text-sm flex items-center justify-between">
@@ -317,26 +321,27 @@ export default function SimulatorPage({ inShell = false }: { inShell?: boolean }
                   <div className="font-mono text-[10px] text-slate-700 mt-0.5 leading-snug">{t.desc.slice(0, 38)}…</div>
                 </button>
               ))}
-            </nav>
 
-            <div className="mt-6 pt-6 border-t border-[#1A1A2E]">
-              <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-3 px-2">// AGENTS</p>
-              <div className="flex flex-col gap-2 px-2">
-                {[
-                  { dot: "#4FC3F7", label: "Blue Agent", note: "analysis" },
-                  { dot: "#A78BFA", label: "Aeon",       note: "ecosystem" },
-                  { dot: "#34d399", label: "MiroShark",  note: "consensus" },
-                ].map((a) => (
-                  <div key={a.label} className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: a.dot }} />
-                    <span className="font-mono text-xs text-slate-600">{a.label}</span>
-                    <span className="font-mono text-[10px] text-slate-800 ml-auto">{a.note}</span>
-                  </div>
-                ))}
+              {/* Agents sub-section */}
+              <div className="px-5 pt-5 pb-2 mt-2 border-t border-[#1A1A2E]">
+                <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">// AGENTS</p>
+                <div className="flex flex-col gap-2">
+                  {[
+                    { dot: "#4FC3F7", label: "Blue Agent", note: "analysis" },
+                    { dot: "#A78BFA", label: "Aeon",       note: "ecosystem" },
+                    { dot: "#34d399", label: "MiroShark",  note: "consensus" },
+                  ].map((a) => (
+                    <div key={a.label} className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: a.dot }} />
+                      <span className="font-mono text-xs text-slate-600">{a.label}</span>
+                      <span className="font-mono text-[10px] text-slate-800 ml-auto">{a.note}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-
-            <div className="mt-auto px-2 pt-6 border-t border-[#1A1A2E] space-y-3">
+            </nav>
+            {/* Footer */}
+            <div className="px-5 py-4 border-t border-[#1A1A2E] shrink-0 space-y-3">
               {isConnected && address ? (
                 <div>
                   <p className="font-mono text-[10px] text-slate-700 mb-1">WALLET</p>
