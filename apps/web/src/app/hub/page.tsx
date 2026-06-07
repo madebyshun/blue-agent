@@ -24,6 +24,11 @@ interface Tool {
   agents: Agent[]; desc: string; inputs: ToolInput[]; featured?: boolean;
   x402Url?: string;
   x402Body?: (values: Record<string, string>) => Record<string, unknown>;
+  // v2 marketplace metadata (defaulted via withV2Defaults in agent-tools.ts)
+  verified?:       boolean;
+  aiReady?:        boolean;
+  builderAddress?: string;
+  releasedAt?:    number;
 }
 
 const FEATURED_IDS = ["launch-simulator", "investor-memo", "market-fit", "token-launch-readiness"];
@@ -125,6 +130,10 @@ const TOOLS: Tool[] = AGENT_TOOLS.map(t => ({
     :                               (["blue"]       as Agent[]),
   desc:   t.description,
   inputs: t.inputs,
+  verified:       t.verified,
+  aiReady:        t.aiReady,
+  builderAddress: t.builderAddress,
+  releasedAt:    t.releasedAt,
   x402Url:  t.x402Url,
   x402Body: t.x402Body,
 }));
@@ -1011,18 +1020,18 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
 
 // ─── Empty / browse state ─────────────────────────────────────────────────────
 
-type SortMode = "default" | "price-asc" | "price-desc" | "popular";
+type SortMode = "popular" | "newest" | "price-asc" | "price-desc";
+type ViewMode = "grid" | "list";
 
 function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t: Tool) => void; featuredIds: Set<string>; usage: Record<string, number>; recentIds: string[] }) {
   const recentTools = recentIds.map(id => TOOLS.find(t => t.id === id)).filter((t): t is Tool => !!t).reverse();
   const totalRuns = Object.values(usage).reduce((a, b) => a + b, 0);
   const usdcPaid  = TOOLS.reduce((s, t) => s + (usage[t.id] ?? 0) * (parseFloat(t.price.replace("$", "")) || 0), 0);
   const runsOf = (id: string) => usage[id] ?? 0;
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [sortMode, setSortMode] = useState<SortMode>("default");
+  const [sortMode,  setSortMode]  = useState<SortMode>("popular");
+  const [viewMode,  setViewMode]  = useState<ViewMode>("grid");
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
-  const toggleExpand = (groupId: string) =>
-    setExpanded(prev => { const n = new Set(prev); n.has(groupId) ? n.delete(groupId) : n.add(groupId); return n; });
 
   // Load onboarding state from localStorage
   useEffect(() => {
@@ -1037,15 +1046,30 @@ function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t:
     try { localStorage.setItem("bluehub_onboarding_dismissed", "1"); } catch {}
   }
 
-  function sortGroupTools(tools: Tool[]): Tool[] {
-    if (sortMode === "price-asc") return [...tools].sort((a, b) => (parseFloat(a.price.replace("$",""))||0) - (parseFloat(b.price.replace("$",""))||0));
-    if (sortMode === "price-desc") return [...tools].sort((a, b) => (parseFloat(b.price.replace("$",""))||0) - (parseFloat(a.price.replace("$",""))||0));
-    if (sortMode === "popular") return [...tools].sort((a, b) => (runsOf(b.id)) - (runsOf(a.id)));
-    return tools;
+  function sortTools(tools: Tool[]): Tool[] {
+    const price = (t: Tool) => parseFloat(t.price.replace("$", "")) || 0;
+    if (sortMode === "price-asc")  return [...tools].sort((a, b) => price(a) - price(b));
+    if (sortMode === "price-desc") return [...tools].sort((a, b) => price(b) - price(a));
+    if (sortMode === "newest")     return [...tools].sort((a, b) => (b.releasedAt ?? 0) - (a.releasedAt ?? 0));
+    // popular (default)
+    return [...tools].sort((a, b) => runsOf(b.id) - runsOf(a.id));
   }
 
-  // suppress unused warning — featuredIds kept in props for future use
-  void featuredIds;
+  // ── Featured tools ── prefer real usage; pad with curated FEATURED_IDS
+  const featuredTools: Tool[] = (() => {
+    const byUsage = [...TOOLS]
+      .filter(t => runsOf(t.id) > 0)
+      .sort((a, b) => runsOf(b.id) - runsOf(a.id))
+      .slice(0, 8);
+    if (byUsage.length >= 8) return byUsage;
+    const seen   = new Set(byUsage.map(t => t.id));
+    const padIds = [...featuredIds, ...FEATURED_IDS].filter(id => !seen.has(id));
+    const padded = padIds.map(id => TOOLS.find(t => t.id === id)).filter((t): t is Tool => !!t);
+    return [...byUsage, ...padded].slice(0, 8);
+  })();
+
+  // ── All tools (sorted + filtered by Verified toggle) ──
+  const allTools = sortTools(verifiedOnly ? TOOLS.filter(t => t.verified) : TOOLS);
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -1158,12 +1182,12 @@ function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t:
       {/* ── Content grid ── */}
       <div className="flex-1 px-6 py-5 overflow-y-auto">
 
-        {/* Sort controls */}
-        <div className="flex items-center gap-2 mb-4">
+        {/* Sort + View + Filter controls */}
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
           <span className="font-mono text-[10px] text-slate-700">Sort:</span>
           {([
-            { mode: "default",    label: "Default" },
             { mode: "popular",    label: "Popular" },
+            { mode: "newest",     label: "Newest" },
             { mode: "price-asc",  label: "Price ↑" },
             { mode: "price-desc", label: "Price ↓" },
           ] as { mode: SortMode; label: string }[]).map(s => (
@@ -1176,23 +1200,52 @@ function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t:
               {s.label}
             </button>
           ))}
+
+          {/* Divider */}
+          <span className="w-px h-3 bg-[#1A1A2E] mx-1" />
+
+          {/* Verified-only filter */}
+          <button onClick={() => setVerifiedOnly(v => !v)}
+            className={`font-mono text-[10px] px-2 py-0.5 rounded border transition-colors flex items-center gap-1 ${
+              verifiedOnly
+                ? "text-[#34D399] border-[#34D399]/30 bg-[#34D399]/5"
+                : "text-slate-600 border-transparent hover:text-slate-300"
+            }`}>
+            <span>✓</span><span>Verified only</span>
+          </button>
+
+          {/* View toggle */}
+          <div className="ml-auto flex items-center gap-1 border border-[#1A1A2E] rounded p-0.5">
+            {(["grid", "list"] as ViewMode[]).map(m => (
+              <button key={m} onClick={() => setViewMode(m)}
+                title={m === "grid" ? "Grid view" : "List view"}
+                className={`font-mono text-[10px] px-2 py-0.5 rounded transition-colors ${
+                  viewMode === m
+                    ? "bg-[#4FC3F7]/10 text-[#4FC3F7]"
+                    : "text-slate-600 hover:text-slate-400"
+                }`}>
+                {m === "grid" ? "▦" : "≡"}
+              </button>
+            ))}
+          </div>
+
           {!onboardingOpen && (
             <button onClick={() => setOnboardingOpen(true)}
-              className="ml-auto font-mono text-[10px] text-slate-700 hover:text-slate-400 transition-colors border border-transparent hover:border-[#1A1A2E] px-2 py-0.5 rounded">
+              className="font-mono text-[10px] text-slate-700 hover:text-slate-400 transition-colors border border-transparent hover:border-[#1A1A2E] px-2 py-0.5 rounded">
               ? How to use
             </button>
           )}
         </div>
 
-        {/* Your recent results (cached, free to re-open) */}
+        {/* Your recent results (compact strip) */}
         {recentTools.length > 0 && (
-          <>
-            <div className="flex items-center gap-3 mb-3">
+          <div className="mb-6">
+            <div className="flex items-center gap-3 mb-2">
               <p className="font-mono text-[10px] text-[#34D399] tracking-widest">// YOUR RECENT RESULTS</p>
               <div className="flex-1 h-px bg-[#34D399]/10" />
               <span className="font-mono text-[9px] text-slate-700">free to re-open</span>
             </div>
-            <div className="flex flex-wrap gap-2 mb-5">
+            <div className="flex flex-wrap gap-2">
               {recentTools.map(tool => (
                 <button key={tool.id} onClick={() => onSelect(tool)}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#34D399]/20 bg-[#34D399]/5 hover:bg-[#34D399]/10 hover:border-[#34D399]/40 transition-all">
@@ -1201,90 +1254,138 @@ function EmptyState({ onSelect, featuredIds, usage, recentIds }: { onSelect: (t:
                 </button>
               ))}
             </div>
-          </>
+          </div>
         )}
 
-        {/* ── Grouped sections ── */}
-        {TOOL_GROUPS.map(group => {
-          const rawGroupTools = group.ids.map(id => TOOLS.find(t => t.id === id)).filter((t): t is Tool => !!t);
-          const groupTools = sortGroupTools(rawGroupTools);
-          if (!groupTools.length) return null;
-          const isExpanded = expanded.has(group.id);
-          const visible = isExpanded ? groupTools : groupTools.slice(0, 4);
-          const hiddenCount = groupTools.length - 4;
-
-          return (
-            <div key={group.id} className="mb-7">
-              {/* Section header */}
-              <div className="flex items-center gap-3 mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: group.color }} />
-                  <p className="font-mono text-[10px] tracking-widest font-semibold" style={{ color: group.color }}>
-                    {group.label.toUpperCase()}
-                  </p>
-                </div>
-                <span className="font-mono text-[10px] text-slate-700">{group.desc}</span>
-                <div className="flex-1 h-px" style={{ background: group.color + "15" }} />
-                <span className="font-mono text-[9px] text-slate-700">{groupTools.length} tools</span>
-              </div>
-
-              {/* Tool cards */}
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
-                {visible.map(tool => {
-                  const hasExample = !!TOOL_EXAMPLES[tool.id];
-                  return (
-                  <button key={tool.id} onClick={() => onSelect(tool)}
-                    className="text-left rounded-xl p-3.5 transition-all group border hover:bg-white/[0.02] flex flex-col"
-                    style={{ borderColor: group.color + "20", background: group.color + "05" }}
-                    onMouseEnter={e => (e.currentTarget.style.borderColor = group.color + "40")}
-                    onMouseLeave={e => (e.currentTarget.style.borderColor = group.color + "20")}
-                  >
-                    <div className="flex items-center gap-1 mb-2">
-                      {tool.agents.map(a => (
-                        <span key={a} className="w-1 h-1 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-                      ))}
-                      <span className="font-mono text-[9px] text-slate-700 ml-auto">{tool.price}</span>
-                    </div>
-                    <p className="font-mono text-xs font-semibold text-white mb-0.5 leading-snug transition-colors"
-                      style={{ color: undefined }}
-                      onMouseEnter={e => ((e.target as HTMLElement).style.color = group.color)}
-                      onMouseLeave={e => ((e.target as HTMLElement).style.color = "white")}
-                    >
-                      {tool.name}
-                    </p>
-                    <p className="font-mono text-[10px] text-slate-600 leading-relaxed line-clamp-2 flex-1">{tool.desc}</p>
-                    <div className="flex items-center justify-between mt-2.5 pt-2 border-t" style={{ borderColor: group.color + "15" }}>
-                      {runsOf(tool.id) > 0
-                        ? <span className="font-mono text-[9px] text-slate-700">{runsOf(tool.id)} runs</span>
-                        : <span className="font-mono text-[9px]" style={{ color: hasExample ? group.color + "60" : "transparent" }}>example ready</span>
-                      }
-                      <span className="font-mono text-[10px] font-semibold transition-colors group-hover:opacity-100 opacity-60"
-                        style={{ color: group.color }}>
-                        Try Now →
-                      </span>
-                    </div>
-                  </button>
-                  );
-                })}
-              </div>
-
-              {/* See all / Collapse */}
-              {hiddenCount > 0 && (
-                <button
-                  onClick={() => toggleExpand(group.id)}
-                  className="mt-2.5 font-mono text-[10px] transition-colors"
-                  style={{ color: group.color + "80" }}
-                  onMouseEnter={e => ((e.target as HTMLElement).style.color = group.color)}
-                  onMouseLeave={e => ((e.target as HTMLElement).style.color = group.color + "80")}
-                >
-                  {isExpanded ? "↑ Show less" : `→ See all ${groupTools.length} ${group.label.toLowerCase()} tools`}
-                </button>
-              )}
+        {/* ── Featured grid (4-col big cards, Orbis pattern) ── */}
+        {featuredTools.length > 0 && (
+          <div className="mb-7">
+            <div className="flex items-center gap-3 mb-3">
+              <p className="font-mono text-[10px] tracking-widest font-semibold text-[#A78BFA]">★ FEATURED</p>
+              <span className="font-mono text-[10px] text-slate-700">Most-run multi-agent tools right now</span>
+              <div className="flex-1 h-px bg-[#A78BFA]/10" />
+              <span className="font-mono text-[9px] text-slate-700">{featuredTools.length} tools</span>
             </div>
-          );
-        })}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              {featuredTools.map(tool => (
+                <ToolCardBig key={tool.id} tool={tool} runs={runsOf(tool.id)} onSelect={onSelect} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── All Tools — flat sorted list (with view toggle) ── */}
+        <div className="mb-7">
+          <div className="flex items-center gap-3 mb-3">
+            <p className="font-mono text-[10px] tracking-widest font-semibold text-[#4FC3F7]">// ALL TOOLS</p>
+            <span className="font-mono text-[10px] text-slate-700">{allTools.length} of {TOOLS.length} · sorted by {sortMode}</span>
+            <div className="flex-1 h-px bg-[#4FC3F7]/10" />
+          </div>
+          {viewMode === "grid" ? (
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
+              {allTools.map(tool => (
+                <ToolCardCompact key={tool.id} tool={tool} runs={runsOf(tool.id)} onSelect={onSelect} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-[#1A1A2E] overflow-hidden">
+              {allTools.map(tool => (
+                <ToolRow key={tool.id} tool={tool} runs={runsOf(tool.id)} onSelect={onSelect} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+// ─── Tool card components ─────────────────────────────────────────────────────
+
+function VerifiedAiBadges({ tool }: { tool: Tool }) {
+  return (
+    <div className="flex items-center gap-1">
+      {tool.verified && (
+        <span title="Reviewed by Blue Agent" className="font-mono text-[8px] px-1 py-0.5 rounded border border-[#34D399]/30 text-[#34D399]/90 bg-[#34D399]/5">
+          ✓ Verified
+        </span>
+      )}
+      {tool.aiReady && (
+        <span title="Returns structured JSON — agent-callable" className="font-mono text-[8px] px-1 py-0.5 rounded border border-[#A78BFA]/30 text-[#A78BFA]/90 bg-[#A78BFA]/5">
+          🤖 AI Ready
+        </span>
+      )}
+    </div>
+  );
+}
+
+function ToolCardBig({ tool, runs, onSelect }: { tool: Tool; runs: number; onSelect: (t: Tool) => void }) {
+  return (
+    <button onClick={() => onSelect(tool)}
+      className="text-left rounded-xl p-4 transition-all group border border-[#A78BFA]/20 hover:border-[#A78BFA]/50 flex flex-col relative overflow-hidden"
+      style={{ background: "linear-gradient(135deg, #A78BFA08 0%, #4FC3F705 100%)" }}>
+      <div className="absolute inset-0 bg-gradient-to-br from-[#A78BFA]/0 via-transparent to-[#4FC3F7]/0 group-hover:from-[#A78BFA]/5 group-hover:to-[#4FC3F7]/5 transition-all pointer-events-none" />
+      <div className="relative">
+        <div className="flex items-center gap-1.5 mb-3">
+          {tool.agents.map(a => (
+            <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
+          ))}
+          <span className="font-mono text-[9px] text-slate-700 ml-auto">{tool.price}</span>
+        </div>
+        <p className="font-mono text-sm font-bold text-white mb-1 leading-snug group-hover:text-[#A78BFA] transition-colors">{tool.name}</p>
+        <p className="font-mono text-[10px] text-slate-500 leading-relaxed line-clamp-2 mb-3 min-h-[28px]">{tool.desc}</p>
+        <div className="mb-2"><VerifiedAiBadges tool={tool} /></div>
+        <div className="flex items-center justify-between pt-2 border-t border-[#A78BFA]/10">
+          <span className="font-mono text-[10px] text-slate-600">
+            {runs > 0 ? <><span className="text-white font-semibold">{runs}</span> calls</> : "new"}
+          </span>
+          <span className="font-mono text-[10px] font-semibold text-[#A78BFA] opacity-70 group-hover:opacity-100 transition-opacity">
+            Try Now →
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function ToolCardCompact({ tool, runs, onSelect }: { tool: Tool; runs: number; onSelect: (t: Tool) => void }) {
+  return (
+    <button onClick={() => onSelect(tool)}
+      className="text-left rounded-xl p-3.5 transition-all group border border-[#1A1A2E] hover:border-[#4FC3F7]/40 hover:bg-white/[0.02] flex flex-col">
+      <div className="flex items-center gap-1 mb-2">
+        {tool.agents.map(a => (
+          <span key={a} className="w-1 h-1 rounded-full" style={{ background: AGENT_COLORS[a] }} />
+        ))}
+        <span className="font-mono text-[9px] text-slate-700 ml-auto">{tool.price}</span>
+      </div>
+      <p className="font-mono text-xs font-semibold text-white mb-0.5 leading-snug group-hover:text-[#4FC3F7] transition-colors">{tool.name}</p>
+      <p className="font-mono text-[10px] text-slate-600 leading-relaxed line-clamp-2 flex-1 mb-2">{tool.desc}</p>
+      <div className="mb-2"><VerifiedAiBadges tool={tool} /></div>
+      <div className="flex items-center justify-between pt-2 border-t border-[#1A1A2E]">
+        <span className="font-mono text-[9px] text-slate-700">{runs > 0 ? `${runs} calls` : "new"}</span>
+        <span className="font-mono text-[10px] font-semibold text-[#4FC3F7] opacity-60 group-hover:opacity-100 transition-opacity">Try →</span>
+      </div>
+    </button>
+  );
+}
+
+function ToolRow({ tool, runs, onSelect }: { tool: Tool; runs: number; onSelect: (t: Tool) => void }) {
+  return (
+    <button onClick={() => onSelect(tool)}
+      className="w-full text-left px-4 py-3 grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 items-center border-b border-[#1A1A2E] last:border-0 hover:bg-[#4FC3F7]/5 transition-colors group">
+      <div className="flex items-center gap-1 shrink-0">
+        {tool.agents.map(a => (
+          <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
+        ))}
+      </div>
+      <div className="min-w-0">
+        <p className="font-mono text-xs font-semibold text-white truncate group-hover:text-[#4FC3F7] transition-colors">{tool.name}</p>
+        <p className="font-mono text-[10px] text-slate-600 truncate">{tool.desc}</p>
+      </div>
+      <VerifiedAiBadges tool={tool} />
+      <span className="font-mono text-[10px] text-slate-700 w-16 text-right">{runs > 0 ? `${runs} calls` : "—"}</span>
+      <span className="font-mono text-[10px] text-slate-500 w-14 text-right">{tool.price}</span>
+    </button>
   );
 }
 
