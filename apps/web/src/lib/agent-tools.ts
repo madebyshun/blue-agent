@@ -16,6 +16,10 @@ export type CompositeSkill = {
 
 const X402_BASE = "https://blueagent.dev/api/x402";
 
+// Blue Hub treasury — default builder address for Blue Agent first-party tools.
+// Builder-submitted tools (Hub v2 Phase 3) will set this to the builder's own wallet.
+export const BLUE_TREASURY = "0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f" as const;
+
 export type AgentTool = {
   id: string;
   name: string;
@@ -35,11 +39,16 @@ export type AgentTool = {
   priceUSDC?: number;      // in USDC units (6 decimals), e.g. 200000 = $0.20
   x402Url?: string;        // full x402 endpoint URL — if set, payment is required
   x402Body?: (values: Record<string, string>) => Record<string, unknown>; // maps hub inputs → x402 body
+  // v2 marketplace metadata — defaults applied via withV2Defaults() at bottom of file
+  verified?:       boolean;          // Blue Agent reviewed; default true for first-party
+  aiReady?:        boolean;          // Returns structured JSON; default true
+  builderAddress?: `0x${string}`;    // Revenue recipient; default BLUE_TREASURY
+  releasedAt?:    number;            // Unix ms — drives "Newest" sort; default 2024-06-01
 };
 
 // ─── All 64 tools ─────────────────────────────────────────────────────────────
 
-export const AGENT_TOOLS: AgentTool[] = [
+const AGENT_TOOLS_RAW: AgentTool[] = [
 
   // ── Intelligence ────────────────────────────────────────────────────────────
 
@@ -1197,3 +1206,21 @@ export const AGENT_TOOLS: AgentTool[] = [
     x402Body: (v) => ({ projectName: v.projectName ?? "", description: v.description ?? "", teamBackground: v.teamBackground ?? "", requestedAmount: v.requestedAmount ?? "", milestones: v.milestones ?? "", githubUrl: v.githubUrl ?? "" }),
   },
 ];
+
+// ─── v2 defaults ──────────────────────────────────────────────────────────────
+// Centralize verified/aiReady/builder defaults so we don't have to set them on
+// every tool. Builder-submitted tools (Phase 3) override these explicitly.
+
+const DEFAULT_RELEASED_AT = new Date("2024-06-01T00:00:00Z").getTime();
+
+function withV2Defaults(t: AgentTool): AgentTool {
+  return {
+    ...t,
+    verified:       t.verified       ?? true,            // first-party = pre-verified
+    aiReady:        t.aiReady        ?? true,            // all current tools return JSON
+    builderAddress: t.builderAddress ?? BLUE_TREASURY,
+    releasedAt:     t.releasedAt     ?? DEFAULT_RELEASED_AT,
+  };
+}
+
+export const AGENT_TOOLS: AgentTool[] = AGENT_TOOLS_RAW.map(withV2Defaults);
