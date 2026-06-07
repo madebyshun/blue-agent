@@ -16,8 +16,14 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
+import { kv } from "@/lib/kv";
 
 export const runtime = "nodejs";
+
+// Free-tier internal bypass — MCP calls don't require x402 payment.
+// Set INTERNAL_SERVICE_KEY in Vercel; the /api/x402/[tool] route accepts it
+// via X-Blue-Internal and skips the USDC settlement step.
+const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY ?? "";
 
 // ─── Tool definitions ─────────────────────────────────────────────────────────
 
@@ -408,15 +414,23 @@ const CONSOLE_MAP: Record<string, string> = {
 const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
 
 async function callHubTool(toolId: string, args: Record<string, unknown>): Promise<string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  // Server-to-server: bypass x402 payment for MCP free-tier calls
+  if (INTERNAL_KEY) headers["X-Blue-Internal"] = INTERNAL_KEY;
+
   const res = await fetch(`${BASE}/api/x402/${toolId}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(args),
     signal: AbortSignal.timeout(90_000),
   });
   const text = await res.text();
-  if (res.status === 402) return `Payment required for ${toolId}. Visit https://blueagent.dev/hub to run with USDC payment.`;
+  if (res.status === 402) {
+    return `Tool "${toolId}" requires payment but MCP free-tier bypass is not configured. Set INTERNAL_SERVICE_KEY env var, or pay via https://blueagent.dev/hub.`;
+  }
   if (!res.ok) throw new Error(`${toolId} returned ${res.status}`);
+  // Track MCP usage (paid path tracks via x402 route; internal path doesn't, so track here)
+  try { await kv.incr(`usage:${toolId}`); } catch {}
   try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text; }
 }
 
@@ -440,17 +454,44 @@ async function callBuilderScore(handle: string): Promise<string> {
 
 // ─── JSON-RPC helpers ─────────────────────────────────────────────────────────
 
-function ok(id: unknown, result: unknown) {
-  return NextResponse.json({ jsonrpc: "2.0", id, result }, {
-    headers: { "Access-Control-Allow-Origin": "*" },
-  });
+const JSON_HEADERS = {
+  "Content-Type":                 "application/json",
+  "Access-Control-Allow-Origin":  "*",
+  "Cache-Control":                "no-store",
+};
+
+const SSE_HEADERS = {
+  "Content-Type":                 "text/event-stream",
+  "Cache-Control":                "no-cache, no-transform",
+  "Connection":                   "keep-alive",
+  "Access-Control-Allow-Origin":  "*",
+  "X-Accel-Buffering":            "no", // disable nginx buffering
+};
+
+/** Wrap a JSON-RPC envelope as a single SSE `message` event. */
+function sseEnvelope(envelope: object): string {
+  return `event: message\ndata: ${JSON.stringify(envelope)}\n\n`;
 }
 
-function err(id: unknown, code: number, message: string) {
-  return NextResponse.json({ jsonrpc: "2.0", id, error: { code, message } }, {
-    status: 200,
-    headers: { "Access-Control-Allow-Origin": "*" },
-  });
+/** True if the client prefers SSE (Streamable HTTP per MCP 2025-03-26). */
+function wantsSse(req: NextRequest): boolean {
+  const accept = req.headers.get("accept") ?? "";
+  return accept.includes("text/event-stream");
+}
+
+function respond(envelope: object, useSse: boolean): NextResponse {
+  if (useSse) {
+    return new NextResponse(sseEnvelope(envelope), { headers: SSE_HEADERS });
+  }
+  return new NextResponse(JSON.stringify(envelope), { headers: JSON_HEADERS });
+}
+
+function ok(id: unknown, result: unknown, useSse = false) {
+  return respond({ jsonrpc: "2.0", id, result }, useSse);
+}
+
+function err(id: unknown, code: number, message: string, useSse = false) {
+  return respond({ jsonrpc: "2.0", id, error: { code, message } }, useSse);
 }
 
 // ─── Route ────────────────────────────────────────────────────────────────────
@@ -459,9 +500,11 @@ export async function POST(req: NextRequest) {
   const { success } = await rateLimit(getIdentifier(req), "api");
   if (!success) return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
 
+  const useSse = wantsSse(req);
+
   let body: { jsonrpc?: string; id?: unknown; method?: string; params?: unknown };
   try { body = await req.json(); }
-  catch { return err(null, -32700, "Parse error"); }
+  catch { return err(null, -32700, "Parse error", useSse); }
 
   const { id, method, params } = body;
   const p = (params ?? {}) as Record<string, unknown>;
@@ -473,21 +516,21 @@ export async function POST(req: NextRequest) {
       capabilities: { tools: {} },
       serverInfo: { name: "blue-agent", version: "1.0.0" },
       instructions: `Blue Agent MCP server — ${TOOLS.length} tools for Base builders. Docs: https://blueagent.dev/api-docs`,
-    });
+    }, useSse);
   }
 
   if (method === "notifications/initialized") {
-    return NextResponse.json({}, { status: 200 });
+    return new NextResponse(null, { status: 202, headers: { "Access-Control-Allow-Origin": "*" } });
   }
 
   // ── ping ────────────────────────────────────────────────────────────────────
   if (method === "ping") {
-    return ok(id, {});
+    return ok(id, {}, useSse);
   }
 
   // ── tools/list ──────────────────────────────────────────────────────────────
   if (method === "tools/list") {
-    return ok(id, { tools: TOOLS });
+    return ok(id, { tools: TOOLS }, useSse);
   }
 
   // ── tools/call ──────────────────────────────────────────────────────────────
@@ -495,31 +538,31 @@ export async function POST(req: NextRequest) {
     const name = p.name as string;
     const args = (p.arguments ?? {}) as Record<string, unknown>;
 
-    if (!name) return err(id, -32602, "tools/call requires name");
+    if (!name) return err(id, -32602, "tools/call requires name", useSse);
 
     try {
       // Console tools
       const consoleCmd = CONSOLE_MAP[name];
       if (consoleCmd) {
         const prompt = args.prompt as string;
-        if (!prompt) return err(id, -32602, "prompt is required");
+        if (!prompt) return err(id, -32602, "prompt is required", useSse);
         const text = await callConsole(consoleCmd, prompt);
-        return ok(id, { content: [{ type: "text", text }] });
+        return ok(id, { content: [{ type: "text", text }] }, useSse);
       }
 
       // Hub tools
       const hubId = HUB_MAP[name];
       if (hubId) {
         const text = await callHubTool(hubId, args);
-        return ok(id, { content: [{ type: "text", text }] });
+        return ok(id, { content: [{ type: "text", text }] }, useSse);
       }
 
       // blue_score
       if (name === "blue_score") {
         const handle = args.handle as string;
-        if (!handle) return err(id, -32602, "handle is required");
+        if (!handle) return err(id, -32602, "handle is required", useSse);
         const text = await callBuilderScore(handle);
-        return ok(id, { content: [{ type: "text", text }] });
+        return ok(id, { content: [{ type: "text", text }] }, useSse);
       }
 
       // blue_new — can't scaffold files server-side, explain how to use locally
@@ -540,18 +583,18 @@ export async function POST(req: NextRequest) {
               `  blue new ${projectName} --template ${type}`,
             ].join("\n"),
           }],
-        });
+        }, useSse);
       }
 
-      return err(id, -32601, `Unknown tool: ${name}`);
+      return err(id, -32601, `Unknown tool: ${name}`, useSse);
 
     } catch (e) {
       const msg = (e as Error).message;
-      return ok(id, { content: [{ type: "text", text: `Error: ${msg}` }], isError: true });
+      return ok(id, { content: [{ type: "text", text: `Error: ${msg}` }], isError: true }, useSse);
     }
   }
 
-  return err(id, -32601, `Method not found: ${method}`);
+  return err(id, -32601, `Method not found: ${method}`, useSse);
 }
 
 // CORS preflight
@@ -560,18 +603,38 @@ export async function OPTIONS() {
     status: 204,
     headers: {
       "Access-Control-Allow-Origin":  "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept, Mcp-Session-Id",
+      "Access-Control-Expose-Headers": "Mcp-Session-Id",
     },
   });
 }
 
-// GET — discovery
-export async function GET() {
+// GET — discovery + Streamable HTTP server→client stream
+//
+// When invoked by a browser / curl with `Accept: application/json`, returns
+// discovery JSON for humans.
+//
+// When invoked with `Accept: text/event-stream` (MCP 2025-03-26 Streamable
+// HTTP), returns an empty SSE stream so clients that probe a GET endpoint
+// for server-initiated messages (notifications, sampling) don't error out.
+export async function GET(req: NextRequest) {
+  if (wantsSse(req)) {
+    // Empty heartbeat stream. We don't emit server-initiated messages yet, but
+    // mcp-remote pings this endpoint and disconnects cleanly when it gets SSE.
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(": blue-agent mcp stream\n\n"));
+      },
+      cancel() {},
+    });
+    return new NextResponse(stream, { headers: SSE_HEADERS });
+  }
+
   return NextResponse.json({
     name:        "Blue Agent MCP Server",
     version:     "1.0.0",
-    protocol:    "MCP JSON-RPC 2.0",
+    protocol:    "MCP JSON-RPC 2.0 (Streamable HTTP, spec 2025-03-26)",
     tools:       TOOLS.length,
     tool_names:  TOOLS.map((t) => t.name),
     config: {
@@ -581,6 +644,15 @@ export async function GET() {
         },
       },
       claude_code: "claude mcp add blue-agent --transport http https://blueagent.dev/api/mcp",
+      mcp_remote: {
+        mcpServers: {
+          "blue-agent": {
+            command: "npx",
+            args:    ["-y", "mcp-remote", "https://blueagent.dev/api/mcp"],
+          },
+        },
+      },
+      cursor: "https://blueagent.dev/api/mcp",
     },
     docs: "https://blueagent.dev/api-docs",
   }, {
