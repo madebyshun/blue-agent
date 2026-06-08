@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { APIS } from "../marketplace/_data";
+import { ProviderLogo } from "../_components/Logos";
 
 /**
  * Homepage Featured APIs strip — picks top live APIs from the marketplace
@@ -41,9 +42,9 @@ export default function FeaturedAPIs() {
 
             {/* Image area */}
             <div className="aspect-[16/9] relative bg-gradient-to-br from-[#1A1A2E] to-[#0a0a0f] flex items-center justify-center">
-              <span className="text-5xl opacity-80 group-hover:scale-110 transition-transform">
-                {api.icon ?? "⚡"}
-              </span>
+              <div className="opacity-90 group-hover:scale-110 transition-transform">
+                <ProviderLogo provider={api.provider} size={56} />
+              </div>
               <span className="absolute top-2 left-2 font-mono text-[8px] px-1.5 py-0.5 rounded border border-[#34D399]/40 text-[#34D399] bg-[#34D399]/10 tracking-widest">
                 ● LIVE
               </span>

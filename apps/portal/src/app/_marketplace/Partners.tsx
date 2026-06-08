@@ -4,79 +4,87 @@
  * infrastructure stack and ecosystem allies Blue Agent integrates with.
  */
 
+import type { ReactNode } from "react";
+import {
+  BaseLogo, CoinbaseLogo, AnthropicLogo, UniswapLogo,
+  AeonLogo, MiroSharkLogo, BankrLogo, VercelLogo,
+} from "../_components/Logos";
+
 interface Partner {
   name:  string;
   role:  string;
   blurb: string;
   url:   string;
   color: string;
-  initial: string;
+  logo:  ReactNode;
 }
+
+const SZ = 40;
 
 const PARTNERS: Partner[] = [
   {
-    name:    "Base",
-    role:    "Chain",
-    blurb:   "Native chain · ID 8453 · USDC settlement layer · all marketplace activity here.",
-    url:     "https://base.org",
-    color:   "#0052FF",
-    initial: "B",
+    name:  "Base",
+    role:  "Chain",
+    blurb: "Native chain · ID 8453 · USDC settlement layer · all marketplace activity here.",
+    url:   "https://base.org",
+    color: "#0052FF",
+    logo:  <BaseLogo size={SZ} />,
   },
   {
-    name:    "Coinbase CDP",
-    role:    "x402 Facilitator",
-    blurb:   "Reference x402 implementation · settles every paid API call through CDP's facilitator.",
-    url:     "https://portal.cdp.coinbase.com/products/x402",
-    color:   "#0052FF",
-    initial: "CDP",
+    name:  "Coinbase CDP",
+    role:  "x402 Facilitator",
+    blurb: "Reference x402 implementation · settles every paid API call through CDP's facilitator.",
+    url:   "https://portal.cdp.coinbase.com/products/x402",
+    color: "#0052FF",
+    logo:  <CoinbaseLogo size={SZ} />,
   },
   {
-    name:    "Anthropic MCP",
-    role:    "Protocol",
-    blurb:   "Model Context Protocol · how AI clients discover and call APIs · open standard.",
-    url:     "https://modelcontextprotocol.io",
-    color:   "#C77B5C",
-    initial: "MCP",
+    name:  "Anthropic MCP",
+    role:  "Protocol",
+    blurb: "Model Context Protocol · how AI clients discover and call APIs · open standard.",
+    url:   "https://modelcontextprotocol.io",
+    color: "#D97757",
+    logo:  <AnthropicLogo size={SZ} />,
   },
   {
-    name:    "Uniswap v4",
-    role:    "Liquidity",
-    blurb:   "$BLUEAGENT token liquidity on Base · primary DEX for buying/selling.",
-    url:     "https://app.uniswap.org/swap?outputCurrency=0xf895783b2931c919955e18b5e3343e7c7c456ba3&chain=base",
-    color:   "#FF007A",
-    initial: "Uni",
+    name:  "Uniswap v4",
+    role:  "Liquidity",
+    blurb: "$BLUEAGENT token liquidity on Base · primary DEX for buying/selling.",
+    url:   "https://app.uniswap.org/swap?outputCurrency=0xf895783b2931c919955e18b5e3343e7c7c456ba3&chain=base",
+    color: "#FF007A",
+    logo:  <UniswapLogo size={SZ} />,
   },
   {
-    name:    "Aeon",
-    role:    "Agent partner",
-    blurb:   "Ecosystem signals + narrative tracking · onboarding APIs to the marketplace.",
-    url:     "https://x.com/aeon_xyz",
-    color:   "#A78BFA",
-    initial: "Ae",
+    name:  "Aeon",
+    role:  "Agent partner",
+    blurb: "Ecosystem signals + narrative tracking · onboarding APIs to the marketplace.",
+    url:   "https://x.com/aeon_xyz",
+    color: "#A78BFA",
+    logo:  <AeonLogo size={SZ} />,
   },
   {
-    name:    "MiroShark",
-    role:    "Agent partner",
-    blurb:   "Sentiment consensus + crowd intelligence · onboarding APIs.",
-    url:     "https://x.com/miroshark",
-    color:   "#34D399",
-    initial: "MS",
+    name:  "MiroShark",
+    role:  "Agent partner",
+    blurb: "Sentiment consensus + crowd intelligence · onboarding APIs.",
+    url:   "https://x.com/miroshark",
+    color: "#34D399",
+    logo:  <MiroSharkLogo size={SZ} />,
   },
   {
-    name:    "Bankr",
-    role:    "LLM provider",
-    blurb:   "Bankr LLM powers Blue Agent's first-party tools (idea, build, audit, ship, raise).",
-    url:     "https://bankr.bot",
-    color:   "#F59E0B",
-    initial: "Bk",
+    name:  "Bankr",
+    role:  "LLM provider",
+    blurb: "Bankr LLM powers Blue Agent's first-party tools (idea, build, audit, ship, raise).",
+    url:   "https://bankr.bot",
+    color: "#F59E0B",
+    logo:  <BankrLogo size={SZ} />,
   },
   {
-    name:    "Vercel",
-    role:    "Infra",
-    blurb:   "Hosting + edge functions for the portal and MCP server.",
-    url:     "https://vercel.com",
-    color:   "#FFFFFF",
-    initial: "V",
+    name:  "Vercel",
+    role:  "Infra",
+    blurb: "Hosting + edge functions for the portal and MCP server.",
+    url:   "https://vercel.com",
+    color: "#FFFFFF",
+    logo:  <VercelLogo size={SZ} />,
   },
 ];
 
@@ -96,11 +104,8 @@ export default function Partners() {
         {PARTNERS.map(p => (
           <a key={p.name} href={p.url} target="_blank" rel="noopener noreferrer"
             className="block rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-4 card-hover group">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0"
-                   style={{ background: `${p.color}18`, color: p.color, border: `1px solid ${p.color}40` }}>
-                {p.initial}
-              </div>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="shrink-0">{p.logo}</div>
               <div className="min-w-0 flex-1">
                 <p className="font-mono text-sm font-bold text-white truncate group-hover:text-[#4FC3F7] transition-colors">{p.name}</p>
                 <p className="font-mono text-[9px] text-slate-700 truncate">{p.role}</p>

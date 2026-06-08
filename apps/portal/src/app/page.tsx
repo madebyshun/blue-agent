@@ -9,6 +9,7 @@
  */
 
 import Link from "next/link";
+import { APIS } from "./marketplace/_data";
 import FeaturedAPIs     from "./_marketplace/FeaturedAPIs";
 import Partners         from "./_marketplace/Partners";
 import ListedOn         from "./_marketplace/ListedOn";
@@ -19,6 +20,8 @@ import ReadyToShip      from "./_marketplace/ReadyToShip";
 import NewsletterStrip  from "./_components/NewsletterStrip";
 
 export default function PortalHome() {
+  const liveCount     = APIS.filter(a => a.status === "live").length;
+  const providerCount = new Set(APIS.filter(a => a.status === "live").map(a => a.provider)).size;
   return (
     <>
       {/* ───── HERO ───── */}
@@ -36,7 +39,7 @@ export default function PortalHome() {
             </p>
 
             <p className="font-mono text-base sm:text-lg text-slate-300 mb-8 leading-relaxed max-w-xl">
-              31 production APIs.
+              {liveCount} production APIs.
               USDC micropayments on Base.
               Built for the agent era.
             </p>
@@ -52,13 +55,13 @@ export default function PortalHome() {
               </Link>
             </div>
 
-            {/* Hero stats */}
+            {/* Hero stats — honest counts only, no fake call totals */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-6">
               {[
-                { value: "31",   label: "Live APIs" },
-                { value: "12K+", label: "API Calls" },
-                { value: "80%",  label: "Provider cut" },
-                { value: "20%",  label: "Platform fee" },
+                { value: String(liveCount),     label: "Live APIs" },
+                { value: String(providerCount), label: "Providers" },
+                { value: "80%",                 label: "Provider cut" },
+                { value: "USDC",                label: "Settled on Base" },
               ].map(s => (
                 <div key={s.label}>
                   <p className="font-mono text-2xl sm:text-3xl font-black text-white tabular-nums leading-none">{s.value}</p>

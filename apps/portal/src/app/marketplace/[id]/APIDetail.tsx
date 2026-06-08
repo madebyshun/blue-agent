@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { MarketplaceAPI } from "../_data";
 import { providerSlug } from "../_helpers";
 import { sampleFor } from "../_samples";
+import { ProviderLogo } from "../../_components/Logos";
 
 interface Props {
   api:     MarketplaceAPI;
@@ -100,8 +101,8 @@ data = res.json()`,
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 mb-8">
         <div>
           <div className="flex items-start gap-4 mb-4">
-            <div className="w-14 h-14 rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] flex items-center justify-center text-3xl shrink-0">
-              {api.icon ?? "⚡"}
+            <div className="shrink-0">
+              <ProviderLogo provider={api.provider} size={56} />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
@@ -265,7 +266,7 @@ data = res.json()`,
               <Link key={r.id} href={`/marketplace/${r.id}`}
                 className="block rounded-xl border border-[#1A1A2E] bg-[#0d0d12] p-4 card-hover group">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xl">{r.icon ?? "⚡"}</span>
+                  <ProviderLogo provider={r.provider} size={24} />
                   <p className="font-mono text-[10px] text-slate-700 truncate">{r.provider}</p>
                 </div>
                 <p className="font-mono text-sm font-bold truncate group-hover:text-[#4FC3F7] transition-colors">{r.name}</p>

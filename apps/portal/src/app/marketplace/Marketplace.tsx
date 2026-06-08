@@ -11,6 +11,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { APIS, CATEGORIES, type MarketplaceAPI } from "./_data";
+import { ProviderLogo } from "../_components/Logos";
 
 type Sort = "popular" | "newest" | "price";
 
@@ -163,9 +164,11 @@ function FeaturedCard({ api }: { api: MarketplaceAPI }) {
     <>
       {/* Image area */}
       <div className="aspect-[16/9] relative bg-gradient-to-br from-[#1A1A2E] to-[#0a0a0f] flex items-center justify-center">
-        <span className={`text-5xl transition-transform ${muted ? "opacity-30" : "opacity-80 group-hover:scale-110"}`}>
-          {api.icon ?? "⚡"}
-        </span>
+        <div className={`transition-transform ${muted ? "opacity-30" : "opacity-90 group-hover:scale-110"}`}>
+          {muted && api.status !== "live"
+            ? <span className="text-5xl">{api.icon ?? "⚡"}</span>
+            : <ProviderLogo provider={api.provider} size={56} />}
+        </div>
         <span className="absolute top-2 left-2 font-mono text-[8px] px-1.5 py-0.5 rounded border tracking-widest"
               style={
                 api.status === "live"
@@ -223,8 +226,8 @@ function APIRow({ api }: { api: MarketplaceAPI }) {
     <Link href={`/marketplace/${api.id}`}
       className="block rounded-xl border border-[#1A1A2E] bg-[#0d0d12] p-4 card-hover group">
       <div className="flex items-start gap-3 mb-2">
-        <div className="w-9 h-9 rounded-lg border border-[#1A1A2E] bg-[#0a0a0f] flex items-center justify-center text-lg shrink-0">
-          {api.icon ?? "⚡"}
+        <div className="shrink-0">
+          <ProviderLogo provider={api.provider} size={36} />
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-mono text-sm font-bold text-white truncate group-hover:text-[#4FC3F7] transition-colors">{api.name}</p>
