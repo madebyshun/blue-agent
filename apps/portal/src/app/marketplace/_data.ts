@@ -7,11 +7,28 @@
  * here as they complete /submit.
  */
 
+export interface APIEndpoint {
+  method:  "GET" | "POST";
+  path:    string;                 // path-only, e.g. "/blue-idea"
+  desc:    string;                 // one-line description
+  price:   string;                 // "$0.05" or "Free"
+  free?:   boolean;                // marks discovery / status endpoints
+}
+
+export interface PricingTier {
+  name:   string;                  // "Paid", "Free", "Heavy", etc.
+  price:  string;                  // display, e.g. "$0.10"
+  desc:   string;                  // what's included
+  flavor: "paid" | "free";         // visual variant
+}
+
 export interface MarketplaceAPI {
   id:          string;
   name:        string;             // public display name
   provider:    string;             // who owns it (agent or builder handle)
   desc:        string;             // 1-line pitch
+  longDesc?:   string;             // multi-paragraph About card body (\n\n separated)
+  tags?:       string[];           // tag chips on detail page
   category:    string;
   price:       string;             // "$0.05" — display
   priceNum:    number;             // for sort
@@ -22,8 +39,13 @@ export interface MarketplaceAPI {
   featured:    boolean;
   status:      "live" | "pending" | "reserved";
   releasedAt:  string;             // ISO date
-  icon?:       string;             // emoji or 1-letter
+  icon?:       string;             // emoji or 1-letter (fallback for open slot)
   toolsCount?: number;             // for providers exposing multiple tools
+  // Orbis-style detail page extras (optional — populated as we backfill)
+  website?:     string;            // external website
+  docsUrl?:    string;             // docs link
+  pricingTiers?: PricingTier[];    // side-by-side pricing cards
+  endpoints?:    APIEndpoint[];    // expandable endpoints list
 }
 
 // Blue Agent's API base — every endpoint hangs off here.
