@@ -69,18 +69,24 @@ export default function DashboardClient() {
   }
 
   return (
-    <div className="px-5 sm:px-8 py-6 max-w-4xl mx-auto">
+    <div className="px-5 sm:px-8 py-6">
 
-      {/* Header */}
-      <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
+      {/* Header — matches marketplace pattern (full-width, not narrow centered) */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-6">
         <div>
           <h1 className="font-mono text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="font-mono text-[11px] text-slate-600 mt-1">Track APIs you&apos;ve registered · monitor calls · accrued USDC</p>
+          <p className="font-mono text-[11px] text-slate-600 mt-1">Track APIs you&apos;ve registered · monitor calls · accrued USDC on Base</p>
         </div>
-        <Link href="/submit"
-          className="font-mono text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA] bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 transition-all">
-          + Register another
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/marketplace"
+            className="font-mono text-[11px] text-slate-400 hover:text-white px-3 py-1.5 transition-colors">
+            ← Marketplace
+          </Link>
+          <Link href="/submit"
+            className="font-mono text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA] bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 transition-all">
+            + Register another
+          </Link>
+        </div>
       </div>
 
       {/* Wallet input (will be replaced by wagmi connect) */}

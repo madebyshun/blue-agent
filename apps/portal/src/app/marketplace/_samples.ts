@@ -85,6 +85,37 @@ export const SAMPLES: Record<string, SampleIO> = {
     },
   },
 
+  "blue-research": {
+    input: { topic: "Aerodrome v3 slipstream pools on Base" },
+    output: {
+      topic:       "Aerodrome v3 slipstream pools on Base",
+      generatedAt: "2026-06-08T10:42:13Z",
+      mode:        "template",
+      summary:     "Research on Aerodrome v3 slipstream pools. Drawing from 6 sources across the Blue Hub corpus.",
+      sections: [
+        {
+          heading:   "What it is",
+          content:   "Aerodrome is a ve(3,3) DEX on Base, the largest by TVL. Fork of Velodrome V2. Supports concentrated liquidity (Slipstream pools), stable + volatile pools, and vote-escrowed AERO tokens.",
+          citations: [{ id: "aerodrome", title: "Aerodrome — Base's largest DEX", url: "https://aerodrome.finance" }],
+        },
+        {
+          heading:   "How it works",
+          content:   "AERO contract: 0x940181a94A35A4569E4529A3CDfB74e38FD98631. Most Base token pairs route through Aerodrome for best liquidity. Slipstream uses Uniswap v3-style concentrated liquidity with custom fee tiers.",
+          citations: [{ id: "aerodrome", title: "Aerodrome — Base's largest DEX", url: "https://aerodrome.finance" }],
+        },
+      ],
+      next_steps: [
+        "Run `blue build` to design an Aerodrome LP integration",
+        "Run `blue audit` if you're building on top of Aerodrome contracts",
+        "Read primary source: https://aerodrome.finance",
+      ],
+      sources: [
+        { id: "aerodrome",       title: "Aerodrome — Base's largest DEX",   url: "https://aerodrome.finance",                       relevance: 0.92 },
+        { id: "uniswap-v4-base", title: "Uniswap v4 on Base",               url: "https://docs.uniswap.org/contracts/v4/overview",  relevance: 0.43 },
+      ],
+    },
+  },
+
   "blue-search": {
     input: { query: "how to deploy a contract to Base mainnet" },
     output: {
