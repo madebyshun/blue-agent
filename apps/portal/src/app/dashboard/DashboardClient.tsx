@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Builder dashboard client — fetches APIs registered to a given wallet
- * from /api/me/apis. Until wagmi is wired, the user pastes their address
- * into a field; once wallet connect lands this becomes automatic.
+ * Builder dashboard — Hero + sections layout matching /x402 and /docs.
+ * Fetches APIs registered to a given wallet from /api/me/apis.
+ * Until wagmi is wired, the user pastes their address into a field.
  */
 
 import Link from "next/link";
@@ -44,10 +44,10 @@ function relTime(ms: number) {
 }
 
 export default function DashboardClient() {
-  const [wallet, setWallet]   = useState("");
-  const [data,   setData]     = useState<Resp | null>(null);
-  const [busy,   setBusy]     = useState(false);
-  const [err,    setErr]      = useState<string | null>(null);
+  const [wallet, setWallet] = useState("");
+  const [data,   setData]   = useState<Resp | null>(null);
+  const [busy,   setBusy]   = useState(false);
+  const [err,    setErr]    = useState<string | null>(null);
 
   async function fetchMe() {
     if (!ADDR_RE.test(wallet)) {
@@ -69,72 +69,116 @@ export default function DashboardClient() {
   }
 
   return (
-    <div className="px-5 sm:px-8 py-6">
-
-      {/* Header — matches marketplace pattern (full-width, not narrow centered) */}
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-6">
-        <div>
-          <h1 className="font-mono text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="font-mono text-[11px] text-slate-600 mt-1">Track APIs you&apos;ve registered · monitor calls · accrued USDC on Base</p>
+    <>
+      {/* Hero — matches /x402 + /docs */}
+      <section className="relative overflow-hidden border-b border-[#1A1A2E]">
+        <div className="absolute inset-0 hero-glow pointer-events-none" />
+        <div className="relative max-w-5xl mx-auto px-6 py-16">
+          <div className="inline-flex items-center gap-2 px-3 py-1 mb-5 rounded-full border border-[#34D399]/30 bg-[#34D399]/5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] animate-pulse" />
+            <span className="font-mono text-[10px] text-[#34D399] tracking-widest">BUILDER DASHBOARD · WALLET-SCOPED</span>
+          </div>
+          <h1 className="font-mono text-3xl sm:text-4xl font-bold tracking-tight mb-3">
+            Track your APIs — <span className="text-[#34D399]">USDC earnings</span> in real-time
+          </h1>
+          <p className="font-mono text-sm text-slate-400 max-w-2xl mb-6 leading-relaxed">
+            Connect your Base wallet to see APIs you&apos;ve registered, live call counts, and accrued
+            USDC revenue. Data persists in our KV store; wallet connect (wagmi) lands next deploy —
+            for now paste your address to load.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <a href="#load"
+               className="font-mono text-sm font-semibold px-5 py-3 rounded-xl bg-gradient-to-r from-[#34D399] to-[#10B981] text-[#050508] hover:scale-[1.02] transition-transform">
+              Load your APIs ↓
+            </a>
+            <Link href="/submit"
+               className="font-mono text-sm font-semibold px-5 py-3 rounded-xl border border-[#A78BFA]/40 text-[#A78BFA] bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 transition-all">
+              + Register new API
+            </Link>
+            <Link href="/docs/builders/dashboard"
+               className="font-mono text-sm font-semibold px-5 py-3 rounded-xl border border-slate-700 text-slate-300 hover:bg-white/[0.02] transition-all">
+              Read dashboard docs →
+            </Link>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href="/marketplace"
-            className="font-mono text-[11px] text-slate-400 hover:text-white px-3 py-1.5 transition-colors">
-            ← Marketplace
-          </Link>
-          <Link href="/submit"
-            className="font-mono text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA] bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 transition-all">
-            + Register another
-          </Link>
-        </div>
-      </div>
+      </section>
 
-      {/* Wallet input (will be replaced by wagmi connect) */}
-      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 mb-6">
-        <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">YOUR WALLET</p>
-        <div className="flex gap-2">
-          <input
-            value={wallet}
-            onChange={e => setWallet(e.target.value)}
-            placeholder="0x…"
-            className="flex-1 bg-[#050508] border border-[#1A1A2E] rounded-lg px-3 py-2 font-mono text-sm text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/40 transition-colors"
-          />
-          <button onClick={fetchMe} disabled={busy || !wallet}
-            className="font-mono text-xs font-semibold px-4 py-2 rounded-lg bg-[#4FC3F7] text-[#050508] hover:bg-[#29ABE2] disabled:opacity-50 transition-colors">
-            {busy ? "…" : "Load"}
-          </button>
-        </div>
-        <p className="font-mono text-[10px] text-slate-700 mt-2">
-          Paste your Base address · wallet connect (wagmi) lands next deploy
-        </p>
-      </div>
+      {/* Wallet load + stats */}
+      <section id="load" className="max-w-5xl mx-auto px-6 py-16">
+        <p className="font-mono text-[10px] text-[#34D399] tracking-widest mb-1">🔑 YOUR WALLET</p>
+        <h2 className="font-mono text-2xl font-bold mb-6">Paste your Base address</h2>
 
-      {err && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3 mb-4">
-          <p className="font-mono text-[11px] text-red-400">{err}</p>
+        <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 mb-6">
+          <div className="flex gap-2 mb-2">
+            <input
+              value={wallet}
+              onChange={e => setWallet(e.target.value)}
+              placeholder="0x…"
+              className="flex-1 bg-[#050508] border border-[#1A1A2E] rounded-lg px-3 py-2.5 font-mono text-sm text-white placeholder-slate-700 focus:outline-none focus:border-[#34D399]/40 transition-colors"
+            />
+            <button onClick={fetchMe} disabled={busy || !wallet}
+              className="font-mono text-sm font-semibold px-5 py-2.5 rounded-lg bg-[#34D399] text-[#050508] hover:bg-emerald-400 disabled:opacity-50 transition-colors">
+              {busy ? "Loading…" : "Load APIs"}
+            </button>
+          </div>
+          <p className="font-mono text-[10px] text-slate-700">
+            Wallet connect (wagmi + Coinbase Smart Wallet) ships next deploy. For now: paste the address you used in <Link href="/submit" className="text-[#34D399] hover:underline">/submit</Link>.
+          </p>
         </div>
-      )}
 
-      {/* Stats + APIs */}
+        {err && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3 mb-6">
+            <p className="font-mono text-[11px] text-red-400">{err}</p>
+          </div>
+        )}
+
+        {/* Stats grid — visible after load */}
+        {data && (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+              <StatCard label="APIs LISTED"      value={String(data.stats.apis)}              color="#4FC3F7" sub="across the catalog" />
+              <StatCard label="LIFETIME CALLS"   value={data.stats.calls.toLocaleString()}    color="#A78BFA" sub="paid + free combined" />
+              <StatCard label="USDC ACCRUED"     value={usdc(data.stats.revenue)}             color="#34D399" sub="80% builder share" />
+            </div>
+
+            <div className="rounded-xl border border-[#1A1A2E] bg-[#0d0d12] px-4 py-3 mb-6 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="w-2 h-2 rounded-full bg-[#34D399] animate-pulse" />
+                <code className="font-mono text-xs text-[#34D399]">{shortAddr(data.wallet)}</code>
+                <span className="font-mono text-[10px] text-slate-600">connected via paste</span>
+              </div>
+              <a href={`https://basescan.org/address/${data.wallet}`} target="_blank" rel="noopener noreferrer"
+                 className="font-mono text-[10px] text-slate-600 hover:text-slate-400 transition-colors">
+                Basescan ↗
+              </a>
+            </div>
+          </>
+        )}
+      </section>
+
+      {/* APIs list */}
       {data && (
-        <>
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            <Stat label="APIs"            value={String(data.stats.apis)}              accent="#4FC3F7" />
-            <Stat label="LIFETIME CALLS"  value={data.stats.calls.toLocaleString()}    accent="#A78BFA" />
-            <Stat label="USDC EARNED"     value={usdc(data.stats.revenue)}             accent="#34D399" sub="80% builder share" />
-          </div>
-
-          <div className="rounded-xl border border-[#1A1A2E] bg-[#0d0d12] px-4 py-3 mb-6 flex items-center justify-between">
-            <code className="font-mono text-xs text-[#4FC3F7]">{shortAddr(data.wallet)}</code>
-            <a href={`https://basescan.org/address/${data.wallet}`} target="_blank" rel="noopener noreferrer"
-               className="font-mono text-[10px] text-slate-600 hover:text-slate-400">Basescan ↗</a>
-          </div>
+        <section className="max-w-5xl mx-auto px-6 py-16 border-t border-[#1A1A2E]">
+          <p className="font-mono text-[10px] text-[#A78BFA] tracking-widest mb-1">📡 YOUR APIs</p>
+          <h2 className="font-mono text-2xl font-bold mb-6">
+            {data.apis.length === 0 ? "No APIs registered yet" : `${data.apis.length} live ${data.apis.length === 1 ? "endpoint" : "endpoints"}`}
+          </h2>
 
           {data.apis.length === 0 ? (
-            <EmptyState />
+            <div className="rounded-2xl border border-dashed border-[#1A1A2E] bg-[#0a0a0f] p-10 text-center">
+              <p className="text-3xl mb-3">📭</p>
+              <p className="font-mono text-sm font-bold mb-2">This wallet has no registered APIs</p>
+              <p className="font-mono text-[11px] text-slate-500 max-w-md mx-auto mb-5">
+                Register your first API to start earning USDC on every call from AI agents.
+              </p>
+              <Link href="/submit"
+                className="inline-block font-mono text-sm font-semibold px-5 py-2.5 rounded-lg bg-[#A78BFA] text-[#050508] hover:bg-[#9d7ef0] transition-colors">
+                Register your first API →
+              </Link>
+            </div>
           ) : (
             <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
-              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-4 px-4 py-2 border-b border-[#1A1A2E] bg-[#0a0a0f] text-[10px] tracking-widest text-slate-600">
+              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-4 px-4 py-2.5 border-b border-[#1A1A2E] bg-[#0a0a0f] font-mono text-[10px] tracking-widest text-slate-600">
                 <span>API</span>
                 <span>STATUS</span>
                 <span className="text-right">CALLS</span>
@@ -159,52 +203,57 @@ export default function DashboardClient() {
               ))}
             </div>
           )}
-        </>
+        </section>
       )}
 
+      {/* Empty state before wallet loaded */}
       {!data && !err && (
-        <div className="rounded-2xl border border-dashed border-[#1A1A2E] bg-[#0a0a0f] p-8 text-center">
-          <p className="text-3xl mb-3">📭</p>
-          <p className="font-mono text-sm font-bold mb-2">Paste your wallet to view registered APIs</p>
-          <p className="font-mono text-[11px] text-slate-500 max-w-md mx-auto mb-5">
-            Or, if you haven&apos;t registered yet, start with your first API.
-          </p>
-          <Link href="/submit"
-            className="inline-block font-mono text-sm font-semibold px-5 py-2.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA] bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 transition-colors">
-            Register an API →
+        <section className="max-w-5xl mx-auto px-6 py-16 border-t border-[#1A1A2E]">
+          <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-1">📊 STATS PREVIEW</p>
+          <h2 className="font-mono text-2xl font-bold mb-6">What you&apos;ll see once loaded</h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6 opacity-50">
+            <StatCard label="APIs LISTED"    value="—" color="#4FC3F7" sub="across the catalog" />
+            <StatCard label="LIFETIME CALLS" value="—" color="#A78BFA" sub="paid + free combined" />
+            <StatCard label="USDC ACCRUED"   value="$—" color="#34D399" sub="80% builder share" />
+          </div>
+
+          <div className="rounded-2xl border border-dashed border-[#1A1A2E] bg-[#0a0a0f] p-10 text-center">
+            <p className="text-3xl mb-3">🔌</p>
+            <p className="font-mono text-sm font-bold mb-2">Paste your wallet address above to load</p>
+            <p className="font-mono text-[11px] text-slate-500 max-w-md mx-auto">
+              Or if you haven&apos;t registered yet, start with your first API.
+            </p>
+          </div>
+        </section>
+      )}
+
+      {/* Withdraw banner (Phase 4 placeholder) */}
+      <section className="max-w-5xl mx-auto px-6 py-12 border-t border-[#1A1A2E]">
+        <div className="rounded-2xl border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-5 flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <p className="font-mono text-sm font-bold text-[#F59E0B] mb-1">💎 Withdraw (Phase 4)</p>
+            <p className="font-mono text-[11px] text-slate-500 leading-relaxed max-w-2xl">
+              Currently USDC accrues against your wallet in our ledger. The splitter contract that auto-distributes
+              80% to your wallet, 10% to stakers, 10% to treasury ships next phase — your accrued balance migrates over.
+            </p>
+          </div>
+          <Link href="/docs/builders/dashboard"
+            className="shrink-0 font-mono text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-[#F59E0B]/30 text-[#F59E0B] hover:bg-[#F59E0B]/10 transition-colors">
+            Read more →
           </Link>
         </div>
-      )}
-
-      <p className="font-mono text-[10px] text-slate-700 text-center mt-6">
-        Dashboard data persists in KV · live splitter ships with Phase 4
-      </p>
-    </div>
+      </section>
+    </>
   );
 }
 
-function Stat({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent: string }) {
+function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
   return (
-    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] px-5 py-4">
-      <p className="font-mono text-[10px] tracking-widest mb-1" style={{ color: accent }}>{label}</p>
-      <p className="font-mono text-2xl font-bold leading-none" style={{ color: accent }}>{value}</p>
-      {sub && <p className="font-mono text-[10px] text-slate-700 mt-1">{sub}</p>}
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="rounded-2xl border border-dashed border-[#1A1A2E] bg-[#0a0a0f] p-8 text-center">
-      <p className="text-3xl mb-3">📭</p>
-      <p className="font-mono text-sm font-bold mb-2">No APIs registered yet from this wallet</p>
-      <p className="font-mono text-[11px] text-slate-500 max-w-md mx-auto mb-5">
-        Register your first API to start earning USDC on every call from AI agents.
-      </p>
-      <Link href="/submit"
-        className="inline-block font-mono text-sm font-semibold px-5 py-2.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA] bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 transition-colors">
-        Register your first API →
-      </Link>
+    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5">
+      <p className="font-mono text-[10px] tracking-widest mb-2" style={{ color }}>{label}</p>
+      <p className="font-mono text-3xl font-bold leading-none mb-1" style={{ color }}>{value}</p>
+      {sub && <p className="font-mono text-[10px] text-slate-700 mt-2">{sub}</p>}
     </div>
   );
 }
