@@ -13,17 +13,19 @@ interface LogoProps {
 // ─── Provider logos (Blue Agent ecosystem) ────────────────────────────────────
 
 export function BlueAgentLogo({ size = 24, className = "" }: LogoProps) {
+  // Real Blue Agent brand mark, served from /public/logo.svg.
+  // Using <img> keeps the 46KB SVG out of every component bundle and lets the
+  // browser cache it once across the whole portal.
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" className={className} fill="none">
-      <defs>
-        <linearGradient id="ba-grad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#4FC3F7" />
-          <stop offset="100%" stopColor="#A78BFA" />
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="8" fill="url(#ba-grad)" />
-      <path d="M10 22V10h5.5c2.5 0 4 1.4 4 3.4 0 1.4-.7 2.4-1.8 2.9 1.4.4 2.3 1.4 2.3 3 0 2.1-1.6 3.7-4.2 3.7H10zm2.5-7h2.7c1.2 0 2-.6 2-1.5s-.8-1.5-2-1.5h-2.7V15zm0 5h3c1.4 0 2.3-.6 2.3-1.8 0-1-.9-1.7-2.3-1.7h-3V20z" fill="#050508"/>
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/logo.svg"
+      alt="Blue Agent"
+      width={size}
+      height={size}
+      className={className}
+      style={{ display: "inline-block" }}
+    />
   );
 }
 
