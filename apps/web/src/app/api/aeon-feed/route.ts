@@ -19,6 +19,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { setAeonOutput, listAeonSkills } from "@/app/api/_lib/aeon-kv";
 
+
+export const runtime = "nodejs";
+// Vercel kills serverless functions at 60s by default — explicit budget
+// so it fails loudly instead of silently 504-ing.
+export const maxDuration = 15;
+
 const AEON_FEED_TOKEN = process.env.AEON_FEED_TOKEN ?? "";
 
 // Map content/username patterns to skill IDs

@@ -10,6 +10,9 @@ import { kvGet } from "@/lib/kv";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 
 export const runtime = "nodejs";
+// Vercel kills serverless functions at 60s by default — explicit budget so
+// it fails loudly instead of silently 504-ing.
+export const maxDuration = 15;
 
 const PAY_TO = "0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f";
 const USDC   = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";

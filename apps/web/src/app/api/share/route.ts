@@ -6,6 +6,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+// Vercel kills serverless functions at 60s by default — explicit budget so
+// it fails loudly instead of silently 504-ing.
+export const maxDuration = 15;
 
 const store = new Map<string, { messages: unknown[]; ts: number }>();
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
