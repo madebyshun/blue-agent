@@ -318,36 +318,37 @@ export default function OverviewView({ onSwitchTab }: Props) {
                       <span className="text-sm font-bold text-white truncate">{address?.slice(0, 6)}…{address?.slice(-4)}</span>
                       <span className="text-[9px] text-slate-600 shrink-0">{copied ? "✓" : "copy"}</span>
                     </button>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {/* Tier + member-since only — disconnect moved to the right
+                        rail so this line stays uncluttered. */}
+                    <div className="flex items-center gap-2 mt-1.5">
                       <span className="text-[9px] px-2 py-0.5 rounded-full font-bold"
                         style={{ color: tier.color, background: `${tier.color}20`, border: `1px solid ${tier.color}40` }}>
                         {tier.name === "None" ? "No Tier" : tier.name}
                       </span>
                       {memberSince && <span className="text-[9px] text-slate-600">since {memberSince}</span>}
-                      {/* Disconnect — was previously only accessible through
-                          the WalletBar dropdown on chat pages. Surface it on
-                          the dashboard so users can swap wallets without
-                          first navigating to chat. */}
-                      <button onClick={() => disconnect()}
-                        className="text-[9px] text-slate-600 hover:text-red-400 underline-offset-2 hover:underline transition-colors">
-                        disconnect
-                      </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Builder score as a compact ring-style chip */}
-                <div className="text-right shrink-0">
-                  <div className="text-[9px] text-slate-600 tracking-widest mb-1">BUILDER</div>
-                  <div className="inline-flex items-baseline gap-0.5 px-2.5 py-1 rounded-lg"
-                       style={{ background: `${scoreColor}10`, border: `1px solid ${scoreColor}25` }}>
-                    <span className="text-xl font-bold leading-none" style={{ color: scoreColor }}>
-                      {scoreLoading ? "—" : builderScore !== null ? builderScore : "—"}
-                    </span>
-                    {builderScore !== null && !scoreLoading && (
-                      <span className="text-[8px] text-slate-700">/100</span>
-                    )}
+                {/* Right rail — builder score chip + disconnect underneath, so
+                    the wallet-swap action lives away from the identity line. */}
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  <div className="text-right">
+                    <div className="text-[9px] text-slate-600 tracking-widest mb-1">BUILDER</div>
+                    <div className="inline-flex items-baseline gap-0.5 px-2.5 py-1 rounded-lg"
+                         style={{ background: `${scoreColor}10`, border: `1px solid ${scoreColor}25` }}>
+                      <span className="text-xl font-bold leading-none" style={{ color: scoreColor }}>
+                        {scoreLoading ? "—" : builderScore !== null ? builderScore : "—"}
+                      </span>
+                      {builderScore !== null && !scoreLoading && (
+                        <span className="text-[8px] text-slate-700">/100</span>
+                      )}
+                    </div>
                   </div>
+                  <button onClick={() => disconnect()}
+                    className="text-[9px] text-slate-600 hover:text-red-400 underline-offset-2 hover:underline transition-colors">
+                    disconnect
+                  </button>
                 </div>
               </div>
 
@@ -467,11 +468,12 @@ export default function OverviewView({ onSwitchTab }: Props) {
               </div>
             </BentoCell>
 
-            {/* ─── Quick actions (full width) ──────────────────────────── */}
+            {/* ─── Quick actions + Chat activity (merged, full width) ───────
+                One card: a compact action strip on top, then chat-usage stats
+                below a divider. Previously two stacked full-width cells. */}
             <BentoCell className="sm:col-span-3 p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-[10px] text-slate-500 tracking-widest font-bold">QUICK ACTIONS</div>
-              </div>
+              {/* Quick actions strip — icon + label only, no "Open →" subtext */}
+              <div className="text-[10px] text-slate-500 tracking-widest font-bold mb-3">QUICK ACTIONS</div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {[
                   { label: "Chat",     icon: "💬", href: "/app/chat",      color: "#4FC3F7" },
@@ -480,20 +482,18 @@ export default function OverviewView({ onSwitchTab }: Props) {
                   { label: "Hub",      icon: "🧰", href: "/app/hub",       color: "#22C55E" },
                 ].map(a => (
                   <Link key={a.label} href={a.href}
-                    className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] hover:border-[#2a2a3e] hover:bg-white/[0.02] transition-all group">
-                    <span className="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0"
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] hover:border-[#2a2a3e] hover:bg-white/[0.02] transition-all">
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0"
                           style={{ background: `${a.color}15`, border: `1px solid ${a.color}25` }}>{a.icon}</span>
-                    <div className="min-w-0">
-                      <div className="text-[10px] tracking-widest font-bold" style={{ color: a.color }}>{a.label.toUpperCase()}</div>
-                      <div className="text-[10px] text-slate-700">Open →</div>
-                    </div>
+                    <span className="text-[11px] tracking-widest font-bold" style={{ color: a.color }}>{a.label.toUpperCase()}</span>
                   </Link>
                 ))}
               </div>
-            </BentoCell>
 
-            {/* ─── Chat activity (full width) ──────────────────────────── */}
-            <BentoCell className="sm:col-span-3 p-5">
+              {/* Divider */}
+              <div className="border-t border-[#1A1A2E] my-4" />
+
+              {/* Chat activity */}
               <div className="flex items-center justify-between mb-3">
                 <div className="text-[10px] text-slate-500 tracking-widest font-bold">BLUE CHAT ACTIVITY</div>
                 {chatStats.totalSessions > 0 && (
@@ -541,7 +541,7 @@ export default function OverviewView({ onSwitchTab }: Props) {
                   )}
                 </div>
               ) : (
-                <div className="text-center py-6">
+                <div className="text-center py-5">
                   <div className="text-2xl mb-2">💬</div>
                   <p className="text-sm font-bold text-white mb-1">Start your first chat</p>
                   <p className="text-[11px] text-slate-600 mb-4">5 commands · 50+ tools · 3-agent consensus</p>

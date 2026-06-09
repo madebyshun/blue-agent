@@ -58,33 +58,34 @@ function DashboardShell() {
   return (
     <div className="flex flex-col h-full bg-[#050508] text-white font-mono overflow-hidden">
 
-      <AppPageHeader label="DASHBOARD" subtitle={meta.subtitle} accent={meta.accent} />
-
-      {/* Tab bar */}
-      <div className="border-b border-[#1A1A2E] shrink-0 bg-[#050508]">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 flex">
-          {TABS.map(t => {
-            const active = tab === t;
-            const accent = TAB_META[t].accent;
-            return (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className="flex-1 sm:flex-none sm:px-6 py-3 font-mono text-[11px] sm:text-xs tracking-widest transition-all border-b-2 relative"
-                style={active
-                  ? { color: accent, borderBottomColor: accent, background: `${accent}06` }
-                  : { color: "#475569", borderBottomColor: "transparent" }}
-              >
-                {TAB_META[t].label.toUpperCase()}
-                {active && (
-                  <span className="hidden sm:block absolute -top-px left-1/2 -translate-x-1/2 w-1 h-1 rounded-full"
-                        style={{ background: accent, boxShadow: `0 0 6px ${accent}80` }} />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      {/* Header + tab switch on one row — the tabs ride in the header's right
+          slot as a compact segmented control, so there's a single top bar
+          instead of a header band stacked above a separate tab strip. */}
+      <AppPageHeader
+        label="DASHBOARD"
+        subtitle={meta.subtitle}
+        accent={meta.accent}
+        right={
+          <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[#0D0D14] border border-[#1A1A2E]">
+            {TABS.map(t => {
+              const active = tab === t;
+              const accent = TAB_META[t].accent;
+              return (
+                <button
+                  key={t}
+                  onClick={() => setTab(t)}
+                  className="px-3 sm:px-4 py-1.5 rounded-md font-mono text-[10px] tracking-widest transition-all"
+                  style={active
+                    ? { color: accent, background: `${accent}18` }
+                    : { color: "#475569" }}
+                >
+                  {TAB_META[t].label.toUpperCase()}
+                </button>
+              );
+            })}
+          </div>
+        }
+      />
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto">
