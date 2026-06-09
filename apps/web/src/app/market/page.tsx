@@ -30,8 +30,12 @@ const USDC_BASE        = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 const BLUE_TOKEN       = "0xf895783b2931c919955e18b5e3343e7c7c456ba3" as const;
 const PAY_TO           = "0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f" as const;
 
-// TODO: replace after deploying BlueMarketStaking.sol to Base
-const STAKING_CONTRACT = "0x0000000000000000000000000000000000000000" as const;
+// BlueMarketStaking.sol on Base mainnet — deployed 2026 (Task #22).
+// Also used by /app/rewards. NEXT_PUBLIC_STAKING_CONTRACT can override.
+const STAKING_CONTRACT = (
+  process.env.NEXT_PUBLIC_STAKING_CONTRACT ??
+  "0x69e539684EE48F71eCDAd58618d8e8a2423E279d"
+) as `0x${string}`;
 
 const DAILY_THRESHOLD  = parseUnits("25000000",  18); // 25M BLUE
 const WEEKLY_THRESHOLD = parseUnits("60000000",  18); // 60M BLUE
