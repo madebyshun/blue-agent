@@ -105,11 +105,11 @@ export interface ModelPreset {
  * lands; the slot is intentionally left for it.
  */
 export const MODEL_PRESETS: ModelPreset[] = [
-  { id: "chat",       label: "Chat",        desc: "Balanced · default · $BLUE",          icon: "💬", tier: "pro",                webSearch: false },
-  { id: "fast",       label: "Fast",        desc: "Cheapest · 1M ctx (DeepSeek)",         icon: "⚡", tier: "venice-deepseek",    webSearch: false },
-  { id: "web-search", label: "Web Search",  desc: "~2s · multi-source live (Grok)",      icon: "🔍", tier: "venice-grok",        webSearch: true  },
-  { id: "deep-think", label: "Deep Think",  desc: "Heavy reasoning + web (Opus)",        icon: "🔬", tier: "max",                webSearch: true  },
-  { id: "private",    label: "Private",     desc: "E2EE · no logs (Gemma)",              icon: "🔒", tier: "venice-e2ee-gemma",  webSearch: false },
+  { id: "chat",       label: "Chat",        desc: "Balanced default · Sonnet · 200K ctx", icon: "💬", tier: "pro",                webSearch: false },
+  { id: "fast",       label: "Fast",        desc: "Cheapest · DeepSeek · 1M ctx",         icon: "⚡", tier: "venice-deepseek",    webSearch: false },
+  { id: "web-search", label: "Web Search",  desc: "~2s live multi-source · Grok 4",       icon: "🔍", tier: "venice-grok",        webSearch: true  },
+  { id: "deep-think", label: "Deep Think",  desc: "Heavy reasoning + web · Opus",         icon: "🔬", tier: "max",                webSearch: true  },
+  { id: "private",    label: "Private",     desc: "E2EE · no logs · Gemma 27B",           icon: "🔒", tier: "venice-e2ee-gemma",  webSearch: false },
 ];
 
 export default function ChatInput() {
