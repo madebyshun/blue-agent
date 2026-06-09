@@ -504,6 +504,12 @@ interface ToolCallResult {
   text:     string;
   result?:  unknown;
   /**
+   * Credits actually debited from the user's ledger for this tool call.
+   * Read off the X-Credits-Debited response header set by the x402 route.
+   * Zero for free/non-priced tools (e.g. hub_crypto_rpc) or guest sessions.
+   */
+  credits?: number;
+  /**
    * Set when the chat user's credit ledger couldn't cover the tool's cost.
    * Surfaced upstream so the chat stream can emit an `insufficient_credits`
    * SSE event instead of silently swallowing the failure.
@@ -565,7 +571,10 @@ async function callHubTool(
     // Unwrap nested { result: ... } if present
     const payload = (data as Record<string, unknown>)?.result ?? data;
     const text = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
-    return { text, result: payload };
+    // Surface the actual credit debit so the chat UI can show the real
+    // total spend (chat message + tool calls), not just the message cost.
+    const credits = Number(res.headers.get("x-credits-debited") ?? 0) || 0;
+    return { text, result: payload, credits };
   } catch (e) {
     return { text: `[${toolName}: unavailable (${(e as Error).message}) — answering from knowledge]` };
   }
@@ -686,7 +695,13 @@ async function veniceToolStream(
         //    emit a dedicated event so the chat UI can render a top-up CTA
         //    inline alongside the regular result placeholder.
         for (const { tc, out } of veniceOutputs) {
-          emit({ type: "tool_done", tool: tc.function.name, ms: elapsed, result: out.result });
+          emit({
+            type:    "tool_done",
+            tool:    tc.function.name,
+            ms:      elapsed,
+            result:  out.result,
+            credits: out.credits ?? 0,
+          });
           if (out.insufficient) {
             emit({
               type:    "insufficient_credits",
@@ -1350,7 +1365,13 @@ export async function POST(req: NextRequest) {
         //    UI can pop a top-up CTA without disrupting the tool stream.
         for (const { block, out } of toolOutputs) {
           controller.enqueue(enc.encode(
-            `data: ${JSON.stringify({ type: "tool_done", tool: block.name, ms: elapsed, result: out.result })}\n\n`
+            `data: ${JSON.stringify({
+              type:    "tool_done",
+              tool:    block.name,
+              ms:      elapsed,
+              result:  out.result,
+              credits: out.credits ?? 0,
+            })}\n\n`,
           ));
           if (out.insufficient) {
             controller.enqueue(enc.encode(

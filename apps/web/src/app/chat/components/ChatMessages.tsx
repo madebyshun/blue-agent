@@ -481,14 +481,30 @@ export default function ChatMessages() {
                               </span>
                             </>
                           )}
-                          {msg.creditsUsed !== undefined && msg.creditsUsed > 0 && (
-                            <span
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono text-[9px] font-semibold"
-                              style={{ background: "#4FC3F715", color: "#4FC3F7" }}
-                            >
-                              ⚡ {msg.creditsUsed} cr
-                            </span>
-                          )}
+                          {(() => {
+                            const msgCr = msg.creditsUsed ?? 0;
+                            const toolCr = (msg.toolLogs ?? []).reduce((s, l) => s + (l.credits ?? 0), 0);
+                            const total = msgCr + toolCr;
+                            if (total <= 0) return null;
+                            // Show breakdown when both pieces contributed,
+                            // collapsed to a single number when only one did
+                            // (avoids "50 + 0 = 50" noise on tool-free turns).
+                            const showBreakdown = msgCr > 0 && toolCr > 0;
+                            return (
+                              <span
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono text-[9px] font-semibold"
+                                style={{ background: "#4FC3F715", color: "#4FC3F7" }}
+                                title={showBreakdown ? `${msgCr} cr chat + ${toolCr} cr tools` : undefined}
+                              >
+                                ⚡ {total} cr
+                                {showBreakdown && (
+                                  <span className="text-[#4FC3F7]/60 font-normal">
+                                    ({msgCr}+{toolCr})
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })()}
                         </div>
                       )}
 

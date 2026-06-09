@@ -2,7 +2,16 @@
 
 export type ActiveTab = "chat" | "tools" | "skills" | "cron" | "settings";
 
-export type ToolLog = { tool: string; status: "running" | "done"; ms?: number; result?: unknown };
+export type ToolLog = {
+  tool:    string;
+  status:  "running" | "done";
+  ms?:     number;
+  result?: unknown;
+  /** Credits actually debited from the user's ledger for this tool call.
+   *  Surfaced in the per-message cost chip so users see the real total
+   *  spend (msg + tools), not just the chat-message base. */
+  credits?: number;
+};
 
 export interface Attachment {
   name:     string;   // filename e.g. "Contract.sol"
