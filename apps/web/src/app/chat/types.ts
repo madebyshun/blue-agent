@@ -12,6 +12,14 @@ export interface Attachment {
   isText:   boolean;  // true = plain text content, false = base64 binary
 }
 
+export interface InsufficientCreditsNotice {
+  kind:    "chat" | "tool";   // what ran out: a chat-message debit or a tool debit
+  tool?:   string;            // present when kind === "tool"
+  needed:  number;            // credits required
+  balance: number;            // credits available at the time of the attempt
+  message?: string;           // server-provided human copy (fallback locally)
+}
+
 export interface Message {
   role:             "user" | "assistant";
   content:          string;
@@ -23,6 +31,9 @@ export interface Message {
   creditsUsed?:     number;   // credits deducted for this message
   toolLogs?:        ToolLog[];
   attachments?:     Attachment[];
+  /** When set, the chat or tool debit hit an empty balance — render a
+   * top-up CTA inline with the message. Top-up modal lands in Week 3. */
+  insufficientCredits?: InsufficientCreditsNotice;
 }
 
 // ── Task (conversation) ────────────────────────────────────────────────────────

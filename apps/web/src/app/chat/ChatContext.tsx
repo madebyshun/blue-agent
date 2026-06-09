@@ -480,6 +480,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           messages:    next,
           tier:        chatTier,
           provider:    activeTierProvider,
+          // Connected wallet — when present, the chat backend debits the
+          // message + tool credit cost from this wallet's unified ledger
+          // (Week 2 of the credit redesign). Guest sessions omit this and
+          // continue to use the localStorage daily-quota path.
+          ...(walletAddr    ? { address: walletAddr } : {}),
           ...(modelId       ? { modelId }       : {}),
           ...(memoryContext ? { memoryContext }  : {}),
           ...(personaPrompt ? { persona: personaPrompt } : {}),
@@ -574,6 +579,38 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                     l.tool === parsed.tool ? { ...l, status: "done" as const, ms: parsed.ms, result: parsed.result } : l
                   );
                   msgs[msgs.length - 1] = { ...last, toolLogs: logs };
+                }
+                return prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
+              });
+            } else if (parsed.type === "insufficient_credits") {
+              // Server signalled the wallet's credit ledger couldn't cover the
+              // chat message or tool call. Attach the structured notice to the
+              // assistant message so ChatMessages can render a top-up CTA
+              // inline. Week 3 ships the actual top-up modal; for now we just
+              // expose the data shape and a readable message.
+              const p = parsed as unknown as {
+                kind?: "chat" | "tool";
+                tool?: string;
+                needed?: number;
+                balance?: number;
+                message?: string;
+              };
+              setTasksState(prev => {
+                const task = prev.find(t => t.id === tid);
+                if (!task) return prev;
+                const msgs = [...task.messages];
+                const last = msgs[msgs.length - 1];
+                if (last?.role === "assistant") {
+                  msgs[msgs.length - 1] = {
+                    ...last,
+                    insufficientCredits: {
+                      kind:    p.kind ?? "chat",
+                      tool:    p.tool,
+                      needed:  p.needed ?? 0,
+                      balance: p.balance ?? 0,
+                      message: p.message,
+                    },
+                  };
                 }
                 return prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
               });
