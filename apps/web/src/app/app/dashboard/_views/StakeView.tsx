@@ -248,24 +248,24 @@ export default function StakeView() {
         <div className="absolute inset-0"
           style={{ background: "radial-gradient(ellipse 80% 50% at 50% -10%, #4FC3F710 0%, transparent 70%)" }} />
       </div>
-      <div className="relative max-w-3xl mx-auto px-6 pt-6 pb-16">
+      <div className="relative max-w-3xl mx-auto px-4 sm:px-6 pt-5 pb-16">
 
-        {/* Protocol stats */}
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <AppCard className="py-4 text-center">
-            <div className="font-mono text-xl font-bold text-[#4FC3F7]">
-              {globalStaked ? fmtBlue(globalStaked) : "—"}
+        {/* Protocol stats — bento strip, each with its own accent gradient */}
+        <div className="grid grid-cols-3 gap-2.5 mb-4">
+          {[
+            { label: "TOTAL STAKED", value: globalStaked ? fmtBlue(globalStaked) : "—", accent: "#4FC3F7" },
+            { label: "x402 REVENUE", value: "20%",                                       accent: "#22C55E" },
+            { label: "COOLDOWN",     value: "1 day",                                     accent: "#A78BFA" },
+          ].map(s => (
+            <div key={s.label} className="rounded-2xl border p-4 text-center relative overflow-hidden"
+                 style={{ background: `linear-gradient(135deg, ${s.accent}12 0%, #0d0d12 60%)`,
+                          borderColor: `${s.accent}25` }}>
+              <span aria-hidden className="absolute inset-x-0 top-0 h-px"
+                    style={{ background: `linear-gradient(90deg, transparent, ${s.accent}, transparent)` }} />
+              <div className="font-mono text-xl font-bold leading-none" style={{ color: s.accent }}>{s.value}</div>
+              <div className="font-mono text-[9px] text-slate-600 mt-1.5 tracking-widest">{s.label}</div>
             </div>
-            <div className="font-mono text-[10px] text-slate-600 mt-1 tracking-widest">TOTAL STAKED</div>
-          </AppCard>
-          <AppCard className="py-4 text-center">
-            <div className="font-mono text-xl font-bold text-[#22C55E]">20%</div>
-            <div className="font-mono text-[10px] text-slate-600 mt-1 tracking-widest">x402 REVENUE</div>
-          </AppCard>
-          <AppCard className="py-4 text-center">
-            <div className="font-mono text-xl font-bold text-[#A78BFA]">1 day</div>
-            <div className="font-mono text-[10px] text-slate-600 mt-1 tracking-widest">COOLDOWN</div>
-          </AppCard>
+          ))}
         </div>
 
         {!isConnected ? (
@@ -297,22 +297,32 @@ export default function StakeView() {
           </AppCard>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-3 mb-4">
 
-            {/* Position card */}
-            <AppCard className="p-8" accent={staked > 0 ? tier.color : undefined}>
+            {/* Position card — bento gradient bg tinted by current tier */}
+            <div className="rounded-2xl border p-6 sm:p-8 relative overflow-hidden"
+                 style={{
+                   background: staked > 0
+                     ? `linear-gradient(135deg, ${tier.color}14 0%, #0d0d12 55%)`
+                     : "#0d0d12",
+                   borderColor: staked > 0 ? `${tier.color}35` : "#1A1A2E",
+                   boxShadow: staked > 0 ? `0 0 60px ${tier.color}0a` : undefined,
+                 }}>
+              <span aria-hidden className="absolute inset-x-0 top-0 h-px"
+                    style={{ background: staked > 0 ? `linear-gradient(90deg, transparent, ${tier.color}, transparent)` : "transparent" }} />
               <div className="flex items-start justify-between mb-6">
                 <div>
                   <div className="font-mono text-[10px] text-slate-600 tracking-widest mb-2">YOUR POSITION</div>
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-6xl font-bold tracking-tight" style={{ color: staked > 0 ? tier.color : "#2a2a3e" }}>
+                  <div className="flex items-baseline gap-3 flex-wrap">
+                    <span className="text-5xl sm:text-6xl font-bold tracking-tight leading-none"
+                          style={{ color: staked > 0 ? tier.color : "#2a2a3e" }}>
                       {fmtBlue(stakedWei)}
                     </span>
                     <span className="font-mono text-base text-slate-600">BLUE</span>
                   </div>
                 </div>
-                <div className="px-4 py-2 rounded-xl border font-mono text-sm font-bold tracking-widest"
-                  style={{ color: tier.color, background: `${tier.color}12`, borderColor: `${tier.color}35` }}>
+                <div className="px-3 py-1.5 rounded-xl border font-mono text-xs font-bold tracking-widest"
+                  style={{ color: tier.color, background: `${tier.color}15`, borderColor: `${tier.color}40` }}>
                   {tier.name === "None" ? "NO TIER" : tier.name.toUpperCase()}
                 </div>
               </div>
@@ -370,21 +380,25 @@ export default function StakeView() {
                   ))}
                 </div>
               </div>
-            </AppCard>
+            </div>
 
-            {/* Action panel */}
-            <AppCard noPad className="overflow-hidden">
-              <div className="flex border-b border-[#1A1A2E]">
+            {/* Action panel — bento with cyan glass tint */}
+            <div className="rounded-2xl border border-[#4FC3F7]/20 bg-[#4FC3F7]/[0.03] overflow-hidden flex flex-col">
+              <div className="flex border-b border-[#1A1A2E] bg-[#0a0a0f]/50">
                 {(["stake", "unstake", "claim"] as ActionTab[]).map(t => (
                   <button
                     key={t}
                     onClick={() => setTab(t)}
-                    className="flex-1 py-3 font-mono text-xs tracking-widest transition-all border-b-2"
+                    className="flex-1 py-3 font-mono text-xs tracking-widest transition-all relative"
                     style={tab === t
-                      ? { color: "#4FC3F7", borderBottomColor: "#4FC3F7", background: "#4FC3F708" }
-                      : { color: "#475569", borderBottomColor: "transparent" }}
+                      ? { color: "#4FC3F7", background: "#4FC3F708" }
+                      : { color: "#475569" }}
                   >
                     {t.toUpperCase()}
+                    {tab === t && (
+                      <span aria-hidden className="absolute inset-x-3 bottom-0 h-0.5 rounded-full"
+                            style={{ background: "#4FC3F7", boxShadow: "0 0 8px #4FC3F7" }} />
+                    )}
                   </button>
                 ))}
               </div>
@@ -569,45 +583,47 @@ export default function StakeView() {
                   </div>
                 )}
               </div>
-            </AppCard>
+            </div>
 
             </div>
 
             {/* Tx status */}
             {(txStatus || isBusy) && (
-              <div className="rounded-xl border border-[#4FC3F730] bg-[#4FC3F708] px-5 py-3.5 font-mono text-sm text-[#4FC3F7] mb-4">
-                {isConfirming ? "⏳ Confirming on Base..." : txStatus}
+              <div className="rounded-xl border border-[#4FC3F7]/40 bg-[#4FC3F7]/10 px-5 py-3.5 font-mono text-sm text-[#4FC3F7] mb-4 flex items-center gap-2">
+                {isConfirming && <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />}
+                {isConfirming ? "Confirming on Base…" : txStatus}
               </div>
             )}
           </>
         )}
 
-        {/* Footer info */}
-        <AppCard className="mt-4 px-6 py-5">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        {/* Footer info — bento with feature pills */}
+        <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] mt-4 p-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-4">
             {[
-              { icon: "📌", text: "Credits accrue on-chain" },
-              { icon: "💬", text: "Unlock Blue Chat AI" },
-              { icon: "💵", text: "20% x402 revenue → stakers" },
-              { icon: "⏳", text: "1-day cooldown to unstake" },
+              { icon: "📌", text: "Credits accrue on-chain",      color: "#4FC3F7" },
+              { icon: "💬", text: "Unlock Blue Chat AI",          color: "#A78BFA" },
+              { icon: "💵", text: "20% x402 revenue → stakers",   color: "#22C55E" },
+              { icon: "⏳", text: "1-day cooldown to unstake",    color: "#F59E0B" },
             ].map(item => (
-              <div key={item.text} className="flex items-start gap-2">
+              <div key={item.text} className="flex items-start gap-2.5 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3 py-2.5"
+                   style={{ borderColor: `${item.color}15` }}>
                 <span className="text-sm shrink-0">{item.icon}</span>
-                <span className="font-mono text-[10px] text-slate-600 leading-snug">{item.text}</span>
+                <span className="font-mono text-[10px] text-slate-500 leading-snug">{item.text}</span>
               </div>
             ))}
           </div>
-          <div className="pt-4 border-t border-[#1A1A2E] flex items-center justify-between">
+          <div className="pt-3 border-t border-[#1A1A2E] flex items-center justify-between">
             <a href={`https://basescan.org/address/${STAKING_ADDRESS}`}
               target="_blank" rel="noopener noreferrer"
               className="font-mono text-[10px] text-slate-700 hover:text-slate-500 transition-colors">
               {STAKING_ADDRESS.slice(0, 10)}…{STAKING_ADDRESS.slice(-8)} ↗
             </a>
-            <Link href="/app/chat" className="font-mono text-[11px] text-[#4FC3F760] hover:text-[#4FC3F7] transition-colors">
+            <Link href="/app/chat" className="font-mono text-[11px] text-[#4FC3F7]/60 hover:text-[#4FC3F7] transition-colors">
               Blue Chat →
             </Link>
           </div>
-        </AppCard>
+        </div>
 
       </div>
     </div>

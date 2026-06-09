@@ -1,12 +1,15 @@
 "use client";
 
 /**
- * OverviewView — wallet identity, balances, stake summary, active alerts,
- * quick actions, chat activity. Renders inside the Dashboard "Overview" tab.
+ * OverviewView — Dashboard "Overview" tab, bento-style grid.
  *
- * The deep-link mini-cards (stake + alerts) now call back to the dashboard
- * to switch tabs instead of navigating, so the whole experience stays on
- * one URL.
+ * Layout intent: instead of a uniform vertical stack of identical cards,
+ * different cards take different cell sizes so the page reads at a glance.
+ * Mobile collapses to a clean 1-column flow; ≥sm steps up to a 2-col bento;
+ * ≥lg the identity hero becomes the dominant cell and stake / alerts ride
+ * alongside it.
+ *
+ * All data hooks identical to the previous version — no behavioural change.
  */
 
 import { useState, useEffect } from "react";
@@ -14,7 +17,6 @@ import Link from "next/link";
 import { useAccount, useReadContracts } from "wagmi";
 import { formatUnits } from "viem";
 import AppConnectPrompt from "@/components/app/AppConnectPrompt";
-import AppCard, { AppSectionLabel } from "@/components/app/AppCard";
 
 // ── Contracts (Base mainnet) ─────────────────────────────────────────────────
 
@@ -47,7 +49,7 @@ const STAKING_ABI = [
     inputs: [{ name: "user", type: "address" }], outputs: [{ type: "uint256" }] },
 ] as const;
 
-// ── Tier table (mirrors /app/dashboard/_views/StakeView.tsx) ─────────────────
+// ── Tier table ───────────────────────────────────────────────────────────────
 
 const TIERS = [
   { name: "None",    min: 0,          color: "#475569" },
@@ -78,7 +80,7 @@ function fmtAmt(n: number, decimals: number): string {
   return n.toFixed(6);
 }
 
-// ── localStorage data (chat + alerts) ────────────────────────────────────────
+// ── localStorage data ─────────────────────────────────────────────────────────
 
 interface ChatStats {
   totalSessions:   number;
@@ -138,18 +140,53 @@ function loadActiveAlerts(): AlertItem[] {
   } catch { return []; }
 }
 
+// ── Bento card primitives ────────────────────────────────────────────────────
+
+/**
+ * BentoCell — the unit of the bento grid. Accepts an `accent` colour and
+ * `flavor` (solid / gradient / glass) so each cell can carry its own visual
+ * identity without us writing one-off Tailwind soup each time.
+ */
+function BentoCell({
+  accent  = "#1A1A2E",
+  flavor  = "solid",
+  className = "",
+  children,
+}: {
+  accent?:    string;
+  flavor?:    "solid" | "gradient" | "glass";
+  className?: string;
+  children:   React.ReactNode;
+}) {
+  const style: React.CSSProperties =
+    flavor === "gradient"
+      ? {
+          background: `linear-gradient(135deg, ${accent}18 0%, #0d0d12 60%)`,
+          borderColor: `${accent}30`,
+        }
+      : flavor === "glass"
+      ? { background: `${accent}0a`, borderColor: `${accent}25`, backdropFilter: "blur(8px)" }
+      : { background: "#0d0d12", borderColor: "#1A1A2E" };
+  return (
+    <div className={`rounded-2xl border ${className}`} style={style}>{children}</div>
+  );
+}
+
+function StatChip({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
+  return (
+    <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f]/60 px-3 py-2.5 relative overflow-hidden">
+      <span aria-hidden className="absolute inset-x-0 top-0 h-px"
+            style={{ background: `linear-gradient(90deg, transparent, ${color}50, transparent)` }} />
+      <div className="text-[9px] text-slate-600 tracking-widest mb-1">{label}</div>
+      <div className="text-base font-bold leading-none" style={{ color }}>{value}</div>
+      {sub && <div className="text-[9px] text-slate-700 mt-1">{sub}</div>}
+    </div>
+  );
+}
+
 // ── View ─────────────────────────────────────────────────────────────────────
 
-const BALANCE_TOKENS = [
-  { sym: "BLUE",  addr: BLUE_ADDRESS,  decimals: 18, color: "#4FC3F7" },
-  { sym: "USDC",  addr: USDC_ADDRESS,  decimals: 6,  color: "#22C55E" },
-  { sym: "WETH",  addr: WETH_ADDRESS,  decimals: 18, color: "#A78BFA" },
-  { sym: "cbBTC", addr: CBBTC_ADDRESS, decimals: 8,  color: "#F59E0B" },
-  { sym: "AERO",  addr: AERO_ADDRESS,  decimals: 18, color: "#F472B6" },
-];
-
 interface Props {
-  /** Switch the Dashboard tab. Allows the mini-cards to deep-link in-page. */
   onSwitchTab?: (tab: "stake" | "alerts") => void;
 }
 
@@ -189,10 +226,18 @@ export default function OverviewView({ onSwitchTab }: Props) {
 
   const stakeInfo    = contractData?.[0]?.result as [bigint, bigint, bigint, bigint, bigint] | undefined;
   const totalCredits = contractData?.[1]?.result as bigint | undefined;
-  const balances     = BALANCE_TOKENS.map((t, i) => {
+
+  const BALANCE_TOKENS = [
+    { sym: "BLUE",  decimals: 18, color: "#4FC3F7" },
+    { sym: "USDC",  decimals: 6,  color: "#22C55E" },
+    { sym: "WETH",  decimals: 18, color: "#A78BFA" },
+    { sym: "cbBTC", decimals: 8,  color: "#F59E0B" },
+    { sym: "AERO",  decimals: 18, color: "#F472B6" },
+  ];
+  const balances = BALANCE_TOKENS.map((t, i) => {
     const raw = contractData?.[2 + i]?.result as bigint | undefined;
     const n = raw !== undefined ? Number(formatUnits(raw, t.decimals)) : null;
-    return { ...t, raw, amount: n };
+    return { ...t, amount: n };
   });
 
   const stakedWei   = stakeInfo?.[0] ?? 0n;
@@ -213,15 +258,19 @@ export default function OverviewView({ onSwitchTab }: Props) {
     setTimeout(() => setCopied(false), 1500);
   }
 
+  const scoreColor = builderScore !== null
+    ? builderScore >= 70 ? "#34D399" : builderScore >= 40 ? "#4FC3F7" : "#F59E0B"
+    : "#1A1A2E";
+
   return (
     <div className="relative">
       {/* Ambient glow */}
-      <div className="pointer-events-none overflow-hidden absolute inset-x-0 top-0 h-[260px]">
+      <div className="pointer-events-none overflow-hidden absolute inset-x-0 top-0 h-[320px]">
         <div className="absolute inset-0"
-          style={{ background: `radial-gradient(ellipse 80% 50% at 50% -10%, ${tier.color}10 0%, transparent 70%)` }} />
+          style={{ background: `radial-gradient(ellipse 80% 60% at 50% -10%, ${tier.color}12 0%, transparent 70%)` }} />
       </div>
 
-      <div className="relative px-4 sm:px-6 py-6 max-w-2xl mx-auto">
+      <div className="relative px-3 sm:px-5 py-5 max-w-5xl mx-auto">
 
         {!isConnected ? (
           <AppConnectPrompt
@@ -235,14 +284,20 @@ export default function OverviewView({ onSwitchTab }: Props) {
             }
           />
         ) : (
-          <>
-            {/* ── 1. Identity strip ─────────────────────────────────────── */}
-            <AppCard className="p-5 mb-4" accent={tier.color}>
-              <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+
+            {/* ─── Identity hero (2 col on ≥sm) ─────────────────────────── */}
+            <BentoCell flavor="gradient" accent={tier.color} className="sm:col-span-2 p-5">
+              <div className="flex items-start justify-between gap-3 mb-5">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-bold shrink-0"
-                    style={{ background: `${tier.color}18`, border: `1px solid ${tier.color}30`, color: tier.color }}>
-                    {address?.slice(2, 4).toUpperCase()}
+                  <div className="relative shrink-0">
+                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-lg font-bold"
+                      style={{ background: `linear-gradient(135deg, ${tier.color}25, ${tier.color}08)`,
+                               border: `1px solid ${tier.color}40`,
+                               color: tier.color,
+                               boxShadow: `0 0 24px ${tier.color}20` }}>
+                      {address?.slice(2, 4).toUpperCase()}
+                    </div>
                   </div>
                   <div className="min-w-0">
                     <button onClick={copyAddress} className="flex items-center gap-2 hover:opacity-80 transition-opacity max-w-full">
@@ -251,7 +306,7 @@ export default function OverviewView({ onSwitchTab }: Props) {
                     </button>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className="text-[9px] px-2 py-0.5 rounded-full font-bold"
-                        style={{ color: tier.color, background: `${tier.color}18`, border: `1px solid ${tier.color}30` }}>
+                        style={{ color: tier.color, background: `${tier.color}20`, border: `1px solid ${tier.color}40` }}>
                         {tier.name === "None" ? "No Tier" : tier.name}
                       </span>
                       {memberSince && <span className="text-[9px] text-slate-600">since {memberSince}</span>}
@@ -259,106 +314,115 @@ export default function OverviewView({ onSwitchTab }: Props) {
                   </div>
                 </div>
 
+                {/* Builder score as a compact ring-style chip */}
                 <div className="text-right shrink-0">
-                  <div className="text-[9px] text-slate-600 tracking-widest mb-0.5">BUILDER</div>
-                  <div className="text-2xl font-bold"
-                    style={{ color: builderScore !== null ? (builderScore >= 70 ? "#34D399" : builderScore >= 40 ? "#4FC3F7" : "#F59E0B") : "#1A1A2E" }}>
-                    {scoreLoading ? "—" : builderScore !== null ? builderScore : "—"}
+                  <div className="text-[9px] text-slate-600 tracking-widest mb-1">BUILDER</div>
+                  <div className="inline-flex items-baseline gap-0.5 px-2.5 py-1 rounded-lg"
+                       style={{ background: `${scoreColor}10`, border: `1px solid ${scoreColor}25` }}>
+                    <span className="text-xl font-bold leading-none" style={{ color: scoreColor }}>
+                      {scoreLoading ? "—" : builderScore !== null ? builderScore : "—"}
+                    </span>
+                    {builderScore !== null && !scoreLoading && (
+                      <span className="text-[8px] text-slate-700">/100</span>
+                    )}
                   </div>
-                  {builderScore !== null && !scoreLoading && (
-                    <div className="text-[8px] text-slate-700">/100</div>
-                  )}
                 </div>
               </div>
 
-              {/* Earning summary */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                {[
-                  { label: "STAKED",        value: hasStake ? fmtBlue(stakedWei) : "0",                              sub: "BLUE",        color: tier.color },
-                  { label: "CREDITS / DAY", value: Number(dailyCr).toLocaleString(),                                  sub: "per day",     color: "#4FC3F7" },
-                  { label: "TOTAL CREDITS", value: totalCr < 1 ? totalCr.toFixed(2) : totalCr.toFixed(0),             sub: "earned",      color: "#A78BFA" },
-                  { label: "USDC YIELD",    value: `$${(Number(pendingUsdc) / 1e6).toFixed(4)}`,                      sub: "pending",     color: "#22C55E" },
-                ].map(s => (
-                  <div key={s.label} className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-2.5">
-                    <div className="text-[9px] text-slate-600 tracking-widest mb-1">{s.label}</div>
-                    <div className="text-base font-bold leading-none" style={{ color: s.color }}>{s.value}</div>
-                    <div className="text-[9px] text-slate-700 mt-1">{s.sub}</div>
-                  </div>
-                ))}
+              {/* 4 stat chips */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <StatChip label="STAKED"        value={hasStake ? fmtBlue(stakedWei) : "0"}                        sub="BLUE"    color={tier.color} />
+                <StatChip label="CREDITS / DAY" value={Number(dailyCr).toLocaleString()}                            sub="per day" color="#4FC3F7" />
+                <StatChip label="TOTAL CREDITS" value={totalCr < 1 ? totalCr.toFixed(2) : totalCr.toFixed(0)}       sub="earned"  color="#A78BFA" />
+                <StatChip label="USDC YIELD"    value={`$${(Number(pendingUsdc) / 1e6).toFixed(4)}`}                sub="pending" color="#22C55E" />
               </div>
-            </AppCard>
+            </BentoCell>
 
-            {/* ── 2. Balances ───────────────────────────────────────────── */}
-            <AppCard className="mb-4">
-              <AppSectionLabel>BALANCES · BASE</AppSectionLabel>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {/* ─── Stake mini (1 col, full height of left) ─────────────── */}
+            <BentoCell flavor="gradient" accent="#4FC3F7" className="p-5 flex flex-col">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-[10px] text-[#4FC3F7] tracking-widest font-bold">STAKE</div>
+                {hasStake && (
+                  <span className="text-[9px] text-slate-700">{tier.name}</span>
+                )}
+              </div>
+              {hasStake ? (
+                <>
+                  <div className="text-3xl font-bold text-white leading-none mb-1">
+                    {fmtBlue(stakedWei)}
+                    <span className="text-xs text-slate-600 ml-1.5">BLUE</span>
+                  </div>
+                  <div className="text-[11px] text-[#22C55E] mb-4">
+                    +${(Number(pendingUsdc) / 1e6).toFixed(4)} pending USDC
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-slate-500 mb-1">No stake</div>
+                  <div className="text-[11px] text-slate-600 mb-4">Earn USDC yield + AI credits</div>
+                </>
+              )}
+              <button
+                onClick={() => onSwitchTab?.("stake")}
+                className="mt-auto inline-flex items-center justify-center gap-1.5 text-[11px] font-bold px-3 py-2 rounded-lg bg-[#4FC3F7]/15 text-[#4FC3F7] border border-[#4FC3F7]/40 hover:bg-[#4FC3F7]/20 transition-colors">
+                {hasStake ? "Manage stake" : "Stake now"} →
+              </button>
+            </BentoCell>
+
+            {/* ─── Balances row (2 col) ────────────────────────────────── */}
+            <BentoCell className="sm:col-span-2 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-[10px] text-slate-500 tracking-widest font-bold">BALANCES · BASE</div>
+                <span className="text-[9px] text-slate-700">5 tokens</span>
+              </div>
+              <div className="grid grid-cols-5 gap-2">
                 {balances.map(t => {
                   const isZero = !t.amount || t.amount === 0;
                   return (
                     <div key={t.sym}
-                      className={`rounded-xl border p-3 ${isZero ? "border-[#1A1A2E]/50 bg-[#0a0a0f] opacity-60" : "border-[#1A1A2E] bg-[#0a0a0f]"}`}>
-                      <div className="text-[9px] tracking-widest mb-1" style={{ color: t.color }}>{t.sym}</div>
-                      <div className="text-sm font-bold text-white leading-none">
+                      className={`rounded-xl border p-2.5 ${isZero ? "border-[#1A1A2E]/40 bg-[#0a0a0f]/40 opacity-50" : "border-[#1A1A2E] bg-[#0a0a0f]"}`}>
+                      <div className="text-[9px] tracking-widest mb-1 font-bold" style={{ color: t.color }}>{t.sym}</div>
+                      <div className="text-[12px] sm:text-sm font-bold text-white leading-none truncate">
                         {t.amount === null ? "—" : fmtAmt(t.amount, t.decimals)}
                       </div>
                     </div>
                   );
                 })}
               </div>
-            </AppCard>
+            </BentoCell>
 
-            {/* ── 3. Stake + Alerts mini-cards (switch tab in-page) ────── */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              <AppCard className="p-4 flex flex-col">
-                <AppSectionLabel>STAKE</AppSectionLabel>
-                {hasStake ? (
-                  <>
-                    <div className="text-2xl font-bold text-white mb-0.5">{fmtBlue(stakedWei)} <span className="text-xs text-slate-600">BLUE</span></div>
-                    <div className="text-[11px] text-slate-500 mb-3">+${(Number(pendingUsdc) / 1e6).toFixed(4)} pending USDC</div>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-2xl font-bold text-slate-500 mb-0.5">No stake</div>
-                    <div className="text-[11px] text-slate-600 mb-3">Stake $BLUEAGENT to earn USDC yield + credits</div>
-                  </>
+            {/* ─── Alerts mini (1 col) ─────────────────────────────────── */}
+            <BentoCell flavor="gradient" accent="#A78BFA" className="p-5 flex flex-col">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-[10px] text-[#A78BFA] tracking-widest font-bold">ALERTS</div>
+                {activeAlerts.length > 0 && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#A78BFA]/15 text-[#A78BFA]">{activeAlerts.length}</span>
                 )}
-                <button
-                  onClick={() => onSwitchTab?.("stake")}
-                  className="mt-auto inline-flex items-center justify-center gap-1.5 text-[11px] font-bold px-3 py-2 rounded-lg bg-[#4FC3F7]/10 text-[#4FC3F7] border border-[#4FC3F7]/30 hover:bg-[#4FC3F7]/15 transition-colors">
-                  {hasStake ? "Manage stake" : "Stake now"} →
-                </button>
-              </AppCard>
-
-              <AppCard className="p-4 flex flex-col">
-                <div className="flex items-center justify-between mb-3">
-                  <AppSectionLabel>ALERTS</AppSectionLabel>
-                  {activeAlerts.length > 0 && (
-                    <span className="text-[10px] text-[#A78BFA]">{activeAlerts.length} active</span>
-                  )}
+              </div>
+              {activeAlerts.length > 0 ? (
+                <div className="space-y-1.5 mb-4">
+                  {activeAlerts.map(a => (
+                    <div key={a.id} className="flex items-center gap-2 text-[11px]">
+                      <span className="w-1 h-1 rounded-full bg-[#A78BFA] animate-pulse shrink-0" />
+                      <span className="text-slate-300 truncate">{a.label}</span>
+                    </div>
+                  ))}
                 </div>
-                {activeAlerts.length > 0 ? (
-                  <div className="space-y-1.5 mb-3">
-                    {activeAlerts.map(a => (
-                      <div key={a.id} className="flex items-center gap-2 text-[11px]">
-                        <span className="w-1 h-1 rounded-full bg-[#A78BFA] shrink-0" />
-                        <span className="text-slate-300 truncate">{a.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-[11px] text-slate-600 mb-3">No active alerts yet</div>
-                )}
-                <button
-                  onClick={() => onSwitchTab?.("alerts")}
-                  className="mt-auto inline-flex items-center justify-center gap-1.5 text-[11px] font-bold px-3 py-2 rounded-lg bg-[#A78BFA]/10 text-[#A78BFA] border border-[#A78BFA]/30 hover:bg-[#A78BFA]/15 transition-colors">
-                  {activeAlerts.length > 0 ? "Manage alerts" : "Create alert"} →
-                </button>
-              </AppCard>
-            </div>
+              ) : (
+                <div className="text-[11px] text-slate-600 mb-4">No active alerts</div>
+              )}
+              <button
+                onClick={() => onSwitchTab?.("alerts")}
+                className="mt-auto inline-flex items-center justify-center gap-1.5 text-[11px] font-bold px-3 py-2 rounded-lg bg-[#A78BFA]/15 text-[#A78BFA] border border-[#A78BFA]/40 hover:bg-[#A78BFA]/20 transition-colors">
+                {activeAlerts.length > 0 ? "Manage" : "Create alert"} →
+              </button>
+            </BentoCell>
 
-            {/* ── 4. Quick actions ──────────────────────────────────────── */}
-            <AppCard className="mb-4">
-              <AppSectionLabel>QUICK ACTIONS</AppSectionLabel>
+            {/* ─── Quick actions (full width) ──────────────────────────── */}
+            <BentoCell className="sm:col-span-3 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-[10px] text-slate-500 tracking-widest font-bold">QUICK ACTIONS</div>
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {[
                   { label: "Chat",     icon: "💬", href: "/app/chat",      color: "#4FC3F7" },
@@ -367,71 +431,88 @@ export default function OverviewView({ onSwitchTab }: Props) {
                   { label: "Hub",      icon: "🧰", href: "/app/hub",       color: "#22C55E" },
                 ].map(a => (
                   <Link key={a.label} href={a.href}
-                    className="flex flex-col items-center justify-center gap-1 py-3 px-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] hover:border-slate-700 hover:bg-white/[0.02] transition-all">
-                    <span className="text-xl">{a.icon}</span>
-                    <span className="text-[10px] font-bold tracking-widest" style={{ color: a.color }}>{a.label}</span>
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] hover:border-[#2a2a3e] hover:bg-white/[0.02] transition-all group">
+                    <span className="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0"
+                          style={{ background: `${a.color}15`, border: `1px solid ${a.color}25` }}>{a.icon}</span>
+                    <div className="min-w-0">
+                      <div className="text-[10px] tracking-widest font-bold" style={{ color: a.color }}>{a.label.toUpperCase()}</div>
+                      <div className="text-[10px] text-slate-700">Open →</div>
+                    </div>
                   </Link>
                 ))}
               </div>
-            </AppCard>
+            </BentoCell>
 
-            {/* ── 5. Chat activity ──────────────────────────────────────── */}
-            {chatStats.totalSessions > 0 ? (
-              <AppCard className="mb-4">
-                <AppSectionLabel>BLUE CHAT ACTIVITY</AppSectionLabel>
-                <div className="grid grid-cols-3 gap-3 mb-4">
-                  {[
-                    { label: "SESSIONS",     value: chatStats.totalSessions },
-                    { label: "AI RESPONSES", value: chatStats.totalMessages },
-                    { label: "CREDITS USED", value: chatStats.totalCreditsUsed },
-                  ].map(s => (
-                    <div key={s.label}>
-                      <div className="text-[9px] text-slate-600 tracking-widest mb-1">{s.label}</div>
-                      <div className="text-xl font-bold text-white">{s.value.toLocaleString()}</div>
-                    </div>
-                  ))}
-                </div>
-                {chatStats.toolsUsed.length > 0 && (
-                  <>
-                    <p className="text-[9px] text-slate-700 tracking-widest mb-2">TOP TOOLS</p>
-                    <div className="space-y-1.5">
-                      {chatStats.toolsUsed.map(t => {
-                        const maxCount = chatStats.toolsUsed[0].count;
-                        return (
-                          <div key={t.name} className="flex items-center gap-2.5">
-                            <span className="text-[10px] text-slate-400 w-28 sm:w-36 shrink-0 truncate">{t.name.replace(/_/g, " ")}</span>
-                            <div className="flex-1 h-1 bg-[#1A1A2E] rounded-full overflow-hidden">
-                              <div className="h-full rounded-full bg-[#4FC3F7]"
-                                style={{ width: `${(t.count / maxCount) * 100}%` }} />
-                            </div>
-                            <span className="text-[9px] text-slate-600 w-5 text-right shrink-0">{t.count}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
+            {/* ─── Chat activity (full width) ──────────────────────────── */}
+            <BentoCell className="sm:col-span-3 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-[10px] text-slate-500 tracking-widest font-bold">BLUE CHAT ACTIVITY</div>
+                {chatStats.totalSessions > 0 && (
+                  <Link href="/app/chat" className="text-[10px] text-[#4FC3F7] hover:underline">Open chat →</Link>
                 )}
-              </AppCard>
-            ) : (
-              <AppCard className="mb-4 text-center py-6">
-                <div className="text-2xl mb-2">💬</div>
-                <p className="text-sm font-bold text-white mb-1">Start your first chat</p>
-                <p className="text-[11px] text-slate-600 mb-4">5 commands · 50+ tools · 3-agent consensus</p>
-                <Link href="/app/chat"
-                  className="inline-flex items-center justify-center gap-1.5 text-[11px] font-bold px-4 py-2 rounded-lg bg-[#4FC3F7] text-[#050508] hover:bg-[#29ABE2] transition-colors">
-                  Open Blue Chat →
-                </Link>
-              </AppCard>
-            )}
+              </div>
+              {chatStats.totalSessions > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-4">
+                  {/* 3-stat block */}
+                  <div className="grid grid-cols-3 sm:grid-cols-1 gap-2.5">
+                    <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3 py-2.5">
+                      <div className="text-[9px] text-slate-600 tracking-widest mb-1">SESSIONS</div>
+                      <div className="text-lg font-bold text-white leading-none">{chatStats.totalSessions.toLocaleString()}</div>
+                    </div>
+                    <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3 py-2.5">
+                      <div className="text-[9px] text-slate-600 tracking-widest mb-1">RESPONSES</div>
+                      <div className="text-lg font-bold text-white leading-none">{chatStats.totalMessages.toLocaleString()}</div>
+                    </div>
+                    <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3 py-2.5">
+                      <div className="text-[9px] text-slate-600 tracking-widest mb-1">CREDITS</div>
+                      <div className="text-lg font-bold text-[#4FC3F7] leading-none">{chatStats.totalCreditsUsed.toLocaleString()}</div>
+                    </div>
+                  </div>
+                  {/* Top tools */}
+                  {chatStats.toolsUsed.length > 0 && (
+                    <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
+                      <p className="text-[9px] text-slate-700 tracking-widest mb-2.5">TOP TOOLS</p>
+                      <div className="space-y-1.5">
+                        {chatStats.toolsUsed.map(t => {
+                          const maxCount = chatStats.toolsUsed[0].count;
+                          return (
+                            <div key={t.name} className="flex items-center gap-2.5">
+                              <span className="text-[10px] text-slate-400 w-28 sm:w-36 shrink-0 truncate">{t.name.replace(/_/g, " ")}</span>
+                              <div className="flex-1 h-1 bg-[#1A1A2E] rounded-full overflow-hidden">
+                                <div className="h-full rounded-full"
+                                  style={{ width: `${(t.count / maxCount) * 100}%`,
+                                           background: "linear-gradient(90deg, #4FC3F780, #4FC3F7)" }} />
+                              </div>
+                              <span className="text-[9px] text-slate-600 w-5 text-right shrink-0">{t.count}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <div className="text-2xl mb-2">💬</div>
+                  <p className="text-sm font-bold text-white mb-1">Start your first chat</p>
+                  <p className="text-[11px] text-slate-600 mb-4">5 commands · 50+ tools · 3-agent consensus</p>
+                  <Link href="/app/chat"
+                    className="inline-flex items-center justify-center gap-1.5 text-[11px] font-bold px-4 py-2 rounded-lg bg-[#4FC3F7] text-[#050508] hover:bg-[#29ABE2] transition-colors">
+                    Open Blue Chat →
+                  </Link>
+                </div>
+              )}
+            </BentoCell>
 
-            {/* ── Footer links ──────────────────────────────────────────── */}
-            <div className="flex flex-wrap gap-3 text-[10px] text-slate-700 justify-center">
+            {/* ─── Footer links ─────────────────────────────────────────── */}
+            <div className="sm:col-span-3 flex flex-wrap gap-3 text-[10px] text-slate-700 justify-center pt-2">
               <a href={`https://basescan.org/address/${address}`} target="_blank" rel="noopener noreferrer"
                 className="hover:text-slate-500 transition-colors">Basescan ↗</a>
               <Link href="/app/profile" className="hover:text-slate-500 transition-colors">Profile →</Link>
               <Link href="/score" className="hover:text-slate-500 transition-colors">Score →</Link>
             </div>
-          </>
+
+          </div>
         )}
       </div>
     </div>
