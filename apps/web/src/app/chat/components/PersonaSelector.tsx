@@ -26,17 +26,24 @@ export default function PersonaSelector() {
                 boxShadow: isActive ? `0 0 6px ${p.color}70` : "none",
               }}
             />
-            {/* Icon + label */}
+            {/* Icon + label + one-line role description */}
             <span className="text-sm shrink-0">{p.icon}</span>
-            <span
-              className="font-mono text-sm font-medium flex-1"
-              style={{ color: isActive ? p.color : "#64748b" }}
-            >
-              {p.label}
+            <span className="flex-1 min-w-0">
+              <span className="flex items-center gap-2">
+                <span
+                  className="font-mono text-sm font-medium"
+                  style={{ color: isActive ? p.color : "#94a3b8" }}
+                >
+                  {p.label}
+                </span>
+                {isActive && (
+                  <span className="font-mono text-[9px]" style={{ color: p.color }}>active</span>
+                )}
+              </span>
+              <span className="block font-mono text-[10px] text-slate-600 leading-snug mt-0.5">
+                {p.desc}
+              </span>
             </span>
-            {isActive && (
-              <span className="font-mono text-[9px] shrink-0" style={{ color: p.color }}>active</span>
-            )}
           </button>
         );
       })}

@@ -5,6 +5,7 @@ export const PERSONAS: Persona[] = [
     id:           "blue-agent",
     label:        "Blue Agent",
     icon:         "🔵",
+    desc:         "General Base founder copilot — idea, build, audit, ship, raise",
     color:        "#4FC3F7",
     systemPrompt: "",  // uses BASE_SYSTEM only
   },
@@ -12,6 +13,7 @@ export const PERSONAS: Persona[] = [
     id:    "blue-trader",
     label: "Blue Trader",
     icon:  "📈",
+    desc:  "Trading specialist — position sizing, entries/exits, on-chain alpha",
     color: "#34D399",
     systemPrompt:
       "You are Blue Trader — a crypto trading specialist for Base. " +
@@ -23,6 +25,7 @@ export const PERSONAS: Persona[] = [
     id:    "blue-auditor",
     label: "Blue Auditor",
     icon:  "🛡️",
+    desc:  "Contract security expert — vulns, severity, Solidity fixes, go/no-go",
     color: "#F87171",
     systemPrompt:
       "You are Blue Auditor — a smart contract security expert. " +
@@ -34,6 +37,7 @@ export const PERSONAS: Persona[] = [
     id:    "blue-researcher",
     label: "Blue Researcher",
     icon:  "🔬",
+    desc:  "Deep research — evidence-backed, cites on-chain data, contrarian",
     color: "#A78BFA",
     systemPrompt:
       "You are Blue Researcher — a deep research specialist for Base and crypto. " +
@@ -45,6 +49,7 @@ export const PERSONAS: Persona[] = [
     id:    "custom",
     label: "Custom",
     icon:  "✏️",
+    desc:  "Write your own system prompt — full control over behavior",
     color: "#FB923C",
     systemPrompt: "",  // user-defined at runtime
   },
