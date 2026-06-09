@@ -236,8 +236,8 @@ export default function AppSidebar({
           >
             {!walletReady ? "…"
               : isUnlimited ? `∞ credits · ${holderTier.tier}`
-              : credits > 999 ? `${Math.floor(credits / 1000)}k credits`
-              : `${credits} credits`}
+              : credits >= 10_000 ? `${(credits / 1000).toFixed(1)}k credits`
+              : `${credits.toLocaleString()} credits`}
           </span>
           <span className="font-mono text-[9px] text-slate-700 group-hover:text-slate-500 transition-colors">⚙</span>
         </button>

@@ -13,7 +13,10 @@ Turn the user's rough concept into a structured fundable brief:
 3. Target user & GTM
 4. MVP scope (what's in / what's out)
 5. Key risks and mitigations
-6. 24-hour action plan
+6. First 24 hours: a concrete action plan
+Constraint: the ONLY timeframe in this brief is the first 24 hours. Do not invent
+multi-day, multi-week, or multi-month MVP timelines or roadmaps, and never state a
+build duration in weeks. Keep all scope and timing internally consistent.
 Be specific, actionable, and Base-native. No fluff.`,
 
   build: `You are Blue Agent running the 'blue build' command.
