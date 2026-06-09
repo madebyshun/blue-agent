@@ -165,11 +165,56 @@ async function handle(
   const requirements = buildRequirements(String(priceUnits));
   const xPayment    = req.headers.get("x-payment") ?? req.headers.get("X-Payment");
   const xInternal   = req.headers.get("x-blue-internal") ?? req.headers.get("X-Blue-Internal");
+  // X-Blue-User pairs with X-Blue-Internal to flip the bypass from
+  // free-for-server into "debit the user's credit ledger". This is how
+  // chat-originated tool calls now bill the user instead of the dev's
+  // pocket. Must be a checksum-or-lowercase 0x address.
+  const xBlueUser   = req.headers.get("x-blue-user") ?? req.headers.get("X-Blue-User");
 
-  // ── Internal bypass — skip payment for server-to-server calls ─────────────
+  // ── Internal bypass — skip x402 payment for server-to-server calls ────────
+  // Two flavours depending on whether X-Blue-User is provided:
+  //   no user  → free bypass (server jobs, cron, internal callers)
+  //   w/ user  → debit credits from that user's ledger; on insufficient
+  //              balance return 402 INSUFFICIENT_CREDITS so the chat UI
+  //              can surface a top-up CTA.
   if (INTERNAL_KEY && xInternal === INTERNAL_KEY) {
     let body: Record<string, unknown> = {};
     try { body = await req.json(); } catch {}
+
+    // Credit-debit path (chat user calling a tool).
+    if (xBlueUser && /^0x[a-fA-F0-9]{40}$/.test(xBlueUser)) {
+      const { fetchBlueBalance, getTierInfo } = await import("@/lib/credits");
+      const { toolCreditCost }                = await import("@/lib/credit-pricing");
+      const { spend }                         = await import("@/lib/credit-ledger");
+
+      const blueBalance = await fetchBlueBalance(xBlueUser);
+      const holderTier  = getTierInfo(blueBalance);
+      const cost        = toolCreditCost(tool, holderTier);
+
+      if (cost > 0) {
+        try {
+          await spend(xBlueUser, cost, `tool:${tool}`);
+        } catch (e) {
+          const err = e as Error & { code?: string };
+          if (err.code === "INSUFFICIENT_CREDITS") {
+            return NextResponse.json(
+              {
+                error:  "Insufficient credits to call this tool",
+                code:   "INSUFFICIENT_CREDITS",
+                tool,
+                needed: cost,
+                hint:   "Top up credits or stake more BLUE for a bigger daily accrual.",
+              },
+              { status: 402 },
+            );
+          }
+          // Non-payment error during spend — log + degrade to free bypass
+          // rather than block the chat experience.
+          console.error("[x402] credit debit failed:", err.message);
+        }
+      }
+    }
+
     const innerReq = new Request(`https://blueagent.dev/api/x402/${tool}`, {
       method: "POST",
       headers: { "content-type": "application/json" },

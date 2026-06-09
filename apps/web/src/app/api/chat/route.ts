@@ -22,6 +22,91 @@ const VENICE_API      = "https://api.venice.ai/api/v1/chat/completions";
 const BASE_URL        = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
 const INTERNAL_KEY    = process.env.INTERNAL_SERVICE_KEY ?? "";
 
+// ─── Credit ledger debit helpers (Week 2 of credit redesign) ─────────────────
+
+type DebitResult =
+  | { kind: "ok";           cost: number }
+  | { kind: "insufficient"; needed: number; balance: number }
+  | { kind: "skipped";      reason: string };
+
+/**
+ * Resolve the connected wallet's tier server-side, compute the model-tier
+ * credit cost, and debit it from the unified credit ledger. Returns the
+ * outcome so the caller can either keep streaming (ok/skipped) or short-
+ * circuit with a credit-error SSE (insufficient).
+ *
+ * Skipped (not an error) when:
+ *   - INTERNAL_SERVICE_KEY isn't configured  → can't auth to the spend route
+ *   - the spend route itself errors out      → degrade gracefully, don't block
+ */
+async function debitChatCredits(address: string, tier: string): Promise<DebitResult> {
+  // Lazy-import so we don't drag the lib into every other code path that
+  // imports this route module (Next.js build will tree-shake either way,
+  // but keeps the dependency graph obvious).
+  const { fetchBlueBalance, getTierInfo } = await import("@/lib/credits");
+  const { chatCreditCost }                = await import("@/lib/credit-pricing");
+
+  const blueBalance = await fetchBlueBalance(address);
+  const holderTier  = getTierInfo(blueBalance);
+  const cost        = chatCreditCost(tier, holderTier);
+
+  if (cost <= 0) return { kind: "skipped", reason: "zero-cost-tier" };
+
+  try {
+    const res = await fetch(`${BASE_URL}/api/credits/spend`, {
+      method: "POST",
+      headers: {
+        "Content-Type":   "application/json",
+        "X-Blue-Internal": INTERNAL_KEY,
+      },
+      body: JSON.stringify({ address, amount: cost, reason: `chat:${tier}` }),
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (res.status === 402) {
+      const data = await res.json().catch(() => ({})) as {
+        balance?: { balance?: number };
+      };
+      return {
+        kind:    "insufficient",
+        needed:  cost,
+        balance: data.balance?.balance ?? 0,
+      };
+    }
+    if (!res.ok) {
+      // Don't block the chat on ledger trouble — log + skip.
+      console.error("[chat] credit spend failed:", res.status);
+      return { kind: "skipped", reason: `spend-${res.status}` };
+    }
+    return { kind: "ok", cost };
+  } catch (e) {
+    console.error("[chat] credit spend error:", (e as Error).message);
+    return { kind: "skipped", reason: "network" };
+  }
+}
+
+/**
+ * Return an SSE stream that emits a single `insufficient_credits` event and
+ * closes — keeps the response shape identical to the normal chat stream so
+ * the frontend reader doesn't need a separate code path for this.
+ */
+function creditErrorSSE(needed: number, balance: number): Response {
+  const payload = JSON.stringify({
+    type:    "insufficient_credits",
+    needed,
+    balance,
+    message: `You need ${needed} credits but only have ${balance}. Top up to continue.`,
+  });
+  const body = `data: ${payload}\n\ndata: [DONE]\n\n`;
+  return new Response(body, {
+    status:  200, // 200 + SSE so the existing reader picks it up
+    headers: {
+      "Content-Type":  "text/event-stream",
+      "Cache-Control": "no-store",
+      "Connection":    "keep-alive",
+    },
+  });
+}
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 const MODELS: Record<string, { id: string; maxTokens: number }> = {
@@ -415,13 +500,35 @@ const TOOL_ENDPOINT: Record<string, string> = {
 
 // ─── Internal Hub tool caller ─────────────────────────────────────────────────
 
-async function callHubTool(toolName: string, args: Record<string, unknown>): Promise<{ text: string; result?: unknown }> {
+interface ToolCallResult {
+  text:     string;
+  result?:  unknown;
+  /**
+   * Set when the chat user's credit ledger couldn't cover the tool's cost.
+   * Surfaced upstream so the chat stream can emit an `insufficient_credits`
+   * SSE event instead of silently swallowing the failure.
+   */
+  insufficient?: { needed: number; balance: number; tool: string };
+}
+
+async function callHubTool(
+  toolName: string,
+  args:     Record<string, unknown>,
+  // Connected wallet of the chat user. When present, the x402 route debits
+  // toolCreditCost(toolId, tier) from their credit ledger instead of free-
+  // bypassing on the dev's pocket.
+  userAddress?: string,
+): Promise<ToolCallResult> {
   const endpoint = TOOL_ENDPOINT[toolName];
   if (!endpoint) return { text: `[Unknown tool: ${toolName}]` };
 
-  // Internal bypass: call /api/x402/<id> directly with X-Blue-Internal header
+  // Internal bypass: call /api/x402/<id> directly with X-Blue-Internal header.
+  // If userAddress is set, the x402 route will additionally debit credits.
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (INTERNAL_KEY) headers["X-Blue-Internal"] = INTERNAL_KEY;
+  if (INTERNAL_KEY)  headers["X-Blue-Internal"] = INTERNAL_KEY;
+  if (userAddress && /^0x[a-fA-F0-9]{40}$/.test(userAddress)) {
+    headers["X-Blue-User"] = userAddress;
+  }
 
   // crypto-rpc routes directly to /api/crypto-rpc (not x402 — no payment gate)
   const apiPath = toolName === "hub_crypto_rpc"
@@ -437,6 +544,17 @@ async function callHubTool(toolName: string, args: Record<string, unknown>): Pro
     });
 
     if (res.status === 402) {
+      // Distinguish credit-ledger 402 from "payment gate not bypassed" 402:
+      // ours carries code: "INSUFFICIENT_CREDITS" + a needed field.
+      const data = await res.json().catch(() => ({})) as {
+        code?: string; needed?: number;
+      };
+      if (data?.code === "INSUFFICIENT_CREDITS" && typeof data.needed === "number") {
+        return {
+          text: `[${toolName}: not enough credits — need ${data.needed}, top up to continue]`,
+          insufficient: { needed: data.needed, balance: 0, tool: toolName },
+        };
+      }
       return { text: `[${toolName}: payment required — set INTERNAL_SERVICE_KEY env var to enable]` };
     }
     if (!res.ok) {
@@ -502,6 +620,9 @@ async function veniceToolStream(
   toolCalls:       VeniceToolCall[],
   maxTokens:       number,
   enableWebSearch: boolean,
+  // Connected wallet — forwarded to callHubTool so each tool invocation
+  // debits credits from the user's ledger rather than free-bypassing.
+  userAddress?:    string,
 ): Promise<Response> {
   const enc = new TextEncoder();
 
@@ -551,7 +672,7 @@ async function veniceToolStream(
         const veniceOutputs = await Promise.all(toolCalls.map(async tc => {
           let args: Record<string, unknown> = {};
           try { args = JSON.parse(tc.function.arguments); } catch {}
-          const out = await callHubTool(tc.function.name, args);
+          const out = await callHubTool(tc.function.name, args, userAddress);
           return { tc, out };
         }));
         const elapsed = Date.now() - t0;
@@ -560,9 +681,22 @@ async function veniceToolStream(
           role: "tool" as const, tool_call_id: tc.id, content: out.text,
         }));
 
-        // 3. tool_done events (include raw result for card rendering)
-        for (const { tc, out } of veniceOutputs)
+        // 3. tool_done events (include raw result for card rendering).
+        //    If the tool came back with an insufficient-credits signal,
+        //    emit a dedicated event so the chat UI can render a top-up CTA
+        //    inline alongside the regular result placeholder.
+        for (const { tc, out } of veniceOutputs) {
           emit({ type: "tool_done", tool: tc.function.name, ms: elapsed, result: out.result });
+          if (out.insufficient) {
+            emit({
+              type:    "insufficient_credits",
+              kind:    "tool",
+              tool:    out.insufficient.tool,
+              needed:  out.insufficient.needed,
+              balance: out.insufficient.balance,
+            });
+          }
+        }
 
         // 4. Phase 2 streaming synthesis
         const phase2Msgs = [
@@ -1045,6 +1179,10 @@ export async function POST(req: NextRequest) {
     modelId?:     string;
     webSearch?:   boolean;
     attachments?: Attachment[];
+    // Connected wallet — when present, server debits credits via the unified
+    // ledger (Week 2 of the credit-economics redesign). Guest sessions (no
+    // address) keep the old localStorage daily-quota flow on the frontend.
+    address?:     string;
   } = {};
   try {
     body = await req.json();
@@ -1052,9 +1190,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { messages, tier = "pro", memoryContext, provider, modelId, webSearch = false, attachments = [] } = body;
+  const { messages, tier = "pro", memoryContext, provider, modelId, webSearch = false, attachments = [], address } = body;
   if (!messages?.length) {
     return NextResponse.json({ error: "messages array required." }, { status: 400 });
+  }
+
+  // ── Credit ledger debit (connected wallets only) ──────────────────────────
+  // Server fetches BLUE balance + computes credit cost server-side (frontend
+  // tier is not trusted). On insufficient balance, we return an SSE stream
+  // with a structured event so the chat UI can render a top-up CTA in-line.
+  if (address && INTERNAL_KEY && /^0x[a-fA-F0-9]{40}$/.test(address)) {
+    const debit = await debitChatCredits(address, tier);
+    if (debit.kind === "insufficient") {
+      return creditErrorSSE(debit.needed, debit.balance);
+    }
+    // debit.kind === "ok" | "skipped" → proceed normally
   }
 
   // ── Command injection ─────────────────────────────────────────────────────
@@ -1109,7 +1259,7 @@ export async function POST(req: NextRequest) {
       const phase1    = await callVenicePhase1(apiKey, modelId, openaiMsgs, maxTok, autoSearch);
       const toolCalls = phase1?.choices?.[0]?.message?.tool_calls;
       if (toolCalls?.length) {
-        return veniceToolStream(apiKey, modelId, openaiMsgs, toolCalls, maxTok, autoSearch);
+        return veniceToolStream(apiKey, modelId, openaiMsgs, toolCalls, maxTok, autoSearch, address);
       }
     }
 
@@ -1183,7 +1333,7 @@ export async function POST(req: NextRequest) {
         const t0 = Date.now();
         const toolOutputs = await Promise.all(
           toolUseBlocks.map(async (block) => {
-            const out = await callHubTool(block.name!, block.input ?? {});
+            const out = await callHubTool(block.name!, block.input ?? {}, address);
             return { block, out };
           })
         );
@@ -1195,11 +1345,24 @@ export async function POST(req: NextRequest) {
           content:     out.text,
         }));
 
-        // 3. tool_done events (include raw result for card rendering)
+        // 3. tool_done events (include raw result for card rendering).
+        //    Insufficient-credits emits a sibling SSE event so the chat
+        //    UI can pop a top-up CTA without disrupting the tool stream.
         for (const { block, out } of toolOutputs) {
           controller.enqueue(enc.encode(
             `data: ${JSON.stringify({ type: "tool_done", tool: block.name, ms: elapsed, result: out.result })}\n\n`
           ));
+          if (out.insufficient) {
+            controller.enqueue(enc.encode(
+              `data: ${JSON.stringify({
+                type:    "insufficient_credits",
+                kind:    "tool",
+                tool:    out.insufficient.tool,
+                needed:  out.insufficient.needed,
+                balance: out.insufficient.balance,
+              })}\n\n`,
+            ));
+          }
         }
 
         // 4. Phase 2 — streaming synthesis

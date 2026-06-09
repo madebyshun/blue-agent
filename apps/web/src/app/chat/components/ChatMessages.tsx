@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useChat } from "../ChatContext";
 import { ToolResultCard } from "./ToolCards";
 
@@ -488,6 +489,38 @@ export default function ChatMessages() {
                               ⚡ {msg.creditsUsed} cr
                             </span>
                           )}
+                        </div>
+                      )}
+
+                      {/* Insufficient-credits notice — rendered inline when the
+                          chat or tool ledger debit hit an empty balance. The
+                          actual top-up modal lands in Week 3; for now this is
+                          a deep-link prompt to the dashboard's stake/top-up
+                          surface so users still have a path forward. */}
+                      {msg.insufficientCredits && (
+                        <div className="mt-2 rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/[0.06] px-3 py-2.5">
+                          <div className="flex items-start gap-2.5">
+                            <span className="text-[#F59E0B] shrink-0 mt-0.5">⚡</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-mono text-[11px] text-[#F59E0B] font-bold tracking-widest mb-0.5">
+                                {msg.insufficientCredits.kind === "tool" ? "TOOL CREDITS LOW" : "CHAT CREDITS LOW"}
+                              </p>
+                              <p className="font-mono text-[11px] text-slate-300 leading-relaxed">
+                                {msg.insufficientCredits.message ?? (
+                                  <>Need <span className="text-white font-medium">{msg.insufficientCredits.needed}</span> cr · have <span className="text-white font-medium">{msg.insufficientCredits.balance}</span></>
+                                )}
+                              </p>
+                              <div className="flex gap-2 mt-2 flex-wrap">
+                                <Link href="/app/dashboard?tab=stake"
+                                  className="inline-flex items-center gap-1 font-mono text-[10px] font-bold px-2.5 py-1 rounded-md bg-[#F59E0B]/15 text-[#F59E0B] border border-[#F59E0B]/40 hover:bg-[#F59E0B]/25 transition-colors">
+                                  Stake more BLUE →
+                                </Link>
+                                <span className="font-mono text-[10px] text-slate-700 self-center">
+                                  Top-up via USDC coming next
+                                </span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       )}
 
