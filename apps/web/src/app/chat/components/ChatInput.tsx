@@ -256,13 +256,18 @@ export default function ChatInput() {
               <span className="font-mono text-[10px] text-slate-600 tracking-widest">CHOOSE A MODE</span>
             </div>
 
-            {/* Use-case presets — 5 active + 1 roadmap placeholder for the
-                upcoming Code preset. Even-count grid keeps the layout balanced
-                while signalling that a code-specialised model is on the way. */}
-            <div className="p-2 grid grid-cols-2 gap-1.5">
+            {/* Use-case presets — single-column row list. Each preset is one
+                line: icon + label on the left, terse description and credit
+                cost on the right. Tier accent shows as a 2px left bar on the
+                active row instead of a full card outline; way less ink than
+                the previous 2×3 card grid + the whole popover collapses to
+                about half the height. The Code placeholder still appears as
+                a muted row so the roadmap stays visible. */}
+            <div className="py-1.5">
               {MODEL_PRESETS.map(p => {
                 const isActive = activePreset?.id === p.id;
                 const tierMeta = ALL_TIERS.find(t => t.id === p.tier);
+                const accent   = tierMeta?.color ?? "#4FC3F7";
                 return (
                   <button key={p.id}
                     onClick={() => {
@@ -271,33 +276,46 @@ export default function ChatInput() {
                       setModelOpen(false);
                       textareaRef.current?.focus();
                     }}
-                    className="text-left rounded-lg border p-2.5 transition-all hover:bg-white/[0.02]"
-                    style={isActive
-                      ? { borderColor: `${tierMeta?.color ?? "#4FC3F7"}50`, background: `${tierMeta?.color ?? "#4FC3F7"}10` }
-                      : { borderColor: "#1A1A2E", background: "transparent" }}>
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className="text-base">{p.icon}</span>
-                      <span className="font-mono text-[11px] font-bold" style={{ color: tierMeta?.color ?? "#fff" }}>
-                        {p.label}
-                      </span>
+                    className="w-full text-left flex items-center gap-2.5 px-3 py-2 hover:bg-white/[0.02] transition-colors relative"
+                    style={isActive ? { background: `${accent}0a` } : undefined}>
+                    {/* Active indicator bar */}
+                    {isActive && (
+                      <span aria-hidden className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r"
+                            style={{ background: accent, boxShadow: `0 0 8px ${accent}80` }} />
+                    )}
+                    <span className="text-base shrink-0 w-5 text-center">{p.icon}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-mono text-[12px] font-bold" style={{ color: isActive ? accent : "#e2e8f0" }}>
+                          {p.label}
+                        </span>
+                        {isActive && (
+                          <span className="font-mono text-[9px]" style={{ color: accent }}>✓</span>
+                        )}
+                      </div>
+                      <p className="font-mono text-[10px] text-slate-500 leading-snug truncate">{p.desc}</p>
                     </div>
-                    <p className="font-mono text-[9px] text-slate-500 leading-snug">{p.desc}</p>
                     {tierMeta && (
-                      <p className="font-mono text-[9px] text-slate-700 mt-1">{tierMeta.credits} cr/msg</p>
+                      <span className="font-mono text-[10px] shrink-0" style={{ color: accent }}>
+                        {tierMeta.credits}<span className="text-slate-700"> cr</span>
+                      </span>
                     )}
                   </button>
                 );
               })}
+
               {/* Roadmap placeholder — Code preset coming when a code-tuned
-                  model lands. Renders as a non-interactive card so the grid
-                  stays a tidy 2×3 and users see what's next. */}
-              <div className="text-left rounded-lg border border-dashed border-[#1A1A2E] p-2.5 opacity-60 cursor-default select-none">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="text-base">🛠️</span>
-                  <span className="font-mono text-[11px] font-bold text-slate-500">Code</span>
+                  model lands. Non-interactive row, muted styling. */}
+              <div className="w-full text-left flex items-center gap-2.5 px-3 py-2 opacity-50 cursor-default select-none">
+                <span className="text-base shrink-0 w-5 text-center">🛠️</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-mono text-[12px] font-bold text-slate-500">Code</span>
+                    <span className="font-mono text-[9px] text-slate-700">coming soon</span>
+                  </div>
+                  <p className="font-mono text-[10px] text-slate-600 leading-snug truncate">Solidity · viem · Foundry</p>
                 </div>
-                <p className="font-mono text-[9px] text-slate-600 leading-snug">Coming soon · Solidity / viem / Foundry</p>
-                <p className="font-mono text-[9px] text-slate-700 mt-1">tbd cr/msg</p>
+                <span className="font-mono text-[10px] text-slate-700 shrink-0">tbd</span>
               </div>
             </div>
 
