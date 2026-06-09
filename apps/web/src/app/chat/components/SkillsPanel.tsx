@@ -64,14 +64,13 @@ export default function SkillsPanel() {
   return (
     <div className="flex flex-col h-full bg-[#050508] overflow-hidden">
 
-      {/* ── Header ── */}
-      <div className="px-6 py-5 border-b border-[#1A1A2E] flex-shrink-0">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="font-mono text-xs text-white tracking-widest">// AGENT SKILLS</h2>
-            <p className="font-mono text-[10px] text-slate-700 mt-0.5">{totalActive} active · click to send to chat</p>
-          </div>
+      {/* ── Header — same SECTION-LABEL pattern as Settings/Cron/Tools ── */}
+      <div className="px-5 py-4 border-b border-[#1A1A2E] flex-shrink-0">
+        <div className="flex items-center justify-between mb-3">
+          <p className="font-mono text-[10px] text-slate-500 tracking-widest">AGENT SKILLS</p>
+          <span className="font-mono text-[10px] text-slate-600">{totalActive} active</span>
         </div>
+        <p className="font-mono text-[10px] text-slate-700 mb-3">Click any active skill to send its trigger into the composer.</p>
 
         {/* Search */}
         <div className="relative mb-4">

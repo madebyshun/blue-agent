@@ -185,22 +185,20 @@ export default function ToolsTab() {
   return (
     <div className="flex flex-col h-full bg-[#050508] overflow-hidden">
 
-      {/* ── Header ── */}
-      <div className="px-6 py-5 border-b border-[#1A1A2E] flex-shrink-0">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="font-mono text-xs text-white tracking-widest">// HUB TOOLS</h2>
-            <p className="font-mono text-[10px] text-slate-700 mt-0.5">
-              {HUB_SKILLS.length} tools · {SKILL_CATEGORIES.length} categories · click to run
-            </p>
-          </div>
+      {/* ── Header — same SECTION-LABEL pattern as Settings/Cron/Skills ── */}
+      <div className="px-5 py-4 border-b border-[#1A1A2E] flex-shrink-0">
+        <div className="flex items-center justify-between mb-3">
+          <p className="font-mono text-[10px] text-slate-500 tracking-widest">HUB TOOLS</p>
           <span
-            className="font-mono text-[9px] px-2 py-1 rounded-lg border"
+            className="font-mono text-[10px] px-1.5 py-0.5 rounded border font-semibold"
             style={{ color: "#4FC3F7", borderColor: "#4FC3F730", background: "#4FC3F710" }}
           >
             BLUE HUB
           </span>
         </div>
+        <p className="font-mono text-[10px] text-slate-700 mb-3">
+          {HUB_SKILLS.length} tools · {SKILL_CATEGORIES.length} categories · click to run
+        </p>
 
         {/* Search */}
         <div className="relative">

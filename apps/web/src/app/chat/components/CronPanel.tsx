@@ -72,11 +72,11 @@ export default function CronPanel() {
   return (
     <div className="flex flex-col h-full bg-[#050508] overflow-y-auto">
 
-      {/* ── Header ── */}
-      <div className="px-6 py-5 border-b border-[#1A1A2E] flex-shrink-0">
+      {/* ── Header — consistent w/ Settings/Skills/Tools panels ─────── */}
+      <div className="px-5 py-4 border-b border-[#1A1A2E] flex-shrink-0">
         <div className="flex items-center justify-between mb-1">
-          <h2 className="font-mono text-xs text-white tracking-widest">// SCHEDULED TASKS</h2>
-          <div className="flex items-center gap-3">
+          <p className="font-mono text-[10px] text-slate-500 tracking-widest">SCHEDULED TASKS</p>
+          <div className="flex items-center gap-2">
             {crons.length > 0 && (
               <span className="font-mono text-[10px] text-slate-600">
                 {active} active{inactive > 0 ? ` · ${inactive} paused` : ""}
@@ -84,26 +84,12 @@ export default function CronPanel() {
             )}
             <button
               onClick={() => setShowForm(v => !v)}
-              className="flex items-center gap-1.5 font-mono text-[11px] px-3 py-1.5 rounded-lg transition-all"
+              className="flex items-center gap-1 font-mono text-[10px] font-semibold px-2.5 py-1 rounded-md transition-all"
               style={showForm
                 ? { color: "#EF4444", background: "#EF444415", border: "1px solid #EF444430" }
                 : { color: "#4FC3F7", background: "#4FC3F710", border: "1px solid #4FC3F730" }}
             >
-              {showForm ? (
-                <>
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  Cancel
-                </>
-              ) : (
-                <>
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add task
-                </>
-              )}
+              {showForm ? "✕ Cancel" : "+ Add task"}
             </button>
           </div>
         </div>
@@ -189,55 +175,53 @@ export default function CronPanel() {
         </div>
       )}
 
-      {/* ── Task list ── */}
-      <div className="flex-1 px-6 py-5">
+      {/* ── Task list — tighter card density vs the original (px-4
+            pt-4 pb-3 + nested prompt box → px-3.5 py-3 with prompt
+            inline). Each card stacks vertically: toggle row → prompt
+            preview → footer; same content, ~30% less height. ─────── */}
+      <div className="flex-1 px-5 py-4">
         {crons.length === 0 && !showForm && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-12 h-12 rounded-2xl border border-[#1A1A2E] flex items-center justify-center mb-4 text-2xl">
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-10 h-10 rounded-xl border border-[#1A1A2E] flex items-center justify-center mb-3 text-xl">
               ⏱
             </div>
-            <p className="font-mono text-sm text-slate-500 mb-1">No scheduled tasks</p>
-            <p className="font-mono text-[10px] text-slate-700">Create a task to run prompts automatically</p>
+            <p className="font-mono text-sm text-slate-500 mb-0.5">No scheduled tasks</p>
+            <p className="font-mono text-[10px] text-slate-700">Create one above to run prompts automatically</p>
           </div>
         )}
 
-        <div className="space-y-3">
+        <div className="space-y-2">
           {crons.map(cron => {
             const isRunning = cronRunning === cron.id;
             return (
               <div
                 key={cron.id}
-                className="rounded-2xl border transition-all"
+                className="rounded-xl border transition-all overflow-hidden"
                 style={{
                   borderColor: cron.active ? "#1E293B" : "#0F172A",
-                  background: cron.active ? "#0A0A12" : "#070710",
+                  background:  cron.active ? "#0A0A12" : "#070710",
                 }}
               >
-                {/* Card header */}
-                <div className="flex items-center gap-3 px-4 pt-4 pb-3">
-                  {/* Toggle */}
+                {/* Toggle row */}
+                <div className="flex items-center gap-2.5 px-3.5 pt-3 pb-2">
                   <Toggle active={cron.active} onChange={() => updateCron(cron.id, { active: !cron.active })} />
-
-                  {/* Name */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <StatusDot active={cron.active} />
-                      <span className={`font-mono text-sm font-medium truncate ${cron.active ? "text-white" : "text-slate-500"}`}>
+                      <span className={`font-mono text-[13px] font-medium truncate ${cron.active ? "text-white" : "text-slate-500"}`}>
                         {cron.label}
                       </span>
                     </div>
-                    <p className="font-mono text-[10px] text-slate-600 mt-0.5 truncate pl-3.5">
+                    <p className="font-mono text-[10px] text-slate-600 mt-0.5 truncate pl-3">
                       {cron.schedule} · {cron.time}
                       {cron.active && (
                         <span className="ml-1.5 text-slate-700">· next {nextRunLabel(cron)}</span>
                       )}
                     </p>
                   </div>
-
-                  {/* Delete */}
                   <button
                     onClick={() => deleteCron(cron.id)}
-                    className="p-1.5 rounded-lg text-slate-700 hover:text-red-400 hover:bg-red-400/10 transition-all"
+                    className="p-1 rounded-md text-slate-700 hover:text-red-400 hover:bg-red-400/10 transition-all"
                     title="Delete"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -246,24 +230,27 @@ export default function CronPanel() {
                   </button>
                 </div>
 
-                {/* Prompt preview */}
-                <div className="mx-4 mb-3 px-3 py-2 rounded-xl bg-[#050508] border border-[#1A1A2E]">
-                  <p className="font-mono text-[10px] text-slate-500 truncate">{cron.prompt}</p>
+                {/* Prompt preview — flush against the bottom of the row, no
+                    nested card. Saves ~16px per item. */}
+                <div className="px-3.5 pb-2">
+                  <p className="font-mono text-[10px] text-slate-500 px-2 py-1.5 rounded-md bg-[#050508] border border-[#1A1A2E] truncate">
+                    {cron.prompt}
+                  </p>
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-between px-4 pb-3">
+                <div className="flex items-center justify-between px-3.5 pb-3 gap-2">
                   {cron.lastResult ? (
-                    <p className="font-mono text-[9px] text-slate-700 truncate flex-1 mr-3">
+                    <p className="font-mono text-[9px] text-slate-700 truncate flex-1">
                       Last: {cron.lastResult}
                     </p>
                   ) : (
-                    <span />
+                    <span className="flex-1" />
                   )}
                   <button
                     onClick={() => runCron(cron.id)}
                     disabled={isRunning}
-                    className="flex items-center gap-1.5 font-mono text-[10px] px-3 py-1.5 rounded-lg border transition-all disabled:opacity-40"
+                    className="flex items-center gap-1 font-mono text-[10px] px-2.5 py-1 rounded-md border transition-all disabled:opacity-40 shrink-0"
                     style={isRunning
                       ? { color: "#34D399", borderColor: "#34D39930", background: "#34D39910" }
                       : { color: "#64748b", borderColor: "#1A1A2E", background: "transparent" }}
@@ -271,16 +258,10 @@ export default function CronPanel() {
                     {isRunning ? (
                       <>
                         <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
-                        running…
+                        running
                       </>
                     ) : (
-                      <>
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Run now
-                      </>
+                      <>▶ Run</>
                     )}
                   </button>
                 </div>
