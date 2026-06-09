@@ -8,6 +8,7 @@ import { useAccount, useSignTypedData, useReadContract } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
 import AppPageHeader from "@/components/app/AppPageHeader";
 import HubHome from "./_components/HubHome";
+import MarkdownOutput from "@/components/MarkdownOutput";
 
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 const ERC20_BAL_ABI = [{
@@ -500,7 +501,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
 }) {
   const [vals, setVals]       = useState<Record<string,string>>({});
   const [step, setStep]       = useState<RunStep>(cached ? "done" : "idle");
-  const [result, setResult]   = useState<Record<string,unknown> | null>(cached?.result ?? null);
+  const [result, setResult]   = useState<Record<string,unknown> | string | null>(cached?.result ?? null);
   const [err, setErr]         = useState<string | null>(null);
   const [isMock, setIsMock]   = useState(cached?.isMock ?? false);
   const [mobileTab, setMobileTab] = useState<"input" | "output">(cached ? "output" : "input");
@@ -519,7 +520,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
   async function copyJson() {
     if (!result) return;
     try {
-      await navigator.clipboard.writeText(JSON.stringify(result, null, 2));
+      await navigator.clipboard.writeText(typeof result === "string" ? result : JSON.stringify(result, null, 2));
       setCopiedJson(true);
       setTimeout(() => setCopiedJson(false), 2000);
     } catch {}
@@ -887,7 +888,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                     cached
                   </span>
                 )}
-                {!isMock && (result._settle as { ok?: boolean; tx?: string } | undefined)?.ok && (() => {
+                {!isMock && typeof result !== "string" && (result._settle as { ok?: boolean; tx?: string } | undefined)?.ok && (() => {
                   const settle = result._settle as { ok?: boolean; tx?: string };
                   const cls = "font-mono text-[10px] px-1.5 py-0.5 rounded border border-[#34D399]/30 text-[#34D399] ml-1";
                   return settle.tx
@@ -925,17 +926,21 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                   </button>
                 </div>
               </div>
-              <ResultObj obj={result} />
+              {typeof result === "string"
+                ? <MarkdownOutput content={result} />
+                : <ResultObj obj={result} />}
               {isMock ? (
                 <p className="font-mono text-[10px] text-slate-700 mt-6 pt-4 border-t border-[#1A1A2E]">
                   preview data — live results powered by 3-agent consensus
                 </p>
               ) : (
                 <p className="font-mono text-[10px] text-slate-700 mt-6 pt-4 border-t border-[#1A1A2E]">
-                  {[
-                    result.data_source ? `source: ${result.data_source}` : "3-agent consensus · Blue · Aeon · MiroShark",
-                    result.timestamp ? new Date(result.timestamp as string).toLocaleString() : null,
-                  ].filter(Boolean).join("  ·  ")}
+                  {typeof result === "string"
+                    ? "3-agent consensus · Blue · Aeon · MiroShark"
+                    : [
+                        result.data_source ? `source: ${result.data_source}` : "3-agent consensus · Blue · Aeon · MiroShark",
+                        result.timestamp ? new Date(result.timestamp as string).toLocaleString() : null,
+                      ].filter(Boolean).join("  ·  ")}
                 </p>
               )}
             </div>
@@ -1252,7 +1257,7 @@ function ToolRow({ tool, runs, onSelect }: { tool: Tool; runs: number; onSelect:
 
 // ─── Cached result type ───────────────────────────────────────────────────────
 
-type ToolResult = { result: Record<string,unknown>; isMock: boolean; mockReason: "dev" | "service-down" };
+type ToolResult = { result: Record<string,unknown> | string; isMock: boolean; mockReason: "dev" | "service-down" };
 
 // ─── Share encode / decode ────────────────────────────────────────────────────
 
@@ -1397,7 +1402,7 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
     if (!hash.startsWith("s=")) return;
     const value = hash.slice(2);
 
-    const apply = (toolId: string, result: Record<string, unknown>, isMock: boolean, mockReason: "dev" | "service-down") => {
+    const apply = (toolId: string, result: Record<string, unknown> | string, isMock: boolean, mockReason: "dev" | "service-down") => {
       const tool = allTools.find(t => t.id === toolId);
       if (!tool) return;
       setCache(prev => new Map(prev).set(toolId, { result, isMock, mockReason }));
