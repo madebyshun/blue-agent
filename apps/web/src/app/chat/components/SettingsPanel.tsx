@@ -7,27 +7,28 @@ import PersonaSelector from "./PersonaSelector";
 
 // ── Model definitions ──────────────────────────────────────────────────────────
 
+// 5-model list, in sync with ChatInput's preset picker. The previous 14
+// entries were trimmed when we switched to use-case presets — kept only
+// the model each preset points at.
+//
+//   pro                  → Chat
+//   max                  → Deep Think
+//   venice-deepseek      → Fast
+//   venice-grok          → Web Search
+//   venice-e2ee-gemma    → Private
+
 const BANKR_TIERS = [
-  { id: "fast", label: "Fast",   sub: "Claude Haiku 4.5",   color: "#64748b", note: "1K ctx",   badge: "" },
-  { id: "pro",  label: "Pro",    sub: "Claude Sonnet 4.6",  color: "#4FC3F7", note: "200K ctx",  badge: "" },
-  { id: "max",  label: "Max",    sub: "Claude Sonnet 4.6",  color: "#A78BFA", note: "200K ctx",  badge: "best" },
+  { id: "pro",  label: "Pro", sub: "Claude Sonnet 4.6", color: "#4FC3F7", note: "200K ctx", badge: ""     },
+  { id: "max",  label: "Max", sub: "Claude Opus 4.7",   color: "#A78BFA", note: "200K ctx", badge: "best" },
 ];
 
 const VENICE_TIERS = [
-  { id: "venice-deepseek",     label: "V4 Flash",   sub: "DeepSeek V4 Flash",  color: "#34D399", note: "1M ctx",   badge: "" },
-  { id: "venice-deepseek-pro", label: "V4 Pro",     sub: "DeepSeek V4 Pro",    color: "#10B981", note: "1M ctx",   badge: "" },
-  { id: "venice-kimi",         label: "Kimi K2",    sub: "Kimi K2",            color: "#6EE7B7", note: "128K ctx", badge: "" },
-  { id: "venice-claude",       label: "Opus 4",     sub: "Claude Opus 4",      color: "#A78BFA", note: "200K ctx", badge: "smart" },
-  { id: "venice-grok",         label: "Grok 4",     sub: "xAI Grok 4",         color: "#E879F9", note: "search",   badge: "" },
-  { id: "venice-qwen",         label: "Qwen3 235B", sub: "Qwen3 235B A22B",    color: "#818CF8", note: "128K ctx", badge: "" },
-  { id: "venice-mistral",      label: "Mistral",    sub: "Mistral Small 3.2",  color: "#60A5FA", note: "256K ctx", badge: "" },
-  { id: "venice-uncut",        label: "Uncensored", sub: "Venice Uncensored",  color: "#FB923C", note: "no filter",badge: "" },
+  { id: "venice-deepseek", label: "V4 Flash", sub: "DeepSeek V4 Flash", color: "#34D399", note: "1M ctx · fast", badge: ""       },
+  { id: "venice-grok",     label: "Grok 4",   sub: "xAI Grok 4",        color: "#E879F9", note: "X + web",      badge: "search" },
 ];
 
 const E2EE_TIERS = [
-  { id: "venice-e2ee-venice",  label: "Venice 24B",  sub: "Venice Uncensored 24B", color: "#FB7185", note: "E2EE", badge: "" },
-  { id: "venice-e2ee-gemma",   label: "Gemma 27B",   sub: "Gemma 3 27B",           color: "#FCA5A5", note: "E2EE", badge: "" },
-  { id: "venice-e2ee-qwen",    label: "Qwen3 35B",   sub: "Qwen3 35B",             color: "#F9A8D4", note: "E2EE", badge: "" },
+  { id: "venice-e2ee-gemma", label: "Gemma 27B", sub: "Gemma 3 27B", color: "#FCA5A5", note: "E2EE · no logs", badge: "private" },
 ];
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -183,40 +184,76 @@ export default function SettingsPanel() {
           </span>
         </div>
 
-        {/* Credit card */}
+        {/* Credit card — two looks depending on the credit source:
+              - Connected wallet → `credits` is the on-chain ledger balance
+                (accrued + topup − spent). No daily reset, no progress bar;
+                instead we show "+N/day" accrual hint.
+              - Guest → `credits` is the localStorage daily quota; legacy
+                progress bar + reset timer. */}
         <div className="rounded-2xl bg-[#0A0A12] border border-[#1A1A2E] p-4 mb-4">
-          <div className="flex items-end justify-between mb-3">
-            <div>
-              <span
-                className="font-mono text-4xl font-bold tabular-nums leading-none"
-                style={{ color: isUnlimited ? holderTier.color : credits <= 20 ? "#EF4444" : "#4FC3F7" }}
-              >
-                {isUnlimited ? "∞" : credits.toLocaleString()}
-              </span>
-              {!isUnlimited && (
-                <span className="font-mono text-sm text-slate-600 ml-2">/ {daily.toLocaleString()}</span>
+          {walletAddr ? (
+            <>
+              <div className="flex items-end justify-between mb-3">
+                <div>
+                  <span
+                    className="font-mono text-4xl font-bold tabular-nums leading-none"
+                    style={{ color: credits <= 20 ? "#EF4444" : "#4FC3F7" }}
+                  >
+                    {credits.toLocaleString()}
+                  </span>
+                  <span className="font-mono text-sm text-slate-600 ml-2">spendable</span>
+                </div>
+                <span className="font-mono text-[10px] text-slate-600 mb-1">
+                  {daily > 0 ? `+${daily.toLocaleString()}/day` : "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[10px] text-slate-600">
+                  Accrued on-chain · cleared via chat use
+                </span>
+                {holderTier.discount > 0 && (
+                  <span className="font-mono text-[10px]" style={{ color: holderTier.color }}>
+                    {Math.round(holderTier.discount * 100)}% off
+                  </span>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-end justify-between mb-3">
+                <div>
+                  <span
+                    className="font-mono text-4xl font-bold tabular-nums leading-none"
+                    style={{ color: isUnlimited ? holderTier.color : credits <= 20 ? "#EF4444" : "#4FC3F7" }}
+                  >
+                    {isUnlimited ? "∞" : credits.toLocaleString()}
+                  </span>
+                  {!isUnlimited && (
+                    <span className="font-mono text-sm text-slate-600 ml-2">/ {daily.toLocaleString()}</span>
+                  )}
+                </div>
+                <span className="font-mono text-[10px] text-slate-600 mb-1">per day</span>
+              </div>
+
+              {!isUnlimited && daily > 0 && (
+                <div className="h-1 bg-[#1A1A2E] rounded-full overflow-hidden mb-3">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${Math.min(100, (credits / daily) * 100)}%`, background: holderTier.color }}
+                  />
+                </div>
               )}
-            </div>
-            <span className="font-mono text-[10px] text-slate-600 mb-1">per day</span>
-          </div>
 
-          {!isUnlimited && daily > 0 && (
-            <div className="h-1 bg-[#1A1A2E] rounded-full overflow-hidden mb-3">
-              <div
-                className="h-full rounded-full transition-all"
-                style={{ width: `${Math.min(100, (credits / daily) * 100)}%`, background: holderTier.color }}
-              />
-            </div>
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[10px] text-slate-600">resets in {countdown}</span>
+                {holderTier.discount > 0 && (
+                  <span className="font-mono text-[10px]" style={{ color: holderTier.color }}>
+                    {Math.round(holderTier.discount * 100)}% off
+                  </span>
+                )}
+              </div>
+            </>
           )}
-
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-[10px] text-slate-600">resets in {countdown}</span>
-            {holderTier.discount > 0 && (
-              <span className="font-mono text-[10px]" style={{ color: holderTier.color }}>
-                {Math.round(holderTier.discount * 100)}% off
-              </span>
-            )}
-          </div>
         </div>
 
         {/* Next tier hint */}
