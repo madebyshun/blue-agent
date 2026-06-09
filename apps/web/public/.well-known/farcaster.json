@@ -1,0 +1,27 @@
+{
+  "accountAssociation": {
+    "header": "REPLACE_ME_WITH_HEADER_FROM_FARCASTER",
+    "payload": "REPLACE_ME_WITH_PAYLOAD_FROM_FARCASTER",
+    "signature": "REPLACE_ME_WITH_SIGNATURE_FROM_FARCASTER"
+  },
+  "frame": {
+    "version": "1",
+    "name": "Blue Agent",
+    "iconUrl": "https://blueagent.dev/icon.png",
+    "homeUrl": "https://blueagent.dev/app/chat",
+    "imageUrl": "https://blueagent.dev/og-chat.png",
+    "buttonTitle": "Open Blue Chat",
+    "splashImageUrl": "https://blueagent.dev/splash.png",
+    "splashBackgroundColor": "#4FC3F7",
+    "webhookUrl": "https://blueagent.dev/api/farcaster/webhook",
+    "subtitle": "AI founder console for Base",
+    "description": "50+ AI tools, 3-agent consensus, USDC micropayments. Idea → build → audit → ship — pay per use via x402 on Base.",
+    "primaryCategory": "developer-tools",
+    "tags": ["base", "ai", "x402", "agents", "founder"],
+    "tagline": "The AI agent layer on Base",
+    "heroImageUrl": "https://blueagent.dev/og-chat.png",
+    "ogTitle": "Blue Agent — AI agent layer on Base",
+    "ogDescription": "50+ AI tools. 3-agent consensus. USDC micropayments via x402. Built for Base builders.",
+    "ogImageUrl": "https://blueagent.dev/og-chat.png"
+  }
+}
