@@ -1,5 +1,9 @@
-// x402/whale-tracker — Smart money and whale flow analysis
-// Price: $0.10 — Fully self-contained, no external workspace imports
+// x402/whale-tracker — smart money / whale flow on Base.
+// Movements are REAL: pulled from Basescan (Etherscan v2, chainid 8453) token
+// transfers for the given address. The LLM only reads the real transfer list and
+// produces a signal — it never invents a movement. topMovements is built in code
+// from the on-chain data, not by the model.
+// Price: $0.10
 
 type BankrMessage = { role: string; content: string };
 
@@ -18,8 +22,8 @@ async function callBankrLLM(opts: {
       model: opts.model ?? "claude-haiku-4-5",
       system: opts.system,
       messages: opts.messages,
-      temperature: opts.temperature ?? 0.5,
-      max_tokens: opts.maxTokens ?? 1000,
+      temperature: opts.temperature ?? 0.4,
+      max_tokens: opts.maxTokens ?? 700,
     }),
   });
   if (!res.ok) throw new Error(`Bankr LLM ${res.status}: ${await res.text()}`);
@@ -38,41 +42,33 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
   return null;
 }
 
-async function getTokenTx(address: string, limit = 50): Promise<unknown[]> {
+type TokenTx = { value: string; tokenDecimal?: string; from?: string; to?: string; tokenSymbol: string; timeStamp: string };
+
+async function getTokenTx(address: string, limit = 100): Promise<TokenTx[]> {
   const key = process.env.BASESCAN_API_KEY ?? "";
   try {
     const res = await fetch(
-      `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=tokentx&address=${address}&sort=desc&offset=${limit}&apikey=${key}`,
+      `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=tokentx&address=${address}&sort=desc&offset=${limit}&page=1&apikey=${key}`,
       { signal: AbortSignal.timeout(8000) }
     );
-    const data = await res.json() as { status: string; result?: unknown[] };
+    const data = await res.json() as { status: string; result?: TokenTx[] };
     return data.status === "1" ? (data.result ?? []) : [];
   } catch {
     return [];
   }
 }
 
-const SYSTEM = `You are a smart money and whale flow analyst for Base chain tokens and wallets.
-
-Analyze large wallet movements to identify accumulation, distribution, or manipulation patterns. Smart money signals are valuable for agents making trading decisions.
-
+const SYSTEM = `You are a smart-money / whale flow analyst for Base chain.
+You are given a REAL list of recent large on-chain token transfers for an address.
+Read ONLY those transfers — do not invent any movement, token or amount.
 Return ONLY valid JSON:
-
 {
-  "whaleActivity": "ACCUMULATING" | "DISTRIBUTING" | "NEUTRAL" | "MIXED",
-  "signal": "BULLISH" | "BEARISH" | "NEUTRAL",
-  "signalStrength": number (0-100),
-  "topMovements": [
-    {
-      "address": "string (shortened)",
-      "action": "string",
-      "amount": "string",
-      "significance": "HIGH | MEDIUM | LOW"
-    }
-  ],
-  "patterns": ["pattern1", "pattern2"],
-  "trend": "string (summary of what whales are doing)",
-  "recommendation": "string (actionable signal for agents/traders)"
+  "whaleActivity": "ACCUMULATING|DISTRIBUTING|NEUTRAL|MIXED",
+  "signal": "BULLISH|BEARISH|NEUTRAL",
+  "signalStrength": <0-100>,
+  "patterns": ["<pattern grounded in the transfers>"],
+  "trend": "<summary of what the transfers show>",
+  "recommendation": "<actionable signal>"
 }`;
 
 export default async function handler(req: Request): Promise<Response> {
@@ -83,46 +79,82 @@ export default async function handler(req: Request): Promise<Response> {
       if (text?.trim().startsWith("{")) body = JSON.parse(text);
     } catch {}
     const url = new URL(req.url);
-    if (!body.address) body.address = url.searchParams.get("address") || url.searchParams.get("token") || undefined;
+    const address = body.address ?? url.searchParams.get("address") ?? url.searchParams.get("token") ?? "";
 
-    const { address } = body;
     if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
       return Response.json({ error: "Provide a valid wallet or token address (0x...)" }, { status: 400 });
     }
 
-    console.log(`[WhaleTracker] Tracking: ${address}`);
+    const txs = await getTokenTx(address, 100);
 
-    const txs = await getTokenTx(address, 50);
-
-    type TokenTx = { value: string; tokenDecimal?: string; from?: string; to?: string; tokenSymbol: string; timeStamp: string };
-
-    const largeTxs = (txs as TokenTx[])
-      .filter(tx => {
-        const value = parseFloat(tx.value) / Math.pow(10, parseInt(tx.tokenDecimal || "18"));
-        return value > 1000;
+    // Build the real large-transfer list in code (top 15 by token amount).
+    const largeTxs = txs
+      .map((tx) => {
+        const amount = parseFloat(tx.value) / Math.pow(10, parseInt(tx.tokenDecimal || "18"));
+        return {
+          token: tx.tokenSymbol,
+          amount: Number.isFinite(amount) ? amount : 0,
+          direction: tx.to?.toLowerCase() === address.toLowerCase() ? "IN" : "OUT",
+          from: (tx.from ?? "").slice(0, 10) + "…",
+          to: (tx.to ?? "").slice(0, 10) + "…",
+          timestamp: new Date(parseInt(tx.timeStamp) * 1000).toISOString(),
+        };
       })
-      .slice(0, 15)
-      .map(tx => ({
-        from: tx.from?.slice(0, 10) + "...",
-        to: tx.to?.slice(0, 10) + "...",
-        token: tx.tokenSymbol,
-        value: tx.value,
-        decimals: tx.tokenDecimal,
-        direction: tx.to?.toLowerCase() === address.toLowerCase() ? "IN" : "OUT",
-        timestamp: new Date(parseInt(tx.timeStamp) * 1000).toISOString(),
-      }));
+      .filter((t) => t.amount > 0)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 15);
+
+    const topMovements = largeTxs.map((t) => ({
+      token: t.token,
+      action: t.direction === "IN" ? "received" : "sent",
+      amount: t.amount.toLocaleString(undefined, { maximumFractionDigits: 2 }),
+      direction: t.direction,
+      significance: t.amount >= 100_000 ? "HIGH" : t.amount >= 10_000 ? "MEDIUM" : "LOW",
+    }));
+
+    const base = {
+      tool: "whale-tracker",
+      timestamp: new Date().toISOString(),
+      chain: "base",
+      chainId: 8453,
+      address,
+      data_source: "Basescan (live on-chain transfers)",
+      transfers_analyzed: txs.length,
+      topMovements,
+      url: `https://basescan.org/address/${address}`,
+    };
+
+    if (!txs.length) {
+      return Response.json({
+        ...base,
+        whaleActivity: "NEUTRAL",
+        signal: "NEUTRAL",
+        signalStrength: 0,
+        patterns: [],
+        trend: "No recent token transfers found for this address on Base (or Basescan is unavailable).",
+        recommendation: "No on-chain flow to act on right now.",
+      });
+    }
 
     const llmResponse = await callBankrLLM({
       system: SYSTEM,
-      messages: [{ role: "user", content: `Analyze whale/smart money activity for: ${address}\n\nLarge transactions (>1000 tokens):\n${JSON.stringify(largeTxs, null, 2)}\nTotal transactions analyzed: ${txs.length}` }],
+      messages: [{ role: "user", content: `Address: ${address} (Base)\nRecent large transfers (real, on-chain):\n${JSON.stringify(topMovements, null, 2)}\nTotal transfers analyzed: ${txs.length}` }],
       temperature: 0.4,
-      maxTokens: 700,
+      maxTokens: 600,
     });
-    const result = extractJsonObject(llmResponse);
-    if (!result) throw new Error("Failed to parse whale tracker");
-    return Response.json(result);
+    const analysis = extractJsonObject(llmResponse) ?? {};
+
+    return Response.json({
+      ...base,
+      whaleActivity: analysis.whaleActivity ?? "NEUTRAL",
+      signal: analysis.signal ?? "NEUTRAL",
+      signalStrength: analysis.signalStrength ?? 50,
+      patterns: analysis.patterns ?? [],
+      trend: analysis.trend ?? "",
+      recommendation: analysis.recommendation ?? "",
+    });
   } catch (error) {
-    console.error("[WhaleTracker] Error:", error);
+    console.error("[WhaleTracker]", error);
     return Response.json({ error: "Whale tracking failed", message: (error as Error).message }, { status: 500 });
   }
 }
