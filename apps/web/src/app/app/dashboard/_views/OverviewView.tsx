@@ -123,23 +123,6 @@ function loadChatStats(addr?: string): ChatStats {
   } catch { return empty; }
 }
 
-interface AlertItem {
-  id: string;
-  type: "price_above" | "price_below" | "whale_move";
-  label: string;
-  status: "active" | "triggered" | "dismissed";
-  createdAt: number;
-}
-
-function loadActiveAlerts(): AlertItem[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem("blue_alerts_v1");
-    const all = (raw ? JSON.parse(raw) : []) as AlertItem[];
-    return all.filter(a => a.status === "active").slice(0, 3);
-  } catch { return []; }
-}
-
 // ── Bento card primitives ────────────────────────────────────────────────────
 
 /**
@@ -187,14 +170,13 @@ function StatChip({ label, value, sub, color }: { label: string; value: string; 
 // ── View ─────────────────────────────────────────────────────────────────────
 
 interface Props {
-  onSwitchTab?: (tab: "stake" | "alerts") => void;
+  onSwitchTab?: (tab: "stake") => void;
 }
 
 export default function OverviewView({ onSwitchTab }: Props) {
   const { address, isConnected } = useAccount();
   const { disconnect }           = useDisconnect();
   const [chatStats,    setChatStats]    = useState<ChatStats>({ totalSessions: 0, totalMessages: 0, totalCreditsUsed: 0, toolsUsed: [], firstUsed: null });
-  const [activeAlerts, setActiveAlerts] = useState<AlertItem[]>([]);
   const [copied,       setCopied]       = useState(false);
   const [builderScore, setBuilderScore] = useState<number | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
@@ -208,7 +190,6 @@ export default function OverviewView({ onSwitchTab }: Props) {
   } | null>(null);
 
   useEffect(() => { setChatStats(loadChatStats(address)); }, [address]);
-  useEffect(() => { setActiveAlerts(loadActiveAlerts()); }, []);
 
   useEffect(() => {
     if (!address) { setBuilderScore(null); return; }
@@ -309,7 +290,7 @@ export default function OverviewView({ onSwitchTab }: Props) {
           <AppConnectPrompt
             accent={tier.color}
             title="Connect to see your dashboard"
-            subtitle="Wallet · holdings · stake · alerts — all in one place."
+            subtitle="Wallet · holdings · stake — all in one place."
             icon={
               <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z" />
@@ -464,8 +445,8 @@ export default function OverviewView({ onSwitchTab }: Props) {
               </button>
             </BentoCell>
 
-            {/* ─── Balances row (2 col) ────────────────────────────────── */}
-            <BentoCell className="sm:col-span-2 p-5">
+            {/* ─── Balances row (full width) ───────────────────────────── */}
+            <BentoCell className="sm:col-span-3 p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="text-[10px] text-slate-500 tracking-widest font-bold">BALANCES · BASE</div>
                 <span className="text-[9px] text-slate-700">5 tokens</span>
@@ -484,33 +465,6 @@ export default function OverviewView({ onSwitchTab }: Props) {
                   );
                 })}
               </div>
-            </BentoCell>
-
-            {/* ─── Alerts mini (1 col) ─────────────────────────────────── */}
-            <BentoCell flavor="gradient" accent="#A78BFA" className="p-5 flex flex-col">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-[10px] text-[#A78BFA] tracking-widest font-bold">ALERTS</div>
-                {activeAlerts.length > 0 && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#A78BFA]/15 text-[#A78BFA]">{activeAlerts.length}</span>
-                )}
-              </div>
-              {activeAlerts.length > 0 ? (
-                <div className="space-y-1.5 mb-4">
-                  {activeAlerts.map(a => (
-                    <div key={a.id} className="flex items-center gap-2 text-[11px]">
-                      <span className="w-1 h-1 rounded-full bg-[#A78BFA] animate-pulse shrink-0" />
-                      <span className="text-slate-300 truncate">{a.label}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-[11px] text-slate-600 mb-4">No active alerts</div>
-              )}
-              <button
-                onClick={() => onSwitchTab?.("alerts")}
-                className="mt-auto inline-flex items-center justify-center gap-1.5 text-[11px] font-bold px-3 py-2 rounded-lg bg-[#A78BFA]/15 text-[#A78BFA] border border-[#A78BFA]/40 hover:bg-[#A78BFA]/20 transition-colors">
-                {activeAlerts.length > 0 ? "Manage" : "Create alert"} →
-              </button>
             </BentoCell>
 
             {/* ─── Quick actions (full width) ──────────────────────────── */}

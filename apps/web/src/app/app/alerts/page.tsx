@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
-// Alert CRUD now lives in the unified /app/dashboard shell as a tab.
+// Alerts CRUD is deferred (to be rebuilt later). The legacy route lands on
+// the dashboard overview so existing links don't 404.
 export default function AlertsRedirect() {
-  redirect("/app/dashboard?tab=alerts");
+  redirect("/app/dashboard");
 }
