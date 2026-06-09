@@ -12,7 +12,7 @@
  *
  * Protocol: JSON-RPC 2.0 over HTTP POST
  * Tools: 50 — 5 console commands + 43 Hub tools + blue_score + blue_new
- * Docs: https://blueagent.dev/api-docs
+ * Docs: https://api.blueagent.dev/docs
  */
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
@@ -520,7 +520,7 @@ export async function POST(req: NextRequest) {
       protocolVersion: "2024-11-05",
       capabilities: { tools: {} },
       serverInfo: { name: "blue-agent", version: "1.0.0" },
-      instructions: `Blue Agent MCP server — ${TOOLS.length} tools for Base builders. Docs: https://blueagent.dev/api-docs`,
+      instructions: `Blue Agent MCP server — ${TOOLS.length} tools for Base builders. Docs: https://api.blueagent.dev/docs`,
     }, useSse);
   }
 
@@ -659,7 +659,7 @@ export async function GET(req: NextRequest) {
       },
       cursor: "https://blueagent.dev/api/mcp",
     },
-    docs: "https://blueagent.dev/api-docs",
+    docs: "https://api.blueagent.dev/docs",
   }, {
     headers: { "Access-Control-Allow-Origin": "*" },
   });

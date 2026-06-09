@@ -43,7 +43,7 @@
     {
       "name": "X / Twitter",
       "icon": "x-twitter",
-      "url": "https://x.com/blocky_agent"
+      "url": "https://x.com/blueagent_"
     },
     {
       "name": "Telegram",
@@ -80,7 +80,7 @@
     }
   ],
   "footerSocials": {
-    "x-twitter": "https://x.com/blocky_agent",
+    "x-twitter": "https://x.com/blueagent_",
     "github": "https://github.com/madebyshun/blue-agent"
   }
 }
