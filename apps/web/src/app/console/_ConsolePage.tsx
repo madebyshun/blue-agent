@@ -268,10 +268,15 @@ export default function ConsolePage({ inShell = false }: { inShell?: boolean }) 
             <p className="font-mono text-[10px] text-slate-700 mt-1.5 px-1">Enter to submit · Shift+Enter for newline</p>
           </form>
 
-          {/* Output — error */}
+          {/* Output — error. Surface the actual upstream message instead of
+              a stale "coming soon" copy that hid Bankr 5xx + timeout cases. */}
           {error && (
-            <div className="card-surface rounded-xl p-4 border border-[#4FC3F7]/10 mb-4">
-              <p className="font-mono text-xs text-slate-500">// Coming soon for holders — hold $BLUEAGENT to unlock Console access</p>
+            <div className="card-surface rounded-xl p-4 border border-[#F87171]/30 bg-[#F87171]/[0.04] mb-4">
+              <p className="font-mono text-[10px] text-[#F87171] tracking-widest mb-1.5">// ERROR</p>
+              <p className="font-mono text-xs text-slate-300 leading-relaxed break-words">{error}</p>
+              <p className="font-mono text-[10px] text-slate-700 mt-2">
+                If this is a 502 from Bankr LLM, retry in a few seconds. Persistent failures: DM <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer" className="text-[#4FC3F7] hover:underline">@blueagent_</a>.
+              </p>
             </div>
           )}
 
