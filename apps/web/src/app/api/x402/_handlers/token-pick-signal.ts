@@ -1,7 +1,11 @@
-// x402/token-pick-signal/index.ts
-// Token Pick Signal — Aeon token-movers + token-pick + MiroShark retail
-// Price: $0.20 — one actionable token pick with retail consensus
-// Fully self-contained — no external workspace imports
+// x402/token-pick-signal
+// One actionable token pick chosen from REAL Base pools (GeckoTerminal trending +
+// new). The candidate set, prices, %-moves, volume and liquidity are all live;
+// the LLM only picks one and writes the thesis. It cannot pick a token that
+// isn't in the live list, so no invented tickers.
+// Price: $0.20
+
+import { getBaseTrending, getBaseNewPools, poolsToPrompt, type Pool } from "@/lib/market-data";
 
 type BankrMessage = { role: string; content: string };
 
@@ -20,8 +24,8 @@ async function callBankrLLM(opts: {
       model: opts.model ?? "claude-haiku-4-5",
       system: opts.system,
       messages: opts.messages,
-      temperature: opts.temperature ?? 0.5,
-      max_tokens: opts.maxTokens ?? 1000,
+      temperature: opts.temperature ?? 0.4,
+      max_tokens: opts.maxTokens ?? 800,
     }),
   });
   if (!res.ok) throw new Error(`Bankr LLM ${res.status}: ${await res.text()}`);
@@ -40,102 +44,58 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
   return null;
 }
 
-async function runAeonSkill(skill: string, varInput = ""): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://raw.githubusercontent.com/aaronjmars/aeon/main/skills/${skill}/SKILL.md`,
-      { signal: AbortSignal.timeout(6000) }
-    );
-    if (!res.ok) return null;
-    const skillPrompt = await res.text();
-    const today = new Date().toISOString().split("T")[0];
-    const varLine = varInput ? `\nFocus on: ${varInput}` : "";
-    return await callBankrLLM({
-      model: "claude-haiku-4-5",
-      system: `You are Aeon — autonomous intelligence agent. Synthesize from training knowledge. Be specific, data-driven. Today is ${today}.`,
-      messages: [{ role: "user", content: `Follow this skill template. Generate from training knowledge — no API excuses. Be concrete.\n\nSkill:\n${skillPrompt}${varLine}\n\nReturn only the skill output.` }],
-      temperature: 0.2,
-      maxTokens: 1200,
-    });
-  } catch { return null; }
-}
-
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { chain?: string; min_mcap?: number; context?: string } = {};
+    let body: { min_mcap?: number; context?: string } = {};
     try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const url = new URL(req.url);
-    const chain    = body.chain ?? url.searchParams.get("chain") ?? "base";
-    const minMcap  = body.min_mcap ?? Number(url.searchParams.get("min_mcap") ?? "1000000");
-    const context  = body.context ?? url.searchParams.get("context") ?? "";
+    const minMcap = body.min_mcap ?? Number(url.searchParams.get("min_mcap") ?? "0");
+    const context = body.context ?? url.searchParams.get("context") ?? "";
 
-    const varInput = `chain=${chain}, min_mcap=$${minMcap.toLocaleString()}, focus on Base ecosystem tokens${context ? `. Additional context: ${context}` : ""}`;
+    const [trending, fresh] = await Promise.all([getBaseTrending(15), getBaseNewPools(10)]);
+    const candidates: Pool[] = [...trending, ...fresh]
+      .filter((p) => p.baseSymbol && (minMcap ? (p.marketCap ?? 0) >= minMcap : true));
 
-    // Step 1 + 2: Run Aeon token-movers and token-pick in parallel
-    const [moversRaw, pickRaw] = await Promise.all([
-      runAeonSkill("token-movers", varInput),
-      runAeonSkill("token-pick", `${varInput}. Today's date: ${new Date().toISOString().split("T")[0]}`),
-    ]);
+    if (!candidates.length) {
+      return Response.json(
+        { error: "Live Base pool data is unavailable right now. Retry shortly." },
+        { status: 503 }
+      );
+    }
 
-    // Step 3: MiroShark retail persona on the pick
-    const pickContext = pickRaw ?? "No specific pick available today — market conditions unclear";
-    const msRaw = await callBankrLLM({
-      model: "claude-haiku-4-5",
-      system: `You are MiroShark retail persona — FOMO-driven, focuses on price action, entry points, ease of use.
-Evaluate this token pick from a retail trader perspective.
-CRITICAL: Return ONLY raw JSON. No markdown.
-Schema: {"stance":"bull|bear|neutral","bull":<0-100>,"bear":<0-100>,"neutral":<0-100>,"rationale":"<1-2 sentences>","entry_advice":"<1 sentence>","risk_warning":"<1 sentence>"}`,
-      messages: [{ role: "user", content: `Retail sentiment on this token pick:\n\n${pickContext}\n\nMarket movers context:\n${moversRaw ?? "No movers data"}` }],
-      temperature: 0.5,
-      maxTokens: 400,
-    });
+    const validSymbols = Array.from(new Set(candidates.map((p) => p.baseSymbol)));
+    const realContext = `Live Base candidates (GeckoTerminal — trending + newly active):\n${poolsToPrompt(candidates)}${context ? `\n\nUser focus: ${context}` : ""}`;
 
-    const retailConsensus = extractJsonObject(msRaw) ?? { stance: "neutral", bull: 40, bear: 30, neutral: 30, rationale: "Mixed signals", entry_advice: "Wait for confirmation", risk_warning: "High volatility" };
-
-    // Step 4: Blue Agent final synthesis
-    const isNoPick = !pickRaw || pickRaw.includes("NO_PICK");
     const synthesis = await callBankrLLM({
-      model: "claude-haiku-4-5",
-      system: `You are Blue Agent — AI-native intelligence for Base builders and agents.
-Synthesize Aeon token signal + MiroShark retail consensus into a final actionable verdict.
-CRITICAL: Return ONLY raw JSON. No markdown.
+      system: `You are Blue Agent — token signal for Base. You are given a REAL list of live Base tokens with real prices, %-moves, volume and liquidity.
+Rules:
+- Your pick MUST be one of: ${validSymbols.join(", ")}. Never invent a ticker. "Base" is the chain, not a token.
+- Anchor entry to the real current price. Quote real %-moves only.
+- If nothing is compelling, set blue_verdict to "NO_PICK" and no_pick to true.
+Return ONLY raw JSON. No markdown.
 Schema: {
   "no_pick": <boolean>,
-  "pick": {
-    "token": "<symbol or null>",
-    "thesis": "<1 sentence or null>",
-    "entry": "<price + venue or null>",
-    "kill_criterion": "<1 sentence or null>",
-    "sizing": "small|medium|large|null",
-    "horizon": "<hours/days/weeks or null>"
-  },
-  "near_misses": ["<token: reason>" or empty array],
-  "retail_consensus": {"bull":<0-100>,"bear":<0-100>,"neutral":<0-100>,"stance":"bull|bear|neutral"},
-  "risk_flags": ["<flag>" or empty array],
+  "pick": {"token":"<symbol from list or null>","price":"<real current price>","change_24h":"<real %>","thesis":"<1 sentence>","entry":"<level vs current price>","kill_criterion":"<1 sentence>","sizing":"small|medium|large|null","horizon":"<hours/days/weeks or null>"},
+  "near_misses": ["<symbol: reason>"],
+  "risk_flags": ["<flag>"],
   "blue_verdict": "BUY|WATCH|SKIP|NO_PICK",
   "confidence": <0-100>,
   "note": "<1 sentence context>"
 }`,
-      messages: [{ role: "user", content: `Aeon token-movers:\n${moversRaw ?? "unavailable"}\n\nAeon token-pick:\n${pickRaw ?? "NO_PICK"}\n\nMiroShark retail:\n${JSON.stringify(retailConsensus)}` }],
-      temperature: 0.3,
+      messages: [{ role: "user", content: realContext }],
+      temperature: 0.35,
       maxTokens: 800,
     });
 
     const result = extractJsonObject(synthesis);
     if (!result) throw new Error("Failed to parse synthesis");
 
-    if (result.retail_consensus && typeof result.retail_consensus === "object") {
-      const rc = result.retail_consensus as Record<string, unknown>;
-      rc.bull = (retailConsensus as Record<string, unknown>).bull ?? rc.bull;
-      rc.bear = (retailConsensus as Record<string, unknown>).bear ?? rc.bear;
-      rc.neutral = (retailConsensus as Record<string, unknown>).neutral ?? rc.neutral;
-    }
-
     return Response.json({
       tool: "token-pick-signal",
       timestamp: new Date().toISOString(),
-      chain,
-      no_pick: isNoPick,
+      chain: "base",
+      data_source: "GeckoTerminal (live Base pools)",
+      candidates_scanned: candidates.length,
       ...result,
     });
   } catch (error) {

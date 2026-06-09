@@ -1,7 +1,11 @@
-// x402/narrative-position/index.ts
-// Narrative Position — Aeon narrative-tracker + MiroShark influencer + Blue verdict
-// Price: $0.25 — narrative map with position calls (FRONT-RUN / RIDE / FADE / IGNORE)
-// Fully self-contained — no external workspace imports
+// x402/narrative-position
+// Narrative map for Base, anchored to REAL trending tokens (GeckoTerminal). The
+// LLM frames narratives and position calls, but every token it references must be
+// in the live trending set — no invented tickers. Narrative phase/velocity are
+// analysis; the tokens and their moves are real.
+// Price: $0.25
+
+import { getBaseTrending, poolsToPrompt, type Pool } from "@/lib/market-data";
 
 type BankrMessage = { role: string; content: string };
 
@@ -20,7 +24,7 @@ async function callBankrLLM(opts: {
       model: opts.model ?? "claude-haiku-4-5",
       system: opts.system,
       messages: opts.messages,
-      temperature: opts.temperature ?? 0.5,
+      temperature: opts.temperature ?? 0.4,
       max_tokens: opts.maxTokens ?? 1000,
     }),
   });
@@ -40,89 +44,43 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
   return null;
 }
 
-async function runAeonSkill(skill: string, varInput = ""): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://raw.githubusercontent.com/aaronjmars/aeon/main/skills/${skill}/SKILL.md`,
-      { signal: AbortSignal.timeout(6000) }
-    );
-    if (!res.ok) return null;
-    const skillPrompt = await res.text();
-    const today = new Date().toISOString().split("T")[0];
-    const varLine = varInput ? `\nFocus on: ${varInput}` : "";
-    return await callBankrLLM({
-      model: "claude-haiku-4-5",
-      system: `You are Aeon — autonomous intelligence agent. Synthesize from training knowledge. Be specific. Today is ${today}.`,
-      messages: [{ role: "user", content: `Follow skill template. Generate from training knowledge.\n\nSkill:\n${skillPrompt}${varLine}\n\nReturn only the skill output.` }],
-      temperature: 0.2,
-      maxTokens: 1400,
-    });
-  } catch { return null; }
-}
-
 export default async function handler(req: Request): Promise<Response> {
   try {
     let body: { topic?: string; focus?: string } = {};
     try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const url = new URL(req.url);
-    // Accept "focus" (Hub UI) as alias for "topic"
     const topic = body.topic ?? body.focus ?? url.searchParams.get("topic") ?? url.searchParams.get("focus") ?? "";
 
-    const varInput = topic
-      ? `Focus on "${topic}" and related Base ecosystem narratives`
-      : "Base ecosystem crypto narratives, AI x crypto, DeFi, agent economy";
+    const trending: Pool[] = await getBaseTrending(15);
+    if (!trending.length) {
+      return Response.json(
+        { error: "Live Base trending data is unavailable right now. Retry shortly." },
+        { status: 503 }
+      );
+    }
 
-    // Step 1: Aeon narrative-tracker
-    const narrativeRaw = await runAeonSkill("narrative-tracker", varInput);
+    const validSymbols = Array.from(new Set(trending.map((p) => p.baseSymbol)));
+    const realContext = `Live trending Base tokens (GeckoTerminal — real prices + 24h moves):\n${poolsToPrompt(trending)}${topic ? `\n\nUser focus: ${topic}` : ""}`;
 
-    // Step 2: MiroShark influencer persona
-    const msRaw = await callBankrLLM({
-      model: "claude-haiku-4-5",
-      system: `You are MiroShark influencer persona — narrative-driven, focuses on virality, social momentum, meme potential, community size.
-Evaluate these narratives from an influencer/KOL perspective. Which ones would you post about?
-CRITICAL: Return ONLY raw JSON. No markdown.
-Schema: {
-  "top_narrative": "<name>",
-  "would_post": ["<narrative name>"],
-  "would_ignore": ["<narrative name>"],
-  "viral_potential": {"<narrative>": <0-10>},
-  "content_angles": ["<1-line angle for top narrative>"],
-  "influencer_verdict": "<1-2 sentences>"
-}`,
-      messages: [{ role: "user", content: `Evaluate these narratives from influencer perspective:\n\n${narrativeRaw ?? "Base ecosystem narratives: AI agents, DeFi, x402 payments"}` }],
-      temperature: 0.6,
-      maxTokens: 600,
-    });
-
-    const influencerTake = extractJsonObject(msRaw) ?? { top_narrative: "AI x crypto", would_post: [], would_ignore: [], viral_potential: {}, content_angles: [], influencer_verdict: "Monitor for breakout signals" };
-
-    // Step 3: Blue Agent synthesis — structured position map
     const synthesis = await callBankrLLM({
-      model: "claude-haiku-4-5",
-      system: `You are Blue Agent — intelligence layer for Base builders.
-Parse narrative signals and produce a structured position map.
-CRITICAL: Return ONLY raw JSON. No markdown.
+      system: `You are Blue Agent — narrative intelligence for Base. You are given the REAL trending Base tokens right now with live %-moves.
+Rules:
+- Group these real movers into narratives (e.g. AI agents, memes, DeFi, RWA). Any token you cite MUST be in this list: ${validSymbols.join(", ")}.
+- Never invent a ticker. "Base" is the chain, not a token.
+- Narrative phase/velocity/position calls are your analysis; the tokens and moves are real.
+Return ONLY raw JSON. No markdown.
 Schema: {
   "narratives": [
-    {
-      "name": "<narrative>",
-      "phase": "Emerging|Rising|Peak|Fading|Dead",
-      "velocity": "↑↑|↑|→|↓|↓↓",
-      "mindshare": <1-5>,
-      "position_call": "FRONT-RUN|RIDE|FADE|WATCH|IGNORE",
-      "influencer_interest": <0-10>,
-      "driver": "<named catalyst>",
-      "bear_case": "<1 sentence>"
-    }
+    {"name":"<narrative>","phase":"Emerging|Rising|Peak|Fading|Dead","velocity":"↑↑|↑|→|↓|↓↓","tokens":["<symbol from list>"],"position_call":"FRONT-RUN|RIDE|FADE|WATCH|IGNORE","driver":"<real catalyst>","bear_case":"<1 sentence>"}
   ],
   "transitions": ["<narrative>: <old phase> → <new phase>"],
   "top_opportunity": "<narrative name>",
   "reflexivity_alert": "<narrative showing cope/reflexivity or null>",
   "quiet_day": <boolean>
 }`,
-      messages: [{ role: "user", content: `Aeon narrative signals:\n${narrativeRaw ?? "Base ecosystem narratives"}\n\nMiroShark influencer take:\n${JSON.stringify(influencerTake)}${topic ? `\n\nUser focus: ${topic}` : ""}` }],
-      temperature: 0.3,
-      maxTokens: 1200,
+      messages: [{ role: "user", content: realContext }],
+      temperature: 0.4,
+      maxTokens: 1100,
     });
 
     const result = extractJsonObject(synthesis);
@@ -132,7 +90,8 @@ Schema: {
       tool: "narrative-position",
       timestamp: new Date().toISOString(),
       topic: topic || null,
-      influencer_take: influencerTake,
+      data_source: "GeckoTerminal (live Base trending)",
+      tokens_scanned: trending.length,
       ...result,
     });
   } catch (error) {

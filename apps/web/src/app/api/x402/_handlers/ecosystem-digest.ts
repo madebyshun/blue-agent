@@ -1,7 +1,10 @@
-// x402/ecosystem-digest/index.ts
-// Weekly Ecosystem Digest — Aeon token-movers + narrative-tracker + MiroShark observer + Blue synthesis
-// Price: $0.20 — weekly Base ecosystem recap
-// Fully self-contained — no external workspace imports
+// x402/ecosystem-digest
+// Weekly Base ecosystem digest. Numbers are REAL — movers come from GeckoTerminal
+// trending pools, TVL from DefiLlama. The LLM only writes prose (notes, narratives,
+// community read) on top of real figures; it never invents a ticker or a %.
+// Price: $0.20
+
+import { getBaseTvl, getBaseTrending, poolsToPrompt, tvlToPrompt, type Pool } from "@/lib/market-data";
 
 type BankrMessage = { role: string; content: string };
 
@@ -20,7 +23,7 @@ async function callBankrLLM(opts: {
       model: opts.model ?? "claude-haiku-4-5",
       system: opts.system,
       messages: opts.messages,
-      temperature: opts.temperature ?? 0.5,
+      temperature: opts.temperature ?? 0.4,
       max_tokens: opts.maxTokens ?? 1000,
     }),
   });
@@ -40,88 +43,100 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
   return null;
 }
 
-async function runAeonSkill(skill: string, varInput = ""): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://raw.githubusercontent.com/aaronjmars/aeon/main/skills/${skill}/SKILL.md`,
-      { signal: AbortSignal.timeout(6000) }
-    );
-    if (!res.ok) return null;
-    const skillPrompt = await res.text();
-    const today = new Date().toISOString().split("T")[0];
-    const varLine = varInput ? `\nFocus on: ${varInput}` : "";
-    return await callBankrLLM({
-      model: "claude-haiku-4-5",
-      system: `You are Aeon — autonomous intelligence agent. Synthesize from training knowledge. Be specific. Today is ${today}.`,
-      messages: [{ role: "user", content: `Follow skill template. Generate from training knowledge.\n\nSkill:\n${skillPrompt}${varLine}\n\nReturn only the skill output.` }],
-      temperature: 0.2,
-      maxTokens: 1200,
-    });
-  } catch { return null; }
+const pct = (n: number | null) => (n == null ? "n/a" : `${n > 0 ? "+" : ""}${n.toFixed(1)}%`);
+
+// Build the movers list straight from real pool data — never from the LLM.
+function buildMovers(pools: Pool[]): { token: string; change: string; change24hRaw: number | null; url: string }[] {
+  const named = pools.filter((p) => p.baseSymbol && p.change.h24 != null);
+  const sorted = [...named].sort((a, b) => (b.change.h24 ?? 0) - (a.change.h24 ?? 0));
+  const top = sorted.slice(0, 4);
+  const bottom = sorted.slice(-2).filter((p) => !top.includes(p));
+  return [...top, ...bottom].map((p) => ({
+    token: p.baseSymbol,
+    change: pct(p.change.h24),
+    change24hRaw: p.change.h24,
+    url: p.url,
+  }));
 }
 
-export default async function handler(req: Request): Promise<Response> {
+export default async function handler(): Promise<Response> {
   try {
-    // Step 1+2: Aeon token-movers (Base) + narrative-tracker in parallel
-    const [moversRaw, narrativeRaw] = await Promise.all([
-      runAeonSkill("token-movers", "Base chain ecosystem tokens, chain=base, min_mcap=$1M"),
-      runAeonSkill("narrative-tracker", "Base ecosystem, AI agents, DeFi, builder economy"),
-    ]);
+    const [tvl, trending] = await Promise.all([getBaseTvl(), getBaseTrending(12)]);
 
-    // Step 3: MiroShark observer — neutral temperature check
-    const msRaw = await callBankrLLM({
-      model: "claude-haiku-4-5",
-      system: `You are MiroShark observer persona — neutral recorder, no strong bias, synthesizes what others say.
-Record the community temperature for the Base ecosystem this week.
-CRITICAL: Return ONLY raw JSON. No markdown.
+    if (!trending.length && !tvl) {
+      return Response.json(
+        { error: "Live market data sources are unavailable right now. Retry shortly." },
+        { status: 503 }
+      );
+    }
+
+    const movers = buildMovers(trending);
+    const realContext = `${tvlToPrompt(tvl)}\n\nTop active Base pools (live, GeckoTerminal):\n${poolsToPrompt(trending)}`;
+
+    // Single grounded synthesis pass. The LLM gets ONLY real tokens + real numbers
+    // and is told to reference nothing else.
+    const synthesisRaw = await callBankrLLM({
+      system: `You are Blue Agent — intelligence for Base builders. You are given REAL, live Base market data.
+Rules:
+- Reference ONLY the tokens and numbers provided. Never invent a ticker, price, or percentage.
+- "Base" is the chain; it has NO native token. Never list a "BASE" token.
+- For each mover token I give you, write a one-line note explaining the move qualitatively.
+Return ONLY raw JSON. No markdown.
 Schema: {
-  "temperature": "hot|warm|neutral|cool|cold",
-  "bull": <0-100>,
-  "bear": <0-100>,
-  "neutral": <0-100>,
-  "community_mood": "<1 sentence>",
-  "notable_events": ["<event>"],
-  "builder_activity": "high|medium|low",
-  "what_observers_say": "<1-2 sentences>"
-}`,
-      messages: [{ role: "user", content: `Base ecosystem this week:\n\nToken movers:\n${moversRaw ?? "Base tokens active"}\n\nNarratives:\n${narrativeRaw ?? "AI agents, DeFi narratives active"}` }],
-      temperature: 0.4,
-      maxTokens: 500,
-    });
-
-    const observerTake = extractJsonObject(msRaw) ?? { temperature: "neutral", bull: 40, bear: 30, neutral: 30, community_mood: "Steady builder activity", notable_events: [], builder_activity: "medium", what_observers_say: "Base ecosystem continuing to grow" };
-
-    // Step 4: Blue Agent final digest synthesis
-    const synthesis = await callBankrLLM({
-      model: "claude-haiku-4-5",
-      system: `You are Blue Agent — AI-native intelligence for Base builders.
-Produce a concise weekly digest of the Base ecosystem.
-CRITICAL: Return ONLY raw JSON. No markdown.
-Schema: {
-  "headline": "<1 sentence digest headline>",
-  "movers": [{"token":"<symbol>","change":"<+/-%>","note":"<1 sentence>"}],
-  "narratives": [{"name":"<narrative>","phase":"Emerging|Rising|Peak|Fading","key_point":"<1 sentence>"}],
-  "community": {"temperature":"<hot/warm/neutral/cool/cold>","bull":<0-100>,"bear":<0-100>,"neutral":<0-100>},
-  "what_moved": ["<key event or trend>"],
-  "what_matters": ["<actionable insight>"],
+  "headline": "<1 sentence digest headline grounded in the real data>",
+  "mover_notes": {"<TOKEN_SYMBOL>": "<1 sentence note>"},
+  "narratives": [{"name":"<narrative>","phase":"Emerging|Rising|Peak|Fading","key_point":"<1 sentence tied to the real tokens>"}],
+  "community": {"temperature":"hot|warm|neutral|cool|cold","bull":<0-100>,"bear":<0-100>,"neutral":<0-100>},
+  "what_moved": ["<key real event/trend>"],
+  "what_matters": ["<actionable insight for a Base builder>"],
   "what_to_watch": ["<upcoming catalyst or risk>"],
   "builder_signal": "<1 sentence for builders>",
   "week_rating": <1-10>
 }`,
-      messages: [{ role: "user", content: `Aeon token-movers:\n${moversRaw ?? "Base tokens"}\n\nAeon narratives:\n${narrativeRaw ?? "Base narratives"}\n\nMiroShark observer:\n${JSON.stringify(observerTake)}` }],
-      temperature: 0.3,
-      maxTokens: 1200,
+      messages: [{ role: "user", content: `${realContext}\n\nMover tokens to annotate: ${movers.map((m) => `${m.token} (${m.change})`).join(", ") || "none"}` }],
+      temperature: 0.35,
+      maxTokens: 1100,
     });
 
-    const result = extractJsonObject(synthesis);
-    if (!result) throw new Error("Failed to parse digest");
+    const synth = extractJsonObject(synthesisRaw) ?? {};
+    const moverNotes = (synth.mover_notes as Record<string, string> | undefined) ?? {};
+
+    const moversOut = movers.map((m) => ({
+      token: m.token,
+      change: m.change,
+      note: moverNotes[m.token] ?? "",
+      url: m.url,
+    }));
+
+    const community = (synth.community as Record<string, unknown> | undefined) ?? {
+      temperature: "neutral", bull: 40, bear: 30, neutral: 30,
+    };
 
     return Response.json({
       tool: "ecosystem-digest",
       timestamp: new Date().toISOString(),
       period: "weekly",
-      observer: observerTake,
-      ...result,
+      data_source: "DexScreener · GeckoTerminal · DefiLlama (live)",
+      base_tvl: tvl
+        ? { usd: tvl.tvlUsd, change_1d: pct(tvl.change1dPct), change_7d: pct(tvl.change7dPct) }
+        : null,
+      observer: {
+        temperature: community.temperature ?? "neutral",
+        bull: community.bull ?? 40,
+        bear: community.bear ?? 30,
+        neutral: community.neutral ?? 30,
+        community_mood: synth.headline ?? "Base ecosystem activity",
+        builder_activity: "live",
+      },
+      headline: synth.headline ?? "Base ecosystem weekly digest",
+      movers: moversOut,
+      narratives: synth.narratives ?? [],
+      community,
+      what_moved: synth.what_moved ?? [],
+      what_matters: synth.what_matters ?? [],
+      what_to_watch: synth.what_to_watch ?? [],
+      builder_signal: synth.builder_signal ?? "",
+      week_rating: synth.week_rating ?? null,
     });
   } catch (error) {
     console.error("[EcosystemDigest]", error);
