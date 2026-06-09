@@ -38,6 +38,11 @@ export default function MarkdownOutput({ content, className = "" }: Props) {
   const lines = content.split("\n");
   const nodes: React.ReactNode[] = [];
   let i = 0;
+  // Continuous counter for ordered lists. LLM output often writes "1." for every
+  // item and separates them with nested bullets / blank lines, which would split
+  // each item into its own <ol> and reset to "1." every time. Carry the number
+  // across those gaps and only reset on a heading / rule (a new section).
+  let olNum = 0;
 
   while (i < lines.length) {
     const line = lines[i];
@@ -69,6 +74,7 @@ export default function MarkdownOutput({ content, className = "" }: Props) {
 
     // H1
     if (line.startsWith("# ")) {
+      olNum = 0;
       nodes.push(
         <h1 key={i} className="font-mono font-bold text-2xl text-white mt-6 mb-3">
           {parseInline(line.slice(2))}
@@ -79,6 +85,7 @@ export default function MarkdownOutput({ content, className = "" }: Props) {
 
     // H2
     if (line.startsWith("## ")) {
+      olNum = 0;
       nodes.push(
         <h2 key={i} className="font-mono font-bold text-xl text-white mt-6 mb-2 pb-1 border-b border-[#1A1A2E]">
           {parseInline(line.slice(3))}
@@ -89,6 +96,7 @@ export default function MarkdownOutput({ content, className = "" }: Props) {
 
     // H3
     if (line.startsWith("### ")) {
+      olNum = 0;
       nodes.push(
         <h3 key={i} className="font-mono font-semibold text-base text-[#4FC3F7] mt-4 mb-1">
           {parseInline(line.slice(4))}
@@ -99,6 +107,7 @@ export default function MarkdownOutput({ content, className = "" }: Props) {
 
     // H4
     if (line.startsWith("#### ")) {
+      olNum = 0;
       nodes.push(
         <h4 key={i} className="font-mono font-semibold text-sm text-slate-300 mt-3 mb-1">
           {parseInline(line.slice(5))}
@@ -109,6 +118,7 @@ export default function MarkdownOutput({ content, className = "" }: Props) {
 
     // Horizontal rule
     if (/^[-*_]{3,}$/.test(line.trim())) {
+      olNum = 0;
       nodes.push(<hr key={i} className="border-[#1A1A2E] my-4" />);
       i++; continue;
     }
@@ -133,18 +143,21 @@ export default function MarkdownOutput({ content, className = "" }: Props) {
       continue;
     }
 
-    // Numbered list
+    // Numbered list — number continuously from olNum so items split across
+    // nested bullets / blank lines keep incrementing instead of resetting to 1.
     if (line.match(/^\d+\.\s/)) {
       const items: string[] = [];
       while (i < lines.length && lines[i].match(/^\d+\.\s/)) {
         items.push(lines[i].replace(/^\d+\.\s/, ""));
         i++;
       }
+      const start = olNum;
+      olNum += items.length;
       nodes.push(
         <ol key={i} className="my-2 space-y-1 pl-2">
           {items.map((item, j) => (
             <li key={j} className="flex gap-3 text-sm text-slate-400 leading-relaxed">
-              <span className="font-mono text-[#4FC3F7] font-semibold flex-shrink-0 w-4 text-right">{j + 1}.</span>
+              <span className="font-mono text-[#4FC3F7] font-semibold flex-shrink-0 w-5 text-right">{start + j + 1}.</span>
               <span>{parseInline(item)}</span>
             </li>
           ))}
