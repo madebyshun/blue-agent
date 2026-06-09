@@ -79,6 +79,7 @@ export interface Persona {
   id:           PersonaId;
   label:        string;
   icon:         string;
+  desc:         string;   // one-line role summary shown in the picker
   systemPrompt: string;   // empty = use BASE_SYSTEM only
   color:        string;
 }

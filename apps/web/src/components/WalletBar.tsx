@@ -131,7 +131,7 @@ export default function WalletBar({ onWalletChange, refreshTrigger = 0 }: Wallet
       </div>
       <button
         onClick={() => disconnect()}
-        className="self-start font-mono text-[10px] text-slate-600 hover:text-red-400 transition-colors"
+        className="self-start font-mono text-[11px] text-slate-400 hover:text-red-400 hover:border-red-400/30 border border-[#1A1A2E] rounded-lg px-3 py-1.5 transition-colors"
       >
         Disconnect wallet
       </button>

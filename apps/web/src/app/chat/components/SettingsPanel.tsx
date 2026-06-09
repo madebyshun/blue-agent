@@ -48,10 +48,12 @@ export default function SettingsPanel() {
       {/* ── Persona ──────────────────────────────────────────────────── */}
       <section className="px-5 pt-5 pb-5 border-b border-[#1A1A2E]">
         <SectionLabel>PERSONA</SectionLabel>
-        <PersonaSelector />
-        <p className="font-mono text-[10px] text-slate-700 mt-3 leading-relaxed">
-          Choose model in the chat composer below — Chat · Fast · Web Search · Deep Think · Private.
+        <p className="font-mono text-[10px] text-slate-600 mb-3 leading-relaxed">
+          The expert role the agent takes on — it swaps the system prompt, not the
+          model. Pick the <span className="text-slate-400">model</span> (Chat · Fast ·
+          Web Search · Deep Think · Private) separately in the chat composer below.
         </p>
+        <PersonaSelector />
       </section>
 
       {/* ── Credits ──────────────────────────────────────────────────── */}
