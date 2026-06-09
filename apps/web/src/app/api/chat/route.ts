@@ -1423,13 +1423,54 @@ export async function POST(req: NextRequest) {
           return;
         }
 
-        // Pipe Phase 2 into merged stream
+        // Pipe Phase 2 into merged stream. We also decode chunks in flight
+        // to count how many text deltas actually reached the client — if
+        // Anthropic returned only more tool_use blocks (chained tools we
+        // don't loop yet) or any other zero-text outcome, the message would
+        // otherwise render as an indefinite "thinking" state with empty
+        // content. The fallback line below tells the user something useful
+        // instead of stranding them.
         const reader = streamRes.body!.getReader();
+        const dec = new TextDecoder();
+        let sawText = false;
+        let lineBuf = "";
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             controller.enqueue(value);
+            if (sawText) continue; // skip scan once we've confirmed text
+            lineBuf += dec.decode(value, { stream: true });
+            // Anthropic SSE: lines like  data: {...}\n
+            let idx: number;
+            while ((idx = lineBuf.indexOf("\n")) !== -1) {
+              const line = lineBuf.slice(0, idx);
+              lineBuf = lineBuf.slice(idx + 1);
+              if (!line.startsWith("data: ")) continue;
+              try {
+                const ev = JSON.parse(line.slice(6)) as {
+                  type?: string;
+                  delta?: { type?: string; text?: string };
+                };
+                if (
+                  ev.type === "content_block_delta" &&
+                  ev.delta?.type === "text_delta" &&
+                  ev.delta.text
+                ) {
+                  sawText = true;
+                  break;
+                }
+              } catch { /* ignore parse errors */ }
+            }
+          }
+          if (!sawText) {
+            const msg =
+              "I ran the tool but the model returned no text response. " +
+              "This usually means it wanted to chain another tool call — " +
+              "rephrase your question or try the same prompt again.";
+            controller.enqueue(enc.encode(
+              `data: ${JSON.stringify({ delta: { text: msg } })}\n\n`,
+            ));
           }
         } finally {
           controller.close();
