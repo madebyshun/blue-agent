@@ -14,7 +14,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useAccount, useReadContracts } from "wagmi";
+import { useAccount, useReadContracts, useDisconnect } from "wagmi";
 import { formatUnits } from "viem";
 import AppConnectPrompt from "@/components/app/AppConnectPrompt";
 
@@ -192,6 +192,7 @@ interface Props {
 
 export default function OverviewView({ onSwitchTab }: Props) {
   const { address, isConnected } = useAccount();
+  const { disconnect }           = useDisconnect();
   const [chatStats,    setChatStats]    = useState<ChatStats>({ totalSessions: 0, totalMessages: 0, totalCreditsUsed: 0, toolsUsed: [], firstUsed: null });
   const [activeAlerts, setActiveAlerts] = useState<AlertItem[]>([]);
   const [copied,       setCopied]       = useState(false);
@@ -342,6 +343,14 @@ export default function OverviewView({ onSwitchTab }: Props) {
                         {tier.name === "None" ? "No Tier" : tier.name}
                       </span>
                       {memberSince && <span className="text-[9px] text-slate-600">since {memberSince}</span>}
+                      {/* Disconnect — was previously only accessible through
+                          the WalletBar dropdown on chat pages. Surface it on
+                          the dashboard so users can swap wallets without
+                          first navigating to chat. */}
+                      <button onClick={() => disconnect()}
+                        className="text-[9px] text-slate-600 hover:text-red-400 underline-offset-2 hover:underline transition-colors">
+                        disconnect
+                      </button>
                     </div>
                   </div>
                 </div>

@@ -181,7 +181,11 @@ async function handle(
     let body: Record<string, unknown> = {};
     try { body = await req.json(); } catch {}
 
-    // Credit-debit path (chat user calling a tool).
+    // Credit-debit path (chat user calling a tool). Tracks the actually-
+    // debited amount so we can echo it back in an X-Credits-Debited header
+    // — the chat backend reads that header to populate the in-message
+    // credit chip with the real spend, not just the chat-message cost.
+    let creditsDebited = 0;
     if (xBlueUser && /^0x[a-fA-F0-9]{40}$/.test(xBlueUser)) {
       const { fetchBlueBalance, getTierInfo } = await import("@/lib/credits");
       const { toolCreditCost }                = await import("@/lib/credit-pricing");
@@ -194,6 +198,7 @@ async function handle(
       if (cost > 0) {
         try {
           await spend(xBlueUser, cost, `tool:${tool}`);
+          creditsDebited = cost;
         } catch (e) {
           const err = e as Error & { code?: string };
           if (err.code === "INSUFFICIENT_CREDITS") {
@@ -223,7 +228,10 @@ async function handle(
     try {
       const resp = await handler(innerReq);
       const data = await resp.json().catch(() => ({}));
-      return NextResponse.json(data, { status: resp.ok ? 200 : resp.status });
+      return NextResponse.json(data, {
+        status:  resp.ok ? 200 : resp.status,
+        headers: { "X-Credits-Debited": String(creditsDebited) },
+      });
     } catch (e) {
       return NextResponse.json(
         { error: "Tool failed", message: (e as Error).message },

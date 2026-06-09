@@ -569,6 +569,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 return prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
               });
             } else if (parsed.type === "tool_done") {
+              const toolCredits = Number((parsed as { credits?: number }).credits ?? 0);
               setTasksState(prev => {
                 const task = prev.find(t => t.id === tid);
                 if (!task) return prev;
@@ -576,7 +577,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 const last = msgs[msgs.length - 1];
                 if (last?.role === "assistant") {
                   const logs = (last.toolLogs ?? []).map(l =>
-                    l.tool === parsed.tool ? { ...l, status: "done" as const, ms: parsed.ms, result: parsed.result } : l
+                    l.tool === parsed.tool
+                      ? { ...l, status: "done" as const, ms: parsed.ms, result: parsed.result, credits: toolCredits }
+                      : l,
                   );
                   msgs[msgs.length - 1] = { ...last, toolLogs: logs };
                 }
