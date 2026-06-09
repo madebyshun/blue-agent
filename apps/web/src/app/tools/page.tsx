@@ -170,9 +170,9 @@ const COMMANDS = [
 ];
 
 const SIDEBAR_SECTIONS = [
-  { id: "tools",    label: "x402 Tools",  count: "31" },
+  { id: "tools",    label: "x402 Tools",  count: "50+" },
   { id: "commands", label: "CLI Commands", count: "30" },
-  { id: "skills",   label: "Skills",       count: "34" },
+  { id: "skills",   label: "Skills",       count: "41" },
 ];
 
 const CATEGORIES = ["all", "security", "research", "launch", "premium"];
