@@ -440,16 +440,27 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_token_price",
-    description: `Get the LIVE USD price of a token from CoinGecko (real-time, ~30s cache).
-ALWAYS use this when the user asks for the current price of any crypto / token / coin, including:
-- "ETH price", "giá ETH", "BTC price hôm nay", "what's solana at"
-- "price of $BLUE" (pass symbol or {network, address})
-- Any "what's X worth" / "X to USD" question
-NEVER answer price questions from your training data — prices change every second.
+    description: `THE ONLY tool for token / crypto / coin PRICE queries. Returns live USD price from CoinGecko (~30s cache).
+
+USE FOR ANY of these intents — match aggressively:
+- "ETH price", "eth price", "ethereum price"
+- "giá ETH", "giá bitcoin", "giá X"  ← Vietnamese
+- "BTC hôm nay", "ETH bao nhiêu"
+- "what's SOL at", "how much is USDC"
+- "$BLUE price", "price of <any token>"
+- "X to USD", "X worth"
+- Any sentence containing "price", "giá", "cost", "worth", "trading at", "spot"
+
+DO NOT use hub_crypto_rpc for prices — that tool is for raw RPC reads only and CANNOT return prices.
+DO NOT answer from your own training data — prices move every second.
+
 Two query modes:
-- By symbol (preferred for majors): { symbol: "eth" | "btc" | "sol" | "usdc" | ... }
-- By contract address (for any ERC-20): { network: "base", address: "0x..." }
-Returns: usd price, 24h % change, market cap, 24h volume.`,
+- By symbol (use this for majors): { symbol: "eth" }
+- By contract on Base/Ethereum: { network: "base", address: "0x..." }
+
+Common symbols: eth, btc, sol, usdc, usdt, bnb, avax, matic, arb, op, link, uni, aero, cbbtc, blue.
+
+Returns: { usd, change24h (%), marketCap, volume24h, source, fetchedAt }.`,
     input_schema: {
       type: "object",
       properties: {
@@ -461,15 +472,20 @@ Returns: usd price, 24h % change, market cap, 24h volume.`,
   },
   {
     name: "hub_crypto_rpc",
-    description: `Make a live onchain JSON-RPC call via Venice Crypto RPC. Use this when the user asks for:
-- wallet balance of an address on any chain
-- token balance (ERC-20 balanceOf)
-- transaction details or receipt (by hash)
-- block number, gas price, or fee data
-- contract call (eth_call) results
-- ENS lookup or any other live onchain data
+    description: `Make a live onchain JSON-RPC call (eth_call, eth_getBalance, etc) via Venice Crypto RPC.
+
+**NEVER USE FOR TOKEN PRICES.** Token prices use hub_token_price exclusively. This tool returns raw onchain data — there is no "get price" JSON-RPC method.
+
+Use this ONLY for:
+- Wallet ETH balance: eth_getBalance(address)
+- ERC-20 balance: eth_call to balanceOf(address)
+- Tx details: eth_getTransactionByHash / eth_getTransactionReceipt
+- Block number, gas price, fee data
+- Generic contract reads (eth_call) — but not for price queries
+- ENS lookup
+
 Supported networks: base, ethereum, arbitrum, optimism, polygon, avalanche, bsc, fantom, gnosis, zksync, linea, scroll, mantle, blast, mode, zora, celo, moonbeam, cronos, kava, metis.
-Default to "base" for Base-related queries. Always use the correct network for the user's request.`,
+Default to "base" for Base-related queries.`,
     input_schema: {
       type: "object",
       properties: {
