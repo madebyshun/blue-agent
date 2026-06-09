@@ -17,7 +17,6 @@ import Link from "next/link";
 import { useAccount, useReadContracts } from "wagmi";
 import { formatUnits } from "viem";
 import AppConnectPrompt from "@/components/app/AppConnectPrompt";
-import { refreshCreditsIfNeeded } from "@/lib/credits";
 
 // ── Contracts (Base mainnet) ─────────────────────────────────────────────────
 
@@ -198,10 +197,14 @@ export default function OverviewView({ onSwitchTab }: Props) {
   const [copied,       setCopied]       = useState(false);
   const [builderScore, setBuilderScore] = useState<number | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
-  // Daily-allowance chat credits read from localStorage (lib/credits.ts). This
-  // is the SPENDABLE balance — distinct from the on-chain totalCreditsAccrued
-  // which only ticks up to record proof-of-stake-time and is never deducted.
-  const [chatCredits,  setChatCredits]  = useState<{ available: number; daily: number; used: number } | null>(null);
+  // Claimable credit balance from the new ledger API: accrued (on-chain
+  // staking accrual) + topup (off-chain USDC top-ups) - spent (off-chain
+  // ledger of chat + tool runs). This replaces the localStorage daily-quota
+  // model — credits accumulate continuously and are spendable as long as
+  // accrued + topup > spent.
+  const [ledger, setLedger] = useState<{
+    accrued: number; topup: number; spent: number; balance: number;
+  } | null>(null);
 
   useEffect(() => { setChatStats(loadChatStats(address)); }, [address]);
   useEffect(() => { setActiveAlerts(loadActiveAlerts()); }, []);
@@ -250,7 +253,9 @@ export default function OverviewView({ onSwitchTab }: Props) {
   const pendingUsdc = stakeInfo?.[4] ?? 0n;
   const staked      = Number(formatUnits(stakedWei, 18));
   const tier        = getTier(staked);
-  const totalCr     = totalCredits ? Number(totalCredits) : 0;
+  // totalCredits (raw on-chain accrual) is fetched but rendered via the
+  // ledger API below — kept in the read batch for cheap analytics access.
+  void totalCredits;
   const hasStake    = staked > 0;
   const memberSince = chatStats.firstUsed
     ? new Date(chatStats.firstUsed).toLocaleDateString("en-US", { month: "short", year: "numeric" })
@@ -263,17 +268,27 @@ export default function OverviewView({ onSwitchTab }: Props) {
     setTimeout(() => setCopied(false), 1500);
   }
 
-  // Sync the daily-allowance chat credits whenever the on-chain BLUE balance
-  // resolves. Uses (wallet + staked) so credits respect the same effective
-  // balance the chat page reads from /lib/credits.ts.
-  const walletBlue = balances[0].amount;
+  // Fetch the unified credit ledger from /api/credits/balance/[address].
+  // This single source of truth replaces the old localStorage daily-quota:
+  // balance = accrued (on-chain stake-time) + topup (USDC purchases) - spent.
   useEffect(() => {
-    if (!address || walletBlue === null) { setChatCredits(null); return; }
-    const effective = walletBlue + staked;
-    const r = refreshCreditsIfNeeded(effective, address);
-    const used = Math.max(0, r.daily - r.credits);
-    setChatCredits({ available: r.credits, daily: r.daily, used });
-  }, [address, walletBlue, staked]);
+    if (!address) { setLedger(null); return; }
+    let cancelled = false;
+    fetch(`/api/credits/balance/${address}`)
+      .then(r => r.json())
+      .then(d => {
+        if (cancelled) return;
+        if (d?.balance === undefined) { setLedger(null); return; }
+        setLedger({
+          accrued: Number(d.accrued ?? 0),
+          topup:   Number(d.topup   ?? 0),
+          spent:   Number(d.spent   ?? 0),
+          balance: Number(d.balance ?? 0),
+        });
+      })
+      .catch(() => { if (!cancelled) setLedger(null); });
+    return () => { cancelled = true; };
+  }, [address]);
 
   const scoreColor = builderScore !== null
     ? builderScore >= 70 ? "#34D399" : builderScore >= 40 ? "#4FC3F7" : "#F59E0B"
@@ -346,47 +361,64 @@ export default function OverviewView({ onSwitchTab }: Props) {
                 </div>
               </div>
 
-              {/* 4 stat chips — focused on what's SPENDABLE right now, not
-                  lifetime accruals. CHAT TODAY / USED come from localStorage
-                  (the daily allowance the chat actually reads), STAKED + YIELD
-                  are on-chain truth. */}
+              {/* 4 stat chips reading from the unified credit ledger.
+                  BALANCE is the spendable number; ACCRUED, SPENT, STAKED give
+                  enough context to explain where balance came from + USDC
+                  yield is the only thing actually claimable. */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <StatChip
-                  label="CHAT TODAY"
-                  value={chatCredits ? chatCredits.available.toLocaleString() : "—"}
-                  sub={chatCredits ? `of ${chatCredits.daily.toLocaleString()}` : "loading"}
+                  label="BALANCE"
+                  value={ledger ? ledger.balance.toLocaleString() : "—"}
+                  sub="credits · spendable"
                   color="#4FC3F7" />
                 <StatChip
-                  label="USED TODAY"
-                  value={chatCredits ? chatCredits.used.toLocaleString() : "—"}
-                  sub="this 24h"
+                  label="ACCRUED"
+                  value={ledger
+                    ? (ledger.accrued < 1 ? ledger.accrued.toFixed(2) : ledger.accrued.toFixed(0))
+                    : "—"}
+                  sub={`+${Number(dailyCr).toLocaleString()}/day`}
                   color="#A78BFA" />
                 <StatChip
                   label="STAKED"
                   value={hasStake ? fmtBlue(stakedWei) : "0"}
-                  sub="BLUE"
+                  sub={tier.name === "None" ? "BLUE · no tier" : `BLUE · ${tier.name}`}
                   color={tier.color} />
                 <StatChip
                   label="USDC YIELD"
                   value={`$${(Number(pendingUsdc) / 1e6).toFixed(4)}`}
-                  sub="pending"
+                  sub="claimable"
                   color="#22C55E" />
               </div>
 
-              {/* Lifetime-earned explainer. The on-chain totalCreditsAccrued
-                  is proof of how long the user has been staking — it ticks up
-                  but is never consumed. Surfacing it here as a small caption
-                  prevents users from confusing it with their spendable chat
-                  credits (CHAT TODAY above). */}
-              {hasStake && (
-                <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-600 group" title="On-chain accrual from BlueMarketStaking.sol — records how long you've been staking. Not deducted by chat usage; chat reads its own daily quota above.">
+              {/* Ledger breakdown — surfaces the spent + top-up history so the
+                  user understands the BALANCE arithmetic. Only renders once
+                  the ledger has loaded so we don't flash a zero row. */}
+              {ledger && (ledger.spent > 0 || ledger.topup > 0) && (
+                <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-600">
                   <svg className="w-3 h-3 shrink-0 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                   </svg>
                   <span>
-                    Lifetime accrued on-chain:{" "}
-                    <span className="text-slate-400 font-medium">{totalCr < 1 ? totalCr.toFixed(2) : totalCr.toFixed(0)} cr</span>
-                    <span className="text-slate-700"> · at {Number(dailyCr).toLocaleString()}/day · proof-of-stake-time, not chat balance</span>
+                    {ledger.accrued.toFixed(0)} accrued
+                    {ledger.topup > 0  && <> + <span className="text-[#22C55E]">{ledger.topup.toLocaleString()} top-up</span></>}
+                    {ledger.spent > 0  && <> − <span className="text-[#A78BFA]">{ledger.spent.toLocaleString()} spent</span></>}
+                    {" "}= <span className="text-slate-400 font-medium">{ledger.balance.toLocaleString()} balance</span>
+                  </span>
+                </div>
+              )}
+              {ledger && ledger.spent === 0 && ledger.topup === 0 && hasStake && (
+                <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-600">
+                  <svg className="w-3 h-3 shrink-0 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                  </svg>
+                  <span>
+                    Credits accrue at{" "}
+                    <span className="text-slate-400 font-medium">{Number(dailyCr).toLocaleString()}/day</span>
+                    {" "}· spend on chat (
+                    <span className="text-slate-500">10–200 cr/msg</span>
+                    ) or tools (
+                    <span className="text-slate-500">100–2000 cr/call</span>
+                    )
                   </span>
                 </div>
               )}
