@@ -1,10 +1,13 @@
-// x402/defi-opportunity/index.ts
-// DeFi Opportunity Scan — Aeon defi-monitor + MiroShark analyst + Blue verdict
+// x402/defi-opportunity
+// DeFi yield scan over REAL Base pools (DefiLlama yields). Every protocol, APY and
+// TVL is live. The LLM ranks/explains the real pools and flags risk — it never
+// invents a protocol or an APY.
 // Price: $0.35
-// Fully self-contained
+
+import { getBaseYields, getBaseTvl, yieldsToPrompt, tvlToPrompt, type YieldPool } from "@/lib/market-data";
 
 type Msg = { role: string; content: string };
-async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
+async function llm(system: string, user: string, temp = 0.3, tokens = 1000): Promise<string> {
   const r = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
     headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
@@ -20,15 +23,6 @@ function parseJson(t: string): Record<string, unknown> | null {
   if (i >= 0 && j > i) s = s.slice(i, j + 1);
   try { return JSON.parse(s); } catch { try { return JSON.parse(s.replace(/[\x00-\x1F]/g, " ")); } catch { return null; } }
 }
-async function aeon(skill: string, focus = ""): Promise<string | null> {
-  try {
-    const r = await fetch(`https://raw.githubusercontent.com/aaronjmars/aeon/main/skills/${skill}/SKILL.md`, { signal: AbortSignal.timeout(6000) });
-    if (!r.ok) return null;
-    const p = await r.text();
-    return await llm(`You are Aeon. Synthesize from training knowledge. Today: ${new Date().toISOString().split("T")[0]}.`,
-      `Follow skill template. Be concrete.\n\nSkill:\n${p}${focus ? `\nFocus: ${focus}` : ""}\n\nReturn only skill output.`, 0.2, 1200);
-  } catch { return null; }
-}
 
 export default async function handler(req: Request): Promise<Response> {
   try {
@@ -36,40 +30,58 @@ export default async function handler(req: Request): Promise<Response> {
     try { const t = await req.text(); if (t.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const { strategy = "yield", risk_tolerance = "medium" } = body;
 
-    const defiRaw = await aeon("defi-monitor", `Base chain DeFi: ${strategy} opportunities, risk_tolerance=${risk_tolerance}. Focus on Aerodrome, Uniswap v4, Aave, active yield farms.`);
+    // Low risk → bias toward stablecoin pools with meaningful TVL.
+    const stableOnly = risk_tolerance === "low";
+    const [pools, tvl] = await Promise.all([
+      getBaseYields(18, { stableOnly, minTvl: 100_000 }),
+      getBaseTvl(),
+    ]);
+    const usable: YieldPool[] = pools.length ? pools : await getBaseYields(18, { minTvl: 100_000 });
 
-    const msRaw = await llm(`You are MiroShark analyst persona — data-driven, risk-aware.
-Evaluate these DeFi opportunities on Base.
-CRITICAL: Return ONLY raw JSON.
-Schema: {"top_opportunity":"<protocol/pool>","risk_level":"high|medium|low","confidence":<0-10>,"smart_money_signal":"accumulating|neutral|exiting","analyst_take":"<1-2 sentences>"}`,
-      `DeFi signals: ${defiRaw ?? "Base DeFi ecosystem"}\nStrategy: ${strategy}\nRisk tolerance: ${risk_tolerance}`, 0.3, 500);
-    const analyst = parseJson(msRaw) ?? {};
+    if (!usable.length) {
+      return Response.json(
+        { error: "Live DeFi yield data is unavailable right now. Retry shortly." },
+        { status: 503 }
+      );
+    }
 
-    const resultRaw = await llm(`You are Blue Agent — DeFi opportunity scanner for Base.
-CRITICAL: Return ONLY raw JSON.
+    const validProjects = Array.from(new Set(usable.map((p) => `${p.project}/${p.symbol}`)));
+    const realContext = `${tvlToPrompt(tvl)}\n\nLive Base yield pools (DefiLlama):\n${yieldsToPrompt(usable)}`;
+
+    const resultRaw = await llm(
+      `You are Blue Agent — DeFi opportunity scanner for Base. You are given REAL live yield pools with real APY, TVL and risk flags.
+Rules:
+- Recommend ONLY pools from this list: ${validProjects.join(", ")}. Never invent a protocol or APY.
+- Quote the real APY and TVL shown. Respect the user's risk tolerance (${risk_tolerance}).
+- apy_range must reflect the real APY of the pool you cite.
+Return ONLY raw JSON. No markdown.
 Schema: {
   "scan_score": <0-100>,
   "market_condition": "favorable|neutral|unfavorable",
   "opportunities": [
-    {
-      "protocol": "<name>",
-      "type": "yield|lp|lending|farming|staking",
-      "apy_range": "<e.g. 8-12%>",
-      "risk": "high|medium|low",
-      "entry": "<how to enter>",
-      "watch_for": "<risk signal>"
-    }
+    {"protocol":"<project from list>","pool":"<symbol>","type":"yield|lp|lending|farming|staking","apy":"<real APY>","tvl":"<real TVL>","risk":"high|medium|low","entry":"<how to enter>","watch_for":"<risk signal>"}
   ],
   "avoid_now": ["<protocol or strategy to avoid>"],
   "best_entry_timing": "<immediate|wait for X>",
   "summary": "<2 sentences>"
 }`,
-      `Strategy: ${strategy}\nRisk: ${risk_tolerance}\nDeFi monitor: ${defiRaw ?? "Base DeFi"}\nAnalyst: ${JSON.stringify(analyst)}`, 0.3, 1000);
+      `Strategy: ${strategy}\nRisk tolerance: ${risk_tolerance}\n\n${realContext}`,
+      0.3,
+      1000
+    );
 
     const result = parseJson(resultRaw);
     if (!result) throw new Error("Failed to parse result");
 
-    return Response.json({ tool: "defi-opportunity", timestamp: new Date().toISOString(), strategy, risk_tolerance, analyst, ...result });
+    return Response.json({
+      tool: "defi-opportunity",
+      timestamp: new Date().toISOString(),
+      strategy,
+      risk_tolerance,
+      data_source: "DefiLlama (live Base yields)",
+      pools_scanned: usable.length,
+      ...result,
+    });
   } catch (e) {
     return Response.json({ error: "DeFi opportunity scan failed", message: (e as Error).message }, { status: 500 });
   }
