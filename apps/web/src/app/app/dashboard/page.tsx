@@ -1,15 +1,15 @@
 "use client";
 
 /**
- * /app/dashboard — unified shell with 3 tabs.
+ * /app/dashboard — unified shell with 2 tabs.
  *
- *   ?tab=overview  Wallet identity, balances, stake summary, alerts, activity
+ *   ?tab=overview  Wallet identity, balances, stake summary, activity
  *   ?tab=stake     Full staking flow (approve → stake → cooldown → claim)
- *   ?tab=alerts    Alert CRUD + Sentinel deep-link
  *
  * URL is the source of truth — deep-links from elsewhere can land directly
  * on the right tab. /app/rewards and /app/alerts redirect into here so
- * existing links keep working.
+ * existing links keep working. (Alerts CRUD is deferred — the legacy
+ * /app/alerts route now lands on overview.)
  */
 
 import { Suspense, useEffect, useState } from "react";
@@ -17,15 +17,13 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import AppPageHeader from "@/components/app/AppPageHeader";
 import OverviewView from "./_views/OverviewView";
 import StakeView    from "./_views/StakeView";
-import AlertsView   from "./_views/AlertsView";
 
-const TABS = ["overview", "stake", "alerts"] as const;
+const TABS = ["overview", "stake"] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_META: Record<Tab, { label: string; accent: string; subtitle: string }> = {
-  overview: { label: "Overview", accent: "#4FC3F7", subtitle: "Wallet · balances · stake · alerts" },
+  overview: { label: "Overview", accent: "#4FC3F7", subtitle: "Wallet · balances · stake" },
   stake:    { label: "Stake",    accent: "#A78BFA", subtitle: "Stake $BLUEAGENT · earn credits · share x402 revenue" },
-  alerts:   { label: "Alerts",   accent: "#F59E0B", subtitle: "Price thresholds · whale moves · onchain events" },
 };
 
 function DashboardShell() {
@@ -92,7 +90,6 @@ function DashboardShell() {
       <div className="flex-1 overflow-y-auto">
         {tab === "overview" && <OverviewView onSwitchTab={setTab} />}
         {tab === "stake"    && <StakeView />}
-        {tab === "alerts"   && <AlertsView />}
       </div>
     </div>
   );
