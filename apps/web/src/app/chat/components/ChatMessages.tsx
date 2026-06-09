@@ -93,6 +93,99 @@ function renderInline(text: string): React.ReactNode[] {
 
 // ── Block markdown renderer ───────────────────────────────────────────────────
 
+/**
+ * Trust chip rendered above the message body when the upstream model
+ * actually browsed the web. Click toggles a source list — each entry is a
+ * direct link to the page Anthropic surfaced so the user can verify the
+ * claim rather than trust the prose alone.
+ */
+function WebSearchChip({ ws }: {
+  ws: { provider: string; sources: number; urls?: Array<{ url: string; title: string }> }
+}) {
+  const [open, setOpen] = useState(false);
+  const hasLinks = !!ws.urls?.length;
+  return (
+    <div className="mb-1.5 rounded-lg border overflow-hidden"
+         style={{ borderColor: "#22C55E20", background: "#22C55E07" }}>
+      <button
+        onClick={() => hasLinks && setOpen(o => !o)}
+        disabled={!hasLinks}
+        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/[0.02] transition-colors disabled:cursor-default text-left">
+        <span className="text-xs shrink-0">🌐</span>
+        <span className="font-mono text-[10px] font-semibold shrink-0" style={{ color: "#22C55E" }}>
+          Web Search
+        </span>
+        <span className="font-mono text-[10px] text-slate-500 flex-1 truncate capitalize">
+          {ws.provider}
+        </span>
+        <span className="font-mono text-[9px] shrink-0" style={{ color: "#22C55E" }}>
+          ✓ {ws.sources} source{ws.sources === 1 ? "" : "s"}
+        </span>
+        {hasLinks && (
+          <span className={`text-slate-600 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+        )}
+      </button>
+      {open && hasLinks && (
+        <div className="border-t border-[#22C55E15] bg-[#0a0a0f]/40 px-3 py-2 space-y-1">
+          {ws.urls!.map((s, i) => {
+            let host = "";
+            try { host = new URL(s.url).host.replace(/^www\./, ""); } catch {}
+            return (
+              <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
+                 className="flex items-baseline gap-2 hover:bg-white/[0.02] rounded px-1.5 py-1 -mx-1.5 transition-colors group">
+                <span className="font-mono text-[9px] text-slate-700 shrink-0 w-4 text-right">{i + 1}.</span>
+                <span className="font-mono text-[11px] text-slate-300 truncate flex-1 group-hover:text-[#22C55E] transition-colors">
+                  {s.title}
+                </span>
+                {host && (
+                  <span className="font-mono text-[9px] text-slate-700 shrink-0">{host}</span>
+                )}
+              </a>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Splits assistant content into the main markdown body and the trailing
+ * follow-up suggestions. The system prompt asks the model to append 2-3
+ * lines prefixed with "↳ " at the very end; this helper finds the first
+ * contiguous run of those lines anchored at the end of the message and
+ * lifts them out so the UI can render them as clickable chips.
+ *
+ * Tolerant to: leading whitespace on the marker line, the model wrapping
+ * follow-ups in a bullet list (e.g. "- ↳ ..."), or trailing whitespace.
+ * If no follow-ups are present the body is returned unchanged.
+ */
+function splitFollowups(content: string): { body: string; followups: string[] } {
+  const lines = content.split("\n");
+  const followups: string[] = [];
+  let lastBodyEnd = lines.length;
+
+  // Walk from the end and consume "↳ ..." lines plus the blank lines between
+  // them. Stop at the first non-followup, non-blank line.
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const raw = lines[i];
+    const trim = raw.trim();
+    if (!trim) continue;                                     // skip blanks
+    const m = trim.match(/^(?:[-*]\s+)?↳\s*(.+)$/);
+    if (m) {
+      followups.unshift(m[1].trim().replace(/[.,;:]+$/, "")); // drop trailing punctuation
+      lastBodyEnd = i;
+      continue;
+    }
+    break;
+  }
+
+  return {
+    body:      lines.slice(0, lastBodyEnd).join("\n").trimEnd(),
+    followups: followups.slice(0, 4),                         // hard cap, model can over-shoot
+  };
+}
+
 function MarkdownRenderer({ content }: { content: string }) {
   const lines = content.split("\n");
   const elems: React.ReactNode[] = [];
@@ -410,6 +503,14 @@ export default function ChatMessages() {
                   {isAssistant ? (
                     <div className="group/msg relative">
 
+                      {/* Web search trust chip — emitted whenever the upstream
+                          model actually browsed (Anthropic server tool, or a
+                          Venice model with browsing flag confirmed). Click
+                          to expand the source list when URLs are available. */}
+                      {msg.webSearch && msg.webSearch.sources > 0 && (
+                        <WebSearchChip ws={msg.webSearch} />
+                      )}
+
                       {/* Tool execution logs + result cards */}
                       {!!msg.toolLogs?.length && (
                         <div className="flex flex-col gap-1.5 mb-4">
@@ -452,11 +553,34 @@ export default function ChatMessages() {
                         <ThinkingBlock content={msg.thinkingContent} isStreaming={msg.isThinking === true} />
                       )}
 
-                      {/* Main content */}
+                      {/* Main content. The system prompt asks the model to
+                          append follow-up suggestions on their own lines
+                          prefixed with "↳ "; we split those off before
+                          rendering so the body stays clean markdown and the
+                          follow-ups can render as clickable suggestion chips
+                          below. */}
                       {msg.content ? (
-                        <div className="font-mono">
-                          <MarkdownRenderer content={msg.content} />
-                        </div>
+                        (() => {
+                          const { body, followups } = splitFollowups(msg.content);
+                          return (
+                            <>
+                              <div className="font-mono">
+                                <MarkdownRenderer content={body} />
+                              </div>
+                              {followups.length > 0 && (
+                                <div className="mt-3 flex flex-col gap-1.5">
+                                  {followups.map((q, k) => (
+                                    <button key={k} onClick={() => send(q)}
+                                      className="group/sg flex items-center gap-2 text-left font-mono text-[12px] text-slate-400 hover:text-[#4FC3F7] transition-colors">
+                                      <span className="text-slate-700 group-hover/sg:text-[#4FC3F7] transition-colors">↳</span>
+                                      <span className="underline-offset-4 group-hover/sg:underline">{q}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()
                       ) : !msg.thinkingContent ? (
                         <span className="flex gap-1.5 items-center mt-1">
                           <Dot delay={0} /><Dot delay={160} /><Dot delay={320} />

@@ -71,6 +71,30 @@ export const PRIVACY_TIERS: ModelTier[] = [
 
 export const ALL_TIERS: ModelTier[] = [...BANKR_TIERS, ...VENICE_TIERS, ...PRIVACY_TIERS];
 
+/**
+ * Use-case presets — what most users actually want at the moment of
+ * choosing. Each preset maps to one underlying tier ID so the rest of the
+ * pipeline (cost, system prompt, tool routing) doesn't need to change.
+ *
+ * The raw 14-model list still ships behind an "Advanced ▾" expander for
+ * power users; presets are the default landing.
+ */
+export interface ModelPreset {
+  id:       string;
+  label:    string;
+  desc:     string;
+  icon:     string;
+  tier:     string;     // maps to a ModelTier id
+  webSearch?: boolean;  // suggested webSearch default when picked
+}
+
+export const MODEL_PRESETS: ModelPreset[] = [
+  { id: "chat",        label: "Chat",         desc: "Balanced · default",                  icon: "💬", tier: "pro",                webSearch: false },
+  { id: "fast-search", label: "Fast Search",  desc: "~2s · multi-source web (Grok)",       icon: "⚡", tier: "venice-grok",        webSearch: true  },
+  { id: "deep-think",  label: "Deep Think",   desc: "Heavy reasoning + web (Opus)",        icon: "🔬", tier: "max",                webSearch: true  },
+  { id: "private",     label: "Private",      desc: "E2EE · no logs (Gemma)",              icon: "🔒", tier: "venice-e2ee-gemma",  webSearch: false },
+];
+
 export default function ChatInput() {
   const {
     input, setInput, send, stop, streaming, outOfCredits,
@@ -81,8 +105,13 @@ export default function ChatInput() {
 
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [modelOpen, setModelOpen] = useState(false);
-  const [cmdOpen,   setCmdOpen]   = useState(false);
+  const [modelOpen,    setModelOpen]    = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);  // raw 14-model list
+  const [cmdOpen,      setCmdOpen]      = useState(false);
+
+  // Active preset (if the current tier matches a preset's underlying tier).
+  // Used to highlight the right card when the popover opens.
+  const activePreset = MODEL_PRESETS.find(p => p.tier === chatTier);
 
   const activeTier = ALL_TIERS.find(t => t.id === chatTier) ?? BANKR_TIERS[1];
 
@@ -204,34 +233,73 @@ export default function ChatInput() {
           </div>
         )}
 
-        {/* ── Model selector popover ───────────────────────────────────────── */}
+        {/* ── Model selector popover — presets first, advanced behind toggle ── */}
         {modelOpen && (
-          <div className="absolute bottom-full mb-2 left-0 bg-[#0D0D14] border border-[#2A2A4E] rounded-xl overflow-hidden shadow-2xl z-20 w-72 max-h-[480px] overflow-y-auto">
-            <div className="px-3 pt-2.5 pb-1.5 border-b border-[#1A1A2E] sticky top-0 bg-[#0D0D14]">
-              <span className="font-mono text-[10px] text-slate-600 tracking-widest">SELECT MODEL</span>
+          <div className="absolute bottom-full mb-2 left-0 bg-[#0D0D14] border border-[#2A2A4E] rounded-xl overflow-hidden shadow-2xl z-20 w-80 max-h-[520px] overflow-y-auto">
+            <div className="px-3 pt-2.5 pb-1.5 border-b border-[#1A1A2E] sticky top-0 bg-[#0D0D14] z-10">
+              <span className="font-mono text-[10px] text-slate-600 tracking-widest">CHOOSE A MODE</span>
             </div>
 
-            {/* Bankr */}
-            <ModelGroup
-              label="BANKR" tiers={BANKR_TIERS}
-              active={chatTier} holderTier={holderTier}
-              onSelect={(id) => { setChatTier(id); setModelOpen(false); textareaRef.current?.focus(); }}
-            />
+            {/* Use-case presets — 4 cards, the default landing UX */}
+            <div className="p-2 grid grid-cols-2 gap-1.5">
+              {MODEL_PRESETS.map(p => {
+                const isActive = activePreset?.id === p.id;
+                const tierMeta = ALL_TIERS.find(t => t.id === p.tier);
+                return (
+                  <button key={p.id}
+                    onClick={() => {
+                      setChatTier(p.tier);
+                      if (typeof p.webSearch === "boolean") setWebSearch(p.webSearch);
+                      setModelOpen(false);
+                      textareaRef.current?.focus();
+                    }}
+                    className="text-left rounded-lg border p-2.5 transition-all hover:bg-white/[0.02]"
+                    style={isActive
+                      ? { borderColor: `${tierMeta?.color ?? "#4FC3F7"}50`, background: `${tierMeta?.color ?? "#4FC3F7"}10` }
+                      : { borderColor: "#1A1A2E", background: "transparent" }}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-base">{p.icon}</span>
+                      <span className="font-mono text-[11px] font-bold" style={{ color: tierMeta?.color ?? "#fff" }}>
+                        {p.label}
+                      </span>
+                    </div>
+                    <p className="font-mono text-[9px] text-slate-500 leading-snug">{p.desc}</p>
+                    {tierMeta && (
+                      <p className="font-mono text-[9px] text-slate-700 mt-1">{tierMeta.credits} cr/msg</p>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
-            {/* Venice */}
-            <ModelGroup
-              label="VENICE" tiers={VENICE_TIERS}
-              active={chatTier} holderTier={holderTier}
-              onSelect={(id) => { setChatTier(id); setModelOpen(false); textareaRef.current?.focus(); }}
-            />
+            {/* Advanced — raw 14-model list, collapsed by default */}
+            <button
+              onClick={() => setAdvancedOpen(o => !o)}
+              className="w-full px-3 py-2 border-t border-[#1A1A2E] flex items-center justify-between hover:bg-white/[0.02] transition-colors">
+              <span className="font-mono text-[10px] text-slate-500 tracking-widest">ADVANCED · 14 MODELS</span>
+              <span className="font-mono text-[10px] text-slate-700">{advancedOpen ? "▴" : "▾"}</span>
+            </button>
 
-            {/* Privacy / E2EE */}
-            <ModelGroup
-              label="🔒 PRIVACY · E2EE" tiers={PRIVACY_TIERS}
-              active={chatTier} holderTier={holderTier}
-              onSelect={(id) => { setChatTier(id); setModelOpen(false); textareaRef.current?.focus(); }}
-              description="Transmitted over HTTPS · client-side key mgmt coming soon"
-            />
+            {advancedOpen && (
+              <>
+                <ModelGroup
+                  label="BANKR" tiers={BANKR_TIERS}
+                  active={chatTier} holderTier={holderTier}
+                  onSelect={(id) => { setChatTier(id); setModelOpen(false); textareaRef.current?.focus(); }}
+                />
+                <ModelGroup
+                  label="VENICE" tiers={VENICE_TIERS}
+                  active={chatTier} holderTier={holderTier}
+                  onSelect={(id) => { setChatTier(id); setModelOpen(false); textareaRef.current?.focus(); }}
+                />
+                <ModelGroup
+                  label="🔒 PRIVACY · E2EE" tiers={PRIVACY_TIERS}
+                  active={chatTier} holderTier={holderTier}
+                  onSelect={(id) => { setChatTier(id); setModelOpen(false); textareaRef.current?.focus(); }}
+                  description="Transmitted over HTTPS · client-side key mgmt coming soon"
+                />
+              </>
+            )}
           </div>
         )}
 
