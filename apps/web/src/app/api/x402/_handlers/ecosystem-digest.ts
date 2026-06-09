@@ -91,7 +91,7 @@ Schema: {
   "what_matters": ["<actionable insight for a Base builder>"],
   "what_to_watch": ["<upcoming catalyst or risk>"],
   "builder_signal": "<1 sentence for builders>",
-  "week_rating": <1-10>
+  "rating": <1-10>
 }`,
       messages: [{ role: "user", content: `${realContext}\n\nMover tokens to annotate: ${movers.map((m) => `${m.token} (${m.change})`).join(", ") || "none"}` }],
       temperature: 0.35,
@@ -115,7 +115,7 @@ Schema: {
     return Response.json({
       tool: "ecosystem-digest",
       timestamp: new Date().toISOString(),
-      period: "weekly",
+      period: "daily",
       data_source: "DexScreener · GeckoTerminal · DefiLlama (live)",
       base_tvl: tvl
         ? { usd: tvl.tvlUsd, change_1d: pct(tvl.change1dPct), change_7d: pct(tvl.change7dPct) }
@@ -128,7 +128,7 @@ Schema: {
         community_mood: synth.headline ?? "Base ecosystem activity",
         builder_activity: "live",
       },
-      headline: synth.headline ?? "Base ecosystem weekly digest",
+      headline: synth.headline ?? "Base ecosystem daily digest",
       movers: moversOut,
       narratives: synth.narratives ?? [],
       community,
@@ -136,7 +136,7 @@ Schema: {
       what_matters: synth.what_matters ?? [],
       what_to_watch: synth.what_to_watch ?? [],
       builder_signal: synth.builder_signal ?? "",
-      week_rating: synth.week_rating ?? null,
+      rating: synth.rating ?? null,
     });
   } catch (error) {
     console.error("[EcosystemDigest]", error);
