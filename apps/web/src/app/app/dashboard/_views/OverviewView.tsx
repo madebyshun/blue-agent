@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useAccount, useReadContracts } from "wagmi";
 import { formatUnits } from "viem";
 import AppConnectPrompt from "@/components/app/AppConnectPrompt";
+import { refreshCreditsIfNeeded } from "@/lib/credits";
 
 // ── Contracts (Base mainnet) ─────────────────────────────────────────────────
 
@@ -197,6 +198,10 @@ export default function OverviewView({ onSwitchTab }: Props) {
   const [copied,       setCopied]       = useState(false);
   const [builderScore, setBuilderScore] = useState<number | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
+  // Daily-allowance chat credits read from localStorage (lib/credits.ts). This
+  // is the SPENDABLE balance — distinct from the on-chain totalCreditsAccrued
+  // which only ticks up to record proof-of-stake-time and is never deducted.
+  const [chatCredits,  setChatCredits]  = useState<{ available: number; daily: number; used: number } | null>(null);
 
   useEffect(() => { setChatStats(loadChatStats(address)); }, [address]);
   useEffect(() => { setActiveAlerts(loadActiveAlerts()); }, []);
@@ -257,6 +262,18 @@ export default function OverviewView({ onSwitchTab }: Props) {
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
+
+  // Sync the daily-allowance chat credits whenever the on-chain BLUE balance
+  // resolves. Uses (wallet + staked) so credits respect the same effective
+  // balance the chat page reads from /lib/credits.ts.
+  const walletBlue = balances[0].amount;
+  useEffect(() => {
+    if (!address || walletBlue === null) { setChatCredits(null); return; }
+    const effective = walletBlue + staked;
+    const r = refreshCreditsIfNeeded(effective, address);
+    const used = Math.max(0, r.daily - r.credits);
+    setChatCredits({ available: r.credits, daily: r.daily, used });
+  }, [address, walletBlue, staked]);
 
   const scoreColor = builderScore !== null
     ? builderScore >= 70 ? "#34D399" : builderScore >= 40 ? "#4FC3F7" : "#F59E0B"
@@ -329,13 +346,50 @@ export default function OverviewView({ onSwitchTab }: Props) {
                 </div>
               </div>
 
-              {/* 4 stat chips */}
+              {/* 4 stat chips — focused on what's SPENDABLE right now, not
+                  lifetime accruals. CHAT TODAY / USED come from localStorage
+                  (the daily allowance the chat actually reads), STAKED + YIELD
+                  are on-chain truth. */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <StatChip label="STAKED"        value={hasStake ? fmtBlue(stakedWei) : "0"}                        sub="BLUE"    color={tier.color} />
-                <StatChip label="CREDITS / DAY" value={Number(dailyCr).toLocaleString()}                            sub="per day" color="#4FC3F7" />
-                <StatChip label="TOTAL CREDITS" value={totalCr < 1 ? totalCr.toFixed(2) : totalCr.toFixed(0)}       sub="earned"  color="#A78BFA" />
-                <StatChip label="USDC YIELD"    value={`$${(Number(pendingUsdc) / 1e6).toFixed(4)}`}                sub="pending" color="#22C55E" />
+                <StatChip
+                  label="CHAT TODAY"
+                  value={chatCredits ? chatCredits.available.toLocaleString() : "—"}
+                  sub={chatCredits ? `of ${chatCredits.daily.toLocaleString()}` : "loading"}
+                  color="#4FC3F7" />
+                <StatChip
+                  label="USED TODAY"
+                  value={chatCredits ? chatCredits.used.toLocaleString() : "—"}
+                  sub="this 24h"
+                  color="#A78BFA" />
+                <StatChip
+                  label="STAKED"
+                  value={hasStake ? fmtBlue(stakedWei) : "0"}
+                  sub="BLUE"
+                  color={tier.color} />
+                <StatChip
+                  label="USDC YIELD"
+                  value={`$${(Number(pendingUsdc) / 1e6).toFixed(4)}`}
+                  sub="pending"
+                  color="#22C55E" />
               </div>
+
+              {/* Lifetime-earned explainer. The on-chain totalCreditsAccrued
+                  is proof of how long the user has been staking — it ticks up
+                  but is never consumed. Surfacing it here as a small caption
+                  prevents users from confusing it with their spendable chat
+                  credits (CHAT TODAY above). */}
+              {hasStake && (
+                <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-600 group" title="On-chain accrual from BlueMarketStaking.sol — records how long you've been staking. Not deducted by chat usage; chat reads its own daily quota above.">
+                  <svg className="w-3 h-3 shrink-0 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                  </svg>
+                  <span>
+                    Lifetime accrued on-chain:{" "}
+                    <span className="text-slate-400 font-medium">{totalCr < 1 ? totalCr.toFixed(2) : totalCr.toFixed(0)} cr</span>
+                    <span className="text-slate-700"> · at {Number(dailyCr).toLocaleString()}/day · proof-of-stake-time, not chat balance</span>
+                  </span>
+                </div>
+              )}
             </BentoCell>
 
             {/* ─── Stake mini (1 col, full height of left) ─────────────── */}
