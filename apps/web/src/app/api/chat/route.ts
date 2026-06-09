@@ -182,12 +182,21 @@ If a user asks about buying credits, getting more credits, or topping up — exp
 
 ## Hub tools
 You have access to real-time Hub tools. Use them when the user asks about:
+- **Live token / crypto prices** (ANY "price", "giá", "what's X at" question) → hub_token_price FIRST. Never guess from training data.
 - Token picks, market signals, whale activity → hub_token_pick, hub_whale_signal, hub_narrative
 - Market fit, competitor analysis, investor memos → hub_market_fit, hub_competitor_scan, hub_investor_memo
 - Security checks, honeypots, risk screening → hub_risk_gate, hub_honeypot, hub_deep_analysis
 - Builder scores, repo health, grants → hub_builder_score, hub_repo_health, hub_base_grant
 - Fundraising timing, ecosystem digest → hub_fundraise_timing, hub_ecosystem
 - Live onchain data: balance, tx, block, gas, contract calls → hub_crypto_rpc (21 chains: base, ethereum, arbitrum, optimism, polygon, etc.)
+- Anything requiring live web data (news, events, rumours, OFFICIAL announcements) → web_search
+
+Tool selection rules:
+1. For prices: ALWAYS hub_token_price. Never the web search and never your own knowledge.
+2. For onchain reads: hub_crypto_rpc.
+3. For market intel / analysis: the appropriate hub_* tool.
+4. For recent web news / sentiment / events: web_search.
+5. You can chain tools — e.g. hub_token_price + web_search for "ETH price and why is it up?".
 
 If a tool is unavailable, answer from your own knowledge and note that live data is unavailable.
 If the user has memory context below, use it to personalize responses — reference their project, remember what they're building.`;
@@ -430,6 +439,27 @@ const HUB_TOOLS = [
     },
   },
   {
+    name: "hub_token_price",
+    description: `Get the LIVE USD price of a token from CoinGecko (real-time, ~30s cache).
+ALWAYS use this when the user asks for the current price of any crypto / token / coin, including:
+- "ETH price", "giá ETH", "BTC price hôm nay", "what's solana at"
+- "price of $BLUE" (pass symbol or {network, address})
+- Any "what's X worth" / "X to USD" question
+NEVER answer price questions from your training data — prices change every second.
+Two query modes:
+- By symbol (preferred for majors): { symbol: "eth" | "btc" | "sol" | "usdc" | ... }
+- By contract address (for any ERC-20): { network: "base", address: "0x..." }
+Returns: usd price, 24h % change, market cap, 24h volume.`,
+    input_schema: {
+      type: "object",
+      properties: {
+        symbol:  { type: "string", description: "Token symbol — e.g. eth, btc, sol, usdc, blue, aero. Lowercase preferred." },
+        network: { type: "string", description: "Network slug when querying by contract address. base | ethereum | arbitrum | optimism | polygon | bsc. Default: base." },
+        address: { type: "string", description: "Contract address (0x…) when querying by token contract. Pair with `network`." },
+      },
+    },
+  },
+  {
     name: "hub_crypto_rpc",
     description: `Make a live onchain JSON-RPC call via Venice Crypto RPC. Use this when the user asks for:
 - wallet balance of an address on any chain
@@ -496,6 +526,7 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_yield:            "yield-optimizer",
   hub_launch_sim:       "launch-simulator",
   hub_crypto_rpc:       "crypto-rpc",
+  hub_token_price:      "token-price",
 };
 
 // ─── Internal Hub tool caller ─────────────────────────────────────────────────
@@ -536,9 +567,15 @@ async function callHubTool(
     headers["X-Blue-User"] = userAddress;
   }
 
-  // crypto-rpc routes directly to /api/crypto-rpc (not x402 — no payment gate)
-  const apiPath = toolName === "hub_crypto_rpc"
-    ? `${BASE_URL}/api/crypto-rpc`
+  // Free utility tools route directly (no x402 payment gate). These are
+  // public-ish data providers we proxy ourselves (Venice RPC, CoinGecko).
+  // Everything else still flows through /api/x402/<endpoint>.
+  const FREE_DIRECT: Record<string, string> = {
+    hub_crypto_rpc:  "/api/crypto-rpc",
+    hub_token_price: "/api/token-price",
+  };
+  const apiPath = FREE_DIRECT[toolName]
+    ? `${BASE_URL}${FREE_DIRECT[toolName]}`
     : `${BASE_URL}/api/x402/${endpoint}`;
 
   try {
@@ -1295,6 +1332,15 @@ export async function POST(req: NextRequest) {
 
   // ── Phase 1: intent detection (non-streaming + tools) ─────────────────────
   let firstData: LLMResponse;
+  // Anthropic server-tool: web_search. Already wired up as the "Search on"
+  // toggle in the chat composer (frontend sends `webSearch: true` in body).
+  // When toggled, the tool is appended to the tool list so the model can
+  // call it; toggle off keeps the tools array Hub-only. Anthropic bills
+  // per-search; reconciliation against our credit ledger lands later.
+  const ANTHROPIC_TOOLS: unknown[] = webSearch
+    ? [...HUB_TOOLS, { type: "web_search_20250305", name: "web_search", max_uses: 3 }]
+    : [...HUB_TOOLS];
+
   try {
     const firstRes = await fetch(BANKR_LLM, {
       method:  "POST",
@@ -1303,7 +1349,7 @@ export async function POST(req: NextRequest) {
         model:      model.id,
         system,
         messages:   cleanMessages,
-        tools:      HUB_TOOLS,
+        tools:      ANTHROPIC_TOOLS,
         max_tokens: model.maxTokens,
       }),
     });
