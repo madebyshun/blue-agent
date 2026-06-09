@@ -19,6 +19,11 @@ import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { kv } from "@/lib/kv";
 
 export const runtime = "nodejs";
+// Console commands (blue_idea/build/audit/ship/raise) wait on Bankr LLM which
+// can take 30-50s. Without explicit maxDuration, Vercel's default cuts the
+// function before Bankr replies → 504 to Claude Desktop. 120s leaves headroom
+// for the longest case (blue_audit on a complex contract).
+export const maxDuration = 120;
 
 // Free-tier internal bypass — MCP calls don't require x402 payment.
 // Set INTERNAL_SERVICE_KEY in Vercel; the /api/x402/[tool] route accepts it
