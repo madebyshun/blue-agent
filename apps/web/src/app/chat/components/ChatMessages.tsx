@@ -357,26 +357,83 @@ const MODEL_COLORS: Record<string, string> = {
 };
 
 // ── Starters ──────────────────────────────────────────────────────────────────
+// Empty-state content is keyed by the active persona so that picking a role in
+// Settings (or via the composer pill) immediately changes "what to do next" —
+// the heading + 4 starter cards + quick commands all reflect that expert role.
 
-const STARTERS = [
-  { icon: "💡", label: "Idea Brief",   text: "/idea USDC streaming payroll app on Base",  color: "#4FC3F7" },
-  { icon: "🛠️", label: "Architecture", text: "/build ERC-4337 agent wallet",               color: "#A78BFA" },
-  { icon: "🛡️", label: "Audit",        text: "/audit my token launch plan",                color: "#F87171" },
-  { icon: "🚀", label: "Token Pick",   text: "/pick",                                      color: "#34D399" },
-];
-const QUICK_CMDS = ["idea", "build", "audit", "ship", "raise", "pick", "scan"];
+interface Starter { icon: string; text: string; color: string; }
+interface EmptyState { heading: string; sub: string; starters: Starter[]; quick: string[]; }
+
+const PERSONA_EMPTY: Record<string, EmptyState> = {
+  "blue-agent": {
+    heading: "What are you building?",
+    sub:     "Ideas, architecture, audits, launches, fundraising — grounded in Base.",
+    starters: [
+      { icon: "💡", text: "/idea USDC streaming payroll app on Base", color: "#4FC3F7" },
+      { icon: "🛠️", text: "/build ERC-4337 agent wallet",            color: "#A78BFA" },
+      { icon: "🛡️", text: "/audit my token launch plan",             color: "#F87171" },
+      { icon: "🚀", text: "/pick",                                   color: "#34D399" },
+    ],
+    quick: ["idea", "build", "audit", "ship", "raise", "pick", "scan"],
+  },
+  "blue-trader": {
+    heading: "What's the trade?",
+    sub:     "Position sizing, entries/exits, and on-chain alpha — Base-native.",
+    starters: [
+      { icon: "🎯", text: "/pick",                              color: "#34D399" },
+      { icon: "🐋", text: "/whale AERO",                        color: "#4FC3F7" },
+      { icon: "📈", text: "/dex AERO",                          color: "#E879F9" },
+      { icon: "📊", text: "/pnl 0x…",                           color: "#A78BFA" },
+    ],
+    quick: ["pick", "whale", "dex", "pnl", "yield"],
+  },
+  "blue-auditor": {
+    heading: "What should I audit?",
+    sub:     "Vulnerabilities, severity ratings, Solidity fixes, and a go/no-go call.",
+    starters: [
+      { icon: "🛡️", text: "/audit paste your contract here",            color: "#F87171" },
+      { icon: "🔍", text: "/scan 0x…",                                  color: "#4FC3F7" },
+      { icon: "⚠️", text: "Review this contract for reentrancy risks", color: "#FB923C" },
+      { icon: "🧾", text: "/aml 0x…",                                   color: "#A78BFA" },
+    ],
+    quick: ["audit", "scan", "aml", "quantum"],
+  },
+  "blue-researcher": {
+    heading: "What should I research?",
+    sub:     "Evidence-backed DD, on-chain data, and contrarian takes.",
+    starters: [
+      { icon: "🔬", text: "Deep DD on Aerodrome — risks and moat",  color: "#A78BFA" },
+      { icon: "🐋", text: "/whale AERO",                            color: "#4FC3F7" },
+      { icon: "📡", text: "What narrative is running on Base now?", color: "#E879F9" },
+      { icon: "📊", text: "/wallet 0x…",                            color: "#34D399" },
+    ],
+    quick: ["pick", "whale", "wallet", "pnl"],
+  },
+  "custom": {
+    heading: "How can I help?",
+    sub:     "Your custom system prompt is active — ask anything.",
+    starters: [
+      { icon: "💡", text: "/idea USDC streaming payroll app on Base", color: "#4FC3F7" },
+      { icon: "🛠️", text: "/build ERC-4337 agent wallet",            color: "#A78BFA" },
+      { icon: "🛡️", text: "/audit my token launch plan",             color: "#F87171" },
+      { icon: "🎯", text: "/pick",                                   color: "#34D399" },
+    ],
+    quick: ["idea", "build", "audit", "ship", "raise", "pick"],
+  },
+};
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function ChatMessages() {
   const {
-    activeTask, streaming, outOfCredits, send, setInput, chatTier,
+    activeTask, streaming, outOfCredits, send, setInput, chatTier, personaId,
   } = useChat();
 
   const bottomRef  = useRef<HTMLDivElement>(null);
   const messages   = activeTask?.messages ?? [];
   const isEmpty    = messages.length === 0;
   const tierColor  = MODEL_COLORS[chatTier] ?? "#4FC3F7";
+  const empty      = PERSONA_EMPTY[personaId] ?? PERSONA_EMPTY["blue-agent"];
 
   // Thinking timer
   const [elapsed, setElapsed] = useState(0);
@@ -414,17 +471,17 @@ export default function ChatMessages() {
             </span>
           </div>
 
-          {/* Heading */}
+          {/* Heading — persona-aware */}
           <h2 className="font-mono text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2">
-            What are you building?
+            {empty.heading}
           </h2>
           <p className="font-mono text-sm text-slate-600 mb-8">
-            Ideas, architecture, audits, launches, fundraising — grounded in Base.
+            {empty.sub}
           </p>
 
-          {/* Starter cards — 4-column single row */}
+          {/* Starter cards — 4-column single row, persona-aware */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-2xl mx-auto mb-6">
-            {STARTERS.map(s => (
+            {empty.starters.map(s => (
               <button
                 key={s.text}
                 onClick={() => send(s.text)}
@@ -448,9 +505,9 @@ export default function ChatMessages() {
             ))}
           </div>
 
-          {/* Quick command chips */}
+          {/* Quick command chips — persona-aware */}
           <div className="flex flex-wrap justify-center gap-1.5">
-            {QUICK_CMDS.map(cmd => (
+            {empty.quick.map(cmd => (
               <button
                 key={cmd}
                 onClick={() => { if (cmd === "pick") send(`/${cmd}`); else setInput(`/${cmd} `); }}
