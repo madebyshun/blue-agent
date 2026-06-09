@@ -9,6 +9,12 @@ import { AGENT_TOOLS, type AgentTool } from "@/lib/agent-tools";
 
 // ─── Runners ──────────────────────────────────────────────────────────────────
 
+
+export const runtime = "nodejs";
+// Vercel kills serverless functions at 60s by default — explicit budget
+// so it fails loudly instead of silently 504-ing.
+export const maxDuration = 120;
+
 async function runSingleTool(tool: AgentTool, userInput: string): Promise<string> {
   if (tool.agentType === "aeon" && tool.skillId) {
     return (await runAeonSkill(tool.skillId, userInput)) ?? "No result from Aeon";

@@ -13,6 +13,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
+// Vercel kills serverless functions at 60s by default — explicit budget so
+// it fails loudly instead of silently 504-ing.
+export const maxDuration = 120;
 
 const BANKR_LLM       = "https://llm.bankr.bot/v1/messages";
 const VENICE_API      = "https://api.venice.ai/api/v1/chat/completions";

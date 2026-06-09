@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 
+
+export const runtime = "nodejs";
+// Vercel kills serverless functions at 60s by default — explicit budget
+// so it fails loudly instead of silently 504-ing.
+export const maxDuration = 10;
+
 const TOOLS = [
   // Security
   { slug: "honeypot-check",       price: "$0.10", category: "security",      description: "Token honeypot detection on Base" },

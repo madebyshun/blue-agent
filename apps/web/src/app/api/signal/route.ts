@@ -15,6 +15,9 @@ import { kvGet, kvSet } from "@/lib/kv";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
+// Vercel kills serverless functions at 60s by default — explicit budget so
+// it fails loudly instead of silently 504-ing.
+export const maxDuration = 15;
 
 const KV_KEY_SIGNALS     = "incoming:signals:latest";
 const KV_KEY_SIGNAL_LOG  = "incoming:signals:log";

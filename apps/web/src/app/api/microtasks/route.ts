@@ -3,6 +3,12 @@ import { loadTasks, createTask } from "@/lib/micro-storage";
 import { MAX_MICROTASK_REWARD, MIN_MICROTASK_REWARD } from "@/lib/micro-types";
 import type { MicroPlatform, MicroProof, MicroApproval } from "@/lib/micro-types";
 
+
+export const runtime = "nodejs";
+// Vercel kills serverless functions at 60s by default — explicit budget
+// so it fails loudly instead of silently 504-ing.
+export const maxDuration = 15;
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const platform = searchParams.get("platform");

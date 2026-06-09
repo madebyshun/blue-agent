@@ -7,6 +7,9 @@ import { NextResponse } from "next/server";
 import { isKVEnabled } from "@/lib/kv";
 
 export const runtime = "nodejs";
+// Vercel kills serverless functions at 60s by default — explicit budget so
+// it fails loudly instead of silently 504-ing.
+export const maxDuration = 30;
 
 const START_TIME = Date.now();
 

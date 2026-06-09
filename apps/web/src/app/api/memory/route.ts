@@ -7,6 +7,9 @@ import { kvGet, kvSet, kvDel, isKVEnabled } from "@/lib/kv";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
+// Vercel kills serverless functions at 60s by default — explicit budget so
+// it fails loudly instead of silently 504-ing.
+export const maxDuration = 15;
 
 const KEY = (wallet: string) => `memory:${wallet}`;
 const TTL = 60 * 60 * 24 * 30; // 30 days

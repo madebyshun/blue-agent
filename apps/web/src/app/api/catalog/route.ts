@@ -12,6 +12,9 @@ import { NextResponse } from "next/server";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 
 export const runtime = "nodejs";
+// Vercel kills serverless functions at 60s by default — explicit budget so
+// it fails loudly instead of silently 504-ing.
+export const maxDuration = 15;
 
 const BASE = "https://blueagent.dev";
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
