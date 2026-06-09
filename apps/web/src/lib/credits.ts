@@ -5,7 +5,7 @@
  * No purchase needed — just hold BLUE.
  *
  * Tiers (at $BLUEAGENT $0.000001/token):
- *   Guest    (no wallet):     30 cr/day
+ *   Guest    (no wallet):    100 cr/day  (≈10 free Fast messages — growth tier)
  *   Starter  (500K BLUE):   500 cr/day  (~$0.50)
  *   Pro      (2M BLUE):    2000 cr/day  (~$2)
  *   Max      (10M BLUE):      ∞ cr/day  (~$10)
@@ -41,8 +41,14 @@ const TIERS: { min: number; tier: HolderTier; dailyCr: number; discount: number;
   { min:    500_000, tier: "Starter", dailyCr:   500, discount: 0,    color: "#4FC3F7" },
 ];
 
-/** Guest = no wallet connected */
-export const GUEST_DAILY = 30;
+/**
+ * Guest = no wallet connected. Bumped 30 → 100 on Bankr's growth advice
+ * ("give ~10 free messages/day at least early on"): 100 cr = 10 messages on
+ * the Fast tier (10 cr/msg), enough to let a new user actually feel the
+ * product before being asked to hold $BLUE. Cheap to subsidise — provider
+ * cost of 10 Fast msgs is well under 2¢.
+ */
+export const GUEST_DAILY = 100;
 
 export function getTierInfo(blueBalance: number): TierInfo {
   const idx = TIERS.findIndex((t) => blueBalance >= t.min);
