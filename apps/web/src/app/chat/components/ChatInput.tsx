@@ -88,11 +88,29 @@ export interface ModelPreset {
   webSearch?: boolean;  // suggested webSearch default when picked
 }
 
+/**
+ * 5 use-case presets, ordered by likely user intent (chat-first, then
+ * cheap fast, then specialised web/deep/private). Each maps to one
+ * underlying model tier + a sensible webSearch default so picking a
+ * preset is a one-click setup.
+ *
+ * Funding model context:
+ *   - Bankr-tier models (Chat, Deep Think) are funded via the $BLUEAGENT
+ *     trade-fee partnership — Bankr accepts $BLUE for compute, and we
+ *     earn $BLUE from Bankr trade fees. Closed loop.
+ *   - Venice-tier models (Fast, Web Search, Private) are paid in USDC
+ *     directly. Cheap enough that the credit price (1 cr = $0.0005)
+ *     gives 17-25x margin on DeepSeek Flash / E2EE Gemma.
+ *
+ * A 6th "🛠️ Code" preset is planned for when a code-specialised model
+ * lands; the slot is intentionally left for it.
+ */
 export const MODEL_PRESETS: ModelPreset[] = [
-  { id: "chat",        label: "Chat",         desc: "Balanced · default",                  icon: "💬", tier: "pro",                webSearch: false },
-  { id: "fast-search", label: "Fast Search",  desc: "~2s · multi-source web (Grok)",       icon: "⚡", tier: "venice-grok",        webSearch: true  },
-  { id: "deep-think",  label: "Deep Think",   desc: "Heavy reasoning + web (Opus)",        icon: "🔬", tier: "max",                webSearch: true  },
-  { id: "private",     label: "Private",      desc: "E2EE · no logs (Gemma)",              icon: "🔒", tier: "venice-e2ee-gemma",  webSearch: false },
+  { id: "chat",       label: "Chat",        desc: "Balanced · default · $BLUE",          icon: "💬", tier: "pro",                webSearch: false },
+  { id: "fast",       label: "Fast",        desc: "Cheapest · 1M ctx (DeepSeek)",         icon: "⚡", tier: "venice-deepseek",    webSearch: false },
+  { id: "web-search", label: "Web Search",  desc: "~2s · multi-source live (Grok)",      icon: "🔍", tier: "venice-grok",        webSearch: true  },
+  { id: "deep-think", label: "Deep Think",  desc: "Heavy reasoning + web (Opus)",        icon: "🔬", tier: "max",                webSearch: true  },
+  { id: "private",    label: "Private",     desc: "E2EE · no logs (Gemma)",              icon: "🔒", tier: "venice-e2ee-gemma",  webSearch: false },
 ];
 
 export default function ChatInput() {
@@ -240,7 +258,9 @@ export default function ChatInput() {
               <span className="font-mono text-[10px] text-slate-600 tracking-widest">CHOOSE A MODE</span>
             </div>
 
-            {/* Use-case presets — 4 cards, the default landing UX */}
+            {/* Use-case presets — 5 active + 1 roadmap placeholder for the
+                upcoming Code preset. Even-count grid keeps the layout balanced
+                while signalling that a code-specialised model is on the way. */}
             <div className="p-2 grid grid-cols-2 gap-1.5">
               {MODEL_PRESETS.map(p => {
                 const isActive = activePreset?.id === p.id;
@@ -270,6 +290,17 @@ export default function ChatInput() {
                   </button>
                 );
               })}
+              {/* Roadmap placeholder — Code preset coming when a code-tuned
+                  model lands. Renders as a non-interactive card so the grid
+                  stays a tidy 2×3 and users see what's next. */}
+              <div className="text-left rounded-lg border border-dashed border-[#1A1A2E] p-2.5 opacity-60 cursor-default select-none">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-base">🛠️</span>
+                  <span className="font-mono text-[11px] font-bold text-slate-500">Code</span>
+                </div>
+                <p className="font-mono text-[9px] text-slate-600 leading-snug">Coming soon · Solidity / viem / Foundry</p>
+                <p className="font-mono text-[9px] text-slate-700 mt-1">tbd cr/msg</p>
+              </div>
             </div>
 
             {/* Advanced — raw 14-model list, collapsed by default */}
