@@ -136,26 +136,40 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [walletRefresh, setWalletRefresh] = useState(0);
   const triggerWalletRefresh = useCallback(() => setWalletRefresh(n => n + 1), []);
 
-  // Only refresh credits after wallet detection completes — avoids 30-credit flash
+  // Source of truth for the spendable `credits` number depends on whether a
+  // wallet is connected:
+  //   - Wallet connected → read the unified credit ledger
+  //     (/api/credits/balance/[address]), which is what the dashboard shows
+  //     and what /api/chat actually debits server-side.
+  //   - Guest (no wallet) → keep the legacy localStorage daily-quota.
+  //
+  // The earlier design had both rails active at once: server debited the
+  // ledger AND the client also subtracted from localStorage after a send.
+  // That double-spend was why Dashboard read 1,170 while Settings read
+  // 40/500 for the same user. We pick one source per session and stick.
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!walletReady) return;
 
-    // If wallet just connected and has no saved credits, migrate from guest credits
     if (walletAddr) {
-      const walletCr = getCredits(walletAddr);
-      if (walletCr === -1) { // never initialized for this address
-        const guestCr = getCredits(undefined);
-        if (guestCr > 0) {
-          // Carry guest credits over to wallet address (don't double-grant, just transfer)
-          setCreditsLS(guestCr, walletAddr);
-        }
-      }
+      // Connected — fetch the ledger balance. Refreshes whenever
+      // walletRefresh increments (after a send / on demand).
+      let cancelled = false;
+      fetch(`/api/credits/balance/${walletAddr}`)
+        .then(r => r.json())
+        .then(d => {
+          if (cancelled) return;
+          const bal = Number(d?.balance);
+          if (Number.isFinite(bal)) setCredits(bal);
+        })
+        .catch(() => null);
+      return () => { cancelled = true; };
     }
 
+    // Guest — keep the legacy localStorage daily quota.
     const result = refreshCreditsIfNeeded(holderTier.blueBalance, walletAddr);
     setCredits(result.credits);
-  }, [walletReady, walletAddr, holderTier.blueBalance]);
+  }, [walletReady, walletAddr, holderTier.blueBalance, walletRefresh]);
 
   useEffect(() => {
     function tick() {
@@ -499,8 +513,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         throw new Error(data.error ?? `Error ${res.status}`);
       }
 
-      const remaining = deductCredits(cost, walletAddr);
-      setCredits(remaining);
+      // Credit accounting: connected wallets are debited server-side by
+      // /api/chat against the unified ledger — we just re-fetch the balance.
+      // Guest sessions still drain the localStorage daily quota.
+      if (walletAddr) {
+        fetch(`/api/credits/balance/${walletAddr}`)
+          .then(r => r.json())
+          .then(d => {
+            const bal = Number(d?.balance);
+            if (Number.isFinite(bal)) setCredits(bal);
+          })
+          .catch(() => null);
+      } else {
+        const remaining = deductCredits(cost, walletAddr);
+        setCredits(remaining);
+      }
 
       const reader  = res.body!.getReader();
       const decoder = new TextDecoder();

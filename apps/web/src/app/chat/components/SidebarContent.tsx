@@ -8,16 +8,17 @@ import ToolsTab from "./ToolsTab";
 import CronPanel from "./CronPanel";
 import PersonaSelector from "./PersonaSelector";
 
+// 5-preset whitelist (mirrors ChatInput's MODEL_PRESETS). Sidebar shows a
+// compact dot row of the same active models; legacy IDs handled by the
+// dropped-model fallback in ChatContext.
 const BANKR_TIERS = [
-  { id: "fast", label: "Fast",   model: "Haiku",  color: "#64748b" },
-  { id: "pro",  label: "Pro",    model: "Sonnet", color: "#4FC3F7" },
-  { id: "max",  label: "Max",    model: "Opus",   color: "#A78BFA" },
+  { id: "pro", label: "Pro", model: "Sonnet", color: "#4FC3F7" },
+  { id: "max", label: "Max", model: "Opus",   color: "#A78BFA" },
 ];
 const VENICE_TIERS = [
-  { id: "venice-deepseek", label: "V4 Flash",   model: "DeepSeek", color: "#34D399", note: "1M ctx" },
-  { id: "venice-grok",     label: "Grok 4",     model: "xAI",      color: "#E879F9", note: "X search" },
-  { id: "venice-uncut",    label: "Uncensored", model: "Venice",   color: "#FB923C", note: "No filter" },
-  { id: "venice-mistral",  label: "Mistral",    model: "Mistral",  color: "#60A5FA", note: "256K ctx" },
+  { id: "venice-deepseek",   label: "Fast",       model: "DeepSeek", color: "#34D399", note: "1M ctx · cheap" },
+  { id: "venice-grok",       label: "Web Search", model: "Grok 4",   color: "#E879F9", note: "X + live web"   },
+  { id: "venice-e2ee-gemma", label: "Private",    model: "Gemma",    color: "#FCA5A5", note: "E2EE · no logs" },
 ];
 
 const SIDEBAR_TABS = [
