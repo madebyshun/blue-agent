@@ -178,7 +178,7 @@ Be direct, technical, and actionable. Prefer Base, USDC, Coinbase tools, and the
 
 ## Credit system (IMPORTANT — know this)
 Blue Agent uses a credit system based on $BLUEAGENT token balance:
-- Guest (no wallet): 30 credits/day
+- Guest (no wallet): 100 credits/day free (~10 messages — no signup needed)
 - Starter (hold 500K BLUE): 500 credits/day (~$0.50)
 - Pro (hold 2M BLUE): 2,000 credits/day + 20% discount (~$2)
 - Max (hold 10M BLUE): unlimited credits/day + 40% discount (~$10)
