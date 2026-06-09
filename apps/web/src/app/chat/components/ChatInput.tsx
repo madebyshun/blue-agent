@@ -46,27 +46,26 @@ export interface ModelTier {
   credits: number; // cost per msg
 }
 
+// User-facing model list — locked at 5 active models (one per preset).
+// The previous 14-model raw menu has been retired in favour of preset-only
+// selection. The cost-lookup tables in /lib/credits.ts and /lib/credit-
+// pricing.ts keep all 14 IDs around so legacy chatTier values cached in
+// localStorage still resolve to a price; the ChatContext bootstrap below
+// remaps any unknown ID back to "pro" so the picker never lands on a
+// model that doesn't exist in the UI any more.
+
 export const BANKR_TIERS: ModelTier[] = [
-  { id: "fast",  label: "Fast",    model: "Haiku",   color: "#64748b", badge: "",  note: "Fastest",   group: "bankr",  credits: 10 },
-  { id: "pro",   label: "Pro",     model: "Sonnet",  color: "#4FC3F7", badge: "",  note: "Balanced",  group: "bankr",  credits: 50 },
-  { id: "max",   label: "Max",     model: "Opus",    color: "#A78BFA", badge: "",  note: "Smartest",  group: "bankr",  credits: 200 },
+  { id: "pro",  label: "Pro", model: "Sonnet", color: "#4FC3F7", badge: "", note: "Balanced", group: "bankr", credits: 50  },
+  { id: "max",  label: "Max", model: "Opus",   color: "#A78BFA", badge: "", note: "Smartest", group: "bankr", credits: 200 },
 ];
 
 export const VENICE_TIERS: ModelTier[] = [
-  { id: "venice-deepseek",  label: "V4 Flash",   model: "deepseek-v4-flash",                   color: "#34D399", badge: "V", note: "Fastest · 1M ctx",  group: "venice", credits: 10 },
-  { id: "venice-deepseek-pro", label: "V4 Pro",  model: "deepseek-v4-pro",                     color: "#2DD4BF", badge: "V", note: "Smarter · 1M ctx",  group: "venice", credits: 30 },
-  { id: "venice-kimi",      label: "Kimi K2",    model: "kimi-k2-6",                           color: "#818CF8", badge: "V", note: "256K ctx",           group: "venice", credits: 20 },
-  { id: "venice-claude",    label: "Claude Opus",model: "claude-opus-4-7",                     color: "#F472B6", badge: "V", note: "Smartest",           group: "venice", credits: 80 },
-  { id: "venice-grok",      label: "Grok 4",     model: "grok-4-3",                            color: "#E879F9", badge: "V", note: "X search",           group: "venice", credits: 60 },
-  { id: "venice-qwen",      label: "Qwen 235B",  model: "qwen3-235b-a22b-instruct-2507",       color: "#FB923C", badge: "V", note: "Huge · reasoning",  group: "venice", credits: 40 },
-  { id: "venice-mistral",   label: "Mistral",    model: "mistral-small-3-2-24b-instruct",      color: "#60A5FA", badge: "V", note: "Fast · 256K ctx",   group: "venice", credits: 10 },
-  { id: "venice-uncut",     label: "Uncensored", model: "venice-uncensored-1-2",               color: "#F59E0B", badge: "V", note: "No filter",          group: "venice", credits: 20 },
+  { id: "venice-deepseek", label: "V4 Flash", model: "deepseek-v4-flash", color: "#34D399", badge: "V", note: "Fastest · 1M ctx", group: "venice", credits: 10 },
+  { id: "venice-grok",     label: "Grok 4",   model: "grok-4-3",          color: "#E879F9", badge: "V", note: "X search",         group: "venice", credits: 60 },
 ];
 
 export const PRIVACY_TIERS: ModelTier[] = [
-  { id: "venice-e2ee-venice",  label: "Private Venice", model: "e2ee-venice-uncensored-24b-p", color: "#6EE7B7", badge: "🔒", note: "E2EE · No logs",   group: "privacy", credits: 30 },
-  { id: "venice-e2ee-gemma",   label: "Private Gemma",  model: "e2ee-gemma-3-27b-p",           color: "#6EE7B7", badge: "🔒", note: "E2EE · No logs",   group: "privacy", credits: 30 },
-  { id: "venice-e2ee-qwen",    label: "Private Qwen",   model: "e2ee-qwen3-6-35b-a3b",         color: "#6EE7B7", badge: "🔒", note: "E2EE · No logs",   group: "privacy", credits: 40 },
+  { id: "venice-e2ee-gemma", label: "Private Gemma", model: "e2ee-gemma-3-27b-p", color: "#6EE7B7", badge: "🔒", note: "E2EE · No logs", group: "privacy", credits: 30 },
 ];
 
 export const ALL_TIERS: ModelTier[] = [...BANKR_TIERS, ...VENICE_TIERS, ...PRIVACY_TIERS];
@@ -123,9 +122,8 @@ export default function ChatInput() {
 
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [modelOpen,    setModelOpen]    = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);  // raw 14-model list
-  const [cmdOpen,      setCmdOpen]      = useState(false);
+  const [modelOpen, setModelOpen] = useState(false);
+  const [cmdOpen,   setCmdOpen]   = useState(false);
 
   // Active preset (if the current tier matches a preset's underlying tier).
   // Used to highlight the right card when the popover opens.
@@ -303,34 +301,15 @@ export default function ChatInput() {
               </div>
             </div>
 
-            {/* Advanced — raw 14-model list, collapsed by default */}
-            <button
-              onClick={() => setAdvancedOpen(o => !o)}
-              className="w-full px-3 py-2 border-t border-[#1A1A2E] flex items-center justify-between hover:bg-white/[0.02] transition-colors">
-              <span className="font-mono text-[10px] text-slate-500 tracking-widest">ADVANCED · 14 MODELS</span>
-              <span className="font-mono text-[10px] text-slate-700">{advancedOpen ? "▴" : "▾"}</span>
-            </button>
-
-            {advancedOpen && (
-              <>
-                <ModelGroup
-                  label="BANKR" tiers={BANKR_TIERS}
-                  active={chatTier} holderTier={holderTier}
-                  onSelect={(id) => { setChatTier(id); setModelOpen(false); textareaRef.current?.focus(); }}
-                />
-                <ModelGroup
-                  label="VENICE" tiers={VENICE_TIERS}
-                  active={chatTier} holderTier={holderTier}
-                  onSelect={(id) => { setChatTier(id); setModelOpen(false); textareaRef.current?.focus(); }}
-                />
-                <ModelGroup
-                  label="🔒 PRIVACY · E2EE" tiers={PRIVACY_TIERS}
-                  active={chatTier} holderTier={holderTier}
-                  onSelect={(id) => { setChatTier(id); setModelOpen(false); textareaRef.current?.focus(); }}
-                  description="Transmitted over HTTPS · client-side key mgmt coming soon"
-                />
-              </>
-            )}
+            {/* Tiny footnote — the raw model list used to live behind an
+                "Advanced" toggle here; the presets now cover every active
+                model 1:1 so the toggle was pure noise. Bankr / Venice
+                badges are still surfaced inside each preset card. */}
+            <div className="px-3 py-1.5 border-t border-[#1A1A2E]">
+              <p className="font-mono text-[9px] text-slate-700 leading-relaxed">
+                Bankr {BANKR_TIERS.length} · Venice {VENICE_TIERS.length} · Privacy {PRIVACY_TIERS.length} · Each preset maps to one model.
+              </p>
+            </div>
           </div>
         )}
 
@@ -538,49 +517,5 @@ export default function ChatInput() {
   );
 }
 
-// ── Model group sub-component ─────────────────────────────────────────────────
-
-import type { TierInfo } from "@/lib/credits";
-
-function ModelGroup({
-  label, tiers, active, holderTier, onSelect, description,
-}: {
-  label: string;
-  tiers: ModelTier[];
-  active: string;
-  holderTier: TierInfo;
-  onSelect: (id: string) => void;
-  description?: string;
-}) {
-  return (
-    <div className="px-3 pt-2 pb-2 border-t border-[#1A1A2E] first:border-t-0">
-      <div className="flex items-center gap-2 mb-1.5">
-        <p className="font-mono text-[9px] text-slate-700 tracking-widest">{label}</p>
-        {description && <p className="font-mono text-[9px] text-slate-700 opacity-60">{description}</p>}
-      </div>
-      {tiers.map(t => {
-        const c = creditCost(t.id, holderTier);
-        const isActive = active === t.id;
-        return (
-          <button
-            key={t.id}
-            onMouseDown={(e) => { e.preventDefault(); onSelect(t.id); }}
-            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-[#1A1A2E] transition-colors text-left group mb-0.5"
-            style={isActive ? { background: `${t.color}12`, outline: `1px solid ${t.color}30` } : {}}
-          >
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: t.color }} />
-            <div className="flex-1 min-w-0">
-              <p className="font-mono text-[11px] text-slate-300 group-hover:text-white flex items-center gap-1.5">
-                {t.label}
-                {t.badge && <span className="text-[8px] opacity-50 font-normal">{t.badge}</span>}
-                {isActive && <span className="text-[8px] ml-1" style={{ color: t.color }}>✓</span>}
-              </p>
-              <p className="font-mono text-[9px] text-slate-600 truncate">{t.note}</p>
-            </div>
-            <span className="font-mono text-[9px] shrink-0" style={{ color: t.color }}>{c}cr</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+// ModelGroup sub-component retired alongside the Advanced submenu — the
+// preset grid in the main popover handles every model now.
