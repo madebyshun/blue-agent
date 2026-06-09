@@ -43,6 +43,15 @@ export interface Message {
   /** When set, the chat or tool debit hit an empty balance — render a
    * top-up CTA inline with the message. Top-up modal lands in Week 3. */
   insufficientCredits?: InsufficientCreditsNotice;
+  /** Trust signal — server confirmed an upstream web search ran for this
+   * message. Renders as a chip alongside tool calls so the user can tell
+   * browsed content from training-data prose. `urls` is the deduped list
+   * of result pages the model could draw from. */
+  webSearch?: {
+    provider: "anthropic" | "venice" | "grok";
+    sources:  number;
+    urls?:    Array<{ url: string; title: string }>;
+  };
 }
 
 // ── Task (conversation) ────────────────────────────────────────────────────────

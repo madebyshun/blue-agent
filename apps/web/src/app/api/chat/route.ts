@@ -109,10 +109,15 @@ function creditErrorSSE(needed: number, balance: number): Response {
 
 // ─── Models ───────────────────────────────────────────────────────────────────
 
+// max_tokens lowered for Pro/Max to enforce concise default. The new system-
+// prompt "Output style" section pushes the model toward short answers; this
+// is the budget guard so even an LLM that ignores the prompt can't run away
+// into a 2000-token essay for a one-line price question. Verbose intents
+// ("explain in detail", "deep dive") use longer answers but still fit.
 const MODELS: Record<string, { id: string; maxTokens: number }> = {
-  fast: { id: "claude-haiku-4-5",  maxTokens: 1024 },
-  pro:  { id: "claude-sonnet-4-6", maxTokens: 2048 },
-  max:  { id: "claude-sonnet-4-6", maxTokens: 4096 },
+  fast: { id: "claude-haiku-4-5",  maxTokens: 768  },  // was 1024
+  pro:  { id: "claude-sonnet-4-6", maxTokens: 1200 },  // was 2048
+  max:  { id: "claude-sonnet-4-6", maxTokens: 2400 },  // was 4096
 };
 
 // ─── Model display names ──────────────────────────────────────────────────────
@@ -199,7 +204,32 @@ Tool selection rules:
 5. You can chain tools — e.g. hub_token_price + web_search for "ETH price and why is it up?".
 
 If a tool is unavailable, answer from your own knowledge and note that live data is unavailable.
-If the user has memory context below, use it to personalize responses — reference their project, remember what they're building.`;
+If the user has memory context below, use it to personalize responses — reference their project, remember what they're building.
+
+## Output style
+Be concise by default. Most users want a quick answer, not an essay.
+- **Data questions** (price, stats, balance) → lead with the number, then a single line of context. Use a small markdown table only when comparing 3+ values.
+- **Explain questions** ("how does X work", "what is Y") → 3-5 short paragraphs MAX. Use headings only when the answer has 3+ distinct sections.
+- **How-to questions** → numbered steps, one action per step, no padding.
+- **Yes/no questions** → start with "Yes" or "No" + one-sentence rationale, expand only if the user asks "why".
+
+Only go long when the user explicitly says "explain in detail", "deep dive", "step-by-step", or asks a multi-part question.
+
+## Follow-up suggestions
+After your main answer, ALWAYS append 2-3 follow-up question suggestions on their own lines, each prefixed with "↳ " (the arrow + space).
+Pick follow-ups the user is *likely* to ask next based on the topic — not generic.
+
+Example for "ETH price":
+↳ ETH staking yield on Lido / Aerodrome
+↳ Bridge ETH from Base to mainnet
+↳ Best ETH/USDC LP on Base today
+
+Example for "how to deploy a contract on Base":
+↳ Verify the contract on Basescan
+↳ Set up a frontend with Wagmi + viem
+↳ Add a monitoring webhook with Blue Sentinel
+
+Keep them short (≤ 8 words), specific, and actionable.`;
 
 // ─── Hub tool definitions (Anthropic tool format) ─────────────────────────────
 
@@ -1118,10 +1148,15 @@ const SSE_HEADERS = {
   "X-Accel-Buffering": "no",
 };
 
-function textToSSE(text: string): Response {
+function textToSSE(text: string, prefixEvents: unknown[] = []): Response {
   const encoder = new TextEncoder();
   const stream  = new ReadableStream({
     start(controller) {
+      // Emit any pre-events (e.g. web_search_used trust chip) before the
+      // text chunks so the UI renders them above the streamed body.
+      for (const ev of prefixEvents) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(ev)}\n\n`));
+      }
       // Chunk into ~40-char pieces for a natural stream feel
       const size = 40;
       for (let i = 0; i < text.length; i += size) {
@@ -1219,7 +1254,42 @@ interface LLMResponse {
     id?:   string;
     name?: string;
     input?: Record<string, unknown>;
+    // Anthropic web_search server tool emits these block types inside the
+    // same content array — we detect them to surface a trust chip in the UI.
+    tool_use_id?: string;
+    // For web_search_tool_result blocks, `content` is an array of search
+    // results { url, title, encrypted_content, page_age? }.
+    content?: Array<{
+      type?: string;
+      url?:  string;
+      title?: string;
+    }> | string;
   }>;
+}
+
+interface WebSearchSource { url: string; title: string }
+
+/**
+ * Extract the web_search results Anthropic baked into a Phase 1 response.
+ * Returns an empty array when web_search wasn't used. Anthropic emits one
+ * server_tool_use block + one web_search_tool_result block per search; the
+ * URLs come from the result blocks. Deduplicates by URL because Anthropic
+ * sometimes returns the same source in multiple searches per turn.
+ */
+function extractWebSearchSources(resp: LLMResponse): WebSearchSource[] {
+  const seen = new Set<string>();
+  const out: WebSearchSource[] = [];
+  for (const block of resp.content) {
+    if (block.type !== "web_search_tool_result" || !Array.isArray(block.content)) continue;
+    for (const c of block.content) {
+      if (c?.type !== "web_search_result") continue;
+      const url = c.url?.trim();
+      if (!url || seen.has(url)) continue;
+      seen.add(url);
+      out.push({ url, title: (c.title ?? url).trim() });
+    }
+  }
+  return out.slice(0, 20); // hard cap
 }
 
 // ─── Route ────────────────────────────────────────────────────────────────────
@@ -1386,10 +1456,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // ── Web search trust signal: extract sources Anthropic baked in ─────────
+  // Done before either branch so a no-tool response still shows the chip
+  // when the model used web_search but didn't trigger any hub_* tool.
+  const webSearchSourceList = extractWebSearchSources(firstData);
+  const webSearchSources    = webSearchSourceList.length;
+
   // ── No tool use: return text as SSE directly ───────────────────────────────
   if (firstData.stop_reason !== "tool_use") {
     const text = firstData.content.find((b) => b.type === "text")?.text ?? "";
-    return textToSSE(text);
+    // Prefix the search-used event onto the SSE stream so the UI renders the
+    // trust chip even when the message has no hub_* tool calls.
+    const prefix = webSearchSources > 0
+      ? [{ type: "web_search_used", provider: "anthropic", sources: webSearchSources, urls: webSearchSourceList }]
+      : [];
+    return textToSSE(text, prefix);
   }
 
   // ── Tool use: merged stream (tool events → Phase 2 stream) ───────────────
@@ -1399,6 +1480,18 @@ export async function POST(req: NextRequest) {
   const mergedStream = new ReadableStream({
     async start(controller) {
       try {
+        // 0. web_search_used trust chip — emit first so it lands above the
+        //    tool chips in the UI when the model chained web_search + hub_*.
+        if (webSearchSources > 0) {
+          controller.enqueue(enc.encode(
+            `data: ${JSON.stringify({
+              type:     "web_search_used",
+              provider: "anthropic",
+              sources:  webSearchSources,
+              urls:     webSearchSourceList,
+            })}\n\n`,
+          ));
+        }
         // 1. tool_start events
         for (const block of toolUseBlocks) {
           controller.enqueue(enc.encode(

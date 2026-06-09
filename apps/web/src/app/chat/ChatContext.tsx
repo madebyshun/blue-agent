@@ -585,6 +585,39 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 }
                 return prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
               });
+            } else if (parsed.type === "web_search_used") {
+              // Trust signal: the upstream model actually invoked a web
+              // search (Anthropic server tool or Venice browse). Attach to
+              // the current assistant message so the UI can render a chip
+              // alongside tool calls — distinguishes browsed content from
+              // model knowledge.
+              const p = parsed as unknown as {
+                provider?: "anthropic" | "venice" | "grok";
+                sources?:  number;
+                urls?:     Array<{ url?: string; title?: string }>;
+              };
+              const urls = Array.isArray(p.urls)
+                ? p.urls
+                    .filter(u => typeof u?.url === "string")
+                    .map(u => ({ url: u.url as string, title: (u.title ?? u.url) as string }))
+                : undefined;
+              setTasksState(prev => {
+                const task = prev.find(t => t.id === tid);
+                if (!task) return prev;
+                const msgs = [...task.messages];
+                const last = msgs[msgs.length - 1];
+                if (last?.role === "assistant") {
+                  msgs[msgs.length - 1] = {
+                    ...last,
+                    webSearch: {
+                      provider: p.provider ?? "anthropic",
+                      sources:  Math.max(0, Number(p.sources ?? 0)),
+                      urls,
+                    },
+                  };
+                }
+                return prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
+              });
             } else if (parsed.type === "insufficient_credits") {
               // Server signalled the wallet's credit ledger couldn't cover the
               // chat message or tool call. Attach the structured notice to the
