@@ -99,7 +99,13 @@ export default function Sidebar({ collapsed, onToggle }: { collapsed: boolean; o
         {/* Credits dot */}
         <div className="mt-auto w-8 h-8 rounded-full flex items-center justify-center" style={{ background: `${holderTier.color}20` }}>
           <span className="font-mono text-[9px] font-bold" style={{ color: holderTier.color }}>
-            {isUnlimited ? "∞" : credits > 999 ? `${(credits/1000).toFixed(0)}k` : credits}
+            {isUnlimited
+              ? "∞"
+              : credits >= 10_000
+                ? `${(credits / 1000).toFixed(0)}k`
+                : credits >= 1_000
+                  ? `${(credits / 1000).toFixed(1)}k`
+                  : credits}
           </span>
         </div>
       </aside>
