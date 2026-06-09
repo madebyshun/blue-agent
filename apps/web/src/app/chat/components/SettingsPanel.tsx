@@ -139,16 +139,19 @@ export default function SettingsPanel() {
           )}
         </div>
 
-        {/* Next tier hint */}
+        {/* Next-tier hint — wording answers "what do I do to earn more
+            credits per day?". Uses "Stake" because the on-chain credit
+            accrual is keyed off the staked amount, not just the wallet
+            balance — see BlueMarketStaking.totalCreditsAccrued. */}
         {holderTier.nextTier && walletAddr && (
           <p className="font-mono text-[10px] text-slate-700 mb-3 leading-relaxed">
-            Hold{" "}
+            Stake{" "}
             <span className="text-slate-500">
               {holderTier.nextTier.need >= 1_000_000
                 ? `${(holderTier.nextTier.need / 1_000_000).toFixed(1)}M`
                 : `${(holderTier.nextTier.need / 1_000).toFixed(0)}K`} BLUE
             </span>
-            {" "}→{" "}
+            {" "}→ earn{" "}
             <span style={{ color: holderTier.color }}>
               {holderTier.nextTier.dailyCr === -1 ? "∞" : holderTier.nextTier.dailyCr.toLocaleString()} cr/day
             </span>
