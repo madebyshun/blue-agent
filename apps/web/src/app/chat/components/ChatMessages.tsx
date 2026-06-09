@@ -415,8 +415,13 @@ export default function ChatMessages() {
                         <div className="flex flex-col gap-1.5 mb-4">
                           {msg.toolLogs.map((log, j) => {
                             const name = log.tool.replace(/^hub_/, "").replace(/_/g, " ");
+                            // Brand label per provider. hub_crypto_rpc is a
+                            // Blue Hub tool (it just happens to proxy Venice's
+                            // RPC infra under the hood) — surfacing "Venice
+                            // RPC" inside a Bankr-Pro chat was confusing, so
+                            // we rebrand to Blue Hub.
                             const prov = log.tool === "hub_crypto_rpc"
-                              ? { icon: "🌐", color: "#34D399", label: "Venice RPC" }
+                              ? { icon: "🔗", color: "#4FC3F7", label: "Blue Hub" }
                               : log.tool.includes("base") || log.tool.includes("contract") || log.tool.includes("deploy")
                               ? { icon: "🔵", color: "#34D399", label: "Base MCP" }
                               : { icon: "⚡", color: "#4FC3F7", label: "Blue Agent" };
