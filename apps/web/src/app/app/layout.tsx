@@ -218,7 +218,13 @@ function MobileNav() {
   const pathname = usePathname();
   const isActive = (href: string) => pathname.startsWith(href);
 
-  const allItems = [...APP_NAV, ...APP_BOTTOM];
+  // Mobile bottom bar is capped at 5 core destinations — 8 items were far too
+  // cramped on a phone (~47px each). Terminal, Simulator and Docs drop off the
+  // bar (still reachable from the desktop side-rail and in-app links).
+  const MOBILE_IDS = ["chat", "dashboard", "hub", "console", "profile"];
+  const allItems = [...APP_NAV, ...APP_BOTTOM]
+    .filter(i => MOBILE_IDS.includes(i.id))
+    .sort((a, b) => MOBILE_IDS.indexOf(a.id) - MOBILE_IDS.indexOf(b.id));
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-[#1A1A2E] bg-[#050508]/95 backdrop-blur-xl"
