@@ -125,9 +125,28 @@ export async function POST(req: NextRequest) {
 
   // Surface the result. 201 = deployed (tokenAddress, txHash, pool, fee split);
   // 200 = simulateOnly preview (predicted tokenAddress, no broadcast).
-  const tokenAddress =
+  let tokenAddress =
     (data?.tokenAddress as string) ?? (data?.address as string) ?? null;
   const txHash = (data?.txHash as string) ?? null;
+
+  // Fallback for a real deploy whose response shape doesn't surface the address
+  // where we expect: the public GET /token-launches feed lists the 50 most
+  // recent launches with the canonical tokenAddress + status. Match ours by
+  // feeRecipient + symbol to confirm and recover the address.
+  if (!tokenAddress && !body.simulateOnly) {
+    try {
+      const listRes = await fetch("https://api.bankr.bot/token-launches", {
+        signal: AbortSignal.timeout(10_000),
+      });
+      const list = await listRes.json().catch(() => null) as
+        { launches?: Array<{ tokenAddress?: string; tokenSymbol?: string; feeRecipient?: { walletAddress?: string } }> } | null;
+      const match = list?.launches?.find(l =>
+        l?.feeRecipient?.walletAddress?.toLowerCase() === feeRecipient.toLowerCase() &&
+        (l?.tokenSymbol ?? "").toLowerCase() === tokenSymbol.toLowerCase(),
+      );
+      if (match?.tokenAddress) tokenAddress = match.tokenAddress;
+    } catch { /* best-effort — fall through with whatever we have */ }
+  }
   return NextResponse.json({
     ok: true,
     simulated: !!body.simulateOnly,
