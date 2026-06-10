@@ -1,9 +1,15 @@
 ---
 title: x402 Tools
-description: 31 pay-per-use AI tools for agents and developers
+description: 60+ pay-per-use AI tools for agents and developers
 ---
 
 Blue Agent's x402 API lets any agent or developer pay per call in USDC on Base — no subscriptions, no API key registration required.
+
+<Note>
+  This page lists a curated selection. For the **complete, always-current
+  catalog**, call the `blue-registry` tool (`POST /api/x402/blue-registry`) or
+  hit `GET https://blueagent.dev/api/mcp` for the live tool list.
+</Note>
 
 ## How x402 works
 
@@ -14,7 +20,25 @@ Blue Agent's x402 API lets any agent or developer pay per call in USDC on Base �
 
 ## Available tools
 
-Tools are grouped into 4 categories:
+### Blue command suite
+
+The first-party builder lifecycle — idea → build → audit → ship → raise, plus the extended `blue-*` suite:
+
+| Tool | Price | Description |
+|------|-------|-------------|
+| `blue-idea` | $0.05 | Rough concept → fundable brief |
+| `blue-build` | $0.50 | Architecture, stack, test plan |
+| `blue-audit` | $1.00 | Security + product risk review, go/no-go |
+| `blue-ship` | $0.10 | Deploy checklist, verification, monitoring |
+| `blue-raise` | $0.20 | Pitch narrative, traction, investor map |
+| `blue-research` | $1.00 | Deep DD memo (grounds in live market data) |
+| `blue-compose` | $0.10 | Plan a runnable chain of Blue Hub tools |
+| `blue-monitor` | $0.20 | Health + risk snapshot for a token/contract |
+| `blue-deploy` | $0.10 | Base mainnet deploy mechanics (scripts, verify) |
+| `blue-analytics` | $0.25 | Live token metrics + interpretation |
+| `blue-simulate` | $0.15 | Bull/base/bear scenario modeling |
+| `blue-stream` | $0.05 | Live Base onchain activity feed |
+| `blue-registry` | $0.05 | Discover the full tool catalog |
 
 ### Analysis
 | Tool | Price | Description |
