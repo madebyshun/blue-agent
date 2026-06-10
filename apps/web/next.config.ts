@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 
+// Deploy retrigger: production was stuck at PR #27; this nudge ships PR #28's
+// /app/hub/:tool redirect.
+
 const nextConfig: NextConfig = {
   async redirects() {
     return [
