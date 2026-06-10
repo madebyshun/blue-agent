@@ -536,6 +536,46 @@ Default to "base" for Base-related queries.`,
       required: ["method"],
     },
   },
+  {
+    name: "blue_monitor",
+    description: "Health + risk snapshot for a Base token/contract — live price, liquidity, Basescan verification, risk signals + watch plan. Use when user asks to 'monitor', 'watch', 'check the risk/health of' a token or contract.",
+    input_schema: { type: "object", properties: { target: { type: "string", description: "Base token/contract address (0x…) or protocol name" }, focus: { type: "string", description: "Optional focus" } }, required: ["target"] },
+  },
+  {
+    name: "blue_registry",
+    description: "Discover the Blue Hub tool catalog — every callable tool, filterable by query/category, with prices. Use when user asks 'what tools are there', 'what can you do', 'list the tools'.",
+    input_schema: { type: "object", properties: { query: { type: "string" }, category: { type: "string" } } },
+  },
+  {
+    name: "blue_research",
+    description: "Deep DD memo on a Base project, narrative, or token — thesis, bull/bear, risks, contrarian take, verdict. Use when user asks for 'research', 'DD', 'a deep dive', 'a memo on X'.",
+    input_schema: { type: "object", properties: { topic: { type: "string" }, target: { type: "string", description: "Optional 0x token address to ground in live data" } }, required: ["topic"] },
+  },
+  {
+    name: "blue_compose",
+    description: "Plan a runnable chain of Blue Hub tools to hit a goal. Use when user describes a multi-step goal and asks 'how', 'what's the workflow', 'which tools should I run'.",
+    input_schema: { type: "object", properties: { goal: { type: "string" } }, required: ["goal"] },
+  },
+  {
+    name: "blue_deploy",
+    description: "Base mainnet deploy mechanics — scripts, Basescan verify commands, env, gas. Use when user asks how to 'deploy', 'ship to Base', 'verify on Basescan'.",
+    input_schema: { type: "object", properties: { project: { type: "string" }, stack: { type: "string" } }, required: ["project"] },
+  },
+  {
+    name: "blue_analytics",
+    description: "Live performance metrics for a Base token (DexScreener) + interpretation — momentum, liquidity health, growth signals. Use when user asks for 'analytics', 'metrics', 'stats', 'how is X performing'.",
+    input_schema: { type: "object", properties: { target: { type: "string", description: "Base token address (0x…)" }, focus: { type: "string" } }, required: ["target"] },
+  },
+  {
+    name: "blue_simulate",
+    description: "Bull/base/bear scenario modeling for a Base decision (tokenomics, fee model, growth). Use when user asks to 'simulate', 'model', 'what if', 'project outcomes'.",
+    input_schema: { type: "object", properties: { scenario: { type: "string" }, params: { type: "string" } }, required: ["scenario"] },
+  },
+  {
+    name: "blue_stream",
+    description: "Live snapshot feed of Base onchain activity — trending/new pools, TVL, real prices. Use when user asks 'what's happening on Base now', 'live feed', 'what's moving'.",
+    input_schema: { type: "object", properties: { feed: { type: "string", description: "movers | new | all" } } },
+  },
 ];
 
 // ─── Venice tools (OpenAI function-calling format) ───────────────────────────
@@ -573,6 +613,15 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_launch_sim:       "launch-simulator",
   hub_crypto_rpc:       "crypto-rpc",
   hub_token_price:      "token-price",
+  // Blue first-party suite
+  blue_monitor:         "blue-monitor",
+  blue_registry:        "blue-registry",
+  blue_research:        "blue-research",
+  blue_compose:         "blue-compose",
+  blue_deploy:          "blue-deploy",
+  blue_analytics:       "blue-analytics",
+  blue_simulate:        "blue-simulate",
+  blue_stream:          "blue-stream",
 };
 
 // ─── Internal Hub tool caller ─────────────────────────────────────────────────
