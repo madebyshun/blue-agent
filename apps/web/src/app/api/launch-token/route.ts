@@ -16,10 +16,16 @@ const BANKR_DEPLOY = "https://api.bankr.bot/token-launches/deploy";
  * must take an explicit user confirmation before calling this.
  *
  * Env:
- *   BANKR_PARTNER_KEY  partner key (bk_ptr_…) — preferred; fee attribution to
- *                      an arbitrary feeRecipient is a partner capability.
- *   BANKR_API_KEY      fallback wallet key (creator may resolve to Blue's own
- *                      wallet — only used if no partner key is set).
+ *   BANKR_PARTNER_KEY  partner key (bk_ptr_…) — REQUIRED. Routing the creator
+ *                      fee to an arbitrary feeRecipient (the user's wallet) is
+ *                      a partner-deployment capability, so only a partner key
+ *                      does this correctly.
+ *
+ * We deliberately do NOT fall back to BANKR_API_KEY: that key powers the LLM
+ * gateway and is tied to a funded Bankr wallet. Per Bankr's skill-install docs
+ * ("your API key is tied to a wallet and all its funds"), using it for deploys
+ * would (a) expose that wallet and (b) make *it* the creator instead of the
+ * user. A dedicated partner key is the only correct credential here.
  */
 export async function POST(req: NextRequest) {
   // Tight rate limit — this is a real, irreversible onchain deploy.
@@ -28,11 +34,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Too many launches. Slow down." }, { status: 429 });
   }
 
+  // Partner key only — never the LLM/personal BANKR_API_KEY (see header note).
   const partnerKey = process.env.BANKR_PARTNER_KEY;
-  const apiKey     = process.env.BANKR_API_KEY;
-  if (!partnerKey && !apiKey) {
+  if (!partnerKey) {
     return NextResponse.json(
-      { error: "Token launch not configured — set BANKR_PARTNER_KEY (partner key) to enable." },
+      { error: "Token launch not configured — set BANKR_PARTNER_KEY (a dedicated Bankr partner key, bk_ptr_…) to enable." },
       { status: 500 },
     );
   }
@@ -71,10 +77,10 @@ export async function POST(req: NextRequest) {
   if (body.website) payload.website = body.website;
   if (body.tweet)   payload.tweet   = body.tweet;
 
-  // Prefer the partner key (proper fee attribution); fall back to wallet key.
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (partnerKey) headers["X-Partner-Key"] = partnerKey;
-  else            headers["X-API-Key"]     = apiKey!;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Partner-Key": partnerKey,
+  };
 
   let upstream: Response;
   try {
