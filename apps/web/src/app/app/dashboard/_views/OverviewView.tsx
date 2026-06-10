@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useAccount, useReadContracts, useDisconnect } from "wagmi";
 import { formatUnits } from "viem";
 import AppConnectPrompt from "@/components/app/AppConnectPrompt";
+import { useBasename } from "@/lib/useBasename";
 
 // ── Contracts (Base mainnet) ─────────────────────────────────────────────────
 
@@ -176,6 +177,7 @@ interface Props {
 export default function OverviewView({ onSwitchTab }: Props) {
   const { address, isConnected } = useAccount();
   const { disconnect }           = useDisconnect();
+  const { name: basename }       = useBasename(address);
   const [chatStats,    setChatStats]    = useState<ChatStats>({ totalSessions: 0, totalMessages: 0, totalCreditsUsed: 0, toolsUsed: [], firstUsed: null });
   const [copied,       setCopied]       = useState(false);
   const [builderScore, setBuilderScore] = useState<number | null>(null);
@@ -315,7 +317,9 @@ export default function OverviewView({ onSwitchTab }: Props) {
                   </div>
                   <div className="min-w-0">
                     <button onClick={copyAddress} className="flex items-center gap-2 hover:opacity-80 transition-opacity max-w-full">
-                      <span className="text-sm font-bold text-white truncate">{address?.slice(0, 6)}…{address?.slice(-4)}</span>
+                      <span className="text-sm font-bold text-white truncate">
+                        {basename ?? `${address?.slice(0, 6)}…${address?.slice(-4)}`}
+                      </span>
                       <span className="text-[9px] text-slate-600 shrink-0">{copied ? "✓" : "copy"}</span>
                     </button>
                     {/* Tier + member-since only — disconnect moved to the right
