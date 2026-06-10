@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import SubmitForm from "./SubmitForm";
+import WalletProviders from "@/components/WalletProviders";
 
 export const metadata: Metadata = {
   title: "Register your API · Blue Hub",
@@ -66,21 +67,16 @@ export default function SubmitPage() {
         <p className="font-mono text-[10px] text-[#34D399] tracking-widest mb-1">💸 REVENUE SPLIT</p>
         <h2 className="font-mono text-2xl font-bold mb-6">Every paid call · automatic on-chain split</h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="rounded-2xl border border-[#34D399]/25 bg-[#34D399]/5 p-5">
             <p className="font-mono text-3xl font-black text-[#34D399] mb-1">80%</p>
             <p className="font-mono text-sm font-bold mb-1">You keep</p>
             <p className="font-mono text-[10px] text-slate-500 leading-relaxed">Settled to your registered wallet on Base every call. No minimum payout.</p>
           </div>
-          <div className="rounded-2xl border border-[#F59E0B]/25 bg-[#F59E0B]/5 p-5">
-            <p className="font-mono text-3xl font-black text-[#F59E0B] mb-1">10%</p>
-            <p className="font-mono text-sm font-bold mb-1">$BLUEAGENT stakers</p>
-            <p className="font-mono text-[10px] text-slate-500 leading-relaxed">Fee-share back to token holders. Aligned incentives for marketplace growth.</p>
-          </div>
           <div className="rounded-2xl border border-[#A78BFA]/25 bg-[#A78BFA]/5 p-5">
-            <p className="font-mono text-3xl font-black text-[#A78BFA] mb-1">10%</p>
+            <p className="font-mono text-3xl font-black text-[#A78BFA] mb-1">20%</p>
             <p className="font-mono text-sm font-bold mb-1">Blue Hub treasury</p>
-            <p className="font-mono text-[10px] text-slate-500 leading-relaxed">Operations, ecosystem grants, insurance fund. Public treasury wallet.</p>
+            <p className="font-mono text-[10px] text-slate-500 leading-relaxed">Operations, ecosystem grants, insurance fund, and $BLUEAGENT staker rewards. Public treasury wallet.</p>
           </div>
         </div>
       </section>
@@ -117,7 +113,9 @@ export default function SubmitPage() {
         <h2 className="font-mono text-2xl font-bold mb-6">Manifest form</h2>
 
         <div className="max-w-3xl">
-          <SubmitForm />
+          <WalletProviders>
+            <SubmitForm />
+          </WalletProviders>
         </div>
       </section>
 
