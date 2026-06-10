@@ -220,7 +220,7 @@ export default function OverviewView({ onSwitchTab }: Props) {
   const totalCredits = contractData?.[1]?.result as bigint | undefined;
 
   const BALANCE_TOKENS = [
-    { sym: "BLUE",  decimals: 18, color: "#4FC3F7" },
+    { sym: "BLUEAGENT", decimals: 18, color: "#4FC3F7" },
     { sym: "USDC",  decimals: 6,  color: "#22C55E" },
     { sym: "WETH",  decimals: 18, color: "#A78BFA" },
     { sym: "cbBTC", decimals: 8,  color: "#F59E0B" },
