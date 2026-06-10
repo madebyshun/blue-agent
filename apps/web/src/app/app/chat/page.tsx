@@ -61,8 +61,34 @@ function ChatShell() {
         {/* ── Sidebar (desktop) ── */}
         <AppSidebar activeTab={activeTab} onSelect={setActiveTab} />
 
-        {/* ── Main content area ── */}
-        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+        {/* ── Main content area ──
+            pb-14 below md clears the global mobile bottom nav (56px); md+ has
+            no bottom nav so no padding. */}
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden pb-14 md:pb-0">
+
+          {/* ── Mobile top bar ── chat sub-tabs as icons (replaces the old
+              second bottom bar; desktop uses the AppSidebar instead) */}
+          <div className="lg:hidden flex items-center justify-between gap-2 px-3 h-12 border-b border-[#1A1A2E] shrink-0 bg-[#050508]">
+            <span className="font-mono text-[10px] text-[#4FC3F7] tracking-widest shrink-0 truncate">
+              {isChat ? "// BLUE CHAT" : `// ${meta?.title.toUpperCase()}`}
+            </span>
+            <div className="flex items-center gap-0.5 bg-[#0d0d12] rounded-lg p-0.5 border border-[#1A1A2E] shrink-0">
+              {MOBILE_TABS.map(tab => {
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    title={tab.label}
+                    className="px-2.5 py-1 rounded-md text-sm leading-none transition-colors"
+                    style={{ color: isActive ? "#4FC3F7" : "#64748b", background: isActive ? "#4FC3F715" : "transparent" }}
+                  >
+                    {tab.icon}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Tab header (non-chat, desktop) */}
           {!isChat && meta && (
@@ -125,23 +151,6 @@ function ChatShell() {
         </div>
       </div>
 
-      {/* ── Mobile bottom tab bar ── */}
-      <div className="lg:hidden fixed bottom-14 md:bottom-0 left-0 right-0 z-40 flex bg-[#050508] border-t border-[#1A1A2E] h-14">
-        {MOBILE_TABS.map(tab => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
-              style={{ color: isActive ? "#4FC3F7" : "#475569" }}
-            >
-              <span className="text-lg leading-none">{tab.icon}</span>
-              <span className="font-mono text-[8px] leading-none mt-0.5">{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
     </>
   );
 }
