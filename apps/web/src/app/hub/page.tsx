@@ -552,7 +552,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
       });
       const data = await res.json() as { id?: string };
       const url = data.id
-        ? `${window.location.origin}/hub#s=${data.id}`
+        ? `${window.location.origin}/app/hub#s=${data.id}`
         : `${window.location.origin}/hub/${tool.id}`; // fallback to tool detail
       await navigator.clipboard.writeText(url);
       setCopied(true);
@@ -1422,6 +1422,18 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
       // Legacy inline base64 payload
       const shared = decodeShare(value);
       if (shared) apply(shared.toolId, shared.result, shared.isMock, shared.mockReason);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── On mount: open a tool from ?tool=<id> (deep link from /hub/[tool] detail) ──
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const toolId = new URLSearchParams(window.location.search).get("tool");
+    if (!toolId) return;
+    const tool = allTools.find(t => t.id === toolId);
+    if (tool) {
+      setSelected(tool);
+      window.history.replaceState(null, "", window.location.pathname);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
