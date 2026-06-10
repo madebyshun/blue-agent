@@ -45,7 +45,10 @@ export async function POST(req: NextRequest) {
 
   let body: {
     tokenName?: string; tokenSymbol?: string;
-    feeRecipient?: string; image?: string; website?: string; tweet?: string;
+    feeRecipient?: string;          // legacy: raw wallet (treated as type "wallet")
+    feeRecipientType?: string;      // "wallet" | "x" | "farcaster" | "ens"
+    feeRecipientValue?: string;     // address or handle, per type
+    image?: string; website?: string; tweet?: string;
     simulateOnly?: boolean;
   } = {};
   try { body = await req.json(); }
@@ -53,7 +56,16 @@ export async function POST(req: NextRequest) {
 
   const tokenName   = body.tokenName?.trim();
   const tokenSymbol = body.tokenSymbol?.trim().replace(/^\$/, "");
-  const feeRecipient = body.feeRecipient?.trim();
+
+  // Fee recipient — who receives the 57% creator share. Bankr resolves four
+  // identity types to a payout wallet:
+  //   wallet    → raw EVM address (0x…)
+  //   x         → Twitter/X username → the user's Bankr wallet
+  //   farcaster → Farcaster username → verified EVM address
+  //   ens       → ENS name → underlying address
+  const feeType  = (body.feeRecipientType ?? "wallet").toLowerCase();
+  const rawValue = (body.feeRecipientValue ?? body.feeRecipient ?? "").trim();
+  const ALLOWED_FEE_TYPES = ["wallet", "x", "farcaster", "ens"];
 
   if (!tokenName || !tokenSymbol) {
     return NextResponse.json({ error: "tokenName and tokenSymbol are required." }, { status: 400 });
@@ -61,18 +73,29 @@ export async function POST(req: NextRequest) {
   if (tokenSymbol.length > 10) {
     return NextResponse.json({ error: "tokenSymbol too long (max 10 chars)." }, { status: 400 });
   }
-  // feeRecipient must be the user's wallet so the 57% creator share is theirs.
-  if (!feeRecipient || !/^0x[a-fA-F0-9]{40}$/.test(feeRecipient)) {
-    return NextResponse.json(
-      { error: "A valid feeRecipient wallet (0x…) is required so creator fees go to you." },
-      { status: 400 },
-    );
+  if (!ALLOWED_FEE_TYPES.includes(feeType)) {
+    return NextResponse.json({ error: `feeRecipientType must be one of: ${ALLOWED_FEE_TYPES.join(", ")}.` }, { status: 400 });
   }
+  // Normalise + validate the value per type.
+  let feeValue = rawValue;
+  if (feeType === "wallet") {
+    if (!/^0x[a-fA-F0-9]{40}$/.test(feeValue)) {
+      return NextResponse.json({ error: "feeRecipientType 'wallet' needs a valid 0x… address." }, { status: 400 });
+    }
+  } else {
+    feeValue = feeValue.replace(/^@/, ""); // strip a leading @ from handles
+    if (!feeValue) {
+      return NextResponse.json({ error: `feeRecipientType '${feeType}' needs a ${feeType === "ens" ? "name" : "username"}.` }, { status: 400 });
+    }
+  }
+  // For the success card + list fallback we still want a wallet to match on
+  // when the type IS wallet; non-wallet types resolve server-side at Bankr.
+  const feeWallet = feeType === "wallet" ? feeValue : null;
 
   const payload: Record<string, unknown> = {
     tokenName,
     tokenSymbol,
-    feeRecipient: { type: "wallet", value: feeRecipient },
+    feeRecipient: { type: feeType, value: feeValue },
   };
   if (body.image)        payload.image        = body.image;
   if (body.website)      payload.website      = body.website;
@@ -140,10 +163,14 @@ export async function POST(req: NextRequest) {
       });
       const list = await listRes.json().catch(() => null) as
         { launches?: Array<{ tokenAddress?: string; tokenSymbol?: string; feeRecipient?: { walletAddress?: string } }> } | null;
-      const match = list?.launches?.find(l =>
-        l?.feeRecipient?.walletAddress?.toLowerCase() === feeRecipient.toLowerCase() &&
-        (l?.tokenSymbol ?? "").toLowerCase() === tokenSymbol.toLowerCase(),
-      );
+      // Match by symbol; additionally pin to our wallet when the fee type is
+      // "wallet" (non-wallet types resolve to an address we don't know here).
+      const match = list?.launches?.find(l => {
+        const symOk = (l?.tokenSymbol ?? "").toLowerCase() === tokenSymbol.toLowerCase();
+        if (!symOk) return false;
+        if (!feeWallet) return true; // x/farcaster/ens — symbol match is enough
+        return l?.feeRecipient?.walletAddress?.toLowerCase() === feeWallet.toLowerCase();
+      });
       if (match?.tokenAddress) tokenAddress = match.tokenAddress;
     } catch { /* best-effort — fall through with whatever we have */ }
   }
@@ -154,11 +181,12 @@ export async function POST(req: NextRequest) {
     tokenSymbol,
     tokenAddress,
     txHash,
-    feeRecipient,
+    feeRecipient: { type: feeType, value: feeValue },
     raw: data,
     basescan: tokenAddress ? `https://basescan.org/token/${tokenAddress}` : null,
     uniswap:  tokenAddress
       ? `https://app.uniswap.org/swap?outputCurrency=${tokenAddress}&chain=base`
       : null,
+    bankr:    tokenAddress ? `https://bankr.bot/launches/${tokenAddress}` : null,
   });
 }

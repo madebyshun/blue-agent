@@ -927,14 +927,29 @@ interface TokenLaunchResult {
   website?:     string;
 }
 
+type FeeType = "wallet" | "x" | "farcaster" | "ens";
+const FEE_TYPES: { id: FeeType; label: string; placeholder: string }[] = [
+  { id: "wallet",    label: "Wallet",    placeholder: "0x… (your address)" },
+  { id: "x",         label: "X",         placeholder: "@username" },
+  { id: "farcaster", label: "Farcaster", placeholder: "username" },
+  { id: "ens",       label: "ENS",       placeholder: "name.eth" },
+];
+
 function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
   const { address, isConnected } = useAccount();
   const [step, setStep] = useState<"idle" | "simulating" | "launching" | "done" | "error">("idle");
   const [err,  setErr]  = useState<string>("");
-  const [out,  setOut]  = useState<{ tokenAddress: string | null; basescan: string | null; uniswap: string | null; simulated: boolean } | null>(null);
+  const [out,  setOut]  = useState<{ tokenAddress: string | null; basescan: string | null; uniswap: string | null; bankr: string | null; simulated: boolean } | null>(null);
+  // Fee recipient — who gets the 57% creator share. Defaults to the connected
+  // wallet; can route to an X / Farcaster / ENS handle (Bankr resolves it).
+  const [feeType,  setFeeType]  = useState<FeeType>("wallet");
+  const [feeValue, setFeeValue] = useState("");
 
   const name   = result.tokenName?.trim() ?? "";
   const symbol = (result.tokenSymbol ?? "").replace(/^\$/, "").trim();
+
+  // wallet type defaults to the connected address when the field is left blank.
+  const effectiveFee = feeType === "wallet" ? (feeValue.trim() || address || "") : feeValue.trim();
 
   // sim=true → Bankr predicts the address + fees without broadcasting (safe,
   // no irreversible deploy, lighter on the rate limit). sim=false → real deploy.
@@ -945,11 +960,15 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
       const res = await fetch("/api/launch-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tokenName: name, tokenSymbol: symbol, feeRecipient: address, image: result.image, website: result.website, simulateOnly: sim }),
+        body: JSON.stringify({
+          tokenName: name, tokenSymbol: symbol,
+          feeRecipientType: feeType, feeRecipientValue: effectiveFee,
+          image: result.image, website: result.website, simulateOnly: sim,
+        }),
       });
       const d = await res.json();
       if (!res.ok) { setErr(d?.error ?? `Launch failed (${res.status})`); setStep("error"); return; }
-      setOut({ tokenAddress: d.tokenAddress ?? null, basescan: d.basescan ?? null, uniswap: d.uniswap ?? null, simulated: !!d.simulated });
+      setOut({ tokenAddress: d.tokenAddress ?? null, basescan: d.basescan ?? null, uniswap: d.uniswap ?? null, bankr: d.bankr ?? null, simulated: !!d.simulated });
       setStep("done");
     } catch (e) {
       setErr((e as Error).message); setStep("error");
@@ -977,11 +996,12 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
       <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
         <div className="font-mono text-[11px] font-bold mb-1" style={{ color: "#22C55E" }}>🚀 ${symbol} launched on Base</div>
         {out?.tokenAddress && <div className="font-mono text-[10px] text-slate-400 mb-2 break-all">{out.tokenAddress}</div>}
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {out?.bankr    && <a href={out.bankr}    target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7]">View on Bankr ↗</a>}
           {out?.basescan && <a href={out.basescan} target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] text-slate-300 hover:text-white">Basescan ↗</a>}
           {out?.uniswap  && <a href={out.uniswap}  target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#F59E0B30] text-[#F59E0B]">Trade on Uniswap ↗</a>}
         </div>
-        <p className="font-mono text-[9px] text-slate-600 mt-2">Creator fees (57%) accrue to your wallet.</p>
+        <p className="font-mono text-[9px] text-slate-600 mt-2">Creator fees (57%) accrue to the fee recipient.</p>
       </div>
     );
   }
@@ -1004,13 +1024,38 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
           <div className="text-slate-600 mb-0.5">SUPPLY</div><div className="text-slate-300">100B fixed</div>
         </div>
         <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-2.5 py-1.5">
-          <div className="text-slate-600 mb-0.5">CREATOR FEE</div><div className="text-[#22C55E]">57% → you</div>
+          <div className="text-slate-600 mb-0.5">CREATOR FEE</div><div className="text-[#22C55E]">57% of swaps</div>
         </div>
       </div>
       {isConnected && address ? (
         <>
+          {/* Fee recipient — who receives the 57% creator share */}
+          <div className="mb-3">
+            <div className="font-mono text-[9px] text-slate-600 mb-1.5">FEE RECIPIENT · 57% creator share</div>
+            <div className="flex gap-1 mb-1.5">
+              {FEE_TYPES.map(t => {
+                const active = feeType === t.id;
+                return (
+                  <button key={t.id}
+                    onClick={() => { setFeeType(t.id); setFeeValue(""); }}
+                    className="font-mono text-[10px] px-2 py-1 rounded-md transition-colors"
+                    style={active
+                      ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                      : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+            <input
+              value={feeValue}
+              onChange={e => setFeeValue(e.target.value)}
+              placeholder={feeType === "wallet" ? `${truncAddr(address)} (default)` : (FEE_TYPES.find(t => t.id === feeType)?.placeholder ?? "")}
+              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors"
+            />
+          </div>
           <p className="font-mono text-[9px] text-slate-600 mb-2 leading-relaxed">
-            Fees route to <span className="text-slate-400">{truncAddr(address)}</span>. This deploys a
+            Fees → <span className="text-slate-400">{feeType === "wallet" ? (feeValue.trim() ? truncAddr(feeValue.trim()) : truncAddr(address)) : `${feeType}:${feeValue.trim() || "—"}`}</span>. This deploys a
             <span className="text-amber-400"> real, irreversible</span> token on Base via Bankr.
           </p>
           {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
