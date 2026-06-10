@@ -12,6 +12,12 @@ import hBuilderScore  from "./builder-score";
 import hAgentScore    from "./agent-score";
 import hBlueMonitor   from "./blue-monitor";
 import hBlueRegistry  from "./blue-registry";
+import hBlueResearch  from "./blue-research";
+import hBlueCompose   from "./blue-compose";
+import hBlueDeploy    from "./blue-deploy";
+import hBlueAnalytics from "./blue-analytics";
+import hBlueSimulate  from "./blue-simulate";
+import hBlueStream    from "./blue-stream";
 import h0 from "./agent-collab-match";
 import h1 from "./agent-performance";
 import h2 from "./agent-revenue-optimizer";
@@ -114,6 +120,12 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "agent-score":    hAgentScore,
   "blue-monitor":   hBlueMonitor,
   "blue-registry":  hBlueRegistry,
+  "blue-research":  hBlueResearch,
+  "blue-compose":   hBlueCompose,
+  "blue-deploy":    hBlueDeploy,
+  "blue-analytics": hBlueAnalytics,
+  "blue-simulate":  hBlueSimulate,
+  "blue-stream":    hBlueStream,
   "quantum-premium": h34,
   "quantum-batch":   h35,
   "quantum-migrate": h36,
