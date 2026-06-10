@@ -837,7 +837,7 @@ function GenericCard({ tool, result }: { tool: string; result: Record<string, un
 // live rather than a server snapshot. Mirrors the dashboard's token set.
 
 const PORTFOLIO_TOKENS = [
-  { sym: "BLUE",  address: "0xf895783b2931c919955e18b5e3343e7c7c456ba3", decimals: 18, color: "#4FC3F7" },
+  { sym: "BLUEAGENT", address: "0xf895783b2931c919955e18b5e3343e7c7c456ba3", decimals: 18, color: "#4FC3F7" },
   { sym: "USDC",  address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6,  color: "#22C55E" },
   { sym: "WETH",  address: "0x4200000000000000000000000000000000000006", decimals: 18, color: "#A78BFA" },
   { sym: "cbBTC", address: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", decimals: 8,  color: "#F59E0B" },
