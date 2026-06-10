@@ -7,7 +7,7 @@ const NAV_LINKS = [
   { label: "Hub",    href: "/hub" },
   { label: "About",  href: "/about" },
   { label: "Skills", href: "/skills" },
-  { label: "API",    href: "/api-docs" },
+  { label: "API",    href: "https://api.blueagent.dev/docs" },
   { label: "Docs",   href: "/docs" },
 ];
 

@@ -11,6 +11,13 @@ const nextConfig: NextConfig = {
         destination: "https://api.blueagent.dev/docs/mcp",
         permanent: false,
       },
+      {
+        // /api-docs retired — API + MCP docs now live on the api subdomain.
+        // The main docs hub is blueagent.dev/docs.
+        source: "/api-docs",
+        destination: "https://api.blueagent.dev/docs",
+        permanent: false,
+      },
     ];
   },
   webpack(config) {

@@ -121,7 +121,7 @@ function HomeView(props: HubHomeProps) {
         {/* ── HERO with big search ── */}
         <section className="mb-8">
           <h1 className="font-mono text-2xl sm:text-3xl font-bold text-white tracking-tight mb-1">
-            App Store <span className="text-[#4FC3F7]">for Base</span>
+            Blue Hub <span className="text-[#4FC3F7]">for Base</span>
           </h1>
           <p className="font-mono text-xs sm:text-sm text-slate-500 mb-5 max-w-xl">
             Pay-per-call AI tools from Blue Agent, partner agents, and community builders. No signup, no API key — USDC on Base.
