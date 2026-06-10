@@ -2,7 +2,16 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   async redirects() {
-    return [];
+    return [
+      {
+        // Clean marketing shortcut for the MCP setup guide (tweets, bio, etc.).
+        // Temporary (307) so we can re-point to blueagent.dev/docs/mcp once the
+        // docs domain is consolidated onto the main site.
+        source: "/mcp",
+        destination: "https://api.blueagent.dev/docs/mcp",
+        permanent: false,
+      },
+    ];
   },
   webpack(config) {
     // tempoWallet connector dynamically imports 'accounts' (native pkg)
