@@ -240,6 +240,20 @@ const HUB_TOOLS = [
     input_schema: { type: "object", properties: {} },
   },
   {
+    name: "prepare_token_launch",
+    description: "Render an inline token-launch card (Bankr launchpad → real token on Base, Uniswap V4, 100B fixed supply). Call when the user wants to LAUNCH / CREATE / DEPLOY their own token and has given at least a name and a symbol — ask for any missing one first. The card is a PREVIEW: the user must click Launch to actually deploy; never claim the token is launched from calling this tool. Creator fees (57%) route to the user's connected wallet. Do NOT use for launch analysis/simulation — that's hub_launch_sim.",
+    input_schema: {
+      type: "object",
+      properties: {
+        tokenName:   { type: "string", description: "Token display name, e.g. 'Blue Agent'" },
+        tokenSymbol: { type: "string", description: "Ticker symbol, e.g. BLUE (no $ prefix)" },
+        image:       { type: "string", description: "Optional logo image URL" },
+        website:     { type: "string", description: "Optional project website URL" },
+      },
+      required: ["tokenName", "tokenSymbol"],
+    },
+  },
+  {
     name: "hub_token_pick",
     description: "Get an AI token pick on Base — falsifiable thesis, entry point, sizing, and kill criterion. Use when user asks: 'what should I buy', 'token pick', 'best token today', 'what's a good trade'.",
     input_schema: {
@@ -663,6 +677,14 @@ async function callHubTool(
     return {
       text: "Showing your live Base portfolio.",
       result: { kind: "portfolio", address: userAddress ?? null },
+    };
+  }
+  if (toolName === "prepare_token_launch") {
+    // Preview only — the LaunchCard takes an explicit user confirmation before
+    // it POSTs to /api/launch-token. We never deploy from here.
+    return {
+      text: "Token-launch card ready — review the details and confirm to deploy.",
+      result: { kind: "token_launch", ...args },
     };
   }
 

@@ -2,6 +2,7 @@
 // Tool output cards — rendered inline after tool execution logs
 // One card per tool type: honeypot, risk-gate, deep-analysis, token-pick, contract-trust
 
+import { useState } from "react";
 import { useAccount, useReadContracts, useBalance } from "wagmi";
 import { formatUnits } from "viem";
 
@@ -912,6 +913,104 @@ function PortfolioCard() {
   );
 }
 
+// ── Token launch card (Bankr launchpad, explicit confirm) ─────────────────────
+// Rendered for the `prepare_token_launch` marker. A real, irreversible deploy
+// on Base — so it's a preview with an explicit Launch button. The deploy runs
+// server-side via Bankr's partner key; the 57% creator-fee share is routed to
+// the user's connected wallet (feeRecipient), so they own the upside without a
+// Bankr account or a signature.
+
+interface TokenLaunchResult {
+  tokenName?:   string;
+  tokenSymbol?: string;
+  image?:       string;
+  website?:     string;
+}
+
+function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
+  const { address, isConnected } = useAccount();
+  const [step, setStep] = useState<"idle" | "launching" | "done" | "error">("idle");
+  const [err,  setErr]  = useState<string>("");
+  const [out,  setOut]  = useState<{ tokenAddress: string | null; basescan: string | null; uniswap: string | null } | null>(null);
+
+  const name   = result.tokenName?.trim() ?? "";
+  const symbol = (result.tokenSymbol ?? "").replace(/^\$/, "").trim();
+
+  async function launch() {
+    if (!address) return;
+    setStep("launching"); setErr("");
+    try {
+      const res = await fetch("/api/launch-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tokenName: name, tokenSymbol: symbol, feeRecipient: address, image: result.image, website: result.website }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setErr(d?.error ?? `Launch failed (${res.status})`); setStep("error"); return; }
+      setOut({ tokenAddress: d.tokenAddress ?? null, basescan: d.basescan ?? null, uniswap: d.uniswap ?? null });
+      setStep("done");
+    } catch (e) {
+      setErr((e as Error).message); setStep("error");
+    }
+  }
+
+  if (step === "done") {
+    return (
+      <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
+        <div className="font-mono text-[11px] font-bold mb-1" style={{ color: "#22C55E" }}>🚀 ${symbol} launched on Base</div>
+        {out?.tokenAddress && <div className="font-mono text-[10px] text-slate-400 mb-2 break-all">{out.tokenAddress}</div>}
+        <div className="flex gap-2">
+          {out?.basescan && <a href={out.basescan} target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] text-slate-300 hover:text-white">Basescan ↗</a>}
+          {out?.uniswap  && <a href={out.uniswap}  target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#F59E0B30] text-[#F59E0B]">Trade on Uniswap ↗</a>}
+        </div>
+        <p className="font-mono text-[9px] text-slate-600 mt-2">Creator fees (57%) accrue to your wallet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
+      <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold mb-3">LAUNCH TOKEN · BASE</div>
+      <div className="flex items-center gap-2.5 mb-3">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center font-mono text-sm font-bold shrink-0"
+             style={{ background: "#4FC3F715", border: "1px solid #4FC3F730", color: "#4FC3F7" }}>
+          {symbol.slice(0, 2).toUpperCase() || "?"}
+        </div>
+        <div className="min-w-0">
+          <div className="font-mono text-sm font-bold text-white truncate">{name || "Unnamed token"}</div>
+          <div className="font-mono text-[11px] text-slate-500">${symbol || "—"}</div>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 mb-3 font-mono text-[10px]">
+        <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-2.5 py-1.5">
+          <div className="text-slate-600 mb-0.5">SUPPLY</div><div className="text-slate-300">100B fixed</div>
+        </div>
+        <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-2.5 py-1.5">
+          <div className="text-slate-600 mb-0.5">CREATOR FEE</div><div className="text-[#22C55E]">57% → you</div>
+        </div>
+      </div>
+      {isConnected && address ? (
+        <>
+          <p className="font-mono text-[9px] text-slate-600 mb-2 leading-relaxed">
+            Fees route to <span className="text-slate-400">{truncAddr(address)}</span>. This deploys a
+            <span className="text-amber-400"> real, irreversible</span> token on Base via Bankr.
+          </p>
+          {step === "error" && <p className="font-mono text-[10px] text-red-400 mb-2">{err}</p>}
+          <button
+            onClick={launch}
+            disabled={step === "launching" || !name || !symbol}
+            className="w-full font-mono text-[12px] font-bold py-2 rounded-lg transition-all disabled:opacity-50"
+            style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>
+            {step === "launching" ? "Launching…" : `🚀 Launch $${symbol || "TOKEN"} on Base`}
+          </button>
+        </>
+      ) : (
+        <p className="font-mono text-[10px] text-slate-500">Connect a wallet to launch — creator fees route to it.</p>
+      )}
+    </div>
+  );
+}
+
 export function ToolResultCard({ tool, result }: { tool: string; result: Record<string, unknown> }) {
   if (!result || typeof result !== "object") return null;
   const r = result;
@@ -930,6 +1029,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_yield":         return <YieldCard        result={r} />;
     case "hub_launch_sim":    return <LaunchSimCard    result={r} />;
     case "show_portfolio":    return <PortfolioCard />;
+    case "prepare_token_launch": return <TokenLaunchCard result={r as TokenLaunchResult} />;
     default:                  return <GenericCard      tool={tool} result={r} />;
   }
 }
