@@ -205,7 +205,7 @@ export default function DocsPage() {
               </div>
               <div className="rounded-2xl border border-[#4FC3F720] bg-[#4FC3F705] p-4">
                 <div className="font-mono text-[10px] text-slate-600 mb-1">MCP server for Claude Code / Cursor</div>
-                <pre className="font-mono text-xs text-[#4FC3F7] overflow-x-auto">{`"blueagent": { "command": "npx", "args": ["-y", "@blueagent/skill"] }`}</pre>
+                <pre className="font-mono text-xs text-[#4FC3F7] overflow-x-auto">{`"blue-agent": { "url": "https://blueagent.dev/api/mcp" }`}</pre>
               </div>
             </div>
           </div>
@@ -362,34 +362,35 @@ export default function DocsPage() {
             <div className="space-y-4">
               <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-[#1A1A2E] bg-[#0a0a0f]">
-                  <span className="font-mono text-[10px] text-slate-600 tracking-widest">INSTALL</span>
+                  <span className="font-mono text-[10px] text-slate-600 tracking-widest">NO INSTALL — REMOTE URL</span>
                 </div>
                 <div className="p-5 font-mono text-sm">
-                  <span className="text-slate-600">$ </span><span className="text-white">npm install -g @blueagent/skill</span>
+                  <span className="text-white">https://blueagent.dev/api/mcp</span>
+                  <p className="font-sans text-xs text-slate-500 mt-2 leading-relaxed">Add in 30s. Nothing to install — point your client at the URL. Optional: <code className="text-slate-400">npm i -g @blueagent/skill</code> for the local package.</p>
                 </div>
               </div>
               <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5">
-                <div className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">AVAILABLE MCP TOOLS</div>
+                <div className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">AVAILABLE MCP TOOLS · 50+</div>
                 <div className="grid grid-cols-2 gap-1.5">
-                  {["blue_idea", "blue_build", "blue_audit", "blue_ship", "blue_raise", "blue_score", "blue_new"].map((t) => (
+                  {["blue_idea", "blue_build", "blue_audit", "blue_ship", "blue_raise", "hub_market_fit", "hub_ecosystem", "hub_risk_gate", "hub_builder_score", "hub_investor_memo"].map((t) => (
                     <div key={t} className="flex items-center gap-2">
                       <span className="text-[#4FC3F7] text-xs">·</span>
                       <code className="font-mono text-[11px] text-white">{t}</code>
                     </div>
                   ))}
                 </div>
+                <p className="font-sans text-[11px] text-slate-600 mt-3">5 core commands + 45 hub tools (security · market · onchain clusters).</p>
               </div>
             </div>
 
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden">
               <div className="px-5 py-3.5 border-b border-[#1A1A2E] bg-[#0a0a0f]">
-                <span className="font-mono text-[10px] text-slate-600 tracking-widest">CLAUDE CODE / CURSOR CONFIG (.mcp.json)</span>
+                <span className="font-mono text-[10px] text-slate-600 tracking-widest">CLAUDE CODE / CURSOR / DESKTOP CONFIG</span>
               </div>
               <pre className="font-mono text-sm text-[#4FC3F7] p-5 overflow-x-auto leading-relaxed">{`{
   "mcpServers": {
-    "blueagent": {
-      "command": "npx",
-      "args": ["-y", "@blueagent/skill"]
+    "blue-agent": {
+      "url": "https://blueagent.dev/api/mcp"
     }
   }
 }`}</pre>

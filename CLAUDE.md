@@ -6,10 +6,11 @@
 
 Blue Agent is the flagship AI agent of the Base ecosystem. It is not just a chatbot — it is a full economic actor: it holds a wallet, executes onchain transactions, earns and distributes tokens, and powers a growing ecosystem of tools and services.
 
-**Three surfaces:**
-- **Telegram bot** — community hub, wallet, trading, rewards, builder tools
-- **Founder console** (this repo) — AI-native workflow for Base builders: idea → build → audit → ship → raise
-- **x402 API services** — 31 pay-per-use AI tools for agents and developers
+**Two surfaces:**
+- **Founder console** (this repo) — AI-native workflow for Base builders: idea → build → audit → ship → raise. MCP-native — runs inside Claude Desktop, Cursor & Claude Code (`https://blueagent.dev/api/mcp`). *Not a tool you open. A layer you build on.*
+- **x402 API services** — pay-per-use AI tools (USDC on Base, EIP-3009) for agents and developers. Each of the 5 commands is backed by a cluster of hub tools (e.g. audit → risk_gate · honeypot · phishing_scan · key_exposure · protocol_risk).
+
+> Note: the Telegram bot surface is **no longer in active development** (as of 2026-06). Focus is the 5 commands + their hub tool clusters.
 
 **Tokens:**
 - `$BLUEAGENT` — `0xf895783b2931c919955e18b5e3343e7c7c456ba3` (Base, Uniswap v4)
