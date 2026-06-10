@@ -2,20 +2,17 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // api.blueagent.dev — developer portal, separate from blueagent.dev
-  webpack(config) {
-    // wagmi connectors pull in optional/native packages (porto, accounts,
-    // pino-pretty) that don't exist in the Node/webpack build — mark them
-    // external so the bundle skips them. Mirrors apps/web/next.config.ts.
-    config.externals = [
-      ...(Array.isArray(config.externals) ? config.externals : config.externals ? [config.externals] : []),
+  async redirects() {
+    return [
       {
-        accounts: "accounts",
-        "pino-pretty": "pino-pretty",
-        "porto/internal": "porto/internal",
-        porto: "porto",
+        // The secure builder-submit form (real wagmi SIWE) lives on the web app.
+        // Both write to the same registry KV, so point the marketplace submit
+        // entry there until the portal hosts its own wallet flow.
+        source: "/submit",
+        destination: "https://blueagent.dev/hub/submit",
+        permanent: false,
       },
     ];
-    return config;
   },
 };
 
