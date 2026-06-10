@@ -2,7 +2,7 @@
   "schema": "agent-discovery/v1",
   "agent": {
     "name": "Blue Agent",
-    "handle": "@blocky_agent",
+    "handle": "@blueagent_",
     "description": "Base-native AI agent for builders — idea, build, audit, ship, raise. 40 tools on Blue Hub, x402 pay-per-call. Powered by Bankr LLM.",
     "version": "1.1.0",
     "network": "base",
@@ -112,7 +112,7 @@
   "links": {
     "github": "https://github.com/madebyshun/blue-agent",
     "telegram": "https://t.me/blueagent_hub",
-    "x": "https://x.com/blocky_agent",
+    "x": "https://x.com/blueagent_",
     "bankr": "https://bankr.bot/agents/blue-agent",
     "npm": "https://npmjs.com/package/@blueagent/x402"
   }

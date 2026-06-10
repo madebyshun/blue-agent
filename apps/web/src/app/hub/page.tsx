@@ -56,7 +56,7 @@ const TOOL_EXAMPLES: Record<string, Record<string, string>> = {
   "stack-recommender":         { project_type: "Multi-agent x402 tool marketplace on Base mainnet with USDC micropayments", constraints: "TypeScript, Next.js, solo dev" },
   "investor-memo":             { project: "Blue Agent", description: "40 pay-per-use AI tools for Base builders via x402 micropayments", ask: "$750k pre-seed" },
   "token-distribution-plan":   { token: "BLUEAGENT", total_supply: "1000000000", description: "reward builders and agents on Base, community-first, 40% public" },
-  "agent-performance":         { handle: "@blocky_agent" },
+  "agent-performance":         { handle: "@blueagent_" },
   "agent-collab-match":        { agent_a: "Blue Agent — AI research + x402 tool execution on Base", agent_b: "any", collab_goal: "joint tool bundle or revenue share" },
   "repo-health":               { repo: "madebyshun/blue-agent" },
   "community-sentiment":       { project: "Base", channels: "@base Twitter, Base Discord, base.mirror.xyz" },

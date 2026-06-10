@@ -83,7 +83,7 @@ Score any AI agent by X handle, npm package, GitHub repo, or x402 endpoint. Retu
 import { scoreAgent } from "@blueagent/reputation";
 
 // By X handle
-const r1 = await scoreAgent("@blocky_agent");
+const r1 = await scoreAgent("@blueagent_");
 
 // By npm package
 const r2 = await scoreAgent("npm:@blueagent/skill");

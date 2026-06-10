@@ -89,6 +89,6 @@ All other addresses should be verified on [Basescan](https://basescan.org) befor
 
 ## Built by
 
-[Blocky Studio](https://blocky.studio) — [@blocky_agent](https://x.com/blocky_agent)
+[Blocky Studio](https://blocky.studio) — [@blueagent_](https://x.com/blueagent_)
 
 Telegram community: [t.me/blueagent_hub](https://t.me/blueagent_hub)

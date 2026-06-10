@@ -38,4 +38,4 @@ vercel --prod
 
 ---
 
-Built by [Blocky Studio](https://x.com/blocky_agent) · Base 🔵
+Built by [Blocky Studio](https://x.com/blueagent_) · Base 🔵
