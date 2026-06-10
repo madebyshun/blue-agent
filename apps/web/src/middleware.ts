@@ -15,9 +15,10 @@ export function middleware(request: NextRequest) {
     );
   }
 
-  // Redirect public /hub, /market, /sentinel → in-app versions
+  // Redirect public /hub, /market, /sentinel → in-app versions.
+  // Preserve the query string so deep links like /hub?tool=blue-idea survive.
   if (pathname === "/hub" || pathname === "/hub/") {
-    return NextResponse.redirect(new URL("/app/hub", request.url), { status: 301 });
+    return NextResponse.redirect(new URL(`/app/hub${request.nextUrl.search}`, request.url), { status: 301 });
   }
 
   return NextResponse.next();
