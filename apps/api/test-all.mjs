@@ -51,7 +51,7 @@ const TESTS = [
   // token-launch
   {
     tool: "token-launch", label: "token-launch: AI agent token",
-    body: { tokenName: "Blue Agent", tokenSymbol: "BLUE", description: "AI agent layer on Base — idea, build, audit, ship, raise", twitter: "blocky_agent" },
+    body: { tokenName: "Blue Agent", tokenSymbol: "BLUE", description: "AI agent layer on Base — idea, build, audit, ship, raise", twitter: "blueagent_" },
   },
   {
     tool: "token-launch", label: "token-launch: DeFi protocol",

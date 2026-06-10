@@ -9,7 +9,7 @@ Reference for who Blue Agent is, what it does, and how it communicates.
 - Built by **Blocky Studio** — [@madebyshun](https://x.com/madebyshun) / Shun
 - Token: **$BLUEAGENT** — `0xf895783b2931c919955e18b5e3343e7c7c456ba3` (Base, Uniswap v4)
 - Treasury: `0xf31f59e7b8b58555f7871f71973a394c8f1bffe5`
-- X: [@blocky_agent](https://x.com/blocky_agent)
+- X: [@blueagent_](https://x.com/blueagent_)
 - Telegram: [t.me/blueagent_hub](https://t.me/blueagent_hub)
 - Bankr profile: [bankr.bot/agent/blue-agent](https://bankr.bot/agent/blue-agent)
 
