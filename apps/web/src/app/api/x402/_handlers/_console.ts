@@ -3,7 +3,7 @@
  * Each command is a thin handler that calls runConsoleCommand with its system
  * prompt; payment is handled upstream by /api/x402/[tool] (verify → run → settle).
  */
-import { CONSOLE_SYSTEMS, type ConsoleCommand } from "@/lib/console-systems";
+import { CONSOLE_SYSTEMS, CONSOLE_MAX_TOKENS, CONSOLE_MODELS, type ConsoleCommand } from "@/lib/console-systems";
 
 const BANKR_LLM = "https://llm.bankr.bot/v1/messages";
 
@@ -27,12 +27,14 @@ export async function runConsoleCommand(
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5",
+        model: CONSOLE_MODELS[command],
         system: CONSOLE_SYSTEMS[command],
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 1500,
+        max_tokens: CONSOLE_MAX_TOKENS[command],
       }),
-      signal: AbortSignal.timeout(55_000),
+      // Parent x402 [tool] route has maxDuration 120s; give the upstream call
+      // room for audit (Sonnet + larger budget) without tripping a silent kill.
+      signal: AbortSignal.timeout(100_000),
     });
     if (!res.ok) {
       const errText = await res.text();
