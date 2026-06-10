@@ -69,7 +69,7 @@ const PRODUCTS = [
   { name: "Blue CLI",   color: "#34D399", desc: "@blueagent/cli · 30 commands · Terminal + TUI · idea/build/audit/ship", link: "/docs",      label: "View Docs →" },
   { name: "Blue Market",color: "#FB923C", desc: "Stake $BLUEAGENT · earn credits + USDC · daily Base brief",             link: "/market",    label: "Open Market →" },
   { name: "Blue Score", color: "#E879F9", desc: "Builder Score + Agent Score · 0–100 · onchain reputation",              link: "/score",     label: "Score a builder →" },
-  { name: "Blue API",   color: "#fbbf24", desc: "18 x402 endpoints · USDC on Base · no subscription",                    link: "/api-docs",  label: "API Docs →" },
+  { name: "Blue API",   color: "#fbbf24", desc: "60+ x402 endpoints · USDC on Base · no subscription",                   link: "https://api.blueagent.dev/docs",  label: "API Docs →" },
 ];
 
 // ─── Components ───────────────────────────────────────────────────────────────
@@ -497,10 +497,10 @@ export default function DocsPage() {
                 className="px-8 py-3.5 rounded-xl font-mono text-sm border border-[#2a2a3e] text-slate-400 hover:text-white hover:border-[#4FC3F740] transition-all">
                 Explore Hub
               </Link>
-              <Link href="/api-docs"
+              <a href="https://api.blueagent.dev/docs"
                 className="px-8 py-3.5 rounded-xl font-mono text-sm border border-[#fbbf2430] text-[#fbbf24] hover:bg-[#fbbf2410] transition-all">
                 API Reference →
-              </Link>
+              </a>
             </div>
           </div>
         </section>
