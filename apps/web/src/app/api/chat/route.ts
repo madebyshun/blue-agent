@@ -235,6 +235,11 @@ Keep them short (≤ 8 words), specific, and actionable.`;
 
 const HUB_TOOLS = [
   {
+    name: "show_portfolio",
+    description: "Render the user's live Base wallet portfolio as an inline card (ETH + BLUE + USDC + WETH + cbBTC + AERO balances, read live from their connected wallet — no signing). Call this with NO arguments whenever the user asks to see THEIR OWN holdings: 'my balance', 'my wallet', 'my portfolio', 'what do I hold', 'check my holdings'. Do NOT use for analysing someone ELSE's address — use hub_wallet_pnl for that. After calling, add a one-line natural summary; the card shows the numbers.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
     name: "hub_token_pick",
     description: "Get an AI token pick on Base — falsifiable thesis, entry point, sizing, and kill criterion. Use when user asks: 'what should I buy', 'token pick', 'best token today', 'what's a good trade'.",
     input_schema: {
@@ -651,6 +656,16 @@ async function callHubTool(
   // bypassing on the dev's pocket.
   userAddress?: string,
 ): Promise<ToolCallResult> {
+  // Client-rendered marker tools — no server endpoint. The chat UI reads the
+  // result.kind and renders an interactive card that talks to the user's
+  // connected wallet directly (read-only here). show_portfolio reads balances.
+  if (toolName === "show_portfolio") {
+    return {
+      text: "Showing your live Base portfolio.",
+      result: { kind: "portfolio", address: userAddress ?? null },
+    };
+  }
+
   const endpoint = TOOL_ENDPOINT[toolName];
   if (!endpoint) return { text: `[Unknown tool: ${toolName}]` };
 

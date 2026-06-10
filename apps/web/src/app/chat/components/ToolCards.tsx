@@ -2,6 +2,9 @@
 // Tool output cards — rendered inline after tool execution logs
 // One card per tool type: honeypot, risk-gate, deep-analysis, token-pick, contract-trust
 
+import { useAccount, useReadContracts, useBalance } from "wagmi";
+import { formatUnits } from "viem";
+
 function truncAddr(addr: string, len = 6) {
   if (!addr || addr.length < 12) return addr;
   return `${addr.slice(0, len)}…${addr.slice(-4)}`;
@@ -827,6 +830,88 @@ function GenericCard({ tool, result }: { tool: string; result: Record<string, un
 
 // ── Router — pick the right card for a tool ───────────────────────────────────
 
+// ── Portfolio card (live, client-side) ────────────────────────────────────────
+// Rendered for the `show_portfolio` marker tool. Reads the connected wallet's
+// Base balances directly via wagmi (read-only, no signing) so the number is
+// live rather than a server snapshot. Mirrors the dashboard's token set.
+
+const PORTFOLIO_TOKENS = [
+  { sym: "BLUE",  address: "0xf895783b2931c919955e18b5e3343e7c7c456ba3", decimals: 18, color: "#4FC3F7" },
+  { sym: "USDC",  address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6,  color: "#22C55E" },
+  { sym: "WETH",  address: "0x4200000000000000000000000000000000000006", decimals: 18, color: "#A78BFA" },
+  { sym: "cbBTC", address: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", decimals: 8,  color: "#F59E0B" },
+  { sym: "AERO",  address: "0x940181a94A35A4569E4529A3CDfB74e38FD98631", decimals: 18, color: "#F472B6" },
+] as const;
+
+const ERC20_BALANCE_ABI = [
+  { name: "balanceOf", type: "function", stateMutability: "view",
+    inputs: [{ name: "a", type: "address" }], outputs: [{ type: "uint256" }] },
+] as const;
+
+function fmtTokenAmt(n: number, decimals: number): string {
+  if (n === 0) return "0";
+  if (decimals <= 6)  return n.toFixed(2);
+  if (n >= 1_000)     return (n / 1_000).toFixed(2) + "K";
+  if (n >= 1)         return n.toFixed(4);
+  return n.toFixed(6);
+}
+
+function PortfolioCard() {
+  const { address, isConnected } = useAccount();
+  const { data: native } = useBalance({ address });
+  const { data, isLoading } = useReadContracts({
+    contracts: PORTFOLIO_TOKENS.map(t => ({
+      address:      t.address as `0x${string}`,
+      abi:          ERC20_BALANCE_ABI,
+      functionName: "balanceOf",
+      args:         address ? [address] : undefined,
+    })),
+    query: { enabled: !!address },
+  });
+
+  if (!isConnected || !address) {
+    return (
+      <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3 font-mono text-[11px] text-slate-500">
+        Connect a wallet to see your Base portfolio.
+      </div>
+    );
+  }
+
+  const eth = native ? Number(formatUnits(native.value, 18)) : null;
+  const rows = [
+    { sym: "ETH", color: "#627EEA", decimals: 18, amt: eth },
+    ...PORTFOLIO_TOKENS.map((t, i) => {
+      const raw = data?.[i]?.result as bigint | undefined;
+      return { sym: t.sym, color: t.color, decimals: t.decimals,
+               amt: raw !== undefined ? Number(formatUnits(raw, t.decimals)) : null };
+    }),
+  ];
+
+  return (
+    <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
+      <div className="flex items-center justify-between mb-3">
+        <span className="font-mono text-[10px] text-slate-500 tracking-widest font-bold">PORTFOLIO · BASE</span>
+        <span className="font-mono text-[9px] text-slate-700">{truncAddr(address)}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {rows.map(t => {
+          const isZero = !t.amt || t.amt === 0;
+          return (
+            <div key={t.sym}
+              className={`rounded-lg border p-2 ${isZero ? "border-[#1A1A2E]/40 bg-[#0a0a0f]/40 opacity-50" : "border-[#1A1A2E] bg-[#0d0d12]"}`}>
+              <div className="font-mono text-[9px] tracking-widest font-bold mb-0.5" style={{ color: t.color }}>{t.sym}</div>
+              <div className="font-mono text-[12px] font-bold text-white leading-none truncate">
+                {isLoading && t.amt === null ? "…" : t.amt === null ? "—" : fmtTokenAmt(t.amt, t.decimals)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="font-mono text-[9px] text-slate-700 mt-2.5">Live on-chain balances · read-only</p>
+    </div>
+  );
+}
+
 export function ToolResultCard({ tool, result }: { tool: string; result: Record<string, unknown> }) {
   if (!result || typeof result !== "object") return null;
   const r = result;
@@ -844,6 +929,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_quantum":       return <QuantumCard      result={r} />;
     case "hub_yield":         return <YieldCard        result={r} />;
     case "hub_launch_sim":    return <LaunchSimCard    result={r} />;
+    case "show_portfolio":    return <PortfolioCard />;
     default:                  return <GenericCard      tool={tool} result={r} />;
   }
 }
