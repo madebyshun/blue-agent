@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
-import { CONSOLE_SYSTEMS } from "@/lib/console-systems";
+import { CONSOLE_SYSTEMS, CONSOLE_MAX_TOKENS, CONSOLE_MODELS, type ConsoleCommand } from "@/lib/console-systems";
 
 export const runtime = "nodejs";
-// 90s lets the upstream Bankr 75s ceiling resolve before Vercel kills us.
+// 120s lets the upstream Bankr 100s ceiling resolve before Vercel kills us.
+// Headroom raised from 90s because `audit` now runs on Sonnet with a larger
+// token budget and can legitimately take longer than the old Haiku-only path.
 // Persona 2 was hitting 504 because the upstream fetch was unbounded — when
 // Bankr stalled, this function got killed at the old 60s with no error msg.
-export const maxDuration = 90;
+export const maxDuration = 120;
 
 const BANKR_LLM = "https://llm.bankr.bot/v1/messages";
 
@@ -34,9 +36,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "command and prompt are required." }, { status: 400 });
   }
 
-  const system = CONSOLE_SYSTEMS[command as keyof typeof CONSOLE_SYSTEMS] ?? CONSOLE_SYSTEMS.idea;
+  const cmd: ConsoleCommand = (command in CONSOLE_SYSTEMS ? command : "idea") as ConsoleCommand;
+  const system = CONSOLE_SYSTEMS[cmd];
 
-  // 75s ceiling on the upstream LLM call. If Bankr hangs we surface a 502
+  // 100s ceiling on the upstream LLM call. If Bankr hangs we surface a 502
   // with a clear message instead of letting Vercel kill the function silently
   // (which used to bubble up as a 504 to MCP clients).
   let upstream: Response;
@@ -49,16 +52,16 @@ export async function POST(req: NextRequest) {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5",
+        model: CONSOLE_MODELS[cmd],
         system,
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 1500,
+        max_tokens: CONSOLE_MAX_TOKENS[cmd],
       }),
-      signal: AbortSignal.timeout(75_000),
+      signal: AbortSignal.timeout(100_000),
     });
   } catch (e) {
     const msg = (e as Error).name === "TimeoutError"
-      ? "Bankr LLM did not respond within 75s. This is an upstream issue — retry in a moment, or DM @blueagent_ if it persists."
+      ? "Bankr LLM did not respond within 100s. This is an upstream issue — retry in a moment, or DM @blueagent_ if it persists."
       : `Bankr LLM unreachable: ${(e as Error).message}`;
     return NextResponse.json({ error: msg }, { status: 502 });
   }

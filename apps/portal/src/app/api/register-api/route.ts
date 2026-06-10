@@ -9,12 +9,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { verifyMessage } from "viem";
 import {
   putAPI,
   getRegisteredAPI,
   isValidSlug,
   isValidAddress,
   probeEndpoint,
+  siweMessage,
   type RegisteredAPI,
 } from "@/lib/registry";
 
@@ -31,7 +33,8 @@ interface SubmitBody {
   priceUSDC:      number;
   builderAddress: `0x${string}`;
   agentName?:     string;
-  signature?:     string;
+  signature?:     `0x${string}`;
+  nonce?:         string;
 }
 
 export async function POST(req: NextRequest) {
@@ -77,6 +80,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `id "${body.id}" already registered.` }, { status: 409 });
   }
 
+  // ── SIWE signature ─────────────────────────────────────────────────────────
+  // If a signature is supplied it MUST verify against builderAddress (rejects
+  // spoofed wallets). Once the portal wires wagmi, make this mandatory by
+  // requiring body.signature + body.nonce up front. Until then, unsigned
+  // submissions are still accepted but stay verified:false (manual review),
+  // and a present-but-invalid signature is always rejected.
+  let signed = false;
+  if (body.signature) {
+    if (!body.nonce) {
+      return NextResponse.json({ error: "nonce is required when a signature is provided." }, { status: 400 });
+    }
+    const message = siweMessage(body, body.nonce);
+    let valid = false;
+    try {
+      valid = await verifyMessage({ address: body.builderAddress, message, signature: body.signature });
+    } catch (e) {
+      return NextResponse.json({ error: `Signature verification failed: ${(e as Error).message}` }, { status: 400 });
+    }
+    if (!valid) {
+      return NextResponse.json({ error: "Invalid signature — does not match builderAddress." }, { status: 401 });
+    }
+    signed = true;
+  }
+
   // ── Lenient probe (don't block on failure) ────────────────────────────────
   const probe = await probeEndpoint(body.endpoint);
 
@@ -106,7 +133,7 @@ export async function POST(req: NextRequest) {
 
   await putAPI(api);
 
-  return NextResponse.json({ ok: true, api, probe }, {
+  return NextResponse.json({ ok: true, api, probe, signed }, {
     status:  201,
     headers: { "Access-Control-Allow-Origin": "*" },
   });

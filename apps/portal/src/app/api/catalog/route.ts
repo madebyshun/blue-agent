@@ -50,8 +50,7 @@ export async function GET() {
     facilitator: "Coinbase CDP",
     revenue_split: {
       provider:  0.80,
-      stakers:   0.10,
-      treasury:  0.10,
+      treasury:  0.20,
     },
     counts: {
       live_apis: live.length,

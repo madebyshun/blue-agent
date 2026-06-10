@@ -99,6 +99,30 @@ export const isValidSlug = (id: string): boolean => SLUG_RE.test(id);
 const ADDR_RE = /^0x[a-fA-F0-9]{40}$/;
 export const isValidAddress = (a: string): boolean => ADDR_RE.test(a);
 
+/**
+ * Canonical message a builder signs to register an API. Must match exactly on
+ * the client (wallet) and server (verifyMessage). Revenue terms: 80/20 split
+ * with the Blue Hub treasury, USDC on Base.
+ */
+export function siweMessage(
+  spec: Pick<RegisteredAPI, "id" | "name" | "endpoint" | "priceUSDC" | "builderAddress">,
+  nonce: string,
+): string {
+  return [
+    `Blue Hub API Registration`,
+    ``,
+    `Wallet:    ${spec.builderAddress.toLowerCase()}`,
+    `API ID:    ${spec.id}`,
+    `Name:      ${spec.name}`,
+    `Endpoint:  ${spec.endpoint}`,
+    `Price:     ${spec.priceUSDC} USDC units (6 decimals)`,
+    `Nonce:     ${nonce}`,
+    ``,
+    `By signing I confirm I control this wallet and agree to the Blue Hub`,
+    `builder terms: 80/20 revenue split with the treasury, USDC settlement on Base.`,
+  ].join("\n");
+}
+
 // ─── Lenient endpoint probe ───────────────────────────────────────────────────
 
 export interface ProbeResult {
