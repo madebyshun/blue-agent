@@ -241,15 +241,17 @@ const HUB_TOOLS = [
   },
   {
     name: "prepare_token_launch",
-    description: "Render an inline token-launch card (Bankr launchpad → real token on Base, Uniswap V4, 100B fixed supply). Call when the user wants to LAUNCH / CREATE / DEPLOY their own token and has given at least a name and a symbol — ask for any missing one first. The card is a PREVIEW: the user must click Launch to actually deploy; never claim the token is launched from calling this tool. Creator fees (57%) route to the user's connected wallet; gas is SPONSORED by Bankr (there is NO ETH cost to the user — never quote a gas/ETH cost). The card already shows every detail (name, symbol, supply, creator fee, launchpad) — after calling, do NOT print a summary/details table and do NOT invent any costs; reply with ONE short line telling the user to review and hit Launch in the card. Do NOT use for launch analysis/simulation — that's hub_launch_sim.",
+    description: "Render the FINAL token-launch confirmation card (Bankr launchpad → real token on Base, Uniswap V4, 100B fixed supply). \n\nGATHER DETAILS FIRST — do NOT call this immediately when the user says 'launch a token'. First ASK them (one concise message) for: 1) Token name (required); 2) Ticker symbol (optional — Bankr defaults to the first 4 letters of the name); 3) Short description (optional); 4) Logo image URL (optional); 5) Website URL (optional); 6) Where the 57% creator fees go — their connected wallet (default) OR an X / Farcaster / ENS handle. Wait for their reply (they may skip optionals or say 'use defaults'), THEN call this tool once with everything you collected. \n\nThe card is the final confirmation: it shows all details and the user clicks Launch to deploy — never claim it's launched just from calling this tool. Gas is SPONSORED by Bankr (NO ETH cost — never quote a gas cost). After calling, do NOT print a details table; reply with one short line telling them to confirm in the card. Not for launch analysis/simulation — that's hub_launch_sim.",
     input_schema: {
       type: "object",
       properties: {
-        tokenName:   { type: "string", description: "Token display name (1–100 chars), e.g. 'Blue Agent'" },
-        tokenSymbol: { type: "string", description: "Optional ticker (1–10 chars, no $). If omitted, Bankr defaults to the first 4 chars of the name." },
-        description: { type: "string", description: "Optional short description (≤500 chars) stored in on-chain metadata" },
-        image:       { type: "string", description: "Optional logo image URL" },
-        website:     { type: "string", description: "Optional project website URL" },
+        tokenName:        { type: "string", description: "Token display name (1–100 chars), e.g. 'Blue Agent'" },
+        tokenSymbol:      { type: "string", description: "Optional ticker (1–10 chars, no $). If omitted, Bankr defaults to the first 4 chars of the name." },
+        description:      { type: "string", description: "Optional short description (≤500 chars) stored in on-chain metadata" },
+        image:            { type: "string", description: "Optional logo image URL" },
+        website:          { type: "string", description: "Optional project website URL" },
+        feeRecipientType: { type: "string", enum: ["wallet", "x", "farcaster", "ens"], description: "Where the 57% creator fee goes. 'wallet' (default) = the user's connected wallet. Use x/farcaster/ens if the user named a handle." },
+        feeRecipientValue:{ type: "string", description: "The handle/address for feeRecipientType when it is x/farcaster/ens (e.g. an @username or name.eth). Omit for 'wallet' to default to the connected wallet." },
       },
       required: ["tokenName"],
     },
