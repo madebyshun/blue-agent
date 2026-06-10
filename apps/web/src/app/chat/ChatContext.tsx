@@ -17,7 +17,7 @@ import {
 import { extractArtifacts } from "./artifacts";
 import { getPersona } from "./personas";
 import {
-  creditCost, getCredits, deductCredits,
+  creditCost, deductCredits,
   getNextRefresh, refreshCreditsIfNeeded, getDailyCr,
   setCredits as setCreditsLS,
 } from "@/lib/credits";
@@ -402,9 +402,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const userMsg = text.trim();
     if (!userMsg || streaming) return;
 
-    const currentCredits = getCredits(walletAddr);
-    if (!isUnlimited && currentCredits < cost) {
-      setError(`Not enough credits. Need ${cost}, have ${currentCredits}.`);
+    // Gate on the SAME credit value the UI shows — `credits` is the unified
+    // ledger balance for connected wallets and the localStorage daily quota
+    // for guests. Previously this re-read localStorage directly, which caused
+    // a mismatch: the sidebar showed 731 (ledger) while this gate saw a stale
+    // localStorage 40 and blocked the send. The server ledger is authoritative
+    // regardless and will reject with insufficient_credits if truly short.
+    if (!isUnlimited && credits < cost) {
+      setError(`Not enough credits. Need ${cost}, have ${credits}.`);
       return;
     }
 
@@ -749,7 +754,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       abortRef.current = null;
     }
   }, [
-    streaming, activeTask, activeTaskId, chatTier, walletAddr, cost,
+    streaming, activeTask, activeTaskId, chatTier, walletAddr, cost, credits,
     isUnlimited, personaId, customPersonaPrompt, activeTierProvider,
     webSearch, pendingFiles,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
