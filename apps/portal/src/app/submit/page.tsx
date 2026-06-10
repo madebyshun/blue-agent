@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import SubmitForm from "./SubmitForm";
-import WalletProviders from "@/components/WalletProviders";
 
 export const metadata: Metadata = {
   title: "Register your API · Blue Hub",
@@ -113,9 +112,7 @@ export default function SubmitPage() {
         <h2 className="font-mono text-2xl font-bold mb-6">Manifest form</h2>
 
         <div className="max-w-3xl">
-          <WalletProviders>
-            <SubmitForm />
-          </WalletProviders>
+          <SubmitForm />
         </div>
       </section>
 
