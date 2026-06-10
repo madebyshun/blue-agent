@@ -8,6 +8,7 @@ import {
   getCredits,
   TierInfo,
 } from "@/lib/credits";
+import { useBasename } from "@/lib/useBasename"; // resolves wallet → shun.base
 
 interface WalletBarProps {
   onWalletChange?: (address: string | undefined, tier: TierInfo) => void;
@@ -35,6 +36,7 @@ export default function WalletBar({ onWalletChange, refreshTrigger = 0 }: Wallet
   const { address, isConnected }            = useAccount();
   const { connectors, connect, isPending }  = useConnect();
   const { disconnect }                      = useDisconnect();
+  const { name: basename }                  = useBasename(address);
 
   const [tier,    setTier]    = useState<TierInfo>({ tier: "Starter", blueBalance: 0, dailyCr: 200, discount: 0, color: "#4FC3F7" });
   const [credits, setCredits] = useState(0);
@@ -125,7 +127,7 @@ export default function WalletBar({ onWalletChange, refreshTrigger = 0 }: Wallet
       <div className="flex items-center gap-2 font-mono text-xs px-3 py-2 rounded-lg border border-[#1A1A2E] bg-[#0D0D14]">
         <span className="w-2 h-2 rounded-full shrink-0"
           style={{ background: tier.color, boxShadow: `0 0 6px ${tier.color}` }} />
-        <span className="text-slate-300">{shortAddr(address)}</span>
+        <span className="text-slate-300">{basename ?? shortAddr(address)}</span>
         <span className="text-slate-600">·</span>
         <span style={{ color: "#4FC3F7" }}>{fmtCredits(ledger?.balance ?? credits)} cr</span>
       </div>
