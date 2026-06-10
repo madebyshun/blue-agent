@@ -350,6 +350,16 @@ const TOOLS = [
       required: ["name", "type"],
     },
   },
+  {
+    name: "blue_monitor",
+    description: "On-demand health + risk snapshot for a Base token/contract — live price, liquidity, Basescan verification, risk signals + a watch plan with alert thresholds.",
+    inputSchema: { type: "object", properties: { target: { type: "string", description: "Base token/contract address (0x…) or a protocol/token name" }, focus: { type: "string", description: "Optional focus, e.g. liquidity or exit risk" } }, required: ["target"] },
+  },
+  {
+    name: "blue_registry",
+    description: "Discover the Blue Hub tool catalog — every callable x402 tool (first-party + community), filterable by query/category, with prices and how-to-call.",
+    inputSchema: { type: "object", properties: { query: { type: "string", description: "Optional search term" }, category: { type: "string", description: "Optional category filter" } } },
+  },
 ];
 
 // ─── Tool → hub ID map ────────────────────────────────────────────────────────
@@ -404,6 +414,9 @@ const HUB_MAP: Record<string, string> = {
   hub_community_growth:     "community-growth-playbook",
   hub_thread_intel:         "thread-intelligence",
   hub_narrative_pulse:      "narrative-pulse",
+  // Blue first-party (extended)
+  blue_monitor:             "blue-monitor",
+  blue_registry:            "blue-registry",
 };
 
 const CONSOLE_MAP: Record<string, string> = {
