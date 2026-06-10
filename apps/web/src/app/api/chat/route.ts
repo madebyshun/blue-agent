@@ -236,7 +236,7 @@ Keep them short (≤ 8 words), specific, and actionable.`;
 const HUB_TOOLS = [
   {
     name: "show_portfolio",
-    description: "Render the user's live Base wallet portfolio as an inline card (ETH + BLUE + USDC + WETH + cbBTC + AERO balances, read live from their connected wallet — no signing). Call this with NO arguments whenever the user asks to see THEIR OWN holdings: 'my balance', 'my wallet', 'my portfolio', 'what do I hold', 'check my holdings'. Do NOT use for analysing someone ELSE's address — use hub_wallet_pnl for that. After calling, add a one-line natural summary; the card shows the numbers.",
+    description: "Render the user's live Base wallet portfolio as an inline card (ETH + BLUE + USDC + WETH + cbBTC + AERO balances, read live from their connected wallet — no signing). Call this with NO arguments whenever the user asks to see THEIR OWN holdings: 'my balance', 'my wallet', 'my portfolio', 'what do I hold', 'check my holdings'. Do NOT use for analysing someone ELSE's address — use hub_wallet_pnl for that.\n\nCRITICAL: this tool returns NO balance figures to you — only the card shows the real, live numbers. After calling you do NOT know any token amounts. NEVER print a balance table, NEVER state or estimate any specific token amounts, tier, or credits (you would be fabricating — the user can see the real numbers in the card). Reply with at most ONE short non-numeric line, e.g. 'Here's your live Base portfolio 👇'. If the user then asks about a specific number, say it's shown in the card.",
     input_schema: { type: "object", properties: {} },
   },
   {
@@ -675,7 +675,9 @@ async function callHubTool(
   // connected wallet directly (read-only here). show_portfolio reads balances.
   if (toolName === "show_portfolio") {
     return {
-      text: "Showing your live Base portfolio.",
+      // The model reads this text — make the no-data contract explicit so it
+      // can't fabricate a balance table next to the (real) card.
+      text: "Portfolio card rendered for the user. You were given NO balance figures — do not state, table, or estimate any token amounts, tier, or credits. Reply with one short non-numeric line only.",
       result: { kind: "portfolio", address: userAddress ?? null },
     };
   }
