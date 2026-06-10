@@ -11,7 +11,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${BASE}/hub`,     lastModified: now, changeFrequency: "daily",   priority: 0.9 },
     { url: `${BASE}/docs`,    lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     { url: `${BASE}/skills`,  lastModified: now, changeFrequency: "monthly", priority: 0.5 },
-    { url: `${BASE}/api-docs`,lastModified: now, changeFrequency: "monthly", priority: 0.5 },
   ];
 
   const toolPages: MetadataRoute.Sitemap = AGENT_TOOLS

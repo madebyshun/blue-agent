@@ -63,7 +63,7 @@ export async function GET() {
       version: "v1",
       baseUrl: "https://blueagent.dev/api/v1",
       auth:    "x402 — X-Payment header (USDC on Base mainnet)",
-      docs:    "https://blueagent.dev/api-docs",
+      docs:    "https://api.blueagent.dev/docs",
       endpoints: TOOLS.map(t => ({
         method:      "POST",
         path:        `/api/v1/${t.slug}`,
