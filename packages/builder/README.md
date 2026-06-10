@@ -74,4 +74,4 @@ Skills are loaded from (first found wins):
 
 ## Built by
 
-[Blocky Studio](https://blocky.studio) — [@blocky_agent](https://x.com/blocky_agent)
+[Blocky Studio](https://blocky.studio) — [@blueagent_](https://x.com/blueagent_)
