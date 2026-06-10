@@ -9,23 +9,21 @@ const BANKR_DEPLOY = "https://api.bankr.bot/token-launches/deploy";
 /**
  * POST /api/launch-token — deploy a token on Base via Bankr's launchpad.
  *
- * Custody model: Blue deploys with its Bankr **partner key**, but the launch's
- * 57% creator-fee share is routed to the *user's* connected wallet via
- * `feeRecipient`. So the user owns the upside without needing a Bankr account
- * or signing anything. The deploy itself is irreversible + public — the UI
- * must take an explicit user confirmation before calling this.
+ * Custody model: Blue deploys via Bankr, and the launch's 57% creator-fee
+ * share is routed to the *user's* connected wallet via `feeRecipient`. So the
+ * user owns the upside without needing a Bankr account or signing anything.
+ * Gas is sponsored by Bankr within daily caps (50/day standard, 100 Bankr
+ * Club). The deploy is irreversible + public — the UI takes an explicit user
+ * confirmation before calling this.
  *
- * Env:
- *   BANKR_PARTNER_KEY  partner key (bk_ptr_…) — REQUIRED. Routing the creator
- *                      fee to an arbitrary feeRecipient (the user's wallet) is
- *                      a partner-deployment capability, so only a partner key
- *                      does this correctly.
- *
- * We deliberately do NOT fall back to BANKR_API_KEY: that key powers the LLM
- * gateway and is tied to a funded Bankr wallet. Per Bankr's skill-install docs
- * ("your API key is tied to a wallet and all its funds"), using it for deploys
- * would (a) expose that wallet and (b) make *it* the creator instead of the
- * user. A dedicated partner key is the only correct credential here.
+ * Auth (per Bankr docs, EITHER works for POST /token-launches/deploy):
+ *   BANKR_PARTNER_KEY  partner key (bk_ptr_…) → X-Partner-Key. Org-level;
+ *                      preferred for cleanest fee attribution.
+ *   BANKR_API_KEY      wallet-level key (bk_…) → X-API-Key. Also deploys fine
+ *                      — this is what a simple Bankr bot uses. Used when no
+ *                      partner key is set.
+ * At least one must be set. feeRecipient is always sent so creator fees go to
+ * the user regardless of key type.
  */
 export async function POST(req: NextRequest) {
   // Tight rate limit — this is a real, irreversible onchain deploy.
@@ -34,11 +32,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Too many launches. Slow down." }, { status: 429 });
   }
 
-  // Partner key only — never the LLM/personal BANKR_API_KEY (see header note).
+  // Prefer the partner key (org-level), else use the wallet-level Bankr key —
+  // both are valid credentials for /token-launches/deploy.
   const partnerKey = process.env.BANKR_PARTNER_KEY;
-  if (!partnerKey) {
+  const apiKey     = process.env.BANKR_API_KEY;
+  if (!partnerKey && !apiKey) {
     return NextResponse.json(
-      { error: "Token launch not configured — set BANKR_PARTNER_KEY (a dedicated Bankr partner key, bk_ptr_…) to enable." },
+      { error: "Token launch not configured — set BANKR_PARTNER_KEY or BANKR_API_KEY to enable." },
       { status: 500 },
     );
   }
@@ -77,10 +77,9 @@ export async function POST(req: NextRequest) {
   if (body.website) payload.website = body.website;
   if (body.tweet)   payload.tweet   = body.tweet;
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "X-Partner-Key": partnerKey,
-  };
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (partnerKey) headers["X-Partner-Key"] = partnerKey;
+  else            headers["X-API-Key"]     = apiKey!;
 
   let upstream: Response;
   try {

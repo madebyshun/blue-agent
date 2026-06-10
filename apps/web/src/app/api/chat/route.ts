@@ -241,7 +241,7 @@ const HUB_TOOLS = [
   },
   {
     name: "prepare_token_launch",
-    description: "Render an inline token-launch card (Bankr launchpad → real token on Base, Uniswap V4, 100B fixed supply). Call when the user wants to LAUNCH / CREATE / DEPLOY their own token and has given at least a name and a symbol — ask for any missing one first. The card is a PREVIEW: the user must click Launch to actually deploy; never claim the token is launched from calling this tool. Creator fees (57%) route to the user's connected wallet. Do NOT use for launch analysis/simulation — that's hub_launch_sim.",
+    description: "Render an inline token-launch card (Bankr launchpad → real token on Base, Uniswap V4, 100B fixed supply). Call when the user wants to LAUNCH / CREATE / DEPLOY their own token and has given at least a name and a symbol — ask for any missing one first. The card is a PREVIEW: the user must click Launch to actually deploy; never claim the token is launched from calling this tool. Creator fees (57%) route to the user's connected wallet; gas is SPONSORED by Bankr (there is NO ETH cost to the user — never quote a gas/ETH cost). The card already shows every detail (name, symbol, supply, creator fee, launchpad) — after calling, do NOT print a summary/details table and do NOT invent any costs; reply with ONE short line telling the user to review and hit Launch in the card. Do NOT use for launch analysis/simulation — that's hub_launch_sim.",
     input_schema: {
       type: "object",
       properties: {
@@ -685,7 +685,7 @@ async function callHubTool(
     // Preview only — the LaunchCard takes an explicit user confirmation before
     // it POSTs to /api/launch-token. We never deploy from here.
     return {
-      text: "Token-launch card ready — review the details and confirm to deploy.",
+      text: "Token-launch card rendered. The card shows all details — do NOT restate them as a table and do NOT quote any gas/ETH cost (gas is sponsored). Reply with one short line: tell the user to review and hit Launch in the card.",
       result: { kind: "token_launch", ...args },
     };
   }
