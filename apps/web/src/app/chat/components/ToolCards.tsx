@@ -923,6 +923,7 @@ function PortfolioCard() {
 interface TokenLaunchResult {
   tokenName?:   string;
   tokenSymbol?: string;
+  description?: string;
   image?:       string;
   website?:     string;
 }
@@ -962,6 +963,7 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tokenName: name, tokenSymbol: symbol,
+          description: result.description,
           feeRecipientType: feeType, feeRecipientValue: effectiveFee,
           image: result.image, website: result.website, simulateOnly: sim,
         }),
