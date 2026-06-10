@@ -45,17 +45,24 @@ export async function POST(req: NextRequest) {
 
   let body: {
     tokenName?: string; tokenSymbol?: string;
+    description?: string;
     feeRecipient?: string;          // legacy: raw wallet (treated as type "wallet")
     feeRecipientType?: string;      // "wallet" | "x" | "farcaster" | "ens"
     feeRecipientValue?: string;     // address or handle, per type
-    image?: string; website?: string; tweet?: string;
+    image?: string;
+    websiteUrl?: string; website?: string;   // website (back-compat: website)
+    tweetUrl?: string;   tweet?: string;      // tweetUrl (back-compat: tweet)
     simulateOnly?: boolean;
   } = {};
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }); }
 
   const tokenName   = body.tokenName?.trim();
-  const tokenSymbol = body.tokenSymbol?.trim().replace(/^\$/, "");
+  // tokenSymbol is OPTIONAL per Bankr (defaults to first 4 chars of name).
+  const tokenSymbol = body.tokenSymbol?.trim().replace(/^\$/, "") || "";
+  const description = body.description?.trim();
+  const websiteUrl  = (body.websiteUrl ?? body.website)?.trim();
+  const tweetUrl    = (body.tweetUrl   ?? body.tweet)?.trim();
 
   // Fee recipient — who receives the 57% creator share. Bankr resolves four
   // identity types to a payout wallet:
@@ -67,11 +74,14 @@ export async function POST(req: NextRequest) {
   const rawValue = (body.feeRecipientValue ?? body.feeRecipient ?? "").trim();
   const ALLOWED_FEE_TYPES = ["wallet", "x", "farcaster", "ens"];
 
-  if (!tokenName || !tokenSymbol) {
-    return NextResponse.json({ error: "tokenName and tokenSymbol are required." }, { status: 400 });
+  if (!tokenName || tokenName.length > 100) {
+    return NextResponse.json({ error: "tokenName is required (1–100 chars)." }, { status: 400 });
   }
   if (tokenSymbol.length > 10) {
     return NextResponse.json({ error: "tokenSymbol too long (max 10 chars)." }, { status: 400 });
+  }
+  if (description && description.length > 500) {
+    return NextResponse.json({ error: "description too long (max 500 chars)." }, { status: 400 });
   }
   if (!ALLOWED_FEE_TYPES.includes(feeType)) {
     return NextResponse.json({ error: `feeRecipientType must be one of: ${ALLOWED_FEE_TYPES.join(", ")}.` }, { status: 400 });
@@ -92,14 +102,18 @@ export async function POST(req: NextRequest) {
   // when the type IS wallet; non-wallet types resolve server-side at Bankr.
   const feeWallet = feeType === "wallet" ? feeValue : null;
 
+  // Field names per Bankr's deploy schema: tokenSymbol (optional → omit to let
+  // Bankr default to the first 4 chars of the name), description, image,
+  // websiteUrl, tweetUrl.
   const payload: Record<string, unknown> = {
     tokenName,
-    tokenSymbol,
     feeRecipient: { type: feeType, value: feeValue },
   };
+  if (tokenSymbol)       payload.tokenSymbol  = tokenSymbol;
+  if (description)       payload.description  = description;
   if (body.image)        payload.image        = body.image;
-  if (body.website)      payload.website      = body.website;
-  if (body.tweet)        payload.tweet        = body.tweet;
+  if (websiteUrl)        payload.websiteUrl    = websiteUrl;
+  if (tweetUrl)          payload.tweetUrl      = tweetUrl;
   // simulateOnly → Bankr predicts the token address + fee split WITHOUT
   // broadcasting (200, not 201). Lets the UI preview safely before the real,
   // irreversible deploy.
@@ -178,7 +192,8 @@ export async function POST(req: NextRequest) {
     ok: true,
     simulated: !!body.simulateOnly,
     tokenName,
-    tokenSymbol,
+    // Prefer the symbol Bankr actually used (it may have auto-defaulted it).
+    tokenSymbol: (data?.tokenSymbol as string) || tokenSymbol,
     tokenAddress,
     txHash,
     feeRecipient: { type: feeType, value: feeValue },

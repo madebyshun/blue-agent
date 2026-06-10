@@ -245,12 +245,13 @@ const HUB_TOOLS = [
     input_schema: {
       type: "object",
       properties: {
-        tokenName:   { type: "string", description: "Token display name, e.g. 'Blue Agent'" },
-        tokenSymbol: { type: "string", description: "Ticker symbol, e.g. BLUE (no $ prefix)" },
+        tokenName:   { type: "string", description: "Token display name (1–100 chars), e.g. 'Blue Agent'" },
+        tokenSymbol: { type: "string", description: "Optional ticker (1–10 chars, no $). If omitted, Bankr defaults to the first 4 chars of the name." },
+        description: { type: "string", description: "Optional short description (≤500 chars) stored in on-chain metadata" },
         image:       { type: "string", description: "Optional logo image URL" },
         website:     { type: "string", description: "Optional project website URL" },
       },
-      required: ["tokenName", "tokenSymbol"],
+      required: ["tokenName"],
     },
   },
   {
