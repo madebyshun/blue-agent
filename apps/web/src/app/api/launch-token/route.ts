@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
   let body: {
     tokenName?: string; tokenSymbol?: string;
     feeRecipient?: string; image?: string; website?: string; tweet?: string;
+    simulateOnly?: boolean;
   } = {};
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }); }
@@ -73,9 +74,13 @@ export async function POST(req: NextRequest) {
     tokenSymbol,
     feeRecipient: { type: "wallet", value: feeRecipient },
   };
-  if (body.image)   payload.image   = body.image;
-  if (body.website) payload.website = body.website;
-  if (body.tweet)   payload.tweet   = body.tweet;
+  if (body.image)        payload.image        = body.image;
+  if (body.website)      payload.website      = body.website;
+  if (body.tweet)        payload.tweet        = body.tweet;
+  // simulateOnly → Bankr predicts the token address + fee split WITHOUT
+  // broadcasting (200, not 201). Lets the UI preview safely before the real,
+  // irreversible deploy.
+  if (body.simulateOnly) payload.simulateOnly = true;
 
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (partnerKey) headers["X-Partner-Key"] = partnerKey;
@@ -97,20 +102,39 @@ export async function POST(req: NextRequest) {
   }
 
   const data = await upstream.json().catch(() => null) as Record<string, unknown> | null;
+
+  // 429 — Bankr's deploy rate limit. Partner keys are capped at 1/min, 20/day,
+  // 1 concurrent *per fee recipient*; user keys at 50/day. Surface a clear,
+  // non-alarming message with the retry hint instead of a generic failure.
+  if (upstream.status === 429) {
+    const retry = upstream.headers.get("retry-after");
+    const wait  = retry ? `${retry}s` : "a minute";
+    return NextResponse.json(
+      {
+        error: `Bankr rate limit reached — only 1 launch per minute per wallet (20/day). Wait ${wait} and try again.`,
+        rateLimited: true,
+        retryAfter: retry ? Number(retry) : null,
+      },
+      { status: 429 },
+    );
+  }
   if (!upstream.ok) {
     const detail = typeof data?.error === "string" ? data.error : `status ${upstream.status}`;
     return NextResponse.json({ error: `Bankr launch failed: ${detail}` }, { status: 502 });
   }
 
-  // Surface the launch result. Bankr returns the token address + V4 pool; we
-  // pass through whatever it gives plus a couple of convenience links.
+  // Surface the result. 201 = deployed (tokenAddress, txHash, pool, fee split);
+  // 200 = simulateOnly preview (predicted tokenAddress, no broadcast).
   const tokenAddress =
     (data?.tokenAddress as string) ?? (data?.address as string) ?? null;
+  const txHash = (data?.txHash as string) ?? null;
   return NextResponse.json({
     ok: true,
+    simulated: !!body.simulateOnly,
     tokenName,
     tokenSymbol,
     tokenAddress,
+    txHash,
     feeRecipient,
     raw: data,
     basescan: tokenAddress ? `https://basescan.org/token/${tokenAddress}` : null,
