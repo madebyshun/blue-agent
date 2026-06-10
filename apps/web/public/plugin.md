@@ -268,4 +268,4 @@ Open for any Base MCP integration. Wallet `0xb058a1e305d9c720aa5b1bf42b6f2f6294b
 receives all settlements. Built by Blocky Studio. Powered by `$BLUEAGENT`.
 
 For questions, manifest details, or to suggest tools:
-[blueagent.dev](https://blueagent.dev) · [github.com/madebyshun/blue-agent](https://github.com/madebyshun/blue-agent) · [@blocky_agent](https://x.com/blocky_agent)
+[blueagent.dev](https://blueagent.dev) · [github.com/madebyshun/blue-agent](https://github.com/madebyshun/blue-agent) · [@blueagent_](https://x.com/blueagent_)

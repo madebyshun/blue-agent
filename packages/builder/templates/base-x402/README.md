@@ -68,6 +68,6 @@ The `bankr.x402.json` file defines your services and their prices:
 
 ## Built by
 
-[Blocky Studio](https://blocky.studio) — [@blocky_agent](https://x.com/blocky_agent)
+[Blocky Studio](https://blocky.studio) — [@blueagent_](https://x.com/blueagent_)
 
 Telegram community: [t.me/blueagent_hub](https://t.me/blueagent_hub)
