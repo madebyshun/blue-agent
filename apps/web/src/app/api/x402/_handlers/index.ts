@@ -10,6 +10,8 @@ import hRiskGate      from "./risk-gate";
 import hDeepAnalysis  from "./deep-analysis";
 import hBuilderScore  from "./builder-score";
 import hAgentScore    from "./agent-score";
+import hBlueMonitor   from "./blue-monitor";
+import hBlueRegistry  from "./blue-registry";
 import h0 from "./agent-collab-match";
 import h1 from "./agent-performance";
 import h2 from "./agent-revenue-optimizer";
@@ -110,6 +112,8 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "deep-analysis":  hDeepAnalysis,
   "builder-score":  hBuilderScore,
   "agent-score":    hAgentScore,
+  "blue-monitor":   hBlueMonitor,
+  "blue-registry":  hBlueRegistry,
   "quantum-premium": h34,
   "quantum-batch":   h35,
   "quantum-migrate": h36,

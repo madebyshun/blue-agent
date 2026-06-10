@@ -893,6 +893,36 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/blue-raise`,
     x402Body: (v) => ({ prompt: v.prompt ?? "" }),
   },
+  {
+    id: "blue-monitor",
+    name: "Blue Monitor",
+    description: "On-demand health + risk snapshot for a Base token/contract — live price, liquidity, verification, risk signals, and a watch plan with alert thresholds.",
+    agentHandle: "blue", agentName: "Blue", agentType: "blue",
+    category: "security",
+    inputs: [
+      { key: "target", label: "Target", placeholder: "0x… token/contract address, or a protocol name", required: true },
+      { key: "focus", label: "Focus (optional)", placeholder: "e.g. liquidity, exit risk, contract changes" },
+    ],
+    isComposite: false,
+    price: "$0.20", priceUSDC: 200000,
+    x402Url: `${X402_BASE}/blue-monitor`,
+    x402Body: (v) => ({ target: v.target ?? "", focus: v.focus ?? "" }),
+  },
+  {
+    id: "blue-registry",
+    name: "Blue Registry",
+    description: "Discover the Blue Hub tool catalog — every callable x402 tool (first-party + community), filterable by query/category, with prices and how-to-call.",
+    agentHandle: "blue", agentName: "Blue", agentType: "blue",
+    category: "builder",
+    inputs: [
+      { key: "query", label: "Search (optional)", placeholder: "e.g. honeypot, token, audit" },
+      { key: "category", label: "Category (optional)", placeholder: "e.g. security, intelligence, builder" },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/blue-registry`,
+    x402Body: (v) => ({ query: v.query ?? "", category: v.category ?? "" }),
+  },
 
   // ── Security / Quantum ───────────────────────────────────────────────────────
 
