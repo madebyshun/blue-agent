@@ -929,29 +929,47 @@ interface TokenLaunchResult {
 
 function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
   const { address, isConnected } = useAccount();
-  const [step, setStep] = useState<"idle" | "launching" | "done" | "error">("idle");
+  const [step, setStep] = useState<"idle" | "simulating" | "launching" | "done" | "error">("idle");
   const [err,  setErr]  = useState<string>("");
-  const [out,  setOut]  = useState<{ tokenAddress: string | null; basescan: string | null; uniswap: string | null } | null>(null);
+  const [out,  setOut]  = useState<{ tokenAddress: string | null; basescan: string | null; uniswap: string | null; simulated: boolean } | null>(null);
 
   const name   = result.tokenName?.trim() ?? "";
   const symbol = (result.tokenSymbol ?? "").replace(/^\$/, "").trim();
 
-  async function launch() {
+  // sim=true → Bankr predicts the address + fees without broadcasting (safe,
+  // no irreversible deploy, lighter on the rate limit). sim=false → real deploy.
+  async function run(sim: boolean) {
     if (!address) return;
-    setStep("launching"); setErr("");
+    setStep(sim ? "simulating" : "launching"); setErr("");
     try {
       const res = await fetch("/api/launch-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tokenName: name, tokenSymbol: symbol, feeRecipient: address, image: result.image, website: result.website }),
+        body: JSON.stringify({ tokenName: name, tokenSymbol: symbol, feeRecipient: address, image: result.image, website: result.website, simulateOnly: sim }),
       });
       const d = await res.json();
       if (!res.ok) { setErr(d?.error ?? `Launch failed (${res.status})`); setStep("error"); return; }
-      setOut({ tokenAddress: d.tokenAddress ?? null, basescan: d.basescan ?? null, uniswap: d.uniswap ?? null });
+      setOut({ tokenAddress: d.tokenAddress ?? null, basescan: d.basescan ?? null, uniswap: d.uniswap ?? null, simulated: !!d.simulated });
       setStep("done");
     } catch (e) {
       setErr((e as Error).message); setStep("error");
     }
+  }
+
+  if (step === "done" && out?.simulated) {
+    // Simulation preview — not deployed. Offer the real deploy.
+    return (
+      <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#4FC3F740", background: "#4FC3F708" }}>
+        <div className="font-mono text-[11px] font-bold mb-1" style={{ color: "#4FC3F7" }}>🧪 Simulation · ${symbol} (not deployed)</div>
+        {out.tokenAddress && <div className="font-mono text-[10px] text-slate-400 mb-2 break-all">Predicted: {out.tokenAddress}</div>}
+        <p className="font-mono text-[9px] text-slate-600 mb-2.5">Looks good — deploy for real to mint ${symbol} on Base.</p>
+        <button onClick={() => run(false)}
+          className="w-full font-mono text-[12px] font-bold py-2 rounded-lg transition-all"
+          style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>
+          🚀 Deploy ${symbol} for real
+        </button>
+      </div>
+    );
   }
 
   if (step === "done") {
@@ -995,14 +1013,24 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
             Fees route to <span className="text-slate-400">{truncAddr(address)}</span>. This deploys a
             <span className="text-amber-400"> real, irreversible</span> token on Base via Bankr.
           </p>
-          {step === "error" && <p className="font-mono text-[10px] text-red-400 mb-2">{err}</p>}
-          <button
-            onClick={launch}
-            disabled={step === "launching" || !name || !symbol}
-            className="w-full font-mono text-[12px] font-bold py-2 rounded-lg transition-all disabled:opacity-50"
-            style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>
-            {step === "launching" ? "Launching…" : `🚀 Launch $${symbol || "TOKEN"} on Base`}
-          </button>
+          {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
+          <div className="flex gap-2">
+            <button
+              onClick={() => run(true)}
+              disabled={step === "simulating" || step === "launching" || !name || !symbol}
+              className="font-mono text-[12px] font-bold py-2 px-3 rounded-lg transition-all disabled:opacity-50 shrink-0"
+              style={{ background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+              {step === "simulating" ? "Simulating…" : "🧪 Simulate"}
+            </button>
+            <button
+              onClick={() => run(false)}
+              disabled={step === "simulating" || step === "launching" || !name || !symbol}
+              className="flex-1 font-mono text-[12px] font-bold py-2 rounded-lg transition-all disabled:opacity-50"
+              style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>
+              {step === "launching" ? "Launching…" : `🚀 Launch $${symbol || "TOKEN"}`}
+            </button>
+          </div>
+          <p className="font-mono text-[9px] text-slate-700 mt-1.5">Simulate = preview address + fees, no deploy. Bankr allows 1 real launch/min per wallet.</p>
         </>
       ) : (
         <p className="font-mono text-[10px] text-slate-500">Connect a wallet to launch — creator fees route to it.</p>
