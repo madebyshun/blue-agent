@@ -37,7 +37,7 @@ const SKILLS_DOCS = [
   { file: "base-security.md",               desc: "500+ security checks across 13 categories. Loaded for blue audit." },
   { file: "base-addresses.md",              desc: "Verified contract addresses on Base — USDC, WETH, Uniswap, Aave." },
   { file: "base-standards.md",              desc: "ERC standards, Base patterns, x402 protocol spec." },
-  { file: "bankr-tools.md",                 desc: "Bankr LLM capabilities and all 31 x402 tools." },
+  { file: "bankr-tools.md",                 desc: "Bankr LLM capabilities and the full x402 tool suite (60+)." },
   { file: "blue-agent-identity.md",         desc: "Blue Agent mission, product voice, do/don't rules." },
   { file: "design-system.md",               desc: "Visual language, colors, card patterns, spacing." },
   { file: "base-ecosystem.md",              desc: "Base ecosystem overview — key protocols, teams, infrastructure." },
@@ -63,8 +63,19 @@ const SKILLS_DOCS = [
   { file: "reputation-engine.md",           desc: "Reputation engine — Builder Score, Agent Score, onchain signals." },
 ];
 
+const X402_SUITE = [
+  { id: "blue-research", price: "$1.00", color: "#60a5fa", desc: "Deep DD memo — grounds in live market data" },
+  { id: "blue-compose",  price: "$0.10", color: "#34D399", desc: "Plan a runnable chain of Blue Hub tools" },
+  { id: "blue-monitor",  price: "$0.20", color: "#f87171", desc: "Health + risk snapshot for a token/contract" },
+  { id: "blue-deploy",   price: "$0.10", color: "#34D399", desc: "Base deploy mechanics — scripts, verify" },
+  { id: "blue-analytics",price: "$0.25", color: "#60a5fa", desc: "Live token metrics + interpretation" },
+  { id: "blue-simulate", price: "$0.15", color: "#A78BFA", desc: "Bull/base/bear scenario modeling" },
+  { id: "blue-stream",   price: "$0.05", color: "#34D399", desc: "Live Base onchain activity feed" },
+  { id: "blue-registry", price: "$0.05", color: "#fbbf24", desc: "Discover the full tool catalog" },
+];
+
 const PRODUCTS = [
-  { name: "Blue Hub",    color: "#4FC3F7", desc: "64 AI tools · 3-agent consensus · pay per use via x402",                link: "/hub",       label: "Open Hub →" },
+  { name: "Blue Hub",    color: "#4FC3F7", desc: "66 AI tools · 3-agent consensus · pay per use via x402",                link: "/hub",       label: "Open Hub →" },
   { name: "Blue Chat",  color: "#A78BFA", desc: "AI chat for Base builders · Haiku / Sonnet / Opus · credit system",      link: "/app/chat",  label: "Open Chat →" },
   { name: "Blue CLI",   color: "#34D399", desc: "@blueagent/cli · 30 commands · Terminal + TUI · idea/build/audit/ship", link: "/docs",      label: "View Docs →" },
   { name: "Blue Market",color: "#FB923C", desc: "Stake $BLUEAGENT · earn credits + USDC · daily Base brief",             link: "/market",    label: "Open Market →" },
@@ -113,7 +124,7 @@ export default function DocsPage() {
           </h1>
 
           <p className="text-slate-400 text-lg max-w-2xl mx-auto leading-relaxed mb-12">
-            30 CLI commands. 27 skill files. 18 API endpoints. 64 Hub tools.
+            30 CLI commands. 27 skill files. 66 Hub tools. 58 MCP tools.
             All grounded in verified Base knowledge — no hallucinated addresses, no generic advice.
           </p>
 
@@ -121,8 +132,8 @@ export default function DocsPage() {
             {[
               { value: "30",  label: "Commands",  color: "#4FC3F7" },
               { value: "27",  label: "Skills",    color: "#34D399" },
-              { value: "64",  label: "Hub Tools", color: "#A78BFA" },
-              { value: "18",  label: "API Endpoints", color: "#fbbf24" },
+              { value: "66",  label: "Hub Tools", color: "#A78BFA" },
+              { value: "58",  label: "MCP Tools", color: "#fbbf24" },
             ].map((s) => (
               <div key={s.label} className="bg-[#0d0d12] px-6 py-5 text-center">
                 <div className="font-mono text-xl font-bold mb-1" style={{ color: s.color }}>{s.value}</div>
@@ -255,6 +266,53 @@ export default function DocsPage() {
           </div>
         </section>
 
+        {/* ══ x402 TOOLS ════════════════════════════════════════════════════════ */}
+        <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
+          <div className="text-center mb-14">
+            <SectionLabel>x402 Tools</SectionLabel>
+            <h2 className="text-3xl font-bold">The Blue command suite</h2>
+            <p className="text-slate-500 mt-3 text-sm max-w-xl mx-auto">
+              Pay-per-call in USDC on Base — no keys, no subscription. Callable via the API,
+              the Hub, or any MCP client. The 5 core commands plus an extended <code className="font-mono text-[#4FC3F7]">blue-*</code> suite.
+            </p>
+          </div>
+
+          {/* 5 core */}
+          <div className="grid sm:grid-cols-5 gap-3 mb-4">
+            {[
+              { cmd: "idea",  price: "$0.05", color: "#4FC3F7" },
+              { cmd: "build", price: "$0.50", color: "#A78BFA" },
+              { cmd: "audit", price: "$1.00", color: "#f87171" },
+              { cmd: "ship",  price: "$0.10", color: "#34D399" },
+              { cmd: "raise", price: "$0.20", color: "#fbbf24" },
+            ].map((c) => (
+              <div key={c.cmd} className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-4 text-center" style={{ boxShadow: `0 0 20px ${c.color}08` }}>
+                <div className="font-mono text-sm font-bold mb-1" style={{ color: c.color }}>blue {c.cmd}</div>
+                <div className="font-mono text-[10px] text-slate-500 border border-[#1A1A2E] rounded-lg px-2 py-1">{c.price}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* extended blue-* suite */}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {X402_SUITE.map((t) => (
+              <div key={t.id} className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-4" style={{ boxShadow: `0 0 20px ${t.color}06` }}>
+                <div className="flex items-center justify-between mb-2">
+                  <code className="font-mono text-[12px] font-bold" style={{ color: t.color }}>{t.id}</code>
+                  <span className="font-mono text-[9px] text-slate-500 border border-[#1A1A2E] rounded px-1.5 py-0.5">{t.price}</span>
+                </div>
+                <p className="font-mono text-[10px] text-slate-500 leading-relaxed">{t.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-center font-mono text-[11px] text-slate-600 mt-6">
+            66 tools total. Always-current catalog →{" "}
+            <code className="text-[#4FC3F7]">blue-registry</code> or{" "}
+            <a href="https://api.blueagent.dev/docs" className="text-[#fbbf24] hover:underline">api.blueagent.dev/docs</a>
+          </p>
+        </section>
+
         {/* ══ COMMANDS ══════════════════════════════════════════════════════════ */}
         <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
           <div className="text-center mb-14">
@@ -370,16 +428,16 @@ export default function DocsPage() {
                 </div>
               </div>
               <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5">
-                <div className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">AVAILABLE MCP TOOLS · 50+</div>
+                <div className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">AVAILABLE MCP TOOLS · 58</div>
                 <div className="grid grid-cols-2 gap-1.5">
-                  {["blue_idea", "blue_build", "blue_audit", "blue_ship", "blue_raise", "hub_market_fit", "hub_ecosystem", "hub_risk_gate", "hub_builder_score", "hub_investor_memo"].map((t) => (
+                  {["blue_idea", "blue_build", "blue_audit", "blue_research", "blue_monitor", "blue_compose", "blue_registry", "blue_stream", "hub_ecosystem", "hub_token_pick", "hub_honeypot", "hub_market_fit"].map((t) => (
                     <div key={t} className="flex items-center gap-2">
                       <span className="text-[#4FC3F7] text-xs">·</span>
                       <code className="font-mono text-[11px] text-white">{t}</code>
                     </div>
                   ))}
                 </div>
-                <p className="font-sans text-[11px] text-slate-600 mt-3">5 core commands + 45 hub tools (security · market · onchain clusters).</p>
+                <p className="font-sans text-[11px] text-slate-600 mt-3">Core commands + the blue-* suite + 50+ hub tools (security · market · onchain · agent clusters).</p>
               </div>
             </div>
 
@@ -485,7 +543,7 @@ export default function DocsPage() {
             style={{ boxShadow: "0 0 60px #4FC3F708" }}>
             <h2 className="text-3xl font-bold mb-4">Start building on Base</h2>
             <p className="text-slate-500 mb-8 max-w-md mx-auto text-sm leading-relaxed">
-              64 AI tools. 30 commands. 27 skill files. All grounded in verified Base knowledge.
+              66 AI tools. 30 commands. 27 skill files. All grounded in verified Base knowledge.
             </p>
             <div className="flex items-center justify-center gap-4 flex-wrap">
               <Link href="/app/chat"
