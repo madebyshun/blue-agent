@@ -241,7 +241,7 @@ const HUB_TOOLS = [
   },
   {
     name: "prepare_token_launch",
-    description: "Render the FINAL token-launch confirmation card (Bankr launchpad → real token on Base, Uniswap V4, 100B fixed supply). \n\nALWAYS A BRAND-NEW TOKEN: when the user says 'launch a token', treat it as a fresh launch from scratch. IGNORE any 'Active project' from memory and ANY token discussed or already launched earlier in the conversation. NEVER assume the user wants to relaunch, continue, or reuse a previous token (e.g. one already deployed), and NEVER claim a launch was 'paused' or is 'pending'. Only reuse a specific earlier token if the user explicitly names it in THIS request. \n\nGATHER DETAILS FIRST — do NOT call this immediately. First ASK them (one concise message) for: 1) Token name (required); 2) Ticker symbol (optional — Bankr defaults to the first 4 letters of the name); 3) Short description (optional); 4) Logo image URL (optional); 5) Website URL (optional); 6) Where the 57% creator fees go — their connected wallet (default) OR an X / Farcaster / ENS handle. Wait for their reply (they may skip optionals or say 'use defaults'), THEN call this tool once with everything you collected. \n\nThe card is the final confirmation: it shows all details and the user clicks Launch to deploy — never claim it's launched just from calling this tool. Gas is SPONSORED by Bankr (NO ETH cost — never quote a gas cost). After calling, do NOT print a details table; reply with one short line telling them to confirm in the card. Not for launch analysis/simulation — that's hub_launch_sim.",
+    description: "Render the FINAL token-launch confirmation card (Bankr launchpad → real token on Base, Uniswap V4, 100B fixed supply). \n\nALWAYS A BRAND-NEW TOKEN: when the user says 'launch a token', treat it as a fresh launch from scratch. IGNORE any 'Active project' from memory and ANY token discussed or already launched earlier in the conversation. NEVER assume the user wants to relaunch, continue, or reuse a previous token (e.g. one already deployed), and NEVER claim a launch was 'paused' or is 'pending'. Only reuse a specific earlier token if the user explicitly names it in THIS request. \n\nGATHER DETAILS FIRST — do NOT call this immediately. First ASK them (one concise message) for: 1) Token name (required); 2) Ticker symbol (optional — Bankr defaults to the first 4 letters of the name); 3) Short description (optional); 4) Logo image URL (optional); 5) Website URL (optional); 6) Where the 57% creator fees go — their connected wallet (default) OR an X / Farcaster / ENS handle. Wait for their reply (they may skip optionals or say 'use defaults'), THEN call this tool once with everything you collected. Do NOT ask about or mention total supply — Bankr fixes every launch at 100,000,000,000 (100B) tokens; it is NOT configurable. \n\nThe card is the final confirmation: it shows all details and the user clicks Launch to deploy — never claim it's launched just from calling this tool. Gas is SPONSORED by Bankr (NO ETH cost — never quote a gas cost). After calling, do NOT print a details table; reply with one short line telling them to confirm in the card. Not for launch analysis/simulation — that's hub_launch_sim.",
     input_schema: {
       type: "object",
       properties: {
@@ -1075,9 +1075,12 @@ YOU MUST call hub_whale_tracker immediately with { token: "<token>" }.
 Present: top wallet moves, accumulation vs distribution signal, smart money verdict.`,
 
   launch: `## COMMAND: /launch <token> <description>
-The user wants to simulate a token launch.
-YOU MUST call hub_launch_sim immediately with { token_name: "<token>", description: "<description>", launch_price: "0.001", liquidity: "50000" }.
-Present: consensus verdict, projected FDV, week-1 return estimate, key risks, go/no-go.`,
+The user wants to LAUNCH A REAL TOKEN on Base via the Bankr launchpad (Uniswap V4, 100B fixed supply, gas sponsored by Bankr). This is the prepare_token_launch flow — do NOT call hub_launch_sim, and do NOT treat this as a simulation.
+Treat it as a BRAND-NEW token from scratch — ignore any "Active project" from memory and any token discussed earlier unless the user explicitly names one in THIS request.
+If the user already typed a token name (and/or a description) after /launch, use them. Then GATHER ANY MISSING DETAILS in ONE concise message — ask only for what's still missing: 1) Token name (required); 2) Ticker symbol (optional — Bankr defaults to the first 4 letters of the name); 3) Short description (optional); 4) Logo image URL (optional); 5) Website URL (optional); 6) Where the 57% creator fees go — their connected wallet (default) OR an X / Farcaster / ENS handle.
+Do NOT ask about or mention total supply — Bankr fixes every launch at 100,000,000,000 (100B) tokens; it is NOT configurable, so never ask for it or quote a different supply.
+Wait for their reply (they may skip optionals or say "use defaults"), THEN call prepare_token_launch ONCE with everything you collected. The card is the FINAL confirmation — the user reviews it and clicks Launch to deploy; never claim it launched just from calling the tool, and never quote a gas/ETH cost.
+Only use hub_launch_sim if the user EXPLICITLY asks to simulate or model launch performance instead of deploying.`,
 
   help: `## COMMAND: /help
 List all available Blue Chat slash commands in a clean format.
@@ -1101,7 +1104,8 @@ Commands to document:
 /airdrop <address> — Base airdrop eligibility check
 ── DeFi ──
 /yield — Best APY on Base right now
-/launch <token> <desc> — Token launch simulation
+── Launch ──
+/launch <token> — Launch a real token on Base via Bankr (gas sponsored)
 ── Meta ──
 /credits — Credit balance, tier, how to earn more
 /models — Available AI models + costs
