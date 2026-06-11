@@ -1,5 +1,9 @@
 // x402/thread-intelligence/index.ts
-// Thread Intelligence — Aeon narrative-tracker + MiroShark influencer + Blue idea
+// Thread Intelligence — Aeon narrative-tracker + MiroShark influencer + Blue idea.
+// This is a GENERATIVE content tool (hooks, thread outlines, posting strategy). It is
+// NOT wired to a live CT/Twitter feed, so the scores (content_score, viral_potential,
+// engagement_prediction) are AI ESTIMATES from model knowledge, not measured metrics.
+// Output is labelled accordingly. Resilient: never 500.
 // Price: $0.35
 
 type Msg = { role: string; content: string };
@@ -8,11 +12,13 @@ async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Pro
     method: "POST",
     headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
     body: JSON.stringify({ model: "claude-haiku-4-5", system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
+    signal: AbortSignal.timeout(30_000),
   });
-  if (!r.ok) throw new Error(`LLM ${r.status}: ${await r.text()}`);
+  if (!r.ok) throw new Error(`LLM ${r.status}`);
   const d = await r.json() as { content?: { text: string }[] };
   return d.content?.[0]?.text ?? "";
 }
+const DISCLAIMER = "Content strategy is AI-generated; the scores (content_score, viral_potential, engagement_prediction) are model ESTIMATES, not measured from live social data.";
 function parseJson(t: string): Record<string, unknown> | null {
   let s = t.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
   const i = s.indexOf("{"), j = s.lastIndexOf("}");
@@ -70,10 +76,42 @@ Schema: {
       `Topic: ${topic || "Base"}\nAudience: ${audience}\nGoal: ${goal}\nNarratives: ${narrativeRaw ?? "CT"}\nInfluencer: ${JSON.stringify(influencer)}`, 0.4, 1000);
 
     let result = parseJson(resultRaw);
-    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
+    if (!result) {
+      result = {
+        content_score: null,
+        recommended_angle: "Re-run for a full content strategy",
+        thread_outline: [],
+        hook_options: [],
+        best_posting_window: "weekday morning EST",
+        hashtags: [],
+        avoid: [],
+        engagement_prediction: "medium",
+        summary: "Content synthesis briefly unavailable this run — re-run.",
+        degraded: true,
+      };
+    }
 
-    return Response.json({ tool: "thread-intelligence", timestamp: new Date().toISOString(), topic, audience, goal, influencer, ...result });
+    return Response.json({
+      tool: "thread-intelligence",
+      timestamp: new Date().toISOString(),
+      data_source: "AI estimate (no live social data — model-generated, not measured)",
+      disclaimer: DISCLAIMER,
+      topic,
+      audience,
+      goal,
+      influencer,
+      ...result,
+    });
   } catch (e) {
-    return Response.json({ error: "Thread intelligence failed", message: (e as Error).message }, { status: 500 });
+    // Never 500 — return a labelled, degraded estimate.
+    return Response.json({
+      tool: "thread-intelligence",
+      timestamp: new Date().toISOString(),
+      data_source: "AI estimate (no live social data — model-generated, not measured)",
+      disclaimer: DISCLAIMER,
+      degraded: true,
+      note: "Estimate unavailable this run — please retry.",
+      message: (e as Error).message,
+    });
   }
 }
