@@ -1,7 +1,13 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
-  // api.blueagent.dev — developer portal, separate from blueagent.dev
+  // api.blueagent.dev — developer portal, separate from blueagent.dev.
+  // Point Next at the monorepo root so it resolves the workspace lockfile
+  // correctly — fixes the "Failed to patch lockfile / Cannot read properties
+  // of undefined (reading 'os')" crash that fails the Vercel build of this
+  // subproject (non-fatal locally, fatal on Vercel).
+  outputFileTracingRoot: path.join(process.cwd(), "..", ".."),
   async redirects() {
     return [
       {
