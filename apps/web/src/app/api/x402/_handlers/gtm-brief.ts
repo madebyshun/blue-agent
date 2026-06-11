@@ -73,8 +73,8 @@ Schema: {
 }`,
       `Project: ${project}\nBrief: ${JSON.stringify(brief)}\nNarratives: ${narrativeRaw ?? "Base"}\nDistribution: ${JSON.stringify(distribution)}`, 0.3, 1000);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "gtm-brief", timestamp: new Date().toISOString(), project, brief, distribution, ...result });
   } catch (e) {

@@ -97,8 +97,8 @@ Token Supply: ${body.tokenSupply || "Not specified"}`;
       maxTokens: 2000,
     });
 
-    const result = extractJsonObject(llmResponse);
-    if (!result) throw new Error("Failed to parse launch plan");
+    let result = extractJsonObject(llmResponse);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
     return Response.json(result, { status: 200 });
   } catch (error) {
     console.error("[LaunchAdvisor] Error:", error);

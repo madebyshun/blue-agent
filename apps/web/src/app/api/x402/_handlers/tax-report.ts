@@ -141,8 +141,8 @@ Estimate taxable events, gains/losses, and provide tax recommendations. Include 
       maxTokens: 1000,
     });
 
-    const result = extractJsonObject(llmResponse);
-    if (!result) throw new Error("Failed to parse tax report");
+    let result = extractJsonObject(llmResponse);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
     return Response.json(result);
   } catch (error) {
     return Response.json({ error: "Tax report failed", message: (error as Error).message }, { status: 500 });

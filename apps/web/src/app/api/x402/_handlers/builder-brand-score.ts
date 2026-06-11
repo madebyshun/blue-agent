@@ -80,8 +80,8 @@ Schema: {
 }`,
       `Builder: ${target}\nProject: ${project || "unknown"}\nResearch: ${researchRaw ?? target}\nNarratives: ${narrativeRaw ?? target}\nInfluencer: ${JSON.stringify(influencer)}`, 0.3, 1000);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "builder-brand-score", timestamp: new Date().toISOString(), builder: target, project, influencer, ...result });
   } catch (e) {

@@ -120,8 +120,8 @@ Estimate impermanent loss, fee income (assume typical Uniswap v3 range), and giv
       maxTokens: 800,
     });
 
-    const result = extractJsonObject(llmResponse);
-    if (!result) throw new Error("Failed to parse LP analysis");
+    let result = extractJsonObject(llmResponse);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
     return Response.json(result);
   } catch (error) {
     return Response.json({ error: "LP analysis failed", message: (error as Error).message }, { status: 500 });
