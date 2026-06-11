@@ -138,6 +138,12 @@ export default function ChatInput() {
 
   const activeTier = ALL_TIERS.find(t => t.id === chatTier) ?? BANKR_TIERS[1];
 
+  // Max tier (dailyCr === -1) is unlimited — UI promises "every model free",
+  // and the backend skips the debit (see debitChatCredits). Mirror that here so
+  // the per-msg cost + remaining-credits footers don't show metering numbers
+  // that contradict the ∞ shown everywhere else.
+  const isUnlimited = holderTier.dailyCr === -1;
+
   // ── File handling ────────────────────────────────────────────────────────────
   const handleFiles = useCallback(async (fileList: FileList | null) => {
     if (!fileList) return;
@@ -579,13 +585,13 @@ export default function ChatInput() {
 
             <div className="flex-1" />
 
-            <span className="font-mono text-[10px] text-slate-700">{cost}cr/msg</span>
+            <span className="font-mono text-[10px] text-slate-700">{isUnlimited ? "Free" : `${cost}cr/msg`}</span>
           </div>
 
           {/* Footer hint */}
           <div className="flex items-center justify-between px-3 pb-2.5">
             <span className="font-mono text-[10px] text-slate-700">Enter ↵ send · Shift+Enter newline</span>
-            <span className="font-mono text-[10px] text-slate-700">{credits} credits left</span>
+            <span className="font-mono text-[10px] text-slate-700">{isUnlimited ? "∞ credits" : `${credits} credits left`}</span>
           </div>
         </div>
       </div>

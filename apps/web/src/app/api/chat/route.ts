@@ -48,7 +48,15 @@ async function debitChatCredits(address: string, tier: string): Promise<DebitRes
 
   const blueBalance = await fetchBlueBalance(address);
   const holderTier  = getTierInfo(blueBalance);
-  const cost        = chatCreditCost(tier, holderTier);
+
+  // Max tier (10M+ BLUE, dailyCr === -1) is unlimited. The UI promises
+  // "Max tier · no metering, every model free" and shows ∞ credits — so
+  // honor that server-side and skip the debit entirely, instead of charging
+  // the (40%-discounted) per-message cost. Without this the backend silently
+  // contradicts the ∞ UI and bills holders for messages they were told are free.
+  if (holderTier.dailyCr === -1) return { kind: "skipped", reason: "unlimited-tier" };
+
+  const cost = chatCreditCost(tier, holderTier);
 
   if (cost <= 0) return { kind: "skipped", reason: "zero-cost-tier" };
 
