@@ -9,6 +9,7 @@ import { base } from "viem/chains";
 import { useAddress, useName } from "@coinbase/onchainkit/identity";
 import { YIELD_NETWORKS, ERC20_ABI, AAVE_POOL_ABI, ERC4626_ABI, WITHDRAW_ALL, parseUsdc, supplyApyPct, VENUES, VENUE_LIST, type YieldNetwork, type VenueId } from "@/lib/yield-execution";
 import { useChat } from "../ChatContext";
+import { useBasename } from "@/lib/useBasename";
 
 function truncAddr(addr: string, len = 6) {
   if (!addr || addr.length < 12) return addr;
@@ -1172,9 +1173,21 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
     : venueRate;
   const refetchPos = () => { refetchAave?.(); refetchMorpho?.(); };
 
+  // Basename identity + spendable wallet USDC (balance-aware supply, Tier 1 #3).
+  const { name: fromName } = useBasename(address);
+  const { data: walletUsdcRaw } = useReadContract({
+    address: vnet?.usdc, abi: ERC20_ABI, functionName: "balanceOf",
+    args: address ? [address] : undefined, chainId,
+    query: { enabled: !!address && !!vnet },
+  });
+  const walletUsdc = walletUsdcRaw != null ? Number(formatUnits(walletUsdcRaw as bigint, vnet?.usdcDecimals ?? 6)) : null;
+  const maxFor = action === "supply" ? walletUsdc : position; // supply caps at wallet, withdraw at position
+  function setMax() { if (maxFor != null) setAmount(String(maxFor)); }
+
   const amt = parseFloat(amount);
   const withdrawAll = action === "withdraw" && all;
-  const valid = !!vnet && (withdrawAll || amt > 0);
+  const overMax = !withdrawAll && maxFor != null && amt > maxFor;
+  const valid = !!vnet && (withdrawAll || (amt > 0 && !overMax));
   const busy = step === "switching" || step === "approving" || step === "supplying" || step === "withdrawing";
 
   async function run() {
@@ -1258,6 +1271,13 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
           : <>🔴 <b>Mainnet — real funds.</b> You sign; this is irreversible. Double-check the amount.</>}
       </div>
 
+      {/* Account identity — Basename if set */}
+      {address && (
+        <div className="font-mono text-[9px] text-slate-600 mb-3">
+          ACCOUNT <span className="text-slate-300">{fromName || truncAddr(address)}</span>
+        </div>
+      )}
+
       {/* Venue selector — the router */}
       <div className="mb-3">
         <div className="font-mono text-[9px] text-slate-600 mb-1.5">VENUE</div>
@@ -1338,12 +1358,21 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
         </select>
       </label>
 
-      {/* Amount */}
+      {/* Amount + balance-aware Max */}
       <label className="block mb-2">
-        <span className="font-mono text-[9px] text-slate-600 block mb-1">AMOUNT (USDC)</span>
+        <div className="flex items-center justify-between mb-1">
+          <span className="font-mono text-[9px] text-slate-600">AMOUNT (USDC)</span>
+          {maxFor != null && !withdrawAll && (
+            <span className="font-mono text-[9px] text-slate-600">
+              {action === "supply" ? "Wallet" : "Position"} {maxFor.toFixed(2)}
+              <button type="button" onClick={setMax} className="text-[#4FC3F7] ml-1">Max</button>
+            </span>
+          )}
+        </div>
         <input type="number" min="0" step="0.01" value={amount} disabled={withdrawAll}
           onChange={e => setAmount(e.target.value)} placeholder="e.g. 5"
           className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors disabled:opacity-40" />
+        {overMax && <span className="font-mono text-[9px] text-red-500 mt-1 block">{action === "supply" ? "Exceeds your wallet USDC" : "Exceeds your position"}</span>}
       </label>
 
       {action === "withdraw" && (
@@ -1412,8 +1441,26 @@ function SendCard({ result }: { result: SendResult }) {
     { address: recipIsAddr ? (recip as `0x${string}`) : undefined, chain: base }, { enabled: recipIsAddr });
 
   const toAddress = (recipIsAddr ? recip : (recipIsName ? (resolvedAddr ?? undefined) : undefined)) as `0x${string}` | undefined;
+
+  // Basename as account identity + spendable balance (Tier 1 #3, balance-aware).
+  const { name: fromName } = useBasename(fromAddr);
+  const { data: usdcBalRaw } = useReadContract({
+    address: net.usdc, abi: ERC20_ABI, functionName: "balanceOf",
+    args: fromAddr ? [fromAddr] : undefined, chainId,
+    query: { enabled: !!fromAddr && asset === "USDC" },
+  });
+  const { data: ethBal } = useBalance({ address: fromAddr, chainId, query: { enabled: !!fromAddr && asset === "ETH" } });
+  const balance = asset === "USDC"
+    ? (usdcBalRaw != null ? Number(formatUnits(usdcBalRaw as bigint, net.usdcDecimals)) : null)
+    : (ethBal ? Number(formatUnits(ethBal.value, ethBal.decimals)) : null);
+  function setMax() {
+    if (balance == null) return;
+    setAmount(String(asset === "ETH" ? Math.max(0, balance - 0.00005) : balance)); // leave a little ETH for gas
+  }
+
   const amt = parseFloat(amount);
-  const valid = !!toAddress && amt > 0;
+  const overBalance = balance != null && amt > balance;
+  const valid = !!toAddress && amt > 0 && !overBalance;
   const busy = step === "switching" || step === "sending";
 
   async function send() {
@@ -1478,6 +1525,13 @@ function SendCard({ result }: { result: SendResult }) {
           : <>🔴 <b>Mainnet — real funds.</b> Sending is irreversible. Double-check the recipient + amount.</>}
       </div>
 
+      {/* Account identity — Basename if set */}
+      {fromAddr && (
+        <div className="font-mono text-[9px] text-slate-600 mb-3">
+          FROM <span className="text-slate-300">{fromName || truncAddr(fromAddr)}</span>
+        </div>
+      )}
+
       {/* Asset toggle */}
       <div className="flex gap-1 mb-3">
         {(["USDC", "ETH"] as const).map(a => {
@@ -1503,12 +1557,21 @@ function SendCard({ result }: { result: SendResult }) {
       </label>
       <div className="font-mono text-[9px] mb-3 h-3">{resolveLine}</div>
 
-      {/* Amount */}
+      {/* Amount + balance-aware Max */}
       <label className="block mb-3">
-        <span className="font-mono text-[9px] text-slate-600 block mb-1">AMOUNT ({asset})</span>
+        <div className="flex items-center justify-between mb-1">
+          <span className="font-mono text-[9px] text-slate-600">AMOUNT ({asset})</span>
+          {balance != null && (
+            <span className="font-mono text-[9px] text-slate-600">
+              Bal {balance.toFixed(asset === "ETH" ? 4 : 2)}
+              <button type="button" onClick={setMax} className="text-[#4FC3F7] ml-1">Max</button>
+            </span>
+          )}
+        </div>
         <input type="number" min="0" step={asset === "ETH" ? "0.0001" : "0.01"} value={amount}
           onChange={e => setAmount(e.target.value)} placeholder={asset === "ETH" ? "e.g. 0.01" : "e.g. 5"}
           className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+        {overBalance && <span className="font-mono text-[9px] text-red-500 mt-1 block">Amount exceeds your {asset} balance</span>}
       </label>
 
       {/* Network */}
