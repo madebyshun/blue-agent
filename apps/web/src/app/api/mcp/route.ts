@@ -62,13 +62,13 @@ const TOOLS = [
   // ── Builder & Research Hub tools ─────────────────────────────────────────
   {
     name: "hub_builder_score",
-    description: "Builder Score for an X/Twitter handle — on-chain activity, shipping history, community (0-100).",
-    inputSchema: { type: "object", properties: { handle: { type: "string", description: "X handle without @" } }, required: ["handle"] },
+    description: "Builder Score (0-100) — anchored in REAL GitHub repo activity and/or on-chain wallet activity when supplied; the X/CT community part is a labelled estimate.",
+    inputSchema: { type: "object", properties: { handle: { type: "string", description: "X handle without @" }, repo: { type: "string", description: "GitHub repo (owner/name or URL) for real shipping signal" }, address: { type: "string", description: "Base wallet 0x... for real on-chain activity" } }, required: ["handle"] },
   },
   {
     name: "hub_agent_score",
-    description: "Agent Score for AI agents on Base — XP system tracking interactions, signals, uptime.",
-    inputSchema: { type: "object", properties: { handle: { type: "string", description: "Agent handle or name" } }, required: ["handle"] },
+    description: "Agent Score (0-100) — anchored in REAL GitHub repo activity and/or on-chain wallet activity when supplied; XP/community is a labelled estimate.",
+    inputSchema: { type: "object", properties: { handle: { type: "string", description: "Agent handle or name" }, repo: { type: "string", description: "GitHub repo for real dev-activity signal" }, address: { type: "string", description: "Base wallet 0x... for real on-chain activity" } }, required: ["handle"] },
   },
   {
     name: "hub_market_fit",
@@ -237,8 +237,8 @@ const TOOLS = [
   },
   {
     name: "hub_brand_score",
-    description: "Brand score for a Base project — visibility, narrative alignment, community resonance.",
-    inputSchema: { type: "object", properties: { project: { type: "string", description: "Project name or URL" } }, required: ["project"] },
+    description: "Brand score for a Base project — visibility/narrative/community (AI estimate, no live social feed); credibility is anchored in REAL GitHub activity when a repo is supplied.",
+    inputSchema: { type: "object", properties: { project: { type: "string", description: "Project name or URL" }, repo: { type: "string", description: "GitHub repo for real credibility signal" } }, required: ["project"] },
   },
   {
     name: "hub_roadmap",
