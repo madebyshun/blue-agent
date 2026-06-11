@@ -47,11 +47,22 @@ type KVClient = {
   incr(key: string): Promise<number>;
 };
 
-function getKV(): KVClient {
-  const url   = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
+// Resolve Upstash REST credentials from either env var convention:
+//   - KV_REST_API_URL / KV_REST_API_TOKEN          (Vercel KV legacy naming)
+//   - UPSTASH_REDIS_REST_URL / ..._TOKEN           (Upstash Marketplace naming)
+// The Vercel ↔ Upstash Marketplace integration injects the UPSTASH_* names, so
+// supporting both means "Connect Project" works with zero manual env copying.
+function kvCreds(): { url: string; token: string } | null {
+  const url   = process.env.KV_REST_API_URL   ?? process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
+  return url && token ? { url, token } : null;
+}
 
-  if (url && token) {
+function getKV(): KVClient {
+  const creds = kvCreds();
+
+  if (creds) {
+    const { url, token } = creds;
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Redis } = require("@upstash/redis");
     const redis = new Redis({ url, token });
@@ -91,12 +102,11 @@ export async function kvDel(...keys: string[]): Promise<void> {
  */
 export async function kvSetNX(key: string, value: unknown, ttlSeconds: number): Promise<boolean> {
   try {
-    const url   = process.env.KV_REST_API_URL;
-    const token = process.env.KV_REST_API_TOKEN;
-    if (url && token) {
+    const creds = kvCreds();
+    if (creds) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { Redis } = require("@upstash/redis");
-      const redis  = new Redis({ url, token });
+      const redis  = new Redis({ url: creds.url, token: creds.token });
       // SET key value NX EX ttl — atomic, returns "OK" or null
       const result = await redis.set(key, value, { nx: true, ex: ttlSeconds });
       return result === "OK";
@@ -112,5 +122,4 @@ export async function kvSetNX(key: string, value: unknown, ttlSeconds: number): 
   }
 }
 
-export const isKVEnabled = (): boolean =>
-  !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+export const isKVEnabled = (): boolean => kvCreds() !== null;
