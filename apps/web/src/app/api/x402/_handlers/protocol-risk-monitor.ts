@@ -74,8 +74,8 @@ Schema: {
 }`,
       `Protocol: ${protocol}\nPosition: ${position}\nDeFi: ${defiRaw ?? "Base DeFi"}\nAnalyst: ${JSON.stringify(analyst)}`, 0.3, 1100);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "protocol-risk-monitor", timestamp: new Date().toISOString(), protocol, position, analyst, ...result });
   } catch (e) {

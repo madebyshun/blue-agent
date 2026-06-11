@@ -105,8 +105,8 @@ Analyze for alert conditions and fire any that are triggered.` }],
       temperature: 0.2,
       maxTokens: 800,
     });
-    const result = extractJsonObject(llmResponse);
-    if (!result) throw new Error("Failed to parse alert check");
+    let result = extractJsonObject(llmResponse);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
     return Response.json(result);
   } catch (error) {
     console.error("[AlertCheck] Error:", error);

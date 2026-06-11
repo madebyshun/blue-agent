@@ -65,8 +65,8 @@ Schema: {
 }`,
       `Token: ${token} ${ticker ? `($${ticker})` : ""}\nTotal supply: ${total_supply.toLocaleString()}\nDescription: ${description}\nMarket: ${moversRaw ?? "Base"}\nRetail preference: ${JSON.stringify(retailPref)}`, 0.3, 1000);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "token-distribution-plan", timestamp: new Date().toISOString(), token, ticker: ticker || null, total_supply, retail_preference: retailPref, ...result });
   } catch (e) {

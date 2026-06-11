@@ -89,8 +89,8 @@ export default async function handler(req: Request): Promise<Response> {
       temperature: 0.4,
       maxTokens: 1500,
     });
-    const result = extractJsonObject(llmResponse);
-    if (!result) throw new Error("Failed to parse timeline");
+    let result = extractJsonObject(llmResponse);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
     return Response.json(result);
   } catch (error) {
     console.error("[QuantumTimeline] Error:", error);

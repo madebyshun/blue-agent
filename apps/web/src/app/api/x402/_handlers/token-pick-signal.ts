@@ -87,8 +87,8 @@ Schema: {
       maxTokens: 800,
     });
 
-    const result = extractJsonObject(synthesis);
-    if (!result) throw new Error("Failed to parse synthesis");
+    let result = extractJsonObject(synthesis);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({
       tool: "token-pick-signal",

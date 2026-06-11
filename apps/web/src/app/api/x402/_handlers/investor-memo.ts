@@ -89,8 +89,8 @@ Schema: {
 }`,
       `Project: ${project}\nNarrative: ${JSON.stringify(narrative)}\nMarket: ${marketResearch ?? "Base"}\nAnalyst: ${JSON.stringify(analyst)}\nInfluencer: ${JSON.stringify(influencer)}`, 0.3, 1000);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "investor-memo", timestamp: new Date().toISOString(), project, stage, narrative, analyst, influencer, ...result });
   } catch (e) {

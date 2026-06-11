@@ -85,8 +85,8 @@ Schema: {
 }`,
       `A: ${protocol_a}\nB: ${protocol_b || "alternatives"}\nCategory: ${category}\nUse case: ${use_case}\nA: ${resA ?? protocol_a}\nB: ${resB ?? protocol_b}\nAnalyst: ${JSON.stringify(analyst)}`, 0.3, 1200);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "base-protocol-comparison", timestamp: new Date().toISOString(), protocol_a, protocol_b, category, use_case, analyst, ...result });
   } catch (e) {

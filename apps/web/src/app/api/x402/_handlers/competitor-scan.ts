@@ -68,8 +68,8 @@ Schema: {
 }`,
       `Project: ${project}\nDescription: ${description}\n\nProject research:\n${projectResearch ?? project}\n\nCompetitor research:\n${competitorResearch ?? competitorList}\n\nAnalyst: ${JSON.stringify(analystTake)}`, 0.3, 1200);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "competitor-scan", timestamp: new Date().toISOString(), project, competitors_analyzed: competitorList, analyst: analystTake, ...result });
   } catch (e) {
