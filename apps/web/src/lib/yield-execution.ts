@@ -103,3 +103,61 @@ export function supplyApyPct(liquidityRateRay: bigint): number {
   const apr = Number(liquidityRateRay) / RAY;
   return ((1 + apr / SECONDS_PER_YEAR) ** SECONDS_PER_YEAR - 1) * 100;
 }
+
+// ─── ERC-4626 (Morpho MetaMorpho vaults) ─────────────────────────────────────
+// Standard vault interface: deposit USDC → shares, withdraw/redeem → USDC.
+export const ERC4626_ABI = [
+  { name: "deposit", type: "function", stateMutability: "nonpayable",
+    inputs: [{ name: "assets", type: "uint256" }, { name: "receiver", type: "address" }], outputs: [{ type: "uint256" }] },
+  { name: "withdraw", type: "function", stateMutability: "nonpayable",
+    inputs: [{ name: "assets", type: "uint256" }, { name: "receiver", type: "address" }, { name: "owner", type: "address" }], outputs: [{ type: "uint256" }] },
+  { name: "redeem", type: "function", stateMutability: "nonpayable",
+    inputs: [{ name: "shares", type: "uint256" }, { name: "receiver", type: "address" }, { name: "owner", type: "address" }], outputs: [{ type: "uint256" }] },
+  { name: "maxWithdraw", type: "function", stateMutability: "view",
+    inputs: [{ name: "owner", type: "address" }], outputs: [{ type: "uint256" }] },
+] as const satisfies Abi;
+
+// ─── Yield venues (best-rate routing) ────────────────────────────────────────
+// Each venue carries verified per-network addresses + which protocol interface
+// to use. Morpho's vault was verified on-chain (asset()==Base USDC, ERC-4626,
+// $442M TVL, curator Gauntlet). Morpho is mainnet-only (no real testnet vault).
+const MORPHO_GAUNTLET_USDC_PRIME = getAddress("0xeE8F4eC5672F09119b96Ab6fB59C27E1b7e44b61");
+
+export type VenueId  = "aave" | "morpho";
+export type Protocol = "aave" | "erc4626";
+
+export interface VenueNet {
+  spender: `0x${string}`;   // approve USDC here (Aave Pool / Morpho vault)
+  target:  `0x${string}`;   // call supply/deposit/withdraw/redeem here
+  usdc:    `0x${string}`;
+  receipt: `0x${string}`;   // aToken / vault share token — balanceOf for position
+  receiptDecimals: number;  // aUSDC = 6, vault shares = 18
+  usdcDecimals: number;
+}
+
+export interface VenueCfg {
+  id: VenueId;
+  label: string;            // full name
+  short: string;            // chip/button label
+  protocol: Protocol;
+  llamaProject: string;     // maps to /api/yield/rates project → APY
+  nets: Partial<Record<YieldNetwork, VenueNet>>;
+}
+
+export const VENUES: Record<VenueId, VenueCfg> = {
+  aave: {
+    id: "aave", label: "Aave v3", short: "Aave", protocol: "aave", llamaProject: "aave-v3",
+    nets: {
+      baseSepolia: { spender: YIELD_NETWORKS.baseSepolia.pool, target: YIELD_NETWORKS.baseSepolia.pool, usdc: YIELD_NETWORKS.baseSepolia.usdc, receipt: YIELD_NETWORKS.baseSepolia.aUsdc, receiptDecimals: 6, usdcDecimals: 6 },
+      base:        { spender: YIELD_NETWORKS.base.pool,        target: YIELD_NETWORKS.base.pool,        usdc: YIELD_NETWORKS.base.usdc,        receipt: YIELD_NETWORKS.base.aUsdc,        receiptDecimals: 6, usdcDecimals: 6 },
+    },
+  },
+  morpho: {
+    id: "morpho", label: "Morpho · Gauntlet USDC Prime", short: "Morpho", protocol: "erc4626", llamaProject: "morpho-blue",
+    nets: {
+      base: { spender: MORPHO_GAUNTLET_USDC_PRIME, target: MORPHO_GAUNTLET_USDC_PRIME, usdc: YIELD_NETWORKS.base.usdc, receipt: MORPHO_GAUNTLET_USDC_PRIME, receiptDecimals: 18, usdcDecimals: 6 },
+    },
+  },
+};
+
+export const VENUE_LIST: VenueCfg[] = [VENUES.aave, VENUES.morpho];

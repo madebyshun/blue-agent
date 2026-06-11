@@ -5,7 +5,7 @@
 import { useState, useEffect } from "react";
 import { useAccount, useReadContracts, useBalance, useReadContract, useWriteContract, useSwitchChain, usePublicClient } from "wagmi";
 import { formatUnits } from "viem";
-import { YIELD_NETWORKS, ERC20_ABI, AAVE_POOL_ABI, WITHDRAW_ALL, parseUsdc, supplyApyPct, type YieldNetwork } from "@/lib/yield-execution";
+import { YIELD_NETWORKS, ERC20_ABI, AAVE_POOL_ABI, ERC4626_ABI, WITHDRAW_ALL, parseUsdc, supplyApyPct, VENUES, VENUE_LIST, type YieldNetwork, type VenueId } from "@/lib/yield-execution";
 import { useChat } from "../ChatContext";
 
 function truncAddr(addr: string, len = 6) {
@@ -1084,9 +1084,9 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
 }
 
 // Rendered for the `prepare_yield` marker. NON-custodial move-to-yield: the user
-// signs approve + supply (or withdraw) on Aave v3 from their OWN wallet via wagmi.
-// Verified Aave addresses (see lib/yield-execution). Testnet by default — the
-// network selector defaults to Base Sepolia so users can test before mainnet.
+// signs supply/withdraw on the chosen venue (Aave v3 or Morpho) from their OWN
+// wallet via wagmi. Verified addresses (see lib/yield-execution). Best-rate
+// router: pick a venue, the card builds the right protocol calls.
 interface YieldMoveResult { action?: string; amount?: number | string; network?: string }
 
 function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
@@ -1100,6 +1100,7 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
   const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
 
+  const [venue,   setVenue]   = useState<VenueId>("aave");
   const [action,  setAction]  = useState<"supply" | "withdraw">(result.action === "withdraw" ? "withdraw" : "supply");
   const [network, setNetwork] = useState<YieldNetwork>(result.network === "base" ? "base" : "baseSepolia");
   const [amount,  setAmount]  = useState<string>(
@@ -1109,9 +1110,8 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
   const [err,  setErr]  = useState("");
   const [txHash, setTxHash] = useState<string>("");
 
-  // #4 Best-rate routing — live curated USDC lending APYs across Base venues
-  // (Aave / Moonwell / Compound / Morpho) from DefiLlama. Comparison/intelligence
-  // layer; supply executes via the verified Aave path today.
+  // #4 Best-rate routing — live curated USDC lending APYs across Base venues from
+  // DefiLlama. Drives both the comparison panel and the per-venue APY display.
   type Rate = { project: string; label: string; apy: number; executable: boolean };
   const [rates, setRates] = useState<Rate[] | null>(null);
   useEffect(() => {
@@ -1122,62 +1122,97 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
       .catch(() => { if (!cancelled) setRates([]); });
     return () => { cancelled = true; };
   }, []);
-  const bestRate = rates && rates.length ? rates[0] : null;
 
-  const cfg = YIELD_NETWORKS[network];
-  const publicClient = usePublicClient({ chainId: cfg.chainId });
+  const net = YIELD_NETWORKS[network];
+  const chainId = net.chainId;
+  const vcfg = VENUES[venue];
+  const vnet = vcfg.nets[network];            // venue addresses on this network (or undefined)
+  const isAave = vcfg.protocol === "aave";
+  const publicClient = usePublicClient({ chainId });
 
-  // #1 Position — live aUSDC balance (rebases up with interest). #2 APY — live
-  // Aave v3 supply rate read on-chain (works on testnet + mainnet, real data).
-  const { data: aBalRaw, refetch: refetchPos } = useReadContract({
-    address: cfg.aUsdc, abi: ERC20_ABI, functionName: "balanceOf",
-    args: address ? [address] : undefined, chainId: cfg.chainId,
-    query: { enabled: !!address },
+  // Picking a venue not on the current network auto-switches the network.
+  function pickVenue(v: VenueId) {
+    setVenue(v); setStep("idle"); setErr("");
+    if (!VENUES[v].nets[network]) setNetwork(Object.keys(VENUES[v].nets)[0] as YieldNetwork);
+  }
+  // Switching to a network the venue doesn't support falls back to Aave.
+  useEffect(() => { if (!VENUES[venue].nets[network]) setVenue("aave"); }, [network, venue]);
+
+  // #1 Position — Aave: aToken.balanceOf (rebases). Morpho: vault.maxWithdraw
+  // (USDC-equivalent of your shares). Both in USDC units for display.
+  const { data: aaveBal, refetch: refetchAave } = useReadContract({
+    address: vnet?.receipt, abi: ERC20_ABI, functionName: "balanceOf",
+    args: address ? [address] : undefined, chainId,
+    query: { enabled: !!address && isAave && !!vnet },
   });
   const { data: reserve } = useReadContract({
-    address: cfg.pool, abi: AAVE_POOL_ABI, functionName: "getReserveData",
-    args: [cfg.usdc], chainId: cfg.chainId,
+    address: vnet?.target, abi: AAVE_POOL_ABI, functionName: "getReserveData",
+    args: vnet ? [vnet.usdc] : undefined, chainId,
+    query: { enabled: isAave && !!vnet },
   });
-  const position = aBalRaw != null ? Number(formatUnits(aBalRaw as bigint, cfg.usdcDecimals)) : null;
-  const apy = reserve ? supplyApyPct((reserve as { currentLiquidityRate: bigint }).currentLiquidityRate) : null;
+  const { data: morphoMaxW, refetch: refetchMorpho } = useReadContract({
+    address: vnet?.target, abi: ERC4626_ABI, functionName: "maxWithdraw",
+    args: address ? [address] : undefined, chainId,
+    query: { enabled: !!address && !isAave && !!vnet },
+  });
+  const { data: morphoShares } = useReadContract({
+    address: vnet?.receipt, abi: ERC20_ABI, functionName: "balanceOf",
+    args: address ? [address] : undefined, chainId,
+    query: { enabled: !!address && !isAave && !!vnet },
+  });
+
+  const position = isAave
+    ? (aaveBal != null ? Number(formatUnits(aaveBal as bigint, 6)) : null)
+    : (morphoMaxW != null ? Number(formatUnits(morphoMaxW as bigint, 6)) : null);
+  const venueRate = rates?.find(r => r.project === vcfg.llamaProject)?.apy ?? null;
+  const apy = isAave && reserve
+    ? supplyApyPct((reserve as { currentLiquidityRate: bigint }).currentLiquidityRate)
+    : venueRate;
+  const refetchPos = () => { refetchAave?.(); refetchMorpho?.(); };
 
   const amt = parseFloat(amount);
   const withdrawAll = action === "withdraw" && all;
-  const valid = withdrawAll || amt > 0;
+  const valid = !!vnet && (withdrawAll || amt > 0);
   const busy = step === "switching" || step === "approving" || step === "supplying" || step === "withdrawing";
 
   async function run() {
     if (!address) { setErr("Connect your wallet first"); setStep("error"); return; }
+    if (!vnet)    { setErr(`${vcfg.short} isn't available on ${net.short}`); setStep("error"); return; }
     if (!valid)   { setErr("Enter an amount"); setStep("error"); return; }
     setErr(""); setTxHash("");
     try {
       setStep("switching");
-      await switchChainAsync({ chainId: cfg.chainId });
+      await switchChainAsync({ chainId });
       const value = withdrawAll ? WITHDRAW_ALL : parseUsdc(amt, network);
 
       if (action === "supply") {
         setStep("approving");
         const approveHash = await writeContractAsync({
-          address: cfg.usdc, abi: ERC20_ABI, functionName: "approve",
-          args: [cfg.pool, value], chainId: cfg.chainId,
+          address: vnet.usdc, abi: ERC20_ABI, functionName: "approve",
+          args: [vnet.spender, value], chainId,
         });
         await publicClient?.waitForTransactionReceipt({ hash: approveHash });
         setStep("supplying");
-        const supplyHash = await writeContractAsync({
-          address: cfg.pool, abi: AAVE_POOL_ABI, functionName: "supply",
-          args: [cfg.usdc, value, address, 0], chainId: cfg.chainId,
-        });
+        const supplyHash = isAave
+          ? await writeContractAsync({ address: vnet.target, abi: AAVE_POOL_ABI, functionName: "supply",  args: [vnet.usdc, value, address, 0], chainId })
+          : await writeContractAsync({ address: vnet.target, abi: ERC4626_ABI,   functionName: "deposit", args: [value, address], chainId });
         setTxHash(supplyHash); setStep("done");
       } else {
         setStep("withdrawing");
-        const wHash = await writeContractAsync({
-          address: cfg.pool, abi: AAVE_POOL_ABI, functionName: "withdraw",
-          args: [cfg.usdc, value, address], chainId: cfg.chainId,
-        });
+        let wHash: `0x${string}`;
+        if (isAave) {
+          wHash = await writeContractAsync({ address: vnet.target, abi: AAVE_POOL_ABI, functionName: "withdraw", args: [vnet.usdc, value, address], chainId });
+        } else if (withdrawAll) {
+          // ERC-4626 has no "max" sentinel — redeem the full share balance.
+          const shares = (morphoShares as bigint | undefined) ?? 0n;
+          if (shares === 0n) throw new Error("No position to withdraw");
+          wHash = await writeContractAsync({ address: vnet.target, abi: ERC4626_ABI, functionName: "redeem", args: [shares, address, address], chainId });
+        } else {
+          wHash = await writeContractAsync({ address: vnet.target, abi: ERC4626_ABI, functionName: "withdraw", args: [value, address, address], chainId });
+        }
         setTxHash(wHash); setStep("done");
       }
-      // Refresh the position once the tx is in (best-effort; it also rebases live).
-      setTimeout(() => { refetchPos?.(); }, 4000);
+      setTimeout(refetchPos, 4000); // best-effort refresh once the tx is in
     } catch (e) {
       setErr(((e as Error).message || String(e)).slice(0, 160)); setStep("error");
     }
@@ -1185,16 +1220,16 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
 
   if (step === "done") {
     const msg = action === "supply"
-      ? "Supplied — you'll receive aUSDC and start earning as it confirms."
+      ? `Supplied to ${vcfg.short} — earning as it confirms.`
       : "Withdraw submitted — USDC is returning to your wallet.";
     return (
       <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
         <div className="font-mono text-[11px] font-bold mb-1" style={{ color: "#22C55E" }}>
-          ✓ {action === "supply" ? "Supply" : "Withdraw"} submitted · {cfg.short}
+          ✓ {action === "supply" ? "Supply" : "Withdraw"} submitted · {vcfg.short} · {net.short}
         </div>
         <div className="font-mono text-[10px] text-slate-400 mb-2">{msg}</div>
         {txHash && (
-          <a href={`${cfg.explorer}/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
+          <a href={`${net.explorer}/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
              className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7]">
             View tx ↗
           </a>
@@ -1205,27 +1240,50 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
 
   const btnLabel = busy
     ? (step === "switching" ? "Switching network…" : step === "approving" ? "Approve in wallet…" : step === "supplying" ? "Supply in wallet…" : "Withdraw in wallet…")
-    : action === "supply" ? `🌾 Supply${amt > 0 ? ` ${amt}` : ""} USDC → Aave v3` : `↩︎ Withdraw${withdrawAll ? " all" : amt > 0 ? ` ${amt}` : ""} USDC`;
+    : action === "supply" ? `🌾 Supply${amt > 0 ? ` ${amt}` : ""} USDC → ${vcfg.short}` : `↩︎ Withdraw${withdrawAll ? " all" : amt > 0 ? ` ${amt}` : ""} USDC`;
 
   return (
     <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
-      <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold mb-3">MOVE TO YIELD · AAVE V3 · BASE</div>
+      <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold mb-3">MOVE TO YIELD · BASE</div>
 
       {/* Network risk banner */}
       <div className="rounded-lg px-2.5 py-1.5 mb-3 font-mono text-[10px] leading-relaxed"
-           style={cfg.testnet
+           style={net.testnet
              ? { background: "#F59E0B0a", border: "1px solid #F59E0B30", color: "#fcd9a3" }
              : { background: "#EF44440a", border: "1px solid #EF444440", color: "#fca5a5" }}>
-        {cfg.testnet
+        {net.testnet
           ? <>⚠️ <b>Testnet (Base Sepolia)</b> — safe to experiment with fake funds.</>
           : <>🔴 <b>Mainnet — real funds.</b> You sign; this is irreversible. Double-check the amount.</>}
       </div>
 
-      {/* #1 Position + #2 live APY — real on-chain reads */}
+      {/* Venue selector — the router */}
+      <div className="mb-3">
+        <div className="font-mono text-[9px] text-slate-600 mb-1.5">VENUE</div>
+        <div className="flex gap-1">
+          {VENUE_LIST.map(v => {
+            const active = venue === v.id;
+            const vr = rates?.find(r => r.project === v.llamaProject)?.apy ?? null;
+            return (
+              <button key={v.id} onClick={() => pickVenue(v.id)}
+                className="flex-1 font-mono text-[10px] py-1.5 rounded-md transition-colors"
+                style={active
+                  ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                  : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+                {v.short}{vr != null && <span className={active ? "text-[#22C55E]" : "text-slate-500"}> {vr.toFixed(1)}%</span>}
+              </button>
+            );
+          })}
+        </div>
+        <div className="font-mono text-[9px] text-slate-700 mt-1">
+          {vcfg.label}{!isAave && " · mainnet only"}
+        </div>
+      </div>
+
+      {/* #1 Position + #2 live APY — real on-chain reads (per venue) */}
       <div className="flex items-center justify-between mb-3 px-2.5 py-2 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] font-mono text-[10px]">
         <div>
           <div className="text-slate-600 mb-0.5">YOUR POSITION</div>
-          <div className="text-slate-200">{position != null ? `${position.toFixed(2)} aUSDC` : (isConnected ? "—" : "connect to view")}</div>
+          <div className="text-slate-200">{position != null ? `${position.toFixed(2)} USDC` : (isConnected ? (vnet ? "—" : "—") : "connect to view")}</div>
         </div>
         <div className="text-right">
           <div className="text-slate-600 mb-0.5">SUPPLY APY</div>
@@ -1244,16 +1302,11 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
             <div key={r.project} className="flex items-center justify-between py-[2px] font-mono text-[10px]">
               <span className={i === 0 ? "text-[#22C55E]" : "text-slate-400"}>
                 {i === 0 ? "★ " : "  "}{r.label}
-                {!r.executable && <span className="text-slate-700"> · routing soon</span>}
+                {!r.executable && <span className="text-slate-700"> · view-only</span>}
               </span>
               <span className={i === 0 ? "text-[#22C55E]" : "text-slate-300"}>{r.apy.toFixed(2)}%</span>
             </div>
           ))}
-          {bestRate && !bestRate.executable && (
-            <div className="mt-1.5 font-mono text-[9px] text-slate-600 leading-relaxed">
-              Supplying via Aave today — verified + live. 1-tap routing to {bestRate.label} ({bestRate.apy.toFixed(2)}%) is next.
-            </div>
-          )}
         </div>
       )}
 
@@ -1278,7 +1331,7 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
         <span className="font-mono text-[9px] text-slate-600 block mb-1">NETWORK</span>
         <select value={network} onChange={e => setNetwork(e.target.value as YieldNetwork)}
           className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 outline-none">
-          <option value="baseSepolia">Base Sepolia (testnet)</option>
+          <option value="baseSepolia" disabled={!VENUES[venue].nets.baseSepolia}>Base Sepolia (testnet)</option>
           <option value="base">Base mainnet</option>
         </select>
       </label>
@@ -1294,14 +1347,14 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
       {action === "withdraw" && (
         <label className="flex items-center gap-2 mb-2 font-mono text-[10px] text-slate-500 cursor-pointer">
           <input type="checkbox" checked={all} onChange={e => setAll(e.target.checked)} className="w-auto" />
-          Withdraw all (full aUSDC balance)
+          Withdraw all (full position)
         </label>
       )}
 
       <p className="font-mono text-[9px] text-slate-600 mb-2 leading-relaxed">
         {action === "supply"
-          ? <>Supplies USDC into the verified <span className="text-slate-400">Aave v3 Pool</span> — you sign <span className="text-slate-400">approve + supply</span> and receive aUSDC. Non-custodial; funds stay in your control.</>
-          : <>Pulls USDC back out of <span className="text-slate-400">Aave v3</span> to your wallet — you sign one withdraw call.</>}
+          ? <>Supplies USDC into <span className="text-slate-400">{vcfg.label}</span> — you sign {isAave ? "approve + supply" : "approve + deposit"} and hold a yield-bearing receipt. Non-custodial; funds stay in your control.</>
+          : <>Pulls USDC back out of <span className="text-slate-400">{vcfg.short}</span> to your wallet — you sign one {isAave ? "withdraw" : withdrawAll ? "redeem" : "withdraw"} call.</>}
       </p>
 
       {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
@@ -1314,7 +1367,7 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
         {!isConnected ? "Connect your wallet to continue" : btnLabel}
       </button>
       <p className="font-mono text-[9px] text-slate-700 mt-1.5">
-        Aave v3 · {cfg.label} · you sign every transaction · withdraw anytime.
+        {vcfg.label} · {net.label} · you sign every transaction · withdraw anytime.
       </p>
     </div>
   );
