@@ -82,19 +82,19 @@ export default function SettingsPanel() {
                 <div>
                   <span
                     className="font-mono text-4xl font-bold tabular-nums leading-none"
-                    style={{ color: credits <= 20 ? "#EF4444" : "#4FC3F7" }}
+                    style={{ color: isUnlimited ? holderTier.color : credits <= 20 ? "#EF4444" : "#4FC3F7" }}
                   >
-                    {credits.toLocaleString()}
+                    {isUnlimited ? "∞" : credits.toLocaleString()}
                   </span>
                   <span className="font-mono text-sm text-slate-600 ml-2">spendable</span>
                 </div>
                 <span className="font-mono text-[10px] text-slate-600 mb-1">
-                  {daily > 0 ? `+${daily.toLocaleString()}/day` : "—"}
+                  {isUnlimited ? `${holderTier.tier} · unlimited` : daily > 0 ? `+${daily.toLocaleString()}/day` : "—"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="font-mono text-[10px] text-slate-600">
-                  Accrued on-chain · cleared via chat use
+                  {isUnlimited ? "Max tier · no metering, every model free" : "Accrued on-chain · cleared via chat use"}
                 </span>
                 {holderTier.discount > 0 && (
                   <span className="font-mono text-[10px]" style={{ color: holderTier.color }}>
