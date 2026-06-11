@@ -1,7 +1,9 @@
 // x402/community-sentiment/index.ts
-// Community Sentiment — MiroShark 4-persona + Aeon narrative + Blue score
+// Community Sentiment — MiroShark 4-persona + Aeon narrative + Blue score.
+// IMPORTANT: there is no live social-media feed wired in, so this is an AI ESTIMATE
+// of likely sentiment generated from model knowledge — NOT measured from real posts.
+// The output is labelled accordingly (data_source + disclaimer). Resilient: never 500.
 // Price: $0.25
-// Fully self-contained
 
 type Msg = { role: string; content: string };
 async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
@@ -9,11 +11,13 @@ async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Pro
     method: "POST",
     headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
     body: JSON.stringify({ model: "claude-haiku-4-5", system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
+    signal: AbortSignal.timeout(30_000),
   });
-  if (!r.ok) throw new Error(`LLM ${r.status}: ${await r.text()}`);
+  if (!r.ok) throw new Error(`LLM ${r.status}`);
   const d = await r.json() as { content?: { text: string }[] };
   return d.content?.[0]?.text ?? "";
 }
+const DISCLAIMER = "AI estimate of likely community sentiment generated from model knowledge — NOT measured from live social posts. Treat scores as directional, not data.";
 function parseJson(t: string): Record<string, unknown> | null {
   let s = t.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
   const i = s.indexOf("{"), j = s.lastIndexOf("}");
@@ -76,10 +80,39 @@ Schema: {
       `Project: ${project}\nNarratives: ${narrativeRaw ?? "Base"}\nConsensus: ${JSON.stringify(consensus)}`, 0.3, 700);
 
     let result = parseJson(resultRaw);
-    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
+    if (!result) {
+      result = {
+        sentiment_score: null,
+        overall: "neutral",
+        consensus,
+        key_drivers: [],
+        risk_signals: [],
+        community_health: "stable",
+        recommended_actions: ["Re-run for a fuller estimate"],
+        summary: "Sentiment estimate briefly unavailable this run — re-run.",
+        degraded: true,
+      };
+    }
 
-    return Response.json({ tool: "community-sentiment", timestamp: new Date().toISOString(), project, miroshark: consensus, ...result });
+    return Response.json({
+      tool: "community-sentiment",
+      timestamp: new Date().toISOString(),
+      data_source: "AI estimate (no live social data — model-generated, not measured)",
+      disclaimer: DISCLAIMER,
+      project,
+      miroshark: consensus,
+      ...result,
+    });
   } catch (e) {
-    return Response.json({ error: "Community sentiment failed", message: (e as Error).message }, { status: 500 });
+    // Never 500 — return a labelled, degraded estimate.
+    return Response.json({
+      tool: "community-sentiment",
+      timestamp: new Date().toISOString(),
+      data_source: "AI estimate (no live social data — model-generated, not measured)",
+      disclaimer: DISCLAIMER,
+      degraded: true,
+      note: "Estimate unavailable this run — please retry.",
+      message: (e as Error).message,
+    });
   }
 }
