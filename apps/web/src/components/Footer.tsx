@@ -16,7 +16,7 @@ export default function Footer() {
           {[
             { label: "Console",  href: "/code" },
             { label: "Chat",     href: "/app/chat" },
-            { label: "Launch",   href: "/launch" },
+            { label: "Launch",   href: "/app/chat" },
             { label: "Rewards",  href: "/rewards" },
             { label: "Telegram", href: "https://t.me/blueagent_hub" },
           ].map((l) => (
