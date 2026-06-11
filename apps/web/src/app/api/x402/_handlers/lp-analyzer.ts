@@ -1,34 +1,28 @@
-// x402/lp-analyzer — LP position analysis: impermanent loss, fee income, rebalance recommendation
-// Price: $0.25 — Fully self-contained, no external workspace imports
+// x402/lp-analyzer
+// LP Position Analyzer — grounded in REAL pool data when a `pool` address is given:
+// live TVL + 24h volume + current price (GeckoTerminal). Impermanent loss is computed
+// DETERMINISTICALLY (2√r/(1+r)−1) from the real price move (entry→current, or 24h),
+// and fee yield is estimated from real volume/TVL × fee tier. The LLM only writes the
+// rebalance verdict/narrative on top — it never invents IL, fees or APR.
+// Resilient: graceful fallback, never 500.
+// Price: $0.25
+
+import { getBasePool, impermanentLoss, type PoolDetail } from "@/lib/market-data";
 
 type BankrMessage = { role: string; content: string };
-
-async function callBankrLLM(opts: {
-  model?: string; system: string; messages: BankrMessage[];
-  temperature?: number; maxTokens?: number;
-}): Promise<string> {
+async function callBankrLLM(opts: { system: string; messages: BankrMessage[]; temperature?: number; maxTokens?: number }): Promise<string> {
   const res = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
-    headers: {
-      "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "",
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: opts.model ?? "claude-haiku-4-5",
-      system: opts.system,
-      messages: opts.messages,
-      temperature: opts.temperature ?? 0.5,
-      max_tokens: opts.maxTokens ?? 1000,
-    }),
+    headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model: "claude-haiku-4-5", system: opts.system, messages: opts.messages, temperature: opts.temperature ?? 0.3, max_tokens: opts.maxTokens ?? 800 }),
+    signal: AbortSignal.timeout(30_000),
   });
-  if (!res.ok) throw new Error(`Bankr LLM ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`Bankr LLM ${res.status}`);
   const d = await res.json() as { content?: { text: string }[]; text?: string };
   if (d.content?.length) return d.content[0].text;
   if (d.text) return d.text;
   throw new Error("Invalid Bankr LLM response");
 }
-
 function extractJsonObject(text: string): Record<string, unknown> | null {
   let raw = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
   const s = raw.indexOf("{"), e = raw.lastIndexOf("}");
@@ -37,92 +31,110 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
   try { return JSON.parse(raw.replace(/[\x00-\x1F\x7F]/g, " ")); } catch {}
   return null;
 }
-
-const SYSTEM = `You are a DeFi LP position analyst. Analyze liquidity provider positions on Base chain.
-
-Return ONLY valid JSON:
-{
-  "impermanentLoss": {
-    "current": "string (e.g. '-2.3%')",
-    "estimated30d": "string",
-    "severity": "LOW | MEDIUM | HIGH | CRITICAL"
-  },
-  "feeIncome": {
-    "daily": "string (e.g. '$12.50')",
-    "weekly": "string",
-    "monthly": "string",
-    "apr": "string (e.g. '18.4%')"
-  },
-  "netPnl": "string (fee income minus IL, e.g. '+$45.20')",
-  "rebalanceSignal": "HOLD | REBALANCE | EXIT",
-  "rebalanceReason": "string",
-  "priceRange": {
-    "current": "string",
-    "inRange": boolean,
-    "distanceToEdge": "string"
-  },
-  "recommendation": "string",
-  "riskFactors": ["factor1", "factor2"]
-}`;
+const pct = (n: number | null) => (n == null ? null : +(n * 100).toFixed(2));
+const usd = (n: number | null) => (n == null ? "?" : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : `$${n.toFixed(2)}`);
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === "GET") {
     return Response.json({
       service: "lp-analyzer",
-      description: "LP position analysis — impermanent loss, fee income, rebalance recommendation",
+      description: "LP position analysis — real pool TVL/volume (GeckoTerminal), deterministic impermanent loss, fee-yield estimate, rebalance signal",
       price: "$0.25",
-      params: {
-        positionId: "LP NFT position ID or address",
-        pool: "Pool address (optional)",
-        token0: "Token 0 symbol or address",
-        token1: "Token 1 symbol or address",
-        entryPrice: "Price when position was opened (optional)",
-      },
+      params: { pool: "Base pool address 0x... (grounds the analysis in real data)", entryPrice: "Pool price when you opened (for exact IL)", investedAmount: "Your position size in USD (for $ fee income)", feeTier: "Pool fee % e.g. 0.3 (optional)" },
     });
   }
 
   try {
-    let body: {
-      positionId?: string;
-      pool?: string;
-      token0?: string;
-      token1?: string;
-      entryPrice?: string;
-      investedAmount?: string;
-    } = {};
-    try {
-      const text = await req.text();
-      if (text?.trim().startsWith("{")) body = JSON.parse(text);
-    } catch {}
+    let body: { positionId?: string; pool?: string; token0?: string; token1?: string; entryPrice?: string; investedAmount?: string; feeTier?: string } = {};
+    try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const url = new URL(req.url);
-    if (!body.positionId) body.positionId = url.searchParams.get("positionId") || undefined;
-    if (!body.pool) body.pool = url.searchParams.get("pool") || undefined;
-    if (!body.token0) body.token0 = url.searchParams.get("token0") || undefined;
-    if (!body.token1) body.token1 = url.searchParams.get("token1") || undefined;
-
-    const { positionId, pool, token0, token1, entryPrice, investedAmount } = body;
-
-    if (!positionId && !pool && !token0) {
-      return Response.json({ error: "Provide positionId, pool address, or token pair (token0/token1)" }, { status: 400 });
+    const pool = body.pool ?? url.searchParams.get("pool") ?? "";
+    const token0 = body.token0 ?? url.searchParams.get("token0") ?? "";
+    const token1 = body.token1 ?? url.searchParams.get("token1") ?? "";
+    const positionId = body.positionId ?? url.searchParams.get("positionId") ?? "";
+    const entryPrice = parseFloat(body.entryPrice ?? url.searchParams.get("entryPrice") ?? "");
+    const investedAmount = parseFloat(body.investedAmount ?? url.searchParams.get("investedAmount") ?? "");
+    const feeTierIn = parseFloat(body.feeTier ?? url.searchParams.get("feeTier") ?? "");
+    if (!pool && !positionId && !token0) {
+      return Response.json({ error: "Provide a pool address (0x...) to ground the analysis, or token0/token1" }, { status: 400 });
     }
 
-    const llmResponse = await callBankrLLM({
-      system: SYSTEM,
-      messages: [{ role: "user", content: `Analyze this LP position on Base chain:
-Position ID: ${positionId || "not provided"}
-Pool: ${pool || "not provided"}
-Token pair: ${token0 || "?"} / ${token1 || "?"}
-Entry price: ${entryPrice || "unknown"}
-Invested amount: ${investedAmount || "unknown"}
+    // ── Real pool data (GeckoTerminal) ────────────────────────────────────────
+    const p: PoolDetail | null = pool ? await getBasePool(pool) : null;
+    const grounded = !!p;
 
-Estimate impermanent loss, fee income (assume typical Uniswap v3 range), and give rebalance signal. Be realistic with estimates based on Base DeFi conditions.` }],
-      temperature: 0.3,
-      maxTokens: 800,
+    // ── Deterministic impermanent loss ────────────────────────────────────────
+    // Prefer entry→current ratio (exact since position opened); else 24h move.
+    let ilFraction: number | null = null;
+    let ilBasis = "n/a";
+    if (p && Number.isFinite(entryPrice) && entryPrice > 0 && p.poolPrice != null) {
+      ilFraction = impermanentLoss(p.poolPrice / entryPrice);
+      ilBasis = "entry→current price";
+    } else if (p && p.change24hPct != null) {
+      ilFraction = impermanentLoss(1 + p.change24hPct / 100);
+      ilBasis = "last 24h price move";
+    }
+    const ilPct = pct(ilFraction);
+
+    // ── Fee-yield estimate from real volume/TVL × fee tier ────────────────────
+    const feeRate = Number.isFinite(feeTierIn) && feeTierIn > 0 ? feeTierIn / 100 : (p?.feePct != null ? p.feePct / 100 : 0.003);
+    let feeAprPct: number | null = null;
+    let dailyFeesPoolUsd: number | null = null;
+    if (p && p.volume24h != null && p.reserveUsd && p.reserveUsd > 0) {
+      dailyFeesPoolUsd = p.volume24h * feeRate;
+      feeAprPct = +((dailyFeesPoolUsd / p.reserveUsd) * 365 * 100).toFixed(2);
+    }
+    const myDailyFees = feeAprPct != null && Number.isFinite(investedAmount) && investedAmount > 0
+      ? +((feeAprPct / 100 / 365) * investedAmount).toFixed(2) : null;
+
+    const computed = {
+      pool_data: p ? { name: p.name, tvl_usd: p.reserveUsd, volume_24h_usd: p.volume24h, current_price: p.poolPrice, change_24h_pct: p.change24hPct, fee_pct: p.feePct ?? feeRate * 100 } : null,
+      impermanent_loss: { value_pct: ilPct, basis: ilBasis },
+      fee_yield: { apr_pct: feeAprPct, fee_rate_pct: +(feeRate * 100).toFixed(4), my_daily_fees_usd: myDailyFees, assumed_fee_tier: !(p?.feePct != null) && !(Number.isFinite(feeTierIn) && feeTierIn > 0) },
+      net_30d_pct: ilPct != null && feeAprPct != null ? +(feeAprPct / 12 + ilPct).toFixed(2) : null,
+    };
+
+    const ctx = grounded
+      ? `REAL pool data (GeckoTerminal): ${p!.name} — TVL ${usd(p!.reserveUsd)}, 24h volume ${usd(p!.volume24h)}, current price ${p!.poolPrice ?? "?"} (24h ${p!.change24hPct ?? "?"}%), fee tier ${(p!.feePct ?? feeRate * 100)}%.
+Computed (do not change these numbers): impermanent loss ${ilPct ?? "?"}% (${ilBasis}); estimated fee APR ${feeAprPct ?? "?"}% (volume×fee/TVL); net 30d ≈ ${computed.net_30d_pct ?? "?"}%.${myDailyFees != null ? ` Your est. fee income ${usd(myDailyFees)}/day on ${usd(investedAmount)} invested.` : ""}`
+      : `No pool address resolved on GeckoTerminal — provide a Base pool 0x... for real numbers. Give a clearly-labelled qualitative estimate; do not present precise IL/fee figures as measured.`;
+
+    const system = `You are Blue Agent — LP position analyst for Base (chain 8453).
+${grounded ? "You are given REAL pool metrics and DETERMINISTICALLY COMPUTED impermanent loss + fee-yield. Reference those exact numbers; NEVER change or invent them. Only judge the rebalance signal and write the narrative." : "No live pool data — clearly frame the output as an estimate, not measured."}
+Return ONLY raw JSON. No markdown.
+Schema: {
+  "rebalanceSignal": "HOLD | REBALANCE | EXIT",
+  "rebalanceReason": "<reference the real IL vs fee APR>",
+  "ilSeverity": "LOW | MEDIUM | HIGH | CRITICAL",
+  "recommendation": "<1-2 sentences>",
+  "riskFactors": ["<factor>", "<factor>"]
+}`;
+
+    let narrative: Record<string, unknown> | null = null;
+    for (let attempt = 0; attempt < 2 && !narrative; attempt++) {
+      try { narrative = extractJsonObject(await callBankrLLM({ system, messages: [{ role: "user", content: `${ctx}\nPair: ${token0 || p?.baseSymbol || "?"}/${token1 || p?.quoteSymbol || "?"}` }] })); } catch { /* retry */ }
+    }
+    if (!narrative) {
+      const severe = ilPct != null && ilPct <= -5;
+      narrative = {
+        rebalanceSignal: severe ? "REBALANCE" : "HOLD",
+        rebalanceReason: grounded ? "Narrative synthesis briefly unavailable — IL/fee figures below are computed from real pool data. Re-run for the full read." : "Re-run, or supply a pool address for real numbers.",
+        ilSeverity: ilPct == null ? "LOW" : ilPct <= -10 ? "CRITICAL" : ilPct <= -5 ? "HIGH" : ilPct <= -1 ? "MEDIUM" : "LOW",
+        recommendation: grounded ? "Compare the computed fee APR against impermanent loss before adding/removing liquidity." : "Provide a pool address for a grounded analysis.",
+        riskFactors: ["Price divergence increases IL", "Fee APR estimate assumes constant volume"],
+        degraded: true,
+      };
+    }
+
+    return Response.json({
+      tool: "lp-analyzer",
+      timestamp: new Date().toISOString(),
+      data_source: grounded ? "GeckoTerminal (live pool) + deterministic IL/fee math" : "estimate (no pool resolved on GeckoTerminal)",
+      pool: pool || null,
+      position_id: positionId || null,
+      ...computed,
+      ...narrative,
     });
-
-    let result = extractJsonObject(llmResponse);
-    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
-    return Response.json(result);
   } catch (error) {
     return Response.json({ error: "LP analysis failed", message: (error as Error).message }, { status: 500 });
   }
