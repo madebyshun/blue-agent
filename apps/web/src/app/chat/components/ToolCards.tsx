@@ -749,39 +749,6 @@ function YieldCard({ result }: { result: Record<string, unknown> }) {
   );
 }
 
-// ── LaunchSimCard ─────────────────────────────────────────────────────────────
-
-function LaunchSimCard({ result }: { result: Record<string, unknown> }) {
-  const verdict    = String(result.verdict ?? result.consensus ?? "");
-  const score      = Number(result.score ?? result.launch_score ?? 0);
-  const fdv        = String(result.projectedFDV ?? result.projected_fdv ?? result.fdv ?? "");
-  const week1      = String(result.week1Return ?? result.week_1_return ?? "");
-  const risks      = Array.isArray(result.risks) ? result.risks as string[] : [];
-  const summary    = String(result.summary ?? "");
-  const isPositive = score >= 60;
-  const color      = isPositive ? "#A78BFA" : "#fb923c";
-  return (
-    <Card accentColor={color}>
-      <CardHeader accentColor={color}>
-        <span className="font-mono text-[11px] font-bold text-slate-300">🚀 Launch Simulator</span>
-        <div className="flex items-center gap-2">
-          {verdict && <span className="font-mono text-[10px] font-bold" style={{ color }}>{verdict}</span>}
-          {score > 0 && <span className="font-mono text-[10px] text-slate-500">{score}/100</span>}
-        </div>
-      </CardHeader>
-      <CardBody>
-        {score > 0 && <ScoreBar score={score} color={color} />}
-        <div className="grid grid-cols-2 gap-3">
-          {fdv   && <div><p className="font-mono text-[9px] text-slate-600 uppercase">Projected FDV</p><p className="font-mono text-[12px] text-slate-200">{fdv}</p></div>}
-          {week1 && <div><p className="font-mono text-[9px] text-slate-600 uppercase">Week 1 Return</p><p className="font-mono text-[12px]" style={{ color: week1.startsWith("+") ? "#4ade80" : "#f87171" }}>{week1}</p></div>}
-        </div>
-        {risks.length > 0 && <FlagList flags={risks} color="#fb923c" />}
-        {summary && <p className="font-mono text-[11px] text-slate-400 leading-snug">{summary}</p>}
-      </CardBody>
-    </Card>
-  );
-}
-
 // ── GenericCard — fallback for any tool without a specific card ───────────────
 
 const SKIP_KEYS = new Set(["raw", "prompt", "_meta", "model", "tool", "command"]);
@@ -1080,7 +1047,6 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_aml":           return <AmlCard         result={r} />;
     case "hub_quantum":       return <QuantumCard      result={r} />;
     case "hub_yield":         return <YieldCard        result={r} />;
-    case "hub_launch_sim":    return <LaunchSimCard    result={r} />;
     case "show_portfolio":    return <PortfolioCard />;
     case "prepare_token_launch": return <TokenLaunchCard result={r as TokenLaunchResult} />;
     default:                  return <GenericCard      tool={tool} result={r} />;
