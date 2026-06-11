@@ -374,7 +374,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const streamStartRef = useRef<number>(0);
 
   const cost = creditCost(chatTier, holderTier);
-  const isUnlimited = holderTier.dailyCr === -1 && !!walletAddr;
+  // Local dev never gates on credits: `process.env.NODE_ENV` is inlined at build
+  // time, so this is `true` only under `next dev` and ALWAYS `false` in a
+  // production build (the deployed app is unaffected). The server already skips
+  // the ledger debit locally when INTERNAL_SERVICE_KEY is unset.
+  const DEV_UNLIMITED = process.env.NODE_ENV !== "production";
+  const isUnlimited = DEV_UNLIMITED || (holderTier.dailyCr === -1 && !!walletAddr);
   const daily = getDailyCr(holderTier, !!walletAddr);
   // Only block sending after wallet detection is done — avoids false "out of credits" on F5
   const outOfCredits = walletReady && !isUnlimited && credits < cost;

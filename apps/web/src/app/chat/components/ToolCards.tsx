@@ -3,8 +3,10 @@
 // One card per tool type: honeypot, risk-gate, deep-analysis, token-pick, contract-trust
 
 import { useState } from "react";
-import { useAccount, useReadContracts, useBalance } from "wagmi";
+import { useAccount, useReadContracts, useBalance, useWriteContract, useSwitchChain, usePublicClient } from "wagmi";
 import { formatUnits } from "viem";
+import { YIELD_NETWORKS, ERC20_ABI, AAVE_POOL_ABI, WITHDRAW_ALL, parseUsdc, type YieldNetwork } from "@/lib/yield-execution";
+import { useChat } from "../ChatContext";
 
 function truncAddr(addr: string, len = 6) {
   if (!addr || addr.length < 12) return addr;
@@ -1081,6 +1083,176 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
   );
 }
 
+// Rendered for the `prepare_yield` marker. NON-custodial move-to-yield: the user
+// signs approve + supply (or withdraw) on Aave v3 from their OWN wallet via wagmi.
+// Verified Aave addresses (see lib/yield-execution). Testnet by default — the
+// network selector defaults to Base Sepolia so users can test before mainnet.
+interface YieldMoveResult { action?: string; amount?: number | string; network?: string }
+
+function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
+  // Use the chat's canonical connected wallet (set by WalletBar via
+  // onWalletChange) so the card's "connected" state matches what the user sees
+  // in the sidebar — wagmi's bare useAccount() can lag/mismatch right after a
+  // reconnect. wagmi hooks below still drive the actual signing.
+  const { walletAddr } = useChat();
+  const address = walletAddr as `0x${string}` | undefined;
+  const isConnected = !!walletAddr;
+  const { switchChainAsync } = useSwitchChain();
+  const { writeContractAsync } = useWriteContract();
+
+  const [action,  setAction]  = useState<"supply" | "withdraw">(result.action === "withdraw" ? "withdraw" : "supply");
+  const [network, setNetwork] = useState<YieldNetwork>(result.network === "base" ? "base" : "baseSepolia");
+  const [amount,  setAmount]  = useState<string>(
+    result.amount != null && (typeof result.amount === "number" || typeof result.amount === "string") ? String(result.amount) : "");
+  const [all,  setAll]  = useState(false);
+  const [step, setStep] = useState<"idle" | "switching" | "approving" | "supplying" | "withdrawing" | "done" | "error">("idle");
+  const [err,  setErr]  = useState("");
+  const [txHash, setTxHash] = useState<string>("");
+
+  const cfg = YIELD_NETWORKS[network];
+  const publicClient = usePublicClient({ chainId: cfg.chainId });
+
+  const amt = parseFloat(amount);
+  const withdrawAll = action === "withdraw" && all;
+  const valid = withdrawAll || amt > 0;
+  const busy = step === "switching" || step === "approving" || step === "supplying" || step === "withdrawing";
+
+  async function run() {
+    if (!address) { setErr("Connect your wallet first"); setStep("error"); return; }
+    if (!valid)   { setErr("Enter an amount"); setStep("error"); return; }
+    setErr(""); setTxHash("");
+    try {
+      setStep("switching");
+      await switchChainAsync({ chainId: cfg.chainId });
+      const value = withdrawAll ? WITHDRAW_ALL : parseUsdc(amt, network);
+
+      if (action === "supply") {
+        setStep("approving");
+        const approveHash = await writeContractAsync({
+          address: cfg.usdc, abi: ERC20_ABI, functionName: "approve",
+          args: [cfg.pool, value], chainId: cfg.chainId,
+        });
+        await publicClient?.waitForTransactionReceipt({ hash: approveHash });
+        setStep("supplying");
+        const supplyHash = await writeContractAsync({
+          address: cfg.pool, abi: AAVE_POOL_ABI, functionName: "supply",
+          args: [cfg.usdc, value, address, 0], chainId: cfg.chainId,
+        });
+        setTxHash(supplyHash); setStep("done");
+      } else {
+        setStep("withdrawing");
+        const wHash = await writeContractAsync({
+          address: cfg.pool, abi: AAVE_POOL_ABI, functionName: "withdraw",
+          args: [cfg.usdc, value, address], chainId: cfg.chainId,
+        });
+        setTxHash(wHash); setStep("done");
+      }
+    } catch (e) {
+      setErr(((e as Error).message || String(e)).slice(0, 160)); setStep("error");
+    }
+  }
+
+  if (step === "done") {
+    const msg = action === "supply"
+      ? "Supplied — you'll receive aUSDC and start earning as it confirms."
+      : "Withdraw submitted — USDC is returning to your wallet.";
+    return (
+      <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
+        <div className="font-mono text-[11px] font-bold mb-1" style={{ color: "#22C55E" }}>
+          ✓ {action === "supply" ? "Supply" : "Withdraw"} submitted · {cfg.short}
+        </div>
+        <div className="font-mono text-[10px] text-slate-400 mb-2">{msg}</div>
+        {txHash && (
+          <a href={`${cfg.explorer}/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
+             className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7]">
+            View tx ↗
+          </a>
+        )}
+      </div>
+    );
+  }
+
+  const btnLabel = busy
+    ? (step === "switching" ? "Switching network…" : step === "approving" ? "Approve in wallet…" : step === "supplying" ? "Supply in wallet…" : "Withdraw in wallet…")
+    : action === "supply" ? `🌾 Supply${amt > 0 ? ` ${amt}` : ""} USDC → Aave v3` : `↩︎ Withdraw${withdrawAll ? " all" : amt > 0 ? ` ${amt}` : ""} USDC`;
+
+  return (
+    <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
+      <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold mb-3">MOVE TO YIELD · AAVE V3 · BASE</div>
+
+      {/* Network risk banner */}
+      <div className="rounded-lg px-2.5 py-1.5 mb-3 font-mono text-[10px] leading-relaxed"
+           style={cfg.testnet
+             ? { background: "#F59E0B0a", border: "1px solid #F59E0B30", color: "#fcd9a3" }
+             : { background: "#EF44440a", border: "1px solid #EF444440", color: "#fca5a5" }}>
+        {cfg.testnet
+          ? <>⚠️ <b>Testnet (Base Sepolia)</b> — safe to experiment with fake funds.</>
+          : <>🔴 <b>Mainnet — real funds.</b> You sign; this is irreversible. Double-check the amount.</>}
+      </div>
+
+      {/* Supply / Withdraw toggle */}
+      <div className="flex gap-1 mb-3">
+        {(["supply", "withdraw"] as const).map(a => {
+          const active = action === a;
+          return (
+            <button key={a} onClick={() => setAction(a)}
+              className="flex-1 font-mono text-[11px] py-1.5 rounded-md transition-colors"
+              style={active
+                ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+              {a === "supply" ? "Supply" : "Withdraw"}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Network */}
+      <label className="block mb-3">
+        <span className="font-mono text-[9px] text-slate-600 block mb-1">NETWORK</span>
+        <select value={network} onChange={e => setNetwork(e.target.value as YieldNetwork)}
+          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 outline-none">
+          <option value="baseSepolia">Base Sepolia (testnet)</option>
+          <option value="base">Base mainnet</option>
+        </select>
+      </label>
+
+      {/* Amount */}
+      <label className="block mb-2">
+        <span className="font-mono text-[9px] text-slate-600 block mb-1">AMOUNT (USDC)</span>
+        <input type="number" min="0" step="0.01" value={amount} disabled={withdrawAll}
+          onChange={e => setAmount(e.target.value)} placeholder="e.g. 5"
+          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors disabled:opacity-40" />
+      </label>
+
+      {action === "withdraw" && (
+        <label className="flex items-center gap-2 mb-2 font-mono text-[10px] text-slate-500 cursor-pointer">
+          <input type="checkbox" checked={all} onChange={e => setAll(e.target.checked)} className="w-auto" />
+          Withdraw all (full aUSDC balance)
+        </label>
+      )}
+
+      <p className="font-mono text-[9px] text-slate-600 mb-2 leading-relaxed">
+        {action === "supply"
+          ? <>Supplies USDC into the verified <span className="text-slate-400">Aave v3 Pool</span> — you sign <span className="text-slate-400">approve + supply</span> and receive aUSDC. Non-custodial; funds stay in your control.</>
+          : <>Pulls USDC back out of <span className="text-slate-400">Aave v3</span> to your wallet — you sign one withdraw call.</>}
+      </p>
+
+      {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
+
+      <button onClick={run} disabled={busy || !valid || !isConnected}
+        className="w-full font-mono text-[12px] font-bold py-2 rounded-lg transition-all disabled:opacity-50"
+        style={action === "supply"
+          ? { background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }
+          : { background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+        {!isConnected ? "Connect your wallet to continue" : btnLabel}
+      </button>
+      <p className="font-mono text-[9px] text-slate-700 mt-1.5">
+        Aave v3 · {cfg.label} · you sign every transaction · withdraw anytime.
+      </p>
+    </div>
+  );
+}
+
 export function ToolResultCard({ tool, result }: { tool: string; result: Record<string, unknown> }) {
   if (!result || typeof result !== "object") return null;
   const r = result;
@@ -1099,6 +1271,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_yield":         return <YieldCard        result={r} />;
     case "show_portfolio":    return <PortfolioCard />;
     case "prepare_token_launch": return <TokenLaunchCard result={r as TokenLaunchResult} />;
+    case "prepare_yield":     return <MoveToYieldCard  result={r as YieldMoveResult} />;
     default:                  return <GenericCard      tool={tool} result={r} />;
   }
 }
