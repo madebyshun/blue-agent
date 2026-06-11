@@ -76,7 +76,7 @@ export async function GET() {
         apyBase:   Number((p.apyBase ?? 0).toFixed(2)),
         apyReward: Number((p.apyReward ?? 0).toFixed(2)),
         tvlUsd:    Math.round(p.tvlUsd ?? 0),
-        executable: p.project === "aave-v3", // only Aave is verified + wired today
+        executable: p.project === "aave-v3" || p.project === "morpho-blue", // verified + wired venues
         llamaUrl:  p.pool ? `https://defillama.com/yields/pool/${p.pool}` : "https://defillama.com/yields?chain=Base",
       }))
       .sort((a, b) => b.apy - a.apy);
