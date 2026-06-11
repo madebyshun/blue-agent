@@ -56,6 +56,8 @@ export const ERC20_ABI = [
     inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }], outputs: [{ type: "bool" }] },
   { name: "allowance", type: "function", stateMutability: "view",
     inputs: [{ name: "owner", type: "address" }, { name: "spender", type: "address" }], outputs: [{ type: "uint256" }] },
+  { name: "balanceOf", type: "function", stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }], outputs: [{ type: "uint256" }] },
 ] as const satisfies Abi;
 
 export const AAVE_POOL_ABI = [
@@ -63,6 +65,27 @@ export const AAVE_POOL_ABI = [
     inputs: [{ name: "asset", type: "address" }, { name: "amount", type: "uint256" }, { name: "onBehalfOf", type: "address" }, { name: "referralCode", type: "uint16" }], outputs: [] },
   { name: "withdraw", type: "function", stateMutability: "nonpayable",
     inputs: [{ name: "asset", type: "address" }, { name: "amount", type: "uint256" }, { name: "to", type: "address" }], outputs: [{ type: "uint256" }] },
+  // Aave v3 ReserveData (legacy layout). We only read currentLiquidityRate (the
+  // supply APR, in ray) to derive the live supply APY.
+  { name: "getReserveData", type: "function", stateMutability: "view",
+    inputs: [{ name: "asset", type: "address" }],
+    outputs: [{ type: "tuple", components: [
+      { name: "configuration", type: "tuple", components: [{ name: "data", type: "uint256" }] },
+      { name: "liquidityIndex", type: "uint128" },
+      { name: "currentLiquidityRate", type: "uint128" },
+      { name: "variableBorrowIndex", type: "uint128" },
+      { name: "currentVariableBorrowRate", type: "uint128" },
+      { name: "currentStableBorrowRate", type: "uint128" },
+      { name: "lastUpdateTimestamp", type: "uint40" },
+      { name: "id", type: "uint16" },
+      { name: "aTokenAddress", type: "address" },
+      { name: "stableDebtTokenAddress", type: "address" },
+      { name: "variableDebtTokenAddress", type: "address" },
+      { name: "interestRateStrategyAddress", type: "address" },
+      { name: "accruedToTreasury", type: "uint128" },
+      { name: "unbacked", type: "uint128" },
+      { name: "isolationModeTotalDebt", type: "uint128" },
+    ] }] },
 ] as const satisfies Abi;
 
 // maxUint256 = "withdraw all" (Aave convention).
@@ -70,4 +93,13 @@ export const WITHDRAW_ALL = maxUint256;
 
 export function parseUsdc(amount: number, network: YieldNetwork): bigint {
   return parseUnits(String(amount), YIELD_NETWORKS[network].usdcDecimals);
+}
+
+// Aave supply APY from currentLiquidityRate (APR in ray, 1e27), compounded per
+// second — matches the % Aave's own UI shows. Returns a percentage (e.g. 4.21).
+const RAY = 1e27;
+const SECONDS_PER_YEAR = 31_536_000;
+export function supplyApyPct(liquidityRateRay: bigint): number {
+  const apr = Number(liquidityRateRay) / RAY;
+  return ((1 + apr / SECONDS_PER_YEAR) ** SECONDS_PER_YEAR - 1) * 100;
 }

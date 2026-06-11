@@ -3,9 +3,9 @@
 // One card per tool type: honeypot, risk-gate, deep-analysis, token-pick, contract-trust
 
 import { useState } from "react";
-import { useAccount, useReadContracts, useBalance, useWriteContract, useSwitchChain, usePublicClient } from "wagmi";
+import { useAccount, useReadContracts, useBalance, useReadContract, useWriteContract, useSwitchChain, usePublicClient } from "wagmi";
 import { formatUnits } from "viem";
-import { YIELD_NETWORKS, ERC20_ABI, AAVE_POOL_ABI, WITHDRAW_ALL, parseUsdc, type YieldNetwork } from "@/lib/yield-execution";
+import { YIELD_NETWORKS, ERC20_ABI, AAVE_POOL_ABI, WITHDRAW_ALL, parseUsdc, supplyApyPct, type YieldNetwork } from "@/lib/yield-execution";
 import { useChat } from "../ChatContext";
 
 function truncAddr(addr: string, len = 6) {
@@ -1112,6 +1112,20 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
   const cfg = YIELD_NETWORKS[network];
   const publicClient = usePublicClient({ chainId: cfg.chainId });
 
+  // #1 Position — live aUSDC balance (rebases up with interest). #2 APY — live
+  // Aave v3 supply rate read on-chain (works on testnet + mainnet, real data).
+  const { data: aBalRaw, refetch: refetchPos } = useReadContract({
+    address: cfg.aUsdc, abi: ERC20_ABI, functionName: "balanceOf",
+    args: address ? [address] : undefined, chainId: cfg.chainId,
+    query: { enabled: !!address },
+  });
+  const { data: reserve } = useReadContract({
+    address: cfg.pool, abi: AAVE_POOL_ABI, functionName: "getReserveData",
+    args: [cfg.usdc], chainId: cfg.chainId,
+  });
+  const position = aBalRaw != null ? Number(formatUnits(aBalRaw as bigint, cfg.usdcDecimals)) : null;
+  const apy = reserve ? supplyApyPct((reserve as { currentLiquidityRate: bigint }).currentLiquidityRate) : null;
+
   const amt = parseFloat(amount);
   const withdrawAll = action === "withdraw" && all;
   const valid = withdrawAll || amt > 0;
@@ -1147,6 +1161,8 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
         });
         setTxHash(wHash); setStep("done");
       }
+      // Refresh the position once the tx is in (best-effort; it also rebases live).
+      setTimeout(() => { refetchPos?.(); }, 4000);
     } catch (e) {
       setErr(((e as Error).message || String(e)).slice(0, 160)); setStep("error");
     }
@@ -1188,6 +1204,18 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
         {cfg.testnet
           ? <>⚠️ <b>Testnet (Base Sepolia)</b> — safe to experiment with fake funds.</>
           : <>🔴 <b>Mainnet — real funds.</b> You sign; this is irreversible. Double-check the amount.</>}
+      </div>
+
+      {/* #1 Position + #2 live APY — real on-chain reads */}
+      <div className="flex items-center justify-between mb-3 px-2.5 py-2 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] font-mono text-[10px]">
+        <div>
+          <div className="text-slate-600 mb-0.5">YOUR POSITION</div>
+          <div className="text-slate-200">{position != null ? `${position.toFixed(2)} aUSDC` : (isConnected ? "—" : "connect to view")}</div>
+        </div>
+        <div className="text-right">
+          <div className="text-slate-600 mb-0.5">SUPPLY APY</div>
+          <div className="text-[#22C55E]">{apy != null ? `~${apy.toFixed(2)}%` : "—"}</div>
+        </div>
       </div>
 
       {/* Supply / Withdraw toggle */}
