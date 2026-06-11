@@ -220,8 +220,8 @@ const TOOLS = [
   },
   {
     name: "hub_whale_tracker",
-    description: "Smart money flow analysis — track top wallet moves across Base in real time.",
-    inputSchema: { type: "object", properties: { focus: { type: "string", description: "Sector or token to focus on (optional)" } } },
+    description: "Whale/large-transfer tracker for a Base token or wallet — real Basescan transfer data. Pass a 0x address.",
+    inputSchema: { type: "object", properties: { address: { type: "string", description: "Base token or wallet address (0x…) to track" } }, required: ["address"] },
   },
   {
     name: "hub_community_sentiment",
@@ -443,7 +443,7 @@ const HUB_MAP: Record<string, string> = {
   // Community
   hub_community_growth:     "community-growth-playbook",
   hub_thread_intel:         "thread-intelligence",
-  hub_narrative_pulse:      "narrative-pulse",
+  hub_narrative_pulse:      "narrative-position",
   // Blue first-party (extended)
   blue_monitor:             "blue-monitor",
   blue_registry:            "blue-registry",

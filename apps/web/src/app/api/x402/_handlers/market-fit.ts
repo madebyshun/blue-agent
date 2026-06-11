@@ -57,10 +57,10 @@ async function runAeonSkill(skill: string, varInput = ""): Promise<string | null
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { description?: string; product?: string; name?: string; stage?: string } = {};
+    let body: { description?: string; product?: string; project?: string; name?: string; stage?: string } = {};
     try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const url = new URL(req.url);
-    const rawDesc = body.description ?? body.product ?? url.searchParams.get("description") ?? url.searchParams.get("product") ?? "";
+    const rawDesc = body.description ?? body.product ?? body.project ?? url.searchParams.get("description") ?? url.searchParams.get("product") ?? url.searchParams.get("project") ?? "";
     const stage   = body.stage ?? url.searchParams.get("stage") ?? "";
     const description = stage ? `${rawDesc}\n\nStage: ${stage}` : rawDesc;
     const name = body.name ?? url.searchParams.get("name") ?? "this project";
