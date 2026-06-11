@@ -241,19 +241,19 @@ const HUB_TOOLS = [
   },
   {
     name: "prepare_token_launch",
-    description: "Render the FINAL token-launch confirmation card (Bankr launchpad → real token on Base, Uniswap V4, 100B fixed supply, gas SPONSORED by Bankr). \n\nALWAYS A BRAND-NEW TOKEN: treat 'launch a token' as a fresh launch from scratch. IGNORE any 'Active project' from memory and any token discussed or already deployed earlier; never assume a relaunch and never claim a launch is 'paused' or 'pending'. Only reuse an earlier token if the user explicitly names it in THIS request. \n\nGATHER DETAILS FIRST — do NOT call immediately. Ask in ONE concise message for: 1) Token name (required); 2) Ticker (optional — Bankr defaults to the first 4 letters of the name); 3) Short description (optional); 4) Logo image URL (optional); 5) Website URL (optional); 6) Where the 57% creator fees go — connected wallet (default) OR an X / Farcaster / ENS handle. Never ask about or mention total supply — it's fixed at 100B and not configurable. Wait for their reply (they may skip optionals or say 'use defaults'), THEN call this once. \n\nThe card is the final confirmation: the user clicks Launch to deploy — never claim it's launched just from calling this tool, and never quote a gas/ETH cost. After calling, reply with ONE short line telling them to confirm in the card (no details table).",
+    description: "Open the token-launch FORM card (Bankr launchpad → real token on Base, Uniswap V4, 100B fixed supply, gas SPONSORED by Bankr). The CARD itself collects every field — token name, ticker, description, logo URL, website, and fee recipient — as editable inputs; the user fills them in and clicks Launch to deploy. \n\nCRITICAL — NEVER INVENT ANYTHING: do NOT make up a token name, ticker, description, logo, or website. Pass through ONLY values the user explicitly typed in THIS request; leave every other field empty so the user fills it in the card. If the user gave no details, call this with NO arguments. \n\nALWAYS A BRAND-NEW TOKEN: ignore any 'Active project' from memory and any token discussed or already deployed earlier; never assume a relaunch and never claim a launch is 'paused' or 'pending'. Only reuse an earlier token if the user explicitly names it now. \n\nDo NOT gather details by asking questions and do NOT mention total supply (fixed at 100B). Fee recipient defaults to BlueAgent when left blank, so you don't need to collect it. \n\nAfter calling, reply with ONE short line telling the user to fill in the card above and hit Launch — never claim the token launched (only the user's Launch click deploys it) and never quote a gas/ETH cost.",
     input_schema: {
       type: "object",
       properties: {
-        tokenName:        { type: "string", description: "Token display name (1–100 chars), e.g. 'Blue Agent'" },
-        tokenSymbol:      { type: "string", description: "Optional ticker (1–10 chars, no $). If omitted, Bankr defaults to the first 4 chars of the name." },
-        description:      { type: "string", description: "Optional short description (≤500 chars) stored in on-chain metadata" },
-        image:            { type: "string", description: "Optional logo image URL" },
-        website:          { type: "string", description: "Optional project website URL" },
-        feeRecipientType: { type: "string", enum: ["wallet", "x", "farcaster", "ens"], description: "Where the 57% creator fee goes. 'wallet' (default) = the user's connected wallet. Use x/farcaster/ens if the user named a handle." },
-        feeRecipientValue:{ type: "string", description: "The handle/address for feeRecipientType when it is x/farcaster/ens (e.g. an @username or name.eth). Omit for 'wallet' to default to the connected wallet." },
+        tokenName:        { type: "string", description: "OPTIONAL — pass ONLY if the user explicitly typed a token name in this request; otherwise omit. Never invent one." },
+        tokenSymbol:      { type: "string", description: "OPTIONAL — pass ONLY if the user explicitly gave a ticker. Never invent one." },
+        description:      { type: "string", description: "OPTIONAL — pass ONLY if the user explicitly gave a description. Never invent one." },
+        image:            { type: "string", description: "OPTIONAL — pass ONLY if the user explicitly gave a logo image URL. Never invent one." },
+        website:          { type: "string", description: "OPTIONAL — pass ONLY if the user explicitly gave a website URL. Never invent one." },
+        feeRecipientType: { type: "string", enum: ["wallet", "x", "farcaster", "ens"], description: "OPTIONAL — pass ONLY if the user explicitly named where fees go. Left blank, the card defaults fees to BlueAgent." },
+        feeRecipientValue:{ type: "string", description: "OPTIONAL — the handle/address for feeRecipientType (e.g. @username or name.eth). Pass only if the user explicitly named one." },
       },
-      required: ["tokenName"],
+      required: [],
     },
   },
   {
@@ -1059,12 +1059,11 @@ The user wants whale and smart money tracking for a token.
 YOU MUST call hub_whale_tracker immediately with { token: "<token>" }.
 Present: top wallet moves, accumulation vs distribution signal, smart money verdict.`,
 
-  launch: `## COMMAND: /launch <token>
-The user wants to LAUNCH A REAL TOKEN on Base via the Bankr launchpad (Uniswap V4, 100B fixed supply, gas sponsored by Bankr) — this is the prepare_token_launch flow.
-Treat it as a BRAND-NEW token from scratch — ignore any "Active project" from memory and any token discussed earlier unless the user explicitly names one in THIS request.
-If the user already typed a token name (and/or a description) after /launch, use them. Then GATHER ANY MISSING DETAILS in ONE concise message — ask only for what's still missing: 1) Token name (required); 2) Ticker symbol (optional — Bankr defaults to the first 4 letters of the name); 3) Short description (optional); 4) Logo image URL (optional); 5) Website URL (optional); 6) Where the 57% creator fees go — their connected wallet (default) OR an X / Farcaster / ENS handle.
-Never ask about or mention total supply — it's fixed at 100B and not configurable.
-Wait for their reply (they may skip optionals or say "use defaults"), THEN call prepare_token_launch ONCE with everything you collected. The card is the FINAL confirmation — the user reviews it and clicks Launch to deploy; never claim it launched just from calling the tool, and never quote a gas/ETH cost.`,
+  launch: `## COMMAND: /launch <token name?>
+The user wants to launch a real token on Base via the Bankr launchpad (Uniswap V4, 100B fixed supply, gas sponsored by Bankr). Call prepare_token_launch IMMEDIATELY to open the launch FORM card.
+NEVER invent a token name, ticker, description, logo, or website. Pass tokenName ONLY if the user explicitly typed one after /launch; if they typed nothing, call prepare_token_launch with NO arguments and let the card collect everything.
+Treat it as a BRAND-NEW token — ignore any "Active project" from memory and any token discussed earlier unless the user explicitly names one in THIS request. Do NOT ask follow-up questions and do NOT mention total supply (fixed at 100B).
+The card collects name, ticker, description, logo URL, website, and fee recipient (fees default to BlueAgent if left blank), then the user clicks Launch to deploy. After calling, reply with ONE short line: tell them to fill in the card above and hit Launch. Never claim it launched just from calling the tool, and never quote a gas/ETH cost.`,
 
   help: `## COMMAND: /help
 List all available Blue Chat slash commands in a clean format.
