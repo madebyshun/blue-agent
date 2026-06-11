@@ -2,7 +2,7 @@
 // Tool output cards — rendered inline after tool execution logs
 // One card per tool type: honeypot, risk-gate, deep-analysis, token-pick, contract-trust
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAccount, useReadContracts, useBalance, useReadContract, useWriteContract, useSwitchChain, usePublicClient } from "wagmi";
 import { formatUnits } from "viem";
 import { YIELD_NETWORKS, ERC20_ABI, AAVE_POOL_ABI, WITHDRAW_ALL, parseUsdc, supplyApyPct, type YieldNetwork } from "@/lib/yield-execution";
@@ -1109,6 +1109,21 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
   const [err,  setErr]  = useState("");
   const [txHash, setTxHash] = useState<string>("");
 
+  // #4 Best-rate routing — live curated USDC lending APYs across Base venues
+  // (Aave / Moonwell / Compound / Morpho) from DefiLlama. Comparison/intelligence
+  // layer; supply executes via the verified Aave path today.
+  type Rate = { project: string; label: string; apy: number; executable: boolean };
+  const [rates, setRates] = useState<Rate[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/yield/rates")
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setRates((d?.rates as Rate[]) ?? []); })
+      .catch(() => { if (!cancelled) setRates([]); });
+    return () => { cancelled = true; };
+  }, []);
+  const bestRate = rates && rates.length ? rates[0] : null;
+
   const cfg = YIELD_NETWORKS[network];
   const publicClient = usePublicClient({ chainId: cfg.chainId });
 
@@ -1217,6 +1232,30 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
           <div className="text-[#22C55E]">{apy != null ? `~${apy.toFixed(2)}%` : "—"}</div>
         </div>
       </div>
+
+      {/* #4 Best rate on Base — live curated comparison (DefiLlama) */}
+      {rates && rates.length > 0 && (
+        <div className="mb-3 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-2.5">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="font-mono text-[9px] text-slate-600">BEST USDC RATE · BASE</span>
+            <span className="font-mono text-[9px] text-slate-700">live · DefiLlama</span>
+          </div>
+          {rates.slice(0, 4).map((r, i) => (
+            <div key={r.project} className="flex items-center justify-between py-[2px] font-mono text-[10px]">
+              <span className={i === 0 ? "text-[#22C55E]" : "text-slate-400"}>
+                {i === 0 ? "★ " : "  "}{r.label}
+                {!r.executable && <span className="text-slate-700"> · routing soon</span>}
+              </span>
+              <span className={i === 0 ? "text-[#22C55E]" : "text-slate-300"}>{r.apy.toFixed(2)}%</span>
+            </div>
+          ))}
+          {bestRate && !bestRate.executable && (
+            <div className="mt-1.5 font-mono text-[9px] text-slate-600 leading-relaxed">
+              Supplying via Aave today — verified + live. 1-tap routing to {bestRate.label} ({bestRate.apy.toFixed(2)}%) is next.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Supply / Withdraw toggle */}
       <div className="flex gap-1 mb-3">
