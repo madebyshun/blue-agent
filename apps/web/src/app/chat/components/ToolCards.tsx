@@ -3,8 +3,10 @@
 // One card per tool type: honeypot, risk-gate, deep-analysis, token-pick, contract-trust
 
 import { useState, useEffect } from "react";
-import { useAccount, useReadContracts, useBalance, useReadContract, useWriteContract, useSwitchChain, usePublicClient } from "wagmi";
-import { formatUnits } from "viem";
+import { useAccount, useReadContracts, useBalance, useReadContract, useWriteContract, useSwitchChain, usePublicClient, useSendTransaction } from "wagmi";
+import { formatUnits, parseUnits, parseEther, isAddress } from "viem";
+import { base } from "viem/chains";
+import { useAddress, useName } from "@coinbase/onchainkit/identity";
 import { YIELD_NETWORKS, ERC20_ABI, AAVE_POOL_ABI, ERC4626_ABI, WITHDRAW_ALL, parseUsdc, supplyApyPct, VENUES, VENUE_LIST, type YieldNetwork, type VenueId } from "@/lib/yield-execution";
 import { useChat } from "../ChatContext";
 
@@ -1373,6 +1375,170 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
   );
 }
 
+// Rendered for the `prepare_send` marker. NON-custodial send/pay: the user signs
+// a USDC ERC-20 transfer (or native ETH send) to an address or Basename, from
+// their OWN wallet. Basenames resolve via OnchainKit (Base L2 resolver).
+interface SendResult { to?: string; amount?: number | string; asset?: string; network?: string }
+
+function SendCard({ result }: { result: SendResult }) {
+  const { walletAddr } = useChat();
+  const fromAddr = walletAddr as `0x${string}` | undefined;
+  const isConnected = !!walletAddr;
+  const { switchChainAsync } = useSwitchChain();
+  const { writeContractAsync } = useWriteContract();
+  const { sendTransactionAsync } = useSendTransaction();
+
+  const [asset,     setAsset]     = useState<"USDC" | "ETH">(result.asset === "ETH" ? "ETH" : "USDC");
+  const [network,   setNetwork]   = useState<YieldNetwork>(result.network === "base" ? "base" : "baseSepolia");
+  const [recipient, setRecipient] = useState<string>(typeof result.to === "string" ? result.to : "");
+  const [amount,    setAmount]    = useState<string>(
+    result.amount != null && (typeof result.amount === "number" || typeof result.amount === "string") ? String(result.amount) : "");
+  const [step, setStep] = useState<"idle" | "switching" | "sending" | "done" | "error">("idle");
+  const [err,  setErr]  = useState("");
+  const [txHash, setTxHash] = useState<string>("");
+
+  const net = YIELD_NETWORKS[network];
+  const chainId = net.chainId;
+  const recip = recipient.trim();
+  const recipIsAddr = isAddress(recip);
+  const recipIsName = /\.(base|eth)$/i.test(recip);
+
+  // Forward-resolve a Basename/ENS → address (always on Base mainnet resolver;
+  // the resolved address is valid on whichever network you send from).
+  const { data: resolvedAddr, isLoading: resolving } = useAddress(
+    { name: recip, chain: base }, { enabled: recipIsName && recip.length > 3 });
+  // Reverse-name for a pasted address (nice confirmation label).
+  const { data: revName } = useName(
+    { address: recipIsAddr ? (recip as `0x${string}`) : undefined, chain: base }, { enabled: recipIsAddr });
+
+  const toAddress = (recipIsAddr ? recip : (recipIsName ? (resolvedAddr ?? undefined) : undefined)) as `0x${string}` | undefined;
+  const amt = parseFloat(amount);
+  const valid = !!toAddress && amt > 0;
+  const busy = step === "switching" || step === "sending";
+
+  async function send() {
+    if (!fromAddr)  { setErr("Connect your wallet first"); setStep("error"); return; }
+    if (!toAddress) { setErr(recipIsName ? "Couldn't resolve that name" : "Enter a valid address or .base name"); setStep("error"); return; }
+    if (!(amt > 0)) { setErr("Enter an amount"); setStep("error"); return; }
+    setErr(""); setTxHash("");
+    try {
+      setStep("switching");
+      await switchChainAsync({ chainId });
+      setStep("sending");
+      const hash = asset === "USDC"
+        ? await writeContractAsync({ address: net.usdc, abi: ERC20_ABI, functionName: "transfer", args: [toAddress, parseUnits(amount, net.usdcDecimals)], chainId })
+        : await sendTransactionAsync({ to: toAddress, value: parseEther(amount), chainId });
+      setTxHash(hash); setStep("done");
+    } catch (e) {
+      setErr(((e as Error).message || String(e)).slice(0, 160)); setStep("error");
+    }
+  }
+
+  if (step === "done") {
+    return (
+      <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
+        <div className="font-mono text-[11px] font-bold mb-1" style={{ color: "#22C55E" }}>
+          ✓ Sent {amt} {asset} · {net.short}
+        </div>
+        <div className="font-mono text-[10px] text-slate-400 mb-2 break-all">
+          to {revName || (recipIsName ? recip : truncAddr(toAddress ?? ""))}
+        </div>
+        {txHash && (
+          <a href={`${net.explorer}/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
+             className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7]">
+            View tx ↗
+          </a>
+        )}
+      </div>
+    );
+  }
+
+  // Recipient resolution status line
+  let resolveLine: React.ReactNode = null;
+  if (recipIsName && resolving) resolveLine = <span className="text-slate-500">resolving {recip}…</span>;
+  else if (recipIsName && toAddress) resolveLine = <span className="text-[#22C55E]">→ {truncAddr(toAddress)}</span>;
+  else if (recipIsName && recip.length > 3) resolveLine = <span className="text-red-500">name not found on Base</span>;
+  else if (recipIsAddr) resolveLine = <span className="text-[#22C55E]">✓ {revName ? `${revName} · ${truncAddr(recip)}` : "valid address"}</span>;
+  else if (recip.length > 0) resolveLine = <span className="text-slate-600">enter a 0x… address or name.base</span>;
+
+  const btnLabel = busy ? (step === "switching" ? "Switching network…" : "Confirm in wallet…")
+    : `Send${amt > 0 ? ` ${amt}` : ""} ${asset}${toAddress ? ` → ${recipIsName ? recip : truncAddr(toAddress)}` : ""}`;
+
+  return (
+    <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
+      <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold mb-3">SEND / PAY · BASE</div>
+
+      {/* Network risk banner */}
+      <div className="rounded-lg px-2.5 py-1.5 mb-3 font-mono text-[10px] leading-relaxed"
+           style={net.testnet
+             ? { background: "#F59E0B0a", border: "1px solid #F59E0B30", color: "#fcd9a3" }
+             : { background: "#EF44440a", border: "1px solid #EF444440", color: "#fca5a5" }}>
+        {net.testnet
+          ? <>⚠️ <b>Testnet (Base Sepolia)</b> — safe to experiment with fake funds.</>
+          : <>🔴 <b>Mainnet — real funds.</b> Sending is irreversible. Double-check the recipient + amount.</>}
+      </div>
+
+      {/* Asset toggle */}
+      <div className="flex gap-1 mb-3">
+        {(["USDC", "ETH"] as const).map(a => {
+          const active = asset === a;
+          return (
+            <button key={a} onClick={() => setAsset(a)}
+              className="flex-1 font-mono text-[11px] py-1.5 rounded-md transition-colors"
+              style={active
+                ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+              {a}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Recipient */}
+      <label className="block mb-1">
+        <span className="font-mono text-[9px] text-slate-600 block mb-1">RECIPIENT</span>
+        <input value={recipient} onChange={e => setRecipient(e.target.value)}
+          placeholder="0x… or name.base"
+          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+      </label>
+      <div className="font-mono text-[9px] mb-3 h-3">{resolveLine}</div>
+
+      {/* Amount */}
+      <label className="block mb-3">
+        <span className="font-mono text-[9px] text-slate-600 block mb-1">AMOUNT ({asset})</span>
+        <input type="number" min="0" step={asset === "ETH" ? "0.0001" : "0.01"} value={amount}
+          onChange={e => setAmount(e.target.value)} placeholder={asset === "ETH" ? "e.g. 0.01" : "e.g. 5"}
+          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+      </label>
+
+      {/* Network */}
+      <label className="block mb-3">
+        <span className="font-mono text-[9px] text-slate-600 block mb-1">NETWORK</span>
+        <select value={network} onChange={e => setNetwork(e.target.value as YieldNetwork)}
+          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 outline-none">
+          <option value="baseSepolia">Base Sepolia (testnet)</option>
+          <option value="base">Base mainnet</option>
+        </select>
+      </label>
+
+      <p className="font-mono text-[9px] text-slate-600 mb-2 leading-relaxed">
+        Sends {asset} directly from your wallet — you sign one {asset === "USDC" ? "transfer" : "send"}. Non-custodial; Blue Agent never touches the funds.
+      </p>
+
+      {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
+
+      <button onClick={send} disabled={busy || !valid || !isConnected}
+        className="w-full font-mono text-[12px] font-bold py-2 rounded-lg transition-all disabled:opacity-50"
+        style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>
+        {!isConnected ? "Connect your wallet to continue" : btnLabel}
+      </button>
+      <p className="font-mono text-[9px] text-slate-700 mt-1.5">
+        {net.label} · you sign every transaction · sends are final.
+      </p>
+    </div>
+  );
+}
+
 export function ToolResultCard({ tool, result }: { tool: string; result: Record<string, unknown> }) {
   if (!result || typeof result !== "object") return null;
   const r = result;
@@ -1392,6 +1558,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "show_portfolio":    return <PortfolioCard />;
     case "prepare_token_launch": return <TokenLaunchCard result={r as TokenLaunchResult} />;
     case "prepare_yield":     return <MoveToYieldCard  result={r as YieldMoveResult} />;
+    case "prepare_send":      return <SendCard         result={r as SendResult} />;
     default:                  return <GenericCard      tool={tool} result={r} />;
   }
 }

@@ -280,6 +280,20 @@ const HUB_TOOLS = [
     },
   },
   {
+    name: "prepare_send",
+    description: "Open the SEND / PAY card so the user can send USDC (or ETH) to an address or a Basename (e.g. alice.base) on Base — NON-custodial, the user SIGNS the transfer in their own wallet; Blue Agent never touches the funds. Use when the user wants to: 'send X USDC to …', 'pay …', 'transfer to …', 'send ETH to …'. The CARD collects/edits recipient, amount, asset (USDC default), and network (Base Sepolia testnet by DEFAULT, or Base mainnet) and resolves the Basename → address; the user reviews and signs.\n\nCRITICAL — never invent a recipient or amount: pass `to` and `amount` ONLY if the user explicitly stated them in THIS request; otherwise omit and let the card collect them. Pass asset='ETH' only if the user explicitly said ETH. Network defaults to testnet; pass network='base' ONLY if the user explicitly asked for mainnet / real funds.\n\nThis NEVER moves funds by itself — only the user's signature executes. After calling, reply with ONE short line telling the user to review the recipient + amount and sign in the card; never claim funds were sent.",
+    input_schema: {
+      type: "object",
+      properties: {
+        to:      { type: "string", description: "OPTIONAL — recipient 0x… address or Basename/ENS (e.g. alice.base). Pass ONLY if the user explicitly gave one; never invent one." },
+        amount:  { type: "number", description: "OPTIONAL — amount to send. Pass ONLY if the user explicitly stated one; otherwise omit and the card collects it. Never invent one." },
+        asset:   { type: "string", enum: ["USDC", "ETH"], description: "OPTIONAL — defaults to USDC. Pass 'ETH' only if the user explicitly said ETH." },
+        network: { type: "string", enum: ["base", "baseSepolia"], description: "OPTIONAL — defaults to baseSepolia (testnet). Pass 'base' ONLY if the user explicitly asked for mainnet / real funds." },
+      },
+      required: [],
+    },
+  },
+  {
     name: "hub_token_pick",
     description: "Get an AI token pick on Base — falsifiable thesis, entry point, sizing, and kill criterion. Use when user asks: 'what should I buy', 'token pick', 'best token today', 'what's a good trade'.",
     input_schema: {
@@ -707,6 +721,14 @@ async function callHubTool(
     return {
       text: "Move-to-yield card rendered. The card shows the network, amount and Supply/Withdraw action — the user reviews and SIGNS in their own wallet (non-custodial). Do NOT restate numbers as a table, do NOT claim funds were moved, and do NOT quote an APY. Reply with one short line: tell the user to review and sign in the card.",
       result: { kind: "yield_move", ...args },
+    };
+  }
+  if (toolName === "prepare_send") {
+    // Marker only — the SendCard resolves the recipient/Basename and the user
+    // SIGNS the USDC/ETH transfer in their own wallet. We never move funds.
+    return {
+      text: "Send/Pay card rendered. The card shows recipient, amount and asset — the user reviews and SIGNS the transfer in their own wallet (non-custodial). Do NOT claim funds were sent and do NOT restate the recipient as if confirmed. Reply with one short line: tell the user to review the recipient + amount and sign in the card.",
+      result: { kind: "send", ...args },
     };
   }
 
