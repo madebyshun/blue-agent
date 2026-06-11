@@ -99,12 +99,13 @@ const TOOLS = [
   },
   {
     name: "hub_competitor_scan",
-    description: "Competitor analysis — direct/indirect competitors and defensible edge for your project.",
+    description: "Competitor analysis — named competitors are grounded in REAL DefiLlama Base TVL/change when they match a protocol; reasons about defensible edge on top.",
     inputSchema: {
       type: "object",
       properties: {
         project: { type: "string", description: "Your project description" },
-        category: { type: "string", description: "Category e.g. DeFi lending, AI agent" },
+        competitors: { type: "array", items: { type: "string" }, description: "Competitor names (resolved against DefiLlama Base protocols for live TVL)" },
+        description: { type: "string", description: "What your project does" },
       },
       required: ["project"],
     },
@@ -226,8 +227,8 @@ const TOOLS = [
   },
   {
     name: "hub_token_launch",
-    description: "Token launch readiness score (0-100) — narrative fit, liquidity, community, timing. Returns GO/WAIT + action items.",
-    inputSchema: { type: "object", properties: { name: { type: "string" }, ticker: { type: "string" }, description: { type: "string" } }, required: ["name", "ticker", "description"] },
+    description: "Token launch readiness — market TIMING grounded in REAL Base data (live chain TVL + trending pools); if a token address is given its live DexScreener market grounds momentum. Returns GO/WAIT + action items.",
+    inputSchema: { type: "object", properties: { name: { type: "string" }, ticker: { type: "string" }, description: { type: "string" }, address: { type: "string", description: "Optional: existing token contract 0x... to ground in live market data" } }, required: ["name", "ticker", "description"] },
   },
   {
     name: "hub_builder_dd",
