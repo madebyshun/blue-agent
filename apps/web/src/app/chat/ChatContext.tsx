@@ -387,6 +387,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     "venice-deepseek-pro":  "deepseek-v4-pro",
     "venice-kimi":          "kimi-k2-6",
     "venice-claude":        "claude-opus-4-7",
+    "venice-fable":         "claude-fable-5",
     "venice-grok":          "grok-4-3",
     "venice-qwen":          "qwen3-235b-a22b-instruct-2507",
     "venice-mistral":       "mistral-small-3-2-24b-instruct",

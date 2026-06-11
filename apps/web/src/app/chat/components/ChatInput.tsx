@@ -61,8 +61,9 @@ export const BANKR_TIERS: ModelTier[] = [
 ];
 
 export const VENICE_TIERS: ModelTier[] = [
-  { id: "venice-deepseek", label: "V4 Flash", model: "deepseek-v4-flash", color: "#34D399", badge: "V", note: "Fastest · 1M ctx", group: "venice", credits: 10 },
-  { id: "venice-grok",     label: "Grok 4",   model: "grok-4-3",          color: "#E879F9", badge: "V", note: "X search",         group: "venice", credits: 60 },
+  { id: "venice-deepseek", label: "V4 Flash",   model: "deepseek-v4-flash", color: "#34D399", badge: "V", note: "Fastest · 1M ctx", group: "venice", credits: 10  },
+  { id: "venice-grok",     label: "Grok 4",     model: "grok-4-3",          color: "#E879F9", badge: "V", note: "X search",         group: "venice", credits: 60  },
+  { id: "venice-fable",    label: "Fable 5",    model: "claude-fable-5",    color: "#F472B6", badge: "V", note: "Claude · 1M ctx",   group: "venice", credits: 120 },
 ];
 
 export const PRIVACY_TIERS: ModelTier[] = [
@@ -110,6 +111,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
   { id: "fast",       label: "Fast",        desc: "Cheapest · DeepSeek · 1M ctx",         icon: "⚡", tier: "venice-deepseek",    webSearch: false },
   { id: "web-search", label: "Web Search",  desc: "~2s live multi-source · Grok 4",       icon: "🔍", tier: "venice-grok",        webSearch: true  },
   { id: "deep-think", label: "Deep Think",  desc: "Heavy reasoning + web · Opus",         icon: "🔬", tier: "max",                webSearch: true  },
+  { id: "fable",      label: "Fable 5",     desc: "Creative Claude · 1M ctx · Venice",    icon: "✍️", tier: "venice-fable",       webSearch: false },
   { id: "private",    label: "Private",     desc: "E2EE · no logs · Gemma 27B",           icon: "🔒", tier: "venice-e2ee-gemma",  webSearch: false },
 ];
 
