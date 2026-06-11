@@ -134,6 +134,72 @@ async function gtPools(path: string, limit: number): Promise<Pool[]> {
 export const getBaseTrending = (limit = 10) => gtPools("trending_pools", limit);
 export const getBaseNewPools = (limit = 10) => gtPools("new_pools", limit);
 
+// ─── GeckoTerminal: a single Base pool by address (for LP analysis) ───────────
+
+export type PoolDetail = {
+  name: string;
+  poolAddress: string;
+  baseSymbol: string;
+  quoteSymbol: string;
+  baseTokenPriceUsd: number | null;
+  quoteTokenPriceUsd: number | null;
+  poolPrice: number | null;        // base priced in quote (base/quote)
+  change24hPct: number | null;     // base token 24h % change
+  volume24h: number | null;
+  reserveUsd: number | null;       // pool TVL
+  feePct: number | null;           // pool fee tier % if exposed
+  url: string;
+};
+
+type GtPoolDetail = {
+  attributes?: {
+    name?: string;
+    address?: string;
+    base_token_price_usd?: string;
+    quote_token_price_usd?: string;
+    base_token_price_quote_token?: string;
+    price_change_percentage?: Record<string, string>;
+    volume_usd?: Record<string, string>;
+    reserve_in_usd?: string;
+    pool_fee_percentage?: string;
+  };
+};
+
+// Real pool snapshot for a Base pool address. null if not found.
+export async function getBasePool(poolAddress: string): Promise<PoolDetail | null> {
+  const addr = poolAddress.trim().toLowerCase();
+  if (!/^0x[a-f0-9]{40}$/.test(addr)) return null;
+  const d = await getJson<{ data?: GtPoolDetail }>(
+    `https://api.geckoterminal.com/api/v2/networks/base/pools/${addr}`
+  );
+  const a = d?.data?.attributes;
+  if (!a) return null;
+  const name = a.name ?? "";
+  const [base, quote] = name.split("/").map((s) => s.trim());
+  return {
+    name,
+    poolAddress: a.address ?? addr,
+    baseSymbol: base || "?",
+    quoteSymbol: quote || "?",
+    baseTokenPriceUsd: num(a.base_token_price_usd),
+    quoteTokenPriceUsd: num(a.quote_token_price_usd),
+    poolPrice: num(a.base_token_price_quote_token),
+    change24hPct: num(a.price_change_percentage?.h24),
+    volume24h: num(a.volume_usd?.h24),
+    reserveUsd: num(a.reserve_in_usd),
+    feePct: num(a.pool_fee_percentage),
+    url: `https://www.geckoterminal.com/base/pools/${a.address ?? addr}`,
+  };
+}
+
+// Deterministic impermanent loss for a 50/50 constant-product LP, given the
+// price ratio change (current / entry). Returns IL as a NEGATIVE fraction
+// (e.g. -0.0057 = -0.57%). Formula: 2*sqrt(r)/(1+r) - 1.
+export function impermanentLoss(priceRatio: number): number | null {
+  if (!Number.isFinite(priceRatio) || priceRatio <= 0) return null;
+  return (2 * Math.sqrt(priceRatio)) / (1 + priceRatio) - 1;
+}
+
 // ─── DefiLlama: Base chain TVL ───────────────────────────────────────────────
 
 export type BaseTvl = {
