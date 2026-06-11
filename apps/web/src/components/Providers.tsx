@@ -3,7 +3,7 @@
 import { createConfig, WagmiProvider } from "wagmi";
 import { base, baseSepolia } from "wagmi/chains";
 import { http } from "viem";
-import { coinbaseWallet, injected } from "wagmi/connectors";
+import { coinbaseWallet } from "wagmi/connectors";
 import { farcasterMiniApp } from "@farcaster/miniapp-wagmi-connector";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import MiniAppReady from "@/components/MiniAppReady";
@@ -21,6 +21,17 @@ const config = createConfig({
   // base = mainnet (default). baseSepolia = testnet, enabled so the chat
   // Move-to-Yield card can test Aave supply/withdraw safely before mainnet.
   chains: [base, baseSepolia],
+  // We deliberately do NOT register a generic `injected()` connector.
+  // wagmi v3 has EIP-6963 multi-injected discovery ON by default, so every
+  // installed extension (MetaMask, Rabby, Phantom…) is surfaced as its own
+  // connector backed by that wallet's *isolated* provider.
+  //
+  // The generic `injected()` connector instead talks to the shared
+  // `window.ethereum`, which — when several extensions are installed — is a
+  // multiplexed proxy that frequently resolves to a non-responding provider.
+  // That made `connect()` hang on "Connecting…" for MetaMask/Rabby while only
+  // Coinbase (its own SDK) worked. Dropping it routes injected wallets through
+  // EIP-6963's per-wallet providers, fixing the hang.
   connectors: [
     // Only inside Base App / Farcaster — host wallet connects with no prompt.
     ...(inMiniAppFrame ? [farcasterMiniApp()] : []),
@@ -28,8 +39,9 @@ const config = createConfig({
       appName: "Blue Agent",
       preference: { options: "all" }, // extension + QR code fallback
     }),
-    injected({ shimDisconnect: true }), // MetaMask/Rabby if installed
   ],
+  // EIP-6963 discovery (default true in v3) handles MetaMask/Rabby/etc.
+  multiInjectedProviderDiscovery: true,
   transports: { [base.id]: http(), [baseSepolia.id]: http() },
   ssr: true,
 });
