@@ -16,9 +16,10 @@ const BANKR_TIERS = [
   { id: "max", label: "Max", model: "Opus",   color: "#A78BFA" },
 ];
 const VENICE_TIERS = [
-  { id: "venice-deepseek",   label: "Fast",       model: "DeepSeek", color: "#34D399", note: "1M ctx · cheap" },
-  { id: "venice-grok",       label: "Web Search", model: "Grok 4",   color: "#E879F9", note: "X + live web"   },
-  { id: "venice-e2ee-gemma", label: "Private",    model: "Gemma",    color: "#FCA5A5", note: "E2EE · no logs" },
+  { id: "venice-deepseek",   label: "Fast",       model: "DeepSeek",  color: "#34D399", note: "1M ctx · cheap" },
+  { id: "venice-grok",       label: "Web Search", model: "Grok 4",    color: "#E879F9", note: "X + live web"   },
+  { id: "venice-fable",      label: "Fable 5",    model: "Claude",    color: "#F472B6", note: "creative · 1M"  },
+  { id: "venice-e2ee-gemma", label: "Private",    model: "Gemma",     color: "#FCA5A5", note: "E2EE · no logs" },
 ];
 
 const SIDEBAR_TABS = [

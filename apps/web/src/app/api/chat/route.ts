@@ -127,6 +127,7 @@ const VENICE_DISPLAY: Record<string, string> = {
   "deepseek-v4-pro":                    "DeepSeek V4 Pro (Venice)",
   "kimi-k2-6":                          "Kimi K2 (Venice)",
   "claude-opus-4-7":                    "Claude Opus 4 (Venice)",
+  "claude-fable-5":                     "Claude Fable 5 (Venice)",
   "grok-4-3":                           "Grok 4 (Venice)",
   "qwen3-235b-a22b-instruct-2507":      "Qwen3 235B (Venice)",
   "mistral-small-3-2-24b-instruct":     "Mistral Small 3.2 (Venice)",
@@ -156,6 +157,7 @@ const VENICE_MAX_TOKENS: Record<string, number> = {
   "deepseek-v4-pro":                   8192,
   "kimi-k2-6":                         4096,
   "claude-opus-4-7":                   4096,
+  "claude-fable-5":                    4096,
   "grok-4-3":                          4096,
   "qwen3-235b-a22b-instruct-2507":     8192,
   "mistral-small-3-2-24b-instruct":    4096,
@@ -252,6 +254,19 @@ const HUB_TOOLS = [
         website:          { type: "string", description: "OPTIONAL — pass ONLY if the user explicitly gave a website URL. Never invent one." },
         feeRecipientType: { type: "string", enum: ["wallet", "x", "farcaster", "ens"], description: "OPTIONAL — pass ONLY if the user explicitly named where fees go. Left blank, the card defaults fees to BlueAgent." },
         feeRecipientValue:{ type: "string", description: "OPTIONAL — the handle/address for feeRecipientType (e.g. @username or name.eth). Pass only if the user explicitly named one." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "prepare_yield",
+    description: "Open the MOVE-TO-YIELD card so the user can supply idle USDC into Aave v3 on Base (earn lending yield) or withdraw it back — NON-custodial, the user SIGNS in their own wallet; Blue Agent never holds keys or funds. Use when the user wants to: 'earn yield', 'put my USDC to work', 'deposit/supply to Aave', 'move idle USDC to yield', 'stake my USDC for interest', OR 'withdraw/pull my USDC out of Aave'. The CARD collects and edits amount, network (Base Sepolia testnet by DEFAULT — safe to test — or Base mainnet), and the action (supply/withdraw); the user reviews and signs.\n\nCRITICAL — NEVER INVENT AN AMOUNT: pass `amount` ONLY if the user explicitly stated a number in THIS request; otherwise omit it and let the card collect it. Pass action='withdraw' only if the user explicitly asked to withdraw/pull out. Network defaults to testnet; pass network='base' ONLY if the user explicitly asked for mainnet / real funds.\n\nThis tool NEVER moves funds by itself — only the user's signature in the card executes anything. After calling, reply with ONE short line telling the user to review and sign in the card above; never claim funds were moved and never quote an APY figure you weren't given.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action:  { type: "string", enum: ["supply", "withdraw"], description: "OPTIONAL — 'supply' (default) deposits USDC into Aave for yield; 'withdraw' pulls it back. Pass 'withdraw' only if the user explicitly asked to withdraw." },
+        amount:  { type: "number", description: "OPTIONAL — USDC amount. Pass ONLY if the user explicitly stated one in this request; otherwise omit and the card collects it. Never invent one." },
+        network: { type: "string", enum: ["base", "baseSepolia"], description: "OPTIONAL — defaults to baseSepolia (testnet, safe to test). Pass 'base' ONLY if the user explicitly asked for mainnet / real funds." },
       },
       required: [],
     },
@@ -675,6 +690,15 @@ async function callHubTool(
     return {
       text: "Token-launch card rendered. The card shows all details — do NOT restate them as a table and do NOT quote any gas/ETH cost (gas is sponsored). Reply with one short line: tell the user to review and hit Launch in the card.",
       result: { kind: "token_launch", ...args },
+    };
+  }
+  if (toolName === "prepare_yield") {
+    // Marker only — the MoveToYieldCard collects amount/network/action and the
+    // user SIGNS approve+supply (or withdraw) in their own wallet. We never
+    // move funds from here.
+    return {
+      text: "Move-to-yield card rendered. The card shows the network, amount and Supply/Withdraw action — the user reviews and SIGNS in their own wallet (non-custodial). Do NOT restate numbers as a table, do NOT claim funds were moved, and do NOT quote an APY. Reply with one short line: tell the user to review and sign in the card.",
+      result: { kind: "yield_move", ...args },
     };
   }
 
