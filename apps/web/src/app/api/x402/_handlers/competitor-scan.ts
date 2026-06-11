@@ -1,16 +1,22 @@
-// x402/competitor-scan/index.ts
-// Competitor Scan — Aeon deep-research x2 + Blue compare + MiroShark analyst
+// x402/competitor-scan
+// Competitor Scan — grounds named competitors in REAL DefiLlama data (live Base TVL +
+// 1d/7d change + category) whenever they match a protocol on Base. The LLM reasons
+// about positioning/moats on top of the real numbers; it never invents TVL. The
+// subject project itself is described in text (no live metric pre-launch), so its
+// score is qualitative — clearly labelled. Resilient: retry + fallback, never 500.
 // Price: $0.75
-// Fully self-contained
+
+import { findBaseProtocol, protocolToPrompt, type BaseProtocol } from "@/lib/market-data";
 
 type Msg = { role: string; content: string };
-async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
+async function llm(system: string, user: string, temp = 0.3, tokens = 1300): Promise<string> {
   const r = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
     headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
     body: JSON.stringify({ model: "claude-haiku-4-5", system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
+    signal: AbortSignal.timeout(30_000),
   });
-  if (!r.ok) throw new Error(`LLM ${r.status}: ${await r.text()}`);
+  if (!r.ok) throw new Error(`LLM ${r.status}`);
   const d = await r.json() as { content?: { text: string }[] };
   return d.content?.[0]?.text ?? "";
 }
@@ -20,58 +26,73 @@ function parseJson(t: string): Record<string, unknown> | null {
   if (i >= 0 && j > i) s = s.slice(i, j + 1);
   try { return JSON.parse(s); } catch { try { return JSON.parse(s.replace(/[\x00-\x1F]/g, " ")); } catch { return null; } }
 }
-async function aeon(skill: string, focus = ""): Promise<string | null> {
-  try {
-    const r = await fetch(`https://raw.githubusercontent.com/aaronjmars/aeon/main/skills/${skill}/SKILL.md`, { signal: AbortSignal.timeout(6000) });
-    if (!r.ok) return null;
-    const p = await r.text();
-    return await llm(`You are Aeon. Synthesize from training knowledge. Today: ${new Date().toISOString().split("T")[0]}.`,
-      `Follow skill template. Be concrete.\n\nSkill:\n${p}${focus ? `\nFocus: ${focus}` : ""}\n\nReturn only skill output.`, 0.2, 1400);
-  } catch { return null; }
-}
+const slim = (p: BaseProtocol) => ({ name: p.name, tvl_usd: p.tvlUsd, change_1d_pct: p.change1dPct, change_7d_pct: p.change7dPct, category: p.category, url: p.url });
 
 export default async function handler(req: Request): Promise<Response> {
   try {
     let body: { project?: string; competitors?: string[]; description?: string } = {};
     try { const t = await req.text(); if (t.trim().startsWith("{")) body = JSON.parse(t); } catch {}
-    const { project = "", competitors = [], description = "" } = body;
+    const url = new URL(req.url);
+    const project = body.project ?? url.searchParams.get("project") ?? "";
+    const description = body.description ?? url.searchParams.get("description") ?? "";
+    let competitors = body.competitors ?? [];
+    if (!competitors.length) {
+      const q = url.searchParams.get("competitors");
+      if (q) competitors = q.split(",").map((s) => s.trim()).filter(Boolean);
+    }
     if (!project) return Response.json({ error: "project is required" }, { status: 400 });
 
-    const competitorList = competitors.length ? competitors.join(", ") : "top competitors in this space";
+    // ── Resolve named competitors against real DefiLlama Base protocols ───────
+    const resolved = await Promise.all(competitors.slice(0, 8).map(async (name) => ({ name, data: await findBaseProtocol(name) })));
+    const matched = resolved.filter((r) => r.data);
+    const realCtx = matched.length
+      ? matched.map((r) => protocolToPrompt(r.data, `Competitor "${r.name}" (DefiLlama, REAL)`)).join("\n")
+      : "No named competitors matched a Base protocol on DefiLlama — reason about the competitive set qualitatively from known fundamentals.";
 
-    // Research project + competitors in parallel
-    const [projectResearch, competitorResearch] = await Promise.all([
-      aeon("deep-research", `${project}: ${description}. Focus on strengths, weaknesses, market position on Base.`),
-      aeon("deep-research", `${competitorList} — competitive landscape analysis vs ${project}. Focus on differentiation, moats, weaknesses.`),
-    ]);
-
-    // MiroShark analyst persona
-    const msRaw = await llm(`You are MiroShark analyst persona — data-driven, fundamentals-focused, skeptical.
-Analyze competitive positioning.
-CRITICAL: Return ONLY raw JSON.
-Schema: {"competitive_advantage":"strong|moderate|weak","moat_score":<0-10>,"differentiation":["<point>"],"vulnerabilities":["<vulnerability>"],"analyst_verdict":"<1-2 sentences>"}`,
-      `Project: ${project}\n${description}\n\nProject research:\n${projectResearch ?? project}\n\nCompetitor research:\n${competitorResearch ?? competitorList}`, 0.3, 600);
-    const analystTake = parseJson(msRaw) ?? { competitive_advantage: "moderate", moat_score: 5, differentiation: [], vulnerabilities: [], analyst_verdict: "Mixed competitive signals" };
-
-    // Blue Agent synthesis
-    const resultRaw = await llm(`You are Blue Agent — competitive intelligence engine for Base builders.
-CRITICAL: Return ONLY raw JSON.
+    const system = `You are Blue Agent — competitive intelligence engine for Base builders (chain 8453).
+${matched.length ? "You are given REAL DefiLlama TVL/change/category for the matched competitors. Use those exact numbers; NEVER invent TVL. Anchor each competitor's threat_level on its real TVL + 7d trend." : "No live competitor metrics were available — reason qualitatively and label scores as estimates."}
+The subject project is described in text only (likely pre-launch / no live metric), so its score is a qualitative judgement, not a measurement.
+Return ONLY raw JSON. No markdown.
 Schema: {
   "verdict": "STRONG|COMPETITIVE|WEAK",
   "score": <0-100>,
   "project_strengths": ["<strength>"],
   "project_weaknesses": ["<weakness>"],
-  "competitors": [{"name":"<name>","threat_level":"high|medium|low","key_advantage":"<1 sentence>","vulnerability":"<1 sentence>"}],
+  "competitors": [{"name":"<name>","threat_level":"high|medium|low","key_advantage":"<1 sentence, cite real TVL if known>","vulnerability":"<1 sentence>"}],
   "whitespace": ["<market gap to exploit>"],
   "recommended_positioning": "<1-2 sentences>",
   "win_condition": "<what it takes to win>"
-}`,
-      `Project: ${project}\nDescription: ${description}\n\nProject research:\n${projectResearch ?? project}\n\nCompetitor research:\n${competitorResearch ?? competitorList}\n\nAnalyst: ${JSON.stringify(analystTake)}`, 0.3, 1200);
+}`;
+    const user = `Project: ${project}\nDescription: ${description || "(none)"}\nNamed competitors: ${competitors.length ? competitors.join(", ") : "(none given — infer the top Base competitors)"}\n\n${realCtx}`;
 
-    let result = parseJson(resultRaw);
-    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
+    let result: Record<string, unknown> | null = null;
+    for (let attempt = 0; attempt < 2 && !result; attempt++) {
+      try { result = parseJson(await llm(system, user)); } catch { /* retry then fallback */ }
+    }
+    if (!result) {
+      result = {
+        verdict: "COMPETITIVE",
+        score: null,
+        project_strengths: [],
+        project_weaknesses: [],
+        competitors: matched.map((r) => ({ name: r.data!.name, threat_level: (r.data!.tvlUsd ?? 0) > 50_000_000 ? "high" : "medium", key_advantage: `Live Base TVL ${r.data!.tvlUsd ?? "?"}`, vulnerability: "" })),
+        whitespace: [],
+        recommended_positioning: "Synthesis briefly unavailable — competitor TVL below is real. Re-run for full analysis.",
+        win_condition: "Re-run for detail.",
+        degraded: true,
+      };
+    }
 
-    return Response.json({ tool: "competitor-scan", timestamp: new Date().toISOString(), project, competitors_analyzed: competitorList, analyst: analystTake, ...result });
+    return Response.json({
+      tool: "competitor-scan",
+      timestamp: new Date().toISOString(),
+      data_source: matched.length ? "DefiLlama (live Base TVL for matched competitors) + analysis" : "advisory (no competitors matched on DefiLlama)",
+      project,
+      competitors_requested: competitors,
+      competitors_matched: matched.map((r) => r.name),
+      onchain: matched.map((r) => slim(r.data!)),
+      ...result,
+    });
   } catch (e) {
     return Response.json({ error: "Competitor scan failed", message: (e as Error).message }, { status: 500 });
   }
