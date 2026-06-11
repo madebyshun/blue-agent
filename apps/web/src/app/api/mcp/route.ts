@@ -262,13 +262,13 @@ const TOOLS = [
   },
   {
     name: "hub_wallet_strategy",
-    description: "Analyze a wallet's trading strategy — pattern recognition, risk profile, alpha sources.",
-    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
+    description: "Decode a Base wallet's trading strategy from REAL on-chain activity (live ETH balance, tx count, ERC-20 transfer patterns, current priced holdings).",
+    inputSchema: { type: "object", properties: { address: { type: "string", description: "Base wallet address 0x..." }, focus: { type: "string", description: "Optional analysis focus (e.g. 'defi', 'memecoins')" } }, required: ["address"] },
   },
   {
     name: "hub_portfolio",
-    description: "Portfolio rebalancer — optimal allocation across Base DeFi positions based on risk tolerance.",
-    inputSchema: { type: "object", properties: { address: { type: "string" }, risk: { type: "string", description: "conservative | moderate | aggressive" } }, required: ["address"] },
+    description: "Portfolio rebalancer — grounds in a wallet's REAL current holdings (live balances + USD prices) when an address is given; recommends target allocation by risk + goal.",
+    inputSchema: { type: "object", properties: { address: { type: "string", description: "Base wallet address 0x... for live holdings" }, holdings: { type: "string", description: "Or describe holdings as text if no address" }, risk: { type: "string", description: "conservative | moderate | aggressive" }, goal: { type: "string", description: "e.g. growth, income, preservation" } }, required: ["address"] },
   },
   {
     name: "hub_defi_opportunity",
@@ -470,6 +470,7 @@ const ARG_REMAP: Record<string, (a: Record<string, unknown>) => Record<string, u
   "multi-agent-workflow": (a) => ({ ...a, goal: a.goal ?? a.task }),
   "agent-collab-match":   (a) => ({ ...a, agent_a: a.agent_a ?? a.task, agent_b: a.agent_b ?? "best-fit Base ecosystem agent", collab_goal: a.collab_goal ?? a.task }),
   "agent-performance":    (a) => ({ ...a, handle: a.handle ?? a.agent }),
+  "portfolio-rebalancer": (a) => ({ ...a, risk_profile: a.risk_profile ?? a.risk }),
 };
 
 async function callHubTool(toolId: string, rawArgs: Record<string, unknown>): Promise<string> {
