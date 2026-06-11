@@ -68,6 +68,8 @@ export const metadata: Metadata = {
     images: ["/og-chat.png"],
   },
   other: {
+    // Base App domain ownership verification (base.dev "Add Domain")
+    "base:app_id": "69a6f7796b102959c7f25eaa",
     "fc:frame": fcFrame,
     // Legacy fallback for Farcaster v1 clients that haven't migrated to v2
     "fc:frame:image": `${SITE}/og-chat.png`,
