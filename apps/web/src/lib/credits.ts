@@ -97,6 +97,7 @@ export const BASE_COST: Record<string, number> = {
   "venice-deepseek-pro":  30,
   "venice-kimi":          20,
   "venice-claude":        80,
+  "venice-fable":         120,
   "venice-grok":          60,
   "venice-qwen":          40,
   "venice-mistral":       10,
