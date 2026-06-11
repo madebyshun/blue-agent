@@ -1,140 +1,119 @@
-// x402/token-launch-readiness/index.ts
-// Token Launch Readiness — Aeon token-movers + narrative-tracker + MiroShark retail + Blue ship
-// Price: $0.50 — readiness score + GO/WAIT + action checklist before token launch
-// Fully self-contained — no external workspace imports
+// x402/token-launch-readiness
+// Token Launch Readiness — market-TIMING grounded in REAL Base data: live chain TVL
+// + trending pools (DefiLlama/GeckoTerminal) set the market regime, and if a token
+// `address` is supplied its live DexScreener price/liquidity/volume grounds the
+// momentum read. The LLM scores readiness on top — never invents market numbers.
+// Without a token address the launch is pre-market, so the score is a clearly
+// labelled estimate. Resilient: retry + graceful fallback, never 500.
+// Price: $0.50
 
-type BankrMessage = { role: string; content: string };
+import { getBaseTvl, getBaseTrending, tvlToPrompt, poolsToPrompt, getTokenMarket, type TokenMarket } from "@/lib/market-data";
 
-async function callBankrLLM(opts: {
-  model?: string; system: string; messages: BankrMessage[];
-  temperature?: number; maxTokens?: number;
-}): Promise<string> {
-  const res = await fetch("https://llm.bankr.bot/v1/messages", {
+type Msg = { role: string; content: string };
+async function llm(system: string, user: string, temp = 0.3, tokens = 1300): Promise<string> {
+  const r = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
-    headers: {
-      "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "",
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: opts.model ?? "claude-haiku-4-5",
-      system: opts.system,
-      messages: opts.messages,
-      temperature: opts.temperature ?? 0.5,
-      max_tokens: opts.maxTokens ?? 1000,
-    }),
+    headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model: "claude-haiku-4-5", system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
+    signal: AbortSignal.timeout(30_000),
   });
-  if (!res.ok) throw new Error(`Bankr LLM ${res.status}: ${await res.text()}`);
-  const d = await res.json() as { content?: { text: string }[]; text?: string };
-  if (d.content?.length) return d.content[0].text;
-  if (d.text) return d.text;
-  throw new Error("Invalid Bankr LLM response");
+  if (!r.ok) throw new Error(`LLM ${r.status}`);
+  const d = await r.json() as { content?: { text: string }[] };
+  return d.content?.[0]?.text ?? "";
 }
-
-function extractJsonObject(text: string): Record<string, unknown> | null {
-  let raw = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
-  const s = raw.indexOf("{"), e = raw.lastIndexOf("}");
-  if (s >= 0 && e > s) raw = raw.slice(s, e + 1);
-  try { return JSON.parse(raw); } catch {}
-  try { return JSON.parse(raw.replace(/[\x00-\x1F\x7F]/g, " ")); } catch {}
-  return null;
+function parseJson(t: string): Record<string, unknown> | null {
+  let s = t.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  const i = s.indexOf("{"), j = s.lastIndexOf("}");
+  if (i >= 0 && j > i) s = s.slice(i, j + 1);
+  try { return JSON.parse(s); } catch { try { return JSON.parse(s.replace(/[\x00-\x1F]/g, " ")); } catch { return null; } }
 }
-
-async function runAeonSkill(skill: string, varInput = ""): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://raw.githubusercontent.com/aaronjmars/aeon/main/skills/${skill}/SKILL.md`,
-      { signal: AbortSignal.timeout(6000) }
-    );
-    if (!res.ok) return null;
-    const skillPrompt = await res.text();
-    const today = new Date().toISOString().split("T")[0];
-    const varLine = varInput ? `\nFocus on: ${varInput}` : "";
-    return await callBankrLLM({
-      model: "claude-haiku-4-5",
-      system: `You are Aeon — autonomous intelligence agent. Synthesize from training knowledge. Be specific. Today is ${today}.`,
-      messages: [{ role: "user", content: `Follow skill template. Generate from training knowledge.\n\nSkill:\n${skillPrompt}${varLine}\n\nReturn only the skill output.` }],
-      temperature: 0.2,
-      maxTokens: 1200,
-    });
-  } catch { return null; }
-}
+const isAddr = (s: string) => /^0x[a-fA-F0-9]{40}$/.test(s.trim());
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { name?: string; project?: string; ticker?: string; description?: string; traction?: string } = {};
+    let body: { name?: string; project?: string; ticker?: string; address?: string; description?: string; traction?: string } = {};
     try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const url = new URL(req.url);
-    // Accept "project" (Hub UI) as alias for "name", "traction" as alias for "description"
-    const name        = body.name ?? body.project ?? url.searchParams.get("name") ?? url.searchParams.get("project") ?? "";
-    const ticker      = body.ticker ?? url.searchParams.get("ticker") ?? "";
+    const name = body.name ?? body.project ?? url.searchParams.get("name") ?? url.searchParams.get("project") ?? "";
+    const ticker = body.ticker ?? url.searchParams.get("ticker") ?? "";
+    const address = body.address ?? url.searchParams.get("address") ?? "";
     const description = body.description ?? body.traction ?? url.searchParams.get("description") ?? url.searchParams.get("traction") ?? "";
-
     if (!name) return Response.json({ error: "project name is required" }, { status: 400 });
 
-    // Step 1+2: Aeon token-movers + narrative-tracker in parallel
-    const [moversRaw, narrativeRaw] = await Promise.all([
-      runAeonSkill("token-movers", "Base chain tokens, recent launches, market conditions for new token launches"),
-      runAeonSkill("narrative-tracker", `narrative fit for ${name} ${ticker ? `($${ticker})` : ""}: ${description}. Which narratives support this launch?`),
+    // ── Real Base market context (timing regime) + optional live token market ──
+    const [tvl, trending, tokenMkt] = await Promise.all([
+      getBaseTvl(),
+      getBaseTrending(8),
+      isAddr(address) ? getTokenMarket(address.trim()) : Promise.resolve<TokenMarket | null>(null),
     ]);
+    const hasMarket = !!(tvl || trending.length);
+    const tokenLaunched = !!tokenMkt;
 
-    // Step 3: MiroShark retail appetite
-    const msRaw = await callBankrLLM({
-      model: "claude-haiku-4-5",
-      system: `You are MiroShark retail persona — FOMO-driven, focuses on price action, entry points, easy onboarding.
-Evaluate retail appetite for this token launch on Base.
-CRITICAL: Return ONLY raw JSON. No markdown.
-Schema: {
-  "stance": "bull|bear|neutral",
-  "bull": <0-100>,
-  "bear": <0-100>,
-  "neutral": <0-100>,
-  "fomo_level": "high|medium|low",
-  "entry_interest": "<1 sentence>",
-  "concern": "<1 sentence>",
-  "viral_hook": "<what would make retail share this>"
-}`,
-      messages: [{ role: "user", content: `Token: ${name} ${ticker ? `($${ticker})` : ""}\n${description}\n\nMarket conditions:\n${moversRaw ?? "Base market active"}\n\nNarrative context:\n${narrativeRaw ?? "Base ecosystem"}` }],
-      temperature: 0.5,
-      maxTokens: 500,
-    });
+    const tokenCtx = tokenMkt
+      ? `Existing token market (DexScreener, REAL): ${tokenMkt.symbol ?? "?"} price $${tokenMkt.priceUsd ?? "?"}, 24h ${tokenMkt.change.h24 ?? "?"}%, vol24h $${tokenMkt.volume24h ?? "?"}, liquidity $${tokenMkt.liquidityUsd ?? "?"}, mcap $${tokenMkt.marketCap ?? "?"} — this token is ALREADY trading; assess re-launch/relaunch momentum.`
+      : "No token address supplied — this is a PRE-LAUNCH token; there is no live price/liquidity yet. Score launch timing from market regime + narrative only, and label it an estimate.";
 
-    const retailAppetite = extractJsonObject(msRaw) ?? { stance: "neutral", bull: 40, bear: 30, neutral: 30, fomo_level: "medium", entry_interest: "Moderate interest", concern: "Unclear differentiation", viral_hook: "Strong narrative needed" };
+    const marketCtx = [
+      `Base market regime (REAL):`,
+      tvlToPrompt(tvl),
+      `Trending Base pools right now:`,
+      poolsToPrompt(trending),
+      tokenCtx,
+    ].join("\n");
 
-    // Step 4: Blue Agent ship — deployment checklist + final readiness score
-    const readinessRaw = await callBankrLLM({
-      model: "claude-haiku-4-5",
-      system: `You are Blue Agent running the 'blue ship' command for token launches on Base.
-Evaluate token launch readiness and produce a deployment checklist.
-CRITICAL: Return ONLY raw JSON. No markdown.
+    const system = `You are Blue Agent — token launch readiness engine for Base (chain 8453).
+You are given REAL Base market data (chain TVL + trending pools)${tokenLaunched ? " and the token's REAL live DexScreener market" : ""}. Use those exact numbers for market_timing; NEVER invent TVL, prices or volumes. ${tokenLaunched ? "" : "There is no live token market yet — frame readiness as an estimate, not measured."} Reason about narrative fit and retail appetite qualitatively.
+Return ONLY raw JSON. No markdown.
 Schema: {
   "readiness_score": <0-100>,
   "verdict": "GO|WAIT",
-  "market_timing": {"score":<0-10>,"notes":"<1 sentence>"},
+  "market_timing": {"score":<0-10>,"notes":"<reference the real TVL/trending data>"},
   "narrative_fit": {"score":<0-10>,"aligned":<boolean>,"notes":"<1 sentence>"},
   "retail_appetite": {"score":<0-10>,"notes":"<1 sentence>"},
-  "checklist": [
-    {"item":"<task>","status":"done|pending|critical","category":"technical|marketing|community|liquidity"}
-  ],
+  "checklist": [{"item":"<task>","status":"done|pending|critical","category":"technical|marketing|community|liquidity"}],
   "blockers": ["<critical issue if any>"],
-  "action_items": ["<specific next step>","<specific next step>","<specific next step>"],
+  "action_items": ["<step>","<step>","<step>"],
   "recommended_timing": "<immediate|1-2 weeks|1 month|wait for catalyst>",
   "confidence": <0-100>
-}`,
-      messages: [{ role: "user", content: `Token: ${name} ${ticker ? `($${ticker})` : ""}\nDescription: ${description}\n\nAeon market conditions:\n${moversRaw ?? "Base market active"}\n\nAeon narrative fit:\n${narrativeRaw ?? "Base ecosystem"}\n\nMiroShark retail:\n${JSON.stringify(retailAppetite)}` }],
-      temperature: 0.3,
-      maxTokens: 1400,
-    });
+}`;
+    const user = `Token: ${name} ${ticker ? `($${ticker})` : ""}\nDescription: ${description || "(none)"}\n\n${marketCtx}`;
 
-    const readiness = extractJsonObject(readinessRaw);
-    if (!readiness) throw new Error("Failed to parse readiness result");
+    let result: Record<string, unknown> | null = null;
+    for (let attempt = 0; attempt < 2 && !result; attempt++) {
+      try { result = parseJson(await llm(system, user)); } catch { /* retry then fallback */ }
+    }
+    if (!result) {
+      result = {
+        readiness_score: null,
+        verdict: "WAIT",
+        market_timing: { score: null, notes: "Synthesis briefly unavailable — Base market context below is real. Re-run." },
+        narrative_fit: { score: null, aligned: null, notes: "Re-run for detail." },
+        retail_appetite: { score: null, notes: "Re-run for detail." },
+        checklist: [],
+        blockers: [],
+        action_items: ["Re-run the readiness check", "Confirm audit + liquidity plan", "Line up launch narrative"],
+        recommended_timing: "wait for catalyst",
+        confidence: null,
+        degraded: true,
+      };
+    }
 
     return Response.json({
       tool: "token-launch-readiness",
       timestamp: new Date().toISOString(),
-      token: { name, ticker: ticker || null, description },
-      retail_appetite: retailAppetite,
-      ...readiness,
+      data_source: tokenLaunched
+        ? "DefiLlama + GeckoTerminal + DexScreener (live token market)"
+        : hasMarket
+          ? "DefiLlama + GeckoTerminal (live Base market regime) — pre-launch estimate"
+          : "estimate (live market data unavailable this run)",
+      token: { name, ticker: ticker || null, address: address || null, description },
+      market: {
+        base_tvl_usd: tvl?.tvlUsd ?? null,
+        base_tvl_change_7d_pct: tvl?.change7dPct ?? null,
+        trending: trending.slice(0, 5).map((p) => ({ symbol: p.baseSymbol, change_24h_pct: p.change.h24, vol24h: p.volume24h })),
+        token: tokenMkt ? { symbol: tokenMkt.symbol, price_usd: tokenMkt.priceUsd, change_24h_pct: tokenMkt.change.h24, volume24h: tokenMkt.volume24h, liquidity_usd: tokenMkt.liquidityUsd, market_cap: tokenMkt.marketCap } : null,
+      },
+      ...result,
     });
   } catch (error) {
     console.error("[TokenLaunchReadiness]", error);
