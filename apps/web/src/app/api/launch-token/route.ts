@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
+import { recordLaunch } from "@/lib/launches";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -188,12 +189,32 @@ export async function POST(req: NextRequest) {
       if (match?.tokenAddress) tokenAddress = match.tokenAddress;
     } catch { /* best-effort — fall through with whatever we have */ }
   }
+
+  const resolvedSymbol = (data?.tokenSymbol as string) || tokenSymbol;
+
+  // Record real deploys (not simulateOnly previews) into the launch registry so
+  // the public /app/launches showcase has a durable list. Best-effort — never
+  // let bookkeeping block or fail the deploy response.
+  if (!body.simulateOnly && tokenAddress) {
+    await recordLaunch({
+      tokenAddress,
+      tokenName,
+      tokenSymbol: resolvedSymbol,
+      image: body.image ?? null,
+      website: websiteUrl ?? null,
+      description: description ?? null,
+      feeRecipient: { type: feeType, value: feeValue },
+      txHash,
+      launchedAt: Date.now(),
+    }).catch(() => {});
+  }
+
   return NextResponse.json({
     ok: true,
     simulated: !!body.simulateOnly,
     tokenName,
     // Prefer the symbol Bankr actually used (it may have auto-defaulted it).
-    tokenSymbol: (data?.tokenSymbol as string) || tokenSymbol,
+    tokenSymbol: resolvedSymbol,
     tokenAddress,
     txHash,
     feeRecipient: { type: feeType, value: feeValue },
