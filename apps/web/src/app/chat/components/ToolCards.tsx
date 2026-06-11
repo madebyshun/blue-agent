@@ -905,10 +905,11 @@ const FEE_TYPES: { id: FeeType; label: string; placeholder: string }[] = [
   { id: "ens",       label: "ENS",       placeholder: "name.eth" },
 ];
 
-// Default fee recipient when the user leaves the field blank — BlueAgent's
-// Bankr Club wallet (same PAY_TO used for x402). So launches monetize BlueAgent
-// by default; the user can redirect the 57% creator fee to themselves.
-const BLUE_FEE_WALLET = "0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f";
+// Default fee recipient when the user leaves the field blank — BlueAgent's X
+// account (@blueagent_). Bankr resolves the X handle → verified wallet at deploy
+// time, so launches monetize BlueAgent by default; the user can redirect the
+// 57% creator fee to themselves (wallet / X / Farcaster / ENS).
+const BLUE_FEE_X = "blueagent_";
 
 // Small labelled text input used across the launch form.
 function LaunchField({ label, value, onChange, placeholder }: {
@@ -953,11 +954,11 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
   const cleanSymbol = symbol.replace(/^\$/, "").trim();
 
   // Resolve the effective fee recipient. If the user entered nothing, the 57%
-  // creator fee defaults to BlueAgent's wallet — the user can redirect it to
-  // their own wallet / X / Farcaster / ENS by filling the field.
+  // creator fee defaults to BlueAgent's X account (@blueagent_) — the user can
+  // redirect it to their own wallet / X / Farcaster / ENS by filling the field.
   const feeEntered       = feeValue.trim().length > 0;
-  const resolvedFeeType  = feeEntered ? feeType : "wallet";
-  const resolvedFeeValue = feeEntered ? feeValue.trim() : BLUE_FEE_WALLET;
+  const resolvedFeeType  = feeEntered ? feeType : "x";
+  const resolvedFeeValue = feeEntered ? feeValue.trim() : BLUE_FEE_X;
 
   async function launch() {
     if (!cleanName) return;
@@ -992,7 +993,7 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
           {out?.basescan && <a href={out.basescan} target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] text-slate-300 hover:text-white">Basescan ↗</a>}
           {out?.uniswap  && <a href={out.uniswap}  target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#F59E0B30] text-[#F59E0B]">Trade on Uniswap ↗</a>}
         </div>
-        <p className="font-mono text-[9px] text-slate-600 mt-2">Creator fees (57%) accrue to {feeEntered ? "the fee recipient" : "BlueAgent"}.</p>
+        <p className="font-mono text-[9px] text-slate-600 mt-2">Creator fees (57%) accrue to {feeEntered ? "the fee recipient" : "@blueagent_"}.</p>
       </div>
     );
   }
@@ -1055,14 +1056,14 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
           value={feeValue}
           onChange={e => setFeeValue(e.target.value)}
           placeholder={feeType === "wallet"
-            ? (address ? `${truncAddr(address)} — or leave blank → BlueAgent` : "0x… — or leave blank → BlueAgent")
-            : `${FEE_TYPES.find(t => t.id === feeType)?.placeholder ?? ""} — or leave blank → BlueAgent`}
+            ? (address ? `${truncAddr(address)} — or leave blank → @blueagent_` : "0x… — or leave blank → @blueagent_")
+            : `${FEE_TYPES.find(t => t.id === feeType)?.placeholder ?? ""} — or leave blank → @blueagent_`}
           className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors"
         />
       </div>
 
       <p className="font-mono text-[9px] text-slate-600 mb-2 leading-relaxed">
-        Fees → <span className="text-slate-400">{feeEntered ? (resolvedFeeType === "wallet" ? truncAddr(resolvedFeeValue) : `${resolvedFeeType}:${feeValue.trim()}`) : "BlueAgent (default)"}</span>. This deploys a
+        Fees → <span className="text-slate-400">{feeEntered ? (resolvedFeeType === "wallet" ? truncAddr(resolvedFeeValue) : `${resolvedFeeType}:${feeValue.trim()}`) : "@blueagent_ (default)"}</span>. This deploys a
         <span className="text-amber-400"> real, irreversible</span> token on Base via Bankr.
       </p>
       {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
