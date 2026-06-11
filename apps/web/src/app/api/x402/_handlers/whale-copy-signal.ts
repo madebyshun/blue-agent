@@ -66,8 +66,8 @@ Schema: {
 }`,
       `Token: ${token || "Base"}\nMover data: ${moversRaw ?? "Base chain"}\nAnalyst: ${JSON.stringify(analyst)}`, 0.3, 900);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "whale-copy-signal", timestamp: new Date().toISOString(), token, analyst, ...result });
   } catch (e) {

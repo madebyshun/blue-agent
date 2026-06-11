@@ -77,8 +77,8 @@ Schema: {
 }`,
       `Builder: ${builder || project}\nSkills: ${skills}\nLooking for: ${looking_for}\nResearch: ${researchRaw ?? "Base"}\nAnalyst: ${JSON.stringify(analyst)}`, 0.3, 1100);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "base-builder-network-match", timestamp: new Date().toISOString(), builder: builder || project, looking_for, analyst, ...result });
   } catch (e) {

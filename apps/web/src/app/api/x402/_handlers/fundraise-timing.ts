@@ -65,8 +65,8 @@ Schema: {
 }`,
       `Project: ${project}\nDescription: ${description}\nAsk: ${ask}\nStage: ${stage}\nMarket: ${moversRaw ?? "Base"}\nNarratives: ${narrativeRaw ?? "Base"}\nInfluencer: ${JSON.stringify(influencerTake)}`, 0.3, 900);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "fundraise-timing", timestamp: new Date().toISOString(), project, stage, influencer: influencerTake, ...result });
   } catch (e) {

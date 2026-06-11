@@ -75,8 +75,8 @@ Schema: {
 }`,
       `Project: ${project}\nNarratives: ${narrativeRaw ?? "Base"}\nConsensus: ${JSON.stringify(consensus)}`, 0.3, 700);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "community-sentiment", timestamp: new Date().toISOString(), project, miroshark: consensus, ...result });
   } catch (e) {

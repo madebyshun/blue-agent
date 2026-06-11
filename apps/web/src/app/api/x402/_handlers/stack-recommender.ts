@@ -79,8 +79,8 @@ Schema: {
 }`,
       `Project: ${project}\nBuild: ${JSON.stringify(buildRecommendation)}\nEcosystem: ${ecosystemRaw ?? "Base"}\nAnalyst: ${JSON.stringify(analystTake)}`, 0.3, 900);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "stack-recommender", timestamp: new Date().toISOString(), project, team_size, timeline, analyst: analystTake, ...result });
   } catch (e) {

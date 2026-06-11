@@ -76,8 +76,8 @@ Schema: {
 }`,
       `Address: ${address}\nFocus: ${focus}\nMovers: ${moversRaw ?? "Base chain"}\nAnalyst: ${JSON.stringify(analyst)}`, 0.3, 1100);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "wallet-strategy-analyzer", timestamp: new Date().toISOString(), address, focus, analyst, ...result });
   } catch (e) {
