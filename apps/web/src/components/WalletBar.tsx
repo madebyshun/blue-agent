@@ -129,7 +129,9 @@ export default function WalletBar({ onWalletChange, refreshTrigger = 0 }: Wallet
           style={{ background: tier.color, boxShadow: `0 0 6px ${tier.color}` }} />
         <span className="text-slate-300">{basename ?? shortAddr(address)}</span>
         <span className="text-slate-600">·</span>
-        <span style={{ color: "#4FC3F7" }}>{fmtCredits(ledger?.balance ?? credits)} cr</span>
+        <span style={{ color: tier.dailyCr === -1 ? tier.color : "#4FC3F7" }}>
+          {tier.dailyCr === -1 ? "∞" : fmtCredits(ledger?.balance ?? credits)} cr
+        </span>
       </div>
       <button
         onClick={() => disconnect()}
