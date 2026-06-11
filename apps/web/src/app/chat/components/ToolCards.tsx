@@ -980,7 +980,7 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
           <div className="text-slate-600 mb-0.5">SUPPLY</div><div className="text-slate-300">100B fixed</div>
         </div>
         <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-2.5 py-1.5">
-          <div className="text-slate-600 mb-0.5">CREATOR FEE</div><div className="text-[#22C55E]">57% of swaps</div>
+          <div className="text-slate-600 mb-0.5">CREATOR FEE</div><div className="text-[#22C55E]">57% of 1.2% swap fee</div>
         </div>
       </div>
       {isConnected && address ? (
