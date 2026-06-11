@@ -4,9 +4,9 @@
 
 import { useState, useEffect } from "react";
 import { useAccount, useReadContracts, useBalance, useReadContract, useWriteContract, useSwitchChain, usePublicClient, useSendTransaction } from "wagmi";
-import { formatUnits, parseUnits, parseEther, isAddress } from "viem";
+import { formatUnits, parseUnits, parseEther, isAddress, namehash } from "viem";
 import { base } from "viem/chains";
-import { useAddress, useName } from "@coinbase/onchainkit/identity";
+import { useName } from "@coinbase/onchainkit/identity";
 import { YIELD_NETWORKS, ERC20_ABI, AAVE_POOL_ABI, ERC4626_ABI, WITHDRAW_ALL, parseUsdc, supplyApyPct, VENUES, VENUE_LIST, type YieldNetwork, type VenueId } from "@/lib/yield-execution";
 import { useChat } from "../ChatContext";
 import { useBasename } from "@/lib/useBasename";
@@ -14,6 +14,29 @@ import { useBasename } from "@/lib/useBasename";
 function truncAddr(addr: string, len = 6) {
   if (!addr || addr.length < 12) return addr;
   return `${addr.slice(0, len)}…${addr.slice(-4)}`;
+}
+
+// Forward Basename → address resolution. OnchainKit's useAddress proved
+// unreliable (returned "not found" for live names like madebyshun.base.eth), so
+// we read the verified Base L2 Resolver directly — proven to resolve correctly.
+const BASENAME_L2_RESOLVER = "0xC6d566A56A1aFf6508b41f6c90ff131615583BCD" as const;
+const RESOLVER_ADDR_ABI = [
+  { name: "addr", type: "function", stateMutability: "view",
+    inputs: [{ name: "node", type: "bytes32" }], outputs: [{ type: "address" }] },
+] as const;
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+
+// "shun.base" → "shun.base.eth"; passes through "*.base.eth" / "*.eth".
+function basenameToEns(input: string): string | null {
+  const n = input.trim().toLowerCase();
+  if (!n) return null;
+  if (n.endsWith(".base")) return `${n}.eth`;
+  if (n.endsWith(".base.eth") || n.endsWith(".eth")) return n;
+  return null;
+}
+function safeNamehash(name: string | null): `0x${string}` | undefined {
+  if (!name) return undefined;
+  try { return namehash(name); } catch { return undefined; }
 }
 
 function ScoreBar({ score, color }: { score: number; color: string }) {
@@ -1432,10 +1455,15 @@ function SendCard({ result }: { result: SendResult }) {
   const recipIsAddr = isAddress(recip);
   const recipIsName = /\.(base|eth)$/i.test(recip);
 
-  // Forward-resolve a Basename/ENS → address (always on Base mainnet resolver;
-  // the resolved address is valid on whichever network you send from).
-  const { data: resolvedAddr, isLoading: resolving } = useAddress(
-    { name: recip, chain: base }, { enabled: recipIsName && recip.length > 3 });
+  // Forward-resolve a Basename → address via the Base L2 Resolver (always on Base
+  // mainnet; the resolved address is valid on whichever network you send from).
+  const node = recipIsName ? safeNamehash(basenameToEns(recip)) : undefined;
+  const { data: resolvedRaw, isLoading: resolving } = useReadContract({
+    address: BASENAME_L2_RESOLVER, abi: RESOLVER_ADDR_ABI, functionName: "addr",
+    args: node ? [node] : undefined, chainId: base.id,
+    query: { enabled: !!node },
+  });
+  const resolvedAddr = resolvedRaw && resolvedRaw !== ZERO_ADDR ? (resolvedRaw as `0x${string}`) : undefined;
   // Reverse-name for a pasted address (nice confirmation label).
   const { data: revName } = useName(
     { address: recipIsAddr ? (recip as `0x${string}`) : undefined, chain: base }, { enabled: recipIsAddr });
