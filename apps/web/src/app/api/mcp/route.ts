@@ -293,8 +293,8 @@ const TOOLS = [
   },
   {
     name: "hub_agent_perf",
-    description: "Performance analytics for an AI agent — response quality, task success rate, user satisfaction.",
-    inputSchema: { type: "object", properties: { agent: { type: "string", description: "Agent handle or name" } }, required: ["agent"] },
+    description: "Performance report for an AI agent — grounded in REAL GitHub activity (stars/commits/recency) when a repo is supplied; otherwise a labelled estimate.",
+    inputSchema: { type: "object", properties: { agent: { type: "string", description: "Agent handle or name" }, repo: { type: "string", description: "GitHub repo (owner/name or URL) to ground the report in real activity" } }, required: ["agent"] },
   },
   {
     name: "hub_agent_revenue",
