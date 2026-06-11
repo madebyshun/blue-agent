@@ -10,9 +10,10 @@ const PRODUCTS: Product[] = [
   },
   {
     title: "Launch Wizard",
-    desc:  "Turn an agent idea into a public launch with persona, pricing, tools, and publishing config.",
-    price: "Launch fee",
-    href:  "/launch",
+    desc:  "Turn a token idea into a live Base launch — Bankr launchpad deploy, 57% creator fees to your wallet, right from chat.",
+    price: "Gas sponsored",
+    href:  "/app/chat",
+    live:  true,
   },
   {
     title: "Marketplace",
