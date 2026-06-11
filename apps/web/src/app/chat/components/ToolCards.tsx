@@ -905,37 +905,72 @@ const FEE_TYPES: { id: FeeType; label: string; placeholder: string }[] = [
   { id: "ens",       label: "ENS",       placeholder: "name.eth" },
 ];
 
+// Default fee recipient when the user leaves the field blank — BlueAgent's
+// Bankr Club wallet (same PAY_TO used for x402). So launches monetize BlueAgent
+// by default; the user can redirect the 57% creator fee to themselves.
+const BLUE_FEE_WALLET = "0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f";
+
+// Small labelled text input used across the launch form.
+function LaunchField({ label, value, onChange, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder: string;
+}) {
+  return (
+    <label className="block">
+      <span className="font-mono text-[9px] text-slate-600 block mb-1">{label}</span>
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors"
+      />
+    </label>
+  );
+}
+
 function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
-  const { address, isConnected } = useAccount();
+  const { address } = useAccount();
   const [step, setStep] = useState<"idle" | "launching" | "done" | "error">("idle");
   const [err,  setErr]  = useState<string>("");
   const [out,  setOut]  = useState<{ tokenAddress: string | null; basescan: string | null; uniswap: string | null; bankr: string | null } | null>(null);
-  // Fee recipient — who gets the 57% creator share. Pre-filled from what the
-  // agent collected in the Q&A; defaults to the connected wallet, and stays
-  // adjustable here as the final confirmation control.
+
+  // Every token field is editable in the card — pre-filled only from values the
+  // agent explicitly passed through (it never invents them), but the card is the
+  // source of truth so the user can fix/fill anything before launching.
+  const [name,        setName]        = useState(result.tokenName ?? "");
+  const [symbol,      setSymbol]      = useState((result.tokenSymbol ?? "").replace(/^\$/, ""));
+  const [description, setDescription] = useState(result.description ?? "");
+  const [image,       setImage]       = useState(result.image ?? "");
+  const [website,     setWebsite]     = useState(result.website ?? "");
+
+  // Fee recipient — who gets the 57% creator share. Pre-selected from the Q&A if
+  // any; left blank, fees default to BlueAgent (see resolved* below).
   const initType = (["wallet", "x", "farcaster", "ens"].includes(result.feeRecipientType ?? "")
     ? result.feeRecipientType : "wallet") as FeeType;
   const [feeType,  setFeeType]  = useState<FeeType>(initType);
-  const [feeValue, setFeeValue] = useState(initType !== "wallet" ? (result.feeRecipientValue ?? "") : "");
+  const [feeValue, setFeeValue] = useState(result.feeRecipientValue ?? "");
 
-  const name   = result.tokenName?.trim() ?? "";
-  const symbol = (result.tokenSymbol ?? "").replace(/^\$/, "").trim();
+  const cleanName   = name.trim();
+  const cleanSymbol = symbol.replace(/^\$/, "").trim();
 
-  // wallet type defaults to the connected address when the field is left blank.
-  const effectiveFee = feeType === "wallet" ? (feeValue.trim() || address || "") : feeValue.trim();
+  // Resolve the effective fee recipient. If the user entered nothing, the 57%
+  // creator fee defaults to BlueAgent's wallet — the user can redirect it to
+  // their own wallet / X / Farcaster / ENS by filling the field.
+  const feeEntered       = feeValue.trim().length > 0;
+  const resolvedFeeType  = feeEntered ? feeType : "wallet";
+  const resolvedFeeValue = feeEntered ? feeValue.trim() : BLUE_FEE_WALLET;
 
   async function launch() {
-    if (!address) return;
+    if (!cleanName) return;
     setStep("launching"); setErr("");
     try {
       const res = await fetch("/api/launch-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tokenName: name, tokenSymbol: symbol,
-          description: result.description,
-          feeRecipientType: feeType, feeRecipientValue: effectiveFee,
-          image: result.image, website: result.website,
+          tokenName: cleanName, tokenSymbol: cleanSymbol || undefined,
+          description: description.trim() || undefined,
+          feeRecipientType: resolvedFeeType, feeRecipientValue: resolvedFeeValue,
+          image: image.trim() || undefined, website: website.trim() || undefined,
         }),
       });
       const d = await res.json();
@@ -950,14 +985,14 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
   if (step === "done") {
     return (
       <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
-        <div className="font-mono text-[11px] font-bold mb-1" style={{ color: "#22C55E" }}>🚀 ${symbol} launched on Base</div>
+        <div className="font-mono text-[11px] font-bold mb-1" style={{ color: "#22C55E" }}>🚀 ${cleanSymbol || cleanName} launched on Base</div>
         {out?.tokenAddress && <div className="font-mono text-[10px] text-slate-400 mb-2 break-all">{out.tokenAddress}</div>}
         <div className="flex flex-wrap gap-2">
           {out?.bankr    && <a href={out.bankr}    target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7]">View on Bankr ↗</a>}
           {out?.basescan && <a href={out.basescan} target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] text-slate-300 hover:text-white">Basescan ↗</a>}
           {out?.uniswap  && <a href={out.uniswap}  target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#F59E0B30] text-[#F59E0B]">Trade on Uniswap ↗</a>}
         </div>
-        <p className="font-mono text-[9px] text-slate-600 mt-2">Creator fees (57%) accrue to the fee recipient.</p>
+        <p className="font-mono text-[9px] text-slate-600 mt-2">Creator fees (57%) accrue to {feeEntered ? "the fee recipient" : "BlueAgent"}.</p>
       </div>
     );
   }
@@ -965,16 +1000,30 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
   return (
     <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
       <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold mb-3">LAUNCH TOKEN · BASE</div>
+
+      {/* Live preview of the name/ticker as typed */}
       <div className="flex items-center gap-2.5 mb-3">
         <div className="w-9 h-9 rounded-xl flex items-center justify-center font-mono text-sm font-bold shrink-0"
              style={{ background: "#4FC3F715", border: "1px solid #4FC3F730", color: "#4FC3F7" }}>
-          {symbol.slice(0, 2).toUpperCase() || "?"}
+          {(cleanSymbol || cleanName).slice(0, 2).toUpperCase() || "?"}
         </div>
         <div className="min-w-0">
-          <div className="font-mono text-sm font-bold text-white truncate">{name || "Unnamed token"}</div>
-          <div className="font-mono text-[11px] text-slate-500">${symbol || "—"}</div>
+          <div className="font-mono text-sm font-bold text-white truncate">{cleanName || "Your token name"}</div>
+          <div className="font-mono text-[11px] text-slate-500">${cleanSymbol || "TICKER"}</div>
         </div>
       </div>
+
+      {/* Editable token fields — the card is the form */}
+      <div className="space-y-2 mb-3">
+        <LaunchField label="TOKEN NAME *"  value={name}        onChange={setName}        placeholder="e.g. Blue Agent" />
+        <div className="grid grid-cols-2 gap-2">
+          <LaunchField label="TICKER"      value={symbol}      onChange={setSymbol}      placeholder="auto from name" />
+          <LaunchField label="LOGO URL"    value={image}       onChange={setImage}       placeholder="https://…/logo.png" />
+        </div>
+        <LaunchField label="DESCRIPTION"   value={description}  onChange={setDescription} placeholder="One-line pitch (optional)" />
+        <LaunchField label="WEBSITE"       value={website}      onChange={setWebsite}     placeholder="https://… (optional)" />
+      </div>
+
       <div className="grid grid-cols-2 gap-2 mb-3 font-mono text-[10px]">
         <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-2.5 py-1.5">
           <div className="text-slate-600 mb-0.5">SUPPLY</div><div className="text-slate-300">100B fixed</div>
@@ -983,50 +1032,50 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
           <div className="text-slate-600 mb-0.5">CREATOR FEE</div><div className="text-[#22C55E]">57% of 1.2% swap fee</div>
         </div>
       </div>
-      {isConnected && address ? (
-        <>
-          {/* Fee recipient — who receives the 57% creator share */}
-          <div className="mb-3">
-            <div className="font-mono text-[9px] text-slate-600 mb-1.5">FEE RECIPIENT · 57% creator share</div>
-            <div className="flex gap-1 mb-1.5">
-              {FEE_TYPES.map(t => {
-                const active = feeType === t.id;
-                return (
-                  <button key={t.id}
-                    onClick={() => { setFeeType(t.id); setFeeValue(""); }}
-                    className="font-mono text-[10px] px-2 py-1 rounded-md transition-colors"
-                    style={active
-                      ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
-                      : { color: "#64748b", border: "1px solid #1A1A2E" }}>
-                    {t.label}
-                  </button>
-                );
-              })}
-            </div>
-            <input
-              value={feeValue}
-              onChange={e => setFeeValue(e.target.value)}
-              placeholder={feeType === "wallet" ? `${truncAddr(address)} (default)` : (FEE_TYPES.find(t => t.id === feeType)?.placeholder ?? "")}
-              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors"
-            />
-          </div>
-          <p className="font-mono text-[9px] text-slate-600 mb-2 leading-relaxed">
-            Fees → <span className="text-slate-400">{feeType === "wallet" ? (feeValue.trim() ? truncAddr(feeValue.trim()) : truncAddr(address)) : `${feeType}:${feeValue.trim() || "—"}`}</span>. This deploys a
-            <span className="text-amber-400"> real, irreversible</span> token on Base via Bankr.
-          </p>
-          {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
-          <button
-            onClick={launch}
-            disabled={step === "launching" || !name}
-            className="w-full font-mono text-[12px] font-bold py-2 rounded-lg transition-all disabled:opacity-50"
-            style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>
-            {step === "launching" ? "Launching…" : `🚀 Launch $${symbol || "TOKEN"} on Base`}
-          </button>
-          <p className="font-mono text-[9px] text-slate-700 mt-1.5">Bankr allows 1 real launch/min per wallet.</p>
-        </>
-      ) : (
-        <p className="font-mono text-[10px] text-slate-500">Connect a wallet to launch — creator fees route to it.</p>
-      )}
+
+      {/* Fee recipient — optional; blank = BlueAgent */}
+      <div className="mb-3">
+        <div className="font-mono text-[9px] text-slate-600 mb-1.5">FEE RECIPIENT · 57% creator share · optional</div>
+        <div className="flex gap-1 mb-1.5 flex-wrap">
+          {FEE_TYPES.map(t => {
+            const active = feeType === t.id;
+            return (
+              <button key={t.id}
+                onClick={() => { setFeeType(t.id); setFeeValue(t.id === "wallet" && address ? address : ""); }}
+                className="font-mono text-[10px] px-2 py-1 rounded-md transition-colors"
+                style={active
+                  ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                  : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+        <input
+          value={feeValue}
+          onChange={e => setFeeValue(e.target.value)}
+          placeholder={feeType === "wallet"
+            ? (address ? `${truncAddr(address)} — or leave blank → BlueAgent` : "0x… — or leave blank → BlueAgent")
+            : `${FEE_TYPES.find(t => t.id === feeType)?.placeholder ?? ""} — or leave blank → BlueAgent`}
+          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors"
+        />
+      </div>
+
+      <p className="font-mono text-[9px] text-slate-600 mb-2 leading-relaxed">
+        Fees → <span className="text-slate-400">{feeEntered ? (resolvedFeeType === "wallet" ? truncAddr(resolvedFeeValue) : `${resolvedFeeType}:${feeValue.trim()}`) : "BlueAgent (default)"}</span>. This deploys a
+        <span className="text-amber-400"> real, irreversible</span> token on Base via Bankr.
+      </p>
+      {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
+      <button
+        onClick={launch}
+        disabled={step === "launching" || !cleanName}
+        className="w-full font-mono text-[12px] font-bold py-2 rounded-lg transition-all disabled:opacity-50"
+        style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>
+        {step === "launching" ? "Launching…" : `🚀 Launch $${cleanSymbol || "TOKEN"} on Base`}
+      </button>
+      <p className="font-mono text-[9px] text-slate-700 mt-1.5">
+        {cleanName ? "Bankr allows 1 real launch/min per wallet." : "Enter a token name to launch."}
+      </p>
     </div>
   );
 }
