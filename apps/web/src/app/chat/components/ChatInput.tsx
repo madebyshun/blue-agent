@@ -33,7 +33,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { cmd: "yield",   icon: "💰", label: "Yield Optimizer", hint: "Best APY opportunities on Base DeFi",        example: "/yield" },
   { cmd: "dex",     icon: "📈", label: "DEX Flow",        hint: "Live buy/sell pressure for a token",         example: "/dex <token>" },
   { cmd: "whale",   icon: "🐋", label: "Whale Tracker",   hint: "Smart money flow for any token",             example: "/whale <token>" },
-  { cmd: "launch",  icon: "🚀", label: "Launch Sim",      hint: "Simulate your token launch — 3-agent",       example: "/launch <token> <description>" },
+  { cmd: "launch",  icon: "🚀", label: "Launch Token",    hint: "Deploy a real token on Base via Bankr",       example: "/launch <token>" },
   { cmd: "credits", icon: "⚡", label: "Credits",         hint: "Show balance, tier, and how to earn more",   example: "/credits" },
   { cmd: "models",  icon: "🤖", label: "Models",          hint: "List all available AI models + costs",       example: "/models" },
   { cmd: "skills",  icon: "⚡", label: "Skills / Tools",  hint: "List all Hub tools available in chat",       example: "/skills" },
