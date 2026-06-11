@@ -198,16 +198,6 @@ const TOOLS = [
     inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
   },
   {
-    name: "hub_allowance_audit",
-    description: "Audit dangerous token approvals for a wallet — find unlimited allowances and revoke recommendations.",
-    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
-  },
-  {
-    name: "hub_phishing_scan",
-    description: "Scan a URL or domain for phishing patterns targeting crypto users.",
-    inputSchema: { type: "object", properties: { url: { type: "string", description: "URL or domain to scan" } }, required: ["url"] },
-  },
-  {
     name: "hub_key_exposure",
     description: "Check if a wallet's public key is exposed on-chain (quantum vulnerability risk).",
     inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
@@ -413,8 +403,6 @@ const HUB_MAP: Record<string, string> = {
   // Security (extended)
   hub_contract_trust:       "contract-trust",
   hub_aml_screen:           "aml-screen",
-  hub_allowance_audit:      "allowance-audit",
-  hub_phishing_scan:        "phishing-scan",
   hub_key_exposure:         "key-exposure",
   // Research (extended)
   hub_token_momentum:       "token-momentum-scanner",
@@ -467,7 +455,25 @@ const CONSOLE_MAP: Record<string, string> = {
 
 const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
 
-async function callHubTool(toolId: string, args: Record<string, unknown>): Promise<string> {
+// Some MCP tool schemas use agent-friendly field names (task, agent, pitch,
+// target, handle) that differ from the handler's expected body fields. Map them
+// here, keyed by handler id, so the MCP path doesn't 400. The Hub-UI path
+// already sends the correct fields, so this only touches MCP calls.
+const ARG_REMAP: Record<string, (a: Record<string, unknown>) => Record<string, unknown>> = {
+  "repo-health":          (a) => ({ ...a, repo: a.repo ?? a.url }),
+  "community-sentiment":  (a) => ({ ...a, project: a.project ?? a.target }),
+  "builder-deep-dd":      (a) => ({ ...a, target: a.target ?? a.handle }),
+  "builder-brand-score":  (a) => ({ ...a, builder: a.builder ?? a.project, handle: a.handle ?? a.project }),
+  "roadmap-validator":    (a) => ({ ...a, project: a.project ?? "this project", roadmap: a.roadmap }),
+  "gtm-brief":            (a) => ({ ...a, project: a.project, description: a.description ?? a.target ?? a.project }),
+  "pitch-intelligence":   (a) => ({ ...a, project: a.project ?? a.pitch, description: a.description ?? a.pitch }),
+  "multi-agent-workflow": (a) => ({ ...a, goal: a.goal ?? a.task }),
+  "agent-collab-match":   (a) => ({ ...a, agent_a: a.agent_a ?? a.task, agent_b: a.agent_b ?? "best-fit Base ecosystem agent", collab_goal: a.collab_goal ?? a.task }),
+  "agent-performance":    (a) => ({ ...a, handle: a.handle ?? a.agent }),
+};
+
+async function callHubTool(toolId: string, rawArgs: Record<string, unknown>): Promise<string> {
+  const args = ARG_REMAP[toolId] ? ARG_REMAP[toolId](rawArgs) : rawArgs;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   // Server-to-server: bypass x402 payment for MCP free-tier calls
   if (INTERNAL_KEY) headers["X-Blue-Internal"] = INTERNAL_KEY;
