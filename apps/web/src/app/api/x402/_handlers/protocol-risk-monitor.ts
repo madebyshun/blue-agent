@@ -1,15 +1,21 @@
-// x402/protocol-risk-monitor/index.ts
-// Protocol Risk Monitor — Aeon defi-monitor + MiroShark analyst + Blue verdict
+// x402/protocol-risk-monitor
+// Protocol Risk Monitor — grounded in DefiLlama (real Base TVL + TVL change).
+// The TVL numbers are live; the LLM only reasons about contract/oracle/
+// governance risk on top of them (never invents TVL/percentages).
+// Resilient: retry + graceful fallback, never 500.
 // Price: $0.35
 
+import { findBaseProtocol, protocolToPrompt, type BaseProtocol } from "@/lib/market-data";
+
 type Msg = { role: string; content: string };
-async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
+async function llm(system: string, user: string, temp = 0.3, tokens = 1100): Promise<string> {
   const r = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
     headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
     body: JSON.stringify({ model: "claude-haiku-4-5", system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
+    signal: AbortSignal.timeout(30_000),
   });
-  if (!r.ok) throw new Error(`LLM ${r.status}: ${await r.text()}`);
+  if (!r.ok) throw new Error(`LLM ${r.status}`);
   const d = await r.json() as { content?: { text: string }[] };
   return d.content?.[0]?.text ?? "";
 }
@@ -19,15 +25,6 @@ function parseJson(t: string): Record<string, unknown> | null {
   if (i >= 0 && j > i) s = s.slice(i, j + 1);
   try { return JSON.parse(s); } catch { try { return JSON.parse(s.replace(/[\x00-\x1F]/g, " ")); } catch { return null; } }
 }
-async function aeon(skill: string, focus = ""): Promise<string | null> {
-  try {
-    const r = await fetch(`https://raw.githubusercontent.com/aaronjmars/aeon/main/skills/${skill}/SKILL.md`, { signal: AbortSignal.timeout(6000) });
-    if (!r.ok) return null;
-    const p = await r.text();
-    return await llm(`You are Aeon. Synthesize from training knowledge. Today: ${new Date().toISOString().split("T")[0]}.`,
-      `Follow skill template. Be concrete.\n\nSkill:\n${p}${focus ? `\nFocus: ${focus}` : ""}\n\nReturn only skill output.`, 0.2, 1200);
-  } catch { return null; }
-}
 
 export default async function handler(req: Request): Promise<Response> {
   try {
@@ -36,48 +33,65 @@ export default async function handler(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const protocol = body.protocol ?? url.searchParams.get("protocol") ?? "";
     const position = body.position ?? url.searchParams.get("position") ?? "";
-    if (!protocol) return Response.json({ error: "protocol is required (e.g. 'Aerodrome', 'Aave Base', 'Uniswap v4')" }, { status: 400 });
+    if (!protocol) return Response.json({ error: "protocol is required (e.g. 'Aerodrome', 'Aave', 'Uniswap')" }, { status: 400 });
 
-    const defiRaw = await aeon("defi-monitor", `${protocol} on Base: current TVL health, liquidity depth, recent unusual activity, smart contract risk signals, exploit history, centralization risks, oracle dependencies.`);
+    // ── Real DefiLlama data ───────────────────────────────────────────────────
+    const p: BaseProtocol | null = await findBaseProtocol(protocol);
+    const ch7 = p?.change7dPct ?? null;
+    const ch1 = p?.change1dPct ?? null;
+    const tvlSignals: string[] = [];
+    if (ch7 != null && ch7 <= -20) tvlSignals.push(`TVL down ${ch7.toFixed(1)}% over 7d — capital fleeing, elevated risk.`);
+    else if (ch7 != null && ch7 <= -8) tvlSignals.push(`TVL down ${ch7.toFixed(1)}% over 7d — softening.`);
+    if (ch1 != null && ch1 <= -10) tvlSignals.push(`TVL down ${ch1.toFixed(1)}% in 24h — sharp outflow.`);
+    if (p && (p.tvlUsd ?? 0) < 1_000_000) tvlSignals.push(`Low TVL (<$1M) — thin protocol, higher fragility.`);
 
-    const msRaw = await llm(`You are MiroShark analyst persona — DeFi risk specialist.
-Assess protocol risk from a position holder perspective.
-CRITICAL: Return ONLY raw JSON.
-Schema: {
-  "risk_level": "critical|high|medium|low|minimal",
-  "exit_urgency": "exit_now|reduce|hold|add",
-  "biggest_risk": "<single biggest risk right now>",
-  "time_horizon": "<safe window: hours|days|weeks|months>",
-  "analyst_verdict": "<1-2 sentences>"
-}`,
-      `Protocol: ${protocol}\nPosition: ${position || "general exposure"}\nDeFi signals: ${defiRaw ?? "Base DeFi"}`, 0.3, 500);
-    const analyst = parseJson(msRaw) ?? {};
+    const realCtx = [
+      protocolToPrompt(p, "Target protocol (DefiLlama, REAL)"),
+      tvlSignals.length ? `Live TVL signals: ${tvlSignals.join(" ")}` : "Live TVL signals: none flagged.",
+    ].join("\n");
 
-    const resultRaw = await llm(`You are Blue Agent — protocol risk monitor for Base DeFi positions.
-CRITICAL: Return ONLY raw JSON.
+    const system = `You are Blue Agent — protocol risk monitor for Base DeFi (chain 8453).
+You are given REAL DefiLlama TVL data. Reference those numbers exactly; NEVER invent TVL or percentages. Use the live TVL trend for the liquidity/market dimensions; reason qualitatively (from known fundamentals) about smart-contract, oracle and governance risk.
+Return ONLY raw JSON. No markdown.
 Schema: {
   "risk_score": <0-100>,
   "overall_risk": "critical|high|medium|low|minimal",
   "action": "EXIT_NOW|REDUCE|HOLD|ADD",
-  "risk_dimensions": {
-    "smart_contract": <0-10>,
-    "liquidity": <0-10>,
-    "oracle": <0-10>,
-    "governance": <0-10>,
-    "market": <0-10>
-  },
+  "risk_dimensions": { "smart_contract": <0-10>, "liquidity": <0-10>, "oracle": <0-10>, "governance": <0-10>, "market": <0-10> },
   "active_risks": [{"risk":"<name>","severity":"critical|high|medium|low","description":"<brief>"}],
   "watch_for": ["<signal that changes risk level>"],
   "safe_exit_path": "<how to exit safely if needed>",
-  "position_sizing": "<recommended max exposure %>",
   "summary": "<2 sentences>"
-}`,
-      `Protocol: ${protocol}\nPosition: ${position}\nDeFi: ${defiRaw ?? "Base DeFi"}\nAnalyst: ${JSON.stringify(analyst)}`, 0.3, 1100);
+}`;
+    const user = `${realCtx}\nPosition: ${position || "general exposure"}`;
 
-    let result = parseJson(resultRaw);
-    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
+    let result: Record<string, unknown> | null = null;
+    for (let attempt = 0; attempt < 2 && !result; attempt++) {
+      try { result = parseJson(await llm(system, user)); } catch { /* retry then fallback */ }
+    }
+    if (!result) {
+      result = {
+        risk_score: p ? (ch7 != null && ch7 <= -20 ? 70 : 45) : 50,
+        overall_risk: ch7 != null && ch7 <= -20 ? "high" : "medium",
+        action: "HOLD",
+        risk_dimensions: { smart_contract: 5, liquidity: 5, oracle: 5, governance: 5, market: 5 },
+        active_risks: tvlSignals.map((s) => ({ risk: "tvl-trend", severity: "medium", description: s })),
+        watch_for: ["Continued TVL decline", "Governance/contract changes"],
+        safe_exit_path: "Reduce position into deep-liquidity pairs; avoid thin pools.",
+        summary: "Live risk synthesis was briefly unavailable — assessment built from real TVL signals. Re-run for full detail.",
+        degraded: true,
+      };
+    }
 
-    return Response.json({ tool: "protocol-risk-monitor", timestamp: new Date().toISOString(), protocol, position, analyst, ...result });
+    return Response.json({
+      tool: "protocol-risk-monitor",
+      timestamp: new Date().toISOString(),
+      data_source: p ? "DefiLlama (live Base TVL) + analysis" : "advisory (protocol not found on DefiLlama for Base)",
+      protocol,
+      position: position || null,
+      onchain: p ? { name: p.name, tvl_usd: p.tvlUsd, change_1d_pct: p.change1dPct, change_7d_pct: p.change7dPct, category: p.category, url: p.url } : null,
+      ...result,
+    });
   } catch (e) {
     return Response.json({ error: "Protocol risk monitor failed", message: (e as Error).message }, { status: 500 });
   }

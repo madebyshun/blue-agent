@@ -236,3 +236,70 @@ export function tvlToPrompt(t: BaseTvl | null): string {
   if (!t) return "Base TVL: (unavailable)";
   return `Base chain TVL: ${fmtUsd(t.tvlUsd)} (1d ${fmtPct(t.change1dPct)}, 7d ${fmtPct(t.change7dPct)})`;
 }
+
+// ─── DefiLlama: protocols on Base (TVL, change, category) ────────────────────
+
+export type BaseProtocol = {
+  name: string;
+  slug: string;
+  category: string | null;
+  tvlUsd: number | null;
+  change1dPct: number | null;
+  change7dPct: number | null;
+  chains: string[];
+  url: string;
+};
+
+type LlamaProtocol = {
+  name?: string;
+  slug?: string;
+  category?: string;
+  tvl?: number;
+  change_1d?: number | null;
+  change_7d?: number | null;
+  chains?: string[];
+  chainTvls?: Record<string, number>;
+};
+
+function mapProtocol(p: LlamaProtocol): BaseProtocol {
+  return {
+    name: p.name ?? "unknown",
+    slug: p.slug ?? "",
+    category: p.category ?? null,
+    tvlUsd: p.chainTvls?.Base ?? p.tvl ?? null, // prefer Base-specific TVL
+    change1dPct: p.change_1d ?? null,
+    change7dPct: p.change_7d ?? null,
+    chains: p.chains ?? [],
+    url: p.slug ? `https://defillama.com/protocol/${p.slug}` : "https://defillama.com/chain/Base",
+  };
+}
+
+// All protocols present on Base, sorted by Base TVL desc.
+export async function getBaseProtocols(limit = 50): Promise<BaseProtocol[]> {
+  const all = await getJson<LlamaProtocol[]>("https://api.llama.fi/protocols");
+  if (!all?.length) return [];
+  return all
+    .filter((p) => (p.chains ?? []).includes("Base"))
+    .map(mapProtocol)
+    .sort((a, b) => (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0))
+    .slice(0, limit);
+}
+
+// Fuzzy-match a Base protocol by name (case-insensitive).
+export async function findBaseProtocol(name: string): Promise<BaseProtocol | null> {
+  if (!name?.trim()) return null;
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, "");
+  const q = norm(name);
+  const list = await getBaseProtocols(800);
+  return (
+    list.find((p) => norm(p.name) === q) ??
+    list.find((p) => p.name.toLowerCase().includes(name.toLowerCase().trim())) ??
+    list.find((p) => name.toLowerCase().includes(p.name.toLowerCase())) ??
+    null
+  );
+}
+
+export function protocolToPrompt(p: BaseProtocol | null, label = "Protocol"): string {
+  if (!p) return `${label}: (not found on DefiLlama for Base — assess qualitatively)`;
+  return `${label}: ${p.name} — Base TVL ${fmtUsd(p.tvlUsd)} (1d ${fmtPct(p.change1dPct)}, 7d ${fmtPct(p.change7dPct)}), category ${p.category ?? "?"}, chains ${p.chains.length}`;
+}
