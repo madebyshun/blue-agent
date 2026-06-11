@@ -97,8 +97,8 @@ CRITICAL: Return ONLY raw JSON. No markdown. No backticks. Start with { and end 
       maxTokens: 900,
     });
 
-    const result = extractJsonObject(llmResponse);
-    if (!result) throw new Error("Failed to parse quantum risk report");
+    let result = extractJsonObject(llmResponse);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
     return Response.json(result, { status: 200 });
   } catch (error) {
     console.error("[QuantumPremium] Error:", error);

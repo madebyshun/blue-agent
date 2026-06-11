@@ -110,8 +110,8 @@ CRITICAL: Return ONLY raw JSON. No markdown. No backticks. Start with { and end 
       maxTokens: 1200,
     });
 
-    const result = extractJsonObject(llmResponse);
-    if (!result) throw new Error("Failed to parse wallet PnL");
+    let result = extractJsonObject(llmResponse);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
     return Response.json(result, { status: 200 });
   } catch (error) {
     console.error("[WalletPnL] Error:", error);

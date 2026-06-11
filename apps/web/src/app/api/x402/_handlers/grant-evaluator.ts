@@ -95,8 +95,8 @@ Website: ${body.websiteUrl || "Not provided"}`;
       maxTokens: 2000,
     });
 
-    const result = extractJsonObject(llmResponse);
-    if (!result) throw new Error("Failed to parse grant evaluation");
+    let result = extractJsonObject(llmResponse);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
     return Response.json(result, { status: 200 });
   } catch (error) {
     console.error("[GrantEvaluator] Error:", error);

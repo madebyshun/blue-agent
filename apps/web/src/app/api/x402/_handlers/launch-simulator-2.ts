@@ -172,7 +172,7 @@ Rules: copy miroshark values EXACTLY. final_verdict = weighted consensus of all 
         if (result?.final_verdict) break;
       } catch (e) { if (attempt === 2) throw e; }
     }
-    if (!result) throw new Error("Failed to parse simulation result after 3 attempts");
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     if (miroShark && result.miroshark && typeof result.miroshark === "object") {
       const ms = result.miroshark as Record<string, unknown>;

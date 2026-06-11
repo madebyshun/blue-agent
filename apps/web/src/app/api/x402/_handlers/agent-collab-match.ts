@@ -60,8 +60,8 @@ Schema: {
 }`,
       `Agent A (${agent_a}): ${JSON.stringify(scoreA)}\nAgent B (${agent_b}): ${JSON.stringify(scoreB)}\nGoal: ${collab_goal}\nAnalyst: ${JSON.stringify(analyst)}`, 0.3, 800);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "agent-collab-match", timestamp: new Date().toISOString(), agent_a, agent_b, collab_goal: collab_goal || null, score_a: scoreA, score_b: scoreB, analyst, ...result });
   } catch (e) {

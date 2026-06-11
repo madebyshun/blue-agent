@@ -73,8 +73,8 @@ Schema: {
 }`,
       `Agent: ${handle}\nScore: ${JSON.stringify(agentScore)}\nRepo health: ${repoHealthRaw ?? "no data"}\nObserver: ${JSON.stringify(observerTake)}`, 0.3, 900);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "agent-performance", timestamp: new Date().toISOString(), handle, repo: repo || null, agent_score: agentScore, observer: observerTake, ...result });
   } catch (e) {

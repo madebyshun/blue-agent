@@ -70,8 +70,8 @@ Schema: {
 }`,
       `Agent: ${agent}\nDescription: ${description}\nCurrent: ${current_revenue}\nModel: ${model}\nResearch: ${researchRaw ?? "agent economy"}\nAnalyst: ${JSON.stringify(analyst)}`, 0.3, 1100);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "agent-revenue-optimizer", timestamp: new Date().toISOString(), agent, current_revenue, model, analyst, ...result });
   } catch (e) {

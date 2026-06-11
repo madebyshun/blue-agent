@@ -73,8 +73,8 @@ Schema: {
 }`,
       `Project: ${project}\nDescription: ${description}\nAsk: ${ask}\nStage: ${stage}\nPitch: ${JSON.stringify(raisePitch)}\nNarratives: ${narrativeRaw ?? "Base"}\nInfluencer: ${JSON.stringify(influencerTake)}`, 0.3, 1000);
 
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
+    let result = parseJson(resultRaw);
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({ tool: "pitch-intelligence", timestamp: new Date().toISOString(), project, stage, raise_pitch: raisePitch, influencer: influencerTake, ...result });
   } catch (e) {
