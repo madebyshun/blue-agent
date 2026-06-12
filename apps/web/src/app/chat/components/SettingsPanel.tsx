@@ -22,10 +22,10 @@ const LINKS: { label: string; sub: string; href: string }[] = [
 // "How credits & tiers work" explainer so users understand why to connect and
 // the hold-OR-stake model (both count toward your tier).
 const TIER_ROWS: { need: string; tier: string; perk: string; color: string }[] = [
-  { need: "No wallet", tier: "Guest",   perk: "500 cr/day",    color: "#64748b" },
-  { need: "500K BLUE", tier: "Starter", perk: "2,000 cr/day",  color: "#4FC3F7" },
-  { need: "2M BLUE",   tier: "Pro",     perk: "6,000 cr/day",  color: "#A78BFA" },
-  { need: "10M BLUE",  tier: "Max",     perk: "∞ + 40% off",   color: "#F59E0B" },
+  { need: "No wallet", tier: "Guest",   perk: "100 cr/day",   color: "#64748b" },
+  { need: "500K BLUE", tier: "Starter", perk: "500 cr/day",   color: "#4FC3F7" },
+  { need: "2M BLUE",   tier: "Pro",     perk: "2,000 cr/day", color: "#A78BFA" },
+  { need: "10M BLUE",  tier: "Max",     perk: "∞ + 40% off",  color: "#F59E0B" },
 ];
 
 // Section content header — mirrors Claude's right-pane title + subtitle.
@@ -230,7 +230,7 @@ export default function SettingsPanel({ section }: { section: SettingsSection })
           {showHelp && (
             <div className="mt-2 rounded-2xl bg-[#0A0A12] border border-[#1A1A2E] p-4 space-y-3">
               <p className="font-mono text-[10px] text-slate-500 leading-relaxed">
-                With no wallet you get <span className="text-[#4FC3F7]">500 free credits/day</span> — enough to try a tool. Hold or stake $BLUE to unlock real usage.
+                With no wallet you get <span className="text-[#4FC3F7]">100 free credits/day</span> (~10 messages). Hold $BLUE to step up a tier and unlock tools.
                 Your tier — and how many credits you get — is set by your <span className="text-slate-300">$BLUE</span>,
                 and <span className="text-slate-300">holding or staking both count</span>.
               </p>
