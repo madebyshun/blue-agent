@@ -6,6 +6,7 @@ import WalletBar     from "@/components/WalletBar";
 import { ChatProvider, useChat } from "@/app/chat/ChatContext";
 
 import AppSidebar    from "@/app/chat/components/AppSidebar";
+import ModelsPanel   from "@/app/chat/components/ModelsPanel";
 import ToolsTab      from "@/app/chat/components/ToolsTab";
 import SkillsPanel   from "@/app/chat/components/SkillsPanel";
 import CronPanel     from "@/app/chat/components/CronPanel";
@@ -19,17 +20,19 @@ import type { ActiveTab } from "@/app/chat/types";
 // Settings is intentionally absent — it opens as a modal from the account chip,
 // not as a content tab.
 const TAB_META: Record<Exclude<ActiveTab, "chat" | "settings">, { title: string; subtitle: string }> = {
+  models:   { title: "Models",   subtitle: "AI engines behind Blue Chat · pick by use-case" },
   tools:    { title: "Tools",    subtitle: "50 hub tools · click to run in chat" },
   skills:   { title: "Skills",   subtitle: "Agent capabilities · Blue Agent · Bankr · Base MCP" },
-  cron:     { title: "Cron",     subtitle: "Scheduled agent tasks" },
+  cron:     { title: "Scheduled", subtitle: "Scheduled agent tasks" },
 };
 
 // ── Mobile tab bar ─────────────────────────────────────────────────────────────
 const MOBILE_TABS: { id: ActiveTab; label: string; icon: string }[] = [
   { id: "chat",     label: "Chat",     icon: "💬" },
+  { id: "models",   label: "Models",   icon: "🤖" },
   { id: "tools",    label: "Tools",    icon: "🔧" },
   { id: "skills",   label: "Skills",   icon: "⚡" },
-  { id: "cron",     label: "Cron",     icon: "⏱" },
+  { id: "cron",     label: "Scheduled", icon: "⏱" },
 ];
 
 // ── Shell ──────────────────────────────────────────────────────────────────────
@@ -127,6 +130,13 @@ function ChatShell() {
                   </div>
                 )}
               </>
+            )}
+
+            {/* 🤖 Models */}
+            {activeTab === "models" && (
+              <div className="flex-1 h-full overflow-hidden">
+                <ModelsPanel onPick={() => setActiveTab("chat")} />
+              </div>
             )}
 
             {/* 🔧 Tools */}
