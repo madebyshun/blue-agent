@@ -1,8 +1,20 @@
 "use client";
+import { useState } from "react";
+import Link from "next/link";
 import { useChat } from "../ChatContext";
 import { getMemory, clearMemory } from "@/lib/memory";
 import WalletBar from "@/components/WalletBar";
 import PersonaSelector from "./PersonaSelector";
+
+// Tier ladder — mirrors lib/credits.ts TIERS + GUEST_DAILY. Shown in the
+// "How credits & tiers work" explainer so users understand why to connect and
+// the hold-OR-stake model (both count toward your tier).
+const TIER_ROWS: { need: string; tier: string; perk: string; color: string }[] = [
+  { need: "No wallet", tier: "Guest",   perk: "100 cr/day",        color: "#64748b" },
+  { need: "500K BLUE", tier: "Starter", perk: "500 cr/day",        color: "#4FC3F7" },
+  { need: "2M BLUE",   tier: "Pro",     perk: "2,000 cr/day",      color: "#A78BFA" },
+  { need: "10M BLUE",  tier: "Max",     perk: "∞ + 40% off",       color: "#F59E0B" },
+];
 
 /**
  * Sidebar settings panel — reduced from the original 6-section layout
@@ -38,6 +50,8 @@ export default function SettingsPanel() {
     credits, countdown, isUnlimited, daily,
     setBuyOpen,
   } = useChat();
+
+  const [showHelp, setShowHelp] = useState(false);
 
   const memory    = getMemory(walletAddr);
   const hasMemory = !!(memory.currentProject || memory.commandHistory.length > 0);
@@ -141,13 +155,13 @@ export default function SettingsPanel() {
           )}
         </div>
 
-        {/* Next-tier hint — wording answers "what do I do to earn more
-            credits per day?". Uses "Stake" because the on-chain credit
-            accrual is keyed off the staked amount, not just the wallet
-            balance — see BlueMarketStaking.totalCreditsAccrued. */}
+        {/* Next-tier hint — answers "what do I do to earn more credits/day?".
+            Says "Hold or stake" because tier is keyed off EFFECTIVE balance =
+            wallet balanceOf + staked amount (lib/credits.ts fetchBlueBalance);
+            both paths count. */}
         {holderTier.nextTier && walletAddr && (
           <p className="font-mono text-[10px] text-slate-700 mb-3 leading-relaxed">
-            Stake{" "}
+            Hold or stake{" "}
             <span className="text-slate-500">
               {holderTier.nextTier.need >= 1_000_000
                 ? `${(holderTier.nextTier.need / 1_000_000).toFixed(1)}M`
@@ -167,6 +181,56 @@ export default function SettingsPanel() {
         >
           💰 Buy $BLUEAGENT
         </button>
+
+        {/* ── How credits & tiers work — inline explainer ──
+            Closes the gap the chat had no answer for: what credits are, why
+            connect, and the hold-OR-stake tier model. Collapsed by default. */}
+        <button
+          onClick={() => setShowHelp(v => !v)}
+          className="mt-3 w-full flex items-center justify-between font-mono text-[10px] text-slate-600 hover:text-slate-400 transition-colors"
+        >
+          <span>How credits &amp; tiers work</span>
+          <span>{showHelp ? "▴" : "▾"}</span>
+        </button>
+
+        {showHelp && (
+          <div className="mt-2 rounded-2xl bg-[#0A0A12] border border-[#1A1A2E] p-4 space-y-3">
+            <p className="font-mono text-[10px] text-slate-500 leading-relaxed">
+              Every message spends <span className="text-slate-300">credits</span>. With no wallet you
+              get <span className="text-[#4FC3F7]">100 free/day</span> (~10 messages). Your tier — and how
+              many credits you get — is set by your <span className="text-slate-300">$BLUE</span>, and{" "}
+              <span className="text-slate-300">holding or staking both count</span>.
+            </p>
+
+            <div className="rounded-xl border border-[#1A1A2E] overflow-hidden">
+              {TIER_ROWS.map((r, i) => (
+                <div
+                  key={r.tier}
+                  className={`flex items-center justify-between px-3 py-2 ${i > 0 ? "border-t border-[#13131f]" : ""}`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: r.color }} />
+                    <span className="font-mono text-[11px] font-semibold shrink-0" style={{ color: r.color }}>{r.tier}</span>
+                    <span className="font-mono text-[10px] text-slate-600 truncate">{r.need}</span>
+                  </div>
+                  <span className="font-mono text-[10px] text-slate-400 shrink-0">{r.perk}</span>
+                </div>
+              ))}
+            </div>
+
+            <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
+              <span className="text-slate-400">Staking</span> is the better path: it counts toward your tier
+              AND accrues extra credits + a share of x402 revenue (USDC) over time. Holding only sets your tier.
+            </p>
+
+            <Link
+              href="/app/dashboard?tab=stake"
+              className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-[#A78BFA] hover:opacity-80 transition-opacity"
+            >
+              Stake $BLUE on the dashboard →
+            </Link>
+          </div>
+        )}
       </section>
 
       {/* ── Memory (conditional) ───────────────────────────────────── */}
