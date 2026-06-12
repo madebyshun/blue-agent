@@ -84,7 +84,7 @@ export default function BankPage() {
   }
 
   return (
-    <div className="min-h-full bg-[#050508] text-slate-200 p-4 sm:p-6 max-w-5xl mx-auto w-full">
+    <div className="min-h-full bg-[#050508] text-slate-200 p-4 sm:p-6 lg:p-8 max-w-screen-2xl mx-auto w-full">
 
       {/* Header */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
@@ -107,30 +107,37 @@ export default function BankPage() {
         </div>
       </div>
 
-      {/* Cash balance hero */}
-      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 mb-4">
-        <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-1">CASH BALANCE · {net.short}</div>
-        <div className="flex items-end justify-between flex-wrap gap-3">
-          <div>
-            <div className="font-mono text-3xl font-bold text-white">${usd(total)} <span className="text-sm text-slate-500">USDC</span></div>
-            <div className="font-mono text-[11px] text-slate-500 mt-1">
-              {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
-            </div>
+      {/* Top: cash-balance hero (wide) + positions (side) */}
+      <div className="grid lg:grid-cols-3 gap-4 mb-4">
+        {/* Cash balance hero */}
+        <div className="lg:col-span-2 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6 flex flex-col">
+          <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH BALANCE · {net.short}</div>
+          <div className="font-mono text-4xl sm:text-5xl font-bold text-white">${usd(total)} <span className="text-base text-slate-500">USDC</span></div>
+          <div className="font-mono text-[11px] text-slate-500 mt-2">
+            {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 mt-auto pt-6">
             <button onClick={() => setAction(action === "receive" ? null : "receive")}
-              className="font-mono text-[11px] px-3 py-2 rounded-lg" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>⬇ Receive</button>
+              className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>⬇ Receive</button>
             <button onClick={() => setAction(action === "send" ? null : "send")}
-              className="font-mono text-[11px] px-3 py-2 rounded-lg" style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>➡ Send</button>
+              className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>➡ Send</button>
             <button onClick={() => setAction(action === "earn" ? null : "earn")}
-              className="font-mono text-[11px] px-3 py-2 rounded-lg" style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>🌾 Earn</button>
+              className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>🌾 Earn</button>
           </div>
+        </div>
+
+        {/* Positions */}
+        <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
+          <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-3">POSITIONS</div>
+          <PositionRow label="Aave v3" pos={aavePos} apy={aaveApy} onManage={() => setAction("earn")} />
+          <PositionRow label="Morpho · Gauntlet USDC Prime" pos={morphoPos} apy={morphoApy}
+            disabled={!morphoVnet} disabledNote="mainnet only" onManage={() => setAction("earn")} />
         </div>
       </div>
 
       {/* Active action panel (reuses the chat cards) */}
       {action === "receive" && (
-        <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 mb-4 flex flex-col items-center text-center">
+        <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 mb-4 max-w-md flex flex-col items-center text-center">
           <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-3 self-start">RECEIVE · {net.short}</div>
           <div className="bg-[#0a0a0f] p-2 rounded-xl border border-[#1A1A2E]">
             <QRCodeSVG value={acct ?? ""} size={168} bgColor="#0a0a0f" fgColor="#e2e8f0" level="M" />
@@ -145,22 +152,14 @@ export default function BankPage() {
           </p>
         </div>
       )}
-      {action === "send" && <div className="mb-4"><SendCard result={{ network }} account={acct} /></div>}
-      {action === "earn" && <div className="mb-4"><MoveToYieldCard result={{ network }} account={acct} /></div>}
+      {action === "send" && <div className="mb-4 max-w-md"><SendCard result={{ network }} account={acct} /></div>}
+      {action === "earn" && <div className="mb-4 max-w-md"><MoveToYieldCard result={{ network }} account={acct} /></div>}
 
       {/* Stat row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <Stat label="BEST APY · BASE" value={bestApy != null ? `${bestApy.toFixed(2)}%` : "—"} note="live · DefiLlama" color="#34D399" />
         <Stat label="EARNING" value={`$${usd(inYield)}`} note="supplied across venues" color="#4FC3F7" />
         <Stat label="CUSTODY" value="You hold keys" note="non-custodial · 24/7" color="#A78BFA" />
-      </div>
-
-      {/* Positions */}
-      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 mb-4">
-        <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-3">POSITIONS</div>
-        <PositionRow label="Aave v3" pos={aavePos} apy={aaveApy} onManage={() => setAction("earn")} />
-        <PositionRow label="Morpho · Gauntlet USDC Prime" pos={morphoPos} apy={morphoApy}
-          disabled={!morphoVnet} disabledNote="mainnet only" onManage={() => setAction("earn")} />
       </div>
 
       {/* Activity — honest placeholder (no fabricated history) */}
