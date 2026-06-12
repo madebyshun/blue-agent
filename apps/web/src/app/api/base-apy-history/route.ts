@@ -8,7 +8,11 @@ import { NextResponse } from "next/server";
 
 export const revalidate = 3600;
 
-export const APY_POOLS = [
+// NOTE: not exported — Next.js route modules may only export the framework's
+// allowlisted names (GET, revalidate, …). A stray `export` here makes the
+// generated .next/types reject the route. Kept module-local; the frontend
+// reads label/color from the `keys` field of the JSON response, not an import.
+const APY_POOLS = [
   { id: "69cf831d-624a-4f23-b5e3-c0f63ad1fa01", key: "moonwell", label: "Moonwell", color: "#34D399" },
   { id: "e0672197-9f3e-4414-bca5-e6b4c90aa469", key: "morpho",   label: "Morpho",   color: "#A78BFA" },
   { id: "7e0661bf-8cf3-45e6-9424-31916d4c7b84", key: "aave",     label: "Aave v3",  color: "#4FC3F7" },

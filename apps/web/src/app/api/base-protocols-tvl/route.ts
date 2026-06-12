@@ -8,7 +8,11 @@ import { NextResponse } from "next/server";
 
 export const revalidate = 3600;
 
-export const PROTOCOLS = [
+// NOTE: not exported — Next.js route modules may only export the framework's
+// allowlisted names (GET, revalidate, …). A stray `export` here makes the
+// generated .next/types reject the route. Kept module-local; the frontend
+// reads label/color from the `keys` field of the JSON response, not an import.
+const PROTOCOLS = [
   { slug: "morpho-blue",          key: "morpho",    label: "Morpho",    color: "#A78BFA" },
   { slug: "aave-v3",              key: "aave",      label: "Aave",      color: "#EC4899" },
   { slug: "uniswap-v3",           key: "uniswap",   label: "Uniswap",   color: "#F59E0B" },
