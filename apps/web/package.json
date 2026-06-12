@@ -25,6 +25,7 @@
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "recharts": "^3.8.1",
     "viem": "^2.49.2",
     "wagmi": "^3.6.15"
   },
