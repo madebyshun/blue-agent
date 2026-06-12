@@ -38,6 +38,24 @@ const nextConfig: NextConfig = {
       ...(Array.isArray(config.externals) ? config.externals : config.externals ? [config.externals] : []),
       { accounts: "accounts", "pino-pretty": "pino-pretty" },
     ];
+    // wagmi v3's `wagmi/connectors` barrel re-exports OPTIONAL connectors
+    // (porto / safe / walletconnect / metamask-sdk / base-account) whose peer
+    // deps we don't install — we only use coinbaseWallet + EIP-6963 + farcaster.
+    // Those unresolved imports made webpack fail the whole connectors module,
+    // leaving coinbaseWallet undefined and breaking wallet connect. Stub them to
+    // empty modules so the barrel compiles; the app never instantiates them.
+    config.resolve = config.resolve || {};
+    config.resolve.fallback = {
+      ...(config.resolve.fallback || {}),
+      "@base-org/account": false,
+      "@metamask/connect-evm": false,
+      porto: false,
+      "porto/internal": false,
+      "porto/wagmi": false,
+      "@safe-global/safe-apps-sdk": false,
+      "@safe-global/safe-apps-provider": false,
+      "@walletconnect/ethereum-provider": false,
+    };
     return config;
   },
 };
