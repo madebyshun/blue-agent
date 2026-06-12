@@ -20,6 +20,14 @@ import { useBasename, shortAddr } from "@/lib/useBasename";
 const usd = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const compact = (n: number | null | undefined) =>
+  n == null ? "—" : n >= 1e9 ? `$${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(0)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(0)}K` : `$${n.toFixed(0)}`;
+
+const fmtPrice = (n: number | null | undefined) =>
+  n == null ? "—"
+  : n >= 1 ? `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`
+  : `$${n.toFixed(n < 1e-4 ? 10 : 6).replace(/0+$/, "").replace(/\.$/, "")}`;
+
 type Panel = "positions" | "earn" | "send" | "receive";
 
 export default function BankPage() {
@@ -73,7 +81,12 @@ export default function BankPage() {
 
   // Wow data: Morpho 30d APY series + Base chain snapshot (both real, cached).
   const [hist, setHist] = useState<{ points: number[]; current: number | null } | null>(null);
-  const [snap, setSnap] = useState<{ tvlUsd: number | null; change7dPct: number | null } | null>(null);
+  type Tok = { price: number | null; change24h: number | null; vol24h?: number | null } | null;
+  type Snap = {
+    tvlUsd: number | null; change7dPct: number | null; tvlSeries?: number[];
+    dexVol24h?: number | null; dexVol7d?: number | null; blue?: Tok; cbbtc?: Tok;
+  };
+  const [snap, setSnap] = useState<Snap | null>(null);
   useEffect(() => {
     let off = false;
     fetch("/api/yield/morpho-history").then(r => r.json()).then(d => { if (!off) setHist({ points: d.points ?? [], current: d.current ?? null }); }).catch(() => {});
@@ -161,17 +174,49 @@ export default function BankPage() {
           {/* Top row: cash balance + action panel */}
           <div className="grid lg:grid-cols-3 gap-4 mb-4">
 
-            {/* Cash balance */}
-            <div className="lg:col-span-2 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6 flex flex-col">
-              <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH BALANCE · {net.short}</div>
-              <div className="font-mono text-4xl sm:text-5xl font-bold text-white">${usd(total)} <span className="text-base text-slate-500">USDC</span></div>
-              <div className="font-mono text-[11px] text-slate-500 mt-2">
-                {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
+            {/* Left column: balance + Base market (stacked → fills the height) */}
+            <div className="lg:col-span-2 flex flex-col gap-4">
+
+              {/* Cash balance */}
+              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6">
+                <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH BALANCE · {net.short}</div>
+                <div className="font-mono text-4xl sm:text-5xl font-bold text-white">${usd(total)} <span className="text-base text-slate-500">USDC</span></div>
+                <div className="font-mono text-[11px] text-slate-500 mt-2">
+                  {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
+                </div>
+                <div className="flex flex-wrap gap-2 mt-5">
+                  <button onClick={() => setPanel("receive")} className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>⬇ Receive</button>
+                  <button onClick={() => setPanel("send")} className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>➡ Send</button>
+                  <button onClick={() => setPanel("earn")} className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>🌾 Earn</button>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2 mt-auto pt-6">
-                <button onClick={() => setPanel("receive")} className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>⬇ Receive</button>
-                <button onClick={() => setPanel("send")} className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>➡ Send</button>
-                <button onClick={() => setPanel("earn")} className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>🌾 Earn</button>
+
+              {/* Base market — fills the rest of the left column */}
+              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 flex-1">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="font-mono text-[10px] text-slate-500 tracking-widest">BASE MARKET</span>
+                  <span className="font-mono text-[9px] text-slate-700">live · built by Coinbase</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <Ticker label="$BLUEAGENT" price={fmtPrice(snap?.blue?.price)} change={snap?.blue?.change24h ?? null} />
+                  <Ticker label="cbBTC" price={fmtPrice(snap?.cbbtc?.price)} change={snap?.cbbtc?.change24h ?? null} />
+                </div>
+                <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-3 mb-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-mono text-[9px] text-slate-600 tracking-wide">BASE TVL · 30D</span>
+                    <span className="font-mono text-[11px] text-white">
+                      {snap?.tvlUsd != null ? compact(snap.tvlUsd) : "—"}{" "}
+                      <span style={{ color: (snap?.change7dPct ?? 0) >= 0 ? "#34D399" : "#EF4444" }}>
+                        {snap?.change7dPct != null ? `${snap.change7dPct >= 0 ? "+" : ""}${snap.change7dPct.toFixed(2)}%` : ""}
+                      </span>
+                    </span>
+                  </div>
+                  <Spark points={snap?.tvlSeries ?? []} color="#4FC3F7" height={40} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Mini label="24H DEX VOL" value={snap?.dexVol24h != null ? compact(snap.dexVol24h) : "—"} />
+                  <Mini label="7D DEX VOL" value={snap?.dexVol7d != null ? compact(snap.dexVol7d) : "—"} />
+                </div>
               </div>
             </div>
 
@@ -280,6 +325,7 @@ export default function BankPage() {
             <Card title="BASE SNAPSHOT" note="live · DefiLlama">
               <StatLine label="Chain TVL" value={snap?.tvlUsd != null ? `$${(snap.tvlUsd / 1e9).toFixed(2)}B` : "—"} />
               <StatLine label="7d change" value={snap?.change7dPct != null ? `${snap.change7dPct >= 0 ? "+" : ""}${snap.change7dPct.toFixed(2)}%` : "—"} color={snap && (snap.change7dPct ?? 0) >= 0 ? "#34D399" : "#EF4444"} />
+              <StatLine label="24h DEX vol" value={compact(snap?.dexVol24h)} />
               <StatLine label="Best USDC APY" value={bestApy != null ? `${bestApy.toFixed(2)}%` : "—"} color="#34D399" />
               <StatLine label="Custody" value="You hold keys" color="#A78BFA" />
             </Card>
@@ -320,6 +366,28 @@ function AssetRow({ label, sub, usd: val, color }: { label: string; sub: string;
         <div><div className="font-mono text-[12px] text-slate-200">{label}</div><div className="font-mono text-[9px] text-slate-600">{sub}</div></div>
       </div>
       <div className="font-mono text-[12px] text-slate-300">{val != null ? `$${usd(val)}` : "—"}</div>
+    </div>
+  );
+}
+
+function Ticker({ label, price, change }: { label: string; price: string; change: number | null }) {
+  const up = (change ?? 0) >= 0;
+  return (
+    <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-3 py-2">
+      <div className="font-mono text-[9px] text-slate-500">{label}</div>
+      <div className="font-mono text-[13px] font-bold text-slate-100 mt-0.5 truncate">{price}</div>
+      <div className="font-mono text-[10px] mt-0.5" style={{ color: change == null ? "#64748b" : up ? "#34D399" : "#EF4444" }}>
+        {change == null ? "—" : `${up ? "▲" : "▼"} ${Math.abs(change).toFixed(2)}% 24h`}
+      </div>
+    </div>
+  );
+}
+
+function Mini({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-3 py-2">
+      <div className="font-mono text-[9px] text-slate-500">{label}</div>
+      <div className="font-mono text-[13px] font-bold text-slate-200 mt-0.5">{value}</div>
     </div>
   );
 }
