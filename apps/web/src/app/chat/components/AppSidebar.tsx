@@ -93,7 +93,12 @@ export default function AppSidebar({
 
   const activeCrons = crons.filter(c => c.active).length;
 
-  const sorted = [...tasks].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 40);
+  // Only show real conversations — the active New Chat draft (empty messages)
+  // stays out of history until its first message is sent.
+  const sorted = [...tasks]
+    .filter(t => t.messages.length > 0)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, 40);
   const groups = (["today", "yesterday", "older"] as const)
     .map(g => ({ key: g, label: GROUP_LABELS[g], items: sorted.filter(t => relativeGroup(t.updatedAt) === g) }))
     .filter(g => g.items.length > 0);
