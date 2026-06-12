@@ -1,8 +1,25 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useChat } from "../ChatContext";
 import { nextRunLabel } from "../storage";
-import type { CronSchedule } from "../types";
+import { MarkdownRenderer } from "./ChatMessages";
+import type { CronSchedule, CronTask } from "../types";
+
+// Strip markdown to a clean single-line preview for the card. The stored
+// result is full markdown (tables, headings, links) which is unreadable when
+// crammed onto one line — this reduces it to plain prose for the snippet.
+function plainPreview(md: string): string {
+  return md
+    .replace(/```[\s\S]*?```/g, " ")           // fenced code blocks
+    .replace(/`([^`]+)`/g, "$1")               // inline code
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")      // images
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")   // links → text
+    .replace(/^#{1,6}\s+/gm, "")               // headings
+    .replace(/^[\s>*-]+/gm, " ")               // bullets / quotes
+    .replace(/[|*_#>]+/g, " ")                 // residual markdown
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 const SCHEDULES: { value: CronSchedule; label: string }[] = [
   { value: "daily",  label: "Every day" },
@@ -49,6 +66,7 @@ function Toggle({ active, onChange }: { active: boolean; onChange: () => void })
 export default function CronPanel() {
   const { crons, addCron, updateCron, deleteCron, runCron, cronRunning } = useChat();
   const [showForm, setShowForm] = useState(false);
+  const [viewing,  setViewing]  = useState<CronTask | null>(null);
   const [form, setForm] = useState({
     label: "", schedule: "daily" as CronSchedule, time: "09:00", prompt: "",
   });
@@ -70,6 +88,7 @@ export default function CronPanel() {
   const inactive = crons.length - active;
 
   return (
+    <>
     <div className="flex flex-col h-full bg-[#050508] overflow-y-auto">
 
       {/* ── Header — consistent w/ Settings/Skills/Tools panels ─────── */}
@@ -190,84 +209,150 @@ export default function CronPanel() {
           </div>
         )}
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           {crons.map(cron => {
             const isRunning = cronRunning === cron.id;
             return (
               <div
                 key={cron.id}
-                className="rounded-xl border transition-all overflow-hidden"
+                className="rounded-2xl border transition-all p-4"
                 style={{
-                  borderColor: cron.active ? "#1E293B" : "#0F172A",
+                  borderColor: cron.active ? "#1E293B" : "#13131F",
                   background:  cron.active ? "#0A0A12" : "#070710",
                 }}
               >
-                {/* Toggle row */}
-                <div className="flex items-center gap-2.5 px-3.5 pt-3 pb-2">
-                  <Toggle active={cron.active} onChange={() => updateCron(cron.id, { active: !cron.active })} />
+                {/* ── Header: title + toggle + delete ── */}
+                <div className="flex items-start gap-3 mb-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <StatusDot active={cron.active} />
-                      <span className={`font-mono text-[13px] font-medium truncate ${cron.active ? "text-white" : "text-slate-500"}`}>
+                      <span className={`font-mono text-sm font-semibold truncate ${cron.active ? "text-white" : "text-slate-500"}`}>
                         {cron.label}
                       </span>
                     </div>
-                    <p className="font-mono text-[10px] text-slate-600 mt-0.5 truncate pl-3">
-                      {cron.schedule} · {cron.time}
-                      {cron.active && (
-                        <span className="ml-1.5 text-slate-700">· next {nextRunLabel(cron)}</span>
-                      )}
-                    </p>
                   </div>
+                  <Toggle active={cron.active} onChange={() => updateCron(cron.id, { active: !cron.active })} />
                   <button
                     onClick={() => deleteCron(cron.id)}
-                    className="p-1 rounded-md text-slate-700 hover:text-red-400 hover:bg-red-400/10 transition-all"
+                    className="p-1 rounded-md text-slate-700 hover:text-red-400 hover:bg-red-400/10 transition-all shrink-0"
                     title="Delete"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
                 </div>
 
-                {/* Prompt preview — flush against the bottom of the row, no
-                    nested card. Saves ~16px per item. */}
-                <div className="px-3.5 pb-2">
-                  <p className="font-mono text-[10px] text-slate-500 px-2 py-1.5 rounded-md bg-[#050508] border border-[#1A1A2E] truncate">
+                {/* ── Schedule chips ── */}
+                <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                  <span className="font-mono text-[10px] px-2 py-1 rounded-md bg-[#11111A] text-slate-300 capitalize">
+                    🗓 {cron.schedule} · {cron.time}
+                  </span>
+                  {cron.active && (
+                    <span className="font-mono text-[10px] px-2 py-1 rounded-md" style={{ background: "#34D39912", color: "#34D399" }}>
+                      next {nextRunLabel(cron)}
+                    </span>
+                  )}
+                </div>
+
+                {/* ── Prompt ── */}
+                <div className="rounded-xl bg-[#050508] border border-[#1A1A2E] px-3 py-2.5 mb-3">
+                  <p className="font-mono text-[8px] text-slate-600 tracking-widest mb-1">PROMPT</p>
+                  <p className="font-mono text-[11px] text-slate-300 leading-relaxed line-clamp-2">
                     {cron.prompt}
                   </p>
                 </div>
 
-                {/* Footer */}
-                <div className="flex items-center justify-between px-3.5 pb-3 gap-2">
-                  {cron.lastResult ? (
-                    <p className="font-mono text-[9px] text-slate-700 truncate flex-1">
-                      Last: {cron.lastResult}
+                {/* ── Last result preview (cleaned to plain text) ── */}
+                {cron.lastResult && (
+                  <button
+                    onClick={() => setViewing(cron)}
+                    className="w-full text-left rounded-xl bg-[#070710] border border-[#15151F] hover:border-[#4FC3F730] px-3 py-2.5 mb-3 transition-colors group"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-mono text-[8px] text-slate-600 tracking-widest">LAST RESULT</span>
+                      <span className="font-mono text-[9px] text-slate-600 group-hover:text-[#4FC3F7] transition-colors">View full →</span>
+                    </div>
+                    <p className="font-mono text-[11px] text-slate-400 leading-relaxed line-clamp-2">
+                      {plainPreview(cron.lastResult)}
                     </p>
-                  ) : (
-                    <span className="flex-1" />
-                  )}
+                  </button>
+                )}
+
+                {/* ── Footer: status + Run ── */}
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-mono text-[10px] text-slate-700 flex-1">
+                    {cron.lastRun
+                      ? `Ran ${new Date(cron.lastRun).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`
+                      : "Not run yet"}
+                  </p>
                   <button
                     onClick={() => runCron(cron.id)}
                     disabled={isRunning}
-                    className="flex items-center gap-1 font-mono text-[10px] px-2.5 py-1 rounded-md border transition-all disabled:opacity-40 shrink-0"
+                    className="flex items-center gap-1.5 font-mono text-[11px] font-semibold px-3 py-1.5 rounded-lg border transition-all disabled:opacity-40 shrink-0"
                     style={isRunning
                       ? { color: "#34D399", borderColor: "#34D39930", background: "#34D39910" }
-                      : { color: "#64748b", borderColor: "#1A1A2E", background: "transparent" }}
+                      : { color: "#4FC3F7", borderColor: "#4FC3F730", background: "#4FC3F710" }}
                   >
                     {isRunning ? (
                       <>
-                        <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
-                        running
+                        <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                        Running
                       </>
                     ) : (
-                      <>▶ Run</>
+                      <>▶ Run now</>
                     )}
                   </button>
                 </div>
               </div>
             );
           })}
+        </div>
+      </div>
+    </div>
+
+    {/* ── Result modal — full markdown report ── */}
+    {viewing && <ResultModal cron={viewing} onClose={() => setViewing(null)} />}
+    </>
+  );
+}
+
+// ── Result modal ────────────────────────────────────────────────────────────────
+function ResultModal({ cron, onClose }: { cron: CronTask; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl border border-[#1A1A2E] bg-[#050508] shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 h-14 border-b border-[#1A1A2E] shrink-0">
+          <div className="min-w-0">
+            <p className="font-mono text-[11px] text-[#4FC3F7] tracking-widest truncate">// {cron.label.toUpperCase()}</p>
+            <p className="font-mono text-[9px] text-slate-600 mt-0.5">
+              {cron.schedule} · {cron.time}
+              {cron.lastRun && ` · ran ${new Date(cron.lastRun).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-[#1A1A2E] transition-colors shrink-0"
+            title="Close (Esc)"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        {/* Body — full markdown */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 font-mono text-[13px] text-slate-300 leading-relaxed">
+          {cron.lastResult
+            ? <MarkdownRenderer content={cron.lastResult} />
+            : <p className="text-slate-600">No result yet.</p>}
         </div>
       </div>
     </div>

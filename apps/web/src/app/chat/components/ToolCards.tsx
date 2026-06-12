@@ -2,13 +2,41 @@
 // Tool output cards — rendered inline after tool execution logs
 // One card per tool type: honeypot, risk-gate, deep-analysis, token-pick, contract-trust
 
-import { useState } from "react";
-import { useAccount, useReadContracts, useBalance } from "wagmi";
-import { formatUnits } from "viem";
+import { useState, useEffect } from "react";
+import { useAccount, useReadContracts, useBalance, useReadContract, useWriteContract, useSwitchChain, usePublicClient, useSendTransaction } from "wagmi";
+import { formatUnits, parseUnits, parseEther, isAddress, namehash } from "viem";
+import { base } from "viem/chains";
+import { useName } from "@coinbase/onchainkit/identity";
+import { YIELD_NETWORKS, ERC20_ABI, AAVE_POOL_ABI, ERC4626_ABI, WITHDRAW_ALL, parseUsdc, supplyApyPct, VENUES, VENUE_LIST, type YieldNetwork, type VenueId } from "@/lib/yield-execution";
+import { useChat } from "../ChatContext";
+import { useBasename } from "@/lib/useBasename";
 
 function truncAddr(addr: string, len = 6) {
   if (!addr || addr.length < 12) return addr;
   return `${addr.slice(0, len)}…${addr.slice(-4)}`;
+}
+
+// Forward Basename → address resolution. OnchainKit's useAddress proved
+// unreliable (returned "not found" for live names like madebyshun.base.eth), so
+// we read the verified Base L2 Resolver directly — proven to resolve correctly.
+const BASENAME_L2_RESOLVER = "0xC6d566A56A1aFf6508b41f6c90ff131615583BCD" as const;
+const RESOLVER_ADDR_ABI = [
+  { name: "addr", type: "function", stateMutability: "view",
+    inputs: [{ name: "node", type: "bytes32" }], outputs: [{ type: "address" }] },
+] as const;
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+
+// "shun.base" → "shun.base.eth"; passes through "*.base.eth" / "*.eth".
+function basenameToEns(input: string): string | null {
+  const n = input.trim().toLowerCase();
+  if (!n) return null;
+  if (n.endsWith(".base")) return `${n}.eth`;
+  if (n.endsWith(".base.eth") || n.endsWith(".eth")) return n;
+  return null;
+}
+function safeNamehash(name: string | null): `0x${string}` | undefined {
+  if (!name) return undefined;
+  try { return namehash(name); } catch { return undefined; }
 }
 
 function ScoreBar({ score, color }: { score: number; color: string }) {
@@ -1081,7 +1109,530 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
   );
 }
 
+// Rendered for the `prepare_yield` marker. NON-custodial move-to-yield: the user
+// signs supply/withdraw on the chosen venue (Aave v3 or Morpho) from their OWN
+// wallet via wagmi. Verified addresses (see lib/yield-execution). Best-rate
+// router: pick a venue, the card builds the right protocol calls.
+interface YieldMoveResult { action?: string; amount?: number | string; network?: string }
+
+export function MoveToYieldCard({ result, account }: { result: YieldMoveResult; account?: `0x${string}` }) {
+  // `account` is the connected wallet, passed in by the host (chat dispatcher
+  // reads it from useChat; the /app/bank dashboard reads it from useAccount) so
+  // the card works both inside and outside the chat. wagmi hooks below still
+  // drive the actual signing.
+  const address = account;
+  const isConnected = !!account;
+  const { switchChainAsync } = useSwitchChain();
+  const { writeContractAsync } = useWriteContract();
+
+  const [venue,   setVenue]   = useState<VenueId>("aave");
+  const [action,  setAction]  = useState<"supply" | "withdraw">(result.action === "withdraw" ? "withdraw" : "supply");
+  const [network, setNetwork] = useState<YieldNetwork>(result.network === "base" ? "base" : "baseSepolia");
+  const [amount,  setAmount]  = useState<string>(
+    result.amount != null && (typeof result.amount === "number" || typeof result.amount === "string") ? String(result.amount) : "");
+  const [all,  setAll]  = useState(false);
+  const [step, setStep] = useState<"idle" | "switching" | "approving" | "supplying" | "withdrawing" | "done" | "error">("idle");
+  const [err,  setErr]  = useState("");
+  const [txHash, setTxHash] = useState<string>("");
+
+  // #4 Best-rate routing — live curated USDC lending APYs across Base venues from
+  // DefiLlama. Drives both the comparison panel and the per-venue APY display.
+  type Rate = { project: string; label: string; apy: number; executable: boolean };
+  const [rates, setRates] = useState<Rate[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/yield/rates")
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setRates((d?.rates as Rate[]) ?? []); })
+      .catch(() => { if (!cancelled) setRates([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const net = YIELD_NETWORKS[network];
+  const chainId = net.chainId;
+  const vcfg = VENUES[venue];
+  const vnet = vcfg.nets[network];            // venue addresses on this network (or undefined)
+  const isAave = vcfg.protocol === "aave";
+  const publicClient = usePublicClient({ chainId });
+
+  // Picking a venue not on the current network auto-switches the network.
+  function pickVenue(v: VenueId) {
+    setVenue(v); setStep("idle"); setErr("");
+    if (!VENUES[v].nets[network]) setNetwork(Object.keys(VENUES[v].nets)[0] as YieldNetwork);
+  }
+  // Switching to a network the venue doesn't support falls back to Aave.
+  useEffect(() => { if (!VENUES[venue].nets[network]) setVenue("aave"); }, [network, venue]);
+
+  // #1 Position — Aave: aToken.balanceOf (rebases). Morpho: vault.maxWithdraw
+  // (USDC-equivalent of your shares). Both in USDC units for display.
+  const { data: aaveBal, refetch: refetchAave } = useReadContract({
+    address: vnet?.receipt, abi: ERC20_ABI, functionName: "balanceOf",
+    args: address ? [address] : undefined, chainId,
+    query: { enabled: !!address && isAave && !!vnet },
+  });
+  const { data: reserve } = useReadContract({
+    address: vnet?.target, abi: AAVE_POOL_ABI, functionName: "getReserveData",
+    args: vnet ? [vnet.usdc] : undefined, chainId,
+    query: { enabled: isAave && !!vnet },
+  });
+  const { data: morphoMaxW, refetch: refetchMorpho } = useReadContract({
+    address: vnet?.target, abi: ERC4626_ABI, functionName: "maxWithdraw",
+    args: address ? [address] : undefined, chainId,
+    query: { enabled: !!address && !isAave && !!vnet },
+  });
+  const { data: morphoShares } = useReadContract({
+    address: vnet?.receipt, abi: ERC20_ABI, functionName: "balanceOf",
+    args: address ? [address] : undefined, chainId,
+    query: { enabled: !!address && !isAave && !!vnet },
+  });
+
+  const position = isAave
+    ? (aaveBal != null ? Number(formatUnits(aaveBal as bigint, 6)) : null)
+    : (morphoMaxW != null ? Number(formatUnits(morphoMaxW as bigint, 6)) : null);
+  const venueRate = rates?.find(r => r.project === vcfg.llamaProject)?.apy ?? null;
+  const apy = isAave && reserve
+    ? supplyApyPct((reserve as { currentLiquidityRate: bigint }).currentLiquidityRate)
+    : venueRate;
+  const refetchPos = () => { refetchAave?.(); refetchMorpho?.(); };
+
+  // Basename identity + spendable wallet USDC (balance-aware supply, Tier 1 #3).
+  const { name: fromName } = useBasename(address);
+  const { data: walletUsdcRaw } = useReadContract({
+    address: vnet?.usdc, abi: ERC20_ABI, functionName: "balanceOf",
+    args: address ? [address] : undefined, chainId,
+    query: { enabled: !!address && !!vnet },
+  });
+  const walletUsdc = walletUsdcRaw != null ? Number(formatUnits(walletUsdcRaw as bigint, vnet?.usdcDecimals ?? 6)) : null;
+  const maxFor = action === "supply" ? walletUsdc : position; // supply caps at wallet, withdraw at position
+  function setMax() { if (maxFor != null) setAmount(String(maxFor)); }
+
+  const amt = parseFloat(amount);
+  const withdrawAll = action === "withdraw" && all;
+  const overMax = !withdrawAll && maxFor != null && amt > maxFor;
+  const valid = !!vnet && (withdrawAll || (amt > 0 && !overMax));
+  const busy = step === "switching" || step === "approving" || step === "supplying" || step === "withdrawing";
+
+  async function run() {
+    if (!address) { setErr("Connect your wallet first"); setStep("error"); return; }
+    if (!vnet)    { setErr(`${vcfg.short} isn't available on ${net.short}`); setStep("error"); return; }
+    if (!valid)   { setErr("Enter an amount"); setStep("error"); return; }
+    setErr(""); setTxHash("");
+    try {
+      setStep("switching");
+      await switchChainAsync({ chainId });
+      const value = withdrawAll ? WITHDRAW_ALL : parseUsdc(amt, network);
+
+      if (action === "supply") {
+        setStep("approving");
+        const approveHash = await writeContractAsync({
+          address: vnet.usdc, abi: ERC20_ABI, functionName: "approve",
+          args: [vnet.spender, value], chainId,
+        });
+        await publicClient?.waitForTransactionReceipt({ hash: approveHash });
+        setStep("supplying");
+        const supplyHash = isAave
+          ? await writeContractAsync({ address: vnet.target, abi: AAVE_POOL_ABI, functionName: "supply",  args: [vnet.usdc, value, address, 0], chainId })
+          : await writeContractAsync({ address: vnet.target, abi: ERC4626_ABI,   functionName: "deposit", args: [value, address], chainId });
+        setTxHash(supplyHash); setStep("done");
+      } else {
+        setStep("withdrawing");
+        let wHash: `0x${string}`;
+        if (isAave) {
+          wHash = await writeContractAsync({ address: vnet.target, abi: AAVE_POOL_ABI, functionName: "withdraw", args: [vnet.usdc, value, address], chainId });
+        } else if (withdrawAll) {
+          // ERC-4626 has no "max" sentinel — redeem the full share balance.
+          const shares = (morphoShares as bigint | undefined) ?? 0n;
+          if (shares === 0n) throw new Error("No position to withdraw");
+          wHash = await writeContractAsync({ address: vnet.target, abi: ERC4626_ABI, functionName: "redeem", args: [shares, address, address], chainId });
+        } else {
+          wHash = await writeContractAsync({ address: vnet.target, abi: ERC4626_ABI, functionName: "withdraw", args: [value, address, address], chainId });
+        }
+        setTxHash(wHash); setStep("done");
+      }
+      setTimeout(refetchPos, 4000); // best-effort refresh once the tx is in
+    } catch (e) {
+      setErr(((e as Error).message || String(e)).slice(0, 160)); setStep("error");
+    }
+  }
+
+  if (step === "done") {
+    const msg = action === "supply"
+      ? `Supplied to ${vcfg.short} — earning as it confirms.`
+      : "Withdraw submitted — USDC is returning to your wallet.";
+    return (
+      <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
+        <div className="font-mono text-[11px] font-bold mb-1" style={{ color: "#22C55E" }}>
+          ✓ {action === "supply" ? "Supply" : "Withdraw"} submitted · {vcfg.short} · {net.short}
+        </div>
+        <div className="font-mono text-[10px] text-slate-400 mb-2">{msg}</div>
+        {txHash && (
+          <a href={`${net.explorer}/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
+             className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7]">
+            View tx ↗
+          </a>
+        )}
+      </div>
+    );
+  }
+
+  const btnLabel = busy
+    ? (step === "switching" ? "Switching network…" : step === "approving" ? "Approve in wallet…" : step === "supplying" ? "Supply in wallet…" : "Withdraw in wallet…")
+    : action === "supply" ? `🌾 Supply${amt > 0 ? ` ${amt}` : ""} USDC → ${vcfg.short}` : `↩︎ Withdraw${withdrawAll ? " all" : amt > 0 ? ` ${amt}` : ""} USDC`;
+
+  return (
+    <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
+      <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold mb-3">MOVE TO YIELD · BASE</div>
+
+      {/* Network risk banner */}
+      <div className="rounded-lg px-2.5 py-1.5 mb-3 font-mono text-[10px] leading-relaxed"
+           style={net.testnet
+             ? { background: "#F59E0B0a", border: "1px solid #F59E0B30", color: "#fcd9a3" }
+             : { background: "#EF44440a", border: "1px solid #EF444440", color: "#fca5a5" }}>
+        {net.testnet
+          ? <>⚠️ <b>Testnet (Base Sepolia)</b> — safe to experiment with fake funds.</>
+          : <>🔴 <b>Mainnet — real funds.</b> You sign; this is irreversible. Double-check the amount.</>}
+      </div>
+
+      {/* Account identity — Basename if set */}
+      {address && (
+        <div className="font-mono text-[9px] text-slate-600 mb-3">
+          ACCOUNT <span className="text-slate-300">{fromName || truncAddr(address)}</span>
+        </div>
+      )}
+
+      {/* Venue selector — the router */}
+      <div className="mb-3">
+        <div className="font-mono text-[9px] text-slate-600 mb-1.5">VENUE</div>
+        <div className="flex gap-1">
+          {VENUE_LIST.map(v => {
+            const active = venue === v.id;
+            const vr = rates?.find(r => r.project === v.llamaProject)?.apy ?? null;
+            return (
+              <button key={v.id} onClick={() => pickVenue(v.id)}
+                className="flex-1 font-mono text-[10px] py-1.5 rounded-md transition-colors"
+                style={active
+                  ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                  : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+                {v.short}{vr != null && <span className={active ? "text-[#22C55E]" : "text-slate-500"}> {vr.toFixed(1)}%</span>}
+              </button>
+            );
+          })}
+        </div>
+        <div className="font-mono text-[9px] text-slate-700 mt-1">
+          {vcfg.label}{!isAave && " · mainnet only"}
+        </div>
+      </div>
+
+      {/* #1 Position + #2 live APY — real on-chain reads (per venue) */}
+      <div className="flex items-center justify-between mb-3 px-2.5 py-2 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] font-mono text-[10px]">
+        <div>
+          <div className="text-slate-600 mb-0.5">YOUR POSITION</div>
+          <div className="text-slate-200">{position != null ? `${position.toFixed(2)} USDC` : (isConnected ? (vnet ? "—" : "—") : "connect to view")}</div>
+        </div>
+        <div className="text-right">
+          <div className="text-slate-600 mb-0.5">SUPPLY APY</div>
+          <div className="text-[#22C55E]">{apy != null ? `~${apy.toFixed(2)}%` : "—"}</div>
+        </div>
+      </div>
+
+      {/* #4 Best rate on Base — live curated comparison (DefiLlama) */}
+      {rates && rates.length > 0 && (
+        <div className="mb-3 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-2.5">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="font-mono text-[9px] text-slate-600">BEST USDC RATE · BASE</span>
+            <span className="font-mono text-[9px] text-slate-700">live · DefiLlama</span>
+          </div>
+          {rates.slice(0, 4).map((r, i) => (
+            <div key={r.project} className="flex items-center justify-between py-[2px] font-mono text-[10px]">
+              <span className={i === 0 ? "text-[#22C55E]" : "text-slate-400"}>
+                {i === 0 ? "★ " : "  "}{r.label}
+                {!r.executable && <span className="text-slate-700"> · view-only</span>}
+              </span>
+              <span className={i === 0 ? "text-[#22C55E]" : "text-slate-300"}>{r.apy.toFixed(2)}%</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Supply / Withdraw toggle */}
+      <div className="flex gap-1 mb-3">
+        {(["supply", "withdraw"] as const).map(a => {
+          const active = action === a;
+          return (
+            <button key={a} onClick={() => setAction(a)}
+              className="flex-1 font-mono text-[11px] py-1.5 rounded-md transition-colors"
+              style={active
+                ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+              {a === "supply" ? "Supply" : "Withdraw"}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Network */}
+      <label className="block mb-3">
+        <span className="font-mono text-[9px] text-slate-600 block mb-1">NETWORK</span>
+        <select value={network} onChange={e => setNetwork(e.target.value as YieldNetwork)}
+          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 outline-none">
+          <option value="baseSepolia" disabled={!VENUES[venue].nets.baseSepolia}>Base Sepolia (testnet)</option>
+          <option value="base">Base mainnet</option>
+        </select>
+      </label>
+
+      {/* Amount + balance-aware Max */}
+      <label className="block mb-2">
+        <div className="flex items-center justify-between mb-1">
+          <span className="font-mono text-[9px] text-slate-600">AMOUNT (USDC)</span>
+          {maxFor != null && !withdrawAll && (
+            <span className="font-mono text-[9px] text-slate-600">
+              {action === "supply" ? "Wallet" : "Position"} {maxFor.toFixed(2)}
+              <button type="button" onClick={setMax} className="text-[#4FC3F7] ml-1">Max</button>
+            </span>
+          )}
+        </div>
+        <input type="number" min="0" step="0.01" value={amount} disabled={withdrawAll}
+          onChange={e => setAmount(e.target.value)} placeholder="e.g. 5"
+          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors disabled:opacity-40" />
+        {overMax && <span className="font-mono text-[9px] text-red-500 mt-1 block">{action === "supply" ? "Exceeds your wallet USDC" : "Exceeds your position"}</span>}
+      </label>
+
+      {action === "withdraw" && (
+        <label className="flex items-center gap-2 mb-2 font-mono text-[10px] text-slate-500 cursor-pointer">
+          <input type="checkbox" checked={all} onChange={e => setAll(e.target.checked)} className="w-auto" />
+          Withdraw all (full position)
+        </label>
+      )}
+
+      <p className="font-mono text-[9px] text-slate-600 mb-2 leading-relaxed">
+        {action === "supply"
+          ? <>Supplies USDC into <span className="text-slate-400">{vcfg.label}</span> — you sign {isAave ? "approve + supply" : "approve + deposit"} and hold a yield-bearing receipt. Non-custodial; funds stay in your control.</>
+          : <>Pulls USDC back out of <span className="text-slate-400">{vcfg.short}</span> to your wallet — you sign one {isAave ? "withdraw" : withdrawAll ? "redeem" : "withdraw"} call.</>}
+      </p>
+
+      {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
+
+      <button onClick={run} disabled={busy || !valid || !isConnected}
+        className="w-full font-mono text-[12px] font-bold py-2 rounded-lg transition-all disabled:opacity-50"
+        style={action === "supply"
+          ? { background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }
+          : { background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+        {!isConnected ? "Connect your wallet to continue" : btnLabel}
+      </button>
+      <p className="font-mono text-[9px] text-slate-700 mt-1.5">
+        {vcfg.label} · {net.label} · you sign every transaction · withdraw anytime.
+      </p>
+    </div>
+  );
+}
+
+// Rendered for the `prepare_send` marker. NON-custodial send/pay: the user signs
+// a USDC ERC-20 transfer (or native ETH send) to an address or Basename, from
+// their OWN wallet. Basenames resolve via OnchainKit (Base L2 resolver).
+interface SendResult { to?: string; amount?: number | string; asset?: string; network?: string }
+
+export function SendCard({ result, account }: { result: SendResult; account?: `0x${string}` }) {
+  const fromAddr = account;
+  const isConnected = !!account;
+  const { switchChainAsync } = useSwitchChain();
+  const { writeContractAsync } = useWriteContract();
+  const { sendTransactionAsync } = useSendTransaction();
+
+  const [asset,     setAsset]     = useState<"USDC" | "ETH">(result.asset === "ETH" ? "ETH" : "USDC");
+  const [network,   setNetwork]   = useState<YieldNetwork>(result.network === "base" ? "base" : "baseSepolia");
+  const [recipient, setRecipient] = useState<string>(typeof result.to === "string" ? result.to : "");
+  const [amount,    setAmount]    = useState<string>(
+    result.amount != null && (typeof result.amount === "number" || typeof result.amount === "string") ? String(result.amount) : "");
+  const [step, setStep] = useState<"idle" | "switching" | "sending" | "done" | "error">("idle");
+  const [err,  setErr]  = useState("");
+  const [txHash, setTxHash] = useState<string>("");
+
+  const net = YIELD_NETWORKS[network];
+  const chainId = net.chainId;
+  const recip = recipient.trim();
+  const recipIsAddr = isAddress(recip);
+  const recipIsName = /\.(base|eth)$/i.test(recip);
+
+  // Forward-resolve a Basename → address via the Base L2 Resolver (always on Base
+  // mainnet; the resolved address is valid on whichever network you send from).
+  const node = recipIsName ? safeNamehash(basenameToEns(recip)) : undefined;
+  const { data: resolvedRaw, isLoading: resolving } = useReadContract({
+    address: BASENAME_L2_RESOLVER, abi: RESOLVER_ADDR_ABI, functionName: "addr",
+    args: node ? [node] : undefined, chainId: base.id,
+    query: { enabled: !!node },
+  });
+  const resolvedAddr = resolvedRaw && resolvedRaw !== ZERO_ADDR ? (resolvedRaw as `0x${string}`) : undefined;
+  // Reverse-name for a pasted address (nice confirmation label).
+  const { data: revName } = useName(
+    { address: recipIsAddr ? (recip as `0x${string}`) : undefined, chain: base }, { enabled: recipIsAddr });
+
+  const toAddress = (recipIsAddr ? recip : (recipIsName ? (resolvedAddr ?? undefined) : undefined)) as `0x${string}` | undefined;
+
+  // Basename as account identity + spendable balance (Tier 1 #3, balance-aware).
+  const { name: fromName } = useBasename(fromAddr);
+  const { data: usdcBalRaw } = useReadContract({
+    address: net.usdc, abi: ERC20_ABI, functionName: "balanceOf",
+    args: fromAddr ? [fromAddr] : undefined, chainId,
+    query: { enabled: !!fromAddr && asset === "USDC" },
+  });
+  const { data: ethBal } = useBalance({ address: fromAddr, chainId, query: { enabled: !!fromAddr && asset === "ETH" } });
+  const balance = asset === "USDC"
+    ? (usdcBalRaw != null ? Number(formatUnits(usdcBalRaw as bigint, net.usdcDecimals)) : null)
+    : (ethBal ? Number(formatUnits(ethBal.value, ethBal.decimals)) : null);
+  function setMax() {
+    if (balance == null) return;
+    setAmount(String(asset === "ETH" ? Math.max(0, balance - 0.00005) : balance)); // leave a little ETH for gas
+  }
+
+  const amt = parseFloat(amount);
+  const overBalance = balance != null && amt > balance;
+  const valid = !!toAddress && amt > 0 && !overBalance;
+  const busy = step === "switching" || step === "sending";
+
+  async function send() {
+    if (!fromAddr)  { setErr("Connect your wallet first"); setStep("error"); return; }
+    if (!toAddress) { setErr(recipIsName ? "Couldn't resolve that name" : "Enter a valid address or .base name"); setStep("error"); return; }
+    if (!(amt > 0)) { setErr("Enter an amount"); setStep("error"); return; }
+    setErr(""); setTxHash("");
+    try {
+      setStep("switching");
+      await switchChainAsync({ chainId });
+      setStep("sending");
+      const hash = asset === "USDC"
+        ? await writeContractAsync({ address: net.usdc, abi: ERC20_ABI, functionName: "transfer", args: [toAddress, parseUnits(amount, net.usdcDecimals)], chainId })
+        : await sendTransactionAsync({ to: toAddress, value: parseEther(amount), chainId });
+      setTxHash(hash); setStep("done");
+    } catch (e) {
+      setErr(((e as Error).message || String(e)).slice(0, 160)); setStep("error");
+    }
+  }
+
+  if (step === "done") {
+    return (
+      <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
+        <div className="font-mono text-[11px] font-bold mb-1" style={{ color: "#22C55E" }}>
+          ✓ Sent {amt} {asset} · {net.short}
+        </div>
+        <div className="font-mono text-[10px] text-slate-400 mb-2 break-all">
+          to {revName || (recipIsName ? recip : truncAddr(toAddress ?? ""))}
+        </div>
+        {txHash && (
+          <a href={`${net.explorer}/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
+             className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7]">
+            View tx ↗
+          </a>
+        )}
+      </div>
+    );
+  }
+
+  // Recipient resolution status line
+  let resolveLine: React.ReactNode = null;
+  if (recipIsName && resolving) resolveLine = <span className="text-slate-500">resolving {recip}…</span>;
+  else if (recipIsName && toAddress) resolveLine = <span className="text-[#22C55E]">→ {truncAddr(toAddress)}</span>;
+  else if (recipIsName && recip.length > 3) resolveLine = <span className="text-red-500">name not found on Base</span>;
+  else if (recipIsAddr) resolveLine = <span className="text-[#22C55E]">✓ {revName ? `${revName} · ${truncAddr(recip)}` : "valid address"}</span>;
+  else if (recip.length > 0) resolveLine = <span className="text-slate-600">enter a 0x… address or name.base</span>;
+
+  const btnLabel = busy ? (step === "switching" ? "Switching network…" : "Confirm in wallet…")
+    : `Send${amt > 0 ? ` ${amt}` : ""} ${asset}${toAddress ? ` → ${recipIsName ? recip : truncAddr(toAddress)}` : ""}`;
+
+  return (
+    <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
+      <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold mb-3">SEND / PAY · BASE</div>
+
+      {/* Network risk banner */}
+      <div className="rounded-lg px-2.5 py-1.5 mb-3 font-mono text-[10px] leading-relaxed"
+           style={net.testnet
+             ? { background: "#F59E0B0a", border: "1px solid #F59E0B30", color: "#fcd9a3" }
+             : { background: "#EF44440a", border: "1px solid #EF444440", color: "#fca5a5" }}>
+        {net.testnet
+          ? <>⚠️ <b>Testnet (Base Sepolia)</b> — safe to experiment with fake funds.</>
+          : <>🔴 <b>Mainnet — real funds.</b> Sending is irreversible. Double-check the recipient + amount.</>}
+      </div>
+
+      {/* Account identity — Basename if set */}
+      {fromAddr && (
+        <div className="font-mono text-[9px] text-slate-600 mb-3">
+          FROM <span className="text-slate-300">{fromName || truncAddr(fromAddr)}</span>
+        </div>
+      )}
+
+      {/* Asset toggle */}
+      <div className="flex gap-1 mb-3">
+        {(["USDC", "ETH"] as const).map(a => {
+          const active = asset === a;
+          return (
+            <button key={a} onClick={() => setAsset(a)}
+              className="flex-1 font-mono text-[11px] py-1.5 rounded-md transition-colors"
+              style={active
+                ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+              {a}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Recipient */}
+      <label className="block mb-1">
+        <span className="font-mono text-[9px] text-slate-600 block mb-1">RECIPIENT</span>
+        <input value={recipient} onChange={e => setRecipient(e.target.value)}
+          placeholder="0x… or name.base"
+          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+      </label>
+      <div className="font-mono text-[9px] mb-3 h-3">{resolveLine}</div>
+
+      {/* Amount + balance-aware Max */}
+      <label className="block mb-3">
+        <div className="flex items-center justify-between mb-1">
+          <span className="font-mono text-[9px] text-slate-600">AMOUNT ({asset})</span>
+          {balance != null && (
+            <span className="font-mono text-[9px] text-slate-600">
+              Bal {balance.toFixed(asset === "ETH" ? 4 : 2)}
+              <button type="button" onClick={setMax} className="text-[#4FC3F7] ml-1">Max</button>
+            </span>
+          )}
+        </div>
+        <input type="number" min="0" step={asset === "ETH" ? "0.0001" : "0.01"} value={amount}
+          onChange={e => setAmount(e.target.value)} placeholder={asset === "ETH" ? "e.g. 0.01" : "e.g. 5"}
+          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+        {overBalance && <span className="font-mono text-[9px] text-red-500 mt-1 block">Amount exceeds your {asset} balance</span>}
+      </label>
+
+      {/* Network */}
+      <label className="block mb-3">
+        <span className="font-mono text-[9px] text-slate-600 block mb-1">NETWORK</span>
+        <select value={network} onChange={e => setNetwork(e.target.value as YieldNetwork)}
+          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 outline-none">
+          <option value="baseSepolia">Base Sepolia (testnet)</option>
+          <option value="base">Base mainnet</option>
+        </select>
+      </label>
+
+      <p className="font-mono text-[9px] text-slate-600 mb-2 leading-relaxed">
+        Sends {asset} directly from your wallet — you sign one {asset === "USDC" ? "transfer" : "send"}. Non-custodial; Blue Agent never touches the funds.
+      </p>
+
+      {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
+
+      <button onClick={send} disabled={busy || !valid || !isConnected}
+        className="w-full font-mono text-[12px] font-bold py-2 rounded-lg transition-all disabled:opacity-50"
+        style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>
+        {!isConnected ? "Connect your wallet to continue" : btnLabel}
+      </button>
+      <p className="font-mono text-[9px] text-slate-700 mt-1.5">
+        {net.label} · you sign every transaction · sends are final.
+      </p>
+    </div>
+  );
+}
+
 export function ToolResultCard({ tool, result }: { tool: string; result: Record<string, unknown> }) {
+  // Always called inside the chat (ChatMessages) — read the canonical wallet
+  // here and hand it to the action cards as a prop so they don't depend on chat.
+  const { walletAddr } = useChat();
+  const account = walletAddr as `0x${string}` | undefined;
   if (!result || typeof result !== "object") return null;
   const r = result;
 
@@ -1099,6 +1650,8 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_yield":         return <YieldCard        result={r} />;
     case "show_portfolio":    return <PortfolioCard />;
     case "prepare_token_launch": return <TokenLaunchCard result={r as TokenLaunchResult} />;
+    case "prepare_yield":     return <MoveToYieldCard  result={r as YieldMoveResult} account={account} />;
+    case "prepare_send":      return <SendCard         result={r as SendResult} account={account} />;
     default:                  return <GenericCard      tool={tool} result={r} />;
   }
 }

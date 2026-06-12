@@ -48,7 +48,15 @@ async function debitChatCredits(address: string, tier: string): Promise<DebitRes
 
   const blueBalance = await fetchBlueBalance(address);
   const holderTier  = getTierInfo(blueBalance);
-  const cost        = chatCreditCost(tier, holderTier);
+
+  // Max tier (10M+ BLUE, dailyCr === -1) is unlimited. The UI promises
+  // "Max tier · no metering, every model free" and shows ∞ credits — so
+  // honor that server-side and skip the debit entirely, instead of charging
+  // the (40%-discounted) per-message cost. Without this the backend silently
+  // contradicts the ∞ UI and bills holders for messages they were told are free.
+  if (holderTier.dailyCr === -1) return { kind: "skipped", reason: "unlimited-tier" };
+
+  const cost = chatCreditCost(tier, holderTier);
 
   if (cost <= 0) return { kind: "skipped", reason: "zero-cost-tier" };
 
@@ -267,6 +275,20 @@ const HUB_TOOLS = [
         action:  { type: "string", enum: ["supply", "withdraw"], description: "OPTIONAL — 'supply' (default) deposits USDC into Aave for yield; 'withdraw' pulls it back. Pass 'withdraw' only if the user explicitly asked to withdraw." },
         amount:  { type: "number", description: "OPTIONAL — USDC amount. Pass ONLY if the user explicitly stated one in this request; otherwise omit and the card collects it. Never invent one." },
         network: { type: "string", enum: ["base", "baseSepolia"], description: "OPTIONAL — defaults to baseSepolia (testnet, safe to test). Pass 'base' ONLY if the user explicitly asked for mainnet / real funds." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "prepare_send",
+    description: "Open the SEND / PAY card so the user can send USDC (or ETH) to an address or a Basename (e.g. alice.base) on Base — NON-custodial, the user SIGNS the transfer in their own wallet; Blue Agent never touches the funds. Use when the user wants to: 'send X USDC to …', 'pay …', 'transfer to …', 'send ETH to …'. The CARD collects/edits recipient, amount, asset (USDC default), and network (Base Sepolia testnet by DEFAULT, or Base mainnet) and resolves the Basename → address; the user reviews and signs.\n\nCRITICAL — never invent a recipient or amount: pass `to` and `amount` ONLY if the user explicitly stated them in THIS request; otherwise omit and let the card collect them. Pass asset='ETH' only if the user explicitly said ETH. Network defaults to testnet; pass network='base' ONLY if the user explicitly asked for mainnet / real funds.\n\nThis NEVER moves funds by itself — only the user's signature executes. After calling, reply with ONE short line telling the user to review the recipient + amount and sign in the card; never claim funds were sent.",
+    input_schema: {
+      type: "object",
+      properties: {
+        to:      { type: "string", description: "OPTIONAL — recipient 0x… address or Basename/ENS (e.g. alice.base). Pass ONLY if the user explicitly gave one; never invent one." },
+        amount:  { type: "number", description: "OPTIONAL — amount to send. Pass ONLY if the user explicitly stated one; otherwise omit and the card collects it. Never invent one." },
+        asset:   { type: "string", enum: ["USDC", "ETH"], description: "OPTIONAL — defaults to USDC. Pass 'ETH' only if the user explicitly said ETH." },
+        network: { type: "string", enum: ["base", "baseSepolia"], description: "OPTIONAL — defaults to baseSepolia (testnet). Pass 'base' ONLY if the user explicitly asked for mainnet / real funds." },
       },
       required: [],
     },
@@ -699,6 +721,14 @@ async function callHubTool(
     return {
       text: "Move-to-yield card rendered. The card shows the network, amount and Supply/Withdraw action — the user reviews and SIGNS in their own wallet (non-custodial). Do NOT restate numbers as a table, do NOT claim funds were moved, and do NOT quote an APY. Reply with one short line: tell the user to review and sign in the card.",
       result: { kind: "yield_move", ...args },
+    };
+  }
+  if (toolName === "prepare_send") {
+    // Marker only — the SendCard resolves the recipient/Basename and the user
+    // SIGNS the USDC/ETH transfer in their own wallet. We never move funds.
+    return {
+      text: "Send/Pay card rendered. The card shows recipient, amount and asset — the user reviews and SIGNS the transfer in their own wallet (non-custodial). Do NOT claim funds were sent and do NOT restate the recipient as if confirmed. Reply with one short line: tell the user to review the recipient + amount and sign in the card.",
+      result: { kind: "send", ...args },
     };
   }
 

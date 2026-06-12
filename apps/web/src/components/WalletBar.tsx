@@ -94,7 +94,7 @@ export default function WalletBar({ onWalletChange, refreshTrigger = 0 }: Wallet
         >
           {isPending ? "Connecting…" : "Connect Wallet"}
         </button>
-        <span className="block font-mono text-[10px] text-slate-600 mt-1 px-0.5">→ 100 free credits/day · ~10 messages</span>
+        <span className="block font-mono text-[10px] text-slate-600 mt-1 px-0.5">→ Connect + hold/stake $BLUE to unlock tiers &amp; more credits</span>
 
         {picker && (
           <>

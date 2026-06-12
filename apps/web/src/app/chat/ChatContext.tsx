@@ -211,39 +211,36 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [chatTier,     setChatTier]    = useState("pro");
 
-  // Load tasks on wallet change, migrate old chat, or create a fresh default task
+  // Load tasks on wallet change, migrate old chat, then ALWAYS open on a fresh
+  // New Chat draft (ChatGPT / Claude behaviour). Prior sessions stay available
+  // in the sidebar history; we never auto-restore the most recent one.
   useEffect(() => {
-    const loaded = loadTasks(walletAddr);
-    if (loaded.length === 0) {
-      // Try old single-chat format migration first
+    // Gather any existing history (current format, or migrated old/guest data).
+    let history = loadTasks(walletAddr);
+    if (history.length === 0) {
       const migrated = migrateOldChat(walletAddr);
       if (migrated) {
-        setTasksState([migrated]);
-        setActiveTaskId(migrated.id);
-        saveTasks([migrated], walletAddr);
-        return;
-      }
-      // If wallet just connected, migrate any guest history across
-      if (walletAddr) {
+        history = [migrated];
+        saveTasks(history, walletAddr);
+      } else if (walletAddr) {
+        // Wallet just connected — carry guest history across.
         const guestTasks = loadTasks(undefined); // blue_tasks_v1_guest
         if (guestTasks.length > 0) {
-          saveTasks(guestTasks, walletAddr);
-          const sorted = [...guestTasks].sort((a, b) => b.updatedAt - a.updatedAt);
-          setTasksState(sorted);
-          setActiveTaskId(sorted[0].id);
-          return;
+          history = guestTasks;
+          saveTasks(history, walletAddr);
         }
       }
-      // No history at all — put a fresh unsaved task in state so send() has something to attach to
-      const fresh = createTask("pro", "blue-agent");
-      setTasksState([fresh]);       // in-memory only, NOT saved yet
-      setActiveTaskId(fresh.id);
-      return;
     }
-    // Sort by most recent and activate the latest
-    const sorted = [...loaded].sort((a, b) => b.updatedAt - a.updatedAt);
-    setTasksState(sorted);
-    setActiveTaskId(sorted[0].id);
+    // Keep only real conversations (drop any empty drafts left over) and sort.
+    const sorted = history
+      .filter(t => t.messages.length > 0)
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+    // Open on a fresh in-memory draft so the welcome / New Chat screen shows.
+    // It is NOT persisted until the first message is sent.
+    const fresh = createTask(chatTier, personaId);
+    setTasksState([fresh, ...sorted]);
+    setActiveTaskId(fresh.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletAddr]);
 
   const setTasks = useCallback((ts: ChatTask[]) => {
@@ -257,13 +254,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   );
 
   const createNewTask = useCallback(() => {
+    // In-memory only — an empty draft is not persisted to storage, so it never
+    // shows up as a blank entry in the sidebar history. send() saves it on the
+    // first message.
     const t = createTask(chatTier, personaId);
-    const updated = [t, ...tasks];
-    setTasks(updated);
+    setTasksState(prev => [t, ...prev.filter(p => p.messages.length > 0)]);
     setActiveTaskId(t.id);
     setInput("");
     setError(null);
-  }, [tasks, chatTier, personaId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chatTier, personaId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectTask = useCallback((id: string) => {
     setActiveTaskId(id);
@@ -346,7 +345,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         signal: AbortSignal.timeout(60_000),
       });
       const data = await res.json() as { result?: string };
-      updateCron(id, { lastRun: Date.now(), lastResult: data.result?.slice(0, 200) });
+      // Keep the full markdown report (capped to bound localStorage) so the
+      // Scheduled card can render it properly on demand, not just a garbled
+      // 200-char slice.
+      updateCron(id, { lastRun: Date.now(), lastResult: data.result?.slice(0, 4000) });
     } catch {
       updateCron(id, { lastRun: Date.now(), lastResult: "Error running task" });
     } finally {
@@ -374,7 +376,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const streamStartRef = useRef<number>(0);
 
   const cost = creditCost(chatTier, holderTier);
-  const isUnlimited = holderTier.dailyCr === -1 && !!walletAddr;
+  // Local dev never gates on credits: `process.env.NODE_ENV` is inlined at build
+  // time, so this is `true` only under `next dev` and ALWAYS `false` in a
+  // production build (the deployed app is unaffected). The server already skips
+  // the ledger debit locally when INTERNAL_SERVICE_KEY is unset.
+  const DEV_UNLIMITED = process.env.NODE_ENV !== "production";
+  const isUnlimited = DEV_UNLIMITED || (holderTier.dailyCr === -1 && !!walletAddr);
   const daily = getDailyCr(holderTier, !!walletAddr);
   // Only block sending after wallet detection is done — avoids false "out of credits" on F5
   const outOfCredits = walletReady && !isUnlimited && credits < cost;
