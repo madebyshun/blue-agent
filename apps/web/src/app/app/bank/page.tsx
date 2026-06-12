@@ -20,14 +20,14 @@ import { useBasename, shortAddr } from "@/lib/useBasename";
 const usd = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-type Action = "earn" | "send" | "receive" | null;
+type Section = "overview" | "earn" | "send" | "receive" | "activity";
 
 export default function BankPage() {
   const { address, isConnected } = useAccount();
   const acct = address as `0x${string}` | undefined;
   const { name } = useBasename(acct);
   const [network, setNetwork] = useState<YieldNetwork>("baseSepolia");
-  const [action, setAction]   = useState<Action>(null);
+  const [section, setSection] = useState<Section>("overview");
   const [copied, setCopied]   = useState(false);
 
   const net = YIELD_NETWORKS[network];
@@ -83,93 +83,156 @@ export default function BankPage() {
     return <BankLanding bestApy={bestApy} />;
   }
 
-  return (
-    <div className="min-h-full bg-[#050508] text-slate-200 p-4 sm:p-6 lg:p-8 max-w-screen-2xl mx-auto w-full">
+  const NAV: { id: Section; label: string; icon: string }[] = [
+    { id: "overview", label: "Overview", icon: "⌂" },
+    { id: "earn",     label: "Earn",     icon: "🌾" },
+    { id: "send",     label: "Send",     icon: "➡" },
+    { id: "receive",  label: "Receive",  icon: "⬇" },
+    { id: "activity", label: "Activity", icon: "≡" },
+  ];
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
-        <div>
-          <div className="font-mono text-[13px] tracking-widest text-[#4FC3F7] font-bold">🔵 BLUEBANK</div>
-          <div className="font-mono text-[11px] text-slate-400 mt-0.5">
-            {name || shortAddr(acct)} · <span className="text-[#34D399]">non-custodial</span>
+  return (
+    <div className="flex h-full w-full bg-[#050508] text-slate-200">
+
+      {/* ── BlueBank sidebar (like Blue Chat / Blue Hub) ─────────────────── */}
+      <aside className="hidden md:flex flex-col w-56 shrink-0 border-r border-[#1A1A2E] bg-[#070710] overflow-y-auto">
+        <div className="px-4 py-4 border-b border-[#1A1A2E]">
+          <div className="font-mono text-[12px] tracking-widest text-[#4FC3F7] font-bold">🔵 BLUEBANK</div>
+          <div className="font-mono text-[10px] text-slate-500 mt-1 truncate">{name || shortAddr(acct)}</div>
+          <div className="font-mono text-[9px] text-[#34D399] mt-0.5">● non-custodial</div>
+        </div>
+        <div className="px-4 py-3 border-b border-[#1A1A2E]">
+          <div className="font-mono text-[9px] text-slate-600">BALANCE · {net.short}</div>
+          <div className="font-mono text-[16px] font-bold text-white mt-0.5">${usd(total)}</div>
+          <div className="font-mono text-[9px] text-slate-600 mt-0.5">{usd(inYield)} earning</div>
+        </div>
+        <nav className="flex flex-col gap-0.5 p-2 flex-1">
+          {NAV.map(item => {
+            const active = section === item.id;
+            return (
+              <button key={item.id} onClick={() => setSection(item.id)}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg font-mono text-[12px] transition-colors text-left"
+                style={active
+                  ? { background: "#4FC3F712", color: "#4FC3F7", boxShadow: "inset 0 0 0 1px #4FC3F720" }
+                  : { color: "#64748b" }}>
+                <span className="w-4 text-center">{item.icon}</span>{item.label}
+              </button>
+            );
+          })}
+        </nav>
+        <div className="p-3 border-t border-[#1A1A2E]">
+          <div className="font-mono text-[9px] text-slate-600 mb-1.5">NETWORK</div>
+          <div className="flex gap-1">
+            {(["baseSepolia", "base"] as const).map(nk => (
+              <button key={nk} onClick={() => setNetwork(nk)}
+                className="flex-1 font-mono text-[10px] py-1.5 rounded-md transition-colors"
+                style={network === nk
+                  ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                  : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+                {nk === "base" ? "Mainnet" : "Sepolia"}
+              </button>
+            ))}
           </div>
         </div>
-        <div className="flex items-center gap-1 font-mono text-[10px]">
-          {(["baseSepolia", "base"] as const).map(nk => (
-            <button key={nk} onClick={() => setNetwork(nk)}
-              className="px-2.5 py-1 rounded-md transition-colors"
-              style={network === nk
-                ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+      </aside>
+
+      {/* ── Content ──────────────────────────────────────────────────────── */}
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+
+        {/* Mobile section tabs (sidebar hidden on small screens) */}
+        <div className="md:hidden flex gap-1 mb-4 overflow-x-auto pb-1">
+          {NAV.map(item => (
+            <button key={item.id} onClick={() => setSection(item.id)}
+              className="shrink-0 font-mono text-[11px] px-3 py-1.5 rounded-lg transition-colors"
+              style={section === item.id
+                ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
                 : { color: "#64748b", border: "1px solid #1A1A2E" }}>
-              {nk === "base" ? "Mainnet" : "Sepolia"}
+              {item.label}
             </button>
           ))}
         </div>
-      </div>
 
-      {/* Top: cash-balance hero (wide) + positions (side) */}
-      <div className="grid lg:grid-cols-3 gap-4 mb-4">
-        {/* Cash balance hero */}
-        <div className="lg:col-span-2 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6 flex flex-col">
-          <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH BALANCE · {net.short}</div>
-          <div className="font-mono text-4xl sm:text-5xl font-bold text-white">${usd(total)} <span className="text-base text-slate-500">USDC</span></div>
-          <div className="font-mono text-[11px] text-slate-500 mt-2">
-            {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
+        {/* Overview */}
+        {section === "overview" && (
+          <div className="max-w-screen-xl">
+            <div className="grid lg:grid-cols-3 gap-4 mb-4">
+              <div className="lg:col-span-2 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6 flex flex-col">
+                <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH BALANCE · {net.short}</div>
+                <div className="font-mono text-4xl sm:text-5xl font-bold text-white">${usd(total)} <span className="text-base text-slate-500">USDC</span></div>
+                <div className="font-mono text-[11px] text-slate-500 mt-2">
+                  {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
+                </div>
+                <div className="flex gap-2 mt-auto pt-6">
+                  <button onClick={() => setSection("receive")} className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>⬇ Receive</button>
+                  <button onClick={() => setSection("send")} className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>➡ Send</button>
+                  <button onClick={() => setSection("earn")} className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>🌾 Earn</button>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
+                <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-3">POSITIONS</div>
+                <PositionRow label="Aave v3" pos={aavePos} apy={aaveApy} onManage={() => setSection("earn")} />
+                <PositionRow label="Morpho · Gauntlet USDC Prime" pos={morphoPos} apy={morphoApy}
+                  disabled={!morphoVnet} disabledNote="mainnet only" onManage={() => setSection("earn")} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Stat label="BEST APY · BASE" value={bestApy != null ? `${bestApy.toFixed(2)}%` : "—"} note="live · DefiLlama" color="#34D399" />
+              <Stat label="EARNING" value={`$${usd(inYield)}`} note="supplied across venues" color="#4FC3F7" />
+              <Stat label="CUSTODY" value="You hold keys" note="non-custodial · 24/7" color="#A78BFA" />
+            </div>
           </div>
-          <div className="flex gap-2 mt-auto pt-6">
-            <button onClick={() => setAction(action === "receive" ? null : "receive")}
-              className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>⬇ Receive</button>
-            <button onClick={() => setAction(action === "send" ? null : "send")}
-              className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>➡ Send</button>
-            <button onClick={() => setAction(action === "earn" ? null : "earn")}
-              className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>🌾 Earn</button>
+        )}
+
+        {/* Earn */}
+        {section === "earn" && (
+          <div className="max-w-md">
+            <div className="font-mono text-[12px] text-slate-300 mb-1">🌾 Earn yield</div>
+            <p className="font-mono text-[10px] text-slate-600 mb-3">Supply USDC into Aave or Morpho — non-custodial, you sign.</p>
+            <MoveToYieldCard result={{ network }} account={acct} />
           </div>
-        </div>
+        )}
 
-        {/* Positions */}
-        <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
-          <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-3">POSITIONS</div>
-          <PositionRow label="Aave v3" pos={aavePos} apy={aaveApy} onManage={() => setAction("earn")} />
-          <PositionRow label="Morpho · Gauntlet USDC Prime" pos={morphoPos} apy={morphoApy}
-            disabled={!morphoVnet} disabledNote="mainnet only" onManage={() => setAction("earn")} />
-        </div>
-      </div>
-
-      {/* Active action panel (reuses the chat cards) */}
-      {action === "receive" && (
-        <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 mb-4 max-w-md flex flex-col items-center text-center">
-          <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-3 self-start">RECEIVE · {net.short}</div>
-          <div className="bg-[#0a0a0f] p-2 rounded-xl border border-[#1A1A2E]">
-            <QRCodeSVG value={acct ?? ""} size={168} bgColor="#0a0a0f" fgColor="#e2e8f0" level="M" />
+        {/* Send */}
+        {section === "send" && (
+          <div className="max-w-md">
+            <div className="font-mono text-[12px] text-slate-300 mb-1">➡ Send / Pay</div>
+            <p className="font-mono text-[10px] text-slate-600 mb-3">Send USDC or ETH to any address or <span className="text-slate-400">name.base</span>.</p>
+            <SendCard result={{ network }} account={acct} />
           </div>
-          {name && <div className="font-mono text-[13px] text-[#4FC3F7] mt-3">{name}</div>}
-          <div className="font-mono text-[10px] text-slate-400 mt-2 break-all max-w-xs">{acct}</div>
-          <button onClick={copyAddr} className="font-mono text-[11px] px-3 py-1.5 rounded-lg mt-3" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-            {copied ? "✓ Copied" : "Copy address"}
-          </button>
-          <p className="font-mono text-[9px] text-slate-600 mt-3 max-w-xs leading-relaxed">
-            Send only <b>USDC or ETH on Base</b> ({net.short}) to this address. Funds from other chains may be lost.
-          </p>
-        </div>
-      )}
-      {action === "send" && <div className="mb-4 max-w-md"><SendCard result={{ network }} account={acct} /></div>}
-      {action === "earn" && <div className="mb-4 max-w-md"><MoveToYieldCard result={{ network }} account={acct} /></div>}
+        )}
 
-      {/* Stat row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-        <Stat label="BEST APY · BASE" value={bestApy != null ? `${bestApy.toFixed(2)}%` : "—"} note="live · DefiLlama" color="#34D399" />
-        <Stat label="EARNING" value={`$${usd(inYield)}`} note="supplied across venues" color="#4FC3F7" />
-        <Stat label="CUSTODY" value="You hold keys" note="non-custodial · 24/7" color="#A78BFA" />
-      </div>
+        {/* Receive */}
+        {section === "receive" && (
+          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6 max-w-md flex flex-col items-center text-center">
+            <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-4 self-start">RECEIVE · {net.short}</div>
+            <div className="bg-[#0a0a0f] p-2 rounded-xl border border-[#1A1A2E]">
+              <QRCodeSVG value={acct ?? ""} size={184} bgColor="#0a0a0f" fgColor="#e2e8f0" level="M" />
+            </div>
+            {name && <div className="font-mono text-[14px] text-[#4FC3F7] mt-4">{name}</div>}
+            <div className="font-mono text-[10px] text-slate-400 mt-2 break-all max-w-xs">{acct}</div>
+            <button onClick={copyAddr} className="font-mono text-[11px] px-4 py-2 rounded-lg mt-4" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+              {copied ? "✓ Copied" : "Copy address"}
+            </button>
+            <p className="font-mono text-[9px] text-slate-600 mt-4 max-w-xs leading-relaxed">
+              Send only <b>USDC or ETH on Base</b> ({net.short}) to this address. Funds from other chains may be lost.
+            </p>
+          </div>
+        )}
 
-      {/* Activity — honest placeholder (no fabricated history) */}
-      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
-        <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">ACTIVITY</div>
-        <p className="font-mono text-[11px] text-slate-600">
-          On-chain history coming soon. View live on{" "}
-          <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer" className="text-[#4FC3F7]">Basescan ↗</a>
-        </p>
-      </div>
+        {/* Activity */}
+        {section === "activity" && (
+          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6 max-w-screen-xl">
+            <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">ACTIVITY · {net.short}</div>
+            <p className="font-mono text-[11px] text-slate-600 mb-3">
+              On-chain history view coming soon (needs an indexer). For now, your full transaction history is live on Basescan.
+            </p>
+            <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer"
+              className="inline-block font-mono text-[11px] px-3 py-1.5 rounded-lg text-[#4FC3F7]" style={{ border: "1px solid #4FC3F730" }}>
+              View on Basescan ↗
+            </a>
+          </div>
+        )}
+      </main>
     </div>
   );
 }
