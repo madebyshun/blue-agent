@@ -7,7 +7,7 @@
 // is wired (we never fabricate transaction history).
 
 import { useState, useEffect } from "react";
-import { useAccount, useReadContract, useBalance } from "wagmi";
+import { useAccount, useReadContract, useBalance, useConnect } from "wagmi";
 import { formatUnits } from "viem";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -80,14 +80,7 @@ export default function BankPage() {
   }
 
   if (!isConnected) {
-    return (
-      <div className="min-h-full flex items-center justify-center p-8">
-        <div className="text-center">
-          <div className="font-mono text-[13px] tracking-widest text-[#4FC3F7] mb-2">🔵 BLUEBANK</div>
-          <p className="font-mono text-[12px] text-slate-500">Connect your wallet to open your account.</p>
-        </div>
-      </div>
-    );
+    return <BankLanding bestApy={bestApy} />;
   }
 
   return (
@@ -208,6 +201,100 @@ function PositionRow({ label, pos, apy, onManage, disabled, disabledNote }: {
         <button onClick={onManage} className="font-mono text-[10px] px-2.5 py-1 rounded-md text-[#4FC3F7]" style={{ border: "1px solid #4FC3F730" }}>
           Manage
         </button>
+      )}
+    </div>
+  );
+}
+
+// ── Landing hero (shown until the wallet connects) ───────────────────────────
+function BankLanding({ bestApy }: { bestApy: number | null }) {
+  const apyText = bestApy != null ? `~${bestApy.toFixed(1)}%` : "up to ~5%";
+  const features: { icon: string; title: string; body: string }[] = [
+    { icon: "📈", title: `Earn ${apyText} APY on idle USDC`, body: "Live rates across blue-chip lending (Aave · Morpho). Your USDC works while you sleep — no lockups." },
+    { icon: "➡", title: "Send to any wallet or name.base", body: "Pay anyone on Base by address or Basename. Instant, 24/7, no cut-off times." },
+    { icon: "🔒", title: "Non-custodial — you hold the keys", body: "You sign every transaction from your own wallet. BlueBank never holds your keys or funds." },
+    { icon: "🌐", title: "On-chain, withdraw anytime", body: "Your money lives on Base, not in a silo. Pull it out whenever you want, in one click." },
+  ];
+  return (
+    <div className="min-h-full bg-[#050508] flex items-center justify-center p-5 sm:p-8">
+      <div className="w-full max-w-4xl grid md:grid-cols-2 gap-6 items-center">
+        {/* Left — marketing */}
+        <div>
+          <div className="font-mono text-[13px] tracking-widest text-[#4FC3F7] font-bold mb-3">🔵 BLUEBANK</div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight mb-3">
+            Banking that you<br />actually own.
+          </h1>
+          <p className="font-mono text-[12px] text-slate-400 leading-relaxed mb-5 max-w-md">
+            Hold USDC, earn real yield, and move money on Base — <span className="text-slate-200">non-custodial</span>.
+            You hold the keys; BlueBank only prepares the transaction, you sign it.
+          </p>
+          <div className="space-y-3">
+            {features.map(f => (
+              <div key={f.title} className="flex gap-3">
+                <span className="text-base shrink-0">{f.icon}</span>
+                <div>
+                  <div className="font-mono text-[12px] text-slate-200">{f.title}</div>
+                  <div className="font-mono text-[10px] text-slate-600 leading-relaxed">{f.body}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Right — connect card */}
+        <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6">
+          <div className="font-mono text-[14px] font-bold text-white mb-1">Open your account</div>
+          <p className="font-mono text-[11px] text-slate-500 mb-5">Connect a wallet to start — no signup, no KYC, no custody.</p>
+          <ConnectButton />
+          <div className="flex items-center gap-2 my-4">
+            <div className="h-px flex-1 bg-[#1A1A2E]" /><span className="font-mono text-[9px] text-slate-700">SECURED BY YOU</span><div className="h-px flex-1 bg-[#1A1A2E]" />
+          </div>
+          <div className="flex items-center justify-center gap-4 font-mono text-[9px] text-slate-600">
+            <span>🔒 Non-custodial</span><span>·</span><span>⛓ On Base</span><span>·</span><span>↩ Withdraw anytime</span>
+          </div>
+          <p className="font-mono text-[9px] text-slate-700 text-center mt-4">Powered by Base · Aave v3 · Morpho</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Connect-wallet CTA — reuses wagmi connectors (same as the sidebar WalletBar),
+// de-duped, rendered as a prominent button + picker for the landing hero.
+function ConnectButton() {
+  const { connectors, connect, isPending } = useConnect();
+  const [open, setOpen] = useState(false);
+  const seen = new Set<string>();
+  const wallets = connectors.filter(c => { const k = c.name.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+  const icon = (name: string) => {
+    const n = name.toLowerCase();
+    if (n.includes("coinbase")) return "🔵";
+    if (n.includes("metamask")) return "🦊";
+    if (n.includes("rabby")) return "🐰";
+    if (n.includes("phantom")) return "👻";
+    return "💼";
+  };
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(o => !o)} disabled={isPending}
+        className="w-full font-mono text-[13px] font-bold py-2.5 rounded-xl transition-all disabled:opacity-60"
+        style={{ background: "#4FC3F7", color: "#050508" }}>
+        {isPending ? "Connecting…" : "Connect Wallet"}
+      </button>
+      {open && (
+        <>
+          <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-xl border border-[#1A1A2E] bg-[#0A0A12] shadow-2xl overflow-hidden">
+            <p className="font-mono text-[10px] text-slate-600 px-3 pt-3 pb-2 tracking-widest">SELECT WALLET</p>
+            {wallets.map(c => (
+              <button key={c.uid} onClick={() => { connect({ connector: c }); setOpen(false); }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#1A1A2E] transition-colors">
+                <span className="w-7 h-7 rounded-lg bg-[#1A1A2E] flex items-center justify-center text-base shrink-0">{icon(c.name)}</span>
+                <span className="font-mono text-xs text-slate-200">{c.name}</span>
+              </button>
+            ))}
+          </div>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+        </>
       )}
     </div>
   );
