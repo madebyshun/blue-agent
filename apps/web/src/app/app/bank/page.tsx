@@ -19,6 +19,8 @@ import { useBasename, shortAddr } from "@/lib/useBasename";
 import BaseTvlChart from "./BaseTvlChart";
 import { ApyCompareChart } from "./BaseProtocolCharts";
 import BaseTokensCard from "./BaseTokensCard";
+import QrScanner from "./QrScanner";
+import { parsePaymentQr, buildPaymentUri, type ParsedPayment } from "@/lib/payment-qr";
 
 const usd = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -43,7 +45,30 @@ export default function BankPage() {
   const [panel, setPanel]     = useState<Panel>("positions");
   const [actionOpen, setActionOpen] = useState(false);
   const [copied, setCopied]   = useState(false);
-  const openAction = (p: Panel) => { setPanel(p); setActionOpen(true); };
+  const openAction = (p: Panel) => {
+    if (p === "send") { setScanPrefill(null); setScanKey(k => k + 1); } // fresh Send
+    setPanel(p); setActionOpen(true);
+  };
+
+  // Scan-to-pay — read a payment QR (address / name.base / EIP-681 request),
+  // prefill the Send card, and let the user confirm + sign (non-custodial).
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanPrefill, setScanPrefill] = useState<ParsedPayment | null>(null);
+  const [scanKey, setScanKey] = useState(0); // remounts SendCard with new prefill
+  function handleScan(text: string): string | void {
+    const p = parsePaymentQr(text);
+    if (!p || !p.to) return "Not a Base address or payment QR";
+    setScanPrefill(p);
+    setScanKey(k => k + 1);
+    setPanel("send");
+    setScanOpen(false);
+    setActionOpen(true);
+  }
+
+  // Receive as a payment request — encode an amount into the QR (EIP-681) so a
+  // payer scanning it gets the amount prefilled, not just the bare address.
+  const [reqAmount, setReqAmount] = useState("");
+  const [reqAsset, setReqAsset] = useState<"USDC" | "ETH">("USDC");
 
   // Add cash — Coinbase Onramp (buy USDC on Base with card/Apple Pay/bank).
   // USDC is delivered straight to the user's own wallet (non-custodial). Mainnet.
@@ -246,7 +271,7 @@ export default function BankPage() {
                 {/* Tabs + close */}
                 <div className="flex items-center gap-1 p-3 border-b border-[#1A1A2E] shrink-0">
                   {TABS.map(tb => (
-                    <button key={tb.id} onClick={() => setPanel(tb.id)}
+                    <button key={tb.id} onClick={() => { if (tb.id === "send") { setScanPrefill(null); setScanKey(k => k + 1); } setPanel(tb.id); }}
                       className="flex-1 font-mono text-[10px] py-1.5 rounded-md transition-colors"
                       style={panel === tb.id
                         ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
@@ -283,15 +308,61 @@ export default function BankPage() {
                     </div>
                   )}
                   {panel === "earn" && <MoveToYieldCard result={{ network }} account={acct} />}
-                  {panel === "send" && <SendCard result={{ network }} account={acct} />}
+                  {panel === "send" && (
+                    <div>
+                      <button onClick={() => setScanOpen(true)}
+                        className="w-full font-mono text-[11px] font-bold py-2 rounded-xl mb-3 flex items-center justify-center gap-2"
+                        style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                        📷 Scan to pay
+                      </button>
+                      {scanPrefill && (
+                        <div className="font-mono text-[9px] text-[#34D399] mb-2">
+                          ✓ scanned{scanPrefill.amount ? ` · request ${scanPrefill.amount} ${scanPrefill.asset ?? "USDC"}` : ""} — confirm + sign below
+                        </div>
+                      )}
+                      <SendCard key={scanKey}
+                        result={{
+                          network: scanPrefill?.network ?? network,
+                          to: scanPrefill?.to,
+                          amount: scanPrefill?.amount,
+                          asset: scanPrefill?.asset,
+                        }}
+                        account={acct} />
+                    </div>
+                  )}
                   {panel === "receive" && (
                     <div>
                       <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-3">RECEIVE · {net.short}</div>
+
+                      {/* Request a specific amount → encodes an EIP-681 payment QR */}
+                      <div className="flex items-center gap-1.5 mb-3">
+                        <div className="flex gap-1">
+                          {(["USDC", "ETH"] as const).map(a => (
+                            <button key={a} onClick={() => setReqAsset(a)}
+                              className="font-mono text-[10px] px-2.5 py-1.5 rounded-lg transition-colors"
+                              style={reqAsset === a
+                                ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                                : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+                              {a}
+                            </button>
+                          ))}
+                        </div>
+                        <input value={reqAmount} onChange={e => setReqAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                          inputMode="decimal" placeholder="amount (optional)"
+                          className="flex-1 bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[10px] text-slate-200 placeholder:text-slate-700 outline-none" />
+                        {reqAmount && (
+                          <button onClick={() => setReqAmount("")} className="font-mono text-[10px] px-2 py-1.5 rounded-lg text-slate-500 hover:text-white border border-[#1A1A2E]">✕</button>
+                        )}
+                      </div>
+
                       <div className="flex flex-col items-center text-center">
                         <div className="bg-white p-2.5 rounded-xl">
-                          <QRCodeSVG value={acct ?? ""} size={180} bgColor="#ffffff" fgColor="#0a0a0f" level="M" />
+                          <QRCodeSVG value={acct ? buildPaymentUri({ to: acct, amount: reqAmount, asset: reqAsset, network }) : ""} size={180} bgColor="#ffffff" fgColor="#0a0a0f" level="M" />
                         </div>
-                        {name && <div className="font-mono text-[13px] text-[#4FC3F7] mt-3">{name}</div>}
+                        {parseFloat(reqAmount) > 0 && (
+                          <div className="font-mono text-[12px] text-[#34D399] mt-3 font-bold">requesting {reqAmount} {reqAsset}</div>
+                        )}
+                        {name && <div className="font-mono text-[13px] text-[#4FC3F7] mt-2">{name}</div>}
                         <div className="font-mono text-[9px] text-slate-400 mt-1.5 break-all px-2">{acct}</div>
                         <button onClick={copyAddr} className="font-mono text-[11px] px-4 py-2 rounded-lg mt-3" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
                           {copied ? "✓ Copied" : "Copy address"}
@@ -299,7 +370,9 @@ export default function BankPage() {
                       </div>
                       <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-2.5 mt-4">
                         <p className="font-mono text-[9px] text-slate-500 leading-relaxed">
-                          Scan the QR with any wallet, or copy the address. Send only <b className="text-slate-300">USDC / ETH on Base</b> ({net.short}) here — funds from other chains may be lost.
+                          {parseFloat(reqAmount) > 0
+                            ? <>Payment-request QR — a payer scanning it (BlueBank <b className="text-slate-300">Scan to pay</b>, or any EIP-681 wallet) gets <b className="text-slate-300">{reqAmount} {reqAsset}</b> prefilled.</>
+                            : <>Scan the QR with any wallet, or set an amount above to make a payment request. <b className="text-slate-300">USDC / ETH on Base</b> ({net.short}) only.</>}
                         </p>
                       </div>
                     </div>
@@ -308,6 +381,9 @@ export default function BankPage() {
               </div>
             </div>
           )}
+
+          {/* Scan-to-pay camera overlay */}
+          {scanOpen && <QrScanner onResult={handleScan} onClose={() => setScanOpen(false)} />}
 
           {/* Row 2: Assets · Rates · Projection */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
