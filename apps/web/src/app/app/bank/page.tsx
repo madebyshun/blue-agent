@@ -18,6 +18,7 @@ import { MoveToYieldCard, SendCard } from "@/app/chat/components/ToolCards";
 import { useBasename, shortAddr } from "@/lib/useBasename";
 import BaseTvlChart from "./BaseTvlChart";
 import { StackedTvlChart, ApyCompareChart } from "./BaseProtocolCharts";
+import BaseTokensCard from "./BaseTokensCard";
 
 const usd = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -25,10 +26,6 @@ const usd = (n: number | null | undefined) =>
 const compact = (n: number | null | undefined) =>
   n == null ? "—" : n >= 1e9 ? `$${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(0)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(0)}K` : `$${n.toFixed(0)}`;
 
-const fmtPrice = (n: number | null | undefined) =>
-  n == null ? "—"
-  : n >= 1 ? `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`
-  : `$${n.toFixed(n < 1e-4 ? 10 : 6).replace(/0+$/, "").replace(/\.$/, "")}`;
 
 type Panel = "positions" | "earn" | "send" | "receive";
 
@@ -194,35 +191,8 @@ export default function BankPage() {
                 </div>
               </div>
 
-              {/* Base market — flex-1 fills the rest of the fixed-height column */}
-              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 flex-1 flex flex-col min-h-0">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="font-mono text-[10px] text-slate-500 tracking-widest">BASE MARKET</span>
-                  <span className="font-mono text-[9px] text-slate-700">live · built by Coinbase</span>
-                </div>
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <Ticker label="$BLUEAGENT" price={fmtPrice(snap?.blue?.price)} change={snap?.blue?.change24h ?? null} />
-                  <Ticker label="cbBTC" price={fmtPrice(snap?.cbbtc?.price)} change={snap?.cbbtc?.change24h ?? null} />
-                </div>
-                <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-3 mb-3 flex-1 flex flex-col min-h-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-mono text-[9px] text-slate-600 tracking-wide">BASE TVL · 30D</span>
-                    <span className="font-mono text-[11px] text-white">
-                      {snap?.tvlUsd != null ? compact(snap.tvlUsd) : "—"}{" "}
-                      <span style={{ color: (snap?.change7dPct ?? 0) >= 0 ? "#34D399" : "#EF4444" }}>
-                        {snap?.change7dPct != null ? `${snap.change7dPct >= 0 ? "+" : ""}${snap.change7dPct.toFixed(2)}%` : ""}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="flex-1 min-h-0 flex items-stretch">
-                    <Spark points={snap?.tvlSeries ?? []} color="#4FC3F7" fill />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Mini label="24H DEX VOL" value={snap?.dexVol24h != null ? compact(snap.dexVol24h) : "—"} />
-                  <Mini label="7D DEX VOL" value={snap?.dexVol7d != null ? compact(snap.dexVol7d) : "—"} />
-                </div>
-              </div>
+              {/* Base market — selectable top tokens + per-token price chart */}
+              <BaseTokensCard />
             </div>
 
             {/* Action panel — fixed height + internal scroll so the tab content
@@ -402,28 +372,6 @@ function AssetRow({ label, sub, usd: val, color }: { label: string; sub: string;
         <div><div className="font-mono text-[12px] text-slate-200">{label}</div><div className="font-mono text-[9px] text-slate-600">{sub}</div></div>
       </div>
       <div className="font-mono text-[12px] text-slate-300">{val != null ? `$${usd(val)}` : "—"}</div>
-    </div>
-  );
-}
-
-function Ticker({ label, price, change }: { label: string; price: string; change: number | null }) {
-  const up = (change ?? 0) >= 0;
-  return (
-    <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-3 py-2">
-      <div className="font-mono text-[9px] text-slate-500">{label}</div>
-      <div className="font-mono text-[13px] font-bold text-slate-100 mt-0.5 truncate">{price}</div>
-      <div className="font-mono text-[10px] mt-0.5" style={{ color: change == null ? "#64748b" : up ? "#34D399" : "#EF4444" }}>
-        {change == null ? "—" : `${up ? "▲" : "▼"} ${Math.abs(change).toFixed(2)}% 24h`}
-      </div>
-    </div>
-  );
-}
-
-function Mini({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-3 py-2">
-      <div className="font-mono text-[9px] text-slate-500">{label}</div>
-      <div className="font-mono text-[13px] font-bold text-slate-200 mt-0.5">{value}</div>
     </div>
   );
 }
