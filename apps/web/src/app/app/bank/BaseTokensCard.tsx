@@ -52,6 +52,25 @@ export default function BaseTokensCard() {
     return () => { off = true; };
   }, [t?.pool]);
 
+  // Scan any Base token by contract address → look up + add to the list + select.
+  const [query, setQuery] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [scanErr, setScanErr] = useState("");
+  async function scan() {
+    const addr = query.trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) { setScanErr("Enter a 0x token contract"); return; }
+    setScanning(true); setScanErr("");
+    try {
+      const j = await fetch(`/api/token-lookup?addr=${addr}`).then(r => r.json());
+      if (!j.token) { setScanErr(j.error || "token not found on Base"); return; }
+      const tok: Tok = j.token;
+      setTokens(prev => [tok, ...prev.filter(x => x.addr.toLowerCase() !== tok.addr.toLowerCase())]);
+      setSel(tok.sym);
+      setQuery("");
+    } catch { setScanErr("lookup failed"); }
+    finally { setScanning(false); }
+  }
+
   const up = (t?.change24h ?? 0) >= 0;
   const lineColor = up ? "#34D399" : "#EF4444";
 
@@ -62,11 +81,29 @@ export default function BaseTokensCard() {
         <span className="font-mono text-[9px] text-slate-700">live · built by Coinbase</span>
       </div>
 
+      {/* Scan any token by contract address */}
+      <div className="mb-3 shrink-0">
+        <div className="flex gap-1.5">
+          <input value={query} onChange={e => { setQuery(e.target.value); setScanErr(""); }}
+            onKeyDown={e => { if (e.key === "Enter") scan(); }}
+            placeholder="Scan a token contract 0x…"
+            className="flex-1 bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[10px] text-slate-200 placeholder:text-slate-700 outline-none" />
+          <button onClick={scan} disabled={scanning}
+            className="font-mono text-[10px] px-2.5 py-1.5 rounded-lg disabled:opacity-50" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+            {scanning ? "…" : "Scan"}
+          </button>
+        </div>
+        {scanErr && <div className="font-mono text-[9px] text-red-500 mt-1">{scanErr}</div>}
+      </div>
+
       {/* Selected token + chart */}
       <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-3 mb-3 shrink-0">
         <div className="flex items-start justify-between mb-1">
           <div>
-            <div className="font-mono text-[12px] text-slate-200 font-bold">{t?.sym ?? "—"}</div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-[12px] text-slate-200 font-bold">{t?.sym ?? "—"}</span>
+              {t?.addr && <a href={`https://basescan.org/token/${t.addr}`} target="_blank" rel="noopener noreferrer" className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7]">contract ↗</a>}
+            </div>
             <div className="font-mono text-[14px] text-white">{fmtPrice(t?.price)}</div>
           </div>
           <div className="font-mono text-[11px]" style={{ color: t?.change24h == null ? "#64748b" : up ? "#34D399" : "#EF4444" }}>
