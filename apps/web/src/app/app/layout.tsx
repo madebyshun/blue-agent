@@ -192,7 +192,7 @@ function AppSideNav() {
 
       {/* Primary nav */}
       <nav className="flex flex-col items-center gap-0.5 pt-2 flex-1 px-2">
-        {APP_NAV.map((item) => {
+        {NAV_ITEMS.map((item) => {
           const active = isActive(item.href);
           return (
             <Link
@@ -316,7 +316,14 @@ function AppSideNav() {
 // Tools / Skills / Scheduled and recent conversations. Shown below lg so the
 // tablet gap (md rail, no chat sidebar) keeps full nav access.
 
-const PRODUCTS = [...APP_NAV, ...APP_BOTTOM];
+// BlueBank is still in local testing — hide its nav entry on production builds
+// (NODE_ENV=production). Local `next dev` keeps it visible. The /app/bank route
+// is also redirected away in production (see next.config.ts) as a hard gate.
+const NAV_ITEMS = APP_NAV.filter(
+  (i) => !(i.id === "bank" && process.env.NODE_ENV === "production"),
+);
+
+const PRODUCTS = [...NAV_ITEMS, ...APP_BOTTOM];
 
 function labelForPath(pathname: string): string {
   const match = PRODUCTS.find(i => pathname === i.href || pathname.startsWith(i.href + "/"));

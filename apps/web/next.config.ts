@@ -11,6 +11,15 @@ const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   async redirects() {
     return [
+      // BlueBank is still in local testing — hide /app/bank on production
+      // (and preview) builds by redirecting it to chat. Local `next dev`
+      // (NODE_ENV=development) keeps it reachable for testing.
+      ...(process.env.NODE_ENV === "production"
+        ? [
+            { source: "/app/bank",          destination: "/app/chat", permanent: false },
+            { source: "/app/bank/:path*",   destination: "/app/chat", permanent: false },
+          ]
+        : []),
       {
         // Clean marketing shortcut for the MCP setup guide (tweets, bio, etc.).
         // Temporary (307) so we can re-point to blueagent.dev/docs/mcp once the
