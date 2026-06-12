@@ -36,7 +36,7 @@ function ProviderBadge({ provider }: { provider: SkillProvider }) {
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
-export default function SkillsPanel() {
+export default function SkillsPanel({ onPick }: { onPick?: () => void }) {
   const { setInput } = useChat();
   const [activeProvider, setActiveProvider] = useState<SkillProvider | "all">("all");
   const [search, setSearch] = useState("");
@@ -57,6 +57,8 @@ export default function SkillsPanel() {
 
   function use(trigger?: string) {
     if (trigger) setInput(trigger);
+    // Jump back to the Chat surface so the inserted trigger is visible.
+    onPick?.();
   }
 
   const totalActive = AGENT_SKILLS.filter(s => s.status === "active").length;

@@ -142,14 +142,14 @@ function ChatShell() {
             {/* 🔧 Tools */}
             {activeTab === "tools" && (
               <div className="flex-1 h-full overflow-hidden">
-                <ToolsTab />
+                <ToolsTab onPick={() => setActiveTab("chat")} />
               </div>
             )}
 
             {/* ⚡ Skills */}
             {activeTab === "skills" && (
               <div className="flex-1 h-full overflow-hidden">
-                <SkillsPanel />
+                <SkillsPanel onPick={() => setActiveTab("chat")} />
               </div>
             )}
 
