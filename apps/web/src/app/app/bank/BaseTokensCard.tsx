@@ -18,13 +18,28 @@ function Spark({ points, color }: { points: number[]; color: string }) {
   const w = 100, h = 48;
   const min = Math.min(...points), max = Math.max(...points), range = max - min || 1;
   const step = w / (points.length - 1);
-  const coords = points.map((p, i) => `${(i * step).toFixed(2)},${(h - ((p - min) / range) * h).toFixed(2)}`);
+  const xy = points.map((p, i) => [i * step, h - ((p - min) / range) * h] as const);
+  const coords = xy.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`);
   const line = "M" + coords.join(" L");
   const area = `${line} L${w},${h} L0,${h} Z`;
+  const gid = `spark-${color.replace("#", "")}`;
+  const [ex, ey] = xy[xy.length - 1];
+  // Re-key on points so the draw-in animation replays when the token changes.
+  const k = points.length + ":" + color;
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ width: "100%", height: "100%" }}>
-      <path d={area} fill={color} fillOpacity="0.12" />
-      <path d={line} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+    <svg key={k} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ width: "100%", height: "100%", overflow: "visible" }}>
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.22" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+        <filter id={`${gid}-glow`} x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="1.4" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+      <path d={area} fill={`url(#${gid})`} />
+      <path className="bank-draw" d={line} fill="none" stroke={color} strokeWidth="1.6" vectorEffect="non-scaling-stroke" pathLength={1} filter={`url(#${gid}-glow)`} />
+      <circle className="bank-glow-pulse" cx={ex} cy={ey} r="2" fill={color} style={{ transformOrigin: `${ex}px ${ey}px` }} />
     </svg>
   );
 }
@@ -75,7 +90,7 @@ export default function BaseTokensCard() {
   const lineColor = up ? "#34D399" : "#EF4444";
 
   return (
-    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 h-full flex flex-col min-h-0">
+    <div className="card-hover rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 h-full flex flex-col min-h-0">
       <div className="flex items-center justify-between mb-3">
         <span className="font-mono text-[10px] text-slate-500 tracking-widest">BASE MARKET</span>
         <span className="font-mono text-[9px] text-slate-700">live · built by Coinbase</span>

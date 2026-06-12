@@ -6,7 +6,7 @@
 // the address + Basename + QR. Activity is a placeholder until an indexer key
 // is wired (we never fabricate transaction history).
 
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode, type CSSProperties } from "react";
 import { useAccount, useReadContract, useBalance, useConnect, useDisconnect } from "wagmi";
 import { formatUnits } from "viem";
 import { QRCodeSVG } from "qrcode.react";
@@ -31,6 +31,24 @@ function relTime(ts: number): string {
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
+}
+
+// Smoothly count a number up to its target (used for the cash balance).
+function useCountUp(target: number, ms = 850): number {
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    if (!(target > 0)) { setV(target || 0); return; }
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / ms);
+      setV(target * (1 - Math.pow(1 - t, 3))); // easeOutCubic
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, ms]);
+  return v;
 }
 
 
@@ -149,6 +167,7 @@ export default function BankPage() {
 
   const inYield = (aavePos ?? 0) + (morphoPos ?? 0);
   const total   = (walletUsdc ?? 0) + inYield;
+  const animTotal = useCountUp(total);
   const projAnnual  = bestApy != null ? inYield * (bestApy / 100) : null;
 
   function copyAddr() {
@@ -224,7 +243,7 @@ export default function BankPage() {
         <div className="w-full">
 
           {/* Header */}
-          <div className="mb-5">
+          <div className="bank-aurora -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 mb-5 pb-4 rounded-b-3xl">
             <h1 className="font-mono text-lg font-bold text-white">Your account on Base</h1>
             <p className="font-mono text-[11px] text-slate-500 mt-0.5">{name || shortAddr(acct)} · <span className="text-[#34D399]">non-custodial</span> · you hold the keys</p>
           </div>
@@ -234,9 +253,9 @@ export default function BankPage() {
           <div className="grid lg:grid-cols-3 gap-4 mb-4 lg:h-[440px]">
 
             {/* Cash balance + primary actions (stacked, fill the card) */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6 flex flex-col lg:h-full">
+            <div className="bank-rise card-hover rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6 flex flex-col lg:h-full" style={{ "--d": "0ms" } as CSSProperties}>
               <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH BALANCE · {net.short}</div>
-              <div className="font-mono text-4xl font-bold text-white">${usd(total)} <span className="text-base text-slate-500">USDC</span></div>
+              <div className="font-mono text-4xl font-bold text-white tabular-nums">${usd(animTotal)} <span className="text-base text-slate-500">USDC</span></div>
               <div className="font-mono text-[11px] text-slate-500 mt-2">
                 {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
               </div>
@@ -262,10 +281,10 @@ export default function BankPage() {
             </div>
 
             {/* BASE MARKET — selectable top tokens + per-token price chart */}
-            <BaseTokensCard />
+            <div className="bank-rise lg:h-full" style={{ "--d": "90ms" } as CSSProperties}><BaseTokensCard /></div>
 
             {/* BASE TVL — compact interactive chart */}
-            <BaseTvlChart />
+            <div className="bank-rise lg:h-full" style={{ "--d": "180ms" } as CSSProperties}><BaseTvlChart /></div>
 
           </div>
 
@@ -392,7 +411,7 @@ export default function BankPage() {
           {scanOpen && <QrScanner onResult={handleScan} onClose={() => setScanOpen(false)} />}
 
           {/* Row 2: Assets · Rates · Projection */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+          <div className="bank-rise grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4" style={{ "--d": "240ms" } as CSSProperties}>
 
             {/* A. Your Assets */}
             <Card title={`YOUR ASSETS · ${net.short}`}>
@@ -416,7 +435,7 @@ export default function BankPage() {
                       <span className={i === 0 ? "text-[#34D399]" : "text-slate-300"}>{r.apy.toFixed(2)}%</span>
                     </div>
                     <div className="h-1.5 rounded-full bg-[#13131f] overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${(r.apy / max) * 100}%`, background: i === 0 ? "#34D399" : "#4FC3F7" }} />
+                      <div className="h-full rounded-full transition-[width] duration-700 ease-out" style={{ width: `${(r.apy / max) * 100}%`, background: i === 0 ? "#34D399" : "#4FC3F7" }} />
                     </div>
                   </div>
                 );
@@ -445,12 +464,12 @@ export default function BankPage() {
           </div>
 
           {/* USDC supply APY — Aave vs Morpho vs Moonwell (the one yield chart, tied to Earn) */}
-          <div className="mb-4">
+          <div className="bank-rise mb-4" style={{ "--d": "300ms" } as CSSProperties}>
             <ApyCompareChart />
           </div>
 
           {/* Activity — real on-chain history (Etherscan V2) */}
-          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
+          <div className="bank-rise card-hover rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5" style={{ "--d": "360ms" } as CSSProperties}>
             <div className="flex items-center justify-between mb-3">
               <div className="font-mono text-[10px] text-slate-500 tracking-widest">ACTIVITY · {net.short}</div>
               <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer" className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7]">Basescan ↗</a>
@@ -491,7 +510,7 @@ export default function BankPage() {
 // ── Small UI primitives ──────────────────────────────────────────────────────
 function Card({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
+    <div className="card-hover h-full rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="font-mono text-[10px] text-slate-500 tracking-widest">{title}</div>
         {note && <div className="font-mono text-[9px] text-slate-700">{note}</div>}

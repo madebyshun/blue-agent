@@ -100,3 +100,62 @@ body {
 .animate-fadeIn {
   animation: fadeIn 0.18s ease-out forwards;
 }
+
+/* ── BlueBank effects ─────────────────────────────────────────────────── */
+
+/* Card entrance — fade + slide up. Stagger with inline style="--d: 80ms". */
+@keyframes bankRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.bank-rise {
+  opacity: 0;
+  animation: bankRise 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--d, 0ms);
+  will-change: transform, opacity;
+}
+
+/* Skeleton shimmer for loading chart/number states. */
+@keyframes bankShimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.bank-shimmer {
+  background: linear-gradient(90deg, rgba(79,195,247,0.04) 25%, rgba(79,195,247,0.14) 37%, rgba(79,195,247,0.04) 63%);
+  background-size: 200% 100%;
+  animation: bankShimmer 1.4s ease-in-out infinite;
+}
+
+/* SVG line draw-in for sparklines (set pathLength="1" on the path). */
+@keyframes bankDraw {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
+}
+.bank-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: bankDraw 1.1s ease-out forwards;
+}
+
+/* Soft glow pulse for live dots / endpoints. */
+@keyframes bankGlow {
+  0%, 100% { opacity: 0.55; transform: scale(0.9); }
+  50%      { opacity: 1;    transform: scale(1.15); }
+}
+.bank-glow-pulse { animation: bankGlow 2.2s ease-in-out infinite; }
+
+/* Ambient radial glow behind the hero. */
+.bank-aurora {
+  background:
+    radial-gradient(60% 80% at 15% 0%, rgba(79,195,247,0.10), transparent 60%),
+    radial-gradient(50% 70% at 100% 10%, rgba(167,139,250,0.08), transparent 60%);
+}
+
+/* Accessibility — kill motion for users who ask for it. */
+@media (prefers-reduced-motion: reduce) {
+  .bank-rise, .bank-shimmer, .bank-draw, .bank-glow-pulse {
+    animation: none !important;
+    opacity: 1 !important;
+    stroke-dashoffset: 0 !important;
+  }
+}
