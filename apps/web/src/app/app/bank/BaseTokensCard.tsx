@@ -23,6 +23,7 @@ function Spark({ points, color }: { points: number[]; color: string }) {
   const line = "M" + coords.join(" L");
   const area = `${line} L${w},${h} L0,${h} Z`;
   const gid = `spark-${color.replace("#", "")}`;
+  const [ex, ey] = xy[xy.length - 1];
   // Re-key on points so the draw-in animation replays when the token changes.
   const k = points.length + ":" + color;
   return (
@@ -38,6 +39,7 @@ function Spark({ points, color }: { points: number[]; color: string }) {
       </defs>
       <path d={area} fill={`url(#${gid})`} />
       <path className="bank-draw" d={line} fill="none" stroke={color} strokeWidth="1.6" vectorEffect="non-scaling-stroke" pathLength={1} filter={`url(#${gid}-glow)`} />
+      <circle className="bank-glow-pulse" cx={ex} cy={ey} r="2" fill={color} style={{ transformOrigin: `${ex}px ${ey}px` }} />
     </svg>
   );
 }
