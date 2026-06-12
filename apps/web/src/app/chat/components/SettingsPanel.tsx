@@ -8,7 +8,15 @@ import PersonaSelector from "./PersonaSelector";
 
 // The settings categories — Claude-style two-pane modal. The modal owns the
 // left nav + active section; this panel renders the matching content.
-export type SettingsSection = "account" | "credits" | "persona" | "memory";
+export type SettingsSection = "account" | "credits" | "persona" | "memory" | "about";
+
+// $BLUEAGENT — Base, Uniswap v4 (CLAUDE.md). Shown in About with copy.
+const BLUE_CONTRACT = "0xf895783b2931c919955e18b5e3343e7c7c456ba3";
+const LINKS: { label: string; sub: string; href: string }[] = [
+  { label: "X / Twitter", sub: "@blueagent_",              href: "https://x.com/blueagent_" },
+  { label: "Telegram",    sub: "t.me/blueagent_hub",       href: "https://t.me/blueagent_hub" },
+  { label: "Bankr",       sub: "bankr.bot/agent/blue-agent", href: "https://bankr.bot/agent/blue-agent" },
+];
 
 // Tier ladder — mirrors lib/credits.ts TIERS + GUEST_DAILY. Shown in the
 // "How credits & tiers work" explainer so users understand why to connect and
@@ -42,9 +50,17 @@ export default function SettingsPanel({ section }: { section: SettingsSection })
   } = useChat();
 
   const [showHelp, setShowHelp] = useState(false);
+  const [copied, setCopied]     = useState(false);
 
   const memory    = getMemory(walletAddr);
   const hasMemory = !!(memory.currentProject || memory.commandHistory.length > 0);
+
+  function copyContract() {
+    navigator.clipboard?.writeText(BLUE_CONTRACT).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  }
 
   return (
     <div className="px-5 sm:px-7 py-6">
@@ -68,6 +84,27 @@ export default function SettingsPanel({ section }: { section: SettingsSection })
                   ? `${(holderTier.blueBalance / 1_000_000).toFixed(1)}M`
                   : `${(holderTier.blueBalance / 1_000).toFixed(0)}K`} BLUE
               </span>
+            </div>
+          )}
+
+          {/* Network + explorer — only meaningful once connected. */}
+          {walletAddr && (
+            <div className="mt-4 rounded-2xl bg-[#0A0A12] border border-[#1A1A2E] divide-y divide-[#13131f]">
+              <div className="flex items-center justify-between px-3.5 py-2.5">
+                <span className="font-mono text-[11px] text-slate-500">Network</span>
+                <span className="font-mono text-[11px] text-slate-300 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7]" />Base · 8453
+                </span>
+              </div>
+              <a
+                href={`https://basescan.org/address/${walletAddr}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between px-3.5 py-2.5 hover:bg-[#ffffff05] transition-colors"
+              >
+                <span className="font-mono text-[11px] text-slate-500">Explorer</span>
+                <span className="font-mono text-[11px] text-[#4FC3F7]">View on Basescan ↗</span>
+              </a>
             </div>
           )}
         </>
@@ -281,6 +318,49 @@ export default function SettingsPanel({ section }: { section: SettingsSection })
               <p className="font-mono text-[10px] text-slate-700 mt-1">Start a project or run a command and it’ll show here.</p>
             </div>
           )}
+        </>
+      )}
+
+      {/* ── About ───────────────────────────────────────────────────────── */}
+      {section === "about" && (
+        <>
+          <PaneHeader
+            title="About"
+            subtitle="Blue Agent — the AI agent layer on Base."
+          />
+
+          {/* $BLUEAGENT token */}
+          <div className="rounded-2xl bg-[#0A0A12] border border-[#1A1A2E] p-4 mb-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="font-mono text-[11px] text-slate-300 font-semibold">$BLUEAGENT</span>
+              <button
+                onClick={copyContract}
+                className="font-mono text-[10px] text-slate-600 hover:text-[#4FC3F7] transition-colors"
+              >
+                {copied ? "copied ✓" : "copy"}
+              </button>
+            </div>
+            <p className="font-mono text-[10px] text-slate-500 break-all leading-relaxed">{BLUE_CONTRACT}</p>
+            <p className="font-mono text-[10px] text-slate-700 mt-1">Base · Uniswap v4</p>
+          </div>
+
+          {/* Links */}
+          <div className="rounded-2xl bg-[#0A0A12] border border-[#1A1A2E] divide-y divide-[#13131f]">
+            {LINKS.map(l => (
+              <a
+                key={l.href}
+                href={l.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between px-3.5 py-2.5 hover:bg-[#ffffff05] transition-colors"
+              >
+                <span className="font-mono text-[11px] text-slate-300">{l.label}</span>
+                <span className="font-mono text-[10px] text-slate-600">{l.sub} ↗</span>
+              </a>
+            ))}
+          </div>
+
+          <p className="font-mono text-[9px] text-slate-700 mt-4 text-center">Blue Chat · built on Base (8453)</p>
         </>
       )}
     </div>
