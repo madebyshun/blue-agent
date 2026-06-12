@@ -16,6 +16,7 @@ import {
 } from "@/lib/yield-execution";
 import { MoveToYieldCard, SendCard } from "@/app/chat/components/ToolCards";
 import { useBasename, shortAddr } from "@/lib/useBasename";
+import BaseTvlChart from "./BaseTvlChart";
 
 const usd = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -274,6 +275,11 @@ export default function BankPage() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Interactive Base TVL chart (full width) */}
+          <div className="mb-4">
+            <BaseTvlChart />
           </div>
 
           {/* Row 2: Assets · Rates · Projection */}
