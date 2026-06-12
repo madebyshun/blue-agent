@@ -23,6 +23,14 @@ import BaseTokensCard from "./BaseTokensCard";
 const usd = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+function relTime(ts: number): string {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
 
 
 type Panel = "positions" | "earn" | "send" | "receive";
@@ -85,6 +93,16 @@ export default function BankPage() {
     fetch("/api/yield/morpho-history").then(r => r.json()).then(d => { if (!off) setHist({ points: d.points ?? [], current: d.current ?? null }); }).catch(() => {});
     return () => { off = true; };
   }, []);
+
+  // Real on-chain activity (USDC/ETH transfers, classified) via Etherscan V2.
+  type ActItem = { hash: string; ts: number; label: string; dir: "in" | "out"; asset: string; amount: number; counterparty: string };
+  const [activity, setActivity] = useState<{ items: ActItem[]; needsKey?: boolean } | null>(null);
+  useEffect(() => {
+    if (!acct) return;
+    let off = false;
+    fetch(`/api/activity?address=${acct}&network=${network}`).then(r => r.json()).then(d => { if (!off) setActivity(d); }).catch(() => {});
+    return () => { off = true; };
+  }, [acct, network]);
 
   const inYield = (aavePos ?? 0) + (morphoPos ?? 0);
   const total   = (walletUsdc ?? 0) + inYield;
@@ -325,13 +343,38 @@ export default function BankPage() {
             <ApyCompareChart />
           </div>
 
-          {/* Activity */}
+          {/* Activity — real on-chain history (Etherscan V2) */}
           <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
-            <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">ACTIVITY · {net.short}</div>
-            <p className="font-mono text-[11px] text-slate-600">
-              On-chain history view coming soon. Your full transaction history is live on{" "}
-              <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer" className="text-[#4FC3F7]">Basescan ↗</a>
-            </p>
+            <div className="flex items-center justify-between mb-3">
+              <div className="font-mono text-[10px] text-slate-500 tracking-widest">ACTIVITY · {net.short}</div>
+              <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer" className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7]">Basescan ↗</a>
+            </div>
+            {activity?.items?.length ? (
+              <div>
+                {activity.items.map(it => (
+                  <a key={`${it.hash}-${it.ts}-${it.asset}`} href={`${net.explorer}/tx/${it.hash}`} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between py-2 border-b border-[#13131f] last:border-0 hover:bg-[#0d0d12] -mx-2 px-2 rounded transition-colors">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-7 h-7 rounded-lg flex items-center justify-center text-[12px]"
+                        style={{ background: it.dir === "in" ? "#34D39915" : "#EF444415", color: it.dir === "in" ? "#34D399" : "#EF4444" }}>{it.dir === "in" ? "↘" : "↗"}</span>
+                      <div>
+                        <div className="font-mono text-[11px] text-slate-200">{it.label} <span className="text-slate-600">{shortAddr(it.counterparty)}</span></div>
+                        <div className="font-mono text-[9px] text-slate-600">{relTime(it.ts)}</div>
+                      </div>
+                    </div>
+                    <div className="font-mono text-[11px]" style={{ color: it.dir === "in" ? "#34D399" : "#e2e8f0" }}>
+                      {it.dir === "in" ? "+" : "−"}{it.amount.toLocaleString("en-US", { maximumFractionDigits: it.asset === "ETH" ? 5 : 2 })} {it.asset}
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="font-mono text-[11px] text-slate-600">
+                {activity?.needsKey
+                  ? <>Live history needs an Etherscan key (set <span className="text-slate-400">ETHERSCAN_API_KEY</span>). View full history on <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer" className="text-[#4FC3F7]">Basescan ↗</a></>
+                  : <>No transactions yet on {net.short}. Your USDC / ETH activity will appear here.</>}
+              </p>
+            )}
           </div>
         </div>
       </main>
