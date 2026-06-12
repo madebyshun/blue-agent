@@ -36,19 +36,18 @@ export interface TierInfo {
 }
 
 const TIERS: { min: number; tier: HolderTier; dailyCr: number; discount: number; color: string }[] = [
-  { min: 10_000_000, tier: "Max",     dailyCr: -1,    discount: 0.40, color: "#F59E0B" },
-  { min:  2_000_000, tier: "Pro",     dailyCr: 2_000, discount: 0.20, color: "#A78BFA" },
-  { min:    500_000, tier: "Starter", dailyCr:   500, discount: 0,    color: "#4FC3F7" },
+  { min: 10_000_000, tier: "Max",     dailyCr: -1,     discount: 0.40, color: "#F59E0B" },
+  { min:  2_000_000, tier: "Pro",     dailyCr: 20_000, discount: 0.20, color: "#A78BFA" },
+  { min:    500_000, tier: "Starter", dailyCr:  5_000, discount: 0,    color: "#4FC3F7" },
 ];
 
 /**
- * Guest = no wallet connected. Set high enough that a new user can actually
- * TEST the Hub tools, not just chat: a typical x402 tool costs 400–500 cr
- * ($0.20–$0.25 × 2000 cr/USDC), so 100/day couldn't run even one. 5,000/day
- * ≈ a couple of premium tools or ~10 typical tool calls (or ~100 Fast msgs)
- * — enough to feel the full product before being asked to hold/stake $BLUE.
+ * Guest = no wallet connected. A SAMPLER, not a free ride: 500/day ≈ one
+ * typical x402 tool ($0.20–$0.25 = 400–500 cr) or ~50 Fast msgs — enough to
+ * try the product once, but deliberately below the holder tiers so there's a
+ * real reason to hold/stake $BLUE. Real tool usage starts at Starter (5,000).
  */
-export const GUEST_DAILY = 5000;
+export const GUEST_DAILY = 500;
 
 export function getTierInfo(blueBalance: number): TierInfo {
   const idx = TIERS.findIndex((t) => blueBalance >= t.min);
