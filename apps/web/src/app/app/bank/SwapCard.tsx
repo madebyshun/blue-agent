@@ -1,0 +1,209 @@
+"use client";
+
+// Convert — in-app non-custodial swap on Base mainnet (ETH / WETH / USDC / cbBTC)
+// routed via the 0x Swap API. BlueBank fetches the route from /api/swap/quote;
+// the user approves (for ERC-20 sells) and signs the swap from their own wallet.
+// Base mainnet only — 0x doesn't route testnet liquidity.
+
+import { useState, useEffect, useRef } from "react";
+import { useAccount, useBalance, useReadContract, useSwitchChain, useWriteContract, useSendTransaction } from "wagmi";
+import { formatUnits, parseUnits } from "viem";
+import { base } from "wagmi/chains";
+import { ERC20_ABI } from "@/lib/yield-execution";
+
+const NATIVE = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+type Token = { sym: string; addr: string; decimals: number; native?: boolean };
+const TOKENS: Token[] = [
+  { sym: "ETH",   addr: NATIVE, decimals: 18, native: true },
+  { sym: "USDC",  addr: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6 },
+  { sym: "WETH",  addr: "0x4200000000000000000000000000000000000006", decimals: 18 },
+  { sym: "cbBTC", addr: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", decimals: 8 },
+];
+
+const fmt = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 6 });
+
+type Quote = {
+  needsKey?: boolean; error?: string;
+  buyAmount?: string; minBuyAmount?: string;
+  transaction?: { to: `0x${string}`; data: `0x${string}`; value?: string };
+  issues?: { allowance?: { spender: `0x${string}` } | null };
+};
+
+export default function SwapCard({ account }: { account?: `0x${string}` }) {
+  const { isConnected } = useAccount();
+  const { switchChainAsync } = useSwitchChain();
+  const { writeContractAsync } = useWriteContract();
+  const { sendTransactionAsync } = useSendTransaction();
+
+  const [sell, setSell] = useState<Token>(TOKENS[0]); // ETH
+  const [buy, setBuy]   = useState<Token>(TOKENS[1]); // USDC
+  const [amount, setAmount] = useState("");
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<"idle" | "approving" | "swapping" | "done" | "error">("idle");
+  const [err, setErr] = useState("");
+  const [txHash, setTxHash] = useState("");
+
+  // Balance of the sell token.
+  const { data: nativeBal } = useBalance({ address: account, chainId: base.id, query: { enabled: !!account && !!sell.native } });
+  const { data: erc20Bal }  = useReadContract({
+    address: sell.addr as `0x${string}`, abi: ERC20_ABI, functionName: "balanceOf",
+    args: account ? [account] : undefined, chainId: base.id,
+    query: { enabled: !!account && !sell.native },
+  });
+  const balance = sell.native
+    ? (nativeBal ? Number(formatUnits(nativeBal.value, 18)) : null)
+    : (erc20Bal != null ? Number(formatUnits(erc20Bal as bigint, sell.decimals)) : null);
+
+  const amt = parseFloat(amount);
+  const sellBase = amount && amt > 0 ? (() => { try { return parseUnits(amount, sell.decimals).toString(); } catch { return ""; } })() : "";
+  const overBalance = balance != null && amt > balance;
+
+  // Debounced quote fetch.
+  const reqId = useRef(0);
+  useEffect(() => {
+    if (!sellBase || sell.addr === buy.addr) { setQuote(null); return; }
+    const id = ++reqId.current;
+    setLoading(true);
+    const t = setTimeout(() => {
+      const qs = new URLSearchParams({ sellToken: sell.addr, buyToken: buy.addr, sellAmount: sellBase, ...(account ? { taker: account } : {}) });
+      fetch(`/api/swap/quote?${qs}`).then(r => r.json()).then((j: Quote) => {
+        if (id !== reqId.current) return;
+        setQuote(j); setLoading(false);
+      }).catch(() => { if (id === reqId.current) { setQuote({ error: "quote failed" }); setLoading(false); } });
+    }, 450);
+    return () => clearTimeout(t);
+  }, [sellBase, sell.addr, buy.addr, account]);
+
+  const buyAmount = quote?.buyAmount ? Number(formatUnits(BigInt(quote.buyAmount), buy.decimals)) : null;
+  const minBuy = quote?.minBuyAmount ? Number(formatUnits(BigInt(quote.minBuyAmount), buy.decimals)) : null;
+  const rate = buyAmount != null && amt > 0 ? buyAmount / amt : null;
+
+  function flip() { setSell(buy); setBuy(sell); setAmount(""); setQuote(null); }
+  function setMax() {
+    if (balance == null) return;
+    setAmount(String(sell.native ? Math.max(0, balance - 0.00005) : balance));
+  }
+  function pick(side: "sell" | "buy", sym: string) {
+    const tok = TOKENS.find(t => t.sym === sym)!;
+    if (side === "sell") { if (tok.addr === buy.addr) setBuy(sell); setSell(tok); }
+    else { if (tok.addr === sell.addr) setSell(buy); setBuy(tok); }
+    setAmount(""); setQuote(null);
+  }
+
+  const canSwap = !!account && !!quote?.transaction && amt > 0 && !overBalance && !loading;
+  const busy = step === "approving" || step === "swapping";
+
+  async function swap() {
+    if (!account) { setErr("Connect your wallet"); setStep("error"); return; }
+    if (quote?.needsKey) { setErr("Convert needs a 0x API key (ZEROX_API_KEY)"); setStep("error"); return; }
+    if (!quote?.transaction) { setErr(quote?.error || "No route for this pair"); setStep("error"); return; }
+    setErr(""); setTxHash("");
+    try {
+      await switchChainAsync({ chainId: base.id });
+      // ERC-20 sells need an allowance to the 0x AllowanceHolder first.
+      if (!sell.native && quote.issues?.allowance?.spender) {
+        setStep("approving");
+        await writeContractAsync({
+          address: sell.addr as `0x${string}`, abi: ERC20_ABI, functionName: "approve",
+          args: [quote.issues.allowance.spender, parseUnits(amount, sell.decimals)], chainId: base.id,
+        });
+      }
+      setStep("swapping");
+      const hash = await sendTransactionAsync({
+        to: quote.transaction.to,
+        data: quote.transaction.data,
+        value: quote.transaction.value ? BigInt(quote.transaction.value) : undefined,
+        chainId: base.id,
+      });
+      setTxHash(hash); setStep("done");
+    } catch (e) {
+      setErr(((e as Error).message || String(e)).slice(0, 160)); setStep("error");
+    }
+  }
+
+  if (step === "done") {
+    return (
+      <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
+        <div className="font-mono text-[11px] font-bold mb-1" style={{ color: "#22C55E" }}>
+          ✓ Converted {fmt(amt)} {sell.sym} → {buyAmount != null ? fmt(buyAmount) : ""} {buy.sym}
+        </div>
+        {txHash && (
+          <a href={`https://basescan.org/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
+             className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] inline-block mt-1">View tx ↗</a>
+        )}
+        <button onClick={() => { setStep("idle"); setAmount(""); setQuote(null); }}
+          className="font-mono text-[10px] text-slate-500 hover:text-slate-300 ml-3">Convert again</button>
+      </div>
+    );
+  }
+
+  const TokenSelect = ({ side, value }: { side: "sell" | "buy"; value: Token }) => (
+    <select value={value.sym} onChange={e => pick(side, e.target.value)}
+      className="bg-[#050508] border border-[#1A1A2E] rounded-lg px-2 py-1.5 font-mono text-[11px] text-slate-200 outline-none">
+      {TOKENS.map(t => <option key={t.sym} value={t.sym}>{t.sym}</option>)}
+    </select>
+  );
+
+  return (
+    <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
+      <div className="flex items-center justify-between mb-3">
+        <span className="font-mono text-[10px] text-slate-500 tracking-widest font-bold">CONVERT · BASE</span>
+        <span className="font-mono text-[9px] text-slate-600">mainnet · via 0x</span>
+      </div>
+
+      {/* Sell */}
+      <div className="rounded-lg border border-[#1A1A2E] bg-[#050508] p-2.5 mb-1">
+        <div className="flex items-center justify-between mb-1">
+          <span className="font-mono text-[9px] text-slate-600">YOU PAY</span>
+          {balance != null && (
+            <span className="font-mono text-[9px] text-slate-600">Bal {balance.toFixed(sell.decimals === 6 ? 2 : 5)}
+              <button type="button" onClick={setMax} className="text-[#4FC3F7] ml-1">Max</button></span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <input type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.0"
+            className="flex-1 bg-transparent font-mono text-[16px] text-white outline-none placeholder:text-slate-700 w-0" />
+          <TokenSelect side="sell" value={sell} />
+        </div>
+        {overBalance && <div className="font-mono text-[9px] text-red-500 mt-1">Exceeds your {sell.sym} balance</div>}
+      </div>
+
+      {/* Flip */}
+      <div className="flex justify-center -my-1 relative z-10">
+        <button onClick={flip} className="w-7 h-7 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] text-slate-400 hover:text-[#4FC3F7] hover:border-[#4FC3F7]/40 font-mono text-[12px]">⇅</button>
+      </div>
+
+      {/* Buy */}
+      <div className="rounded-lg border border-[#1A1A2E] bg-[#050508] p-2.5 mt-1 mb-3">
+        <div className="font-mono text-[9px] text-slate-600 mb-1">YOU RECEIVE</div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 font-mono text-[16px] text-white w-0 truncate">
+            {loading ? <span className="text-slate-600">…</span> : buyAmount != null ? fmt(buyAmount) : <span className="text-slate-700">0.0</span>}
+          </div>
+          <TokenSelect side="buy" value={buy} />
+        </div>
+      </div>
+
+      {rate != null && (
+        <div className="font-mono text-[9px] text-slate-500 mb-2 flex items-center justify-between">
+          <span>1 {sell.sym} ≈ {fmt(rate)} {buy.sym}</span>
+          {minBuy != null && <span className="text-slate-600">min {fmt(minBuy)} {buy.sym}</span>}
+        </div>
+      )}
+
+      {quote?.needsKey && <p className="font-mono text-[9px] text-amber-400 mb-2">Convert needs a free 0x API key — set <span className="text-slate-300">ZEROX_API_KEY</span>.</p>}
+      {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
+
+      <button onClick={swap} disabled={!canSwap || busy}
+        className="w-full font-mono text-[12px] font-bold py-2 rounded-lg transition-all disabled:opacity-50"
+        style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
+        {!isConnected ? "Connect your wallet"
+          : busy ? (step === "approving" ? "Approve in wallet…" : "Confirm swap…")
+          : overBalance ? "Insufficient balance"
+          : `Convert ${amt > 0 ? fmt(amt) : ""} ${sell.sym} → ${buy.sym}`}
+      </button>
+      <p className="font-mono text-[9px] text-slate-700 mt-1.5">Best route via 0x · you sign · non-custodial · Base mainnet.</p>
+    </div>
+  );
+}
