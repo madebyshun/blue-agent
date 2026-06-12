@@ -172,11 +172,12 @@ export default function BankPage() {
             <p className="font-mono text-[11px] text-slate-500 mt-0.5">{name || shortAddr(acct)} · <span className="text-[#34D399]">non-custodial</span> · you hold the keys</p>
           </div>
 
-          {/* Top row: cash balance + action panel */}
-          <div className="grid lg:grid-cols-3 gap-4 mb-4 items-start">
+          {/* Top row: cash balance + action panel — FIXED height so switching the
+              right-panel tab (Positions/Earn/Send/Receive) never reflows the page. */}
+          <div className="grid lg:grid-cols-3 gap-4 mb-4 lg:h-[600px]">
 
-            {/* Left column: balance + Base market (stacked) */}
-            <div className="lg:col-span-2 flex flex-col gap-4">
+            {/* Left column: balance + Base market (stacked, fills the fixed height) */}
+            <div className="lg:col-span-2 flex flex-col gap-4 lg:h-[600px]">
 
               {/* Cash balance */}
               <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6">
@@ -192,8 +193,8 @@ export default function BankPage() {
                 </div>
               </div>
 
-              {/* Base market */}
-              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
+              {/* Base market — flex-1 fills the rest of the fixed-height column */}
+              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 flex-1 flex flex-col min-h-0">
                 <div className="flex items-center justify-between mb-3">
                   <span className="font-mono text-[10px] text-slate-500 tracking-widest">BASE MARKET</span>
                   <span className="font-mono text-[9px] text-slate-700">live · built by Coinbase</span>
@@ -202,7 +203,7 @@ export default function BankPage() {
                   <Ticker label="$BLUEAGENT" price={fmtPrice(snap?.blue?.price)} change={snap?.blue?.change24h ?? null} />
                   <Ticker label="cbBTC" price={fmtPrice(snap?.cbbtc?.price)} change={snap?.cbbtc?.change24h ?? null} />
                 </div>
-                <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-3 mb-3">
+                <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-3 mb-3 flex-1 flex flex-col min-h-0">
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-mono text-[9px] text-slate-600 tracking-wide">BASE TVL · 30D</span>
                     <span className="font-mono text-[11px] text-white">
@@ -212,7 +213,9 @@ export default function BankPage() {
                       </span>
                     </span>
                   </div>
-                  <Spark points={snap?.tvlSeries ?? []} color="#4FC3F7" height={40} />
+                  <div className="flex-1 min-h-0 flex items-stretch">
+                    <Spark points={snap?.tvlSeries ?? []} color="#4FC3F7" fill />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <Mini label="24H DEX VOL" value={snap?.dexVol24h != null ? compact(snap.dexVol24h) : "—"} />
@@ -221,9 +224,10 @@ export default function BankPage() {
               </div>
             </div>
 
-            {/* Action panel (tabbed; fills the right column instead of empty space) */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-3 flex flex-col">
-              <div className="flex gap-1 mb-2">
+            {/* Action panel — fixed height + internal scroll so the tab content
+                (short Positions vs tall Earn) never changes the row height. */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-3 flex flex-col lg:h-[600px]">
+              <div className="flex gap-1 mb-2 shrink-0">
                 {TABS.map(t => (
                   <button key={t.id} onClick={() => setPanel(t.id)}
                     className="flex-1 font-mono text-[10px] py-1.5 rounded-md transition-colors"
@@ -235,6 +239,7 @@ export default function BankPage() {
                 ))}
               </div>
 
+              <div className="flex-1 overflow-y-auto pr-0.5 min-h-0">
               {panel === "positions" && (
                 <div className="px-2 pb-2">
                   <PositionRow label="Aave v3" pos={aavePos} apy={aaveApy} onManage={() => setPanel("earn")} />
@@ -274,6 +279,7 @@ export default function BankPage() {
                   <p className="font-mono text-[9px] text-slate-600 mt-2.5 leading-relaxed">Send only <b>USDC / ETH on Base</b> ({net.short}) here.</p>
                 </div>
               )}
+              </div>
             </div>
           </div>
 
@@ -424,17 +430,18 @@ function StatLine({ label, value, color }: { label: string; value: string; color
   );
 }
 
-// Dependency-free area sparkline.
-function Spark({ points, color, height = 48 }: { points: number[]; color: string; height?: number }) {
-  if (!points || points.length < 2) return <div className="font-mono text-[10px] text-slate-700" style={{ height }}>loading chart…</div>;
-  const w = 100, h = height;
+// Dependency-free area sparkline. `fill` makes it stretch to its container height.
+function Spark({ points, color, height = 48, fill = false }: { points: number[]; color: string; height?: number; fill?: boolean }) {
+  if (!points || points.length < 2)
+    return <div className="font-mono text-[10px] text-slate-700" style={fill ? { width: "100%" } : { height }}>loading chart…</div>;
+  const w = 100, h = 48; // internal coordinate space; svg stretches via preserveAspectRatio
   const min = Math.min(...points), max = Math.max(...points), range = max - min || 1;
   const step = w / (points.length - 1);
   const coords = points.map((p, i) => `${(i * step).toFixed(2)},${(h - ((p - min) / range) * h).toFixed(2)}`);
   const line = "M" + coords.join(" L");
   const area = `${line} L${w},${h} L0,${h} Z`;
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ width: "100%", height }}>
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={fill ? { width: "100%", height: "100%" } : { width: "100%", height }}>
       <path d={area} fill={color} fillOpacity="0.12" />
       <path d={line} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
     </svg>
