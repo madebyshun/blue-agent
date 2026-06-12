@@ -345,7 +345,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         signal: AbortSignal.timeout(60_000),
       });
       const data = await res.json() as { result?: string };
-      updateCron(id, { lastRun: Date.now(), lastResult: data.result?.slice(0, 200) });
+      // Keep the full markdown report (capped to bound localStorage) so the
+      // Scheduled card can render it properly on demand, not just a garbled
+      // 200-char slice.
+      updateCron(id, { lastRun: Date.now(), lastResult: data.result?.slice(0, 4000) });
     } catch {
       updateCron(id, { lastRun: Date.now(), lastResult: "Error running task" });
     } finally {
