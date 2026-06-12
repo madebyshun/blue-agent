@@ -60,7 +60,7 @@ export default function BaseTvlChart() {
         </div>
       </div>
 
-      <div style={{ width: "100%", height: 240 }}>
+      <div style={{ width: "100%", height: 150 }}>
         <ResponsiveContainer>
           <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <defs>

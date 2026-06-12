@@ -25,7 +25,7 @@ type Pt = { date: number; totalLiquidityUSD?: number; tvl?: number };
 async function baseSeries(slug: string): Promise<Map<number, number>> {
   const m = new Map<number, number>();
   try {
-    const r = await fetch(`https://api.llama.fi/protocol/${slug}`, { next: { revalidate: 3600 } });
+    const r = await fetch(`https://api.llama.fi/protocol/${slug}`, { cache: "no-store" });
     const j = await r.json();
     const arr: Pt[] = j?.chainTvls?.Base?.tvl ?? [];
     for (const p of arr) {
@@ -36,7 +36,14 @@ async function baseSeries(slug: string): Promise<Map<number, number>> {
   return m;
 }
 
+// The upstream /protocol/{slug} responses are huge (20–36 MB each) and exceed
+// Next's 2 MB fetch-cache limit, so they'd be re-downloaded on every request and
+// bog the server. Cache the small computed result in module memory for 1h.
+let MEM: { data: unknown; ts: number } | null = null;
+
 export async function GET() {
+  if (MEM && Date.now() - MEM.ts < 3600_000) return NextResponse.json(MEM.data);
+
   const maps = await Promise.all(PROTOCOLS.map(p => baseSeries(p.slug)));
 
   // Union of days across the largest protocol, last 365 days.
@@ -52,5 +59,7 @@ export async function GET() {
   });
 
   const keys = PROTOCOLS.map(p => ({ key: p.key, label: p.label, color: p.color }));
-  return NextResponse.json({ series, keys, ts: Date.now() });
+  const data = { series, keys, ts: Date.now() };
+  MEM = { data, ts: Date.now() };
+  return NextResponse.json(data);
 }
