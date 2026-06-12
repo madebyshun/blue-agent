@@ -17,6 +17,7 @@ import {
 import { MoveToYieldCard, SendCard } from "@/app/chat/components/ToolCards";
 import { useBasename, shortAddr } from "@/lib/useBasename";
 import BaseTvlChart from "./BaseTvlChart";
+import { StackedTvlChart, ApyCompareChart } from "./BaseProtocolCharts";
 
 const usd = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -286,6 +287,12 @@ export default function BankPage() {
           {/* Interactive Base TVL chart (full width) */}
           <div className="mb-4">
             <BaseTvlChart />
+          </div>
+
+          {/* TVL by protocol (stacked) + USDC APY comparison */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+            <StackedTvlChart />
+            <ApyCompareChart />
           </div>
 
           {/* Row 2: Assets · Rates · Projection */}
