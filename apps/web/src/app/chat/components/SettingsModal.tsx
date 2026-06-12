@@ -47,6 +47,15 @@ const SECTIONS: { id: SettingsSection; label: string; icon: React.ReactNode }[] 
       </svg>
     ),
   },
+  {
+    id: "about",
+    label: "About",
+    icon: (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
 ];
 
 export default function SettingsModal({
@@ -73,8 +82,9 @@ export default function SettingsModal({
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Panel */}
-      <div className="relative w-full max-w-3xl h-[88vh] sm:h-[80vh] flex flex-col rounded-2xl border border-[#1A1A2E] bg-[#050508] shadow-2xl overflow-hidden">
+      {/* Panel — sizes to content (so sparse sections don't leave a void),
+          capped at the viewport and floored so it never feels cramped. */}
+      <div className="relative w-full max-w-2xl max-h-[90vh] sm:max-h-[85vh] min-h-[420px] flex flex-col rounded-2xl border border-[#1A1A2E] bg-[#050508] shadow-2xl overflow-hidden">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 h-14 border-b border-[#1A1A2E] shrink-0">
