@@ -117,8 +117,14 @@ function useDevTools() {
   const [dev, setDev] = useState(process.env.NEXT_PUBLIC_DEV_TOOLS === "1");
   useEffect(() => {
     try {
-      const params = new URLSearchParams(window.location.search);
-      if (params.has("dev")) {
+      const params   = new URLSearchParams(window.location.search);
+      const devParam = params.get("dev");
+      if (devParam === "0" || devParam === "off" || devParam === "false") {
+        // ?dev=0 — explicit off-switch: clear the persisted flag.
+        localStorage.removeItem("blue_dev_tools");
+        setDev(false);
+      } else if (params.has("dev")) {
+        // ?dev (or ?dev=1) — turn on and persist for this origin.
         localStorage.setItem("blue_dev_tools", "1");
         setDev(true);
       } else if (localStorage.getItem("blue_dev_tools") === "1") {
