@@ -45,6 +45,23 @@ export default function BankPage() {
   const [copied, setCopied]   = useState(false);
   const openAction = (p: Panel) => { setPanel(p); setActionOpen(true); };
 
+  // Add cash — Coinbase Onramp (buy USDC on Base with card/Apple Pay/bank).
+  // USDC is delivered straight to the user's own wallet (non-custodial). Mainnet.
+  const [onrampBusy, setOnrampBusy] = useState(false);
+  const [onrampMsg, setOnrampMsg]   = useState("");
+  async function addCash() {
+    if (!acct) return;
+    setOnrampBusy(true); setOnrampMsg("");
+    try {
+      const j = await fetch(`/api/onramp/session?address=${acct}`).then(r => r.json());
+      if (j.needsKey) { setOnrampMsg("Add cash needs a CDP key"); return; }
+      if (j.error || !j.sessionToken) { setOnrampMsg(j.error || "couldn't start onramp"); return; }
+      const url = `https://pay.coinbase.com/buy/select-asset?sessionToken=${encodeURIComponent(j.sessionToken)}&defaultAsset=USDC&defaultNetwork=base&presetFiatAmount=25&fiatCurrency=USD`;
+      window.open(url, "_blank", "popup,width=470,height=720");
+    } catch { setOnrampMsg("onramp failed"); }
+    finally { setOnrampBusy(false); }
+  }
+
   const net = YIELD_NETWORKS[network];
   const chainId = net.chainId;
   const morphoVnet = VENUES.morpho.nets[network]; // mainnet only
@@ -192,7 +209,13 @@ export default function BankPage() {
               <div className="font-mono text-[11px] text-slate-500 mt-2">
                 {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
               </div>
-              <div className="flex flex-col gap-2 mt-4 flex-1 min-h-0">
+              <button onClick={addCash} disabled={onrampBusy || !isConnected}
+                className="font-mono text-[12px] font-bold px-4 py-2.5 rounded-xl mt-4 disabled:opacity-50"
+                style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>
+                {onrampBusy ? "Starting…" : "💵 Add cash · card / bank → USDC"}
+              </button>
+              {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-1">{onrampMsg}</div>}
+              <div className="flex flex-col gap-2 mt-3 flex-1 min-h-0">
                 {TABS.map(tb => (
                   <button key={tb.id} onClick={() => openAction(tb.id)}
                     className="flex-1 flex items-center gap-3 px-4 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left">
