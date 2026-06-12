@@ -106,11 +106,11 @@ export default function BankPage() {
     return <BankLanding bestApy={bestApy} />;
   }
 
-  const TABS: { id: Panel; label: string }[] = [
-    { id: "positions", label: "Positions" },
-    { id: "earn",      label: "Earn" },
-    { id: "send",      label: "Send" },
-    { id: "receive",   label: "Receive" },
+  const TABS: { id: Panel; label: string; icon: string }[] = [
+    { id: "positions", label: "Positions", icon: "📊" },
+    { id: "earn",      label: "Earn",      icon: "🌾" },
+    { id: "send",      label: "Send",      icon: "➡" },
+    { id: "receive",   label: "Receive",   icon: "⬇" },
   ];
 
   return (
@@ -195,22 +195,27 @@ export default function BankPage() {
               <BaseTokensCard />
             </div>
 
-            {/* Action panel — fixed height + internal scroll so the tab content
-                (short Positions vs tall Earn) never changes the row height. */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-3 flex flex-col lg:h-[600px]">
-              <div className="flex gap-1 mb-2 shrink-0">
-                {TABS.map(t => (
-                  <button key={t.id} onClick={() => setPanel(t.id)}
-                    className="flex-1 font-mono text-[10px] py-1.5 rounded-md transition-colors"
-                    style={panel === t.id
-                      ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
-                      : { color: "#64748b", border: "1px solid transparent" }}>
-                    {t.label}
-                  </button>
-                ))}
+            {/* Action panel — vertical tab rail + content. Fixed height so
+                switching tabs never reflows the page. */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] flex lg:h-[600px] overflow-hidden">
+              {/* Vertical tab rail */}
+              <div className="w-[76px] shrink-0 border-r border-[#1A1A2E] bg-[#070710] flex flex-col gap-1 p-2">
+                {TABS.map(t => {
+                  const active = panel === t.id;
+                  return (
+                    <button key={t.id} onClick={() => setPanel(t.id)}
+                      className="flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg transition-colors"
+                      style={active
+                        ? { background: "#4FC3F712", color: "#4FC3F7", boxShadow: "inset 0 0 0 1px #4FC3F722" }
+                        : { color: "#64748b" }}>
+                      <span className="text-[15px] leading-none">{t.icon}</span>
+                      <span className="font-mono text-[9px]">{t.label}</span>
+                    </button>
+                  );
+                })}
               </div>
 
-              <div className="flex-1 overflow-y-auto pr-0.5 min-h-0">
+              <div className="flex-1 overflow-y-auto p-3 min-h-0">
               {panel === "positions" && (
                 <div className="px-2 pb-2">
                   <PositionRow label="Aave v3" pos={aavePos} apy={aaveApy} onManage={() => setPanel("earn")} />
@@ -238,16 +243,23 @@ export default function BankPage() {
               {panel === "earn" && <MoveToYieldCard result={{ network }} account={acct} />}
               {panel === "send" && <SendCard result={{ network }} account={acct} />}
               {panel === "receive" && (
-                <div className="flex flex-col items-center text-center px-2 pb-2 pt-1">
-                  <div className="bg-[#0a0a0f] p-1.5 rounded-xl border border-[#1A1A2E]">
-                    <QRCodeSVG value={acct ?? ""} size={150} bgColor="#0a0a0f" fgColor="#e2e8f0" level="M" />
+                <div className="pb-2">
+                  <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-3">RECEIVE · {net.short}</div>
+                  <div className="flex flex-col items-center text-center">
+                    <div className="bg-white p-2.5 rounded-xl">
+                      <QRCodeSVG value={acct ?? ""} size={160} bgColor="#ffffff" fgColor="#0a0a0f" level="M" />
+                    </div>
+                    {name && <div className="font-mono text-[13px] text-[#4FC3F7] mt-3">{name}</div>}
+                    <div className="font-mono text-[9px] text-slate-400 mt-1.5 break-all px-2">{acct}</div>
+                    <button onClick={copyAddr} className="font-mono text-[11px] px-4 py-2 rounded-lg mt-3" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                      {copied ? "✓ Copied" : "Copy address"}
+                    </button>
                   </div>
-                  {name && <div className="font-mono text-[12px] text-[#4FC3F7] mt-3">{name}</div>}
-                  <div className="font-mono text-[9px] text-slate-400 mt-1.5 break-all">{acct}</div>
-                  <button onClick={copyAddr} className="font-mono text-[10px] px-3 py-1.5 rounded-lg mt-2.5" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                    {copied ? "✓ Copied" : "Copy address"}
-                  </button>
-                  <p className="font-mono text-[9px] text-slate-600 mt-2.5 leading-relaxed">Send only <b>USDC / ETH on Base</b> ({net.short}) here.</p>
+                  <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-2.5 mt-4">
+                    <p className="font-mono text-[9px] text-slate-500 leading-relaxed">
+                      Scan the QR with any wallet, or copy the address. Send only <b className="text-slate-300">USDC / ETH on Base</b> ({net.short}) here — funds from other chains may be lost.
+                    </p>
+                  </div>
                 </div>
               )}
               </div>
