@@ -547,7 +547,10 @@ export default function ChatInput() {
               style={{ color: activeTier.color, background: `${activeTier.color}10`, borderColor: `${activeTier.color}30` }}
             >
               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: activeTier.color }} />
-              {activeTier.label}
+              {/* Show the PRESET label (Chat · Fast · Web Search · …) — same name
+                  shown in the picker — not the tier label, which read "Pro/Max"
+                  and collided with the credit tiers. */}
+              {activePreset?.label ?? activeTier.label}
               {activeTier.badge && <span className="text-[8px] opacity-60">{activeTier.badge}</span>}
               <svg className="w-2.5 h-2.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
