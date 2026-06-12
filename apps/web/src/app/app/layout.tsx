@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
@@ -53,6 +54,15 @@ const APP_NAV = [
       </svg>
     ),
   },
+];
+
+// ── Dev-only surfaces ───────────────────────────────────────────────────────────
+// Hidden from the product nav by default — the app is focused on Blue Chat +
+// Blue Hub (+ Launches, Dashboard). These developer tools appear in the side
+// rail ONLY when dev tools are enabled: NEXT_PUBLIC_DEV_TOOLS=1 at build time,
+// or append ?dev to any /app URL once (it sticks via localStorage). The routes
+// themselves stay live and reachable by direct URL regardless of the flag.
+const APP_DEV_NAV = [
   {
     id: "terminal",
     label: "Terminal",
@@ -88,6 +98,26 @@ const APP_NAV = [
   },
 ];
 
+// ── Dev-tools flag ──────────────────────────────────────────────────────────────
+// Server + first client render use the build-time env so hydration matches.
+// After mount we upgrade to `true` if ?dev is present (and persist it) or it was
+// persisted earlier — a one-directional flip that never causes a hydration error.
+function useDevTools() {
+  const [dev, setDev] = useState(process.env.NEXT_PUBLIC_DEV_TOOLS === "1");
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has("dev")) {
+        localStorage.setItem("blue_dev_tools", "1");
+        setDev(true);
+      } else if (localStorage.getItem("blue_dev_tools") === "1") {
+        setDev(true);
+      }
+    } catch { /* SSR / storage blocked — keep env default */ }
+  }, []);
+  return dev;
+}
+
 const APP_BOTTOM = [
   // Profile is back as its own page — identity (bio, avatar, social links)
   // is distinct from the dashboard's wallet snapshot. /app/dashboard is for
@@ -120,6 +150,7 @@ const APP_BOTTOM = [
 
 function AppSideNav() {
   const pathname = usePathname();
+  const dev      = useDevTools();
 
   const isActive = (href: string) => {
     if (href === "/app/chat") return pathname === "/app/chat" || pathname.startsWith("/app/chat/");
@@ -174,6 +205,43 @@ function AppSideNav() {
             </Link>
           );
         })}
+
+        {/* Dev-only tools — only when the dev flag is on */}
+        {dev && (
+          <>
+            <div className="w-8 h-px bg-[#1A1A2E] my-1.5 self-center" />
+            {APP_DEV_NAV.map((item) => {
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className="group relative flex flex-col items-center justify-center gap-0.5 w-full h-[50px] rounded-xl transition-all"
+                  style={
+                    active
+                      ? { color: "#A78BFA", background: "#A78BFA12", boxShadow: "0 0 0 1px #A78BFA20" }
+                      : { color: "#334155" }
+                  }
+                  title={`${item.label} · dev`}
+                >
+                  <span className="group-hover:text-slate-300 transition-colors">
+                    {item.icon}
+                  </span>
+                  <span
+                    className="font-mono text-[7px] tracking-wide transition-colors group-hover:text-slate-400 truncate max-w-[56px] text-center"
+                    style={{ color: active ? "#A78BFA" : undefined }}
+                  >
+                    {item.label}
+                  </span>
+                  {active && (
+                    <span className="absolute -left-2 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-[#A78BFA]"
+                      style={{ boxShadow: "0 0 6px #A78BFA80" }} />
+                  )}
+                </Link>
+              );
+            })}
+          </>
+        )}
       </nav>
 
       {/* Bottom items */}
@@ -229,10 +297,10 @@ function MobileNav() {
   const pathname = usePathname();
   const isActive = (href: string) => pathname.startsWith(href);
 
-  // Mobile bottom bar is capped at 5 core destinations — 8 items were far too
-  // cramped on a phone (~47px each). Terminal, Simulator and Docs drop off the
-  // bar (still reachable from the desktop side-rail and in-app links).
-  const MOBILE_IDS = ["chat", "dashboard", "hub", "console", "profile"];
+  // Mobile bottom bar = the 5 product destinations. Terminal/Simulator/Console
+  // are dev-only (never on mobile); Docs lives in-app. Order mirrors the desktop
+  // rail: Chat → Hub → Launches → Dashboard → Profile.
+  const MOBILE_IDS = ["chat", "hub", "launches", "dashboard", "profile"];
   const allItems = [...APP_NAV, ...APP_BOTTOM]
     .filter(i => MOBILE_IDS.includes(i.id))
     .sort((a, b) => MOBILE_IDS.indexOf(a.id) - MOBILE_IDS.indexOf(b.id));
