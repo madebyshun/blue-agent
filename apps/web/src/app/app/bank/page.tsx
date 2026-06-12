@@ -163,7 +163,7 @@ export default function BankPage() {
 
       {/* ── Content — single page ────────────────────────────────────────── */}
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-        <div className="max-w-screen-xl mx-auto">
+        <div className="w-full">
 
           {/* Header */}
           <div className="mb-5">
@@ -172,9 +172,9 @@ export default function BankPage() {
           </div>
 
           {/* Top row: cash balance + action panel */}
-          <div className="grid lg:grid-cols-3 gap-4 mb-4">
+          <div className="grid lg:grid-cols-3 gap-4 mb-4 items-start">
 
-            {/* Left column: balance + Base market (stacked → fills the height) */}
+            {/* Left column: balance + Base market (stacked) */}
             <div className="lg:col-span-2 flex flex-col gap-4">
 
               {/* Cash balance */}
@@ -191,8 +191,8 @@ export default function BankPage() {
                 </div>
               </div>
 
-              {/* Base market — fills the rest of the left column */}
-              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 flex-1">
+              {/* Base market */}
+              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
                 <div className="flex items-center justify-between mb-3">
                   <span className="font-mono text-[10px] text-slate-500 tracking-widest">BASE MARKET</span>
                   <span className="font-mono text-[9px] text-slate-700">live · built by Coinbase</span>
@@ -235,10 +235,27 @@ export default function BankPage() {
               </div>
 
               {panel === "positions" && (
-                <div className="px-2 pb-1">
+                <div className="px-2 pb-2">
                   <PositionRow label="Aave v3" pos={aavePos} apy={aaveApy} onManage={() => setPanel("earn")} />
                   <PositionRow label="Morpho · Gauntlet USDC Prime" pos={morphoPos} apy={morphoApy}
                     disabled={!morphoVnet} disabledNote="mainnet only" onManage={() => setPanel("earn")} />
+                  <div className="mt-3 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-3">
+                    <div className="font-mono text-[9px] text-slate-600 mb-1.5">BEST SAFE RATE · BASE</div>
+                    {rates && rates.length ? rates.slice(0, 3).map((r, i) => (
+                      <div key={r.project} className="flex items-center justify-between py-0.5 font-mono text-[10px]">
+                        <span className={i === 0 ? "text-[#34D399]" : "text-slate-400"}>{i === 0 ? "★ " : "  "}{r.label}</span>
+                        <span className={i === 0 ? "text-[#34D399]" : "text-slate-300"}>{r.apy.toFixed(2)}%</span>
+                      </div>
+                    )) : <div className="font-mono text-[10px] text-slate-600">loading…</div>}
+                  </div>
+                  <button onClick={() => setPanel("earn")}
+                    className="w-full font-mono text-[12px] font-bold py-2.5 rounded-xl mt-3"
+                    style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>
+                    🌾 {inYield > 0 ? "Manage yield" : "Start earning"}
+                  </button>
+                  <p className="font-mono text-[9px] text-slate-600 mt-2 leading-relaxed px-0.5">
+                    Supply idle USDC into Aave or Morpho — non-custodial, you sign, withdraw anytime.
+                  </p>
                 </div>
               )}
               {panel === "earn" && <MoveToYieldCard result={{ network }} account={acct} />}
