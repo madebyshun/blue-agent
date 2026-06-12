@@ -215,6 +215,7 @@ export default function BankPage() {
                 {onrampBusy ? "Starting…" : "💵 Add cash · card / bank → USDC"}
               </button>
               {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-1">{onrampMsg}</div>}
+              <div className="font-mono text-[9px] text-slate-600 mt-1">via Coinbase · available in select regions · or fund with Receive</div>
               <div className="flex flex-col gap-2 mt-3 flex-1 min-h-0">
                 {TABS.map(tb => (
                   <button key={tb.id} onClick={() => openAction(tb.id)}
