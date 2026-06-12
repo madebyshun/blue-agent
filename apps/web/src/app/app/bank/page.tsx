@@ -6,7 +6,7 @@
 // the address + Basename + QR. Activity is a placeholder until an indexer key
 // is wired (we never fabricate transaction history).
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useAccount, useReadContract, useBalance, useConnect } from "wagmi";
 import { formatUnits } from "viem";
 import { QRCodeSVG } from "qrcode.react";
@@ -71,8 +71,19 @@ export default function BankPage() {
   const bestApy   = rates && rates.length ? rates[0].apy : null;
   const morphoApy = rates?.find(r => r.project === "morpho-blue")?.apy ?? null;
 
+  // Wow data: Morpho 30d APY series + Base chain snapshot (both real, cached).
+  const [hist, setHist] = useState<{ points: number[]; current: number | null } | null>(null);
+  const [snap, setSnap] = useState<{ tvlUsd: number | null; change7dPct: number | null } | null>(null);
+  useEffect(() => {
+    let off = false;
+    fetch("/api/yield/morpho-history").then(r => r.json()).then(d => { if (!off) setHist({ points: d.points ?? [], current: d.current ?? null }); }).catch(() => {});
+    fetch("/api/base-snapshot").then(r => r.json()).then(d => { if (!off) setSnap(d); }).catch(() => {});
+    return () => { off = true; };
+  }, []);
+
   const inYield = (aavePos ?? 0) + (morphoPos ?? 0);
   const total   = (walletUsdc ?? 0) + inYield;
+  const projAnnual  = bestApy != null ? inYield * (bestApy / 100) : null;
 
   function copyAddr() {
     if (!acct) return;
@@ -104,9 +115,11 @@ export default function BankPage() {
         <div className="m-3 rounded-xl border border-[#1A1A2E] bg-gradient-to-b from-[#0d1117] to-[#0a0a0f] p-3.5">
           <div className="font-mono text-[9px] text-slate-500 tracking-wide">EARNING</div>
           <div className="font-mono text-[20px] font-bold text-[#34D399] mt-0.5">${usd(inYield)}</div>
-          <div className="font-mono text-[9px] text-slate-600 mt-0.5">
+          <div className="font-mono text-[9px] text-slate-600 mt-0.5 mb-2">
             best rate {bestApy != null ? `${bestApy.toFixed(1)}%` : "—"} · via Aave · Morpho
           </div>
+          <Spark points={hist?.points ?? []} color="#34D399" height={28} />
+          <div className="font-mono text-[8px] text-slate-700 mt-1">Morpho USDC · 30d APY trend</div>
         </div>
 
         <div className="flex-1" />
@@ -201,11 +214,75 @@ export default function BankPage() {
             </div>
           </div>
 
-          {/* Stat row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-            <Stat label="BEST APY · BASE" value={bestApy != null ? `${bestApy.toFixed(2)}%` : "—"} note="live · DefiLlama" color="#34D399" />
-            <Stat label="EARNING" value={`$${usd(inYield)}`} note="supplied across venues" color="#4FC3F7" />
-            <Stat label="CUSTODY" value="You hold keys" note="non-custodial · 24/7" color="#A78BFA" />
+          {/* Row 2: Assets · Rates · Projection */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+
+            {/* A. Your Assets */}
+            <Card title={`YOUR ASSETS · ${net.short}`}>
+              <AssetRow label="USDC" sub="in wallet" usd={walletUsdc} color="#4FC3F7" />
+              <AssetRow label="aUSDC" sub="Aave v3" usd={aavePos} color="#34D399" />
+              {morphoVnet && <AssetRow label="Morpho" sub="Gauntlet USDC Prime" usd={morphoPos} color="#A78BFA" />}
+              <div className="flex items-center justify-between py-2">
+                <div><div className="font-mono text-[12px] text-slate-200">ETH</div><div className="font-mono text-[9px] text-slate-600">gas</div></div>
+                <div className="font-mono text-[12px] text-slate-300">{ethBal != null ? ethBal.toFixed(4) : "—"}</div>
+              </div>
+            </Card>
+
+            {/* B. Rates on Base */}
+            <Card title="RATES ON BASE" note="live · DefiLlama">
+              {rates && rates.length ? rates.slice(0, 4).map((r, i) => {
+                const max = Math.max(...rates.map(x => x.apy)) || 1;
+                return (
+                  <div key={r.project} className="py-1">
+                    <div className="flex items-center justify-between font-mono text-[10px] mb-1">
+                      <span className={i === 0 ? "text-[#34D399]" : "text-slate-400"}>{i === 0 ? "★ " : ""}{r.label}</span>
+                      <span className={i === 0 ? "text-[#34D399]" : "text-slate-300"}>{r.apy.toFixed(2)}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-[#13131f] overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${(r.apy / max) * 100}%`, background: i === 0 ? "#34D399" : "#4FC3F7" }} />
+                    </div>
+                  </div>
+                );
+              }) : <div className="font-mono text-[10px] text-slate-600">loading rates…</div>}
+            </Card>
+
+            {/* C. Yield projection */}
+            <Card title="YIELD PROJECTION" note="estimate">
+              {inYield > 0 ? (
+                <>
+                  <div className="font-mono text-[26px] font-bold text-[#34D399]">${usd(projAnnual)}<span className="text-sm text-slate-500"> /yr</span></div>
+                  <div className="font-mono text-[10px] text-slate-500 mt-1">${usd((projAnnual ?? 0) / 12)} /mo · on ${usd(inYield)} at {bestApy?.toFixed(2)}%</div>
+                  <p className="font-mono text-[9px] text-slate-600 mt-3 leading-relaxed">Projected at the current best safe rate. Real yield accrues live in your aUSDC.</p>
+                </>
+              ) : (
+                <>
+                  <div className="font-mono text-[13px] text-slate-300">Your USDC is idle.</div>
+                  <p className="font-mono text-[10px] text-slate-500 mt-1.5 leading-relaxed">
+                    Supplying <b>${usd(walletUsdc)}</b> at {bestApy != null ? `${bestApy.toFixed(1)}%` : "~5%"} would earn ≈{" "}
+                    <span className="text-[#34D399]">${usd((walletUsdc ?? 0) * ((bestApy ?? 5) / 100))}/yr</span>.
+                  </p>
+                  <button onClick={() => setPanel("earn")} className="font-mono text-[11px] px-3 py-1.5 rounded-lg mt-3" style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>🌾 Put it to work</button>
+                </>
+              )}
+            </Card>
+          </div>
+
+          {/* Row 3: Morpho APY chart (wide) + Base snapshot */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+            <div className="lg:col-span-2 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-mono text-[10px] text-slate-500 tracking-widest">MORPHO · GAUNTLET USDC PRIME · 30D NET APY</div>
+                <div className="font-mono text-[13px] font-bold text-[#A78BFA]">{hist?.current != null ? `${hist.current.toFixed(2)}%` : "—"}</div>
+              </div>
+              <Spark points={hist?.points ?? []} color="#A78BFA" height={64} />
+              <div className="font-mono text-[9px] text-slate-600 mt-2">$442M TVL · curator Gauntlet · verified ERC-4626 · live via Morpho API</div>
+            </div>
+            <Card title="BASE SNAPSHOT" note="live · DefiLlama">
+              <StatLine label="Chain TVL" value={snap?.tvlUsd != null ? `$${(snap.tvlUsd / 1e9).toFixed(2)}B` : "—"} />
+              <StatLine label="7d change" value={snap?.change7dPct != null ? `${snap.change7dPct >= 0 ? "+" : ""}${snap.change7dPct.toFixed(2)}%` : "—"} color={snap && (snap.change7dPct ?? 0) >= 0 ? "#34D399" : "#EF4444"} />
+              <StatLine label="Best USDC APY" value={bestApy != null ? `${bestApy.toFixed(2)}%` : "—"} color="#34D399" />
+              <StatLine label="Custody" value="You hold keys" color="#A78BFA" />
+            </Card>
           </div>
 
           {/* Activity */}
@@ -222,15 +299,57 @@ export default function BankPage() {
   );
 }
 
-function Stat({ label, value, note, color }: { label: string; value: string; note: string; color: string }) {
+// ── Small UI primitives ──────────────────────────────────────────────────────
+function Card({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
-    <div className="rounded-xl border border-[#1A1A2E] bg-[#0d0d12] px-3.5 py-3">
-      <div className="font-mono text-[9px] text-slate-600 tracking-wide mb-1">{label}</div>
-      <div className="font-mono text-lg font-bold" style={{ color }}>{value}</div>
-      <div className="font-mono text-[9px] text-slate-600 mt-0.5">{note}</div>
+    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="font-mono text-[10px] text-slate-500 tracking-widest">{title}</div>
+        {note && <div className="font-mono text-[9px] text-slate-700">{note}</div>}
+      </div>
+      {children}
     </div>
   );
 }
+
+function AssetRow({ label, sub, usd: val, color }: { label: string; sub: string; usd: number | null; color: string }) {
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-[#13131f] last:border-0">
+      <div className="flex items-center gap-2">
+        <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
+        <div><div className="font-mono text-[12px] text-slate-200">{label}</div><div className="font-mono text-[9px] text-slate-600">{sub}</div></div>
+      </div>
+      <div className="font-mono text-[12px] text-slate-300">{val != null ? `$${usd(val)}` : "—"}</div>
+    </div>
+  );
+}
+
+function StatLine({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="flex items-center justify-between py-1.5 border-b border-[#13131f] last:border-0 font-mono text-[11px]">
+      <span className="text-slate-500">{label}</span>
+      <span style={{ color: color ?? "#e2e8f0" }}>{value}</span>
+    </div>
+  );
+}
+
+// Dependency-free area sparkline.
+function Spark({ points, color, height = 48 }: { points: number[]; color: string; height?: number }) {
+  if (!points || points.length < 2) return <div className="font-mono text-[10px] text-slate-700" style={{ height }}>loading chart…</div>;
+  const w = 100, h = height;
+  const min = Math.min(...points), max = Math.max(...points), range = max - min || 1;
+  const step = w / (points.length - 1);
+  const coords = points.map((p, i) => `${(i * step).toFixed(2)},${(h - ((p - min) / range) * h).toFixed(2)}`);
+  const line = "M" + coords.join(" L");
+  const area = `${line} L${w},${h} L0,${h} Z`;
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ width: "100%", height }}>
+      <path d={area} fill={color} fillOpacity="0.12" />
+      <path d={line} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
 
 function PositionRow({ label, pos, apy, onManage, disabled, disabledNote }: {
   label: string; pos: number | null; apy: number | null; onManage: () => void; disabled?: boolean; disabledNote?: string;
