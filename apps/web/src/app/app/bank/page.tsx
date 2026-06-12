@@ -117,7 +117,7 @@ export default function BankPage() {
     <div className="flex h-full w-full bg-[#050508] text-slate-200">
 
       {/* ── Account / status sidebar (info, not page-nav) ─────────────────── */}
-      <aside className="hidden md:flex flex-col w-60 shrink-0 border-r border-[#1A1A2E] bg-[#070710] overflow-y-auto">
+      <aside className="hidden md:flex flex-col w-72 shrink-0 border-r border-[#1A1A2E] bg-[#070710] overflow-y-auto">
         <div className="px-4 py-4 border-b border-[#1A1A2E]">
           <div className="font-mono text-[12px] tracking-widest text-[#4FC3F7] font-bold">🔵 BLUEBANK</div>
           <div className="font-mono text-[9px] text-[#34D399] mt-1">● Banking services · LIVE</div>
