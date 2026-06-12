@@ -34,7 +34,7 @@ export default function BaseTvlChart() {
   const changePct = cur != null && first ? ((cur - first) / first) * 100 : null;
 
   return (
-    <div className="card-hover rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 h-full flex flex-col min-h-0">
+    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 h-full flex flex-col min-h-0">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div>
           <div className="font-mono text-[10px] text-slate-500 tracking-widest">BASE · TOTAL VALUE LOCKED</div>
@@ -65,13 +65,9 @@ export default function BaseTvlChart() {
           <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="tvlGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#4FC3F7" stopOpacity={0.28} />
+                <stop offset="0%" stopColor="#4FC3F7" stopOpacity={0.25} />
                 <stop offset="100%" stopColor="#4FC3F7" stopOpacity={0} />
               </linearGradient>
-              <filter id="tvlGlow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="2.2" result="blur" />
-                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-              </filter>
             </defs>
             <CartesianGrid stroke="#13131f" vertical={false} />
             <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} scale="time"
@@ -79,10 +75,8 @@ export default function BaseTvlChart() {
               tick={{ fill: "#475569", fontSize: 9, fontFamily: "monospace" }} axisLine={{ stroke: "#1A1A2E" }} tickLine={false} minTickGap={48} />
             <YAxis tickFormatter={(v: number) => compact(v)} tick={{ fill: "#475569", fontSize: 9, fontFamily: "monospace" }}
               axisLine={false} tickLine={false} width={46} />
-            <Tooltip content={<TvlTooltip />} cursor={{ stroke: "#4FC3F7", strokeOpacity: 0.25, strokeWidth: 1 }} />
-            <Area type="monotone" dataKey="v" stroke="#4FC3F7" strokeWidth={1.8} fill="url(#tvlGrad)"
-              filter="url(#tvlGlow)" isAnimationActive animationDuration={900} animationEasing="ease-out"
-              activeDot={{ r: 3.5, fill: "#4FC3F7", stroke: "#0a0a0f", strokeWidth: 2 }} />
+            <Tooltip content={<TvlTooltip />} />
+            <Area type="monotone" dataKey="v" stroke="#4FC3F7" strokeWidth={1.5} fill="url(#tvlGrad)" isAnimationActive={false} />
           </AreaChart>
         </ResponsiveContainer>
       </div>

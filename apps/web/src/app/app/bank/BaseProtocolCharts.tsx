@@ -114,7 +114,7 @@ export function ApyCompareChart() {
   const days = RANGES.find(r => r.id === range)!.days;
   const data = series.filter(p => p.t >= Date.now() - days * 86400000);
   return (
-    <div className="card-hover rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
+    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
       <div className="flex items-start justify-between mb-3 flex-wrap gap-2">
         <div>
           <div className="font-mono text-[10px] text-slate-500 tracking-widest">USDC SUPPLY APY · BASE</div>
@@ -131,10 +131,8 @@ export function ApyCompareChart() {
               tick={{ fill: "#475569", fontSize: 9, fontFamily: "monospace" }} axisLine={{ stroke: "#1A1A2E" }} tickLine={false} minTickGap={48} />
             <YAxis tickFormatter={(v: number) => `${v.toFixed(0)}%`} tick={{ fill: "#475569", fontSize: 9, fontFamily: "monospace" }} axisLine={false} tickLine={false} width={36} domain={[0, "auto"]} />
             <Tooltip content={<ChartTooltip keys={keys} unit="pct" />} />
-            {keys.map((k, i) => (
-              <Line key={k.key} type="monotone" dataKey={k.key} stroke={k.color} strokeWidth={1.6} dot={false} connectNulls
-                isAnimationActive animationDuration={900} animationBegin={i * 120} animationEasing="ease-out"
-                activeDot={{ r: 3, fill: k.color, stroke: "#0a0a0f", strokeWidth: 2 }} />
+            {keys.map(k => (
+              <Line key={k.key} type="monotone" dataKey={k.key} stroke={k.color} strokeWidth={1.5} dot={false} connectNulls isAnimationActive={false} />
             ))}
           </LineChart>
         </ResponsiveContainer>
