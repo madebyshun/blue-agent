@@ -19,10 +19,15 @@ export async function GET(req: Request) {
   if (!/^0x[a-fA-F0-9]{40}$/.test(address)) return NextResponse.json({ error: "invalid address" }, { status: 200 });
   if (!keyId || !keySecret) return NextResponse.json({ needsKey: true }, { status: 200 });
 
+  // .env can't hold a multi-line PEM, so the secret is stored single-line with
+  // literal "\n" escapes — restore real newlines for EC PEM keys. Base64
+  // Ed25519 keys have no newlines and pass through unchanged.
+  const secret = keySecret.includes("\\n") ? keySecret.replace(/\\n/g, "\n") : keySecret;
+
   try {
     const jwt = await generateJwt({
       apiKeyId: keyId,
-      apiKeySecret: keySecret,
+      apiKeySecret: secret,
       requestMethod: "POST",
       requestHost: HOST,
       requestPath: PATH,
