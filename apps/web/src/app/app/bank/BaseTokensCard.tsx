@@ -75,7 +75,7 @@ export default function BaseTokensCard() {
   const lineColor = up ? "#34D399" : "#EF4444";
 
   return (
-    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 flex-1 flex flex-col min-h-0">
+    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 h-full flex flex-col min-h-0">
       <div className="flex items-center justify-between mb-3">
         <span className="font-mono text-[10px] text-slate-500 tracking-widest">BASE MARKET</span>
         <span className="font-mono text-[9px] text-slate-700">live · built by Coinbase</span>

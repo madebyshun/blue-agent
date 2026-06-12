@@ -174,19 +174,19 @@ export default function BankPage() {
 
           {/* Top row: cash balance + action panel — FIXED height so switching the
               right-panel tab (Positions/Earn/Send/Receive) never reflows the page. */}
-          <div className="grid lg:grid-cols-2 gap-4 mb-4 items-stretch">
+          <div className="grid lg:grid-cols-3 gap-4 mb-4 lg:h-[440px]">
 
-            {/* Cash balance + 4 primary action cards */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6 flex flex-col">
+            {/* Cash balance + primary actions (stacked, fill the card) */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6 flex flex-col lg:h-full">
               <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH BALANCE · {net.short}</div>
-              <div className="font-mono text-4xl sm:text-5xl font-bold text-white">${usd(total)} <span className="text-base text-slate-500">USDC</span></div>
+              <div className="font-mono text-4xl font-bold text-white">${usd(total)} <span className="text-base text-slate-500">USDC</span></div>
               <div className="font-mono text-[11px] text-slate-500 mt-2">
                 {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
               </div>
-              <div className="grid grid-cols-2 gap-2.5 mt-auto pt-6">
+              <div className="flex flex-col gap-2 mt-4 flex-1 min-h-0">
                 {TABS.map(tb => (
                   <button key={tb.id} onClick={() => openAction(tb.id)}
-                    className="flex items-center gap-2.5 px-3 py-3 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left">
+                    className="flex-1 flex items-center gap-3 px-4 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left">
                     <span className="text-lg leading-none">{tb.icon}</span>
                     <div>
                       <div className="font-mono text-[12px] text-slate-200">{tb.label}</div>
@@ -199,6 +199,9 @@ export default function BankPage() {
 
             {/* BASE MARKET — selectable top tokens + per-token price chart */}
             <BaseTokensCard />
+
+            {/* BASE TVL — compact interactive chart */}
+            <BaseTvlChart />
 
           </div>
 
@@ -272,11 +275,6 @@ export default function BankPage() {
               </div>
             </div>
           )}
-
-          {/* Interactive Base TVL chart (full width) */}
-          <div className="mb-4">
-            <BaseTvlChart />
-          </div>
 
           {/* TVL by protocol (stacked) + USDC APY comparison */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
