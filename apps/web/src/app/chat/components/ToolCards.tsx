@@ -3,8 +3,8 @@
 // One card per tool type: honeypot, risk-gate, deep-analysis, token-pick, contract-trust
 
 import { useState, useEffect } from "react";
-import { useAccount, useReadContracts, useBalance, useReadContract, useWriteContract, useSwitchChain, usePublicClient, useSendTransaction } from "wagmi";
-import { formatUnits, parseUnits, parseEther, isAddress, namehash } from "viem";
+import { useAccount, useReadContracts, useBalance, useReadContract, useWriteContract, useSwitchChain, usePublicClient, useSendTransaction, useCapabilities, useSendCalls, useCallsStatus } from "wagmi";
+import { formatUnits, parseUnits, parseEther, isAddress, namehash, encodeFunctionData } from "viem";
 import { base } from "viem/chains";
 import { useName } from "@coinbase/onchainkit/identity";
 import { YIELD_NETWORKS, ERC20_ABI, AAVE_POOL_ABI, ERC4626_ABI, WITHDRAW_ALL, parseUsdc, supplyApyPct, VENUES, VENUE_LIST, type YieldNetwork, type VenueId } from "@/lib/yield-execution";
@@ -1437,6 +1437,12 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
   const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
   const { sendTransactionAsync } = useSendTransaction();
+  // EIP-5792 gasless path — only engages for a Smart Wallet whose paymaster
+  // capability is present (see gaslessSupported below). Everything else falls
+  // through to the unchanged writeContract / sendTransaction path.
+  const { sendCallsAsync } = useSendCalls();
+  const { data: walletCapabilities } = useCapabilities({ account, query: { enabled: !!account } });
+  const [callsId, setCallsId] = useState<string>("");
 
   const [asset,     setAsset]     = useState<"USDC" | "ETH">(result.asset === "ETH" ? "ETH" : "USDC");
   const [network,   setNetwork]   = useState<YieldNetwork>(result.network === "base" ? "base" : "baseSepolia");
@@ -1449,6 +1455,22 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
 
   const net = YIELD_NETWORKS[network];
   const chainId = net.chainId;
+  // Smart Wallet + paymaster present for this chain → we can sponsor gas.
+  const gaslessSupported = Boolean(
+    (walletCapabilities as Record<number, { paymasterService?: { supported?: boolean } }> | undefined)?.[chainId]?.paymasterService?.supported,
+  );
+  // Resolve the on-chain tx hash from an EIP-5792 batch once it confirms.
+  const { data: callsStatus } = useCallsStatus({
+    id: callsId,
+    query: { enabled: !!callsId, refetchInterval: ({ state }) => (state.data?.status === "success" ? false : 1500) },
+  });
+  // When the sponsored batch confirms, surface its tx hash like a normal send.
+  useEffect(() => {
+    if (callsStatus?.status === "success") {
+      const hash = callsStatus.receipts?.[0]?.transactionHash;
+      if (hash) { setTxHash(hash); setStep("done"); }
+    }
+  }, [callsStatus]);
   const recip = recipient.trim();
   const recipIsAddr = isAddress(recip);
   const recipIsName = /\.(base|eth)$/i.test(recip);
@@ -1493,11 +1515,28 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
     if (!fromAddr)  { setErr("Connect your wallet first"); setStep("error"); return; }
     if (!toAddress) { setErr(recipIsName ? "Couldn't resolve that name" : "Enter a valid address or .base name"); setStep("error"); return; }
     if (!(amt > 0)) { setErr("Enter an amount"); setStep("error"); return; }
-    setErr(""); setTxHash("");
+    setErr(""); setTxHash(""); setCallsId("");
     try {
       setStep("switching");
       await switchChainAsync({ chainId });
       setStep("sending");
+
+      // Gasless: Smart Wallet + paymaster → batch the call through EIP-5792 and
+      // let our /api/paymaster sponsor gas. The status hook resolves the hash.
+      if (gaslessSupported) {
+        const call = asset === "USDC"
+          ? { to: net.usdc, data: encodeFunctionData({ abi: ERC20_ABI, functionName: "transfer", args: [toAddress, parseUnits(amount, net.usdcDecimals)] }) }
+          : { to: toAddress, value: parseEther(amount) };
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const res = await sendCallsAsync({
+          calls: [call],
+          chainId,
+          capabilities: { paymasterService: { url: `${origin}/api/paymaster?network=${network}` } },
+        });
+        setCallsId(typeof res === "string" ? res : res.id); // status hook → done
+        return;
+      }
+
       const hash = asset === "USDC"
         ? await writeContractAsync({ address: net.usdc, abi: ERC20_ABI, functionName: "transfer", args: [toAddress, parseUnits(amount, net.usdcDecimals)], chainId })
         : await sendTransactionAsync({ to: toAddress, value: parseEther(amount), chainId });
@@ -1539,7 +1578,14 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
 
   return (
     <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
-      <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold mb-3">SEND / PAY · BASE</div>
+      <div className="flex items-center justify-between mb-3">
+        <span className="font-mono text-[10px] text-slate-500 tracking-widest font-bold">SEND / PAY · BASE</span>
+        {gaslessSupported && (
+          <span className="font-mono text-[9px] px-2 py-0.5 rounded-full" style={{ background: "#A78BFA15", color: "#A78BFA", border: "1px solid #A78BFA40" }}>
+            ⚡ Gasless
+          </span>
+        )}
+      </div>
 
       {/* Network risk banner */}
       <div className="rounded-lg px-2.5 py-1.5 mb-3 font-mono text-[10px] leading-relaxed"
@@ -1612,6 +1658,7 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
 
       <p className="font-mono text-[9px] text-slate-600 mb-2 leading-relaxed">
         Sends {asset} directly from your wallet — you sign one {asset === "USDC" ? "transfer" : "send"}. Non-custodial; Blue Agent never touches the funds.
+        {gaslessSupported && <span className="text-[#A78BFA]"> Gas is sponsored — no ETH needed.</span>}
       </p>
 
       {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
