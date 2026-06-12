@@ -109,7 +109,7 @@ export default function AppSidebar({
       {/* ── Identity ── aligned with main sidebar h-14 logo row */}
       <div className="px-5 h-14 flex items-center border-b border-[#1A1A2E] shrink-0">
         <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0 mr-2" />
-        <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">// BLUE CHAT</p>
+        <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUE CHAT</p>
       </div>
 
       {/* ── Primary actions — labeled vertical rows ── */}
