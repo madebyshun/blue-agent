@@ -35,7 +35,9 @@ export default function BankPage() {
   const { name } = useBasename(acct);
   const [network, setNetwork] = useState<YieldNetwork>("baseSepolia");
   const [panel, setPanel]     = useState<Panel>("positions");
+  const [actionOpen, setActionOpen] = useState(false);
   const [copied, setCopied]   = useState(false);
+  const openAction = (p: Panel) => { setPanel(p); setActionOpen(true); };
 
   const net = YIELD_NETWORKS[network];
   const chainId = net.chainId;
@@ -106,11 +108,11 @@ export default function BankPage() {
     return <BankLanding bestApy={bestApy} />;
   }
 
-  const TABS: { id: Panel; label: string; icon: string }[] = [
-    { id: "positions", label: "Positions", icon: "📊" },
-    { id: "earn",      label: "Earn",      icon: "🌾" },
-    { id: "send",      label: "Send",      icon: "➡" },
-    { id: "receive",   label: "Receive",   icon: "⬇" },
+  const TABS: { id: Panel; label: string; icon: string; desc: string }[] = [
+    { id: "positions", label: "Positions", icon: "📊", desc: "Your yield" },
+    { id: "earn",      label: "Earn",      icon: "🌾", desc: "Grow USDC" },
+    { id: "send",      label: "Send",      icon: "➡",  desc: "Pay anyone" },
+    { id: "receive",   label: "Receive",   icon: "⬇",  desc: "Get paid" },
   ];
 
   return (
@@ -172,99 +174,104 @@ export default function BankPage() {
 
           {/* Top row: cash balance + action panel — FIXED height so switching the
               right-panel tab (Positions/Earn/Send/Receive) never reflows the page. */}
-          <div className="grid lg:grid-cols-3 gap-4 mb-4 lg:h-[600px]">
+          <div className="grid lg:grid-cols-2 gap-4 mb-4 items-stretch">
 
-            {/* Left column: balance + Base market (stacked, fills the fixed height) */}
-            <div className="lg:col-span-2 flex flex-col gap-4 lg:h-[600px]">
-
-              {/* Cash balance */}
-              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6">
-                <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH BALANCE · {net.short}</div>
-                <div className="font-mono text-4xl sm:text-5xl font-bold text-white">${usd(total)} <span className="text-base text-slate-500">USDC</span></div>
-                <div className="font-mono text-[11px] text-slate-500 mt-2">
-                  {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
-                </div>
-                <div className="flex flex-wrap gap-2 mt-5">
-                  <button onClick={() => setPanel("receive")} className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>⬇ Receive</button>
-                  <button onClick={() => setPanel("send")} className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>➡ Send</button>
-                  <button onClick={() => setPanel("earn")} className="font-mono text-[12px] px-4 py-2.5 rounded-xl" style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>🌾 Earn</button>
-                </div>
+            {/* Cash balance + 4 primary action cards */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6 flex flex-col">
+              <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH BALANCE · {net.short}</div>
+              <div className="font-mono text-4xl sm:text-5xl font-bold text-white">${usd(total)} <span className="text-base text-slate-500">USDC</span></div>
+              <div className="font-mono text-[11px] text-slate-500 mt-2">
+                {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
               </div>
-
-              {/* Base market — selectable top tokens + per-token price chart */}
-              <BaseTokensCard />
-            </div>
-
-            {/* Action panel — vertical tab rail + content. Fixed height so
-                switching tabs never reflows the page. */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] flex lg:h-[600px] overflow-hidden">
-              {/* Vertical tab rail */}
-              <div className="w-[76px] shrink-0 border-r border-[#1A1A2E] bg-[#070710] flex flex-col gap-1 p-2">
-                {TABS.map(t => {
-                  const active = panel === t.id;
-                  return (
-                    <button key={t.id} onClick={() => setPanel(t.id)}
-                      className="flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg transition-colors"
-                      style={active
-                        ? { background: "#4FC3F712", color: "#4FC3F7", boxShadow: "inset 0 0 0 1px #4FC3F722" }
-                        : { color: "#64748b" }}>
-                      <span className="text-[15px] leading-none">{t.icon}</span>
-                      <span className="font-mono text-[9px]">{t.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-3 min-h-0">
-              {panel === "positions" && (
-                <div className="px-2 pb-2">
-                  <PositionRow label="Aave v3" pos={aavePos} apy={aaveApy} onManage={() => setPanel("earn")} />
-                  <PositionRow label="Morpho · Gauntlet USDC Prime" pos={morphoPos} apy={morphoApy}
-                    disabled={!morphoVnet} disabledNote="mainnet only" onManage={() => setPanel("earn")} />
-                  <div className="mt-3 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-3">
-                    <div className="font-mono text-[9px] text-slate-600 mb-1.5">BEST SAFE RATE · BASE</div>
-                    {rates && rates.length ? rates.slice(0, 3).map((r, i) => (
-                      <div key={r.project} className="flex items-center justify-between py-0.5 font-mono text-[10px]">
-                        <span className={i === 0 ? "text-[#34D399]" : "text-slate-400"}>{i === 0 ? "★ " : "  "}{r.label}</span>
-                        <span className={i === 0 ? "text-[#34D399]" : "text-slate-300"}>{r.apy.toFixed(2)}%</span>
-                      </div>
-                    )) : <div className="font-mono text-[10px] text-slate-600">loading…</div>}
-                  </div>
-                  <button onClick={() => setPanel("earn")}
-                    className="w-full font-mono text-[12px] font-bold py-2.5 rounded-xl mt-3"
-                    style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>
-                    🌾 {inYield > 0 ? "Manage yield" : "Start earning"}
-                  </button>
-                  <p className="font-mono text-[9px] text-slate-600 mt-2 leading-relaxed px-0.5">
-                    Supply idle USDC into Aave or Morpho — non-custodial, you sign, withdraw anytime.
-                  </p>
-                </div>
-              )}
-              {panel === "earn" && <MoveToYieldCard result={{ network }} account={acct} />}
-              {panel === "send" && <SendCard result={{ network }} account={acct} />}
-              {panel === "receive" && (
-                <div className="pb-2">
-                  <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-3">RECEIVE · {net.short}</div>
-                  <div className="flex flex-col items-center text-center">
-                    <div className="bg-white p-2.5 rounded-xl">
-                      <QRCodeSVG value={acct ?? ""} size={160} bgColor="#ffffff" fgColor="#0a0a0f" level="M" />
+              <div className="grid grid-cols-2 gap-2.5 mt-auto pt-6">
+                {TABS.map(tb => (
+                  <button key={tb.id} onClick={() => openAction(tb.id)}
+                    className="flex items-center gap-2.5 px-3 py-3 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left">
+                    <span className="text-lg leading-none">{tb.icon}</span>
+                    <div>
+                      <div className="font-mono text-[12px] text-slate-200">{tb.label}</div>
+                      <div className="font-mono text-[9px] text-slate-600">{tb.desc}</div>
                     </div>
-                    {name && <div className="font-mono text-[13px] text-[#4FC3F7] mt-3">{name}</div>}
-                    <div className="font-mono text-[9px] text-slate-400 mt-1.5 break-all px-2">{acct}</div>
-                    <button onClick={copyAddr} className="font-mono text-[11px] px-4 py-2 rounded-lg mt-3" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                      {copied ? "✓ Copied" : "Copy address"}
-                    </button>
-                  </div>
-                  <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-2.5 mt-4">
-                    <p className="font-mono text-[9px] text-slate-500 leading-relaxed">
-                      Scan the QR with any wallet, or copy the address. Send only <b className="text-slate-300">USDC / ETH on Base</b> ({net.short}) here — funds from other chains may be lost.
-                    </p>
-                  </div>
-                </div>
-              )}
+                  </button>
+                ))}
               </div>
             </div>
+
+            {/* BASE MARKET — selectable top tokens + per-token price chart */}
+            <BaseTokensCard />
+
           </div>
+
+          {/* Action modal — Positions / Earn / Send / Receive (opened from the hero) */}
+          {actionOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setActionOpen(false)} />
+              <div className="relative z-10 w-full max-w-md rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] shadow-2xl max-h-[88vh] flex flex-col">
+                {/* Tabs + close */}
+                <div className="flex items-center gap-1 p-3 border-b border-[#1A1A2E] shrink-0">
+                  {TABS.map(tb => (
+                    <button key={tb.id} onClick={() => setPanel(tb.id)}
+                      className="flex-1 font-mono text-[10px] py-1.5 rounded-md transition-colors"
+                      style={panel === tb.id
+                        ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                        : { color: "#64748b", border: "1px solid transparent" }}>
+                      {tb.label}
+                    </button>
+                  ))}
+                  <button onClick={() => setActionOpen(false)} className="ml-1 w-7 h-7 rounded-md font-mono text-[13px] text-slate-500 hover:text-white hover:bg-[#1A1A2E] shrink-0">✕</button>
+                </div>
+
+                <div className="overflow-y-auto p-4 min-h-0">
+                  {panel === "positions" && (
+                    <div>
+                      <PositionRow label="Aave v3" pos={aavePos} apy={aaveApy} onManage={() => setPanel("earn")} />
+                      <PositionRow label="Morpho · Gauntlet USDC Prime" pos={morphoPos} apy={morphoApy}
+                        disabled={!morphoVnet} disabledNote="mainnet only" onManage={() => setPanel("earn")} />
+                      <div className="mt-3 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-3">
+                        <div className="font-mono text-[9px] text-slate-600 mb-1.5">BEST SAFE RATE · BASE</div>
+                        {rates && rates.length ? rates.slice(0, 3).map((r, i) => (
+                          <div key={r.project} className="flex items-center justify-between py-0.5 font-mono text-[10px]">
+                            <span className={i === 0 ? "text-[#34D399]" : "text-slate-400"}>{i === 0 ? "★ " : "  "}{r.label}</span>
+                            <span className={i === 0 ? "text-[#34D399]" : "text-slate-300"}>{r.apy.toFixed(2)}%</span>
+                          </div>
+                        )) : <div className="font-mono text-[10px] text-slate-600">loading…</div>}
+                      </div>
+                      <button onClick={() => setPanel("earn")}
+                        className="w-full font-mono text-[12px] font-bold py-2.5 rounded-xl mt-3"
+                        style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>
+                        🌾 {inYield > 0 ? "Manage yield" : "Start earning"}
+                      </button>
+                      <p className="font-mono text-[9px] text-slate-600 mt-2 leading-relaxed px-0.5">
+                        Supply idle USDC into Aave or Morpho — non-custodial, you sign, withdraw anytime.
+                      </p>
+                    </div>
+                  )}
+                  {panel === "earn" && <MoveToYieldCard result={{ network }} account={acct} />}
+                  {panel === "send" && <SendCard result={{ network }} account={acct} />}
+                  {panel === "receive" && (
+                    <div>
+                      <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-3">RECEIVE · {net.short}</div>
+                      <div className="flex flex-col items-center text-center">
+                        <div className="bg-white p-2.5 rounded-xl">
+                          <QRCodeSVG value={acct ?? ""} size={180} bgColor="#ffffff" fgColor="#0a0a0f" level="M" />
+                        </div>
+                        {name && <div className="font-mono text-[13px] text-[#4FC3F7] mt-3">{name}</div>}
+                        <div className="font-mono text-[9px] text-slate-400 mt-1.5 break-all px-2">{acct}</div>
+                        <button onClick={copyAddr} className="font-mono text-[11px] px-4 py-2 rounded-lg mt-3" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                          {copied ? "✓ Copied" : "Copy address"}
+                        </button>
+                      </div>
+                      <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-2.5 mt-4">
+                        <p className="font-mono text-[9px] text-slate-500 leading-relaxed">
+                          Scan the QR with any wallet, or copy the address. Send only <b className="text-slate-300">USDC / ETH on Base</b> ({net.short}) here — funds from other chains may be lost.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Interactive Base TVL chart (full width) */}
           <div className="mb-4">
