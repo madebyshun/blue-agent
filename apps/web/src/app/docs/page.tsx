@@ -70,7 +70,7 @@ const X402_SUITE = [
 
 const PRODUCTS = [
   { name: "Blue Chat",  color: "#A78BFA", desc: "AI chat for Base builders · Sonnet / Opus / Venice · credit system",     link: "/app/chat",  label: "Open Chat →" },
-  { name: "Blue Hub",   color: "#4FC3F7", desc: "51 AI tools · 3-agent consensus · pay per use via x402",                 link: "/hub",       label: "Open Hub →" },
+  { name: "Blue Hub",   color: "#4FC3F7", desc: "72 AI tools · 3-agent consensus · pay per use via x402",                 link: "/hub",       label: "Open Hub →" },
   { name: "Blue CLI",   color: "#34D399", desc: "@blueagent/cli · idea / build / audit / ship · Terminal + TUI",          link: "/docs",      label: "View Docs →" },
   { name: "Blue API",   color: "#fbbf24", desc: "60+ x402 endpoints · USDC on Base · no subscription",                    link: "https://api.blueagent.dev/docs",  label: "API Docs →" },
 ];
@@ -116,7 +116,7 @@ export default function DocsPage() {
           </h1>
 
           <p className="text-slate-400 text-lg max-w-2xl mx-auto leading-relaxed mb-12">
-            22 CLI commands. 40 skill files. 51 Hub tools. 56 MCP tools.
+            22 CLI commands. 40 skill files. 72 Hub tools. 56 MCP tools.
             All grounded in verified Base knowledge — no hallucinated addresses, no generic advice.
           </p>
 
@@ -124,7 +124,7 @@ export default function DocsPage() {
             {[
               { value: "22",  label: "Commands",  color: "#4FC3F7" },
               { value: "40",  label: "Skills",    color: "#34D399" },
-              { value: "51",  label: "Hub Tools", color: "#A78BFA" },
+              { value: "72",  label: "Hub Tools", color: "#A78BFA" },
               { value: "56",  label: "MCP Tools", color: "#fbbf24" },
             ].map((s) => (
               <div key={s.label} className="bg-[#0d0d12] px-6 py-5 text-center">
@@ -298,7 +298,7 @@ export default function DocsPage() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { t: "Slash commands", d: "/idea /build /audit /ship /raise · /pick /scan /wallet — same power as the CLI, inline." },
-              { t: "Hub tools",      d: "Live token prices, whale flow, risk gate, wallet PnL — 51 tools the model calls for you." },
+              { t: "Hub tools",      d: "Live token prices, whale flow, risk gate, wallet PnL — 72 Hub tools the model calls for you." },
               { t: "Personas",       d: "Swap the agent's expert role (Trader · Cipher · Oracle · Custom) without changing the model." },
               { t: "Web search",     d: "Toggle on to let the model pull live web data and cite sources (auto-on for Web Search / Deep Think)." },
             ].map((c) => (
@@ -387,7 +387,7 @@ export default function DocsPage() {
           </div>
 
           <p className="text-center font-mono text-[11px] text-slate-600 mt-6">
-            51 tools total. Always-current catalog →{" "}
+            72 tools total. Always-current catalog →{" "}
             <code className="text-[#4FC3F7]">blue-registry</code> or{" "}
             <a href="https://api.blueagent.dev/docs" className="text-[#fbbf24] hover:underline">api.blueagent.dev/docs</a>
           </p>
@@ -623,7 +623,7 @@ export default function DocsPage() {
             style={{ boxShadow: "0 0 60px #4FC3F708" }}>
             <h2 className="text-3xl font-bold mb-4">Start building on Base</h2>
             <p className="text-slate-500 mb-8 max-w-md mx-auto text-sm leading-relaxed">
-              51 AI tools. 22 commands. 40 skill files. All grounded in verified Base knowledge.
+              72 AI tools. 22 commands. 40 skill files. All grounded in verified Base knowledge.
             </p>
             <div className="flex items-center justify-center gap-4 flex-wrap">
               <Link href="/app/chat"
