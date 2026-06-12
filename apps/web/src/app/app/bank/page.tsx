@@ -20,6 +20,7 @@ import BaseTvlChart from "./BaseTvlChart";
 import { ApyCompareChart } from "./BaseProtocolCharts";
 import BaseTokensCard from "./BaseTokensCard";
 import QrScanner from "./QrScanner";
+import SwapCard from "./SwapCard";
 import { parsePaymentQr, buildPaymentUri, type ParsedPayment } from "@/lib/payment-qr";
 
 const usd = (n: number | null | undefined) =>
@@ -35,7 +36,7 @@ function relTime(ts: number): string {
 
 
 
-type Panel = "positions" | "earn" | "send" | "receive";
+type Panel = "positions" | "earn" | "send" | "receive" | "convert";
 
 export default function BankPage() {
   const { address, isConnected } = useAccount();
@@ -86,6 +87,22 @@ export default function BankPage() {
       window.open(url, "_blank", "popup,width=470,height=720");
     } catch { setOnrampMsg("onramp failed"); }
     finally { setOnrampBusy(false); }
+  }
+
+  // Cash out — Coinbase Offramp (sell USDC on Base → card / bank). Reuses the
+  // same CDP session token, which initializes either the buy or the sell flow.
+  const [cashOutBusy, setCashOutBusy] = useState(false);
+  async function cashOut() {
+    if (!acct) return;
+    setCashOutBusy(true); setOnrampMsg("");
+    try {
+      const j = await fetch(`/api/onramp/session?address=${acct}`).then(r => r.json());
+      if (j.needsKey) { setOnrampMsg("Cash out needs a CDP key"); return; }
+      if (j.error || !j.sessionToken) { setOnrampMsg(j.error || "couldn't start cash out"); return; }
+      const url = `https://pay.coinbase.com/v3/sell/input?sessionToken=${encodeURIComponent(j.sessionToken)}&defaultAsset=USDC&defaultNetwork=base&fiatCurrency=USD`;
+      window.open(url, "_blank", "popup,width=470,height=720");
+    } catch { setOnrampMsg("cash out failed"); }
+    finally { setCashOutBusy(false); }
   }
 
   const net = YIELD_NETWORKS[network];
@@ -165,6 +182,7 @@ export default function BankPage() {
     { id: "earn",      label: "Earn",      icon: "🌾", desc: "Grow USDC" },
     { id: "send",      label: "Send",      icon: "➡",  desc: "Pay anyone" },
     { id: "receive",   label: "Receive",   icon: "⬇",  desc: "Get paid" },
+    { id: "convert",   label: "Convert",   icon: "⇅",  desc: "Swap tokens" },
   ];
 
   return (
@@ -247,17 +265,25 @@ export default function BankPage() {
               </button>
               {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-1">{onrampMsg}</div>}
               <div className="font-mono text-[9px] text-slate-600 mt-1">via Coinbase · available in select regions · or fund with Receive</div>
-              <div className="flex flex-col gap-2 mt-3 flex-1 min-h-0">
+              <div className="grid grid-cols-2 gap-2 mt-3">
                 {TABS.map(tb => (
                   <button key={tb.id} onClick={() => openAction(tb.id)}
-                    className="flex-1 flex items-center gap-3 px-4 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left">
-                    <span className="text-lg leading-none">{tb.icon}</span>
-                    <div>
-                      <div className="font-mono text-[12px] text-slate-200">{tb.label}</div>
-                      <div className="font-mono text-[9px] text-slate-600">{tb.desc}</div>
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left">
+                    <span className="text-base leading-none shrink-0">{tb.icon}</span>
+                    <div className="min-w-0">
+                      <div className="font-mono text-[11px] text-slate-200 truncate">{tb.label}</div>
+                      <div className="font-mono text-[9px] text-slate-600 truncate">{tb.desc}</div>
                     </div>
                   </button>
                 ))}
+                <button onClick={cashOut} disabled={cashOutBusy || !isConnected}
+                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left disabled:opacity-50">
+                  <span className="text-base leading-none shrink-0">🏦</span>
+                  <div className="min-w-0">
+                    <div className="font-mono text-[11px] text-slate-200 truncate">{cashOutBusy ? "Starting…" : "Cash out"}</div>
+                    <div className="font-mono text-[9px] text-slate-600 truncate">USDC → bank</div>
+                  </div>
+                </button>
               </div>
             </div>
 
@@ -314,6 +340,7 @@ export default function BankPage() {
                     </div>
                   )}
                   {panel === "earn" && <MoveToYieldCard result={{ network }} account={acct} />}
+                  {panel === "convert" && <SwapCard account={acct} />}
                   {panel === "send" && (
                     <div>
                       <button onClick={() => setScanOpen(true)}
