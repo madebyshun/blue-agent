@@ -478,12 +478,10 @@ export default function OverviewView({ onSwitchTab }: Props) {
             <BentoCell className="sm:col-span-3 p-5">
               {/* Quick actions strip — icon + label only, no "Open →" subtext */}
               <div className="text-[10px] text-slate-500 tracking-widest font-bold mb-3">QUICK ACTIONS</div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {[
-                  { label: "Chat",     icon: "💬", href: "/app/chat",      color: "#4FC3F7" },
-                  { label: "Console",  icon: "⌘",  href: "/app/console",   color: "#A78BFA" },
-                  { label: "Simulate", icon: "🚀", href: "/app/simulator", color: "#F59E0B" },
-                  { label: "Hub",      icon: "🧰", href: "/app/hub",       color: "#22C55E" },
+                  { label: "Chat", icon: "💬", href: "/app/chat", color: "#4FC3F7" },
+                  { label: "Hub",  icon: "🧰", href: "/app/hub",  color: "#22C55E" },
                 ].map(a => (
                   <Link key={a.label} href={a.href}
                     className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] hover:border-[#2a2a3e] hover:bg-white/[0.02] transition-all">

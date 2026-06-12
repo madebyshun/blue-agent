@@ -323,7 +323,7 @@ export default function DocsPage() {
 
           <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden">
             {[
-              { tier: "Guest",   need: "No wallet",  perk: "100 cr/day · ~10 messages", color: "#64748b" },
+              { tier: "Guest",   need: "No wallet",  perk: "5,000 cr/day · test the tools", color: "#64748b" },
               { tier: "Starter", need: "500K BLUE",  perk: "500 cr/day",                color: "#4FC3F7" },
               { tier: "Pro",     need: "2M BLUE",    perk: "2,000 cr/day",              color: "#A78BFA" },
               { tier: "Max",     need: "10M BLUE",   perk: "∞ credits · 40% off",       color: "#F59E0B" },

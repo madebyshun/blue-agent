@@ -42,13 +42,13 @@ const TIERS: { min: number; tier: HolderTier; dailyCr: number; discount: number;
 ];
 
 /**
- * Guest = no wallet connected. Bumped 30 → 100 on Bankr's growth advice
- * ("give ~10 free messages/day at least early on"): 100 cr = 10 messages on
- * the Fast tier (10 cr/msg), enough to let a new user actually feel the
- * product before being asked to hold $BLUE. Cheap to subsidise — provider
- * cost of 10 Fast msgs is well under 2¢.
+ * Guest = no wallet connected. Set high enough that a new user can actually
+ * TEST the Hub tools, not just chat: a typical x402 tool costs 400–500 cr
+ * ($0.20–$0.25 × 2000 cr/USDC), so 100/day couldn't run even one. 5,000/day
+ * ≈ a couple of premium tools or ~10 typical tool calls (or ~100 Fast msgs)
+ * — enough to feel the full product before being asked to hold/stake $BLUE.
  */
-export const GUEST_DAILY = 100;
+export const GUEST_DAILY = 5000;
 
 export function getTierInfo(blueBalance: number): TierInfo {
   const idx = TIERS.findIndex((t) => blueBalance >= t.min);
