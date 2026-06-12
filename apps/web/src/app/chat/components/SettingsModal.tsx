@@ -82,9 +82,9 @@ export default function SettingsModal({
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Panel — sizes to content (so sparse sections don't leave a void),
-          capped at the viewport and floored so it never feels cramped. */}
-      <div className="relative w-full max-w-2xl max-h-[90vh] sm:max-h-[85vh] min-h-[420px] flex flex-col rounded-2xl border border-[#1A1A2E] bg-[#050508] shadow-2xl overflow-hidden">
+      {/* Panel — one fixed size so the modal never resizes between sections;
+          capped at the viewport on short screens. */}
+      <div className="relative w-full max-w-2xl h-[600px] max-h-[90vh] flex flex-col rounded-2xl border border-[#1A1A2E] bg-[#050508] shadow-2xl overflow-hidden">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 h-14 border-b border-[#1A1A2E] shrink-0">

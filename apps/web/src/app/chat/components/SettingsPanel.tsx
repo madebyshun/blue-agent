@@ -15,7 +15,7 @@ const BLUE_CONTRACT = "0xf895783b2931c919955e18b5e3343e7c7c456ba3";
 const LINKS: { label: string; sub: string; href: string }[] = [
   { label: "X / Twitter", sub: "@blueagent_",              href: "https://x.com/blueagent_" },
   { label: "Telegram",    sub: "t.me/blueagent_hub",       href: "https://t.me/blueagent_hub" },
-  { label: "Bankr",       sub: "bankr.bot/agent/blue-agent", href: "https://bankr.bot/agent/blue-agent" },
+  { label: "Bankr",       sub: "bankr.bot/agents/blue-agent", href: "https://bankr.bot/agents/blue-agent" },
 ];
 
 // Tier ladder — mirrors lib/credits.ts TIERS + GUEST_DAILY. Shown in the
