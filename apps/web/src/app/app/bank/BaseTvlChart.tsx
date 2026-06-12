@@ -34,7 +34,7 @@ export default function BaseTvlChart() {
   const changePct = cur != null && first ? ((cur - first) / first) * 100 : null;
 
   return (
-    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
+    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 h-full flex flex-col min-h-0">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div>
           <div className="font-mono text-[10px] text-slate-500 tracking-widest">BASE · TOTAL VALUE LOCKED</div>
@@ -60,8 +60,8 @@ export default function BaseTvlChart() {
         </div>
       </div>
 
-      <div style={{ width: "100%", height: 150 }}>
-        <ResponsiveContainer>
+      <div className="flex-1 min-h-0" style={{ width: "100%" }}>
+        <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="tvlGrad" x1="0" y1="0" x2="0" y2="1">
