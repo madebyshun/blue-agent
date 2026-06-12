@@ -4,6 +4,11 @@ import type { NextConfig } from "next";
 // /app/hub/:tool redirect.
 
 const nextConfig: NextConfig = {
+  // Allow a second `next dev` of THIS app (e.g. a parallel agent session) to
+  // use its own build dir so two servers don't corrupt a shared `.next`.
+  // Defaults to `.next` → production and the primary dev server are unaffected.
+  // Start the secondary server with: NEXT_DIST_DIR=.next-dev3004 PORT=3004 …
+  distDir: process.env.NEXT_DIST_DIR ?? ".next",
   async redirects() {
     return [
       {
