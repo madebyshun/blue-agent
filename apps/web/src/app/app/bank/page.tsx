@@ -17,14 +17,12 @@ import {
 import { MoveToYieldCard, SendCard } from "@/app/chat/components/ToolCards";
 import { useBasename, shortAddr } from "@/lib/useBasename";
 import BaseTvlChart from "./BaseTvlChart";
-import { StackedTvlChart, ApyCompareChart } from "./BaseProtocolCharts";
+import { ApyCompareChart } from "./BaseProtocolCharts";
 import BaseTokensCard from "./BaseTokensCard";
 
 const usd = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const compact = (n: number | null | undefined) =>
-  n == null ? "—" : n >= 1e9 ? `$${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(0)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(0)}K` : `$${n.toFixed(0)}`;
 
 
 type Panel = "positions" | "earn" | "send" | "receive";
@@ -80,18 +78,11 @@ export default function BankPage() {
   const bestApy   = rates && rates.length ? rates[0].apy : null;
   const morphoApy = rates?.find(r => r.project === "morpho-blue")?.apy ?? null;
 
-  // Wow data: Morpho 30d APY series + Base chain snapshot (both real, cached).
+  // Morpho 30d APY series for the sidebar EARNING sparkline (real, cached).
   const [hist, setHist] = useState<{ points: number[]; current: number | null } | null>(null);
-  type Tok = { price: number | null; change24h: number | null; vol24h?: number | null } | null;
-  type Snap = {
-    tvlUsd: number | null; change7dPct: number | null; tvlSeries?: number[];
-    dexVol24h?: number | null; dexVol7d?: number | null; blue?: Tok; cbbtc?: Tok;
-  };
-  const [snap, setSnap] = useState<Snap | null>(null);
   useEffect(() => {
     let off = false;
     fetch("/api/yield/morpho-history").then(r => r.json()).then(d => { if (!off) setHist({ points: d.points ?? [], current: d.current ?? null }); }).catch(() => {});
-    fetch("/api/base-snapshot").then(r => r.json()).then(d => { if (!off) setSnap(d); }).catch(() => {});
     return () => { off = true; };
   }, []);
 
@@ -276,12 +267,6 @@ export default function BankPage() {
             </div>
           )}
 
-          {/* TVL by protocol (stacked) + USDC APY comparison */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-            <StackedTvlChart />
-            <ApyCompareChart />
-          </div>
-
           {/* Row 2: Assets · Rates · Projection */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
 
@@ -335,23 +320,9 @@ export default function BankPage() {
             </Card>
           </div>
 
-          {/* Row 3: Morpho APY chart (wide) + Base snapshot */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-            <div className="lg:col-span-2 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="font-mono text-[10px] text-slate-500 tracking-widest">MORPHO · GAUNTLET USDC PRIME · 30D NET APY</div>
-                <div className="font-mono text-[13px] font-bold text-[#A78BFA]">{hist?.current != null ? `${hist.current.toFixed(2)}%` : "—"}</div>
-              </div>
-              <Spark points={hist?.points ?? []} color="#A78BFA" height={64} />
-              <div className="font-mono text-[9px] text-slate-600 mt-2">$442M TVL · curator Gauntlet · verified ERC-4626 · live via Morpho API</div>
-            </div>
-            <Card title="BASE SNAPSHOT" note="live · DefiLlama">
-              <StatLine label="Chain TVL" value={snap?.tvlUsd != null ? `$${(snap.tvlUsd / 1e9).toFixed(2)}B` : "—"} />
-              <StatLine label="7d change" value={snap?.change7dPct != null ? `${snap.change7dPct >= 0 ? "+" : ""}${snap.change7dPct.toFixed(2)}%` : "—"} color={snap && (snap.change7dPct ?? 0) >= 0 ? "#34D399" : "#EF4444"} />
-              <StatLine label="24h DEX vol" value={compact(snap?.dexVol24h)} />
-              <StatLine label="Best USDC APY" value={bestApy != null ? `${bestApy.toFixed(2)}%` : "—"} color="#34D399" />
-              <StatLine label="Custody" value="You hold keys" color="#A78BFA" />
-            </Card>
+          {/* USDC supply APY — Aave vs Morpho vs Moonwell (the one yield chart, tied to Earn) */}
+          <div className="mb-4">
+            <ApyCompareChart />
           </div>
 
           {/* Activity */}
@@ -389,15 +360,6 @@ function AssetRow({ label, sub, usd: val, color }: { label: string; sub: string;
         <div><div className="font-mono text-[12px] text-slate-200">{label}</div><div className="font-mono text-[9px] text-slate-600">{sub}</div></div>
       </div>
       <div className="font-mono text-[12px] text-slate-300">{val != null ? `$${usd(val)}` : "—"}</div>
-    </div>
-  );
-}
-
-function StatLine({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="flex items-center justify-between py-1.5 border-b border-[#13131f] last:border-0 font-mono text-[11px]">
-      <span className="text-slate-500">{label}</span>
-      <span style={{ color: color ?? "#e2e8f0" }}>{value}</span>
     </div>
   );
 }
