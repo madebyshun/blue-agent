@@ -1115,14 +1115,13 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
 // router: pick a venue, the card builds the right protocol calls.
 interface YieldMoveResult { action?: string; amount?: number | string; network?: string }
 
-function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
-  // Use the chat's canonical connected wallet (set by WalletBar via
-  // onWalletChange) so the card's "connected" state matches what the user sees
-  // in the sidebar — wagmi's bare useAccount() can lag/mismatch right after a
-  // reconnect. wagmi hooks below still drive the actual signing.
-  const { walletAddr } = useChat();
-  const address = walletAddr as `0x${string}` | undefined;
-  const isConnected = !!walletAddr;
+export function MoveToYieldCard({ result, account }: { result: YieldMoveResult; account?: `0x${string}` }) {
+  // `account` is the connected wallet, passed in by the host (chat dispatcher
+  // reads it from useChat; the /app/bank dashboard reads it from useAccount) so
+  // the card works both inside and outside the chat. wagmi hooks below still
+  // drive the actual signing.
+  const address = account;
+  const isConnected = !!account;
   const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
 
@@ -1432,10 +1431,9 @@ function MoveToYieldCard({ result }: { result: YieldMoveResult }) {
 // their OWN wallet. Basenames resolve via OnchainKit (Base L2 resolver).
 interface SendResult { to?: string; amount?: number | string; asset?: string; network?: string }
 
-function SendCard({ result }: { result: SendResult }) {
-  const { walletAddr } = useChat();
-  const fromAddr = walletAddr as `0x${string}` | undefined;
-  const isConnected = !!walletAddr;
+export function SendCard({ result, account }: { result: SendResult; account?: `0x${string}` }) {
+  const fromAddr = account;
+  const isConnected = !!account;
   const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
   const { sendTransactionAsync } = useSendTransaction();
@@ -1631,6 +1629,10 @@ function SendCard({ result }: { result: SendResult }) {
 }
 
 export function ToolResultCard({ tool, result }: { tool: string; result: Record<string, unknown> }) {
+  // Always called inside the chat (ChatMessages) — read the canonical wallet
+  // here and hand it to the action cards as a prop so they don't depend on chat.
+  const { walletAddr } = useChat();
+  const account = walletAddr as `0x${string}` | undefined;
   if (!result || typeof result !== "object") return null;
   const r = result;
 
@@ -1648,8 +1650,8 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_yield":         return <YieldCard        result={r} />;
     case "show_portfolio":    return <PortfolioCard />;
     case "prepare_token_launch": return <TokenLaunchCard result={r as TokenLaunchResult} />;
-    case "prepare_yield":     return <MoveToYieldCard  result={r as YieldMoveResult} />;
-    case "prepare_send":      return <SendCard         result={r as SendResult} />;
+    case "prepare_yield":     return <MoveToYieldCard  result={r as YieldMoveResult} account={account} />;
+    case "prepare_send":      return <SendCard         result={r as SendResult} account={account} />;
     default:                  return <GenericCard      tool={tool} result={r} />;
   }
 }
