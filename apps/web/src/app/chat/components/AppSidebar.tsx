@@ -101,11 +101,13 @@ export default function AppSidebar({
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, 40);
 
+  // w-72 + px-5 h-14 header — the shared app-wide secondary-sidebar format,
+  // matching Hub (HubView) and Hub registry so every /app page lines up.
   return (
-    <aside className="hidden lg:flex flex-col w-64 shrink-0 h-full border-r border-[#1A1A2E] bg-[#050508]">
+    <aside className="hidden lg:flex flex-col w-72 shrink-0 h-full border-r border-[#1A1A2E] bg-[#050508]">
 
       {/* ── Identity ── aligned with main sidebar h-14 logo row */}
-      <div className="px-4 h-14 flex items-center border-b border-[#1A1A2E] shrink-0">
+      <div className="px-5 h-14 flex items-center border-b border-[#1A1A2E] shrink-0">
         <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0 mr-2" />
         <p className="font-mono text-[10px] text-[#4FC3F7] tracking-widest">// BLUE CHAT</p>
       </div>
@@ -158,7 +160,7 @@ export default function AppSidebar({
 
       {/* ── Conversations — "Recents" section ── */}
       <div className="flex-1 overflow-hidden flex flex-col min-h-0 border-t border-[#1A1A2E]">
-        <div className="flex items-center justify-between px-4 pt-3 pb-1 shrink-0">
+        <div className="flex items-center justify-between px-5 pt-3 pb-1 shrink-0">
           <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">Recents</p>
         </div>
 
@@ -181,7 +183,7 @@ export default function AppSidebar({
                 <div
                   key={task.id}
                   onClick={() => { selectTask(task.id); onSelect("chat"); }}
-                  className={`group relative w-full text-left px-4 py-2 transition-all cursor-pointer flex items-center gap-2 ${
+                  className={`group relative w-full text-left px-5 py-2 transition-all cursor-pointer flex items-center gap-2 ${
                     isActive ? "bg-[#4FC3F7]/8" : "hover:bg-[#ffffff05]"
                   }`}
                 >
@@ -215,7 +217,7 @@ export default function AppSidebar({
       </div>
 
       {/* ── Footer — credits ── */}
-      <div className="px-4 py-3.5 border-t border-[#1A1A2E] shrink-0">
+      <div className="px-5 py-3.5 border-t border-[#1A1A2E] shrink-0">
         <button
           className="w-full flex items-center gap-2.5 group"
           onClick={onOpenSettings}
