@@ -7,7 +7,7 @@
 // is wired (we never fabricate transaction history).
 
 import { useState, useEffect, type ReactNode } from "react";
-import { useAccount, useReadContract, useBalance, useConnect } from "wagmi";
+import { useAccount, useReadContract, useBalance, useConnect, useDisconnect } from "wagmi";
 import { formatUnits } from "viem";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -41,6 +41,7 @@ export default function BankPage() {
   const { address, isConnected } = useAccount();
   const acct = address as `0x${string}` | undefined;
   const { name } = useBasename(acct);
+  const { disconnect } = useDisconnect();
   const [network, setNetwork] = useState<YieldNetwork>("baseSepolia");
   const [panel, setPanel]     = useState<Panel>("positions");
   const [actionOpen, setActionOpen] = useState(false);
@@ -208,8 +209,13 @@ export default function BankPage() {
         {/* Account chip */}
         <div className="px-4 py-3 border-t border-[#1A1A2E]">
           <div className="font-mono text-[11px] text-slate-300 truncate">{name || shortAddr(acct)}</div>
-          <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer"
-            className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7]">View on Basescan ↗</a>
+          <div className="flex items-center gap-2 mt-0.5">
+            <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer"
+              className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7]">Basescan ↗</a>
+            <span className="text-slate-700 text-[9px]">·</span>
+            <button onClick={() => disconnect()}
+              className="font-mono text-[9px] text-slate-600 hover:text-red-400 transition-colors">Disconnect</button>
+          </div>
         </div>
       </aside>
 
