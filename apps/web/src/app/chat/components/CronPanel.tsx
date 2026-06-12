@@ -190,78 +190,84 @@ export default function CronPanel() {
           </div>
         )}
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           {crons.map(cron => {
             const isRunning = cronRunning === cron.id;
             return (
               <div
                 key={cron.id}
-                className="rounded-xl border transition-all overflow-hidden"
+                className="rounded-2xl border transition-all p-4"
                 style={{
-                  borderColor: cron.active ? "#1E293B" : "#0F172A",
+                  borderColor: cron.active ? "#1E293B" : "#13131F",
                   background:  cron.active ? "#0A0A12" : "#070710",
                 }}
               >
-                {/* Toggle row */}
-                <div className="flex items-center gap-2.5 px-3.5 pt-3 pb-2">
-                  <Toggle active={cron.active} onChange={() => updateCron(cron.id, { active: !cron.active })} />
+                {/* ── Header: title + toggle + delete ── */}
+                <div className="flex items-start gap-3 mb-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <StatusDot active={cron.active} />
-                      <span className={`font-mono text-[13px] font-medium truncate ${cron.active ? "text-white" : "text-slate-500"}`}>
+                      <span className={`font-mono text-sm font-semibold truncate ${cron.active ? "text-white" : "text-slate-500"}`}>
                         {cron.label}
                       </span>
                     </div>
-                    <p className="font-mono text-[10px] text-slate-600 mt-0.5 truncate pl-3">
-                      {cron.schedule} · {cron.time}
-                      {cron.active && (
-                        <span className="ml-1.5 text-slate-700">· next {nextRunLabel(cron)}</span>
-                      )}
-                    </p>
                   </div>
+                  <Toggle active={cron.active} onChange={() => updateCron(cron.id, { active: !cron.active })} />
                   <button
                     onClick={() => deleteCron(cron.id)}
-                    className="p-1 rounded-md text-slate-700 hover:text-red-400 hover:bg-red-400/10 transition-all"
+                    className="p-1 rounded-md text-slate-700 hover:text-red-400 hover:bg-red-400/10 transition-all shrink-0"
                     title="Delete"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
                 </div>
 
-                {/* Prompt preview — flush against the bottom of the row, no
-                    nested card. Saves ~16px per item. */}
-                <div className="px-3.5 pb-2">
-                  <p className="font-mono text-[10px] text-slate-500 px-2 py-1.5 rounded-md bg-[#050508] border border-[#1A1A2E] truncate">
+                {/* ── Schedule chips ── */}
+                <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                  <span className="font-mono text-[10px] px-2 py-1 rounded-md bg-[#11111A] text-slate-300 capitalize">
+                    🗓 {cron.schedule} · {cron.time}
+                  </span>
+                  {cron.active && (
+                    <span className="font-mono text-[10px] px-2 py-1 rounded-md" style={{ background: "#34D39912", color: "#34D399" }}>
+                      next {nextRunLabel(cron)}
+                    </span>
+                  )}
+                </div>
+
+                {/* ── Prompt ── */}
+                <div className="rounded-xl bg-[#050508] border border-[#1A1A2E] px-3 py-2.5 mb-3">
+                  <p className="font-mono text-[8px] text-slate-600 tracking-widest mb-1">PROMPT</p>
+                  <p className="font-mono text-[11px] text-slate-300 leading-relaxed line-clamp-2">
                     {cron.prompt}
                   </p>
                 </div>
 
-                {/* Footer */}
-                <div className="flex items-center justify-between px-3.5 pb-3 gap-2">
+                {/* ── Footer: last result + Run ── */}
+                <div className="flex items-center justify-between gap-2">
                   {cron.lastResult ? (
-                    <p className="font-mono text-[9px] text-slate-700 truncate flex-1">
-                      Last: {cron.lastResult}
+                    <p className="font-mono text-[10px] text-slate-600 truncate flex-1">
+                      <span className="text-slate-700">Last run:</span> {cron.lastResult}
                     </p>
                   ) : (
-                    <span className="flex-1" />
+                    <p className="font-mono text-[10px] text-slate-700 flex-1">Not run yet</p>
                   )}
                   <button
                     onClick={() => runCron(cron.id)}
                     disabled={isRunning}
-                    className="flex items-center gap-1 font-mono text-[10px] px-2.5 py-1 rounded-md border transition-all disabled:opacity-40 shrink-0"
+                    className="flex items-center gap-1.5 font-mono text-[11px] font-semibold px-3 py-1.5 rounded-lg border transition-all disabled:opacity-40 shrink-0"
                     style={isRunning
                       ? { color: "#34D399", borderColor: "#34D39930", background: "#34D39910" }
-                      : { color: "#64748b", borderColor: "#1A1A2E", background: "transparent" }}
+                      : { color: "#4FC3F7", borderColor: "#4FC3F730", background: "#4FC3F710" }}
                   >
                     {isRunning ? (
                       <>
-                        <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
-                        running
+                        <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                        Running
                       </>
                     ) : (
-                      <>▶ Run</>
+                      <>▶ Run now</>
                     )}
                   </button>
                 </div>

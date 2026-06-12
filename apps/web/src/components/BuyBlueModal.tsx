@@ -239,7 +239,7 @@ export default function BuyBlueModal({ onClose, onSuccess }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4"
       onClick={(e) => { if (e.target === e.currentTarget && !isBusy) onClose(); }}
     >
       <div className="bg-[#0D0D14] border border-[#2A2A4E] rounded-2xl w-full max-w-sm shadow-2xl">
