@@ -23,8 +23,8 @@ const LINKS: { label: string; sub: string; href: string }[] = [
 // the hold-OR-stake model (both count toward your tier).
 const TIER_ROWS: { need: string; tier: string; perk: string; color: string }[] = [
   { need: "No wallet", tier: "Guest",   perk: "500 cr/day",    color: "#64748b" },
-  { need: "500K BLUE", tier: "Starter", perk: "5,000 cr/day",  color: "#4FC3F7" },
-  { need: "2M BLUE",   tier: "Pro",     perk: "20,000 cr/day", color: "#A78BFA" },
+  { need: "500K BLUE", tier: "Starter", perk: "2,000 cr/day",  color: "#4FC3F7" },
+  { need: "2M BLUE",   tier: "Pro",     perk: "6,000 cr/day",  color: "#A78BFA" },
   { need: "10M BLUE",  tier: "Max",     perk: "∞ + 40% off",   color: "#F59E0B" },
 ];
 

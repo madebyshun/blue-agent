@@ -36,16 +36,18 @@ export interface TierInfo {
 }
 
 const TIERS: { min: number; tier: HolderTier; dailyCr: number; discount: number; color: string }[] = [
-  { min: 10_000_000, tier: "Max",     dailyCr: -1,     discount: 0.40, color: "#F59E0B" },
-  { min:  2_000_000, tier: "Pro",     dailyCr: 20_000, discount: 0.20, color: "#A78BFA" },
-  { min:    500_000, tier: "Starter", dailyCr:  5_000, discount: 0,    color: "#4FC3F7" },
+  { min: 10_000_000, tier: "Max",     dailyCr: -1,    discount: 0.40, color: "#F59E0B" },
+  { min:  2_000_000, tier: "Pro",     dailyCr: 6_000, discount: 0.20, color: "#A78BFA" },
+  { min:    500_000, tier: "Starter", dailyCr: 2_000, discount: 0,    color: "#4FC3F7" },
 ];
 
 /**
  * Guest = no wallet connected. A SAMPLER, not a free ride: 500/day ≈ one
  * typical x402 tool ($0.20–$0.25 = 400–500 cr) or ~50 Fast msgs — enough to
  * try the product once, but deliberately below the holder tiers so there's a
- * real reason to hold/stake $BLUE. Real tool usage starts at Starter (5,000).
+ * real reason to hold/stake $BLUE. Daily credits cover chat + light tool use;
+ * heavy tool usage is pay-per-use (x402 / buy credits) — that keeps the tool
+ * revenue intact instead of giving holders unlimited free tools.
  */
 export const GUEST_DAILY = 500;
 
