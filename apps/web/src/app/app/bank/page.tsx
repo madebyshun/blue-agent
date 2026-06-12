@@ -266,10 +266,10 @@ export default function BankPage() {
               </button>
               {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-1">{onrampMsg}</div>}
               <div className="font-mono text-[9px] text-slate-600 mt-1">via Coinbase · available in select regions · or fund with Receive</div>
-              <div className="flex flex-col gap-2 mt-3 flex-1 min-h-0">
+              <div className="flex flex-col gap-2 mt-3 flex-1 min-h-0 overflow-y-auto">
                 {TABS.map(tb => (
                   <button key={tb.id} onClick={() => openAction(tb.id)}
-                    className="flex-1 flex items-center gap-3 px-4 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left">
+                    className="flex-1 min-h-[52px] flex items-center gap-3 px-4 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left">
                     <span className="text-lg leading-none">{tb.icon}</span>
                     <div>
                       <div className="font-mono text-[12px] text-slate-200">{tb.label}</div>
