@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AppChromeProvider, useAppChrome } from "./AppChrome";
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
@@ -308,42 +309,149 @@ function AppSideNav() {
   );
 }
 
-// ── Mobile bottom nav ──────────────────────────────────────────────────────────
+// ── Mobile chrome (top bar + drawer) ────────────────────────────────────────────
+// Replaces the old bottom tab bar. Claude-style: a hamburger top bar opens a
+// slide-out drawer that holds BOTH the product destinations and (when a page
+// registers it) that page's contextual sub-nav — e.g. Blue Chat's Models /
+// Tools / Skills / Scheduled and recent conversations. Shown below lg so the
+// tablet gap (md rail, no chat sidebar) keeps full nav access.
 
-function MobileNav() {
+const PRODUCTS = [...APP_NAV, ...APP_BOTTOM];
+
+function labelForPath(pathname: string): string {
+  const match = PRODUCTS.find(i => pathname === i.href || pathname.startsWith(i.href + "/"));
+  return match?.label ?? "Blue Agent";
+}
+
+function MobileTopBar() {
+  const { setDrawerOpen, contextual } = useAppChrome();
   const pathname = usePathname();
-  const isActive = (href: string) => pathname.startsWith(href);
-
-  // Mobile bottom bar = the 5 product destinations. Terminal/Simulator/Console
-  // are dev-only (never on mobile); Docs lives in-app. Order mirrors the desktop
-  // rail: Chat → Hub → Launches → Dashboard → Profile.
-  const MOBILE_IDS = ["chat", "hub", "launches", "dashboard", "profile"];
-  const allItems = [...APP_NAV, ...APP_BOTTOM]
-    .filter(i => MOBILE_IDS.includes(i.id))
-    .sort((a, b) => MOBILE_IDS.indexOf(a.id) - MOBILE_IDS.indexOf(b.id));
+  const title = contextual?.barTitle ?? labelForPath(pathname);
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-[#1A1A2E] bg-[#050508]/95 backdrop-blur-xl"
-      style={{ height: 56 }}>
-      <div className="flex h-full">
-        {allItems.map((item) => {
-          const active = isActive(item.href);
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
-              style={{ color: active ? "#4FC3F7" : "#334155" }}
-            >
-              {item.icon}
-              <span className="font-mono text-[8px] tracking-wider mt-0.5">
-                {item.label.toUpperCase()}
-              </span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+    <header className="lg:hidden flex items-center gap-3 h-12 px-3 border-b border-[#1A1A2E] bg-[#050508] shrink-0">
+      <button
+        aria-label="Open menu"
+        onClick={() => setDrawerOpen(true)}
+        className="p-1.5 -ml-1 rounded-lg text-slate-300 hover:bg-[#ffffff0a] transition-colors"
+      >
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+      <span className="font-mono text-[11px] text-[#4FC3F7] tracking-widest truncate">
+        // {title.toUpperCase()}
+      </span>
+    </header>
+  );
+}
+
+function MobileDrawer() {
+  const { drawerOpen, setDrawerOpen, contextual } = useAppChrome();
+  const pathname = usePathname();
+
+  // Close the drawer whenever the route changes (e.g. after tapping a product).
+  useEffect(() => { setDrawerOpen(false); }, [pathname, setDrawerOpen]);
+
+  // Escape closes.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDrawerOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drawerOpen, setDrawerOpen]);
+
+  if (!drawerOpen) return null;
+
+  const hasContextual = contextual && (contextual.items.length > 0 || (contextual.recents?.length ?? 0) > 0);
+
+  return (
+    <div className="lg:hidden fixed inset-0 z-[90]">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
+
+      <aside className="absolute left-0 top-0 h-full w-[300px] max-w-[86vw] bg-[#070710] border-r border-[#1A1A2E] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between h-14 px-4 border-b border-[#1A1A2E] shrink-0">
+          <div className="flex items-center gap-2">
+            <img src="/logomark.svg" alt="" className="h-6 w-6 rounded-md" />
+            <span className="font-mono text-[12px] text-white tracking-wide">
+              BLUE<span className="text-[#4FC3F7]">AGENT</span>
+            </span>
+          </div>
+          <button
+            aria-label="Close menu"
+            onClick={() => setDrawerOpen(false)}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-[#ffffff0a] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto py-2">
+          {/* Contextual group (e.g. Blue Chat sub-tabs + recents) */}
+          {hasContextual && (
+            <div className="px-2 pb-2">
+              <p className="px-3 pt-2 pb-1 font-mono text-[9px] text-slate-600 tracking-widest uppercase">
+                {contextual!.groupTitle}
+              </p>
+              {contextual!.items.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => { item.onSelect(); setDrawerOpen(false); }}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-[#ffffff06]"
+                  style={item.active ? { background: "#4FC3F712" } : undefined}
+                >
+                  {item.icon && <span className="w-4 text-center shrink-0 text-sm leading-none">{item.icon}</span>}
+                  <span className="font-mono text-[13px]" style={{ color: item.active ? "#4FC3F7" : "#cbd5e1" }}>
+                    {item.label}
+                  </span>
+                </button>
+              ))}
+
+              {contextual!.recents && contextual!.recents.length > 0 && (
+                <>
+                  <p className="px-3 pt-3 pb-1 font-mono text-[9px] text-slate-600 tracking-widest uppercase">Recents</p>
+                  {contextual!.recents.map(r => (
+                    <button
+                      key={r.id}
+                      onClick={() => { r.onSelect(); setDrawerOpen(false); }}
+                      className="w-full text-left flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff06]"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: r.active ? "#4FC3F7" : "#334155" }} />
+                      <span className="font-mono text-[12px] truncate" style={{ color: r.active ? "#ffffff" : "#94a3b8" }}>
+                        {r.title}
+                      </span>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Products group */}
+          <div className={`px-2 pt-1 ${hasContextual ? "border-t border-[#13131f] mt-1" : ""}`}>
+            <p className="px-3 pt-3 pb-1 font-mono text-[9px] text-slate-600 tracking-widest uppercase">Products</p>
+            {PRODUCTS.map(item => {
+              const active = pathname === item.href || pathname.startsWith(item.href + "/");
+              return (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  onClick={() => setDrawerOpen(false)}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-[#ffffff06]"
+                  style={active ? { background: "#4FC3F712" } : undefined}
+                >
+                  <span className="shrink-0" style={{ color: active ? "#4FC3F7" : "#64748b" }}>{item.icon}</span>
+                  <span className="font-mono text-[13px]" style={{ color: active ? "#4FC3F7" : "#cbd5e1" }}>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </aside>
+    </div>
   );
 }
 
@@ -351,12 +459,17 @@ function MobileNav() {
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#050508]">
-      <AppSideNav />
-      <main className="flex-1 min-w-0 overflow-hidden flex flex-col">
-        {children}
-      </main>
-      <MobileNav />
-    </div>
+    <AppChromeProvider>
+      <div className="flex h-screen w-screen overflow-hidden bg-[#050508]">
+        <AppSideNav />
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <MobileTopBar />
+          <main className="flex-1 min-h-0 overflow-hidden flex flex-col">
+            {children}
+          </main>
+        </div>
+        <MobileDrawer />
+      </div>
+    </AppChromeProvider>
   );
 }
