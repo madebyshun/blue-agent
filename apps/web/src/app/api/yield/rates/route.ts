@@ -42,11 +42,14 @@ export interface YieldRate {
   llamaUrl:  string;
 }
 
+// yields.llama.fi/pools is ~14 MB — over Next's 2 MB fetch-cache limit, so it
+// re-downloads every request. Cache the small computed result in memory for 5m.
+let MEM: { data: unknown; ts: number } | null = null;
+
 export async function GET() {
+  if (MEM && Date.now() - MEM.ts < 300_000) return NextResponse.json(MEM.data);
   try {
-    const res = await fetch("https://yields.llama.fi/pools", {
-      next: { revalidate: 300 },
-    });
+    const res = await fetch("https://yields.llama.fi/pools", { cache: "no-store" });
     if (!res.ok) throw new Error(`defillama ${res.status}`);
     const json = (await res.json()) as { data?: LlamaPool[] };
 
@@ -82,7 +85,9 @@ export async function GET() {
       .sort((a, b) => b.apy - a.apy);
 
     const best = rates[0] ?? null;
-    return NextResponse.json({ rates, best, ts: Date.now() });
+    const data = { rates, best, ts: Date.now() };
+    MEM = { data, ts: Date.now() };
+    return NextResponse.json(data);
   } catch (e) {
     return NextResponse.json(
       { rates: [], best: null, error: (e as Error).message, ts: Date.now() },

@@ -96,39 +96,36 @@ export default function BaseTokensCard() {
         {scanErr && <div className="font-mono text-[9px] text-red-500 mt-1">{scanErr}</div>}
       </div>
 
-      {/* Selected token + chart */}
-      <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-3 mb-3 shrink-0">
-        <div className="flex items-start justify-between mb-1">
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-mono text-[12px] text-slate-200 font-bold">{t?.sym ?? "—"}</span>
-              {t?.addr && <a href={`https://basescan.org/token/${t.addr}`} target="_blank" rel="noopener noreferrer" className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7]">contract ↗</a>}
-            </div>
-            <div className="font-mono text-[14px] text-white">{fmtPrice(t?.price)}</div>
-          </div>
-          <div className="font-mono text-[11px]" style={{ color: t?.change24h == null ? "#64748b" : up ? "#34D399" : "#EF4444" }}>
-            {t?.change24h == null ? "—" : `${up ? "▲" : "▼"} ${Math.abs(t.change24h).toFixed(2)}% 24h`}
-          </div>
-        </div>
-        <div style={{ height: 56 }}><Spark points={chart} color={lineColor} /></div>
+      {/* Quick-pick chips */}
+      <div className="flex flex-wrap gap-1.5 mb-3 shrink-0">
+        {tokens.slice(0, 8).map(tok => (
+          <button key={tok.sym} onClick={() => setSel(tok.sym)}
+            className="font-mono text-[10px] px-2 py-1 rounded-md transition-colors"
+            style={tok.sym === sel
+              ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+              : { color: "#94a3b8", border: "1px solid #1A1A2E" }}>
+            {tok.sym}
+          </button>
+        ))}
       </div>
 
-      {/* Token list (scrollable) */}
-      <div className="flex-1 overflow-y-auto min-h-0 -mr-1 pr-1">
-        {tokens.length ? tokens.map(tok => {
-          const active = tok.sym === sel;
-          const u = (tok.change24h ?? 0) >= 0;
-          return (
-            <button key={tok.sym} onClick={() => setSel(tok.sym)}
-              className="w-full flex items-center justify-between py-1.5 px-2 rounded-md transition-colors"
-              style={active ? { background: "#4FC3F710", border: "1px solid #4FC3F722" } : { border: "1px solid transparent" }}>
-              <span className="font-mono text-[11px] text-slate-200">{tok.sym}</span>
-              <span className="font-mono text-[11px] text-slate-300">
-                {fmtPrice(tok.price)} <span style={{ color: tok.change24h == null ? "#64748b" : u ? "#34D399" : "#EF4444" }}>{tok.change24h == null ? "" : `${u ? "+" : ""}${tok.change24h.toFixed(1)}%`}</span>
-              </span>
-            </button>
-          );
-        }) : <div className="font-mono text-[10px] text-slate-600 px-2 py-2">loading tokens…</div>}
+      {/* Selected token header */}
+      <div className="flex items-start justify-between mb-2 shrink-0">
+        <div>
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono text-[14px] text-slate-100 font-bold">{t?.sym ?? "—"}</span>
+            {t?.addr && <a href={`https://basescan.org/token/${t.addr}`} target="_blank" rel="noopener noreferrer" className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7]">contract ↗</a>}
+          </div>
+          <div className="font-mono text-[18px] text-white font-bold">{fmtPrice(t?.price)}</div>
+        </div>
+        <div className="font-mono text-[12px]" style={{ color: t?.change24h == null ? "#64748b" : up ? "#34D399" : "#EF4444" }}>
+          {t?.change24h == null ? "—" : `${up ? "▲" : "▼"} ${Math.abs(t.change24h).toFixed(2)}% 24h`}
+        </div>
+      </div>
+
+      {/* Big price chart fills the remaining space */}
+      <div className="flex-1 min-h-0">
+        <Spark points={chart} color={lineColor} />
       </div>
     </div>
   );
