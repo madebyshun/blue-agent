@@ -9,18 +9,19 @@ import AppSidebar    from "@/app/chat/components/AppSidebar";
 import ToolsTab      from "@/app/chat/components/ToolsTab";
 import SkillsPanel   from "@/app/chat/components/SkillsPanel";
 import CronPanel     from "@/app/chat/components/CronPanel";
-import SettingsPanel from "@/app/chat/components/SettingsPanel";
+import SettingsModal from "@/app/chat/components/SettingsModal";
 import ChatMessages  from "@/app/chat/components/ChatMessages";
 import ChatInput     from "@/app/chat/components/ChatInput";
 import ArtifactsPanel from "@/app/chat/components/ArtifactsPanel";
 import type { ActiveTab } from "@/app/chat/types";
 
 // ── Tab metadata ───────────────────────────────────────────────────────────────
-const TAB_META: Record<Exclude<ActiveTab, "chat">, { title: string; subtitle: string }> = {
+// Settings is intentionally absent — it opens as a modal from the account chip,
+// not as a content tab.
+const TAB_META: Record<Exclude<ActiveTab, "chat" | "settings">, { title: string; subtitle: string }> = {
   tools:    { title: "Tools",    subtitle: "50 hub tools · click to run in chat" },
   skills:   { title: "Skills",   subtitle: "Agent capabilities · Blue Agent · Bankr · Base MCP" },
   cron:     { title: "Cron",     subtitle: "Scheduled agent tasks" },
-  settings: { title: "Settings", subtitle: "Model · Persona · Credits · Wallet" },
 };
 
 // ── Mobile tab bar ─────────────────────────────────────────────────────────────
@@ -29,16 +30,16 @@ const MOBILE_TABS: { id: ActiveTab; label: string; icon: string }[] = [
   { id: "tools",    label: "Tools",    icon: "🔧" },
   { id: "skills",   label: "Skills",   icon: "⚡" },
   { id: "cron",     label: "Cron",     icon: "⏱" },
-  { id: "settings", label: "Settings", icon: "⚙️" },
 ];
 
 // ── Shell ──────────────────────────────────────────────────────────────────────
 function ChatShell() {
   const { buyOpen, setBuyOpen, triggerWalletRefresh, artifactsPanelOpen, onWalletChange, walletRefresh } = useChat();
   const [activeTab, setActiveTab] = useState<ActiveTab>("chat");
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const isChat = activeTab === "chat";
-  const meta   = !isChat ? TAB_META[activeTab] : null;
+  const meta   = activeTab !== "chat" && activeTab !== "settings" ? TAB_META[activeTab] : null;
 
   return (
     <>
@@ -59,7 +60,7 @@ function ChatShell() {
       <div className="flex bg-[#050508] font-mono h-full overflow-hidden">
 
         {/* ── Sidebar (desktop) ── */}
-        <AppSidebar activeTab={activeTab} onSelect={setActiveTab} />
+        <AppSidebar activeTab={activeTab} onSelect={setActiveTab} onOpenSettings={() => setSettingsOpen(true)} />
 
         {/* ── Main content area ──
             pb-14 below md clears the global mobile bottom nav (56px); md+ has
@@ -87,6 +88,14 @@ function ChatShell() {
                   </button>
                 );
               })}
+              {/* Settings — opens the modal (not a content tab) */}
+              <button
+                onClick={() => setSettingsOpen(true)}
+                title="Settings"
+                className="px-2.5 py-1 rounded-md text-sm leading-none text-[#64748b] transition-colors"
+              >
+                ⚙️
+              </button>
             </div>
           </div>
 
@@ -140,16 +149,12 @@ function ChatShell() {
                 <CronPanel />
               </div>
             )}
-
-            {/* ⚙️ Settings */}
-            {activeTab === "settings" && (
-              <div className="flex-1 h-full overflow-hidden">
-                <SettingsPanel />
-              </div>
-            )}
           </div>
         </div>
       </div>
+
+      {/* ⚙️ Settings — modal opened from the sidebar account chip */}
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
     </>
   );
