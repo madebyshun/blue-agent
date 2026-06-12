@@ -1,5 +1,5 @@
-import HubPage from "@/app/hub/page";
+import HubView from "@/app/hub/HubView";
 
 export default function AppHubPage() {
-  return <HubPage inShell />;
+  return <HubView inShell />;
 }

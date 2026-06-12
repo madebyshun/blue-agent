@@ -127,3 +127,39 @@ chore:    tooling, deps, config
 ## Branch policy
 
 **Always work on `dev`.** Never commit directly to `main`. PRs go `dev → main`.
+
+---
+
+## Build & deploy workflow
+
+**Build locally first, then deploy.** Never push to `main` (which auto-deploys
+to production) until the change has passed a full local build. This catches
+errors before they burn a Vercel deploy slot — the free plan caps at **100
+deployments/day**, and a failed build wastes one.
+
+Pipeline for every change, in order:
+
+```
+1. Edit code
+2. npx tsc --noEmit -p tsconfig.json   # type errors (fast) — run from apps/web
+3. npm run build                        # next build — lint, prerender, server/client import errors
+4. Manual runtime test at localhost     # logic/UX bugs a build can't catch
+5. Only when 2–4 PASS → merge dev→main → push (single deploy)
+```
+
+Notes:
+- `tsc --noEmit` only catches **types**. `next build` additionally catches
+  **ESLint errors, prerender failures, and server/client boundary mistakes** —
+  exactly the class of error that makes a Vercel build fail.
+- Step 4 is **mandatory** for sensitive changes (wallet, payments, on-chain,
+  credit metering) — those break at **runtime**, not build time. A clean build
+  is necessary but not sufficient.
+- `next build` and `next dev` share the `.next/` directory — **stop the dev
+  server before running a build** or `.next` can corrupt.
+- Deploy = one `git push origin main` after the quota resets. **Do not** create
+  empty `chore: trigger production redeploy` commits — they burn deploy slots.
+  If `main` doesn't auto-deploy, the cause is almost always the daily cap, not
+  the GitHub integration.
+
+**Deploy target:** production is the Vercel project **`blueagent-web-new`**
+(`blueagent.dev`). Never deploy to or recreate the `blue-agent` project.

@@ -186,7 +186,7 @@ function splitFollowups(content: string): { body: string; followups: string[] } 
   };
 }
 
-function MarkdownRenderer({ content }: { content: string }) {
+export function MarkdownRenderer({ content }: { content: string }) {
   const lines = content.split("\n");
   const elems: React.ReactNode[] = [];
   let i = 0;

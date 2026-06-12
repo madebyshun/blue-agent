@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { AppChromeProvider, useAppChrome } from "./AppChrome";
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
@@ -14,6 +16,17 @@ const APP_NAV = [
       <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round"
           d="M8.625 9.75a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375m-13.5 3.01c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 0 1 .778-.332 48.294 48.294 0 0 0 5.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
+      </svg>
+    ),
+  },
+  {
+    id: "bank",
+    label: "Bank",
+    href: "/app/bank",
+    icon: (
+      <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round"
+          d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0 0 12 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75Z" />
       </svg>
     ),
   },
@@ -53,6 +66,15 @@ const APP_NAV = [
       </svg>
     ),
   },
+];
+
+// ── Dev-only surfaces ───────────────────────────────────────────────────────────
+// Hidden from the product nav by default — the app is focused on Blue Chat +
+// Blue Hub (+ Launches, Dashboard). These developer tools appear in the side
+// rail ONLY when dev tools are enabled: NEXT_PUBLIC_DEV_TOOLS=1 at build time,
+// or append ?dev to any /app URL once (it sticks via localStorage). The routes
+// themselves stay live and reachable by direct URL regardless of the flag.
+const APP_DEV_NAV = [
   {
     id: "terminal",
     label: "Terminal",
@@ -88,6 +110,32 @@ const APP_NAV = [
   },
 ];
 
+// ── Dev-tools flag ──────────────────────────────────────────────────────────────
+// Server + first client render use the build-time env so hydration matches.
+// After mount we upgrade to `true` if ?dev is present (and persist it) or it was
+// persisted earlier — a one-directional flip that never causes a hydration error.
+function useDevTools() {
+  const [dev, setDev] = useState(process.env.NEXT_PUBLIC_DEV_TOOLS === "1");
+  useEffect(() => {
+    try {
+      const params   = new URLSearchParams(window.location.search);
+      const devParam = params.get("dev");
+      if (devParam === "0" || devParam === "off" || devParam === "false") {
+        // ?dev=0 — explicit off-switch: clear the persisted flag.
+        localStorage.removeItem("blue_dev_tools");
+        setDev(false);
+      } else if (params.has("dev")) {
+        // ?dev (or ?dev=1) — turn on and persist for this origin.
+        localStorage.setItem("blue_dev_tools", "1");
+        setDev(true);
+      } else if (localStorage.getItem("blue_dev_tools") === "1") {
+        setDev(true);
+      }
+    } catch { /* SSR / storage blocked — keep env default */ }
+  }, []);
+  return dev;
+}
+
 const APP_BOTTOM = [
   // Profile is back as its own page — identity (bio, avatar, social links)
   // is distinct from the dashboard's wallet snapshot. /app/dashboard is for
@@ -120,6 +168,7 @@ const APP_BOTTOM = [
 
 function AppSideNav() {
   const pathname = usePathname();
+  const dev      = useDevTools();
 
   const isActive = (href: string) => {
     if (href === "/app/chat") return pathname === "/app/chat" || pathname.startsWith("/app/chat/");
@@ -174,6 +223,43 @@ function AppSideNav() {
             </Link>
           );
         })}
+
+        {/* Dev-only tools — only when the dev flag is on */}
+        {dev && (
+          <>
+            <div className="w-8 h-px bg-[#1A1A2E] my-1.5 self-center" />
+            {APP_DEV_NAV.map((item) => {
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className="group relative flex flex-col items-center justify-center gap-0.5 w-full h-[50px] rounded-xl transition-all"
+                  style={
+                    active
+                      ? { color: "#A78BFA", background: "#A78BFA12", boxShadow: "0 0 0 1px #A78BFA20" }
+                      : { color: "#334155" }
+                  }
+                  title={`${item.label} · dev`}
+                >
+                  <span className="group-hover:text-slate-300 transition-colors">
+                    {item.icon}
+                  </span>
+                  <span
+                    className="font-mono text-[7px] tracking-wide transition-colors group-hover:text-slate-400 truncate max-w-[56px] text-center"
+                    style={{ color: active ? "#A78BFA" : undefined }}
+                  >
+                    {item.label}
+                  </span>
+                  {active && (
+                    <span className="absolute -left-2 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-[#A78BFA]"
+                      style={{ boxShadow: "0 0 6px #A78BFA80" }} />
+                  )}
+                </Link>
+              );
+            })}
+          </>
+        )}
       </nav>
 
       {/* Bottom items */}
@@ -223,42 +309,149 @@ function AppSideNav() {
   );
 }
 
-// ── Mobile bottom nav ──────────────────────────────────────────────────────────
+// ── Mobile chrome (top bar + drawer) ────────────────────────────────────────────
+// Replaces the old bottom tab bar. Claude-style: a hamburger top bar opens a
+// slide-out drawer that holds BOTH the product destinations and (when a page
+// registers it) that page's contextual sub-nav — e.g. Blue Chat's Models /
+// Tools / Skills / Scheduled and recent conversations. Shown below lg so the
+// tablet gap (md rail, no chat sidebar) keeps full nav access.
 
-function MobileNav() {
+const PRODUCTS = [...APP_NAV, ...APP_BOTTOM];
+
+function labelForPath(pathname: string): string {
+  const match = PRODUCTS.find(i => pathname === i.href || pathname.startsWith(i.href + "/"));
+  return match?.label ?? "Blue Agent";
+}
+
+function MobileTopBar() {
+  const { setDrawerOpen, contextual } = useAppChrome();
   const pathname = usePathname();
-  const isActive = (href: string) => pathname.startsWith(href);
-
-  // Mobile bottom bar is capped at 5 core destinations — 8 items were far too
-  // cramped on a phone (~47px each). Terminal, Simulator and Docs drop off the
-  // bar (still reachable from the desktop side-rail and in-app links).
-  const MOBILE_IDS = ["chat", "dashboard", "hub", "console", "profile"];
-  const allItems = [...APP_NAV, ...APP_BOTTOM]
-    .filter(i => MOBILE_IDS.includes(i.id))
-    .sort((a, b) => MOBILE_IDS.indexOf(a.id) - MOBILE_IDS.indexOf(b.id));
+  const title = contextual?.barTitle ?? labelForPath(pathname);
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-[#1A1A2E] bg-[#050508]/95 backdrop-blur-xl"
-      style={{ height: 56 }}>
-      <div className="flex h-full">
-        {allItems.map((item) => {
-          const active = isActive(item.href);
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
-              style={{ color: active ? "#4FC3F7" : "#334155" }}
-            >
-              {item.icon}
-              <span className="font-mono text-[8px] tracking-wider mt-0.5">
-                {item.label.toUpperCase()}
-              </span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+    <header className="lg:hidden flex items-center gap-3 h-12 px-3 border-b border-[#1A1A2E] bg-[#050508] shrink-0">
+      <button
+        aria-label="Open menu"
+        onClick={() => setDrawerOpen(true)}
+        className="p-1.5 -ml-1 rounded-lg text-slate-300 hover:bg-[#ffffff0a] transition-colors"
+      >
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+      <span className="font-mono text-[11px] text-[#4FC3F7] tracking-widest truncate">
+        // {title.toUpperCase()}
+      </span>
+    </header>
+  );
+}
+
+function MobileDrawer() {
+  const { drawerOpen, setDrawerOpen, contextual } = useAppChrome();
+  const pathname = usePathname();
+
+  // Close the drawer whenever the route changes (e.g. after tapping a product).
+  useEffect(() => { setDrawerOpen(false); }, [pathname, setDrawerOpen]);
+
+  // Escape closes.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDrawerOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drawerOpen, setDrawerOpen]);
+
+  if (!drawerOpen) return null;
+
+  const hasContextual = contextual && (contextual.items.length > 0 || (contextual.recents?.length ?? 0) > 0);
+
+  return (
+    <div className="lg:hidden fixed inset-0 z-[90]">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
+
+      <aside className="absolute left-0 top-0 h-full w-[300px] max-w-[86vw] bg-[#070710] border-r border-[#1A1A2E] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between h-14 px-4 border-b border-[#1A1A2E] shrink-0">
+          <div className="flex items-center gap-2">
+            <img src="/logomark.svg" alt="" className="h-6 w-6 rounded-md" />
+            <span className="font-mono text-[12px] text-white tracking-wide">
+              BLUE<span className="text-[#4FC3F7]">AGENT</span>
+            </span>
+          </div>
+          <button
+            aria-label="Close menu"
+            onClick={() => setDrawerOpen(false)}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-[#ffffff0a] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto py-2">
+          {/* Contextual group (e.g. Blue Chat sub-tabs + recents) */}
+          {hasContextual && (
+            <div className="px-2 pb-2">
+              <p className="px-3 pt-2 pb-1 font-mono text-[9px] text-slate-600 tracking-widest uppercase">
+                {contextual!.groupTitle}
+              </p>
+              {contextual!.items.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => { item.onSelect(); setDrawerOpen(false); }}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-[#ffffff06]"
+                  style={item.active ? { background: "#4FC3F712" } : undefined}
+                >
+                  {item.icon && <span className="w-4 text-center shrink-0 text-sm leading-none">{item.icon}</span>}
+                  <span className="font-mono text-[13px]" style={{ color: item.active ? "#4FC3F7" : "#cbd5e1" }}>
+                    {item.label}
+                  </span>
+                </button>
+              ))}
+
+              {contextual!.recents && contextual!.recents.length > 0 && (
+                <>
+                  <p className="px-3 pt-3 pb-1 font-mono text-[9px] text-slate-600 tracking-widest uppercase">Recents</p>
+                  {contextual!.recents.map(r => (
+                    <button
+                      key={r.id}
+                      onClick={() => { r.onSelect(); setDrawerOpen(false); }}
+                      className="w-full text-left flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff06]"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: r.active ? "#4FC3F7" : "#334155" }} />
+                      <span className="font-mono text-[12px] truncate" style={{ color: r.active ? "#ffffff" : "#94a3b8" }}>
+                        {r.title}
+                      </span>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Products group */}
+          <div className={`px-2 pt-1 ${hasContextual ? "border-t border-[#13131f] mt-1" : ""}`}>
+            <p className="px-3 pt-3 pb-1 font-mono text-[9px] text-slate-600 tracking-widest uppercase">Products</p>
+            {PRODUCTS.map(item => {
+              const active = pathname === item.href || pathname.startsWith(item.href + "/");
+              return (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  onClick={() => setDrawerOpen(false)}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-[#ffffff06]"
+                  style={active ? { background: "#4FC3F712" } : undefined}
+                >
+                  <span className="shrink-0" style={{ color: active ? "#4FC3F7" : "#64748b" }}>{item.icon}</span>
+                  <span className="font-mono text-[13px]" style={{ color: active ? "#4FC3F7" : "#cbd5e1" }}>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </aside>
+    </div>
   );
 }
 
@@ -266,12 +459,17 @@ function MobileNav() {
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#050508]">
-      <AppSideNav />
-      <main className="flex-1 min-w-0 overflow-hidden flex flex-col">
-        {children}
-      </main>
-      <MobileNav />
-    </div>
+    <AppChromeProvider>
+      <div className="flex h-screen w-screen overflow-hidden bg-[#050508]">
+        <AppSideNav />
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <MobileTopBar />
+          <main className="flex-1 min-h-0 overflow-hidden flex flex-col">
+            {children}
+          </main>
+        </div>
+        <MobileDrawer />
+      </div>
+    </AppChromeProvider>
   );
 }

@@ -1,5 +1,6 @@
 node_modules/
 .next/
+.next-*/
 .vercel/
 .DS_Store
 *.tsbuildinfo
