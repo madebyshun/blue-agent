@@ -159,10 +159,10 @@ function SearchRow({
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
-export default function ToolsTab() {
-  const { setInput, setSidebarTab } = useChat();
-  const [search, setSearch]         = useState("");
-  const [expanded, setExpanded]     = useState<SkillCategory | null>(null);
+export default function ToolsTab({ onPick }: { onPick?: () => void }) {
+  const { setInput }            = useChat();
+  const [search, setSearch]     = useState("");
+  const [expanded, setExpanded] = useState<SkillCategory | null>(null);
 
   const lc          = search.trim().toLowerCase();
   const isSearching = !!lc;
@@ -176,10 +176,10 @@ export default function ToolsTab() {
     : [];
 
   function use(trigger: string) {
+    // Insert the tool's trigger into the chat composer, then jump back to the
+    // Chat surface so the user sees it land (the panel itself isn't the chat).
     setInput(trigger);
-    if (typeof window !== "undefined" && window.innerWidth < 1024) {
-      setSidebarTab("none" as Parameters<typeof setSidebarTab>[0]);
-    }
+    onPick?.();
   }
 
   return (
