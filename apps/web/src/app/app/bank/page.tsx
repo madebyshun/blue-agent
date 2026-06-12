@@ -551,6 +551,7 @@ function PositionRow({ label, pos, apy, onManage, disabled, disabledNote }: {
 function BankLanding({ bestApy }: { bestApy: number | null }) {
   const apyText = bestApy != null ? `~${bestApy.toFixed(1)}%` : "up to ~5%";
   const features: { icon: string; title: string; body: string }[] = [
+    { icon: "🔑", title: "Sign in with Face ID — no seed phrase", body: "Coinbase Smart Wallet: a passkey-secured account you create in one tap. Recoverable, no 12-word phrase to lose." },
     { icon: "📈", title: `Earn ${apyText} APY on idle USDC`, body: "Live rates across blue-chip lending (Aave · Morpho). Your USDC works while you sleep — no lockups." },
     { icon: "➡", title: "Send to any wallet or name.base", body: "Pay anyone on Base by address or Basename. Instant, 24/7, no cut-off times." },
     { icon: "🔒", title: "Non-custodial — you hold the keys", body: "You sign every transaction from your own wallet. BlueBank never holds your keys or funds." },
@@ -585,7 +586,7 @@ function BankLanding({ bestApy }: { bestApy: number | null }) {
         {/* Right — connect card */}
         <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6">
           <div className="font-mono text-[14px] font-bold text-white mb-1">Open your account</div>
-          <p className="font-mono text-[11px] text-slate-500 mb-5">Connect a wallet to start — no signup, no KYC, no custody.</p>
+          <p className="font-mono text-[11px] text-slate-500 mb-5">Sign in with Face ID — no signup, no KYC, no custody. Your keys are secured by a passkey, not a seed phrase.</p>
           <ConnectButton />
           <div className="flex items-center gap-2 my-4">
             <div className="h-px flex-1 bg-[#1A1A2E]" /><span className="font-mono text-[9px] text-slate-700">SECURED BY YOU</span><div className="h-px flex-1 bg-[#1A1A2E]" />
@@ -600,11 +601,19 @@ function BankLanding({ bestApy }: { bestApy: number | null }) {
   );
 }
 
-// Connect-wallet CTA — reuses wagmi connectors (same as the sidebar WalletBar),
-// de-duped, rendered as a prominent button + picker for the landing hero.
+// Connect-wallet CTA — Smart Wallet (Coinbase, passkey/Face ID, no seed phrase)
+// as the first-class "create account" path, with an "I already have a wallet"
+// picker (MetaMask/Rabby/Coinbase extension via EIP-6963) as the secondary path.
 function ConnectButton() {
   const { connectors, connect, isPending } = useConnect();
   const [open, setOpen] = useState(false);
+
+  // The Coinbase connector (preference "all") surfaces Coinbase Smart Wallet —
+  // a passkey-secured smart-contract account: no seed phrase, recoverable, and
+  // Paymaster-ready for gasless transactions.
+  const coinbase = connectors.find(c => c.id === "coinbaseWalletSDK" || c.name.toLowerCase().includes("coinbase"));
+
+  // De-dupe the rest for the "existing wallet" picker.
   const seen = new Set<string>();
   const wallets = connectors.filter(c => { const k = c.name.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
   const icon = (name: string) => {
@@ -615,13 +624,29 @@ function ConnectButton() {
     if (n.includes("phantom")) return "👻";
     return "💼";
   };
+
   return (
     <div className="relative">
+      {/* Primary — create / sign in with Coinbase Smart Wallet */}
+      {coinbase && (
+        <>
+          <button onClick={() => connect({ connector: coinbase })} disabled={isPending}
+            className="w-full font-mono text-[13px] font-bold py-3 rounded-xl transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+            style={{ background: "#4FC3F7", color: "#050508" }}>
+            {isPending ? "Connecting…" : <>🔵 Create a free wallet</>}
+          </button>
+          <div className="flex items-center justify-center gap-2 mt-2 font-mono text-[9px] text-slate-500">
+            <span>Face ID</span><span>·</span><span>no seed phrase</span><span>·</span><span>no app to install</span>
+          </div>
+        </>
+      )}
+
+      {/* Secondary — connect an existing wallet */}
       <button onClick={() => setOpen(o => !o)} disabled={isPending}
-        className="w-full font-mono text-[13px] font-bold py-2.5 rounded-xl transition-all disabled:opacity-60"
-        style={{ background: "#4FC3F7", color: "#050508" }}>
-        {isPending ? "Connecting…" : "Connect Wallet"}
+        className="w-full font-mono text-[11px] text-slate-400 hover:text-slate-200 py-2.5 mt-3 rounded-xl border border-[#1A1A2E] transition-colors disabled:opacity-60">
+        I already have a wallet
       </button>
+
       {open && (
         <>
           <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-xl border border-[#1A1A2E] bg-[#0A0A12] shadow-2xl overflow-hidden">
