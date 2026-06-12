@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import BuyBlueModal  from "@/components/BuyBlueModal";
 import WalletBar     from "@/components/WalletBar";
 import { ChatProvider, useChat } from "@/app/chat/ChatContext";
+import { useAppChrome, type DrawerNavItem, type DrawerRecent } from "@/app/app/AppChrome";
 
 import AppSidebar    from "@/app/chat/components/AppSidebar";
 import ModelsPanel   from "@/app/chat/components/ModelsPanel";
@@ -26,23 +27,62 @@ const TAB_META: Record<Exclude<ActiveTab, "chat" | "settings">, { title: string;
   cron:     { title: "Scheduled", subtitle: "Scheduled agent tasks" },
 };
 
-// ── Mobile tab bar ─────────────────────────────────────────────────────────────
-const MOBILE_TABS: { id: ActiveTab; label: string; icon: string }[] = [
-  { id: "chat",     label: "Chat",     icon: "💬" },
-  { id: "models",   label: "Models",   icon: "🤖" },
-  { id: "tools",    label: "Tools",    icon: "🔧" },
-  { id: "skills",   label: "Skills",   icon: "⚡" },
+// Drawer sub-tab rows (mobile) — Blue Chat's content tabs live in the global
+// nav drawer now (no more in-page mobile tab bar). icon = emoji glyph.
+const CHAT_SUBTABS: { id: ActiveTab; label: string; icon: string }[] = [
+  { id: "chat",     label: "Chat",      icon: "💬" },
+  { id: "models",   label: "Models",    icon: "🤖" },
+  { id: "tools",    label: "Tools",     icon: "🔧" },
+  { id: "skills",   label: "Skills",    icon: "⚡" },
   { id: "cron",     label: "Scheduled", icon: "⏱" },
 ];
 
 // ── Shell ──────────────────────────────────────────────────────────────────────
 function ChatShell() {
-  const { buyOpen, setBuyOpen, triggerWalletRefresh, artifactsPanelOpen, onWalletChange, walletRefresh } = useChat();
+  const {
+    buyOpen, setBuyOpen, triggerWalletRefresh, artifactsPanelOpen,
+    onWalletChange, walletRefresh,
+    createNewTask, tasks, selectTask, activeTaskId,
+  } = useChat();
   const [activeTab, setActiveTab] = useState<ActiveTab>("chat");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const { setContextual } = useAppChrome();
 
   const isChat = activeTab === "chat";
   const meta   = activeTab !== "chat" && activeTab !== "settings" ? TAB_META[activeTab] : null;
+
+  // Register Blue Chat's sub-nav + recents into the global mobile drawer.
+  // Re-runs when the active tab or conversation list changes so highlights and
+  // the recents list stay current; cleared on unmount (when leaving /app/chat).
+  useEffect(() => {
+    const items: DrawerNavItem[] = [
+      { id: "newchat", label: "New chat", icon: "✏️", onSelect: () => { createNewTask(); setActiveTab("chat"); } },
+      ...CHAT_SUBTABS.map(t => ({
+        id: t.id, label: t.label, icon: t.icon,
+        active: activeTab === t.id,
+        onSelect: () => setActiveTab(t.id),
+      })),
+      { id: "settings", label: "Settings", icon: "⚙️", onSelect: () => setSettingsOpen(true) },
+    ];
+    const recents: DrawerRecent[] = [...tasks]
+      .filter(t => t.messages.length > 0)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, 12)
+      .map(t => ({
+        id: t.id,
+        title: t.title || "New conversation",
+        active: t.id === activeTaskId && activeTab === "chat",
+        onSelect: () => { selectTask(t.id); setActiveTab("chat"); },
+      }));
+    setContextual({
+      barTitle:   isChat ? "Blue Chat" : (meta?.title ?? "Blue Chat"),
+      groupTitle: "Blue Chat",
+      items,
+      recents,
+    });
+    return () => setContextual(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, tasks, activeTaskId]);
 
   return (
     <>
@@ -66,41 +106,10 @@ function ChatShell() {
         <AppSidebar activeTab={activeTab} onSelect={setActiveTab} onOpenSettings={() => setSettingsOpen(true)} />
 
         {/* ── Main content area ──
-            pb-14 below md clears the global mobile bottom nav (56px); md+ has
-            no bottom nav so no padding. */}
-        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden pb-14 md:pb-0">
-
-          {/* ── Mobile top bar ── chat sub-tabs as icons (replaces the old
-              second bottom bar; desktop uses the AppSidebar instead) */}
-          <div className="lg:hidden flex items-center justify-between gap-2 px-3 h-12 border-b border-[#1A1A2E] shrink-0 bg-[#050508]">
-            <span className="font-mono text-[10px] text-[#4FC3F7] tracking-widest shrink-0 truncate">
-              {isChat ? "// BLUE CHAT" : `// ${meta?.title.toUpperCase()}`}
-            </span>
-            <div className="flex items-center gap-0.5 bg-[#0d0d12] rounded-lg p-0.5 border border-[#1A1A2E] shrink-0">
-              {MOBILE_TABS.map(tab => {
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    title={tab.label}
-                    className="px-2.5 py-1 rounded-md text-sm leading-none transition-colors"
-                    style={{ color: isActive ? "#4FC3F7" : "#64748b", background: isActive ? "#4FC3F715" : "transparent" }}
-                  >
-                    {tab.icon}
-                  </button>
-                );
-              })}
-              {/* Settings — opens the modal (not a content tab) */}
-              <button
-                onClick={() => setSettingsOpen(true)}
-                title="Settings"
-                className="px-2.5 py-1 rounded-md text-sm leading-none text-[#64748b] transition-colors"
-              >
-                ⚙️
-              </button>
-            </div>
-          </div>
+            The global mobile top bar + nav drawer (see /app/layout.tsx) own
+            mobile navigation now, so there's no in-page mobile tab bar and no
+            bottom-bar padding to clear. */}
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
 
           {/* Tab header (non-chat, desktop) */}
           {!isChat && meta && (
