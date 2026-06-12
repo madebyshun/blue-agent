@@ -12,7 +12,7 @@
  * /app/alerts route now lands on overview.)
  */
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useMemo } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import AppPageHeader from "@/components/app/AppPageHeader";
 import OverviewView from "./_views/OverviewView";
@@ -30,28 +30,18 @@ function DashboardShell() {
   const sp       = useSearchParams();
   const router   = useRouter();
   const pathname = usePathname();
-  const initial  = (sp.get("tab") ?? "").toLowerCase();
-  const [tab, setTab] = useState<Tab>(
-    (TABS as readonly string[]).includes(initial) ? (initial as Tab) : "overview"
-  );
 
-  // Keep URL in sync when the user switches tabs in-page. replace() avoids
-  // pushing a history entry per tab toggle.
-  useEffect(() => {
-    const want = tab === "overview" ? null : tab;
-    const have = (sp.get("tab") ?? "").toLowerCase();
-    if (want === null && have === "") return;
-    if (want === have) return;
-    const qs = want ? `?tab=${want}` : "";
-    router.replace(`${pathname}${qs}`, { scroll: false });
-  }, [tab, pathname, router, sp]);
+  // URL is the single source of truth — derive the active tab from ?tab=
+  // directly. (The previous two-way state↔URL sync could ping-pong between
+  // stake and overview because writing the URL re-fired the read effect.)
+  const tab: Tab = useMemo(() => {
+    const t = (sp.get("tab") ?? "").toLowerCase();
+    return (TABS as readonly string[]).includes(t) ? (t as Tab) : "overview";
+  }, [sp]);
 
-  // React to back/forward navigation that changes ?tab=
-  useEffect(() => {
-    const next = (sp.get("tab") ?? "").toLowerCase();
-    const norm = (TABS as readonly string[]).includes(next) ? (next as Tab) : "overview";
-    if (norm !== tab) setTab(norm);
-  }, [sp]); // eslint-disable-line react-hooks/exhaustive-deps
+  const setTab = (t: Tab) => {
+    router.replace(`${pathname}${t === "overview" ? "" : `?tab=${t}`}`, { scroll: false });
+  };
 
   const meta = TAB_META[tab];
 
