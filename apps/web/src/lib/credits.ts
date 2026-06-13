@@ -15,6 +15,18 @@ export const BLUE_TOKEN     = "0xf895783b2931c919955e18b5e3343e7c7c456ba3";
 export const BASE_RPC       = "https://mainnet.base.org";
 export const STAKING_ADDRESS = "0x69e539684EE48F71eCDAd58618d8e8a2423E279d";
 
+// Multiple public Base RPCs tried in order. mainnet.base.org alone is flaky
+// under burst (a chat turn fires several balance reads in seconds) — a single
+// timeout there used to return 0, silently DOWNGRADING a Max holder to a paying
+// tier mid-turn and triggering a false "insufficient credits". Falling back
+// across endpoints makes the tier read reliable so that can't happen.
+const BASE_RPCS = [
+  "https://mainnet.base.org",
+  "https://base-rpc.publicnode.com",
+  "https://base.llamarpc.com",
+  "https://base.drpc.org",
+];
+
 const REFRESH_MS = 24 * 60 * 60 * 1000; // 24 hours
 const MAX_CAP    = 50_000;              // "unlimited" practical cap
 
@@ -226,27 +238,40 @@ export async function fetchBlueBalance(address: string): Promise<number> {
   // (Returns tuple (amount, stakedAt, dailyCredits, cooldown, pendingUsdc) — we only read amount = first 32 bytes of result)
   const stakeInfoData = "0x1601e641" + address.slice(2).padStart(64, "0");
 
-  try {
-    const res = await fetch(BASE_RPC, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([
-        { jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: BLUE_TOKEN,     data: balanceOfData }, "latest"] },
-        { jsonrpc: "2.0", id: 2, method: "eth_call", params: [{ to: STAKING_ADDRESS, data: stakeInfoData }, "latest"] },
-      ]),
-      signal: AbortSignal.timeout(5000),
-    });
-    const json = await res.json() as { id: number; result?: string }[];
-    const walletHex = json.find(r => r.id === 1)?.result;
-    const stakeHex  = json.find(r => r.id === 2)?.result;
+  // Try each RPC in turn; only accept a response where the balanceOf result is
+  // a well-formed hex word (66 chars). A genuine zero balance is "0x000…0"
+  // (still 66 chars) so it passes; an RPC error / empty "0x" / undefined does
+  // NOT, so we fall through to the next endpoint instead of reporting a false
+  // zero that would downgrade the holder's tier.
+  for (const rpc of BASE_RPCS) {
+    try {
+      const res = await fetch(rpc, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([
+          { jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: BLUE_TOKEN,     data: balanceOfData }, "latest"] },
+          { jsonrpc: "2.0", id: 2, method: "eth_call", params: [{ to: STAKING_ADDRESS, data: stakeInfoData }, "latest"] },
+        ]),
+        signal: AbortSignal.timeout(4000),
+      });
+      if (!res.ok) continue;
+      const json = await res.json() as { id: number; result?: string }[];
+      const walletHex = json.find(r => r.id === 1)?.result;
+      const stakeHex  = json.find(r => r.id === 2)?.result;
 
-    const wallet = weiHexToBlue(walletHex);
-    // stakeInfo returns 5 uint256 values — amount is the first 32 bytes (after 0x prefix).
-    const stakedAmountHex = stakeHex && stakeHex.length >= 66 ? "0x" + stakeHex.slice(2, 66) : undefined;
-    const staked = weiHexToBlue(stakedAmountHex);
+      // balanceOf must be a full 32-byte word to trust this endpoint's answer.
+      if (typeof walletHex !== "string" || walletHex.length < 66) continue;
 
-    return wallet + staked;
-  } catch {
-    return 0;
+      const wallet = weiHexToBlue(walletHex);
+      // stakeInfo returns 5 uint256 values — amount is the first 32 bytes (after 0x prefix).
+      const stakedAmountHex = stakeHex && stakeHex.length >= 66 ? "0x" + stakeHex.slice(2, 66) : undefined;
+      const staked = weiHexToBlue(stakedAmountHex);
+
+      return wallet + staked;
+    } catch {
+      // network error / timeout on this endpoint — try the next one
+    }
   }
+  // Every endpoint failed — report 0 (callers degrade gracefully).
+  return 0;
 }
