@@ -114,6 +114,14 @@ export const X402_SUITE = [
   { id: "blue-registry",  price: "$0.05", color: "#fbbf24", desc: "Discover the full tool catalog" },
 ];
 
+export const AEON_SKILLS = [
+  { file: "aeon-token-movers",      color: "#34D399", trigger: '"what\'s pumping" · "top movers today" · pre-trade scan', desc: "Scans Base for the biggest movers right now — a fast pre-trade radar of what's running." },
+  { file: "aeon-token-pick",        color: "#4FC3F7", trigger: '"give me a token pick" · "asymmetric setup today"',       desc: "Surfaces one asymmetric setup with a thesis — entry logic, why now, and the risk." },
+  { file: "aeon-narrative-tracker", color: "#A78BFA", trigger: '"what\'s running on CT" · narrative positions · content', desc: "Tracks live crypto-Twitter narratives and the tokens positioned under each one." },
+  { file: "aeon-deep-research",     color: "#fbbf24", trigger: '"DD on X" · "build me a memo" · contrarian take',         desc: "Full due-diligence memo on a token or project, with a contrarian angle." },
+  { file: "aeon-distribute-tokens", color: "#f87171", trigger: "Weekly $BLUEAGENT rewards payout to the leaderboard",     desc: "Distributes $BLUEAGENT rewards to top contributors. Needs BANKR_API_KEY with Wallet write scope." },
+];
+
 export const PACKAGES = [
   { label: "SURFACE — what users install", color: "#4FC3F7", items: [
     { pkg: "@blueagent/cli",  desc: "TUI + CLI · blueagent (interactive) · blue (direct commands)" },
