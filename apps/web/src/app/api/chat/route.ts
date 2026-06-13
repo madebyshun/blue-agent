@@ -391,7 +391,7 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_fundraise_timing",
-    description: "Assess if now is the right time to raise — market conditions, stage readiness, investor appetite. USE WHEN: the user explicitly asks WHETHER/WHEN to raise. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
+    description: "Assess if now is the right time to raise — market conditions, stage readiness, investor appetite. USE WHEN: the user asks WHETHER/WHEN to raise, or as part of the /raise pitch. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
     input_schema: {
       type: "object",
       properties: {
@@ -403,7 +403,7 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_base_grant",
-    description: "Find active grants and funding for Base projects. USE WHEN: the user explicitly asks about GRANTS / funding programs on Base. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
+    description: "Find active grants and funding for Base projects. USE WHEN: the user asks about GRANTS / funding programs on Base, or as part of the /raise pitch. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
     input_schema: {
       type: "object",
       properties: {
@@ -1082,7 +1082,17 @@ Generate a TECHNICAL ARCHITECTURE:
 Optimize for Base + TypeScript + Next.js 15 + Vercel stack.`,
 
   audit: `## COMMAND: /audit
-Perform a SECURITY + PRODUCT RISK REVIEW:
+SECURITY + PRODUCT RISK REVIEW.
+
+IF the user provided a CONTRACT or WALLET ADDRESS (0x…): YOU MUST call these
+tools first, in parallel, and base the review on their LIVE on-chain data
+(never answer from training data alone when an address is present):
+1. hub_deep_analysis — with { token: "<address>" }
+2. hub_risk_gate — with { action: "scan", to: "<address>" }
+3. hub_honeypot — with { token: "<address>" }
+
+Then present (use the tool data when an address was given; otherwise do a plain
+code/product review from your knowledge):
 **🔴 Critical** — blockers that must be fixed before launch
 **🟡 Medium** — important issues to address
 **🟢 Suggestions** — nice-to-have improvements
@@ -1099,13 +1109,20 @@ Generate a DEPLOYMENT CHECKLIST for Base Mainnet:
 Be precise, include exact CLI commands where relevant.`,
 
   raise: `## COMMAND: /raise
-Write a PITCH NARRATIVE:
+The user wants a PITCH NARRATIVE — GROUNDED IN LIVE FUNDING DATA, not guesses.
+YOU MUST call BOTH tools first, in parallel (do not skip):
+1. hub_fundraise_timing — with { project: "<the user's project>" }
+2. hub_base_grant — with { project: "<the user's project>" }
+NEVER answer from training data alone — always call the tools first.
+
+After the tools return, write the pitch in this exact format:
 **Framing** — market thesis in 1 punchy sentence
 **Why This Wins** — 3 specific unfair advantages
-**Traction** — key metrics in bullet form (fill with what user provides)
+**Timing** — cite hub_fundraise_timing (is now the right time to raise + why)
+**Funding Paths** — cite hub_base_grant (specific Base grants/programs to target)
 **Ask** — raise amount + use of funds breakdown
 **Target Investors** — 5 specific Base/crypto funds or angels with why they fit
-Be bold. Think like a founder who knows they're going to win.`,
+Base the Timing + Funding Paths sections on the TOOL DATA. Be bold.`,
 
   scan: `## COMMAND: /scan <token_address>
 The user wants a security scan of a Base token contract address.
@@ -1536,15 +1553,20 @@ export async function POST(req: NextRequest) {
   const detectedCmd = extractCommand(messages as LLMMessage[]);
   const cmdPrompt = detectedCmd ? COMMAND_PROMPTS[detectedCmd.cmd] : null;
 
-  // /build /audit /ship /raise are pure-knowledge deliverables (the model writes
-  // an architecture / review / checklist from its own knowledge — no live or
-  // on-chain data, and no real-data Hub tool backs them). Tools are DISABLED for
-  // them so the model can't mis-fire a paid Hub tool and burn credits for
-  // nothing. /idea is NOT here: it's now a real-data command that deliberately
-  // calls hub_market_fit + hub_competitor_scan to ground the brief (see its
-  // COMMAND_PROMPT). Data/exec commands (/scan /pick /pnl …) keep their tools.
-  const KNOWLEDGE_COMMANDS = new Set(["build", "audit", "ship", "raise"]);
-  const knowledgeOnly = !!detectedCmd && KNOWLEDGE_COMMANDS.has(detectedCmd.cmd);
+  // /build (architecture) and /ship (deploy checklist) are pure expertise — no
+  // live/on-chain data and no real-data Hub tool backs them. Tools are DISABLED
+  // so the model can't mis-fire a paid tool and burn credits for nothing.
+  // /idea and /raise ARE real-data commands (they force their backing tools —
+  // see COMMAND_PROMPTS). Data/exec commands (/scan /pick /pnl …) keep tools.
+  const KNOWLEDGE_COMMANDS = new Set(["build", "ship"]);
+  // /audit is real-data ONLY when the user passes a contract/wallet address to
+  // analyse (→ its prompt forces the on-chain security tools). A plain
+  // "review my plan/code" /audit has nothing live to fetch, so it stays
+  // knowledge-only (tools off) to avoid a wasted paid-tool call.
+  const auditWithoutAddress = detectedCmd?.cmd === "audit" &&
+    !/0x[a-fA-F0-9]{40}/.test(detectedCmd.args ?? "");
+  const knowledgeOnly =
+    (!!detectedCmd && KNOWLEDGE_COMMANDS.has(detectedCmd.cmd)) || auditWithoutAddress;
   const modelLabel = getModelLabel(tier, modelId, provider);
   const modelLine = `## Active model\nYou are currently running as: **${modelLabel}**. When asked "what model are you?", "which AI are you?", "what are you running on?", or similar — answer precisely with this model name.`;
   const system = [
