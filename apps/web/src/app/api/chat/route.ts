@@ -685,7 +685,17 @@ interface ToolCallResult {
    * SSE event instead of silently swallowing the failure.
    */
   insufficient?: { needed: number; balance: number; tool: string };
+  /**
+   * Set when a paid tool was requested without a connected wallet (guest). The
+   * synthesis step short-circuits to a "connect wallet" message rather than
+   * letting the model fabricate a result from training data.
+   */
+  walletRequired?: boolean;
 }
+
+// Shown (verbatim, no model synthesis) when a guest requests a paid Hub tool.
+const WALLET_REQUIRED_MSG =
+  "🔒 This needs a connected wallet.\n\nConnect your wallet — and hold $BLUE for a daily credit allowance — to run paid Hub tools like this. Guests get free chat; tools require a wallet.";
 
 async function callHubTool(
   toolName: string,
@@ -777,10 +787,11 @@ async function callHubTool(
         code?: string; needed?: number;
       };
       if (data?.code === "WALLET_REQUIRED") {
-        // Guest tried a paid tool. Tell the model to ask the user to connect —
-        // do NOT fabricate a result.
+        // Guest tried a paid tool. Flag it so the stream short-circuits to a
+        // fixed "connect wallet" message — models can't be trusted to relay it.
         return {
-          text: `[${toolName}: this tool needs a connected wallet. Tell the user to connect their wallet (and hold $BLUE for a daily allowance) to run it — do not invent a result.]`,
+          text: `[${toolName}: requires a connected wallet]`,
+          walletRequired: true,
         };
       }
       if (data?.code === "INSUFFICIENT_CREDITS" && typeof data.needed === "number") {
@@ -913,6 +924,17 @@ async function veniceToolStream(
           return { tc, out };
         }));
         const elapsed = Date.now() - t0;
+
+        // Guest hit a paid tool → emit the fixed connect-wallet message and stop,
+        // so the model never fabricates a result from training data.
+        if (veniceOutputs.some(({ out }) => out.walletRequired)) {
+          for (const { tc } of veniceOutputs)
+            emit({ type: "tool_done", tool: tc.function.name, ms: elapsed, result: null, credits: 0 });
+          emit({ delta: { text: WALLET_REQUIRED_MSG } });
+          controller.enqueue(enc.encode("data: [DONE]\n\n"));
+          controller.close();
+          return;
+        }
 
         const toolResults = veniceOutputs.map(({ tc, out }) => ({
           role: "tool" as const, tool_call_id: tc.id, content: out.text,
@@ -1660,6 +1682,19 @@ export async function POST(req: NextRequest) {
           })
         );
         const elapsed = Date.now() - t0;
+
+        // Guest hit a paid tool → emit the fixed connect-wallet message and stop,
+        // so the model never fabricates a result from training data.
+        if (toolOutputs.some(({ out }) => out.walletRequired)) {
+          for (const { block } of toolOutputs)
+            controller.enqueue(enc.encode(
+              `data: ${JSON.stringify({ type: "tool_done", tool: block.name, ms: elapsed, result: null, credits: 0 })}\n\n`,
+            ));
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ delta: { text: WALLET_REQUIRED_MSG } })}\n\n`));
+          controller.enqueue(enc.encode("data: [DONE]\n\n"));
+          controller.close();
+          return;
+        }
 
         const toolResults = toolOutputs.map(({ block, out }) => ({
           type:        "tool_result" as const,
