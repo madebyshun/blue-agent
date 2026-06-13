@@ -7,7 +7,7 @@
 // is wired (we never fabricate transaction history).
 
 import { useState, useEffect, type ReactNode } from "react";
-import { useAccount, useReadContract, useBalance, useConnect } from "wagmi";
+import { useAccount, useReadContract, useBalance, useConnect, useDisconnect } from "wagmi";
 import { formatUnits } from "viem";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -20,6 +20,7 @@ import BaseTvlChart from "./BaseTvlChart";
 import { ApyCompareChart } from "./BaseProtocolCharts";
 import BaseTokensCard from "./BaseTokensCard";
 import QrScanner from "./QrScanner";
+import SwapCard from "./SwapCard";
 import { parsePaymentQr, buildPaymentUri, type ParsedPayment } from "@/lib/payment-qr";
 
 const usd = (n: number | null | undefined) =>
@@ -35,12 +36,13 @@ function relTime(ts: number): string {
 
 
 
-type Panel = "positions" | "earn" | "send" | "receive";
+type Panel = "positions" | "earn" | "send" | "receive" | "convert";
 
 export default function BankPage() {
   const { address, isConnected } = useAccount();
   const acct = address as `0x${string}` | undefined;
   const { name } = useBasename(acct);
+  const { disconnect } = useDisconnect();
   const [network, setNetwork] = useState<YieldNetwork>("baseSepolia");
   const [panel, setPanel]     = useState<Panel>("positions");
   const [actionOpen, setActionOpen] = useState(false);
@@ -85,6 +87,22 @@ export default function BankPage() {
       window.open(url, "_blank", "popup,width=470,height=720");
     } catch { setOnrampMsg("onramp failed"); }
     finally { setOnrampBusy(false); }
+  }
+
+  // Cash out — Coinbase Offramp (sell USDC on Base → card / bank). Reuses the
+  // same CDP session token, which initializes either the buy or the sell flow.
+  const [cashOutBusy, setCashOutBusy] = useState(false);
+  async function cashOut() {
+    if (!acct) return;
+    setCashOutBusy(true); setOnrampMsg("");
+    try {
+      const j = await fetch(`/api/onramp/session?address=${acct}`).then(r => r.json());
+      if (j.needsKey) { setOnrampMsg("Cash out needs a CDP key"); return; }
+      if (j.error || !j.sessionToken) { setOnrampMsg(j.error || "couldn't start cash out"); return; }
+      const url = `https://pay.coinbase.com/v3/sell/input?sessionToken=${encodeURIComponent(j.sessionToken)}&defaultAsset=USDC&defaultNetwork=base&fiatCurrency=USD`;
+      window.open(url, "_blank", "popup,width=470,height=720");
+    } catch { setOnrampMsg("cash out failed"); }
+    finally { setCashOutBusy(false); }
   }
 
   const net = YIELD_NETWORKS[network];
@@ -164,6 +182,7 @@ export default function BankPage() {
     { id: "earn",      label: "Earn",      icon: "🌾", desc: "Grow USDC" },
     { id: "send",      label: "Send",      icon: "➡",  desc: "Pay anyone" },
     { id: "receive",   label: "Receive",   icon: "⬇",  desc: "Get paid" },
+    { id: "convert",   label: "Convert",   icon: "⇅",  desc: "Swap tokens" },
   ];
 
   return (
@@ -208,8 +227,13 @@ export default function BankPage() {
         {/* Account chip */}
         <div className="px-4 py-3 border-t border-[#1A1A2E]">
           <div className="font-mono text-[11px] text-slate-300 truncate">{name || shortAddr(acct)}</div>
-          <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer"
-            className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7]">View on Basescan ↗</a>
+          <div className="flex items-center gap-2 mt-0.5">
+            <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer"
+              className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7]">Basescan ↗</a>
+            <span className="text-slate-700 text-[9px]">·</span>
+            <button onClick={() => disconnect()}
+              className="font-mono text-[9px] text-slate-600 hover:text-red-400 transition-colors">Disconnect</button>
+          </div>
         </div>
       </aside>
 
@@ -241,17 +265,25 @@ export default function BankPage() {
               </button>
               {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-1">{onrampMsg}</div>}
               <div className="font-mono text-[9px] text-slate-600 mt-1">via Coinbase · available in select regions · or fund with Receive</div>
-              <div className="flex flex-col gap-2 mt-3 flex-1 min-h-0">
+              <div className="grid grid-cols-2 gap-2 mt-3">
                 {TABS.map(tb => (
                   <button key={tb.id} onClick={() => openAction(tb.id)}
-                    className="flex-1 flex items-center gap-3 px-4 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left">
-                    <span className="text-lg leading-none">{tb.icon}</span>
-                    <div>
-                      <div className="font-mono text-[12px] text-slate-200">{tb.label}</div>
-                      <div className="font-mono text-[9px] text-slate-600">{tb.desc}</div>
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left">
+                    <span className="text-base leading-none shrink-0">{tb.icon}</span>
+                    <div className="min-w-0">
+                      <div className="font-mono text-[11px] text-slate-200 truncate">{tb.label}</div>
+                      <div className="font-mono text-[9px] text-slate-600 truncate">{tb.desc}</div>
                     </div>
                   </button>
                 ))}
+                <button onClick={cashOut} disabled={cashOutBusy || !isConnected}
+                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left disabled:opacity-50">
+                  <span className="text-base leading-none shrink-0">🏦</span>
+                  <div className="min-w-0">
+                    <div className="font-mono text-[11px] text-slate-200 truncate">{cashOutBusy ? "Starting…" : "Cash out"}</div>
+                    <div className="font-mono text-[9px] text-slate-600 truncate">USDC → bank</div>
+                  </div>
+                </button>
               </div>
             </div>
 
@@ -308,6 +340,7 @@ export default function BankPage() {
                     </div>
                   )}
                   {panel === "earn" && <MoveToYieldCard result={{ network }} account={acct} />}
+                  {panel === "convert" && <SwapCard account={acct} />}
                   {panel === "send" && (
                     <div>
                       <button onClick={() => setScanOpen(true)}
@@ -551,6 +584,7 @@ function PositionRow({ label, pos, apy, onManage, disabled, disabledNote }: {
 function BankLanding({ bestApy }: { bestApy: number | null }) {
   const apyText = bestApy != null ? `~${bestApy.toFixed(1)}%` : "up to ~5%";
   const features: { icon: string; title: string; body: string }[] = [
+    { icon: "🔑", title: "Sign in with Face ID — no seed phrase", body: "Coinbase Smart Wallet: a passkey-secured account you create in one tap. Recoverable, no 12-word phrase to lose." },
     { icon: "📈", title: `Earn ${apyText} APY on idle USDC`, body: "Live rates across blue-chip lending (Aave · Morpho). Your USDC works while you sleep — no lockups." },
     { icon: "➡", title: "Send to any wallet or name.base", body: "Pay anyone on Base by address or Basename. Instant, 24/7, no cut-off times." },
     { icon: "🔒", title: "Non-custodial — you hold the keys", body: "You sign every transaction from your own wallet. BlueBank never holds your keys or funds." },
@@ -585,7 +619,7 @@ function BankLanding({ bestApy }: { bestApy: number | null }) {
         {/* Right — connect card */}
         <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6">
           <div className="font-mono text-[14px] font-bold text-white mb-1">Open your account</div>
-          <p className="font-mono text-[11px] text-slate-500 mb-5">Connect a wallet to start — no signup, no KYC, no custody.</p>
+          <p className="font-mono text-[11px] text-slate-500 mb-5">Sign in with Face ID — no signup, no KYC, no custody. Your keys are secured by a passkey, not a seed phrase.</p>
           <ConnectButton />
           <div className="flex items-center gap-2 my-4">
             <div className="h-px flex-1 bg-[#1A1A2E]" /><span className="font-mono text-[9px] text-slate-700">SECURED BY YOU</span><div className="h-px flex-1 bg-[#1A1A2E]" />
@@ -600,11 +634,19 @@ function BankLanding({ bestApy }: { bestApy: number | null }) {
   );
 }
 
-// Connect-wallet CTA — reuses wagmi connectors (same as the sidebar WalletBar),
-// de-duped, rendered as a prominent button + picker for the landing hero.
+// Connect-wallet CTA — Smart Wallet (Coinbase, passkey/Face ID, no seed phrase)
+// as the first-class "create account" path, with an "I already have a wallet"
+// picker (MetaMask/Rabby/Coinbase extension via EIP-6963) as the secondary path.
 function ConnectButton() {
   const { connectors, connect, isPending } = useConnect();
   const [open, setOpen] = useState(false);
+
+  // The Coinbase connector (preference "all") surfaces Coinbase Smart Wallet —
+  // a passkey-secured smart-contract account: no seed phrase, recoverable, and
+  // Paymaster-ready for gasless transactions.
+  const coinbase = connectors.find(c => c.id === "coinbaseWalletSDK" || c.name.toLowerCase().includes("coinbase"));
+
+  // De-dupe the rest for the "existing wallet" picker.
   const seen = new Set<string>();
   const wallets = connectors.filter(c => { const k = c.name.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
   const icon = (name: string) => {
@@ -615,13 +657,29 @@ function ConnectButton() {
     if (n.includes("phantom")) return "👻";
     return "💼";
   };
+
   return (
     <div className="relative">
+      {/* Primary — create / sign in with Coinbase Smart Wallet */}
+      {coinbase && (
+        <>
+          <button onClick={() => connect({ connector: coinbase })} disabled={isPending}
+            className="w-full font-mono text-[13px] font-bold py-3 rounded-xl transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+            style={{ background: "#4FC3F7", color: "#050508" }}>
+            {isPending ? "Connecting…" : <>🔵 Create a free wallet</>}
+          </button>
+          <div className="flex items-center justify-center gap-2 mt-2 font-mono text-[9px] text-slate-500">
+            <span>Face ID</span><span>·</span><span>no seed phrase</span><span>·</span><span>no app to install</span>
+          </div>
+        </>
+      )}
+
+      {/* Secondary — connect an existing wallet */}
       <button onClick={() => setOpen(o => !o)} disabled={isPending}
-        className="w-full font-mono text-[13px] font-bold py-2.5 rounded-xl transition-all disabled:opacity-60"
-        style={{ background: "#4FC3F7", color: "#050508" }}>
-        {isPending ? "Connecting…" : "Connect Wallet"}
+        className="w-full font-mono text-[11px] text-slate-400 hover:text-slate-200 py-2.5 mt-3 rounded-xl border border-[#1A1A2E] transition-colors disabled:opacity-60">
+        I already have a wallet
       </button>
+
       {open && (
         <>
           <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-xl border border-[#1A1A2E] bg-[#0A0A12] shadow-2xl overflow-hidden">

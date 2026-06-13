@@ -20,6 +20,17 @@
  */
 
 import { kvGet, kvSet } from "./kv";
+import { getTierInfo, fetchBlueBalance } from "./credits";
+
+// A connected wallet's spendable balance has TWO buckets:
+//   - daily allowance: tier.dailyCr, granted fresh each UTC day (HOLD-driven —
+//     hold 500K → Starter 500/day, 2M → Pro 2,000/day, 10M → Max unlimited).
+//   - pool: on-chain stake accrual + USDC top-ups, CUMULATIVE (doesn't reset).
+// A spend drains the daily bucket first (use-it-or-lose-it), then the pool.
+const UNLIMITED_BALANCE = 1_000_000; // reported for Max; metering is skipped upstream
+function utcDay(): string {
+  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+}
 
 // ─── On-chain accrued (read via /lib/credits → contract) ─────────────────────
 
@@ -63,9 +74,11 @@ export async function readAccruedCredits(address: string): Promise<number> {
 // ─── Off-chain spent + top-up (KV-backed) ────────────────────────────────────
 
 interface LedgerRow {
-  spent:   number;      // credits debited from balance
+  spent:   number;      // credits debited from the cumulative pool
   topup:   number;      // credits credited via USDC top-up
   history: LedgerEvent[];
+  dailyDay?:   string;  // UTC day key of the current daily-allowance window
+  dailySpent?: number;  // credits spent from the daily tier allowance today
 }
 
 export interface LedgerEvent {
@@ -99,8 +112,11 @@ export interface BalanceSummary {
   address:  string;
   accrued:  number;     // on-chain accrual from staking time
   topup:    number;     // off-chain credits added via USDC top-up
-  spent:    number;     // off-chain credits debited via chat/tool use
-  balance:  number;     // max(0, accrued + topup - spent)
+  spent:    number;     // off-chain credits debited from the pool
+  balance:  number;     // total spendable now = dailyRemaining + pool
+  pool?:           number;  // cumulative bucket: max(0, accrued + topup - spent)
+  dailyCr?:        number;  // tier daily allowance (-1 = Max/unlimited)
+  dailyRemaining?: number;  // tier allowance left today
   recent:   LedgerEvent[];  // last few events
 }
 
@@ -112,16 +128,29 @@ export interface BalanceSummary {
  */
 export async function getBalance(address: string): Promise<BalanceSummary> {
   const addr = address.toLowerCase();
-  const [accrued, ledger] = await Promise.all([
+  const [accrued, blueBalance, ledger] = await Promise.all([
     readAccruedCredits(addr),
+    fetchBlueBalance(addr),   // held + staked → tier → daily allowance
     loadLedger(addr),
   ]);
-  const balance = Math.max(0, accrued + ledger.topup - ledger.spent);
+
+  const dailyCr = getTierInfo(blueBalance).dailyCr;   // -1 = Max (unlimited)
+  const pool    = Math.max(0, accrued + ledger.topup - ledger.spent);
+
+  const dailySpent     = ledger.dailyDay === utcDay() ? (ledger.dailySpent ?? 0) : 0;
+  const dailyRemaining = dailyCr === -1 ? 0 : Math.max(0, dailyCr - dailySpent);
+
+  // Max = unlimited (metering skipped upstream); report a large sentinel.
+  const balance = dailyCr === -1 ? UNLIMITED_BALANCE : pool + dailyRemaining;
+
   return {
     address: addr,
     accrued,
     topup:   ledger.topup,
     spent:   ledger.spent,
+    pool,
+    dailyCr,
+    dailyRemaining,
     balance,
     recent:  ledger.history.slice(-10).reverse(),
   };
@@ -141,27 +170,56 @@ export async function spend(
   if (amount <= 0) throw new Error("amount must be positive");
   const addr = address.toLowerCase();
 
-  const [accrued, ledger] = await Promise.all([
+  const [accrued, blueBalance, ledger] = await Promise.all([
     readAccruedCredits(addr),
+    fetchBlueBalance(addr),
     loadLedger(addr),
   ]);
-  const balance = Math.max(0, accrued + ledger.topup - ledger.spent);
-  if (balance < amount) {
-    const err = new Error(`Insufficient credits: have ${balance}, need ${amount}`);
+  const dailyCr = getTierInfo(blueBalance).dailyCr;
+  const today   = utcDay();
+
+  // Max tier — unlimited, free. Record the event but debit nothing.
+  if (dailyCr === -1) {
+    ledger.history.push({ ts: Date.now(), kind: "spend", amount, reason, ref });
+    await saveLedger(addr, ledger);
+    return {
+      address: addr, accrued, topup: ledger.topup, spent: ledger.spent,
+      pool: Math.max(0, accrued + ledger.topup - ledger.spent),
+      dailyCr, dailyRemaining: 0, balance: UNLIMITED_BALANCE,
+      recent: ledger.history.slice(-10).reverse(),
+    };
+  }
+
+  let dailySpent       = ledger.dailyDay === today ? (ledger.dailySpent ?? 0) : 0;
+  const pool           = Math.max(0, accrued + ledger.topup - ledger.spent);
+  const dailyRemaining = Math.max(0, dailyCr - dailySpent);
+
+  if (pool + dailyRemaining < amount) {
+    const err = new Error(`Insufficient credits: have ${pool + dailyRemaining}, need ${amount}`);
     (err as { code?: string }).code = "INSUFFICIENT_CREDITS";
     throw err;
   }
 
-  ledger.spent += amount;
+  // Drain the daily allowance first (use-it-or-lose-it), then the pool.
+  const fromDaily = Math.min(amount, dailyRemaining);
+  dailySpent += fromDaily;
+  ledger.spent += amount - fromDaily;   // overflow hits the cumulative pool
+  ledger.dailyDay   = today;
+  ledger.dailySpent = dailySpent;
   ledger.history.push({ ts: Date.now(), kind: "spend", amount, reason, ref });
   await saveLedger(addr, ledger);
 
+  const newPool  = Math.max(0, accrued + ledger.topup - ledger.spent);
+  const newDaily = Math.max(0, dailyCr - dailySpent);
   return {
     address: addr,
     accrued,
     topup:   ledger.topup,
     spent:   ledger.spent,
-    balance: balance - amount,
+    pool:    newPool,
+    dailyCr,
+    dailyRemaining: newDaily,
+    balance: newPool + newDaily,
     recent:  ledger.history.slice(-10).reverse(),
   };
 }

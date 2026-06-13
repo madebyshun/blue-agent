@@ -42,11 +42,11 @@ const TIERS: { min: number; tier: HolderTier; dailyCr: number; discount: number;
 ];
 
 /**
- * Guest = no wallet connected. Bumped 30 → 100 on Bankr's growth advice
- * ("give ~10 free messages/day at least early on"): 100 cr = 10 messages on
- * the Fast tier (10 cr/msg), enough to let a new user actually feel the
- * product before being asked to hold $BLUE. Cheap to subsidise — provider
- * cost of 10 Fast msgs is well under 2¢.
+ * Guest = no wallet connected. 100 cr/day ≈ 10 Fast messages — enough to chat
+ * and feel the product. Tool usage (400–500 cr each) intentionally needs a
+ * tier: hold $BLUE to step up (500K → Starter 500/day, 2M → Pro 2,000/day,
+ * 10M → Max unlimited). The token bar is cheap, so "hold to use tools" is a
+ * low-friction ask that still gives the token real utility.
  */
 export const GUEST_DAILY = 100;
 

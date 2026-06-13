@@ -27,16 +27,6 @@ const TAB_META: Record<Exclude<ActiveTab, "chat" | "settings">, { title: string;
   cron:     { title: "Scheduled", subtitle: "Scheduled agent tasks" },
 };
 
-// Drawer sub-tab rows (mobile) — Blue Chat's content tabs live in the global
-// nav drawer now (no more in-page mobile tab bar). icon = emoji glyph.
-const CHAT_SUBTABS: { id: ActiveTab; label: string; icon: string }[] = [
-  { id: "chat",     label: "Chat",      icon: "💬" },
-  { id: "models",   label: "Models",    icon: "🤖" },
-  { id: "tools",    label: "Tools",     icon: "🔧" },
-  { id: "skills",   label: "Skills",    icon: "⚡" },
-  { id: "cron",     label: "Scheduled", icon: "⏱" },
-];
-
 // ── Shell ──────────────────────────────────────────────────────────────────────
 function ChatShell() {
   const {
@@ -55,14 +45,12 @@ function ChatShell() {
   // Re-runs when the active tab or conversation list changes so highlights and
   // the recents list stay current; cleared on unmount (when leaving /app/chat).
   useEffect(() => {
+    // New chat = primary action (compose button in top bar + prominent in
+    // drawer). Models/Tools/Skills moved into Settings (mobile); the redundant
+    // "Chat" row is dropped since you're already in the chat tab.
     const items: DrawerNavItem[] = [
-      { id: "newchat", label: "New chat", icon: "✏️", onSelect: () => { createNewTask(); setActiveTab("chat"); } },
-      ...CHAT_SUBTABS.map(t => ({
-        id: t.id, label: t.label, icon: t.icon,
-        active: activeTab === t.id,
-        onSelect: () => setActiveTab(t.id),
-      })),
-      { id: "settings", label: "Settings", icon: "⚙️", onSelect: () => setSettingsOpen(true) },
+      { id: "cron",     label: "Scheduled", icon: "⏱",  active: activeTab === "cron", onSelect: () => setActiveTab("cron") },
+      { id: "settings", label: "Settings",  icon: "⚙️", onSelect: () => setSettingsOpen(true) },
     ];
     const recents: DrawerRecent[] = [...tasks]
       .filter(t => t.messages.length > 0)
@@ -77,6 +65,7 @@ function ChatShell() {
     setContextual({
       barTitle:   isChat ? "Blue Chat" : (meta?.title ?? "Blue Chat"),
       groupTitle: "Blue Chat",
+      newChat:    () => { createNewTask(); setActiveTab("chat"); },
       items,
       recents,
     });
@@ -172,8 +161,14 @@ function ChatShell() {
         </div>
       </div>
 
-      {/* ⚙️ Settings — modal opened from the sidebar account chip */}
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      {/* ⚙️ Settings — modal opened from the sidebar account chip. onJumpTab
+          lets the mobile-only quick links (Models/Tools/Skills) jump to a chat
+          tab and close the modal. */}
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onJumpTab={(tab) => { setActiveTab(tab); setSettingsOpen(false); }}
+      />
 
     </>
   );

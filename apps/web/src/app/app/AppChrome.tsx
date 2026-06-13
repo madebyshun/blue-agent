@@ -32,6 +32,9 @@ export interface ContextualNav {
   barTitle: string;
   /** Heading for the contextual group inside the drawer. */
   groupTitle: string;
+  /** Primary "New chat" action — surfaced as a compose button in the mobile
+   *  top bar and as a prominent button at the top of the drawer. */
+  newChat?: () => void;
   items: DrawerNavItem[];
   recents?: DrawerRecent[];
 }
