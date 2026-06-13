@@ -47,7 +47,7 @@ $ blue doctor`}</CodeBlock>
 }`}</CodeBlock>
 
       <Callout title="What's next?">
-        Explore the <Link href="/docs/commands" className="text-[#4FC3F7] underline">22 CLI commands</Link>,
+        Explore the <Link href="/docs/commands" className="text-[#4FC3F7] underline">24 CLI commands</Link>,
         browse the <Link href="/docs/skills" className="text-[#4FC3F7] underline">40 skill files</Link>,
         or read how <Link href="/docs/credits" className="text-[#4FC3F7] underline">credits &amp; tiers</Link> work in Blue Chat.
       </Callout>

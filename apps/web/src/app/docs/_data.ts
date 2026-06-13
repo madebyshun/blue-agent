@@ -2,7 +2,7 @@
 // stays thin and the numbers don't drift across pages.
 
 export const STATS = [
-  { value: "22", label: "Commands", color: "#4FC3F7" },
+  { value: "24", label: "Commands", color: "#4FC3F7" },
   { value: "40", label: "Skills", color: "#34D399" },
   { value: "72", label: "Hub Tools", color: "#A78BFA" },
   { value: "56", label: "MCP Tools", color: "#fbbf24" },
@@ -52,53 +52,84 @@ export const CORE_COMMANDS = [
   { cmd: "raise", price: "$0.20", color: "#fbbf24", desc: "Pitch narrative" },
 ];
 
+// Derived from packages/builder/src/cli.ts (the `blue` binary) + the CLI TUI.
 export const COMMANDS_DOCS = [
   { group: "WORKFLOW", items: [
-    { cmd: "blue idea [prompt]",  desc: "Fundable brief — problem, why now, MVP, risks, 24h plan",          example: 'blue idea "NFT marketplace for Base agents"' },
-    { cmd: "blue build [prompt]", desc: "Architecture, stack, folder structure, integrations, test plan",     example: 'blue build "Base-native staking protocol"' },
-    { cmd: "blue audit [prompt]", desc: "Security review — reentrancy, oracle, MEV, go/no-go verdict",       example: 'blue audit "my Solidity contract"' },
-    { cmd: "blue ship [prompt]",  desc: "Deployment checklist, verification, release notes, monitoring",      example: 'blue ship "launch on Base mainnet"' },
-    { cmd: "blue raise [prompt]", desc: "Pitch narrative — why this wins, traction, ask, Base investor map",  example: 'blue raise "Base DeFi protocol"' },
+    { cmd: "blue idea [prompt]",  desc: "Concept → fundable brief (problem, why Base, MVP, risks, 24h plan)", example: 'blue idea "NFT marketplace for Base agents"' },
+    { cmd: "blue build [prompt]", desc: "Brief → architecture + stack, folder structure, integrations",       example: 'blue build "Base-native staking protocol"' },
+    { cmd: "blue audit [prompt]", desc: "Code → security review (reentrancy, oracle, MEV, go/no-go)",          example: 'blue audit "my Solidity contract"' },
+    { cmd: "blue ship [prompt]",  desc: "Project → deploy checklist, verification, release notes, monitoring", example: 'blue ship "launch on Base mainnet"' },
+    { cmd: "blue raise [prompt]", desc: "Idea → fundraising narrative, investor map, competitive landscape",   example: 'blue raise "Base DeFi protocol"' },
   ]},
   { group: "SETUP", items: [
-    { cmd: "blue init",           desc: "Install skill files to ~/.blue-agent/skills/ for local grounding",   example: "blue init" },
-    { cmd: "blue new <name>",     desc: "Scaffold a new Base project — base-agent | base-x402 | base-token",  example: "blue new my-token --template base-token" },
-    { cmd: "blue doctor",         desc: "Verify node, skills, API key, config — full environment health check", example: "blue doctor" },
-    { cmd: "blue validate [dir]", desc: "Project health check — Node, package.json, tsconfig, env, src/, git", example: "blue validate ./my-project" },
+    { cmd: "blue init",           desc: "Install skill files to ~/.blue-agent/skills/ for local grounding",    example: "blue init" },
+    { cmd: "blue new <name>",     desc: "Scaffold a new Base project — base-agent | base-x402 | base-token",   example: "blue new my-token --template base-token" },
+    { cmd: "blue doctor",         desc: "Check environment health — Node, skills, API key, config",            example: "blue doctor" },
+    { cmd: "blue validate [dir]", desc: "Validate project structure — package.json, tsconfig, env, src/, git", example: "blue validate ./my-project" },
+  ]},
+  { group: "CHAT", items: [
+    { cmd: "blue chat [prompt]",  desc: "Interactive chat with Bankr LLM in the terminal",                     example: 'blue chat "how do I add x402 to my API?"' },
+  ]},
+  { group: "REPUTATION", items: [
+    { cmd: "blue score [handle]",       desc: "Builder Score for a wallet or X handle",                        example: "blue score @blueagent_" },
+    { cmd: "blue agent-score [input]",  desc: "Evaluate an agent's reliability score",                         example: "blue agent-score 0x…" },
+    { cmd: "blue compare [a] [b]",      desc: "Compare two builders or agents side by side",                   example: "blue compare @a @b" },
+  ]},
+  { group: "DISCOVERY", items: [
+    { cmd: "blue search [query]",   desc: "Search builders, agents, projects, tokens",                         example: 'blue search "base lending"' },
+    { cmd: "blue trending [filter]", desc: "What's trending on Base right now",                                example: "blue trending tokens" },
+    { cmd: "blue watch [target]",   desc: "Watch a wallet, handle, or token",                                  example: "blue watch 0x…" },
+    { cmd: "blue alert [subcommand]", desc: "Configure threshold alerts",                                      example: "blue alert add" },
+    { cmd: "blue history [input]",  desc: "Activity history for a builder or agent",                           example: "blue history @blueagent_" },
+  ]},
+  { group: "LAUNCH", items: [
+    { cmd: "blue launch [mode]",      desc: "Launch a token or project on Base",                               example: "blue launch token" },
+    { cmd: "blue market [subcommand]", desc: "Market intelligence for the Base ecosystem",                     example: "blue market movers" },
   ]},
   { group: "TASKS", items: [
-    { cmd: "blue tasks",                     desc: "Browse open tasks. Filter: audit|content|art|data|dev",   example: "blue tasks --category audit" },
-    { cmd: "blue post-task [handle]",        desc: "Post a task to the Work Hub (interactive)",                example: "blue post-task @myhandle" },
-    { cmd: "blue accept <taskId>",           desc: "Accept an open task from the Work Hub",                    example: "blue accept task_abc123" },
-    { cmd: "blue submit <taskId> <h> <url>", desc: "Submit proof of work and earn XP + USDC",                  example: "blue submit task_abc123 @me https://github.com/..." },
+    { cmd: "blue tasks",                       desc: "Browse open tasks on the Work Hub",                      example: "blue tasks" },
+    { cmd: "blue post-task [handle]",          desc: "Post a task + escrow USDC",                              example: "blue post-task @myhandle" },
+    { cmd: "blue accept [taskId] [handle]",    desc: "Accept an open task",                                    example: "blue accept task_abc123 @me" },
+    { cmd: "blue submit [taskId] [h] [proof]", desc: "Submit proof of work and earn XP + USDC",                example: "blue submit task_abc123 @me https://github.com/…" },
   ]},
 ];
 
+// The 35 core skill files in skills/ (the 5 aeon-*.md skills are documented
+// separately on /docs/aeon-skills; 35 + 5 = the 40 total).
 export const SKILLS_DOCS = [
   { file: "base-security.md",                 desc: "500+ security checks across 13 categories. Loaded for blue audit." },
   { file: "base-addresses.md",                desc: "Verified contract addresses on Base — USDC, WETH, Uniswap, Aave." },
   { file: "base-standards.md",                desc: "ERC standards, Base patterns, x402 protocol spec." },
-  { file: "bankr-tools.md",                   desc: "Bankr LLM capabilities and the full x402 tool suite (60+)." },
+  { file: "base-ecosystem.md",                desc: "Base ecosystem overview — key protocols, teams, infrastructure." },
+  { file: "base-account-integration.md",      desc: "Coinbase Smart Wallet — ERC-4337, passkeys, sponsored txs." },
+  { file: "account-abstraction-deep-dive.md", desc: "ERC-4337 deep dive — UserOps, bundlers, paymasters, EntryPoint." },
+  { file: "bankr-tools.md",                   desc: "Bankr LLM capabilities and the full x402 tool suite." },
   { file: "blue-agent-identity.md",           desc: "Blue Agent mission, product voice, do/don't rules." },
   { file: "design-system.md",                 desc: "Visual language, colors, card patterns, spacing." },
-  { file: "base-ecosystem.md",                desc: "Base ecosystem overview — key protocols, teams, infrastructure." },
   { file: "x402-patterns.md",                 desc: "x402 payment patterns — pay-per-call APIs, pricing, flow." },
+  { file: "x402-escrow-patterns.md",          desc: "x402 escrow — conditional payments, dispute resolution, release." },
   { file: "agent-wallet-security.md",         desc: "Security patterns for agent-controlled wallets." },
+  { file: "agent-transaction-verification.md", desc: "Verify agent transactions before signing — simulation, intent checks." },
+  { file: "wallet-guardrails.md",             desc: "Wallet guardrails for AI agents — spend limits, allowlists, approvals." },
   { file: "aerodrome-dex-guide.md",           desc: "Aerodrome DEX — pools, voting, bribes, LP strategy on Base." },
   { file: "aave-lending-patterns.md",         desc: "Aave v3 lending and borrowing patterns on Base." },
   { file: "uniswap-v4-hooks-guide.md",        desc: "Uniswap v4 hooks — lifecycle, pool manager, custom logic." },
   { file: "flashloan-patterns.md",            desc: "Flashloan fundamentals — callback structure, use cases." },
   { file: "flashloan-patterns-advanced.md",   desc: "Advanced flashloan strategies and attack vectors." },
   { file: "staking-yield-farming.md",         desc: "Staking and yield farming — vaults, rewards, compounding." },
+  { file: "token-launch-guide.md",            desc: "Token launch — contract, Uniswap pool, liquidity, listing on Base." },
   { file: "solidity-security-patterns.md",    desc: "Solidity security — access control, overflow, reentrancy." },
   { file: "oracle-design-guide.md",           desc: "Oracle design — Chainlink, TWAP, price feed validation." },
   { file: "mev-protection-guide.md",          desc: "MEV protection — frontrun defense, slippage, commit-reveal." },
+  { file: "mev-protection-advanced.md",       desc: "Advanced MEV protection — private orderflow, bundle strategies." },
   { file: "gas-optimization-guide.md",        desc: "Gas optimization — storage packing, calldata, assembly." },
-  { file: "base-account-integration.md",      desc: "Coinbase Smart Wallet — ERC-4337, passkeys, sponsored txs." },
-  { file: "account-abstraction-deep-dive.md", desc: "ERC-4337 deep dive — UserOps, bundlers, paymasters, EntryPoint." },
+  { file: "cross-chain-bridge-security.md",   desc: "Cross-chain bridge security — validation, trust assumptions, exploits." },
   { file: "governance-dao-patterns.md",       desc: "DAO governance — Governor, timelock, voting, quorum." },
   { file: "multi-sig-wallet-security.md",     desc: "Multi-sig — Safe, threshold signing, timelock, key rotation." },
+  { file: "veil-privacy-transactions.md",     desc: "Privacy transactions — shielded transfers and ZK patterns on Base." },
   { file: "frames-miniapps.md",               desc: "Farcaster Frames and Base mini app development." },
+  { file: "telegram-bot-patterns.md",         desc: "Telegram bot patterns — commands, webhooks, wallet linking." },
+  { file: "gig-marketplace-guide.md",         desc: "On-chain gig/work marketplace — escrow, reputation, payouts." },
   { file: "postgres-for-agents.md",           desc: "Postgres for agents — schema design, indexing, pgvector." },
   { file: "reputation-engine.md",             desc: "Reputation engine — Builder Score, Agent Score, onchain signals." },
 ];

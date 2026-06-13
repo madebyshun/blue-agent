@@ -18,6 +18,10 @@ export default function SkillsDoc() {
         <code className="font-mono text-white">~/.blue-agent/skills/</code>. Load order:{" "}
         <code className="text-white">BLUE_AGENT_SKILLS_DIR</code> → <code className="text-white">~/.blue-agent/skills/</code> → monorepo <code className="text-white">skills/</code>.
       </P>
+      <P>
+        These are the {SKILLS_DOCS.length} core skill files. The 5 trading/research{" "}
+        <Link href="/docs/aeon-skills" className="text-[#4FC3F7] underline">Aeon skills</Link> are documented separately — {SKILLS_DOCS.length + 5} total.
+      </P>
 
       <CodeBlock title="install skills" badge="$ blue init">{`$ blue init
 ✓ 40 skill files installed to ~/.blue-agent/skills/`}</CodeBlock>
