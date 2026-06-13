@@ -32,13 +32,6 @@ function utcDay(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
 }
 
-// Cron service identity. Scheduled tasks run through the same PAID tool path as
-// real users (no anonymous free-bypass), billed to this synthetic address so
-// the spend is accountable. Pre-seed its ledger via /api/credits/topup. Holds
-// no $BLUE, so it sits at the base tier — top it up to fund cron tool calls.
-export const CRON_WALLET = (
-  process.env.CRON_WALLET_ADDRESS ?? "0xc0c0000000000000000000000000000000000000"
-).toLowerCase();
 
 // ─── On-chain accrued (read via /lib/credits → contract) ─────────────────────
 

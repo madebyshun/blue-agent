@@ -17,11 +17,11 @@
  * Rule: real-data, the LLM must NOT fabricate data.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { CRON_WALLET } from "@/lib/credit-ledger";
 
 export const runtime = "nodejs";
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
+const BASE_URL     = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
+const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY ?? "";
 
 // Chat route only knows the bankr tiers fast | pro | max. Cron may pass any
 // ModelTier id; coerce anything unknown to `pro` so we always get a tool-
@@ -99,16 +99,18 @@ export async function POST(req: NextRequest) {
     }
 
     // Route through the live chat pipeline so the model has the real-data Hub
-    // tools available. Bill the run to the CRON_WALLET service identity (not the
-    // anonymous free-bypass — that's reserved for connected users now) so cron
-    // tool spend is accountable. Pre-seed CRON_WALLET's credit ledger.
+    // tools available. Carry the internal key so /api/chat recognizes this as an
+    // authorized server job → its paid tools may free-bypass (browser guests,
+    // which can't supply the key, stay blocked from paid tools).
     const res = await fetch(`${BASE_URL}/api/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(INTERNAL_KEY ? { "X-Blue-Internal": INTERNAL_KEY } : {}),
+      },
       body: JSON.stringify({
         messages: [{ role: "user", content: expandPrompt(prompt) }],
         tier,
-        address: CRON_WALLET,
         // Omit `provider` → Anthropic/Bankr path WITH HUB_TOOLS (real data).
       }),
       signal: AbortSignal.timeout(90_000),
