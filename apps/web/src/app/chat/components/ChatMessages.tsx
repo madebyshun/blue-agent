@@ -671,7 +671,19 @@ export default function ChatMessages() {
                             const msgCr = msg.creditsUsed ?? 0;
                             const toolCr = (msg.toolLogs ?? []).reduce((s, l) => s + (l.credits ?? 0), 0);
                             const total = msgCr + toolCr;
-                            if (total <= 0) return null;
+                            // total === 0 → Max tier (unmetered) or a free model.
+                            // Show an explicit "Free" chip rather than a blank gap.
+                            if (total <= 0) {
+                              return (
+                                <span
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono text-[9px] font-semibold"
+                                  style={{ background: "#F59E0B15", color: "#F59E0B" }}
+                                  title="Max tier — unmetered"
+                                >
+                                  ⚡ Free
+                                </span>
+                              );
+                            }
                             // Show breakdown when both pieces contributed,
                             // collapsed to a single number when only one did
                             // (avoids "50 + 0 = 50" noise on tool-free turns).

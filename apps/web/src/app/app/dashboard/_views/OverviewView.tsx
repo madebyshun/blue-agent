@@ -188,7 +188,7 @@ export default function OverviewView({ onSwitchTab }: Props) {
   // model — credits accumulate continuously and are spendable as long as
   // accrued + topup > spent.
   const [ledger, setLedger] = useState<{
-    accrued: number; topup: number; spent: number; balance: number;
+    accrued: number; topup: number; spent: number; balance: number; dailyCr: number;
   } | null>(null);
 
   useEffect(() => { setChatStats(loadChatStats(address)); }, [address]);
@@ -268,6 +268,7 @@ export default function OverviewView({ onSwitchTab }: Props) {
           topup:   Number(d.topup   ?? 0),
           spent:   Number(d.spent   ?? 0),
           balance: Number(d.balance ?? 0),
+          dailyCr: Number(d.dailyCr ?? 0),
         });
       })
       .catch(() => { if (!cancelled) setLedger(null); });
@@ -363,8 +364,8 @@ export default function OverviewView({ onSwitchTab }: Props) {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <StatChip
                   label="BALANCE"
-                  value={ledger ? ledger.balance.toLocaleString() : "—"}
-                  sub="credits · spendable"
+                  value={ledger ? (ledger.dailyCr === -1 ? "∞" : ledger.balance.toLocaleString()) : "—"}
+                  sub={ledger?.dailyCr === -1 ? "Max · unlimited" : "credits · spendable"}
                   color="#4FC3F7" />
                 <StatChip
                   label="ACCRUED"
@@ -388,7 +389,19 @@ export default function OverviewView({ onSwitchTab }: Props) {
               {/* Ledger breakdown — surfaces the spent + top-up history so the
                   user understands the BALANCE arithmetic. Only renders once
                   the ledger has loaded so we don't flash a zero row. */}
-              {ledger && (ledger.spent > 0 || ledger.topup > 0) && (
+              {/* Max tier = unlimited: the accrued/spent arithmetic doesn't
+                  apply (balance is a sentinel), so show a plain note instead. */}
+              {ledger && ledger.dailyCr === -1 && (
+                <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-600">
+                  <svg className="w-3 h-3 shrink-0 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                  </svg>
+                  <span>
+                    <span className="text-[#F59E0B] font-medium">Max tier</span> — every model &amp; tool free, no metering
+                  </span>
+                </div>
+              )}
+              {ledger && ledger.dailyCr !== -1 && (ledger.spent > 0 || ledger.topup > 0) && (
                 <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-600">
                   <svg className="w-3 h-3 shrink-0 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
@@ -401,7 +414,7 @@ export default function OverviewView({ onSwitchTab }: Props) {
                   </span>
                 </div>
               )}
-              {ledger && ledger.spent === 0 && ledger.topup === 0 && hasStake && (
+              {ledger && ledger.dailyCr !== -1 && ledger.spent === 0 && ledger.topup === 0 && hasStake && (
                 <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-600">
                   <svg className="w-3 h-3 shrink-0 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />

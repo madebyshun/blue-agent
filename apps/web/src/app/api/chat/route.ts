@@ -699,6 +699,16 @@ interface ToolCallResult {
 const WALLET_REQUIRED_MSG =
   "🔒 This needs a connected wallet.\n\nConnect your wallet — and hold $BLUE for a daily credit allowance — to run real-data Hub tools like this. Guests get free chat; live-data tools require a wallet.";
 
+// The 5 paid founder-console commands. Unlike the trading/security commands
+// (/pick /scan /pnl …) these answer from the model with NO real-data tool to
+// gate at the tool layer — so for guests we gate them here, before the LLM.
+// Connected wallets run them free (just the message cost). Plain-language asks
+// ("an idea for X" without the slash) stay free for everyone — only the explicit
+// paid /command is gated, which is the deterrent we actually want.
+const GUEST_GATED_COMMANDS = new Set(["idea", "build", "audit", "ship", "raise"]);
+const CORE_COMMAND_WALLET_MSG =
+  "🔒 The /idea, /build, /audit, /ship and /raise commands need a connected wallet.\n\nConnect your wallet (hold $BLUE for a daily credit allowance) to run the founder-console commands. Guests still get free chat — just ask in plain words, e.g. \"an idea for a Base payroll app\".";
+
 async function callHubTool(
   toolName: string,
   args:     Record<string, unknown>,
@@ -1508,6 +1518,17 @@ export async function POST(req: NextRequest) {
   // our own server has. Lets cron free-bypass paid tools; a browser guest can't
   // forge this, so guests stay blocked from paid tools.
   const isInternalCaller = !!INTERNAL_KEY && (req.headers.get("x-blue-internal") === INTERNAL_KEY);
+
+  // ── Guest gate for the paid founder-console commands ──────────────────────
+  // Guest (no wallet, not an internal job) running /idea /build /audit /ship
+  // /raise → require a wallet. These have no real-data tool to gate downstream,
+  // so block here, before the LLM. Connected wallets fall through and run free.
+  if (!isInternalCaller && !address) {
+    const guestCmd = extractCommand(messages as LLMMessage[]);
+    if (guestCmd && GUEST_GATED_COMMANDS.has(guestCmd.cmd)) {
+      return textToSSE(CORE_COMMAND_WALLET_MSG);
+    }
+  }
 
   // ── Credit ledger debit (connected wallets only) ──────────────────────────
   // Server fetches BLUE balance + computes credit cost server-side (frontend
