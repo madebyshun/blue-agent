@@ -932,6 +932,9 @@ async function veniceToolStream(
         if (veniceOutputs.some(({ out }) => out.walletRequired)) {
           for (const { tc } of veniceOutputs)
             emit({ type: "tool_done", tool: tc.function.name, ms: elapsed, result: null, credits: 0 });
+          // Signal the block so the client refunds the message cost — the guest
+          // got no answer, just the connect-wallet wall, so they shouldn't pay.
+          emit({ type: "wallet_required" });
           emit({ delta: { text: WALLET_REQUIRED_MSG } });
           controller.enqueue(enc.encode("data: [DONE]\n\n"));
           controller.close();
@@ -1692,6 +1695,9 @@ export async function POST(req: NextRequest) {
             controller.enqueue(enc.encode(
               `data: ${JSON.stringify({ type: "tool_done", tool: block.name, ms: elapsed, result: null, credits: 0 })}\n\n`,
             ));
+          // Signal the block so the client refunds the message cost — the guest
+          // got no answer, just the connect-wallet wall, so they shouldn't pay.
+          controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: "wallet_required" })}\n\n`));
           controller.enqueue(enc.encode(`data: ${JSON.stringify({ delta: { text: WALLET_REQUIRED_MSG } })}\n\n`));
           controller.enqueue(enc.encode("data: [DONE]\n\n"));
           controller.close();
