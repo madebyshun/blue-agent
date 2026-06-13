@@ -13,6 +13,7 @@ export const DOC_NAV: DocGroup[] = [
   { group: "Products", items: [
     { title: "Blue Chat", href: "/docs/blue-chat" },
     { title: "Blue Hub",  href: "/docs/blue-hub" },
+    { title: "BlueBank",  href: "/docs/bluebank" },
   ]},
   { group: "CLI Reference", items: [
     { title: "Commands",    href: "/docs/commands" },
@@ -21,6 +22,7 @@ export const DOC_NAV: DocGroup[] = [
   ]},
   { group: "Platform", items: [
     { title: "x402 Tools",      href: "/docs/x402" },
+    { title: "API Reference",   href: "/docs/api" },
     { title: "Credits & Tiers", href: "/docs/credits" },
     { title: "MCP Setup",       href: "/docs/mcp" },
     { title: "For Developers",  href: "/docs/develop" },
