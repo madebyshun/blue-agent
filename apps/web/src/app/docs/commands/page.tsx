@@ -9,7 +9,7 @@ export default function CommandsDoc() {
       <DocHeader
         eyebrow="CLI Reference"
         title="Commands"
-        lead="22 CLI commands across Workflow, Setup, and Tasks — all grounded in verified Base knowledge. Install with npm i -g @blueagent/cli."
+        lead="24 CLI commands across Workflow, Setup, Chat, Reputation, Discovery, Launch, and Tasks — all grounded in verified Base knowledge. Install with npm i -g @blueagent/cli."
       />
 
       <H2 id="core">5 core commands</H2>

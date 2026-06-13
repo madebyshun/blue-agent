@@ -1,13 +1,22 @@
 import Link from "next/link";
-import { DocHeader, H2, P, CardGrid, Card, PrevNext, Callout } from "../_ui";
+import { DocHeader, H2, P, PrevNext, Callout } from "../_ui";
+import { AGENT_TOOLS } from "@/lib/agent-tools";
 
 export const metadata = { title: "Blue Hub — Blue Agent Docs" };
 
-const CATEGORIES = [
-  { title: "Security",  color: "#f87171", desc: "Honeypot, risk gate, contract trust, AML screen, key exposure, phishing scan." },
-  { title: "Market",    color: "#4FC3F7", desc: "Token pick, momentum, narrative pulse, whale signal, competitor scan." },
-  { title: "Onchain",   color: "#34D399", desc: "Wallet PnL, portfolio, transaction history, DeFi opportunity, allowance audit." },
-  { title: "Agent",     color: "#A78BFA", desc: "Multi-agent consensus, agent score, builder DD, deep analysis clusters." },
+// Display metadata for the raw category tags on AGENT_TOOLS, in render order.
+const CAT_META: { key: string; label: string; icon: string; color: string }[] = [
+  { key: "intelligence",   label: "Market Intelligence", icon: "📈", color: "#4FC3F7" },
+  { key: "security",       label: "Security",            icon: "🛡️", color: "#f87171" },
+  { key: "on-chain",       label: "On-chain",            icon: "⛓", color: "#34D399" },
+  { key: "builder",        label: "Builder Tools",       icon: "🏗️", color: "#A78BFA" },
+  { key: "earn",           label: "Earn / DeFi",         icon: "🌾", color: "#fbbf24" },
+  { key: "Base DeFi",      label: "DeFi",                icon: "💧", color: "#fbbf24" },
+  { key: "trading",        label: "Trading",             icon: "💹", color: "#34D399" },
+  { key: "agent-economy",  label: "Agent Network",       icon: "🤝", color: "#A78BFA" },
+  { key: "base-ecosystem", label: "Base Ecosystem",      icon: "🔵", color: "#4FC3F7" },
+  { key: "content",        label: "Content",             icon: "✍️", color: "#E879F9" },
+  { key: "alerts",         label: "Alerts",              icon: "🔔", color: "#f87171" },
 ];
 
 export default function BlueHubDoc() {
@@ -16,31 +25,50 @@ export default function BlueHubDoc() {
       <DocHeader
         eyebrow="Products"
         title="Blue Hub"
-        lead="72 AI tools for Base — security, market, onchain, and multi-agent consensus. Built from a 3-agent collaboration (Blue Agent + Aeon + MiroShark) and paid per call via x402."
+        lead={`${AGENT_TOOLS.length} AI tools for Base — security, market intelligence, on-chain, builder, and agent-network. Built from a 3-agent collaboration (Blue Agent + Aeon + MiroShark) and paid per call in USDC via x402.`}
       />
 
       <P>
-        The Hub is a marketplace of focused tools. Each one uses live data (never fabricated numbers) and is callable three ways:
-        the <a href="/hub" className="text-[#4FC3F7] underline">Hub UI</a>, the{" "}
+        Every tool uses live data (never fabricated numbers) and is callable three ways: the{" "}
+        <a href="/hub" className="text-[#4FC3F7] underline">Hub UI</a>, the{" "}
         <a href="https://api.blueagent.dev/docs" className="text-[#4FC3F7] underline">x402 API</a>, or any MCP client.
       </P>
 
-      <H2 id="categories">Tool categories</H2>
-      <CardGrid cols={2}>
-        {CATEGORIES.map((c) => (
-          <Card key={c.title} title={c.title} color={c.color}>{c.desc}</Card>
-        ))}
-      </CardGrid>
-
       <H2 id="consensus">3-agent consensus</H2>
       <P>
-        High-stakes tools (deep analysis, risk gate, builder DD) run across three independent agents and reconcile their
-        answers — so you get a consensus view, not a single model&apos;s guess. Real data in, cross-checked signal out.
+        High-stakes tools (deep analysis, risk gate, builder DD) run across three independent agents and reconcile their answers —
+        a consensus view, not a single model&apos;s guess. Real data in, cross-checked signal out.
       </P>
 
-      <Callout color="#fbbf24" title="Pricing & full suite">
-        Tools are pay-per-call in USDC on Base. See <Link href="/docs/x402" className="text-[#fbbf24] underline">x402 Tools</Link> for
-        the 5 core commands, the extended blue-* suite, and live pricing.
+      <H2 id="catalog">Full catalog</H2>
+      {CAT_META.map((cat) => {
+        const tools = AGENT_TOOLS.filter((t) => t.category === cat.key);
+        if (!tools.length) return null;
+        return (
+          <section key={cat.key} className="my-6">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-base">{cat.icon}</span>
+              <span className="font-mono text-[11px] tracking-widest uppercase" style={{ color: cat.color }}>{cat.label}</span>
+              <span className="font-mono text-[10px] text-slate-600">{tools.length}</span>
+            </div>
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden divide-y divide-[#1A1A2E]">
+              {tools.map((t) => (
+                <div key={t.id} className="px-5 py-3">
+                  <div className="flex items-center justify-between gap-3 mb-0.5">
+                    <span className="font-mono text-[12px] font-bold text-slate-200">{t.name}</span>
+                    <span className="font-mono text-[10px] text-slate-500 border border-[#1A1A2E] rounded px-1.5 py-0.5 shrink-0">{t.price}</span>
+                  </div>
+                  <p className="font-mono text-[10px] text-slate-500 leading-relaxed">{t.description}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      })}
+
+      <Callout color="#fbbf24" title="Pricing & API">
+        Pay-per-call in USDC on Base — no keys, no subscription. See <Link href="/docs/x402" className="text-[#fbbf24] underline">x402 Tools</Link> for
+        the core command suite, or the <a href="https://api.blueagent.dev/docs" className="text-[#fbbf24] underline">OpenAPI spec</a>.
       </Callout>
 
       <PrevNext current="/docs/blue-hub" />
