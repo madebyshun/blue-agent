@@ -719,9 +719,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const last     = task.messages[lastIdx];
 
         // Stamp model + timing on the completed assistant message
+        // Max tier (unlimited) is free + unmetered server-side — the chip must
+        // reflect that (0 cr / "Free"), not the would-be discounted message cost.
         const finalMsgs = task.messages.map((m, i) =>
           i === lastIdx && m.role === "assistant"
-            ? { ...m, modelUsed: chatTier, responseMs, creditsUsed: cost, isThinking: false }
+            ? { ...m, modelUsed: chatTier, responseMs, creditsUsed: isUnlimited ? 0 : cost, isThinking: false }
             : m
         );
 
