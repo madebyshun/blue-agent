@@ -2,10 +2,8 @@
  * POST /api/credits/topup
  *
  * Internal-only admin endpoint to credit an address's ledger (KV `topup`).
- * Same INTERNAL_SERVICE_KEY gate as /api/credits/spend. Used to:
- *   - pre-seed the CRON_WALLET service identity so scheduled tasks can pay for
- *     their tool calls,
- *   - grant promo / support credits.
+ * Same INTERNAL_SERVICE_KEY gate as /api/credits/spend. Used to grant
+ * promo / support credits or reconcile balances.
  *
  * These are off-chain ledger credits (not USDC) — minting here is free; gate
  * it carefully.
