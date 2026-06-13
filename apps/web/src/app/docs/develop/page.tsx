@@ -25,6 +25,11 @@ $ npm run dev`}</CodeBlock>
       <CodeBlock title="skill load order">{`BLUE_AGENT_SKILLS_DIR  →  ~/.blue-agent/skills/  →  monorepo skills/`}</CodeBlock>
 
       <H2 id="packages">Packages</H2>
+      <P>All <code className="text-slate-300">@blueagent/*</code> packages are published on npm — install only what you need:</P>
+      <CodeBlock title="install from npm" badge="npm">{`$ npm install -g @blueagent/cli     # CLI + TUI
+$ npm install @blueagent/x402        # x402 client SDK
+$ npm install @blueagent/sdk         # unified SDK
+$ npm install @blueagent/agentkit    # Coinbase AgentKit plugin`}</CodeBlock>
       <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-6 my-5 space-y-5">
         {PACKAGES.map((group) => (
           <div key={group.label}>

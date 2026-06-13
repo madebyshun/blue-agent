@@ -16,6 +16,7 @@ export const DOC_NAV: DocGroup[] = [
     { title: "BlueBank",  href: "/docs/bluebank" },
   ]},
   { group: "CLI Reference", items: [
+    { title: "Blue CLI",    href: "/docs/cli" },
     { title: "Commands",    href: "/docs/commands" },
     { title: "Skills",      href: "/docs/skills" },
     { title: "Aeon Skills", href: "/docs/aeon-skills" },
