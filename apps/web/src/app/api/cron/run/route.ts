@@ -20,7 +20,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
+const BASE_URL     = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
+const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY ?? "";
 
 // Chat route only knows the bankr tiers fast | pro | max. Cron may pass any
 // ModelTier id; coerce anything unknown to `pro` so we always get a tool-
@@ -97,17 +98,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "prompt required" }, { status: 400 });
     }
 
-    // Route through the live chat pipeline so the model has the real-data
-    // Hub tools available. No `address` → guest (no credit debit); tools run
-    // via the internal-service bypass the chat route already implements.
+    // Route through the live chat pipeline so the model has the real-data Hub
+    // tools available. Carry the internal key so /api/chat recognizes this as an
+    // authorized server job → its paid tools may free-bypass (browser guests,
+    // which can't supply the key, stay blocked from paid tools).
     const res = await fetch(`${BASE_URL}/api/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(INTERNAL_KEY ? { "X-Blue-Internal": INTERNAL_KEY } : {}),
+      },
       body: JSON.stringify({
         messages: [{ role: "user", content: expandPrompt(prompt) }],
         tier,
         // Omit `provider` → Anthropic/Bankr path WITH HUB_TOOLS (real data).
-        // Omit `address` → guest session, no metering.
       }),
       signal: AbortSignal.timeout(90_000),
     });
