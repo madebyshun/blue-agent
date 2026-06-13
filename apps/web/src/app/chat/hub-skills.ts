@@ -51,23 +51,9 @@ const CATEGORY_ORDER: SkillCategory[] = [
   "On-chain", "Base Native",
 ];
 
-// AGENT_TOOLS category slug → display bucket (fallback when a tool isn't curated).
-const CATEGORY_MAP: Record<string, SkillCategory> = {
-  "intelligence":   "Market Intel",
-  "trading":        "Market Intel",
-  "security":       "Due Diligence",
-  "builder":        "Builder Tools",
-  "content":        "Builder Tools",
-  "earn":           "Ecosystem",
-  "agent-economy":  "Agent Network",
-  "base-ecosystem": "Ecosystem",
-  "Base DeFi":      "Ecosystem",
-  "alerts":         "On-chain",
-  "on-chain":       "On-chain",
-};
-
-// Hand-tuned category + chat trigger for the tools that have them. Keyed by id
-// (shared with AGENT_TOOLS). Entries whose id isn't in AGENT_TOOLS are ignored.
+// Hand-tuned category + chat trigger for the tools that are genuinely useful
+// IN CHAT (slash commands + prompts the model can actually action). Keyed by id
+// (shared with AGENT_TOOLS).
 const CURATED: { id: string; category: SkillCategory; trigger: string }[] = [
   // Market Intel
   { id: "token-pick-signal",       category: "Market Intel",  trigger: "/pick" },
@@ -110,26 +96,22 @@ const CURATED: { id: string; category: SkillCategory; trigger: string }[] = [
   { id: "wallet-strategy-analyzer",category: "Ecosystem",     trigger: "/wallet " },
 ];
 
-const curatedById = new Map(CURATED.map(c => [c.id, c]));
+const toolById = new Map(AGENT_TOOLS.map(t => [t.id, t]));
 
-type AnyAgentTool = (typeof AGENT_TOOLS)[number];
-
-// Fallback trigger for tools without a curated one: a fill-in-the-blank prompt
-// using the first (required) input, or a standalone "Run <name>".
-function deriveTrigger(t: AnyAgentTool): string {
-  const req = t.inputs?.find(i => i.required) ?? t.inputs?.[0];
-  return req ? `${t.name} — ${req.label}: ` : `Run ${t.name}`;
-}
-
-export const HUB_SKILLS: HubSkill[] = AGENT_TOOLS.map((t) => {
-  const curated = curatedById.get(t.id);
-  return {
-    id:          t.id,
-    name:        t.name,
-    description: t.description,
-    category:    curated?.category ?? CATEGORY_MAP[t.category] ?? "Ecosystem",
-    trigger:     curated?.trigger  ?? deriveTrigger(t),
-  };
+// Blue Chat surfaces ONLY this curated subset — tools with a hand-tuned trigger
+// that actually do something useful in chat. The full 72-tool catalog still
+// lives on the Hub page (/hub). Name + description come from AGENT_TOOLS so the
+// two stay in sync; entries whose id isn't in AGENT_TOOLS are skipped.
+export const HUB_SKILLS: HubSkill[] = CURATED.flatMap((c) => {
+  const tool = toolById.get(c.id);
+  if (!tool) return [];
+  return [{
+    id:          c.id,
+    name:        tool.name,
+    description: tool.description,
+    category:    c.category,
+    trigger:     c.trigger,
+  }];
 });
 
 // Only categories that actually contain tools, in canonical order — so the
