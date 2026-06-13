@@ -1,7 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import SettingsPanel, { type SettingsSection } from "./SettingsPanel";
+
+// Mobile-only quick links — Models/Tools/Skills/Docs live here (out of the nav
+// drawer) so the mobile drawer stays focused. Tapping jumps to the chat tab and
+// closes the modal; Docs navigates to /docs. Hidden on desktop (lg:hidden), so
+// the web Settings experience is unchanged.
+type JumpTab = "models" | "tools" | "skills";
+const QUICK_LINKS: { id: JumpTab; label: string; icon: string }[] = [
+  { id: "models", label: "Models", icon: "🤖" },
+  { id: "tools",  label: "Tools",  icon: "🔧" },
+  { id: "skills", label: "Skills", icon: "⚡" },
+];
 
 /**
  * Account / Settings modal — Claude-style two-pane layout: a left category
@@ -61,9 +73,11 @@ const SECTIONS: { id: SettingsSection; label: string; icon: React.ReactNode }[] 
 export default function SettingsModal({
   open,
   onClose,
+  onJumpTab,
 }: {
   open: boolean;
   onClose: () => void;
+  onJumpTab?: (tab: JumpTab) => void;
 }) {
   const [section, setSection] = useState<SettingsSection>("account");
 
@@ -128,6 +142,33 @@ export default function SettingsModal({
 
           {/* Right content pane */}
           <div className="flex-1 min-h-0 overflow-y-auto">
+            {/* Mobile-only quick links (Models/Tools/Skills/Docs) — desktop has
+                these in the chat sidebar, so this is hidden on lg+. */}
+            <div className="lg:hidden px-5 pt-5">
+              <p className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">BLUE CHAT</p>
+              <div className="grid grid-cols-2 gap-2">
+                {QUICK_LINKS.map(q => (
+                  <button
+                    key={q.id}
+                    onClick={() => onJumpTab?.(q.id)}
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#1A1A2E] bg-[#0A0A12] hover:bg-[#ffffff06] transition-colors"
+                  >
+                    <span className="text-sm leading-none shrink-0">{q.icon}</span>
+                    <span className="font-mono text-[13px] text-slate-200">{q.label}</span>
+                  </button>
+                ))}
+                <Link
+                  href="/docs"
+                  onClick={onClose}
+                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#1A1A2E] bg-[#0A0A12] hover:bg-[#ffffff06] transition-colors"
+                >
+                  <span className="text-sm leading-none shrink-0">📄</span>
+                  <span className="font-mono text-[13px] text-slate-200">Docs</span>
+                </Link>
+              </div>
+              <div className="border-t border-[#1A1A2E] mt-5" />
+            </div>
+
             <SettingsPanel section={section} />
           </div>
         </div>

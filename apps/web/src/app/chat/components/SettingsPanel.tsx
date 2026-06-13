@@ -146,7 +146,7 @@ export default function SettingsPanel({ section }: { section: SettingsSection })
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-[10px] text-slate-600">
-                    {isUnlimited ? "Max tier · no metering, every model free" : "Accrued on-chain · cleared via chat use"}
+                    {isUnlimited ? "Max tier · no metering, every model free" : "Daily tier allowance + staked accrual"}
                   </span>
                   {holderTier.discount > 0 && (
                     <span className="font-mono text-[10px]" style={{ color: holderTier.color }}>
@@ -230,7 +230,7 @@ export default function SettingsPanel({ section }: { section: SettingsSection })
           {showHelp && (
             <div className="mt-2 rounded-2xl bg-[#0A0A12] border border-[#1A1A2E] p-4 space-y-3">
               <p className="font-mono text-[10px] text-slate-500 leading-relaxed">
-                With no wallet you get <span className="text-[#4FC3F7]">100 free/day</span> (~10 messages).
+                With no wallet you get <span className="text-[#4FC3F7]">100 free credits/day</span> (~10 messages). Hold $BLUE to step up a tier and unlock tools.
                 Your tier — and how many credits you get — is set by your <span className="text-slate-300">$BLUE</span>,
                 and <span className="text-slate-300">holding or staking both count</span>.
               </p>
