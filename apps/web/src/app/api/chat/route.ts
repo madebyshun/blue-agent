@@ -694,6 +694,9 @@ async function callHubTool(
   // toolCreditCost(toolId, tier) from their credit ledger instead of free-
   // bypassing on the dev's pocket.
   userAddress?: string,
+  // True when this chat request came from an authorized server job (cron),
+  // proven by the internal key. Lets paid tools free-bypass for cron only.
+  isInternal = false,
 ): Promise<ToolCallResult> {
   // Client-rendered marker tools — no server endpoint. The chat UI reads the
   // result.kind and renders an interactive card that talks to the user's
@@ -741,6 +744,11 @@ async function callHubTool(
   if (INTERNAL_KEY)  headers["X-Blue-Internal"] = INTERNAL_KEY;
   if (userAddress && /^0x[a-fA-F0-9]{40}$/.test(userAddress)) {
     headers["X-Blue-User"] = userAddress;
+  } else if (isInternal) {
+    // Authorized server job (cron) with no end-user → may free-bypass paid
+    // tools. Set only when the inbound /api/chat request carried the internal
+    // key, so a browser guest can never reach this branch.
+    headers["X-Blue-Service"] = "internal";
   }
 
   // Free utility tools route directly (no x402 payment gate). These are
@@ -768,6 +776,13 @@ async function callHubTool(
       const data = await res.json().catch(() => ({})) as {
         code?: string; needed?: number;
       };
+      if (data?.code === "WALLET_REQUIRED") {
+        // Guest tried a paid tool. Tell the model to ask the user to connect —
+        // do NOT fabricate a result.
+        return {
+          text: `[${toolName}: this tool needs a connected wallet. Tell the user to connect their wallet (and hold $BLUE for a daily allowance) to run it — do not invent a result.]`,
+        };
+      }
       if (data?.code === "INSUFFICIENT_CREDITS" && typeof data.needed === "number") {
         return {
           text: `[${toolName}: not enough credits — need ${data.needed}, top up to continue]`,
@@ -1465,6 +1480,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "messages array required." }, { status: 400 });
   }
 
+  // Authorized server job (e.g. cron) — proven by the internal key, which only
+  // our own server has. Lets cron free-bypass paid tools; a browser guest can't
+  // forge this, so guests stay blocked from paid tools.
+  const isInternalCaller = !!INTERNAL_KEY && (req.headers.get("x-blue-internal") === INTERNAL_KEY);
+
   // ── Credit ledger debit (connected wallets only) ──────────────────────────
   // Server fetches BLUE balance + computes credit cost server-side (frontend
   // tier is not trusted). On insufficient balance, we return an SSE stream
@@ -1635,7 +1655,7 @@ export async function POST(req: NextRequest) {
         const t0 = Date.now();
         const toolOutputs = await Promise.all(
           toolUseBlocks.map(async (block) => {
-            const out = await callHubTool(block.name!, block.input ?? {}, address);
+            const out = await callHubTool(block.name!, block.input ?? {}, address, isInternalCaller);
             return { block, out };
           })
         );

@@ -218,6 +218,19 @@ async function handle(
           console.error("[x402] credit debit failed:", err.message);
         }
       }
+    } else if ((req.headers.get("x-blue-service") ?? "") !== "internal") {
+      // No user AND not an authorized internal service job (cron). Free utility
+      // tools ($0) still run for anyone, but PAID tools require a connected
+      // wallet — closes the guest free-tool loophole. (Cron sets X-Blue-Service
+      // = "internal", which only our own server can produce, so it falls through
+      // and free-bypasses; a browser guest can never set it.)
+      const { toolCreditCostFor } = await import("@/lib/credit-pricing");
+      if (toolCreditCostFor(tool, 0) > 0) {
+        return NextResponse.json(
+          { error: "This tool requires a connected wallet.", code: "WALLET_REQUIRED", tool },
+          { status: 402 },
+        );
+      }
     }
 
     const innerReq = new Request(`https://blueagent.dev/api/x402/${tool}`, {

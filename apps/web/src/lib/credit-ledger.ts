@@ -32,6 +32,7 @@ function utcDay(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
 }
 
+
 // ─── On-chain accrued (read via /lib/credits → contract) ─────────────────────
 
 /**
