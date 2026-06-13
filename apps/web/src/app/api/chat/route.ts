@@ -354,7 +354,7 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_market_fit",
-    description: "Market-fit analysis for a project — problem clarity, timing, competition, demand signals. USE WHEN: the user explicitly asks to VALIDATE / SCORE market fit or demand for a described product. NOT FOR: writing code, building an app/game/frontend, explaining concepts, designing architecture, or debugging — and NOT the default for /idea-style brainstorming. Answer those directly without a tool.",
+    description: "Market-fit analysis for a project — problem clarity, timing, competition, demand signals. USE WHEN: the user asks to VALIDATE / SCORE market fit or demand for a described product, or as part of the /idea brief. NOT FOR: writing code, building an app/game/frontend, explaining concepts, designing architecture, or debugging — answer those directly without a tool.",
     input_schema: {
       type: "object",
       properties: {
@@ -1055,14 +1055,22 @@ Show the user their credit system status. Format it cleanly:
 Keep it short, practical, and actionable.`,
 
   idea: `## COMMAND: /idea
-Generate a FUNDABLE BRIEF in this exact format:
+The user wants a FUNDABLE BRIEF for their concept — GROUNDED IN LIVE DATA, not
+just your assumptions. YOU MUST call BOTH tools first, in parallel (do not skip):
+1. hub_market_fit — with { project: "<the user's concept>" }
+2. hub_competitor_scan — with { project: "<the user's concept>" }
+NEVER answer from training data alone — always call the tools first.
+
+After the tools return, synthesize the brief in this exact format:
 **Problem** — 1 crisp sentence
 **Why Now** — the timing catalyst that makes this urgent
 **Why Base** — specific Base advantage (onchain UX, USDC, Coinbase ecosystem, etc.)
+**Market Fit** — cite the hub_market_fit signal (demand, timing, problem clarity)
+**Competition** — cite hub_competitor_scan (who exists) + the defensible edge
 **MVP Scope** — 3 bullet points, each shippable in ≤2 weeks
 **Risks** — top 2 risks and how to mitigate
 **24h Plan** — the first 3 concrete actions to take today
-Be direct and opinionated. Avoid filler.`,
+Base the Market Fit + Competition sections on the TOOL DATA. Be direct, opinionated, no filler.`,
 
   build: `## COMMAND: /build
 Generate a TECHNICAL ARCHITECTURE:
@@ -1528,13 +1536,14 @@ export async function POST(req: NextRequest) {
   const detectedCmd = extractCommand(messages as LLMMessage[]);
   const cmdPrompt = detectedCmd ? COMMAND_PROMPTS[detectedCmd.cmd] : null;
 
-  // The 5 founder-console commands are pure-knowledge deliverables (the model
-  // writes a brief / architecture / review from its own knowledge — no live or
-  // on-chain data). Tools are DISABLED for them so the model can't mis-fire a
-  // paid Hub tool (e.g. /idea accidentally calling hub_market_fit) and burn the
-  // user's credits for nothing. Data/exec commands (/scan /pick /pnl …) keep
-  // their tools. web_search stays available if the user explicitly toggled it.
-  const KNOWLEDGE_COMMANDS = new Set(["idea", "build", "audit", "ship", "raise"]);
+  // /build /audit /ship /raise are pure-knowledge deliverables (the model writes
+  // an architecture / review / checklist from its own knowledge — no live or
+  // on-chain data, and no real-data Hub tool backs them). Tools are DISABLED for
+  // them so the model can't mis-fire a paid Hub tool and burn credits for
+  // nothing. /idea is NOT here: it's now a real-data command that deliberately
+  // calls hub_market_fit + hub_competitor_scan to ground the brief (see its
+  // COMMAND_PROMPT). Data/exec commands (/scan /pick /pnl …) keep their tools.
+  const KNOWLEDGE_COMMANDS = new Set(["build", "audit", "ship", "raise"]);
   const knowledgeOnly = !!detectedCmd && KNOWLEDGE_COMMANDS.has(detectedCmd.cmd);
   const modelLabel = getModelLabel(tier, modelId, provider);
   const modelLine = `## Active model\nYou are currently running as: **${modelLabel}**. When asked "what model are you?", "which AI are you?", "what are you running on?", or similar — answer precisely with this model name.`;
