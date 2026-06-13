@@ -695,7 +695,17 @@ interface ToolCallResult {
 
 // Shown (verbatim, no model synthesis) when a guest requests a paid Hub tool.
 const WALLET_REQUIRED_MSG =
-  "🔒 This needs a connected wallet.\n\nConnect your wallet — and hold $BLUE for a daily credit allowance — to run paid Hub tools like this. Guests get free chat; tools require a wallet.";
+  "🔒 This needs a connected wallet.\n\nConnect your wallet — and hold $BLUE for a daily credit allowance — to run paid commands and Hub tools like this. Guests get free chat; commands & tools require a wallet.";
+
+// Paid slash commands — gated for guests (no wallet). The model can answer
+// these from training data without ever calling the priced tool, so we must
+// block them BEFORE the LLM, not just at the tool layer. Free info commands
+// (/help /credits /models /skills) are intentionally NOT listed.
+const GATED_COMMANDS = new Set([
+  "idea", "build", "audit", "ship", "raise",
+  "pick", "scan", "wallet", "pnl", "aml", "quantum",
+  "airdrop", "yield", "dex", "whale", "launch",
+]);
 
 async function callHubTool(
   toolName: string,
@@ -1506,6 +1516,18 @@ export async function POST(req: NextRequest) {
   // our own server has. Lets cron free-bypass paid tools; a browser guest can't
   // forge this, so guests stay blocked from paid tools.
   const isInternalCaller = !!INTERNAL_KEY && (req.headers.get("x-blue-internal") === INTERNAL_KEY);
+
+  // Guest (no wallet, not an internal job) running a paid slash command →
+  // short-circuit to the connect-wallet message BEFORE the LLM, so guests can't
+  // get command output (real OR model-fabricated) for just the message cost.
+  if (!isInternalCaller && !address) {
+    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+    const txt = typeof lastUser?.content === "string" ? lastUser.content : "";
+    const cmd = txt.trim().match(/^\/([a-z-]+)/i)?.[1]?.toLowerCase();
+    if (cmd && GATED_COMMANDS.has(cmd)) {
+      return textToSSE(WALLET_REQUIRED_MSG);
+    }
+  }
 
   // ── Credit ledger debit (connected wallets only) ──────────────────────────
   // Server fetches BLUE balance + computes credit cost server-side (frontend
