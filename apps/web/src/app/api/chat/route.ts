@@ -768,6 +768,13 @@ async function callHubTool(
       const data = await res.json().catch(() => ({})) as {
         code?: string; needed?: number;
       };
+      if (data?.code === "WALLET_REQUIRED") {
+        // Guest tried a paid tool. Tell the model to ask the user to connect —
+        // do NOT fabricate a result.
+        return {
+          text: `[${toolName}: this tool needs a connected wallet. Tell the user to connect their wallet (and hold $BLUE for a daily allowance) to run it — do not invent a result.]`,
+        };
+      }
       if (data?.code === "INSUFFICIENT_CREDITS" && typeof data.needed === "number") {
         return {
           text: `[${toolName}: not enough credits — need ${data.needed}, top up to continue]`,

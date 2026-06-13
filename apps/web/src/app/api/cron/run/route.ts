@@ -17,6 +17,7 @@
  * Rule: real-data, the LLM must NOT fabricate data.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { CRON_WALLET } from "@/lib/credit-ledger";
 
 export const runtime = "nodejs";
 
@@ -97,17 +98,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "prompt required" }, { status: 400 });
     }
 
-    // Route through the live chat pipeline so the model has the real-data
-    // Hub tools available. No `address` → guest (no credit debit); tools run
-    // via the internal-service bypass the chat route already implements.
+    // Route through the live chat pipeline so the model has the real-data Hub
+    // tools available. Bill the run to the CRON_WALLET service identity (not the
+    // anonymous free-bypass — that's reserved for connected users now) so cron
+    // tool spend is accountable. Pre-seed CRON_WALLET's credit ledger.
     const res = await fetch(`${BASE_URL}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         messages: [{ role: "user", content: expandPrompt(prompt) }],
         tier,
+        address: CRON_WALLET,
         // Omit `provider` → Anthropic/Bankr path WITH HUB_TOOLS (real data).
-        // Omit `address` → guest session, no metering.
       }),
       signal: AbortSignal.timeout(90_000),
     });

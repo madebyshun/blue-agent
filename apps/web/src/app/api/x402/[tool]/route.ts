@@ -218,6 +218,17 @@ async function handle(
           console.error("[x402] credit debit failed:", err.message);
         }
       }
+    } else {
+      // No user attached → free utility tools ($0) still run for anyone, but
+      // PAID tools require a connected wallet. Closes the guest free-tool
+      // loophole; cron supplies CRON_WALLET so it bills through the path above.
+      const { toolCreditCostFor } = await import("@/lib/credit-pricing");
+      if (toolCreditCostFor(tool, 0) > 0) {
+        return NextResponse.json(
+          { error: "This tool requires a connected wallet.", code: "WALLET_REQUIRED", tool },
+          { status: 402 },
+        );
+      }
     }
 
     const innerReq = new Request(`https://blueagent.dev/api/x402/${tool}`, {
