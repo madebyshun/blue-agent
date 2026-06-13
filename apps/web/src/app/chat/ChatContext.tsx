@@ -17,7 +17,7 @@ import {
 import { extractArtifacts } from "./artifacts";
 import { getPersona } from "./personas";
 import {
-  creditCost, deductCredits,
+  creditCost, deductCredits, addCredits,
   getNextRefresh, refreshCreditsIfNeeded, getDailyCr,
   setCredits as setCreditsLS,
 } from "@/lib/credits";
@@ -545,6 +545,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const reader  = res.body!.getReader();
       const decoder = new TextDecoder();
       let buf = "";
+      // Set when the server short-circuits to the connect-wallet wall (a guest
+      // tool call hit a paid tool). The turn produced no answer, so we refund
+      // the up-front message charge below and stamp the chip at 0 cr.
+      let walletBlocked = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -658,6 +662,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 }
                 return prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
               });
+            } else if (parsed.type === "wallet_required") {
+              // Guest tool call hit a paid tool — the turn is just the
+              // connect-wallet wall, no answer. Mark it so we don't charge.
+              walletBlocked = true;
             } else if (parsed.type === "insufficient_credits") {
               // Server signalled the wallet's credit ledger couldn't cover the
               // chat message or tool call. Attach the structured notice to the
@@ -709,6 +717,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      // Blocked turn (guest hit a paid tool) → refund the up-front message
+      // charge. The guest got the connect-wallet wall, not an answer.
+      if (walletBlocked && !walletAddr) {
+        const refunded = addCredits(cost, walletAddr);
+        setCredits(refunded);
+      }
+
       // Persist final state + stamp metadata + update memory
       const responseMs = Date.now() - streamStartRef.current;
       setTasksState(prev => {
@@ -719,11 +734,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const last     = task.messages[lastIdx];
 
         // Stamp model + timing on the completed assistant message
-        // Max tier (unlimited) is free + unmetered server-side — the chip must
-        // reflect that (0 cr / "Free"), not the would-be discounted message cost.
+        // Max tier (unlimited) is free + unmetered server-side, and a blocked
+        // turn (connect-wallet wall) is refunded — both stamp the chip at 0 cr.
         const finalMsgs = task.messages.map((m, i) =>
           i === lastIdx && m.role === "assistant"
-            ? { ...m, modelUsed: chatTier, responseMs, creditsUsed: isUnlimited ? 0 : cost, isThinking: false }
+            ? { ...m, modelUsed: chatTier, responseMs, creditsUsed: (isUnlimited || walletBlocked) ? 0 : cost, isThinking: false }
             : m
         );
 
