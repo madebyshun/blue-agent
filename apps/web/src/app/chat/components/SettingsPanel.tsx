@@ -146,7 +146,7 @@ export default function SettingsPanel({ section }: { section: SettingsSection })
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-[10px] text-slate-600">
-                    {isUnlimited ? "Max tier · no metering, every model free" : "Accrued on-chain · cleared via chat use"}
+                    {isUnlimited ? "Max tier · no metering, every model free" : "Daily tier allowance + staked accrual"}
                   </span>
                   {holderTier.discount > 0 && (
                     <span className="font-mono text-[10px]" style={{ color: holderTier.color }}>
