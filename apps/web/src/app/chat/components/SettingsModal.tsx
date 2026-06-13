@@ -6,7 +6,7 @@ import SettingsPanel, { type SettingsSection } from "./SettingsPanel";
 
 // Mobile-only quick links — Models/Tools/Skills/Docs live here (out of the nav
 // drawer) so the mobile drawer stays focused. Tapping jumps to the chat tab and
-// closes the modal; Docs navigates to /docs. Hidden on desktop (lg:hidden), so
+// closes the modal; Docs navigates to /docs/blue-chat. Hidden on desktop (lg:hidden), so
 // the web Settings experience is unchanged.
 type JumpTab = "models" | "tools" | "skills";
 const QUICK_LINKS: { id: JumpTab; label: string; icon: string }[] = [
@@ -158,7 +158,7 @@ export default function SettingsModal({
                   </button>
                 ))}
                 <Link
-                  href="/docs"
+                  href="/docs/blue-chat"
                   onClick={onClose}
                   className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#1A1A2E] bg-[#0A0A12] hover:bg-[#ffffff06] transition-colors"
                 >
