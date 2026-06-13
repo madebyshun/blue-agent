@@ -323,7 +323,7 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_deep_analysis",
-    description: "Comprehensive token fundamentals — on-chain activity, holder distribution, risk signals. Use when user asks for DD, due diligence, or deep analysis on a token.",
+    description: "Comprehensive token fundamentals — on-chain activity, holder distribution, risk signals. USE WHEN: the user gives a token CONTRACT ADDRESS and asks for DD / due diligence / deep analysis. NOT FOR: analysing, reviewing, or debugging CODE; explaining concepts; or any request without a real token address — answer those directly without a tool.",
     input_schema: {
       type: "object",
       properties: { token: { type: "string", description: "Token contract address" } },
@@ -354,7 +354,7 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_market_fit",
-    description: "Market fit analysis for a project — problem clarity, timing, competition, demand signals. Use when user describes a project and wants to validate it.",
+    description: "Market-fit analysis for a project — problem clarity, timing, competition, demand signals. USE WHEN: the user explicitly asks to VALIDATE / SCORE market fit or demand for a described product. NOT FOR: writing code, building an app/game/frontend, explaining concepts, designing architecture, or debugging — and NOT the default for /idea-style brainstorming. Answer those directly without a tool.",
     input_schema: {
       type: "object",
       properties: {
@@ -366,7 +366,7 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_competitor_scan",
-    description: "Competitor analysis — direct/indirect competitors and defensible edge. Use when user asks about competition for their project.",
+    description: "Competitor analysis — direct/indirect competitors and defensible edge. USE WHEN: the user explicitly asks WHO the competitors are for their project. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
     input_schema: {
       type: "object",
       properties: {
@@ -378,7 +378,7 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_investor_memo",
-    description: "Generate a full investor memo — thesis, market, moat, risks, ask. Use when user wants to write a pitch, investor memo, or fundraising doc.",
+    description: "Generate a full investor memo — thesis, market, moat, risks, ask. USE WHEN: the user explicitly asks for an investor memo / pitch doc / fundraising deck. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
     input_schema: {
       type: "object",
       properties: {
@@ -391,7 +391,7 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_fundraise_timing",
-    description: "Assess if now is the right time to raise — market conditions, stage readiness, investor appetite. Use when user asks about fundraising timing.",
+    description: "Assess if now is the right time to raise — market conditions, stage readiness, investor appetite. USE WHEN: the user explicitly asks WHETHER/WHEN to raise. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
     input_schema: {
       type: "object",
       properties: {
@@ -403,7 +403,7 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_base_grant",
-    description: "Find active grants and funding for Base projects. Use when user asks about grants, funding opportunities, or how to get funded on Base.",
+    description: "Find active grants and funding for Base projects. USE WHEN: the user explicitly asks about GRANTS / funding programs on Base. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
     input_schema: {
       type: "object",
       properties: {
@@ -433,7 +433,7 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_ecosystem",
-    description: "Daily Base ecosystem digest — top launches, protocol updates, builder activity. Use when user asks what's happening on Base today, latest news, or ecosystem updates.",
+    description: "Daily Base ecosystem digest — top launches, protocol updates, builder activity. USE WHEN: the user explicitly asks what's happening on Base TODAY / latest news / ecosystem updates. NOT FOR: writing code, building, explaining concepts, architecture, or /idea-style brainstorming — answer those directly without a tool.",
     input_schema: {
       type: "object",
       properties: { focus: { type: "string", description: "Focus area e.g. DeFi, AI agents, NFT (optional)" } },
@@ -1527,6 +1527,15 @@ export async function POST(req: NextRequest) {
   // ── Command injection ─────────────────────────────────────────────────────
   const detectedCmd = extractCommand(messages as LLMMessage[]);
   const cmdPrompt = detectedCmd ? COMMAND_PROMPTS[detectedCmd.cmd] : null;
+
+  // The 5 founder-console commands are pure-knowledge deliverables (the model
+  // writes a brief / architecture / review from its own knowledge — no live or
+  // on-chain data). Tools are DISABLED for them so the model can't mis-fire a
+  // paid Hub tool (e.g. /idea accidentally calling hub_market_fit) and burn the
+  // user's credits for nothing. Data/exec commands (/scan /pick /pnl …) keep
+  // their tools. web_search stays available if the user explicitly toggled it.
+  const KNOWLEDGE_COMMANDS = new Set(["idea", "build", "audit", "ship", "raise"]);
+  const knowledgeOnly = !!detectedCmd && KNOWLEDGE_COMMANDS.has(detectedCmd.cmd);
   const modelLabel = getModelLabel(tier, modelId, provider);
   const modelLine = `## Active model\nYou are currently running as: **${modelLabel}**. When asked "what model are you?", "which AI are you?", "what are you running on?", or similar — answer precisely with this model name.`;
   const system = [
@@ -1571,8 +1580,8 @@ export async function POST(req: NextRequest) {
       })),
     ];
 
-    if (!isE2EE) {
-      // Phase 1: detect tool intent
+    if (!isE2EE && !knowledgeOnly) {
+      // Phase 1: detect tool intent (skipped for pure-knowledge commands)
       const phase1    = await callVenicePhase1(apiKey, modelId, openaiMsgs, maxTok, autoSearch);
       const toolCalls = phase1?.choices?.[0]?.message?.tool_calls;
       if (toolCalls?.length) {
@@ -1602,9 +1611,12 @@ export async function POST(req: NextRequest) {
   // When toggled, the tool is appended to the tool list so the model can
   // call it; toggle off keeps the tools array Hub-only. Anthropic bills
   // per-search; reconciliation against our credit ledger lands later.
-  const ANTHROPIC_TOOLS: unknown[] = webSearch
-    ? [...HUB_TOOLS, { type: "web_search_20250305", name: "web_search", max_uses: 3 }]
-    : [...HUB_TOOLS];
+  // Pure-knowledge commands get NO Hub tools (prevents accidental paid-tool
+  // calls). web_search is still honored when the user explicitly toggled it.
+  const webSearchTool = { type: "web_search_20250305", name: "web_search", max_uses: 3 };
+  const ANTHROPIC_TOOLS: unknown[] = knowledgeOnly
+    ? (webSearch ? [webSearchTool] : [])
+    : (webSearch ? [...HUB_TOOLS, webSearchTool] : [...HUB_TOOLS]);
 
   try {
     const firstRes = await fetch(BANKR_LLM, {
