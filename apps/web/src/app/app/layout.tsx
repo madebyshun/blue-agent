@@ -154,7 +154,7 @@ const APP_BOTTOM = [
   {
     id: "docs",
     label: "Docs",
-    href: "/docs",
+    href: "/docs/blue-chat",
     icon: (
       <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round"
