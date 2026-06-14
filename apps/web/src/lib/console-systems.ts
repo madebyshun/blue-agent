@@ -8,7 +8,7 @@
 // Previously each file kept its own copy and they drifted (the `idea` 24h-timeframe
 // fix had to be applied twice). Edit the prompt here and both surfaces stay in sync.
 
-import { getTokenIdentity, tokenIdentityToPrompt } from "@/lib/onchain";
+import { getTokenIdentity, tokenIdentityToPrompt, getSourceSignals } from "@/lib/onchain";
 
 // Shared guardrail appended to every console command. These commands are LLM-only
 // (no live-data tool calls), so they must NOT pass off invented onchain metrics as
@@ -128,40 +128,27 @@ export const CONSOLE_MODELS: Record<ConsoleCommand, string> = {
 
 const ADDRESS_RE = /0x[a-fA-F0-9]{40}/;
 
-async function fetchVerification(address: string): Promise<string> {
-  const key = process.env.BASESCAN_API_KEY ?? "";
-  try {
-    const r = await fetch(
-      `https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getsourcecode&address=${address}&apikey=${key}`,
-      { signal: AbortSignal.timeout(8000) }
-    );
-    const d = await r.json() as { status: string; result?: { ContractName?: string; SourceCode?: string; Proxy?: string; Implementation?: string }[] };
-    if (d.status === "1" && d.result?.length) {
-      const i = d.result[0];
-      const verified = !!i.SourceCode && i.SourceCode.length > 0;
-      return verified
-        ? `Etherscan/Basescan source: VERIFIED (contract "${i.ContractName}"${i.Proxy === "1" ? `, proxy → ${i.Implementation}` : ""}).`
-        : "Etherscan/Basescan source: NOT verified.";
-    }
-  } catch { /* fall through */ }
-  return "Etherscan/Basescan source: verification status could not be read (do NOT assume unverified).";
-}
-
 export async function groundConsolePrompt(command: ConsoleCommand, prompt: string): Promise<string> {
   if (command !== "audit") return prompt;
   const m = prompt.match(ADDRESS_RE);
   if (!m) return prompt;
   const address = m[0];
-  const [identity, verification] = await Promise.all([
+  const [identity, src] = await Promise.all([
     getTokenIdentity(address),
-    fetchVerification(address),
+    getSourceSignals(address),
   ]);
   const facts = identity
     ? tokenIdentityToPrompt(identity)
     : `Address ${address}: on-chain identity could not be read this moment (do NOT assume it is an EOA or unverified).`;
+  const verification = src.verified
+    ? `Etherscan/Basescan source: VERIFIED${src.contractName ? ` (contract "${src.contractName}")` : ""}.`
+    : "Etherscan/Basescan source: verification status could not be read (do NOT assume unverified).";
+  const sourceFindings = src.verified
+    ? `\nVERIFIED-SOURCE FINDINGS (scanned from the actual public source — CONFIRMED, not speculation; since the source is public you CAN assess mint/burn/admin powers — do NOT say "unverified" or "cannot assess"):\n${src.signals.length ? src.signals.map(x => `- ${x}`).join("\n") : "- No owner-mint / blacklist / pausable / fee patterns detected. Standard ERC-20 surface."}\nAn owner-controlled or uncapped mint() is a CONCRETE supply-dilution / soft-rug risk → reflect it in the verdict (Critical/High). "Non-proxy / immutable" does NOT offset active owner powers (mint/pause/blacklist).`
+    : "";
   return `${prompt}
 
 --- ON-CHAIN GROUND TRUTH for ${address} (authoritative — direct Base RPC + Etherscan V2; do NOT contradict) ---
 ${facts}
-${verification}`;
+${verification}${sourceFindings}`;
 }
