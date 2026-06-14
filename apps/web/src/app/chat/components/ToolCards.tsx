@@ -307,7 +307,7 @@ interface DeepAnalysisResult {
   composite_score?: number;
   action?: string;
   address?: string;
-  token?: { name?: string; symbol?: string; verified?: boolean; isProxy?: boolean; isContract?: boolean; url?: string };
+  token?: { name?: string; symbol?: string; verified?: boolean; isProxy?: boolean; isContract?: boolean; isToken?: boolean; contractName?: string; url?: string };
   security?: { score?: number; critical_risks?: string[]; positive_signals?: string[]; summary?: string };
   market?: { score?: number; community_trust?: string; narrative?: string; summary?: string };
   fundamentals?: { score?: number; activity_level?: string; age_signal?: string; summary?: string };
@@ -320,9 +320,20 @@ const DEEP_VERDICT_COLORS: Record<string, { bg: string; text: string; icon: stri
 };
 
 export function DeepAnalysisCard({ result }: { result: DeepAnalysisResult }) {
-  // EOA / non-contract: nothing to audit — render a clean note, not 0/0/0 bars.
-  if (result.verdict === "NOT_A_CONTRACT" || result.token?.isContract === false) {
+  // EOA or non-token contract (pool/router/multisig): token scoring doesn't
+  // apply — render a clean note, not misleading 0/0/0 bars or a BEARISH verdict.
+  const notAnalyzable =
+    result.verdict === "NOT_A_CONTRACT" ||
+    result.verdict === "NOT_A_TOKEN" ||
+    result.token?.isContract === false ||
+    (result.token?.isContract === true && result.token?.isToken === false);
+  if (notAnalyzable) {
     const url = result.token?.url ?? (result.address ? `https://basescan.org/address/${result.address}` : undefined);
+    const isEOA = result.verdict === "NOT_A_CONTRACT" || result.token?.isContract === false;
+    const chip = isEOA ? "NOT A CONTRACT" : "NOT A TOKEN";
+    const fallback = isEOA
+      ? "This address is a wallet (EOA), not a smart contract or token — there is no code to audit."
+      : "This is a non-token contract (pool / router / multisig) — token-level analysis doesn't apply.";
     return (
       <Card accentColor="#64748b">
         <CardHeader accentColor="#64748b">
@@ -330,11 +341,14 @@ export function DeepAnalysisCard({ result }: { result: DeepAnalysisResult }) {
             <span className="text-sm">🔬</span>
             <span className="font-mono text-[11px] text-slate-500 tracking-widest uppercase">Deep Analysis</span>
           </div>
-          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-slate-800/60 text-slate-400 border border-slate-700/50">NOT A CONTRACT</span>
+          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-slate-800/60 text-slate-400 border border-slate-700/50">{chip}</span>
         </CardHeader>
         <CardBody>
+          {result.token?.contractName && (
+            <div className="font-mono text-[11px] text-slate-300">{result.token.contractName}{result.token?.verified ? " · verified ✓" : ""}</div>
+          )}
           <p className="font-mono text-[11px] text-slate-400 leading-relaxed">
-            {result.security?.summary ?? "This address is a wallet (EOA), not a smart contract or token — there is no code to audit."}
+            {result.security?.summary ?? fallback}
           </p>
           {url && (
             <a href={url} target="_blank" rel="noopener noreferrer"
