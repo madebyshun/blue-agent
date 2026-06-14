@@ -106,19 +106,20 @@ export default async function handler(req: Request): Promise<Response> {
       getTokenInfo(address),
     ]);
 
-    // Guard: an EOA (normal wallet) has no contract code — there is no token to
-    // honeypot-check. Without this, the LLM reads "no metadata / unverified" as
-    // honeypot red flags and returns a dangerous false "HONEYPOT" verdict on a
-    // plain wallet. Short-circuit to a clean NOT_A_TOKEN result (and skip the
-    // paid LLM calls).
-    if (identity && identity.isContract === false) {
+    // Guard: there is nothing to honeypot-check unless the address is an actual
+    // ERC-20 token. An EOA (wallet) has no code; a non-token contract (liquidity
+    // pool, router, multisig) has code but no ERC-20 transfer surface. In both
+    // cases the LLM would read "no token metadata" as honeypot red flags and
+    // return a dangerous false "HONEYPOT". Short-circuit to a clean NOT_A_TOKEN.
+    if (identity && identity.isToken === false) {
+      const isEOA = identity.isContract === false;
       return Response.json({
         tool: "honeypot-check",
         timestamp: new Date().toISOString(),
         address,
         chain: "base",
         chainId: 8453,
-        token: { name: null, symbol: null, decimals: null, verified: false, url: `https://basescan.org/address/${address}` },
+        token: { name: identity.name, symbol: identity.symbol, decimals: identity.decimals, verified: tokenInfo.verified, url: `https://basescan.org/address/${address}` },
         verdict: "NOT_A_TOKEN",
         action: "N/A",
         confidence: 0,
@@ -129,7 +130,9 @@ export default async function handler(req: Request): Promise<Response> {
         green_flags: [],
         honeypot_patterns: [],
         community: { alert: "none", known_rug: false, rug_patterns: [], signal: "" },
-        assessment: "This address is an externally-owned account (EOA / normal wallet), not a token contract — there is nothing to honeypot-check. Pass a token CONTRACT address to scan a token.",
+        assessment: isEOA
+          ? "This address is an externally-owned account (EOA / normal wallet), not a token contract — there is nothing to honeypot-check. Pass a token CONTRACT address to scan a token."
+          : `This is a non-token contract${tokenInfo.contractName ? ` (${tokenInfo.contractName})` : ""} — infrastructure such as a liquidity pool or router, not an ERC-20 token. A honeypot check only applies to tradeable tokens.`,
       });
     }
 
