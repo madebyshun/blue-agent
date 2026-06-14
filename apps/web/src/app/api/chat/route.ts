@@ -313,7 +313,7 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_whale_signal",
-    description: "Get whale copy-trade signals for a specific token — track large wallet moves. Use when user asks about whale activity, smart money, what whales are buying.",
+    description: "Copy-trade signal from a WALLET's real recent on-chain transfers (Basescan, live) — is this whale accumulating or distributing, and is it worth copying. Pass a wallet address (0x…). USE WHEN: the user gives a whale/wallet address and asks whether to copy it or what it's doing. NOT FOR: code/concept questions. For a token's overall whale flow, use hub_whale_tracker.",
     input_schema: {
       type: "object",
       properties: {

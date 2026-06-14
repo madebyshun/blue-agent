@@ -136,7 +136,7 @@ Schema: {
     }
     if (!result) result = fallbackGrants(stage);
 
-    return Response.json({ tool: "base-grant-finder", timestamp: new Date().toISOString(), project, stage, sector, analyst, ...result });
+    return Response.json({ tool: "base-grant-finder", timestamp: new Date().toISOString(), project, stage, sector, analyst, ...result, disclaimer: "Grant programs are known Base/ecosystem programs from model knowledge plus AI matching — they may be out of date. Verify current status, deadlines and eligibility on each program's official channel before applying." });
   } catch (e) {
     return Response.json({ error: "Base grant finder failed", message: (e as Error).message }, { status: 500 });
   }

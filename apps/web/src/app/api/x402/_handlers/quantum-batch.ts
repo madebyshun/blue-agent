@@ -114,6 +114,7 @@ export default async function handler(req: Request): Promise<Response> {
         medium: results.filter((r: { riskLevel: string }) => r.riskLevel === "MEDIUM").length,
         low: results.filter((r: { riskLevel: string }) => ["LOW", "MINIMAL"].includes(r.riskLevel)).length,
       },
+      disclaimer: "Quantum risk is forward-looking and theoretical (no quantum computer can break ECDSA today). Risk levels are an AI heuristic, not a measured on-chain exploit risk.",
     };
 
     return new Response(JSON.stringify(response), {
