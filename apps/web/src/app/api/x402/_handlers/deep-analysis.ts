@@ -207,6 +207,7 @@ ${info.sourceSignals.map(x => `- ${x}`).join("\n")}
 RULES:
 - TRUST THE SCAN, do not speculate. If a function is marked ABSENT it is genuinely NOT in the code — NEVER write "pause/blacklist likely present (standard Ownable pattern)" when the scan says ABSENT. Only flag risks for items marked PRESENT.
 - An owner-controlled / uncapped mint() that is PRESENT is a CONCRETE dilution / soft-rug risk → critical_risks (or high), never vague "unverified mint/burn".
+- ABSENT admin levers are a POSITIVE for a token, NOT a risk. "No pausable", "no blacklist", "no fees/limits" mean the owner has FEWER censorship/rug levers — put them in positive_signals. NEVER list "no pausable" or "no blacklist" as a risk (do not argue "can't halt in emergency / can't freeze malicious addresses" — that is protocol-think, wrong for a plain ERC-20). Do not double-count an absence as both positive and risk.
 - "Non-proxy / immutable" is NOT a safety guarantee against owner privileges; do not present it as offsetting an active owner power.
 - audit_status: this tool does not search audit registries — use "unknown" and phrase it as "no public third-party audit found", do NOT assert "unaudited" as fact.` : ""}
 ${context ? `Additional context: ${context}` : ""}
@@ -227,7 +228,7 @@ Schema: {
   "positive_signals": ["<signal>" or empty],
   "ownership_risk": "low|medium|high|unknown",
   "liquidity_risk": "low|medium|high|unknown",
-  "audit_status": "audited|unaudited|unknown",
+  "audit_status": "audited|unknown",
   "security_summary": "<3 sentences — key findings>"
 }`,
         ctx,
