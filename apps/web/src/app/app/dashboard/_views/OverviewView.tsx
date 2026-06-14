@@ -364,8 +364,8 @@ export default function OverviewView({ onSwitchTab }: Props) {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <StatChip
                   label="BALANCE"
-                  value={ledger ? (ledger.dailyCr === -1 ? "∞" : ledger.balance.toLocaleString()) : "—"}
-                  sub={ledger?.dailyCr === -1 ? "Max · unlimited" : "credits · spendable"}
+                  value={ledger ? (ledger.dailyCr === -1 ? "Unlimited" : ledger.balance.toLocaleString()) : "—"}
+                  sub={ledger?.dailyCr === -1 ? "Max tier · no metering" : "credits · spendable"}
                   color="#4FC3F7" />
                 <StatChip
                   label="ACCRUED"
