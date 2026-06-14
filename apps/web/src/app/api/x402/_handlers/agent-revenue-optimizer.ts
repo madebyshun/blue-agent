@@ -73,7 +73,7 @@ Schema: {
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "agent-revenue-optimizer", timestamp: new Date().toISOString(), agent, current_revenue, model, analyst, ...result });
+    return Response.json({ tool: "agent-revenue-optimizer", timestamp: new Date().toISOString(), agent, current_revenue, model, analyst, ...result, disclaimer: "Revenue advice and any figures are AI estimates from model knowledge, not measured from your live agent metrics." });
   } catch (e) {
     return Response.json({ error: "Agent revenue optimizer failed", message: (e as Error).message }, { status: 500 });
   }

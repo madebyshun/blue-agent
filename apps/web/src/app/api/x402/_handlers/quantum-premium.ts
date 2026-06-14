@@ -99,7 +99,7 @@ CRITICAL: Return ONLY raw JSON. No markdown. No backticks. Start with { and end 
 
     let result = extractJsonObject(llmResponse);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
-    return Response.json(result, { status: 200 });
+    return Response.json({ ...result, disclaimer: "Quantum risk is forward-looking and theoretical (no quantum computer can break ECDSA today). Scores are an AI heuristic and do NOT verify on-chain public-key exposure — not a measured exploit risk." }, { status: 200 });
   } catch (error) {
     console.error("[QuantumPremium] Error:", error);
     return Response.json(

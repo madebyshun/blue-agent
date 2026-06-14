@@ -97,7 +97,7 @@ Website: ${body.websiteUrl || "Not provided"}`;
 
     let result = extractJsonObject(llmResponse);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
-    return Response.json(result, { status: 200 });
+    return Response.json({ ...result, disclaimer: "Grant fit/scoring is an AI assessment from model knowledge, not an official evaluation — verify current program criteria and apply through official channels." }, { status: 200 });
   } catch (error) {
     console.error("[GrantEvaluator] Error:", error);
     return Response.json({ error: "Failed to evaluate grant application", message: (error as Error).message }, { status: 500 });
