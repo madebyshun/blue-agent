@@ -1112,20 +1112,19 @@ Generate a DEPLOYMENT CHECKLIST for Base Mainnet:
 Be precise, include exact CLI commands where relevant.`,
 
   raise: `## COMMAND: /raise
-The user wants a PITCH NARRATIVE — GROUNDED IN LIVE FUNDING DATA, not guesses.
-YOU MUST call BOTH tools first, in parallel (do not skip):
+The user wants a PITCH NARRATIVE, informed by a funding-climate read and known Base grant programs.
+YOU MUST call BOTH tools first, in parallel, and call ONLY these two (do not add others):
 1. hub_fundraise_timing — with { project: "<the user's project>" }
 2. hub_base_grant — with { project: "<the user's project>" }
-Call ONLY these two — do not add any other tool. NEVER answer from training data alone — always call the tools first.
 
 After the tools return, write the pitch in this exact format:
 **Framing** — market thesis in 1 punchy sentence
 **Why This Wins** — 3 specific unfair advantages
-**Timing** — cite hub_fundraise_timing (is now the right time to raise + why)
-**Funding Paths** — cite hub_base_grant (specific Base grants/programs to target)
+**Timing** — use hub_fundraise_timing. Present its read as an ESTIMATE / judgement call, NOT measured market data (respect the tool's disclaimer).
+**Funding Paths** — use hub_base_grant for specific Base grants/programs to target; tell the user to verify each program's current status before applying.
 **Ask** — raise amount + use of funds breakdown
 **Target Investors** — 5 specific Base/crypto funds or angels with why they fit
-Base the Timing + Funding Paths sections on the TOOL DATA. Be bold.`,
+Be bold, but NEVER present an estimate as hard data.`,
 
   scan: `## COMMAND: /scan <token_address>
 The user wants a security scan of a Base token contract address.
