@@ -144,7 +144,7 @@ export async function groundConsolePrompt(command: ConsoleCommand, prompt: strin
     ? `Etherscan/Basescan source: VERIFIED${src.contractName ? ` (contract "${src.contractName}")` : ""}.`
     : "Etherscan/Basescan source: verification status could not be read (do NOT assume unverified).";
   const sourceFindings = src.verified
-    ? `\nVERIFIED-SOURCE SCAN (facts from the actual public source — each line is PRESENT or ABSENT; TRUST IT over pattern guesses):\n${src.signals.map(x => `- ${x}`).join("\n")}\nRULES: Do NOT speculate — if a function is ABSENT it is genuinely not in the code (never say "pause/blacklist likely present"). A PRESENT owner-controlled / uncapped mint() is a CONCRETE dilution / soft-rug risk → reflect it (Critical/High). "Non-proxy / immutable" does NOT offset active owner powers. For audit status, say "no public third-party audit found", not a hard "unaudited".`
+    ? `\nVERIFIED-SOURCE SCAN (facts from the actual public source — each line is PRESENT or ABSENT; TRUST IT over pattern guesses):\n${src.signals.map(x => `- ${x}`).join("\n")}\nRULES: Do NOT speculate — if a function is ABSENT it is genuinely not in the code (never say "pause/blacklist likely present"). A PRESENT owner-controlled / uncapped mint() is a CONCRETE dilution / soft-rug risk → reflect it (Critical/High). ABSENT admin levers (no pausable / no blacklist / no fees) are a POSITIVE for a token (fewer owner censorship/rug levers) — never list them as a risk or argue "can't halt in emergency". "Non-proxy / immutable" does NOT offset active owner powers. For audit status, say "no public third-party audit found", not a hard "unaudited".`
     : "";
   return `${prompt}
 
