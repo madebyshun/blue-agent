@@ -202,9 +202,13 @@ Contract name: ${info.contractName ?? "unknown"}
 Compiler: ${info.compilerVersion ?? "unknown"}
 Proxy: ${info.isProxy ? `yes → ${info.implementationAddress}` : "no"}
 ${info.verified ? `
-VERIFIED-SOURCE FINDINGS (scanned from the actual public source — these are CONFIRMED facts, not speculation. If this list is non-empty, do NOT say "mint/burn mechanism unverified" or "cannot assess" — you CAN, the source is public):
-${info.sourceSignals.length ? info.sourceSignals.map(x => `- ${x}`).join("\n") : "- No owner-mint / blacklist / pausable / fee patterns detected in the scanned source. Standard ERC-20 surface."}
-RULE: An owner-controlled or uncapped mint() is a CONCRETE supply-dilution / soft-rug risk and belongs in critical_risks (or high), NOT vaguely in medium as "unverified". "Non-proxy / immutable" is NOT a safety guarantee against owner privileges — never present it as offsetting an active mint/pause/blacklist power.` : ""}
+VERIFIED-SOURCE SCAN (facts read from the actual public source — each line is PRESENT or ABSENT; TRUST IT over any pattern guess):
+${info.sourceSignals.map(x => `- ${x}`).join("\n")}
+RULES:
+- TRUST THE SCAN, do not speculate. If a function is marked ABSENT it is genuinely NOT in the code — NEVER write "pause/blacklist likely present (standard Ownable pattern)" when the scan says ABSENT. Only flag risks for items marked PRESENT.
+- An owner-controlled / uncapped mint() that is PRESENT is a CONCRETE dilution / soft-rug risk → critical_risks (or high), never vague "unverified mint/burn".
+- "Non-proxy / immutable" is NOT a safety guarantee against owner privileges; do not present it as offsetting an active owner power.
+- audit_status: this tool does not search audit registries — use "unknown" and phrase it as "no public third-party audit found", do NOT assert "unaudited" as fact.` : ""}
 ${context ? `Additional context: ${context}` : ""}
 `.trim();
 
@@ -329,6 +333,12 @@ Schema: {
         totalSupply: identity?.totalSupply ?? null,
         priceUsd: identity?.market?.priceUsd ?? null,
         liquidityUsd: identity?.market?.liquidityUsd ?? null,
+        fdv: identity?.market?.fdv ?? null,
+        marketCap: identity?.market?.marketCap ?? null,
+        // Market figures are a live snapshot — surface WHEN they were read so a
+        // volatile price isn't mistaken for a fixed value.
+        priceAsOf: identity?.market?.priceUsd != null ? new Date().toISOString() : null,
+        priceNote: identity?.market?.priceUsd != null ? "live snapshot — volatile, varies by source/pool" : null,
         verified: info.verified,
         contractName: info.contractName,
         isProxy: info.isProxy,

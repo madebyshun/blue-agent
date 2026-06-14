@@ -240,25 +240,43 @@ export async function getTokenIdentity(rawAddr: string): Promise<TokenIdentity |
   return { address, isContract, isToken, name, symbol, decimals, totalSupply, market };
 }
 
-// Scan VERIFIED Solidity source for privileged / risk-bearing functions. Since
-// the source is public+verified these are CONFIRMED facts, not speculation —
-// e.g. an owner-controlled mint() means supply is NOT fixed (dilution/soft-rug).
-// Lets security tools state concrete findings instead of "mint/burn unverified".
+// Scan VERIFIED Solidity source for privileged / risk-bearing functions and
+// report each category as PRESENT or ABSENT — these are facts from the actual
+// code, so a consumer must trust them over pattern speculation. Reporting ABSENT
+// explicitly is what stops the LLM from guessing "blacklist likely present
+// (standard Ownable pattern)" when the source clearly has no such function.
 export function scanSourceSignals(src: string): string[] {
   const s = src;
-  const sig: string[] = [];
+  const out: string[] = [];
+
+  // mint — the headline supply/dilution vector.
   if (/function\s+mint\s*\(/i.test(s)) {
     const ownerMint = /function\s+mint\s*\([^)]*\)[^{;]*\b(onlyOwner|onlyMinter|onlyRole|owner|admin|MINTER)/i.test(s);
-    sig.push(ownerMint
-      ? "CONFIRMED: owner/minter-controlled mint() exists — total supply is NOT fixed; a privileged key can inflate supply (dilution / soft-rug vector). Treat as HIGH (or CRITICAL if uncapped and ownership not renounced)."
-      : "mint() function present — confirm whether it is access-controlled and capped (supply-inflation risk).");
+    out.push(ownerMint
+      ? "mint(): PRESENT, owner/minter-controlled — total supply is NOT fixed; a privileged key can inflate supply (dilution / soft-rug). HIGH, or CRITICAL if uncapped and ownership not renounced."
+      : "mint(): PRESENT — confirm access control + cap (supply-inflation risk).");
+  } else {
+    out.push("mint(): ABSENT — no inflation path; supply set at deploy.");
   }
-  if (/function\s+burn(From)?\s*\(/i.test(s)) sig.push("burn() present (supply can be reduced).");
-  if (/black[_]?list|deny[_]?list|isBlacklisted|_blacklist|blocklist/i.test(s)) sig.push("CONFIRMED: blacklist/denylist mechanism — specific addresses can be blocked from transferring (censorship / honeypot-style risk).");
-  if (/function\s+pause\s*\(|whenNotPaused|_pause\s*\(|Pausable/i.test(s)) sig.push("CONFIRMED: pausable — transfers/trading can be halted by a privileged role.");
-  if (/setFee|setTax|_taxFee|setMaxTx|setMaxWallet|maxWallet|maxTransaction|excludeFromFee/i.test(s)) sig.push("Fee/limit controls present (tax, maxWallet, or maxTx) — privileged role can throttle or tax trades.");
-  if (/\bonlyOwner\b|Ownable/i.test(s)) sig.push("Owner-privileged functions exist (onlyOwner/Ownable). NOTE: 'non-proxy / immutable bytecode' does NOT remove owner power — owner actions (mint, pause, blacklist, fees) are centralization/rug vectors even without an upgradeable proxy. Check whether ownership is renounced.");
-  return sig;
+
+  // blacklist / pause / fee — report present OR absent so absence is a stated fact.
+  out.push(/black[_]?list|deny[_]?list|isBlacklisted|_blacklist|blocklist/i.test(s)
+    ? "blacklist/denylist: PRESENT — addresses can be blocked from transferring (censorship / honeypot-style risk)."
+    : "blacklist/denylist: ABSENT.");
+  out.push(/function\s+pause\s*\(|whenNotPaused|_pause\s*\(|Pausable/i.test(s)
+    ? "pausable: PRESENT — transfers/trading can be halted by a privileged role."
+    : "pausable: ABSENT.");
+  out.push(/setFee|setTax|_taxFee|setMaxTx|setMaxWallet|maxWallet|maxTransaction|excludeFromFee/i.test(s)
+    ? "fee/limit controls: PRESENT — tax, maxWallet, or maxTx can throttle or tax trades."
+    : "fee/limit controls: ABSENT (no transfer tax or wallet/tx caps).");
+
+  // owner privileges (Ownable OR solmate's Owned).
+  out.push(/\bonlyOwner\b|Ownable|\bOwned\b/i.test(s)
+    ? "owner privileges: PRESENT (onlyOwner/Ownable/Owned). 'Non-proxy / immutable bytecode' does NOT remove owner power — check whether ownership is renounced."
+    : "owner privileges: none detected.");
+
+  if (/function\s+burn(From)?\s*\(/i.test(s)) out.push("burn(): PRESENT (supply can be reduced).");
+  return out;
 }
 
 // Fetch verified source from Etherscan V2 (Base) and return privileged-function
