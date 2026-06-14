@@ -25,6 +25,25 @@ async function llm(system: string, user: string, temp = 0.2, tokens = 600): Prom
   return d.content?.[0]?.text ?? "";
 }
 
+// Does this address have contract bytecode? An EOA (normal wallet) returns
+// "0x" — there is no token there to honeypot-check. Returns null if the RPC
+// can't be reached (caller then degrades to the full analysis).
+const BASE_RPC = "https://mainnet.base.org";
+async function hasContractCode(address: string): Promise<boolean | null> {
+  try {
+    const r = await fetch(BASE_RPC, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getCode", params: [address, "latest"] }),
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!r.ok) return null;
+    const d = await r.json() as { result?: string };
+    if (typeof d.result !== "string") return null;
+    return d.result.replace(/^0x/, "").length > 0; // ""/"0" → EOA, longer → contract
+  } catch { return null; }
+}
+
 function parseJson(t: string): Record<string, unknown> | null {
   let s = t.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
   const i = s.indexOf("{"), j = s.lastIndexOf("}");
@@ -95,6 +114,34 @@ export default async function handler(req: Request): Promise<Response> {
     }
     if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
       return Response.json({ error: "Invalid address format. Must be 0x + 40 hex chars." }, { status: 400 });
+    }
+
+    // Guard: an EOA (normal wallet) has no contract code — there is no token to
+    // honeypot-check. Without this, the LLM reads "no metadata / unverified" as
+    // honeypot red flags and returns a dangerous false "HONEYPOT" verdict on a
+    // plain wallet. Short-circuit to a clean NOT_A_TOKEN result (and skip the
+    // paid LLM calls). If the RPC is unreachable (null), fall through.
+    const hasCode = await hasContractCode(address);
+    if (hasCode === false) {
+      return Response.json({
+        tool: "honeypot-check",
+        timestamp: new Date().toISOString(),
+        address,
+        chain: "base",
+        chainId: 8453,
+        token: { name: null, symbol: null, decimals: null, verified: false, url: `https://basescan.org/address/${address}` },
+        verdict: "NOT_A_TOKEN",
+        action: "N/A",
+        confidence: 0,
+        is_honeypot: false,
+        sell_tax_estimate: "n/a",
+        buy_tax_estimate: "n/a",
+        red_flags: [],
+        green_flags: [],
+        honeypot_patterns: [],
+        community: { alert: "none", known_rug: false, rug_patterns: [], signal: "" },
+        assessment: "This address is an externally-owned account (EOA / normal wallet), not a token contract — there is nothing to honeypot-check. Pass a token CONTRACT address to scan a token.",
+      });
     }
 
     // Fetch token info from Basescan
