@@ -259,16 +259,18 @@ export function scanSourceSignals(src: string): string[] {
     out.push("mint(): ABSENT — no inflation path; supply set at deploy.");
   }
 
-  // blacklist / pause / fee — report present OR absent so absence is a stated fact.
+  // blacklist / pause / fee — report present OR absent. For a token, ABSENCE of
+  // these admin levers is a POSITIVE (decentralization; no owner censorship/rug
+  // switch), NOT a risk — label it so the consumer does not flip it into a risk.
   out.push(/black[_]?list|deny[_]?list|isBlacklisted|_blacklist|blocklist/i.test(s)
     ? "blacklist/denylist: PRESENT — addresses can be blocked from transferring (censorship / honeypot-style risk)."
-    : "blacklist/denylist: ABSENT.");
+    : "blacklist/denylist: ABSENT — no address can be censored/frozen (POSITIVE: no freeze lever; this is NOT a risk for a token).");
   out.push(/function\s+pause\s*\(|whenNotPaused|_pause\s*\(|Pausable/i.test(s)
     ? "pausable: PRESENT — transfers/trading can be halted by a privileged role."
-    : "pausable: ABSENT.");
+    : "pausable: ABSENT — trading cannot be halted by an admin (POSITIVE: no owner kill-switch; this is NOT a risk for a plain ERC-20).");
   out.push(/setFee|setTax|_taxFee|setMaxTx|setMaxWallet|maxWallet|maxTransaction|excludeFromFee/i.test(s)
     ? "fee/limit controls: PRESENT — tax, maxWallet, or maxTx can throttle or tax trades."
-    : "fee/limit controls: ABSENT (no transfer tax or wallet/tx caps).");
+    : "fee/limit controls: ABSENT — no transfer tax or wallet/tx caps (POSITIVE: clean, unrestricted transfer mechanics).");
 
   // owner privileges (Ownable OR solmate's Owned).
   out.push(/\bonlyOwner\b|Ownable|\bOwned\b/i.test(s)
