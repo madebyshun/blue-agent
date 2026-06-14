@@ -76,7 +76,7 @@ Schema: {
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "pitch-intelligence", timestamp: new Date().toISOString(), project, stage, raise_pitch: raisePitch, influencer: influencerTake, ...result });
+    return Response.json({ tool: "pitch-intelligence", timestamp: new Date().toISOString(), project, stage, raise_pitch: raisePitch, influencer: influencerTake, ...result, disclaimer: "Pitch scores (hype_score, verdict) are AI estimates from model knowledge, not measured from live investor or social data." });
   } catch (e) {
     return Response.json({ error: "Pitch intelligence failed", message: (e as Error).message }, { status: 500 });
   }
