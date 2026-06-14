@@ -1,7 +1,8 @@
 // x402/contract-trust/index.ts
-// Contract Trust — Basescan lookup + Blue security analysis + MiroShark community signal
+// Contract Trust — on-chain identity + Basescan verification + Blue security + MiroShark signal
 // Price: $0.15 — SAFE / CAUTION / RED_FLAG verdict before swapping into a contract
-// Fully self-contained — no external workspace imports
+
+import { getTokenIdentity, tokenIdentityToPrompt } from "@/lib/onchain";
 
 type Msg = { role: string; content: string };
 
@@ -117,15 +118,43 @@ export default async function handler(req: Request): Promise<Response> {
       return Response.json({ error: "Invalid address format. Must be 0x + 40 hex chars." }, { status: 400 });
     }
 
-    // Step 1: Basescan lookup (parallel with nothing for now, fast)
-    const basescan = await basescanLookup(address);
+    // Step 1: authoritative on-chain identity + Basescan verification in parallel
+    const [identity, basescan] = await Promise.all([
+      getTokenIdentity(address),
+      basescanLookup(address),
+    ]);
+
+    // EOA short-circuit — a wallet has no contract code to trust-check. Without
+    // this, the LLM treats "no metadata" as red flags and emits a scary verdict
+    // on a plain wallet.
+    if (identity && identity.isContract === false) {
+      return Response.json({
+        tool: "contract-trust",
+        timestamp: new Date().toISOString(),
+        address,
+        chain: "base",
+        chainId: 8453,
+        basescan: { verified: false, contractName: null, isProxy: false, url: `https://basescan.org/address/${address}` },
+        security: { score: null, verified: false, proxy_risk: "n/a", red_flags: [], green_flags: [], attack_vectors: [], known_pattern: "EOA", assessment: "This address is an externally-owned account (EOA / wallet), not a smart contract — there is no contract to trust-check." },
+        community: { trust: "n/a", recognition: "wallet", degen_flags: [], verdict: "" },
+        verdict: "NOT_A_CONTRACT",
+        confidence: 100,
+        headline: "Not a contract — this is a wallet address",
+        action: "N/A",
+        summary: "No contract code exists at this address. If you meant to check a token or protocol, paste its contract address.",
+        checklist: [],
+      });
+    }
 
     // Step 2 + 3: Blue security analysis + MiroShark community signal in parallel
     const contractCtx = `
-Contract address: ${address} (Base mainnet, chain ID 8453)
-Basescan: ${basescan.raw}
+GROUND TRUTH (direct Base RPC reads — authoritative, do NOT contradict): if the section below says the address has bytecode, it IS a contract. An unverified Basescan source is common for legitimate tokens and is NOT, by itself, grounds for RED_FLAG. Active two-sided DEX liquidity + real volume are evidence of legitimacy.
+
+${identity ? tokenIdentityToPrompt(identity) : `Contract address: ${address} (Base, chain 8453). On-chain identity read unavailable; do NOT assume EOA.`}
+
+Basescan verification (supplementary): ${basescan.raw}
 Contract name: ${basescan.contractName ?? "unknown"}
-Verified: ${basescan.verified}
+Source verified: ${basescan.verified}
 Proxy: ${basescan.isProxy ? `yes → ${basescan.implementationAddress}` : "no"}
 ${context ? `Additional context: ${context}` : ""}
 `.trim();
@@ -201,10 +230,11 @@ Schema: {
   "checklist": ["<item to verify before interacting>"]
 }
 
-Rules:
-- RED_FLAG if: security_score < 40, OR 2+ red_flags, OR proxy_risk=high, OR recognition=suspicious
-- CAUTION if: not verified, OR proxy_risk=medium, OR community_trust=low
-- SAFE if: verified + security_score >= 70 + no red_flags + known protocol`,
+Rules (weight CONCRETE signals; do NOT punish a token merely for unverified source):
+- RED_FLAG if: security_score < 40, OR 2+ concrete red_flags, OR proxy_risk=high, OR recognition=suspicious, OR a known rug/honeypot pattern
+- CAUTION if: proxy_risk=medium, OR community_trust=low, OR (unverified source AND little/no DEX liquidity AND unrecognized)
+- SAFE if: security_score >= 70 AND no red_flags AND (verified OR recognized OR has healthy DEX liquidity)
+- Unverified source on its own, when the token has real liquidity/volume, is at most a minor caution note — never an automatic RED_FLAG.`,
       `Address: ${address}
 Blue security: ${JSON.stringify(blue)}
 MiroShark community: ${JSON.stringify(ms)}

@@ -1,5 +1,8 @@
 // x402/airdrop-check — Base airdrop eligibility check
-// Price: $0.10 — Fully self-contained, no external workspace imports
+// Price: $0.10 — heuristic eligibility grounded in real wallet activity; honest
+// when a wallet has no activity or data is unreadable.
+
+import { getWalletSnapshot } from "@/lib/onchain";
 
 type BankrMessage = { role: string; content: string };
 
@@ -95,7 +98,34 @@ export default async function handler(req: Request): Promise<Response> {
 
     console.log(`[AirdropCheck] Checking: ${address}`);
 
-    const { txs, tokenTxs } = await getBasescanData(address).catch(() => ({ txs: [], tokenTxs: [] }));
+    const [{ txs, tokenTxs }, snap] = await Promise.all([
+      getBasescanData(address).catch(() => ({ txs: [], tokenTxs: [] })),
+      getWalletSnapshot(address),
+    ]);
+
+    // Guard: no readable activity → don't fabricate an eligibility score.
+    const nonce = snap?.txCount ?? null;
+    if (txs.length === 0 && tokenTxs.length === 0) {
+      const neverActive = nonce === 0;
+      return Response.json({
+        address,
+        eligibilityScore: neverActive ? 0 : null,
+        activityLevel: "INACTIVE",
+        likelyEligible: [],
+        activitySignals: [],
+        weaknesses: neverActive ? ["No on-chain activity — no protocol interactions to qualify for airdrops"] : [],
+        recommendations: neverActive
+          ? ["Start interacting with Base protocols (swap on Aerodrome/Uniswap, bridge funds, provide liquidity) to build an airdrop-eligible footprint."]
+          : ["Transaction history could not be read (data source unavailable) — retry shortly."],
+        estimatedValue: "n/a",
+        topOpportunities: [],
+        summary: neverActive
+          ? "This wallet has no on-chain activity on Base, so there is nothing to qualify it for ecosystem airdrops yet."
+          : "On-chain activity could not be read for this wallet; eligibility is indeterminate.",
+        disclaimer: "Heuristic estimate only — airdrop criteria are set by each project and are usually unannounced. This is not a guarantee of any allocation.",
+        dataSource: "Basescan tx history + live Base RPC nonce",
+      });
+    }
 
     type Tx = { to?: string };
     type TokenTx = { tokenSymbol?: string };
@@ -111,7 +141,12 @@ export default async function handler(req: Request): Promise<Response> {
     });
     let result = extractJsonObject(llmResponse);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
-    return Response.json(result);
+    return Response.json({
+      ...result,
+      address,
+      dataSource: "Basescan tx history + live Base RPC nonce",
+      disclaimer: "Heuristic estimate only — airdrop criteria are set by each project and usually unannounced. Not a guarantee of any allocation.",
+    });
   } catch (error) {
     console.error("[AirdropCheck] Error:", error);
     return Response.json({ error: "Airdrop check failed", message: (error as Error).message }, { status: 500 });
