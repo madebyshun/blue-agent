@@ -7,7 +7,7 @@
 
 import { createPublicClient, http, formatEther, formatUnits, parseAbi, isAddress, getAddress } from "viem";
 import { base } from "viem/chains";
-import { getTokenMarket } from "@/lib/market-data";
+import { getTokenMarket, type TokenMarket } from "@/lib/market-data";
 
 const RPC = process.env.BASE_RPC_URL || "https://mainnet.base.org";
 const client = createPublicClient({ chain: base, transport: http(RPC) });
@@ -16,6 +16,8 @@ const ERC20 = parseAbi([
   "function balanceOf(address) view returns (uint256)",
   "function decimals() view returns (uint8)",
   "function symbol() view returns (string)",
+  "function name() view returns (string)",
+  "function totalSupply() view returns (uint256)",
 ]);
 
 export function normalizeAddress(addr: string): `0x${string}` | null {
@@ -31,7 +33,7 @@ type BscanTokenTx = {
 
 async function basescanTokenTx(addr: string, offset = 200): Promise<BscanTokenTx[]> {
   const key = process.env.BASESCAN_API_KEY ?? "";
-  const url = `https://api.basescan.org/api?module=account&action=tokentx&address=${addr}&page=1&offset=${offset}&sort=desc${key ? `&apikey=${key}` : ""}`;
+  const url = `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=tokentx&address=${addr}&page=1&offset=${offset}&sort=desc${key ? `&apikey=${key}` : ""}`;
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!r.ok) return [];
@@ -180,4 +182,80 @@ export function holdingsToPrompt(h: Holding[]): string {
     `Current holdings (live balanceOf + DexScreener price), total ${fmtUsd(total)}:`,
     ...h.map((x, i) => `${i + 1}. ${x.symbol} — ${x.balance} (${x.valueUsd != null ? fmtUsd(x.valueUsd) : "unpriced"}${x.allocationPct != null ? `, ${x.allocationPct}%` : ""})`),
   ].join("\n");
+}
+
+// ─── Authoritative token/contract identity (the grounding layer) ──────────────
+// Decides "is this a contract? a token?" from the CHAIN, not from Basescan
+// verification status. eth_getCode is authoritative — if there's bytecode, it's
+// a contract, full stop. ERC-20 metadata (name/symbol/decimals/supply) is read
+// directly via multicall, so an unverified or Uniswap-v4 token is still
+// correctly identified. Market data (DexScreener) is folded in when it's a
+// token. Every audit/security tool MUST ground on this instead of letting the
+// LLM guess "EOA / not a contract" from missing Basescan metadata.
+
+export interface TokenIdentity {
+  address: string;
+  isContract: boolean;          // eth_getCode returned bytecode
+  isToken: boolean;             // standard ERC-20 metadata readable
+  name: string | null;
+  symbol: string | null;
+  decimals: number | null;
+  totalSupply: number | null;   // human-readable (divided by 10^decimals)
+  market: TokenMarket | null;   // DexScreener Base pair, null if unlisted
+}
+
+export async function getTokenIdentity(rawAddr: string): Promise<TokenIdentity | null> {
+  const address = normalizeAddress(rawAddr);
+  if (!address) return null;
+
+  const code = await client.getCode({ address }).catch(() => undefined);
+  const isContract = !!code && code !== "0x";
+
+  let name: string | null = null, symbol: string | null = null,
+      decimals: number | null = null, totalSupply: number | null = null;
+
+  if (isContract) {
+    try {
+      const res = await client.multicall({
+        allowFailure: true,
+        contracts: [
+          { address, abi: ERC20, functionName: "name" } as const,
+          { address, abi: ERC20, functionName: "symbol" } as const,
+          { address, abi: ERC20, functionName: "decimals" } as const,
+          { address, abi: ERC20, functionName: "totalSupply" } as const,
+        ],
+      });
+      if (res[0]?.status === "success") name = res[0].result as string;
+      if (res[1]?.status === "success") symbol = res[1].result as string;
+      if (res[2]?.status === "success") decimals = Number(res[2].result as number);
+      if (res[3]?.status === "success" && decimals != null) {
+        totalSupply = +(+formatUnits(res[3].result as bigint, decimals)).toFixed(2);
+      }
+    } catch { /* leave metadata null */ }
+  }
+
+  const isToken = isContract && symbol != null && decimals != null;
+  const market = isToken ? await getTokenMarket(address) : null;
+
+  return { address, isContract, isToken, name, symbol, decimals, totalSupply, market };
+}
+
+export function tokenIdentityToPrompt(t: TokenIdentity): string {
+  if (!t.isContract) {
+    return `Address ${t.address} (Base, chain 8453): eth_getCode returned NO bytecode — this is an externally-owned account (EOA / normal wallet). It is NOT a contract or token. There is no code to audit.`;
+  }
+  const lines = [
+    `Address ${t.address} (Base, chain 8453): eth_getCode returned bytecode — this IS a deployed smart contract (verified by direct RPC read, authoritative).`,
+  ];
+  if (t.isToken) {
+    lines.push(`On-chain ERC-20 metadata (authoritative, read via multicall): name="${t.name ?? "?"}", symbol="${t.symbol ?? "?"}", decimals=${t.decimals ?? "?"}, totalSupply=${t.totalSupply ?? "?"}.`);
+  } else {
+    lines.push(`Standard ERC-20 metadata is NOT readable — this is a non-token contract (router, pool, multisig, proxy, etc.), not an ERC-20 token.`);
+  }
+  if (t.market) {
+    lines.push(`Live market (DexScreener Base): price ${t.market.priceUsd != null ? "$" + t.market.priceUsd : "?"}, 24h change ${t.market.change.h24 ?? "?"}%, liquidity ${fmtUsd(t.market.liquidityUsd)}, 24h volume ${fmtUsd(t.market.volume24h)}, market cap ${fmtUsd(t.market.marketCap)}, dex ${t.market.dex ?? "?"}. Active two-sided DEX liquidity and real volume are strong evidence the token is tradeable (NOT a honeypot).`);
+  } else if (t.isToken) {
+    lines.push(`No DexScreener Base pair found — little or no DEX liquidity, or not indexed. Absence of a listing is NOT by itself evidence of a scam.`);
+  }
+  return lines.join("\n");
 }

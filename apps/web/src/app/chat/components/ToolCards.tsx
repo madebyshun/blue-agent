@@ -307,7 +307,7 @@ interface DeepAnalysisResult {
   composite_score?: number;
   action?: string;
   address?: string;
-  token?: { name?: string; symbol?: string; verified?: boolean; isProxy?: boolean; url?: string };
+  token?: { name?: string; symbol?: string; verified?: boolean; isProxy?: boolean; isContract?: boolean; url?: string };
   security?: { score?: number; critical_risks?: string[]; positive_signals?: string[]; summary?: string };
   market?: { score?: number; community_trust?: string; narrative?: string; summary?: string };
   fundamentals?: { score?: number; activity_level?: string; age_signal?: string; summary?: string };
@@ -320,6 +320,33 @@ const DEEP_VERDICT_COLORS: Record<string, { bg: string; text: string; icon: stri
 };
 
 export function DeepAnalysisCard({ result }: { result: DeepAnalysisResult }) {
+  // EOA / non-contract: nothing to audit — render a clean note, not 0/0/0 bars.
+  if (result.verdict === "NOT_A_CONTRACT" || result.token?.isContract === false) {
+    const url = result.token?.url ?? (result.address ? `https://basescan.org/address/${result.address}` : undefined);
+    return (
+      <Card accentColor="#64748b">
+        <CardHeader accentColor="#64748b">
+          <div className="flex items-center gap-3">
+            <span className="text-sm">🔬</span>
+            <span className="font-mono text-[11px] text-slate-500 tracking-widest uppercase">Deep Analysis</span>
+          </div>
+          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-slate-800/60 text-slate-400 border border-slate-700/50">NOT A CONTRACT</span>
+        </CardHeader>
+        <CardBody>
+          <p className="font-mono text-[11px] text-slate-400 leading-relaxed">
+            {result.security?.summary ?? "This address is a wallet (EOA), not a smart contract or token — there is no code to audit."}
+          </p>
+          {url && (
+            <a href={url} target="_blank" rel="noopener noreferrer"
+              className="font-mono text-[10px] hover:underline text-slate-400">
+              View on Basescan ↗
+            </a>
+          )}
+        </CardBody>
+      </Card>
+    );
+  }
+
   const verdict     = result.verdict ?? "NEUTRAL";
   const composite   = result.composite_score ?? 50;
   const accentColor = verdict === "BULLISH" ? "#4ade80" : verdict === "BEARISH" ? "#f87171" : "#60a5fa";

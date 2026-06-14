@@ -71,7 +71,7 @@ async function loadResearchTeaser(): Promise<string | null> {
 async function fetchBaseDeployments(): Promise<string> {
   if (!BASESCAN_API_KEY) return "Basescan API key not configured.";
   try {
-    const url = `https://api.basescan.org/api?module=account&action=txlist&address=0x0000000000000000000000000000000000000000&startblock=0&endblock=99999999&page=1&offset=10&sort=desc&apikey=${BASESCAN_API_KEY}`;
+    const url = `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=0x0000000000000000000000000000000000000000&startblock=0&endblock=99999999&page=1&offset=10&sort=desc&apikey=${BASESCAN_API_KEY}`;
     const res  = await fetch(url, { signal: AbortSignal.timeout(8000) });
     const data = await res.json() as { result?: BasescanTx[] };
     if (!data.result?.length) return "No recent deployment data.";

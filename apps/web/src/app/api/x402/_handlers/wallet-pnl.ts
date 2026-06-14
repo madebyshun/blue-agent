@@ -1,5 +1,9 @@
 // x402/wallet-pnl — Wallet PnL report on Base
-// Price: $1.00 — Fully self-contained, no external workspace imports
+// Price: $1.00 — grounded in real on-chain activity (getWalletSnapshot). PnL /
+// win-rate are explicitly labelled estimates (no cost-basis price feed), and we
+// never fabricate a report from an empty data response.
+
+import { getWalletSnapshot } from "@/lib/onchain";
 
 type BankrMessage = { role: string; content: string };
 
@@ -71,7 +75,35 @@ export default async function handler(req: Request): Promise<Response> {
 
     console.log(`[WalletPnL] Analyzing: ${address}`);
 
-    const txs = await getBasescanTxs(address);
+    const [txs, snap] = await Promise.all([
+      getBasescanTxs(address),
+      getWalletSnapshot(address),
+    ]);
+
+    // Guard: with no readable transfer history AND no on-chain activity, do not
+    // let the LLM fabricate a $-PnL / win-rate / score. Return an honest result.
+    const nonce = snap?.txCount ?? null;
+    if (txs.length === 0 && snap && snap.transferCount === 0) {
+      const neverActive = nonce === 0;
+      return Response.json({
+        address,
+        trades: 0,
+        tokens: 0,
+        pnl: "n/a",
+        winRate: "n/a",
+        style: "Inactive",
+        topTokens: [],
+        risk: "n/a",
+        score: null,
+        summary: neverActive
+          ? "This wallet has no token-transfer history on Base — nothing to analyze yet."
+          : "No token-transfer history could be read for this wallet (data source unavailable or empty).",
+        tip: "Fund and trade from this wallet, then re-run the report.",
+        dataSource: "live Base RPC + Basescan token transfers",
+        disclaimer: "PnL and win-rate are rough estimates — this tool has no cost-basis or historical price feed, so they are not accounting-grade figures.",
+      }, { status: 200 });
+    }
+
     const txSummary = txs.length > 0
       ? (txs as { tokenSymbol: string; value: string; tokenDecimal: string; to?: string; timeStamp: string }[])
         .slice(0, 20).map(tx => ({
@@ -83,16 +115,24 @@ export default async function handler(req: Request): Promise<Response> {
         }))
       : [];
 
+    const snapCtx = snap
+      ? `Real on-chain activity: native ETH ${snap.ethBalance ?? "?"}, total sent tx (nonce) ${nonce ?? "?"}, ${snap.transferCount} ERC-20 transfers across ${snap.distinctTokens} tokens, last activity ${snap.lastActivityDays === null ? "unknown" : snap.lastActivityDays + "d ago"}. Most-traded: ${snap.topTokens.slice(0, 6).map(t => `${t.symbol}(${t.transfers}x)`).join(", ") || "none"}.`
+      : "On-chain snapshot unavailable.";
+
     const systemPrompt = `You are a crypto portfolio analyst specializing in onchain wallet analysis on Base chain.
+
+IMPORTANT HONESTY RULES:
+- You do NOT have cost-basis or historical price data. So "pnl" and "winRate" are ROUGH ESTIMATES inferred from flow patterns — never present them as precise accounting. Prefer ranges or qualitative reads when data is thin.
+- Base every field on the provided real on-chain activity; do not invent tokens or trades that aren't in the data.
 
 CRITICAL: Return ONLY raw JSON. No markdown. No backticks. Start with { and end with }.
 
 {
   "address": "string",
-  "trades": <number>,
-  "tokens": <number of unique tokens>,
-  "pnl": "estimated e.g. +$1,240 or -$320",
-  "winRate": "e.g. 65%",
+  "trades": <number — from real data>,
+  "tokens": <number of unique tokens — from real data>,
+  "pnl": "rough estimate e.g. ~+$1,240 or ~-$320 (label as estimate)",
+  "winRate": "rough estimate e.g. ~65% (label as estimate)",
   "style": "Memecoin Aper | DeFi Farmer | Long-term Holder | Active Trader | Degen",
   "topTokens": ["token1", "token2", "token3"],
   "risk": "Conservative | Moderate | Aggressive | Degen",
@@ -101,7 +141,7 @@ CRITICAL: Return ONLY raw JSON. No markdown. No backticks. Start with { and end 
   "tip": "one actionable recommendation"
 }`;
 
-    const userPrompt = `Analyze this Base wallet: ${address}\n\nRecent token transactions (last 50):\n${JSON.stringify(txSummary, null, 2)}\n\nTotal transactions found: ${txs.length}`;
+    const userPrompt = `Analyze this Base wallet: ${address}\n\n${snapCtx}\n\nRecent token transactions (sample):\n${JSON.stringify(txSummary, null, 2)}\n\nTotal transfers sampled: ${txs.length}`;
 
     const llmResponse = await callBankrLLM({
       system: systemPrompt,
@@ -112,7 +152,12 @@ CRITICAL: Return ONLY raw JSON. No markdown. No backticks. Start with { and end 
 
     let result = extractJsonObject(llmResponse);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
-    return Response.json(result, { status: 200 });
+    return Response.json({
+      ...result,
+      address,
+      dataSource: "live Base RPC + Basescan token transfers",
+      disclaimer: "PnL and win-rate are rough estimates — this tool has no cost-basis or historical price feed, so they are not accounting-grade figures.",
+    }, { status: 200 });
   } catch (error) {
     console.error("[WalletPnL] Error:", error);
     return Response.json({ error: "Failed to analyze wallet", message: (error as Error).message }, { status: 500 });

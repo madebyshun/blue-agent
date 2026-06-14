@@ -1,5 +1,9 @@
 // x402/key-exposure — Check if wallet's public key is exposed on-chain
-// Price: $0.50 — Fully self-contained, no external workspace imports
+// Price: $0.50 — exposure verdict is computed from the real on-chain nonce
+// (getTransactionCount). The LLM only writes the human-readable prose; it can
+// never fabricate the exposed/txCount facts.
+
+import { getWalletSnapshot } from "@/lib/onchain";
 
 type BankrMessage = { role: string; content: string };
 
@@ -52,28 +56,15 @@ async function getBasescanTxList(address: string, limit = 100): Promise<unknown[
   }
 }
 
-const SYSTEM = `You are a quantum cryptography expert assessing whether an Ethereum wallet's public key has been exposed on-chain.
+const SYSTEM = `You are a quantum cryptography expert explaining whether an Ethereum/Base wallet's public key is exposed on-chain.
 
-Critical facts:
-- When a wallet SENDS a transaction, the ECDSA signature reveals the public key
-- If public key is exposed, a sufficiently powerful quantum computer could derive the private key
-- Wallets that have ONLY received funds (never sent) have unexposed public keys = safer
-- Even 1 outgoing transaction = public key exposed forever on-chain
+Facts (already determined from the chain — do NOT contradict them):
+- When a wallet SENDS a transaction, the ECDSA signature reveals its public key. The account nonce is the exact count of sent transactions.
+- nonce > 0 ⇒ public key is exposed on-chain (permanently). nonce = 0 ⇒ never sent ⇒ public key NOT exposed.
+- An exposed public key is only a THEORETICAL future risk: no quantum computer can derive a private key from it today (CRQC estimated 5-15 years away).
 
-Return ONLY valid JSON:
-
-{
-  "address": "string",
-  "exposed": boolean,
-  "txCount": number,
-  "outgoingTxCount": number,
-  "firstExposureDate": "string or null",
-  "riskLevel": "SAFE" | "EXPOSED" | "CRITICAL",
-  "riskScore": number (0-100),
-  "explanation": "string (clear explanation for non-technical users)",
-  "migrationUrgency": "URGENT" | "RECOMMENDED" | "OPTIONAL" | "NOT_NEEDED",
-  "recommendation": "string"
-}`;
+You will be given the authoritative verdict and counts. Write ONLY the prose fields, in plain language for a non-technical user. Return ONLY valid JSON:
+{ "explanation": "2-3 sentences explaining what the verdict means", "recommendation": "1-2 sentences of practical advice" }`;
 
 export default async function handler(req: Request): Promise<Response> {
   try {
@@ -93,21 +84,72 @@ export default async function handler(req: Request): Promise<Response> {
 
     console.log(`[KeyExposure] Checking: ${address}`);
 
-    const txs = await getBasescanTxList(address, 100);
-    const outgoing = (txs as { from?: string; timeStamp?: string }[]).filter(
-      tx => tx.from?.toLowerCase() === address.toLowerCase()
-    );
-    const firstOutgoing = outgoing.length > 0 ? outgoing[outgoing.length - 1] : null;
+    // AUTHORITATIVE: the account nonce (outgoing tx count) comes from a direct
+    // Base RPC read, not a capped Basescan page. nonce > 0 is irrefutable proof
+    // the public key is exposed. We never infer "SAFE" from an empty Basescan
+    // response — if the RPC read fails we say so instead of guessing.
+    const snap = await getWalletSnapshot(address);
+    if (!snap || snap.txCount === null) {
+      return Response.json({
+        address,
+        degraded: true,
+        riskLevel: "UNKNOWN",
+        note: "Could not read the wallet nonce from Base RPC — exposure status is unavailable. Please retry.",
+        disclaimer: "Quantum key-exposure risk is forward-looking and theoretical — no quantum computer can break ECDSA today.",
+      }, { status: 200 });
+    }
 
-    const llmResponse = await callBankrLLM({
-      system: SYSTEM,
-      messages: [{ role: "user", content: `Check public key exposure for wallet: ${address}\n\nOnchain data:\n- Total transactions: ${txs.length}\n- Outgoing transactions (sent by wallet): ${outgoing.length}\n- First outgoing tx date: ${firstOutgoing ? new Date(parseInt((firstOutgoing as { timeStamp: string }).timeStamp) * 1000).toISOString() : "None found"}\n\nBased on this data, assess quantum exposure risk.` }],
-      temperature: 0.2,
-      maxTokens: 600,
+    const nonce = snap.txCount;            // = number of transactions SENT
+    const exposed = nonce > 0;
+
+    // Optional: first-exposure date from Basescan (non-authoritative; may be
+    // empty if rate-limited — the exposed verdict above does not depend on it).
+    let firstExposureDate: string | null = null;
+    if (exposed) {
+      const txs = await getBasescanTxList(address, 100);
+      const outgoing = (txs as { from?: string; timeStamp?: string }[]).filter(
+        tx => tx.from?.toLowerCase() === address.toLowerCase()
+      );
+      const firstOutgoing = outgoing.length > 0 ? outgoing[outgoing.length - 1] : null;
+      if (firstOutgoing?.timeStamp) {
+        firstExposureDate = new Date(parseInt(firstOutgoing.timeStamp) * 1000).toISOString();
+      }
+    }
+
+    const riskLevel = exposed ? "EXPOSED" : "SAFE";
+    const riskScore = exposed ? 55 : 5;            // theoretical/forward-looking, never "today" risk
+    const migrationUrgency = exposed ? "OPTIONAL" : "NOT_NEEDED";
+
+    // LLM writes prose only; all facts below are computed, so it cannot fabricate them.
+    let prose: Record<string, unknown> = {};
+    try {
+      const llmResponse = await callBankrLLM({
+        system: SYSTEM,
+        messages: [{ role: "user", content: `Wallet: ${address}\nAuthoritative verdict: ${riskLevel}\nTransactions sent (nonce): ${nonce}\nPublic key exposed: ${exposed}\nFirst send date: ${firstExposureDate ?? "unknown"}\n\nWrite the explanation and recommendation.` }],
+        temperature: 0.3,
+        maxTokens: 400,
+      });
+      prose = extractJsonObject(llmResponse) ?? {};
+    } catch { /* prose is optional — facts already computed */ }
+
+    return Response.json({
+      address,
+      exposed,
+      txCount: nonce,
+      outgoingTxCount: nonce,
+      firstExposureDate,
+      riskLevel,
+      riskScore,
+      migrationUrgency,
+      explanation: (prose.explanation as string) ?? (exposed
+        ? `This wallet has sent ${nonce} transaction(s), so its public key is permanently visible on-chain. This is only a theoretical future risk — no quantum computer can derive your private key from it today.`
+        : `This wallet has never sent a transaction (nonce 0), so its public key is not exposed on-chain — the strongest possible position against a future quantum attacker.`),
+      recommendation: (prose.recommendation as string) ?? (exposed
+        ? "No action needed today. If holding long-term, consider moving funds to a fresh never-sent wallet once Ethereum ships post-quantum signatures."
+        : "Keep using fresh receive-only addresses for cold storage to preserve this unexposed state."),
+      dataSource: "live Base RPC nonce (authoritative)",
+      disclaimer: "Quantum key-exposure risk is forward-looking and theoretical — no quantum computer can break ECDSA (secp256k1) today. 'EXPOSED' means the public key is visible, not that funds are at immediate risk.",
     });
-    let result = extractJsonObject(llmResponse);
-    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
-    return Response.json(result);
   } catch (error) {
     console.error("[KeyExposure] Error:", error);
     return Response.json({ error: "Key exposure check failed", message: (error as Error).message }, { status: 500 });

@@ -2,6 +2,8 @@
 // Deep project/token analysis — comprehensive security + market + fundamentals on Base
 // Price: $0.50 — full due diligence in one call
 
+import { getTokenIdentity, tokenIdentityToPrompt } from "@/lib/onchain";
+
 type Msg = { role: string; content: string };
 
 async function llm(system: string, user: string, temp = 0.3, tokens = 1000): Promise<string> {
@@ -49,7 +51,7 @@ async function deepBasescanLookup(address: string): Promise<{
   raw: string;
 }> {
   const apiKey = process.env.BASESCAN_API_KEY ?? "";
-  const base = "https://api.basescan.org/api";
+  const base = "https://api.etherscan.io/v2/api?chainid=8453";
   const def = {
     isToken: false, tokenName: null, tokenSymbol: null, tokenDecimals: null,
     verified: false, contractName: null, compilerVersion: null, isProxy: false,
@@ -58,8 +60,8 @@ async function deepBasescanLookup(address: string): Promise<{
 
   try {
     const [srcRes, tokenRes] = await Promise.all([
-      fetch(`${base}?module=contract&action=getsourcecode&address=${address}&apikey=${apiKey}`, { signal: AbortSignal.timeout(8000) }),
-      fetch(`${base}?module=token&action=tokeninfo&contractaddress=${address}&apikey=${apiKey}`,  { signal: AbortSignal.timeout(8000) }),
+      fetch(`${base}&module=contract&action=getsourcecode&address=${address}&apikey=${apiKey}`, { signal: AbortSignal.timeout(8000) }),
+      fetch(`${base}&module=token&action=tokeninfo&contractaddress=${address}&apikey=${apiKey}`,  { signal: AbortSignal.timeout(8000) }),
     ]);
 
     let verified = false, contractName: string | null = null,
@@ -130,16 +132,45 @@ export default async function handler(req: Request): Promise<Response> {
       return Response.json({ error: "Invalid address format. Must be 0x + 40 hex chars." }, { status: 400 });
     }
 
-    // Basescan deep lookup
-    const info = await deepBasescanLookup(address);
+    // Authoritative on-chain identity (eth_getCode + ERC-20 metadata + market)
+    // runs alongside the Basescan verification/proxy lookup. The chain — not
+    // Basescan — decides whether this is a contract or a token.
+    const [identity, info] = await Promise.all([
+      getTokenIdentity(address),
+      deepBasescanLookup(address),
+    ]);
+
+    // EOA short-circuit: a plain wallet has no code to audit. Without this the
+    // LLM reads "no metadata" as red flags and fabricates a BEARISH/AVOID 0/100
+    // verdict on a normal wallet. Return an honest, neutral result instead.
+    if (identity && identity.isContract === false) {
+      return Response.json({
+        tool: "deep-analysis",
+        timestamp: new Date().toISOString(),
+        address,
+        chain: "base",
+        chainId: 8453,
+        token: { isToken: false, isContract: false, name: null, symbol: null, decimals: null, verified: false, contractName: null, isProxy: false, url: `https://basescan.org/address/${address}` },
+        composite_score: null,
+        verdict: "NOT_A_CONTRACT",
+        action: "N/A",
+        security:     { score: null, critical_risks: [], medium_risks: [], positive_signals: [], ownership_risk: "n/a", liquidity_risk: "n/a", audit_status: "n/a", summary: "This address is an externally-owned account (EOA / normal wallet), not a smart contract or token — there is no code to audit. For a wallet, use the wallet tools (PnL, AML, key-exposure) instead." },
+        market:       { score: null, community_trust: "n/a", tokenomics_risk: "n/a", team_transparency: "n/a", narrative: "n/a", trading_signals: [], summary: "" },
+        fundamentals: { score: null, holder_risk: "n/a", activity_level: "wallet", whale_concentration: "n/a", age_signal: "n/a", on_chain_signals: [], summary: "" },
+      });
+    }
+
+    const onchain = identity ? tokenIdentityToPrompt(identity) : `Address: ${address} (Base, chain 8453). On-chain identity read unavailable — fall back to Basescan signals below; do NOT assume EOA.`;
 
     const ctx = `
-Address: ${address} (Base mainnet, chain ID 8453)
+GROUND TRUTH (from direct Base RPC reads — treat as authoritative, do NOT contradict): the on-chain section below is fact. If it says the address has bytecode, it IS a contract; never call it an "EOA" or "not a contract". Do NOT lower scores merely because Basescan source is unverified — that is common for legit tokens.
+
+${onchain}
+
+Basescan verification signals (supplementary — may lag or be empty for unverified / Uniswap-v4 tokens; absence is NOT proof the address is an EOA):
 ${info.raw}
-Is token: ${info.isToken}
-Token name: ${info.tokenName ?? "N/A"} (${info.tokenSymbol ?? "N/A"})
-Verified: ${info.verified}
-Contract: ${info.contractName ?? "unknown"}
+Source verified on Basescan: ${info.verified}
+Contract name: ${info.contractName ?? "unknown"}
 Compiler: ${info.compilerVersion ?? "unknown"}
 Proxy: ${info.isProxy ? `yes → ${info.implementationAddress}` : "no"}
 ${context ? `Additional context: ${context}` : ""}
@@ -254,10 +285,14 @@ Schema: {
       chain: "base",
       chainId: 8453,
       token: {
-        isToken: info.isToken,
-        name: info.tokenName,
-        symbol: info.tokenSymbol,
-        decimals: info.tokenDecimals,
+        isToken: identity?.isToken ?? info.isToken,
+        isContract: identity?.isContract ?? true,
+        name: identity?.name ?? info.tokenName,
+        symbol: identity?.symbol ?? info.tokenSymbol,
+        decimals: identity?.decimals ?? info.tokenDecimals,
+        totalSupply: identity?.totalSupply ?? null,
+        priceUsd: identity?.market?.priceUsd ?? null,
+        liquidityUsd: identity?.market?.liquidityUsd ?? null,
         verified: info.verified,
         contractName: info.contractName,
         isProxy: info.isProxy,

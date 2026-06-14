@@ -77,7 +77,7 @@ Schema: {
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "community-growth-playbook", timestamp: new Date().toISOString(), project, current_size, goal, miroshark: consensus, ...result });
+    return Response.json({ tool: "community-growth-playbook", timestamp: new Date().toISOString(), project, current_size, goal, miroshark: consensus, ...result, disclaimer: "AI-generated growth advisory from model knowledge — scores and persona 'consensus' are model estimates, not measured audience research or a guarantee. Verify independently." });
   } catch (e) {
     return Response.json({ error: "Community growth playbook failed", message: (e as Error).message }, { status: 500 });
   }
