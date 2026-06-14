@@ -68,7 +68,7 @@ Schema: {
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "token-distribution-plan", timestamp: new Date().toISOString(), token, ticker: ticker || null, total_supply, retail_preference: retailPref, ...result });
+    return Response.json({ tool: "token-distribution-plan", timestamp: new Date().toISOString(), token, ticker: ticker || null, total_supply, retail_preference: retailPref, ...result, disclaimer: "AI-generated tokenomics advisory from model knowledge — allocations, scores, and 'retail preference' are estimates, not survey data, financial/legal advice, or a guarantee. Verify independently." });
   } catch (e) {
     return Response.json({ error: "Token distribution plan failed", message: (e as Error).message }, { status: 500 });
   }

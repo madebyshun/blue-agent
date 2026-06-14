@@ -63,7 +63,7 @@ Schema: {
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "agent-collab-match", timestamp: new Date().toISOString(), agent_a, agent_b, collab_goal: collab_goal || null, score_a: scoreA, score_b: scoreB, analyst, ...result });
+    return Response.json({ tool: "agent-collab-match", timestamp: new Date().toISOString(), agent_a, agent_b, collab_goal: collab_goal || null, score_a: scoreA, score_b: scoreB, analyst, ...result, disclaimer: "AI-estimated compatibility advisory. Agent scores (xp, tier, dimensions) are model estimates from the handle alone — NOT measured on-chain reputation or verified performance. Use as a brainstorming aid, not a verified rating." });
   } catch (e) {
     return Response.json({ error: "Agent collab match failed", message: (e as Error).message }, { status: 500 });
   }

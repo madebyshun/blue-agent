@@ -92,7 +92,7 @@ Schema: {
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "investor-memo", timestamp: new Date().toISOString(), project, stage, narrative, analyst, influencer, ...result });
+    return Response.json({ tool: "investor-memo", timestamp: new Date().toISOString(), project, stage, narrative, analyst, influencer, ...result, disclaimer: "AI-generated memo from model knowledge — the investment grade, scores, and any TAM/market figures are estimates, NOT investment advice, due diligence, or verified data. Verify independently." });
   } catch (e) {
     return Response.json({ error: "Investor memo failed", message: (e as Error).message }, { status: 500 });
   }

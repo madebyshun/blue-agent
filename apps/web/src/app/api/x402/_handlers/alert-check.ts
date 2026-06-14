@@ -1,5 +1,7 @@
 // x402/alert-check — Check active alert triggers for any address
-// Price: $0.10 — Fully self-contained, no external workspace imports
+// Price: $0.10 — never reports "all clear" when the data simply failed to load.
+
+import { getWalletSnapshot } from "@/lib/onchain";
 
 type BankrMessage = { role: string; content: string };
 
@@ -87,7 +89,28 @@ export default async function handler(req: Request): Promise<Response> {
 
     console.log(`[AlertCheck] Checking alerts for: ${address}`);
 
-    const { txs, tokenTxs } = await getBasescanData(address).catch(() => ({ txs: [], tokenTxs: [] }));
+    const [{ txs, tokenTxs }, snap] = await Promise.all([
+      getBasescanData(address).catch(() => ({ txs: [], tokenTxs: [] })),
+      getWalletSnapshot(address),
+    ]);
+
+    // Guard: if no transactions were readable, do NOT report a silent "all clear"
+    // — that would hide a whale/rug alert behind a failed data fetch. nonce
+    // disambiguates a genuinely idle wallet from a data outage.
+    const nonce = snap?.txCount ?? null;
+    if (txs.length === 0 && tokenTxs.length === 0) {
+      const idle = nonce === 0;
+      return Response.json({
+        address,
+        status: idle ? "NO_ACTIVITY" : "DATA_UNAVAILABLE",
+        alerts: [],
+        summary: idle
+          ? "No on-chain activity for this wallet — no alert conditions to evaluate."
+          : "Could not read recent on-chain activity (data source unavailable). This is NOT an all-clear — re-check shortly.",
+        nextCheckIn: "5 minutes",
+        dataSource: "Basescan recent activity + live Base RPC nonce",
+      });
+    }
 
     const llmResponse = await callBankrLLM({
       system: SYSTEM,

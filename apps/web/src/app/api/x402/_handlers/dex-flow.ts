@@ -74,6 +74,8 @@ const SYSTEM = `You are a DEX flow analyst interpreting on-chain trading data fo
 
 Analyze volume, buy/sell pressure, liquidity, and price action to assess market sentiment and flow direction.
 
+CRITICAL DATA RULE: Use ONLY the live DexScreener numbers provided in the user message. Derive pressureScore, buySellRatio, and volume from those exact buys/sells/volume figures. NEVER invent volume, ratios, or liquidity that aren't in the data.
+
 Return ONLY valid JSON:
 
 {
@@ -113,25 +115,52 @@ export default async function handler(req: Request): Promise<Response> {
     console.log(`[DexFlow] Analyzing flow for: ${token}`);
 
     let dexData: unknown[] = [];
+    let fetchOk = true;
     try {
       dexData = await getDexData(token);
-    } catch (e) {
-      console.warn("[DexFlow] DexScreener fetch failed, using LLM only");
+    } catch {
+      fetchOk = false;
+      console.warn("[DexFlow] DexScreener fetch failed");
     }
 
-    const context = dexData.length > 0
-      ? `Live DexScreener data (Base chain):\n${JSON.stringify(dexData, null, 2)}`
-      : `No live data available — provide general DEX flow analysis for ${token} on Base.`;
+    // Don't fabricate flow metrics with no data. Separate a fetch failure
+    // (retry) from a genuine no-listing.
+    if (!fetchOk) {
+      return Response.json({
+        token, chain: "base", pressure: "UNKNOWN", pressureScore: null,
+        volume24h: "n/a", buySellRatio: "n/a", liquidityHealth: "UNKNOWN",
+        priceAction: "Live DEX data source (DexScreener) was unavailable.",
+        topPairs: [], signals: [],
+        recommendation: "Could not fetch live DEX flow — please retry shortly. No estimated flow metrics are shown to avoid fabricated numbers.",
+        dataSource: "DexScreener (unavailable)",
+        disclaimer: "DEX flow is a live snapshot and changes continuously — not financial advice.",
+      });
+    }
+    if (dexData.length === 0) {
+      return Response.json({
+        token, chain: "base", pressure: "UNKNOWN", pressureScore: null,
+        volume24h: "n/a", buySellRatio: "n/a", liquidityHealth: "UNKNOWN",
+        priceAction: `No Base-chain DEX pairs found for "${token}".`,
+        topPairs: [], signals: [],
+        recommendation: `No live Base DEX pair matched "${token}". Check the token address, or it may have no DEX liquidity yet.`,
+        dataSource: "DexScreener (live)",
+        disclaimer: "DEX flow is a live snapshot and changes continuously — not financial advice.",
+      });
+    }
 
     const llmResponse = await callBankrLLM({
       system: SYSTEM,
-      messages: [{ role: "user", content: `Analyze DEX flow for ${token} on Base chain.\n\n${context}\n\nAssess buy/sell pressure, volume trends, and liquidity health.` }],
+      messages: [{ role: "user", content: `Analyze DEX flow for ${token} on Base chain.\n\nLive DexScreener data (Base chain) — use ONLY these numbers:\n${JSON.stringify(dexData, null, 2)}\n\nAssess buy/sell pressure, volume trends, and liquidity health from the exact figures above.` }],
       temperature: 0.3,
       maxTokens: 800,
     });
     let result = extractJsonObject(llmResponse);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
-    return Response.json(result);
+    return Response.json({
+      ...result,
+      dataSource: "DexScreener (live)",
+      disclaimer: "DEX flow is a live snapshot and changes continuously — not financial advice.",
+    });
   } catch (error) {
     console.error("[DexFlow] Error:", error);
     return Response.json({ error: "DEX flow analysis failed", message: (error as Error).message }, { status: 500 });

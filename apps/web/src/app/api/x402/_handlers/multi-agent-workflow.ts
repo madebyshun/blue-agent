@@ -74,7 +74,7 @@ Schema: {
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "multi-agent-workflow", timestamp: new Date().toISOString(), goal, agents, analyst, ...result });
+    return Response.json({ tool: "multi-agent-workflow", timestamp: new Date().toISOString(), goal, agents, analyst, ...result, disclaimer: "AI-generated workflow advisory — any cost, latency, and score figures are rough estimates, not measured benchmarks or a guarantee. Validate before relying on them." });
   } catch (e) {
     return Response.json({ error: "Multi-agent workflow failed", message: (e as Error).message }, { status: 500 });
   }

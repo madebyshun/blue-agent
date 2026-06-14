@@ -82,7 +82,7 @@ Schema: {
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "stack-recommender", timestamp: new Date().toISOString(), project, team_size, timeline, analyst: analystTake, ...result });
+    return Response.json({ tool: "stack-recommender", timestamp: new Date().toISOString(), project, team_size, timeline, analyst: analystTake, ...result, disclaimer: "AI-generated stack advisory from model knowledge — recommendations and any confidence score are estimates, not a guarantee. Validate against your own constraints." });
   } catch (e) {
     return Response.json({ error: "Stack recommender failed", message: (e as Error).message }, { status: 500 });
   }

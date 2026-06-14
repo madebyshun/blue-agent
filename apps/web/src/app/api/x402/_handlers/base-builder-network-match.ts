@@ -80,7 +80,7 @@ Schema: {
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "base-builder-network-match", timestamp: new Date().toISOString(), builder: builder || project, looking_for, analyst, ...result });
+    return Response.json({ tool: "base-builder-network-match", timestamp: new Date().toISOString(), builder: builder || project, looking_for, analyst, ...result, disclaimer: "AI-generated networking advisory from model knowledge — match/synergy scores are estimates, not measured data or a guarantee. Verify independently." });
   } catch (e) {
     return Response.json({ error: "Base builder network match failed", message: (e as Error).message }, { status: 500 });
   }
