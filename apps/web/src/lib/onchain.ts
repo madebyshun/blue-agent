@@ -33,7 +33,7 @@ type BscanTokenTx = {
 
 async function basescanTokenTx(addr: string, offset = 200): Promise<BscanTokenTx[]> {
   const key = process.env.BASESCAN_API_KEY ?? "";
-  const url = `https://api.basescan.org/api?module=account&action=tokentx&address=${addr}&page=1&offset=${offset}&sort=desc${key ? `&apikey=${key}` : ""}`;
+  const url = `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=tokentx&address=${addr}&page=1&offset=${offset}&sort=desc${key ? `&apikey=${key}` : ""}`;
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!r.ok) return [];

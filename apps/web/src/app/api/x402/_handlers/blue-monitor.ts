@@ -45,7 +45,7 @@ async function getVerified(address: string): Promise<{ verified: boolean; name: 
   const apiKey = process.env.BASESCAN_API_KEY ?? "";
   try {
     const res = await fetch(
-      `https://api.basescan.org/api?module=contract&action=getsourcecode&address=${address}&apikey=${apiKey}`,
+      `https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getsourcecode&address=${address}&apikey=${apiKey}`,
       { signal: AbortSignal.timeout(8000) }
     );
     if (!res.ok) return { verified: false, name: null };
