@@ -192,7 +192,7 @@ Blue Agent uses a credit system based on $BLUEAGENT token balance:
 - Starter (hold 500K BLUE): 500 credits/day (~$0.50)
 - Pro (hold 2M BLUE): 2,000 credits/day + 20% discount (~$2)
 - Max (hold 10M BLUE): unlimited credits/day + 40% discount (~$10)
-Credits refresh automatically every 24h. To get more credits: buy $BLUEAGENT on Uniswap Base, or click "Buy $BLUEAGENT" in the sidebar. No USDC purchase needed — just hold BLUE.
+Credits refresh automatically every 24h. To get more credits: buy $BLUEAGENT on Uniswap Base, or click "Buy $BLUEAGENT" in the sidebar. No USDC purchase needed — just hold $BLUEAGENT.
 If a user asks about buying credits, getting more credits, or topping up — explain the tier system and tell them to use the "Buy $BLUEAGENT" button in the sidebar.
 
 ## Hub tools
@@ -212,6 +212,8 @@ Tool selection rules:
 3. For market intel / analysis: the appropriate hub_* tool.
 4. For recent web news / sentiment / events: web_search.
 5. You can chain tools — e.g. hub_token_price + web_search for "ETH price and why is it up?".
+6. **Call the FEWEST tools that answer THIS message.** Each Hub tool costs the user credits — never run an extra tool "just in case". A bare price query ("ETH price", "giá BTC") = hub_token_price ONLY; do NOT also run honeypot, monitor, deep-analysis, or any audit tool.
+7. **Act only on what the CURRENT message asks.** Do NOT re-run tools on a token/address/contract from an EARLIER message unless the user references it again now. A fresh "ETH price" after an /audit must NOT re-scan the audited address.
 
 If a tool is unavailable, answer from your own knowledge and note that live data is unavailable.
 If the user has memory context below, use it to personalize responses — reference their project, remember what they're building.
@@ -697,7 +699,7 @@ interface ToolCallResult {
 // the real-data tools (live prices, scans, on-chain reads) are the only thing
 // we can actually gate; the model's free-chat knowledge answers aren't.
 const WALLET_REQUIRED_MSG =
-  "🔒 This needs a connected wallet.\n\nConnect your wallet — and hold $BLUE for a daily credit allowance — to run real-data Hub tools like this. Guests get free chat; live-data tools require a wallet.";
+  "🔒 This needs a connected wallet.\n\nConnect your wallet — and hold $BLUEAGENT for a daily credit allowance — to run real-data Hub tools like this. Guests get free chat; live-data tools require a wallet.";
 
 async function callHubTool(
   toolName: string,
@@ -1049,7 +1051,7 @@ Show the user their credit system status. Format it cleanly:
 
 **How to earn more credits:**
 - Hold $BLUEAGENT on Base → credits refresh daily automatically
-- Buy $BLUEAGENT: click "Buy BLUE" in the sidebar or type /idea to get started
+- Buy $BLUEAGENT: click "Buy $BLUEAGENT" in the sidebar or type /idea to get started
 - $BLUEAGENT contract: 0xf895783b2931c919955e18b5e3343e7c7c456ba3 (Base)
 
 Keep it short, practical, and actionable.`,
@@ -1059,7 +1061,7 @@ The user wants a FUNDABLE BRIEF for their concept — GROUNDED IN LIVE DATA, not
 just your assumptions. YOU MUST call BOTH tools first, in parallel (do not skip):
 1. hub_market_fit — with { project: "<the user's concept>" }
 2. hub_competitor_scan — with { project: "<the user's concept>" }
-NEVER answer from training data alone — always call the tools first.
+Call ONLY these two — do not add any other tool. NEVER answer from training data alone — always call the tools first.
 
 After the tools return, synthesize the brief in this exact format:
 **Problem** — 1 crisp sentence
@@ -1090,6 +1092,7 @@ tools first, in parallel, and base the review on their LIVE on-chain data
 1. hub_deep_analysis — with { token: "<address>" }
 2. hub_risk_gate — with { action: "scan", to: "<address>" }
 3. hub_honeypot — with { token: "<address>" }
+Call ONLY these three — do NOT add hub_token_price or any other tool.
 
 Then present (use the tool data when an address was given; otherwise do a plain
 code/product review from your knowledge):
@@ -1113,7 +1116,7 @@ The user wants a PITCH NARRATIVE — GROUNDED IN LIVE FUNDING DATA, not guesses.
 YOU MUST call BOTH tools first, in parallel (do not skip):
 1. hub_fundraise_timing — with { project: "<the user's project>" }
 2. hub_base_grant — with { project: "<the user's project>" }
-NEVER answer from training data alone — always call the tools first.
+Call ONLY these two — do not add any other tool. NEVER answer from training data alone — always call the tools first.
 
 After the tools return, write the pitch in this exact format:
 **Framing** — market thesis in 1 punchy sentence

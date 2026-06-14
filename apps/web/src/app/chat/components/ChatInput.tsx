@@ -423,7 +423,7 @@ export default function ChatInput() {
                 className="font-mono text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all"
                 style={{ background: "#F59E0B18", color: "#F59E0B", border: "1px solid #F59E0B30" }}
               >
-                Buy BLUE →
+                Buy $BLUEAGENT →
               </button>
             </div>
             <div className="flex items-center gap-4 px-4 py-2">
