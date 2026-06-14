@@ -68,7 +68,7 @@ Schema: {
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "fundraise-timing", timestamp: new Date().toISOString(), project, stage, influencer: influencerTake, ...result });
+    return Response.json({ tool: "fundraise-timing", timestamp: new Date().toISOString(), project, stage, influencer: influencerTake, ...result, disclaimer: "AI estimate of the fundraising climate from model knowledge — investor appetite is NOT measured from a live data feed. Treat as directional guidance, not market data." });
   } catch (e) {
     return Response.json({ error: "Fundraise timing failed", message: (e as Error).message }, { status: 500 });
   }
