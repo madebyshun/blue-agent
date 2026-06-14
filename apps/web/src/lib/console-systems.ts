@@ -8,6 +8,8 @@
 // Previously each file kept its own copy and they drifted (the `idea` 24h-timeframe
 // fix had to be applied twice). Edit the prompt here and both surfaces stay in sync.
 
+import { getTokenIdentity, tokenIdentityToPrompt } from "@/lib/onchain";
+
 // Shared guardrail appended to every console command. These commands are LLM-only
 // (no live-data tool calls), so they must NOT pass off invented onchain metrics as
 // fact — that is exactly what the hub_* live-data tools exist for.
@@ -55,7 +57,19 @@ Then perform a thorough security and product risk review:
 4. Suggested fixes for each issue (short code snippets where useful)
 5. Restate the Go / No-go recommendation with the top blockers
 Order findings by severity (Critical → High → Medium → Low). Be direct and
-specific — flag anything that could cause loss of funds. Keep fixes concise.`,
+specific — flag anything that could cause loss of funds. Keep fixes concise.
+
+ON-CHAIN GROUND TRUTH: if the user message contains an "ON-CHAIN GROUND TRUTH"
+block, it is authoritative fact read directly from Base — treat it as true.
+- Never claim an address is "unverified", "not a contract", or "an EOA" if the
+  block says otherwise. If the block says the source is VERIFIED, do not list
+  "unverified source" as a risk.
+- Do NOT issue a 🔴 NO-GO or assert honeypot/scam from MISSING information alone.
+  Verified source and real DEX liquidity/volume are legitimacy signals. Reserve
+  NO-GO for concrete, evidenced critical risks.
+- If the block says the address is an EOA (no bytecode), state plainly that
+  there is no contract to audit and point the user to wallet tools — do not
+  invent contract-level findings.`,
 
   ship: `You are Blue Agent running the 'blue ship' command.
 Generate a complete deployment and launch checklist:
@@ -104,3 +118,50 @@ export const CONSOLE_MODELS: Record<ConsoleCommand, string> = {
   ship: "claude-haiku-4-5",
   raise: "claude-haiku-4-5",
 };
+
+// ─── On-chain grounding for the `audit` command ───────────────────────────────
+// `blue audit` is LLM-only. When a user passes a bare contract/wallet ADDRESS,
+// the model has no on-chain data and hallucinates an "unverified / not-a-contract
+// / honeypot / NO-GO" report from nothing. This attaches authoritative facts
+// (eth_getCode + ERC-20 identity + Etherscan V2 verification) so the review is
+// grounded. No-op for non-audit commands or prompts without an address.
+
+const ADDRESS_RE = /0x[a-fA-F0-9]{40}/;
+
+async function fetchVerification(address: string): Promise<string> {
+  const key = process.env.BASESCAN_API_KEY ?? "";
+  try {
+    const r = await fetch(
+      `https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getsourcecode&address=${address}&apikey=${key}`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    const d = await r.json() as { status: string; result?: { ContractName?: string; SourceCode?: string; Proxy?: string; Implementation?: string }[] };
+    if (d.status === "1" && d.result?.length) {
+      const i = d.result[0];
+      const verified = !!i.SourceCode && i.SourceCode.length > 0;
+      return verified
+        ? `Etherscan/Basescan source: VERIFIED (contract "${i.ContractName}"${i.Proxy === "1" ? `, proxy → ${i.Implementation}` : ""}).`
+        : "Etherscan/Basescan source: NOT verified.";
+    }
+  } catch { /* fall through */ }
+  return "Etherscan/Basescan source: verification status could not be read (do NOT assume unverified).";
+}
+
+export async function groundConsolePrompt(command: ConsoleCommand, prompt: string): Promise<string> {
+  if (command !== "audit") return prompt;
+  const m = prompt.match(ADDRESS_RE);
+  if (!m) return prompt;
+  const address = m[0];
+  const [identity, verification] = await Promise.all([
+    getTokenIdentity(address),
+    fetchVerification(address),
+  ]);
+  const facts = identity
+    ? tokenIdentityToPrompt(identity)
+    : `Address ${address}: on-chain identity could not be read this moment (do NOT assume it is an EOA or unverified).`;
+  return `${prompt}
+
+--- ON-CHAIN GROUND TRUTH for ${address} (authoritative — direct Base RPC + Etherscan V2; do NOT contradict) ---
+${facts}
+${verification}`;
+}
