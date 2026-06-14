@@ -127,15 +127,16 @@ interface HoneypotResult {
 }
 
 const HONEYPOT_COLORS: Record<string, { bg: string; text: string; icon: string }> = {
-  SAFE:       { bg: "#16a34a15", text: "#4ade80", icon: "✓" },
-  SUSPICIOUS: { bg: "#d9770615", text: "#fb923c", icon: "⚠" },
-  HONEYPOT:   { bg: "#dc262615", text: "#f87171", icon: "✕" },
+  SAFE:        { bg: "#16a34a15", text: "#4ade80", icon: "✓" },
+  SUSPICIOUS:  { bg: "#d9770615", text: "#fb923c", icon: "⚠" },
+  HONEYPOT:    { bg: "#dc262615", text: "#f87171", icon: "✕" },
+  NOT_A_TOKEN: { bg: "#1E1E3215", text: "#94a3b8", icon: "·" },
 };
 
 export function HoneypotCard({ result }: { result: HoneypotResult }) {
   const verdict   = result.verdict ?? "SUSPICIOUS";
   const color     = HONEYPOT_COLORS[verdict]?.text ?? "#94a3b8";
-  const accentColor = verdict === "SAFE" ? "#4ade80" : verdict === "HONEYPOT" ? "#f87171" : "#fb923c";
+  const accentColor = verdict === "SAFE" ? "#4ade80" : verdict === "HONEYPOT" ? "#f87171" : verdict === "NOT_A_TOKEN" ? "#64748b" : "#fb923c";
   const url       = result.token?.url ?? (result.address ? `https://basescan.org/address/${result.address}` : undefined);
 
   return (
