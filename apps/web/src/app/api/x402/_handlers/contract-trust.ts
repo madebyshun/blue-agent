@@ -47,7 +47,7 @@ async function basescanLookup(address: string): Promise<{
   raw: string;
 }> {
   const apiKey = process.env.BASESCAN_API_KEY ?? "";
-  const base = "https://api.basescan.org/api";
+  const base = "https://api.etherscan.io/v2/api?chainid=8453";
 
   const defaultResult = {
     verified: false,
@@ -61,7 +61,7 @@ async function basescanLookup(address: string): Promise<{
 
   try {
     const res = await fetch(
-      `${base}?module=contract&action=getsourcecode&address=${address}&apikey=${apiKey}`,
+      `${base}&module=contract&action=getsourcecode&address=${address}&apikey=${apiKey}`,
       { signal: AbortSignal.timeout(8000) }
     );
     if (!res.ok) return defaultResult;

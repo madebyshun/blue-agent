@@ -51,7 +51,7 @@ async function deepBasescanLookup(address: string): Promise<{
   raw: string;
 }> {
   const apiKey = process.env.BASESCAN_API_KEY ?? "";
-  const base = "https://api.basescan.org/api";
+  const base = "https://api.etherscan.io/v2/api?chainid=8453";
   const def = {
     isToken: false, tokenName: null, tokenSymbol: null, tokenDecimals: null,
     verified: false, contractName: null, compilerVersion: null, isProxy: false,
@@ -60,8 +60,8 @@ async function deepBasescanLookup(address: string): Promise<{
 
   try {
     const [srcRes, tokenRes] = await Promise.all([
-      fetch(`${base}?module=contract&action=getsourcecode&address=${address}&apikey=${apiKey}`, { signal: AbortSignal.timeout(8000) }),
-      fetch(`${base}?module=token&action=tokeninfo&contractaddress=${address}&apikey=${apiKey}`,  { signal: AbortSignal.timeout(8000) }),
+      fetch(`${base}&module=contract&action=getsourcecode&address=${address}&apikey=${apiKey}`, { signal: AbortSignal.timeout(8000) }),
+      fetch(`${base}&module=token&action=tokeninfo&contractaddress=${address}&apikey=${apiKey}`,  { signal: AbortSignal.timeout(8000) }),
     ]);
 
     let verified = false, contractName: string | null = null,
