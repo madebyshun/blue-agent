@@ -3,7 +3,7 @@
  * Each command is a thin handler that calls runConsoleCommand with its system
  * prompt; payment is handled upstream by /api/x402/[tool] (verify → run → settle).
  */
-import { CONSOLE_SYSTEMS, CONSOLE_MAX_TOKENS, CONSOLE_MODELS, type ConsoleCommand } from "@/lib/console-systems";
+import { CONSOLE_SYSTEMS, CONSOLE_MAX_TOKENS, CONSOLE_MODELS, groundConsolePrompt, type ConsoleCommand } from "@/lib/console-systems";
 
 const BANKR_LLM = "https://llm.bankr.bot/v1/messages";
 
@@ -19,6 +19,7 @@ export async function runConsoleCommand(
     return Response.json({ error: "BANKR_API_KEY not configured" }, { status: 500 });
   }
   try {
+    const grounded = await groundConsolePrompt(command, prompt);
     const res = await fetch(BANKR_LLM, {
       method: "POST",
       headers: {
@@ -29,7 +30,7 @@ export async function runConsoleCommand(
       body: JSON.stringify({
         model: CONSOLE_MODELS[command],
         system: CONSOLE_SYSTEMS[command],
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role: "user", content: grounded }],
         max_tokens: CONSOLE_MAX_TOKENS[command],
       }),
       // Parent x402 [tool] route has maxDuration 120s; give the upstream call

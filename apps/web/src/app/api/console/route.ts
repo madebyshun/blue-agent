@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
-import { CONSOLE_SYSTEMS, CONSOLE_MAX_TOKENS, CONSOLE_MODELS, type ConsoleCommand } from "@/lib/console-systems";
+import { CONSOLE_SYSTEMS, CONSOLE_MAX_TOKENS, CONSOLE_MODELS, groundConsolePrompt, type ConsoleCommand } from "@/lib/console-systems";
 
 export const runtime = "nodejs";
 // 120s lets the upstream Bankr 100s ceiling resolve before Vercel kills us.
@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
 
   const cmd: ConsoleCommand = (command in CONSOLE_SYSTEMS ? command : "idea") as ConsoleCommand;
   const system = CONSOLE_SYSTEMS[cmd];
+  const grounded = await groundConsolePrompt(cmd, prompt);
 
   // 100s ceiling on the upstream LLM call. If Bankr hangs we surface a 502
   // with a clear message instead of letting Vercel kill the function silently
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model: CONSOLE_MODELS[cmd],
         system,
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role: "user", content: grounded }],
         max_tokens: CONSOLE_MAX_TOKENS[cmd],
       }),
       signal: AbortSignal.timeout(100_000),
