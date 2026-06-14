@@ -106,6 +106,7 @@ Schema: {
       audit,
       analyst,
       ...result,
+      disclaimer: "AI-generated due-diligence from model knowledge — NOT verified findings. The dd_score, confidence, and every checklist pass/fail are unverified estimates. Independently confirm code, team, and security claims before relying on them.",
     });
   } catch (e) {
     return Response.json({ error: "Builder deep DD failed", message: (e as Error).message }, { status: 500 });

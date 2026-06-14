@@ -76,7 +76,7 @@ Schema: {
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "gtm-brief", timestamp: new Date().toISOString(), project, brief, distribution, ...result });
+    return Response.json({ tool: "gtm-brief", timestamp: new Date().toISOString(), project, brief, distribution, ...result, disclaimer: "AI-generated GTM advisory from model knowledge — scores and projections are estimates, not measured market data or a guarantee. Adapt to your own research." });
   } catch (e) {
     return Response.json({ error: "GTM brief failed", message: (e as Error).message }, { status: 500 });
   }

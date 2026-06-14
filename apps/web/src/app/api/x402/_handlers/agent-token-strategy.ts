@@ -80,7 +80,7 @@ Schema: {
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "agent-token-strategy", timestamp: new Date().toISOString(), agent, token_name, total_supply, retail, ...result });
+    return Response.json({ tool: "agent-token-strategy", timestamp: new Date().toISOString(), agent, token_name, total_supply, retail, ...result, disclaimer: "AI-generated advisory from model knowledge — scores, allocations, and comparables are estimates, not measured data, financial advice, or a guarantee. Verify independently." });
   } catch (e) {
     return Response.json({ error: "Agent token strategy failed", message: (e as Error).message }, { status: 500 });
   }

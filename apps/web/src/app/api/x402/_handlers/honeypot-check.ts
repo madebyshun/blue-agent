@@ -2,6 +2,8 @@
 // Honeypot token detection — checks if a token can be bought but not sold on Base
 // Price: $0.10 — verdict: SAFE / HONEYPOT / SUSPICIOUS
 
+import { getTokenIdentity, tokenIdentityToPrompt } from "@/lib/onchain";
+
 type Msg = { role: string; content: string };
 
 async function llm(system: string, user: string, temp = 0.2, tokens = 600): Promise<string> {
@@ -25,25 +27,6 @@ async function llm(system: string, user: string, temp = 0.2, tokens = 600): Prom
   return d.content?.[0]?.text ?? "";
 }
 
-// Does this address have contract bytecode? An EOA (normal wallet) returns
-// "0x" — there is no token there to honeypot-check. Returns null if the RPC
-// can't be reached (caller then degrades to the full analysis).
-const BASE_RPC = "https://mainnet.base.org";
-async function hasContractCode(address: string): Promise<boolean | null> {
-  try {
-    const r = await fetch(BASE_RPC, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getCode", params: [address, "latest"] }),
-      signal: AbortSignal.timeout(6000),
-    });
-    if (!r.ok) return null;
-    const d = await r.json() as { result?: string };
-    if (typeof d.result !== "string") return null;
-    return d.result.replace(/^0x/, "").length > 0; // ""/"0" → EOA, longer → contract
-  } catch { return null; }
-}
-
 function parseJson(t: string): Record<string, unknown> | null {
   let s = t.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
   const i = s.indexOf("{"), j = s.lastIndexOf("}");
@@ -63,13 +46,13 @@ async function getTokenInfo(address: string): Promise<{
   raw: string;
 }> {
   const apiKey = process.env.BASESCAN_API_KEY ?? "";
-  const base = "https://api.basescan.org/api";
+  const base = "https://api.etherscan.io/v2/api?chainid=8453";
   const def = { name: null, symbol: null, decimals: null, verified: false, contractName: null, raw: "Basescan unavailable" };
 
   try {
     const [tokenRes, srcRes] = await Promise.all([
-      fetch(`${base}?module=token&action=tokeninfo&contractaddress=${address}&apikey=${apiKey}`, { signal: AbortSignal.timeout(8000) }),
-      fetch(`${base}?module=contract&action=getsourcecode&address=${address}&apikey=${apiKey}`, { signal: AbortSignal.timeout(8000) }),
+      fetch(`${base}&module=token&action=tokeninfo&contractaddress=${address}&apikey=${apiKey}`, { signal: AbortSignal.timeout(8000) }),
+      fetch(`${base}&module=contract&action=getsourcecode&address=${address}&apikey=${apiKey}`, { signal: AbortSignal.timeout(8000) }),
     ]);
 
     let name: string | null = null, symbol: string | null = null, decimals: number | null = null;
@@ -116,13 +99,19 @@ export default async function handler(req: Request): Promise<Response> {
       return Response.json({ error: "Invalid address format. Must be 0x + 40 hex chars." }, { status: 400 });
     }
 
+    // Authoritative on-chain identity (eth_getCode + ERC-20 metadata + live
+    // DexScreener liquidity) alongside the Basescan verification lookup.
+    const [identity, tokenInfo] = await Promise.all([
+      getTokenIdentity(address),
+      getTokenInfo(address),
+    ]);
+
     // Guard: an EOA (normal wallet) has no contract code — there is no token to
     // honeypot-check. Without this, the LLM reads "no metadata / unverified" as
     // honeypot red flags and returns a dangerous false "HONEYPOT" verdict on a
     // plain wallet. Short-circuit to a clean NOT_A_TOKEN result (and skip the
-    // paid LLM calls). If the RPC is unreachable (null), fall through.
-    const hasCode = await hasContractCode(address);
-    if (hasCode === false) {
+    // paid LLM calls).
+    if (identity && identity.isContract === false) {
       return Response.json({
         tool: "honeypot-check",
         timestamp: new Date().toISOString(),
@@ -144,16 +133,10 @@ export default async function handler(req: Request): Promise<Response> {
       });
     }
 
-    // Fetch token info from Basescan
-    const tokenInfo = await getTokenInfo(address);
-
     const tokenCtx = `
-Token address: ${address} (Base mainnet, chain ID 8453)
-${tokenInfo.raw}
-Name: ${tokenInfo.name ?? "unknown"}
-Symbol: ${tokenInfo.symbol ?? "unknown"}
-Verified: ${tokenInfo.verified}
-Contract name: ${tokenInfo.contractName ?? "unknown"}
+${identity ? tokenIdentityToPrompt(identity) : `Token address: ${address} (Base, chain 8453). On-chain identity read unavailable — do NOT assume EOA.`}
+
+Basescan: source verified = ${tokenInfo.verified}, contract name = ${tokenInfo.contractName ?? "unknown"}. (An unverified source is common for legitimate tokens and is NOT, by itself, a honeypot signal.)
 `.trim();
 
     // Run Blue Agent honeypot analysis + MiroShark degen signal in parallel
@@ -162,6 +145,14 @@ Contract name: ${tokenInfo.contractName ?? "unknown"}
         `You are Blue Agent — token security specialist for Base (chain ID 8453).
 Analyze whether this token is a honeypot (buy works, sell blocked or taxed to 100%).
 Key honeypot patterns: trading disabled post-launch, massive sell tax (>50%), blacklist abuse, ownership not renounced with dangerous functions, transfer() reverts on sell.
+
+EVIDENCE RULES (critical — avoid false positives):
+- Only set is_honeypot=true when there is CONCRETE evidence of a sell restriction (sell blocked, sell tax >50%, blacklist, trading disabled, or a known rug). With no such evidence, set is_honeypot=false.
+- Missing Basescan verification, missing metadata, or an unfamiliar token name is NOT evidence of a honeypot. Do NOT flag on absence of information.
+- Healthy two-sided DEX liquidity and real 24h volume (in the context) are strong evidence the token is tradeable — weight them as green flags, not red.
+- Do NOT invent tax numbers. If you cannot determine a tax, use "unknown" — never "extreme".
+- Set confidence to reflect EVIDENCE strength, not how scary the unknowns feel.
+
 CRITICAL: Return ONLY raw JSON. No markdown.
 Schema: {
   "is_honeypot": <boolean>,
@@ -193,15 +184,19 @@ Schema: {
       ),
     ]);
 
+    const hasLiquidity = (identity?.market?.liquidityUsd ?? 0) > 0;
     const blue = parseJson(blueRaw) ?? {
       is_honeypot: false,
       confidence: 50,
       sell_tax_estimate: "unknown",
       buy_tax_estimate: "unknown",
-      red_flags: tokenInfo.verified ? [] : ["source not verified on Basescan"],
-      green_flags: tokenInfo.verified ? ["source verified on Basescan"] : [],
+      red_flags: [],
+      green_flags: [
+        ...(tokenInfo.verified ? ["source verified on Basescan"] : []),
+        ...(hasLiquidity ? ["active DEX liquidity on Base"] : []),
+      ],
       honeypot_patterns: [],
-      assessment: "Unable to fully analyze. Verify manually before trading.",
+      assessment: "Automated honeypot analysis was inconclusive (no concrete sell-block evidence found). This is not a honeypot verdict — verify liquidity and try a small test sell before trading.",
     };
 
     const ms = parseJson(msRaw) ?? {
@@ -224,10 +219,11 @@ Schema: {
       chain: "base",
       chainId: 8453,
       token: {
-        name: tokenInfo.name,
-        symbol: tokenInfo.symbol,
-        decimals: tokenInfo.decimals,
+        name: identity?.name ?? tokenInfo.name,
+        symbol: identity?.symbol ?? tokenInfo.symbol,
+        decimals: identity?.decimals ?? tokenInfo.decimals,
         verified: tokenInfo.verified,
+        liquidityUsd: identity?.market?.liquidityUsd ?? null,
         url: `https://basescan.org/address/${address}`,
       },
       verdict,

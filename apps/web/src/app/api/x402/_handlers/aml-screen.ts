@@ -1,5 +1,8 @@
 // x402/aml-screen — AML compliance screening for any wallet
-// Price: $0.25 — Fully self-contained, no external workspace imports
+// Price: $0.25 — heuristic screening grounded in real on-chain activity. Never
+// returns a confident "CLEAN/APPROVE" from an empty data response.
+
+import { getWalletSnapshot } from "@/lib/onchain";
 
 type BankrMessage = { role: string; content: string };
 
@@ -97,13 +100,46 @@ export default async function handler(req: Request): Promise<Response> {
 
     console.log(`[AMLScreen] Screening: ${address}`);
 
-    const { txs, tokenTxs } = await getBasescanData(address).catch(() => ({ txs: [], tokenTxs: [] }));
+    const [{ txs, tokenTxs }, snap] = await Promise.all([
+      getBasescanData(address).catch(() => ({ txs: [], tokenTxs: [] })),
+      getWalletSnapshot(address),
+    ]);
+
+    const nonce = snap?.txCount ?? null;   // authoritative outgoing-tx count (RPC)
+
+    // Guard: if we could read NO transaction history at all, do not let the LLM
+    // fabricate a confident "CLEAN / APPROVE". A wallet that genuinely never
+    // transacted (nonce 0) has no behaviour to screen; a data-fetch failure is
+    // even less screenable. Either way, return an honest indeterminate verdict.
+    const hasData = txs.length > 0 || tokenTxs.length > 0;
+    if (!hasData) {
+      const neverTxd = nonce === 0;
+      return Response.json({
+        address,
+        amlRisk: "UNKNOWN",
+        riskScore: null,
+        verdict: neverTxd ? "NO_HISTORY" : "INSUFFICIENT_DATA",
+        flags: [],
+        patterns: [],
+        transactionProfile: neverTxd
+          ? "Wallet has never sent a transaction (nonce 0) — no transaction behaviour exists to screen."
+          : "On-chain transaction history could not be read (data source unavailable or rate-limited).",
+        recommendedAction: "MANUAL_REVIEW",
+        recommendation: neverTxd
+          ? "Fresh/unused wallet — nothing to screen yet. Re-screen after it has on-chain activity."
+          : "Transaction data was unavailable. Retry shortly before relying on this result.",
+        disclaimer: "AI heuristic screening only — not a regulatory compliance product and not a sanctions-list check.",
+        dataSource: "Basescan tx history + live Base RPC nonce",
+      });
+    }
 
     type Tx = { from?: string; to?: string; value?: string; timeStamp?: string };
     type TokenTx = { tokenSymbol?: string };
 
     const profile = {
-      totalTx: txs.length,
+      totalSentTx_nonce: nonce,
+      lastActivityDays: snap?.lastActivityDays ?? null,
+      sampledTx: txs.length,
       uniqueCounterparties: new Set([...(txs as Tx[]).map(t => t.from), ...(txs as Tx[]).map(t => t.to)]).size,
       tokenTypes: [...new Set((tokenTxs as TokenTx[]).map(t => t.tokenSymbol))].slice(0, 10),
       recentActivity: (txs as Tx[]).slice(0, 5).map(tx => ({
@@ -122,7 +158,7 @@ export default async function handler(req: Request): Promise<Response> {
     });
     let result = extractJsonObject(llmResponse);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
-    return Response.json(result);
+    return Response.json({ ...result, address, dataSource: "Basescan tx history + live Base RPC nonce" });
   } catch (error) {
     console.error("[AMLScreen] Error:", error);
     return Response.json({ error: "AML screening failed", message: (error as Error).message }, { status: 500 });

@@ -99,7 +99,10 @@ Token Supply: ${body.tokenSupply || "Not specified"}`;
 
     let result = extractJsonObject(llmResponse);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
-    return Response.json(result, { status: 200 });
+    return Response.json({
+      ...result,
+      disclaimer: "AI-generated launch advisory. All numbers — KPIs, target holders/volume, score, supply and distribution percentages — are illustrative estimates, NOT benchmarked targets or projections backed by data. Adapt to your own market research.",
+    }, { status: 200 });
   } catch (error) {
     console.error("[LaunchAdvisor] Error:", error);
     return Response.json({ error: "Failed to generate launch plan", message: (error as Error).message }, { status: 500 });

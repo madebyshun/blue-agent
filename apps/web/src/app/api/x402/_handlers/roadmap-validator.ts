@@ -63,7 +63,7 @@ Schema: {"verdict":"SHIP|REVISE|PIVOT","score":<0-100>,"narrative_alignment":{"s
     const verdict = parseJson(verdictRaw);
     if (!verdict) throw new Error("Failed to parse verdict");
 
-    return Response.json({ tool: "roadmap-validator", timestamp: new Date().toISOString(), project, timeline, build_analysis: buildAnalysis, miroshark: consensus, ...verdict });
+    return Response.json({ tool: "roadmap-validator", timestamp: new Date().toISOString(), project, timeline, build_analysis: buildAnalysis, miroshark: consensus, ...verdict, disclaimer: "AI-generated advisory from model knowledge — scores and the bull/bear consensus are model estimates, not measured community sentiment or a guarantee. Verify independently." });
   } catch (e) {
     return Response.json({ error: "Roadmap validation failed", message: (e as Error).message }, { status: 500 });
   }

@@ -2,6 +2,8 @@
 // Transaction risk gate — pre-trade risk assessment before executing any tx on Base
 // Price: $0.20 — verdict: PROCEED / CAUTION / ABORT
 
+import { getTokenIdentity } from "@/lib/onchain";
+
 type Msg = { role: string; content: string };
 
 async function llm(system: string, user: string, temp = 0.2, tokens = 700): Promise<string> {
@@ -42,12 +44,12 @@ async function getAddressInfo(address: string): Promise<{
   raw: string;
 }> {
   const apiKey = process.env.BASESCAN_API_KEY ?? "";
-  const base = "https://api.basescan.org/api";
+  const base = "https://api.etherscan.io/v2/api?chainid=8453";
   const def = { isContract: false, verified: false, contractName: null, raw: "Basescan unavailable" };
 
   try {
     const res = await fetch(
-      `${base}?module=contract&action=getsourcecode&address=${address}&apikey=${apiKey}`,
+      `${base}&module=contract&action=getsourcecode&address=${address}&apikey=${apiKey}`,
       { signal: AbortSignal.timeout(7000) }
     );
     if (!res.ok) return def;
@@ -89,8 +91,17 @@ export default async function handler(req: Request): Promise<Response> {
       return Response.json({ error: "Invalid address format. Must be 0x + 40 hex chars." }, { status: 400 });
     }
 
-    // Lookup target address
-    const addrInfo = await getAddressInfo(to);
+    // Authoritative contract detection via on-chain eth_getCode, plus the
+    // Basescan verification lookup (verified source / contract name) in parallel.
+    // eth_getCode — not Basescan — decides EOA vs contract.
+    const [addrInfo, identity] = await Promise.all([
+      getAddressInfo(to),
+      getTokenIdentity(to),
+    ]);
+    const isContract = identity?.isContract ?? addrInfo.isContract;
+    const tokenDesc = identity?.isToken
+      ? `Target is an ERC-20 token: ${identity.name ?? "?"} (${identity.symbol ?? "?"})`
+      : isContract ? "Target is a smart contract (non-token or unrecognized)" : "Target is an externally-owned account (EOA / wallet)";
 
     const txCtx = `
 Transaction details (Base mainnet, chain ID 8453):
@@ -98,8 +109,9 @@ Action: ${action}
 Target address: ${to}
 Value: ${value || "0 ETH"}
 Calldata present: ${data ? "yes" : "no"}
-Target type: ${addrInfo.isContract ? "contract" : "EOA / unknown"}
-Verified: ${addrInfo.verified}
+Target type (from on-chain eth_getCode — authoritative): ${isContract ? "contract" : "EOA"}
+${tokenDesc}
+Basescan source verified: ${addrInfo.verified}
 Contract name: ${addrInfo.contractName ?? "unknown"}
 ${addrInfo.raw}
 `.trim();
@@ -110,6 +122,12 @@ ${addrInfo.raw}
         `You are Blue Agent — transaction risk guard for Base (chain ID 8453).
 Assess the risk of this transaction BEFORE it is executed.
 Focus on: malicious contract patterns, phishing addresses, unusual calldata, AML red flags, drain/approval abuse, known attack vectors.
+
+SCORE THE ACTION, NOT JUST THE TARGET (critical — avoid false ABORTs):
+- Risk is about what THIS transaction does. A read-only action (e.g. "scan", "read", "view") and any transaction with value 0 AND no calldata transfers nothing and executes nothing — score it low (0-20) regardless of the target's verification status.
+- Unverified source code is common for legitimate tokens and is NOT, by itself, grounds for CAUTION or ABORT. Do not raise the score solely because the target is unverified.
+- Reserve high scores (>40) for transactions that actually move value, grant approvals, or execute calldata into a target with concrete red flags, and reserve ABORT (>70) for known drainers/phishing or clear drain/approval-abuse patterns.
+
 CRITICAL: Return ONLY raw JSON. No markdown.
 Schema: {
   "risk_score": <0-100>,
@@ -174,9 +192,9 @@ Schema: {
       chain: "base",
       chainId: 8453,
       target: {
-        isContract: addrInfo.isContract,
+        isContract,
         verified:   addrInfo.verified,
-        contractName: addrInfo.contractName,
+        contractName: addrInfo.contractName ?? (identity?.isToken ? `${identity.name ?? ""} (${identity.symbol ?? ""})`.trim() : null),
         url: `https://basescan.org/address/${to}`,
       },
       verdict,
