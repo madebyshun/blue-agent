@@ -240,6 +240,48 @@ export async function getTokenIdentity(rawAddr: string): Promise<TokenIdentity |
   return { address, isContract, isToken, name, symbol, decimals, totalSupply, market };
 }
 
+// Scan VERIFIED Solidity source for privileged / risk-bearing functions. Since
+// the source is public+verified these are CONFIRMED facts, not speculation —
+// e.g. an owner-controlled mint() means supply is NOT fixed (dilution/soft-rug).
+// Lets security tools state concrete findings instead of "mint/burn unverified".
+export function scanSourceSignals(src: string): string[] {
+  const s = src;
+  const sig: string[] = [];
+  if (/function\s+mint\s*\(/i.test(s)) {
+    const ownerMint = /function\s+mint\s*\([^)]*\)[^{;]*\b(onlyOwner|onlyMinter|onlyRole|owner|admin|MINTER)/i.test(s);
+    sig.push(ownerMint
+      ? "CONFIRMED: owner/minter-controlled mint() exists — total supply is NOT fixed; a privileged key can inflate supply (dilution / soft-rug vector). Treat as HIGH (or CRITICAL if uncapped and ownership not renounced)."
+      : "mint() function present — confirm whether it is access-controlled and capped (supply-inflation risk).");
+  }
+  if (/function\s+burn(From)?\s*\(/i.test(s)) sig.push("burn() present (supply can be reduced).");
+  if (/black[_]?list|deny[_]?list|isBlacklisted|_blacklist|blocklist/i.test(s)) sig.push("CONFIRMED: blacklist/denylist mechanism — specific addresses can be blocked from transferring (censorship / honeypot-style risk).");
+  if (/function\s+pause\s*\(|whenNotPaused|_pause\s*\(|Pausable/i.test(s)) sig.push("CONFIRMED: pausable — transfers/trading can be halted by a privileged role.");
+  if (/setFee|setTax|_taxFee|setMaxTx|setMaxWallet|maxWallet|maxTransaction|excludeFromFee/i.test(s)) sig.push("Fee/limit controls present (tax, maxWallet, or maxTx) — privileged role can throttle or tax trades.");
+  if (/\bonlyOwner\b|Ownable/i.test(s)) sig.push("Owner-privileged functions exist (onlyOwner/Ownable). NOTE: 'non-proxy / immutable bytecode' does NOT remove owner power — owner actions (mint, pause, blacklist, fees) are centralization/rug vectors even without an upgradeable proxy. Check whether ownership is renounced.");
+  return sig;
+}
+
+// Fetch verified source from Etherscan V2 (Base) and return privileged-function
+// signals. Returns [] if unverified / unreadable. Used by audit-style tools.
+export async function getSourceSignals(address: string): Promise<{ verified: boolean; contractName: string | null; signals: string[] }> {
+  const addr = normalizeAddress(address);
+  if (!addr) return { verified: false, contractName: null, signals: [] };
+  const key = process.env.BASESCAN_API_KEY ?? "";
+  try {
+    const r = await fetch(
+      `https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getsourcecode&address=${addr}&apikey=${key}`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    const d = await r.json() as { status: string; result?: { ContractName?: string; SourceCode?: string }[] };
+    if (d.status === "1" && d.result?.length) {
+      const src = d.result[0].SourceCode ?? "";
+      const verified = src.length > 0;
+      return { verified, contractName: d.result[0].ContractName ?? null, signals: verified ? scanSourceSignals(src) : [] };
+    }
+  } catch { /* fall through */ }
+  return { verified: false, contractName: null, signals: [] };
+}
+
 export function tokenIdentityToPrompt(t: TokenIdentity): string {
   if (!t.isContract) {
     return `Address ${t.address} (Base, chain 8453): eth_getCode returned NO bytecode — this is an externally-owned account (EOA / normal wallet). It is NOT a contract or token. There is no code to audit.`;
@@ -253,7 +295,11 @@ export function tokenIdentityToPrompt(t: TokenIdentity): string {
     lines.push(`Standard ERC-20 metadata is NOT readable — this is a non-token contract (router, pool, multisig, proxy, etc.), not an ERC-20 token.`);
   }
   if (t.market) {
-    lines.push(`Live market (DexScreener Base): price ${t.market.priceUsd != null ? "$" + t.market.priceUsd : "?"}, 24h change ${t.market.change.h24 ?? "?"}%, liquidity ${fmtUsd(t.market.liquidityUsd)}, 24h volume ${fmtUsd(t.market.volume24h)}, market cap ${fmtUsd(t.market.marketCap)}, dex ${t.market.dex ?? "?"}. Active two-sided DEX liquidity and real volume are strong evidence the token is tradeable (NOT a honeypot).`);
+    lines.push(`Live market (DexScreener, ${t.market.dex ?? "?"} — DEEPEST single Base pool only; total cross-DEX liquidity may be higher):`);
+    lines.push(`- price ~$${t.market.priceUsd ?? "?"} (VOLATILE live snapshot — varies by source/pool and by the second; do NOT present as a fixed price)`);
+    lines.push(`- 24h change ${t.market.change.h24 ?? "?"}% | 24h volume ${fmtUsd(t.market.volume24h)} | liquidity ${fmtUsd(t.market.liquidityUsd)} (this pool)`);
+    lines.push(`- market cap ${fmtUsd(t.market.marketCap)} | FDV ${fmtUsd(t.market.fdv)} (these are DIFFERENT — do not conflate market cap with fully-diluted valuation)`);
+    lines.push(`Active two-sided DEX liquidity and real volume are strong evidence the token is tradeable (NOT a honeypot).`);
   } else if (t.isToken) {
     lines.push(`No DexScreener Base pair found — little or no DEX liquidity, or not indexed. Absence of a listing is NOT by itself evidence of a scam.`);
   }

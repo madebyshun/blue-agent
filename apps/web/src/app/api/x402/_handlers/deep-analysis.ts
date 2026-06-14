@@ -2,7 +2,7 @@
 // Deep project/token analysis — comprehensive security + market + fundamentals on Base
 // Price: $0.50 — full due diligence in one call
 
-import { getTokenIdentity, tokenIdentityToPrompt } from "@/lib/onchain";
+import { getTokenIdentity, tokenIdentityToPrompt, scanSourceSignals } from "@/lib/onchain";
 
 type Msg = { role: string; content: string };
 
@@ -36,7 +36,7 @@ function parseJson(t: string): Record<string, unknown> | null {
   }
 }
 
-// Combined Basescan lookup: contract info + token info
+// Combined Basescan lookup: contract info + token info + verified-source signals
 async function deepBasescanLookup(address: string): Promise<{
   isToken: boolean;
   tokenName: string | null;
@@ -48,6 +48,7 @@ async function deepBasescanLookup(address: string): Promise<{
   isProxy: boolean;
   implementationAddress: string | null;
   licenseType: string | null;
+  sourceSignals: string[];
   raw: string;
 }> {
   const apiKey = process.env.BASESCAN_API_KEY ?? "";
@@ -55,7 +56,7 @@ async function deepBasescanLookup(address: string): Promise<{
   const def = {
     isToken: false, tokenName: null, tokenSymbol: null, tokenDecimals: null,
     verified: false, contractName: null, compilerVersion: null, isProxy: false,
-    implementationAddress: null, licenseType: null, raw: "Basescan unavailable",
+    implementationAddress: null, licenseType: null, sourceSignals: [], raw: "Basescan unavailable",
   };
 
   try {
@@ -66,7 +67,8 @@ async function deepBasescanLookup(address: string): Promise<{
 
     let verified = false, contractName: string | null = null,
         compilerVersion: string | null = null, isProxy = false,
-        implementationAddress: string | null = null, licenseType: string | null = null;
+        implementationAddress: string | null = null, licenseType: string | null = null,
+        sourceSignals: string[] = [];
 
     if (srcRes.ok) {
       const sd = await srcRes.json() as {
@@ -78,13 +80,15 @@ async function deepBasescanLookup(address: string): Promise<{
       };
       if (sd.status === "1" && sd.result?.length) {
         const info = sd.result[0];
-        verified = !!info.SourceCode && info.SourceCode.length > 0;
+        const srcBody = info.SourceCode ?? "";
+        verified = srcBody.length > 0;
         contractName    = info.ContractName ?? null;
         compilerVersion = info.CompilerVersion ?? null;
         isProxy         = info.Proxy === "1";
         implementationAddress = info.Implementation && info.Implementation !== "0x0000000000000000000000000000000000000000"
           ? info.Implementation : null;
         licenseType = info.LicenseType ?? null;
+        if (verified) sourceSignals = scanSourceSignals(srcBody);
       }
     }
 
@@ -107,7 +111,7 @@ async function deepBasescanLookup(address: string): Promise<{
       isProxy ? `Proxy → ${implementationAddress}` : "Not a proxy",
     ].join(" | ");
 
-    return { isToken, tokenName, tokenSymbol, tokenDecimals, verified, contractName, compilerVersion, isProxy, implementationAddress, licenseType, raw };
+    return { isToken, tokenName, tokenSymbol, tokenDecimals, verified, contractName, compilerVersion, isProxy, implementationAddress, licenseType, sourceSignals, raw };
   } catch {
     return def;
   }
@@ -197,6 +201,10 @@ Source verified on Basescan: ${info.verified}
 Contract name: ${info.contractName ?? "unknown"}
 Compiler: ${info.compilerVersion ?? "unknown"}
 Proxy: ${info.isProxy ? `yes → ${info.implementationAddress}` : "no"}
+${info.verified ? `
+VERIFIED-SOURCE FINDINGS (scanned from the actual public source — these are CONFIRMED facts, not speculation. If this list is non-empty, do NOT say "mint/burn mechanism unverified" or "cannot assess" — you CAN, the source is public):
+${info.sourceSignals.length ? info.sourceSignals.map(x => `- ${x}`).join("\n") : "- No owner-mint / blacklist / pausable / fee patterns detected in the scanned source. Standard ERC-20 surface."}
+RULE: An owner-controlled or uncapped mint() is a CONCRETE supply-dilution / soft-rug risk and belongs in critical_risks (or high), NOT vaguely in medium as "unverified". "Non-proxy / immutable" is NOT a safety guarantee against owner privileges — never present it as offsetting an active mint/pause/blacklist power.` : ""}
 ${context ? `Additional context: ${context}` : ""}
 `.trim();
 
@@ -227,6 +235,7 @@ Schema: {
         `You are MiroShark — market intelligence specialist for Base tokens.
 Analyze market fundamentals and community signals for this token/contract.
 Cover: trading activity patterns, community sentiment, social signals, tokenomics red flags, team transparency, narrative fit.
+HONESTY: only assign team_transparency or narrative_alignment when you actually recognize the project from its name/symbol; if you have no real basis, use "unknown" rather than guessing "partial"/"other". Price is a volatile snapshot — never present it as a fixed/current price. market cap ≠ FDV; keep them distinct.
 CRITICAL: Return ONLY raw JSON. No markdown.
 Schema: {
   "market_score": <0-100>,
