@@ -144,7 +144,7 @@ export async function groundConsolePrompt(command: ConsoleCommand, prompt: strin
     ? `Etherscan/Basescan source: VERIFIED${src.contractName ? ` (contract "${src.contractName}")` : ""}.`
     : "Etherscan/Basescan source: verification status could not be read (do NOT assume unverified).";
   const sourceFindings = src.verified
-    ? `\nVERIFIED-SOURCE FINDINGS (scanned from the actual public source — CONFIRMED, not speculation; since the source is public you CAN assess mint/burn/admin powers — do NOT say "unverified" or "cannot assess"):\n${src.signals.length ? src.signals.map(x => `- ${x}`).join("\n") : "- No owner-mint / blacklist / pausable / fee patterns detected. Standard ERC-20 surface."}\nAn owner-controlled or uncapped mint() is a CONCRETE supply-dilution / soft-rug risk → reflect it in the verdict (Critical/High). "Non-proxy / immutable" does NOT offset active owner powers (mint/pause/blacklist).`
+    ? `\nVERIFIED-SOURCE SCAN (facts from the actual public source — each line is PRESENT or ABSENT; TRUST IT over pattern guesses):\n${src.signals.map(x => `- ${x}`).join("\n")}\nRULES: Do NOT speculate — if a function is ABSENT it is genuinely not in the code (never say "pause/blacklist likely present"). A PRESENT owner-controlled / uncapped mint() is a CONCRETE dilution / soft-rug risk → reflect it (Critical/High). "Non-proxy / immutable" does NOT offset active owner powers. For audit status, say "no public third-party audit found", not a hard "unaudited".`
     : "";
   return `${prompt}
 
