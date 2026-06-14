@@ -160,6 +160,30 @@ export default async function handler(req: Request): Promise<Response> {
       });
     }
 
+    // Non-token contract short-circuit: the address HAS code but exposes no
+    // ERC-20 metadata — it is infrastructure (liquidity pool, router, multisig,
+    // factory), not a tradeable token. Token-level scoring (price/market/holders)
+    // does not apply, so do NOT run the token LLM analysis — it produces a
+    // misleading BEARISH/AVOID verdict and invents token risks for a legit
+    // contract. Return an honest "not a token" result instead.
+    if (identity && identity.isContract === true && identity.isToken === false) {
+      const label = info.contractName ?? identity.name ?? "contract";
+      return Response.json({
+        tool: "deep-analysis",
+        timestamp: new Date().toISOString(),
+        address,
+        chain: "base",
+        chainId: 8453,
+        token: { isToken: false, isContract: true, name: identity.name, symbol: identity.symbol, decimals: identity.decimals, verified: info.verified, contractName: info.contractName, isProxy: info.isProxy, url: `https://basescan.org/address/${address}` },
+        composite_score: null,
+        verdict: "NOT_A_TOKEN",
+        action: "N/A",
+        security:     { score: null, critical_risks: [], medium_risks: [], positive_signals: info.verified ? ["source verified on Basescan"] : [], ownership_risk: "n/a", liquidity_risk: "n/a", audit_status: "n/a", summary: `This is a${info.verified ? " verified" : ""} non-token contract${info.contractName ? ` (${label})` : ""} — infrastructure such as a liquidity pool, router, factory, or multisig, not an ERC-20 token. Token-level analysis (price, market, holders) does not apply. For contract security use Contract Trust; for pool metrics use LP Analyzer.` },
+        market:       { score: null, community_trust: "n/a", tokenomics_risk: "n/a", team_transparency: "n/a", narrative: "infra", trading_signals: [], summary: "" },
+        fundamentals: { score: null, holder_risk: "n/a", activity_level: "n/a", whale_concentration: "n/a", age_signal: "n/a", on_chain_signals: [], summary: "" },
+      });
+    }
+
     const onchain = identity ? tokenIdentityToPrompt(identity) : `Address: ${address} (Base, chain 8453). On-chain identity read unavailable — fall back to Basescan signals below; do NOT assume EOA.`;
 
     const ctx = `
