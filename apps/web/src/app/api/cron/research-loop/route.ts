@@ -189,10 +189,13 @@ Return ONLY valid JSON:
   const raw = await callLLM(system, prompt);
 
   try {
-    const parsed = JSON.parse(raw) as Omit<ResearchOutput, "runAt">;
+    let clean = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+    const oi = clean.indexOf("{"), oj = clean.lastIndexOf("}");
+    if (oi >= 0 && oj > oi) clean = clean.slice(oi, oj + 1);
+    const parsed = JSON.parse(clean) as Omit<ResearchOutput, "runAt">;
     return {
       ...parsed,
-      signals: parsed.signals.map(s => ({ ...s, timestamp: now })),
+      signals: (Array.isArray(parsed.signals) ? parsed.signals : []).map(s => ({ ...s, timestamp: now })),
       runAt: now,
     };
   } catch {
