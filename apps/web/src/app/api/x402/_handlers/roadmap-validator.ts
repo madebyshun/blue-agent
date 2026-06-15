@@ -38,7 +38,7 @@ export default async function handler(req: Request): Promise<Response> {
     if (!project || !roadmap) return Response.json({ error: "project and roadmap are required" }, { status: 400 });
 
     const [narrativeRaw, buildRaw] = await Promise.all([
-      aeon("narrative-tracker", `relevance to: ${project}. Which narratives support or conflict with this roadmap?`),
+      aeon("narrative-tracker"),
       llm(`You are Blue Agent running 'blue build'. Analyze this roadmap for technical feasibility on Base.
 CRITICAL: Return ONLY raw JSON.
 Schema: {"feasibility_score":<0-10>,"phases":[{"name":"<phase>","realistic":<boolean>,"concern":"<or null>"}],"missing":["<missing item>"],"dependency_risks":["<risk>"],"build_note":"<1 sentence>"}`,

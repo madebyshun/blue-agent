@@ -40,7 +40,7 @@ export default async function handler(req: Request): Promise<Response> {
     const skills = body.skills ?? url.searchParams.get("skills") ?? "";
     if (!builder && !project) return Response.json({ error: "builder or project is required" }, { status: 400 });
 
-    const researchRaw = await aeon("deep-research", `Base ecosystem builder network: active builders, their projects, complementary skills, collaboration patterns. Context: ${builder || project} — ${skills || "full-stack"} builder looking for ${looking_for || "collaborators"}.`);
+    const researchRaw = await aeon("deep-research");
 
     const msRaw = await llm(`You are MiroShark analyst persona — network and synergy specialist.
 Identify best collaboration matches and network opportunities.

@@ -37,7 +37,7 @@ export default async function handler(req: Request): Promise<Response> {
     const { token = "", ticker = "", total_supply = 1000000000, description = "" } = body;
     if (!token) return Response.json({ error: "token is required" }, { status: 400 });
 
-    const moversRaw = await aeon("token-movers", "Base token distributions, successful tokenomics patterns, community allocations");
+    const moversRaw = await aeon("token-movers");
 
     const msRaw = await llm(`You are MiroShark retail persona.
 What distribution do retail holders expect and respond well to?

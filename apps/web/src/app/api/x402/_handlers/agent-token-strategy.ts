@@ -41,8 +41,8 @@ export default async function handler(req: Request): Promise<Response> {
     if (!agent) return Response.json({ error: "agent is required" }, { status: 400 });
 
     const [moversRaw, narrativeRaw] = await Promise.all([
-      aeon("token-movers", `AI agent tokens on Base: what's working, what tokenomics patterns succeed for agent-owned projects. Examples like VIRTUAL, ARC, similar.`),
-      aeon("narrative-tracker", `AI agent token narrative on Base: what story resonates for agent tokens? Utility vs memecoin positioning. ${agent} ${description}`),
+      aeon("token-movers"),
+      aeon("narrative-tracker"),
     ]);
 
     const msRaw = await llm(`You are MiroShark — retail perspective (1.0x weight) on agent token strategies.

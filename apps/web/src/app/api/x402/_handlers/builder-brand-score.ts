@@ -52,8 +52,8 @@ export default async function handler(req: Request): Promise<Response> {
     // Real GitHub credibility signal (optional) + brand research (model estimate).
     const [repoData, researchRaw, narrativeRaw] = await Promise.all([
       repo ? fetchRepo(slugifyRepo(repo)) : Promise.resolve<RepoData | null>(null),
-      aeon("deep-research", `${target}${project ? ` — ${project}` : ""}: reputation in Base/crypto ecosystem, CT presence, community standing, past projects, credibility signals.`),
-      aeon("narrative-tracker", `${target} brand positioning: how are they perceived on CT? What narratives are they associated with? Brand strength in Base ecosystem.`),
+      aeon("deep-research"),
+      aeon("narrative-tracker"),
     ]);
     const repoScored = repoData ? scoreRepoActivity(repoData) : null;
     const githubCtx = repoScored ? `\nREAL GitHub credibility (anchor consistency/credibility on this):\n${repoFactsPrompt(repoData!, repoScored)}` : "";

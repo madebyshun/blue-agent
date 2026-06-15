@@ -42,7 +42,7 @@ export default async function handler(req: Request): Promise<Response> {
     if (!project || !description) return Response.json({ error: "project and pitch summary are required" }, { status: 400 });
 
     const [narrativeRaw, raiseRaw] = await Promise.all([
-      aeon("narrative-tracker", `investor narrative relevance for ${project}: ${description}`),
+      aeon("narrative-tracker"),
       llm(`You are Blue Agent running 'blue raise'. Build pitch narrative for Base builders.
 CRITICAL: Return ONLY raw JSON.
 Schema: {"market_framing":"<1-2 sentences>","why_this_wins":"<1-2 sentences>","why_now":"<1 sentence>","why_base":"<1 sentence>","ask_framing":"<1 sentence>","target_investor_type":"<e.g. crypto-native, generalist, strategic>"}`,

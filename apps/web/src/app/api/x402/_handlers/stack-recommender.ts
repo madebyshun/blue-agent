@@ -38,7 +38,7 @@ export default async function handler(req: Request): Promise<Response> {
     if (!project || !description) return Response.json({ error: "project and description are required" }, { status: 400 });
 
     const [ecosystemRaw, buildRaw] = await Promise.all([
-      aeon("deep-research", `Best tech stack for building ${description} on Base in 2025. Focus on what successful Base projects use.`),
+      aeon("deep-research"),
       llm(`You are Blue Agent running 'blue build'. Recommend stack for Base builders.
 CRITICAL: Return ONLY raw JSON.
 Schema: {

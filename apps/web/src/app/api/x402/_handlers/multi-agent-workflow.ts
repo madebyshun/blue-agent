@@ -39,7 +39,7 @@ export default async function handler(req: Request): Promise<Response> {
     const constraints = body.constraints ?? url.searchParams.get("constraints") ?? "";
     if (!goal) return Response.json({ error: "goal is required (what should the multi-agent workflow accomplish?)" }, { status: 400 });
 
-    const researchRaw = await aeon("deep-research", `multi-agent workflow patterns: agent orchestration, task decomposition, handoff protocols, Base x402 payment between agents. Best patterns for: ${goal}`);
+    const researchRaw = await aeon("deep-research");
 
     const msRaw = await llm(`You are MiroShark analyst persona — systems thinking, workflow design.
 Design optimal agent coordination strategy.

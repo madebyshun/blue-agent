@@ -38,8 +38,8 @@ export default async function handler(req: Request): Promise<Response> {
     if (!project) return Response.json({ error: "project is required" }, { status: 400 });
 
     const [moversRaw, narrativeRaw] = await Promise.all([
-      aeon("token-movers", "Base ecosystem market conditions, investor risk appetite"),
-      aeon("narrative-tracker", `investor narrative cycle for ${project}: ${description}`),
+      aeon("token-movers"),
+      aeon("narrative-tracker"),
     ]);
 
     const msRaw = await llm(`You are MiroShark influencer persona.

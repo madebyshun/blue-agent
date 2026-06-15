@@ -40,7 +40,7 @@ export default async function handler(req: Request): Promise<Response> {
     const model = body.model ?? url.searchParams.get("model") ?? "x402";
     if (!agent) return Response.json({ error: "agent is required" }, { status: 400 });
 
-    const researchRaw = await aeon("deep-research", `AI agent monetization models in Base/crypto ecosystem: x402 micropayments, token gating, subscription, revenue sharing. Best practices for ${description || agent}.`);
+    const researchRaw = await aeon("deep-research");
 
     const msRaw = await llm(`You are MiroShark analyst persona — agent economy specialist.
 Evaluate revenue optimization opportunities for this AI agent.
