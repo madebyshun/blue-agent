@@ -1,4 +1,5 @@
 // x402/launch-simulator-2 — Launch Simulator Tier 2: Deep Signal with live DexScreener data
+import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 // Price: $0.35 — Fully self-contained, no external workspace imports
 
 type BankrMessage = { role: string; content: string };
@@ -38,24 +39,16 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
   return null;
 }
 
-async function runAeonSkill(skill: string, varInput = ""): Promise<string | null> {
+async function runAeonSkill(skill: string, _varInput = ""): Promise<string | null> {
+  // Read REAL Aeon data from KV (research-loop cron + Aeon webhook).
+  // KV miss → null; caller marks data unavailable. NEVER fetch GitHub SKILL.md
+  // and ask the LLM to synthesize from training knowledge — that fabricates.
   try {
-    const res = await fetch(
-      `https://raw.githubusercontent.com/aaronjmars/aeon/main/skills/${skill}/SKILL.md`,
-      { signal: AbortSignal.timeout(6000) }
-    );
-    if (!res.ok) return null;
-    const skillPrompt = await res.text();
-    const today = new Date().toISOString().split("T")[0];
-    const varLine = varInput ? `\nUse this variable: var=${varInput}` : "";
-    return await callBankrLLM({
-      model: "claude-haiku-4-5",
-      system: `You are Aeon — an autonomous intelligence agent running in offline/knowledge mode. Synthesize ecosystem intelligence from training knowledge. Be specific, data-driven, actionable. Today is ${today}.`,
-      messages: [{ role: "user", content: `Use the skill template as a guide. Generate output from training knowledge — do NOT say APIs are unavailable. Produce concrete, realistic signals.\n\nSkill template:\n${skillPrompt}${varLine}\n\nReturn only the skill output, no meta-commentary.` }],
-      temperature: 0.2,
-      maxTokens: 1200,
-    });
-  } catch { return null; }
+    const kv = await getAeonOutput(skill);
+    return kv ? formatAeonForLLM(kv) : null;
+  } catch {
+    return null;
+  }
 }
 
 type MiroSharkResult = {
