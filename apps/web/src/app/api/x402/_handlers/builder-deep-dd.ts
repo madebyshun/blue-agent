@@ -56,11 +56,9 @@ export default async function handler(req: Request): Promise<Response> {
 ${ghFacts}`
       : `NO live GitHub/on-chain data was resolved for this target. You therefore CANNOT cite specific metrics. Do NOT invent transaction counts, agent counts, TVL, dates, framework integrations, or third-party endorsements (e.g. "Coinbase recommends"). State clearly that technical DD is "insufficient data — provide a GitHub repo (user/repo) for grounded analysis" and keep all assessments explicitly qualitative and labeled as model estimate.`;
 
-    // Step 1+2: Aeon deep-research x2 — project + team/background in parallel
-    const [projectResearch, backgroundResearch] = await Promise.all([
-      aeon("deep-research"),
-      aeon("deep-research"),
-    ]);
+    // Step 1: Aeon deep-research (single KV read — both legs previously fetched
+    // the same key, so the "background" copy was redundant).
+    const projectResearch = await aeon("deep-research");
 
     // Step 3: Blue audit — code/product quality signals
     const auditRaw = await llm(`${GROUNDING}
@@ -94,7 +92,7 @@ Schema: {
   "comparable": "<similar project or builder>",
   "analyst_verdict": "<2-3 sentences>"
 }`,
-      `Target: ${target}\nProject research: ${projectResearch ?? target}\nBackground: ${backgroundResearch ?? target}\nAudit: ${JSON.stringify(audit)}`, 0.3, 800);
+      `Target: ${target}\nProject research: ${projectResearch ?? target}\nAudit: ${JSON.stringify(audit)}`, 0.3, 800);
     const analyst = parseJson(msRaw) ?? {};
 
     // Step 5: Blue Agent final DD synthesis
@@ -115,7 +113,7 @@ Schema: {
   "recommended_action": "<specific next step>",
   "open_questions": ["<question to answer before deciding>"]
 }`,
-      `Target: ${target}\nType: ${type}\nProject: ${projectResearch ?? target}\nBackground: ${backgroundResearch ?? target}\nAudit: ${JSON.stringify(audit)}\nAnalyst: ${JSON.stringify(analyst)}`,  0, 1500, "claude-sonnet-4-5");
+      `Target: ${target}\nType: ${type}\nProject: ${projectResearch ?? target}\nAudit: ${JSON.stringify(audit)}\nAnalyst: ${JSON.stringify(analyst)}`,  0, 1500, "claude-sonnet-4-5");
 
     let result = parseJson(resultRaw);
     // HARDMAP verdict từ dd_score (tất định, hết LLM lật)
