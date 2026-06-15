@@ -46,7 +46,7 @@ export type AgentTool = {
   releasedAt?:    number;            // Unix ms — drives "Newest" sort; default 2024-06-01
 };
 
-// ─── All 69 tools ─────────────────────────────────────────────────────────────
+// ─── All 70 tools ─────────────────────────────────────────────────────────────
 
 const AGENT_TOOLS_RAW: AgentTool[] = [
 
@@ -1203,6 +1203,22 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
 
   // ── Builder (launch & grants) ─────────────────────────────────────────────────
 
+  {
+    id: "launch-simulator-1",
+    name: "Launch Simulator Tier 1",
+    description: "Quick Signal — baseline ecosystem read + 3-agent verdict. Fast pre-launch gut-check.",
+    agentHandle: "composite", agentName: "Blue + Aeon + MiroShark", agentType: "composite",
+    category: "builder",
+    inputs: [
+      { key: "project", label: "Project name", placeholder: "Your project name", required: true },
+      { key: "description", label: "Project description", placeholder: "What it does, target audience, current stage" },
+      { key: "ticker", label: "Token ticker (optional)", placeholder: "e.g. $BLUE" },
+    ],
+    isComposite: true,
+    price: "$0.10", priceUSDC: 100000,
+    x402Url: `${X402_BASE}/launch-simulator-1`,
+    x402Body: (v) => ({ project: v.project ?? "", description: v.description ?? "", ticker: v.ticker ?? "" }),
+  },
   {
     id: "launch-simulator-2",
     name: "Launch Simulator Tier 2",
