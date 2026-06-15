@@ -61,13 +61,15 @@ export async function setAeonOutput(
 export function formatAeonForLLM(aeon: AeonOutput): string {
   const age = Math.round((Date.now() - aeon.ts) / 60_000);
   const stamp = `${age}min ago, ${new Date(aeon.ts).toISOString()}`;
-  // Only genuine Aeon agent output is "REAL". Output bridged from our own
-  // research-loop cron is model-generated — label it honestly so downstream
-  // tools never present LLM leads as measured data.
-  if (aeon.source === "model") {
-    return `=== AEON SIGNAL (model-generated, not measured — treat as a lead, verify independently) (${stamp}) ===\n${aeon.output}`;
+  // Fail-safe default: ONLY an explicit source==="aeon" (genuine Aeon agent feed)
+  // earns the "REAL" label. Everything else — model-generated cron output, or
+  // legacy KV entries written before `source` existed (source===undefined) — is
+  // treated as model-generated. When provenance is unknown, label conservatively
+  // rather than overclaiming "real".
+  if (aeon.source === "aeon") {
+    return `=== REAL AEON OUTPUT (${stamp}) ===\n${aeon.output}`;
   }
-  return `=== REAL AEON OUTPUT (${stamp}) ===\n${aeon.output}`;
+  return `=== AEON SIGNAL (model-generated, not measured — treat as a lead, verify independently) (${stamp}) ===\n${aeon.output}`;
 }
 
 /**
