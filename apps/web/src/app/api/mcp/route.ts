@@ -11,7 +11,7 @@
  *   }
  *
  * Protocol: JSON-RPC 2.0 over HTTP POST
- * Tools: 50 — 5 console commands + 43 Hub tools + blue_score + blue_new
+ * Tools: 56 — 15 console commands + 41 Hub tools
  * Docs: https://api.blueagent.dev/docs
  */
 import { NextRequest, NextResponse } from "next/server";
