@@ -348,18 +348,6 @@ const HUB_TOOLS = [
     inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
   },
   {
-    name: "hub_allowance_audit",
-    toolId: "allowance-audit",
-    description: "Audit dangerous token approvals for a wallet — find unlimited allowances and revoke recommendations.",
-    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
-  },
-  {
-    name: "hub_phishing_scan",
-    toolId: "phishing-scan",
-    description: "Scan a URL or domain for phishing patterns targeting crypto users.",
-    inputSchema: { type: "object", properties: { url: { type: "string", description: "URL or domain to scan" } }, required: ["url"] },
-  },
-  {
     name: "hub_key_exposure",
     toolId: "key-exposure",
     description: "Check if a wallet's public key is exposed on-chain (quantum vulnerability risk).",
@@ -507,6 +495,55 @@ const HUB_TOOLS = [
     toolId: "narrative-pulse",
     description: "Real-time narrative pulse — what's being talked about right now on Base CT, velocity and sentiment.",
     inputSchema: { type: "object", properties: { focus: { type: "string" } } },
+  },
+  // ── blue-* suite (extended console tools, x402-paid) ───────────────────────
+  {
+    name: "blue_monitor",
+    toolId: "blue-monitor",
+    description: "On-demand health + risk snapshot for a Base token/contract — live price, liquidity, Basescan verification, risk signals + a watch plan with alert thresholds.",
+    inputSchema: { type: "object", properties: { target: { type: "string", description: "Base token/contract address (0x…) or a protocol/token name" }, focus: { type: "string", description: "Optional focus, e.g. liquidity or exit risk" } }, required: ["target"] },
+  },
+  {
+    name: "blue_registry",
+    toolId: "blue-registry",
+    description: "Discover the Blue Hub tool catalog — every callable x402 tool (first-party + community), filterable by query/category, with prices and how-to-call.",
+    inputSchema: { type: "object", properties: { query: { type: "string", description: "Optional search term" }, category: { type: "string", description: "Optional category filter" } } },
+  },
+  {
+    name: "blue_research",
+    toolId: "blue-research",
+    description: "Deep DD memo on a Base project, narrative, or token — thesis, bull/bear, risks, contrarian take, verdict. Grounds in live DexScreener data when a token address is given.",
+    inputSchema: { type: "object", properties: { topic: { type: "string", description: "Project, narrative, or token to research" }, target: { type: "string", description: "Optional 0x token address to ground in live market data" } }, required: ["topic"] },
+  },
+  {
+    name: "blue_compose",
+    toolId: "blue-compose",
+    description: "Turn a goal into a runnable chain of Blue Hub tools — picks from the real catalog, orders the steps, suggests inputs, and estimates cost.",
+    inputSchema: { type: "object", properties: { goal: { type: "string", description: "What you want to accomplish on Base" } }, required: ["goal"] },
+  },
+  {
+    name: "blue_deploy",
+    toolId: "blue-deploy",
+    description: "Technical deploy mechanics for Base mainnet — deploy scripts, Basescan verify commands, env vars, gas notes, post-deploy checks. Never invents addresses.",
+    inputSchema: { type: "object", properties: { project: { type: "string", description: "What you're deploying (contract/app + stack)" }, stack: { type: "string", description: "Optional: Foundry, Hardhat, viem…" } }, required: ["project"] },
+  },
+  {
+    name: "blue_analytics",
+    toolId: "blue-analytics",
+    description: "Performance/metrics read on a Base token — live price, momentum, liquidity health, volume/liquidity ratio, growth signals. Real DexScreener data.",
+    inputSchema: { type: "object", properties: { target: { type: "string", description: "Base token contract address (0x…)" }, focus: { type: "string", description: "Optional focus" } }, required: ["target"] },
+  },
+  {
+    name: "blue_simulate",
+    toolId: "blue-simulate",
+    description: "Bull/base/bear scenario modeling for a Base decision — tokenomics, fee model, growth, runway — with assumptions, projections, and sensitivities.",
+    inputSchema: { type: "object", properties: { scenario: { type: "string", description: "The decision/model to simulate" }, params: { type: "string", description: "Optional parameters/values" } }, required: ["scenario"] },
+  },
+  {
+    name: "blue_stream",
+    toolId: "blue-stream",
+    description: "Live snapshot feed of Base onchain activity — trending & new pools, TVL, real price/volume/liquidity. Pure real data; poll for a near-real-time feed.",
+    inputSchema: { type: "object", properties: { feed: { type: "string", description: "movers | new | all (default movers)" } } },
   },
 ];
 
