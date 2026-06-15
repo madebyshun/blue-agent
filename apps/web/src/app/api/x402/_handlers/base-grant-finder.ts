@@ -85,22 +85,24 @@ export default async function handler(req: Request): Promise<Response> {
     const sector = body.sector ?? url.searchParams.get("sector") ?? "";
     if (!project) return Response.json({ error: "project is required" }, { status: 400 });
 
-    const researchRaw = await aeon("deep-research", `Base ecosystem grants and funding programs: Coinbase Grants, Base Builder grants, Optimism RetroPGF, ecosystem funds. Requirements, amounts, application tips for ${sector || "general"} projects at ${stage} stage.`);
+    // Grants are verifiable facts that change — NEVER let the model invent names/amounts/deadlines.
+    // fallbackGrants() is the curated source of truth; LLM only ranks/personalizes within it.
+    const CURATED = fallbackGrants(stage).grants;
+    const researchRaw = await aeon("deep-research");
 
     // Analyst pass — non-fatal: a hiccup here shouldn't sink the whole call.
     let analyst: Record<string, unknown> = {};
     try {
       const msRaw = await llm(`You are MiroShark analyst persona — grant and funding specialist.
-Match this project to grant opportunities.
+Match within CURATED only. HARD RULE: never invent grant names, amounts, deadlines, or success %.
 CRITICAL: Return ONLY raw JSON.
 Schema: {
   "grant_fit": "excellent|good|fair|poor",
-  "best_match": "<grant program name>",
-  "estimated_amount": "<USD range>",
-  "success_probability": <0-100>,
+  "best_match": "<MUST be a name from CURATED — never invent>",
+  "fit_reason": "<why it fits, 1 sentence>",
   "analyst_verdict": "<1-2 sentences>"
 }`,
-        `Project: ${project}\nDescription: ${description}\nStage: ${stage}\nSector: ${sector}\nResearch: ${researchRaw ?? "Base grants"}`, 0.3, 500);
+        `CURATED (only real grants):\n${JSON.stringify(CURATED)}\n\nProject: ${project}\nDescription: ${description}\nStage: ${stage}\nSector: ${sector}`, 0, 500);
       analyst = parseJson(msRaw) ?? {};
     } catch { analyst = {}; }
 
@@ -108,35 +110,24 @@ Schema: {
 CRITICAL: Return ONLY raw JSON.
 Schema: {
   "match_score": <0-100>,
-  "grants": [
-    {
-      "name": "<grant program>",
-      "org": "<Coinbase|Optimism|other>",
-      "amount": "<USD range>",
-      "fit": "perfect|good|stretch",
-      "requirements": ["<key requirement>"],
-      "apply_by": "<deadline or ongoing>",
-      "application_tip": "<1 sentence on how to win>"
-    }
-  ],
+  "grant_tips": [{"name":"<name from CURATED only>","fit":"perfect|good|stretch","application_tip":"<how to win, 1 sentence>"}],
   "strongest_narrative": "<the angle that wins grants>",
   "application_priorities": ["<what to emphasize>"],
   "missing_credentials": ["<what to build before applying>"],
-  "estimated_total": "<total grantable amount>",
   "summary": "<2 sentences>"
 }`;
-    const resultUser = `Project: ${project}\nDescription: ${description}\nStage: ${stage}\nSector: ${sector}\nResearch: ${researchRaw ?? "Base ecosystem"}\nAnalyst: ${JSON.stringify(analyst)}`;
+    const resultUser = `CURATED (only real grants — personalize these, NEVER invent others or amounts):\n${JSON.stringify(CURATED)}\n\nProject: ${project}\nDescription: ${description}\nStage: ${stage}\nSector: ${sector}\nAnalyst: ${JSON.stringify(analyst)}`;
 
     // Up to 2 attempts, then a graceful real-data fallback — never 500 on a paid call.
     let result: Record<string, unknown> | null = null;
     for (let attempt = 0; attempt < 2 && !result; attempt++) {
       try {
-        result = parseJson(await llm(resultSystem, resultUser, 0.3, 1200));
+        result = parseJson(await llm(resultSystem, resultUser, 0, 1200));
       } catch { /* retry, then fall through to fallback */ }
     }
     if (!result) result = fallbackGrants(stage);
 
-    return Response.json({ tool: "base-grant-finder", timestamp: new Date().toISOString(), project, stage, sector, analyst, ...result, disclaimer: "Grant programs are known Base/ecosystem programs from model knowledge plus AI matching — they may be out of date. Verify current status, deadlines and eligibility on each program's official channel before applying." });
+    return Response.json({ tool: "base-grant-finder", timestamp: new Date().toISOString(), project, stage, sector, analyst, ...result, grants: fallbackGrants(stage).grants, disclaimer: "Grant programs are known Base/ecosystem programs from model knowledge plus AI matching — they may be out of date. Verify current status, deadlines and eligibility on each program's official channel before applying." });
   } catch (e) {
     return Response.json({ error: "Base grant finder failed", message: (e as Error).message }, { status: 500 });
   }
