@@ -1,4 +1,13 @@
 .vercel
-node_modules/\n.next/
+node_modules/
+.next/
 .env*.local
 .env*
+
+# Separate distDir builds (verify without touching the dev server's .next)
+.next-build/
+.next-verify/
+
+# Test harness output — keep test-hub.mjs, ignore the files it writes
+*.log
+test-hub-report.json
