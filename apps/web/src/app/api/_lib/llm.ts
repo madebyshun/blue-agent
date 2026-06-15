@@ -1,6 +1,8 @@
 // Shared Bankr LLM client for Next.js API routes
 // Uses BANKR_API_KEY from Vercel env vars
 
+import { getAeonOutput, formatAeonForLLM } from "./aeon-kv";
+
 export type BankrMessage = { role: string; content: string };
 
 // ─── Skill file cache (in-memory, per process) ────────────────────────────────
@@ -164,22 +166,36 @@ function repairTruncatedJson(raw: string): string {
   return fixed;
 }
 
-// ─── Aeon skill runner (fetches real skill from Aeon GitHub) ─────────────────
+// ─── Aeon skill runner — prefer REAL KV output; LLM is a labelled fallback ───
+//
+// Per CLAUDE.md: Aeon facts must come from the research-loop KV (getAeonOutput),
+// NOT from "synthesize from training knowledge" — that fabricates. So we try KV
+// first and return the real output. Only if KV is missing/stale do we produce a
+// model-generated DRAFT, and we (a) instruct the model not to invent measured
+// numbers and (b) LABEL the result so nothing downstream mistakes it for real
+// Aeon data.
 
 export async function runAeonSkill(skill: string, varInput = ""): Promise<string | null> {
+  // 1. Real Aeon output from KV (fed by the research-loop cron).
+  const real = await getAeonOutput(skill);
+  if (real) return formatAeonForLLM(real);
+
+  // 2. Fallback: model-generated estimate, explicitly labelled — not real data.
   try {
     const skillPrompt = await loadSkillFile(`${AEON_BASE}/skills/${skill}/SKILL.md`);
     if (!skillPrompt) return null;
     const today   = new Date().toISOString().split("T")[0];
     const varLine = varInput ? `\nFocus on: ${varInput}` : "";
-    return await callBankrLLM({
+    const draft = await callBankrLLM({
       model: "claude-haiku-4-5",
-      system: `You are Aeon — autonomous intelligence agent. Synthesize from training knowledge. Be specific, data-driven. Today is ${today}.`,
-      messages: [{ role: "user", content: `Follow this skill template exactly. Generate from training knowledge — be concrete and specific.\n\nSkill:\n${skillPrompt}${varLine}\n\nReturn only the skill output, no preamble.` }],
+      system: `You are drafting a MODEL-GENERATED ESTIMATE in the style of the Aeon skill below. You do NOT have live data. Produce a plausible framework only — NEVER invent specific prices, market caps, volumes, or on-chain figures as if measured. Today is ${today}.`,
+      messages: [{ role: "user", content: `Follow this skill template. Where a real figure would go, write "unknown" instead of inventing one.\n\nSkill:\n${skillPrompt}${varLine}\n\nReturn only the skill output, no preamble.` }],
       temperature: 0.2,
       maxTokens: 1200,
       _skipEnhance: true, // Aeon has its own identity
     });
+    if (!draft) return null;
+    return `=== MODEL-GENERATED ESTIMATE (no live Aeon data for "${skill}") ===\n${draft}`;
   } catch (e) { console.error("[llm] skill error:", (e as Error).message); return null; }
 }
 

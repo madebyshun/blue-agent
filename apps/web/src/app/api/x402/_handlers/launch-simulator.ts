@@ -1,4 +1,5 @@
 // x402/launch-simulator/index.ts
+import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 // Launch Simulator — 3-agent pre-launch intelligence
 // Tier 1: $0.10 · Tier 2: $0.35 · Tier 3: $0.50
 // Fully self-contained — no external workspace imports
@@ -81,20 +82,16 @@ async function fetchSkillPrompt(skill: string): Promise<string | null> {
   } catch { return null; }
 }
 
-async function runAeonSkill(skill: string, varInput = ""): Promise<string | null> {
-  const skillPrompt = await fetchSkillPrompt(skill);
-  if (!skillPrompt) return null;
-  const today = new Date().toISOString().split("T")[0];
-  const varLine = varInput ? `\nUse this variable: var=${varInput}` : "";
+async function runAeonSkill(skill: string, _varInput = ""): Promise<string | null> {
+  // Read REAL Aeon data from KV (research-loop cron + Aeon webhook).
+  // KV miss → null; caller marks data unavailable. NEVER fetch GitHub SKILL.md
+  // and ask the LLM to synthesize from training knowledge — that fabricates.
   try {
-    return await callBankrLLM({
-      model: "claude-haiku-4-5",
-      system: `You are Aeon — an autonomous intelligence agent running in offline/knowledge mode. Synthesize ecosystem intelligence from training knowledge. Be specific, data-driven, actionable. Today is ${today}.`,
-      messages: [{ role: "user", content: `Use the skill template as a guide. Generate output from training knowledge — do NOT say APIs are unavailable. Produce concrete, realistic signals.\n\nSkill template:\n${skillPrompt}${varLine}\n\nReturn only the skill output, no meta-commentary.` }],
-      temperature: 0.2,
-      maxTokens: 1200,
-    });
-  } catch { return null; }
+    const kv = await getAeonOutput(skill);
+    return kv ? formatAeonForLLM(kv) : null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchAeonEcosystemData(ticker = ""): Promise<{ available: boolean; summary: string }> {
