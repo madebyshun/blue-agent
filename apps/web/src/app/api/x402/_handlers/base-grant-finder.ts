@@ -87,7 +87,9 @@ export default async function handler(req: Request): Promise<Response> {
 
     // Grants are verifiable facts that change — NEVER let the model invent names/amounts/deadlines.
     // fallbackGrants() is the curated source of truth; LLM only ranks/personalizes within it.
-    const CURATED = fallbackGrants(stage).grants;
+    // Compute once and reuse (CURATED list, no-result fallback, and final grants).
+    const fallback = fallbackGrants(stage);
+    const CURATED = fallback.grants;
     const researchRaw = await aeon("deep-research");
 
     // Analyst pass — non-fatal: a hiccup here shouldn't sink the whole call.
@@ -125,9 +127,9 @@ Schema: {
         result = parseJson(await llm(resultSystem, resultUser, 0, 1200));
       } catch { /* retry, then fall through to fallback */ }
     }
-    if (!result) result = fallbackGrants(stage);
+    if (!result) result = fallback;
 
-    return Response.json({ tool: "base-grant-finder", timestamp: new Date().toISOString(), project, stage, sector, analyst, ...result, grants: fallbackGrants(stage).grants, disclaimer: "Grant programs are known Base/ecosystem programs from model knowledge plus AI matching — they may be out of date. Verify current status, deadlines and eligibility on each program's official channel before applying." });
+    return Response.json({ tool: "base-grant-finder", timestamp: new Date().toISOString(), project, stage, sector, analyst, ...result, grants: fallback.grants, disclaimer: "Grant programs are known Base/ecosystem programs from model knowledge plus AI matching — they may be out of date. Verify current status, deadlines and eligibility on each program's official channel before applying." });
   } catch (e) {
     return Response.json({ error: "Base grant finder failed", message: (e as Error).message }, { status: 500 });
   }
