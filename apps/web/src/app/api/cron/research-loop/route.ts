@@ -355,12 +355,25 @@ export async function GET(req: NextRequest) {
 
       // 3. Save to KV (powers the loop)
       await saveSignals(output.signals);
-      // Bridge: expose research signals to x402 tools via aeon:deep-research key
+      // Bridge: expose research signals to x402 tools via aeon:deep-research key.
+      // These are MODEL-GENERATED leads (this cron calls the LLM), NOT measured
+      // data — so we drop the numeric confidence (don't surface LLM self-scores
+      // as if measured), flag grant leads as "verify independently", and tag the
+      // KV entry source="model" so formatAeonForLLM labels it accordingly.
       try {
-        const aeonText = [output.summary, "", ...output.signals.map(sig =>
-          `[${sig.type.toUpperCase()}] ${sig.title}: ${sig.body} → ACTION: ${sig.action} (confidence ${sig.confidence}/100)`
-        )].join("\n");
-        await setAeonOutput("deep-research", aeonText);
+        const aeonText = [
+          output.summary,
+          "",
+          ...output.signals.map(sig => {
+            const tag = sig.type === "grant"
+              ? "[GRANT — LLM-suggested, verify independently]"
+              : `[${sig.type.toUpperCase()}]`;
+            return `${tag} ${sig.title}: ${sig.body} → ACTION: ${sig.action}`;
+          }),
+          "",
+          "(Model-generated leads, not measured data — verify each independently.)",
+        ].join("\n");
+        await setAeonOutput("deep-research", aeonText, undefined, "model");
       } catch (e) { console.error("[research-loop] aeon bridge failed:", e); }
       steps.push("✓ signals saved to KV");
     }
