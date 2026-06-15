@@ -51,17 +51,21 @@ Schema: {"feasibility_score":<0-10>,"phases":[{"name":"<phase>","realistic":<boo
 Personas: Analyst(1.8x), Influencer(2.8x), Retail(1.0x), Observer(0.5x).
 Evaluate this roadmap's market timing and community reception.
 CRITICAL: Return ONLY raw JSON.
-Schema: {"personas":{"analyst":{"stance":"bull|bear|neutral","weight":1.8,"rationale":"<1 sentence>"},"influencer":{"stance":"bull|bear|neutral","weight":2.8,"rationale":"<1 sentence>"},"retail":{"stance":"bull|bear|neutral","weight":1.0,"rationale":"<1 sentence>"},"observer":{"stance":"bull|bear|neutral","weight":0.5,"rationale":"<1 sentence>"}},"bull":<0-100>,"bear":<0-100>,"neutral":<0-100>,"recommendation":"execute|alert_human|skip","sentiment_summary":"<1 sentence>"}`,
-      `Project: ${project}\nRoadmap: ${roadmap}\nEcosystem: ${narrativeRaw ?? "Base ecosystem"}`, 0.5, 800);
-    const consensus = parseJson(msRaw) ?? { bull: 45, bear: 25, neutral: 30, recommendation: "alert_human" };
+Schema: {"personas":{"analyst":{"stance":"bull|bear|neutral","weight":1.8,"rationale":"<1 sentence>"},"influencer":{"stance":"bull|bear|neutral","weight":2.8,"rationale":"<1 sentence>"},"retail":{"stance":"bull|bear|neutral","weight":1.0,"rationale":"<1 sentence>"},"observer":{"stance":"bull|bear|neutral","weight":0.5,"rationale":"<1 sentence>"}},"bull":<0-100>,"bear":<0-100>,"neutral":<0-100>,"sentiment_summary":"<1 sentence>"}`,
+      `Project: ${project}\nRoadmap: ${roadmap}\nEcosystem: ${narrativeRaw ?? "Base ecosystem"}`, 0.2, 800);
+    const consensus = parseJson(msRaw) ?? { bull: 45, bear: 25, neutral: 30 };
+    { const b = Number(consensus.bull)||0, br = Number(consensus.bear)||0;
+      consensus.recommendation = (b - br) >= 25 ? "execute" : (br - b) >= 25 ? "skip" : "alert_human"; }
 
     const verdictRaw = await llm(`You are Blue Agent — roadmap validation engine.
 CRITICAL: Return ONLY raw JSON.
-Schema: {"verdict":"SHIP|REVISE|PIVOT","score":<0-100>,"narrative_alignment":{"score":<0-10>,"aligned":<boolean>,"note":"<1 sentence>"},"timeline_assessment":"realistic|aggressive|too_slow","consensus":{"bull":<0-100>,"bear":<0-100>,"neutral":<0-100>},"strengths":["<strength>"],"gaps":["<gap>"],"recommended_changes":["<change>"],"builder_note":"<1 sentence>"}`,
-      `Project: ${project}\nRoadmap: ${roadmap}\nBuild analysis: ${JSON.stringify(buildAnalysis)}\nNarratives: ${narrativeRaw ?? "Base ecosystem"}\nConsensus: ${JSON.stringify(consensus)}`, 0.3, 1000);
+Schema: {"score":<0-100>,"narrative_alignment":{"score":<0-10>,"aligned":<boolean>,"note":"<1 sentence>"},"timeline_assessment":"realistic|aggressive|too_slow","consensus":{"bull":<0-100>,"bear":<0-100>,"neutral":<0-100>},"strengths":["<strength>"],"gaps":["<gap>"],"recommended_changes":["<change>"],"builder_note":"<1 sentence>"}`,
+      `Project: ${project}\nRoadmap: ${roadmap}\nBuild analysis: ${JSON.stringify(buildAnalysis)}\nNarratives: ${narrativeRaw ?? "Base ecosystem"}\nConsensus: ${JSON.stringify(consensus)}`, 0, 1000);
 
     const verdict = parseJson(verdictRaw);
     if (!verdict) throw new Error("Failed to parse verdict");
+    const _sc = typeof verdict.score === "number" ? verdict.score : 50;
+    verdict.verdict = _sc >= 65 ? "SHIP" : _sc >= 45 ? "REVISE" : "PIVOT";
 
     return Response.json({ tool: "roadmap-validator", timestamp: new Date().toISOString(), project, timeline, build_analysis: buildAnalysis, miroshark: consensus, ...verdict, disclaimer: "AI-generated advisory from model knowledge — scores and the bull/bear consensus are model estimates, not measured community sentiment or a guarantee. Verify independently." });
   } catch (e) {

@@ -4,7 +4,9 @@
 // Fully self-contained
 
 type Msg = { role: string; content: string };
-async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
+import { slugifyRepo, fetchRepo, scoreRepoActivity, repoFactsPrompt } from "@/lib/github";
+
+async function llm(system: string, user: string, temp = 0, tokens = 1000): Promise<string> {
   const r = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
     headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
@@ -40,6 +42,20 @@ export default async function handler(req: Request): Promise<Response> {
     const context = body.context ?? url.searchParams.get("context") ?? "";
     if (!target) return Response.json({ error: "target is required (builder handle, project name, or GitHub repo)" }, { status: 400 });
 
+    // ── REAL grounding: GitHub repo activity (no hallucinated metrics) ──────────
+    let ghFacts = "";
+    try {
+      const slug = slugifyRepo(target.includes("/") ? target : (context.includes("/") ? context : target));
+      if (slug && slug.includes("/")) {
+        const repo = await fetchRepo(slug);
+        if (repo) ghFacts = repoFactsPrompt(repo, scoreRepoActivity(repo));
+      }
+    } catch {}
+    const GROUNDING = ghFacts
+      ? `REAL GitHub signals (authoritative — use ONLY these GitHub numbers for technical/shipping claims. You have NO on-chain/financial data source. HARD RULE: NEVER state any TVL, dollar amount, transaction count, agent/user count, growth %, or named integration (Uniswap/Aave/etc) — you cannot know these. Every shipping_evidence item must be derivable from the GitHub facts below or omitted. Fabricating financial metrics = critical failure):
+${ghFacts}`
+      : `NO live GitHub/on-chain data was resolved for this target. You therefore CANNOT cite specific metrics. Do NOT invent transaction counts, agent counts, TVL, dates, framework integrations, or third-party endorsements (e.g. "Coinbase recommends"). State clearly that technical DD is "insufficient data — provide a GitHub repo (user/repo) for grounded analysis" and keep all assessments explicitly qualitative and labeled as model estimate.`;
+
     // Step 1+2: Aeon deep-research x2 — project + team/background in parallel
     const [projectResearch, backgroundResearch] = await Promise.all([
       aeon("deep-research", `${target}: ${context}. Comprehensive analysis — product, traction, market position, on-chain activity on Base, funding history, partnerships.`),
@@ -47,7 +63,9 @@ export default async function handler(req: Request): Promise<Response> {
     ]);
 
     // Step 3: Blue audit — code/product quality signals
-    const auditRaw = await llm(`You are Blue Agent running 'blue audit'. Assess product and technical quality signals.
+    const auditRaw = await llm(`${GROUNDING}
+
+You are Blue Agent running 'blue audit'. Assess product and technical quality signals.
 CRITICAL: Return ONLY raw JSON.
 Schema: {
   "product_score": <0-10>,
@@ -61,7 +79,9 @@ Schema: {
     const audit = parseJson(auditRaw) ?? {};
 
     // Step 4: MiroShark analyst — investment/collaboration grade
-    const msRaw = await llm(`You are MiroShark analyst persona — data-driven, skeptical, fundamentals-focused.
+    const msRaw = await llm(`${GROUNDING}
+
+You are MiroShark analyst persona — data-driven, skeptical, fundamentals-focused.
 Perform analyst-grade due diligence assessment.
 CRITICAL: Return ONLY raw JSON.
 Schema: {
@@ -78,7 +98,9 @@ Schema: {
     const analyst = parseJson(msRaw) ?? {};
 
     // Step 5: Blue Agent final DD synthesis
-    const resultRaw = await llm(`You are Blue Agent — deep due diligence engine for Base builders and investors.
+    const resultRaw = await llm(`${GROUNDING}
+
+You are Blue Agent — deep due diligence engine for Base builders and investors.
 CRITICAL: Return ONLY raw JSON.
 Schema: {
   "dd_score": <0-100>,

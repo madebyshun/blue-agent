@@ -7,7 +7,9 @@
 // Price: $0.35
 
 type Msg = { role: string; content: string };
-async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
+import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+
+async function llm(system: string, user: string, temp = 0, tokens = 1000): Promise<string> {
   const r = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
     headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
@@ -25,14 +27,12 @@ function parseJson(t: string): Record<string, unknown> | null {
   if (i >= 0 && j > i) s = s.slice(i, j + 1);
   try { return JSON.parse(s); } catch { try { return JSON.parse(s.replace(/[\x00-\x1F]/g, " ")); } catch { return null; } }
 }
-async function aeon(skill: string, focus = ""): Promise<string | null> {
+async function aeon(skill: string): Promise<string | null> {
   try {
-    const r = await fetch(`https://raw.githubusercontent.com/aaronjmars/aeon/main/skills/${skill}/SKILL.md`, { signal: AbortSignal.timeout(6000) });
-    if (!r.ok) return null;
-    const p = await r.text();
-    return await llm(`You are Aeon. Synthesize from training knowledge. Today: ${new Date().toISOString().split("T")[0]}.`,
-      `Follow skill template. Be concrete.\n\nSkill:\n${p}${focus ? `\nFocus: ${focus}` : ""}\n\nReturn only skill output.`, 0.2, 1200);
-  } catch { return null; }
+    const fresh = await getAeonOutput(skill);
+    if (fresh) return formatAeonForLLM(fresh);
+  } catch {}
+  return null;
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -44,7 +44,11 @@ export default async function handler(req: Request): Promise<Response> {
     const audience = body.audience ?? url.searchParams.get("audience") ?? "Base builders and crypto traders";
     const goal = body.goal ?? url.searchParams.get("goal") ?? "engagement";
 
-    const narrativeRaw = await aeon("narrative-tracker", `what's resonating on CT right now: ${topic || "Base ecosystem, AI agents, DeFi"}. What angles get engagement? What's being discussed?`);
+    const narrativeRaw = await aeon("narrative-tracker");
+    const NARRATIVE_CTX = narrativeRaw
+      ? `REAL Aeon narrative research (fresh daily — base ALL "what is resonating / trending angles" claims ONLY on these actual narratives/catalysts; do NOT invent trending topics, engagement numbers, or CT sentiment not present here):
+${narrativeRaw}`
+      : `No fresh Aeon narrative data — give qualitative angles labeled "model estimate"; do NOT fabricate trending topics, engagement metrics, or specific CT discourse.`;
 
     const msRaw = await llm(`You are MiroShark — influencer persona (2.8x weight).
 You know what goes viral on CT. Evaluate thread potential.
@@ -56,7 +60,7 @@ Schema: {
   "format": "thread|single|poll|reply",
   "influencer_take": "<1-2 sentences on what makes this land>"
 }`,
-      `Topic: ${topic || "Base ecosystem"}\nAudience: ${audience}\nGoal: ${goal}\nNarratives: ${narrativeRaw ?? "CT discourse"}`, 0.5, 500);
+      `Topic: ${topic || "Base ecosystem"}\nAudience: ${audience}\nGoal: ${goal}\nNarratives: ${NARRATIVE_CTX}`, 0, 500);
     const influencer = parseJson(msRaw) ?? {};
 
     const resultRaw = await llm(`You are Blue Agent — content intelligence engine for Base builders.
@@ -73,7 +77,7 @@ Schema: {
   "engagement_prediction": "viral|high|medium|low",
   "summary": "<1-2 sentences>"
 }`,
-      `Topic: ${topic || "Base"}\nAudience: ${audience}\nGoal: ${goal}\nNarratives: ${narrativeRaw ?? "CT"}\nInfluencer: ${JSON.stringify(influencer)}`, 0.4, 1000);
+      `Topic: ${topic || "Base"}\nAudience: ${audience}\nGoal: ${goal}\nNarratives: ${NARRATIVE_CTX}\nInfluencer: ${JSON.stringify(influencer)}`, 0, 1000);
 
     let result = parseJson(resultRaw);
     if (!result) {
