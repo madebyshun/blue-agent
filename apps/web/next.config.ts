@@ -11,13 +11,15 @@ const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   async redirects() {
     return [
-      // BlueBank is still in local testing — hide /app/bank on production
-      // (and preview) builds by redirecting it to chat. Local `next dev`
-      // (NODE_ENV=development) keeps it reachable for testing.
+      // BlueBank is still in local testing — hide /app/bank (and its public
+      // /pay payment-request surface) on production/preview builds by
+      // redirecting to chat. Local `next dev` (NODE_ENV=development) keeps them
+      // reachable for testing. Remove these when BlueBank ships to GA.
       ...(process.env.NODE_ENV === "production"
         ? [
             { source: "/app/bank",          destination: "/app/chat", permanent: false },
             { source: "/app/bank/:path*",   destination: "/app/chat", permanent: false },
+            { source: "/pay/:path*",        destination: "/app/chat", permanent: false },
           ]
         : []),
       {

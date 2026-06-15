@@ -12,6 +12,10 @@ export interface AeonOutput {
   ts:       number;   // Unix ms when stored
   skill:    string;   // e.g. "token-pick"
   username?: string;  // Discord webhook username field
+  // Provenance: "aeon" = genuine Aeon agent output (A2A/webhook feed) → may be
+  // labelled REAL. "model" = bridged from our own research-loop cron (Bankr LLM)
+  // → must be labelled model-generated, never "REAL".
+  source?:  "aeon" | "model";
 }
 
 /** Max age before we consider KV output stale and fall back to our pipeline */
@@ -41,8 +45,13 @@ export async function getAeonOutput(skill: string): Promise<AeonOutput | null> {
  * Store an Aeon skill output.
  * TTL: 26 hours (Aeon runs daily — keep one full cycle + buffer)
  */
-export async function setAeonOutput(skill: string, output: string, username?: string): Promise<void> {
-  const value: AeonOutput = { output, ts: Date.now(), skill, username };
+export async function setAeonOutput(
+  skill: string,
+  output: string,
+  username?: string,
+  source: "aeon" | "model" = "aeon",
+): Promise<void> {
+  const value: AeonOutput = { output, ts: Date.now(), skill, username, source };
   await kv.set(`aeon:${skill}`, value, { ex: 26 * 60 * 60 }); // 26h TTL
 }
 
@@ -51,7 +60,16 @@ export async function setAeonOutput(skill: string, output: string, username?: st
  */
 export function formatAeonForLLM(aeon: AeonOutput): string {
   const age = Math.round((Date.now() - aeon.ts) / 60_000);
-  return `=== REAL AEON OUTPUT (${age}min ago, ${new Date(aeon.ts).toISOString()}) ===\n${aeon.output}`;
+  const stamp = `${age}min ago, ${new Date(aeon.ts).toISOString()}`;
+  // Fail-safe default: ONLY an explicit source==="aeon" (genuine Aeon agent feed)
+  // earns the "REAL" label. Everything else — model-generated cron output, or
+  // legacy KV entries written before `source` existed (source===undefined) — is
+  // treated as model-generated. When provenance is unknown, label conservatively
+  // rather than overclaiming "real".
+  if (aeon.source === "aeon") {
+    return `=== REAL AEON OUTPUT (${stamp}) ===\n${aeon.output}`;
+  }
+  return `=== AEON SIGNAL (model-generated, not measured — treat as a lead, verify independently) (${stamp}) ===\n${aeon.output}`;
 }
 
 /**

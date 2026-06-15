@@ -4,13 +4,13 @@
 export const STATS = [
   { value: "24", label: "Commands", color: "#4FC3F7" },
   { value: "40", label: "Skills", color: "#34D399" },
-  { value: "72", label: "Hub Tools", color: "#A78BFA" },
+  { value: "68", label: "Hub Tools", color: "#A78BFA" },
   { value: "56", label: "MCP Tools", color: "#fbbf24" },
 ];
 
 export const PRODUCTS = [
   { name: "Blue Chat", color: "#A78BFA", desc: "AI chat for Base builders · Sonnet / Opus / Venice · credit system", link: "/app/chat", label: "Open Chat →" },
-  { name: "Blue Hub",  color: "#4FC3F7", desc: "72 AI tools · 3-agent consensus · pay per use via x402",            link: "/hub",      label: "Open Hub →" },
+  { name: "Blue Hub",  color: "#4FC3F7", desc: "68 AI tools · 3-agent consensus · pay per use via x402",            link: "/hub",      label: "Open Hub →" },
   { name: "Blue CLI",  color: "#34D399", desc: "@blueagent/cli · idea / build / audit / ship · Terminal + TUI",     link: "/docs/commands", label: "View Commands →" },
   { name: "Blue API",  color: "#fbbf24", desc: "60+ x402 endpoints · USDC on Base · no subscription",               link: "https://api.blueagent.dev/docs", label: "API Docs →" },
 ];
@@ -32,7 +32,7 @@ export const CHAT_MODELS = [
 
 export const CHAT_CAPABILITIES = [
   { t: "Slash commands", d: "/idea /build /audit /ship /raise · /pick /scan /wallet — same power as the CLI, inline." },
-  { t: "Hub tools",      d: "Live token prices, whale flow, risk gate, wallet PnL — 72 Hub tools the model calls for you." },
+  { t: "Hub tools",      d: "Live token prices, whale flow, risk gate, wallet PnL — 68 Hub tools the model calls for you." },
   { t: "Personas",       d: "Swap the agent's expert role (Trader · Cipher · Oracle · Custom) without changing the model." },
   { t: "Web search",     d: "Toggle on to let the model pull live web data and cite sources (auto-on for Web Search / Deep Think)." },
 ];

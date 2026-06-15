@@ -47,6 +47,7 @@ export default function BankPage() {
   const [panel, setPanel]     = useState<Panel>("positions");
   const [actionOpen, setActionOpen] = useState(false);
   const [copied, setCopied]   = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const openAction = (p: Panel) => {
     if (p === "send") { setScanPrefill(null); setScanKey(k => k + 1); } // fresh Send
     setPanel(p); setActionOpen(true);
@@ -171,6 +172,23 @@ export default function BankPage() {
   function copyAddr() {
     if (!acct) return;
     navigator.clipboard?.writeText(acct).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
+  }
+
+  // Share a payment-request link — turns this Receive request into a /pay/<addr>
+  // URL a payer can open from Telegram/Zalo and settle in one tap. Native share
+  // sheet on mobile, clipboard fallback on desktop. Carries amount/asset/network.
+  function sharePayLink() {
+    if (!acct) return;
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const qs = new URLSearchParams({ asset: reqAsset, network });
+    if (parseFloat(reqAmount) > 0) qs.set("amount", reqAmount);
+    const url = `${origin}/pay/${acct}?${qs.toString()}`;
+    const title = parseFloat(reqAmount) > 0 ? `Pay me ${reqAmount} ${reqAsset} on Base` : "Pay me on Base";
+    if (typeof navigator !== "undefined" && navigator.share) {
+      navigator.share({ title, url }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(url).then(() => { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 1500); });
+    }
   }
 
   if (!isConnected) {
@@ -397,9 +415,14 @@ export default function BankPage() {
                         )}
                         {name && <div className="font-mono text-[13px] text-[#4FC3F7] mt-2">{name}</div>}
                         <div className="font-mono text-[9px] text-slate-400 mt-1.5 break-all px-2">{acct}</div>
-                        <button onClick={copyAddr} className="font-mono text-[11px] px-4 py-2 rounded-lg mt-3" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                          {copied ? "✓ Copied" : "Copy address"}
-                        </button>
+                        <div className="flex items-center gap-2 mt-3">
+                          <button onClick={copyAddr} className="font-mono text-[11px] px-4 py-2 rounded-lg" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                            {copied ? "✓ Copied" : "Copy address"}
+                          </button>
+                          <button onClick={sharePayLink} className="font-mono text-[11px] px-4 py-2 rounded-lg" style={{ background: "#34D39910", color: "#34D399", border: "1px solid #34D39930" }}>
+                            {linkCopied ? "✓ Link copied" : "🔗 Share pay link"}
+                          </button>
+                        </div>
                       </div>
                       <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-2.5 mt-4">
                         <p className="font-mono text-[9px] text-slate-500 leading-relaxed">

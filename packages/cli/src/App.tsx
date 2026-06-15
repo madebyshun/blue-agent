@@ -194,7 +194,7 @@ export const CATEGORIES: Category[] = [
 
 type Screen = 'home' | 'tools' | 'runner'
 
-const X402_BASE = 'https://x402.bankr.bot/0xf31f59e7b8b58555f7871f71973a394c8f1bffe5'
+const X402_BASE = 'https://blueagent.dev/api/x402'
 
 export function App() {
   const [screen, setScreen] = useState<Screen>('home')

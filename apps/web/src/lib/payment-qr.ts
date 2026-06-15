@@ -64,8 +64,10 @@ export function parsePaymentQr(raw: string): ParsedPayment | null {
       const rawAmt = params.get("uint256") || params.get("amount") || undefined;
       const isUsdc = target.toLowerCase() === usdcFor(chainId);
       const decimals = isUsdc && network ? YIELD_NETWORKS[network].usdcDecimals : 6;
+      // EIP-681 transfer recipient must be a real 0x address — reject anything
+      // else (don't prefill a garbage "to"). undefined = no recipient parsed.
       return {
-        to: recip && isAddr(recip) ? recip : recip,
+        to: recip && isAddr(recip) ? recip : undefined,
         asset: isUsdc ? "USDC" : undefined,
         amount: rawAmt ? toHuman(rawAmt, decimals) : undefined,
         network,
