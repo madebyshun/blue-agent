@@ -52,11 +52,6 @@ import h30 from "./token-momentum-scanner";
 import h31 from "./token-pick-signal";
 import h32 from "./wallet-strategy-analyzer";
 import h33 from "./whale-copy-signal";
-import h34 from "./quantum-premium";
-import h35 from "./quantum-batch";
-import h36 from "./quantum-migrate";
-import h37 from "./quantum-timeline";
-import h38 from "./key-exposure";
 import h39 from "./wallet-pnl";
 import h40 from "./aml-screen";
 import h41 from "./airdrop-check";
@@ -126,11 +121,10 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "blue-analytics": hBlueAnalytics,
   "blue-simulate":  hBlueSimulate,
   "blue-stream":    hBlueStream,
-  "quantum-premium": h34,
-  "quantum-batch":   h35,
-  "quantum-migrate": h36,
-  "quantum-timeline": h37,
-  "key-exposure":    h38,
+
+
+
+
   "wallet-pnl":      h39,
   "aml-screen":      h40,
   "airdrop-check":   h41,

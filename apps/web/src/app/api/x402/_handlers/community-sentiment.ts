@@ -6,7 +6,9 @@
 // Price: $0.25
 
 type Msg = { role: string; content: string };
-async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
+import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+
+async function llm(system: string, user: string, temp = 0, tokens = 1000): Promise<string> {
   const r = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
     headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
@@ -25,13 +27,13 @@ function parseJson(t: string): Record<string, unknown> | null {
   try { return JSON.parse(s); } catch { try { return JSON.parse(s.replace(/[\x00-\x1F]/g, " ")); } catch { return null; } }
 }
 async function aeon(skill: string, focus = ""): Promise<string | null> {
+  // 1) REAL Aeon data from KV (Aeon runs daily, posts via webhook)
   try {
-    const r = await fetch(`https://raw.githubusercontent.com/aaronjmars/aeon/main/skills/${skill}/SKILL.md`, { signal: AbortSignal.timeout(6000) });
-    if (!r.ok) return null;
-    const p = await r.text();
-    return await llm(`You are Aeon. Synthesize from training knowledge. Today: ${new Date().toISOString().split("T")[0]}.`,
-      `Follow skill template. Be concrete.\n\nSkill:\n${p}${focus ? `\nFocus: ${focus}` : ""}\n\nReturn only skill output.`, 0.2, 1000);
-  } catch { return null; }
+    const fresh = await getAeonOutput(skill);
+    if (fresh) return formatAeonForLLM(fresh);
+  } catch {}
+  // 2) fallback: no fresh KV data → return null (caller must label as estimate, NOT fabricate)
+  return null;
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -43,9 +45,16 @@ export default async function handler(req: Request): Promise<Response> {
     const description = body.description ?? url.searchParams.get("description") ?? "";
     if (!project) return Response.json({ error: "project is required" }, { status: 400 });
 
-    const narrativeRaw = await aeon("narrative-tracker", `community sentiment around ${project}: ${description}`);
+    const narrativeRaw = await aeon("narrative-tracker");
+    const NARRATIVE_CTX = narrativeRaw
+      ? `REAL Aeon narrative research (fresh daily, authoritative — base sentiment ONLY on these actual trends/catalysts; do NOT invent mention counts, follower numbers, or sentiment scores):
+${narrativeRaw}
+NOTE: this is market-wide narrative data. If "${project}" is not covered here, say sentiment is "insufficient data" — do NOT fabricate token-specific metrics.`
+      : `No fresh Aeon data. Give qualitative read labeled "model estimate". Do NOT fabricate sentiment scores, mention counts, or social metrics.`;
 
-    const msRaw = await llm(`You are MiroShark — 4-persona consensus engine.
+    const msRaw = await llm(`${NARRATIVE_CTX}
+
+You are MiroShark — 4-persona consensus engine.
 Personas: Analyst(1.8x), Influencer(2.8x), Retail(1.0x), Observer(0.5x).
 Simulate community sentiment for this project.
 CRITICAL: Return ONLY raw JSON.
@@ -65,7 +74,9 @@ Schema: {
       `Project: ${project}\nDescription: ${description}\nNarratives: ${narrativeRaw ?? "Base ecosystem"}`, 0.5, 800);
     const consensus = parseJson(msRaw) ?? { bull: 40, bear: 30, neutral: 30, community_temperature: "neutral" };
 
-    const resultRaw = await llm(`You are Blue Agent — community sentiment analyzer.
+    const resultRaw = await llm(`${NARRATIVE_CTX}
+
+You are Blue Agent — community sentiment analyzer.
 CRITICAL: Return ONLY raw JSON.
 Schema: {
   "sentiment_score": <0-100>,
