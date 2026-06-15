@@ -1,5 +1,96 @@
 # CLAUDE.md — Blue Agent
 
+---
+
+# Operating rules for Claude Code — READ BEFORE ANY TASK
+
+These exist because each one prevented a real bug. Follow them even when a shortcut looks faster.
+They take precedence over speed.
+
+## Repo layout (verified)
+
+- **Real repo:** `~/projects/blue-agent` (NOT `~/blue-agent` — that's a junk dir, ignore it).
+- **Working dir:** `apps/web`. Path alias `@/` → `apps/web/src/`.
+- **x402 tool handlers:** `apps/web/src/app/api/x402/_handlers/*.ts`, registered in `_handlers/index.ts` (`HANDLERS` map).
+- **Tool catalog:** `apps/web/src/lib/agent-tools.ts` (`AGENT_TOOLS` — the single source of truth the hub renders).
+  A tool is only live if it exists in **BOTH** `HANDLERS` and `AGENT_TOOLS` (catalog count == handler count, no orphans).
+- **LLM gateway:** Bankr at `https://llm.bankr.bot/v1/messages` (env `BANKR_API_KEY`). NOT Anthropic direct
+  (that key is usually out of credit). Models: `claude-haiku-4-5` (cheap), `claude-sonnet-4-5` (synthesis).
+- **Real data sources already wired:** DefiLlama (`src/lib/yield-rates.ts`), Etherscan/Basescan,
+  GitHub (`src/lib/github.ts`), Aeon KV (`src/app/api/_lib/aeon-kv.ts`).
+
+## NON-NEGOTIABLE: verify before claiming done
+
+- After ANY code change, run **`npx next build`** and confirm it compiles. Do NOT say "done", "fixed", or
+  "works" until the build is green. **`npx tsx` running a file is NOT proof** — tsx skips TypeScript strict
+  checks; `next build` is what production runs and what catches real errors.
+  *(Real bug: a bulk patch changed a function signature but not its callers — tsx ran fine, next build failed,
+  production deploy broke.)*
+- When testing a handler locally via tsx, import through `index.ts` and call via `HANDLERS[id]`, not the file's
+  default export — tsx wraps named exports under `.default`, so direct calls fail misleadingly.
+- **Distinguish test noise from real bugs BEFORE fixing.** Half of apparent failures are wrong input fixtures
+  (an address in a token field, etc.) or LLM-gateway credit exhaustion mid-run, not tool bugs. Run tools
+  individually with a small delay, not all at once (batching causes rate-limit false failures). Confirm the
+  input schema matches before concluding the code is wrong.
+
+## Debugging discipline
+
+- When something fails, **READ THE CODE before blaming infra.** Do not rotate keys, change env vars, or redeploy
+  as a first move. *(Real bug: a cron returned a "warming up" placeholder; three env/key changes did nothing
+  because the cause was one line — `JSON.parse(raw)` choking on markdown-wrapped LLM output and falling into a
+  mock fallback. The LLM worked from call #1.)*
+- Trace the failure to its exact line. State the root cause in **one sentence** before proposing a fix.
+- If you're guessing, say so and add a diagnostic (log / debug field) instead of guessing again.
+
+## Tool quality rules (this is the product's value)
+
+Classify every tool by whether it has a REAL data source. A tool with no real source WILL fabricate, no matter
+how good the prompt is. **Prompts do not prevent hallucination; data sources do.**
+
+- **Verifiable facts** (grant amounts, token data, contract details, yield APY, on-chain metrics): data MUST come
+  from a curated/onchain/API source. The LLM only interprets — it NEVER generates the numbers. Compute derived
+  values (e.g. projected yield = amount × apy) in **code**, not by LLM. Validate any LLM "pick" against the real
+  list; fall back to a code default if it invents one.
+- **Advisory output** (strategy, GTM, roadmap, ideas): the LLM may generate, but label it "estimate" /
+  "model-generated". These are frameworks, not measured facts.
+- **Missing data → "unknown" / "insufficient data".** NEVER infer a negative score, risk level, or fake number
+  from absent data. "Cannot assess" is the correct answer, not a fabricated value.
+- **Verdicts/actions** (BUY/WATCH/PASS, EXIT/HOLD, SHIP/REVISE): hard-map from the numeric score in **code**.
+  Never let the LLM choose the verdict word — that flips the same input between runs. Set `temperature: 0` on
+  any step whose output must be deterministic.
+- **JSON parsing from LLMs must be lenient.** LLMs wrap JSON in fences and add preamble. Never use raw
+  `JSON.parse(text)` — strip fences, slice from first `{` to last `}`, then parse inside try/catch. Reuse the
+  existing parse helper pattern in the x402 handlers.
+- **Aeon data comes from Vercel KV** (`getAeonOutput(skill)` in `_lib/aeon-kv.ts`), fed by the research-loop cron.
+  Do NOT fetch an Aeon `SKILL.md` from GitHub and ask the LLM to "synthesize from training knowledge" — that
+  fabricates. Only the skills live in KV are real.
+
+## Git discipline
+
+- Always **`git branch --show-current` before committing.** Work and commit on `dev`, never on `main`.
+  *(Real bug: a tool committed while accidentally on main was lost when a later dev→main merge overwrote it.)*
+- Ship to production via **GitHub Pull Request (dev → main)**, not a local merge. Local `main` is often behind
+  origin; local merges create divergence and conflicts.
+- After pushing, the PR triggers a Vercel preview build. **Do NOT merge until that preview is green.**
+- Commit in **small checkpoints** (one tool / one fix per commit) so a bad change is easy to isolate and revert.
+  Avoid one giant "build the whole feature" commit.
+
+## Secrets
+
+- **Never paste real secrets** (API keys, KV tokens, Redis URLs, `CRON_SECRET`) into chat or commits.
+- If a secret is exposed, rotate it at the source, then update BOTH `.env.local` and Vercel env vars (and
+  redeploy — env changes only apply to new deployments).
+- `.env.local` quoting: every `KEY="value"` needs matched quotes. One unmatched `"` makes the file silently skip
+  all variables after that line, causing confusing "missing key" failures downstream.
+
+## Definition of done
+
+A change is done only when: (1) `npx next build` is green, (2) the handler returns correct output when tested via
+`HANDLERS[id]`, (3) it's committed on `dev` with a clear message, (4) for a new tool, it's registered in BOTH
+`HANDLERS` and `AGENT_TOOLS` and catalog count == handler count. **State each of these explicitly when reporting done.**
+
+---
+
 ## What is Blue Agent
 
 **Blue Agent** is an AI agent layer built on Base — it interacts with users, automates tasks, and generates onchain activity.
@@ -144,7 +235,7 @@ Pipeline for every change, in order:
 2. npx tsc --noEmit -p tsconfig.json   # type errors (fast) — run from apps/web
 3. npm run build                        # next build — lint, prerender, server/client import errors
 4. Manual runtime test at localhost     # logic/UX bugs a build can't catch
-5. Only when 2–4 PASS → merge dev→main → push (single deploy)
+5. Only when 2–4 PASS → open a PR (dev→main); merge only when the Vercel preview is green
 ```
 
 Notes:
@@ -156,10 +247,10 @@ Notes:
   is necessary but not sufficient.
 - `next build` and `next dev` share the `.next/` directory — **stop the dev
   server before running a build** or `.next` can corrupt.
-- Deploy = one `git push origin main` after the quota resets. **Do not** create
-  empty `chore: trigger production redeploy` commits — they burn deploy slots.
-  If `main` doesn't auto-deploy, the cause is almost always the daily cap, not
-  the GitHub integration.
+- Deploy = merge the green PR into `main` (see Git discipline above — ship via PR,
+  not a local merge). **Do not** create empty `chore: trigger production redeploy`
+  commits — they burn deploy slots. If `main` doesn't auto-deploy, the cause is
+  almost always the daily cap, not the GitHub integration.
 
 **Deploy target:** production is the Vercel project **`blueagent-web-new`**
 (`blueagent.dev`). Never deploy to or recreate the `blue-agent` project.
