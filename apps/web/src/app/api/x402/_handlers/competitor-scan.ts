@@ -30,12 +30,16 @@ const slim = (p: BaseProtocol) => ({ name: p.name, tvl_usd: p.tvlUsd, change_1d_
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { project?: string; competitors?: string[]; description?: string } = {};
+    let body: { project?: string; competitors?: string[] | string; description?: string } = {};
     try { const t = await req.text(); if (t.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const url = new URL(req.url);
     const project = body.project ?? url.searchParams.get("project") ?? "";
     const description = body.description ?? url.searchParams.get("description") ?? "";
-    let competitors = body.competitors ?? [];
+    let competitors: string[] = Array.isArray(body.competitors)
+      ? body.competitors
+      : typeof body.competitors === "string"
+        ? (body.competitors as string).split(",").map(x=>x.trim()).filter(Boolean)
+        : [];
     if (!competitors.length) {
       const q = url.searchParams.get("competitors");
       if (q) competitors = q.split(",").map((s) => s.trim()).filter(Boolean);

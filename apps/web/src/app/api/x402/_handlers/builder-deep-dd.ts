@@ -4,11 +4,15 @@
 // Fully self-contained
 
 type Msg = { role: string; content: string };
-async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
+import { slugifyRepo, fetchRepo, scoreRepoActivity, repoFactsPrompt } from "@/lib/github";
+
+import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+
+async function llm(system: string, user: string, temp = 0, tokens = 1000, model = "claude-haiku-4-5"): Promise<string> {
   const r = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
     headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: "claude-haiku-4-5", system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
+    body: JSON.stringify({ model, system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
   });
   if (!r.ok) throw new Error(`LLM ${r.status}: ${await r.text()}`);
   const d = await r.json() as { content?: { text: string }[] };
@@ -20,14 +24,12 @@ function parseJson(t: string): Record<string, unknown> | null {
   if (i >= 0 && j > i) s = s.slice(i, j + 1);
   try { return JSON.parse(s); } catch { try { return JSON.parse(s.replace(/[\x00-\x1F]/g, " ")); } catch { return null; } }
 }
-async function aeon(skill: string, focus = ""): Promise<string | null> {
+async function aeon(skill: string): Promise<string | null> {
   try {
-    const r = await fetch(`https://raw.githubusercontent.com/aaronjmars/aeon/main/skills/${skill}/SKILL.md`, { signal: AbortSignal.timeout(6000) });
-    if (!r.ok) return null;
-    const p = await r.text();
-    return await llm(`You are Aeon. Synthesize from training knowledge. Today: ${new Date().toISOString().split("T")[0]}.`,
-      `Follow skill template. Be concrete.\n\nSkill:\n${p}${focus ? `\nFocus: ${focus}` : ""}\n\nReturn only skill output.`, 0.2, 1400);
-  } catch { return null; }
+    const fresh = await getAeonOutput(skill);
+    if (fresh) return formatAeonForLLM(fresh);
+  } catch {}
+  return null;
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -40,14 +42,30 @@ export default async function handler(req: Request): Promise<Response> {
     const context = body.context ?? url.searchParams.get("context") ?? "";
     if (!target) return Response.json({ error: "target is required (builder handle, project name, or GitHub repo)" }, { status: 400 });
 
+    // ── REAL grounding: GitHub repo activity (no hallucinated metrics) ──────────
+    let ghFacts = "";
+    try {
+      const slug = slugifyRepo(target.includes("/") ? target : (context.includes("/") ? context : target));
+      if (slug && slug.includes("/")) {
+        const repo = await fetchRepo(slug);
+        if (repo) ghFacts = repoFactsPrompt(repo, scoreRepoActivity(repo));
+      }
+    } catch {}
+    const GROUNDING = ghFacts
+      ? `REAL GitHub signals (authoritative — use ONLY these GitHub numbers for technical/shipping claims. You have NO on-chain/financial data source. HARD RULE: NEVER state any TVL, dollar amount, transaction count, agent/user count, growth %, or named integration (Uniswap/Aave/etc) — you cannot know these. Every shipping_evidence item must be derivable from the GitHub facts below or omitted. Fabricating financial metrics = critical failure):
+${ghFacts}`
+      : `NO live GitHub/on-chain data was resolved for this target. You therefore CANNOT cite specific metrics. Do NOT invent transaction counts, agent counts, TVL, dates, framework integrations, or third-party endorsements (e.g. "Coinbase recommends"). State clearly that technical DD is "insufficient data — provide a GitHub repo (user/repo) for grounded analysis" and keep all assessments explicitly qualitative and labeled as model estimate.`;
+
     // Step 1+2: Aeon deep-research x2 — project + team/background in parallel
     const [projectResearch, backgroundResearch] = await Promise.all([
-      aeon("deep-research", `${target}: ${context}. Comprehensive analysis — product, traction, market position, on-chain activity on Base, funding history, partnerships.`),
-      aeon("deep-research", `${target} team/builder background: track record, previous projects, credibility signals, red flags, community standing in Base/crypto ecosystem.`),
+      aeon("deep-research"),
+      aeon("deep-research"),
     ]);
 
     // Step 3: Blue audit — code/product quality signals
-    const auditRaw = await llm(`You are Blue Agent running 'blue audit'. Assess product and technical quality signals.
+    const auditRaw = await llm(`${GROUNDING}
+
+You are Blue Agent running 'blue audit'. Assess product and technical quality signals.
 CRITICAL: Return ONLY raw JSON.
 Schema: {
   "product_score": <0-10>,
@@ -61,7 +79,9 @@ Schema: {
     const audit = parseJson(auditRaw) ?? {};
 
     // Step 4: MiroShark analyst — investment/collaboration grade
-    const msRaw = await llm(`You are MiroShark analyst persona — data-driven, skeptical, fundamentals-focused.
+    const msRaw = await llm(`${GROUNDING}
+
+You are MiroShark analyst persona — data-driven, skeptical, fundamentals-focused.
 Perform analyst-grade due diligence assessment.
 CRITICAL: Return ONLY raw JSON.
 Schema: {
@@ -78,7 +98,9 @@ Schema: {
     const analyst = parseJson(msRaw) ?? {};
 
     // Step 5: Blue Agent final DD synthesis
-    const resultRaw = await llm(`You are Blue Agent — deep due diligence engine for Base builders and investors.
+    const resultRaw = await llm(`${GROUNDING}
+
+You are Blue Agent — deep due diligence engine for Base builders and investors.
 CRITICAL: Return ONLY raw JSON.
 Schema: {
   "dd_score": <0-100>,
@@ -89,13 +111,18 @@ Schema: {
   "strengths": ["<strength>"],
   "risks": ["<risk>"],
   "red_flags": ["<red flag or 'none'>"],
-  "due_diligence_checklist": [{"item":"<check>","status":"pass|fail|unknown","note":"<brief note>"}],
+  "data_basis": "<state EXACTLY what real data backs this DD (e.g. GitHub commits/stars/recency); explicitly flag what is NOT verifiable — onchain, funding, partnerships>",
   "recommended_action": "<specific next step>",
   "open_questions": ["<question to answer before deciding>"]
 }`,
-      `Target: ${target}\nType: ${type}\nProject: ${projectResearch ?? target}\nBackground: ${backgroundResearch ?? target}\nAudit: ${JSON.stringify(audit)}\nAnalyst: ${JSON.stringify(analyst)}`, 0.3, 1500);
+      `Target: ${target}\nType: ${type}\nProject: ${projectResearch ?? target}\nBackground: ${backgroundResearch ?? target}\nAudit: ${JSON.stringify(audit)}\nAnalyst: ${JSON.stringify(analyst)}`,  0, 1500, "claude-sonnet-4-5");
 
     let result = parseJson(resultRaw);
+    // HARDMAP verdict từ dd_score (tất định, hết LLM lật)
+    if (result && typeof result.dd_score === "number") {
+      const v = result.dd_score;
+      result.verdict = v >= 80 ? "STRONG_BUY" : v >= 60 ? "BUY" : v >= 40 ? "WATCH" : v >= 20 ? "PASS" : "RED_FLAG";
+    }
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({

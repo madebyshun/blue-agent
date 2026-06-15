@@ -315,10 +315,15 @@ export function tokenIdentityToPrompt(t: TokenIdentity): string {
     lines.push(`Standard ERC-20 metadata is NOT readable — this is a non-token contract (router, pool, multisig, proxy, etc.), not an ERC-20 token.`);
   }
   if (t.market) {
+    // Authoritative FDV = live price × on-chain total supply. An external feed's
+    // FDV often implies a stale/different supply (e.g. VVV: DexScreener FDV uses
+    // ~80M while on-chain total is 114M) — prefer the on-chain-derived figure.
+    const fdvOnChain = (t.market.priceUsd != null && t.totalSupply != null) ? t.market.priceUsd * t.totalSupply : t.market.fdv;
     lines.push(`Live market (DexScreener, ${t.market.dex ?? "?"} — DEEPEST single Base pool only; total cross-DEX liquidity may be higher):`);
     lines.push(`- price ~$${t.market.priceUsd ?? "?"} (VOLATILE live snapshot — varies by source/pool and by the second; do NOT present as a fixed price)`);
     lines.push(`- 24h change ${t.market.change.h24 ?? "?"}% | 24h volume ${fmtUsd(t.market.volume24h)} | liquidity ${fmtUsd(t.market.liquidityUsd)} (this pool)`);
-    lines.push(`- market cap ${fmtUsd(t.market.marketCap)} | FDV ${fmtUsd(t.market.fdv)} (these are DIFFERENT — do not conflate market cap with fully-diluted valuation)`);
+    lines.push(`- circulating market cap ${fmtUsd(t.market.marketCap)} (external estimate) | FDV ${fmtUsd(fdvOnChain)} (= price × on-chain total supply ${t.totalSupply ?? "?"} — AUTHORITATIVE; ignore any external FDV that implies a different supply)`);
+    lines.push(`- The market-cap-vs-FDV gap is ALREADY-MINTED but non-circulating supply (treasury/locked/vesting) — a SEPARATE dilution source from an uncapped mint() (which creates NEW tokens beyond total supply). Do NOT merge the two into one "dilution" claim.`);
     lines.push(`Active two-sided DEX liquidity and real volume are strong evidence the token is tradeable (NOT a honeypot).`);
   } else if (t.isToken) {
     lines.push(`No DexScreener Base pair found — little or no DEX liquidity, or not indexed. Absence of a listing is NOT by itself evidence of a scam.`);

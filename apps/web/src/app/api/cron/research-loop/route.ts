@@ -20,6 +20,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { kvGet, kvSet } from "@/lib/kv";
+import { setAeonOutput } from "@/app/api/_lib/aeon-kv";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -351,6 +352,13 @@ export async function GET(req: NextRequest) {
 
       // 3. Save to KV (powers the loop)
       await saveSignals(output.signals);
+      // Bridge: expose research signals to x402 tools via aeon:deep-research key
+      try {
+        const aeonText = [output.summary, "", ...output.signals.map(sig =>
+          `[${sig.type.toUpperCase()}] ${sig.title}: ${sig.body} → ACTION: ${sig.action} (confidence ${sig.confidence}/100)`
+        )].join("\n");
+        await setAeonOutput("deep-research", aeonText);
+      } catch (e) { console.error("[research-loop] aeon bridge failed:", e); }
       steps.push("✓ signals saved to KV");
     }
 
