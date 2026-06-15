@@ -46,7 +46,7 @@ export type AgentTool = {
   releasedAt?:    number;            // Unix ms — drives "Newest" sort; default 2024-06-01
 };
 
-// ─── All 64 tools ─────────────────────────────────────────────────────────────
+// ─── All 69 tools ─────────────────────────────────────────────────────────────
 
 const AGENT_TOOLS_RAW: AgentTool[] = [
 
@@ -832,6 +832,22 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     price: "$0.15", priceUSDC: 150000,
     x402Url: `https://blueagent.dev/api/x402/contract-trust`,
     x402Body: (v) => ({ address: v.address ?? "", context: v.context ?? "" }),
+  },
+  {
+    id: "key-exposure",
+    name: "Key Exposure Check",
+    description: "Check if a wallet's public key is exposed on-chain (quantum vulnerability). Verdict computed from the real Base RPC nonce — never fabricated. EXPOSED means the key is visible, not that funds are at immediate risk.",
+    agentHandle: "composite",
+    agentName: "Blue Agent",
+    agentType: "composite",
+    category: "security",
+    inputs: [
+      { key: "address", label: "Wallet address", placeholder: "0x...", required: true },
+    ],
+    isComposite: true,
+    price: "$0.50", priceUSDC: 500000,
+    x402Url: `${X402_BASE}/key-exposure`,
+    x402Body: (v) => ({ address: v.address ?? "" }),
   },
   {
     id: "blue-idea",
