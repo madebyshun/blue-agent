@@ -136,7 +136,7 @@ export default function BlueChatDoc() {
       </CardGrid>
 
       <P>
-        See the full 72-tool catalog on the <Link href="/docs/blue-hub" className="text-[#4FC3F7] underline">Blue Hub</Link> page,
+        See the full 68-tool catalog on the <Link href="/docs/blue-hub" className="text-[#4FC3F7] underline">Blue Hub</Link> page,
         with pricing in <Link href="/docs/x402" className="text-[#4FC3F7] underline">x402 Tools</Link>.
       </P>
 

@@ -73,9 +73,9 @@ All backed by Bankr LLM with skill-grounded system context (6 skill files).
 |---|---|
 | `packages/core` | ✅ runtime, registry, schemas — stable |
 | `packages/bankr` | ✅ LLM client — stable |
-| `packages/builder` | ✅ CLI with 22 commands — expanded this session |
+| `packages/builder` | ✅ CLI with 24 commands — expanded this session |
 | `packages/reputation` | ✅ builder/agent score, task hub — stable |
-| `packages/skill` | ✅ MCP server with 7 tools |
+| `packages/skill` | ✅ MCP server with 56 tools (15 blue_ + 41 hub_) — matches remote /api/mcp |
 | `packages/payments` | ⚠️ helpers exist, not enforced in CLI |
 
 ---

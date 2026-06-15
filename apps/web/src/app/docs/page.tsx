@@ -4,7 +4,7 @@ import { STATS, PRODUCTS, FOUNDATION } from "./_data";
 
 export const metadata = {
   title: "Blue Agent Docs — Overview",
-  description: "Blue Agent is the Base-native founder console: 24 CLI commands, 40 skills, 72 Hub tools, 56 MCP tools — all grounded in verified Base knowledge.",
+  description: "Blue Agent is the Base-native founder console: 24 CLI commands, 40 skills, 68 Hub tools, 56 MCP tools — all grounded in verified Base knowledge.",
 };
 
 export default function DocsOverview() {

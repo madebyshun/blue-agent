@@ -14,6 +14,7 @@ They take precedence over speed.
 - **x402 tool handlers:** `apps/web/src/app/api/x402/_handlers/*.ts`, registered in `_handlers/index.ts` (`HANDLERS` map).
 - **Tool catalog:** `apps/web/src/lib/agent-tools.ts` (`AGENT_TOOLS` — the single source of truth the hub renders).
   A tool is only live if it exists in **BOTH** `HANDLERS` and `AGENT_TOOLS` (catalog count == handler count, no orphans).
+- **Two x402 surfaces — don't conflate them:** `apps/web` is the live Hub web surface — the `AGENT_TOOLS` catalog `/hub` renders, served at `/api/x402/[tool]` (~68 tools at last audit). `apps/api` (`@blue-agent/api`) is a **separate local-dev server** whose production handlers run on **x402.bankr.bot** infra (a different deployment with its own, larger handler set). All web docs / Hub / MCP counts come from `apps/web` — never from `apps/api`.
 - **LLM gateway:** Bankr at `https://llm.bankr.bot/v1/messages` (env `BANKR_API_KEY`). NOT Anthropic direct
   (that key is usually out of credit). Models: `claude-haiku-4-5` (cheap), `claude-sonnet-4-5` (synthesis).
 - **Real data sources already wired:** DefiLlama (`src/lib/yield-rates.ts`), Etherscan/Basescan,
@@ -99,7 +100,8 @@ Blue Agent is the flagship AI agent of the Base ecosystem. It is not just a chat
 
 **Two surfaces:**
 - **Founder console** (this repo) — AI-native workflow for Base builders: idea → build → audit → ship → raise. MCP-native — runs inside Claude Desktop, Cursor & Claude Code (`https://blueagent.dev/api/mcp`). *Not a tool you open. A layer you build on.*
-- **x402 API services** — pay-per-use AI tools (USDC on Base, EIP-3009) for agents and developers. Each of the 5 commands is backed by a cluster of hub tools (e.g. audit → risk_gate · honeypot · phishing_scan · key_exposure · protocol_risk).
+- **x402 API services** — pay-per-use AI tools (USDC on Base, EIP-3009) for agents and developers. Each of the 5 commands is backed by a cluster of hub tools (e.g. audit → risk_gate · honeypot · key_exposure · protocol_risk).
+  > Note: `phishing_scan` and `allowance_audit` still exist as x402 handlers but were **removed from the MCP/skill surface** (`/api/mcp` + `@blueagent/skill`), which now expose 56 tools (15 `blue_` + 41 `hub_`).
 
 > Note: the Telegram bot surface is **no longer in active development** (as of 2026-06). Focus is the 5 commands + their hub tool clusters.
 
@@ -124,7 +126,7 @@ The `blue-agent` repo is the **AI-native founder console for Base builders**. It
 | Layer | What it is |
 |---|---|
 | `apps/web` | Next.js 15 frontend — founder console UI |
-| `apps/api` | x402 paid API services (risk-gate, deep-analysis, wallet-pnl, etc.) |
+| `apps/api` | x402 handlers as a **local-dev server**; production runs on `x402.bankr.bot` — a **separate surface** from the `apps/web` Hub (don't conflate tool counts) |
 | `packages/bankr` | Bankr LLM client — wraps `https://llm.bankr.bot/v1/messages` |
 | `packages/core` | Shared schemas, command pricing, and tool input definitions |
 | `packages/payments` | x402 payment helpers |

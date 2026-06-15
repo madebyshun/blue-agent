@@ -11,7 +11,8 @@
  *   }
  *
  * Protocol: JSON-RPC 2.0 over HTTP POST
- * Tools: 50 — 5 console commands + 43 Hub tools + blue_score + blue_new
+ * Tools: 72 — 5 console + 57 hub_* + 8 blue_* first-party + blue_score/blue_new
+ *        (full parity with the 69-tool x402 catalog; blue_score/blue_new are MCP-only)
  * Docs: https://api.blueagent.dev/docs
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -323,6 +324,90 @@ const TOOLS = [
     description: "Real-time narrative pulse — what's being talked about right now on Base CT, velocity and sentiment.",
     inputSchema: { type: "object", properties: { focus: { type: "string", description: "Topic or token to focus on (optional)" } } },
   },
+  // ── Catalog parity — Builder & Base ecosystem (extended) ──────────────────
+  {
+    name: "hub_stack",
+    description: "Stack Recommender — optimal tech stack for a Base build: infra, tooling, protocols, integrations.",
+    inputSchema: { type: "object", properties: { project: { type: "string", description: "Project type, e.g. DeFi protocol, AI agent, consumer app" }, description: { type: "string", description: "What you're building (optional)" }, team_size: { type: "string", description: "Team size (optional)" }, timeline: { type: "string", description: "Constraints / timeline (optional)" } }, required: ["project"] },
+  },
+  {
+    name: "hub_token_distribution",
+    description: "Token Distribution Plan — allocation framework across team, community, investors, treasury, liquidity.",
+    inputSchema: { type: "object", properties: { token: { type: "string", description: "Token ticker or project name" }, total_supply: { type: "string", description: "Total supply (optional)" }, description: { type: "string", description: "Stage & context (optional)" } }, required: ["token"] },
+  },
+  {
+    name: "hub_protocol_compare",
+    description: "Base Protocol Comparison — side-by-side of two Base protocols for integrations/partnerships; grounded in DefiLlama TVL where matched.",
+    inputSchema: { type: "object", properties: { protocol_a: { type: "string", description: "First protocol, e.g. Aerodrome" }, protocol_b: { type: "string", description: "Second protocol, e.g. Morpho" }, use_case: { type: "string", description: "Your use case (optional)" } }, required: ["protocol_a", "protocol_b"] },
+  },
+  {
+    name: "hub_builder_match",
+    description: "Builder Network Match — connect with Base builders who complement your skills and project.",
+    inputSchema: { type: "object", properties: { skills: { type: "string", description: "Your skills, e.g. Solidity, frontend, BD" }, looking_for: { type: "string", description: "Who/what you're looking for (optional)" } }, required: ["skills"] },
+  },
+  // ── Catalog parity — On-chain & Earn (extended) ───────────────────────────
+  {
+    name: "hub_agent_yield",
+    description: "Agent Yield Finder — best USDC yield on Base for idle capital. Live DefiLlama APY across Aave, Morpho, Moonwell, Compound. Real rates only.",
+    inputSchema: { type: "object", properties: { amount: { type: "number", description: "Idle USDC amount (default 10000)" }, risk: { type: "string", description: "conservative | balanced | aggressive" } } },
+  },
+  {
+    name: "hub_airdrop",
+    description: "Airdrop Check — Base airdrop eligibility for a wallet: which protocols, activity score, estimated value.",
+    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
+  },
+  {
+    name: "hub_dex_flow",
+    description: "DEX Flow — volume, buy/sell pressure and liquidity flow for a Base token. Live DexScreener data.",
+    inputSchema: { type: "object", properties: { token: { type: "string", description: "Token contract address 0x... or ticker" } }, required: ["token"] },
+  },
+  {
+    name: "hub_yield",
+    description: "Yield Optimizer — best risk-adjusted APY opportunities on Base DeFi for a token. Live DefiLlama data.",
+    inputSchema: { type: "object", properties: { token: { type: "string", description: "Token to optimize yield for, e.g. USDC, ETH" } }, required: ["token"] },
+  },
+  {
+    name: "hub_lp_analyzer",
+    description: "LP Analyzer — impermanent loss, fee income and rebalance recommendation for a liquidity position.",
+    inputSchema: { type: "object", properties: { token0: { type: "string", description: "Token 0, e.g. ETH or 0x..." }, token1: { type: "string", description: "Token 1, e.g. USDC or 0x... (optional)" }, entryPrice: { type: "string", description: "Entry price (optional)" }, investedAmount: { type: "string", description: "Invested amount in USD (optional)" } }, required: ["token0"] },
+  },
+  {
+    name: "hub_tax_report",
+    description: "Tax Report — on-chain tax summary for a wallet: realized gains, taxable events, P&L.",
+    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." }, year: { type: "string", description: "Tax year (optional)" }, country: { type: "string", description: "Country code (optional, default US)" } }, required: ["address"] },
+  },
+  // ── Catalog parity — Alerts (extended) ────────────────────────────────────
+  {
+    name: "hub_alert_subscribe",
+    description: "Alert Subscribe — register a webhook for real-time alerts: whale moves, rug risk, quantum exposure.",
+    inputSchema: { type: "object", properties: { webhookUrl: { type: "string", description: "Your webhook URL" }, topics: { type: "array", items: { type: "string" }, description: "Topics, e.g. whale_movement, rug_risk, quantum_exposure" }, addresses: { type: "array", items: { type: "string" }, description: "Addresses to watch (optional; blank = global)" } }, required: ["webhookUrl", "topics"] },
+  },
+  {
+    name: "hub_alert_check",
+    description: "Alert Check — active alert triggers for a wallet or token address.",
+    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet or token address 0x..." } }, required: ["address"] },
+  },
+  // ── Catalog parity — Launch & grants (extended) ───────────────────────────
+  {
+    name: "hub_launch_sim_tier2",
+    description: "Launch Simulator (Tier 2) — deep launch simulation with live DexScreener market data: price, volume, liquidity.",
+    inputSchema: { type: "object", properties: { project: { type: "string", description: "Project name" }, description: { type: "string", description: "What it does, audience, stage (optional)" }, ticker: { type: "string", description: "Token ticker (optional)" }, contract: { type: "string", description: "Contract 0x... for live data (optional)" } }, required: ["project"] },
+  },
+  {
+    name: "hub_launch_sim_tier3",
+    description: "Launch Simulator (Tier 3) — full multi-agent launch report with risk matrix and timeline recommendation.",
+    inputSchema: { type: "object", properties: { project: { type: "string", description: "Project name" }, description: { type: "string", description: "What it does, audience, stage (optional)" }, ticker: { type: "string", description: "Token ticker (optional)" }, contract: { type: "string", description: "Contract 0x... for live data (optional)" } }, required: ["project"] },
+  },
+  {
+    name: "hub_launch_advisor",
+    description: "Launch Advisor — full token launch playbook: tokenomics, 8-week timeline, marketing strategy, KPIs.",
+    inputSchema: { type: "object", properties: { projectName: { type: "string", description: "Project name" }, description: { type: "string", description: "What it does, why Base, target users" }, targetAudience: { type: "string", description: "Target audience (optional)" }, teamSize: { type: "string", description: "Team size (optional)" }, budget: { type: "string", description: "Budget (optional)" }, tokenSupply: { type: "string", description: "Token supply (optional)" } }, required: ["projectName", "description"] },
+  },
+  {
+    name: "hub_grant_eval",
+    description: "Grant Evaluator — Base ecosystem grant scoring: innovation, feasibility, impact, team quality.",
+    inputSchema: { type: "object", properties: { projectName: { type: "string", description: "Project name" }, description: { type: "string", description: "What you're building and why it matters for Base" }, teamBackground: { type: "string", description: "Team background (optional)" }, requestedAmount: { type: "string", description: "Requested grant amount (optional)" }, milestones: { type: "string", description: "Milestones (optional)" }, githubUrl: { type: "string", description: "GitHub URL (optional)" } }, required: ["projectName", "description"] },
+  },
   // ── Utility ───────────────────────────────────────────────────────────────
   {
     name: "blue_score",
@@ -442,6 +527,23 @@ const HUB_MAP: Record<string, string> = {
   blue_analytics:           "blue-analytics",
   blue_simulate:            "blue-simulate",
   blue_stream:              "blue-stream",
+  // Catalog parity (extended) — every remaining first-party catalog tool
+  hub_stack:                "stack-recommender",
+  hub_token_distribution:   "token-distribution-plan",
+  hub_protocol_compare:     "base-protocol-comparison",
+  hub_builder_match:        "base-builder-network-match",
+  hub_agent_yield:          "agent-yield-finder",
+  hub_airdrop:              "airdrop-check",
+  hub_dex_flow:             "dex-flow",
+  hub_yield:                "yield-optimizer",
+  hub_lp_analyzer:          "lp-analyzer",
+  hub_tax_report:           "tax-report",
+  hub_alert_subscribe:      "alert-subscribe",
+  hub_alert_check:          "alert-check",
+  hub_launch_sim_tier2:     "launch-simulator-2",
+  hub_launch_sim_tier3:     "launch-simulator-3",
+  hub_launch_advisor:       "launch-advisor",
+  hub_grant_eval:           "grant-evaluator",
 };
 
 const CONSOLE_MAP: Record<string, string> = {
@@ -472,6 +574,24 @@ const ARG_REMAP: Record<string, (a: Record<string, unknown>) => Record<string, u
   "agent-collab-match":   (a) => ({ ...a, agent_a: a.agent_a ?? a.task, agent_b: a.agent_b ?? "best-fit Base ecosystem agent", collab_goal: a.collab_goal ?? a.task }),
   "agent-performance":    (a) => ({ ...a, handle: a.handle ?? a.agent }),
   "portfolio-rebalancer": (a) => ({ ...a, risk_profile: a.risk_profile ?? a.risk }),
+  // Catalog parity (extended) — mirror each tool's x402Body so MCP calls match
+  // the handler's expected body exactly (same contract the Hub UI sends).
+  "stack-recommender":        (a) => ({ ...a, description: a.description ?? a.project, team_size: a.team_size ?? "1", timeline: a.timeline ?? "" }),
+  "token-distribution-plan":  (a) => ({ ...a, ticker: a.ticker ?? a.token, total_supply: a.total_supply ?? "1000000000", description: a.description ?? "" }),
+  "base-protocol-comparison": (a) => ({ ...a, category: a.category ?? "Base DeFi", use_case: a.use_case ?? "" }),
+  "base-builder-network-match": (a) => ({ ...a, looking_for: a.looking_for ?? "" }),
+  "agent-yield-finder":       (a) => ({ ...a, amount: Number(a.amount) || 10000, risk: a.risk ?? "balanced" }),
+  "lp-analyzer":              (a) => ({ ...a, token1: a.token1 ?? "", entryPrice: a.entryPrice ?? "", investedAmount: a.investedAmount ?? "" }),
+  "tax-report":               (a) => ({ ...a, year: a.year ?? "", country: a.country ?? "US" }),
+  "alert-subscribe":          (a) => ({
+    webhookUrl: a.webhookUrl ?? "",
+    topics: Array.isArray(a.topics) ? a.topics : String(a.topics ?? "").split(",").map((t) => t.trim()).filter(Boolean),
+    addresses: Array.isArray(a.addresses) ? a.addresses : (a.addresses ? String(a.addresses).split(",").map((x) => x.trim()).filter(Boolean) : []),
+  }),
+  "launch-simulator-2":       (a) => ({ ...a, description: a.description ?? "", ticker: a.ticker ?? "", contract: a.contract ?? "" }),
+  "launch-simulator-3":       (a) => ({ ...a, description: a.description ?? "", ticker: a.ticker ?? "", contract: a.contract ?? "" }),
+  "launch-advisor":           (a) => ({ ...a, targetAudience: a.targetAudience ?? "", teamSize: a.teamSize ?? "", budget: a.budget ?? "", tokenSupply: a.tokenSupply ?? "" }),
+  "grant-evaluator":          (a) => ({ ...a, teamBackground: a.teamBackground ?? "", requestedAmount: a.requestedAmount ?? "", milestones: a.milestones ?? "", githubUrl: a.githubUrl ?? "" }),
 };
 
 async function callHubTool(toolId: string, rawArgs: Record<string, unknown>): Promise<string> {
@@ -509,7 +629,7 @@ async function callConsole(command: string, prompt: string): Promise<string> {
 }
 
 async function callBuilderScore(handle: string): Promise<string> {
-  const res = await fetch(`https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/builder-score?handle=${encodeURIComponent(handle)}`);
+  const res = await fetch(`https://blueagent.dev/api/builder-score?handle=${encodeURIComponent(handle)}`);
   if (!res.ok) throw new Error(`Builder Score API: ${res.status}`);
   return JSON.stringify(await res.json(), null, 2);
 }

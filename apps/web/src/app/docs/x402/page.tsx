@@ -44,7 +44,7 @@ export default function X402Doc() {
       </CardGrid>
 
       <Callout color="#fbbf24" title="Full catalog">
-        72 tools total. Discover the live catalog with <code className="text-[#4FC3F7]">blue-registry</code> or browse the OpenAPI spec at{" "}
+        68 tools total. Discover the live catalog with <code className="text-[#4FC3F7]">blue-registry</code> or browse the OpenAPI spec at{" "}
         <a href="https://api.blueagent.dev/docs" className="text-[#fbbf24] underline">api.blueagent.dev/docs</a>.
       </Callout>
 

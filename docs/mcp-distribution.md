@@ -1,6 +1,6 @@
 # Blue Agent MCP — Distribution Checklist
 
-The MCP server is live at **`https://blueagent.dev/api/mcp`** with 50 tools (5 console commands + 43 Hub tools + `blue_score` + `blue_new`).
+The MCP server is live at **`https://blueagent.dev/api/mcp`** with 56 tools (15 console + 41 Hub).
 
 This doc is the canonical install + submission reference. Copy-paste these snippets into MCP catalogs and dev tools.
 
@@ -69,13 +69,11 @@ curl -sS -X POST https://blueagent.dev/api/mcp \
 
 ---
 
-## 🗂 50 Tools
+## 🗂 56 Tools
 
-**Console commands (5):** `blue_idea`, `blue_build`, `blue_audit`, `blue_ship`, `blue_raise`
+**Console / blue_ (15):** `blue_idea`, `blue_build`, `blue_audit`, `blue_ship`, `blue_raise`, `blue_score`, `blue_new`, `blue_monitor`, `blue_registry`, `blue_research`, `blue_compose`, `blue_deploy`, `blue_analytics`, `blue_simulate`, `blue_stream`
 
-**Hub tools (43):** token-pick-signal, narrative-position, ecosystem-digest, market-fit, token-launch-readiness, roadmap-validator, competitor-scan, pitch-intelligence, fundraise-timing, gtm-brief, stack-recommender, investor-memo, token-distribution-plan, agent-performance, agent-collab-match, repo-health, community-sentiment, defi-opportunity, builder-deep-dd, launch-simulator, whale-copy-signal, token-momentum-scanner, portfolio-rebalancer, thread-intelligence, builder-brand-score, community-growth-playbook, agent-revenue-optimizer, agent-token-strategy, multi-agent-workflow, base-grant-finder, base-protocol-comparison, base-builder-network-match, wallet-strategy-analyzer, protocol-risk-monitor, contract-trust, honeypot-check, risk-gate, deep-analysis, wallet-pnl, aml-screen, airdrop-check, whale-tracker, dex-flow
-
-**Utility (2):** `blue_score` (Builder Score by X handle), `blue_new` (scaffold scripts)
+**Hub tools / hub_ (41):** `hub_builder_score`, `hub_agent_score`, `hub_market_fit`, `hub_token_pick`, `hub_narrative`, `hub_ecosystem`, `hub_competitor_scan`, `hub_investor_memo`, `hub_repo_health`, `hub_base_grant`, `hub_risk_gate`, `hub_honeypot`, `hub_deep_analysis`, `hub_whale_signal`, `hub_fundraise_timing`, `hub_contract_trust`, `hub_aml_screen`, `hub_key_exposure`, `hub_token_momentum`, `hub_whale_tracker`, `hub_community_sentiment`, `hub_launch_simulator`, `hub_token_launch`, `hub_builder_dd`, `hub_brand_score`, `hub_roadmap`, `hub_gtm`, `hub_pitch_intel`, `hub_wallet_pnl`, `hub_wallet_strategy`, `hub_portfolio`, `hub_defi_opportunity`, `hub_protocol_risk`, `hub_multi_agent`, `hub_agent_match`, `hub_agent_perf`, `hub_agent_revenue`, `hub_agent_token`, `hub_community_growth`, `hub_thread_intel`, `hub_narrative_pulse`
 
 ---
 
@@ -89,7 +87,7 @@ Submit the install JSON above to each registry. Replace `<your-contact>` with tw
 - Transport: HTTP (Streamable)
 - Endpoint: `https://blueagent.dev/api/mcp`
 - Category: `web3`, `defi`, `ai-agents`
-- Description: "50 AI tools for Base builders — research, trade, ship. Powered by Aeon, MiroShark, Blue Agent. Pay-per-call via x402 USDC."
+- Description: "56 AI tools for Base builders — research, trade, ship. Powered by Aeon, MiroShark, Blue Agent. Pay-per-call via x402 USDC."
 
 ### 2. MCP.SO (`mcp.so`)
 - URL: https://mcp.so/submit
@@ -108,7 +106,7 @@ Submit the install JSON above to each registry. Replace `<your-contact>` with tw
 ### 5. Orbis (`orbisapi.com`) — list as provider
 - URL: https://orbisapi.com/providers/apply
 - Position as **Base-native specialist** complementing Orbis's general API marketplace.
-- All 43 Hub tools become callable via Orbis MCP → cross-distribution.
+- All 41 Hub tools become callable via Orbis MCP → cross-distribution.
 
 ---
 

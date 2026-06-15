@@ -17,7 +17,7 @@ export default function ScorePage({ inShell = false }: { inShell?: boolean }) {
 
     try {
       const clean = handle.replace(/^@/, "");
-      const res = await fetch(`https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/builder-score?handle=${encodeURIComponent(clean)}`);
+      const res = await fetch(`/api/builder-score?handle=${encodeURIComponent(clean)}`);
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       const data = await res.json();
       setResult(data);

@@ -23,7 +23,7 @@ Blue Agent is a full economic actor on Base: it holds a wallet, executes onchain
 
 ## Blue Hub — 40 AI Tools on Base
 
-Blue Hub is a curated marketplace of 40 pay-per-call AI tools built on Base. Any agent or developer can call tools via x402 micropayments in USDC — no API key, no account, no human in the loop.
+Blue Hub is a curated marketplace of 68 pay-per-call AI tools built on Base. Any agent or developer can call tools via x402 micropayments in USDC — no API key, no account, no human in the loop.
 
 ```bash
 # Discover all tools + prices
@@ -37,7 +37,7 @@ POST https://blueagent.dev/api/x402/{tool-id}
 X-Payment: <EIP-3009 USDC on Base>
 ```
 
-**40 tools across 9 categories** — intelligence · builder · trading · security · investor · agent-economy · base-ecosystem · on-chain · content
+**68 tools across 9 categories** — intelligence · builder · trading · security · investor · agent-economy · base-ecosystem · on-chain · content
 
 Registry: [ERC-8257 ToolRegistry](https://basescan.org/address/0x265BB2DBFC0A8165C9A1941Eb1372F349baD2cf1) · [agentic.market](https://agentic.market) · [CDP Bazaar](https://www.coinbase.com/developer-platform)
 
@@ -122,10 +122,10 @@ blue doctor
 
 ## Blue Terminal
 
-Browser-based CLI at [blueagent.dev/terminal](https://blueagent.dev/terminal) — run all 40 Hub tools, 5 core commands, and onchain queries directly in the browser. No install required.
+Browser-based CLI at [blueagent.dev/terminal](https://blueagent.dev/terminal) — run all 68 Hub tools, 5 core commands, and onchain queries directly in the browser. No install required.
 
 ```
-blue hub ls                    # list all 40 tools
+blue hub ls                    # list all 68 tools
 blue hub info token-pick-signal
 blue idea <prompt>             # $0.05 via Bankr LLM
 blue balance 0x...             # ETH + USDC on Base mainnet

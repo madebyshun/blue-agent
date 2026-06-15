@@ -1,5 +1,6 @@
-// Blue Agent x402 API — local dev server
-// Production: handlers are deployed to x402.bankr.bot infrastructure
+// Blue Agent x402 API — local dev server (separate surface from the apps/web Hub)
+// Production paid x402 is self-hosted at blueagent.dev/api/x402.
+// (The old x402.bankr.bot/builder-score endpoint is dead — do not point clients at it.)
 
 // Load .env for local dev
 import { config } from "dotenv";

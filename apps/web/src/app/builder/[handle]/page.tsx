@@ -6,19 +6,16 @@ import Navbar from "@/components/Navbar";
 
 type Dimension = { name: string; score: number; max: number };
 
+// Shape returned by /api/builder-score (the x402 builder-score handler).
 type BuilderScoreResult = {
-  handle: string;
-  score: number;
+  handle: string | null;
+  score: number | null;
   tier: string;
-  badge: string;
-  summary: string;
-  dimensions: {
-    activity: number;
-    social: number;
-    uniqueness: number;
-    thesis: number;
-    community: number;
-  };
+  blue_assessment?: string;
+  base_ecosystem_score?: number | null;
+  github?: { score: number } | null;
+  onchain?: { tx_count: number | null } | null;
+  community?: { score: number | null } | null;
 };
 
 const TIER_COLORS: Record<string, string> = {
@@ -73,18 +70,18 @@ export default function BuilderProfilePage() {
       .finally(() => setLoading(false));
   }, [handle]);
 
+  const summary = data?.blue_assessment ?? "";
   const shareText = data
-    ? `My Blue Agent Builder Score: ${data.score}/100 (${data.tier}) — ${data.summary}\n\nCheck yours: blueagent.dev/builder/${handle}`
+    ? `My Blue Agent Builder Score: ${data.score ?? "—"}/100 (${data.tier})${summary ? ` — ${summary}` : ""}\n\nCheck yours: blueagent.dev/builder/${handle}`
     : "";
 
+  // Real sub-scores the handler actually produces (0-100); only show the ones present.
   const dimensions: Dimension[] = data
-    ? [
-        { name: "activity",   score: data.dimensions.activity,   max: 25 },
-        { name: "social",     score: data.dimensions.social,     max: 25 },
-        { name: "uniqueness", score: data.dimensions.uniqueness, max: 20 },
-        { name: "thesis",     score: data.dimensions.thesis,     max: 20 },
-        { name: "community",  score: data.dimensions.community,  max: 10 },
-      ]
+    ? ([
+        data.github          ? { name: "github",         score: data.github.score,          max: 100 } : null,
+        data.community       ? { name: "community",      score: data.community.score ?? 0,  max: 100 } : null,
+        data.base_ecosystem_score != null ? { name: "base ecosystem", score: data.base_ecosystem_score, max: 100 } : null,
+      ].filter(Boolean) as Dimension[])
     : [];
 
   return (
@@ -123,12 +120,12 @@ export default function BuilderProfilePage() {
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-mono text-white font-semibold">@{data.handle}</span>
+                    <span className="font-mono text-white font-semibold">@{data.handle ?? handle}</span>
                     <span className={`font-mono text-xs ${TIER_COLORS[data.tier] ?? "text-white"}`}>
-                      {data.badge} {data.tier}
+                      {data.tier}
                     </span>
                   </div>
-                  <p className="font-mono text-[10px] text-slate-500">{data.summary}</p>
+                  <p className="font-mono text-[10px] text-slate-500">{summary}</p>
                 </div>
                 <div className="text-right shrink-0">
                   <span className="font-mono text-4xl font-bold text-white">{data.score}</span>

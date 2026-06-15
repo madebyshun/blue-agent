@@ -144,7 +144,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!address) { setBuilderScore(null); return; }
     setScoreLoad(true);
-    fetch(`https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/builder-score?handle=${address}`)
+    fetch(`/api/builder-score?handle=${address}`)
       .then(r => r.json())
       .then(d => setBuilderScore(d?.score ?? d?.builder_score ?? null))
       .catch(() => null)
