@@ -67,6 +67,7 @@ import h50 from "./launch-simulator-3";
 import h51 from "./launch-advisor";
 import h52 from "./grant-evaluator";
 import h53 from "./key-exposure";
+import h54 from "./launch-simulator-1";
 import hYield from "./agent-yield-finder";
 
 export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
@@ -143,4 +144,5 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "launch-advisor":  h51,
   "grant-evaluator": h52,
   "key-exposure":    h53,
+  "launch-simulator-1": h54,
 };
