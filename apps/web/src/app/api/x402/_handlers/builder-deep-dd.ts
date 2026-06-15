@@ -8,11 +8,11 @@ import { slugifyRepo, fetchRepo, scoreRepoActivity, repoFactsPrompt } from "@/li
 
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 
-async function llm(system: string, user: string, temp = 0, tokens = 1000): Promise<string> {
+async function llm(system: string, user: string, temp = 0, tokens = 1000, model = "claude-haiku-4-5"): Promise<string> {
   const r = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
     headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: "claude-haiku-4-5", system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
+    body: JSON.stringify({ model, system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
   });
   if (!r.ok) throw new Error(`LLM ${r.status}: ${await r.text()}`);
   const d = await r.json() as { content?: { text: string }[] };
@@ -111,13 +111,18 @@ Schema: {
   "strengths": ["<strength>"],
   "risks": ["<risk>"],
   "red_flags": ["<red flag or 'none'>"],
-  "due_diligence_checklist": [{"item":"<check>","status":"pass|fail|unknown","note":"<brief note>"}],
+  "data_basis": "<state EXACTLY what real data backs this DD (e.g. GitHub commits/stars/recency); explicitly flag what is NOT verifiable — onchain, funding, partnerships>",
   "recommended_action": "<specific next step>",
   "open_questions": ["<question to answer before deciding>"]
 }`,
-      `Target: ${target}\nType: ${type}\nProject: ${projectResearch ?? target}\nBackground: ${backgroundResearch ?? target}\nAudit: ${JSON.stringify(audit)}\nAnalyst: ${JSON.stringify(analyst)}`, 0.3, 1500);
+      `Target: ${target}\nType: ${type}\nProject: ${projectResearch ?? target}\nBackground: ${backgroundResearch ?? target}\nAudit: ${JSON.stringify(audit)}\nAnalyst: ${JSON.stringify(analyst)}`,  0, 1500, "claude-sonnet-4-5");
 
     let result = parseJson(resultRaw);
+    // HARDMAP verdict từ dd_score (tất định, hết LLM lật)
+    if (result && typeof result.dd_score === "number") {
+      const v = result.dd_score;
+      result.verdict = v >= 80 ? "STRONG_BUY" : v >= 60 ? "BUY" : v >= 40 ? "WATCH" : v >= 20 ? "PASS" : "RED_FLAG";
+    }
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({
