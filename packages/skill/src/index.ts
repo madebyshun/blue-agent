@@ -50,8 +50,13 @@ async function callHubTool(toolId: string, body: Record<string, unknown>): Promi
 // ─── Builder Score ────────────────────────────────────────────────────────────
 
 async function fetchBuilderScore(handle: string): Promise<string> {
-  const url = `https://x402.bankr.bot/0xf31f59e7b8b58555f7871f71973a394c8f1bffe5/builder-score?handle=${encodeURIComponent(handle)}`;
+  // External callers (this MCP runs on the user's machine) use the PAID x402
+  // endpoint — they pay per call, same as every other Hub tool here.
+  const url = `${BLUEAGENT_API}/api/x402/builder-score?handle=${encodeURIComponent(handle)}`;
   const res = await fetch(url);
+  if (res.status === 402) {
+    return `Builder Score is a paid x402 tool.\nConnect a wallet and pay via x402 to call it.\nSee: https://blueagent.dev/api-docs#auth`;
+  }
   if (!res.ok) throw new Error(`Builder Score API error: ${res.status}`);
   return JSON.stringify(await res.json(), null, 2);
 }

@@ -629,7 +629,7 @@ async function callConsole(command: string, prompt: string): Promise<string> {
 }
 
 async function callBuilderScore(handle: string): Promise<string> {
-  const res = await fetch(`https://x402.bankr.bot/0xb058a1e305d9c720aa5b1bf42b6f2f6294b03b5f/builder-score?handle=${encodeURIComponent(handle)}`);
+  const res = await fetch(`https://blueagent.dev/api/builder-score?handle=${encodeURIComponent(handle)}`);
   if (!res.ok) throw new Error(`Builder Score API: ${res.status}`);
   return JSON.stringify(await res.json(), null, 2);
 }
