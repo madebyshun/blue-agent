@@ -10,7 +10,7 @@ import fs from "fs";
 import path from "path";
 
 const server = new Server(
-  { name: "blueagent-skill", version: "0.3.0" },
+  { name: "blueagent-skill", version: "0.4.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -629,7 +629,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error(`Blue Agent MCP server v0.3.0 — ${ALL_TOOLS.length} tools ready`);
+  console.error(`Blue Agent MCP server v0.4.0 — ${ALL_TOOLS.length} tools ready`);
 }
 
 main().catch((err) => { console.error(err); process.exit(1); });
