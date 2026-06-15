@@ -8,7 +8,7 @@
 import { findBaseProtocol, protocolToPrompt, type BaseProtocol } from "@/lib/market-data";
 
 type Msg = { role: string; content: string };
-async function llm(system: string, user: string, temp = 0.3, tokens = 1100): Promise<string> {
+async function llm(system: string, user: string, temp = 0, tokens = 1100): Promise<string> {
   const r = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
     headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
@@ -52,13 +52,13 @@ export default async function handler(req: Request): Promise<Response> {
 
     const system = `You are Blue Agent — protocol risk monitor for Base DeFi (chain 8453).
 You are given REAL DefiLlama TVL data. Reference those numbers exactly; NEVER invent TVL or percentages. Use the live TVL trend for the liquidity/market dimensions; reason qualitatively (from known fundamentals) about smart-contract, oracle and governance risk.
+DATA DISCIPLINE (critical): If protocol/oracle/governance/audit data is NOT available, set that dimension to "unknown" and severity to "unknown" — do NOT assign low/medium/high. Missing data is NEUTRAL, never a risk. Never infer rug/centralization/manipulation risk from ABSENCE of data. Only score dimensions backed by actual on-chain or known facts. If the address is not a recognized DeFi protocol, say so and return overall_risk "unknown", not a fabricated score.
 Return ONLY raw JSON. No markdown.
 Schema: {
   "risk_score": <0-100>,
-  "overall_risk": "critical|high|medium|low|minimal",
-  "action": "EXIT_NOW|REDUCE|HOLD|ADD",
+  "overall_risk": "critical|high|medium|low|minimal|unknown",
   "risk_dimensions": { "smart_contract": <0-10>, "liquidity": <0-10>, "oracle": <0-10>, "governance": <0-10>, "market": <0-10> },
-  "active_risks": [{"risk":"<name>","severity":"critical|high|medium|low","description":"<brief>"}],
+  "active_risks": [{"risk":"<name>","severity":"critical|high|medium|low|unknown","description":"<brief>"}],
   "watch_for": ["<signal that changes risk level>"],
   "safe_exit_path": "<how to exit safely if needed>",
   "summary": "<2 sentences>"
@@ -68,6 +68,10 @@ Schema: {
     let result: Record<string, unknown> | null = null;
     for (let attempt = 0; attempt < 2 && !result; attempt++) {
       try { result = parseJson(await llm(system, user)); } catch { /* retry then fallback */ }
+    }
+    if (result) {
+      const rs = Number(result.risk_score);
+      if (!isNaN(rs)) result.action = rs >= 75 ? "EXIT_NOW" : rs >= 55 ? "REDUCE" : rs >= 35 ? "HOLD" : "ADD";
     }
     if (!result) {
       result = {

@@ -3,6 +3,8 @@
 // Price: $0.50
 
 type Msg = { role: string; content: string };
+import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+
 async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
   const r = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
@@ -19,14 +21,12 @@ function parseJson(t: string): Record<string, unknown> | null {
   if (i >= 0 && j > i) s = s.slice(i, j + 1);
   try { return JSON.parse(s); } catch { try { return JSON.parse(s.replace(/[\x00-\x1F]/g, " ")); } catch { return null; } }
 }
-async function aeon(skill: string, focus = ""): Promise<string | null> {
+async function aeon(skill: string): Promise<string | null> {
   try {
-    const r = await fetch(`https://raw.githubusercontent.com/aaronjmars/aeon/main/skills/${skill}/SKILL.md`, { signal: AbortSignal.timeout(6000) });
-    if (!r.ok) return null;
-    const p = await r.text();
-    return await llm(`You are Aeon. Synthesize from training knowledge. Today: ${new Date().toISOString().split("T")[0]}.`,
-      `Follow skill template. Be concrete.\n\nSkill:\n${p}${focus ? `\nFocus: ${focus}` : ""}\n\nReturn only skill output.`, 0.2, 1200);
-  } catch { return null; }
+    const fresh = await getAeonOutput(skill);
+    if (fresh) return formatAeonForLLM(fresh);
+  } catch {}
+  return null;
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -40,7 +40,7 @@ export default async function handler(req: Request): Promise<Response> {
     const goal = body.goal ?? url.searchParams.get("goal") ?? "1000 members";
     if (!project) return Response.json({ error: "project is required" }, { status: 400 });
 
-    const narrativeRaw = await aeon("narrative-tracker", `community building strategies for ${project}: ${description}. What narratives attract communities in Base ecosystem? What makes people join and stay?`);
+    const narrativeRaw = await aeon("narrative-tracker");
 
     const msRaw = await llm(`You are MiroShark — 4-persona community growth engine.
 Personas: Analyst(1.8x), Influencer(2.8x), Retail(1.0x), Observer(0.5x).
