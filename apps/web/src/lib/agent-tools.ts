@@ -1013,6 +1013,21 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   },
 
 {
+    id: "agent-yield-finder",
+    name: "Agent Yield Finder",
+    description: "Best USDC yield on Base for idle agent capital — live DefiLlama APY across Aave, Morpho, Moonwell, Compound. Real rates, projected returns, never fabricated.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "on-chain",
+    inputs: [
+      { key: "amount", label: "Idle USDC amount", placeholder: "10000", required: false },
+      { key: "risk", label: "Risk preference", placeholder: "conservative | balanced | aggressive", required: false },
+    ],
+    isComposite: true,
+    price: "$0.25", priceUSDC: 250000,
+    x402Url: `${X402_BASE}/agent-yield-finder`,
+    x402Body: (v) => ({ amount: Number(v.amount) || 10000, risk: v.risk ?? "balanced" }),
+  },
+{
     id: "wallet-pnl",
     name: "Wallet PnL Report",
     description: "Wallet PnL report — trading style, win rate, smart money score, top tokens on Base.",

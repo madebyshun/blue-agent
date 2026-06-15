@@ -66,8 +66,10 @@ import h49 from "./launch-simulator-2";
 import h50 from "./launch-simulator-3";
 import h51 from "./launch-advisor";
 import h52 from "./grant-evaluator";
+import hYield from "./agent-yield-finder";
 
 export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
+  "agent-yield-finder": hYield,
   "agent-collab-match": h0,
   "agent-performance": h1,
   "agent-revenue-optimizer": h2,
