@@ -38,7 +38,7 @@ export default async function handler(req: Request): Promise<Response> {
     if (!project || !description) return Response.json({ error: "project and description are required" }, { status: 400 });
 
     const [marketResearch, raiseRaw] = await Promise.all([
-      aeon("deep-research", `Market size and opportunity for ${description} on Base. Comparable projects, TAM, key risks.`),
+      aeon("deep-research"),
       llm(`You are Blue Agent running 'blue raise'. Write investor narrative sections.
 CRITICAL: Return ONLY raw JSON.
 Schema: {

@@ -40,7 +40,7 @@ export default async function handler(req: Request): Promise<Response> {
     const goal = body.goal ?? url.searchParams.get("goal") ?? "1000 members";
     if (!project) return Response.json({ error: "project is required" }, { status: 400 });
 
-    const narrativeRaw = await aeon("narrative-tracker", `community building strategies for ${project}: ${description}. What narratives attract communities in Base ecosystem? What makes people join and stay?`);
+    const narrativeRaw = await aeon("narrative-tracker");
 
     const msRaw = await llm(`You are MiroShark — 4-persona community growth engine.
 Personas: Analyst(1.8x), Influencer(2.8x), Retail(1.0x), Observer(0.5x).

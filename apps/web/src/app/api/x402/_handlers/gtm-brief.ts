@@ -41,7 +41,7 @@ export default async function handler(req: Request): Promise<Response> {
     if (!project || !description) return Response.json({ error: "product description is required" }, { status: 400 });
 
     const [narrativeRaw, ideaRaw] = await Promise.all([
-      aeon("narrative-tracker", `GTM narrative for ${project}: ${description}`),
+      aeon("narrative-tracker"),
       llm(`You are Blue Agent running 'blue idea'. Expand into GTM-focused brief.
 CRITICAL: Return ONLY raw JSON.
 Schema: {"target_user":"<who>","pain_point":"<specific pain>","entry_wedge":"<smallest beachhead>","distribution_channel":"<primary channel>","hook":"<1 sentence why they switch>"}`,

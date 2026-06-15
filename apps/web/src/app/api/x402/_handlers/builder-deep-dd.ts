@@ -58,8 +58,8 @@ ${ghFacts}`
 
     // Step 1+2: Aeon deep-research x2 — project + team/background in parallel
     const [projectResearch, backgroundResearch] = await Promise.all([
-      aeon("deep-research", `${target}: ${context}. Comprehensive analysis — product, traction, market position, on-chain activity on Base, funding history, partnerships.`),
-      aeon("deep-research", `${target} team/builder background: track record, previous projects, credibility signals, red flags, community standing in Base/crypto ecosystem.`),
+      aeon("deep-research"),
+      aeon("deep-research"),
     ]);
 
     // Step 3: Blue audit — code/product quality signals
