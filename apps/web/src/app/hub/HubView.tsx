@@ -1255,6 +1255,10 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
   const [selected, setSelected] = useState<Tool | null>(null);
   const [search, setSearch]   = useState("");
   const [cache, setCache]     = useState<Map<string, ToolResult>>(new Map());
+  // Result to preload into the runner. Set ONLY by the ?s=/#s= share readers
+  // (server KV). A normal tool click never sets this → the runner opens to a
+  // clean idle form, even if localStorage has an old run for that tool.
+  const [preload, setPreload] = useState<{ toolId: string; data: ToolResult } | null>(null);
   const [usage, setUsage]     = useState<Record<string, number>>({});
   const [communityTools, setCommunityTools] = useState<Tool[]>([]);
   const searchRef             = useRef<HTMLInputElement>(null);
@@ -1266,10 +1270,12 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
   // Selecting a tool updates the URL to /app/hub/[id] without a reload (the view
   // stays inline); clearSelected resets to /app/hub. Only active in the app shell.
   const selectTool = (t: Tool) => {
+    setPreload(null); // normal click → fresh form, never an old result
     setSelected(t);
     if (inShell && typeof window !== "undefined") window.history.pushState(null, "", `/app/hub/${t.id}`);
   };
   const clearSelected = () => {
+    setPreload(null);
     setSelected(null);
     if (inShell && typeof window !== "undefined") window.history.pushState(null, "", "/app/hub");
   };
@@ -1288,6 +1294,7 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
     if (!inShell || typeof window === "undefined") return;
     const onPop = () => {
       const m = window.location.pathname.match(/^\/app\/hub\/([^/?#]+)/);
+      setPreload(null); // back/forward → fresh form
       setSelected(m ? (allTools.find(x => x.id === m[1]) ?? null) : null);
     };
     window.addEventListener("popstate", onPop);
@@ -1412,7 +1419,7 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
     const apply = (toolId: string, result: Record<string, unknown> | string, isMock: boolean, mockReason: "dev" | "service-down") => {
       const tool = allTools.find(t => t.id === toolId);
       if (!tool) return;
-      setCache(prev => new Map(prev).set(toolId, { result, isMock, mockReason }));
+      setPreload({ toolId, data: { result, isMock, mockReason } });
       setSelected(tool);
       window.history.replaceState(null, "", window.location.pathname);
     };
@@ -1449,7 +1456,7 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
         const tool = allTools.find(t => t.id === p.toolId);
         if (!tool) return; // not loaded yet — re-runs when allTools updates
         sApplied.current = true;
-        setCache(prev => new Map(prev).set(p.toolId!, { result: p.result!, isMock: !!p.isMock, mockReason: p.mockReason ?? "dev" }));
+        setPreload({ toolId: p.toolId, data: { result: p.result, isMock: !!p.isMock, mockReason: p.mockReason ?? "dev" } });
         setSelected(tool);
         window.history.replaceState(null, "", `/app/hub/${p.toolId}`);
       })
@@ -1656,9 +1663,13 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
 
           {selected
             ? <ToolRunner
+                // Remount per tool (clean state); when a shared ?s= result
+                // arrives, the key flips to ":shared" so the runner re-inits
+                // into the "done" view instead of staying on the idle form.
+                key={`${selected.id}:${preload?.toolId === selected.id ? "shared" : "fresh"}`}
                 tool={selected}
                 onBack={clearSelected}
-                cached={cache.get(selected.id) ?? null}
+                cached={preload?.toolId === selected.id ? preload.data : null}
                 onResult={(r) => saveResult(selected.id, r)}
               />
             : <div className="overflow-y-auto flex-1"><EmptyState
