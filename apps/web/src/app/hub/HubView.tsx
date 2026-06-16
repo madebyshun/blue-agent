@@ -1128,19 +1128,12 @@ function ShelfCard({
   tool, runs, onSelect, accent, compact,
 }: { tool: Tool; runs: number; onSelect: (t: Tool) => void; accent: string; compact?: boolean }) {
   return (
-    <div className="relative h-full">
-    {/* Open the dedicated tool page — sibling Link (not nested in the button). */}
-    <Link href={`/hub/${tool.id}`} title="Open tool page" aria-label={`Open ${tool.name} page`}
-      className="absolute top-2 right-2 z-10 w-7 h-7 flex items-center justify-center rounded-lg border text-[13px] font-bold transition-transform hover:scale-110"
-      style={{ borderColor: `${accent}66`, background: `${accent}1f`, color: accent }}>
-      ↗
-    </Link>
     <button onClick={() => onSelect(tool)}
       className="w-full text-left rounded-xl p-3.5 transition-all group border flex flex-col h-full"
       style={{ borderColor: `${accent}25`, background: `${accent}06` }}
       onMouseEnter={e => (e.currentTarget.style.borderColor = `${accent}55`)}
       onMouseLeave={e => (e.currentTarget.style.borderColor = `${accent}25`)}>
-      <div className="flex items-center gap-1.5 mb-2 pr-8">
+      <div className="flex items-center gap-1.5 mb-2">
         {tool.agents.map(a => (
           <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
         ))}
@@ -1154,7 +1147,6 @@ function ShelfCard({
         <span className="font-mono text-[10px] font-semibold transition-opacity opacity-70 group-hover:opacity-100" style={{ color: accent }}>Try →</span>
       </div>
     </button>
-    </div>
   );
 }
 
@@ -1219,7 +1211,7 @@ function decodeShare(hash: string): { toolId: string } & ToolResult | null {
 
 // ─── Hub page ─────────────────────────────────────────────────────────────────
 
-export default function HubPage({ inShell = false }: { inShell?: boolean }) {
+export default function HubPage({ inShell = false, initialToolId }: { inShell?: boolean; initialToolId?: string }) {
   const [cat, setCat]         = useState<Category>("all");
   const [selected, setSelected] = useState<Tool | null>(null);
   const [search, setSearch]   = useState("");
@@ -1230,6 +1222,38 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
 
   // ── Merge first-party (TOOLS) + community-submitted (registered) ──────────
   const allTools = useMemo<Tool[]>(() => [...TOOLS, ...communityTools], [communityTools]);
+
+  // ── App-shell deep routing ────────────────────────────────────────────────
+  // Selecting a tool updates the URL to /app/hub/[id] without a reload (the view
+  // stays inline); clearSelected resets to /app/hub. Only active in the app shell.
+  const selectTool = (t: Tool) => {
+    setSelected(t);
+    if (inShell && typeof window !== "undefined") window.history.pushState(null, "", `/app/hub/${t.id}`);
+  };
+  const clearSelected = () => {
+    setSelected(null);
+    if (inShell && typeof window !== "undefined") window.history.pushState(null, "", "/app/hub");
+  };
+
+  // Open the tool from the route param (/app/hub/[tool]). Applies once the tool
+  // is present (community tools load async), and only once.
+  const initialApplied = useRef(false);
+  useEffect(() => {
+    if (initialApplied.current || !initialToolId) return;
+    const t = allTools.find(x => x.id === initialToolId);
+    if (t) { setSelected(t); initialApplied.current = true; }
+  }, [initialToolId, allTools]);
+
+  // Keep the inline view in sync with browser back/forward.
+  useEffect(() => {
+    if (!inShell || typeof window === "undefined") return;
+    const onPop = () => {
+      const m = window.location.pathname.match(/^\/app\/hub\/([^/?#]+)/);
+      setSelected(m ? (allTools.find(x => x.id === m[1]) ?? null) : null);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [inShell, allTools]);
 
   const RESULTS_KEY = "bluehub_results";
 
@@ -1315,7 +1339,7 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
         e.preventDefault();
         searchRef.current?.focus();
       }
-      if (e.key === "Escape" && selected) setSelected(null);
+      if (e.key === "Escape" && selected) clearSelected();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -1329,10 +1353,12 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
       const t = allTools.find(x => x.id === qTool);
       if (t) {
         setSelected(t);
-        window.history.replaceState(null, "", "/hub");
+        // Legacy ?tool= links — normalize to the clean path for the surface
+        // we're on (app shell vs public hub).
+        window.history.replaceState(null, "", inShell ? `/app/hub/${t.id}` : `/hub/${t.id}`);
       }
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── On mount: load shared result from URL hash ────────────────────────────
   // Two formats supported:
@@ -1456,12 +1482,8 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
               const isFeatured = featuredIds.has(tool.id);
               const hasCached  = cache.has(tool.id);
               return (
-                <div key={tool.id} className="relative">
-                {/* Open the dedicated tool page — sibling Link (not nested in the button). */}
-                <Link href={`/hub/${tool.id}`} title="Open tool page" aria-label={`Open ${tool.name} page`}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-6 h-6 flex items-center justify-center rounded-md border border-[#4FC3F7]/35 bg-[#4FC3F7]/12 text-[#4FC3F7] text-[12px] font-bold opacity-80 hover:opacity-100 hover:scale-110 transition-all">↗</Link>
-                <button onClick={() => setSelected(tool)}
-                  className={`w-full text-left px-4 pr-9 py-2.5 transition-all border-l-2 ${
+                <button key={tool.id} onClick={() => selectTool(tool)}
+                  className={`w-full text-left px-4 py-2.5 transition-all border-l-2 ${
                     selected?.id === tool.id
                       ? "border-[#4FC3F7] bg-[#4FC3F7]/5 text-white"
                       : isFeatured
@@ -1485,7 +1507,6 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
                   </div>
                   <span className="font-mono text-sm">{tool.name}</span>
                 </button>
-                </div>
               );
             })}
           </div>
@@ -1572,13 +1593,13 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
           {selected
             ? <ToolRunner
                 tool={selected}
-                onBack={() => setSelected(null)}
+                onBack={clearSelected}
                 cached={cache.get(selected.id) ?? null}
                 onResult={(r) => saveResult(selected.id, r)}
               />
             : <div className="overflow-y-auto flex-1"><EmptyState
                 tools={allTools}
-                onSelect={setSelected}
+                onSelect={selectTool}
                 featuredIds={featuredIds}
                 usage={usage}
                 recentIds={[...cache.keys()]}
