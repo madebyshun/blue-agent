@@ -380,7 +380,7 @@ const HUB_TOOLS = [
   // ── Builder (extended) ─────────────────────────────────────────────────────
   {
     name: "hub_launch_simulator",
-    toolId: "launch-simulator",
+    toolId: "launch-simulator-1",
     description: "Simulate a token or product launch — model price action, liquidity, community growth scenarios.",
     inputSchema: { type: "object", properties: { project: { type: "string" }, supply: { type: "string" } }, required: ["project"] },
   },

@@ -495,7 +495,7 @@ const HUB_MAP: Record<string, string> = {
   hub_whale_tracker:        "whale-tracker",
   hub_community_sentiment:  "community-sentiment",
   // Builder (extended)
-  hub_launch_simulator:     "launch-simulator",
+  hub_launch_simulator:     "launch-simulator-1",
   hub_token_launch:         "token-launch-readiness",
   hub_builder_dd:           "builder-deep-dd",
   hub_brand_score:          "builder-brand-score",
