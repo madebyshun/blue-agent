@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 
@@ -21,12 +22,33 @@ export default function ToolDetailClient({ toolId }: { toolId: string }) {
   const [runs, setRuns] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // A shared result link (/hub/[tool]?s=<id>) loads + shows that result here,
+  // while the page keeps correct per-tool OG (from generateMetadata).
+  const searchParams = useSearchParams();
+  const sharedId = searchParams.get("s");
+  const [shared, setShared] = useState<{ result: unknown; isMock?: boolean } | null>(null);
+
   useEffect(() => {
     fetch("/api/usage")
       .then(r => r.json())
       .then((u: Record<string, number>) => setRuns(u[toolId] ?? 0))
       .catch(() => {});
   }, [toolId]);
+
+  useEffect(() => {
+    if (!sharedId || !/^[a-f0-9]{6,32}$/.test(sharedId)) { setShared(null); return; }
+    let off = false;
+    fetch(`/api/share/${sharedId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then((d: { toolId?: string; result?: unknown; isMock?: boolean } | null) => {
+        // Only show it if the shared result belongs to this tool.
+        if (!off && d && d.toolId === toolId && d.result != null) setShared({ result: d.result, isMock: d.isMock });
+      })
+      .catch(() => {});
+    return () => { off = true; };
+  }, [sharedId, toolId]);
+
+  const endpoint = `/api/x402/${toolId}`;
 
   if (!tool) return null;
   const agents = agentsOf(tool);
@@ -89,6 +111,14 @@ export default function ToolDetailClient({ toolId }: { toolId: string }) {
                 </span>
               </div>
 
+              {/* API endpoint */}
+              <div className="flex items-center gap-2 mt-4 text-xs">
+                <span className="font-mono text-[10px] text-slate-600 uppercase tracking-wider">API endpoint</span>
+                <code className="font-mono text-[11px] text-[#4FC3F7] bg-[#0D0D1A] border border-[#1A1A2E] rounded-md px-2 py-1">
+                  POST {endpoint}
+                </code>
+              </div>
+
               <div className="flex flex-wrap items-center gap-2.5 mt-6">
                 <Link href={`/app/hub?tool=${toolId}`}
                   className="px-5 py-2.5 rounded-xl bg-[#4FC3F7] text-[#050508] font-mono text-sm font-semibold hover:bg-[#29ABE2] transition-colors">
@@ -113,6 +143,19 @@ export default function ToolDetailClient({ toolId }: { toolId: string }) {
             </div>
           </div>
 
+          {/* Shared result (from a /hub/[tool]?s=<id> link) */}
+          {shared && (
+            <div className="rounded-2xl border border-[#34D399]/30 bg-[#0A0A12] p-6 mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <p className="font-mono text-[10px] text-[#34D399] tracking-widest">// SHARED RESULT</p>
+                {shared.isMock && <span className="font-mono text-[9px] text-amber-400 border border-amber-400/30 rounded px-1.5 py-0.5">sample</span>}
+              </div>
+              <pre className="font-mono text-[11px] text-slate-300 leading-relaxed overflow-x-auto max-h-[420px] overflow-y-auto whitespace-pre-wrap break-words">
+                {typeof shared.result === "string" ? shared.result : JSON.stringify(shared.result, null, 2)}
+              </pre>
+            </div>
+          )}
+
           {/* Inputs — what you provide */}
           {tool.inputs.length > 0 && (
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0A0A12] p-6 mb-6">
@@ -120,11 +163,11 @@ export default function ToolDetailClient({ toolId }: { toolId: string }) {
               <div className="space-y-3">
                 {tool.inputs.map(inp => (
                   <div key={inp.key} className="flex items-start gap-3">
-                    <span className="font-mono text-xs text-slate-300 min-w-[120px]">
-                      {inp.label}
-                      {inp.required && <span className="text-[#4FC3F7] ml-1">*</span>}
+                    <span className="font-mono text-xs text-slate-300 min-w-[110px] shrink-0">{inp.label}</span>
+                    <span className={`font-mono text-[9px] px-1.5 py-0.5 rounded shrink-0 ${inp.required ? "text-[#4FC3F7] border border-[#4FC3F7]/30" : "text-slate-500 border border-[#1A1A2E]"}`}>
+                      {inp.required ? "required" : "optional"}
                     </span>
-                    <span className="font-mono text-[11px] text-slate-600 leading-relaxed">{inp.placeholder}</span>
+                    <span className="font-mono text-[11px] text-slate-500 leading-relaxed">{inp.placeholder}</span>
                   </div>
                 ))}
               </div>

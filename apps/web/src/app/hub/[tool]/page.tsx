@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import ToolDetailClient from "./ToolDetailClient";
 
-// Pre-render all 34 tool pages at build time (good for SEO + social crawlers)
+// Pre-render every tool page (69 at last count) at build time — good for SEO +
+// social crawlers. Count derives from AGENT_TOOLS, so this is a hint, not a gate.
 export function generateStaticParams() {
   return AGENT_TOOLS.map(t => ({ tool: t.id }));
 }
@@ -44,5 +46,11 @@ export default async function ToolPage(
   const { tool } = await params;
   const t = AGENT_TOOLS.find(x => x.id === tool);
   if (!t) notFound();
-  return <ToolDetailClient toolId={t.id} />;
+  // Suspense: ToolDetailClient reads ?s= via useSearchParams, which needs a
+  // boundary under a statically-generated route.
+  return (
+    <Suspense fallback={null}>
+      <ToolDetailClient toolId={t.id} />
+    </Suspense>
+  );
 }
