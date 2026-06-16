@@ -97,8 +97,8 @@ export interface ModelPreset {
  *
  * Funding model context:
  *   - Bankr-tier models (Chat, Deep Think) are funded via the $BLUEAGENT
- *     trade-fee partnership — Bankr accepts $BLUE for compute, and we
- *     earn $BLUE from Bankr trade fees. Closed loop.
+ *     trade-fee partnership — Bankr accepts $BLUEAGENT for compute, and we
+ *     earn $BLUEAGENT from Bankr trade fees. Closed loop.
  *   - Venice-tier models (Fast, Web Search, Private) are paid in USDC
  *     directly. Cheap enough that the credit price (1 cr = $0.0005)
  *     gives 17-25x margin on DeepSeek Flash / E2EE Gemma.

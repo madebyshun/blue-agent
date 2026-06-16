@@ -10,7 +10,7 @@ export default function CreditsDoc() {
       <DocHeader
         eyebrow="Platform"
         title="Credits & Tiers"
-        lead="Every Blue Chat message spends credits. No wallet needed to start — and your tier is set by your $BLUE, where holding or staking both count."
+        lead="Every Blue Chat message spends credits. No wallet needed to start — and your tier is set by your $BLUEAGENT, where holding or staking both count."
       />
 
       <H2 id="tiers">Tiers</H2>
@@ -29,12 +29,12 @@ export default function CreditsDoc() {
 
       <H2 id="holding-vs-staking">Holding vs. staking</H2>
       <P>
-        Both holding and staking $BLUE set your tier. <strong className="text-slate-200">Staking is the better path</strong> — it counts toward your tier
+        Both holding and staking $BLUEAGENT set your tier. <strong className="text-slate-200">Staking is the better path</strong> — it counts toward your tier
         and accrues extra credits plus a share of x402 revenue (USDC) over time. Holding only sets your tier.
       </P>
 
       <Callout color="#A78BFA" title="Start earning">
-        <Link href="/app/dashboard?tab=stake" className="text-[#A78BFA] underline">Stake $BLUE →</Link> to grow your daily credits and earn a share of protocol revenue.
+        <Link href="/app/dashboard?tab=stake" className="text-[#A78BFA] underline">Stake $BLUEAGENT →</Link> to grow your daily credits and earn a share of protocol revenue.
       </Callout>
 
       <PrevNext current="/docs/credits" />

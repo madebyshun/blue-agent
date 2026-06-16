@@ -1184,7 +1184,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     inputs: [
       { key: "project", label: "Project name", placeholder: "Your project name", required: true },
       { key: "description", label: "Project description", placeholder: "What it does, target audience, current stage" },
-      { key: "ticker", label: "Token ticker (optional)", placeholder: "e.g. $BLUE" },
+      { key: "ticker", label: "Token ticker (optional)", placeholder: "e.g. $BLUEAGENT" },
     ],
     isComposite: true,
     price: "$0.10", priceUSDC: 100000,
@@ -1200,7 +1200,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     inputs: [
       { key: "project", label: "Project name", placeholder: "Your project name", required: true },
       { key: "description", label: "Project description", placeholder: "What it does, target audience, current stage" },
-      { key: "ticker", label: "Token ticker (optional)", placeholder: "e.g. $BLUE" },
+      { key: "ticker", label: "Token ticker (optional)", placeholder: "e.g. $BLUEAGENT" },
       { key: "contract", label: "Contract address (optional)", placeholder: "0x... for live market data" },
     ],
     isComposite: true,
@@ -1217,7 +1217,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     inputs: [
       { key: "project", label: "Project name", placeholder: "Your project name", required: true },
       { key: "description", label: "Project description", placeholder: "What it does, target audience, current stage" },
-      { key: "ticker", label: "Token ticker (optional)", placeholder: "e.g. $BLUE" },
+      { key: "ticker", label: "Token ticker (optional)", placeholder: "e.g. $BLUEAGENT" },
       { key: "contract", label: "Contract address (optional)", placeholder: "0x... for live market data" },
     ],
     isComposite: true,

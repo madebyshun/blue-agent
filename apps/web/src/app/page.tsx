@@ -134,7 +134,7 @@ export default function Home() {
             {[
               { n: "5", label: "Core commands", sub: "idea · build · audit · ship · raise" },
               { n: "41", label: "Skill files", sub: "grounded · verified · Base-native" },
-              { n: "50+", label: "Hub tools", sub: "3-agent collab · pay per use" },
+              { n: "69", label: "Hub tools", sub: "3-agent collab · pay per use" },
               { n: "9", label: "npm packages", sub: "CLI · MCP · SDK · AgentKit" },
             ].map((s) => (
               <div key={s.label} className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 text-center">
