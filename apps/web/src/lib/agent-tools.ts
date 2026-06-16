@@ -62,7 +62,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     category: "intelligence",
     skillId: "token-pick",
     inputs: [
-      { key: "context", label: "Market context (optional)", placeholder: "e.g. low-cap DeFi, AI agent tokens, memecoins" },
+      { key: "context", label: "Market context (optional)", placeholder: "optional — leave blank for best pick, or add a focus (e.g. rising volume, a sector)" },
     ],
     isComposite: true,
     featured: true,
