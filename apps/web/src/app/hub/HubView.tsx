@@ -493,6 +493,37 @@ function randomNonce(): `0x${string}` {
   return `0x${Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("")}`;
 }
 
+// Shared tool-info block (API endpoint + how-it-works pipeline) — rendered above
+// the inline runner. Kept here so the in-app tool view matches the old public
+// /hub/[tool] detail page without duplicating its markup.
+function ToolInfoBlock({ tool }: { tool: Tool }) {
+  const agents = tool.agents;
+  return (
+    <div className="px-6 py-5 border-b border-[#1A1A2E] space-y-4">
+      <div>
+        <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-1.5">// API ENDPOINT</p>
+        <code className="font-mono text-[11px] text-[#4FC3F7] bg-[#0D0D1A] border border-[#1A1A2E] rounded-md px-2 py-1 inline-block">POST /api/x402/{tool.id}</code>
+      </div>
+      <div>
+        <p className="font-mono text-[10px] text-[#A78BFA] tracking-widest mb-2">// HOW IT WORKS</p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {agents.map((a, i) => (
+            <span key={a} className="flex items-center gap-1.5">
+              <span className="px-2 py-0.5 rounded-lg border font-mono text-[10px]" style={{ color: AGENT_COLORS[a], borderColor: `${AGENT_COLORS[a]}30` }}>{AGENT_LABELS[a]}</span>
+              {i < agents.length - 1 && <span className="text-slate-700 text-xs">→</span>}
+            </span>
+          ))}
+        </div>
+        <p className="font-mono text-[10px] text-slate-600 mt-2.5 leading-relaxed">
+          {agents.length > 1
+            ? "Multi-agent consensus — each agent contributes, then synthesizes into one verdict, grounded in live Base data."
+            : "Runs on Base with live data grounding. Pay per call in USDC via x402 — no subscription, no API key."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function ToolRunner({ tool, onBack, cached, onResult }: {
   tool: Tool;
   onBack: () => void;
@@ -551,19 +582,19 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         body: JSON.stringify({ toolId: tool.id, result, isMock, mockReason }),
       });
       const data = await res.json() as { id?: string };
-      // Share the per-tool detail page (it has correct per-tool OG via
-      // generateMetadata); ?s= loads the shared result there. A hash like
+      // Share the in-app tool page (/app/hub/[tool]) — it has correct per-tool OG
+      // via generateMetadata, and ?s= loads the shared result inline. A hash like
       // /app/hub#s= can't carry OG (crawlers never see the fragment), which is
       // why shared links used to preview as generic Blue Chat.
       const url = data.id
-        ? `${window.location.origin}/hub/${tool.id}?s=${data.id}`
-        : `${window.location.origin}/hub/${tool.id}`;
+        ? `${window.location.origin}/app/hub/${tool.id}?s=${data.id}`
+        : `${window.location.origin}/app/hub/${tool.id}`;
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback: copy plain tool detail link
-      await navigator.clipboard.writeText(`${window.location.origin}/hub/${tool.id}`);
+      // Fallback: copy plain tool page link
+      await navigator.clipboard.writeText(`${window.location.origin}/app/hub/${tool.id}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -754,7 +785,15 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
             </div>
             <h2 className="font-mono text-xl font-bold text-white mb-2">{tool.name}</h2>
             <p className="font-mono text-xs text-slate-500 leading-relaxed">{tool.desc}</p>
+            {tool.price && (
+              <span className="inline-block mt-3 px-3 py-1 rounded-lg border border-[#4FC3F7]/30 bg-[#4FC3F7]/5 text-[#4FC3F7] font-mono text-xs font-bold">
+                {tool.price} <span className="text-[10px] text-slate-500 font-normal">/ run</span>
+              </span>
+            )}
           </div>
+
+          {/* API endpoint + how-it-works (shared info block) */}
+          <ToolInfoBlock tool={tool} />
 
           {/* Input form */}
           <div className="px-6 py-5 flex-1">
@@ -1392,6 +1431,31 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
       if (shared) apply(shared.toolId, shared.result, shared.isMock, shared.mockReason);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Load a shared result from ?s=<id> (the /app/hub/[tool]?s= share link) ──
+  // initialToolId selects the tool; this loads its shared output into the cache
+  // so the inline runner shows it. Applies once the tool exists (community tools
+  // load async), then strips ?s= for a clean URL.
+  const sApplied = useRef(false);
+  useEffect(() => {
+    if (sApplied.current || typeof window === "undefined") return;
+    const sid = new URLSearchParams(window.location.search).get("s");
+    if (!sid || !/^[a-f0-9]{6,32}$/.test(sid)) { sApplied.current = true; return; }
+    let off = false;
+    fetch(`/api/share/${sid}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then((p: { toolId?: string; result?: Record<string, unknown>; isMock?: boolean; mockReason?: "dev" | "service-down" } | null) => {
+        if (off || !p?.toolId || p.result == null) return;
+        const tool = allTools.find(t => t.id === p.toolId);
+        if (!tool) return; // not loaded yet — re-runs when allTools updates
+        sApplied.current = true;
+        setCache(prev => new Map(prev).set(p.toolId!, { result: p.result!, isMock: !!p.isMock, mockReason: p.mockReason ?? "dev" }));
+        setSelected(tool);
+        window.history.replaceState(null, "", `/app/hub/${p.toolId}`);
+      })
+      .catch(() => {});
+    return () => { off = true; };
+  }, [allTools]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── On mount: open a tool from ?tool=<id> (deep link from /hub/[tool] detail) ──
   useEffect(() => {

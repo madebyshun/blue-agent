@@ -296,7 +296,7 @@ export default function TerminalPage({ inShell = false }: { inShell?: boolean })
           mkLine("output",  "  → /hub/" + t.id),
           mkLine("blank",   ""),
         );
-        setTimeout(() => window.open("/hub/" + t.id, "_blank"), 500);
+        setTimeout(() => window.open("/app/hub/" + t.id, "_blank"), 500);
         return;
       }
 
