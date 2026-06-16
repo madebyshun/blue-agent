@@ -15,13 +15,13 @@
     "splashBackgroundColor": "#4FC3F7",
     "webhookUrl": "https://blueagent.dev/api/farcaster/webhook",
     "subtitle": "AI founder console for Base",
-    "description": "50+ AI tools, 3-agent consensus, USDC micropayments. Idea → build → audit → ship — pay per use via x402 on Base.",
+    "description": "69 AI tools, 3-agent consensus, USDC micropayments. Idea → build → audit → ship — pay per use via x402 on Base.",
     "primaryCategory": "developer-tools",
     "tags": ["base", "ai", "x402", "agents", "founder"],
     "tagline": "The AI agent layer on Base",
     "heroImageUrl": "https://blueagent.dev/og-chat.png",
     "ogTitle": "Blue Agent — AI agent layer on Base",
-    "ogDescription": "50+ AI tools. 3-agent consensus. USDC micropayments via x402. Built for Base builders.",
+    "ogDescription": "69 AI tools. 3-agent consensus. USDC micropayments via x402. Built for Base builders.",
     "ogImageUrl": "https://blueagent.dev/og-chat.png"
   }
 }

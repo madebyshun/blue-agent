@@ -170,7 +170,7 @@ const COMMANDS = [
 ];
 
 const SIDEBAR_SECTIONS = [
-  { id: "tools",    label: "x402 Tools",  count: "50+" },
+  { id: "tools",    label: "x402 Tools",  count: "69" },
   { id: "commands", label: "CLI Commands", count: "30" },
   { id: "skills",   label: "Skills",       count: "41" },
 ];
