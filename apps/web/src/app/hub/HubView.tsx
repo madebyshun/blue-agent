@@ -42,7 +42,7 @@ const FEATURED_IDS = ["launch-simulator-1", "investor-memo", "market-fit", "toke
 // Keys must exactly match input.key fields in agent-tools.ts
 const TOOL_EXAMPLES: Record<string, Record<string, string>> = {
   // ── Intelligence ─────────────────────────────────────────────────────────────
-  "token-pick-signal":         { context: "low-cap AI agent tokens on Base" },
+  "token-pick-signal":         { context: "rising volume, real liquidity" },
   "narrative-position":        { focus: "AI agents, Base DeFi" },
   "ecosystem-digest":          { focus: "DeFi protocols and AI agents" },
   "market-fit":                { description: "Pay-per-use AI research tool for Base builders — $0.50/report via x402 USDC micropayments", stage: "MVP" },
