@@ -105,6 +105,74 @@ export async function callBankrLLM(opts: {
   return wantsJson ? "{" + text : text;
 }
 
+// ─── Venice LLM (REAL web search) ────────────────────────────────────────────
+//
+// The Bankr gateway ignores `enable_web_search` (verified: the model replies it
+// "can't search the web"). Venice's `venice_parameters.enable_web_search` DOES
+// run a live search. Use this for any synthesis that must ground specific
+// numbers (TAM, APY, valuations, GitHub stars, revenue) in real data instead of
+// guessing. Drop-in: accepts the same {system, messages|user, temperature,
+// maxTokens} shape as callBankrLLM, and auto-prepends WEB_SEARCH_RULE.
+
+/** Prepended to every Venice (web-search) tool. Tells the model to search, not invent. */
+export const WEB_SEARCH_RULE =
+  "You have web search available. For any specific numbers (market size, TAM, revenue, user counts, APY, GitHub stars, valuations, projections) ALWAYS search for real data first and cite the source. If search returns no result, write \"[data unavailable]\" — NEVER generate numbers without a verified source.";
+
+/** For Bankr tools (no web search): forbid inventing numbers, but don't claim a search ability. */
+export const NO_FABRICATION_RULE =
+  "Do NOT invent specific numbers (market size, TAM, revenue, user counts, valuations, GitHub stars). If you do not have a verified source for a figure, write \"[data unavailable]\" instead of guessing.";
+
+export async function callVeniceLLM(opts: {
+  system: string;
+  /** Either a single user string… */
+  user?: string;
+  /** …or full messages (drop-in for callBankrLLM callers). */
+  messages?: BankrMessage[];
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  /** Web search on by default; pass false to disable. */
+  webSearch?: boolean;
+}): Promise<string> {
+  const apiKey = process.env.VENICE_INFERENCE_KEY ?? process.env.VENICE_API_KEY ?? "";
+  const msgs = opts.messages ?? (opts.user != null ? [{ role: "user", content: opts.user }] : []);
+  const system = `${WEB_SEARCH_RULE}\n\n${opts.system}`;
+  try {
+    const res = await fetch("https://api.venice.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: opts.model ?? "llama-3.3-70b",
+        messages: [{ role: "system", content: system }, ...msgs],
+        max_tokens: opts.maxTokens ?? 1000,
+        temperature: opts.temperature ?? 0.3,
+        venice_parameters: {
+          include_venice_system_prompt: false,
+          ...(opts.webSearch === false ? {} : { enable_web_search: "on" }),
+        },
+      }),
+      signal: AbortSignal.timeout(90_000), // web search adds latency; route maxDuration is 120s
+    });
+    if (!res.ok) throw new Error(`Venice ${res.status}: ${(await res.text()).slice(0, 150)}`);
+    const d = await res.json() as { choices?: { message?: { content?: string } }[] };
+    const text = d.choices?.[0]?.message?.content ?? "";
+    if (!text) throw new Error("Venice empty response");
+    return text;
+  } catch (e) {
+    // Resilience: if Venice (web search) is unavailable, fall back to Bankr so the
+    // paid tool still returns a result. The WEB_SEARCH_RULE is kept — with no search
+    // the model writes "[data unavailable]" rather than inventing numbers.
+    console.error("[venice] falling back to Bankr:", (e as Error).message);
+    return callBankrLLM({
+      system,
+      messages: msgs.length ? msgs : [{ role: "user", content: "" }],
+      temperature: opts.temperature,
+      maxTokens: opts.maxTokens,
+      _skipEnhance: true,
+    });
+  }
+}
+
 export function extractJsonObject(text: string): Record<string, unknown> | null {
   let raw = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
   const s = raw.indexOf("{");
