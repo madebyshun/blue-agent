@@ -1456,8 +1456,12 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
               const isFeatured = featuredIds.has(tool.id);
               const hasCached  = cache.has(tool.id);
               return (
-                <button key={tool.id} onClick={() => setSelected(tool)}
-                  className={`w-full text-left px-4 py-2.5 transition-all border-l-2 ${
+                <div key={tool.id} className="relative">
+                {/* Open the dedicated tool page — sibling Link (not nested in the button). */}
+                <Link href={`/hub/${tool.id}`} title="Open tool page" aria-label={`Open ${tool.name} page`}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-6 h-6 flex items-center justify-center rounded-md border border-[#4FC3F7]/35 bg-[#4FC3F7]/12 text-[#4FC3F7] text-[12px] font-bold opacity-80 hover:opacity-100 hover:scale-110 transition-all">↗</Link>
+                <button onClick={() => setSelected(tool)}
+                  className={`w-full text-left px-4 pr-9 py-2.5 transition-all border-l-2 ${
                     selected?.id === tool.id
                       ? "border-[#4FC3F7] bg-[#4FC3F7]/5 text-white"
                       : isFeatured
@@ -1481,6 +1485,7 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
                   </div>
                   <span className="font-mono text-sm">{tool.name}</span>
                 </button>
+                </div>
               );
             })}
           </div>
