@@ -1,20 +1,23 @@
 import { ImageResponse } from "next/og";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
+import { getMonoFonts } from "@/lib/og-font";
 
 export const runtime = "nodejs";
 export const alt = "Blue Hub — AI agent tools for Base builders";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-export default function Image() {
+export default async function Image() {
   const count = AGENT_TOOLS.filter(t => t.x402Url).length;
+  const fonts = await getMonoFonts();
+  const ff = fonts.length ? "JetBrains Mono" : "monospace";
   return new ImageResponse(
     (
       <div
         style={{
           width: "100%", height: "100%", display: "flex", flexDirection: "column",
           justifyContent: "center", backgroundColor: "#050508", padding: "72px",
-          fontFamily: "monospace", color: "#fff",
+          fontFamily: ff, color: "#fff",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", fontSize: 34, fontWeight: 700, marginBottom: 28 }}>
@@ -36,6 +39,6 @@ export default function Image() {
         </div>
       </div>
     ),
-    { ...size }
+    { ...size, fonts: fonts.length ? fonts : undefined }
   );
 }

@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
+import { getMonoFonts } from "@/lib/og-font";
 
 export const runtime = "nodejs";
 export const alt = "Blue Hub tool";
@@ -8,6 +9,8 @@ export const contentType = "image/png";
 
 export default async function Image({ params }: { params: Promise<{ tool: string }> }) {
   const { tool } = await params;
+  const fonts = await getMonoFonts();
+  const ff = fonts.length ? "JetBrains Mono" : "monospace";
   const t = AGENT_TOOLS.find(x => x.id === tool);
   const name = t?.name ?? "Blue Hub";
   const desc = t?.description ?? "AI agent tools for Base builders";
@@ -24,7 +27,7 @@ export default async function Image({ params }: { params: Promise<{ tool: string
         style={{
           width: "100%", height: "100%", display: "flex", flexDirection: "column",
           justifyContent: "space-between", backgroundColor: "#050508", padding: "64px",
-          fontFamily: "monospace", color: "#fff",
+          fontFamily: ff, color: "#fff",
         }}
       >
         {/* Top: brand + price */}
@@ -65,6 +68,6 @@ export default async function Image({ params }: { params: Promise<{ tool: string
         </div>
       </div>
     ),
-    { ...size }
+    { ...size, fonts: fonts.length ? fonts : undefined }
   );
 }
