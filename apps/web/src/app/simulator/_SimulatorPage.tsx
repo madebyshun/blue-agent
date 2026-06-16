@@ -432,7 +432,7 @@ export default function SimulatorPage({ inShell = false }: { inShell?: boolean }
                     <input
                       value={ticker}
                       onChange={(e) => setTicker(e.target.value)}
-                      placeholder="$BLUE"
+                      placeholder="$BLUEAGENT"
                       className="w-full px-3 py-2 rounded-lg font-mono text-sm bg-[#050508] border border-[#1A1A2E] text-white placeholder:text-slate-700 outline-none focus:border-[#4FC3F7]/40 transition-colors"
                     />
                   </div>

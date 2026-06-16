@@ -524,7 +524,7 @@ USE FOR ANY of these intents — match aggressively:
 - "giá ETH", "giá bitcoin", "giá X"  ← Vietnamese
 - "BTC hôm nay", "ETH bao nhiêu"
 - "what's SOL at", "how much is USDC"
-- "$BLUE price", "price of <any token>"
+- "$BLUEAGENT price", "price of <any token>"
 - "X to USD", "X worth"
 - Any sentence containing "price", "giá", "cost", "worth", "trading at", "spot"
 

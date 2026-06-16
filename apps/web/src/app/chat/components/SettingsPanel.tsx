@@ -115,7 +115,7 @@ export default function SettingsPanel({ section }: { section: SettingsSection })
         <>
           <PaneHeader
             title="Credits"
-            subtitle="Every message spends credits. Hold or stake $BLUE to level up."
+            subtitle="Every message spends credits. Hold or stake $BLUEAGENT to level up."
             right={
               <span
                 className="font-mono text-[10px] px-2 py-0.5 rounded border font-semibold shrink-0"
@@ -230,8 +230,8 @@ export default function SettingsPanel({ section }: { section: SettingsSection })
           {showHelp && (
             <div className="mt-2 rounded-2xl bg-[#0A0A12] border border-[#1A1A2E] p-4 space-y-3">
               <p className="font-mono text-[10px] text-slate-500 leading-relaxed">
-                With no wallet you get <span className="text-[#4FC3F7]">100 free credits/day</span> (~10 messages). Hold $BLUE to step up a tier and unlock tools.
-                Your tier — and how many credits you get — is set by your <span className="text-slate-300">$BLUE</span>,
+                With no wallet you get <span className="text-[#4FC3F7]">100 free credits/day</span> (~10 messages). Hold $BLUEAGENT to step up a tier and unlock tools.
+                Your tier — and how many credits you get — is set by your <span className="text-slate-300">$BLUEAGENT</span>,
                 and <span className="text-slate-300">holding or staking both count</span>.
               </p>
 
@@ -260,7 +260,7 @@ export default function SettingsPanel({ section }: { section: SettingsSection })
                 href="/app/dashboard?tab=stake"
                 className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-[#A78BFA] hover:opacity-80 transition-opacity"
               >
-                Stake $BLUE on the dashboard →
+                Stake $BLUEAGENT on the dashboard →
               </Link>
             </div>
           )}
