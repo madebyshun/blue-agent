@@ -3,18 +3,12 @@
 // Price: $0.75
 // Fully self-contained
 
-type Msg = { role: string; content: string };
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+import { callVeniceLLM } from "@/app/api/_lib/llm";
 
+// Venice — live web search so TAM / market figures are grounded, not invented.
 async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
-  const r = await fetch("https://llm.bankr.bot/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: "claude-haiku-4-5", system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
-  });
-  if (!r.ok) throw new Error(`LLM ${r.status}: ${await r.text()}`);
-  const d = await r.json() as { content?: { text: string }[] };
-  return d.content?.[0]?.text ?? "";
+  return callVeniceLLM({ system, user, temperature: temp, maxTokens: tokens });
 }
 function parseJson(t: string): Record<string, unknown> | null {
   let s = t.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
