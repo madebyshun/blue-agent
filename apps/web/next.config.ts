@@ -37,14 +37,8 @@ const nextConfig: NextConfig = {
         destination: "https://api.blueagent.dev/docs",
         permanent: false,
       },
-      {
-        // The hub app lives at /app/hub but tool detail pages live at /hub/[tool].
-        // A natural link like /app/hub/blue-idea has no route → 404. Point it at
-        // the real detail page.
-        source: "/app/hub/:tool",
-        destination: "/hub/:tool",
-        permanent: false,
-      },
+      // (Removed the /app/hub/:tool → /hub/:tool redirect: /app/hub/[tool] is now
+      //  a real in-app route — the redirect would shadow it.)
     ];
   },
   webpack(config) {
