@@ -1,32 +1,58 @@
 // x402/builder-score
-// Builder Score — anchored in REAL signals when supplied: GitHub repo activity
-// (lib/github: live stars/commits/recency → deterministic shipping score) and/or
-// on-chain wallet activity on Base (lib/onchain: live tx count + ERC-20 patterns).
-// The X/CT community/reputation dimension has no live feed, so it is a clearly
-// labelled AI estimate. The LLM never invents the grounded numbers.
-// Resilient: never 500.
+// Builder Score — anchored in REAL signals:
+//   • GitHub profile + repos by handle (public API, no key) — followers, repos,
+//     stars, languages, account age.
+//   • GitHub repo activity if a repo slug is supplied (lib/github).
+//   • On-chain wallet activity on Base if an address is supplied (lib/onchain).
+// Synthesis runs on Venice (live web search) so CT/Farcaster presence is grounded
+// in real results, not guessed from the handle name. The LLM never invents the
+// grounded numbers; missing data is labelled "unavailable". Resilient: never 500.
 // Price: $0.35
 
 import { fetchRepo, slugifyRepo, scoreRepoActivity, repoFactsPrompt, type RepoData } from "@/lib/github";
 import { getWalletSnapshot, snapshotToPrompt, normalizeAddress } from "@/lib/onchain";
+import { callVeniceLLM, extractJsonObject } from "@/app/api/_lib/llm";
 
-type Msg = { role: string; content: string };
-async function llm(system: string, user: string, temp = 0.3, tokens = 800): Promise<string> {
-  const r = await fetch("https://llm.bankr.bot/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: "claude-haiku-4-5", system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!r.ok) throw new Error(`LLM ${r.status}`);
-  const d = await r.json() as { content?: { text: string }[] };
-  return d.content?.[0]?.text ?? "";
+// ─── GitHub profile + repos by handle (public API, no key) ───────────────────
+type GhUser = { login: string; name?: string | null; public_repos: number; followers: number; created_at: string };
+type GhRepo = { name: string; stargazers_count: number; language: string | null; fork: boolean };
+type GhProfile = {
+  login: string;
+  public_repos: number;
+  followers: number;
+  created_at: string;
+  total_stars: number;
+  top_repos: { name: string; stars: number; language: string | null }[];
+};
+
+async function fetchGithub(handle: string): Promise<GhProfile | null> {
+  // GitHub usernames: alphanumeric + hyphen, ≤39 chars.
+  if (!/^[a-zA-Z0-9-]{1,39}$/.test(handle)) return null;
+  // GitHub REQUIRES a User-Agent or it 403s.
+  const headers = { Accept: "application/vnd.github+json", "User-Agent": "blue-agent" };
+  try {
+    const [uRes, rRes] = await Promise.all([
+      fetch(`https://api.github.com/users/${handle}`, { headers, signal: AbortSignal.timeout(8000) }),
+      fetch(`https://api.github.com/users/${handle}/repos?per_page=100&sort=updated`, { headers, signal: AbortSignal.timeout(8000) }),
+    ]);
+    if (!uRes.ok) return null; // 404 (not a GitHub user) / 403 (rate limit) → unavailable
+    const u = (await uRes.json()) as GhUser;
+    const repos = rRes.ok ? ((await rRes.json()) as GhRepo[]) : [];
+    const owned = Array.isArray(repos) ? repos.filter((r) => !r.fork) : [];
+    const total_stars = owned.reduce((s, r) => s + (r.stargazers_count || 0), 0);
+    const top_repos = owned
+      .slice()
+      .sort((a, b) => (b.stargazers_count || 0) - (a.stargazers_count || 0))
+      .slice(0, 5)
+      .map((r) => ({ name: r.name, stars: r.stargazers_count || 0, language: r.language ?? null }));
+    return { login: u.login, public_repos: u.public_repos, followers: u.followers, created_at: u.created_at, total_stars, top_repos };
+  } catch {
+    return null;
+  }
 }
+
 function parseJson(t: string): Record<string, unknown> | null {
-  let s = t.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
-  const i = s.indexOf("{"), j = s.lastIndexOf("}");
-  if (i >= 0 && j > i) s = s.slice(i, j + 1);
-  try { return JSON.parse(s); } catch { try { return JSON.parse(s.replace(/[\x00-\x1F\x7F]/g, " ")); } catch { return null; } }
+  return extractJsonObject(t);
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -39,57 +65,70 @@ export default async function handler(req: Request): Promise<Response> {
     const address = (body.address ?? url.searchParams.get("address") ?? "").trim();
     if (!handle && !repo && !address) return Response.json({ error: "handle, repo (github), or address is required" }, { status: 400 });
 
-    // ── Real grounding: GitHub repo activity + on-chain wallet activity ────────
-    const [repoData, snap] = await Promise.all([
+    // ── Real grounding: GitHub (repo slug AND/OR handle profile) + on-chain ────
+    const [repoData, gh, snap] = await Promise.all([
       repo ? fetchRepo(slugifyRepo(repo)) : Promise.resolve<RepoData | null>(null),
+      handle ? fetchGithub(handle) : Promise.resolve<GhProfile | null>(null),
       address && normalizeAddress(address) ? getWalletSnapshot(address) : Promise.resolve(null),
     ]);
     const repoScored = repoData ? scoreRepoActivity(repoData) : null;
     const onchainGrounded = !!snap && (snap.txCount !== null || snap.transferCount > 0);
-    const grounded = !!repoScored || onchainGrounded;
+    const githubGrounded = !!repoScored || !!gh;
+    const grounded = githubGrounded || onchainGrounded;
 
     const realCtx = [
-      repoScored ? `REAL GitHub shipping data:\n${repoFactsPrompt(repoData!, repoScored)}` : "No GitHub repo supplied — shipping_history is an estimate.",
-      onchainGrounded ? `REAL on-chain activity:\n${snapshotToPrompt(snap!)}` : "No wallet address supplied — onchain_activity is an estimate.",
-      `Builder X/Twitter handle: @${handle || "(unknown)"} — NO live social feed; community/reputation is an AI estimate, not measured.`,
-    ].join("\n\n");
+      repoScored ? `REAL GitHub repo activity:\n${repoFactsPrompt(repoData!, repoScored)}` : "",
+      gh
+        ? `REAL GitHub profile @${gh.login}: public_repos=${gh.public_repos}, followers=${gh.followers}, account_created=${gh.created_at}, total_stars(owned)=${gh.total_stars}. Top repos: ${gh.top_repos.map((r) => `${r.name} (${r.stars}★${r.language ? ", " + r.language : ""})`).join(", ") || "none"}.`
+        : "",
+      !githubGrounded ? `github: unavailable — no GitHub data found for "${handle || repo || "(none)"}". Do NOT infer GitHub activity, shipping history, or technical skill from the handle NAME.` : "",
+      onchainGrounded ? `REAL on-chain activity:\n${snapshotToPrompt(snap!)}` : "onchain: unavailable — no wallet address supplied. Do NOT infer on-chain activity.",
+      `Builder X/Twitter handle: @${handle || "(unknown)"}. Use web search to check real CT / Farcaster presence; if nothing verifiable is found, write "[data unavailable]" rather than guessing.`,
+    ].filter(Boolean).join("\n\n");
 
     const system = `You are Blue Agent — builder reputation analyst for Base (chain 8453).
-${grounded ? "You are given REAL signals (GitHub repo activity score and/or on-chain wallet activity). Anchor shipping_history + technical_credibility on the GitHub data and onchain_activity on the wallet data; reference them exactly, never invent numbers." : "No live signals were supplied — clearly frame the score as an estimate."}
-The X/CT community/reputation dimension has no live data — treat it as a qualitative estimate.
+You are given REAL signals where available (GitHub profile/repo activity, on-chain wallet activity). Anchor shipping_history + technical_credibility on the GitHub data and onchain_activity on the wallet data — reference the real numbers, never invent them.
+CRITICAL: Never infer skill, output, or reputation from the handle's NAME or vibe. If a dimension has no real data, set it to "unknown" and say so. For community/CT presence, search the web; if nothing is found, write "[data unavailable]".
 Return ONLY raw JSON. No markdown.
 Schema: {
-  "score": <0-100>,
+  "score": <0-100 or null if no data>,
   "tier": "legendary|elite|active|emerging|unknown",
   "onchain_activity": "high|medium|low|unknown",
   "shipping_history": "prolific|active|occasional|unknown",
   "technical_credibility": "high|medium|low|unknown",
-  "base_ecosystem_score": <0-100>,
-  "known_projects": ["<project>"],
-  "community": { "score": <0-100>, "ct_presence": "strong|moderate|minimal|unknown", "verdict": "<1 sentence, labelled estimate>" },
-  "blue_assessment": "<2 sentences>"
+  "base_ecosystem_score": <0-100 or null>,
+  "known_projects": ["<project, only if verified>"],
+  "community": { "score": <0-100 or null>, "ct_presence": "strong|moderate|minimal|unknown", "verdict": "<1 sentence, cite source or [data unavailable]>" },
+  "blue_assessment": "<2 sentences grounded in the real data above>"
 }`;
 
     let blue: Record<string, unknown> | null = null;
     for (let attempt = 0; attempt < 2 && !blue; attempt++) {
-      try { blue = parseJson(await llm(system, realCtx)); } catch { /* retry */ }
+      try { blue = parseJson(await callVeniceLLM({ system, user: realCtx, temperature: 0.3, maxTokens: 900 })); } catch { /* retry */ }
     }
-    if (!blue) blue = { score: null, tier: "unknown", onchain_activity: "unknown", shipping_history: "unknown", technical_credibility: "unknown", base_ecosystem_score: null, known_projects: [], community: { score: null, ct_presence: "unknown", verdict: "Estimate unavailable this run." }, blue_assessment: "Synthesis briefly unavailable — re-run.", degraded: true };
+    if (!blue) blue = { score: null, tier: "unknown", onchain_activity: "unknown", shipping_history: "unknown", technical_credibility: "unknown", base_ecosystem_score: null, known_projects: [], community: { score: null, ct_presence: "unknown", verdict: "Estimate unavailable this run." }, blue_assessment: "Synthesis briefly unavailable — see github/onchain data below, or re-run.", degraded: true };
 
-    // When GitHub-grounded, anchor the headline score on the real shipping score.
+    // Anchor the headline score on the real GitHub repo score when available.
     const score = repoScored ? Math.round(repoScored.score * 0.6 + ((blue.base_ecosystem_score as number) ?? repoScored.score) * 0.4) : ((blue.score as number) ?? null);
     const tier = score == null ? "unknown" : score >= 85 ? "legendary" : score >= 70 ? "elite" : score >= 50 ? "active" : score >= 30 ? "emerging" : "unknown";
 
     return Response.json({
       tool: "builder-score",
       timestamp: new Date().toISOString(),
-      data_source: grounded
-        ? `${repoScored ? "GitHub (live repo activity)" : ""}${repoScored && onchainGrounded ? " + " : ""}${onchainGrounded ? "Base RPC/Basescan (live on-chain)" : ""} + community estimate`.trim()
-        : "AI estimate (no repo/address supplied — community not measured)",
+      data_source: [
+        repoScored ? "GitHub repo (live)" : "",
+        gh ? "GitHub profile (live)" : "",
+        onchainGrounded ? "Base RPC/Basescan (live)" : "",
+        "Venice web search (CT/community)",
+      ].filter(Boolean).join(" + "),
       handle: handle || null,
       url: handle ? `https://x.com/${handle}` : null,
-      github: repoScored ? { repo: repoData!.fullName, score: repoScored.score, grade: repoScored.grade, dimensions: repoScored.dimensions, stars: repoData!.stars, days_since_push: repoData!.daysSincePush, recent_commits: repoData!.commitCount } : null,
-      onchain: onchainGrounded ? { eth_balance: snap!.ethBalance, tx_count: snap!.txCount, distinct_tokens: snap!.distinctTokens, last_activity_days: snap!.lastActivityDays } : null,
+      github: repoScored
+        ? { repo: repoData!.fullName, score: repoScored.score, grade: repoScored.grade, dimensions: repoScored.dimensions, stars: repoData!.stars, days_since_push: repoData!.daysSincePush, recent_commits: repoData!.commitCount }
+        : gh
+        ? { profile: gh.login, public_repos: gh.public_repos, followers: gh.followers, account_created: gh.created_at, total_stars: gh.total_stars, top_repos: gh.top_repos }
+        : "unavailable",
+      onchain: onchainGrounded ? { eth_balance: snap!.ethBalance, tx_count: snap!.txCount, distinct_tokens: snap!.distinctTokens, last_activity_days: snap!.lastActivityDays } : "unavailable",
       ...blue,
       ...(score != null ? { score, tier } : {}),
     });
