@@ -37,7 +37,9 @@ const TOOLS = [
   { slug: "pitch-intelligence",   price: "$0.35", category: "builder",       description: "Pitch deck intelligence" },
   { slug: "fundraise-timing",     price: "$0.50", category: "builder",       description: "Fundraise timing signal" },
   { slug: "base-grant-finder",    price: "$0.35", category: "builder",       description: "Base ecosystem grant matching" },
-  { slug: "launch-simulator",     price: "$0.50", category: "builder",       description: "Token launch scenario simulator" },
+  { slug: "launch-simulator-1",   price: "$0.10", category: "builder",       description: "Launch Simulator Tier 1 — quick 3-agent signal" },
+  { slug: "launch-simulator-2",   price: "$0.35", category: "builder",       description: "Launch Simulator Tier 2 — deep signal + live market data" },
+  { slug: "launch-simulator-3",   price: "$0.50", category: "builder",       description: "Launch Simulator Tier 3 — full multi-agent report" },
   // Wallet
   { slug: "wallet-pnl",           price: "$0.20", category: "wallet",        description: "Wallet PnL calculator" },
   { slug: "wallet-strategy-analyzer", price: "$0.50", category: "wallet",    description: "Wallet on-chain strategy decoder" },
