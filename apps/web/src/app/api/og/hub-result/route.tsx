@@ -9,21 +9,22 @@
 import { ImageResponse } from "next/og";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { kvGet } from "@/lib/kv";
-import { getMonoFonts, verdictColor } from "@/lib/og-font";
+import { getBrandFonts, brandFonts, verdictColor, C, BG_IMAGE } from "@/lib/og-font";
 
 export const runtime = "nodejs";
 const size = { width: 1200, height: 630 };
 
 function agentsOf(t?: { isComposite?: boolean; agentName?: string }): [string, string][] {
-  if (t?.isComposite) return [["Blue", "#4FC3F7"], ["Aeon", "#A78BFA"], ["MiroShark", "#34D399"]];
-  if (t?.agentName === "Aeon") return [["Aeon", "#A78BFA"]];
-  if (t?.agentName === "MiroShark") return [["MiroShark", "#34D399"]];
-  return [["Blue", "#4FC3F7"]];
+  if (t?.isComposite) return [["Blueagent", C.cyan], ["Aeon", C.violet], ["MiroShark", C.green]];
+  if (t?.agentName === "Aeon") return [["Aeon", C.violet]];
+  if (t?.agentName === "MiroShark") return [["MiroShark", C.green]];
+  return [["Blueagent", C.cyan]];
 }
 
 export async function GET(req: Request) {
   const id = new URL(req.url).searchParams.get("s") ?? "";
-  const fonts = await getMonoFonts();
+  const fonts = await getBrandFonts();
+  const f = brandFonts(fonts.length > 0);
 
   type SharePayload = { toolId?: string; result?: Record<string, unknown> };
   let payload: SharePayload | null = null;
@@ -43,36 +44,42 @@ export async function GET(req: Request) {
   const verdict = typeof verdictRaw === "string" && verdictRaw.trim() ? verdictRaw.trim() : null;
   const confRaw = r.confidence ?? blue.score ?? null;
   const confidence = typeof confRaw === "number" ? Math.round(confRaw) : null;
-  const vColor = verdict ? verdictColor(verdict) : "#4FC3F7";
-
-  const ff = fonts.length ? "JetBrains Mono" : "monospace";
+  const vColor = verdict ? verdictColor(verdict) : C.cyan;
 
   return new ImageResponse(
     (
-      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", backgroundColor: "#050508", padding: "64px", fontFamily: ff, color: "#fff" }}>
+      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", backgroundColor: C.bg, backgroundImage: BG_IMAGE, padding: "64px", fontFamily: f.display, color: C.white }}>
         {/* Top: brand + price */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-          <div style={{ display: "flex", alignItems: "center", fontSize: 30, fontWeight: 700 }}>
-            <span style={{ color: "#fff" }}>BLUE</span>
-            <span style={{ color: "#A78BFA" }}>HUB</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            {/* Logo mark: cobalt→cyan rounded square + pause bars */}
+            <div style={{ display: "flex", width: 56, height: 56, borderRadius: 16, background: `linear-gradient(135deg, ${C.primary}, ${C.cyan})`, alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <div style={{ display: "flex", width: 8, height: 22, borderRadius: 3, backgroundColor: C.white }} />
+              <div style={{ display: "flex", width: 8, height: 22, borderRadius: 3, backgroundColor: C.white }} />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", fontFamily: f.display, fontSize: 30, fontWeight: 700, letterSpacing: 1 }}>
+              <span style={{ color: C.white }}>BLUEAGENT</span>
+              <span style={{ color: C.muted, margin: "0 10px" }}>/</span>
+              <span style={{ color: C.cyan }}>HUB</span>
+            </div>
           </div>
           {price ? (
-            <div style={{ display: "flex", fontSize: 28, color: "#4FC3F7", border: "2px solid #4FC3F7", borderRadius: 14, padding: "8px 20px" }}>{price} / run</div>
+            <div style={{ display: "flex", fontFamily: f.mono, fontSize: 26, color: C.cyan, border: `2px solid ${C.cyan}`, borderRadius: 12, padding: "8px 20px" }}>{price} / run</div>
           ) : <div style={{ display: "flex" }} />}
         </div>
 
         {/* Middle: tool name + (verdict + confidence | description) */}
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", fontSize: 68, fontWeight: 800, lineHeight: 1.05, color: "#fff", maxWidth: "1000px" }}>{name}</div>
+          <div style={{ display: "flex", fontSize: 68, fontWeight: 700, lineHeight: 1.05, letterSpacing: -1, color: C.white, maxWidth: "1000px" }}>{name}</div>
           {verdict ? (
             <div style={{ display: "flex", alignItems: "center", gap: 20, marginTop: 28 }}>
-              <div style={{ display: "flex", alignItems: "center", fontSize: 44, fontWeight: 800, color: vColor, border: `3px solid ${vColor}`, borderRadius: 16, padding: "10px 28px" }}>{verdict.toUpperCase()}</div>
+              <div style={{ display: "flex", alignItems: "center", fontFamily: f.mono, fontSize: 42, fontWeight: 700, color: vColor, border: `3px solid ${vColor}`, borderRadius: 14, padding: "10px 28px" }}>{verdict.toUpperCase()}</div>
               {confidence != null && (
-                <div style={{ display: "flex", fontSize: 34, color: "#9aa0aa" }}>{confidence}<span style={{ display: "flex", color: "#5b5b6e" }}>/100 confidence</span></div>
+                <div style={{ display: "flex", fontFamily: f.mono, fontSize: 34, color: C.muted }}>{confidence}<span style={{ display: "flex", color: "#52607a" }}>/100 confidence</span></div>
               )}
             </div>
           ) : (
-            <div style={{ display: "flex", fontSize: 30, color: "#9aa0aa", marginTop: 24, maxWidth: "1000px", lineHeight: 1.35 }}>{desc.length > 140 ? desc.slice(0, 140) + "…" : desc}</div>
+            <div style={{ display: "flex", fontSize: 30, color: C.muted, marginTop: 24, maxWidth: "1000px", lineHeight: 1.4 }}>{desc.length > 140 ? desc.slice(0, 140) + "…" : desc}</div>
           )}
         </div>
 
@@ -80,10 +87,10 @@ export async function GET(req: Request) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
           <div style={{ display: "flex", gap: 14 }}>
             {agents.map(([label, color]) => (
-              <div key={label} style={{ display: "flex", alignItems: "center", fontSize: 24, color, border: `2px solid ${color}55`, borderRadius: 999, padding: "6px 18px" }}>{label}</div>
+              <div key={label} style={{ display: "flex", alignItems: "center", fontFamily: f.mono, fontSize: 23, color, border: `2px solid ${color}55`, borderRadius: 999, padding: "6px 18px" }}>{label}</div>
             ))}
           </div>
-          <div style={{ display: "flex", fontSize: 24, color: "#6b6b7e" }}>{verdict ? "3-agent consensus · Base" : "Pay per call · USDC on Base · no API key"}</div>
+          <div style={{ display: "flex", fontFamily: f.mono, fontSize: 23, color: C.muted }}>{verdict ? "3-agent consensus · Base" : "Pay per call · USDC on Base · no API key"}</div>
         </div>
       </div>
     ),
