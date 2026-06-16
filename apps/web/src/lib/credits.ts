@@ -56,7 +56,7 @@ const TIERS: { min: number; tier: HolderTier; dailyCr: number; discount: number;
 /**
  * Guest = no wallet connected. 100 cr/day ≈ 10 Fast messages — enough to chat
  * and feel the product. Tool usage (400–500 cr each) intentionally needs a
- * tier: hold $BLUE to step up (500K → Starter 500/day, 2M → Pro 2,000/day,
+ * tier: hold $BLUEAGENT to step up (500K → Starter 500/day, 2M → Pro 2,000/day,
  * 10M → Max unlimited). The token bar is cheap, so "hold to use tools" is a
  * low-friction ask that still gives the token real utility.
  */

@@ -5,7 +5,7 @@ import Providers from "@/components/Providers";
 const SITE = "https://blueagent.dev";
 const TITLE = "Blue Agent — AI agent layer on Base";
 const DESCRIPTION =
-  "50+ AI tools. 3-agent consensus (Blue × Aeon × MiroShark). Pay per use via x402 USDC on Base. Idea → build → audit → ship.";
+  "69 AI tools. 3-agent consensus (Blue × Aeon × MiroShark). Pay per use via x402 USDC on Base. Idea → build → audit → ship.";
 
 // Farcaster v2 mini-app embed — what Base App reads when blueagent.dev is
 // shared in a feed. Tap the button → launches /app/chat inside the wallet's
