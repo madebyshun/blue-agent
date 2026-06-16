@@ -1089,64 +1089,6 @@ function VerifiedAiBadges({ tool }: { tool: Tool }) {
   );
 }
 
-function ToolCardBig({ tool, runs, onSelect }: { tool: Tool; runs: number; onSelect: (t: Tool) => void }) {
-  return (
-    <div className="relative">
-    <Link href={`/hub/${tool.id}`} title="Open tool page" aria-label="Open tool page"
-      className="absolute top-2.5 right-2.5 z-10 w-6 h-6 flex items-center justify-center rounded-md border border-[#A78BFA]/25 bg-[#0A0A12] text-[#A78BFA] text-[11px] opacity-60 hover:opacity-100 hover:border-[#A78BFA]/60 transition-all">↗</Link>
-    <button onClick={() => onSelect(tool)}
-      className="w-full text-left rounded-xl p-4 transition-all group border border-[#A78BFA]/20 hover:border-[#A78BFA]/50 flex flex-col relative overflow-hidden"
-      style={{ background: "linear-gradient(135deg, #A78BFA08 0%, #4FC3F705 100%)" }}>
-      <div className="absolute inset-0 bg-gradient-to-br from-[#A78BFA]/0 via-transparent to-[#4FC3F7]/0 group-hover:from-[#A78BFA]/5 group-hover:to-[#4FC3F7]/5 transition-all pointer-events-none" />
-      <div className="relative">
-        <div className="flex items-center gap-1.5 mb-3">
-          {tool.agents.map(a => (
-            <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-          ))}
-          <span className="font-mono text-[9px] text-slate-700 ml-auto">{tool.price}</span>
-        </div>
-        <p className="font-mono text-sm font-bold text-white mb-1 leading-snug group-hover:text-[#A78BFA] transition-colors">{tool.name}</p>
-        <p className="font-mono text-[10px] text-slate-500 leading-relaxed line-clamp-2 mb-3 min-h-[28px]">{tool.desc}</p>
-        <div className="mb-2"><VerifiedAiBadges tool={tool} /></div>
-        <div className="flex items-center justify-between pt-2 border-t border-[#A78BFA]/10">
-          <span className="font-mono text-[10px] text-slate-600">
-            {runs > 0 ? <><span className="text-white font-semibold">{runs}</span> calls</> : "new"}
-          </span>
-          <span className="font-mono text-[10px] font-semibold text-[#A78BFA] opacity-70 group-hover:opacity-100 transition-opacity">
-            Try Now →
-          </span>
-        </div>
-      </div>
-    </button>
-    </div>
-  );
-}
-
-function ToolCardCompact({ tool, runs, onSelect }: { tool: Tool; runs: number; onSelect: (t: Tool) => void }) {
-  return (
-    <div className="relative">
-    <Link href={`/hub/${tool.id}`} title="Open tool page" aria-label="Open tool page"
-      className="absolute top-2 right-2 z-10 w-5 h-5 flex items-center justify-center rounded-md border border-[#4FC3F7]/25 bg-[#0A0A12] text-[#4FC3F7] text-[10px] opacity-60 hover:opacity-100 hover:border-[#4FC3F7]/60 transition-all">↗</Link>
-    <button onClick={() => onSelect(tool)}
-      className="w-full text-left rounded-xl p-3.5 transition-all group border border-[#1A1A2E] hover:border-[#4FC3F7]/40 hover:bg-white/[0.02] flex flex-col">
-      <div className="flex items-center gap-1 mb-2">
-        {tool.agents.map(a => (
-          <span key={a} className="w-1 h-1 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-        ))}
-        <span className="font-mono text-[9px] text-slate-700 ml-auto">{tool.price}</span>
-      </div>
-      <p className="font-mono text-xs font-semibold text-white mb-0.5 leading-snug group-hover:text-[#4FC3F7] transition-colors">{tool.name}</p>
-      <p className="font-mono text-[10px] text-slate-600 leading-relaxed line-clamp-2 flex-1 mb-2">{tool.desc}</p>
-      <div className="mb-2"><VerifiedAiBadges tool={tool} /></div>
-      <div className="flex items-center justify-between pt-2 border-t border-[#1A1A2E]">
-        <span className="font-mono text-[9px] text-slate-700">{runs > 0 ? `${runs} calls` : "new"}</span>
-        <span className="font-mono text-[10px] font-semibold text-[#4FC3F7] opacity-60 group-hover:opacity-100 transition-opacity">Try →</span>
-      </div>
-    </button>
-    </div>
-  );
-}
-
 /**
  * Horizontal scrolling row — App Store style "shelf".
  * Hides overflow on small screens, snap-scrolls on touch.
@@ -1186,12 +1128,19 @@ function ShelfCard({
   tool, runs, onSelect, accent, compact,
 }: { tool: Tool; runs: number; onSelect: (t: Tool) => void; accent: string; compact?: boolean }) {
   return (
+    <div className="relative h-full">
+    {/* Open the dedicated tool page — sibling Link (not nested in the button). */}
+    <Link href={`/hub/${tool.id}`} title="Open tool page" aria-label={`Open ${tool.name} page`}
+      className="absolute top-2 right-2 z-10 w-7 h-7 flex items-center justify-center rounded-lg border text-[13px] font-bold transition-transform hover:scale-110"
+      style={{ borderColor: `${accent}66`, background: `${accent}1f`, color: accent }}>
+      ↗
+    </Link>
     <button onClick={() => onSelect(tool)}
       className="w-full text-left rounded-xl p-3.5 transition-all group border flex flex-col h-full"
       style={{ borderColor: `${accent}25`, background: `${accent}06` }}
       onMouseEnter={e => (e.currentTarget.style.borderColor = `${accent}55`)}
       onMouseLeave={e => (e.currentTarget.style.borderColor = `${accent}25`)}>
-      <div className="flex items-center gap-1.5 mb-2">
+      <div className="flex items-center gap-1.5 mb-2 pr-8">
         {tool.agents.map(a => (
           <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
         ))}
@@ -1205,6 +1154,7 @@ function ShelfCard({
         <span className="font-mono text-[10px] font-semibold transition-opacity opacity-70 group-hover:opacity-100" style={{ color: accent }}>Try →</span>
       </div>
     </button>
+    </div>
   );
 }
 
@@ -1244,26 +1194,6 @@ function ProviderCard({ provider }: { provider: { agent: Agent; toolCount: numbe
         </div>
       </div>
     </div>
-  );
-}
-
-function ToolRow({ tool, runs, onSelect }: { tool: Tool; runs: number; onSelect: (t: Tool) => void }) {
-  return (
-    <button onClick={() => onSelect(tool)}
-      className="w-full text-left px-4 py-3 grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 items-center border-b border-[#1A1A2E] last:border-0 hover:bg-[#4FC3F7]/5 transition-colors group">
-      <div className="flex items-center gap-1 shrink-0">
-        {tool.agents.map(a => (
-          <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-        ))}
-      </div>
-      <div className="min-w-0">
-        <p className="font-mono text-xs font-semibold text-white truncate group-hover:text-[#4FC3F7] transition-colors">{tool.name}</p>
-        <p className="font-mono text-[10px] text-slate-600 truncate">{tool.desc}</p>
-      </div>
-      <VerifiedAiBadges tool={tool} />
-      <span className="font-mono text-[10px] text-slate-700 w-16 text-right">{runs > 0 ? `${runs} calls` : "—"}</span>
-      <span className="font-mono text-[10px] text-slate-500 w-14 text-right">{tool.price}</span>
-    </button>
   );
 }
 
