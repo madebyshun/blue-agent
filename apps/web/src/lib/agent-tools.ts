@@ -403,34 +403,6 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/builder-deep-dd`,
     x402Body: (v) => ({ target: v.target ?? "", type: "builder" }),
   },
-  {
-    id: "launch-simulator",
-    name: "Launch Simulator",
-    description: "Simulate your token launch with 3-agent consensus: Blue strategy + Aeon market + MiroShark crowd.",
-    agentHandle: "composite",
-    agentName: "Blue + Aeon",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "token_name", label: "Token name", placeholder: "e.g. $MYTOKEN", required: true },
-      { key: "launch_price", label: "Launch price (USD)", placeholder: "e.g. 0.001", required: true },
-      { key: "total_supply", label: "Total supply", placeholder: "e.g. 1000000000" },
-      { key: "liquidity", label: "Initial liquidity (USD)", placeholder: "e.g. 50000" },
-      { key: "tier", label: "Analysis tier", placeholder: "standard / deep / ultra" },
-    ],
-    isComposite: true,
-    featured: true,
-    price: "$0.50",
-    priceUSDC: 500000,
-    x402Url: `${X402_BASE}/token-launch-readiness`,
-    x402Body: (v) => ({
-      name: v.token_name ?? "",
-      project: v.token_name ?? "",
-      ticker: v.token_name ?? "",
-      description: `Launch price: $${v.launch_price ?? "0"}, supply: ${v.total_supply ?? "1B"}, liquidity: $${v.liquidity ?? "50k"}`,
-      traction: v.tier ?? "standard",
-    }),
-  },
 
   // ── Trading & Alpha ──────────────────────────────────────────────────────────
 

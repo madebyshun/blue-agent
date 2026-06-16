@@ -36,7 +36,7 @@ interface Tool {
   callPath?:       string;
 }
 
-const FEATURED_IDS = ["launch-simulator", "investor-memo", "market-fit", "token-launch-readiness"];
+const FEATURED_IDS = ["launch-simulator-1", "investor-memo", "market-fit", "token-launch-readiness"];
 
 // ─── Example inputs per tool ──────────────────────────────────────────────────
 // Keys must exactly match input.key fields in agent-tools.ts
@@ -62,8 +62,10 @@ const TOOL_EXAMPLES: Record<string, Record<string, string>> = {
   "community-sentiment":       { project: "Base", channels: "@base Twitter, Base Discord, base.mirror.xyz" },
   "defi-opportunity":          { focus: "stablecoin yield above 8% APR on Base", risk_tolerance: "medium" },
   "builder-deep-dd":           { target: "@madebyshun" },
-  // ── Launch Simulator ──────────────────────────────────────────────────────────
-  "launch-simulator":          { token_name: "BLUEAI", launch_price: "0.001", total_supply: "1000000000", liquidity: "50000", tier: "deep" },
+  // ── Launch Simulator (3 tiers) ────────────────────────────────────────────────
+  "launch-simulator-1":        { project: "BlueAI", description: "AI agent tooling on Base — 69 live tools, 500 weekly users, $5k MRR, pre-launch", ticker: "$BLUEAI" },
+  "launch-simulator-2":        { project: "BlueAI", description: "AI agent tooling on Base — 69 live tools, 500 weekly users, $5k MRR, pre-launch", ticker: "$BLUEAI", contract: "0xf895783b2931c919955e18b5e3343e7c7c456ba3" },
+  "launch-simulator-3":        { project: "BlueAI", description: "AI agent tooling on Base — 69 live tools, 500 weekly users, $5k MRR, pre-launch", ticker: "$BLUEAI", contract: "0xf895783b2931c919955e18b5e3343e7c7c456ba3" },
   // ── Trading ───────────────────────────────────────────────────────────────────
   "whale-copy-signal":         { wallet: "", token: "WETH" },
   "token-momentum-scanner":    { timeframe: "24h", filter: "min $50k volume, AI agent narrative" },
@@ -116,8 +118,6 @@ const TOOL_EXAMPLES: Record<string, Record<string, string>> = {
   "alert-subscribe": { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", webhook: "https://your-server.com/webhook", events: "large_transfer,whale_buy" },
   "alert-check":     { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
   // ── Launch (extended) ─────────────────────────────────────────────────────────
-  "launch-simulator-2": { token_name: "BLUEAI", launch_price: "0.001", total_supply: "1000000000", liquidity: "50000" },
-  "launch-simulator-3": { token_name: "BLUEAI", launch_price: "0.001", total_supply: "1000000000", liquidity: "50000" },
   "launch-advisor":     { token_name: "BLUEAI", description: "AI agent tooling on Base — 64 live tools, 500 weekly users, $5k MRR", raise: "$750k" },
   "grant-evaluator":    { project: "Blue Agent", description: "64 pay-per-use AI tools for Base builders via x402 micropayments. 500 weekly users, $5k MRR.", ask: "$50k" },
 };
@@ -967,7 +967,7 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
     label: "For Founders",
     desc: "Launch, market fit, growth, fundraising",
     color: "#A78BFA",
-    ids: ["market-fit", "token-launch-readiness", "competitor-scan", "gtm-brief", "launch-simulator", "launch-simulator-2", "launch-simulator-3", "launch-advisor", "base-grant-finder", "grant-evaluator", "roadmap-validator", "token-distribution-plan", "stack-recommender"],
+    ids: ["market-fit", "token-launch-readiness", "competitor-scan", "gtm-brief", "launch-simulator-1", "launch-simulator-2", "launch-simulator-3", "launch-advisor", "base-grant-finder", "grant-evaluator", "roadmap-validator", "token-distribution-plan", "stack-recommender"],
   },
   {
     id: "investors",
@@ -981,7 +981,7 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
     label: "Blue Commands",
     desc: "Idea → build → audit → ship → raise",
     color: "#60A5FA",
-    ids: ["blue-idea", "blue-build", "blue-audit", "blue-ship", "blue-raise"],
+    ids: ["blue-idea", "blue-build", "blue-audit", "blue-ship", "blue-raise", "blue-research", "blue-compose", "blue-monitor", "blue-analytics", "blue-simulate", "blue-deploy", "blue-stream", "blue-registry"],
   },
   {
     id: "security",
@@ -1002,7 +1002,7 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
     label: "Earn & DeFi",
     desc: "Yield optimization, LP analysis, tax reporting",
     color: "#34D399",
-    ids: ["yield-optimizer", "lp-analyzer", "tax-report"],
+    ids: ["yield-optimizer", "lp-analyzer", "tax-report", "agent-yield-finder"],
   },
   {
     id: "alerts",
