@@ -16,7 +16,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const toolPages: MetadataRoute.Sitemap = AGENT_TOOLS
     .filter(t => t.x402Url)
     .map(t => ({
-      url: `${BASE}/hub/${t.id}`,
+      url: `${BASE}/app/hub/${t.id}`,
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.8,

@@ -493,6 +493,37 @@ function randomNonce(): `0x${string}` {
   return `0x${Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("")}`;
 }
 
+// Shared tool-info block (API endpoint + how-it-works pipeline) — rendered above
+// the inline runner. Kept here so the in-app tool view matches the old public
+// /hub/[tool] detail page without duplicating its markup.
+function ToolInfoBlock({ tool }: { tool: Tool }) {
+  const agents = tool.agents;
+  return (
+    <div className="px-6 py-5 border-b border-[#1A1A2E] space-y-4">
+      <div>
+        <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-1.5">// API ENDPOINT</p>
+        <code className="font-mono text-[11px] text-[#4FC3F7] bg-[#0D0D1A] border border-[#1A1A2E] rounded-md px-2 py-1 inline-block">POST /api/x402/{tool.id}</code>
+      </div>
+      <div>
+        <p className="font-mono text-[10px] text-[#A78BFA] tracking-widest mb-2">// HOW IT WORKS</p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {agents.map((a, i) => (
+            <span key={a} className="flex items-center gap-1.5">
+              <span className="px-2 py-0.5 rounded-lg border font-mono text-[10px]" style={{ color: AGENT_COLORS[a], borderColor: `${AGENT_COLORS[a]}30` }}>{AGENT_LABELS[a]}</span>
+              {i < agents.length - 1 && <span className="text-slate-700 text-xs">→</span>}
+            </span>
+          ))}
+        </div>
+        <p className="font-mono text-[10px] text-slate-600 mt-2.5 leading-relaxed">
+          {agents.length > 1
+            ? "Multi-agent consensus — each agent contributes, then synthesizes into one verdict, grounded in live Base data."
+            : "Runs on Base with live data grounding. Pay per call in USDC via x402 — no subscription, no API key."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function ToolRunner({ tool, onBack, cached, onResult }: {
   tool: Tool;
   onBack: () => void;
@@ -551,19 +582,19 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         body: JSON.stringify({ toolId: tool.id, result, isMock, mockReason }),
       });
       const data = await res.json() as { id?: string };
-      // Share the per-tool detail page (it has correct per-tool OG via
-      // generateMetadata); ?s= loads the shared result there. A hash like
+      // Share the in-app tool page (/app/hub/[tool]) — it has correct per-tool OG
+      // via generateMetadata, and ?s= loads the shared result inline. A hash like
       // /app/hub#s= can't carry OG (crawlers never see the fragment), which is
       // why shared links used to preview as generic Blue Chat.
       const url = data.id
-        ? `${window.location.origin}/hub/${tool.id}?s=${data.id}`
-        : `${window.location.origin}/hub/${tool.id}`;
+        ? `${window.location.origin}/app/hub/${tool.id}?s=${data.id}`
+        : `${window.location.origin}/app/hub/${tool.id}`;
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback: copy plain tool detail link
-      await navigator.clipboard.writeText(`${window.location.origin}/hub/${tool.id}`);
+      // Fallback: copy plain tool page link
+      await navigator.clipboard.writeText(`${window.location.origin}/app/hub/${tool.id}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -754,7 +785,15 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
             </div>
             <h2 className="font-mono text-xl font-bold text-white mb-2">{tool.name}</h2>
             <p className="font-mono text-xs text-slate-500 leading-relaxed">{tool.desc}</p>
+            {tool.price && (
+              <span className="inline-block mt-3 px-3 py-1 rounded-lg border border-[#4FC3F7]/30 bg-[#4FC3F7]/5 text-[#4FC3F7] font-mono text-xs font-bold">
+                {tool.price} <span className="text-[10px] text-slate-500 font-normal">/ run</span>
+              </span>
+            )}
           </div>
+
+          {/* API endpoint + how-it-works (shared info block) */}
+          <ToolInfoBlock tool={tool} />
 
           {/* Input form */}
           <div className="px-6 py-5 flex-1">
@@ -1089,64 +1128,6 @@ function VerifiedAiBadges({ tool }: { tool: Tool }) {
   );
 }
 
-function ToolCardBig({ tool, runs, onSelect }: { tool: Tool; runs: number; onSelect: (t: Tool) => void }) {
-  return (
-    <div className="relative">
-    <Link href={`/hub/${tool.id}`} title="Open tool page" aria-label="Open tool page"
-      className="absolute top-2.5 right-2.5 z-10 w-6 h-6 flex items-center justify-center rounded-md border border-[#A78BFA]/25 bg-[#0A0A12] text-[#A78BFA] text-[11px] opacity-60 hover:opacity-100 hover:border-[#A78BFA]/60 transition-all">↗</Link>
-    <button onClick={() => onSelect(tool)}
-      className="w-full text-left rounded-xl p-4 transition-all group border border-[#A78BFA]/20 hover:border-[#A78BFA]/50 flex flex-col relative overflow-hidden"
-      style={{ background: "linear-gradient(135deg, #A78BFA08 0%, #4FC3F705 100%)" }}>
-      <div className="absolute inset-0 bg-gradient-to-br from-[#A78BFA]/0 via-transparent to-[#4FC3F7]/0 group-hover:from-[#A78BFA]/5 group-hover:to-[#4FC3F7]/5 transition-all pointer-events-none" />
-      <div className="relative">
-        <div className="flex items-center gap-1.5 mb-3">
-          {tool.agents.map(a => (
-            <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-          ))}
-          <span className="font-mono text-[9px] text-slate-700 ml-auto">{tool.price}</span>
-        </div>
-        <p className="font-mono text-sm font-bold text-white mb-1 leading-snug group-hover:text-[#A78BFA] transition-colors">{tool.name}</p>
-        <p className="font-mono text-[10px] text-slate-500 leading-relaxed line-clamp-2 mb-3 min-h-[28px]">{tool.desc}</p>
-        <div className="mb-2"><VerifiedAiBadges tool={tool} /></div>
-        <div className="flex items-center justify-between pt-2 border-t border-[#A78BFA]/10">
-          <span className="font-mono text-[10px] text-slate-600">
-            {runs > 0 ? <><span className="text-white font-semibold">{runs}</span> calls</> : "new"}
-          </span>
-          <span className="font-mono text-[10px] font-semibold text-[#A78BFA] opacity-70 group-hover:opacity-100 transition-opacity">
-            Try Now →
-          </span>
-        </div>
-      </div>
-    </button>
-    </div>
-  );
-}
-
-function ToolCardCompact({ tool, runs, onSelect }: { tool: Tool; runs: number; onSelect: (t: Tool) => void }) {
-  return (
-    <div className="relative">
-    <Link href={`/hub/${tool.id}`} title="Open tool page" aria-label="Open tool page"
-      className="absolute top-2 right-2 z-10 w-5 h-5 flex items-center justify-center rounded-md border border-[#4FC3F7]/25 bg-[#0A0A12] text-[#4FC3F7] text-[10px] opacity-60 hover:opacity-100 hover:border-[#4FC3F7]/60 transition-all">↗</Link>
-    <button onClick={() => onSelect(tool)}
-      className="w-full text-left rounded-xl p-3.5 transition-all group border border-[#1A1A2E] hover:border-[#4FC3F7]/40 hover:bg-white/[0.02] flex flex-col">
-      <div className="flex items-center gap-1 mb-2">
-        {tool.agents.map(a => (
-          <span key={a} className="w-1 h-1 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-        ))}
-        <span className="font-mono text-[9px] text-slate-700 ml-auto">{tool.price}</span>
-      </div>
-      <p className="font-mono text-xs font-semibold text-white mb-0.5 leading-snug group-hover:text-[#4FC3F7] transition-colors">{tool.name}</p>
-      <p className="font-mono text-[10px] text-slate-600 leading-relaxed line-clamp-2 flex-1 mb-2">{tool.desc}</p>
-      <div className="mb-2"><VerifiedAiBadges tool={tool} /></div>
-      <div className="flex items-center justify-between pt-2 border-t border-[#1A1A2E]">
-        <span className="font-mono text-[9px] text-slate-700">{runs > 0 ? `${runs} calls` : "new"}</span>
-        <span className="font-mono text-[10px] font-semibold text-[#4FC3F7] opacity-60 group-hover:opacity-100 transition-opacity">Try →</span>
-      </div>
-    </button>
-    </div>
-  );
-}
-
 /**
  * Horizontal scrolling row — App Store style "shelf".
  * Hides overflow on small screens, snap-scrolls on touch.
@@ -1247,26 +1228,6 @@ function ProviderCard({ provider }: { provider: { agent: Agent; toolCount: numbe
   );
 }
 
-function ToolRow({ tool, runs, onSelect }: { tool: Tool; runs: number; onSelect: (t: Tool) => void }) {
-  return (
-    <button onClick={() => onSelect(tool)}
-      className="w-full text-left px-4 py-3 grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 items-center border-b border-[#1A1A2E] last:border-0 hover:bg-[#4FC3F7]/5 transition-colors group">
-      <div className="flex items-center gap-1 shrink-0">
-        {tool.agents.map(a => (
-          <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-        ))}
-      </div>
-      <div className="min-w-0">
-        <p className="font-mono text-xs font-semibold text-white truncate group-hover:text-[#4FC3F7] transition-colors">{tool.name}</p>
-        <p className="font-mono text-[10px] text-slate-600 truncate">{tool.desc}</p>
-      </div>
-      <VerifiedAiBadges tool={tool} />
-      <span className="font-mono text-[10px] text-slate-700 w-16 text-right">{runs > 0 ? `${runs} calls` : "—"}</span>
-      <span className="font-mono text-[10px] text-slate-500 w-14 text-right">{tool.price}</span>
-    </button>
-  );
-}
-
 // ─── Cached result type ───────────────────────────────────────────────────────
 
 type ToolResult = { result: Record<string,unknown> | string; isMock: boolean; mockReason: "dev" | "service-down" };
@@ -1289,7 +1250,7 @@ function decodeShare(hash: string): { toolId: string } & ToolResult | null {
 
 // ─── Hub page ─────────────────────────────────────────────────────────────────
 
-export default function HubPage({ inShell = false }: { inShell?: boolean }) {
+export default function HubPage({ inShell = false, initialToolId }: { inShell?: boolean; initialToolId?: string }) {
   const [cat, setCat]         = useState<Category>("all");
   const [selected, setSelected] = useState<Tool | null>(null);
   const [search, setSearch]   = useState("");
@@ -1300,6 +1261,38 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
 
   // ── Merge first-party (TOOLS) + community-submitted (registered) ──────────
   const allTools = useMemo<Tool[]>(() => [...TOOLS, ...communityTools], [communityTools]);
+
+  // ── App-shell deep routing ────────────────────────────────────────────────
+  // Selecting a tool updates the URL to /app/hub/[id] without a reload (the view
+  // stays inline); clearSelected resets to /app/hub. Only active in the app shell.
+  const selectTool = (t: Tool) => {
+    setSelected(t);
+    if (inShell && typeof window !== "undefined") window.history.pushState(null, "", `/app/hub/${t.id}`);
+  };
+  const clearSelected = () => {
+    setSelected(null);
+    if (inShell && typeof window !== "undefined") window.history.pushState(null, "", "/app/hub");
+  };
+
+  // Open the tool from the route param (/app/hub/[tool]). Applies once the tool
+  // is present (community tools load async), and only once.
+  const initialApplied = useRef(false);
+  useEffect(() => {
+    if (initialApplied.current || !initialToolId) return;
+    const t = allTools.find(x => x.id === initialToolId);
+    if (t) { setSelected(t); initialApplied.current = true; }
+  }, [initialToolId, allTools]);
+
+  // Keep the inline view in sync with browser back/forward.
+  useEffect(() => {
+    if (!inShell || typeof window === "undefined") return;
+    const onPop = () => {
+      const m = window.location.pathname.match(/^\/app\/hub\/([^/?#]+)/);
+      setSelected(m ? (allTools.find(x => x.id === m[1]) ?? null) : null);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [inShell, allTools]);
 
   const RESULTS_KEY = "bluehub_results";
 
@@ -1385,7 +1378,7 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
         e.preventDefault();
         searchRef.current?.focus();
       }
-      if (e.key === "Escape" && selected) setSelected(null);
+      if (e.key === "Escape" && selected) clearSelected();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -1399,10 +1392,12 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
       const t = allTools.find(x => x.id === qTool);
       if (t) {
         setSelected(t);
-        window.history.replaceState(null, "", "/hub");
+        // Legacy ?tool= links — normalize to the clean path for the surface
+        // we're on (app shell vs public hub).
+        window.history.replaceState(null, "", inShell ? `/app/hub/${t.id}` : `/hub/${t.id}`);
       }
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── On mount: load shared result from URL hash ────────────────────────────
   // Two formats supported:
@@ -1436,6 +1431,31 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
       if (shared) apply(shared.toolId, shared.result, shared.isMock, shared.mockReason);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Load a shared result from ?s=<id> (the /app/hub/[tool]?s= share link) ──
+  // initialToolId selects the tool; this loads its shared output into the cache
+  // so the inline runner shows it. Applies once the tool exists (community tools
+  // load async), then strips ?s= for a clean URL.
+  const sApplied = useRef(false);
+  useEffect(() => {
+    if (sApplied.current || typeof window === "undefined") return;
+    const sid = new URLSearchParams(window.location.search).get("s");
+    if (!sid || !/^[a-f0-9]{6,32}$/.test(sid)) { sApplied.current = true; return; }
+    let off = false;
+    fetch(`/api/share/${sid}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then((p: { toolId?: string; result?: Record<string, unknown>; isMock?: boolean; mockReason?: "dev" | "service-down" } | null) => {
+        if (off || !p?.toolId || p.result == null) return;
+        const tool = allTools.find(t => t.id === p.toolId);
+        if (!tool) return; // not loaded yet — re-runs when allTools updates
+        sApplied.current = true;
+        setCache(prev => new Map(prev).set(p.toolId!, { result: p.result!, isMock: !!p.isMock, mockReason: p.mockReason ?? "dev" }));
+        setSelected(tool);
+        window.history.replaceState(null, "", `/app/hub/${p.toolId}`);
+      })
+      .catch(() => {});
+    return () => { off = true; };
+  }, [allTools]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── On mount: open a tool from ?tool=<id> (deep link from /hub/[tool] detail) ──
   useEffect(() => {
@@ -1526,7 +1546,7 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
               const isFeatured = featuredIds.has(tool.id);
               const hasCached  = cache.has(tool.id);
               return (
-                <button key={tool.id} onClick={() => setSelected(tool)}
+                <button key={tool.id} onClick={() => selectTool(tool)}
                   className={`w-full text-left px-4 py-2.5 transition-all border-l-2 ${
                     selected?.id === tool.id
                       ? "border-[#4FC3F7] bg-[#4FC3F7]/5 text-white"
@@ -1637,13 +1657,13 @@ export default function HubPage({ inShell = false }: { inShell?: boolean }) {
           {selected
             ? <ToolRunner
                 tool={selected}
-                onBack={() => setSelected(null)}
+                onBack={clearSelected}
                 cached={cache.get(selected.id) ?? null}
                 onResult={(r) => saveResult(selected.id, r)}
               />
             : <div className="overflow-y-auto flex-1"><EmptyState
                 tools={allTools}
-                onSelect={setSelected}
+                onSelect={selectTool}
                 featuredIds={featuredIds}
                 usage={usage}
                 recentIds={[...cache.keys()]}

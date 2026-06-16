@@ -90,7 +90,7 @@ export default async function BuilderProfile({
             <p className="text-[10px] text-slate-600 tracking-widest mb-3">TOOLS</p>
             <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
               {tools.map(t => (
-                <Link key={t.id} href={`/hub/${t.id}`}
+                <Link key={t.id} href={`/app/hub/${t.id}`}
                   className="grid grid-cols-[1fr_auto_auto_auto] gap-4 px-4 py-3 border-b border-[#1A1A2E] last:border-0 hover:bg-[#4FC3F7]/5 transition-colors items-center">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
