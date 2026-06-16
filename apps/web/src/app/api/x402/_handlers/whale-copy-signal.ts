@@ -108,7 +108,7 @@ export default async function handler(req: Request): Promise<Response> {
       url: `https://basescan.org/address/${address}`,
     };
 
-    // No real flow → no signal. Never fabricate one.
+    // No real flow → no signal. Never fabricate one, never crash.
     if (!txs.length) {
       return Response.json({
         ...base,
@@ -117,17 +117,37 @@ export default async function handler(req: Request): Promise<Response> {
         confidence: 0,
         entry_timing: "no clear entry",
         patterns: [],
-        summary: "No recent token transfers found for this address on Base (or Basescan is unavailable). Nothing on-chain to copy right now.",
+        summary: "No on-chain transfer data available for this address. Verify the address or retry shortly.",
+        note: "No recent token transfers found on Base (or Basescan is unavailable). Nothing on-chain to copy right now.",
       });
     }
 
-    const raw = await llm(
-      SYSTEM,
-      `Wallet: ${address} (Base)\nRecent large transfers (real, on-chain):\n${JSON.stringify(topMovements, null, 2)}\nTotal transfers analysed: ${txs.length}`,
-      0.3,
-      600,
-    );
-    const analysis = parseJson(raw) ?? {};
+    // LLM synthesis is non-fatal: if it fails, still return the REAL on-chain
+    // movements (topMovements) instead of 500-ing the whole tool.
+    let analysis: Record<string, unknown> | null = null;
+    try {
+      analysis = parseJson(await llm(
+        SYSTEM,
+        `Wallet: ${address} (Base)\nRecent large transfers (real, on-chain):\n${JSON.stringify(topMovements, null, 2)}\nTotal transfers analysed: ${txs.length}`,
+        0.3,
+        600,
+      ));
+    } catch (e) {
+      console.error("[WhaleCopy] LLM synthesis unavailable:", (e as Error).message);
+    }
+
+    if (!analysis) {
+      return Response.json({
+        ...base,
+        signal: "WATCH",
+        whale_activity: "neutral",
+        confidence: 0,
+        entry_timing: "no clear entry",
+        patterns: [],
+        summary: "On-chain transfers loaded — see topMovements for the real flow. Signal synthesis is briefly unavailable; retry for the read.",
+        degraded: true,
+      });
+    }
 
     return Response.json({
       ...base,

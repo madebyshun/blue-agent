@@ -11,11 +11,12 @@ async function llm(system: string, user: string, temp = 0.3, tokens = 1100): Pro
   const r = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
     headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: "claude-haiku-4-5", system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
+    // Assistant prefill "{" forces a raw-JSON start — the #1 fix for parse failures.
+    body: JSON.stringify({ model: "claude-haiku-4-5", system, messages: [{ role: "user", content: user }, { role: "assistant", content: "{" }] as Msg[], temperature: temp, max_tokens: tokens }),
   });
   if (!r.ok) throw new Error(`LLM ${r.status}: ${await r.text()}`);
   const d = await r.json() as { content?: { text: string }[] };
-  return d.content?.[0]?.text ?? "";
+  return "{" + (d.content?.[0]?.text ?? "");
 }
 function parseJson(t: string): Record<string, unknown> | null {
   let s = t.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
@@ -45,13 +46,13 @@ export default async function handler(req: Request): Promise<Response> {
     const realContext = `Live Base pools (GeckoTerminal — trending + newly active):\n${poolsToPrompt(candidates)}`;
     const validSymbols = Array.from(new Set(candidates.map((p) => p.baseSymbol)));
 
-    const resultRaw = await llm(
-      `You are Blue Agent — momentum scanner for Base chain tokens. You are given REAL live pools with real prices, %-changes, volume and liquidity.
+    const system = `Respond with ONLY a raw JSON object. Start immediately with { and end with }. No markdown, no explanation, no text before or after the JSON.
+
+You are Blue Agent — momentum scanner for Base chain tokens. You are given REAL live pools with real prices, %-changes, volume and liquidity.
 Rules:
 - Use ONLY tokens from this list: ${validSymbols.join(", ")}. Never invent a ticker. "Base" is the chain, not a token.
 - For entry_zone / target, anchor to the REAL current price shown for that token.
 - momentum_score / stage / catalyst are your analysis; prices and %-moves must match the data.
-Return ONLY raw JSON. No markdown.
 Schema: {
   "scan_score": <0-100>,
   "market_phase": "accumulation|markup|distribution|markdown",
@@ -61,13 +62,15 @@ Schema: {
   "avoid": ["<symbol: reason>"],
   "best_setup": "<token with best risk/reward>",
   "summary": "<2 sentences>"
-}`,
-      realContext,
-      0.3,
-      1100
-    );
+}`;
 
-    let result = parseJson(resultRaw);
+    let result = parseJson(await llm(system, realContext, 0.3, 1100));
+    // Retry once on parse failure (transient LLM formatting), then log raw to debug.
+    if (!result) {
+      const retryRaw = await llm(system, realContext, 0.3, 1100);
+      result = parseJson(retryRaw);
+      if (!result) console.error("[TokenMomentum] JSON parse failed after retry. Raw:", retryRaw.slice(0, 400));
+    }
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({
