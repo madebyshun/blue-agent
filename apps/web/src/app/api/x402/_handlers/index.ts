@@ -35,7 +35,6 @@ import h13 from "./ecosystem-digest";
 import h14 from "./fundraise-timing";
 import h15 from "./gtm-brief";
 import h16 from "./investor-memo";
-import h17 from "./launch-simulator";
 import h18 from "./market-fit";
 import h19 from "./multi-agent-workflow";
 import h20 from "./narrative-position";
@@ -89,7 +88,6 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "fundraise-timing": h14,
   "gtm-brief": h15,
   "investor-memo": h16,
-  "launch-simulator": h17,
   "market-fit": h18,
   "multi-agent-workflow": h19,
   "narrative-position": h20,
