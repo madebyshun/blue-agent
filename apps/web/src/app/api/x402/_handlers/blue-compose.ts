@@ -5,13 +5,14 @@
 // Price: $0.10
 
 import { AGENT_TOOLS } from "@/lib/agent-tools";
+import { NO_FABRICATION_RULE } from "@/app/api/_lib/llm";
 
 type Msg = { role: string; content: string };
 async function llm(system: string, user: string, temp = 0.3, tokens = 1100): Promise<string> {
   const r = await fetch("https://llm.bankr.bot/v1/messages", {
     method: "POST",
     headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: "claude-haiku-4-5", system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
+    body: JSON.stringify({ model: "claude-haiku-4-5", system: `${NO_FABRICATION_RULE}\n\n${system}`, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
     signal: AbortSignal.timeout(30_000),
   });
   if (!r.ok) throw new Error(`LLM ${r.status}`);

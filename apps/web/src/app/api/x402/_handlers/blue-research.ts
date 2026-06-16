@@ -6,6 +6,7 @@
 // Price: $1.00
 
 import { getTokenMarket, type TokenMarket } from "@/lib/market-data";
+import { NO_FABRICATION_RULE } from "@/app/api/_lib/llm";
 
 type Msg = { role: string; content: string };
 async function llm(system: string, user: string, temp = 0.4, tokens = 1400): Promise<string> {
@@ -16,7 +17,7 @@ async function llm(system: string, user: string, temp = 0.4, tokens = 1400): Pro
       "Content-Type": "application/json",
       "anthropic-version": "2023-06-01",
     },
-    body: JSON.stringify({ model: "claude-haiku-4-5", system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
+    body: JSON.stringify({ model: "claude-haiku-4-5", system: `${NO_FABRICATION_RULE}\n\n${system}`, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
     signal: AbortSignal.timeout(32_000),
   });
   if (!r.ok) throw new Error(`LLM ${r.status}`);
