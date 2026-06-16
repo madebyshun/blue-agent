@@ -120,7 +120,7 @@ export default function ToolDetailClient({ toolId }: { toolId: string }) {
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5 mt-6">
-                <Link href={`/app/hub?tool=${toolId}`}
+                <Link href={`/app/hub/${toolId}`}
                   className="px-5 py-2.5 rounded-xl bg-[#4FC3F7] text-[#050508] font-mono text-sm font-semibold hover:bg-[#29ABE2] transition-colors">
                   Run this tool →
                 </Link>
@@ -200,7 +200,7 @@ export default function ToolDetailClient({ toolId }: { toolId: string }) {
               <p className="font-mono text-sm font-semibold text-white">Run {tool.name}</p>
               <p className="font-mono text-[11px] text-slate-500 mt-1">Connect a wallet · pay {tool.price} in USDC · get results in seconds</p>
             </div>
-            <Link href={`/app/hub?tool=${toolId}`}
+            <Link href={`/app/hub/${toolId}`}
               className="px-5 py-2.5 rounded-xl bg-[#4FC3F7] text-[#050508] font-mono text-sm font-semibold hover:bg-[#29ABE2] transition-colors shrink-0">
               Run →
             </Link>
