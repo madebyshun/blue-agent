@@ -485,7 +485,9 @@ export default function ChatMessages() {
             {empty.starters.map(s => (
               <button
                 key={s.label}
-                onClick={() => send(s.text)}
+                // Focus the composer so the user types their own prompt — no
+                // hardcoded example text is injected.
+                onClick={() => document.getElementById("chat-composer")?.focus()}
                 disabled={outOfCredits}
                 className="flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-all disabled:opacity-40 group"
                 style={{ background: "#0D0D14", borderColor: "#1A1A2E" }}
