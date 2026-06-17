@@ -1973,7 +1973,10 @@
           "type": "object",
           "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
-      }
+      },
+      "currency": "USDC",
+      "network": "base",
+      "paymentScheme": "exact"
     },
     "wallet-holdings": {
       "category": "on-chain",
