@@ -14,11 +14,9 @@ They take precedence over speed.
 - **x402 tool handlers:** `apps/web/src/app/api/x402/_handlers/*.ts`, registered in `_handlers/index.ts` (`HANDLERS` map).
 - **Tool catalog:** `apps/web/src/lib/agent-tools.ts` (`AGENT_TOOLS` — the single source of truth the hub renders).
   A tool is only live if it exists in **BOTH** `HANDLERS` and `AGENT_TOOLS` (catalog count == handler count, no orphans).
-- **x402 surface:** `apps/web` is the live Hub web surface — the `AGENT_TOOLS` catalog `/hub` renders, served at `/api/x402/[tool]` (~68 tools at last audit). All production x402 traffic goes through **blueagent.dev** (`/api/x402/[tool]`). The old **x402.bankr.bot** deployment is **deprecated** — do not reference it as production. `apps/api` (`@blue-agent/api`) remains only a **separate local-dev server**; all web docs / Hub / MCP counts come from `apps/web` — never from `apps/api`.
-- **LLM gateway:** Bankr at `https://llm.bankr.bot/v1/messages` (env `BANKR_API_KEY`). NOT Anthropic direct
-  (that key is usually out of credit). Models: `claude-haiku-4-5` (cheap), `claude-sonnet-4-5` (synthesis).
-- **Real data sources already wired:** DefiLlama (`src/lib/yield-rates.ts`), Etherscan/Basescan,
-  GitHub (`src/lib/github.ts`), Aeon KV (`src/app/api/_lib/aeon-kv.ts`).
+- **x402 surface:** `apps/web` is the live Hub web surface — the `AGENT_TOOLS` catalog `/hub` renders, served at `/api/x402/[tool]` (**74 tools** at last audit). All production x402 traffic goes through **blueagent.dev** (`/api/x402/[tool]`). The old **x402.bankr.bot** deployment is **deprecated** — do not reference it as production. `apps/api` (`@blue-agent/api`) remains only a **separate local-dev server**; all web docs / Hub / MCP counts come from `apps/web` — never from `apps/api`.
+- **LLM gateways:** Two paths in `_lib/llm.ts`. `callBankrLLM` → Bankr at `https://llm.bankr.bot/v1/messages` (env `BANKR_API_KEY`) — the default; NOT Anthropic direct (that key is usually out of credit). `callVeniceLLM` → Venice at `https://api.venice.ai` with `venice_parameters.enable_web_search` (env `VENICE_INFERENCE_KEY`) — **the only path that can web-search**; it falls back to Bankr if Venice errors (local key is often stale/401, so web search only truly works in prod). Models: `claude-haiku-4-5` (cheap), `claude-sonnet-4-5` (synthesis).
+- **Real data sources already wired:** DexScreener/GeckoTerminal (`src/lib/market-data.ts`), DefiLlama (`src/lib/yield-rates.ts`), **Moralis + Etherscan v2 multichain** (`src/lib/moralis.ts` — on-chain transfers, native tx, verified-contract source; the Basescan→Moralis migration is **done**), GitHub (`src/lib/github.ts`), Aeon KV (`src/app/api/_lib/aeon-kv.ts`).
 
 ## NON-NEGOTIABLE: verify before claiming done
 
@@ -101,7 +99,7 @@ Blue Agent is the flagship AI agent of the Base ecosystem. It is not just a chat
 **Two surfaces:**
 - **Founder console** (this repo) — AI-native workflow for Base builders: idea → build → audit → ship → raise. MCP-native — runs inside Claude Desktop, Cursor & Claude Code (`https://blueagent.dev/api/mcp`). *Not a tool you open. A layer you build on.*
 - **x402 API services** — pay-per-use AI tools (USDC on Base, EIP-3009) for agents and developers. Each of the 5 commands is backed by a cluster of hub tools (e.g. audit → risk_gate · honeypot · key_exposure · protocol_risk).
-  > Note: `phishing_scan` and `allowance_audit` still exist as x402 handlers but were **removed from the MCP/skill surface** (`/api/mcp` + `@blueagent/skill`), which now expose 56 tools (15 `blue_` + 41 `hub_`).
+  > Note: the **Hub web catalog (`apps/web`) is 74 tools**, but the **MCP/skill surface** (`/api/mcp` + `@blueagent/skill`) is a deliberately-curated subset of **57 tools** (15 `blue_` + 42 `hub_`) — the two counts are NOT the same and should not be conflated. The 20 newer on-chain primitives (token-price, pool-scan, gas-tracker, etc.) are live on the Hub/x402 but are not all wired into MCP. There are **no quantum tools** anywhere (the only "quantum" string in the codebase is prose in the `key-exposure` description).
 
 > Note: the Telegram bot surface is **no longer in active development** (as of 2026-06). Focus is the 5 commands + their hub tool clusters.
 
