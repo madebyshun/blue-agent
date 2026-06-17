@@ -224,7 +224,7 @@ export default function ChatInput() {
               <button
                 key={c.cmd}
                 onMouseDown={(e) => { e.preventDefault(); selectCommand(c); }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[#1A1A2E] transition-colors text-left group"
+                className="w-full flex items-center gap-3 px-4 py-2.5 min-h-[44px] hover:bg-[#1A1A2E] transition-colors text-left group"
               >
                 <span className="text-base w-5 text-center shrink-0">{c.icon}</span>
                 <div className="flex-1 min-w-0">
@@ -250,7 +250,7 @@ export default function ChatInput() {
               <button
                 key={c.cmd}
                 onMouseDown={(e) => { e.preventDefault(); selectCommand(c); }}
-                className="w-full flex items-center gap-3 px-4 py-2 hover:bg-[#1A1A2E] transition-colors text-left group"
+                className="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] hover:bg-[#1A1A2E] transition-colors text-left group"
               >
                 <span className="text-sm w-5 text-center shrink-0">{c.icon}</span>
                 <div className="flex-1 min-w-0">
@@ -593,7 +593,7 @@ export default function ChatInput() {
 
           {/* Footer hint */}
           <div className="flex items-center justify-between px-3 pb-2.5">
-            <span className="font-mono text-[10px] text-slate-700">Enter ↵ send · Shift+Enter newline</span>
+            <span className="hidden md:inline font-mono text-[10px] text-slate-700">Enter ↵ send · Shift+Enter newline</span>
             <span className="font-mono text-[10px] text-slate-700">{isUnlimited ? "∞ credits" : `${credits} credits left`}</span>
           </div>
         </div>
