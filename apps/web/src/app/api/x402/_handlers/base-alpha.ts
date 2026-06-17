@@ -1,19 +1,12 @@
 // x402/base-alpha — Base-chain alpha digest: narratives, momentum picks, divergence
 // Price: $0.25 — Real trending pools + TVL from market-data; LLM only groups/labels.
 
-import { callVeniceLLM } from "@/app/api/_lib/llm";
+import { callVeniceLLM, extractJsonObject } from "@/app/api/_lib/llm";
 import { getBaseTrending, getBaseTvl, poolsToPrompt, tvlToPrompt } from "@/lib/market-data";
 
-function extractJsonObject(text: string): Record<string, unknown> | null {
-  let raw = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
-  const s = raw.indexOf("{"), e = raw.lastIndexOf("}");
-  if (s >= 0 && e > s) raw = raw.slice(s, e + 1);
-  try { return JSON.parse(raw); } catch {}
-  try { return JSON.parse(raw.replace(/[\x00-\x1F\x7F]/g, " ")); } catch {}
-  return null;
-}
+const SYSTEM = `Respond with ONLY a raw JSON object. Start immediately with { and end with }. No markdown, no explanation, no text before or after.
 
-const SYSTEM = `You are a Base chain analyst. Use ONLY the data provided. NEVER invent numbers, addresses, or token names not in the data. Return ONLY raw JSON starting with {. No markdown. If data unavailable, return field as null — never estimate.
+You are a Base chain analyst. Use ONLY the data provided. NEVER invent numbers, addresses, or token names not in the data. If data unavailable, return field as null — never estimate.
 
 Group the provided trending Base tokens into narratives, momentum picks, and divergence signals. Every token you name MUST appear in the provided trending list.
 
@@ -60,14 +53,11 @@ export default async function handler(req: Request): Promise<Response> {
 
     const content = `Live Base market data — use ONLY these tokens and numbers.\n\n${tvlToPrompt(tvl)}\n\nTrending Base tokens:\n${poolsToPrompt(trending)}\n\nGroup these into narratives, momentum picks (score 0-100), and divergence signals. Only reference symbols from the list above.`;
 
-    const llmResponse = await callVeniceLLM({
-      system: SYSTEM,
-      messages: [{ role: "user", content }],
-      temperature: 0.3,
-      maxTokens: 800,
-    });
+    const ask = () => callVeniceLLM({ system: SYSTEM, messages: [{ role: "user", content }], temperature: 0.3, maxTokens: 1400 });
 
-    const result = extractJsonObject(llmResponse) ?? { degraded: true, note: "Synthesis briefly unavailable - please retry." };
+    let result = extractJsonObject(await ask());
+    if (!result) result = extractJsonObject(await ask()); // retry once on parse failure
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({
       tool: "base-alpha",
