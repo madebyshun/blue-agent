@@ -30,7 +30,6 @@ const TOOLS = [
   { slug: "competitor-scan",      price: "$0.75", category: "builder",       description: "Competitive landscape scan" },
   { slug: "token-launch-readiness", price: "$0.50", category: "builder",     description: "Token launch readiness score" },
   { slug: "builder-deep-dd",      price: "$1.00", category: "builder",       description: "Builder due diligence" },
-  { slug: "builder-brand-score",  price: "$0.35", category: "builder",       description: "Builder brand score on Base" },
   { slug: "roadmap-validator",    price: "$0.50", category: "builder",       description: "Roadmap vs market timing — SHIP/REVISE/PIVOT" },
   { slug: "gtm-brief",            price: "$0.50", category: "builder",       description: "Go-to-market brief" },
   { slug: "investor-memo",        price: "$0.75", category: "builder",       description: "Full investor memo" },
@@ -41,17 +40,12 @@ const TOOLS = [
   { slug: "launch-simulator-2",   price: "$0.35", category: "builder",       description: "Launch Simulator Tier 2 — deep signal + live market data" },
   { slug: "launch-simulator-3",   price: "$0.50", category: "builder",       description: "Launch Simulator Tier 3 — full multi-agent report" },
   // Wallet
-  { slug: "wallet-pnl",           price: "$0.20", category: "wallet",        description: "Wallet PnL calculator" },
-  { slug: "wallet-strategy-analyzer", price: "$0.50", category: "wallet",    description: "Wallet on-chain strategy decoder" },
-  { slug: "portfolio-rebalancer", price: "$0.50", category: "wallet",        description: "Portfolio rebalance recommendation" },
   { slug: "defi-opportunity",     price: "$0.35", category: "wallet",        description: "DeFi opportunity scan on Base" },
   { slug: "protocol-risk-monitor", price: "$0.35", category: "wallet",       description: "Protocol risk assessment" },
   // Multi-agent
   { slug: "multi-agent-workflow", price: "$0.50", category: "multi-agent",   description: "Multi-agent workflow design" },
   { slug: "agent-collab-match",   price: "$0.35", category: "multi-agent",   description: "Agent collaboration compatibility" },
   { slug: "agent-performance",    price: "$0.35", category: "multi-agent",   description: "AI agent performance audit" },
-  { slug: "agent-revenue-optimizer", price: "$0.50", category: "multi-agent", description: "Agent revenue optimization" },
-  { slug: "agent-token-strategy", price: "$0.50", category: "multi-agent",   description: "Agent token strategy" },
   // Community
   { slug: "community-growth-playbook", price: "$0.50", category: "community", description: "Community growth strategy" },
   { slug: "thread-intelligence",  price: "$0.35", category: "community",     description: "CT thread strategy" },

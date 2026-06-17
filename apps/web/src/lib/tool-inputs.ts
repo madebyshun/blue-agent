@@ -50,37 +50,16 @@ export const TOOL_SCHEMAS: Record<string, ToolSchema> = {
       { name: "website", label: "Website", placeholder: "https://…", type: "url", required: false },
     ],
   },
-  "launch-advisor": {
-    fields: [
-      { name: "projectName", label: "Project Name", placeholder: "My Token", type: "text", required: true },
-      { name: "description", label: "Description", placeholder: "Brief description…", type: "text", required: false },
-    ],
-  },
   "grant-evaluator": { fields: [{ name: "projectUrl", label: "Project URL or Description", placeholder: "https://… or describe project", type: "text", required: true }] },
   "x402-readiness": { fields: [{ name: "apiUrl", label: "API URL to Audit", placeholder: "https://…", type: "url", required: true }] },
   "base-deploy-check": { fields: [{ name: "contractAddress", label: "Contract Address", placeholder: "0x…", type: "address", required: true }] },
   "tokenomics-score": { fields: [{ name: "token", label: "Token Address or Symbol", placeholder: "0x… or TOKEN", type: "text", required: true }] },
   "whitepaper-tldr": { fields: [{ name: "url", label: "Whitepaper URL", placeholder: "https://…", type: "url", required: true }] },
   "vc-tracker": { fields: [{ name: "sector", label: "Sector or Address", placeholder: "DeFi, AI, 0x…", type: "text", required: true }] },
-  "wallet-pnl": { fields: [{ name: "address", label: "Wallet Address", placeholder: "0x…", type: "address", required: true }] },
   "whale-tracker": { fields: [{ name: "token", label: "Token Address", placeholder: "0x…", type: "address", required: true }] },
   "aml-screen": { fields: [{ name: "address", label: "Wallet Address", placeholder: "0x…", type: "address", required: true }] },
   "airdrop-check": { fields: [{ name: "address", label: "Wallet Address", placeholder: "0x…", type: "address", required: true }] },
   "narrative-pulse": { fields: [{ name: "topic", label: "Topic (optional)", placeholder: "DeFi, AI agents…", type: "text", required: false }] },
   "dex-flow": { fields: [{ name: "token", label: "Token Address or Pair", placeholder: "0x… or ETH/USDC", type: "text", required: true }] },
-  "yield-optimizer": { fields: [{ name: "address", label: "Wallet Address (optional)", placeholder: "0x…", type: "address", required: false }] },
   "lp-analyzer": { fields: [{ name: "address", label: "Wallet Address", placeholder: "0x…", type: "address", required: true }] },
-  "tax-report": {
-    fields: [
-      { name: "address", label: "Wallet Address", placeholder: "0x…", type: "address", required: true },
-      { name: "year", label: "Tax Year", placeholder: "2024", type: "number", required: true },
-    ],
-  },
-  "alert-subscribe": {
-    fields: [
-      { name: "address", label: "Watch Address", placeholder: "0x…", type: "address", required: true },
-      { name: "webhookUrl", label: "Webhook URL", placeholder: "https://…", type: "url", required: true },
-    ],
-  },
-  "alert-check": { fields: [{ name: "address", label: "Address", placeholder: "0x…", type: "address", required: true }] },
 };
