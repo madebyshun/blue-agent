@@ -62,11 +62,6 @@ const TOOLS = [
   },
   // ── Builder & Research Hub tools ─────────────────────────────────────────
   {
-    name: "hub_builder_score",
-    description: "Builder Score (0-100) — anchored in REAL GitHub repo activity and/or on-chain wallet activity when supplied; the X/CT community part is a labelled estimate.",
-    inputSchema: { type: "object", properties: { handle: { type: "string", description: "X handle without @" }, repo: { type: "string", description: "GitHub repo (owner/name or URL) for real shipping signal" }, address: { type: "string", description: "Base wallet 0x... for real on-chain activity" } }, required: ["handle"] },
-  },
-  {
     name: "hub_agent_score",
     description: "Agent Score (0-100) — anchored in REAL GitHub repo activity and/or on-chain wallet activity when supplied; XP/community is a labelled estimate.",
     inputSchema: { type: "object", properties: { handle: { type: "string", description: "Agent handle or name" }, repo: { type: "string", description: "GitHub repo for real dev-activity signal" }, address: { type: "string", description: "Base wallet 0x... for real on-chain activity" } }, required: ["handle"] },
@@ -237,11 +232,6 @@ const TOOLS = [
     inputSchema: { type: "object", properties: { handle: { type: "string", description: "X handle, GitHub handle, or wallet" } }, required: ["handle"] },
   },
   {
-    name: "hub_brand_score",
-    description: "Brand score for a Base project — visibility/narrative/community (AI estimate, no live social feed); credibility is anchored in REAL GitHub activity when a repo is supplied.",
-    inputSchema: { type: "object", properties: { project: { type: "string", description: "Project name or URL" }, repo: { type: "string", description: "GitHub repo for real credibility signal" } }, required: ["project"] },
-  },
-  {
     name: "hub_roadmap",
     description: "Validate a product roadmap — feasibility, sequencing, market timing, missing milestones.",
     inputSchema: { type: "object", properties: { roadmap: { type: "string", description: "Roadmap or milestones" }, stage: { type: "string" } }, required: ["roadmap"] },
@@ -257,21 +247,6 @@ const TOOLS = [
     inputSchema: { type: "object", properties: { pitch: { type: "string", description: "Pitch text or deck outline" } }, required: ["pitch"] },
   },
   // ── Premium ───────────────────────────────────────────────────────────────
-  {
-    name: "hub_wallet_pnl",
-    description: "Full PnL report for a wallet — realized/unrealized gains, win rate, best/worst trades on Base.",
-    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
-  },
-  {
-    name: "hub_wallet_strategy",
-    description: "Decode a Base wallet's trading strategy from REAL on-chain activity (live ETH balance, tx count, ERC-20 transfer patterns, current priced holdings).",
-    inputSchema: { type: "object", properties: { address: { type: "string", description: "Base wallet address 0x..." }, focus: { type: "string", description: "Optional analysis focus (e.g. 'defi', 'memecoins')" } }, required: ["address"] },
-  },
-  {
-    name: "hub_portfolio",
-    description: "Portfolio rebalancer — grounds in a wallet's REAL current holdings (live balances + USD prices) when an address is given; recommends target allocation by risk + goal.",
-    inputSchema: { type: "object", properties: { address: { type: "string", description: "Base wallet address 0x... for live holdings" }, holdings: { type: "string", description: "Or describe holdings as text if no address" }, risk: { type: "string", description: "conservative | moderate | aggressive" }, goal: { type: "string", description: "e.g. growth, income, preservation" } }, required: ["address"] },
-  },
   {
     name: "hub_defi_opportunity",
     description: "Best DeFi yield opportunities on Base — APY rankings, risk-adjusted returns, protocol safety.",
@@ -298,16 +273,6 @@ const TOOLS = [
     description: "Performance report for an AI agent — grounded in REAL GitHub activity (stars/commits/recency) when a repo is supplied; otherwise a labelled estimate.",
     inputSchema: { type: "object", properties: { agent: { type: "string", description: "Agent handle or name" }, repo: { type: "string", description: "GitHub repo (owner/name or URL) to ground the report in real activity" } }, required: ["agent"] },
   },
-  {
-    name: "hub_agent_revenue",
-    description: "Revenue optimizer for an AI agent — pricing strategy, tool monetization, x402 fee recommendations.",
-    inputSchema: { type: "object", properties: { agent: { type: "string" }, tools: { type: "string", description: "Tools offered (optional)" } }, required: ["agent"] },
-  },
-  {
-    name: "hub_agent_token",
-    description: "Token strategy for an AI agent — should you launch, how to structure it, timing on Base.",
-    inputSchema: { type: "object", properties: { agent: { type: "string", description: "Agent description and traction" } }, required: ["agent"] },
-  },
   // ── Community ─────────────────────────────────────────────────────────────
   {
     name: "hub_community_growth",
@@ -331,26 +296,11 @@ const TOOLS = [
     inputSchema: { type: "object", properties: { project: { type: "string", description: "Project type, e.g. DeFi protocol, AI agent, consumer app" }, description: { type: "string", description: "What you're building (optional)" }, team_size: { type: "string", description: "Team size (optional)" }, timeline: { type: "string", description: "Constraints / timeline (optional)" } }, required: ["project"] },
   },
   {
-    name: "hub_token_distribution",
-    description: "Token Distribution Plan — allocation framework across team, community, investors, treasury, liquidity.",
-    inputSchema: { type: "object", properties: { token: { type: "string", description: "Token ticker or project name" }, total_supply: { type: "string", description: "Total supply (optional)" }, description: { type: "string", description: "Stage & context (optional)" } }, required: ["token"] },
-  },
-  {
     name: "hub_protocol_compare",
     description: "Base Protocol Comparison — side-by-side of two Base protocols for integrations/partnerships; grounded in DefiLlama TVL where matched.",
     inputSchema: { type: "object", properties: { protocol_a: { type: "string", description: "First protocol, e.g. Aerodrome" }, protocol_b: { type: "string", description: "Second protocol, e.g. Morpho" }, use_case: { type: "string", description: "Your use case (optional)" } }, required: ["protocol_a", "protocol_b"] },
   },
-  {
-    name: "hub_builder_match",
-    description: "Builder Network Match — connect with Base builders who complement your skills and project.",
-    inputSchema: { type: "object", properties: { skills: { type: "string", description: "Your skills, e.g. Solidity, frontend, BD" }, looking_for: { type: "string", description: "Who/what you're looking for (optional)" } }, required: ["skills"] },
-  },
   // ── Catalog parity — On-chain & Earn (extended) ───────────────────────────
-  {
-    name: "hub_agent_yield",
-    description: "Agent Yield Finder — best USDC yield on Base for idle capital. Live DefiLlama APY across Aave, Morpho, Moonwell, Compound. Real rates only.",
-    inputSchema: { type: "object", properties: { amount: { type: "number", description: "Idle USDC amount (default 10000)" }, risk: { type: "string", description: "conservative | balanced | aggressive" } } },
-  },
   {
     name: "hub_airdrop",
     description: "Airdrop Check — Base airdrop eligibility for a wallet: which protocols, activity score, estimated value.",
@@ -362,31 +312,11 @@ const TOOLS = [
     inputSchema: { type: "object", properties: { token: { type: "string", description: "Token contract address 0x... or ticker" } }, required: ["token"] },
   },
   {
-    name: "hub_yield",
-    description: "Yield Optimizer — best risk-adjusted APY opportunities on Base DeFi for a token. Live DefiLlama data.",
-    inputSchema: { type: "object", properties: { token: { type: "string", description: "Token to optimize yield for, e.g. USDC, ETH" } }, required: ["token"] },
-  },
-  {
     name: "hub_lp_analyzer",
     description: "LP Analyzer — impermanent loss, fee income and rebalance recommendation for a liquidity position.",
     inputSchema: { type: "object", properties: { token0: { type: "string", description: "Token 0, e.g. ETH or 0x..." }, token1: { type: "string", description: "Token 1, e.g. USDC or 0x... (optional)" }, entryPrice: { type: "string", description: "Entry price (optional)" }, investedAmount: { type: "string", description: "Invested amount in USD (optional)" } }, required: ["token0"] },
   },
-  {
-    name: "hub_tax_report",
-    description: "Tax Report — on-chain tax summary for a wallet: realized gains, taxable events, P&L.",
-    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." }, year: { type: "string", description: "Tax year (optional)" }, country: { type: "string", description: "Country code (optional, default US)" } }, required: ["address"] },
-  },
   // ── Catalog parity — Alerts (extended) ────────────────────────────────────
-  {
-    name: "hub_alert_subscribe",
-    description: "Alert Subscribe — register a webhook for real-time alerts: whale moves, rug risk, quantum exposure.",
-    inputSchema: { type: "object", properties: { webhookUrl: { type: "string", description: "Your webhook URL" }, topics: { type: "array", items: { type: "string" }, description: "Topics, e.g. whale_movement, rug_risk, quantum_exposure" }, addresses: { type: "array", items: { type: "string" }, description: "Addresses to watch (optional; blank = global)" } }, required: ["webhookUrl", "topics"] },
-  },
-  {
-    name: "hub_alert_check",
-    description: "Alert Check — active alert triggers for a wallet or token address.",
-    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet or token address 0x..." } }, required: ["address"] },
-  },
   // ── Catalog parity — Launch & grants (extended) ───────────────────────────
   {
     name: "hub_launch_sim_tier2",
@@ -397,11 +327,6 @@ const TOOLS = [
     name: "hub_launch_sim_tier3",
     description: "Launch Simulator (Tier 3) — full multi-agent launch report with risk matrix and timeline recommendation.",
     inputSchema: { type: "object", properties: { project: { type: "string", description: "Project name" }, description: { type: "string", description: "What it does, audience, stage (optional)" }, ticker: { type: "string", description: "Token ticker (optional)" }, contract: { type: "string", description: "Contract 0x... for live data (optional)" } }, required: ["project"] },
-  },
-  {
-    name: "hub_launch_advisor",
-    description: "Launch Advisor — full token launch playbook: tokenomics, 8-week timeline, marketing strategy, KPIs.",
-    inputSchema: { type: "object", properties: { projectName: { type: "string", description: "Project name" }, description: { type: "string", description: "What it does, why Base, target users" }, targetAudience: { type: "string", description: "Target audience (optional)" }, teamSize: { type: "string", description: "Team size (optional)" }, budget: { type: "string", description: "Budget (optional)" }, tokenSupply: { type: "string", description: "Token supply (optional)" } }, required: ["projectName", "description"] },
   },
   {
     name: "hub_grant_eval",
@@ -471,7 +396,6 @@ const TOOLS = [
 // ─── Tool → hub ID map ────────────────────────────────────────────────────────
 
 const HUB_MAP: Record<string, string> = {
-  hub_builder_score:    "builder-score",
   hub_agent_score:      "agent-score",
   hub_market_fit:       "market-fit",
   hub_token_pick:       "token-pick-signal",
@@ -498,22 +422,16 @@ const HUB_MAP: Record<string, string> = {
   hub_launch_simulator:     "launch-simulator-1",
   hub_token_launch:         "token-launch-readiness",
   hub_builder_dd:           "builder-deep-dd",
-  hub_brand_score:          "builder-brand-score",
   hub_roadmap:              "roadmap-validator",
   hub_gtm:                  "gtm-brief",
   hub_pitch_intel:          "pitch-intelligence",
   // Premium
-  hub_wallet_pnl:           "wallet-pnl",
-  hub_wallet_strategy:      "wallet-strategy-analyzer",
-  hub_portfolio:            "portfolio-rebalancer",
   hub_defi_opportunity:     "defi-opportunity",
   hub_protocol_risk:        "protocol-risk-monitor",
   // Multi-agent
   hub_multi_agent:          "multi-agent-workflow",
   hub_agent_match:          "agent-collab-match",
   hub_agent_perf:           "agent-performance",
-  hub_agent_revenue:        "agent-revenue-optimizer",
-  hub_agent_token:          "agent-token-strategy",
   // Community
   hub_community_growth:     "community-growth-playbook",
   hub_thread_intel:         "thread-intelligence",
@@ -529,20 +447,12 @@ const HUB_MAP: Record<string, string> = {
   blue_stream:              "blue-stream",
   // Catalog parity (extended) — every remaining first-party catalog tool
   hub_stack:                "stack-recommender",
-  hub_token_distribution:   "token-distribution-plan",
   hub_protocol_compare:     "base-protocol-comparison",
-  hub_builder_match:        "base-builder-network-match",
-  hub_agent_yield:          "agent-yield-finder",
   hub_airdrop:              "airdrop-check",
   hub_dex_flow:             "dex-flow",
-  hub_yield:                "yield-optimizer",
   hub_lp_analyzer:          "lp-analyzer",
-  hub_tax_report:           "tax-report",
-  hub_alert_subscribe:      "alert-subscribe",
-  hub_alert_check:          "alert-check",
   hub_launch_sim_tier2:     "launch-simulator-2",
   hub_launch_sim_tier3:     "launch-simulator-3",
-  hub_launch_advisor:       "launch-advisor",
   hub_grant_eval:           "grant-evaluator",
 };
 
@@ -566,31 +476,19 @@ const ARG_REMAP: Record<string, (a: Record<string, unknown>) => Record<string, u
   "repo-health":          (a) => ({ ...a, repo: a.repo ?? a.url }),
   "community-sentiment":  (a) => ({ ...a, project: a.project ?? a.target }),
   "builder-deep-dd":      (a) => ({ ...a, target: a.target ?? a.handle }),
-  "builder-brand-score":  (a) => ({ ...a, builder: a.builder ?? a.project, handle: a.handle ?? a.project }),
   "roadmap-validator":    (a) => ({ ...a, project: a.project ?? "this project", roadmap: a.roadmap }),
   "gtm-brief":            (a) => ({ ...a, project: a.project, description: a.description ?? a.target ?? a.project }),
   "pitch-intelligence":   (a) => ({ ...a, project: a.project ?? a.pitch, description: a.description ?? a.pitch }),
   "multi-agent-workflow": (a) => ({ ...a, goal: a.goal ?? a.task }),
   "agent-collab-match":   (a) => ({ ...a, agent_a: a.agent_a ?? a.task, agent_b: a.agent_b ?? "best-fit Base ecosystem agent", collab_goal: a.collab_goal ?? a.task }),
   "agent-performance":    (a) => ({ ...a, handle: a.handle ?? a.agent }),
-  "portfolio-rebalancer": (a) => ({ ...a, risk_profile: a.risk_profile ?? a.risk }),
   // Catalog parity (extended) — mirror each tool's x402Body so MCP calls match
   // the handler's expected body exactly (same contract the Hub UI sends).
   "stack-recommender":        (a) => ({ ...a, description: a.description ?? a.project, team_size: a.team_size ?? "1", timeline: a.timeline ?? "" }),
-  "token-distribution-plan":  (a) => ({ ...a, ticker: a.ticker ?? a.token, total_supply: a.total_supply ?? "1000000000", description: a.description ?? "" }),
   "base-protocol-comparison": (a) => ({ ...a, category: a.category ?? "Base DeFi", use_case: a.use_case ?? "" }),
-  "base-builder-network-match": (a) => ({ ...a, looking_for: a.looking_for ?? "" }),
-  "agent-yield-finder":       (a) => ({ ...a, amount: Number(a.amount) || 10000, risk: a.risk ?? "balanced" }),
   "lp-analyzer":              (a) => ({ ...a, token1: a.token1 ?? "", entryPrice: a.entryPrice ?? "", investedAmount: a.investedAmount ?? "" }),
-  "tax-report":               (a) => ({ ...a, year: a.year ?? "", country: a.country ?? "US" }),
-  "alert-subscribe":          (a) => ({
-    webhookUrl: a.webhookUrl ?? "",
-    topics: Array.isArray(a.topics) ? a.topics : String(a.topics ?? "").split(",").map((t) => t.trim()).filter(Boolean),
-    addresses: Array.isArray(a.addresses) ? a.addresses : (a.addresses ? String(a.addresses).split(",").map((x) => x.trim()).filter(Boolean) : []),
-  }),
   "launch-simulator-2":       (a) => ({ ...a, description: a.description ?? "", ticker: a.ticker ?? "", contract: a.contract ?? "" }),
   "launch-simulator-3":       (a) => ({ ...a, description: a.description ?? "", ticker: a.ticker ?? "", contract: a.contract ?? "" }),
-  "launch-advisor":           (a) => ({ ...a, targetAudience: a.targetAudience ?? "", teamSize: a.teamSize ?? "", budget: a.budget ?? "", tokenSupply: a.tokenSupply ?? "" }),
   "grant-evaluator":          (a) => ({ ...a, teamBackground: a.teamBackground ?? "", requestedAmount: a.requestedAmount ?? "", milestones: a.milestones ?? "", githubUrl: a.githubUrl ?? "" }),
 };
 
