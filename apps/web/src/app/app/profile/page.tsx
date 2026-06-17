@@ -192,7 +192,7 @@ export default function ProfilePage() {
     } catch (e) {
       // User rejected in wallet, or wallet errored. Don't burn the nonce.
       const msg = (e as Error)?.message ?? "Wallet signature was cancelled";
-      setError(/user rejected|denied/i.test(msg) ? "Signature cancelled." : msg);
+      setError(/user rejected|denied|cancel/i.test(msg) ? "Signature cancelled — nothing was saved. Sign when you're ready." : msg);
       setSaving(false);
       return;
     }
@@ -378,9 +378,16 @@ export default function ProfilePage() {
                   </div>
 
                   {error && (
-                    <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-2.5">
-                      <p className="text-[11px] text-red-400">{error}</p>
-                    </div>
+                    /cancel/i.test(error)
+                      ? (
+                        <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-2.5">
+                          <p className="text-[11px] text-amber-300/90">{error}</p>
+                        </div>
+                      ) : (
+                        <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-2.5">
+                          <p className="text-[11px] text-red-400">{error}</p>
+                        </div>
+                      )
                   )}
 
                   <div className="mt-5 flex items-center justify-between gap-3">
@@ -401,16 +408,16 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              {/* ── Future: linked accounts (OAuth comes later) ──────────── */}
-              <AppCard className="mb-4 opacity-70">
+              {/* ── Linked accounts ──────────────────────────────────────── */}
+              <AppCard className="mb-4">
                 <AppSectionLabel>LINKED ACCOUNTS</AppSectionLabel>
                 <div className="space-y-2 text-[11px]">
-                  <LinkedRow label="Sign in with X"        icon="𝕏"  status="Coming soon" />
-                  <LinkedRow label="Sign in with Farcaster" icon="◌"  status="Coming soon" />
-                  <LinkedRow label="Base App auto-detect"   icon="⬡"  status="Auto when opened in Base App" />
+                  <LinkedRow label="X / Twitter" icon="𝕏" status="Self-attest" />
+                  <LinkedRow label="Farcaster"   icon="◌" status="Self-attest" />
+                  <LinkedRow label="Base App"    icon="⬡" status="Auto-verified in Base App" />
                 </div>
                 <p className="mt-3 text-[10px] text-slate-700 leading-relaxed">
-                  For now, the social handles above are self-attested. OAuth verification lands once Twitter dev credentials are configured.
+                  Social handles are self-attested — type them in the form above. Open this app inside Base App and your Base identity is detected and verified automatically.
                 </p>
               </AppCard>
 
