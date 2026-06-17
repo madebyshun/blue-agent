@@ -477,6 +477,7 @@ export default function ChatInput() {
           <div className="flex items-end gap-2 px-4 pt-3.5 pb-3">
             <textarea
               ref={textareaRef}
+              id="chat-composer"
               value={input}
               onChange={(e) => handleInput(e.target.value)}
               onKeyDown={handleKeyDown}

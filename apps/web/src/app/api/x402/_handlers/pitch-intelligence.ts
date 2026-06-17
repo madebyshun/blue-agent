@@ -37,6 +37,7 @@ export default async function handler(req: Request): Promise<Response> {
     const [narrativeRaw, raiseRaw] = await Promise.all([
       aeon("narrative-tracker"),
       llm(`You are Blue Agent running 'blue raise'. Build pitch narrative for Base builders.
+The project name is EXACTLY "${project}". NEVER alter, shorten, abbreviate, or rename it — use it verbatim.
 CRITICAL: Return ONLY raw JSON.
 Schema: {"market_framing":"<1-2 sentences>","why_this_wins":"<1-2 sentences>","why_now":"<1 sentence>","why_base":"<1 sentence>","ask_framing":"<1 sentence>","target_investor_type":"<e.g. crypto-native, generalist, strategic>"}`,
         `Project: ${project}\nDescription: ${description}\nAsk: ${ask || "not specified"}\nStage: ${stage}`, 0.4, 700),
@@ -52,6 +53,7 @@ Schema: {"would_hype":<boolean>,"hype_score":<0-10>,"narrative_hooks":["<hook>"]
     const influencerTake = parseJson(msRaw) ?? { would_hype: false, hype_score: 5, narrative_hooks: [], weak_points: [], suggested_angle: "Focus on Base-native angle", influencer_verdict: "Needs stronger narrative" };
 
     const resultRaw = await llm(`You are Blue Agent — pitch intelligence engine.
+The project name is EXACTLY "${project}". NEVER alter, shorten, abbreviate, or rename it — output it verbatim in every field.
 CRITICAL: Return ONLY raw JSON.
 Schema: {
   "pitch_score": <0-100>,

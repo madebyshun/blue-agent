@@ -54,14 +54,14 @@ Schema: {
     const msRaw = await llm(`You are MiroShark analyst persona — data-driven, technical, skeptical.
 Review this stack recommendation for a Base project.
 CRITICAL: Return ONLY raw JSON.
-Schema: {"confidence":<0-10>,"risks":["<tech risk>"],"ecosystem_fit":"strong|moderate|weak","battle_tested":<boolean>,"analyst_note":"<1-2 sentences>"}`,
+Schema: {"confidence":<0-100>,"risks":["<tech risk>"],"ecosystem_fit":"strong|moderate|weak","battle_tested":<boolean>,"analyst_note":"<1-2 sentences>"}`,
       `Project: ${project}\nStack: ${JSON.stringify(buildRecommendation)}\nEcosystem context: ${ecosystemRaw ?? "Base ecosystem"}`, 0.3, 500);
     const analystTake = parseJson(msRaw) ?? {};
 
     const resultRaw = await llm(`You are Blue Agent — stack recommendation engine for Base builders.
 CRITICAL: Return ONLY raw JSON.
 Schema: {
-  "confidence_score": <0-100>,
+  "confidence": <0-100>,
   "stack": <copy recommended_stack>,
   "why_this_stack": ["<reason>"],
   "time_to_mvp": "<estimate>",

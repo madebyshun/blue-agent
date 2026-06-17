@@ -282,13 +282,20 @@ function ModalField({ label, value, onChange, placeholder }: {
 }
 
 function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched: () => void }) {
-  const { address, isConnected } = useAccount();
+  const { address } = useAccount();
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
   const [description, setDescription] = useState("");
+  const [image, setImage] = useState("");
+  const [website, setWebsite] = useState("");
+  const [twitter, setTwitter] = useState("");
+  const [feeRecipient, setFeeRecipient] = useState("");
   const [step, setStep] = useState<"idle" | "launching" | "done" | "error">("idle");
   const [err, setErr] = useState("");
   const [out, setOut] = useState<{ tokenAddress?: string | null; basescan?: string | null; uniswap?: string | null; bankr?: string | null } | null>(null);
+
+  // Pre-fill the fee recipient with the connected wallet (editable).
+  useEffect(() => { if (address && !feeRecipient) setFeeRecipient(address); }, [address, feeRecipient]);
 
   const cleanName = name.trim();
   const cleanSymbol = symbol.replace(/^\$/, "").trim();
@@ -297,6 +304,8 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
     if (!cleanName || step === "launching") return;
     setStep("launching"); setErr("");
     try {
+      const fee = feeRecipient.trim();
+      const tw = twitter.trim().replace(/^@/, "");
       const res = await fetch("/api/launch-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -304,9 +313,12 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
           tokenName: cleanName,
           tokenSymbol: cleanSymbol || undefined,
           description: description.trim() || undefined,
-          // 57% creator fee → your wallet when connected, else defaults to @blueagent_.
-          feeRecipientType: isConnected && address ? "wallet" : "x",
-          feeRecipientValue: isConnected && address ? address : "blueagent_",
+          image: image.trim() || undefined,
+          website: website.trim() || undefined,
+          tweetUrl: tw ? `https://x.com/${tw}` : undefined,
+          // 57% creator fee → the entered wallet, else default to @blueagent_.
+          feeRecipientType: fee ? "wallet" : "x",
+          feeRecipientValue: fee || "blueagent_",
         }),
       });
       const d = await res.json();
@@ -356,6 +368,25 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
               <ModalField label="TOKEN NAME *" value={name} onChange={setName} placeholder="e.g. Blue Agent" />
               <ModalField label="TICKER" value={symbol} onChange={setSymbol} placeholder="auto from name" />
               <ModalField label="DESCRIPTION" value={description} onChange={setDescription} placeholder="One-line pitch (optional)" />
+
+              {/* Token image — URL + live preview */}
+              <div>
+                <div className="font-mono text-[9px] text-slate-600 mb-1">TOKEN IMAGE (URL)</div>
+                <div className="flex items-center gap-2">
+                  {image.trim() && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={image.trim()} alt="logo" className="w-9 h-9 rounded-lg object-cover bg-[#0d0d12] shrink-0 border border-[#1A1A2E]"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "0.2"; }} />
+                  )}
+                  <input value={image} onChange={e => setImage(e.target.value)} placeholder="https://…/logo.png"
+                    className="flex-1 min-w-0 bg-[#050508] border border-[#1A1A2E] focus:border-[#F59E0B]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+                </div>
+              </div>
+
+              <ModalField label="WEBSITE (optional)" value={website} onChange={setWebsite} placeholder="https://… (optional)" />
+              <ModalField label="TWITTER (optional)" value={twitter} onChange={setTwitter} placeholder="@handle (optional)" />
+              <ModalField label="FEE RECIPIENT · 57% creator fee" value={feeRecipient} onChange={setFeeRecipient}
+                placeholder={address ? "your wallet — or 0x… / blank → @blueagent_" : "0x… — or blank → @blueagent_"} />
             </div>
 
             <div className="grid grid-cols-2 gap-2 mb-3 font-mono text-[10px]">
@@ -368,7 +399,7 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
             </div>
 
             <p className="font-mono text-[9px] text-slate-600 mb-3 leading-relaxed">
-              Creator fees → <span className="text-slate-400">{isConnected && address ? `${address.slice(0, 6)}…${address.slice(-4)} (your wallet)` : "@blueagent_ (connect wallet to claim)"}</span>. Deploys a <span className="text-amber-400">real, irreversible</span> token on Base via Bankr · gas sponsored.
+              Deploys a <span className="text-amber-400">real, irreversible</span> token on Base via Bankr · 100B fixed supply · gas sponsored. Leave fee recipient blank to default to @blueagent_.
             </p>
 
             {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
