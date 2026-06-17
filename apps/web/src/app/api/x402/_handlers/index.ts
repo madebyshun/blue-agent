@@ -1,4 +1,24 @@
 // AUTO-GENERATED — self-hosted x402 handler registry (copied from apps/api/x402).
+import hTokenPrice from "./token-price";
+import hPoolScan from "./pool-scan";
+import hWalletHoldings from "./wallet-holdings";
+import hNewPools from "./new-pools";
+import hGasTracker from "./gas-tracker";
+import hQuickSafety from "./quick-safety";
+import hWalletRisk from "./wallet-risk";
+import hB20Check from "./b20-check";
+import hLiquidityDepth from "./liquidity-depth";
+import hTokenDistribution from "./token-distribution";
+import hBaseAlpha from "./base-alpha";
+import hTokenAlpha from "./token-alpha";
+import hProtocolHealth from "./protocol-health";
+import hFounderCheck from "./founder-check";
+import hNarrativePulse from "./narrative-pulse";
+import hBaseActivity from "./base-activity-score";
+import hScamDetector from "./scam-detector";
+import hCrossYield from "./cross-protocol-yield";
+import hAgentReadiness from "./agent-readiness";
+import hBasePulse from "./base-pulse";
 import hBlueIdea      from "./blue-idea";
 import hBlueBuild     from "./blue-build";
 import hBlueAudit     from "./blue-audit";
@@ -55,6 +75,26 @@ import h53 from "./key-exposure";
 import h54 from "./launch-simulator-1";
 
 export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
+  "token-price": hTokenPrice,
+  "pool-scan": hPoolScan,
+  "wallet-holdings": hWalletHoldings,
+  "new-pools": hNewPools,
+  "gas-tracker": hGasTracker,
+  "quick-safety": hQuickSafety,
+  "wallet-risk": hWalletRisk,
+  "b20-check": hB20Check,
+  "liquidity-depth": hLiquidityDepth,
+  "token-distribution": hTokenDistribution,
+  "base-alpha": hBaseAlpha,
+  "token-alpha": hTokenAlpha,
+  "protocol-health": hProtocolHealth,
+  "founder-check": hFounderCheck,
+  "narrative-pulse": hNarrativePulse,
+  "base-activity-score": hBaseActivity,
+  "scam-detector": hScamDetector,
+  "cross-protocol-yield": hCrossYield,
+  "agent-readiness": hAgentReadiness,
+  "base-pulse": hBasePulse,
   "agent-collab-match": h0,
   "agent-performance": h1,
   "base-grant-finder": h5,

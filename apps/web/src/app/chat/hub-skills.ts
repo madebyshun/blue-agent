@@ -81,19 +81,14 @@ const CURATED: { id: string; category: SkillCategory; trigger: string }[] = [
   { id: "base-grant-finder",       category: "Fundraise",     trigger: "Find Base grants for " },
   // Launch
   { id: "token-launch-readiness",  category: "Launch",        trigger: "Is my token ready to launch? " },
-  { id: "launch-advisor",          category: "Launch",        trigger: "Give me a launch plan for " },
-  { id: "token-distribution-plan", category: "Launch",        trigger: "Design a token distribution plan for " },
-  { id: "agent-token-strategy",    category: "Launch",        trigger: "How should I structure my agent token?" },
   // Agent Network
   { id: "agent-collab-match",      category: "Agent Network", trigger: "Which agents should I collaborate with for " },
   { id: "multi-agent-workflow",    category: "Agent Network", trigger: "Design a multi-agent workflow for " },
-  { id: "agent-revenue-optimizer", category: "Agent Network", trigger: "How can my agent earn more revenue?" },
   { id: "base-builder-network",    category: "Agent Network", trigger: "Who should I connect with on Base for " },
   // Ecosystem
   { id: "ecosystem-digest",        category: "Ecosystem",     trigger: "What happened on Base today?" },
   { id: "base-protocol-comparison",category: "Ecosystem",     trigger: "Compare these Base protocols: " },
   { id: "defi-opportunity",        category: "Ecosystem",     trigger: "Find DeFi opportunities on Base" },
-  { id: "wallet-strategy-analyzer",category: "Ecosystem",     trigger: "/wallet " },
 ];
 
 const toolById = new Map(AGENT_TOOLS.map(t => [t.id, t]));

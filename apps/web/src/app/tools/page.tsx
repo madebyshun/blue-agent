@@ -97,7 +97,6 @@ const ALL_TOOLS = [
   {
     category: "Launch", tag: "launch", color: "#34d399",
     tools: [
-      { name: "launch-advisor",  price: "$0.01",  desc: "AI launch strategy — timing, pricing, distribution",              example: "launch-advisor?project=Blue+Agent" },
       { name: "tokenomics",      price: "$0.01",  desc: "Score a token's economic model — supply, vesting, sustainability", example: "tokenomics?token=0x..." },
       { name: "grant-evaluator", price: "$0.01",  desc: "Evaluate grant eligibility and fit for Base ecosystem",            example: "grant-evaluator?url=https://..." },
       { name: "community-fit",   price: "$0.005", desc: "Community fit analysis — Discord, Telegram, X signals",            example: "community-fit?project=..." },
@@ -108,7 +107,6 @@ const ALL_TOOLS = [
   {
     category: "Premium", tag: "premium", color: "#a78bfa",
     tools: [
-      { name: "wallet-pnl",      price: "$0.005", desc: "Realized and unrealized PnL across all positions",                example: "wallet-pnl?address=0x..." },
       { name: "risk-gate",       price: "$0.05",  desc: "Screen any transaction before execution — rug/malicious check",    example: "risk-gate?action=transfer&to=0x..." },
       { name: "quantum-premium", price: "$1.50",  desc: "Deep quantum-readiness analysis — entropy, migration plan",        example: "quantum-premium?address=0x..." },
       { name: "builder-score",   price: "$0.001", desc: "Builder Score for an X/Twitter handle (0-100)",                   example: "builder-score?handle=vitalik" },

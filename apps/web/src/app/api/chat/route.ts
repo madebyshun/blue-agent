@@ -650,13 +650,11 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_repo_health:      "repo-health",
   hub_ecosystem:        "ecosystem-digest",
   hub_agent_score:      "agent-score",
-  hub_wallet_pnl:       "wallet-pnl",
   hub_aml:              "aml-screen",
   hub_whale_tracker:    "whale-tracker",
   hub_dex_flow:         "dex-flow",
   hub_airdrop:          "airdrop-check",
   hub_quantum:          "quantum-premium",
-  hub_yield:            "yield-optimizer",
   hub_crypto_rpc:       "crypto-rpc",
   hub_token_price:      "token-price",
   // Blue first-party suite
