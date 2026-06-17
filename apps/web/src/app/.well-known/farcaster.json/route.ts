@@ -20,7 +20,7 @@ export function GET() {
       imageUrl: "https://blueagent.dev/og-chat.png",
       buttonTitle: "Open Blue Chat",
       splashImageUrl: "https://blueagent.dev/splash.png",
-      splashBackgroundColor: "#4FC3F7",
+      splashBackgroundColor: "#050508",
       webhookUrl: "https://blueagent.dev/api/farcaster/webhook",
       primaryCategory: "finance",
       tags: ["base", "ai", "defi", "agents", "tools"],
