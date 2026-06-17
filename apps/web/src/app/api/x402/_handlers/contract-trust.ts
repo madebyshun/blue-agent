@@ -3,6 +3,7 @@
 // Price: $0.15 — SAFE / CAUTION / RED_FLAG verdict before swapping into a contract
 
 import { getTokenIdentity, tokenIdentityToPrompt } from "@/lib/onchain";
+import { getBasescanSource } from "@/lib/moralis";
 
 type Msg = { role: string; content: string };
 
@@ -46,9 +47,6 @@ async function basescanLookup(address: string): Promise<{
   licenseType: string | null;
   raw: string;
 }> {
-  const apiKey = process.env.BASESCAN_API_KEY ?? "";
-  const base = "https://api.etherscan.io/v2/api?chainid=8453";
-
   const defaultResult = {
     verified: false,
     contractName: null,
@@ -60,24 +58,16 @@ async function basescanLookup(address: string): Promise<{
   };
 
   try {
-    const res = await fetch(
-      `${base}&module=contract&action=getsourcecode&address=${address}&apikey=${apiKey}`,
-      { signal: AbortSignal.timeout(8000) }
-    );
-    if (!res.ok) return defaultResult;
-    const data = await res.json() as {
-      status: string;
-      result?: {
-        ContractName?: string;
-        CompilerVersion?: string;
-        Proxy?: string;
-        Implementation?: string;
-        LicenseType?: string;
-        SourceCode?: string;
-      }[];
+    const result = await getBasescanSource(address);
+    if (!result) return defaultResult;
+    const info = result as {
+      ContractName?: string;
+      CompilerVersion?: string;
+      Proxy?: string;
+      Implementation?: string;
+      LicenseType?: string;
+      SourceCode?: string;
     };
-    if (data.status !== "1" || !data.result?.length) return defaultResult;
-    const info = data.result[0];
     const verified = !!info.SourceCode && info.SourceCode.length > 0;
     return {
       verified,

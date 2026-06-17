@@ -157,13 +157,17 @@ function BentoCell({
 }
 
 function StatChip({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
+  // Dynamic font size so long values (big credit counts, dollar amounts) don't
+  // overflow the narrow card; truncate with a tooltip as a final guard.
+  const len = value.length;
+  const valueSize = len > 12 ? "text-[11px]" : len > 9 ? "text-[13px]" : "text-base";
   return (
     <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f]/60 px-3 py-2.5 relative overflow-hidden">
       <span aria-hidden className="absolute inset-x-0 top-0 h-px"
             style={{ background: `linear-gradient(90deg, transparent, ${color}50, transparent)` }} />
-      <div className="text-[9px] text-slate-600 tracking-widest mb-1">{label}</div>
-      <div className="text-base font-bold leading-none" style={{ color }}>{value}</div>
-      {sub && <div className="text-[9px] text-slate-700 mt-1">{sub}</div>}
+      <div className="text-[9px] text-slate-600 tracking-widest mb-1 truncate">{label}</div>
+      <div className={`${valueSize} font-bold leading-tight truncate`} style={{ color }} title={value}>{value}</div>
+      {sub && <div className="text-[9px] text-slate-700 mt-1 truncate">{sub}</div>}
     </div>
   );
 }
