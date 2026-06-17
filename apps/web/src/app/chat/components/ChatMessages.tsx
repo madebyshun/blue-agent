@@ -369,7 +369,7 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
     heading: "What are you building?",
     sub:     "Ideas, architecture, audits, launches, fundraising — grounded in Base.",
     starters: [
-      { icon: "💡", text: "/idea USDC streaming payroll app on Base", color: "#4FC3F7" },
+      { icon: "💡", text: "/idea USDC payroll on Base", color: "#4FC3F7" },
       { icon: "🛠️", text: "/build ERC-4337 agent wallet",            color: "#A78BFA" },
       { icon: "🛡️", text: "/audit my token launch plan",             color: "#F87171" },
       { icon: "🚀", text: "/pick",                                   color: "#34D399" },
@@ -393,7 +393,7 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
     starters: [
       { icon: "🛡️", text: "/audit paste your contract here",            color: "#F87171" },
       { icon: "🔍", text: "/scan 0x…",                                  color: "#4FC3F7" },
-      { icon: "⚠️", text: "Review this contract for reentrancy risks", color: "#FB923C" },
+      { icon: "⚠️", text: "Audit for reentrancy risks", color: "#FB923C" },
       { icon: "🧾", text: "/aml 0x…",                                   color: "#A78BFA" },
     ],
     quick: ["audit", "scan", "aml", "quantum"],
@@ -402,9 +402,9 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
     heading: "What should I research?",
     sub:     "Evidence-backed DD, on-chain data, and contrarian takes.",
     starters: [
-      { icon: "🔬", text: "Deep DD on Aerodrome — risks and moat",  color: "#A78BFA" },
+      { icon: "🔬", text: "Deep DD on Aerodrome",  color: "#A78BFA" },
       { icon: "🐋", text: "/whale AERO",                            color: "#4FC3F7" },
-      { icon: "📡", text: "What narrative is running on Base now?", color: "#E879F9" },
+      { icon: "📡", text: "Top Base narrative now?", color: "#E879F9" },
       { icon: "📊", text: "/wallet 0x…",                            color: "#34D399" },
     ],
     quick: ["pick", "whale", "wallet", "pnl"],
@@ -413,7 +413,7 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
     heading: "How can I help?",
     sub:     "Your custom system prompt is active — ask anything.",
     starters: [
-      { icon: "💡", text: "/idea USDC streaming payroll app on Base", color: "#4FC3F7" },
+      { icon: "💡", text: "/idea USDC payroll on Base", color: "#4FC3F7" },
       { icon: "🛠️", text: "/build ERC-4337 agent wallet",            color: "#A78BFA" },
       { icon: "🛡️", text: "/audit my token launch plan",             color: "#F87171" },
       { icon: "🎯", text: "/pick",                                   color: "#34D399" },
@@ -461,7 +461,7 @@ export default function ChatMessages() {
     <div className="flex-1 overflow-y-auto flex flex-col">
       {isEmpty ? (
         /* ── Empty state ─────────────────────────────────────────────────── */
-        <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 text-center">
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-6 sm:py-10 text-center">
 
           {/* Logo + wordmark */}
           <div className="flex items-center gap-3 mb-6">
