@@ -278,25 +278,6 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => ({ project: v.project ?? "", description: v.description ?? "", ask: v.ask ?? "", stage: "pre-seed", traction: v.description ?? "" }),
   },
   {
-    id: "token-distribution-plan",
-    name: "Token Distribution Plan",
-    description: "Token allocation framework: team, community, investors, treasury, liquidity.",
-    agentHandle: "composite",
-    agentName: "Blue + Aeon",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "token", label: "Token / project name", placeholder: "Your token ticker or project name", required: true },
-      { key: "total_supply", label: "Total supply", placeholder: "e.g. 1,000,000,000" },
-      { key: "description", label: "Stage & context", placeholder: "pre-launch or post-TGE? community focus or VC-backed?" },
-    ],
-    isComposite: true,
-    price: "$0.30",
-    priceUSDC: 300000,
-    x402Url: `${X402_BASE}/token-distribution-plan`,
-    x402Body: (v) => ({ token: v.token ?? "", ticker: v.token ?? "", total_supply: v.total_supply ?? "1000000000", description: v.description ?? "" }),
-  },
-  {
     id: "agent-performance",
     name: "Agent Performance",
     description: "Benchmark your AI agent's revenue, engagement, and retention metrics.",
@@ -442,24 +423,6 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/token-momentum-scanner`,
     x402Body: (v) => ({ chain: "base", context: `${v.timeframe ?? ""} ${v.filter ?? ""}`.trim() }),
   },
-  {
-    id: "portfolio-rebalancer",
-    name: "Portfolio Rebalancer",
-    description: "AI-driven portfolio rebalancing plan based on current Base market conditions.",
-    agentHandle: "composite",
-    agentName: "Blue + Aeon",
-    agentType: "composite",
-    category: "trading",
-    inputs: [
-      { key: "holdings", label: "Current portfolio", placeholder: "e.g. 50% ETH, 30% USDC, 20% altcoins — use real %", required: true },
-      { key: "goal", label: "Goal", placeholder: "e.g. reduce risk, maximize yield, increase stablecoin exposure" },
-    ],
-    isComposite: true,
-    price: "$0.25",
-    priceUSDC: 250000,
-    x402Url: `${X402_BASE}/portfolio-rebalancer`,
-    x402Body: (v) => ({ holdings: v.holdings ?? "", risk_profile: "medium", goal: v.goal ?? "" }),
-  },
 
   // ── Content ─────────────────────────────────────────────────────────────────
 
@@ -482,24 +445,6 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => ({ topic: v.topic ?? "", audience: "Base builders", goal: v.angle ?? "" }),
   },
   {
-    id: "builder-brand-score",
-    name: "Builder Brand Score",
-    description: "Score your personal brand as a Base builder and get a growth playbook.",
-    agentHandle: "composite",
-    agentName: "Blue + Aeon",
-    agentType: "composite",
-    category: "content",
-    inputs: [
-      { key: "handle", label: "X / Twitter handle", placeholder: "@yourhandle", required: true },
-      { key: "focus", label: "What you build", placeholder: "e.g. DeFi tools, AI agents, consumer apps" },
-    ],
-    isComposite: true,
-    price: "$0.25",
-    priceUSDC: 250000,
-    x402Url: `${X402_BASE}/builder-brand-score`,
-    x402Body: (v) => ({ builder: v.handle ?? "", handle: v.handle ?? "", project: v.focus ?? "" }),
-  },
-  {
     id: "community-growth-playbook",
     name: "Community Growth Playbook",
     description: "Proven growth tactics for Base builder communities — from 0 to 1000 members.",
@@ -520,43 +465,6 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
 
   // ── Agent Economy ────────────────────────────────────────────────────────────
 
-  {
-    id: "agent-revenue-optimizer",
-    name: "Agent Revenue Optimizer",
-    description: "Maximize your agent's x402 revenue: pricing, bundling, and distribution strategy.",
-    agentHandle: "composite",
-    agentName: "Blue + Aeon",
-    agentType: "composite",
-    category: "agent-economy",
-    inputs: [
-      { key: "agent", label: "Agent name", placeholder: "Your agent name", required: true },
-      { key: "description", label: "Current tools / services", placeholder: "List your tools and current prices" },
-      { key: "current_revenue", label: "Current revenue", placeholder: "e.g. $50/month — use real number for accurate output" },
-    ],
-    isComposite: true,
-    price: "$0.30",
-    priceUSDC: 300000,
-    x402Url: `${X402_BASE}/agent-revenue-optimizer`,
-    x402Body: (v) => ({ agent: v.agent ?? "", description: v.description ?? "", current_revenue: v.current_revenue ?? "0", model: "pay-per-use" }),
-  },
-  {
-    id: "agent-token-strategy",
-    name: "Agent Token Strategy",
-    description: "Design your agent token: utility, distribution, tokenomics, and launch strategy.",
-    agentHandle: "composite",
-    agentName: "Blue + Aeon",
-    agentType: "composite",
-    category: "agent-economy",
-    inputs: [
-      { key: "agent", label: "Agent name", placeholder: "Your agent name", required: true },
-      { key: "description", label: "Token use case", placeholder: "e.g. governance, access gating, rewards, revenue share" },
-    ],
-    isComposite: true,
-    price: "$0.30",
-    priceUSDC: 300000,
-    x402Url: `${X402_BASE}/agent-token-strategy`,
-    x402Body: (v) => ({ agent: v.agent ?? "", description: v.description ?? "", token_name: `${v.agent ?? "AGENT"}TOKEN` }),
-  },
   {
     id: "multi-agent-workflow",
     name: "Multi-Agent Workflow",
@@ -615,45 +523,9 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/base-protocol-comparison`,
     x402Body: (v) => ({ protocol_a: v.protocol_a ?? "", protocol_b: v.protocol_b ?? "", category: "Base DeFi", use_case: v.use_case ?? "" }),
   },
-  {
-    id: "base-builder-network-match",
-    name: "Builder Network Match",
-    description: "Connect with Base builders who complement your skill set and project.",
-    agentHandle: "composite",
-    agentName: "Blue + Aeon",
-    agentType: "composite",
-    category: "base-ecosystem",
-    inputs: [
-      { key: "skills", label: "Your skills", placeholder: "e.g. Solidity, frontend, product, BD, design", required: true },
-      { key: "looking_for", label: "Looking for", placeholder: "e.g. co-founder, technical advisor, growth lead" },
-    ],
-    isComposite: true,
-    price: "$0.20",
-    priceUSDC: 200000,
-    x402Url: `${X402_BASE}/base-builder-network-match`,
-    x402Body: (v) => ({ skills: v.skills ?? "", looking_for: v.looking_for ?? "" }),
-  },
 
   // ── On-chain Strategy ────────────────────────────────────────────────────────
 
-  {
-    id: "wallet-strategy-analyzer",
-    name: "Wallet Strategy Analyzer",
-    description: "Deep analysis of any wallet's on-chain strategy, behavior patterns, and alpha signals.",
-    agentHandle: "composite",
-    agentName: "Blue + Aeon",
-    agentType: "composite",
-    category: "on-chain",
-    inputs: [
-      { key: "address", label: "Wallet address", placeholder: "0x… Base wallet address", required: true },
-      { key: "focus", label: "Analysis focus (optional)", placeholder: "e.g. trading patterns, DeFi activity, token accumulation" },
-    ],
-    isComposite: true,
-    price: "$0.30",
-    priceUSDC: 300000,
-    x402Url: `${X402_BASE}/wallet-strategy-analyzer`,
-    x402Body: (v) => ({ address: v.address ?? "", focus: v.focus ?? "" }),
-  },
   {
     id: "protocol-risk-monitor",
     name: "Protocol Risk Monitor",
@@ -740,27 +612,6 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     price: "$0.50", priceUSDC: 500000,
     x402Url: `https://blueagent.dev/api/x402/deep-analysis`,
     x402Body: (v) => ({ token: v.token ?? "", context: v.context ?? "" }),
-  },
-  {
-    id: "builder-score",
-    name: "Builder Score",
-    description: "Builder reputation score (0-100) for any X/Twitter handle — on-chain activity, shipping history, Base ecosystem credibility.",
-    agentHandle: "composite",
-    agentName: "Blue + MiroShark",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "handle", label: "X/Twitter handle (without @)", placeholder: "blueagent_", required: true },
-    ],
-    isComposite: true,
-    compositeSkills: [
-      { agentType: "blue", label: "Builder credibility" },
-      { agentType: "miroshark", label: "Community reputation" },
-    ],
-    featured: false,
-    price: "$0.35", priceUSDC: 350000,
-    x402Url: `https://blueagent.dev/api/x402/builder-score`,
-    x402Body: (v) => ({ handle: v.handle ?? "" }),
   },
   {
     id: "agent-score",
@@ -1000,35 +851,6 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => ({ feed: v.feed ?? "movers" }),
   },
 
-{
-    id: "agent-yield-finder",
-    name: "Agent Yield Finder",
-    description: "Best USDC yield on Base for idle agent capital — live DefiLlama APY across Aave, Morpho, Moonwell, Compound. Real rates, projected returns, never fabricated.",
-    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
-    category: "on-chain",
-    inputs: [
-      { key: "amount", label: "Idle USDC amount", placeholder: "10000", required: false },
-      { key: "risk", label: "Risk preference", placeholder: "conservative | balanced | aggressive", required: false },
-    ],
-    isComposite: true,
-    price: "$0.25", priceUSDC: 250000,
-    x402Url: `${X402_BASE}/agent-yield-finder`,
-    x402Body: (v) => ({ amount: Number(v.amount) || 10000, risk: v.risk ?? "balanced" }),
-  },
-{
-    id: "wallet-pnl",
-    name: "Wallet PnL Report",
-    description: "Wallet PnL report — trading style, win rate, smart money score, top tokens on Base.",
-    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
-    category: "on-chain",
-    inputs: [
-      { key: "address", label: "Base wallet address", placeholder: "0x...", required: true },
-    ],
-    isComposite: true,
-    price: "$1.00", priceUSDC: 1000000,
-    x402Url: `${X402_BASE}/wallet-pnl`,
-    x402Body: (v) => ({ address: v.address ?? "" }),
-  },
   {
     id: "aml-screen",
     name: "AML Screen",
@@ -1089,20 +911,6 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   // ── Earn ─────────────────────────────────────────────────────────────────────
 
   {
-    id: "yield-optimizer",
-    name: "Yield Optimizer",
-    description: "Best APY opportunities on Base DeFi — live DeFiLlama data, risk-adjusted recommendations.",
-    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
-    category: "earn",
-    inputs: [
-      { key: "token", label: "Token to optimize yield for", placeholder: "USDC, ETH, BRETT", required: true },
-    ],
-    isComposite: true,
-    price: "$0.15", priceUSDC: 150000,
-    x402Url: `${X402_BASE}/yield-optimizer`,
-    x402Body: (v) => ({ token: v.token ?? "" }),
-  },
-  {
     id: "lp-analyzer",
     name: "LP Analyzer",
     description: "LP position analysis — impermanent loss, fee income, rebalance recommendation.",
@@ -1119,59 +927,9 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/lp-analyzer`,
     x402Body: (v) => ({ token0: v.token0 ?? "", token1: v.token1 ?? "", entryPrice: v.entryPrice ?? "", investedAmount: v.investedAmount ?? "" }),
   },
-  {
-    id: "tax-report",
-    name: "Tax Report",
-    description: "On-chain tax summary — realized gains, taxable events, P&L.",
-    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
-    category: "earn",
-    inputs: [
-      { key: "address", label: "Wallet address", placeholder: "0x...", required: true },
-      { key: "year", label: "Tax year (optional)", placeholder: "e.g. 2024" },
-      { key: "country", label: "Country (optional)", placeholder: "US, UK, etc." },
-    ],
-    isComposite: true,
-    price: "$2.00", priceUSDC: 2000000,
-    x402Url: `${X402_BASE}/tax-report`,
-    x402Body: (v) => ({ address: v.address ?? "", year: v.year ?? "", country: v.country ?? "US" }),
-  },
 
   // ── Alerts ───────────────────────────────────────────────────────────────────
 
-  {
-    id: "alert-subscribe",
-    name: "Alert Subscribe",
-    description: "Subscribe to real-time alerts via webhook — whale, circuit breaker, quantum exposure.",
-    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
-    category: "alerts",
-    inputs: [
-      { key: "webhookUrl", label: "Webhook URL", placeholder: "https://your-server.com/webhook", required: true },
-      { key: "topics", label: "Topics (comma-separated)", placeholder: "whale_movement, rug_risk, quantum_exposure", required: true },
-      { key: "addresses", label: "Addresses to watch (optional)", placeholder: "0x..., 0x... or leave blank for global" },
-    ],
-    isComposite: true,
-    price: "$0.50", priceUSDC: 500000,
-    x402Url: `${X402_BASE}/alert-subscribe`,
-    x402Body: (v) => ({
-      webhookUrl: v.webhookUrl ?? "",
-      topics: (v.topics ?? "").split(",").map((t: string) => t.trim()).filter(Boolean),
-      addresses: v.addresses ? (v.addresses as string).split(",").map((a: string) => a.trim()).filter(Boolean) : [],
-    }),
-  },
-  {
-    id: "alert-check",
-    name: "Alert Check",
-    description: "Check active alert triggers for any address.",
-    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
-    category: "alerts",
-    inputs: [
-      { key: "address", label: "Wallet or token address", placeholder: "0x...", required: true },
-    ],
-    isComposite: true,
-    price: "$0.10", priceUSDC: 100000,
-    x402Url: `${X402_BASE}/alert-check`,
-    x402Body: (v) => ({ address: v.address ?? "" }),
-  },
 
   // ── Builder (launch & grants) ─────────────────────────────────────────────────
 
@@ -1225,25 +983,6 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     price: "$0.50", priceUSDC: 500000,
     x402Url: `${X402_BASE}/launch-simulator-3`,
     x402Body: (v) => ({ project: v.project ?? "", description: v.description ?? "", ticker: v.ticker ?? "", contract: v.contract ?? "" }),
-  },
-  {
-    id: "launch-advisor",
-    name: "Launch Advisor",
-    description: "Full token launch playbook — tokenomics, 8-week timeline, marketing strategy, KPIs.",
-    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "projectName", label: "Project name", placeholder: "Your project name", required: true },
-      { key: "description", label: "Project description", placeholder: "What it does, why Base, target users", required: true },
-      { key: "targetAudience", label: "Target audience (optional)", placeholder: "e.g. Base builders and DeFi traders" },
-      { key: "teamSize", label: "Team size (optional)", placeholder: "e.g. solo, 3 people" },
-      { key: "budget", label: "Budget (optional)", placeholder: "e.g. $10k for launch" },
-      { key: "tokenSupply", label: "Token supply (optional)", placeholder: "e.g. 1,000,000,000" },
-    ],
-    isComposite: true,
-    price: "$3.00", priceUSDC: 3000000,
-    x402Url: `${X402_BASE}/launch-advisor`,
-    x402Body: (v) => ({ projectName: v.projectName ?? "", description: v.description ?? "", targetAudience: v.targetAudience ?? "", teamSize: v.teamSize ?? "", budget: v.budget ?? "", tokenSupply: v.tokenSupply ?? "" }),
   },
   {
     id: "grant-evaluator",
