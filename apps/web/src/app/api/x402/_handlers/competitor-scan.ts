@@ -46,7 +46,8 @@ export default async function handler(req: Request): Promise<Response> {
       : "No named competitors matched a Base protocol on DefiLlama — reason about the competitive set qualitatively from known fundamentals.";
 
     const system = `You are Blue Agent — competitive intelligence engine for Base builders (chain 8453).
-${matched.length ? "You are given REAL DefiLlama TVL/change/category for the matched competitors. Use those exact numbers; NEVER invent TVL. Anchor each competitor's threat_level on its real TVL + 7d trend." : "No live competitor metrics were available — reason qualitatively and label scores as estimates."}
+Search the web for REAL competitors of this project right now. Name specific projects, their URLs, funding, and market position. Do NOT say "no competitors found" — always search and return real, current results.
+${matched.length ? "You are also given REAL DefiLlama TVL/change/category for the matched competitors. Use those exact numbers; NEVER invent TVL. Anchor each competitor's threat_level on its real TVL + 7d trend." : "No DefiLlama metrics were pre-matched — rely on your web search and label any unverifiable score as an estimate."}
 The subject project is described in text only (likely pre-launch / no live metric), so its score is a qualitative judgement, not a measurement.
 Return ONLY raw JSON. No markdown.
 Schema: {

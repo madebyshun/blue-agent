@@ -5,6 +5,8 @@
 // from the on-chain data, not by the model.
 // Price: $0.10
 
+import { getMoralisERC20Transfers } from "@/lib/moralis";
+
 type BankrMessage = { role: string; content: string };
 
 async function callBankrLLM(opts: {
@@ -42,17 +44,21 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
   return null;
 }
 
-type TokenTx = { value: string; tokenDecimal?: string; from?: string; to?: string; tokenSymbol: string; timeStamp: string };
+type TokenTx = {
+  value?: string;
+  value_decimal?: string;
+  token_decimals?: string;
+  from_address?: string;
+  to_address?: string;
+  token_symbol?: string;
+  block_timestamp?: string;
+  possible_spam?: boolean;
+};
 
 async function getTokenTx(address: string, limit = 100): Promise<TokenTx[]> {
-  const key = process.env.BASESCAN_API_KEY ?? "";
   try {
-    const res = await fetch(
-      `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=tokentx&address=${address}&sort=desc&offset=${limit}&page=1&apikey=${key}`,
-      { signal: AbortSignal.timeout(8000) }
-    );
-    const data = await res.json() as { status: string; result?: TokenTx[] };
-    return data.status === "1" ? (data.result ?? []) : [];
+    const transfers = await getMoralisERC20Transfers(address, limit);
+    return (transfers as TokenTx[]).filter((t) => !t.possible_spam);
   } catch {
     return [];
   }
@@ -90,14 +96,16 @@ export default async function handler(req: Request): Promise<Response> {
     // Build the real large-transfer list in code (top 15 by token amount).
     const largeTxs = txs
       .map((tx) => {
-        const amount = parseFloat(tx.value) / Math.pow(10, parseInt(tx.tokenDecimal || "18"));
+        const amount = tx.value_decimal != null
+          ? parseFloat(tx.value_decimal)
+          : parseFloat(tx.value ?? "0") / Math.pow(10, parseInt(tx.token_decimals || "18"));
         return {
-          token: tx.tokenSymbol,
+          token: tx.token_symbol,
           amount: Number.isFinite(amount) ? amount : 0,
-          direction: tx.to?.toLowerCase() === address.toLowerCase() ? "IN" : "OUT",
-          from: (tx.from ?? "").slice(0, 10) + "…",
-          to: (tx.to ?? "").slice(0, 10) + "…",
-          timestamp: new Date(parseInt(tx.timeStamp) * 1000).toISOString(),
+          direction: tx.to_address?.toLowerCase() === address.toLowerCase() ? "IN" : "OUT",
+          from: (tx.from_address ?? "").slice(0, 10) + "…",
+          to: (tx.to_address ?? "").slice(0, 10) + "…",
+          timestamp: tx.block_timestamp ? new Date(tx.block_timestamp).toISOString() : null,
         };
       })
       .filter((t) => t.amount > 0)

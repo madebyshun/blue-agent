@@ -5,19 +5,12 @@
 // The output is labelled accordingly (data_source + disclaimer). Resilient: never 500.
 // Price: $0.25
 
-type Msg = { role: string; content: string };
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+import { callVeniceLLM } from "@/app/api/_lib/llm";
 
+// Venice — live web search so sentiment is read from real posts, not model guesses.
 async function llm(system: string, user: string, temp = 0, tokens = 1000): Promise<string> {
-  const r = await fetch("https://llm.bankr.bot/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: "claude-haiku-4-5", system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!r.ok) throw new Error(`LLM ${r.status}`);
-  const d = await r.json() as { content?: { text: string }[] };
-  return d.content?.[0]?.text ?? "";
+  return callVeniceLLM({ system, user, temperature: temp, maxTokens: tokens });
 }
 const DISCLAIMER = "AI estimate of likely community sentiment generated from model knowledge — NOT measured from live social posts. Treat scores as directional, not data.";
 function parseJson(t: string): Record<string, unknown> | null {
@@ -77,6 +70,7 @@ Schema: {
     const resultRaw = await llm(`${NARRATIVE_CTX}
 
 You are Blue Agent — community sentiment analyzer.
+Search the web NOW for current community sentiment about this project/token on X/Twitter, Farcaster, and Telegram. Base your read on real posts/signals you find — not model estimates. If you genuinely find no data, state that clearly in the summary rather than inventing sentiment.
 CRITICAL: Return ONLY raw JSON.
 Schema: {
   "sentiment_score": <0-100>,
