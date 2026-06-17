@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useState, useCallback } from "react";
+import { useAccount } from "wagmi";
 import AppPageHeader from "@/components/app/AppPageHeader";
 
 const ACCENT = "#F59E0B";
@@ -174,29 +174,32 @@ export default function LaunchesPage() {
   const [data, setData] = useState<FeedResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showLaunch, setShowLaunch] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  const load = useCallback(() => {
+    setLoading(true);
     fetch("/api/launches")
       .then((r) => r.json())
-      .then((d: FeedResponse) => { if (!cancelled) setData(d); })
-      .catch(() => { if (!cancelled) setError("Failed to load launches"); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .then((d: FeedResponse) => setData(d))
+      .catch(() => setError("Failed to load launches"))
+      .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const launches = data?.launches ?? [];
 
   return (
     <div className="flex flex-col h-full bg-[#050508] text-white font-mono overflow-hidden">
+      {showLaunch && <LaunchModal onClose={() => setShowLaunch(false)} onLaunched={load} />}
       <AppPageHeader
         label="LAUNCHES"
         subtitle="Tokens launched through Blue Chat · live on Base"
         accent={ACCENT}
         right={
-          <Link href="/app/chat" className="hover:text-[#F59E0B] transition-colors">
+          <button onClick={() => setShowLaunch(true)} className="hover:text-[#F59E0B] transition-colors">
             + Launch a token →
-          </Link>
+          </button>
         }
       />
 
@@ -231,11 +234,11 @@ export default function LaunchesPage() {
               <p className="text-[11px] text-slate-600 mb-4">
                 Be the first — launch a token on Base in seconds through Blue Chat.
               </p>
-              <Link href="/app/chat"
+              <button onClick={() => setShowLaunch(true)}
                 className="inline-block font-mono text-[12px] font-bold px-4 py-2 rounded-lg transition-all"
                 style={{ background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}40` }}>
                 Launch a token →
-              </Link>
+              </button>
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -257,6 +260,130 @@ function StatChip({ label, value }: { label: string; value: string }) {
     <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3">
       <div className="font-mono text-[8px] text-slate-600 tracking-widest mb-1">{label}</div>
       <div className="font-mono text-lg font-bold" style={{ color: ACCENT }}>{value}</div>
+    </div>
+  );
+}
+
+// ── Launch modal ─────────────────────────────────────────────────────────────
+// Same deploy path as the chat /launch card (POST /api/launch-token → Bankr
+// launchpad, gas sponsored, 57% creator fee → the user's wallet). Inline UX so
+// the user never leaves /app/launches.
+
+function ModalField({ label, value, onChange, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder: string;
+}) {
+  return (
+    <div>
+      <div className="font-mono text-[9px] text-slate-600 mb-1">{label}</div>
+      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#F59E0B]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+    </div>
+  );
+}
+
+function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched: () => void }) {
+  const { address, isConnected } = useAccount();
+  const [name, setName] = useState("");
+  const [symbol, setSymbol] = useState("");
+  const [description, setDescription] = useState("");
+  const [step, setStep] = useState<"idle" | "launching" | "done" | "error">("idle");
+  const [err, setErr] = useState("");
+  const [out, setOut] = useState<{ tokenAddress?: string | null; basescan?: string | null; uniswap?: string | null; bankr?: string | null } | null>(null);
+
+  const cleanName = name.trim();
+  const cleanSymbol = symbol.replace(/^\$/, "").trim();
+
+  async function launch() {
+    if (!cleanName || step === "launching") return;
+    setStep("launching"); setErr("");
+    try {
+      const res = await fetch("/api/launch-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tokenName: cleanName,
+          tokenSymbol: cleanSymbol || undefined,
+          description: description.trim() || undefined,
+          // 57% creator fee → your wallet when connected, else defaults to @blueagent_.
+          feeRecipientType: isConnected && address ? "wallet" : "x",
+          feeRecipientValue: isConnected && address ? address : "blueagent_",
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setErr(d?.error ?? `Launch failed (${res.status})`); setStep("error"); return; }
+      setOut({ tokenAddress: d.tokenAddress ?? null, basescan: d.basescan ?? null, uniswap: d.uniswap ?? null, bankr: d.bankr ?? null });
+      setStep("done");
+      onLaunched();
+    } catch (e) {
+      setErr((e as Error).message); setStep("error");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={step === "launching" ? undefined : onClose} />
+      <div className="relative w-full max-w-md rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <div className="font-mono text-sm font-bold" style={{ color: ACCENT }}>🚀 Launch a token</div>
+          <button onClick={onClose} disabled={step === "launching"}
+            className="font-mono text-slate-600 hover:text-white text-xl leading-none disabled:opacity-40">×</button>
+        </div>
+
+        {step === "done" ? (
+          <div className="rounded-xl border p-4" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
+            <div className="font-mono text-[12px] font-bold mb-1" style={{ color: "#22C55E" }}>${cleanSymbol || cleanName} launched on Base</div>
+            {out?.tokenAddress && <div className="font-mono text-[10px] text-slate-400 mb-3 break-all">{out.tokenAddress}</div>}
+            <div className="flex flex-wrap gap-2 mb-3">
+              {out?.bankr && <a href={out.bankr} target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7]">Bankr ↗</a>}
+              {out?.basescan && <a href={out.basescan} target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] text-slate-300 hover:text-white">Basescan ↗</a>}
+              {out?.uniswap && <a href={out.uniswap} target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#F59E0B30] text-[#F59E0B]">Trade ↗</a>}
+            </div>
+            <button onClick={onClose} className="w-full font-mono text-[12px] font-bold py-2 rounded-lg" style={{ background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E40" }}>Done</button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center font-mono text-sm font-bold shrink-0" style={{ background: `${ACCENT}15`, border: `1px solid ${ACCENT}30`, color: ACCENT }}>
+                {(cleanSymbol || cleanName).slice(0, 2).toUpperCase() || "?"}
+              </div>
+              <div className="min-w-0">
+                <div className="font-mono text-sm font-bold text-white truncate">{cleanName || "Your token name"}</div>
+                <div className="font-mono text-[11px] text-slate-500">${cleanSymbol || "TICKER"}</div>
+              </div>
+            </div>
+
+            <div className="space-y-2.5 mb-4">
+              <ModalField label="TOKEN NAME *" value={name} onChange={setName} placeholder="e.g. Blue Agent" />
+              <ModalField label="TICKER" value={symbol} onChange={setSymbol} placeholder="auto from name" />
+              <ModalField label="DESCRIPTION" value={description} onChange={setDescription} placeholder="One-line pitch (optional)" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mb-3 font-mono text-[10px]">
+              <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-2.5 py-1.5">
+                <div className="text-slate-600 mb-0.5">SUPPLY</div><div className="text-slate-300">100B fixed</div>
+              </div>
+              <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-2.5 py-1.5">
+                <div className="text-slate-600 mb-0.5">CREATOR FEE</div><div className="text-[#22C55E]">57% of 1.2%</div>
+              </div>
+            </div>
+
+            <p className="font-mono text-[9px] text-slate-600 mb-3 leading-relaxed">
+              Creator fees → <span className="text-slate-400">{isConnected && address ? `${address.slice(0, 6)}…${address.slice(-4)} (your wallet)` : "@blueagent_ (connect wallet to claim)"}</span>. Deploys a <span className="text-amber-400">real, irreversible</span> token on Base via Bankr · gas sponsored.
+            </p>
+
+            {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
+
+            <button onClick={launch} disabled={step === "launching" || !cleanName}
+              className="w-full font-mono text-[12px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
+              style={{ background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}40` }}>
+              {step === "launching" ? "Launching…" : `🚀 Launch $${cleanSymbol || "TOKEN"} on Base`}
+            </button>
+            <p className="font-mono text-[9px] text-slate-700 mt-1.5 text-center">
+              {cleanName ? "Bankr allows 1 launch/min per wallet." : "Enter a token name to launch."}
+            </p>
+          </>
+        )}
+      </div>
     </div>
   );
 }

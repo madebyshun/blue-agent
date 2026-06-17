@@ -361,7 +361,8 @@ const MODEL_COLORS: Record<string, string> = {
 // Settings (or via the composer pill) immediately changes "what to do next" —
 // the heading + 4 starter cards + quick commands all reflect that expert role.
 
-interface Starter { icon: string; text: string; color: string; }
+// `label` = compact display; `text` = the prompt sent on click (no longer shown).
+interface Starter { icon: string; label: string; text: string; color: string; }
 interface EmptyState { heading: string; sub: string; starters: Starter[]; quick: string[]; }
 
 const PERSONA_EMPTY: Record<string, EmptyState> = {
@@ -369,10 +370,10 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
     heading: "What are you building?",
     sub:     "Ideas, architecture, audits, launches, fundraising — grounded in Base.",
     starters: [
-      { icon: "💡", text: "/idea USDC payroll on Base", color: "#4FC3F7" },
-      { icon: "🛠️", text: "/build ERC-4337 agent wallet",            color: "#A78BFA" },
-      { icon: "🛡️", text: "/audit my token launch plan",             color: "#F87171" },
-      { icon: "🚀", text: "/pick",                                   color: "#34D399" },
+      { icon: "💡", label: "Idea", text: "/idea USDC payroll on Base", color: "#4FC3F7" },
+      { icon: "🛠️", label: "Build", text: "/build ERC-4337 agent wallet", color: "#A78BFA" },
+      { icon: "🛡️", label: "Audit", text: "/audit my token launch plan", color: "#F87171" },
+      { icon: "🚀", label: "Pick", text: "/pick", color: "#34D399" },
     ],
     quick: ["idea", "build", "audit", "ship", "raise", "pick", "scan"],
   },
@@ -380,10 +381,10 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
     heading: "What's the trade?",
     sub:     "Position sizing, entries/exits, and on-chain alpha — Base-native.",
     starters: [
-      { icon: "🎯", text: "/pick",                              color: "#34D399" },
-      { icon: "🐋", text: "/whale AERO",                        color: "#4FC3F7" },
-      { icon: "📈", text: "/dex AERO",                          color: "#E879F9" },
-      { icon: "📊", text: "/pnl 0x…",                           color: "#A78BFA" },
+      { icon: "🎯", label: "Pick", text: "/pick", color: "#34D399" },
+      { icon: "🐋", label: "Whale", text: "/whale AERO", color: "#4FC3F7" },
+      { icon: "📈", label: "DEX flow", text: "/dex AERO", color: "#E879F9" },
+      { icon: "📊", label: "PnL", text: "/pnl 0x…", color: "#A78BFA" },
     ],
     quick: ["pick", "whale", "dex", "pnl", "yield"],
   },
@@ -391,10 +392,10 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
     heading: "What should I audit?",
     sub:     "Vulnerabilities, severity ratings, Solidity fixes, and a go/no-go call.",
     starters: [
-      { icon: "🛡️", text: "/audit paste your contract here",            color: "#F87171" },
-      { icon: "🔍", text: "/scan 0x…",                                  color: "#4FC3F7" },
-      { icon: "⚠️", text: "Audit for reentrancy risks", color: "#FB923C" },
-      { icon: "🧾", text: "/aml 0x…",                                   color: "#A78BFA" },
+      { icon: "🛡️", label: "Audit", text: "/audit paste your contract here", color: "#F87171" },
+      { icon: "🔍", label: "Scan", text: "/scan 0x…", color: "#4FC3F7" },
+      { icon: "⚠️", label: "Reentrancy", text: "Audit for reentrancy risks", color: "#FB923C" },
+      { icon: "🧾", label: "AML", text: "/aml 0x…", color: "#A78BFA" },
     ],
     quick: ["audit", "scan", "aml", "quantum"],
   },
@@ -402,10 +403,10 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
     heading: "What should I research?",
     sub:     "Evidence-backed DD, on-chain data, and contrarian takes.",
     starters: [
-      { icon: "🔬", text: "Deep DD on Aerodrome",  color: "#A78BFA" },
-      { icon: "🐋", text: "/whale AERO",                            color: "#4FC3F7" },
-      { icon: "📡", text: "Top Base narrative now?", color: "#E879F9" },
-      { icon: "📊", text: "/wallet 0x…",                            color: "#34D399" },
+      { icon: "🔬", label: "Deep DD", text: "Deep DD on Aerodrome", color: "#A78BFA" },
+      { icon: "🐋", label: "Whale", text: "/whale AERO", color: "#4FC3F7" },
+      { icon: "📡", label: "Narrative", text: "Top Base narrative now?", color: "#E879F9" },
+      { icon: "📊", label: "Wallet", text: "/wallet 0x…", color: "#34D399" },
     ],
     quick: ["pick", "whale", "wallet", "pnl"],
   },
@@ -413,10 +414,10 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
     heading: "How can I help?",
     sub:     "Your custom system prompt is active — ask anything.",
     starters: [
-      { icon: "💡", text: "/idea USDC payroll on Base", color: "#4FC3F7" },
-      { icon: "🛠️", text: "/build ERC-4337 agent wallet",            color: "#A78BFA" },
-      { icon: "🛡️", text: "/audit my token launch plan",             color: "#F87171" },
-      { icon: "🎯", text: "/pick",                                   color: "#34D399" },
+      { icon: "💡", label: "Idea", text: "/idea USDC payroll on Base", color: "#4FC3F7" },
+      { icon: "🛠️", label: "Build", text: "/build ERC-4337 agent wallet", color: "#A78BFA" },
+      { icon: "🛡️", label: "Audit", text: "/audit my token launch plan", color: "#F87171" },
+      { icon: "🎯", label: "Pick", text: "/pick", color: "#34D399" },
     ],
     quick: ["idea", "build", "audit", "ship", "raise", "pick"],
   },
@@ -479,14 +480,14 @@ export default function ChatMessages() {
             {empty.sub}
           </p>
 
-          {/* Starter cards — 4-column single row, persona-aware */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-2xl mx-auto mb-6">
+          {/* Quick action cards — compact pills (icon + short label), persona-aware */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full max-w-md sm:max-w-2xl mx-auto mb-5">
             {empty.starters.map(s => (
               <button
-                key={s.text}
+                key={s.label}
                 onClick={() => send(s.text)}
                 disabled={outOfCredits}
-                className="text-left px-4 py-5 rounded-2xl border transition-all disabled:opacity-40 group"
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-all disabled:opacity-40 group"
                 style={{ background: "#0D0D14", borderColor: "#1A1A2E" }}
                 onMouseEnter={e => {
                   e.currentTarget.style.borderColor = `${s.color}30`;
@@ -497,10 +498,10 @@ export default function ChatMessages() {
                   e.currentTarget.style.background = "#0D0D14";
                 }}
               >
-                <span className="text-2xl mb-3 block">{s.icon}</span>
-                <p className="font-mono text-[11px] text-slate-500 group-hover:text-slate-300 leading-relaxed transition-colors">
-                  {s.text}
-                </p>
+                <span className="text-base shrink-0">{s.icon}</span>
+                <span className="font-mono text-[12px] text-slate-400 group-hover:text-white truncate transition-colors">
+                  {s.label}
+                </span>
               </button>
             ))}
           </div>
