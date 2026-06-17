@@ -4,6 +4,7 @@
 // never fabricate a report from an empty data response.
 
 import { getWalletSnapshot } from "@/lib/onchain";
+import { getMoralisERC20Transfers } from "@/lib/moralis";
 import { callVeniceLLM } from "@/app/api/_lib/llm";
 
 type BankrMessage = { role: string; content: string };
@@ -24,17 +25,10 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
   return null;
 }
 
-async function getBasescanTxs(address: string): Promise<unknown[]> {
-  const apiKey = process.env.BASESCAN_API_KEY;
-  if (!apiKey) return [];
+async function getBasescanTxs(address: string): Promise<Record<string, unknown>[]> {
   try {
-    const url = `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=tokentx&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${apiKey}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
-    const data = await res.json() as { status: string; result?: unknown[] };
-    if (data.status === "1" && Array.isArray(data.result)) {
-      return data.result.slice(0, 50);
-    }
-    return [];
+    const transfers = await getMoralisERC20Transfers(address, 100);
+    return transfers.filter((t) => !t.possible_spam).slice(0, 50);
   } catch {
     return [];
   }
@@ -87,13 +81,13 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     const txSummary = txs.length > 0
-      ? (txs as { tokenSymbol: string; value: string; tokenDecimal: string; to?: string; timeStamp: string }[])
+      ? (txs as { token_symbol?: string; value?: string; value_decimal?: string; token_decimals?: string; to_address?: string; block_timestamp?: string }[])
         .slice(0, 20).map(tx => ({
-          token: tx.tokenSymbol,
-          value: tx.value,
-          decimals: tx.tokenDecimal,
-          direction: tx.to?.toLowerCase() === address.toLowerCase() ? "IN" : "OUT",
-          timestamp: new Date(parseInt(tx.timeStamp) * 1000).toISOString(),
+          token: tx.token_symbol,
+          value: tx.value_decimal ?? tx.value,
+          decimals: tx.token_decimals,
+          direction: tx.to_address?.toLowerCase() === address.toLowerCase() ? "IN" : "OUT",
+          timestamp: tx.block_timestamp ? new Date(tx.block_timestamp).toISOString() : null,
         }))
       : [];
 

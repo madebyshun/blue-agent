@@ -6,6 +6,7 @@
 // Price: $0.20
 
 import { getTokenMarket, type TokenMarket } from "@/lib/market-data";
+import { getBasescanSource } from "@/lib/moralis";
 
 type Msg = { role: string; content: string };
 
@@ -42,18 +43,14 @@ function parseJson(t: string): Record<string, unknown> | null {
 
 // Lightweight Basescan verification check (contract trust signal).
 async function getVerified(address: string): Promise<{ verified: boolean; name: string | null }> {
-  const apiKey = process.env.BASESCAN_API_KEY ?? "";
   try {
-    const res = await fetch(
-      `https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getsourcecode&address=${address}&apikey=${apiKey}`,
-      { signal: AbortSignal.timeout(8000) }
-    );
-    if (!res.ok) return { verified: false, name: null };
-    const d = (await res.json()) as { status: string; result?: { ContractName?: string; SourceCode?: string }[] };
-    if (d.status === "1" && d.result?.length) {
+    const info = await getBasescanSource(address);
+    if (info) {
+      const sourceCode = info.SourceCode as string | undefined;
+      const contractName = info.ContractName as string | undefined;
       return {
-        verified: !!d.result[0].SourceCode && d.result[0].SourceCode.length > 0,
-        name: d.result[0].ContractName || null,
+        verified: !!sourceCode && sourceCode.length > 0,
+        name: contractName || null,
       };
     }
   } catch { /* ignore */ }

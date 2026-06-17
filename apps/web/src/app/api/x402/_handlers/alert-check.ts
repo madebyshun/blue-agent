@@ -2,6 +2,7 @@
 // Price: $0.10 — never reports "all clear" when the data simply failed to load.
 
 import { getWalletSnapshot } from "@/lib/onchain";
+import { getMoralisNativeTx, getMoralisERC20Transfers } from "@/lib/moralis";
 
 type BankrMessage = { role: string; content: string };
 
@@ -41,17 +42,13 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
 }
 
 async function getBasescanData(address: string) {
-  const key = process.env.BASESCAN_API_KEY ?? "";
-  const [txRes, tokenRes] = await Promise.all([
-    fetch(`https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&sort=desc&offset=20&apikey=${key}`, { signal: AbortSignal.timeout(8000) }).catch(() => null),
-    fetch(`https://api.etherscan.io/v2/api?chainid=8453&module=account&action=tokentx&address=${address}&sort=desc&offset=20&apikey=${key}`, { signal: AbortSignal.timeout(8000) }).catch(() => null),
+  const [nativeTxs, tokenTxs] = await Promise.all([
+    getMoralisNativeTx(address, 20).catch(() => []),
+    getMoralisERC20Transfers(address, 20).catch(() => []),
   ]);
-  type ApiResp = { status: string; result?: unknown[] };
-  const txData = (txRes ? await txRes.json().catch(() => ({ status: "0" })) : { status: "0" }) as ApiResp;
-  const tokenData = (tokenRes ? await tokenRes.json().catch(() => ({ status: "0" })) : { status: "0" }) as ApiResp;
   return {
-    txs: txData.status === "1" ? (txData.result ?? []) : [],
-    tokenTxs: tokenData.status === "1" ? (tokenData.result ?? []) : [],
+    txs: nativeTxs,
+    tokenTxs: tokenTxs.filter((t) => !t.possible_spam),
   };
 }
 

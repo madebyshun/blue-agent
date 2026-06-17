@@ -3,6 +3,7 @@
 // when a wallet has no activity or data is unreadable.
 
 import { getWalletSnapshot } from "@/lib/onchain";
+import { getMoralisNativeTx, getMoralisERC20Transfers } from "@/lib/moralis";
 
 type BankrMessage = { role: string; content: string };
 
@@ -42,17 +43,13 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
 }
 
 async function getBasescanData(address: string) {
-  const key = process.env.BASESCAN_API_KEY ?? "";
-  const [txRes, tokenRes] = await Promise.all([
-    fetch(`https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&sort=desc&offset=100&apikey=${key}`, { signal: AbortSignal.timeout(8000) }).catch(() => null),
-    fetch(`https://api.etherscan.io/v2/api?chainid=8453&module=account&action=tokentx&address=${address}&sort=desc&offset=50&apikey=${key}`, { signal: AbortSignal.timeout(8000) }).catch(() => null),
+  const [nativeTxs, tokenTxs] = await Promise.all([
+    getMoralisNativeTx(address, 100).catch(() => []),
+    getMoralisERC20Transfers(address, 50).catch(() => []),
   ]);
-  type ApiResp = { status: string; result?: unknown[] };
-  const txData = (txRes ? await txRes.json().catch(() => ({ status: "0" })) : { status: "0" }) as ApiResp;
-  const tokenData = (tokenRes ? await tokenRes.json().catch(() => ({ status: "0" })) : { status: "0" }) as ApiResp;
   return {
-    txs: txData.status === "1" ? (txData.result ?? []) : [],
-    tokenTxs: tokenData.status === "1" ? (tokenData.result ?? []) : [],
+    txs: nativeTxs,
+    tokenTxs: tokenTxs.filter((t) => !t.possible_spam),
   };
 }
 
@@ -127,11 +124,11 @@ export default async function handler(req: Request): Promise<Response> {
       });
     }
 
-    type Tx = { to?: string };
-    type TokenTx = { tokenSymbol?: string };
+    type Tx = { to_address?: string };
+    type TokenTx = { token_symbol?: string };
 
-    const uniqueContracts = [...new Set((txs as Tx[]).map(tx => tx.to).filter(Boolean))].slice(0, 20);
-    const uniqueTokens = [...new Set((tokenTxs as TokenTx[]).map(tx => tx.tokenSymbol))].slice(0, 15);
+    const uniqueContracts = [...new Set((txs as Tx[]).map(tx => tx.to_address).filter(Boolean))].slice(0, 20);
+    const uniqueTokens = [...new Set((tokenTxs as TokenTx[]).map(tx => tx.token_symbol))].slice(0, 15);
 
     const llmResponse = await callBankrLLM({
       system: SYSTEM,

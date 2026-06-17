@@ -4,6 +4,7 @@
 // report from an empty data response.
 
 import { getWalletSnapshot } from "@/lib/onchain";
+import { getMoralisNativeTx, getMoralisERC20Transfers } from "@/lib/moralis";
 import { callVeniceLLM } from "@/app/api/_lib/llm";
 
 type BankrMessage = { role: string; content: string };
@@ -25,20 +26,16 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
 }
 
 async function getTransactions(address: string) {
-  const key = process.env.BASESCAN_API_KEY ?? "";
-  const [txRes, tokenRes] = await Promise.all([
-    fetch(`https://api.etherscan.io/v2/api?chainid=8453&module=account&action=txlist&address=${address}&sort=asc&offset=200&apikey=${key}`, { signal: AbortSignal.timeout(8000) }),
-    fetch(`https://api.etherscan.io/v2/api?chainid=8453&module=account&action=tokentx&address=${address}&sort=asc&offset=200&apikey=${key}`, { signal: AbortSignal.timeout(8000) }),
+  const [nativeTxs, tokenTxs] = await Promise.all([
+    getMoralisNativeTx(address, 200),
+    getMoralisERC20Transfers(address, 200),
   ]);
-  const [txData, tokenData] = await Promise.all([
-    txRes.json() as Promise<{ status: string; result?: unknown[] }>,
-    tokenRes.json() as Promise<{ status: string; result?: unknown[] }>,
-  ]);
+  const tokens = tokenTxs.filter((t) => !t.possible_spam);
   return {
-    txCount: txData.status === "1" ? (txData.result ?? []).length : 0,
-    tokenTxCount: tokenData.status === "1" ? (tokenData.result ?? []).length : 0,
-    recentTxs: txData.status === "1" ? (txData.result ?? []).slice(0, 20) : [],
-    recentTokenTxs: tokenData.status === "1" ? (tokenData.result ?? []).slice(0, 20) : [],
+    txCount: nativeTxs.length,
+    tokenTxCount: tokens.length,
+    recentTxs: nativeTxs.slice(0, 20),
+    recentTokenTxs: tokens.slice(0, 20),
   };
 }
 
