@@ -381,8 +381,8 @@ export default function OverviewView({ onSwitchTab }: Props) {
                   color={tier.color} />
                 <StatChip
                   label="USDC YIELD"
-                  value={`$${(Number(pendingUsdc) / 1e6).toFixed(4)}`}
-                  sub="claimable"
+                  value={Number(pendingUsdc) > 0 ? `$${(Number(pendingUsdc) / 1e6).toFixed(4)}` : "—"}
+                  sub={Number(pendingUsdc) > 0 ? "claimable" : "no yield yet"}
                   color="#22C55E" />
               </div>
 
