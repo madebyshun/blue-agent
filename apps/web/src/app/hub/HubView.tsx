@@ -1002,7 +1002,7 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
     label: "For Traders",
     desc: "Signals, market intel, portfolio tools",
     color: "#4FC3F7",
-    ids: ["token-pick-signal", "narrative-position", "whale-copy-signal", "defi-opportunity", "token-momentum-scanner", "ecosystem-digest", "protocol-risk-monitor"],
+    ids: ["token-pick-signal", "narrative-position", "whale-copy-signal", "defi-opportunity", "token-momentum-scanner", "ecosystem-digest", "protocol-risk-monitor", "base-alpha", "token-alpha", "narrative-pulse", "protocol-health"],
   },
   {
     id: "founders",
@@ -1016,7 +1016,7 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
     label: "For Investors",
     desc: "Due diligence, memos, pitch intel",
     color: "#34D399",
-    ids: ["builder-deep-dd", "investor-memo", "pitch-intelligence", "fundraise-timing", "base-protocol-comparison", "agent-score"],
+    ids: ["builder-deep-dd", "investor-memo", "pitch-intelligence", "fundraise-timing", "base-protocol-comparison", "agent-score", "founder-check"],
   },
   {
     id: "blue",
@@ -1030,14 +1030,14 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
     label: "Security & Safety",
     desc: "Honeypot, risk gate, deep analysis, quantum protection",
     color: "#F87171",
-    ids: ["honeypot-check", "risk-gate", "deep-analysis", "contract-trust", "quantum-premium", "quantum-batch", "quantum-migrate", "quantum-timeline", "key-exposure"],
+    ids: ["honeypot-check", "risk-gate", "deep-analysis", "contract-trust", "quantum-premium", "quantum-batch", "quantum-migrate", "quantum-timeline", "key-exposure", "quick-safety", "wallet-risk", "b20-check", "liquidity-depth", "token-distribution"],
   },
   {
     id: "onchain",
     label: "On-chain Data",
     desc: "Wallet PnL, AML, airdrops, whale tracking, DEX flow",
     color: "#FACC15",
-    ids: ["aml-screen", "airdrop-check", "whale-tracker", "dex-flow"],
+    ids: ["aml-screen", "airdrop-check", "whale-tracker", "dex-flow", "token-price", "pool-scan", "wallet-holdings", "new-pools", "gas-tracker", "base-activity-score", "scam-detector", "cross-protocol-yield", "agent-readiness", "base-pulse"],
   },
   {
     id: "earn",

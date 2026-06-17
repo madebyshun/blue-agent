@@ -12,15 +12,15 @@ const DESCRIPTION =
 // in-app browser with the splash card while it loads.
 const fcFrame = JSON.stringify({
   version: "next",
-  imageUrl: `${SITE}/og-chat.png`,
+  imageUrl: `${SITE}/opengraph-image`,
   button: {
-    title: "Open Blue Chat",
+    title: "Open Blue Agent",
     action: {
       type: "launch_frame",
       name: "Blue Agent",
       url: `${SITE}/app/chat`,
       splashImageUrl: `${SITE}/splash.png`,
-      splashBackgroundColor: "#4FC3F7",
+      splashBackgroundColor: "#050508",
     },
   },
 });
@@ -72,8 +72,8 @@ export const metadata: Metadata = {
     "base:app_id": "69a6f7796b102959c7f25eaa",
     "fc:frame": fcFrame,
     // Legacy fallback for Farcaster v1 clients that haven't migrated to v2
-    "fc:frame:image": `${SITE}/og-chat.png`,
-    "fc:frame:button:1": "Open Blue Chat",
+    "fc:frame:image": `${SITE}/opengraph-image`,
+    "fc:frame:button:1": "Open Blue Agent",
     "fc:frame:button:1:action": "launch_frame",
     "fc:frame:button:1:target": `${SITE}/app/chat`,
   },
