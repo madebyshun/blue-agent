@@ -1,12 +1,12 @@
 {
   "accountAssociation": {
-    "header": "REPLACE_ME_WITH_HEADER_FROM_FARCASTER",
-    "payload": "REPLACE_ME_WITH_PAYLOAD_FROM_FARCASTER",
-    "signature": "REPLACE_ME_WITH_SIGNATURE_FROM_FARCASTER"
+    "header": "",
+    "payload": "",
+    "signature": ""
   },
-  "frame": {
+  "miniapp": {
     "version": "1",
-    "name": "Blue Agent",
+    "name": "BlueAgent",
     "iconUrl": "https://blueagent.dev/icon.png",
     "homeUrl": "https://blueagent.dev/app/chat",
     "imageUrl": "https://blueagent.dev/og-chat.png",
@@ -14,14 +14,9 @@
     "splashImageUrl": "https://blueagent.dev/splash.png",
     "splashBackgroundColor": "#4FC3F7",
     "webhookUrl": "https://blueagent.dev/api/farcaster/webhook",
-    "subtitle": "AI founder console for Base",
-    "description": "69 AI tools, 3-agent consensus, USDC micropayments. Idea → build → audit → ship — pay per use via x402 on Base.",
-    "primaryCategory": "developer-tools",
-    "tags": ["base", "ai", "x402", "agents", "founder"],
-    "tagline": "The AI agent layer on Base",
-    "heroImageUrl": "https://blueagent.dev/og-chat.png",
-    "ogTitle": "Blue Agent — AI agent layer on Base",
-    "ogDescription": "69 AI tools. 3-agent consensus. USDC micropayments via x402. Built for Base builders.",
-    "ogImageUrl": "https://blueagent.dev/og-chat.png"
+    "primaryCategory": "finance",
+    "tags": ["base", "ai", "defi", "agents", "tools"],
+    "subtitle": "AI agent tools on Base",
+    "description": "69 AI tools. Pay per call via x402 USDC on Base. No signup, no API key."
   }
 }

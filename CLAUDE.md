@@ -14,7 +14,7 @@ They take precedence over speed.
 - **x402 tool handlers:** `apps/web/src/app/api/x402/_handlers/*.ts`, registered in `_handlers/index.ts` (`HANDLERS` map).
 - **Tool catalog:** `apps/web/src/lib/agent-tools.ts` (`AGENT_TOOLS` — the single source of truth the hub renders).
   A tool is only live if it exists in **BOTH** `HANDLERS` and `AGENT_TOOLS` (catalog count == handler count, no orphans).
-- **Two x402 surfaces — don't conflate them:** `apps/web` is the live Hub web surface — the `AGENT_TOOLS` catalog `/hub` renders, served at `/api/x402/[tool]` (~68 tools at last audit). `apps/api` (`@blue-agent/api`) is a **separate local-dev server** whose production handlers run on **x402.bankr.bot** infra (a different deployment with its own, larger handler set). All web docs / Hub / MCP counts come from `apps/web` — never from `apps/api`.
+- **x402 surface:** `apps/web` is the live Hub web surface — the `AGENT_TOOLS` catalog `/hub` renders, served at `/api/x402/[tool]` (~68 tools at last audit). All production x402 traffic goes through **blueagent.dev** (`/api/x402/[tool]`). The old **x402.bankr.bot** deployment is **deprecated** — do not reference it as production. `apps/api` (`@blue-agent/api`) remains only a **separate local-dev server**; all web docs / Hub / MCP counts come from `apps/web` — never from `apps/api`.
 - **LLM gateway:** Bankr at `https://llm.bankr.bot/v1/messages` (env `BANKR_API_KEY`). NOT Anthropic direct
   (that key is usually out of credit). Models: `claude-haiku-4-5` (cheap), `claude-sonnet-4-5` (synthesis).
 - **Real data sources already wired:** DefiLlama (`src/lib/yield-rates.ts`), Etherscan/Basescan,
@@ -126,7 +126,7 @@ The `blue-agent` repo is the **AI-native founder console for Base builders**. It
 | Layer | What it is |
 |---|---|
 | `apps/web` | Next.js 15 frontend — founder console UI |
-| `apps/api` | x402 handlers as a **local-dev server**; production runs on `x402.bankr.bot` — a **separate surface** from the `apps/web` Hub (don't conflate tool counts) |
+| `apps/api` | x402 handlers as a **local-dev server** only. `x402.bankr.bot` is **deprecated** — all production x402 runs via `blueagent.dev` (`/api/x402/[tool]`). Don't conflate tool counts with the `apps/web` Hub. |
 | `packages/bankr` | Bankr LLM client — wraps `https://llm.bankr.bot/v1/messages` |
 | `packages/core` | Shared schemas, command pricing, and tool input definitions |
 | `packages/payments` | x402 payment helpers |
