@@ -1,19 +1,12 @@
 // x402/narrative-pulse — live Base/CT narrative tracker (trending pools + Venice web search)
 // Price: $0.20 — Tokens grounded in the real GeckoTerminal trending list; LLM only synthesizes
 
-import { callVeniceLLM } from "@/app/api/_lib/llm";
+import { callVeniceLLM, extractJsonObject } from "@/app/api/_lib/llm";
 import { getBaseTrending, type Pool } from "@/lib/market-data";
 
-function extractJsonObject(text: string): Record<string, unknown> | null {
-  let raw = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
-  const s = raw.indexOf("{"), e = raw.lastIndexOf("}");
-  if (s >= 0 && e > s) raw = raw.slice(s, e + 1);
-  try { return JSON.parse(raw); } catch {}
-  try { return JSON.parse(raw.replace(/[\x00-\x1F\x7F]/g, " ")); } catch {}
-  return null;
-}
+const SYSTEM = `Respond with ONLY a raw JSON object. Start immediately with { and end with }. No markdown, no explanation, no text before or after.
 
-const SYSTEM = `You are a Base chain analyst. Use ONLY the data provided. NEVER invent numbers, addresses, or token names not in the data. Return ONLY raw JSON starting with {. No markdown. If data unavailable, return field as null — never estimate.
+You are a Base chain analyst. Use ONLY the data provided. NEVER invent numbers, addresses, or token names not in the data. If data unavailable, return field as null — never estimate.
 
 You track crypto-Twitter (CT) and Base ecosystem narratives. You also have live web search — use it to identify which narratives are currently running on CT and Base, but every token you reference MUST come from the live trending list provided in the user message (with that token's exact change24h and volume24h numbers).
 
@@ -77,17 +70,11 @@ export default async function handler(req: Request): Promise<Response> {
     }));
 
     const focusLine = focus ? `\n\nUser is focused on: "${focus}". Prioritize narratives relevant to it.` : "";
-    const llmResponse = await callVeniceLLM({
-      system: SYSTEM,
-      messages: [{
-        role: "user",
-        content: `Identify the trending narratives running on Base / CT right now. Use web search for narrative context, but only reference these live trending Base tokens (use their exact change24h and volume24h):\n${JSON.stringify(tokenData, null, 2)}${focusLine}`,
-      }],
-      temperature: 0.3,
-      maxTokens: 800,
-    });
+    const userContent = `Identify the trending narratives running on Base / CT right now. Use web search for narrative context, but only reference these live trending Base tokens (use their exact change24h and volume24h):\n${JSON.stringify(tokenData, null, 2)}${focusLine}`;
+    const ask = () => callVeniceLLM({ system: SYSTEM, messages: [{ role: "user", content: userContent }], temperature: 0.3, maxTokens: 1400 });
 
-    let result = extractJsonObject(llmResponse);
+    let result = extractJsonObject(await ask());
+    if (!result) result = extractJsonObject(await ask()); // retry once on parse failure
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({

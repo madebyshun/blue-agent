@@ -1,18 +1,9 @@
 // x402/token-alpha — single-token trade signal with whale confirmation for Base
 // Price: $0.25 — Real price/liquidity (DexScreener) + whale flow (Moralis); LLM synthesis.
 
-import { callVeniceLLM } from "@/app/api/_lib/llm";
+import { callVeniceLLM, extractJsonObject } from "@/app/api/_lib/llm";
 import { getTokenMarket } from "@/lib/market-data";
 import { getMoralisERC20Transfers } from "@/lib/moralis";
-
-function extractJsonObject(text: string): Record<string, unknown> | null {
-  let raw = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
-  const s = raw.indexOf("{"), e = raw.lastIndexOf("}");
-  if (s >= 0 && e > s) raw = raw.slice(s, e + 1);
-  try { return JSON.parse(raw); } catch {}
-  try { return JSON.parse(raw.replace(/[\x00-\x1F\x7F]/g, " ")); } catch {}
-  return null;
-}
 
 const DEXSCREENER_URL = "https://api.dexscreener.com/latest/dex";
 
@@ -45,9 +36,13 @@ async function getBasePairs(token: string): Promise<DsPair[]> {
   }
 }
 
-const SYSTEM = `You are a Base chain analyst. Use ONLY the data provided. NEVER invent numbers, addresses, or token names not in the data. Return ONLY raw JSON starting with {. No markdown. If data unavailable, return field as null — never estimate.
+const SYSTEM = `Respond with ONLY a raw JSON object. Start immediately with { and end with }. No markdown, no explanation, no text before or after.
+
+You are a Base chain analyst. Use ONLY the data provided. NEVER invent numbers, addresses, or token names not in the data. If data unavailable, return field as null — never estimate.
 
 Produce a trade signal from the live price, liquidity, momentum and whale-flow data provided. Anchor entry_price to the real current price given. Derive stop_loss / target as plausible levels relative to that real price.
+
+SIGNAL RULES: NO_SIGNAL is ONLY for a token with no live market data at all. When price/volume/liquidity data exists, pick STRONG_BUY/BUY/WATCH/SKIP from the momentum and liquidity. If the token is up >5% over 24h with 24h volume > $1M and liquidity > $1M, the signal MUST be at least WATCH. Never return NO_SIGNAL when clear momentum exists in the data.
 
 Return JSON with this exact shape:
 {
@@ -109,27 +104,34 @@ export default async function handler(req: Request): Promise<Response> {
       });
     }
 
+    // getTokenMarket only resolves an ADDRESS — for a ticker it's null, so fall
+    // back to the DexScreener pair (which has volume/liquidity/change too).
+    const p0 = pairs[0];
+    const mcap = market?.marketCap ?? p0?.marketCap ?? null;
+    const vol24 = market?.volume24h ?? p0?.volume?.h24 ?? null;
+    const liq = market?.liquidityUsd ?? p0?.liquidity?.usd ?? null;
+    const ch1 = market?.change.h1 ?? p0?.priceChange?.h1 ?? null;
+    const ch6 = market?.change.h6 ?? p0?.priceChange?.h6 ?? null;
+    const ch24 = market?.change.h24 ?? p0?.priceChange?.h24 ?? null;
+
     const whaleCount = Array.isArray(transfers) ? transfers.length : 0;
     const dataLines = [
       `Token: ${symbol ?? token}`,
       `Current price (USD): ${price ?? "unknown"}`,
-      `Market cap (USD): ${market?.marketCap ?? "unknown"}`,
-      `24h volume (USD): ${market?.volume24h ?? "unknown"}`,
-      `Liquidity (USD): ${market?.liquidityUsd ?? "unknown"}`,
-      `Price change — 1h: ${market?.change.h1 ?? "?"}%, 6h: ${market?.change.h6 ?? "?"}%, 24h: ${market?.change.h24 ?? "?"}%`,
+      `Market cap (USD): ${mcap ?? "unknown"}`,
+      `24h volume (USD): ${vol24 ?? "unknown"}`,
+      `Liquidity (USD): ${liq ?? "unknown"}`,
+      `Price change — 1h: ${ch1 ?? "?"}%, 6h: ${ch6 ?? "?"}%, 24h: ${ch24 ?? "?"}%`,
       `Recent on-chain transfers observed (last 50): ${whaleCount}`,
     ].join("\n");
 
     const content = `Live data for ${symbol ?? token} on Base — use ONLY these numbers. Anchor entry_price to the current price above.\n\n${dataLines}`;
 
-    const llmResponse = await callVeniceLLM({
-      system: SYSTEM,
-      messages: [{ role: "user", content }],
-      temperature: 0.3,
-      maxTokens: 800,
-    });
+    const ask = () => callVeniceLLM({ system: SYSTEM, messages: [{ role: "user", content }], temperature: 0.3, maxTokens: 900 });
 
-    const result = extractJsonObject(llmResponse) ?? { degraded: true, note: "Synthesis briefly unavailable - please retry." };
+    let result = extractJsonObject(await ask());
+    if (!result) result = extractJsonObject(await ask()); // retry once on parse failure
+    if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
     return Response.json({
       tool: "token-alpha",
