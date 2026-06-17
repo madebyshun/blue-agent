@@ -498,27 +498,39 @@ function randomNonce(): `0x${string}` {
 // /hub/[tool] detail page without duplicating its markup.
 function ToolInfoBlock({ tool }: { tool: Tool }) {
   const agents = tool.agents;
+  const [open, setOpen] = useState(false);
   return (
-    <div className="px-6 py-5 border-b border-[#1A1A2E] space-y-4">
-      <div>
-        <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-1.5">// API ENDPOINT</p>
-        <code className="font-mono text-[11px] text-[#4FC3F7] bg-[#0D0D1A] border border-[#1A1A2E] rounded-md px-2 py-1 inline-block">POST /api/x402/{tool.id}</code>
-      </div>
-      <div>
-        <p className="font-mono text-[10px] text-[#A78BFA] tracking-widest mb-2">// HOW IT WORKS</p>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {agents.map((a, i) => (
-            <span key={a} className="flex items-center gap-1.5">
-              <span className="px-2 py-0.5 rounded-lg border font-mono text-[10px]" style={{ color: AGENT_COLORS[a], borderColor: `${AGENT_COLORS[a]}30` }}>{AGENT_LABELS[a]}</span>
-              {i < agents.length - 1 && <span className="text-slate-700 text-xs">→</span>}
-            </span>
-          ))}
+    <div className="px-6 py-4 lg:py-5 border-b border-[#1A1A2E]">
+      {/* Mobile: collapsed by default. Desktop (lg): always expanded, no toggle. */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        className="lg:hidden w-full flex items-center justify-between min-h-[44px] font-mono text-[10px] text-slate-500 tracking-widest"
+      >
+        <span>// API · HOW IT WORKS</span>
+        <span className="text-base text-slate-600">{open ? "−" : "+"}</span>
+      </button>
+      <div className={`${open ? "block mt-3" : "hidden"} lg:block lg:mt-0 space-y-4`}>
+        <div>
+          <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-1.5">// API ENDPOINT</p>
+          <code className="font-mono text-[11px] text-[#4FC3F7] bg-[#0D0D1A] border border-[#1A1A2E] rounded-md px-2 py-1 inline-block">POST /api/x402/{tool.id}</code>
         </div>
-        <p className="font-mono text-[10px] text-slate-600 mt-2.5 leading-relaxed">
-          {agents.length > 1
-            ? "Multi-agent consensus — each agent contributes, then synthesizes into one verdict, grounded in live Base data."
-            : "Runs on Base with live data grounding. Pay per call in USDC via x402 — no subscription, no API key."}
-        </p>
+        <div>
+          <p className="font-mono text-[10px] text-[#A78BFA] tracking-widest mb-2">// HOW IT WORKS</p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {agents.map((a, i) => (
+              <span key={a} className="flex items-center gap-1.5">
+                <span className="px-2 py-0.5 rounded-lg border font-mono text-[10px]" style={{ color: AGENT_COLORS[a], borderColor: `${AGENT_COLORS[a]}30` }}>{AGENT_LABELS[a]}</span>
+                {i < agents.length - 1 && <span className="text-slate-700 text-xs">→</span>}
+              </span>
+            ))}
+          </div>
+          <p className="font-mono text-[10px] text-slate-600 mt-2.5 leading-relaxed">
+            {agents.length > 1
+              ? "Multi-agent consensus — each agent contributes, then synthesizes into one verdict, grounded in live Base data."
+              : "Runs on Base with live data grounding. Pay per call in USDC via x402 — no subscription, no API key."}
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -744,7 +756,8 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         </button>
         <span className="font-mono text-[10px] text-slate-700">/</span>
         <span className="font-mono text-xs text-slate-400 truncate">{tool.name}</span>
-        <div className="ml-auto flex items-center gap-2">
+        {/* Agents shown on desktop only — keep the mobile breadcrumb compact. */}
+        <div className="ml-auto hidden sm:flex items-center gap-2">
           {tool.agents.map(a => (
             <span key={a} className="font-mono text-[9px] px-1.5 py-0.5 rounded-full"
               style={{ color: AGENT_COLORS[a], background: `${AGENT_COLORS[a]}10` }}>
@@ -1635,28 +1648,34 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
           {/* Mobile search + filter chips (browse state only) */}
           {!selected && (
             <div className="lg:hidden px-4 pt-3 pb-2 border-b border-[#1A1A2E] shrink-0 space-y-2">
+              {/* On the home state the large SearchHero is the single search bar;
+                  this compact input only appears once browsing (search/category). */}
               <input
-                className="w-full bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2.5 font-mono text-sm text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/30 transition-colors"
+                className={`${!search.trim() && cat === "all" ? "hidden" : "block"} w-full bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2.5 font-mono text-sm text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/30 transition-colors`}
                 placeholder="Search tools…"
                 value={search}
                 onChange={e => { setSearch(e.target.value); setCat("all"); }}
               />
-              <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-                <button onClick={() => { setSearch(""); setCat("all"); }}
-                  className={`font-mono text-[10px] px-3 py-1.5 rounded-full whitespace-nowrap border transition-colors shrink-0 ${cat === "all" && !search ? "bg-[#4FC3F7]/15 text-[#4FC3F7] border-[#4FC3F7]/30" : "text-slate-600 border-[#1A1A2E]"}`}>
-                  All
-                </button>
-                {TOOL_GROUPS.map(g => (
-                  <button key={g.id}
-                    onClick={() => { setSearch(""); setCat(g.id as Category); }}
-                    className={`font-mono text-[10px] px-3 py-1.5 rounded-full whitespace-nowrap border shrink-0 transition-colors`}
-                    style={cat === g.id
-                      ? { background: g.color + "15", color: g.color, borderColor: g.color + "40" }
-                      : { color: g.color + "80", borderColor: "#1A1A2E" }}
-                  >
-                    {g.label}
+              {/* Category chips — horizontal scroll with a right fade hinting more. */}
+              <div className="relative">
+                <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar pr-8">
+                  <button onClick={() => { setSearch(""); setCat("all"); }}
+                    className={`font-mono text-[10px] px-3 py-2 min-h-[40px] rounded-full whitespace-nowrap border transition-colors shrink-0 ${cat === "all" && !search ? "bg-[#4FC3F7]/15 text-[#4FC3F7] border-[#4FC3F7]/30" : "text-slate-600 border-[#1A1A2E]"}`}>
+                    All
                   </button>
-                ))}
+                  {TOOL_GROUPS.map(g => (
+                    <button key={g.id}
+                      onClick={() => { setSearch(""); setCat(g.id as Category); }}
+                      className={`font-mono text-[10px] px-3 py-2 min-h-[40px] rounded-full whitespace-nowrap border shrink-0 transition-colors`}
+                      style={cat === g.id
+                        ? { background: g.color + "15", color: g.color, borderColor: g.color + "40" }
+                        : { color: g.color + "80", borderColor: "#1A1A2E" }}
+                    >
+                      {g.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-10 bg-gradient-to-l from-[#050508] to-transparent" />
               </div>
             </div>
           )}
