@@ -1,83 +1,31 @@
-// x402/gtm-brief/index.ts
-// Go-to-Market Brief — Blue idea + Aeon narrative-tracker + MiroShark influencer + retail
-// Price: $0.50
-// Fully self-contained
-
-type Msg = { role: string; content: string };
-async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
-  const r = await fetch("https://llm.bankr.bot/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": process.env.LLM_API_KEY ?? process.env.BANKR_API_KEY ?? "", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: "claude-haiku-4-5", system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, max_tokens: tokens }),
-  });
-  if (!r.ok) throw new Error(`LLM ${r.status}: ${await r.text()}`);
-  const d = await r.json() as { content?: { text: string }[] };
-  return d.content?.[0]?.text ?? "";
-}
-function parseJson(t: string): Record<string, unknown> | null {
-  let s = t.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
-  const i = s.indexOf("{"), j = s.lastIndexOf("}");
-  if (i >= 0 && j > i) s = s.slice(i, j + 1);
-  try { return JSON.parse(s); } catch { try { return JSON.parse(s.replace(/[\x00-\x1F]/g, " ")); } catch { return null; } }
-}
-async function aeon(skill: string, focus = ""): Promise<string | null> {
-  try {
-    const r = await fetch(`https://raw.githubusercontent.com/aaronjmars/aeon/main/skills/${skill}/SKILL.md`, { signal: AbortSignal.timeout(6000) });
-    if (!r.ok) return null;
-    const p = await r.text();
-    return await llm(`You are Aeon. Synthesize from training knowledge. Today: ${new Date().toISOString().split("T")[0]}.`,
-      `Follow skill template. Be concrete.\n\nSkill:\n${p}${focus ? `\nFocus: ${focus}` : ""}\n\nReturn only skill output.`, 0.2, 1200);
-  } catch { return null; }
-}
+// Auto-generated thin proxy → blueagent.dev (single source of truth: apps/web).
+// Bankr x402 Cloud collects the USDC payment, then forwards here; we proxy to
+// blueagent.dev using the internal bypass header so the tool runs there without
+// a second charge. No business logic + no data-source secrets live in apps/api.
+const TOOL_ID = "gtm-brief";
 
 export default async function handler(req: Request): Promise<Response> {
+  let body: unknown = {};
+  try { body = await req.json(); } catch {}
   try {
-    let body: { project?: string; product?: string; description?: string; target?: string } = {};
-    try { const t = await req.text(); if (t.trim().startsWith("{")) body = JSON.parse(t); } catch {}
-    // Accept "product" (Hub UI) as alias for both "project" and "description"
-    const project     = body.project ?? body.product ?? "";
-    const description = body.description ?? body.product ?? "";
-    const target      = body.target ?? "";
-    if (!project || !description) return Response.json({ error: "product description is required" }, { status: 400 });
-
-    const [narrativeRaw, ideaRaw] = await Promise.all([
-      aeon("narrative-tracker", `GTM narrative for ${project}: ${description}`),
-      llm(`You are Blue Agent running 'blue idea'. Expand into GTM-focused brief.
-CRITICAL: Return ONLY raw JSON.
-Schema: {"target_user":"<who>","pain_point":"<specific pain>","entry_wedge":"<smallest beachhead>","distribution_channel":"<primary channel>","hook":"<1 sentence why they switch>"}`,
-        `Project: ${project}\nDescription: ${description}\nTarget: ${target || "Base builders and crypto users"}`, 0.4, 600),
-    ]);
-
-    const brief = parseJson(ideaRaw) ?? {};
-
-    const msRaw = await llm(`You are MiroShark — influencer(2.8x) + retail(1.0x) personas combined.
-Evaluate GTM strategy from distribution perspective.
-CRITICAL: Return ONLY raw JSON.
-Schema: {"viral_potential":<0-10>,"distribution_fit":"strong|moderate|weak","best_channel":"<channel>","community_hooks":["<hook>"],"retail_pull":"<1 sentence>","influencer_appeal":"<1 sentence>","gtm_verdict":"<1 sentence>"}`,
-      `Project: ${project}\nDescription: ${description}\nBrief: ${JSON.stringify(brief)}\nNarratives: ${narrativeRaw ?? "Base ecosystem"}`, 0.5, 600);
-    const distribution = parseJson(msRaw) ?? {};
-
-    const resultRaw = await llm(`You are Blue Agent — GTM brief engine for Base builders.
-CRITICAL: Return ONLY raw JSON.
-Schema: {
-  "gtm_score": <0-100>,
-  "positioning": "<10 words max tagline>",
-  "target_segment": "<specific user>",
-  "launch_channel": "<primary>",
-  "distribution_playbook": ["<step 1>","<step 2>","<step 3>"],
-  "narrative_angle": "<which narrative to ride>",
-  "week_1_actions": ["<action>"],
-  "success_metric": "<what does good look like at 30 days>",
-  "community_strategy": "<1-2 sentences>",
-  "avoid": ["<common GTM mistake>"]
-}`,
-      `Project: ${project}\nBrief: ${JSON.stringify(brief)}\nNarratives: ${narrativeRaw ?? "Base"}\nDistribution: ${JSON.stringify(distribution)}`, 0.3, 1000);
-
-    const result = parseJson(resultRaw);
-    if (!result) throw new Error("Failed to parse result");
-
-    return Response.json({ tool: "gtm-brief", timestamp: new Date().toISOString(), project, brief, distribution, ...result });
-  } catch (e) {
-    return Response.json({ error: "GTM brief failed", message: (e as Error).message }, { status: 500 });
+    const upstream = await fetch(`https://blueagent.dev/api/x402/${TOOL_ID}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Blue-Internal": process.env.INTERNAL_SERVICE_KEY ?? "",
+      },
+      body: JSON.stringify(body ?? {}),
+      signal: AbortSignal.timeout(30000),
+    });
+    const text = await upstream.text();
+    return new Response(text, {
+      status: upstream.status,
+      headers: { "Content-Type": upstream.headers.get("content-type") ?? "application/json" },
+    });
+  } catch (err) {
+    return Response.json(
+      { error: "Upstream proxy failed", tool: TOOL_ID, message: (err as Error).message },
+      { status: 502 },
+    );
   }
 }
