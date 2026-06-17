@@ -124,6 +124,25 @@ export default function ProfilePage() {
   const [builderScore,  setBuilderScore] = useState<number | null>(null);
   const [scoreLoad,     setScoreLoad]    = useState(false);
 
+  // ── Auto-detect identity from the Farcaster / Base App Mini App context ────
+  // When opened inside Base App / a Farcaster client, the SDK gives us the
+  // user's displayName, username, and pfp — no form needed. No-op in a browser.
+  const [fcUser, setFcUser] = useState<{ displayName?: string; username?: string; pfpUrl?: string } | null>(null);
+  useEffect(() => {
+    let off = false;
+    (async () => {
+      try {
+        const { sdk } = await import("@farcaster/miniapp-sdk");
+        if (!(await sdk.isInMiniApp().catch(() => false))) return;
+        const ctx = await sdk.context;
+        if (!off && ctx?.user) {
+          setFcUser({ displayName: ctx.user.displayName, username: ctx.user.username, pfpUrl: ctx.user.pfpUrl });
+        }
+      } catch { /* not in a Mini App host */ }
+    })();
+    return () => { off = true; };
+  }, []);
+
   // ── Load on-chain identity ───────────────────────────────────────────────
 
   const { data: contractData } = useReadContracts({
@@ -222,7 +241,9 @@ export default function ProfilePage() {
 
   // ── Render ───────────────────────────────────────────────────────────────
 
-  const displayName = profile?.displayName?.trim() || (address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "");
+  // Identity prefers the live Mini App context, then a saved profile, then address.
+  const displayName = fcUser?.displayName?.trim() || profile?.displayName?.trim() || (address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "");
+  const avatarSrc   = fcUser?.pfpUrl || profile?.avatarUrl || "";
   const avatarInitial = address?.slice(2, 4).toUpperCase();
 
   return (
@@ -254,9 +275,9 @@ export default function ProfilePage() {
               {/* ── Identity strip ────────────────────────────────────────── */}
               <AppCard className="p-6 mb-4" accent={tier.color}>
                 <div className="flex items-start gap-4 mb-5">
-                  {profile?.avatarUrl ? (
+                  {avatarSrc ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={profile.avatarUrl} alt="" loading="lazy"
+                    <img src={avatarSrc} alt="" loading="lazy"
                       className="w-16 h-16 rounded-2xl object-cover shrink-0 border border-[#1A1A2E]"
                       onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                   ) : (
@@ -344,37 +365,16 @@ export default function ProfilePage() {
                   </div>
 
                   <div className="space-y-4">
-                    <Field label="DISPLAY NAME" hint="Shown instead of your address. Max 40 chars."
-                      value={draft.displayName ?? ""} max={40}
-                      onChange={v => setDraft(d => ({ ...d, displayName: v }))} />
-
+                    {/* Name + avatar are auto-detected from Base App / Farcaster —
+                        only the self-attested bio + X handle are editable. */}
                     <Field label="BIO" multiline hint="280 chars. Markdown links not parsed."
                       value={draft.bio ?? ""} max={280}
                       onChange={v => setDraft(d => ({ ...d, bio: v }))} />
 
-                    <Field label="AVATAR URL" hint="Paste an image URL (https://…). Upload coming later."
-                      value={draft.avatarUrl ?? ""}
-                      onChange={v => setDraft(d => ({ ...d, avatarUrl: v }))}
-                      placeholder="https://example.com/me.png" />
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <Field label="X / TWITTER" prefix="@"
-                        value={draft.x ?? ""}
-                        onChange={v => setDraft(d => ({ ...d, x: v }))}
-                        placeholder="blueagent_" />
-                      <Field label="FARCASTER" prefix="@"
-                        value={draft.farcaster ?? ""}
-                        onChange={v => setDraft(d => ({ ...d, farcaster: v }))}
-                        placeholder="blueagent" />
-                      <Field label="GITHUB" prefix="@"
-                        value={draft.github ?? ""}
-                        onChange={v => setDraft(d => ({ ...d, github: v }))}
-                        placeholder="madebyshun" />
-                      <Field label="WEBSITE"
-                        value={draft.website ?? ""}
-                        onChange={v => setDraft(d => ({ ...d, website: v }))}
-                        placeholder="https://blueagent.dev" />
-                    </div>
+                    <Field label="X / TWITTER" prefix="@"
+                      value={draft.x ?? ""}
+                      onChange={v => setDraft(d => ({ ...d, x: v }))}
+                      placeholder="blueagent_" />
                   </div>
 
                   {error && (
