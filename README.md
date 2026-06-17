@@ -21,9 +21,9 @@ Blue Agent is a full economic actor on Base: it holds a wallet, executes onchain
 
 ---
 
-## Blue Hub — 40 AI Tools on Base
+## Blue Hub — 74 AI Tools on Base
 
-Blue Hub is a curated marketplace of 68 pay-per-call AI tools built on Base. Any agent or developer can call tools via x402 micropayments in USDC — no API key, no account, no human in the loop.
+Blue Hub is a curated marketplace of 74 pay-per-call AI tools built on Base. Any agent or developer can call tools via x402 micropayments in USDC — no API key, no account, no human in the loop.
 
 ```bash
 # Discover all tools + prices
@@ -37,7 +37,7 @@ POST https://blueagent.dev/api/x402/{tool-id}
 X-Payment: <EIP-3009 USDC on Base>
 ```
 
-**68 tools across 9 categories** — intelligence · builder · trading · security · investor · agent-economy · base-ecosystem · on-chain · content
+**74 tools across 9 categories** — intelligence · builder · trading · security · agent-economy · base-ecosystem · on-chain · content · earn
 
 Registry: [ERC-8257 ToolRegistry](https://basescan.org/address/0x265BB2DBFC0A8165C9A1941Eb1372F349baD2cf1) · [agentic.market](https://agentic.market) · [CDP Bazaar](https://www.coinbase.com/developer-platform)
 
@@ -104,12 +104,14 @@ Navigate with `↑ ↓ Enter`. Press `Esc` to go back.
 | Category | Tools |
 |---|---|
 | **Build** | idea · build · audit · ship · raise |
-| **Security** | honeypot-check · contract-trust · allowance-audit · phishing-scan · mev-shield · aml-screen · quantum-* · base-deploy-check |
-| **Research** | deep-analysis · whale-tracker · narrative-pulse · dex-flow · vc-tracker · tokenomics-score · whitepaper-tldr · grant-evaluator |
-| **Score** | builder-score · agent-score |
+| **Intelligence** | base-alpha · token-alpha · protocol-health · founder-check · narrative-pulse · token-pick-signal · ecosystem-digest · market-fit · blue-research |
+| **On-chain** | token-price · pool-scan · wallet-holdings · new-pools · gas-tracker · scam-detector · cross-protocol-yield · whale-tracker · dex-flow · aml-screen · airdrop-check |
+| **Security** | quick-safety · wallet-risk · honeypot-check · risk-gate · deep-analysis · contract-trust · key-exposure · token-distribution · liquidity-depth |
+| **Builder** | roadmap-validator · competitor-scan · pitch-intelligence · gtm-brief · stack-recommender · investor-memo · repo-health · builder-deep-dd · grant-evaluator |
+| **Trading** | whale-copy-signal · token-momentum-scanner |
+| **Content** | thread-intelligence · community-growth-playbook |
+| **Earn** | lp-analyzer · cross-protocol-yield |
 | **Tasks** | post-task · accept · submit · list |
-| **Data** | wallet-pnl · lp-analyzer · risk-gate |
-| **Earn** | yield-optimizer · airdrop-check · tax-report |
 | **Bankr** | swap · transfer · portfolio · launch-token |
 
 ### System check
@@ -122,10 +124,10 @@ blue doctor
 
 ## Blue Terminal
 
-Browser-based CLI at [blueagent.dev/terminal](https://blueagent.dev/terminal) — run all 68 Hub tools, 5 core commands, and onchain queries directly in the browser. No install required.
+Browser-based CLI at [blueagent.dev/terminal](https://blueagent.dev/terminal) — run all 74 Hub tools, 5 core commands, and onchain queries directly in the browser. No install required.
 
 ```
-blue hub ls                    # list all 68 tools
+blue hub ls                    # list all 74 tools
 blue hub info token-pick-signal
 blue idea <prompt>             # $0.05 via Bankr LLM
 blue balance 0x...             # ETH + USDC on Base mainnet

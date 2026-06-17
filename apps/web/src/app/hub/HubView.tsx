@@ -91,10 +91,6 @@ const TOOL_EXAMPLES: Record<string, Record<string, string>> = {
   "deep-analysis":   { token: "0xf895783b2931c919955e18b5e3343e7c7c456ba3" },
   "agent-score":     { handle: "@blueagent_" },
   // ── Quantum ───────────────────────────────────────────────────────────────────
-  "quantum-premium": { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
-  "quantum-batch":   { addresses: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045,0xab5801a7d398351b8be11c439e05c5b3259aec9b" },
-  "quantum-migrate": { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
-  "quantum-timeline":{ context: "DeFi wallet with $50k in assets on Base" },
   "key-exposure":    { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
   // ── On-chain Data ─────────────────────────────────────────────────────────────
   "aml-screen":      { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
@@ -1028,9 +1024,9 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
   {
     id: "security",
     label: "Security & Safety",
-    desc: "Honeypot, risk gate, deep analysis, quantum protection",
+    desc: "Honeypot, risk gate, contract trust, wallet & token safety",
     color: "#F87171",
-    ids: ["honeypot-check", "risk-gate", "deep-analysis", "contract-trust", "quantum-premium", "quantum-batch", "quantum-migrate", "quantum-timeline", "key-exposure", "quick-safety", "wallet-risk", "b20-check", "liquidity-depth", "token-distribution"],
+    ids: ["honeypot-check", "risk-gate", "deep-analysis", "contract-trust", "key-exposure", "quick-safety", "wallet-risk", "b20-check", "liquidity-depth", "token-distribution"],
   },
   {
     id: "onchain",
