@@ -284,7 +284,7 @@ function BrowseView(props: HubHomeProps) {
             { mode: "price-desc", label: "Price ↓"   },
           ] as { mode: SortMode; label: string }[]).map(s => (
             <button key={s.mode} onClick={() => setSortMode(s.mode)}
-              className={`font-mono text-[10px] px-2 py-0.5 rounded border transition-colors ${
+              className={`font-mono text-[10px] inline-flex items-center px-3 py-2 min-h-[44px] sm:px-2 sm:py-0.5 sm:min-h-0 rounded border transition-colors ${
                 sortMode === s.mode
                   ? "text-[#4FC3F7] border-[#4FC3F7]/30 bg-[#4FC3F7]/5"
                   : "text-slate-600 border-transparent hover:text-slate-300"

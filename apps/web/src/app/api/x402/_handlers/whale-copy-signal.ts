@@ -1,6 +1,6 @@
 // x402/whale-copy-signal — copy-trade signal from REAL on-chain whale flow.
-// Movements are pulled from Basescan (Etherscan v2, chainid 8453) token
-// transfers for the given wallet/token. The LLM reads ONLY the real transfer
+// Movements are pulled from Moralis (Base ERC-20 transfers) for the given
+// wallet/token. The LLM reads ONLY the real transfer
 // list and produces a copy signal — it never invents a movement, a wallet
 // count, a price, or a target. topMovements is built in code from on-chain
 // data. Price: $0.35
@@ -25,17 +25,31 @@ function parseJson(t: string): Record<string, unknown> | null {
   try { return JSON.parse(s); } catch { try { return JSON.parse(s.replace(/[\x00-\x1F]/g, " ")); } catch { return null; } }
 }
 
-type TokenTx = { value: string; tokenDecimal?: string; from?: string; to?: string; tokenSymbol: string; timeStamp: string };
+// Moralis ERC-20 transfers (Base) — more reliable than the Etherscan v2 multichain
+// endpoint, and it returns a ready decimal value + spam flag.
+type TokenTx = {
+  value: string;
+  value_decimal?: string | null;
+  token_decimals?: string | null;
+  from_address?: string;
+  to_address?: string;
+  token_symbol: string;
+  block_timestamp: string;
+  possible_spam?: boolean;
+};
 
 async function getTokenTx(address: string, limit = 100): Promise<TokenTx[]> {
-  const key = process.env.BASESCAN_API_KEY ?? "";
+  const key = process.env.MORALIS_API_KEY ?? "";
+  if (!key) return [];
   try {
     const res = await fetch(
-      `https://api.etherscan.io/v2/api?chainid=8453&module=account&action=tokentx&address=${address}&sort=desc&offset=${limit}&page=1&apikey=${key}`,
-      { signal: AbortSignal.timeout(8000) }
+      `https://deep-index.moralis.io/api/v2.2/${address}/erc20/transfers?chain=base&limit=${limit}`,
+      { headers: { "X-API-Key": key, Accept: "application/json" }, signal: AbortSignal.timeout(10000) }
     );
-    const data = await res.json() as { status: string; result?: TokenTx[] };
-    return data.status === "1" ? (data.result ?? []) : [];
+    if (!res.ok) return [];
+    const data = await res.json() as { result?: TokenTx[] };
+    // Drop spam-flagged tokens so the signal reads real flow only.
+    return (data.result ?? []).filter((t) => !t.possible_spam);
   } catch {
     return [];
   }
@@ -76,12 +90,14 @@ export default async function handler(req: Request): Promise<Response> {
     // Build the real large-transfer list in code (top 15 by token amount).
     const largeTxs = txs
       .map((tx) => {
-        const amount = parseFloat(tx.value) / Math.pow(10, parseInt(tx.tokenDecimal || "18"));
+        const amount = tx.value_decimal != null && tx.value_decimal !== ""
+          ? parseFloat(tx.value_decimal)
+          : parseFloat(tx.value) / Math.pow(10, parseInt(tx.token_decimals || "18"));
         return {
-          token: tx.tokenSymbol,
+          token: tx.token_symbol,
           amount: Number.isFinite(amount) ? amount : 0,
-          direction: tx.to?.toLowerCase() === address.toLowerCase() ? "IN" : "OUT",
-          timestamp: new Date(parseInt(tx.timeStamp) * 1000).toISOString(),
+          direction: tx.to_address?.toLowerCase() === address.toLowerCase() ? "IN" : "OUT",
+          timestamp: tx.block_timestamp, // Moralis returns ISO already
         };
       })
       .filter((t) => t.amount > 0)
@@ -102,7 +118,7 @@ export default async function handler(req: Request): Promise<Response> {
       chain: "base",
       chainId: 8453,
       address,
-      data_source: "Basescan (live on-chain transfers)",
+      data_source: "Moralis (live Base ERC-20 transfers)",
       transfers_analyzed: txs.length,
       topMovements,
       url: `https://basescan.org/address/${address}`,
@@ -118,7 +134,7 @@ export default async function handler(req: Request): Promise<Response> {
         entry_timing: "no clear entry",
         patterns: [],
         summary: "No on-chain transfer data available for this address. Verify the address or retry shortly.",
-        note: "No recent token transfers found on Base (or Basescan is unavailable). Nothing on-chain to copy right now.",
+        note: "No recent token transfers found on Base (or the data provider is unavailable). Nothing on-chain to copy right now.",
       });
     }
 
