@@ -359,11 +359,13 @@ const MODEL_COLORS: Record<string, string> = {
 // ── Starters ──────────────────────────────────────────────────────────────────
 // Empty-state content is keyed by the active persona so that picking a role in
 // Settings (or via the composer pill) immediately changes "what to do next" —
-// the heading + 4 starter cards + quick commands all reflect that expert role.
+// the heading + 4 starter cards all reflect that expert role.
 
-// `label` = compact display; `text` = the prompt sent on click (no longer shown).
+// `label` = compact display; `text` = the command/prompt run on click. A card
+// either sends immediately (self-contained, e.g. /pick) or prefills the composer
+// for the user to complete (freeform /idea, or a 0x… placeholder).
 interface Starter { icon: string; label: string; text: string; color: string; }
-interface EmptyState { heading: string; sub: string; starters: Starter[]; quick: string[]; }
+interface EmptyState { heading: string; sub: string; starters: Starter[]; }
 
 const PERSONA_EMPTY: Record<string, EmptyState> = {
   "blue-agent": {
@@ -375,7 +377,6 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
       { icon: "🛡️", label: "Audit", text: "/audit my token launch plan", color: "#F87171" },
       { icon: "🚀", label: "Pick", text: "/pick", color: "#34D399" },
     ],
-    quick: ["idea", "build", "audit", "ship", "raise", "pick", "scan"],
   },
   "blue-trader": {
     heading: "What's the trade?",
@@ -386,7 +387,6 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
       { icon: "📈", label: "DEX flow", text: "/dex AERO", color: "#E879F9" },
       { icon: "📊", label: "PnL", text: "/pnl 0x…", color: "#A78BFA" },
     ],
-    quick: ["pick", "whale", "dex", "pnl", "yield"],
   },
   "blue-auditor": {
     heading: "What should I audit?",
@@ -397,7 +397,6 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
       { icon: "⚠️", label: "Reentrancy", text: "Audit for reentrancy risks", color: "#FB923C" },
       { icon: "🧾", label: "AML", text: "/aml 0x…", color: "#A78BFA" },
     ],
-    quick: ["audit", "scan", "aml", "quantum"],
   },
   "blue-researcher": {
     heading: "What should I research?",
@@ -408,7 +407,6 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
       { icon: "📡", label: "Narrative", text: "Top Base narrative now?", color: "#E879F9" },
       { icon: "📊", label: "Wallet", text: "/wallet 0x…", color: "#34D399" },
     ],
-    quick: ["pick", "whale", "wallet", "pnl"],
   },
   "custom": {
     heading: "How can I help?",
@@ -419,7 +417,6 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
       { icon: "🛡️", label: "Audit", text: "/audit my token launch plan", color: "#F87171" },
       { icon: "🎯", label: "Pick", text: "/pick", color: "#34D399" },
     ],
-    quick: ["idea", "build", "audit", "ship", "raise", "pick"],
   },
 };
 
@@ -480,14 +477,26 @@ export default function ChatMessages() {
             {empty.sub}
           </p>
 
-          {/* Quick action cards — compact pills (icon + short label), persona-aware */}
+          {/* Quick action cards — persona-aware. Each card runs a real command:
+              self-contained commands (e.g. /pick, /whale AERO) and full natural-
+              language prompts send immediately; freeform commands (/idea /build
+              /audit /ship /raise) or ones with a 0x… placeholder prefill the
+              composer + focus so the user fills in their own input. Uses the
+              existing send()/setInput() — no architecture change. */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full max-w-md sm:max-w-2xl mx-auto mb-5">
             {empty.starters.map(s => (
               <button
                 key={s.label}
-                // Focus the composer so the user types their own prompt — no
-                // hardcoded example text is injected.
-                onClick={() => document.getElementById("chat-composer")?.focus()}
+                onClick={() => {
+                  const needsInput =
+                    s.text.includes("…") || /^\/(idea|build|audit|ship|raise)\b/.test(s.text);
+                  if (needsInput) {
+                    setInput(s.text.replace(/0x…|…/g, "").replace(/\s+$/, "") + " ");
+                    document.getElementById("chat-composer")?.focus();
+                  } else {
+                    send(s.text);
+                  }
+                }}
                 disabled={outOfCredits}
                 className="flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-all disabled:opacity-40 group"
                 style={{ background: "#0D0D14", borderColor: "#1A1A2E" }}
@@ -505,18 +514,6 @@ export default function ChatMessages() {
                   {s.label}
                 </span>
               </button>
-            ))}
-          </div>
-
-          {/* Quick command chips — persona-aware */}
-          <div className="flex flex-wrap justify-center gap-1.5">
-            {empty.quick.map(cmd => (
-              <button
-                key={cmd}
-                onClick={() => { if (cmd === "pick") send(`/${cmd}`); else setInput(`/${cmd} `); }}
-                disabled={outOfCredits}
-                className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] text-slate-600 hover:text-[#4FC3F7] hover:border-[#4FC3F7]/20 transition-all disabled:opacity-30"
-              >/{cmd}</button>
             ))}
           </div>
 

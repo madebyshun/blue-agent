@@ -249,7 +249,7 @@ Keep them short (≤ 8 words), specific, and actionable.`;
 const HUB_TOOLS = [
   {
     name: "show_portfolio",
-    description: "Render the user's OWN live Base wallet portfolio as an inline card (ETH + BLUE + USDC + WETH + cbBTC + AERO balances, read live from THEIR connected wallet — no signing). Call this with NO arguments ONLY when the user asks about THEIR OWN holdings: 'my balance', 'my wallet', 'my portfolio', 'what do I hold', 'check my holdings'.\n\nCRITICAL — ONLY the connected user's own wallet. If the user refers to a SPECIFIC address from the conversation — 'this wallet', 'that wallet', 'that address', 'the address above', or a pasted 0x… that is NOT theirs — this is NOT 'my wallet'. Do NOT call this tool for it (it would wrongly show the user's own balance). There is no portfolio card for an external address: use hub_wallet_pnl for its activity, or hub_crypto_rpc (eth_getBalance) for its ETH balance, and say a full portfolio card isn't available for someone else's address.\n\nThis tool returns NO balance figures to you — only the card shows the real, live numbers. After calling you do NOT know any token amounts. NEVER print a balance table, NEVER state or estimate any specific token amounts, tier, or credits (you would be fabricating — the user can see the real numbers in the card). Reply with at most ONE short non-numeric line, e.g. 'Here's your live Base portfolio 👇'. If the user then asks about a specific number, say it's shown in the card.",
+    description: "Render the user's OWN live Base wallet portfolio as an inline card (ETH + BLUE + USDC + WETH + cbBTC + AERO balances, read live from THEIR connected wallet — no signing). Call this with NO arguments ONLY when the user asks about THEIR OWN holdings: 'my balance', 'my wallet', 'my portfolio', 'what do I hold', 'check my holdings'.\n\nCRITICAL — ONLY the connected user's own wallet. If the user refers to a SPECIFIC address from the conversation — 'this wallet', 'that wallet', 'that address', 'the address above', or a pasted 0x… that is NOT theirs — this is NOT 'my wallet'. Do NOT call this tool for it (it would wrongly show the user's own balance). There is no portfolio card for an external address: use hub_crypto_rpc (eth_getBalance) for its ETH balance, and say a full portfolio card isn't available for someone else's address.\n\nThis tool returns NO balance figures to you — only the card shows the real, live numbers. After calling you do NOT know any token amounts. NEVER print a balance table, NEVER state or estimate any specific token amounts, tier, or credits (you would be fabricating — the user can see the real numbers in the card). Reply with at most ONE short non-numeric line, e.g. 'Here's your live Base portfolio 👇'. If the user then asks about a specific number, say it's shown in the card.",
     input_schema: { type: "object", properties: {} },
   },
   {
@@ -451,15 +451,6 @@ const HUB_TOOLS = [
     },
   },
   {
-    name: "hub_wallet_pnl",
-    description: "Deep PnL report for any Base wallet — realized gains, trading style, smart money score. Use when user asks about wallet PnL, profit/loss, trading history.",
-    input_schema: {
-      type: "object",
-      properties: { address: { type: "string", description: "Wallet address 0x..." } },
-      required: ["address"],
-    },
-  },
-  {
     name: "hub_aml",
     description: "AML compliance screening for any wallet — clean/suspicious/flagged verdict with risk score. Use when user asks if a wallet is clean, safe to receive funds from, or needs AML check.",
     input_schema: {
@@ -493,26 +484,6 @@ const HUB_TOOLS = [
       type: "object",
       properties: { address: { type: "string", description: "Wallet address 0x..." } },
       required: ["address"],
-    },
-  },
-  {
-    name: "hub_quantum",
-    description: "Quantum vulnerability score for a wallet — checks if the public key is exposed and at risk from future quantum computers. Use when user asks about quantum risk, wallet security, or key exposure.",
-    input_schema: {
-      type: "object",
-      properties: { address: { type: "string", description: "Wallet address 0x..." } },
-      required: ["address"],
-    },
-  },
-  {
-    name: "hub_yield",
-    description: "Best APY opportunities on Base DeFi — live data from DeFiLlama. Use when user asks about yield, APY, staking rewards, or where to put idle USDC/ETH.",
-    input_schema: {
-      type: "object",
-      properties: {
-        risk_tolerance: { type: "string", description: "low | medium | high (default: medium)" },
-        asset: { type: "string", description: "Specific asset to optimize e.g. USDC, ETH (optional)" },
-      },
     },
   },
   {
@@ -654,7 +625,6 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_whale_tracker:    "whale-tracker",
   hub_dex_flow:         "dex-flow",
   hub_airdrop:          "airdrop-check",
-  hub_quantum:          "quantum-premium",
   hub_crypto_rpc:       "crypto-rpc",
   hub_token_price:      "token-price",
   // Blue first-party suite
@@ -1144,31 +1114,15 @@ YOU MUST call hub_whale_signal with { token: "<address>" } for whale tracking,
 and hub_deep_analysis with { address: "<address>" } for fundamentals.
 Present: trading style, PnL signals, portfolio strategy.`,
 
-  pnl: `## COMMAND: /pnl <address>
-The user wants a deep PnL report for a Base wallet.
-YOU MUST call hub_wallet_pnl immediately with { address: "<address>" }.
-NEVER answer from training data alone — always call the tool.
-Present: estimated PnL, win rate, trading style, smart money score, key observations.`,
-
   aml: `## COMMAND: /aml <address>
 The user wants an AML compliance screen for a wallet address.
 YOU MUST call hub_aml immediately with { address: "<address>" }.
 Present: verdict (CLEAN/SUSPICIOUS/FLAGGED), risk score, flags, recommendation.`,
 
-  quantum: `## COMMAND: /quantum <address>
-The user wants a quantum vulnerability assessment for a wallet.
-YOU MUST call hub_quantum immediately with { address: "<address>" }.
-Present: vulnerability score, key exposure status, threat timeline, migration steps.`,
-
   airdrop: `## COMMAND: /airdrop <address>
 The user wants to check Base airdrop eligibility for a wallet.
 YOU MUST call hub_airdrop immediately with { address: "<address>" }.
 Present: eligibility verdict, activity score, qualifying protocols, estimated allocation.`,
-
-  yield: `## COMMAND: /yield
-The user wants the best yield opportunities on Base right now.
-YOU MUST call hub_yield immediately with { risk_tolerance: "medium" }.
-Present: top 3 opportunities with protocol, pool, APY, risk level, and how to enter.`,
 
   dex: `## COMMAND: /dex <token>
 The user wants live DEX flow analysis for a token.
