@@ -1,8 +1,8 @@
 {
   "accountAssociation": {
-    "header": "",
-    "payload": "",
-    "signature": ""
+    "header": "eyJmaWQiOjEwNTA2NTMsInR5cGUiOiJhdXRoIiwia2V5IjoiMHgwMGEyNWIwMzdjZTk2QzAxNjllNzc1ZTYzQjBkNTMwRDU5YTA4NzlhIn0",
+    "payload": "eyJkb21haW4iOiJibHVlYWdlbnQuZGV2In0",
+    "signature": "QZx+4nup3SwFsKneYIRmUMcgR+gdyydr4ku8VgIEZ4hRJdlOmfI8mT4J0Ks1d4g70wfU2pzp0NwBwj1i+VM/Sxs="
   },
   "miniapp": {
     "version": "1",
@@ -10,7 +10,7 @@
     "iconUrl": "https://blueagent.dev/icon.png",
     "homeUrl": "https://blueagent.dev/app/chat",
     "imageUrl": "https://blueagent.dev/og-chat.png",
-    "buttonTitle": "Open Blue Chat",
+    "buttonTitle": "Open Blue Agent",
     "splashImageUrl": "https://blueagent.dev/splash.png",
     "splashBackgroundColor": "#050508",
     "webhookUrl": "https://blueagent.dev/api/farcaster/webhook",
