@@ -1,75 +1,31 @@
-// x402/grant-evaluator/index.ts
-// Base Grant Evaluator - $5.00 USDC per evaluation
-// Powered by Blue Agent
-
-import { callBankrLLM, extractJsonObject } from "@blue-agent/bankr";
-
-async function callLLM(system: string, userContent: string): Promise<string> {
-  return callBankrLLM({
-    model: "claude-haiku-4-5",
-    system,
-    messages: [{ role: "user", content: userContent }],
-    temperature: 0.4,
-    maxTokens: 2000,
-  });
-}
+// Auto-generated thin proxy → blueagent.dev (single source of truth: apps/web).
+// Bankr x402 Cloud collects the USDC payment, then forwards here; we proxy to
+// blueagent.dev using the internal bypass header so the tool runs there without
+// a second charge. No business logic + no data-source secrets live in apps/api.
+const TOOL_ID = "grant-evaluator";
 
 export default async function handler(req: Request): Promise<Response> {
+  let body: unknown = {};
+  try { body = await req.json(); } catch {}
   try {
-    let body: {
-      projectName?: string;
-      description?: string;
-      teamBackground?: string;
-      requestedAmount?: string;
-      milestones?: string;
-      githubUrl?: string;
-      websiteUrl?: string;
-    } = {};
-    try {
-      const text = await req.text();
-      if (text && text.trim().startsWith("{")) body = JSON.parse(text);
-    } catch {}
-
-    const { projectName, description } = body;
-    if (!projectName || !description) {
-      return Response.json({ error: "Please provide projectName and description" }, { status: 400 });
-    }
-
-    console.log(`[GrantEvaluator] Evaluating: ${projectName}`);
-
-    const systemPrompt = `You are a senior grants evaluator for Base ecosystem grants, using the same criteria as Base Grants and Coinbase Ventures.
-
-CRITICAL: Return ONLY raw JSON. No markdown. No backticks. Start with { and end with }.
-
-{
-  "project": "string",
-  "score": <0-100>,
-  "verdict": "Fund | Fund with Conditions | Decline | Request More Info",
-  "grant": "suggested size e.g. $10k-25k or Decline",
-  "risk": "Low | Medium | High",
-  "strengths": ["strength1", "strength2"],
-  "concerns": ["concern1", "concern2"],
-  "conditions": ["condition if applicable"],
-  "questions": ["key question for team"],
-  "summary": "2-3 sentence evaluation"
-}`;
-
-    const userPrompt = `Evaluate this Base ecosystem grant application:
-
-Project Name: ${projectName}
-Description: ${description}
-Team Background: ${body.teamBackground || "Not provided"}
-Requested Amount: ${body.requestedAmount || "Not specified"}
-Milestones: ${body.milestones || "Not provided"}
-GitHub: ${body.githubUrl || "Not provided"}
-Website: ${body.websiteUrl || "Not provided"}`;
-
-    const llmResponse = await callLLM(systemPrompt, userPrompt);
-    const result = extractJsonObject(llmResponse);
-
-    return Response.json(result, { status: 200 });
-  } catch (error) {
-    console.error("[GrantEvaluator] Error:", error);
-    return Response.json({ error: "Failed to evaluate grant application", message: (error as Error).message }, { status: 500 });
+    const upstream = await fetch(`https://blueagent.dev/api/x402/${TOOL_ID}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Blue-Internal": process.env.INTERNAL_SERVICE_KEY ?? "",
+      },
+      body: JSON.stringify(body ?? {}),
+      signal: AbortSignal.timeout(30000),
+    });
+    const text = await upstream.text();
+    return new Response(text, {
+      status: upstream.status,
+      headers: { "Content-Type": upstream.headers.get("content-type") ?? "application/json" },
+    });
+  } catch (err) {
+    return Response.json(
+      { error: "Upstream proxy failed", tool: TOOL_ID, message: (err as Error).message },
+      { status: 502 },
+    );
   }
 }
