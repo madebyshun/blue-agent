@@ -2,52 +2,10 @@
   "network": "base",
   "currency": "USDC",
   "services": {
-    "quantum-premium": {
-      "category": "quantum",
-      "price": "1.50",
-      "description": "Quantum vulnerability score for any wallet \u2014 public key exposure, threat timeline, migration steps",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "address": {
-              "type": "string",
-              "description": "Wallet address (0x...)"
-            },
-            "chain": {
-              "type": "string",
-              "description": "Blockchain (default: base)"
-            }
-          },
-          "required": [
-            "address"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "quantumRiskLevel": {
-              "type": "string",
-              "description": "CRITICAL | HIGH | MEDIUM | LOW | MINIMAL"
-            },
-            "riskScore": {
-              "type": "number"
-            },
-            "publicKeyExposed": {
-              "type": "boolean"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "quantum-batch": {
-      "category": "quantum",
-      "price": "2.50",
-      "paymentScheme": "upto",
-      "description": "Batch quantum scan \u2014 1-10 wallets at $0.25 each. Pay only for what you scan.",
+    "agent-collab-match": {
+      "category": "builder",
+      "price": "0.20",
+      "description": "Find agents that complement your tool and surface collab opportunities.",
       "methods": [
         "POST"
       ],
@@ -55,974 +13,74 @@
         "input": {
           "type": "object",
           "properties": {
-            "addresses": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "Wallet addresses (max 10)"
+            "agent_a": {
+              "type": "string",
+              "description": "Your agent"
+            },
+            "agent_b": {
+              "type": "string",
+              "description": "Target agent"
+            },
+            "collab_goal": {
+              "type": "string",
+              "description": "Collab goal"
             }
           },
           "required": [
-            "addresses"
+            "agent_a",
+            "agent_b"
           ]
         },
         "output": {
           "type": "object",
-          "properties": {
-            "scanned": {
-              "type": "number"
-            },
-            "results": {
-              "type": "array"
-            },
-            "billing": {
-              "type": "object"
-            },
-            "summary": {
-              "type": "object"
-            }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "quantum-migrate": {
-      "category": "quantum",
-      "price": "2.00",
-      "description": "Step-by-step quantum-safe wallet migration plan \u2014 tools, timeline, priority actions",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "address": {
-              "type": "string",
-              "description": "Wallet address to migrate (0x...)"
-            },
-            "chain": {
-              "type": "string",
-              "description": "Blockchain (default: base)"
-            },
-            "urgencyLevel": {
-              "type": "string",
-              "description": "Urgency hint: CRITICAL | HIGH | MEDIUM | LOW (optional)"
-            }
-          },
-          "required": [
-            "address"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "urgency": {
-              "type": "string"
-            },
-            "steps": {
-              "type": "array"
-            },
-            "totalTimeEstimate": {
-              "type": "string"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "quantum-timeline": {
-      "category": "quantum",
-      "price": "0.40",
-      "description": "Quantum threat timeline \u2014 when CRQC arrives, milestone events, what it means for your wallet",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "address": {
-              "type": "string",
-              "description": "Wallet address for personalized context (optional)"
-            },
-            "concern": {
-              "type": "string",
-              "description": "Specific quantum concern to address (optional)"
-            }
-          }
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "currentThreatLevel": {
-              "type": "string"
-            },
-            "yearsUntilPracticalRisk": {
-              "type": "string"
-            },
-            "milestones": {
-              "type": "array"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "key-exposure": {
-      "category": "quantum",
-      "price": "0.50",
-      "description": "Check if wallet's public key is exposed on-chain \u2014 the #1 quantum risk factor",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "address": {
-              "type": "string",
-              "description": "Wallet address (0x...)"
-            },
-            "chain": {
-              "type": "string",
-              "description": "Blockchain (default: base)"
-            }
-          },
-          "required": [
-            "address"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "exposed": {
-              "type": "boolean"
-            },
-            "txCount": {
-              "type": "number"
-            },
-            "riskLevel": {
-              "type": "string"
-            },
-            "migrationUrgency": {
-              "type": "string"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "risk-gate": {
-      "category": "security",
-      "price": "0.05",
-      "description": "Pre-transaction safety check for AI agents \u2014 APPROVE / WARN / BLOCK with risk score",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "action": {
-              "type": "string",
-              "description": "Action to evaluate (e.g. 'buy token on Uniswap')"
-            },
-            "contractAddress": {
-              "type": "string",
-              "description": "Contract address (optional)"
-            },
-            "amount": {
-              "type": "string",
-              "description": "Transaction amount (optional)"
-            },
-            "toAddress": {
-              "type": "string",
-              "description": "Recipient address (optional)"
-            },
-            "agentId": {
-              "type": "string",
-              "description": "Agent identifier (optional)"
-            },
-            "context": {
-              "type": "string",
-              "description": "Additional context (optional)"
-            }
-          },
-          "required": [
-            "action"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "decision": {
-              "type": "string",
-              "description": "APPROVE | WARN | BLOCK"
-            },
-            "riskScore": {
-              "type": "number"
-            },
-            "riskLevel": {
-              "type": "string"
-            },
-            "reasons": {
-              "type": "array"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "honeypot-check": {
-      "category": "security",
-      "price": "0.05",
-      "description": "Detect honeypot or rug pull token contracts before buying \u2014 SAFE / SUSPICIOUS / HONEYPOT verdict",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "token": {
-              "type": "string",
-              "description": "Token contract address (0x...)"
-            }
-          },
-          "required": [
-            "token"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "isHoneypot": {
-              "type": "boolean"
-            },
-            "verdict": {
-              "type": "string"
-            },
-            "riskScore": {
-              "type": "number"
-            },
-            "indicators": {
-              "type": "array"
-            },
-            "safeToTrade": {
-              "type": "boolean"
-            }
-          }
-        }
-      }
-    },
-    "allowance-audit": {
-      "category": "security",
-      "price": "0.20",
-      "description": "Audit dangerous token approvals \u2014 find unlimited approvals and revoke recommendations",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "address": {
-              "type": "string",
-              "description": "Wallet address to audit (0x...)"
-            }
-          },
-          "required": [
-            "address"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "totalRisk": {
-              "type": "string"
-            },
-            "riskScore": {
-              "type": "number"
-            },
-            "dangerousApprovals": {
-              "type": "array"
-            },
-            "immediateActions": {
-              "type": "array"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "phishing-scan": {
-      "category": "security",
-      "price": "0.10",
-      "description": "Scan URL, contract address, or social handle for phishing and scam indicators",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "target": {
-              "type": "string",
-              "description": "URL, contract address, or @handle to scan"
-            }
-          },
-          "required": [
-            "target"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "isPhishing": {
-              "type": "boolean"
-            },
-            "verdict": {
-              "type": "string"
-            },
-            "riskScore": {
-              "type": "number"
-            },
-            "indicators": {
-              "type": "array"
-            },
-            "safeToInteract": {
-              "type": "boolean"
-            }
-          }
-        }
-      }
-    },
-    "mev-shield": {
-      "category": "security",
-      "price": "0.30",
-      "description": "MEV sandwich attack risk before large swaps \u2014 protection strategies and recommended settings",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "action": {
-              "type": "string",
-              "description": "Swap to analyze (e.g. 'swap 10 ETH to USDC on Uniswap v3')"
-            }
-          },
-          "required": [
-            "action"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "mevRisk": {
-              "type": "string"
-            },
-            "sandwichProbability": {
-              "type": "number"
-            },
-            "protectionStrategies": {
-              "type": "array"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "contract-trust": {
-      "category": "security",
+    "agent-performance": {
+      "category": "builder",
       "price": "0.25",
-      "description": "Trust score for any contract \u2014 safe for AI agent interaction? Verified, audited, centralized?",
+      "description": "Benchmark your AI agent's revenue, engagement, and retention metrics.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "address": {
+            "handle": {
               "type": "string",
-              "description": "Contract address (0x...)"
+              "description": "Agent X/Twitter handle"
+            },
+            "repo": {
+              "type": "string",
+              "description": "GitHub repo (optional)"
             }
           },
           "required": [
-            "address"
+            "handle"
           ]
         },
         "output": {
           "type": "object",
-          "properties": {
-            "trustScore": {
-              "type": "number"
-            },
-            "verdict": {
-              "type": "string"
-            },
-            "agentSafe": {
-              "type": "boolean"
-            },
-            "flags": {
-              "type": "array"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "circuit-breaker": {
-      "category": "security",
-      "price": "0.50",
-      "description": "Circuit breaker for autonomous agents \u2014 CONTINUE / PAUSE / HALT decision for Zero-Human Companies",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "agentId": {
-              "type": "string",
-              "description": "Agent identifier"
-            },
-            "action": {
-              "type": "string",
-              "description": "Action the agent is about to take"
-            },
-            "context": {
-              "type": "string",
-              "description": "Current situation context"
-            },
-            "recentLosses": {
-              "type": "string",
-              "description": "Recent loss amount if any (optional)"
-            },
-            "consecutiveBlocks": {
-              "type": "number",
-              "description": "Number of consecutive BLOCK decisions (optional)"
-            }
-          }
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "decision": {
-              "type": "string",
-              "description": "CONTINUE | PAUSE | HALT"
-            },
-            "urgency": {
-              "type": "string"
-            },
-            "reasons": {
-              "type": "array"
-            },
-            "cooldownPeriod": {
-              "type": "string"
-            },
-            "requiresHumanReview": {
-              "type": "boolean"
-            }
-          }
-        }
-      }
-    },
-    "deep-analysis": {
-      "category": "research",
-      "price": "0.35",
-      "description": "Deep due diligence for any Base token or project \u2014 risk score, rug probability, recommendation",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "contractAddress": {
-              "type": "string",
-              "description": "Contract address on Base (optional)"
-            },
-            "projectName": {
-              "type": "string",
-              "description": "Project name to analyze (optional)"
-            },
-            "ticker": {
-              "type": "string",
-              "description": "Token ticker symbol (optional)"
-            }
-          }
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "overallScore": {
-              "type": "number"
-            },
-            "riskScore": {
-              "type": "number"
-            },
-            "rugProbability": {
-              "type": "number"
-            },
-            "recommendation": {
-              "type": "string"
-            },
-            "summary": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "launch-advisor": {
-      "category": "research",
-      "price": "3.00",
-      "description": "Full token launch playbook \u2014 tokenomics, 8-week timeline, marketing strategy, KPIs",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "projectName": {
-              "type": "string"
-            },
-            "description": {
-              "type": "string"
-            },
-            "targetAudience": {
-              "type": "string"
-            },
-            "teamSize": {
-              "type": "string"
-            },
-            "budget": {
-              "type": "string"
-            },
-            "tokenSupply": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "projectName",
-            "description"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "launchScore": {
-              "type": "number"
-            },
-            "tokenomics": {
-              "type": "object"
-            },
-            "launchTimeline": {
-              "type": "array"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "grant-evaluator": {
-      "category": "research",
-      "price": "5.00",
-      "description": "Base ecosystem grant scoring \u2014 innovation, feasibility, impact, team quality",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "projectName": {
-              "type": "string"
-            },
-            "description": {
-              "type": "string"
-            },
-            "teamBackground": {
-              "type": "string"
-            },
-            "requestedAmount": {
-              "type": "string"
-            },
-            "milestones": {
-              "type": "string"
-            },
-            "githubUrl": {
-              "type": "string"
-            },
-            "websiteUrl": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "projectName",
-            "description"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "overallScore": {
-              "type": "number"
-            },
-            "recommendation": {
-              "type": "string"
-            },
-            "suggestedGrantSize": {
-              "type": "string"
-            },
-            "scores": {
-              "type": "object"
-            }
-          }
-        }
-      }
-    },
-    "x402-readiness": {
-      "category": "research",
-      "price": "1.00",
-      "description": "Audit any API or service for x402 payment protocol readiness \u2014 gaps, steps, pricing suggestion",
+    "agent-readiness": {
+      "category": "on-chain",
+      "price": "0.10",
+      "description": "x402 + MCP readiness probe for an agent endpoint.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
             "url": {
               "type": "string",
-              "description": "API endpoint URL (optional)"
-            },
-            "description": {
-              "type": "string",
-              "description": "Service description (optional)"
-            },
-            "currentModel": {
-              "type": "string",
-              "description": "Current monetization model (optional)"
-            }
-          }
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "readinessScore": {
-              "type": "number"
-            },
-            "verdict": {
-              "type": "string"
-            },
-            "gaps": {
-              "type": "array"
-            },
-            "implementationSteps": {
-              "type": "array"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "base-deploy-check": {
-      "category": "research",
-      "price": "0.50",
-      "description": "Pre-deployment security check for Base contracts \u2014 vulnerabilities, centralization risks, go/no-go",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "contractCode": {
-              "type": "string",
-              "description": "Solidity source code (optional)"
-            },
-            "description": {
-              "type": "string",
-              "description": "Contract description (optional)"
-            },
-            "projectName": {
-              "type": "string",
-              "description": "Project name (optional)"
-            }
-          }
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "securityScore": {
-              "type": "number"
-            },
-            "verdict": {
-              "type": "string"
-            },
-            "vulnerabilities": {
-              "type": "array"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "wallet-pnl": {
-      "category": "data",
-      "price": "1.00",
-      "description": "Wallet PnL report \u2014 trading style, win rate, smart money score, top tokens on Base",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "address": {
-              "type": "string",
-              "description": "Base wallet address (0x...)"
-            }
-          },
-          "required": [
-            "address"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "estimatedPnL": {
-              "type": "string"
-            },
-            "winRate": {
-              "type": "string"
-            },
-            "tradingStyle": {
-              "type": "string"
-            },
-            "smartMoneyScore": {
-              "type": "number"
-            },
-            "summary": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "whale-tracker": {
-      "category": "data",
-      "price": "0.10",
-      "description": "Smart money and whale flow analysis \u2014 accumulation vs distribution signal for any token",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "address": {
-              "type": "string",
-              "description": "Token or wallet address to track (0x...)"
-            }
-          },
-          "required": [
-            "address"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "whaleActivity": {
-              "type": "string"
-            },
-            "signal": {
-              "type": "string"
-            },
-            "topMovements": {
-              "type": "array"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "aml-screen": {
-      "category": "data",
-      "price": "0.25",
-      "description": "AML compliance screening for any wallet \u2014 transaction patterns, risk flags, clean/suspicious verdict",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "address": {
-              "type": "string",
-              "description": "Wallet address to screen (0x...)"
-            }
-          },
-          "required": [
-            "address"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "amlRisk": {
-              "type": "string"
-            },
-            "riskScore": {
-              "type": "number"
-            },
-            "verdict": {
-              "type": "string"
-            },
-            "flags": {
-              "type": "array"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "airdrop-check": {
-      "category": "data",
-      "price": "0.10",
-      "description": "Base airdrop eligibility check \u2014 which protocols, activity score, estimated value",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "address": {
-              "type": "string",
-              "description": "Wallet address (0x...)"
-            }
-          },
-          "required": [
-            "address"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "eligibilityScore": {
-              "type": "number"
-            },
-            "likelyEligible": {
-              "type": "array"
-            },
-            "recommendations": {
-              "type": "array"
-            },
-            "estimatedValue": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "narrative-pulse": {
-      "category": "data",
-      "price": "0.40",
-      "description": "Trending narratives in crypto and Base ecosystem \u2014 momentum scores, emerging themes, agent opportunities",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "query": {
-              "type": "string",
-              "description": "Topic or sector to explore (optional, e.g. 'AI agents', 'Base DeFi')"
-            }
-          }
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "topNarratives": {
-              "type": "array"
-            },
-            "baseEcosystemFocus": {
-              "type": "array"
-            },
-            "agentOpportunity": {
-              "type": "string"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "dex-flow": {
-      "category": "data",
-      "price": "0.15",
-      "description": "DEX volume, buy/sell pressure and liquidity flow for any Base token \u2014 live DexScreener data",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "token": {
-              "type": "string",
-              "description": "Token contract address or ticker symbol"
-            }
-          },
-          "required": [
-            "token"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "pressure": {
-              "type": "string",
-              "description": "STRONG_BUY | BUY | NEUTRAL | SELL | STRONG_SELL"
-            },
-            "buySellRatio": {
-              "type": "string"
-            },
-            "volume24h": {
-              "type": "string"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "tokenomics-score": {
-      "category": "research",
-      "price": "0.50",
-      "description": "Token supply, inflation, unlock cliff analysis \u2014 sustainability score and sell pressure outlook",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "token": {
-              "type": "string",
-              "description": "Token name, ticker, or contract address"
-            }
-          },
-          "required": [
-            "token"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "sustainabilityScore": {
-              "type": "number"
-            },
-            "supplyHealth": {
-              "type": "string"
-            },
-            "vestingRisk": {
-              "type": "string"
-            },
-            "sellPressureOutlook": {
-              "type": "string"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "whitepaper-tldr": {
-      "category": "research",
-      "price": "0.20",
-      "description": "Summarize any whitepaper or project docs into 5 key bullets \u2014 thesis, moat, token utility, risks",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "url": {
-              "type": "string",
-              "description": "URL to whitepaper or project documentation"
-            },
-            "projectName": {
-              "type": "string",
-              "description": "Project name (optional)"
+              "description": "Endpoint URL"
             }
           },
           "required": [
@@ -1031,73 +89,757 @@
         },
         "output": {
           "type": "object",
-          "properties": {
-            "oneLiner": {
-              "type": "string"
-            },
-            "bullets": {
-              "type": "array"
-            },
-            "verdict": {
-              "type": "string"
-            },
-            "tldrScore": {
-              "type": "number"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "vc-tracker": {
-      "category": "research",
+    "agent-score": {
+      "category": "builder",
+      "price": "0.35",
+      "description": "Performance score for AI agents on Base — XP, interaction volume, uptime, ecosystem impact.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "handle": {
+              "type": "string",
+              "description": "Agent handle or name"
+            }
+          },
+          "required": [
+            "handle"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "airdrop-check": {
+      "category": "on-chain",
+      "price": "0.10",
+      "description": "Base airdrop eligibility check — which protocols, activity score, estimated value.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "address": {
+              "type": "string",
+              "description": "Wallet address"
+            }
+          },
+          "required": [
+            "address"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "aml-screen": {
+      "category": "on-chain",
+      "price": "0.25",
+      "description": "AML compliance screening for any wallet — transaction patterns, risk flags, clean/suspicious verdict.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "address": {
+              "type": "string",
+              "description": "Wallet address to screen"
+            }
+          },
+          "required": [
+            "address"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "b20-check": {
+      "category": "security",
+      "price": "0.05",
+      "description": "ERC-20 compliance (B20) role + policy detection from verified source.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "contract": {
+              "type": "string",
+              "description": "Contract address"
+            }
+          },
+          "required": [
+            "contract"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "base-activity-score": {
+      "category": "on-chain",
+      "price": "0.05",
+      "description": "Onchain activity score + tier for a Base wallet (Moralis).",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "address": {
+              "type": "string",
+              "description": "Wallet address"
+            }
+          },
+          "required": [
+            "address"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "base-alpha": {
+      "category": "intelligence",
+      "price": "0.10",
+      "description": "Base market alpha — narratives, momentum picks, divergence signals.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {}
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "base-grant-finder": {
+      "category": "base-ecosystem",
+      "price": "0.20",
+      "description": "Find active grants, hackathons, and funding programs for Base builders.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string",
+              "description": "Project type / description"
+            },
+            "stage": {
+              "type": "string",
+              "description": "Stage"
+            }
+          },
+          "required": [
+            "project"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "base-protocol-comparison": {
+      "category": "base-ecosystem",
+      "price": "0.25",
+      "description": "Side-by-side comparison of Base protocols for integrations and partnerships.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "protocol_a": {
+              "type": "string",
+              "description": "Protocol A"
+            },
+            "protocol_b": {
+              "type": "string",
+              "description": "Protocol B"
+            },
+            "use_case": {
+              "type": "string",
+              "description": "Your use case"
+            }
+          },
+          "required": [
+            "protocol_a",
+            "protocol_b"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "base-pulse": {
+      "category": "on-chain",
+      "price": "0.05",
+      "description": "Base chain market pulse — TVL, DEX volume, sentiment, pulse score.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {}
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "blue-analytics": {
+      "category": "intelligence",
+      "price": "0.25",
+      "description": "Performance/metrics read on a Base token — live price, momentum, liquidity health, volume/liquidity ratio, growth signals. Real DexScreener data.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "description": "Token address"
+            },
+            "focus": {
+              "type": "string",
+              "description": "Focus (optional)"
+            }
+          },
+          "required": [
+            "target"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "blue-audit": {
+      "category": "builder",
       "price": "1.00",
-      "description": "VC investment activity and thesis \u2014 who is backing what, hot sectors, signals for builders and traders",
+      "description": "Security + product risk review. Reentrancy, oracle, MEV, x402, Coinbase Smart Wallet. Go/no-go.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "prompt": {
+              "type": "string",
+              "description": "Code, contract, or system to audit"
+            }
+          },
+          "required": [
+            "prompt"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "blue-build": {
+      "category": "builder",
+      "price": "0.50",
+      "description": "Architecture, stack, folder structure, integrations, test plan. Verified Base patterns, no hallucinations.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "prompt": {
+              "type": "string",
+              "description": "What you're building"
+            }
+          },
+          "required": [
+            "prompt"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "blue-compose": {
+      "category": "builder",
+      "price": "0.10",
+      "description": "Turn a goal into a runnable chain of Blue Hub tools — picks from the real catalog, orders them, suggests inputs, and estimates cost.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "goal": {
+              "type": "string",
+              "description": "Goal"
+            }
+          },
+          "required": [
+            "goal"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "blue-deploy": {
+      "category": "builder",
+      "price": "0.10",
+      "description": "Technical deploy mechanics for Base mainnet — deploy scripts, Basescan verify commands, env vars, gas notes, post-deploy checks. Never invents addresses.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string",
+              "description": "What you're deploying"
+            },
+            "stack": {
+              "type": "string",
+              "description": "Stack (optional)"
+            }
+          },
+          "required": [
+            "project"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "blue-idea": {
+      "category": "builder",
+      "price": "0.05",
+      "description": "Turn a rough concept into a fundable brief — problem, why now, why Base, MVP scope, risks, 24h plan.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "prompt": {
+              "type": "string",
+              "description": "Your idea or concept"
+            }
+          },
+          "required": [
+            "prompt"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "blue-monitor": {
+      "category": "security",
+      "price": "0.20",
+      "description": "On-demand health + risk snapshot for a Base token/contract — live price, liquidity, verification, risk signals, and a watch plan with alert thresholds.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "description": "Target"
+            },
+            "focus": {
+              "type": "string",
+              "description": "Focus (optional)"
+            }
+          },
+          "required": [
+            "target"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "blue-raise": {
+      "category": "builder",
+      "price": "0.20",
+      "description": "Fundraising narrative, investor deck outline, smart money map, competitive landscape for your Base niche.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "prompt": {
+              "type": "string",
+              "description": "Project + raise context"
+            }
+          },
+          "required": [
+            "prompt"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "blue-registry": {
+      "category": "builder",
+      "price": "0.05",
+      "description": "Discover the Blue Hub tool catalog — every callable x402 tool (first-party + community), filterable by query/category, with prices and how-to-call.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
             "query": {
               "type": "string",
-              "description": "VC firm name, sector, or investment theme (e.g. 'a16z crypto', 'AI x DeFi')"
+              "description": "Search (optional)"
+            },
+            "category": {
+              "type": "string",
+              "description": "Category (optional)"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "blue-research": {
+      "category": "intelligence",
+      "price": "1.00",
+      "description": "Deep DD memo on a Base project, narrative, or token — thesis, bull/bear, risks, contrarian take, verdict. Grounds in live market data when a token address is given.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "topic": {
+              "type": "string",
+              "description": "Topic / project"
+            },
+            "target": {
+              "type": "string",
+              "description": "Token address (optional)"
             }
           },
           "required": [
-            "query"
+            "topic"
           ]
         },
         "output": {
           "type": "object",
-          "properties": {
-            "investmentThesis": {
-              "type": "string"
-            },
-            "hotSectors": {
-              "type": "array"
-            },
-            "baseEcosystemActivity": {
-              "type": "string"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "yield-optimizer": {
-      "category": "earn",
+    "blue-ship": {
+      "category": "builder",
+      "price": "0.10",
+      "description": "Deployment checklist, verification, release notes, monitoring. Everything you forget when excited to launch.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "prompt": {
+              "type": "string",
+              "description": "What you're shipping"
+            }
+          },
+          "required": [
+            "prompt"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "blue-simulate": {
+      "category": "builder",
       "price": "0.15",
-      "description": "Best APY opportunities on Base DeFi \u2014 live DeFiLlama data, risk-adjusted recommendations",
+      "description": "Bull/base/bear scenario modeling for a Base decision — tokenomics, fee model, growth, runway — with assumptions, projections, and sensitivities.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "scenario": {
+              "type": "string",
+              "description": "What to simulate"
+            },
+            "params": {
+              "type": "string",
+              "description": "Parameters (optional)"
+            }
+          },
+          "required": [
+            "scenario"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "blue-stream": {
+      "category": "on-chain",
+      "price": "0.05",
+      "description": "Live snapshot feed of Base onchain activity — trending & new pools, TVL, real price/volume/liquidity. Pure real data, poll for a near-real-time feed.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "feed": {
+              "type": "string",
+              "description": "Feed"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "builder-deep-dd": {
+      "category": "builder",
+      "price": "0.35",
+      "description": "Full due diligence on a Base builder: onchain activity, shipped products, credibility.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "description": "Builder handle or address"
+            }
+          },
+          "required": [
+            "target"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "community-growth-playbook": {
+      "category": "content",
+      "price": "0.25",
+      "description": "Proven growth tactics for Base builder communities — from 0 to 1000 members.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string",
+              "description": "Project name"
+            },
+            "current_size": {
+              "type": "string",
+              "description": "Current community size"
+            }
+          },
+          "required": [
+            "project"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "community-sentiment": {
+      "category": "builder",
+      "price": "0.20",
+      "description": "Real-time sentiment analysis across your community channels.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string",
+              "description": "Project / token"
+            },
+            "channels": {
+              "type": "string",
+              "description": "Channels"
+            }
+          },
+          "required": [
+            "project"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "competitor-scan": {
+      "category": "builder",
+      "price": "0.20",
+      "description": "Identify direct/indirect competitors and surface your defensible edge.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string",
+              "description": "Your project"
+            },
+            "category": {
+              "type": "string",
+              "description": "Category"
+            }
+          },
+          "required": [
+            "project"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "contract-trust": {
+      "category": "security",
+      "price": "0.15",
+      "description": "Audit any Base contract before swapping or interacting. Basescan verification + security scan + community signal. Verdict: SAFE / CAUTION / RED_FLAG.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "address": {
+              "type": "string",
+              "description": "Contract address"
+            },
+            "context": {
+              "type": "string",
+              "description": "What is this contract? (optional)"
+            }
+          },
+          "required": [
+            "address"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "cross-protocol-yield": {
+      "category": "on-chain",
+      "price": "0.15",
+      "description": "Best Base yield for a token across protocols (DefiLlama).",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
             "token": {
               "type": "string",
-              "description": "Token to optimize yield for (e.g. USDC, ETH, BRETT)"
+              "description": "Token address or ticker"
             }
           },
           "required": [
@@ -1106,1192 +848,1235 @@
         },
         "output": {
           "type": "object",
-          "properties": {
-            "bestOpportunities": {
-              "type": "array"
-            },
-            "recommendedStrategy": {
-              "type": "string"
-            },
-            "riskWarnings": {
-              "type": "array"
-            },
-            "recommendation": {
-              "type": "string"
-            }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "alert-subscribe": {
+    "deep-analysis": {
+      "category": "security",
       "price": "0.50",
-      "category": "alerts",
-      "description": "Subscribe to real-time alerts via webhook \u2014 whale, circuit breaker, quantum exposure",
+      "description": "Full due diligence on any Base token — security score, market fundamentals, on-chain activity, and composite verdict.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "webhookUrl": {
+            "token": {
               "type": "string",
-              "description": "HTTPS webhook URL to receive alert events"
+              "description": "Token contract address"
             },
-            "topics": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "whale_movement",
-                  "circuit_breaker",
-                  "quantum_exposure",
-                  "honeypot_detected",
-                  "rug_risk"
-                ]
-              },
-              "description": "Alert topics to subscribe to"
-            },
-            "addresses": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "Specific wallet/token addresses to watch (optional \u2014 empty = global alerts)"
+            "context": {
+              "type": "string",
+              "description": "Additional context (optional)"
             }
           },
           "required": [
-            "webhookUrl",
-            "topics"
+            "token"
           ]
         },
         "output": {
           "type": "object",
-          "properties": {
-            "subscriptionId": {
-              "type": "string",
-              "description": "Unique subscription identifier"
-            },
-            "topics": {
-              "type": "array",
-              "description": "Active alert topics"
-            },
-            "webhookUrl": {
-              "type": "string"
-            },
-            "status": {
-              "type": "string",
-              "description": "ACTIVE | PENDING"
-            },
-            "expiresAt": {
-              "type": "string",
-              "description": "ISO timestamp when subscription expires"
-            }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "alert-check": {
-      "price": "0.10",
-      "category": "alerts",
-      "description": "Check active alert triggers for any address",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "address": {
-              "type": "string",
-              "description": "Wallet or token address to check for active alerts (0x...)"
-            }
-          },
-          "required": [
-            "address"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "address": {
-              "type": "string"
-            },
-            "hasAlerts": {
-              "type": "boolean"
-            },
-            "alerts": {
-              "type": "array",
-              "description": "Active alert objects with type, severity, message"
-            },
-            "lastChecked": {
-              "type": "string",
-              "description": "ISO timestamp of last alert check"
-            }
-          }
-        }
-      }
-    },
-    "lp-analyzer": {
+    "defi-opportunity": {
+      "category": "builder",
       "price": "0.25",
-      "category": "earn",
-      "description": "LP position analysis \u2014 impermanent loss, fee income, rebalance recommendation",
+      "description": "Scan Base DeFi for emerging yield, liquidity, and protocol opportunities.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "positionId": {
+            "focus": {
               "type": "string",
-              "description": "LP NFT position ID"
+              "description": "Focus (optional)"
             },
-            "pool": {
+            "risk_tolerance": {
               "type": "string",
-              "description": "Pool contract address"
-            },
-            "token0": {
-              "type": "string",
-              "description": "First token symbol or address"
-            },
-            "token1": {
-              "type": "string",
-              "description": "Second token symbol or address"
-            },
-            "entryPrice": {
-              "type": "string",
-              "description": "Price when position was opened"
-            },
-            "investedAmount": {
-              "type": "string",
-              "description": "Total USD invested"
+              "description": "Risk tolerance"
             }
           }
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "tax-report": {
-      "price": "2.00",
-      "category": "earn",
-      "description": "On-chain tax summary \u2014 realized gains, taxable events, P&L",
+    "dex-flow": {
+      "category": "on-chain",
+      "price": "0.15",
+      "description": "DEX volume, buy/sell pressure and liquidity flow for any Base token — live DexScreener data.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "address": {
+            "token": {
               "type": "string",
-              "description": "Wallet address (0x...)"
-            },
-            "year": {
-              "type": "string",
-              "description": "Tax year (default: current year)"
-            },
-            "country": {
-              "type": "string",
-              "description": "Country for tax rules (default: US)"
+              "description": "Token contract address or ticker"
             }
           },
           "required": [
-            "address"
-          ]
-        }
-      }
-    },
-    "launch-simulator": {
-      "category": "intelligence",
-      "price": "0.10",
-      "description": "3-agent pre-launch intelligence \u2014 Blue Agent + Aeon + MiroShark. Know before you ship.",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "project": {
-              "type": "string",
-              "description": "Project name"
-            },
-            "description": {
-              "type": "string",
-              "description": "Project description"
-            },
-            "ticker": {
-              "type": "string",
-              "description": "Token ticker (e.g. $BLUE)"
-            },
-            "contract": {
-              "type": "string",
-              "description": "Contract address (tier 2+ for live market data)"
-            },
-            "tier": {
-              "type": "number",
-              "description": "Simulation depth: 1=Quick $0.10, 2=Deep $0.35, 3=Full $0.50"
-            }
-          },
-          "required": [
-            "project"
+            "token"
           ]
         },
         "output": {
           "type": "object",
-          "properties": {
-            "final_verdict": {
-              "type": "string",
-              "description": "LAUNCH | WAIT | ABORT"
-            },
-            "confidence": {
-              "type": "number",
-              "description": "Confidence score 0-100"
-            },
-            "blue_agent": {
-              "type": "object",
-              "description": "Blue Agent analysis"
-            },
-            "aeon": {
-              "type": "object",
-              "description": "Aeon ecosystem signals"
-            },
-            "miroshark": {
-              "type": "object",
-              "description": "MiroShark consensus"
-            }
-          }
-        }
-      }
-    },
-    "launch-simulator-2": {
-      "category": "intelligence",
-      "price": "0.35",
-      "description": "Launch Simulator Tier 2 \u2014 Deep Signal with live DexScreener market data (price, volume, liquidity)",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "project": {
-              "type": "string",
-              "description": "Project name"
-            },
-            "description": {
-              "type": "string",
-              "description": "Project description"
-            },
-            "ticker": {
-              "type": "string",
-              "description": "Token ticker"
-            },
-            "contract": {
-              "type": "string",
-              "description": "Contract address for live market data"
-            }
-          },
-          "required": [
-            "project"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "final_verdict": {
-              "type": "string",
-              "description": "LAUNCH | WAIT | ABORT"
-            },
-            "confidence": {
-              "type": "number"
-            },
-            "market_data": {
-              "type": "object",
-              "description": "Live DexScreener data"
-            },
-            "blue_agent": {
-              "type": "object"
-            },
-            "aeon": {
-              "type": "object"
-            },
-            "miroshark": {
-              "type": "object"
-            }
-          }
-        }
-      }
-    },
-    "launch-simulator-3": {
-      "category": "intelligence",
-      "price": "0.50",
-      "description": "Launch Simulator Tier 3 \u2014 Full Simulation with risk matrix and timeline recommendation",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "project": {
-              "type": "string",
-              "description": "Project name"
-            },
-            "description": {
-              "type": "string",
-              "description": "Project description"
-            },
-            "ticker": {
-              "type": "string",
-              "description": "Token ticker"
-            },
-            "contract": {
-              "type": "string",
-              "description": "Contract address for live market data"
-            }
-          },
-          "required": [
-            "project"
-          ]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "final_verdict": {
-              "type": "string",
-              "description": "LAUNCH | WAIT | ABORT"
-            },
-            "confidence": {
-              "type": "number"
-            },
-            "market_data": {
-              "type": "object"
-            },
-            "risk_matrix": {
-              "type": "object",
-              "description": "5-axis risk matrix (0-10)"
-            },
-            "timeline_recommendation": {
-              "type": "string"
-            },
-            "blue_agent": {
-              "type": "object"
-            },
-            "aeon": {
-              "type": "object"
-            },
-            "miroshark": {
-              "type": "object"
-            }
-          }
-        }
-      }
-    },
-    "token-pick-signal": {
-      "category": "intelligence",
-      "price": "0.20",
-      "description": "One actionable token pick with falsifiable thesis, entry, kill criterion — Aeon token-movers + MiroShark retail",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "chain": { "type": "string", "description": "Chain filter (default: base)" },
-            "min_mcap": { "type": "number", "description": "Min market cap USD (default: 1000000)" }
-          }
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "no_pick": { "type": "boolean" },
-            "pick": { "type": "object" },
-            "retail_consensus": { "type": "object" },
-            "blue_verdict": { "type": "string" },
-            "confidence": { "type": "number" }
-          }
-        }
-      }
-    },
-    "narrative-position": {
-      "category": "intelligence",
-      "price": "0.25",
-      "description": "Narrative map with position calls (FRONT-RUN / RIDE / FADE / IGNORE) — Aeon narrative-tracker + MiroShark influencer",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "topic": { "type": "string", "description": "Optional topic focus" }
-          }
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "narratives": { "type": "array" },
-            "transitions": { "type": "array" },
-            "top_opportunity": { "type": "string" },
-            "influencer_take": { "type": "object" }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
     "ecosystem-digest": {
       "category": "intelligence",
       "price": "0.20",
-      "description": "Weekly Base ecosystem digest — what moved, what matters, what to watch. Aeon + MiroShark observer + Blue synthesis",
+      "description": "Weekly Base ecosystem intelligence: top builders, protocols, and narratives.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
-        "input": { "type": "object", "properties": {} },
-        "output": {
+        "input": {
           "type": "object",
           "properties": {
-            "headline": { "type": "string" },
-            "movers": { "type": "array" },
-            "narratives": { "type": "array" },
-            "what_to_watch": { "type": "array" },
-            "week_rating": { "type": "number" }
+            "focus": {
+              "type": "string",
+              "description": "Focus area (optional)"
+            }
           }
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "market-fit": {
+    "founder-check": {
       "category": "intelligence",
-      "price": "0.35",
-      "description": "Market fit validator — GO / WAIT / PIVOT verdict. Blue idea + Aeon ecosystem + MiroShark 4-persona",
+      "price": "0.10",
+      "description": "GitHub-based founder trust score — repos, stars, activity.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "description": { "type": "string", "description": "Project description (required)" },
-            "name": { "type": "string", "description": "Project name" }
+            "handle": {
+              "type": "string",
+              "description": "GitHub handle"
+            }
           },
-          "required": ["description"]
+          "required": [
+            "handle"
+          ]
         },
         "output": {
           "type": "object",
-          "properties": {
-            "verdict": { "type": "string", "description": "GO|WAIT|PIVOT" },
-            "score": { "type": "number" },
-            "brief": { "type": "object" },
-            "risks": { "type": "array" },
-            "suggested_change": { "type": "string" }
-          }
-        }
-      }
-    },
-    "token-launch-readiness": {
-      "category": "intelligence",
-      "price": "0.50",
-      "description": "Token launch readiness — score 0-100, GO/WAIT verdict, checklist. Aeon market + MiroShark retail + Blue ship",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "name": { "type": "string", "description": "Token name (required)" },
-            "ticker": { "type": "string", "description": "Token ticker" },
-            "description": { "type": "string", "description": "What the token is for" }
-          },
-          "required": ["name"]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "readiness_score": { "type": "number" },
-            "verdict": { "type": "string", "description": "GO|WAIT" },
-            "checklist": { "type": "array" },
-            "action_items": { "type": "array" }
-          }
-        }
-      }
-    },
-    "roadmap-validator": {
-      "category": "builder",
-      "price": "0.50",
-      "description": "Validate your roadmap against market timing — SHIP/REVISE/PIVOT verdict. Blue build + Aeon narrative + MiroShark 4-persona",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "project": { "type": "string", "description": "Project name (required)" },
-            "roadmap": { "type": "string", "description": "Roadmap items or milestones" },
-            "timeline": { "type": "string", "description": "Target timeline (e.g. Q3 2025)" }
-          },
-          "required": ["project"]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "verdict": { "type": "string", "description": "SHIP|REVISE|PIVOT" },
-            "score": { "type": "number" },
-            "milestones": { "type": "array" },
-            "risks": { "type": "array" }
-          }
-        }
-      }
-    },
-    "competitor-scan": {
-      "category": "builder",
-      "price": "0.75",
-      "description": "Competitive landscape deep scan — STRONG/COMPETITIVE/WEAK position. Aeon deep-research x2 + MiroShark analyst",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "project": { "type": "string", "description": "Your project name (required)" },
-            "description": { "type": "string", "description": "What your project does" },
-            "sector": { "type": "string", "description": "Market sector (e.g. DeFi, AI agents)" }
-          },
-          "required": ["project"]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "position": { "type": "string", "description": "STRONG|COMPETITIVE|WEAK" },
-            "score": { "type": "number" },
-            "competitors": { "type": "array" },
-            "differentiators": { "type": "array" },
-            "threats": { "type": "array" }
-          }
-        }
-      }
-    },
-    "pitch-intelligence": {
-      "category": "builder",
-      "price": "0.35",
-      "description": "Pitch deck intelligence — narrative hooks, investor angles, objection handling. Blue raise + Aeon narrative + MiroShark",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "project": { "type": "string", "description": "Project name (required)" },
-            "description": { "type": "string", "description": "What the project does" },
-            "ask": { "type": "string", "description": "Funding ask (e.g. $500K seed)" }
-          },
-          "required": ["project"]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "hook": { "type": "string" },
-            "narrative": { "type": "string" },
-            "objections": { "type": "array" },
-            "investor_angles": { "type": "array" }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
     "fundraise-timing": {
       "category": "builder",
-      "price": "0.50",
-      "description": "Optimal fundraise timing signal — RAISE_NOW/WAIT/PREP. Aeon market signals + MiroShark influencer",
+      "price": "0.20",
+      "description": "Is now the right time to raise? Market conditions, stage readiness, investor appetite.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "project": { "type": "string", "description": "Project name (required)" },
-            "stage": { "type": "string", "description": "Funding stage (pre-seed, seed, series-a)" },
-            "sector": { "type": "string", "description": "Project sector" }
+            "project": {
+              "type": "string",
+              "description": "Project"
+            },
+            "stage": {
+              "type": "string",
+              "description": "Stage & metrics"
+            }
           },
-          "required": ["project"]
+          "required": [
+            "project"
+          ]
         },
         "output": {
           "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "gas-tracker": {
+      "category": "on-chain",
+      "price": "0.01",
+      "description": "Live Base gas price + USD cost estimates for common actions.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {}
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "grant-evaluator": {
+      "category": "builder",
+      "price": "5.00",
+      "description": "Base ecosystem grant scoring — innovation, feasibility, impact, team quality.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
           "properties": {
-            "timing_signal": { "type": "string", "description": "RAISE_NOW|WAIT|PREP" },
-            "score": { "type": "number" },
-            "window": { "type": "string" },
-            "reasons": { "type": "array" }
-          }
+            "projectName": {
+              "type": "string",
+              "description": "Project name"
+            },
+            "description": {
+              "type": "string",
+              "description": "Project description"
+            },
+            "teamBackground": {
+              "type": "string",
+              "description": "Team background (optional)"
+            },
+            "requestedAmount": {
+              "type": "string",
+              "description": "Requested grant amount (optional)"
+            },
+            "milestones": {
+              "type": "string",
+              "description": "Milestones (optional)"
+            },
+            "githubUrl": {
+              "type": "string",
+              "description": "GitHub URL (optional)"
+            }
+          },
+          "required": [
+            "projectName",
+            "description"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
     "gtm-brief": {
       "category": "builder",
-      "price": "0.50",
-      "description": "Go-to-market brief with channels, messaging, launch sequence. Blue idea + Aeon narrative + MiroShark influencer+retail",
+      "price": "0.25",
+      "description": "Go-to-market playbook: channels, timing, messaging, and early adopter strategy.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "project": { "type": "string", "description": "Project name (required)" },
-            "description": { "type": "string", "description": "What the project does" },
-            "target_audience": { "type": "string", "description": "Target users" }
+            "project": {
+              "type": "string",
+              "description": "Project name"
+            },
+            "description": {
+              "type": "string",
+              "description": "What you're launching"
+            },
+            "target": {
+              "type": "string",
+              "description": "Target audience"
+            }
           },
-          "required": ["project"]
+          "required": [
+            "project",
+            "description"
+          ]
         },
         "output": {
           "type": "object",
-          "properties": {
-            "channels": { "type": "array" },
-            "messaging": { "type": "object" },
-            "launch_sequence": { "type": "array" },
-            "kpis": { "type": "array" }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "stack-recommender": {
-      "category": "builder",
-      "price": "0.35",
-      "description": "Tech stack recommendation for Base builders — frameworks, infra, tooling. Blue build + Aeon research + MiroShark analyst",
+    "honeypot-check": {
+      "category": "security",
+      "price": "0.10",
+      "description": "Detect honeypot tokens that can be bought but not sold. Transfer tax analysis + rug pattern detection on Base.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "project": { "type": "string", "description": "Project name (required)" },
-            "description": { "type": "string", "description": "What you're building" },
-            "team_size": { "type": "string", "description": "Team size (solo, 2-5, 5+)" }
+            "token": {
+              "type": "string",
+              "description": "Token contract address"
+            }
           },
-          "required": ["project"]
+          "required": [
+            "token"
+          ]
         },
         "output": {
           "type": "object",
-          "properties": {
-            "recommended_stack": { "type": "object" },
-            "alternatives": { "type": "array" },
-            "reasoning": { "type": "string" },
-            "warnings": { "type": "array" }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
     "investor-memo": {
       "category": "builder",
-      "price": "0.75",
-      "description": "Full investor memo — market, thesis, traction, risks, ask. Blue raise + Aeon deep-research + MiroShark analyst+influencer",
+      "price": "0.35",
+      "description": "Full investor memo: thesis, market, moat, risks, and ask — ready to send.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "project": { "type": "string", "description": "Project name (required)" },
-            "description": { "type": "string", "description": "What the project does" },
-            "traction": { "type": "string", "description": "Current traction or metrics" },
-            "ask": { "type": "string", "description": "Funding ask" }
+            "project": {
+              "type": "string",
+              "description": "Project name"
+            },
+            "description": {
+              "type": "string",
+              "description": "Description + traction"
+            },
+            "ask": {
+              "type": "string",
+              "description": "Raise ask"
+            }
           },
-          "required": ["project"]
+          "required": [
+            "project",
+            "description"
+          ]
         },
         "output": {
           "type": "object",
-          "properties": {
-            "memo": { "type": "object" },
-            "investment_grade": { "type": "string" },
-            "conviction": { "type": "string" },
-            "analyst_verdict": { "type": "string" }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "token-distribution-plan": {
+    "key-exposure": {
+      "category": "security",
+      "price": "0.50",
+      "description": "Check if a wallet's public key is exposed on-chain (quantum vulnerability). Verdict computed from the real Base RPC nonce — never fabricated. EXPOSED means the key is visible, not that funds are at immediate risk.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "address": {
+              "type": "string",
+              "description": "Wallet address"
+            }
+          },
+          "required": [
+            "address"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "launch-simulator-1": {
+      "category": "builder",
+      "price": "0.10",
+      "description": "Quick Signal — baseline ecosystem read + 3-agent verdict. Fast pre-launch gut-check.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string",
+              "description": "Project name"
+            },
+            "description": {
+              "type": "string",
+              "description": "Project description"
+            },
+            "ticker": {
+              "type": "string",
+              "description": "Token ticker (optional)"
+            }
+          },
+          "required": [
+            "project"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "launch-simulator-2": {
       "category": "builder",
       "price": "0.35",
-      "description": "Token distribution strategy — allocation, vesting, community rewards. Aeon token-movers + MiroShark retail + Blue raise",
+      "description": "Deep Signal launch simulation with live DexScreener market data — price, volume, liquidity.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "project": { "type": "string", "description": "Project name (required)" },
-            "total_supply": { "type": "string", "description": "Total token supply" },
-            "type": { "type": "string", "description": "Token type: utility, governance, memecoin" }
+            "project": {
+              "type": "string",
+              "description": "Project name"
+            },
+            "description": {
+              "type": "string",
+              "description": "Project description"
+            },
+            "ticker": {
+              "type": "string",
+              "description": "Token ticker (optional)"
+            },
+            "contract": {
+              "type": "string",
+              "description": "Contract address (optional)"
+            }
           },
-          "required": ["project"]
+          "required": [
+            "project"
+          ]
         },
         "output": {
           "type": "object",
-          "properties": {
-            "allocation": { "type": "object" },
-            "vesting_schedule": { "type": "array" },
-            "community_strategy": { "type": "string" },
-            "warnings": { "type": "array" }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "agent-performance": {
+    "launch-simulator-3": {
       "category": "builder",
-      "price": "0.35",
-      "description": "AI agent performance audit — activity, reliability, impact score. Blue agent-score + Aeon github-monitor + MiroShark observer",
+      "price": "0.50",
+      "description": "Full Simulation — complete multi-agent report with risk matrix and timeline recommendation.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "agent": { "type": "string", "description": "Agent name or handle (required)" },
-            "repo": { "type": "string", "description": "GitHub repo (optional)" },
-            "description": { "type": "string", "description": "What the agent does" }
+            "project": {
+              "type": "string",
+              "description": "Project name"
+            },
+            "description": {
+              "type": "string",
+              "description": "Project description"
+            },
+            "ticker": {
+              "type": "string",
+              "description": "Token ticker (optional)"
+            },
+            "contract": {
+              "type": "string",
+              "description": "Contract address (optional)"
+            }
           },
-          "required": ["agent"]
+          "required": [
+            "project"
+          ]
         },
         "output": {
           "type": "object",
-          "properties": {
-            "performance_score": { "type": "number" },
-            "activity_level": { "type": "string" },
-            "strengths": { "type": "array" },
-            "gaps": { "type": "array" },
-            "observer_take": { "type": "object" }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "agent-collab-match": {
-      "category": "builder",
-      "price": "0.35",
-      "description": "Agent collaboration compatibility — STRONG_MATCH/WEAK_MATCH verdict. Blue agent-score x2 + MiroShark analyst",
+    "liquidity-depth": {
+      "category": "security",
+      "price": "0.03",
+      "description": "Liquidity depth, slippage estimate and exit risk for a Base token.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "agent_a": { "type": "string", "description": "First agent name (required)" },
-            "agent_b": { "type": "string", "description": "Second agent name (required)" },
-            "goal": { "type": "string", "description": "Collaboration goal" }
+            "token": {
+              "type": "string",
+              "description": "Token address or ticker"
+            }
           },
-          "required": ["agent_a", "agent_b"]
+          "required": [
+            "token"
+          ]
         },
         "output": {
           "type": "object",
-          "properties": {
-            "verdict": { "type": "string", "description": "STRONG_MATCH|GOOD_MATCH|WEAK_MATCH|POOR_MATCH" },
-            "score": { "type": "number" },
-            "synergies": { "type": "array" },
-            "conflicts": { "type": "array" },
-            "recommended_split": { "type": "string" }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "repo-health": {
-      "category": "builder",
-      "price": "0.35",
-      "description": "GitHub repo health check — A/B/C/D/F grade, activity, code quality, security. Aeon github-monitor + Blue audit + MiroShark",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "repo": { "type": "string", "description": "GitHub repo (user/repo or full URL) (required)" },
-            "description": { "type": "string", "description": "Project description" }
-          },
-          "required": ["repo"]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "health_score": { "type": "number" },
-            "grade": { "type": "string", "description": "A|B|C|D|F" },
-            "status": { "type": "string" },
-            "dimensions": { "type": "object" },
-            "critical_issues": { "type": "array" },
-            "quick_wins": { "type": "array" }
-          }
-        }
-      }
-    },
-    "community-sentiment": {
-      "category": "builder",
-      "price": "0.25",
-      "description": "Community sentiment analysis — sentiment score, bull/bear split, health. MiroShark 4-persona + Aeon narrative + Blue score",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "project": { "type": "string", "description": "Project name (required)" },
-            "description": { "type": "string", "description": "Project description" }
-          },
-          "required": ["project"]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "sentiment_score": { "type": "number" },
-            "overall": { "type": "string" },
-            "consensus": { "type": "object" },
-            "community_health": { "type": "string" },
-            "key_drivers": { "type": "array" }
-          }
-        }
-      }
-    },
-    "defi-opportunity": {
+    "lp-analyzer": {
       "category": "earn",
-      "price": "0.35",
-      "description": "DeFi opportunity scan on Base — top yield, LP, lending opportunities. Aeon defi-monitor + MiroShark analyst + Blue verdict",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "strategy": { "type": "string", "description": "Strategy focus: yield, lp, lending, farming (default: yield)" },
-            "risk_tolerance": { "type": "string", "description": "Risk tolerance: high, medium, low (default: medium)" }
-          }
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "scan_score": { "type": "number" },
-            "market_condition": { "type": "string" },
-            "opportunities": { "type": "array" },
-            "avoid_now": { "type": "array" },
-            "best_entry_timing": { "type": "string" }
-          }
-        }
-      }
-    },
-    "builder-deep-dd": {
-      "category": "builder",
-      "price": "1.00",
-      "description": "Comprehensive builder/project due diligence — STRONG_BUY/BUY/WATCH/PASS/RED_FLAG verdict. Aeon x2 + Blue audit + MiroShark analyst",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "target": { "type": "string", "description": "Builder handle, project name, or GitHub repo (required)" },
-            "type": { "type": "string", "description": "Target type: project, builder, token (default: project)" },
-            "context": { "type": "string", "description": "Additional context" }
-          },
-          "required": ["target"]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "dd_score": { "type": "number" },
-            "verdict": { "type": "string", "description": "STRONG_BUY|BUY|WATCH|PASS|RED_FLAG" },
-            "confidence": { "type": "number" },
-            "summary": { "type": "string" },
-            "thesis": { "type": "string" },
-            "strengths": { "type": "array" },
-            "risks": { "type": "array" },
-            "red_flags": { "type": "array" },
-            "due_diligence_checklist": { "type": "array" }
-          }
-        }
-      }
-    },
-    "whale-copy-signal": {
-      "category": "trading",
-      "price": "0.35",
-      "description": "Smart money copy signal — whale accumulation/distribution, entry timing, tokens to follow. Aeon token-movers + MiroShark analyst",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "token": { "type": "string", "description": "Token to analyze (optional)" },
-            "wallet": { "type": "string", "description": "Specific wallet to track (optional)" }
-          }
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "signal": { "type": "string", "description": "STRONG_BUY|BUY|WATCH|PASS" },
-            "confidence": { "type": "number" },
-            "whale_activity": { "type": "string" },
-            "copy_targets": { "type": "array" },
-            "entry_timing": { "type": "string" }
-          }
-        }
-      }
-    },
-    "token-momentum-scanner": {
-      "category": "trading",
       "price": "0.25",
-      "description": "Scan Base chain for pre-pump momentum plays — early setups before CT picks up. Aeon token-movers + MiroShark retail",
+      "description": "LP position analysis — impermanent loss, fee income, rebalance recommendation.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "chain": { "type": "string", "description": "Chain (default: base)" },
-            "min_mcap": { "type": "number", "description": "Min market cap USD (default: 500000)" }
-          }
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "scan_score": { "type": "number" },
-            "market_phase": { "type": "string" },
-            "momentum_plays": { "type": "array" },
-            "best_setup": { "type": "string" }
-          }
-        }
-      }
-    },
-    "portfolio-rebalancer": {
-      "category": "trading",
-      "price": "0.50",
-      "description": "Portfolio rebalance recommendation based on narrative shifts and market signals. Aeon token-movers + narrative + MiroShark analyst",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "holdings": { "type": "string", "description": "Current holdings (e.g. '50% ETH, 30% USDC, 20% BRETT')" },
-            "risk_profile": { "type": "string", "description": "high|medium|low (default: medium)" },
-            "goal": { "type": "string", "description": "growth|yield|preservation (default: growth)" }
-          }
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "action": { "type": "string", "description": "REBALANCE_NOW|TRIM|ACCUMULATE|HOLD" },
-            "suggested_allocation": { "type": "array" },
-            "rotate_from": { "type": "array" },
-            "rotate_into": { "type": "array" }
-          }
-        }
-      }
-    },
-    "thread-intelligence": {
-      "category": "content",
-      "price": "0.35",
-      "description": "CT thread strategy — winning angle, hook options, posting time, engagement prediction. Aeon narrative + MiroShark influencer",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "topic": { "type": "string", "description": "Thread topic or idea (required)" },
-            "audience": { "type": "string", "description": "Target audience" },
-            "goal": { "type": "string", "description": "engagement|awareness|conversion" }
+            "token0": {
+              "type": "string",
+              "description": "Token 0"
+            },
+            "token1": {
+              "type": "string",
+              "description": "Token 1"
+            },
+            "entryPrice": {
+              "type": "string",
+              "description": "Entry price (optional)"
+            },
+            "investedAmount": {
+              "type": "string",
+              "description": "Invested amount USD (optional)"
+            }
           },
-          "required": ["topic"]
+          "required": [
+            "token0"
+          ]
         },
         "output": {
           "type": "object",
-          "properties": {
-            "content_score": { "type": "number" },
-            "recommended_angle": { "type": "string" },
-            "thread_outline": { "type": "array" },
-            "hook_options": { "type": "array" },
-            "engagement_prediction": { "type": "string" }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "builder-brand-score": {
-      "category": "content",
-      "price": "0.35",
-      "description": "Builder brand score — visibility, credibility, CT presence, narrative ownership on Base. Aeon research + narrative + MiroShark influencer",
+    "market-fit": {
+      "category": "intelligence",
+      "price": "0.25",
+      "description": "Score your product's market fit with swarm intelligence across three personas.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "builder": { "type": "string", "description": "Builder name or @handle (required)" },
-            "project": { "type": "string", "description": "Associated project" }
+            "description": {
+              "type": "string",
+              "description": "Product description"
+            },
+            "stage": {
+              "type": "string",
+              "description": "Stage"
+            }
           },
-          "required": ["builder"]
+          "required": [
+            "description"
+          ]
         },
         "output": {
           "type": "object",
-          "properties": {
-            "brand_score": { "type": "number" },
-            "tier": { "type": "string", "description": "S|A|B|C|D" },
-            "dimensions": { "type": "object" },
-            "quick_wins": { "type": "array" }
-          }
-        }
-      }
-    },
-    "community-growth-playbook": {
-      "category": "content",
-      "price": "0.50",
-      "description": "Community growth strategy — channels, content pillars, engagement loops, milestones. Aeon narrative + MiroShark 4-persona",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "project": { "type": "string", "description": "Project name (required)" },
-            "description": { "type": "string", "description": "What the project does" },
-            "current_size": { "type": "string", "description": "Current community size" },
-            "goal": { "type": "string", "description": "Growth goal (e.g. 1000 members)" }
-          },
-          "required": ["project"]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "growth_score": { "type": "number" },
-            "channels": { "type": "array" },
-            "content_pillars": { "type": "array" },
-            "milestones": { "type": "array" },
-            "quick_wins": { "type": "array" }
-          }
-        }
-      }
-    },
-    "agent-revenue-optimizer": {
-      "category": "agent-economy",
-      "price": "0.50",
-      "description": "Maximize AI agent revenue — streams, pricing strategy, untapped opportunities. Aeon deep-research + MiroShark analyst",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "agent": { "type": "string", "description": "Agent name (required)" },
-            "description": { "type": "string", "description": "What the agent does" },
-            "current_revenue": { "type": "string", "description": "Current revenue (optional)" },
-            "model": { "type": "string", "description": "Current monetization model (default: x402)" }
-          },
-          "required": ["agent"]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "revenue_score": { "type": "number" },
-            "recommended_model": { "type": "string" },
-            "revenue_streams": { "type": "array" },
-            "quick_revenue_wins": { "type": "array" },
-            "30_day_target": { "type": "string" }
-          }
-        }
-      }
-    },
-    "agent-token-strategy": {
-      "category": "agent-economy",
-      "price": "0.50",
-      "description": "Token strategy for agent-owned projects — tokenomics, narrative, launch sequence. Aeon token-movers + narrative + MiroShark retail",
-      "schema": {
-        "input": {
-          "type": "object",
-          "properties": {
-            "agent": { "type": "string", "description": "Agent or project name (required)" },
-            "description": { "type": "string", "description": "What the agent does" },
-            "token_name": { "type": "string", "description": "Proposed token name" },
-            "total_supply": { "type": "string", "description": "Total token supply (default: 1B)" }
-          },
-          "required": ["agent"]
-        },
-        "output": {
-          "type": "object",
-          "properties": {
-            "strategy_score": { "type": "number" },
-            "recommended_type": { "type": "string" },
-            "tokenomics": { "type": "object" },
-            "narrative_angle": { "type": "string" },
-            "launch_sequence": { "type": "array" }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
     "multi-agent-workflow": {
       "category": "agent-economy",
-      "price": "0.50",
-      "description": "Design multi-agent workflow — orchestration pattern, handoff protocol, x402 payment routing. Aeon deep-research + MiroShark analyst",
+      "price": "0.25",
+      "description": "Design an automated workflow combining multiple agents for complex tasks.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "goal": { "type": "string", "description": "What the workflow should accomplish (required)" },
-            "agents": { "type": "string", "description": "Available agents (default: Blue Agent, Aeon, MiroShark)" },
-            "constraints": { "type": "string", "description": "Budget, latency, or other constraints" }
+            "goal": {
+              "type": "string",
+              "description": "Workflow goal"
+            },
+            "agents": {
+              "type": "string",
+              "description": "Agents to use (optional)"
+            }
           },
-          "required": ["goal"]
+          "required": [
+            "goal"
+          ]
         },
         "output": {
           "type": "object",
-          "properties": {
-            "pattern": { "type": "string", "description": "pipeline|orchestrator|swarm|hybrid" },
-            "agents": { "type": "array" },
-            "steps": { "type": "array" },
-            "estimated_cost": { "type": "string" },
-            "estimated_latency": { "type": "string" }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "base-grant-finder": {
-      "category": "base-ecosystem",
-      "price": "0.35",
-      "description": "Match your project to Base ecosystem grants — Coinbase, Optimism RetroPGF, ecosystem funds. Aeon deep-research + MiroShark analyst",
+    "narrative-position": {
+      "category": "intelligence",
+      "price": "0.15",
+      "description": "Which narratives are building vs peaking on CT — and where to position.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "project": { "type": "string", "description": "Project name (required)" },
-            "description": { "type": "string", "description": "What the project does" },
-            "stage": { "type": "string", "description": "early|growth|mature (default: early)" },
-            "sector": { "type": "string", "description": "DeFi|AI agents|tooling|etc" }
-          },
-          "required": ["project"]
+            "focus": {
+              "type": "string",
+              "description": "Narrative focus (optional)"
+            }
+          }
         },
         "output": {
           "type": "object",
-          "properties": {
-            "match_score": { "type": "number" },
-            "grants": { "type": "array" },
-            "strongest_narrative": { "type": "string" },
-            "estimated_total": { "type": "string" }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "base-protocol-comparison": {
-      "category": "base-ecosystem",
-      "price": "0.50",
-      "description": "Side-by-side comparison of Base protocols in same category — security, TVL, UX, integration ease. Aeon deep-research x2 + MiroShark analyst",
+    "narrative-pulse": {
+      "category": "intelligence",
+      "price": "0.10",
+      "description": "Live Base narrative phases, velocity and entry windows.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "protocol_a": { "type": "string", "description": "First protocol to compare (required)" },
-            "protocol_b": { "type": "string", "description": "Second protocol (optional — omit to compare against category alternatives)" },
-            "category": { "type": "string", "description": "Protocol category (e.g. DEX, lending, yield)" },
-            "use_case": { "type": "string", "description": "Your specific use case" }
-          },
-          "required": ["protocol_a"]
+            "focus": {
+              "type": "string",
+              "description": "Focus (optional)"
+            }
+          }
         },
         "output": {
           "type": "object",
-          "properties": {
-            "recommendation": { "type": "string" },
-            "protocols": { "type": "array" },
-            "use_case_winner": { "type": "string" },
-            "risk_comparison": { "type": "string" }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "base-builder-network-match": {
-      "category": "base-ecosystem",
-      "price": "0.35",
-      "description": "Find collaborators, co-founders, and integration partners in Base ecosystem. Aeon deep-research + MiroShark analyst",
+    "new-pools": {
+      "category": "on-chain",
+      "price": "0.02",
+      "description": "Freshly-created Base pools with thin-liquidity honeypot flags.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "builder": { "type": "string", "description": "Your name or project (required)" },
-            "skills": { "type": "string", "description": "Your skills or stack" },
-            "looking_for": { "type": "string", "description": "What kind of collaborator you need" }
-          },
-          "required": ["builder"]
+            "hours": {
+              "type": "string",
+              "description": "Window hours (optional)"
+            }
+          }
         },
         "output": {
           "type": "object",
-          "properties": {
-            "match_score": { "type": "number" },
-            "matches": { "type": "array" },
-            "builder_archetype": { "type": "string" },
-            "first_steps": { "type": "array" }
-          }
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
-    "wallet-strategy-analyzer": {
-      "category": "onchain",
-      "price": "0.50",
-      "description": "Decode on-chain strategy of any wallet — archetype, behaviors, replicable plays, watch signals. Aeon token-movers + MiroShark analyst",
+    "pitch-intelligence": {
+      "category": "builder",
+      "price": "0.30",
+      "description": "Transform your deck into investor-grade pitch intelligence with narrative scoring.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "address": { "type": "string", "description": "Wallet address 0x... (required)" },
-            "focus": { "type": "string", "description": "Focus area: trading|yield|nft|general (default: general)" }
+            "project": {
+              "type": "string",
+              "description": "Project"
+            },
+            "description": {
+              "type": "string",
+              "description": "Pitch summary"
+            }
           },
-          "required": ["address"]
+          "required": [
+            "project",
+            "description"
+          ]
         },
         "output": {
           "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "pool-scan": {
+      "category": "on-chain",
+      "price": "0.02",
+      "description": "Trending + newly-active Base pools with the chain TVL snapshot.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
           "properties": {
-            "strategy_score": { "type": "number" },
-            "wallet_archetype": { "type": "string" },
-            "strategy": { "type": "object" },
-            "replicable_plays": { "type": "array" },
-            "watch_signals": { "type": "array" }
+            "limit": {
+              "type": "string",
+              "description": "Limit (optional)"
+            }
           }
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "protocol-health": {
+      "category": "intelligence",
+      "price": "0.10",
+      "description": "Protocol TVL health, trend and risk signals (DefiLlama).",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "type": "string",
+              "description": "Protocol name"
+            }
+          },
+          "required": [
+            "protocol"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     },
     "protocol-risk-monitor": {
-      "category": "onchain",
+      "category": "on-chain",
       "price": "0.35",
-      "description": "Real-time protocol risk assessment — smart contract, liquidity, oracle, governance risks. Aeon defi-monitor + MiroShark analyst",
+      "description": "Real-time risk assessment for your DeFi positions — exit signals, risk scores.",
+      "methods": [
+        "POST"
+      ],
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "protocol": { "type": "string", "description": "Protocol name (required, e.g. 'Aerodrome', 'Aave Base')" },
-            "position": { "type": "string", "description": "Your position details (optional)" }
+            "protocol": {
+              "type": "string",
+              "description": "Protocol"
+            },
+            "position": {
+              "type": "string",
+              "description": "Position details (optional)"
+            }
           },
-          "required": ["protocol"]
+          "required": [
+            "protocol"
+          ]
         },
         "output": {
           "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "quick-safety": {
+      "category": "security",
+      "price": "0.05",
+      "description": "Fast contract safety check — liquidity, verification, risk verdict.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
           "properties": {
-            "risk_score": { "type": "number" },
-            "overall_risk": { "type": "string" },
-            "action": { "type": "string", "description": "EXIT_NOW|REDUCE|HOLD|ADD" },
-            "risk_dimensions": { "type": "object" },
-            "active_risks": { "type": "array" }
+            "contract": {
+              "type": "string",
+              "description": "Contract address"
+            }
+          },
+          "required": [
+            "contract"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "repo-health": {
+      "category": "builder",
+      "price": "0.20",
+      "description": "Audit your GitHub repo health: code quality, docs, CI, contributor signals.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "repo": {
+              "type": "string",
+              "description": "GitHub repo"
+            }
+          },
+          "required": [
+            "repo"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "risk-gate": {
+      "category": "security",
+      "price": "0.20",
+      "description": "Pre-transaction risk assessment — screen any address or swap for drainer patterns, AML signals, and malicious contracts.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "type": "string",
+              "description": "Target address"
+            },
+            "action": {
+              "type": "string",
+              "description": "Action type"
+            },
+            "value": {
+              "type": "string",
+              "description": "Amount in Wei (optional)"
+            }
+          },
+          "required": [
+            "to"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "roadmap-validator": {
+      "category": "builder",
+      "price": "0.25",
+      "description": "Validate your roadmap against market timing, execution risk, and narrative fit.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string",
+              "description": "Project name"
+            },
+            "roadmap": {
+              "type": "string",
+              "description": "Roadmap milestones"
+            }
+          },
+          "required": [
+            "project",
+            "roadmap"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "scam-detector": {
+      "category": "on-chain",
+      "price": "0.10",
+      "description": "Detect honeypot / rug / fake-token patterns on a Base contract.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "contract": {
+              "type": "string",
+              "description": "Contract address"
+            }
+          },
+          "required": [
+            "contract"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "stack-recommender": {
+      "category": "builder",
+      "price": "0.20",
+      "description": "Optimal tech stack for Base builders — infra, tooling, protocols, integrations.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "project_type": {
+              "type": "string",
+              "description": "Project type"
+            },
+            "constraints": {
+              "type": "string",
+              "description": "Constraints"
+            }
+          },
+          "required": [
+            "project_type"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "thread-intelligence": {
+      "category": "content",
+      "price": "0.20",
+      "description": "Turn your alpha or project update into a high-engagement X thread.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "topic": {
+              "type": "string",
+              "description": "Thread topic"
+            },
+            "angle": {
+              "type": "string",
+              "description": "Angle"
+            }
+          },
+          "required": [
+            "topic"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "token-alpha": {
+      "category": "intelligence",
+      "price": "0.15",
+      "description": "Token trade signal — entry, whale confirmation, momentum and risk.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "token": {
+              "type": "string",
+              "description": "Token address or ticker"
+            }
+          },
+          "required": [
+            "token"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "token-distribution": {
+      "category": "security",
+      "price": "0.05",
+      "description": "Holder concentration + rug-risk distribution score (Moralis holders).",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "contract": {
+              "type": "string",
+              "description": "Contract address"
+            }
+          },
+          "required": [
+            "contract"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "token-launch-readiness": {
+      "category": "intelligence",
+      "price": "0.30",
+      "description": "Go/no-go signal on whether your project is ready to launch a token.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Project / token name"
+            },
+            "description": {
+              "type": "string",
+              "description": "Project description + traction"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "token-momentum-scanner": {
+      "category": "trading",
+      "price": "0.20",
+      "description": "Real-time momentum scan for Base tokens — breakouts, volume spikes, narrative alignment.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "timeframe": {
+              "type": "string",
+              "description": "Timeframe"
+            },
+            "filter": {
+              "type": "string",
+              "description": "Filter"
+            }
           }
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "token-pick-signal": {
+      "category": "intelligence",
+      "price": "0.20",
+      "description": "AI consensus on the highest-conviction asymmetric token setup on Base right now.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": "string",
+              "description": "Market context (optional)"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "token-price": {
+      "category": "on-chain",
+      "price": "0.01",
+      "description": "Live price, mcap, volume and liquidity for any Base token (DexScreener).",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "token": {
+              "type": "string",
+              "description": "Token address or ticker"
+            }
+          },
+          "required": [
+            "token"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "wallet-holdings": {
+      "category": "on-chain",
+      "price": "0.02",
+      "description": "Live ERC-20 + ETH holdings and USD value for a Base wallet (Moralis).",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "address": {
+              "type": "string",
+              "description": "Wallet address"
+            }
+          },
+          "required": [
+            "address"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "wallet-risk": {
+      "category": "security",
+      "price": "0.05",
+      "description": "AML / risk screen for a Base wallet from real on-chain flow (Moralis).",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "address": {
+              "type": "string",
+              "description": "Wallet address"
+            }
+          },
+          "required": [
+            "address"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "whale-copy-signal": {
+      "category": "trading",
+      "price": "0.25",
+      "description": "Track and copy high-alpha whale wallets on Base — entry, size, and timing.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "wallet": {
+              "type": "string",
+              "description": "Whale wallet (optional)"
+            },
+            "token": {
+              "type": "string",
+              "description": "Token to watch (optional)"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
+        }
+      }
+    },
+    "whale-tracker": {
+      "category": "on-chain",
+      "price": "0.10",
+      "description": "Smart money and whale flow analysis — accumulation vs distribution signal for any token.",
+      "methods": [
+        "POST"
+      ],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "address": {
+              "type": "string",
+              "description": "Token or wallet address"
+            }
+          },
+          "required": [
+            "address"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "description": "AI/structured result from blueagent.dev — see blueagent.dev/hub for the full schema."
         }
       }
     }
