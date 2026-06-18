@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 
@@ -12,6 +12,14 @@ const SOCIAL_PROOF = ["74 AI tools", "x402 native", "MCP", "Bankr Skills", "Base
 
 const CHAT_COMMANDS = ["/idea", "/build", "/audit", "/ship", "/raise", "/pick", "/scan"];
 
+// icon: "logo" → BlueAgent logomark, otherwise an emoji glyph
+const CHAT_FEATURES = [
+  { label: "Hub Tools",     icon: "logo", color: "#4FC3F7", desc: "Token price · whale tracking · security checks. Live tools, run directly in chat." },
+  { label: "Skill System",  icon: "⭐",   color: "#34D399", desc: "Install Bankr · Base MCP · custom skills. Extend Blue Chat with any skill." },
+  { label: "Multi-model",   icon: "🦈",   color: "#A78BFA", desc: "Venice · Bankr · Claude. Best model for each task." },
+  { label: "Credits + x402",icon: "💎",   color: "#FBBF24", desc: "Stake $BLUEAGENT → free tools. Or pay $0.01–$0.20/call." },
+];
+
 const HUB_CATEGORIES = [
   { label: "On-chain",     color: "#FBBF24", tools: "token price · pool scan · gas tracker" },
   { label: "Security",     color: "#F87171", tools: "honeypot · risk gate · scam detector" },
@@ -20,12 +28,26 @@ const HUB_CATEGORIES = [
   { label: "Builder",      color: "#A78BFA", tools: "repo health · founder check · roadmap validator" },
 ];
 
-const FEED_TOOLS = ["base-pulse", "narrative-pulse", "token-alpha", "whale-tracker", "base-alpha"];
+const FEED_METRICS = [
+  { label: "Base TVL",    value: "$4.2B",        delta: "↑ +0.8%",  deltaColor: "#34D399", valueColor: "#fff" },
+  { label: "Sentiment",   value: "bullish 🟢",   delta: null,       deltaColor: "",        valueColor: "#34D399" },
+  { label: "Trending",    value: "AERO +10.2%",  delta: null,       deltaColor: "",        valueColor: "#4FC3F7" },
+  { label: "Pulse Score", value: "84/100",       delta: null,       deltaColor: "",        valueColor: "#fff" },
+  { label: "New Pools",   value: "12",           delta: "last hour",deltaColor: "#64748b", valueColor: "#fff" },
+];
+
+const FEED_TOOLS = [
+  { id: "base-pulse",      desc: "ecosystem snapshot" },
+  { id: "narrative-pulse", desc: "trending narratives" },
+  { id: "token-alpha",     desc: "best signal now" },
+  { id: "whale-tracker",   desc: "smart money moving" },
+  { id: "base-alpha",      desc: "daily alpha digest" },
+];
 
 const AGENTS = [
-  { glyph: "🟦", name: "Blue Agent", color: "#4FC3F7", role: "orchestration · routing · execution" },
-  { glyph: "👁", name: "Aeon",       color: "#34D399", role: "sensing · detection · onchain reading" },
-  { glyph: "🦈", name: "MiroShark",  color: "#A78BFA", role: "simulation · forecasting · consensus" },
+  { icon: "logo", name: "Blue Agent", color: "#4FC3F7", role: "orchestration · routing · execution" },
+  { icon: "⭐",   name: "Aeon",       color: "#34D399", role: "sensing · detection · onchain reading" },
+  { icon: "🦈",   name: "MiroShark",  color: "#A78BFA", role: "simulation · forecasting · consensus" },
 ];
 
 const INTEGRATIONS = [
@@ -43,24 +65,21 @@ const PRICING = [
   { tier: "Max",     hold: "10M BLUEAGENT",   credits: "unlimited",    note: "40% discount",  highlight: true  },
 ];
 
-const COMPARISON = [
-  { feature: "Base-native",       gpt: false, claude: false, blue: true },
-  { feature: "x402 payments",     gpt: false, claude: false, blue: true },
-  { feature: "74 onchain tools",  gpt: false, claude: false, blue: true },
-  { feature: "Token launch",      gpt: false, claude: false, blue: true },
-  { feature: "MCP",               gpt: false, claude: true,  blue: true },
-  { feature: "Agent-to-agent pay",gpt: false, claude: false, blue: true },
-  { feature: "Hold to earn free", gpt: false, claude: false, blue: true },
-];
-
 const BUY_URL = "https://app.uniswap.org/swap?chain=base&outputCurrency=0xf895783b2931c919955e18b5e3343e7c7c456ba3";
 
-// ─── Scroll reveal (subtle fade-up; respects reduced-motion & no-JS) ──────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function Glyph({ icon, size = 24, className = "" }: { icon: string; size?: number; className?: string }) {
+  if (icon === "logo") {
+    return <img src="/logomark.svg" alt="BlueAgent" width={size} height={size} className={`rounded ${className}`} style={{ display: "inline-block" }} />;
+  }
+  return <span className={className} style={{ fontSize: size * 0.9, lineHeight: 1 }}>{icon}</span>;
+}
+
+// Subtle fade-up on scroll (respects reduced-motion & no-JS)
 function Reveal({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);
-
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -73,23 +92,16 @@ function Reveal({ children, className = "", delay = 0 }: { children: React.React
     io.observe(el);
     return () => io.disconnect();
   }, []);
-
   return (
-    <div
-      ref={ref}
-      className={className}
-      style={{
-        opacity: shown ? 1 : 0,
-        transform: shown ? "none" : "translateY(18px)",
-        transition: `opacity .6s cubic-bezier(.22,1,.36,1) ${delay}ms, transform .6s cubic-bezier(.22,1,.36,1) ${delay}ms`,
-      }}
-    >
+    <div ref={ref} className={className} style={{
+      opacity: shown ? 1 : 0,
+      transform: shown ? "none" : "translateY(18px)",
+      transition: `opacity .6s cubic-bezier(.22,1,.36,1) ${delay}ms, transform .6s cubic-bezier(.22,1,.36,1) ${delay}ms`,
+    }}>
       {children}
     </div>
   );
 }
-
-// ─── Section header (linear.app numbered style) ───────────────────────────────
 
 function SectionHead({ num, kicker, title, sub, accent = "#4FC3F7" }: {
   num: string; kicker: string; title: React.ReactNode; sub?: React.ReactNode; accent?: string;
@@ -108,8 +120,80 @@ function SectionHead({ num, kicker, title, sub, accent = "#4FC3F7" }: {
   );
 }
 
-const Yes = () => <span className="text-[#34D399] text-base" aria-label="yes">✓</span>;
-const No  = () => <span className="text-slate-700 text-base" aria-label="no">✗</span>;
+// ─── Chat mockup with typing animation (// 1.0) ───────────────────────────────
+
+const CHAT_SEGMENTS: { t: string; cls: string }[] = [
+  { t: "/pick", cls: "text-[#4FC3F7]" },
+  { t: "\n⭐ Aeon scanning Base momentum…", cls: "text-slate-400" },
+  { t: "\n🦈 MiroShark analyzing crowd signal…", cls: "text-slate-400" },
+  { t: "\n\n{ ", cls: "text-slate-500" },
+  { t: '"signal"', cls: "text-slate-400" },
+  { t: ": ", cls: "text-slate-500" },
+  { t: '"BUY"', cls: "text-[#34D399] font-semibold" },
+  { t: ", ", cls: "text-slate-500" },
+  { t: '"token"', cls: "text-slate-400" },
+  { t: ": ", cls: "text-slate-500" },
+  { t: '"AERO"', cls: "text-[#4FC3F7] font-semibold" },
+  { t: ", ", cls: "text-slate-500" },
+  { t: '"confidence"', cls: "text-slate-400" },
+  { t: ": 82, ", cls: "text-slate-500" },
+  { t: '"entry"', cls: "text-slate-400" },
+  { t: ": ", cls: "text-slate-500" },
+  { t: '"$0.49"', cls: "text-white" },
+  { t: ", ", cls: "text-slate-500" },
+  { t: '"thesis"', cls: "text-slate-400" },
+  { t: ': "narrative alignment + whale accumulation" }', cls: "text-slate-500" },
+  { t: "\n\n$0.20 USDC · 2.1s · Base ", cls: "text-slate-500" },
+  { t: "✓", cls: "text-[#34D399]" },
+];
+
+function ChatMockup() {
+  const chars = useMemo(() => {
+    const out: { ch: string; cls: string }[] = [];
+    for (const s of CHAT_SEGMENTS) for (const ch of Array.from(s.t)) out.push({ ch, cls: s.cls });
+    return out;
+  }, []);
+  const [n, setN] = useState(0);
+
+  useEffect(() => {
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { setN(chars.length); return; }
+    let i = 0;
+    const id = setInterval(() => {
+      i += 1;
+      setN(i);
+      if (i >= chars.length) clearInterval(id);
+    }, 20);
+    return () => clearInterval(id);
+  }, [chars.length]);
+
+  // group revealed chars into contiguous same-color spans
+  const groups: { cls: string; text: string }[] = [];
+  for (let k = 0; k < n && k < chars.length; k++) {
+    const c = chars[k];
+    const last = groups[groups.length - 1];
+    if (last && last.cls === c.cls) last.text += c.ch;
+    else groups.push({ cls: c.cls, text: c.ch });
+  }
+
+  return (
+    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden h-full flex flex-col">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-[#15151f]">
+        <img src="/logomark.svg" alt="BlueAgent" width={18} height={18} className="rounded" />
+        <span className="font-mono text-[12px] text-slate-300">Blue Agent</span>
+        <span className="ml-auto flex gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/60" />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/60" />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]/60" />
+        </span>
+      </div>
+      <pre className="flex-1 p-4 sm:p-5 whitespace-pre-wrap break-words font-mono text-[12px] sm:text-[13px] leading-relaxed m-0">
+        {groups.map((g, i) => <span key={i} className={g.cls}>{g.text}</span>)}
+        <span className="animate-blink text-[#4FC3F7]">_</span>
+      </pre>
+    </div>
+  );
+}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -127,6 +211,8 @@ export default function Home() {
 
         {/* ══════════ HERO ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 pt-32 sm:pt-40 pb-16 sm:pb-24 text-center">
+          <img src="/logomark.svg" alt="BlueAgent" width={40} height={40} className="mx-auto mb-6 rounded-xl animate-breathe" />
+
           <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-3.5 py-1.5 mb-8">
             <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
             <span className="font-mono text-[10px] text-[#4FC3F7] tracking-[0.18em]">BUILT ON BASE · x402 NATIVE</span>
@@ -140,11 +226,8 @@ export default function Home() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 mb-10">
-            <Link
-              href="/app/chat"
-              className="text-sm font-semibold px-7 py-3 rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
-              style={{ background: "linear-gradient(135deg, #4FC3F7, #29ABE2)", color: "#050508", boxShadow: "0 0 26px #4FC3F733" }}
-            >
+            <Link href="/app/chat" className="text-sm font-semibold px-7 py-3 rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
+              style={{ background: "linear-gradient(135deg, #4FC3F7, #29ABE2)", color: "#050508", boxShadow: "0 0 26px #4FC3F733" }}>
               Open Blue Chat →
             </Link>
             <Link href="/hub" className="text-sm font-semibold text-[#4FC3F7] border border-[#4FC3F7]/30 px-7 py-3 rounded-xl hover:bg-[#4FC3F7]/5 transition-all">
@@ -179,7 +262,9 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="flex gap-3">
-                    <span className="w-7 h-7 rounded-lg bg-[#4FC3F7]/15 flex items-center justify-center shrink-0 text-xs">🟦</span>
+                    <span className="w-7 h-7 rounded-lg bg-[#4FC3F7]/15 flex items-center justify-center shrink-0">
+                      <img src="/logomark.svg" alt="BlueAgent" width={16} height={16} className="rounded" />
+                    </span>
                     <div className="flex-1 space-y-2.5">
                       <div className="flex flex-wrap gap-1.5">
                         <span className="font-mono text-[10px] text-[#34D399] border border-[#34D399]/25 bg-[#34D399]/5 rounded px-2 py-0.5">↳ token-pick-signal</span>
@@ -206,20 +291,37 @@ export default function Home() {
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
             num="1.0" kicker="Chat"
-            title={<>Talk to AI.<br /><span className="text-[#4FC3F7]">Build onchain.</span></>}
-            sub="Blue Chat is your AI co-founder on Base. Multi-model. Skill-based. Built for builders."
+            title={<>Talk to AI. <span className="text-[#4FC3F7]">Build onchain.</span></>}
+            sub="Blue Chat routes your intent to the right tool. Live Hub tools, multi-model, skill-based. Built for Base."
           />
-          <Reveal>
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 sm:p-7">
-              <div className="font-mono text-[11px] text-slate-600 mb-3 tracking-widest">SLASH COMMANDS</div>
-              <div className="flex flex-wrap gap-2 mb-6">
-                {CHAT_COMMANDS.map((c) => (
-                  <span key={c} className="font-mono text-[13px] text-[#4FC3F7] border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-lg px-3 py-1.5">{c}</span>
+          <div className="grid lg:grid-cols-2 gap-4 sm:gap-5 items-stretch">
+            {/* LEFT — typing chat mockup */}
+            <Reveal>
+              <ChatMockup />
+            </Reveal>
+            {/* RIGHT — 2×2 feature cards */}
+            <Reveal delay={80}>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 h-full">
+                {CHAT_FEATURES.map((card) => (
+                  <div
+                    key={card.label}
+                    className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-4 sm:p-5 transition-colors hover:border-current"
+                    style={{ color: card.color }}
+                  >
+                    <Glyph icon={card.icon} size={22} />
+                    <div className="text-sm font-semibold mt-2.5 mb-1.5" style={{ color: card.color }}>{card.label}</div>
+                    <p className="font-mono text-[11px] text-slate-500 leading-relaxed">{card.desc}</p>
+                  </div>
                 ))}
               </div>
-              <p className="font-mono text-[12px] text-slate-500 leading-relaxed">
-                Multi-model <span className="text-slate-400">(Venice · Bankr · Claude)</span> · Install any skill · Pay with credits or <span className="text-[#34D399]">$BLUEAGENT</span>
-              </p>
+            </Reveal>
+          </div>
+          {/* Slash command chips */}
+          <Reveal className="mt-5">
+            <div className="flex flex-wrap gap-2">
+              {CHAT_COMMANDS.map((c) => (
+                <span key={c} className="font-mono text-[13px] text-[#4FC3F7] border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-lg px-3 py-1.5">{c}</span>
+              ))}
             </div>
           </Reveal>
         </section>
@@ -257,60 +359,62 @@ export default function Home() {
           </Reveal>
         </section>
 
-        {/* ══════════ 3.0 LAUNCH ══════════ */}
+        {/* ══════════ 3.0 FEED ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
-            num="3.0" kicker="Launch" accent="#34D399"
-            title={<>From idea to token <span className="text-[#34D399]">in minutes.</span></>}
-            sub="Fair launch on Base via Bankr. 100% LP. No hidden allocation. Earn fees from every trade."
-          />
-          <Reveal>
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 sm:p-7 flex flex-col gap-5">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { k: "100B", v: "fixed supply" },
-                  { k: "57%", v: "of 1.2% creator fee" },
-                  { k: "Gas", v: "sponsored" },
-                  { k: "Live", v: "Farcaster + Base App" },
-                ].map((s) => (
-                  <div key={s.v} className="rounded-xl border border-[#15151f] bg-[#0a0a10] p-4">
-                    <div className="text-xl font-bold text-[#34D399] mb-1">{s.k}</div>
-                    <div className="font-mono text-[11px] text-slate-500 leading-snug">{s.v}</div>
-                  </div>
-                ))}
-              </div>
-              <Link href="/launch" className="self-start text-sm font-semibold text-[#34D399] border border-[#34D399]/30 px-6 py-2.5 rounded-xl hover:bg-[#34D399]/5 transition-all">
-                Launch a token →
-              </Link>
-            </div>
-          </Reveal>
-        </section>
-
-        {/* ══════════ 4.0 FEED ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
-          <SectionHead
-            num="4.0" kicker="Feed" accent="#FB923C"
+            num="3.0" kicker="Feed" accent="#FB923C"
             title={
               <span className="inline-flex flex-wrap items-center gap-3">
                 Live Base intelligence. <span className="text-[#FB923C]">24/7.</span>
                 <span className="font-mono text-[10px] tracking-widest text-[#FB923C] border border-[#FB923C]/30 bg-[#FB923C]/5 rounded-full px-3 py-1 align-middle">COMING SOON</span>
               </span>
             }
-            sub="Powered by 5 AI tools running every hour."
+            sub={<><span className="text-[#FB923C]">⭐ Aeon</span> monitors Base every hour. No prompts needed — just signal.</>}
           />
+          {/* TOP — feed card mockup */}
           <Reveal>
-            <div className="flex flex-wrap gap-2">
-              {FEED_TOOLS.map((t) => (
-                <span key={t} className="font-mono text-[12px] text-slate-400 border border-[#1A1A2E] bg-[#0d0d12] rounded-lg px-3 py-1.5">{t}</span>
-              ))}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden" style={{ borderTop: "2px solid #FB923C" }}>
+              <div className="px-5 py-3 border-b border-[#15151f] font-mono text-[12px] text-slate-400">
+                ⭐ Aeon · <span className="text-[#FB923C]">base-pulse</span> · just now
+              </div>
+              <div className="p-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                {FEED_METRICS.map((m) => (
+                  <div key={m.label}>
+                    <div className="font-mono text-[10px] text-slate-600 uppercase tracking-wider mb-1">{m.label}</div>
+                    <div className="font-mono text-[13px] font-semibold" style={{ color: m.valueColor }}>
+                      {m.value}
+                      {m.delta && <span className="ml-1.5 text-[11px] font-normal" style={{ color: m.deltaColor }}>{m.delta}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="px-5 py-3 border-t border-[#15151f] flex flex-wrap items-center justify-between gap-3">
+                <span className="font-mono text-[11px] text-slate-500">$0.05 USDC · auto · Base ✓</span>
+                <div className="flex gap-2">
+                  <button disabled className="font-mono text-[11px] text-slate-500 border border-[#1A1A2E] rounded-lg px-3 py-1.5 opacity-50 cursor-not-allowed">Share ↗</button>
+                  <button disabled className="font-mono text-[11px] text-slate-500 border border-[#1A1A2E] rounded-lg px-3 py-1.5 opacity-50 cursor-not-allowed">Cast to Farcaster</button>
+                </div>
+              </div>
             </div>
           </Reveal>
+          {/* BOTTOM — tool grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-4">
+            {FEED_TOOLS.map((t, i) => (
+              <Reveal key={t.id} delay={i * 50}>
+                <div className="h-full rounded-xl border border-[#1A1A2E] bg-[#0d0d12] p-4 hover:border-[#FB923C]/30 transition-colors">
+                  <div className="font-mono text-[12px] text-[#FB923C] mb-1 break-words">{t.id}</div>
+                  <div className="font-mono text-[11px] text-slate-500 leading-snug">{t.desc}</div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+          <p className="font-mono text-[12px] text-slate-500 mt-4">Powered by ⭐ Aeon · Shareable · Cast to Farcaster</p>
         </section>
 
-        {/* ══════════ 5.0 AGENTS ══════════ */}
+        {/* ══════════ 4.0 AGENTS ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
-            num="5.0" kicker="Agents"
+            num="4.0" kicker="Agents"
             title={<>Three agents. <span className="text-[#4FC3F7]">One platform.</span></>}
             sub="Every output is a 3-agent consensus. Not one model guessing — three roles reasoning."
           />
@@ -318,7 +422,7 @@ export default function Home() {
             {AGENTS.map((a, i) => (
               <Reveal key={a.name} delay={i * 80}>
                 <div className="h-full rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-6" style={{ borderTop: `2px solid ${a.color}` }}>
-                  <div className="text-2xl mb-3">{a.glyph}</div>
+                  <div className="mb-3"><Glyph icon={a.icon} size={28} /></div>
                   <div className="text-base font-semibold mb-1" style={{ color: a.color }}>{a.name}</div>
                   <p className="font-mono text-[12px] text-slate-500 leading-relaxed">{a.role}</p>
                 </div>
@@ -327,10 +431,10 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ══════════ INTEGRATIONS ══════════ */}
+        {/* ══════════ 5.0 INTEGRATIONS ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
-            num="6.0" kicker="Integrations" accent="#60A5FA"
+            num="5.0" kicker="Integrations" accent="#60A5FA"
             title={<>Built for the <span className="text-[#60A5FA]">agent economy</span></>}
             sub="BlueAgent is x402 native from day one. Agents pay agents. No human in the loop."
           />
@@ -344,7 +448,6 @@ export default function Home() {
               </Reveal>
             ))}
           </div>
-          {/* Code snippet — real x402 call */}
           <Reveal>
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a10] overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#15151f]">
@@ -353,7 +456,7 @@ export default function Home() {
                 <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]/60" />
                 <span className="font-mono text-[11px] text-slate-600 ml-2">terminal</span>
               </div>
-              <pre className="p-4 sm:p-5 overflow-x-auto font-mono text-[12px] leading-relaxed">
+              <pre className="p-4 sm:p-5 overflow-x-auto font-mono text-[12px] leading-relaxed m-0">
 <span className="text-slate-600">$ </span><span className="text-[#4FC3F7]">curl</span><span className="text-slate-300"> https://x402.bankr.bot/0xb058.../token-price \</span>
 {"\n"}<span className="text-slate-500">    -d </span><span className="text-[#34D399]">{'\'{"token":"AERO"}\''}</span>
 {"\n"}<span className="text-slate-500">→ </span><span className="text-slate-300">{'{"price":0.49,"mcap":465000000,...}'}</span>
@@ -363,22 +466,20 @@ export default function Home() {
           </Reveal>
         </section>
 
-        {/* ══════════ PRICING ══════════ */}
+        {/* ══════════ 6.0 PRICING ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
-            num="7.0" kicker="Pricing" accent="#34D399"
+            num="6.0" kicker="Pricing" accent="#34D399"
             title={<>Hold $BLUEAGENT. <span className="text-[#34D399]">Build for free.</span></>}
             sub="Credits refresh every day. No subscription. Just hold $BLUEAGENT and build."
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
             {PRICING.map((p, i) => (
               <Reveal key={p.tier} delay={i * 60}>
-                <div
-                  className="h-full rounded-2xl border p-5 flex flex-col gap-2"
+                <div className="h-full rounded-2xl border p-5 flex flex-col gap-2"
                   style={p.highlight
                     ? { borderColor: "#34D39950", background: "linear-gradient(160deg, #34D39912, #0d0d12)" }
-                    : { borderColor: "#1A1A2E", background: "#0d0d12" }}
-                >
+                    : { borderColor: "#1A1A2E", background: "#0d0d12" }}>
                   <div className="text-sm font-semibold" style={{ color: p.highlight ? "#34D399" : "#fff" }}>{p.tier}</div>
                   <div className="font-mono text-[11px] text-slate-500">{p.hold}</div>
                   <div className="text-2xl font-bold text-white mt-1">{p.credits}</div>
@@ -396,44 +497,15 @@ export default function Home() {
                 The more <span className="text-[#34D399] font-semibold">$BLUEAGENT</span> you hold, the more you build for free.
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
-                <a
-                  href={BUY_URL} target="_blank" rel="noopener noreferrer"
+                <a href={BUY_URL} target="_blank" rel="noopener noreferrer"
                   className="text-sm font-semibold px-6 py-2.5 rounded-xl text-center transition-all hover:opacity-90 active:scale-[0.98]"
-                  style={{ background: "linear-gradient(135deg, #34D399, #10B981)", color: "#031b12" }}
-                >
+                  style={{ background: "linear-gradient(135deg, #34D399, #10B981)", color: "#031b12" }}>
                   Buy $BLUEAGENT →
                 </a>
                 <Link href="/app/rewards" className="text-sm font-semibold text-[#34D399] border border-[#34D399]/30 px-6 py-2.5 rounded-xl text-center hover:bg-[#34D399]/5 transition-all">
                   Stake now →
                 </Link>
               </div>
-            </div>
-          </Reveal>
-        </section>
-
-        {/* ══════════ COMPARISON ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
-          <SectionHead
-            num="8.0" kicker="Comparison"
-            title={<>Not another AI chat. <span className="text-[#4FC3F7]">Built different.</span></>}
-            sub="General AI: great for writing, coding, thinking. BlueAgent: built for building and trading on Base."
-          />
-          <Reveal>
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden">
-              <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-2 sm:gap-x-6 px-4 sm:px-6 py-3 border-b border-[#1A1A2E] font-mono text-[9px] sm:text-[11px] text-slate-600 tracking-wider">
-                <span>FEATURE</span>
-                <span className="w-14 sm:w-20 text-center">ChatGPT</span>
-                <span className="w-14 sm:w-20 text-center">Claude</span>
-                <span className="w-14 sm:w-20 text-center text-[#4FC3F7]">BlueAgent</span>
-              </div>
-              {COMPARISON.map((row) => (
-                <div key={row.feature} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-2 sm:gap-x-6 px-4 sm:px-6 py-3 border-b border-[#13131d] last:border-0">
-                  <span className="text-[12px] sm:text-sm text-slate-300 pr-2">{row.feature}</span>
-                  <span className="w-14 sm:w-20 text-center">{row.gpt ? <Yes /> : <No />}</span>
-                  <span className="w-14 sm:w-20 text-center">{row.claude ? <Yes /> : <No />}</span>
-                  <span className="w-14 sm:w-20 text-center bg-[#4FC3F7]/[0.04]">{row.blue ? <Yes /> : <No />}</span>
-                </div>
-              ))}
             </div>
           </Reveal>
         </section>
@@ -469,8 +541,8 @@ export default function Home() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div>
               <div className="flex items-center gap-2.5 mb-2">
-                <img src="/logomark.svg" alt="Blue Agent" className="h-5 w-5 rounded-md" />
-                <span className="font-mono text-xs font-bold text-white tracking-widest">BLUE<span className="text-[#4FC3F7]">AGENT</span></span>
+                <img src="/logomark.svg" alt="BlueAgent" width={20} height={20} className="rounded-md" />
+                <span className="font-semibold text-white">BlueAgent</span>
                 <span className="text-xs text-slate-500">· The Builder OS for Base</span>
               </div>
               <p className="font-mono text-[11px] text-slate-600">Powered by Bankr · Venice AI · x402 native · Base</p>
