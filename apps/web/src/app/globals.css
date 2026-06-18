@@ -139,3 +139,28 @@ code, pre, .font-mono {
 .animate-blink {
   animation: blink 1s step-end infinite;
 }
+
+/* Unified content card — one consistent surface + hover across the site.
+   Hover: lift + blue border + soft glow (fast, ease-out, no bounce).
+   Pair with a Tailwind rounded-* and p-* class. No colored accent borders. */
+.ba-card {
+  border: 1px solid var(--border);
+  background-color: #0D0D12;
+  transition: border-color .18s ease-out, background-color .18s ease-out,
+              transform .18s ease-out, box-shadow .18s ease-out;
+}
+.ba-card:hover {
+  border-color: rgba(79, 195, 247, 0.35);
+  background-color: #101019;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 28px rgba(79, 195, 247, 0.10);
+}
+/* Emphasis variant (e.g. featured pricing tier) — green tint, same motion. */
+.ba-card--hot {
+  border-color: rgba(52, 211, 153, 0.40);
+  background-image: linear-gradient(160deg, rgba(52, 211, 153, 0.08), transparent 62%);
+}
+.ba-card--hot:hover {
+  border-color: rgba(52, 211, 153, 0.60);
+  box-shadow: 0 8px 28px rgba(52, 211, 153, 0.12);
+}
