@@ -201,23 +201,24 @@ function deriveContext(items: FeedItem[]): CycleContext {
   };
 }
 
+const STABLES = new Set(["WETH", "ETH", "USDC", "USDBC", "USDT", "DAI", "USD+", "USDS", "GHO", "WBTC", "CBETH", "CBBTC", "WSTETH"]);
 function validTicker(x: unknown): string | null {
   if (typeof x !== "string") return null;
-  const t = x.trim().replace(/^\$/, "");
-  return /^[A-Za-z0-9]{2,12}$/.test(t) ? t.toUpperCase() : null;
+  const t = x.trim().replace(/^\$/, "").toUpperCase();
+  return /^[A-Z0-9]{2,12}$/.test(t) ? t : null;
 }
 
-/** Derive a token ticker for token-alpha from this cycle's base-alpha/base-pulse. */
+/** Derive a rotating token for token-alpha — the cycle's top mover by volume.
+ *  Prefer base-pulse top_tokens (volume-sorted), skip WETH/stablecoins; then
+ *  base-alpha momentum picks; finally AERO. */
 function topTokenFrom(items: FeedItem[]): string {
+  const bp = rawOf(items.find((i) => i.tool === "base-pulse"));
+  for (const t of Array.isArray(bp?.top_tokens) ? bp.top_tokens : []) {
+    const tk = validTicker(t?.symbol); if (tk && !STABLES.has(tk)) return tk;
+  }
   const ba = rawOf(items.find((i) => i.tool === "base-alpha"));
   for (const p of Array.isArray(ba?.momentum_picks) ? ba.momentum_picks : []) {
-    const t = validTicker(p?.symbol); if (t) return t;
-  }
-  const bp = rawOf(items.find((i) => i.tool === "base-pulse"));
-  for (const list of [bp?.trending, bp?.top_tokens]) {
-    for (const x of Array.isArray(list) ? list : []) {
-      const t = validTicker(x?.symbol ?? x); if (t) return t;
-    }
+    const tk = validTicker(p?.symbol); if (tk && !STABLES.has(tk)) return tk;
   }
   return "AERO";
 }
