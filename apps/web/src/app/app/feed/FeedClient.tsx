@@ -816,7 +816,7 @@ export default function FeedClient() {
             <span className="font-mono text-[12px] tracking-widest text-[#4FC3F7] font-bold">BLUE FEED</span>
           </div>
           <div className="font-mono text-[9px] text-[#34D399] mt-1.5 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] live-dot" /> Live · updates hourly
+            <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] live-dot" /> 3 agents · LIVE
           </div>
         </div>
 
@@ -862,15 +862,9 @@ export default function FeedClient() {
 
         <div className="flex-1" />
 
-        {/* Footer — updated / refresh / (dev) run */}
+        {/* Footer — updated / (dev) run */}
         <div className="px-4 py-3 border-t border-[#1A1A2E]">
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-[9px] text-slate-600">{updatedAgo ? `updated ${updatedAgo}` : "—"}</span>
-            <button onClick={() => load()} disabled={loading}
-              className="font-mono text-[11px] px-2 py-1 rounded-md border border-[#1A1A2E] text-slate-400 hover:text-white hover:border-[#4FC3F7]/40 transition-colors disabled:opacity-40">
-              {loading ? "…" : "↻"}
-            </button>
-          </div>
+          <div className="font-mono text-[9px] text-slate-600">{updatedAgo ? `updated ${updatedAgo}` : "—"}</div>
           {isDev && (
             <button onClick={runNow} disabled={running}
               className="w-full mt-2 font-mono text-[11px] py-1.5 rounded-lg border border-[#FB923C]/40 text-[#FB923C] hover:bg-[#FB923C]/10 transition-colors disabled:opacity-50">
@@ -882,8 +876,22 @@ export default function FeedClient() {
       </aside>
 
       {/* ── Content ───────────────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-        {/* Mobile control strip (sidebar is desktop-only, like BlueBank) */}
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        {/* Standard /app page header (matches Launches / Hub) */}
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-[#1A1A2E] shrink-0">
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold text-white leading-tight">Blue Feed</h1>
+            <p className="font-mono text-[11px] text-slate-500 truncate mt-0.5">Live Base intelligence · updates hourly</p>
+          </div>
+          <button onClick={() => load()} disabled={loading}
+            className="font-mono text-[12px] font-bold px-4 py-2 rounded-lg transition-all shrink-0 hover:opacity-90 disabled:opacity-50"
+            style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
+            {loading ? "Refreshing…" : "Refresh ↻"}
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
+        {/* Mobile filters (sidebar is desktop-only, like BlueBank) */}
         <div className="md:hidden flex items-center gap-1.5 mb-4 overflow-x-auto">
           {FILTERS.map((f) => (
             <button key={f.id} onClick={() => setFilter(f.id)}
@@ -894,10 +902,6 @@ export default function FeedClient() {
               {f.emoji} {f.label}
             </button>
           ))}
-          <button onClick={() => load()} disabled={loading}
-            className="ml-auto font-mono text-[11px] px-2.5 py-1 rounded-full border border-[#1A1A2E] text-slate-400 shrink-0 disabled:opacity-40">
-            {loading ? "…" : "↻"}
-          </button>
         </div>
 
         {loading && items.length === 0 && (
@@ -935,6 +939,7 @@ export default function FeedClient() {
             ))}
           </div>
         )}
+        </div>
       </main>
     </div>
   );
