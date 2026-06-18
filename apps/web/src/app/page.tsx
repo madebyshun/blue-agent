@@ -4,7 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 
-const SANS = "'DM Sans', system-ui, sans-serif";
+// Marketing surface → mono-forward. JetBrains Mono is the PRIMARY brand voice
+// here (display headlines + reading body). DM Sans (.font-ui) is reserved for the
+// product app's UI chrome — chat bubbles, dense tables — not this hero page.
+const MONO = "'JetBrains Mono', monospace";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -199,7 +202,7 @@ function ChatMockup() {
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-[#050508] text-white" style={{ fontFamily: SANS }}>
+    <div className="min-h-screen bg-[#050508] text-white" style={{ fontFamily: MONO }}>
       <Navbar />
 
       {/* Ambient glow */}

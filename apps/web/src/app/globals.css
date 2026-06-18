@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -10,6 +10,13 @@
   --purple: #A78BFA;
   --surface: #0D0D14;
   --border: #1A1A2E;
+
+  /* Typography — mono-forward. JetBrains Mono is the PRIMARY voice (display +
+     marketing/terminal body); DM Sans is secondary, for product UI chrome only. */
+  --font-display: 'JetBrains Mono', monospace;
+  --font-body:    'JetBrains Mono', monospace;
+  --font-sans:    'DM Sans', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
 }
 
 * {
@@ -27,12 +34,19 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Headlines are mono per brand (weight 700, tight tracking). */
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
 }
 
 code, pre, .font-mono {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
+}
+
+/* Opt-in DM Sans for product UI chrome (buttons, labels, chat bubbles, tables). */
+.font-ui {
+  font-family: var(--font-sans);
 }
 
 /* Scrollbar */
