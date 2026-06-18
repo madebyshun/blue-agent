@@ -308,8 +308,7 @@ export default function Home() {
                 {CHAT_FEATURES.map((card) => (
                   <div
                     key={card.label}
-                    className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-4 sm:p-5 transition-colors hover:border-current"
-                    style={{ color: card.color }}
+                    className="ba-card rounded-2xl p-4 sm:p-5"
                   >
                     <Glyph icon={card.icon} size={22} />
                     <div className="text-sm font-semibold mt-2.5 mb-1.5" style={{ color: card.color }}>{card.label}</div>
@@ -339,7 +338,7 @@ export default function Home() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
             {HUB_CATEGORIES.map((cat, i) => (
               <Reveal key={cat.label} delay={i * 60}>
-                <div className="h-full rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 hover:border-[#A78BFA]/30 transition-colors">
+                <div className="ba-card h-full rounded-2xl p-5">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="w-1.5 h-1.5 rounded-full" style={{ background: cat.color, boxShadow: `0 0 6px ${cat.color}` }} />
                     <span className="text-sm font-semibold" style={{ color: cat.color }}>{cat.label}</span>
@@ -349,7 +348,7 @@ export default function Home() {
               </Reveal>
             ))}
             <Reveal delay={300}>
-              <Link href="/hub" className="h-full flex flex-col justify-center items-start rounded-2xl border border-dashed border-[#A78BFA]/30 bg-[#A78BFA]/[0.03] p-5 hover:bg-[#A78BFA]/[0.06] transition-colors">
+              <Link href="/hub" className="ba-card h-full flex flex-col justify-center items-start rounded-2xl p-5">
                 <span className="text-sm font-semibold text-[#A78BFA] mb-1">Browse all 74 →</span>
                 <span className="font-mono text-[11px] text-slate-600">9 categories · live data</span>
               </Link>
@@ -376,7 +375,7 @@ export default function Home() {
           />
           {/* TOP — feed card mockup */}
           <Reveal>
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden" style={{ borderTop: "2px solid #FB923C" }}>
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden">
               <div className="px-5 py-3 border-b border-[#15151f] font-mono text-[12px] text-slate-400">
                 ⭐ Aeon · <span className="text-[#FB923C]">base-pulse</span> · just now
               </div>
@@ -404,7 +403,7 @@ export default function Home() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-4">
             {FEED_TOOLS.map((t, i) => (
               <Reveal key={t.id} delay={i * 50}>
-                <div className="h-full rounded-xl border border-[#1A1A2E] bg-[#0d0d12] p-4 hover:border-[#FB923C]/30 transition-colors">
+                <div className="ba-card h-full rounded-xl p-4">
                   <div className="font-mono text-[12px] text-[#FB923C] mb-1 break-words">{t.id}</div>
                   <div className="font-mono text-[11px] text-slate-500 leading-snug">{t.desc}</div>
                 </div>
@@ -424,7 +423,7 @@ export default function Home() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             {AGENTS.map((a, i) => (
               <Reveal key={a.name} delay={i * 80}>
-                <div className="h-full rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-6" style={{ borderTop: `2px solid ${a.color}` }}>
+                <div className="ba-card h-full rounded-2xl p-6">
                   <div className="mb-3"><Glyph icon={a.icon} size={28} /></div>
                   <div className="text-base font-semibold mb-1" style={{ color: a.color }}>{a.name}</div>
                   <p className="font-mono text-[12px] text-slate-500 leading-relaxed">{a.role}</p>
@@ -444,7 +443,7 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
             {INTEGRATIONS.map((it, i) => (
               <Reveal key={it.name} delay={i * 55}>
-                <div className="h-full rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5">
+                <div className="ba-card h-full rounded-2xl p-5">
                   <div className="text-sm font-semibold mb-2" style={{ color: it.color }}>{it.name}</div>
                   <p className="font-mono text-[11px] text-slate-500 leading-relaxed">{it.desc}</p>
                 </div>
@@ -479,10 +478,7 @@ export default function Home() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
             {PRICING.map((p, i) => (
               <Reveal key={p.tier} delay={i * 60}>
-                <div className="h-full rounded-2xl border p-5 flex flex-col gap-2"
-                  style={p.highlight
-                    ? { borderColor: "#34D39950", background: "linear-gradient(160deg, #34D39912, #0d0d12)" }
-                    : { borderColor: "#1A1A2E", background: "#0d0d12" }}>
+                <div className={`ba-card h-full rounded-2xl p-5 flex flex-col gap-2 ${p.highlight ? "ba-card--hot" : ""}`}>
                   <div className="text-sm font-semibold" style={{ color: p.highlight ? "#34D399" : "#fff" }}>{p.tier}</div>
                   <div className="font-mono text-[11px] text-slate-500">{p.hold}</div>
                   <div className="text-2xl font-bold text-white mt-1">{p.credits}</div>
