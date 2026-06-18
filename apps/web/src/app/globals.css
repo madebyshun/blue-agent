@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -10,6 +10,13 @@
   --purple: #A78BFA;
   --surface: #0D0D14;
   --border: #1A1A2E;
+
+  /* Typography — mono-forward. JetBrains Mono is the PRIMARY voice (display +
+     marketing/terminal body); DM Sans is secondary, for product UI chrome only. */
+  --font-display: 'JetBrains Mono', monospace;
+  --font-body:    'JetBrains Mono', monospace;
+  --font-sans:    'DM Sans', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
 }
 
 * {
@@ -23,8 +30,23 @@ html {
 body {
   background-color: var(--bg);
   color: #E2E8F0;
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'DM Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Headlines are mono per brand (weight 700, tight tracking). */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+code, pre, .font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Opt-in DM Sans for product UI chrome (buttons, labels, chat bubbles, tables). */
+.font-ui {
+  font-family: var(--font-sans);
 }
 
 /* Scrollbar */
@@ -99,4 +121,46 @@ body {
 }
 .animate-fadeIn {
   animation: fadeIn 0.18s ease-out forwards;
+}
+
+/* Logo glow pulse */
+@keyframes breathe {
+  0%, 100% { opacity: 0.7; filter: drop-shadow(0 0 4px #4FC3F7); }
+  50%      { opacity: 1;   filter: drop-shadow(0 0 10px #4FC3F7); }
+}
+.animate-breathe {
+  animation: breathe 3s ease-in-out infinite;
+}
+
+/* Typing cursor blink */
+@keyframes blink {
+  50% { opacity: 0; }
+}
+.animate-blink {
+  animation: blink 1s step-end infinite;
+}
+
+/* Unified content card — one consistent surface + hover across the site.
+   Hover: lift + blue border + soft glow (fast, ease-out, no bounce).
+   Pair with a Tailwind rounded-* and p-* class. No colored accent borders. */
+.ba-card {
+  border: 1px solid var(--border);
+  background-color: #0D0D12;
+  transition: border-color .18s ease-out, background-color .18s ease-out,
+              transform .18s ease-out, box-shadow .18s ease-out;
+}
+.ba-card:hover {
+  border-color: rgba(79, 195, 247, 0.35);
+  background-color: #101019;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 28px rgba(79, 195, 247, 0.10);
+}
+/* Emphasis variant (e.g. featured pricing tier) — green tint, same motion. */
+.ba-card--hot {
+  border-color: rgba(52, 211, 153, 0.40);
+  background-image: linear-gradient(160deg, rgba(52, 211, 153, 0.08), transparent 62%);
+}
+.ba-card--hot:hover {
+  border-color: rgba(52, 211, 153, 0.60);
+  box-shadow: 0 8px 28px rgba(52, 211, 153, 0.12);
 }
