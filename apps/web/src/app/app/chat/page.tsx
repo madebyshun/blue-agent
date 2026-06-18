@@ -10,7 +10,6 @@ import AppSidebar    from "@/app/chat/components/AppSidebar";
 import ModelsPanel   from "@/app/chat/components/ModelsPanel";
 import ToolsTab      from "@/app/chat/components/ToolsTab";
 import SkillsPanel   from "@/app/chat/components/SkillsPanel";
-import CronPanel     from "@/app/chat/components/CronPanel";
 import SettingsModal from "@/app/chat/components/SettingsModal";
 import ChatMessages  from "@/app/chat/components/ChatMessages";
 import ChatInput     from "@/app/chat/components/ChatInput";
@@ -24,7 +23,6 @@ const TAB_META: Record<Exclude<ActiveTab, "chat" | "settings">, { title: string;
   models:   { title: "Models",   subtitle: "AI engines behind Blue Chat · pick by use-case" },
   tools:    { title: "Tools",    subtitle: "50 hub tools · click to run in chat" },
   skills:   { title: "Skills",   subtitle: "Agent capabilities · Blue Agent · Bankr · Base MCP" },
-  cron:     { title: "Scheduled", subtitle: "Scheduled agent tasks" },
 };
 
 // ── Shell ──────────────────────────────────────────────────────────────────────
@@ -49,7 +47,6 @@ function ChatShell() {
     // drawer). Models/Tools/Skills moved into Settings (mobile); the redundant
     // "Chat" row is dropped since you're already in the chat tab.
     const items: DrawerNavItem[] = [
-      { id: "cron",     label: "Scheduled", icon: "⏱",  active: activeTab === "cron", onSelect: () => setActiveTab("cron") },
       { id: "settings", label: "Settings",  icon: "⚙️", onSelect: () => setSettingsOpen(true) },
     ];
     const recents: DrawerRecent[] = [...tasks]
@@ -151,12 +148,6 @@ function ChatShell() {
               </div>
             )}
 
-            {/* ⏱ Cron */}
-            {activeTab === "cron" && (
-              <div className="flex-1 h-full overflow-hidden">
-                <CronPanel />
-              </div>
-            )}
           </div>
         </div>
       </div>

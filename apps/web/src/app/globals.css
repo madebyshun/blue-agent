@@ -140,6 +140,29 @@ code, pre, .font-mono {
   animation: blink 1s step-end infinite;
 }
 
+/* Blue Feed — card entrance (fade + slide up), staggered via inline delay */
+@keyframes feedIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+.feed-in { animation: feedIn .5s cubic-bezier(.22,1,.36,1) both; }
+
+/* Blue Feed — live status dot (green ring pulse) */
+@keyframes liveDot {
+  0%   { box-shadow: 0 0 0 0 rgba(52,211,153,.55); }
+  70%  { box-shadow: 0 0 0 7px rgba(52,211,153,0); }
+  100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); }
+}
+.live-dot { animation: liveDot 1.8s ease-out infinite; }
+
+/* Blue Feed — subtle flash when fresh data arrives */
+@keyframes feedFlash {
+  0%   { box-shadow: 0 0 0 1px rgba(79,195,247,0); }
+  30%  { box-shadow: 0 0 0 1px rgba(79,195,247,.5), 0 0 22px rgba(79,195,247,.18); }
+  100% { box-shadow: 0 0 0 1px rgba(79,195,247,0); }
+}
+.feed-flash { animation: feedFlash 1.2s ease-out; }
+
 /* Unified content card — one consistent surface + hover across the site.
    Hover: lift + blue border + soft glow (fast, ease-out, no bounce).
    Pair with a Tailwind rounded-* and p-* class. No colored accent borders. */
