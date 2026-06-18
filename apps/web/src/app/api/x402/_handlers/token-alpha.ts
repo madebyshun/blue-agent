@@ -54,6 +54,7 @@ Return JSON with this exact shape:
   "whale_confirmation": boolean,
   "narrative_fit": "string",
   "momentum_score": number,
+  "horizon": "string e.g. '2h - 6h'",
   "risk_flags": ["string"],
   "thesis": "string"
 }`;
@@ -139,6 +140,11 @@ export default async function handler(req: Request): Promise<Response> {
       symbol,
       // Ground entry_price to the real current price regardless of LLM output.
       entry_price: price,
+      // Real market context (code-computed) — exposed so the feed SIGNALS strip
+      // reads measured liquidity/volume/momentum, never LLM-estimated numbers.
+      liquidity_usd: liq,
+      volume_24h: vol24,
+      change_24h: ch24,
       ...result,
       dataSource: "DexScreener (price/liquidity) + Moralis (transfers)",
       disclaimer: "Model-generated signal grounded in live data — not financial advice.",
