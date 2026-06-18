@@ -3,6 +3,8 @@ import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useChat } from "../ChatContext";
 import { ToolResultCard } from "./ToolCards";
+import ArtifactCard from "./ArtifactCard";
+import { isArtifactCardLang } from "../artifacts";
 
 // ── Animated dot ──────────────────────────────────────────────────────────────
 
@@ -250,20 +252,26 @@ export function MarkdownRenderer({ content }: { content: string }) {
       i++;
       while (i < lines.length && !lines[i].startsWith("```")) { code.push(lines[i]); i++; }
       const codeStr = code.join("\n");
-      elems.push(
-        <div key={`code-${i}`} className="my-4 rounded-xl overflow-hidden border border-[#1E1E32] group/code">
-          <div className="flex items-center justify-between px-4 py-1.5 bg-[#0B0B16] border-b border-[#1E1E32]">
-            <span className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">{lang || "code"}</span>
-            <button onClick={() => navigator.clipboard?.writeText(codeStr)}
-              className="font-mono text-[10px] text-slate-700 hover:text-[#4FC3F7] transition-colors opacity-0 group-hover/code:opacity-100">
-              copy
-            </button>
+      // Substantial code in a supported language → render as an artifact card
+      // (filename, preview, Preview/Download/Open). Otherwise a plain block.
+      if (isArtifactCardLang(lang) && code.length > 20) {
+        elems.push(<ArtifactCard key={`art-${i}`} lang={lang} code={codeStr} />);
+      } else {
+        elems.push(
+          <div key={`code-${i}`} className="my-4 rounded-xl overflow-hidden border border-[#1E1E32] group/code">
+            <div className="flex items-center justify-between px-4 py-1.5 bg-[#0B0B16] border-b border-[#1E1E32]">
+              <span className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">{lang || "code"}</span>
+              <button onClick={() => navigator.clipboard?.writeText(codeStr)}
+                className="font-mono text-[10px] text-slate-700 hover:text-[#4FC3F7] transition-colors opacity-0 group-hover/code:opacity-100">
+                copy
+              </button>
+            </div>
+            <pre className="px-4 py-4 overflow-x-auto bg-[#050510]">
+              <code className="font-mono text-[13px] text-slate-200 leading-relaxed">{codeStr}</code>
+            </pre>
           </div>
-          <pre className="px-4 py-4 overflow-x-auto bg-[#050510]">
-            <code className="font-mono text-[13px] text-slate-200 leading-relaxed">{codeStr}</code>
-          </pre>
-        </div>
-      );
+        );
+      }
       i++; continue;
     }
 
