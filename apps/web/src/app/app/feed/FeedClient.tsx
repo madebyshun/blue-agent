@@ -808,16 +808,11 @@ export default function FeedClient() {
   return (
     <div className="flex h-full w-full bg-[#050508] text-slate-200">
 
-      {/* ── Market / status sidebar (info, not page-nav) — mirrors BlueBank ── */}
-      <aside className="hidden md:flex flex-col w-72 shrink-0 border-r border-[#1A1A2E] bg-[#070710] overflow-y-auto">
-        <div className="px-4 py-4 border-b border-[#1A1A2E]">
-          <div className="flex items-center gap-2">
-            <img src="/logomark.svg" alt="" className="h-5 w-5 rounded-md" />
-            <span className="font-mono text-[12px] tracking-widest text-[#4FC3F7] font-bold">BLUE FEED</span>
-          </div>
-          <div className="font-mono text-[9px] text-[#34D399] mt-1.5 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] live-dot" /> 3 agents · LIVE
-          </div>
+      {/* ── Secondary sidebar — shared /app format (matches Chat / Hub) ────── */}
+      <aside className="hidden lg:flex flex-col w-72 shrink-0 h-full border-r border-[#1A1A2E] bg-[#050508] overflow-y-auto">
+        <div className="px-5 h-14 flex items-center border-b border-[#1A1A2E] shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0 mr-2" />
+          <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUE FEED</p>
         </div>
 
         {/* MARKET widget — Base TVL + sparkline (mirrors BlueBank's EARNING card) */}
@@ -877,11 +872,11 @@ export default function FeedClient() {
 
       {/* ── Content ───────────────────────────────────────────────────────── */}
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        {/* Standard /app page header (matches Launches / Hub) */}
-        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-[#1A1A2E] shrink-0">
+        {/* Standard /app page header — // TITLE format (matches Chat / Hub) */}
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 h-14 border-b border-[#1A1A2E] shrink-0">
           <div className="min-w-0">
-            <h1 className="text-lg sm:text-xl font-bold text-white leading-tight">Blue Feed</h1>
-            <p className="font-mono text-[11px] text-slate-500 truncate mt-0.5">Live Base intelligence · updates hourly</p>
+            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// LIVE INTELLIGENCE</p>
+            <p className="font-mono text-[10px] text-slate-700 mt-1 truncate">Base ecosystem · updates hourly</p>
           </div>
           <button onClick={() => load()} disabled={loading}
             className="font-mono text-[12px] font-bold px-4 py-2 rounded-lg transition-all shrink-0 hover:opacity-90 disabled:opacity-50"
@@ -891,8 +886,8 @@ export default function FeedClient() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
-        {/* Mobile filters (sidebar is desktop-only, like BlueBank) */}
-        <div className="md:hidden flex items-center gap-1.5 mb-4 overflow-x-auto">
+        {/* Mobile filters (sidebar is lg-only, matching Chat / Hub) */}
+        <div className="lg:hidden flex items-center gap-1.5 mb-4 overflow-x-auto">
           {FILTERS.map((f) => (
             <button key={f.id} onClick={() => setFilter(f.id)}
               className="font-mono text-[11px] px-2.5 py-1 rounded-full border transition-colors shrink-0"
