@@ -1,56 +1,199 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 
+// Marketing surface → mono-forward. JetBrains Mono is the PRIMARY brand voice
+// here (display headlines + reading body). DM Sans (.font-ui) is reserved for the
+// product app's UI chrome — chat bubbles, dense tables — not this hero page.
+const MONO = "'JetBrains Mono', monospace";
+
 // ─── Data ────────────────────────────────────────────────────────────────────
 
-const COMMANDS_DATA = [
-  { tag: "idea",  cmd: "blue idea",  price: "$0.05", desc: "Turn rough concept → fundable brief", detail: "Problem · Why Now · Why Base · MVP · Risks · 24h Plan" },
-  { tag: "build", cmd: "blue build", price: "$0.50", desc: "Architecture, stack, folder structure, integrations, test plan", detail: "No hallucinated addresses. Verified Base patterns only." },
-  { tag: "audit", cmd: "blue audit", price: "$1.00", desc: "500+ security checks · 13 categories · Base-native", detail: "Reentrancy · Oracle · MEV · x402 · Coinbase Smart Wallet" },
-  { tag: "ship",  cmd: "blue ship",  price: "$0.10", desc: "Deployment checklist · Verification · Release notes · Monitoring", detail: "Everything you forget when excited to launch." },
-  { tag: "raise", cmd: "blue raise", price: "$0.20", desc: "Fundraising narrative · Investor deck · Competitive landscape", detail: "Smart money map for Base ecosystem." },
+const SOCIAL_PROOF = ["74 AI tools", "x402 native", "MCP", "Bankr Skills", "Base App"];
+
+const CHAT_COMMANDS = ["/idea", "/build", "/audit", "/ship", "/raise", "/pick", "/scan"];
+
+// icon: "logo" → BlueAgent logomark, otherwise an emoji glyph
+const CHAT_FEATURES = [
+  { label: "Hub Tools",     icon: "logo", color: "#4FC3F7", desc: "Token price · whale tracking · security checks. Live tools, run directly in chat." },
+  { label: "Skill System",  icon: "⭐",   color: "#34D399", desc: "Install Bankr · Base MCP · custom skills. Extend Blue Chat with any skill." },
+  { label: "Multi-model",   icon: "🦈",   color: "#A78BFA", desc: "Venice · Bankr · Claude. Best model for each task." },
+  { label: "Credits + x402",icon: "💎",   color: "#FBBF24", desc: "Stake $BLUEAGENT → free tools. Or pay $0.01–$0.20/call." },
 ];
 
 const HUB_CATEGORIES = [
-  { label: "Intelligence",   color: "#4FC3F7", count: 6  },
-  { label: "Builder",        color: "#A78BFA", count: 13 },
-  { label: "Trading",        color: "#34D399", count: 3  },
-  { label: "Content",        color: "#FB923C", count: 3  },
-  { label: "Agent Economy",  color: "#F472B6", count: 3  },
-  { label: "Base Ecosystem", color: "#60A5FA", count: 3  },
-  { label: "On-chain",       color: "#FBBF24", count: 3  },
+  { label: "On-chain",     color: "#FBBF24", tools: "token price · pool scan · gas tracker" },
+  { label: "Security",     color: "#F87171", tools: "honeypot · risk gate · scam detector" },
+  { label: "Intelligence", color: "#4FC3F7", tools: "token alpha · narrative pulse · base alpha" },
+  { label: "DeFi",         color: "#34D399", tools: "cross-protocol yield · liquidity depth" },
+  { label: "Builder",      color: "#A78BFA", tools: "repo health · founder check · roadmap validator" },
 ];
 
-const SKILLS_GROUPS = [
-  { group: "Core",            color: "#4FC3F7", count: 7  },
-  { group: "Security",        color: "#f87171", count: 7  },
-  { group: "DeFi",            color: "#34d399", count: 7  },
-  { group: "Accounts",        color: "#a78bfa", count: 4  },
-  { group: "Payments",        color: "#fbbf24", count: 2  },
-  { group: "Distribution",    color: "#fb923c", count: 3  },
-  { group: "Infrastructure",  color: "#94a3b8", count: 4  },
+const FEED_METRICS = [
+  { label: "Base TVL",    value: "$4.2B",        delta: "↑ +0.8%",  deltaColor: "#34D399", valueColor: "#fff" },
+  { label: "Sentiment",   value: "bullish 🟢",   delta: null,       deltaColor: "",        valueColor: "#34D399" },
+  { label: "Trending",    value: "AERO +10.2%",  delta: null,       deltaColor: "",        valueColor: "#4FC3F7" },
+  { label: "Pulse Score", value: "84/100",       delta: null,       deltaColor: "",        valueColor: "#fff" },
+  { label: "New Pools",   value: "12",           delta: "last hour",deltaColor: "#64748b", valueColor: "#fff" },
 ];
 
-const ECOSYSTEM_PKGS = [
-  { pkg: "@blueagent/cli",        badge: "TUI",      color: "#4FC3F7", desc: "Terminal UI — interactive menu, 31+ tools" },
-  { pkg: "@blueagent/core",       badge: "Runtime",  color: "#A78BFA", desc: "Grounded LLM · skill registry · schemas" },
-  { pkg: "@blueagent/skill",      badge: "MCP",      color: "#34D399", desc: "MCP server for Claude Code · Cursor · Claude Desktop" },
-  { pkg: "@blueagent/sdk",        badge: "SDK",      color: "#60A5FA", desc: "Unified programmatic API" },
-  { pkg: "@blueagent/agentkit",   badge: "AgentKit", color: "#F472B6", desc: "Coinbase AgentKit plugin — 32 x402 tools" },
-  { pkg: "@blueagent/x402-guard", badge: "Security", color: "#FBBF24", desc: "x402 payment validation middleware" },
+const FEED_TOOLS = [
+  { id: "base-pulse",      desc: "ecosystem snapshot" },
+  { id: "narrative-pulse", desc: "trending narratives" },
+  { id: "token-alpha",     desc: "best signal now" },
+  { id: "whale-tracker",   desc: "smart money moving" },
+  { id: "base-alpha",      desc: "daily alpha digest" },
 ];
 
-// ─── Section label ─────────────────────────────────────────────────────────
+const AGENTS = [
+  { icon: "logo", name: "Blue Agent", color: "#4FC3F7", role: "orchestration · routing · execution" },
+  { icon: "⭐",   name: "Aeon",       color: "#34D399", role: "sensing · detection · onchain reading" },
+  { icon: "🦈",   name: "MiroShark",  color: "#A78BFA", role: "simulation · forecasting · consensus" },
+];
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+const INTEGRATIONS = [
+  { name: "x402 HTTP",    color: "#4FC3F7", desc: "Pay per call · USDC on Base · any agent" },
+  { name: "MCP",          color: "#A78BFA", desc: "Claude Code · Cursor · Claude Desktop" },
+  { name: "Bankr Skills", color: "#FBBF24", desc: "install blueagent skill" },
+  { name: "Base App",     color: "#60A5FA", desc: "Farcaster mini app · auto-verified" },
+  { name: "$BLUEAGENT",   color: "#34D399", desc: "Hold to pay less · stake for credits" },
+];
+
+const PRICING = [
+  { tier: "Guest",   hold: "no wallet",       credits: "100 cr/day",   note: null,            highlight: false },
+  { tier: "Starter", hold: "500K BLUEAGENT",  credits: "500 cr/day",   note: null,            highlight: false },
+  { tier: "Pro",     hold: "2M BLUEAGENT",    credits: "2,000 cr/day", note: "20% discount",  highlight: false },
+  { tier: "Max",     hold: "10M BLUEAGENT",   credits: "unlimited",    note: "40% discount",  highlight: true  },
+];
+
+const BUY_URL = "https://app.uniswap.org/swap?chain=base&outputCurrency=0xf895783b2931c919955e18b5e3343e7c7c456ba3";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function Glyph({ icon, size = 24, className = "" }: { icon: string; size?: number; className?: string }) {
+  if (icon === "logo") {
+    return <img src="/logomark.svg" alt="BlueAgent" width={size} height={size} className={`rounded ${className}`} style={{ display: "inline-block" }} />;
+  }
+  return <span className={className} style={{ fontSize: size * 0.9, lineHeight: 1 }}>{icon}</span>;
+}
+
+// Subtle fade-up on scroll (respects reduced-motion & no-JS)
+function Reveal({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduce || typeof IntersectionObserver === "undefined") { setShown(true); return; }
+    const io = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setShown(true); io.disconnect(); } },
+      { threshold: 0.1, rootMargin: "0px 0px -40px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
   return (
-    <div className="inline-flex items-center gap-2 mb-6">
-      <div className="h-px w-8 bg-[#4FC3F740]" />
-      <span className="font-mono text-[11px] text-[#4FC3F7] tracking-[0.2em] uppercase">{children}</span>
-      <div className="h-px w-8 bg-[#4FC3F740]" />
+    <div ref={ref} className={className} style={{
+      opacity: shown ? 1 : 0,
+      transform: shown ? "none" : "translateY(18px)",
+      transition: `opacity .6s cubic-bezier(.22,1,.36,1) ${delay}ms, transform .6s cubic-bezier(.22,1,.36,1) ${delay}ms`,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function SectionHead({ num, kicker, title, sub, accent = "#4FC3F7" }: {
+  num: string; kicker: string; title: React.ReactNode; sub?: React.ReactNode; accent?: string;
+}) {
+  return (
+    <Reveal className="mb-10 sm:mb-14">
+      <div className="font-mono text-[11px] tracking-[0.22em] mb-4">
+        <span style={{ color: accent }}>// {num}</span>
+        <span className="text-slate-600 ml-2 uppercase">{kicker}</span>
+      </div>
+      <h2 className="text-3xl sm:text-4xl lg:text-[2.85rem] font-bold tracking-tight leading-[1.06] mb-4 max-w-2xl text-white">
+        {title}
+      </h2>
+      {sub && <p className="text-slate-400 text-[15px] sm:text-lg leading-relaxed max-w-2xl">{sub}</p>}
+    </Reveal>
+  );
+}
+
+// ─── Chat mockup with typing animation (// 1.0) ───────────────────────────────
+
+const CHAT_SEGMENTS: { t: string; cls: string }[] = [
+  { t: "/pick", cls: "text-[#4FC3F7]" },
+  { t: "\n⭐ Aeon scanning Base momentum…", cls: "text-slate-400" },
+  { t: "\n🦈 MiroShark analyzing crowd signal…", cls: "text-slate-400" },
+  { t: "\n\n{ ", cls: "text-slate-500" },
+  { t: '"signal"', cls: "text-slate-400" },
+  { t: ": ", cls: "text-slate-500" },
+  { t: '"BUY"', cls: "text-[#34D399] font-semibold" },
+  { t: ", ", cls: "text-slate-500" },
+  { t: '"token"', cls: "text-slate-400" },
+  { t: ": ", cls: "text-slate-500" },
+  { t: '"AERO"', cls: "text-[#4FC3F7] font-semibold" },
+  { t: ", ", cls: "text-slate-500" },
+  { t: '"confidence"', cls: "text-slate-400" },
+  { t: ": 82, ", cls: "text-slate-500" },
+  { t: '"entry"', cls: "text-slate-400" },
+  { t: ": ", cls: "text-slate-500" },
+  { t: '"$0.49"', cls: "text-white" },
+  { t: ", ", cls: "text-slate-500" },
+  { t: '"thesis"', cls: "text-slate-400" },
+  { t: ': "narrative alignment + whale accumulation" }', cls: "text-slate-500" },
+  { t: "\n\n$0.20 USDC · 2.1s · Base ", cls: "text-slate-500" },
+  { t: "✓", cls: "text-[#34D399]" },
+];
+
+function ChatMockup() {
+  const chars = useMemo(() => {
+    const out: { ch: string; cls: string }[] = [];
+    for (const s of CHAT_SEGMENTS) for (const ch of Array.from(s.t)) out.push({ ch, cls: s.cls });
+    return out;
+  }, []);
+  const [n, setN] = useState(0);
+
+  useEffect(() => {
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { setN(chars.length); return; }
+    let i = 0;
+    const id = setInterval(() => {
+      i += 1;
+      setN(i);
+      if (i >= chars.length) clearInterval(id);
+    }, 20);
+    return () => clearInterval(id);
+  }, [chars.length]);
+
+  // group revealed chars into contiguous same-color spans
+  const groups: { cls: string; text: string }[] = [];
+  for (let k = 0; k < n && k < chars.length; k++) {
+    const c = chars[k];
+    const last = groups[groups.length - 1];
+    if (last && last.cls === c.cls) last.text += c.ch;
+    else groups.push({ cls: c.cls, text: c.ch });
+  }
+
+  return (
+    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden h-full flex flex-col">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-[#15151f]">
+        <img src="/logomark.svg" alt="BlueAgent" width={18} height={18} className="rounded" />
+        <span className="font-mono text-[12px] text-slate-300">Blue Agent</span>
+        <span className="ml-auto flex gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/60" />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/60" />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]/60" />
+        </span>
+      </div>
+      <pre className="flex-1 p-4 sm:p-5 whitespace-pre-wrap break-words font-mono text-[12px] sm:text-[13px] leading-relaxed m-0">
+        {groups.map((g, i) => <span key={i} className={g.cls}>{g.text}</span>)}
+        <span className="animate-blink text-[#4FC3F7]">_</span>
+      </pre>
     </div>
   );
 }
@@ -58,355 +201,361 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Home() {
-  const [openCmd, setOpenCmd] = useState<string | null>(null);
-
   return (
-    <div className="min-h-screen bg-[#050508] text-white font-mono">
+    <div className="min-h-screen bg-[#050508] text-white" style={{ fontFamily: MONO }}>
       <Navbar />
 
-      {/* ── Ambient glow ── */}
-      <div className="fixed inset-x-0 top-0 h-[700px] pointer-events-none overflow-hidden">
-        <div
-          className="absolute inset-0"
-          style={{ background: "radial-gradient(ellipse 80% 50% at 50% -10%, #4FC3F718 0%, transparent 70%)" }}
-        />
+      {/* Ambient glow */}
+      <div className="fixed inset-x-0 top-0 h-[800px] pointer-events-none overflow-hidden" aria-hidden>
+        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 75% 50% at 50% -8%, #4FC3F71f 0%, transparent 70%)" }} />
       </div>
 
-      <div className="relative">
+      <main className="relative">
 
-        {/* ══════════════════════════════════════════
-            HERO
-        ══════════════════════════════════════════ */}
-        <section className="max-w-5xl mx-auto px-6 pt-36 pb-24 text-center">
+        {/* ══════════ HERO ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 pt-32 sm:pt-40 pb-16 sm:pb-24 text-center">
+          <img src="/logomark.svg" alt="BlueAgent" width={40} height={40} className="mx-auto mb-6 rounded-xl animate-breathe" />
 
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-4 py-1.5 mb-10">
+          <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-3.5 py-1.5 mb-8">
             <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-            <span className="text-[10px] text-[#4FC3F7] tracking-[0.2em]">BUILT ON BASE · POWERED BY BANKR LLM</span>
+            <span className="font-mono text-[10px] text-[#4FC3F7] tracking-[0.18em]">BUILT ON BASE · x402 NATIVE</span>
           </div>
 
-          {/* Headline */}
-          <h1 className="text-6xl sm:text-7xl lg:text-8xl font-bold tracking-tight leading-none mb-6">
-            BLUE<span className="text-[#4FC3F7]">AGENT</span>
+          <h1 className="text-[2.75rem] leading-[1.04] sm:text-6xl lg:text-7xl font-bold tracking-tight mb-5">
+            The Builder OS<br className="hidden sm:block" /> for <span className="text-[#4FC3F7]">Base</span>
           </h1>
-          <p className="text-xl text-slate-400 mb-3 max-w-xl mx-auto leading-relaxed">
-            The AI founder console for Base builders.
-          </p>
-          <p className="text-sm text-slate-600 mb-12 max-w-md mx-auto leading-relaxed">
-            Idea → build → audit → ship → raise.<br />
-            Grounded in real Base knowledge. No hallucinations.
+          <p className="text-base sm:text-xl text-slate-400 mb-9 max-w-2xl mx-auto leading-relaxed">
+            Chat with AI agents. Run 74 tools. Launch tokens. Build and scale onchain — all in one platform.
           </p>
 
-          {/* Install */}
-          <div className="flex items-center justify-center gap-2 bg-[#0D0D14] border border-[#1A1A2E] rounded-xl px-5 py-3 mb-2 max-w-lg mx-auto">
-            <span className="text-xs text-slate-600 shrink-0">$</span>
-            <span className="text-sm text-[#4FC3F7] truncate">curl -fsSL https://blueagent.dev/setup.sh | bash</span>
-          </div>
-          <p className="text-[10px] text-slate-700 mb-10">
-            installs <span className="text-slate-500">blueagent</span> (TUI) + <span className="text-slate-500">blue</span> (CLI) · Node ≥ 18
-          </p>
-
-          {/* CTAs */}
-          <div className="flex flex-wrap justify-center gap-3 mb-20">
-            <Link
-              href="/app/chat"
-              className="text-sm font-semibold px-6 py-2.5 rounded-lg transition-all hover:opacity-90 active:scale-95"
-              style={{
-                background: "linear-gradient(135deg, #4FC3F7, #29ABE2)",
-                color: "#050508",
-                boxShadow: "0 0 20px #4FC3F730",
-              }}
-            >
-              Launch App →
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 mb-10">
+            <Link href="/app/chat" className="text-sm font-semibold px-7 py-3 rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
+              style={{ background: "linear-gradient(135deg, #4FC3F7, #29ABE2)", color: "#050508", boxShadow: "0 0 26px #4FC3F733" }}>
+              Open Blue Chat →
             </Link>
-            <Link href="/hub"
-              className="text-sm text-[#4FC3F7] border border-[#4FC3F7]/30 px-6 py-2.5 rounded-lg hover:bg-[#4FC3F7]/5 transition-all">
-              Explore Hub →
-            </Link>
-            <Link href="/docs"
-              className="text-sm text-slate-500 border border-[#1A1A2E] px-6 py-2.5 rounded-lg hover:text-white hover:border-[#4FC3F7]/30 transition-all">
-              Read Docs →
+            <Link href="/hub" className="text-sm font-semibold text-[#4FC3F7] border border-[#4FC3F7]/30 px-7 py-3 rounded-xl hover:bg-[#4FC3F7]/5 transition-all">
+              Browse Hub
             </Link>
           </div>
 
-          {/* Stats grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[
-              { n: "5", label: "Core commands", sub: "idea · build · audit · ship · raise" },
-              { n: "41", label: "Skill files", sub: "grounded · verified · Base-native" },
-              { n: "69", label: "Hub tools", sub: "3-agent collab · pay per use" },
-              { n: "9", label: "npm packages", sub: "CLI · MCP · SDK · AgentKit" },
-            ].map((s) => (
-              <div key={s.label} className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 text-center">
-                <div className="text-3xl font-bold text-[#4FC3F7] mb-1">{s.n}</div>
-                <div className="text-xs text-white mb-1">{s.label}</div>
-                <div className="text-[10px] text-slate-600">{s.sub}</div>
-              </div>
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 font-mono text-[11px] text-slate-600">
+            {SOCIAL_PROOF.map((s, i) => (
+              <span key={s} className="flex items-center gap-3">
+                {i > 0 && <span className="text-slate-800">·</span>}
+                {s}
+              </span>
             ))}
           </div>
-        </section>
 
-        {/* ══════════════════════════════════════════
-            COMMANDS
-        ══════════════════════════════════════════ */}
-        <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
-          <SectionLabel>5 Core Commands</SectionLabel>
-          <h2 className="text-3xl font-bold mb-3">
-            Build <span className="text-[#4FC3F7]">on Base</span> faster
-          </h2>
-          <p className="text-slate-500 text-sm mb-12 max-w-lg">
-            Five commands that cover the entire founder journey. Pay per use. No subscriptions.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-10">
-            {COMMANDS_DATA.map((c) => (
-              <button
-                key={c.tag}
-                onClick={() => setOpenCmd(openCmd === c.tag ? null : c.tag)}
-                className="text-left rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 flex flex-col gap-3 hover:border-[#4FC3F7]/30 transition-all"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-[#4FC3F7] tracking-widest">&lt;{c.tag}&gt;</span>
-                  <span className="text-[10px] text-slate-600 border border-[#1A1A2E] px-1.5 py-0.5 rounded">{c.price}</span>
+          {/* Product mockup — Blue Chat window */}
+          <Reveal delay={120} className="mt-14 sm:mt-20">
+            <div className="relative max-w-3xl mx-auto">
+              <div className="absolute -inset-4 rounded-3xl pointer-events-none" style={{ background: "radial-gradient(ellipse 70% 60% at 50% 30%, #4FC3F715 0%, transparent 70%)" }} />
+              <div className="relative rounded-2xl border border-[#1A1A2E] bg-[#0a0a10] overflow-hidden shadow-2xl text-left">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-[#15151f]">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/70" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/70" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]/70" />
+                  <span className="font-mono text-[11px] text-slate-600 ml-2">Blue Chat · blueagent.dev</span>
                 </div>
-                <div className="text-sm text-white font-semibold">{c.cmd}</div>
-                <p className="text-xs text-slate-400 leading-relaxed flex-1">{c.desc}</p>
-                {openCmd === c.tag && (
-                  <p className="text-[10px] text-slate-600 border-t border-[#1A1A2E] pt-3">{c.detail}</p>
-                )}
-              </button>
-            ))}
-          </div>
-
-          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 flex flex-wrap items-center gap-x-6 gap-y-2">
-            <span className="text-[10px] text-slate-600 tracking-widest">QUICK START</span>
-            <div className="flex items-center gap-2">
-              <span className="text-slate-700">$</span>
-              <span className="text-sm text-[#4FC3F7]">npm install -g @blueagent/cli</span>
+                <div className="p-4 sm:p-6 space-y-4">
+                  <div className="flex justify-end">
+                    <div className="bg-[#4FC3F7]/10 border border-[#4FC3F7]/20 rounded-2xl rounded-br-md px-4 py-2.5 max-w-[80%]">
+                      <span className="font-mono text-[13px] text-[#9bd9f7]">/pick — find me an asymmetric Base setup</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="w-7 h-7 rounded-lg bg-[#4FC3F7]/15 flex items-center justify-center shrink-0">
+                      <img src="/logomark.svg" alt="BlueAgent" width={16} height={16} className="rounded" />
+                    </span>
+                    <div className="flex-1 space-y-2.5">
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="font-mono text-[10px] text-[#34D399] border border-[#34D399]/25 bg-[#34D399]/5 rounded px-2 py-0.5">↳ token-pick-signal</span>
+                        <span className="font-mono text-[10px] text-[#FBBF24] border border-[#FBBF24]/25 bg-[#FBBF24]/5 rounded px-2 py-0.5">↳ whale-tracker</span>
+                        <span className="font-mono text-[10px] text-slate-500 border border-[#1A1A2E] rounded px-2 py-0.5">$0.20 · USDC</span>
+                      </div>
+                      <p className="text-[13px] text-slate-300 leading-relaxed">
+                        <span className="text-white font-semibold">AERO</span> — $0.52, +5% 24h, $25.6M liquidity. Whale accumulation confirmed over the last 50 transfers. Entry near $0.49 support, kill below $0.46.
+                      </p>
+                      <p className="text-[11px] text-slate-600 font-mono">3-agent consensus · Blue × Aeon × MiroShark</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="px-4 py-3 border-t border-[#15151f] flex items-center gap-2">
+                  <div className="flex-1 bg-[#0f0f17] border border-[#1A1A2E] rounded-lg px-3 py-2 font-mono text-[12px] text-slate-600">Ask anything, or type /</div>
+                  <span className="w-8 h-8 rounded-lg bg-[#4FC3F7]/15 flex items-center justify-center text-[#4FC3F7]">↑</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-slate-700">$</span>
-              <span className="text-sm text-[#4FC3F7]">blue init</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-slate-700">$</span>
-              <span className="text-sm text-white">blue idea <span className="text-slate-600">"my Base project"</span></span>
-            </div>
-            <Link href="/docs" className="ml-auto text-[10px] text-[#4FC3F7] hover:underline">
-              Full docs →
-            </Link>
-          </div>
+          </Reveal>
         </section>
 
-        {/* ══════════════════════════════════════════
-            BLUE HUB
-        ══════════════════════════════════════════ */}
-        <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
-          <SectionLabel>Blue Hub</SectionLabel>
-          <div className="flex items-end justify-between mb-12 flex-wrap gap-4">
-            <div>
-              <h2 className="text-3xl font-bold mb-3">
-                34 collab tools · <span className="text-[#A78BFA]">3 agents</span>
-              </h2>
-              <p className="text-slate-500 text-sm max-w-lg">
-                Blue Agent · Aeon · MiroShark working together. Pay per use via x402 micropayments.
-              </p>
-            </div>
-            <Link
-              href="/hub"
-              className="text-sm font-semibold px-5 py-2 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA] hover:bg-[#A78BFA]/5 transition-all shrink-0"
-            >
-              Explore Hub →
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
-            {HUB_CATEGORIES.map((cat) => (
-              <div
-                key={cat.label}
-                className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5"
-              >
-                <div className="flex items-baseline justify-between mb-3">
-                  <span className="text-sm font-semibold" style={{ color: cat.color }}>{cat.label}</span>
-                  <span
-                    className="text-[10px] px-1.5 py-0.5 rounded font-bold"
-                    style={{ color: cat.color, background: `${cat.color}15`, border: `1px solid ${cat.color}30` }}
+        {/* ══════════ 1.0 CHAT ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+          <SectionHead
+            num="1.0" kicker="Chat"
+            title={<>Talk to AI. <span className="text-[#4FC3F7]">Build onchain.</span></>}
+            sub="Blue Chat routes your intent to the right tool. Live Hub tools, multi-model, skill-based. Built for Base."
+          />
+          <div className="grid lg:grid-cols-2 gap-4 sm:gap-5 items-stretch">
+            {/* LEFT — typing chat mockup */}
+            <Reveal>
+              <ChatMockup />
+            </Reveal>
+            {/* RIGHT — 2×2 feature cards */}
+            <Reveal delay={80}>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 h-full">
+                {CHAT_FEATURES.map((card) => (
+                  <div
+                    key={card.label}
+                    className="ba-card rounded-2xl p-4 sm:p-5"
                   >
-                    {cat.count}
-                  </span>
-                </div>
-                <div className="h-px w-full mt-2" style={{ background: `${cat.color}20` }} />
-              </div>
-            ))}
-          </div>
-
-          {/* Agent collaborators */}
-          <div className="flex flex-wrap gap-3">
-            {[
-              { name: "Blue Agent", color: "#4FC3F7", role: "Founder intelligence · commands · x402 APIs" },
-              { name: "Aeon",       color: "#34D399", role: "Market signals · token picks · narrative tracking" },
-              { name: "MiroShark",  color: "#A78BFA", role: "DeFi strategy · portfolio · yield optimization" },
-            ].map((a) => (
-              <div
-                key={a.name}
-                className="flex-1 min-w-[200px] rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] px-5 py-4"
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: a.color, boxShadow: `0 0 6px ${a.color}` }} />
-                  <span className="text-sm font-semibold" style={{ color: a.color }}>{a.name}</span>
-                </div>
-                <p className="text-[10px] text-slate-600">{a.role}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ══════════════════════════════════════════
-            SKILLS / GROUNDING
-        ══════════════════════════════════════════ */}
-        <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
-          <SectionLabel>Grounding</SectionLabel>
-          <h2 className="text-3xl font-bold mb-3">
-            34 skill files · <span className="text-[#34D399]">zero hallucinations</span>
-          </h2>
-          <p className="text-slate-500 text-sm mb-12 max-w-lg">
-            Every command loads verified Base knowledge before it generates a single token. No guessing. No invented addresses.
-          </p>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
-            {SKILLS_GROUPS.map((g) => (
-              <div
-                key={g.group}
-                className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5"
-              >
-                <div className="flex items-baseline justify-between mb-1">
-                  <span className="text-sm font-semibold" style={{ color: g.color }}>{g.group}</span>
-                  <span className="text-[10px] text-slate-700">{g.count} files</span>
-                </div>
-                <div className="h-px w-full mt-2" style={{ background: `${g.color}20` }} />
-              </div>
-            ))}
-          </div>
-
-          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 flex flex-wrap items-center gap-x-6 gap-y-3">
-            <div>
-              <p className="text-xs text-white mb-1">Install all 34 skills</p>
-              <div className="flex items-center gap-2">
-                <span className="text-slate-700">$</span>
-                <span className="text-sm text-[#4FC3F7]">blue init</span>
-              </div>
-            </div>
-            <div className="w-px h-8 bg-[#1A1A2E] hidden sm:block" />
-            <div>
-              <p className="text-[10px] text-slate-600 mb-1">Covers</p>
-              <div className="flex flex-wrap gap-1.5">
-                {["Base contracts", "ERC standards", "DeFi patterns", "Security checks", "x402 flows"].map((t) => (
-                  <span key={t} className="text-[10px] text-slate-500 border border-[#1A1A2E] px-2 py-0.5 rounded">{t}</span>
+                    <Glyph icon={card.icon} size={22} />
+                    <div className="text-sm font-semibold mt-2.5 mb-1.5" style={{ color: card.color }}>{card.label}</div>
+                    <p className="font-mono text-[11px] text-slate-500 leading-relaxed">{card.desc}</p>
+                  </div>
                 ))}
               </div>
-            </div>
-            <Link href="/skills" className="ml-auto text-[10px] text-[#4FC3F7] hover:underline shrink-0">
-              View all skills →
-            </Link>
+            </Reveal>
           </div>
+          {/* Slash command chips */}
+          <Reveal className="mt-5">
+            <div className="flex flex-wrap gap-2">
+              {CHAT_COMMANDS.map((c) => (
+                <span key={c} className="font-mono text-[13px] text-[#4FC3F7] border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-lg px-3 py-1.5">{c}</span>
+              ))}
+            </div>
+          </Reveal>
         </section>
 
-        {/* ══════════════════════════════════════════
-            ECOSYSTEM PACKAGES
-        ══════════════════════════════════════════ */}
-        <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
-          <SectionLabel>Ecosystem</SectionLabel>
-          <h2 className="text-3xl font-bold mb-3">
-            9 npm packages · <span className="text-[#A78BFA]">plug into any stack</span>
-          </h2>
-          <p className="text-slate-500 text-sm mb-12 max-w-lg">
-            From the CLI you install to the SDK you embed — Blue Agent fits wherever you build.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {ECOSYSTEM_PKGS.map((p) => (
-              <div
-                key={p.pkg}
-                className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5"
-              >
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <span className="text-sm font-semibold text-white break-all">{p.pkg}</span>
-                  <span
-                    className="text-[10px] px-1.5 py-0.5 rounded shrink-0"
-                    style={{ color: p.color, background: `${p.color}15`, border: `1px solid ${p.color}30` }}
-                  >
-                    {p.badge}
-                  </span>
+        {/* ══════════ 2.0 HUB ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+          <SectionHead
+            num="2.0" kicker="Hub" accent="#A78BFA"
+            title={<>74 tools. <span className="text-[#A78BFA]">Pay what you use.</span></>}
+            sub="The intelligence layer for Base agents. Raw data, security checks, alpha signals — all x402 native. No API key. No subscription."
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
+            {HUB_CATEGORIES.map((cat, i) => (
+              <Reveal key={cat.label} delay={i * 60}>
+                <div className="ba-card h-full rounded-2xl p-5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: cat.color, boxShadow: `0 0 6px ${cat.color}` }} />
+                    <span className="text-sm font-semibold" style={{ color: cat.color }}>{cat.label}</span>
+                  </div>
+                  <p className="font-mono text-[12px] text-slate-500 leading-relaxed">{cat.tools}</p>
                 </div>
-                <p className="text-xs text-slate-500">{p.desc}</p>
-                <div className="mt-3 pt-3 border-t border-[#1A1A2E] flex items-center gap-2">
-                  <span className="text-slate-700 text-xs">$</span>
-                  <span className="text-xs text-slate-600">npm install {p.pkg}</span>
+              </Reveal>
+            ))}
+            <Reveal delay={300}>
+              <Link href="/hub" className="ba-card h-full flex flex-col justify-center items-start rounded-2xl p-5">
+                <span className="text-sm font-semibold text-[#A78BFA] mb-1">Browse all 74 →</span>
+                <span className="font-mono text-[11px] text-slate-600">9 categories · live data</span>
+              </Link>
+            </Reveal>
+          </div>
+          <Reveal>
+            <p className="font-mono text-[12px] text-slate-500">
+              From <span className="text-white">$0.01/call</span> · Pay in USDC or <span className="text-[#34D399]">$BLUEAGENT</span>
+            </p>
+          </Reveal>
+        </section>
+
+        {/* ══════════ 3.0 FEED ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+          <SectionHead
+            num="3.0" kicker="Feed" accent="#FB923C"
+            title={
+              <span className="inline-flex flex-wrap items-center gap-3">
+                Live Base intelligence. <span className="text-[#FB923C]">24/7.</span>
+                <span className="font-mono text-[10px] tracking-widest text-[#FB923C] border border-[#FB923C]/30 bg-[#FB923C]/5 rounded-full px-3 py-1 align-middle">COMING SOON</span>
+              </span>
+            }
+            sub={<><span className="text-[#FB923C]">⭐ Aeon</span> monitors Base every hour. No prompts needed — just signal.</>}
+          />
+          {/* TOP — feed card mockup */}
+          <Reveal>
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden">
+              <div className="px-5 py-3 border-b border-[#15151f] font-mono text-[12px] text-slate-400">
+                ⭐ Aeon · <span className="text-[#FB923C]">base-pulse</span> · just now
+              </div>
+              <div className="p-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                {FEED_METRICS.map((m) => (
+                  <div key={m.label}>
+                    <div className="font-mono text-[10px] text-slate-600 uppercase tracking-wider mb-1">{m.label}</div>
+                    <div className="font-mono text-[13px] font-semibold" style={{ color: m.valueColor }}>
+                      {m.value}
+                      {m.delta && <span className="ml-1.5 text-[11px] font-normal" style={{ color: m.deltaColor }}>{m.delta}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="px-5 py-3 border-t border-[#15151f] flex flex-wrap items-center justify-between gap-3">
+                <span className="font-mono text-[11px] text-slate-500">$0.05 USDC · auto · Base ✓</span>
+                <div className="flex gap-2">
+                  <button disabled className="font-mono text-[11px] text-slate-500 border border-[#1A1A2E] rounded-lg px-3 py-1.5 opacity-50 cursor-not-allowed">Share ↗</button>
+                  <button disabled className="font-mono text-[11px] text-slate-500 border border-[#1A1A2E] rounded-lg px-3 py-1.5 opacity-50 cursor-not-allowed">Cast to Farcaster</button>
                 </div>
               </div>
+            </div>
+          </Reveal>
+          {/* BOTTOM — tool grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-4">
+            {FEED_TOOLS.map((t, i) => (
+              <Reveal key={t.id} delay={i * 50}>
+                <div className="ba-card h-full rounded-xl p-4">
+                  <div className="font-mono text-[12px] text-[#FB923C] mb-1 break-words">{t.id}</div>
+                  <div className="font-mono text-[11px] text-slate-500 leading-snug">{t.desc}</div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+          <p className="font-mono text-[12px] text-slate-500 mt-4">Powered by ⭐ Aeon · Shareable · Cast to Farcaster</p>
+        </section>
+
+        {/* ══════════ 4.0 AGENTS ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+          <SectionHead
+            num="4.0" kicker="Agents"
+            title={<>Three agents. <span className="text-[#4FC3F7]">One platform.</span></>}
+            sub="Every output is a 3-agent consensus. Not one model guessing — three roles reasoning."
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            {AGENTS.map((a, i) => (
+              <Reveal key={a.name} delay={i * 80}>
+                <div className="ba-card h-full rounded-2xl p-6">
+                  <div className="mb-3"><Glyph icon={a.icon} size={28} /></div>
+                  <div className="text-base font-semibold mb-1" style={{ color: a.color }}>{a.name}</div>
+                  <p className="font-mono text-[12px] text-slate-500 leading-relaxed">{a.role}</p>
+                </div>
+              </Reveal>
             ))}
           </div>
         </section>
 
-        {/* ══════════════════════════════════════════
-            CTA
-        ══════════════════════════════════════════ */}
-        <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
-          <div
-            className="rounded-2xl border border-[#4FC3F7]/20 p-12 text-center"
-            style={{ background: "radial-gradient(ellipse 80% 60% at 50% 50%, #4FC3F710 0%, transparent 70%)" }}
-          >
-            <SectionLabel>Start building</SectionLabel>
-            <h2 className="text-4xl font-bold mb-4">
-              Your next Base project<br />starts <span className="text-[#4FC3F7]">here</span>
-            </h2>
-            <p className="text-slate-400 text-sm mb-10 max-w-md mx-auto">
-              5 commands. 34 skills. 34 hub tools. Everything you need to go from idea to deployed on Base.
-            </p>
-            <div className="flex flex-wrap justify-center gap-4">
-              <Link
-                href="/app/chat"
-                className="font-semibold px-8 py-3 rounded-lg transition-all hover:opacity-90 active:scale-95 text-sm"
-                style={{
-                  background: "linear-gradient(135deg, #4FC3F7, #29ABE2)",
-                  color: "#050508",
-                  boxShadow: "0 0 24px #4FC3F730",
-                }}
-              >
-                Open Blue Chat →
-              </Link>
-              <Link href="/hub"
-                className="text-sm text-[#4FC3F7] border border-[#4FC3F7]/30 px-8 py-3 rounded-lg hover:bg-[#4FC3F7]/5 transition-all">
-                Explore Hub →
-              </Link>
-            </div>
+        {/* ══════════ 5.0 INTEGRATIONS ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+          <SectionHead
+            num="5.0" kicker="Integrations" accent="#60A5FA"
+            title={<>Built for the <span className="text-[#60A5FA]">agent economy</span></>}
+            sub="BlueAgent is x402 native from day one. Agents pay agents. No human in the loop."
+          />
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
+            {INTEGRATIONS.map((it, i) => (
+              <Reveal key={it.name} delay={i * 55}>
+                <div className="ba-card h-full rounded-2xl p-5">
+                  <div className="text-sm font-semibold mb-2" style={{ color: it.color }}>{it.name}</div>
+                  <p className="font-mono text-[11px] text-slate-500 leading-relaxed">{it.desc}</p>
+                </div>
+              </Reveal>
+            ))}
           </div>
+          <Reveal>
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a10] overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#15151f]">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/60" />
+                <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/60" />
+                <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]/60" />
+                <span className="font-mono text-[11px] text-slate-600 ml-2">terminal</span>
+              </div>
+              <pre className="p-4 sm:p-5 overflow-x-auto font-mono text-[12px] leading-relaxed m-0">
+<span className="text-slate-600">$ </span><span className="text-[#4FC3F7]">curl</span><span className="text-slate-300"> https://x402.bankr.bot/0xb058.../token-price \</span>
+{"\n"}<span className="text-slate-500">    -d </span><span className="text-[#34D399]">{'\'{"token":"AERO"}\''}</span>
+{"\n"}<span className="text-slate-500">→ </span><span className="text-slate-300">{'{"price":0.49,"mcap":465000000,...}'}</span>
+{"\n"}<span className="text-slate-600">Charged: </span><span className="text-[#FBBF24]">$0.01 USDC</span>
+              </pre>
+            </div>
+          </Reveal>
         </section>
 
-        {/* ══════════════════════════════════════════
-            FOOTER
-        ══════════════════════════════════════════ */}
-        <footer className="border-t border-[#1A1A2E] px-6 py-8 max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <img src="/logomark.svg" alt="Blue Agent" className="h-5 w-5 rounded-md" />
-            <span className="font-mono text-xs font-bold text-white tracking-widest">
-              BLUE<span className="text-[#4FC3F7]">AGENT</span>
-            </span>
+        {/* ══════════ 6.0 PRICING ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+          <SectionHead
+            num="6.0" kicker="Pricing" accent="#34D399"
+            title={<>Hold $BLUEAGENT. <span className="text-[#34D399]">Build for free.</span></>}
+            sub="Credits refresh every day. No subscription. Just hold $BLUEAGENT and build."
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+            {PRICING.map((p, i) => (
+              <Reveal key={p.tier} delay={i * 60}>
+                <div className={`ba-card h-full rounded-2xl p-5 flex flex-col gap-2 ${p.highlight ? "ba-card--hot" : ""}`}>
+                  <div className="text-sm font-semibold" style={{ color: p.highlight ? "#34D399" : "#fff" }}>{p.tier}</div>
+                  <div className="font-mono text-[11px] text-slate-500">{p.hold}</div>
+                  <div className="text-2xl font-bold text-white mt-1">{p.credits}</div>
+                  {p.note && <div className="font-mono text-[11px] text-[#34D399]">{p.note}</div>}
+                </div>
+              </Reveal>
+            ))}
           </div>
-          <div className="flex items-center gap-5 font-mono text-xs text-slate-700">
-            <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">X / Twitter</a>
-            <a href="https://t.me/blueagent_hub" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Telegram</a>
-            <a href="https://github.com/madebyshun/blue-agent" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">GitHub</a>
-            <Link href="/docs" className="hover:text-white transition-colors">Docs</Link>
-            <Link href="/about" className="hover:text-white transition-colors">About</Link>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-            <span className="font-mono text-[10px] text-slate-700">$BLUEAGENT · Base</span>
+          <Reveal>
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 sm:p-6 flex flex-col gap-4">
+              <p className="font-mono text-[12px] text-slate-500">
+                x402: <span className="text-white">$0.01–$0.20/call</span> · USDC or $BLUEAGENT · no signup
+              </p>
+              <p className="text-[15px] sm:text-base text-slate-300">
+                The more <span className="text-[#34D399] font-semibold">$BLUEAGENT</span> you hold, the more you build for free.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <a href={BUY_URL} target="_blank" rel="noopener noreferrer"
+                  className="text-sm font-semibold px-6 py-2.5 rounded-xl text-center transition-all hover:opacity-90 active:scale-[0.98]"
+                  style={{ background: "linear-gradient(135deg, #34D399, #10B981)", color: "#031b12" }}>
+                  Buy $BLUEAGENT →
+                </a>
+                <Link href="/app/rewards" className="text-sm font-semibold text-[#34D399] border border-[#34D399]/30 px-6 py-2.5 rounded-xl text-center hover:bg-[#34D399]/5 transition-all">
+                  Stake now →
+                </Link>
+              </div>
+            </div>
+          </Reveal>
+        </section>
+
+        {/* ══════════ FINAL CTA ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-20 sm:py-28 border-t border-[#13131d]">
+          <Reveal>
+            <div className="rounded-3xl border border-[#4FC3F7]/20 p-8 sm:p-14 text-center" style={{ background: "radial-gradient(ellipse 80% 70% at 50% 40%, #4FC3F710 0%, transparent 70%)" }}>
+              <h2 className="text-3xl sm:text-5xl font-bold tracking-tight mb-8">
+                Start building on <span className="text-[#4FC3F7]">Base</span> today
+              </h2>
+              <div className="flex flex-wrap justify-center gap-3">
+                <Link href="/app/chat" className="text-sm font-semibold px-7 py-3 rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
+                  style={{ background: "linear-gradient(135deg, #4FC3F7, #29ABE2)", color: "#050508", boxShadow: "0 0 26px #4FC3F733" }}>
+                  Open Blue Chat →
+                </Link>
+                <Link href="/hub" className="text-sm font-semibold text-[#4FC3F7] border border-[#4FC3F7]/30 px-7 py-3 rounded-xl hover:bg-[#4FC3F7]/5 transition-all">
+                  Browse 74 Hub Tools →
+                </Link>
+                <Link href="/docs" className="text-sm font-semibold text-slate-400 border border-[#1A1A2E] px-7 py-3 rounded-xl hover:text-white hover:border-[#4FC3F7]/30 transition-all">
+                  Install MCP →
+                </Link>
+                <Link href="/docs" className="text-sm font-semibold text-slate-400 border border-[#1A1A2E] px-7 py-3 rounded-xl hover:text-white hover:border-[#4FC3F7]/30 transition-all">
+                  Read Docs →
+                </Link>
+              </div>
+            </div>
+          </Reveal>
+        </section>
+
+        {/* ══════════ FOOTER ══════════ */}
+        <footer className="border-t border-[#1A1A2E] px-5 sm:px-6 py-10 max-w-5xl mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+            <div>
+              <div className="flex items-center gap-2.5 mb-2">
+                <img src="/logomark.svg" alt="BlueAgent" width={20} height={20} className="rounded-md" />
+                <span className="font-semibold text-white">BlueAgent</span>
+                <span className="text-xs text-slate-500">· The Builder OS for Base</span>
+              </div>
+              <p className="font-mono text-[11px] text-slate-600">Powered by Bankr · Venice AI · x402 native · Base</p>
+            </div>
+            <div className="flex items-center gap-5 font-mono text-xs text-slate-600">
+              <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">X</a>
+              <a href="https://t.me/blueagent_hub" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Telegram</a>
+              <a href="https://github.com/madebyshun/blue-agent" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">GitHub</a>
+              <Link href="/docs" className="hover:text-white transition-colors">Docs</Link>
+            </div>
           </div>
         </footer>
 
-      </div>
+      </main>
     </div>
   );
 }
