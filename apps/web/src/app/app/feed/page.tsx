@@ -60,20 +60,19 @@ function sentimentTone(s: string | null): string {
   return AMBER;
 }
 
-// Per-tool / per-signal background tint (rgba over the card surface).
-function tintFor(item: FeedItem): string | undefined {
-  switch (item.tool) {
-    case "base-pulse":      return "rgba(79,195,247,0.03)";   // blue
-    case "narrative-pulse": return "rgba(251,146,60,0.03)";   // orange
-    case "whale-tracker":   return "rgba(167,139,250,0.03)";  // purple
-    case "base-alpha":      return "rgba(52,211,153,0.03)";   // green
-    case "token-alpha": {
-      const c = SIGNAL_COLOR[String(raw(item).signal ?? "").toUpperCase()] ?? "#64748B";
-      const r = parseInt(c.slice(1, 3), 16), g = parseInt(c.slice(3, 5), 16), b = parseInt(c.slice(5, 7), 16);
-      return `rgba(${r},${g},${b},0.05)`;
-    }
-    default: return undefined;
-  }
+// Per-tool accent (left border) + 8% background tint.
+const TOOL_ACCENT: Record<string, string> = {
+  "base-pulse": BLUE, "narrative-pulse": "#FB923C", "whale-tracker": PURPLE, "base-alpha": GREEN,
+  "ecosystem-digest": GREEN, "new-pools": BLUE, "blue-stream": BLUE,
+  "token-momentum-scanner": PURPLE, "narrative-position": GREEN, "defi-opportunity": PURPLE,
+};
+function accentFor(item: FeedItem): string {
+  if (item.tool === "token-alpha") return SIGNAL_COLOR[String(raw(item).signal ?? "").toUpperCase()] ?? "#64748B";
+  return TOOL_ACCENT[item.tool] ?? BLUE;
+}
+function tintRGBA(hex: string, a = 0.08): string {
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${a})`;
 }
 
 // Cast to Farcaster — composeCast inside a mini-app, else open Warpcast compose.
@@ -163,8 +162,12 @@ function BasePulseBody({ item, history, large }: { item: FeedItem; history: Feed
   const pulse = num(getMetric(item, /pulse|score/i));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tokens: any[] = Array.isArray(raw(item).trending) ? raw(item).trending : Array.isArray(raw(item).top_tokens) ? raw(item).top_tokens : [];
-  const series = history.filter((i) => i.tool === "base-pulse").slice(0, 14).reverse()
-    .map((i, x) => ({ x, v: num(getMetric(i, /tvl/i)) })).filter((p) => p.v != null);
+  const bpHist = history.filter((i) => i.tool === "base-pulse").slice(0, 14).reverse();
+  const tvlSeries = bpHist.map((i) => num(getMetric(i, /tvl/i))).filter((v): v is number => v != null);
+  const pulseSeries = bpHist.map((i) => num(getMetric(i, /pulse|score/i))).filter((v): v is number => v != null);
+  const varies = (a: number[]) => { if (a.length < 2) return false; const mx = Math.max(...a), mn = Math.min(...a); return mx > 0 && (mx - mn) / mx > 0.005; };
+  // Flat TVL → no meaningful sparkline; fall back to pulse-score bars, else hide.
+  const chart: "tvl" | "pulse" | null = varies(tvlSeries) ? "tvl" : varies(pulseSeries) ? "pulse" : null;
   return (
     <>
       <div className="flex items-start gap-4">
@@ -191,13 +194,25 @@ function BasePulseBody({ item, history, large }: { item: FeedItem; history: Feed
           ))}
         </div>
       )}
-      {series.length >= 2 && (
-        <div className="-mx-1 mt-3" style={{ height: large ? 120 : 40 }}>
+      {chart === "tvl" && (
+        <div className="-mx-1 mt-3" style={{ height: large ? 100 : 40 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={series}>
+            <LineChart data={tvlSeries.map((v, x) => ({ x, v }))}>
               <Line type="monotone" dataKey="v" stroke={GREEN} strokeWidth={large ? 2 : 1.5} dot={false} isAnimationActive />
             </LineChart>
           </ResponsiveContainer>
+        </div>
+      )}
+      {chart === "pulse" && (
+        <div className="mt-3">
+          <div className="font-mono text-[9px] text-slate-600 uppercase tracking-wider mb-1">Pulse history</div>
+          <div className="-mx-1" style={{ height: large ? 80 : 36 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={pulseSeries.map((v, x) => ({ x, v }))}>
+                <Bar dataKey="v" radius={[2, 2, 0, 0]} fill={GREEN} isAnimationActive />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
     </>
@@ -287,21 +302,35 @@ function TokenAlphaBody({ item, large }: { item: FeedItem; large?: boolean }) {
 }
 
 function WhaleBody({ item }: { item: FeedItem }) {
-  const flow = getMetric(item, /flow|signal|direction/i) ?? "";
-  const up = /bull|accumul|in|buy|up/i.test(flow);
-  const down = /bear|distrib|out|sell|down/i.test(flow);
+  const r = raw(item);
+  const activity = String(r.whaleActivity ?? r.signal ?? getMetric(item, /activity|flow|signal/i) ?? "NEUTRAL");
+  const up = /accumul|bull|buy|inflow/i.test(activity);
+  const down = /distrib|bear|sell|outflow/i.test(activity);
   const tone = up ? GREEN : down ? RED : AMBER;
   const arrow = up ? "↑" : down ? "↓" : "→";
+  const strength = num(r.signalStrength);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const patterns: string[] = Array.isArray(r.patterns) ? r.patterns.filter((p: any) => typeof p === "string").slice(0, 2) : [];
   return (
-    <div className="flex items-center gap-4">
-      <div className="flex flex-col items-center justify-center w-16 shrink-0">
-        <span className="text-4xl font-bold leading-none" style={{ color: tone }}>{arrow}</span>
-        <span className="font-mono text-[9px] text-slate-600 uppercase mt-1">flow</span>
+    <div>
+      <div className="flex items-center gap-4 mb-3">
+        <span className="text-4xl font-bold leading-none shrink-0 w-12 text-center" style={{ color: tone }}>{arrow}</span>
+        <div className="flex-1 min-w-0">
+          <Badge text={activity} color={tone} big />
+          {strength != null && (
+            <div className="mt-2">
+              <div className="flex justify-between font-mono text-[9px] text-slate-600 uppercase mb-1"><span>Signal strength</span><span style={{ color: tone }}>{Math.round(strength)}</span></div>
+              <Bar01 value={strength} color={tone} />
+            </div>
+          )}
+        </div>
       </div>
-      <div className="flex-1 min-w-0">
-        {flow && <Badge text={flow} color={tone} big />}
-        <p className="text-[13px] text-slate-400 leading-relaxed mt-2">{item.summary}</p>
-      </div>
+      <p className="text-[12px] text-slate-400 leading-relaxed">{r.recommendation || item.summary}</p>
+      {patterns.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {patterns.map((p, i) => <span key={i} className="font-mono text-[10px] px-2 py-0.5 rounded-md border border-[#1A1A2E] bg-[#0a0a10] text-slate-400">{p}</span>)}
+        </div>
+      )}
     </div>
   );
 }
@@ -333,6 +362,144 @@ function BaseAlphaBody({ item }: { item: FeedItem }) {
   );
 }
 
+function fmtUsdShort(v: unknown): string | null {
+  const n = num(v); if (n == null) return null;
+  if (Math.abs(n) >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
+  if (Math.abs(n) >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+  if (Math.abs(n) >= 1e3) return `$${(n / 1e3).toFixed(1)}K`;
+  return `$${n.toFixed(0)}`;
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function Chip({ children }: { children: React.ReactNode }) {
+  return <span className="font-mono text-[10px] px-2 py-0.5 rounded-md border border-[#1A1A2E] bg-[#0a0a10] text-slate-300">{children}</span>;
+}
+function Row({ children }: { children: React.ReactNode }) {
+  return <div className="flex items-center gap-2 rounded-lg border border-[#1A1A2E] bg-[#0a0a10] px-2.5 py-1.5">{children}</div>;
+}
+
+function EcosystemDigestBody({ item }: { item: FeedItem }) {
+  const r = raw(item);
+  const movers = (Array.isArray(r.movers) ? r.movers : []).slice(0, 3);
+  const narrs = (Array.isArray(r.narratives) ? r.narratives : []).slice(0, 3);
+  return (
+    <>
+      <p className="text-[13px] text-slate-300 leading-relaxed mb-3">{r.headline ?? item.summary}</p>
+      {movers.length > 0 && (
+        <div className="mb-3">
+          <div className="font-mono text-[9px] text-slate-600 uppercase tracking-wider mb-1.5">Top movers</div>
+          <div className="flex flex-wrap gap-1.5">
+            {movers.map((m: any, i: number) => { const ch = num(m?.change_24h ?? m?.change ?? m?.priceChange); return (
+              <Chip key={i}><span className="text-slate-200">{m?.token ?? m?.symbol ?? "—"}</span>{ch != null && <span className="ml-1" style={{ color: ch >= 0 ? GREEN : RED }}>{ch >= 0 ? "+" : ""}{ch.toFixed(1)}%</span>}</Chip>
+            ); })}
+          </div>
+        </div>
+      )}
+      {narrs.length > 0 && (
+        <div>
+          <div className="font-mono text-[9px] text-slate-600 uppercase tracking-wider mb-1.5">Narratives</div>
+          <div className="flex flex-wrap gap-1.5">{narrs.map((n: any, i: number) => <Chip key={i}><span className="text-slate-400">{typeof n === "string" ? n : (n?.name ?? "—")}</span></Chip>)}</div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function NewPoolsBody({ item }: { item: FeedItem }) {
+  const r = raw(item);
+  const pools = (Array.isArray(r.pools) ? r.pools : Array.isArray(r.new_pools) ? r.new_pools : []).slice(0, 4);
+  return (
+    <>
+      <p className="text-[13px] text-slate-400 leading-relaxed mb-3">{item.summary}</p>
+      <div className="flex flex-col gap-1.5">
+        {pools.map((p: any, i: number) => { const liq = fmtUsdShort(p?.liquidity ?? p?.liquidityUsd ?? p?.liq); const flagged = p?.honeypot || p?.flagged || p?.honeypotFlag; return (
+          <Row key={i}>
+            <span className="font-mono text-[11px] text-slate-200 flex-1 truncate">{p?.symbol ?? p?.baseSymbol ?? p?.name ?? "—"}</span>
+            {liq && <span className="font-mono text-[10px] text-slate-500">{liq}</span>}
+            {flagged && <span title="honeypot flag">🚨</span>}
+          </Row>
+        ); })}
+      </div>
+    </>
+  );
+}
+
+function BlueStreamBody({ item }: { item: FeedItem }) {
+  const r = raw(item);
+  const trending = (Array.isArray(r.trending) ? r.trending : []).slice(0, 5);
+  const newp = Array.isArray(r.new_pools) ? r.new_pools : [];
+  return (
+    <>
+      <div className="flex gap-5 mb-3">
+        <Stat label="Trending" value={`${trending.length}`} />
+        <Stat label="New pools" value={`${newp.length}`} />
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {trending.map((t: any, i: number) => { const ch = num(t?.change_24h ?? t?.change ?? t?.priceChange); return (
+          <Chip key={i}><span className="text-slate-200">{t?.token ?? t?.symbol ?? t?.baseSymbol ?? "—"}</span>{ch != null && <span className="ml-1" style={{ color: ch >= 0 ? GREEN : RED }}>{ch >= 0 ? "+" : ""}{ch.toFixed(1)}%</span>}</Chip>
+        ); })}
+      </div>
+    </>
+  );
+}
+
+function MomentumBody({ item }: { item: FeedItem }) {
+  const r = raw(item);
+  const phase = r.market_phase;
+  const plays = (Array.isArray(r.momentum_plays) ? r.momentum_plays : []).slice(0, 3);
+  const sigOf = (sc: number | null) => sc == null ? null : sc >= 70 ? "BUY" : sc >= 40 ? "WATCH" : "SKIP";
+  return (
+    <>
+      {phase && <div className="mb-3"><Badge text={String(phase)} color={/bull|risk-on/i.test(String(phase)) ? GREEN : /bear|risk-off/i.test(String(phase)) ? RED : AMBER} /></div>}
+      {plays.length > 0 ? (
+        <div className="flex flex-col gap-1.5">
+          {plays.map((p: any, i: number) => { const sc = num(p?.momentum_score); const sig = sigOf(sc); return (
+            <Row key={i}>
+              <span className="font-mono text-[11px] text-slate-200 flex-1 truncate">{p?.token ?? "—"}</span>
+              {sc != null && <span className="font-mono text-[10px] text-slate-500">{sc}</span>}
+              {sig && <Badge text={sig} color={SIGNAL_COLOR[sig] ?? "#64748b"} />}
+            </Row>
+          ); })}
+        </div>
+      ) : <p className="text-[13px] text-slate-400">{item.summary}</p>}
+    </>
+  );
+}
+
+const POS_COLOR: Record<string, string> = { "FRONT-RUN": GREEN, RIDE: BLUE, FADE: RED, IGNORE: "#64748b" };
+function NarrativePositionBody({ item }: { item: FeedItem }) {
+  const arr = (Array.isArray(raw(item).narratives) ? raw(item).narratives : []).slice(0, 3);
+  if (arr.length === 0) return <p className="text-[13px] text-slate-400">{item.summary}</p>;
+  return (
+    <div className="flex flex-col gap-2">
+      {arr.map((n: any, i: number) => { const call = String(n?.position_call ?? "").toUpperCase(); return (
+        <div key={i} className="flex items-center gap-2">
+          <span className="font-mono text-[12px] text-slate-200 truncate flex-1">{n?.name ?? "—"}</span>
+          {call && <Badge text={call} color={POS_COLOR[call] ?? "#64748b"} />}
+        </div>
+      ); })}
+    </div>
+  );
+}
+
+function DefiOpportunityBody({ item }: { item: FeedItem }) {
+  const opps = (Array.isArray(raw(item).opportunities) ? raw(item).opportunities : []).slice(0, 3);
+  const riskTone = (s: string) => /low/i.test(s) ? GREEN : /high/i.test(s) ? RED : AMBER;
+  if (opps.length === 0) return <p className="text-[13px] text-slate-400">{item.summary}</p>;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {opps.map((o: any, i: number) => (
+        <Row key={i}>
+          <span className="font-mono text-[11px] text-slate-200 flex-1 truncate">{o?.protocol ?? o?.pool ?? "—"}</span>
+          {o?.apy && <span className="font-mono text-[11px] font-semibold" style={{ color: GREEN }}>{String(o.apy)}{String(o.apy).includes("%") ? "" : "%"}</span>}
+          {o?.risk && <Badge text={String(o.risk)} color={riskTone(String(o.risk))} />}
+        </Row>
+      ))}
+    </div>
+  );
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 function CardBody({ item, history, large }: { item: FeedItem; history: FeedItem[]; large?: boolean }) {
   switch (item.tool) {
     case "base-pulse":      return <BasePulseBody item={item} history={history} large={large} />;
@@ -340,6 +507,12 @@ function CardBody({ item, history, large }: { item: FeedItem; history: FeedItem[
     case "token-alpha":     return <TokenAlphaBody item={item} large={large} />;
     case "whale-tracker":   return <WhaleBody item={item} />;
     case "base-alpha":      return <BaseAlphaBody item={item} />;
+    case "ecosystem-digest": return <EcosystemDigestBody item={item} />;
+    case "new-pools":        return <NewPoolsBody item={item} />;
+    case "blue-stream":      return <BlueStreamBody item={item} />;
+    case "token-momentum-scanner": return <MomentumBody item={item} />;
+    case "narrative-position":     return <NarrativePositionBody item={item} />;
+    case "defi-opportunity":       return <DefiOpportunityBody item={item} />;
     default: {
       const ms = metricsOf(item);
       return (
@@ -361,13 +534,17 @@ function FeedCard({ item, history, hero, fresh, delay, onShare, onCast, copied }
   onShare: () => void; onCast: () => void; copied: boolean;
 }) {
   const badge = AGENT[item.agent] ?? AGENT.blue;
-  const tint = tintFor(item);
+  const accent = accentFor(item);
   return (
     <div
-      className={`relative overflow-hidden ba-card rounded-2xl h-full flex flex-col feed-in ${fresh ? "feed-flash" : ""} ${hero ? "p-7 sm:p-8 lg:col-span-2" : "p-5"}`}
+      className={`relative overflow-hidden ba-card rounded-2xl flex flex-col feed-in ${fresh ? "feed-flash" : ""} ${hero ? "p-6 sm:p-7 sm:col-span-2 lg:col-span-2" : "p-5 h-full"}`}
       style={{
         animationDelay: `${delay}ms`,
-        backgroundImage: hero ? "linear-gradient(180deg,#0d0d12,#0a0a10)" : tint ? `linear-gradient(0deg, ${tint}, ${tint})` : undefined,
+        borderLeft: `2px solid ${accent}`,
+        maxHeight: hero ? 320 : undefined,
+        backgroundImage: hero
+          ? "linear-gradient(180deg,#0d0d12,#0a0a10)"
+          : `linear-gradient(0deg, ${tintRGBA(accent, 0.08)}, ${tintRGBA(accent, 0.08)})`,
       }}
     >
       {hero && <div className="absolute top-0 inset-x-0 h-0.5" style={{ background: "linear-gradient(90deg,#4FC3F7,#A78BFA)" }} />}
@@ -388,7 +565,7 @@ function FeedCard({ item, history, hero, fresh, delay, onShare, onCast, copied }
 
       <h3 className={`font-bold text-white mb-3 ${hero ? "text-2xl" : "text-base"}`}>{item.title}</h3>
 
-      <div className="flex-1">
+      <div className={hero ? "overflow-hidden" : "flex-1"}>
         <CardBody item={item} history={history} large={hero} />
       </div>
 
@@ -410,19 +587,6 @@ function FeedCard({ item, history, hero, fresh, delay, onShare, onCast, copied }
     </div>
   );
 }
-
-// ─── time grouping ──────────────────────────────────────────────────────────
-
-function bucketOf(ts: number): string {
-  const now = new Date(); const d = new Date(ts);
-  const sameDay = now.toDateString() === d.toDateString();
-  if (sameDay && now.getHours() === d.getHours()) return "This hour";
-  if (sameDay) return "Today";
-  const y = new Date(now); y.setDate(now.getDate() - 1);
-  if (y.toDateString() === d.toDateString()) return "Yesterday";
-  return "Earlier";
-}
-const BUCKET_ORDER = ["This hour", "Today", "Yesterday", "Earlier"];
 
 // ─── page ───────────────────────────────────────────────────────────────────
 
@@ -503,13 +667,15 @@ export default function FeedPage() {
     };
   }, [items]);
 
-  const hero = filtered[0];
-  const rest = filtered.slice(1);
-  const groups = useMemo(() => {
-    const g: Record<string, FeedItem[]> = {};
-    rest.forEach((i) => { (g[bucketOf(i.timestamp)] ??= []).push(i); });
-    return BUCKET_ORDER.filter((b) => g[b]?.length).map((b) => ({ bucket: b, items: g[b] }));
-  }, [rest]);
+  // Dedup the repetitive hourly snapshots → latest item per tool (newest-first).
+  const deduped = useMemo(() => {
+    const seen = new Set<string>(); const out: FeedItem[] = [];
+    for (const it of filtered) if (!seen.has(it.tool)) { seen.add(it.tool); out.push(it); }
+    return out;
+  }, [filtered]);
+  const heroItem = useMemo(() => deduped.find((i) => i.tool === "base-alpha") ?? deduped[0], [deduped]);
+  const rest = useMemo(() => deduped.filter((i) => i.id !== heroItem?.id), [deduped, heroItem]);
+  const updatedAgo = items[0]?.timestamp ? ago(items[0].timestamp) : null;
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-[#050508]">
@@ -541,6 +707,7 @@ export default function FeedPage() {
                 {f.label}
               </button>
             ))}
+            {updatedAgo && <span className="hidden sm:inline font-mono text-[10px] text-slate-600 ml-1">updated {updatedAgo}</span>}
             <button onClick={() => load()} disabled={loading}
               className="font-mono text-[11px] px-2.5 py-1 rounded-full border border-[#1A1A2E] text-slate-400 hover:text-white hover:border-[#4FC3F7]/40 transition-colors disabled:opacity-40 ml-1">
               {loading ? "…" : "↻"}
@@ -553,8 +720,8 @@ export default function FeedPage() {
       {/* body */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5">
         {loading && items.length === 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-            <SkeletonCard hero /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <SkeletonCard hero /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
           </div>
         )}
 
@@ -579,26 +746,15 @@ export default function FeedPage() {
           </div>
         )}
 
-        {filtered.length > 0 && (
-          <div className="flex flex-col gap-6">
-            {hero && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-                <FeedCard item={hero} history={items} hero delay={0} fresh={freshIds.has(hero.id)}
-                  onShare={() => share(hero)} onCast={() => castToFarcaster(hero.shareText)} copied={copied === hero.id} />
-              </div>
+        {deduped.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            {heroItem && (
+              <FeedCard item={heroItem} history={items} hero delay={0} fresh={freshIds.has(heroItem.id)}
+                onShare={() => share(heroItem)} onCast={() => castToFarcaster(heroItem.shareText)} copied={copied === heroItem.id} />
             )}
-            {groups.map((g) => (
-              <div key={g.bucket}>
-                <div className="font-mono text-[10px] text-slate-600 uppercase tracking-widest mb-3 flex items-center gap-2">
-                  <span className="w-1 h-1 rounded-full bg-slate-700" /> {g.bucket}
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-                  {g.items.map((item, idx) => (
-                    <FeedCard key={item.id} item={item} history={items} delay={Math.min(idx, 8) * 50}
-                      fresh={freshIds.has(item.id)} onShare={() => share(item)} onCast={() => castToFarcaster(item.shareText)} copied={copied === item.id} />
-                  ))}
-                </div>
-              </div>
+            {rest.map((item, idx) => (
+              <FeedCard key={item.id} item={item} history={items} delay={Math.min(idx + 1, 10) * 50}
+                fresh={freshIds.has(item.id)} onShare={() => share(item)} onCast={() => castToFarcaster(item.shareText)} copied={copied === item.id} />
             ))}
           </div>
         )}
