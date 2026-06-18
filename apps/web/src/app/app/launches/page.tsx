@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { useAccount } from "wagmi";
-import AppPageHeader from "@/components/app/AppPageHeader";
 
 const ACCENT = "#F59E0B";
 
@@ -192,16 +192,19 @@ export default function LaunchesPage() {
   return (
     <div className="flex flex-col h-full bg-[#050508] text-white font-mono overflow-hidden">
       {showLaunch && <LaunchModal onClose={() => setShowLaunch(false)} onLaunched={load} />}
-      <AppPageHeader
-        label="LAUNCHES"
-        subtitle="Tokens launched through Blue Chat · live on Base"
-        accent={ACCENT}
-        right={
-          <button onClick={() => setShowLaunch(true)} className="hover:text-[#F59E0B] transition-colors">
-            + Launch a token →
-          </button>
-        }
-      />
+      <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-[#1A1A2E] shrink-0">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-bold text-white leading-tight">Launches</h1>
+          <p className="font-mono text-[11px] text-slate-500 truncate mt-0.5">Fair launch on Base via Bankr</p>
+        </div>
+        <Link
+          href="/launch"
+          className="font-mono text-[12px] font-bold px-4 py-2 rounded-lg transition-all shrink-0 hover:opacity-90"
+          style={{ background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}40` }}
+        >
+          Launch Token →
+        </Link>
+      </div>
 
       <div className="flex-1 overflow-y-auto relative">
         {/* Ambient glow */}
@@ -210,7 +213,7 @@ export default function LaunchesPage() {
             style={{ background: `radial-gradient(ellipse 80% 50% at 50% -10%, ${ACCENT}0A 0%, transparent 70%)` }} />
         </div>
 
-        <div className="relative px-6 py-6 max-w-5xl mx-auto">
+        <div className="relative px-4 sm:px-6 py-6">
           {/* Stats strip */}
           <div className="grid grid-cols-3 gap-3 mb-6">
             <StatChip label="TOKENS LAUNCHED" value={loading ? "…" : String(data?.count ?? 0)} />
@@ -241,7 +244,7 @@ export default function LaunchesPage() {
               </button>
             </div>
           ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {launches.map((l) => <LaunchCard key={l.tokenAddress} l={l} />)}
             </div>
           )}
