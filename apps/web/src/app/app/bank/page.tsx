@@ -207,10 +207,10 @@ export default function BankPage() {
     <div className="flex h-full w-full bg-[#050508] text-slate-200">
 
       {/* ── Account / status sidebar (info, not page-nav) ─────────────────── */}
-      <aside className="hidden md:flex flex-col w-72 shrink-0 border-r border-[#1A1A2E] bg-[#070710] overflow-y-auto">
-        <div className="px-4 py-4 border-b border-[#1A1A2E]">
-          <div className="font-mono text-[12px] tracking-widest text-[#4FC3F7] font-bold">🔵 BLUEBANK</div>
-          <div className="font-mono text-[9px] text-[#34D399] mt-1">● Banking services · LIVE</div>
+      <aside className="hidden lg:flex flex-col w-72 shrink-0 h-full border-r border-[#1A1A2E] bg-[#050508] overflow-y-auto">
+        <div className="px-5 h-14 flex items-center border-b border-[#1A1A2E] shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0 mr-2" />
+          <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUEBANK</p>
         </div>
 
         {/* Earning widget (BlueBank's "savings" card) */}
@@ -256,14 +256,17 @@ export default function BankPage() {
       </aside>
 
       {/* ── Content — single page ────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        {/* Standard /app page header — // TITLE format (matches Chat / Hub) */}
+        <div className="px-4 sm:px-6 h-14 flex items-center border-b border-[#1A1A2E] shrink-0">
+          <div className="min-w-0">
+            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// YOUR ACCOUNT ON BASE</p>
+            <p className="font-mono text-[10px] text-slate-700 mt-1 truncate">{name || shortAddr(acct)} · <span className="text-[#34D399]">non-custodial</span> · you hold the keys</p>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
         <div className="w-full">
 
-          {/* Header */}
-          <div className="mb-5">
-            <h1 className="font-mono text-lg font-bold text-white">Your account on Base</h1>
-            <p className="font-mono text-[11px] text-slate-500 mt-0.5">{name || shortAddr(acct)} · <span className="text-[#34D399]">non-custodial</span> · you hold the keys</p>
-          </div>
 
           {/* Top row: cash balance + action panel — FIXED height so switching the
               right-panel tab (Positions/Earn/Send/Receive) never reflows the page. */}
@@ -532,6 +535,7 @@ export default function BankPage() {
               </p>
             )}
           </div>
+        </div>
         </div>
       </main>
     </div>
