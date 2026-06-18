@@ -23,8 +23,16 @@ html {
 body {
   background-color: var(--bg);
   color: #E2E8F0;
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'DM Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'DM Sans', sans-serif;
+}
+
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', monospace;
 }
 
 /* Scrollbar */
@@ -99,4 +107,21 @@ body {
 }
 .animate-fadeIn {
   animation: fadeIn 0.18s ease-out forwards;
+}
+
+/* Logo glow pulse */
+@keyframes breathe {
+  0%, 100% { opacity: 0.7; filter: drop-shadow(0 0 4px #4FC3F7); }
+  50%      { opacity: 1;   filter: drop-shadow(0 0 10px #4FC3F7); }
+}
+.animate-breathe {
+  animation: breathe 3s ease-in-out infinite;
+}
+
+/* Typing cursor blink */
+@keyframes blink {
+  50% { opacity: 0; }
+}
+.animate-blink {
+  animation: blink 1s step-end infinite;
 }
