@@ -3,8 +3,8 @@ import { DocHeader, H2, P, CardGrid, Card, PrevNext, Callout } from "./_ui";
 import { STATS, PRODUCTS, FOUNDATION } from "./_data";
 
 export const metadata = {
-  title: "Blue Agent Docs — Overview",
-  description: "Blue Agent is the Base-native founder console: 24 CLI commands, 40 skills, 68 Hub tools, 56 MCP tools — all grounded in verified Base knowledge.",
+  title: "BlueAgent Docs — The Builder OS for Base",
+  description: "BlueAgent: 74 AI tools, Blue Chat, Blue Feed — built for Base builders and autonomous agents. x402 native, pay per call.",
 };
 
 export default function DocsOverview() {
@@ -13,7 +13,7 @@ export default function DocsOverview() {
       <DocHeader
         eyebrow="Introduction"
         title="Blue Agent"
-        lead="The Base-native founder console. Think, build, audit, ship, and raise on Base — powered by Bankr LLM and monetized with x402 micropayments. Everything is grounded in verified Base knowledge: no hallucinated addresses, no generic advice."
+        lead="The Builder OS for Base. 74 AI tools, Blue Chat, and live Base intelligence — built for builders and autonomous agents. x402 native, no API key needed."
       />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-[#1A1A2E] rounded-2xl overflow-hidden border border-[#1A1A2E] my-8">
@@ -25,15 +25,16 @@ export default function DocsOverview() {
         ))}
       </div>
 
-      <H2>What is Blue Agent?</H2>
+      <H2>What is BlueAgent?</H2>
       <P>
-        Blue Agent is an AI agent layer built on Base. It is not just a chatbot — it is a full economic actor:
+        BlueAgent is an AI agent layer built on Base. It is not just a chatbot — it is a full economic actor:
         it holds a wallet, executes onchain transactions, and powers a growing ecosystem of tools and services.
-        This console is the AI-native workflow for Base builders: <strong className="text-slate-200">idea → build → audit → ship → raise</strong>.
+        It is the <strong className="text-slate-200">Builder OS for Base</strong> — chat with AI agents, run 74 tools,
+        and read live Base intelligence, all in one place.
       </P>
 
       <H2>The ecosystem</H2>
-      <P>Four products, one agent — all built on Base, all powered by Bankr LLM and x402.</P>
+      <P>Four products, one agent — all built on Base, all x402 native.</P>
       <CardGrid cols={2}>
         {PRODUCTS.map((p) => (
           <Card key={p.name} title={p.name} color={p.color} href={p.link}>
@@ -59,8 +60,9 @@ export default function DocsOverview() {
       </div>
 
       <Callout color="#34D399" title="New here?">
-        Start with the <Link href="/docs/quickstart" className="text-[#34D399] underline">Quickstart</Link> to install the CLI and run your
-        first command in 60 seconds — or open <Link href="/app/chat" className="text-[#34D399] underline">Blue Chat</Link> for zero-install access.
+        Open <Link href="/app/chat" className="text-[#34D399] underline">Blue Chat</Link> for zero-install access, or browse the{" "}
+        <Link href="/app/hub" className="text-[#34D399] underline">Hub</Link>&apos;s 74 pay-per-call tools. The{" "}
+        <Link href="/docs/quickstart" className="text-[#34D399] underline">Quickstart</Link> gets you running in 60 seconds.
       </Callout>
 
       <PrevNext current="/docs" />
