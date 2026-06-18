@@ -51,6 +51,39 @@ export function isSolidity(lang: string): boolean {
   return lang === "solidity" || lang === "sol";
 }
 
+// ─── Inline artifact card (in-message) ─────────────────────────────────────────
+// A fenced block is promoted to an artifact card when its language is one of
+// these AND it's substantial (> 20 lines). Otherwise it renders as a plain
+// code block.
+const ARTIFACT_CARD_LANGS = new Set([
+  "html", "tsx", "jsx", "ts", "js", "sol", "py",
+  "solidity", "typescript", "javascript", "python", // full-name aliases LLMs emit
+]);
+
+export function isArtifactCardLang(lang: string): boolean {
+  return ARTIFACT_CARD_LANGS.has(lang.toLowerCase());
+}
+
+export function langToExt(lang: string): string {
+  return LANG_TO_EXT[lang.toLowerCase()] ?? lang.toLowerCase();
+}
+
+// Filename from a `// filename: x` or `# filename: x` hint in the code
+// (also matches a block-comment form); otherwise `output.<ext>`.
+export function inferFilename(code: string, lang: string): string {
+  const m = code.match(/(?:\/\/|#|\/\*)\s*filename:\s*([A-Za-z0-9._/-]+)/i);
+  if (m) return m[1].replace(/^\.?\//, "");
+  return `output.${langToExt(lang)}`;
+}
+
+export const LANG_COLOR: Record<string, string> = {
+  solidity: "#627EEA", sol: "#627EEA",
+  typescript: "#3178C6", ts: "#3178C6", tsx: "#3178C6",
+  javascript: "#F7DF1E", js: "#F7DF1E", jsx: "#F7DF1E",
+  python: "#3572A5", py: "#3572A5",
+  html: "#E34C26", css: "#563D7C",
+};
+
 // ─── Extraction ───────────────────────────────────────────────────────────────
 
 const CODE_BLOCK = /```(\w+)?\n([\s\S]*?)```/g;
