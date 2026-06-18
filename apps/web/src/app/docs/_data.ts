@@ -2,23 +2,25 @@
 // stays thin and the numbers don't drift across pages.
 
 export const STATS = [
-  { value: "24", label: "Commands", color: "#4FC3F7" },
-  { value: "40", label: "Skills", color: "#34D399" },
-  { value: "68", label: "Hub Tools", color: "#A78BFA" },
-  { value: "56", label: "MCP Tools", color: "#fbbf24" },
+  { value: "74", label: "Hub Tools",  color: "#4FC3F7" },
+  { value: "70", label: "x402 Tools", color: "#34D399" },
+  { value: "57", label: "MCP Tools",  color: "#A78BFA" },
+  { value: "3",  label: "Agents",     color: "#fbbf24" },
 ];
 
 export const PRODUCTS = [
-  { name: "Blue Chat", color: "#A78BFA", desc: "AI chat for Base builders · Sonnet / Opus / Venice · credit system", link: "/app/chat", label: "Open Chat →" },
-  { name: "Blue Hub",  color: "#4FC3F7", desc: "68 AI tools · 3-agent consensus · pay per use via x402",            link: "/hub",      label: "Open Hub →" },
-  { name: "Blue CLI",  color: "#34D399", desc: "@blueagent/cli · idea / build / audit / ship · Terminal + TUI",     link: "/docs/commands", label: "View Commands →" },
-  { name: "Blue API",  color: "#fbbf24", desc: "60+ x402 endpoints · USDC on Base · no subscription",               link: "https://api.blueagent.dev/docs", label: "API Docs →" },
+  { name: "Blue Chat", color: "#A78BFA", desc: "AI agent chat · multi-model · skill-based · Built for Base builders",     link: "/app/chat", label: "Open Chat →" },
+  { name: "Blue Hub",  color: "#4FC3F7", desc: "74 AI tools · 3-agent consensus · x402 pay-per-call · no API key",        link: "/app/hub",  label: "Open Hub →" },
+  { name: "Blue Feed", color: "#FB923C", desc: "24/7 Base intelligence · Aeon-powered · shareable · Cast to Farcaster",   link: "/app/feed", label: "Coming Soon" },
+  { name: "Blue Code", color: "#34D399", desc: "Describe an app → Blue builds and deploys it on Base",                    link: "/app/chat", label: "Coming Soon" },
 ];
 
 export const FOUNDATION = [
-  { label: "Bankr LLM", desc: "llm.bankr.bot — AI backbone for all commands and chat", color: "#4FC3F7" },
-  { label: "x402",      desc: "Pay per call in USDC — no subscription, no signup",      color: "#34D399" },
-  { label: "Base",      desc: "All onchain actions on Base (chain ID 8453)",            color: "#2563EB" },
+  { label: "Venice AI", desc: "Primary LLM for x402 handlers + web search",    color: "#4FC3F7" },
+  { label: "Bankr",     desc: "x402 Cloud distribution + skill ecosystem",      color: "#A78BFA" },
+  { label: "x402",      desc: "Pay per call in USDC or $BLUEAGENT — no signup", color: "#34D399" },
+  { label: "Base",      desc: "All onchain actions on Base (chain ID 8453)",    color: "#2563EB" },
+  { label: "Moralis",   desc: "Wallet data, token holdings, tx history",        color: "#fbbf24" },
 ];
 
 export const CHAT_MODELS = [
