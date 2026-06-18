@@ -56,23 +56,13 @@ const NAV_TABS: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
       </svg>
     ),
   },
-  {
-    id: "cron",
-    label: "Scheduled",
-    icon: (
-      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
-  },
   // Settings is no longer a tab here — it opens as a modal from the footer
   // account chip (ChatGPT/Claude pattern). See SettingsModal + onOpenSettings.
 ];
 
 // The labeled action rows shown under "New chat" (skills · tools · scheduled).
 // "chat" is excluded — the conversation list itself is the chat surface.
-const ACTION_ORDER: ActiveTab[] = ["models", "skills", "tools", "cron"];
+const ACTION_ORDER: ActiveTab[] = ["models", "skills", "tools"];
 const ACTION_ITEMS = ACTION_ORDER
   .map(id => NAV_TABS.find(t => t.id === id))
   .filter((t): t is (typeof NAV_TABS)[number] => Boolean(t));
@@ -89,10 +79,8 @@ export default function AppSidebar({
 }) {
   const {
     tasks, activeTaskId, createNewTask, selectTask, deleteTask,
-    crons, credits, isUnlimited, holderTier, walletReady,
+    credits, isUnlimited, holderTier, walletReady,
   } = useChat();
-
-  const activeCrons = crons.filter(c => c.active).length;
 
   // Only show real conversations — the active New Chat draft (empty messages)
   // stays out of history until its first message is sent.
@@ -129,7 +117,6 @@ export default function AppSidebar({
         {/* Skills · Tools · Scheduled */}
         {ACTION_ITEMS.map(item => {
           const isActive = activeTab === item.id;
-          const hasBadge = item.id === "cron" && activeCrons > 0;
           return (
             <button
               key={item.id}
@@ -148,11 +135,6 @@ export default function AppSidebar({
               >
                 {item.label}
               </span>
-              {hasBadge && (
-                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-md bg-[#4FC3F715] text-[#4FC3F7]">
-                  {activeCrons}
-                </span>
-              )}
             </button>
           );
         })}
