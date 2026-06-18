@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/feed/daily",
+      "schedule": "0 9 * * *"
+    },
+    {
       "path": "/api/cron/daily-brief",
       "schedule": "0 8 * * *"
     },

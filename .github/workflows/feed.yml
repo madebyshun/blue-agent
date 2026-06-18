@@ -1,17 +1,26 @@
-name: Blue Feed — hourly data push
+name: Blue Feed — data push
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 * * * *'   # hourly feed
+    - cron: '0 9 * * *'   # daily feed (heavier tools)
   workflow_dispatch:
 
 jobs:
   push-feed:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger BlueAgent Feed
+      - name: Trigger hourly feed
         run: |
           curl -X POST https://blueagent.dev/api/cron/feed \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json" \
-            --max-time 30
+            --max-time 60
+
+      - name: Trigger daily feed
+        if: github.event.schedule == '0 9 * * *' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -X POST https://blueagent.dev/api/cron/feed/daily \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --max-time 60
