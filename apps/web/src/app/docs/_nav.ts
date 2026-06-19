@@ -13,7 +13,8 @@ export const DOC_NAV: DocGroup[] = [
   { group: "Products", items: [
     { title: "Blue Chat", href: "/docs/blue-chat" },
     { title: "Blue Hub",  href: "/docs/blue-hub" },
-    { title: "BlueBank",  href: "/docs/bluebank" },
+    { title: "Blue Feed", href: "/docs/blue-feed" },
+    { title: "Blue Bank", href: "/docs/bluebank" },
   ]},
   { group: "Knowledge", items: [
     { title: "Skills",      href: "/docs/skills" },

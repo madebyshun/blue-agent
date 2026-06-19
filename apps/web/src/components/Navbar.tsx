@@ -4,10 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV_LINKS = [
-  { label: "Hub",    href: "/hub" },
   { label: "About",  href: "/about" },
   { label: "Skills", href: "/skills" },
-  { label: "API",    href: "https://api.blueagent.dev/docs" },
   { label: "Docs",   href: "/docs" },
 ];
 
