@@ -28,7 +28,7 @@ export async function generateMetadata(
 
     const title = `${found.title} · Blue Feed`;
     const description = found.summary || "Live Base ecosystem intelligence.";
-    const url = `https://blueagent.dev/app/feed?item=${found.id}`;
+    const url = `https://blueagent.dev/app/feed/${found.id}`;
     const image = {
       url: `https://blueagent.dev/api/og/feed/${encodeURIComponent(found.id)}`,
       width: 1200,
