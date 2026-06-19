@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { DocHeader, H2, P, CardGrid, Card, Callout, PrevNext } from "../_ui";
 
-export const metadata = { title: "BlueBank — Blue Agent Docs" };
+export const metadata = { title: "Blue Bank — Blue Agent Docs" };
 
 const FEATURES = [
   { title: "Smart Wallet", color: "#4FC3F7", desc: "Open an account with Face ID — Coinbase Smart Wallet, no seed phrase. Recoverable, passkey-secured." },
@@ -19,8 +19,8 @@ export default function BlueBankDoc() {
     <article>
       <DocHeader
         eyebrow="Products"
-        title="BlueBank"
-        lead="A non-custodial consumer neobank on Base. Sign in with Face ID, hold USDC, earn real yield, and move money — no seed phrase, no custody. BlueBank only prepares the transaction; you sign it from your own wallet."
+        title="Blue Bank"
+        lead="A non-custodial consumer neobank on Base. Sign in with Face ID, hold USDC, earn real yield, and move money — no seed phrase, no custody. Blue Bank only prepares the transaction; you sign it from your own wallet."
       />
 
       <Callout color="#34D399" title="Non-custodial by design">

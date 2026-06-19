@@ -68,7 +68,7 @@ const PRICING = [
   { tier: "Max",     hold: "10M BLUEAGENT",   credits: "unlimited",    note: "40% discount",  highlight: true  },
 ];
 
-const BUY_URL = "https://app.uniswap.org/swap?chain=base&outputCurrency=0xf895783b2931c919955e18b5e3343e7c7c456ba3";
+const BUY_URL = "https://bankr.bot/agents/blue-agent";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -365,13 +365,8 @@ export default function Home() {
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
             num="3.0" kicker="Feed" accent="#FB923C"
-            title={
-              <span className="inline-flex flex-wrap items-center gap-3">
-                Live Base intelligence. <span className="text-[#FB923C]">24/7.</span>
-                <span className="font-mono text-[10px] tracking-widest text-[#FB923C] border border-[#FB923C]/30 bg-[#FB923C]/5 rounded-full px-3 py-1 align-middle">COMING SOON</span>
-              </span>
-            }
-            sub={<><span className="text-[#FB923C]">⭐ Aeon</span> monitors Base every hour. No prompts needed — just signal.</>}
+            title={<>Live Base intelligence. <span className="text-[#FB923C]">24/7.</span></>}
+            sub={<>Powered by <span className="text-[#FB923C]">⭐ Aeon</span> · 🟦 BlueAgent · 🦈 MiroShark · updates every hour</>}
           />
           {/* TOP — feed card mockup */}
           <Reveal>
@@ -410,7 +405,11 @@ export default function Home() {
               </Reveal>
             ))}
           </div>
-          <p className="font-mono text-[12px] text-slate-500 mt-4">Powered by ⭐ Aeon · Shareable · Cast to Farcaster</p>
+          <div className="mt-6">
+            <Link href="/app/feed" className="inline-block text-sm font-semibold text-[#FB923C] border border-[#FB923C]/30 px-7 py-3 rounded-xl hover:bg-[#FB923C]/5 transition-all">
+              View Blue Feed →
+            </Link>
+          </div>
         </section>
 
         {/* ══════════ 4.0 AGENTS ══════════ */}
