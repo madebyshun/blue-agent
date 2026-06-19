@@ -244,6 +244,52 @@ Example for "how to deploy a contract on Base":
 
 Keep them short (≤ 8 words), specific, and actionable.`;
 
+// ─── Integration prompt sections (conditionally appended) ─────────────────────
+
+// Bankr agent — always on (Bankr is the default LLM + agent provider).
+const BANKR_AGENT_SECTION = `## Bankr Agent
+You have access to Bankr agent capabilities:
+- Real-time token prices across chains (use hub_token_price for Base first)
+- Token swaps on Base and other chains
+- Polymarket prediction markets
+- Portfolio management via Bankr wallet
+
+For Base tokens: always use hub_token_price first ($0.01)
+For other chains: use Bankr price tools
+For swaps: show preview before executing, require confirmation`;
+
+// Base MCP — appended only when the client enables it (body.baseMcp).
+const BASE_MCP_SECTION = `## Base MCP
+You have access to Base MCP (mcp.base.org) for onchain actions:
+- get_wallets: check wallet address + balance
+- send: send tokens (requires user approval)
+- swap: swap tokens (requires user approval)
+- sign: sign messages (requires user approval)
+- send_calls: batch contract calls (requires user approval)
+- get_request_status: check approval status
+- chain_rpc_request: read onchain state
+
+APPROVAL RULES:
+- Every write action returns { approvalUrl, requestId }
+- ALWAYS show the approvalUrl link to user
+- ALWAYS wait for user to approve before claiming success
+- NEVER assume success without polling get_request_status
+- NEVER execute write actions without showing approval link`;
+
+// Coinbase MCP — appended only when the user has connected (body.coinbase).
+const COINBASE_SECTION = `## Coinbase for Agents
+You have access to Coinbase spot trading:
+- 900+ trading pairs
+- Portfolio management
+- USDC/USD conversions
+
+SAFETY RULES:
+- ALWAYS preview orders before executing
+- ALWAYS show fees + estimated fill price
+- ALWAYS require explicit user confirmation
+- NEVER trade without confirmation
+- Use --dry-run equivalent before any trade`;
+
 // ─── Hub tool definitions (Anthropic tool format) ─────────────────────────────
 
 const HUB_TOOLS = [
@@ -1474,6 +1520,11 @@ export async function POST(req: NextRequest) {
     // ledger (Week 2 of the credit-economics redesign). Guest sessions (no
     // address) keep the old localStorage daily-quota flow on the frontend.
     address?:     string;
+    // Integration toggles + installed-skill prompt, set client-side and flowed
+    // through so the system prompt gains the matching guidance sections.
+    baseMcp?:     boolean;
+    coinbase?:    boolean;
+    skills?:      string;
   } = {};
   try {
     body = await req.json();
@@ -1481,7 +1532,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { messages, tier = "pro", memoryContext, provider, modelId, webSearch = false, attachments = [], address } = body;
+  const { messages, tier = "pro", memoryContext, provider, modelId, webSearch = false, attachments = [], address, baseMcp = false, coinbase = false, skills } = body;
   if (!messages?.length) {
     return NextResponse.json({ error: "messages array required." }, { status: 400 });
   }
@@ -1525,6 +1576,10 @@ export async function POST(req: NextRequest) {
   const modelLine = `## Active model\nYou are currently running as: **${modelLabel}**. When asked "what model are you?", "which AI are you?", "what are you running on?", or similar — answer precisely with this model name.`;
   const system = [
     BASE_SYSTEM,
+    BANKR_AGENT_SECTION,
+    baseMcp  ? BASE_MCP_SECTION : "",
+    coinbase ? COINBASE_SECTION : "",
+    skills   ? `## Installed Skills\nThe user has installed these skill packs — use their tools / knowledge when relevant:\n\n${skills}` : "",
     modelLine,
     memoryContext ?? "",
     cmdPrompt ?? "",

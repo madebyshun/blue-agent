@@ -13,6 +13,7 @@ import SkillsPanel   from "@/app/chat/components/SkillsPanel";
 import SettingsModal from "@/app/chat/components/SettingsModal";
 import ChatMessages  from "@/app/chat/components/ChatMessages";
 import ChatInput     from "@/app/chat/components/ChatInput";
+import IntegrationBadges from "@/app/chat/components/IntegrationBadges";
 import ArtifactsPanel from "@/app/chat/components/ArtifactsPanel";
 import type { ActiveTab } from "@/app/chat/types";
 
@@ -118,6 +119,10 @@ function ChatShell() {
                 <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
                   <ChatMessages />
                   <ChatInput />
+                  <IntegrationBadges
+                    onOpenTools={() => setActiveTab("tools")}
+                    onOpenSkills={() => setActiveTab("skills")}
+                  />
                 </div>
                 {artifactsPanelOpen && (
                   <div className="hidden lg:flex flex-col w-96 shrink-0 border-l border-[#1A1A2E] h-full overflow-hidden">
