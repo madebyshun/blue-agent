@@ -1015,8 +1015,10 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
 
   // Fee recipient — who gets the 57% creator share. Pre-selected from the Q&A if
   // any; left blank, fees default to BlueAgent (see resolved* below).
+  // Default tab = X so the blank-field default visibly matches @blueagent_
+  // (the creator fee routes there until the user picks/fills a recipient).
   const initType = (["wallet", "x", "farcaster", "ens"].includes(result.feeRecipientType ?? "")
-    ? result.feeRecipientType : "wallet") as FeeType;
+    ? result.feeRecipientType : "x") as FeeType;
   const [feeType,  setFeeType]  = useState<FeeType>(initType);
   const [feeValue, setFeeValue] = useState(result.feeRecipientValue ?? "");
 

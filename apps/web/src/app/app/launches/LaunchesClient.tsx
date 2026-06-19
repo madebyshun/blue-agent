@@ -296,8 +296,9 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
   const [err, setErr] = useState("");
   const [out, setOut] = useState<{ tokenAddress?: string | null; basescan?: string | null; uniswap?: string | null; bankr?: string | null } | null>(null);
 
-  // Pre-fill the fee recipient with the connected wallet (editable).
-  useEffect(() => { if (address && !feeRecipient) setFeeRecipient(address); }, [address, feeRecipient]);
+  // Fee recipient is left BLANK by default → the 57% creator fee routes to
+  // @blueagent_ (see `fee || "blueagent_"` in launch()). The user can opt to
+  // redirect it to their own wallet/handle by filling the field.
 
   const cleanName = name.trim();
   const cleanSymbol = symbol.replace(/^\$/, "").trim();
