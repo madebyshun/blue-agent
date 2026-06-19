@@ -45,10 +45,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         {/* top: brand + agent badge */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <div style={{ display: "flex", width: 56, height: 56, borderRadius: 16, background: "linear-gradient(135deg,#1A52FF,#33C3FF)", alignItems: "center", justifyContent: "center", gap: 6 }}>
-              <div style={{ display: "flex", width: 8, height: 22, borderRadius: 3, backgroundColor: "#fff" }} />
-              <div style={{ display: "flex", width: 8, height: 22, borderRadius: 3, backgroundColor: "#fff" }} />
-            </div>
+            <img src="https://blueagent.dev/logomark.svg" width={56} height={56} style={{ borderRadius: 16 }} />
             <div style={{ display: "flex", fontFamily: f.display, fontSize: 30, fontWeight: 700, letterSpacing: 1 }}>
               <span style={{ color: "#fff" }}>BLUE</span>
               <span style={{ color: "#4FC3F7" }}>FEED</span>
