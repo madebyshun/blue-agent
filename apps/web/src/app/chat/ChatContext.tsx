@@ -15,6 +15,7 @@ import {
   loadPersona, savePersona, loadCustomPrompt, saveCustomPrompt,
 } from "./storage";
 import { extractArtifacts } from "./artifacts";
+import { enabledSkillsPrompt, loadIntegrations, runSkillCommand } from "./integrations";
 import { getPersona } from "./personas";
 import {
   creditCost, deductCredits, addCredits,
@@ -410,6 +411,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const userMsg = text.trim();
     if (!userMsg || streaming) return;
 
+    // /skill commands run entirely client-side (GitHub fetch + localStorage) —
+    // they never reach the LLM and never cost credits.
+    if (/^\/skill(\s|$)/i.test(userMsg)) {
+      let stid = activeTaskId;
+      let sbase: Message[] = activeTask?.messages ?? [];
+      if (!stid) {
+        const ft = createTask(chatTier, personaId);
+        stid = ft.id;
+        setTasksState(prev => { const u = [ft, ...prev]; saveTasks(u, walletAddr); return u; });
+        setActiveTaskId(stid);
+        sbase = [];
+      }
+      setInput("");
+      const result = await runSkillCommand(userMsg);
+      const turn: Message[] = [
+        { role: "user", content: userMsg, createdAt: Date.now() },
+        { role: "assistant", content: result, createdAt: Date.now() },
+      ];
+      setTasksState(prev => {
+        const updated = prev.map(t => t.id === stid
+          ? { ...t, title: t.title || userMsg.slice(0, 50), messages: [...sbase, ...turn], updatedAt: Date.now() }
+          : t);
+        saveTasks(updated, walletAddr);
+        return updated;
+      });
+      return;
+    }
+
     // Gate on the SAME credit value the UI shows — `credits` is the unified
     // ledger balance for connected wallets and the localStorage daily quota
     // for guests. Previously this re-read localStorage directly, which caused
@@ -498,6 +527,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const semanticChunks = searchChunks(queryEmbedding, walletAddr, 3);
     const memoryContext = buildMemoryContext(walletAddr, semanticChunks.length > 0 ? semanticChunks : undefined);
     const modelId = VENICE_MODEL_IDS[chatTier];
+    // Installed-skill prompt + integration toggles → extend the system prompt.
+    const skillsPrompt = enabledSkillsPrompt();
+    const integ = loadIntegrations();
 
     try {
       const res = await fetch("/api/chat", {
@@ -517,6 +549,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           ...(personaPrompt ? { persona: personaPrompt } : {}),
           ...(webSearch     ? { webSearch: true } : {}),
           ...(files.length  ? { attachments: files } : {}),
+          ...(skillsPrompt  ? { skills: skillsPrompt } : {}),
+          ...(integ.baseMcp  ? { baseMcp: true }  : {}),
+          ...(integ.coinbase ? { coinbase: true } : {}),
         }),
         signal: abortRef.current.signal,
       });

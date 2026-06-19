@@ -6,6 +6,7 @@ import {
   type SkillProvider,
 } from "../agent-skills";
 import { useChat } from "../ChatContext";
+import { useIntegrations, setSkillEnabled, removeSkill, runSkillCommand } from "../integrations";
 
 // ── Provider pill colors ───────────────────────────────────────────────────────
 const PROVIDER_BG: Record<SkillProvider, string> = {
@@ -40,6 +41,23 @@ export default function SkillsPanel({ onPick }: { onPick?: () => void }) {
   const { setInput } = useChat();
   const [activeProvider, setActiveProvider] = useState<SkillProvider | "all">("all");
   const [search, setSearch] = useState("");
+
+  // Installed skills (localStorage, from /skill install or the modal below).
+  const { skills: installed } = useIntegrations();
+  const [installOpen, setInstallOpen] = useState(false);
+  const [installInput, setInstallInput] = useState("");
+  const [installBusy, setInstallBusy] = useState(false);
+  const [installMsg, setInstallMsg] = useState("");
+
+  async function doInstall() {
+    const v = installInput.trim();
+    if (!v || installBusy) return;
+    setInstallBusy(true); setInstallMsg("");
+    const res = await runSkillCommand(`/skill install ${v}`);
+    setInstallMsg(res);
+    setInstallBusy(false);
+    if (res.startsWith("✓")) { setInstallInput(""); setTimeout(() => { setInstallOpen(false); setInstallMsg(""); }, 1200); }
+  }
 
   const lc = search.trim().toLowerCase();
 
@@ -130,6 +148,53 @@ export default function SkillsPanel({ onPick }: { onPick?: () => void }) {
       {/* ── Content ── */}
       <div className="flex-1 overflow-y-auto">
         <div className="px-6 py-4 space-y-6">
+
+          {/* Installed skills (GitHub SKILL.md, localStorage-backed) */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-mono text-[9px] text-[#4FC3F7] tracking-widest flex items-center gap-2">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#4FC3F7]" />
+                INSTALLED · {installed.length}
+              </p>
+              <button
+                onClick={() => { setInstallMsg(""); setInstallOpen(true); }}
+                className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F7]/30 text-[#4FC3F7] hover:bg-[#4FC3F7]/10 transition-colors"
+              >
+                + Install
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              {installed.map(s => (
+                <div key={s.name} className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-[#1A1A2E] bg-[#0A0A12]">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[13px] text-slate-200 truncate">{s.name}</span>
+                      {s.default && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded border border-slate-700 text-slate-600 shrink-0">default</span>}
+                    </div>
+                    <p className="font-mono text-[10px] text-slate-600 truncate">{s.description}</p>
+                  </div>
+                  <button
+                    onClick={() => setSkillEnabled(s.name, !s.enabled)}
+                    title={s.enabled ? "Disable" : "Enable"}
+                    className="relative w-9 h-5 rounded-full transition-colors shrink-0"
+                    style={{ background: s.enabled ? "#34D39955" : "#1A1A2E" }}
+                  >
+                    <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: s.enabled ? 18 : 2 }} />
+                  </button>
+                  <button
+                    onClick={() => removeSkill(s.name)}
+                    title="Remove"
+                    className="font-mono text-[12px] text-slate-600 hover:text-red-400 transition-colors shrink-0"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {installed.length === 0 && (
+                <p className="font-mono text-[10px] text-slate-700">No skills installed. Click + Install, or type <span className="text-slate-500">/skill install owner/repo</span> in chat.</p>
+              )}
+            </div>
+          </section>
 
           {filtered.length === 0 && (
             <div className="text-center py-12">
@@ -290,6 +355,38 @@ export default function SkillsPanel({ onPick }: { onPick?: () => void }) {
 
         </div>
       </div>
+
+      {/* Install modal */}
+      {installOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setInstallOpen(false)} />
+          <div className="relative z-10 w-full max-w-sm rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-mono text-[11px] text-[#4FC3F7] tracking-widest">// INSTALL SKILL</p>
+              <button onClick={() => setInstallOpen(false)} className="font-mono text-[13px] text-slate-500 hover:text-white">✕</button>
+            </div>
+            <p className="font-mono text-[10px] text-slate-600 mb-3">
+              GitHub repo — <span className="text-slate-400">owner/repo</span> or <span className="text-slate-400">owner/repo/path</span>. Fetches its SKILL.md.
+            </p>
+            <input
+              value={installInput}
+              onChange={e => setInstallInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") doInstall(); }}
+              placeholder="BankrBot/skills/blueagent"
+              autoFocus
+              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-white placeholder:text-slate-700 outline-none mb-3"
+            />
+            <button
+              onClick={doInstall}
+              disabled={installBusy || !installInput.trim()}
+              className="w-full font-mono text-[12px] font-bold py-2 rounded-lg border border-[#4FC3F7]/40 text-[#4FC3F7] hover:bg-[#4FC3F7]/10 transition-colors disabled:opacity-50"
+            >
+              {installBusy ? "Installing…" : "Install"}
+            </button>
+            {installMsg && <p className="font-mono text-[10px] text-slate-400 mt-3 whitespace-pre-wrap leading-relaxed">{installMsg}</p>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
