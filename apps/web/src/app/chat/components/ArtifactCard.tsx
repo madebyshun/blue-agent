@@ -7,8 +7,9 @@ import { inferFilename, langToExt, isSolidity, LANG_COLOR } from "../artifacts";
 function openStackBlitz(filename: string, code: string, lang: string) {
   const isReact = lang === "tsx" || lang === "jsx";
   const isTs = lang === "ts" || lang === "typescript";
+  const isHtml = lang === "html";
   const template = isReact ? "create-react-app" : isTs ? "typescript" : "javascript";
-  const path = isReact ? `src/App.${lang === "jsx" ? "js" : "tsx"}` : filename;
+  const path = isReact ? `src/App.${lang === "jsx" ? "js" : "tsx"}` : isHtml ? "index.html" : filename;
 
   const form = document.createElement("form");
   form.method = "POST";
@@ -42,6 +43,7 @@ function openRemix(code: string) {
 export default function ArtifactCard({ lang, code }: { lang: string; code: string }) {
   const [copied, setCopied]   = useState(false);
   const [preview, setPreview] = useState(false);
+  const [saved, setSaved]     = useState(false);
 
   const l        = lang.toLowerCase();
   const filename = inferFilename(code, l);
@@ -53,6 +55,8 @@ export default function ArtifactCard({ lang, code }: { lang: string; code: strin
   const isHtml  = l === "html";
   const isSol   = isSolidity(l);
   const isJsLike = ["tsx", "jsx", "ts", "js", "typescript", "javascript"].includes(l);
+  // StackBlitz opens web code (HTML + JS/TS/React); Solidity → Remix; others copy-only.
+  const canStackBlitz = isJsLike || isHtml;
 
   function copy() {
     navigator.clipboard?.writeText(code).then(() => {
@@ -69,6 +73,27 @@ export default function ArtifactCard({ lang, code }: { lang: string; code: strin
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  // Save to Projects — persisted in localStorage so the user can revisit
+  // generated code (read by a future /app/projects view). Newest first, capped.
+  function saveToProjects() {
+    try {
+      const KEY = "blueagent:projects";
+      const list = JSON.parse(localStorage.getItem(KEY) || "[]");
+      const arr = Array.isArray(list) ? list : [];
+      arr.unshift({
+        id: `proj_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        name: filename,
+        type: langToExt(l),
+        language: l,
+        created: Date.now(),
+        code,
+      });
+      localStorage.setItem(KEY, JSON.stringify(arr.slice(0, 100)));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1800);
+    } catch { /* storage blocked */ }
   }
 
   return (
@@ -128,6 +153,12 @@ export default function ArtifactCard({ lang, code }: { lang: string; code: strin
         >
           Download
         </button>
+        <button
+          onClick={saveToProjects}
+          className="font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#34D399]/30 text-[#34D399] hover:bg-[#34D399]/10 transition-colors"
+        >
+          {saved ? "Saved ✓" : "Save"}
+        </button>
         {isSol && (
           <button
             onClick={() => openRemix(code)}
@@ -136,7 +167,7 @@ export default function ArtifactCard({ lang, code }: { lang: string; code: strin
             Open in Remix ↗
           </button>
         )}
-        {isJsLike && (
+        {canStackBlitz && (
           <button
             onClick={() => openStackBlitz(filename, code, l)}
             className="font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white hover:border-[#4FC3F7]/40 transition-colors"
