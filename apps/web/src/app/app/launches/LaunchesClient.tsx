@@ -392,14 +392,6 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
                 placeholder={address ? "your wallet — or 0x… / blank → @blueagent_" : "0x… — or blank → @blueagent_"} />
             </div>
 
-            <div className="grid grid-cols-2 gap-2 mb-3 font-mono text-[10px]">
-              <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-2.5 py-1.5">
-                <div className="text-slate-600 mb-0.5">SUPPLY</div><div className="text-slate-300">100B fixed</div>
-              </div>
-              <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-2.5 py-1.5">
-                <div className="text-slate-600 mb-0.5">CREATOR FEE</div><div className="text-[#22C55E]">57% of 1.2%</div>
-              </div>
-            </div>
 
             <p className="font-mono text-[9px] text-slate-600 mb-3 leading-relaxed">
               Deploys a <span className="text-amber-400">real, irreversible</span> token on Base via Bankr · 100B fixed supply · gas sponsored. Leave fee recipient blank to default to @blueagent_.
