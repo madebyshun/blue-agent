@@ -29,6 +29,9 @@ type Metric = { label: string; value: string };
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const fonts = await getBrandFonts();
+  const logoSvg = await fetch("https://blueagent.dev/logomark.svg")
+    .then(r => r.text())
+    .catch(() => null);
   const f = brandFonts(fonts.length > 0);
 
   const items = (await kvGet<FeedItem[]>("feed:items").catch(() => null)) ?? [];
@@ -45,7 +48,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         {/* top: brand + agent badge */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <img src="https://blueagent.dev/logomark.svg" width={56} height={56} style={{ borderRadius: 16 }} />
+            <img src={"data:image/svg+xml;utf8," + encodeURIComponent(logoSvg ?? "")} width={56} height={56} style={{ borderRadius: 16 }} />
             <div style={{ display: "flex", fontFamily: f.display, fontSize: 30, fontWeight: 700, letterSpacing: 1 }}>
               <span style={{ color: "#fff" }}>BLUE</span>
               <span style={{ color: "#4FC3F7" }}>FEED</span>
