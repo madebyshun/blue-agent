@@ -1097,14 +1097,6 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
         <LaunchField label="WEBSITE"       value={website}      onChange={setWebsite}     placeholder="https://… (optional)" />
       </div>
 
-      <div className="grid grid-cols-2 gap-2 mb-3 font-mono text-[10px]">
-        <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-2.5 py-1.5">
-          <div className="text-slate-600 mb-0.5">SUPPLY</div><div className="text-slate-300">100B fixed</div>
-        </div>
-        <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-2.5 py-1.5">
-          <div className="text-slate-600 mb-0.5">CREATOR FEE</div><div className="text-[#22C55E]">57% of 1.2% swap fee</div>
-        </div>
-      </div>
 
       {/* Fee recipient — optional; blank = BlueAgent */}
       <div className="mb-3">
