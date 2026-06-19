@@ -33,6 +33,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { cmd: "launch",  icon: "🚀", label: "Launch Token",    hint: "Deploy a real token on Base via Bankr",       example: "/launch <token>" },
   { cmd: "credits", icon: "⚡", label: "Credits",         hint: "Show balance, tier, and how to earn more",   example: "/credits" },
   { cmd: "models",  icon: "🤖", label: "Models",          hint: "List all available AI models + costs",       example: "/models" },
+  { cmd: "skill",   icon: "📦", label: "Skill Packs",     hint: "install / list / remove GitHub skills",      example: "/skill install owner/repo" },
   { cmd: "skills",  icon: "⚡", label: "Skills / Tools",  hint: "List all Hub tools available in chat",       example: "/skills" },
   { cmd: "help",    icon: "📖", label: "Help",            hint: "Show all available commands",                example: "/help" },
 ];
