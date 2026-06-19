@@ -4,6 +4,7 @@
 // integrations are active. Doubles as the control surface: Base MCP toggles,
 // Coinbase connects (OAuth), Tools/Skills jump to their tabs. State is the
 // localStorage-backed integrations store, read live via useIntegrations().
+import { useState } from "react";
 import { useIntegrations, setIntegration } from "../integrations";
 
 const PILL = "font-mono text-[11px] rounded-full px-2 py-0.5 border transition-colors whitespace-nowrap shrink-0";
@@ -13,17 +14,23 @@ export default function IntegrationBadges({
 }: { onOpenSkills?: () => void; onOpenTools?: () => void }) {
   const { integrations, skills } = useIntegrations();
   const enabledSkills = skills.filter(s => s.enabled).length;
+  const [coinbaseModal, setCoinbaseModal] = useState(false);
 
-  function connectCoinbase() {
+  // Click toggles state — OFF → open a confirm modal (NO redirect); ON → disconnect.
+  function onCoinbaseClick() {
     if (integrations.coinbase) { setIntegration("coinbase", false); return; }
-    // Coinbase for Agents — OAuth 2.1. Open the consent page; mark connected
-    // optimistically so the system prompt + badge reflect it this session.
+    setCoinbaseModal(true);
+  }
+  // Confirm in the modal → open Coinbase consent in a NEW TAB + mark connected.
+  function confirmCoinbase() {
     if (typeof window !== "undefined")
       window.open("https://agents.coinbase.com/mcp", "_blank", "noopener,noreferrer");
     setIntegration("coinbase", true);
+    setCoinbaseModal(false);
   }
 
   return (
+    <>
     <div className="flex items-center gap-1.5 px-3 sm:px-4 pb-2 pt-0.5 flex-wrap">
       <button
         onClick={onOpenTools}
@@ -51,7 +58,7 @@ export default function IntegrationBadges({
       </span>
 
       <button
-        onClick={connectCoinbase}
+        onClick={onCoinbaseClick}
         title={integrations.coinbase ? "Coinbase connected — click to disconnect" : "Connect Coinbase (spot trading)"}
         className={`${PILL} ${integrations.coinbase
           ? "text-[#34D399] border-[#34D399]/40 bg-[#34D399]/10"
@@ -70,5 +77,36 @@ export default function IntegrationBadges({
         Skills: {enabledSkills}
       </button>
     </div>
+
+    {/* Connect Coinbase — confirm modal (stays on /app/chat; opens in a new tab) */}
+    {coinbaseModal && (
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => setCoinbaseModal(false)} />
+        <div className="relative z-10 w-full max-w-sm rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[15px]">🟦</span>
+            <p className="font-mono text-[13px] font-bold text-white">Connect Coinbase</p>
+          </div>
+          <p className="font-mono text-[11px] text-slate-400 leading-relaxed mb-4">
+            Enable spot trading on 900+ pairs via Coinbase Advanced Trade.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={confirmCoinbase}
+              className="flex-1 font-mono text-[12px] font-bold py-2 rounded-lg border border-[#34D399]/40 text-[#34D399] hover:bg-[#34D399]/10 transition-colors"
+            >
+              Connect →
+            </button>
+            <button
+              onClick={() => setCoinbaseModal(false)}
+              className="font-mono text-[12px] px-4 py-2 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
