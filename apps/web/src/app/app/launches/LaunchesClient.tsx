@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import Link from "next/link";
 import { useAccount } from "wagmi";
 
 const ACCENT = "#F59E0B";
@@ -175,6 +174,7 @@ export default function LaunchesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showLaunch, setShowLaunch] = useState(false);
+  const [showBankr, setShowBankr] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -192,18 +192,19 @@ export default function LaunchesPage() {
   return (
     <div className="flex flex-col h-full bg-[#050508] text-white font-mono overflow-hidden">
       {showLaunch && <LaunchModal onClose={() => setShowLaunch(false)} onLaunched={load} />}
+      {showBankr && <BankrLaunchModal onClose={() => setShowBankr(false)} />}
       <div className="flex items-center justify-between gap-3 px-4 sm:px-6 h-14 border-b border-[#1A1A2E] shrink-0">
         <div className="min-w-0">
           <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// LAUNCHES</p>
           <p className="font-mono text-[10px] text-slate-700 truncate mt-1">Fair launch on Base via Bankr</p>
         </div>
-        <Link
-          href="/launch"
+        <button
+          onClick={() => setShowBankr(true)}
           className="font-mono text-[12px] font-bold px-4 py-2 rounded-lg transition-all shrink-0 hover:opacity-90"
           style={{ background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}40` }}
         >
           Launch Token →
-        </Link>
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto relative">
@@ -417,6 +418,103 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
             </p>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Bankr launch helper ─────────────────────────────────────────────────────────
+// Points users to the canonical Bankr deploy flows (terminal or @bankrbot on X)
+// in a modal — both CTAs open a NEW TAB, so the user never leaves /app/launches.
+function BankrLaunchModal({ onClose }: { onClose: () => void }) {
+  const [tab, setTab] = useState<"nl" | "x">("nl");
+  const [copied, setCopied] = useState<number | null>(null);
+
+  const CHIPS = [
+    "deploy a token called [name] with symbol [ticker]",
+    "launch a token called CoolBot",
+    "deploy a token called MyAgent",
+  ];
+
+  function copyChip(text: string, i: number) {
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(i);
+      setTimeout(() => setCopied((c) => (c === i ? null : c)), 1500);
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] overflow-hidden shadow-2xl">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-[#1A1A2E]">
+          <div className="min-w-0">
+            <h2 className="font-mono text-[15px] font-bold text-white">Launch a Token on Base</h2>
+            <p className="font-mono text-[11px] text-slate-500 mt-1">100B fixed supply · 57% creator fees · Gas sponsored</p>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-md font-mono text-[13px] text-slate-500 hover:text-white hover:bg-[#1A1A2E] shrink-0">✕</button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1.5 px-5 pt-4">
+          {([["nl", "Natural Language"], ["x", "Via X"]] as const).map(([id, label]) => {
+            const active = tab === id;
+            return (
+              <button key={id} onClick={() => setTab(id)}
+                className="flex-1 font-mono text-[11px] py-2 rounded-lg transition-colors"
+                style={active
+                  ? { color: ACCENT, background: `${ACCENT}15`, border: `1px solid ${ACCENT}40` }
+                  : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-4">
+          {tab === "nl" ? (
+            <>
+              <p className="font-mono text-[12px] text-slate-400 leading-relaxed mb-3">
+                Tell Bankr what you want to deploy. Tokens deploy to Base by default.
+              </p>
+              <div className="flex flex-col gap-2 mb-4">
+                {CHIPS.map((c, i) => (
+                  <button key={i} onClick={() => copyChip(c, i)}
+                    className="text-left font-mono text-[11px] text-slate-300 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-3 py-2 hover:border-[#4FC3F7]/40 transition-colors flex items-center justify-between gap-2">
+                    <span className="truncate">{c}</span>
+                    <span className="font-mono text-[10px] shrink-0" style={{ color: copied === i ? "#34D399" : "#475569" }}>{copied === i ? "copied ✓" : "copy"}</span>
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => window.open("https://bankr.bot/terminal", "_blank", "noopener,noreferrer")}
+                className="w-full font-mono text-[13px] font-bold py-2.5 rounded-xl transition-all hover:opacity-90"
+                style={{ background: "linear-gradient(135deg,#4FC3F7,#29ABE2)", color: "#050508" }}>
+                Open Bankr Terminal →
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="font-mono text-[12px] text-slate-400 leading-relaxed mb-3">
+                Tag <span className="text-slate-200">@bankrbot</span> on X to launch with instant social proof.
+              </p>
+              <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-3 py-3 mb-4 overflow-x-auto">
+                <code className="font-mono text-[12px] text-[#4FC3F7] whitespace-nowrap">@bankrbot deploy a token called MyAgent</code>
+              </div>
+              <button onClick={() => window.open("https://x.com/intent/tweet?text=@bankrbot%20deploy%20a%20token%20called%20", "_blank", "noopener,noreferrer")}
+                className="w-full font-mono text-[13px] font-bold py-2.5 rounded-xl border border-[#1A1A2E] text-white hover:bg-[#1A1A2E] transition-colors">
+                Post on X →
+              </button>
+            </>
+          )}
+
+          {/* Fee info — shown on both tabs */}
+          <div className="bg-[#0d0d12] border border-[#1A1A2E] rounded-xl p-4 mt-4">
+            <p className="font-mono text-[11px] text-slate-400">1.2% swap fee · 57% to creator · 36.1% to Bankr</p>
+            <p className="font-mono text-[11px] text-slate-500 mt-1">100B fixed supply · Not mintable · Gas sponsored</p>
+          </div>
+        </div>
       </div>
     </div>
   );

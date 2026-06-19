@@ -11,7 +11,7 @@ export const STATS = [
 export const PRODUCTS = [
   { name: "Blue Chat", color: "#A78BFA", desc: "AI agent chat · multi-model · skill-based · Built for Base builders",     link: "/app/chat", label: "Open Chat →" },
   { name: "Blue Hub",  color: "#4FC3F7", desc: "74 AI tools · 3-agent consensus · x402 pay-per-call · no API key",        link: "/app/hub",  label: "Open Hub →" },
-  { name: "Blue Feed", color: "#FB923C", desc: "24/7 Base intelligence · Aeon-powered · shareable · Cast to Farcaster",   link: "/app/feed", label: "Coming Soon" },
+  { name: "Blue Feed", color: "#FB923C", desc: "24/7 Base intelligence · Aeon-powered · shareable · Cast to Farcaster",   link: "/app/feed", label: "Open Feed →" },
   { name: "Blue Code", color: "#34D399", desc: "Describe an app → Blue builds and deploys it on Base",                    link: "/app/chat", label: "Coming Soon" },
 ];
 
