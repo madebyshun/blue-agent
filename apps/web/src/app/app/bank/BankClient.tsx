@@ -24,19 +24,10 @@ import SwapCard from "./SwapCard";
 import { parsePaymentQr, buildPaymentUri, type ParsedPayment } from "@/lib/payment-qr";
 import OrdersPanel from "./OrdersPanel";
 import { B20_ENABLED } from "@/lib/orders";
+import TransactionHistory, { type WalletTx } from "./TransactionHistory";
 
 const usd = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-function relTime(ts: number): string {
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
-}
-
-
 
 type Panel = "positions" | "earn" | "send" | "receive" | "convert" | "orders";
 
@@ -157,19 +148,33 @@ export default function BankPage() {
     return () => { off = true; };
   }, []);
 
-  // Real on-chain activity (USDC/ETH transfers, classified) via Etherscan V2.
-  type ActItem = { hash: string; ts: number; label: string; dir: "in" | "out"; asset: string; amount: number; counterparty: string };
-  const [activity, setActivity] = useState<{ items: ActItem[]; needsKey?: boolean } | null>(null);
+  // Real wallet history (Moralis, categorized) — feeds the transaction list AND
+  // the balance "this month" delta + gas-saved stat (stats computed server-side
+  // from the same transfers, never fabricated). We just render.
+  type TxStats = { transferCountMonth: number; netFlowUsdcMonth: number; gasSavedUsd: number | null };
+  const [txData, setTxData] = useState<{ transactions: WalletTx[]; stats?: TxStats; needsKey?: boolean; error?: string } | null>(null);
+  const [txLoading, setTxLoading] = useState(false);
+  const [txError, setTxError]     = useState(false);
+  const [txReload, setTxReload]   = useState(0);
   useEffect(() => {
-    if (!acct) return;
+    if (!acct) { setTxData(null); return; }
     let off = false;
-    fetch(`/api/activity?address=${acct}&network=${network}`).then(r => r.json()).then(d => { if (!off) setActivity(d); }).catch(() => {});
+    setTxLoading(true); setTxError(false);
+    fetch(`/api/wallet/transactions?address=${acct}&network=${network}`)
+      .then(r => r.json())
+      .then(d => { if (!off) { setTxData(d); setTxLoading(false); } })
+      .catch(() => { if (!off) { setTxError(true); setTxLoading(false); } });
     return () => { off = true; };
-  }, [acct, network]);
+  }, [acct, network, txReload]);
 
   const inYield = (aavePos ?? 0) + (morphoPos ?? 0);
   const total   = (walletUsdc ?? 0) + inYield;
   const projAnnual  = bestApy != null ? inYield * (bestApy / 100) : null;
+
+  // Stats derived from real wallet history (this calendar month).
+  const gasSavedUsd        = txData?.stats?.gasSavedUsd ?? null;
+  const transferCountMonth = txData?.stats?.transferCountMonth ?? 0;
+  const netFlowMonth       = txData?.stats?.netFlowUsdcMonth ?? 0;
 
   function copyAddr() {
     if (!acct) return;
@@ -283,6 +288,11 @@ export default function BankPage() {
               <div className="font-mono text-[11px] text-slate-500 mt-2">
                 {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
               </div>
+              {netFlowMonth !== 0 && (
+                <div className="font-mono text-[11px] mt-1" style={{ color: netFlowMonth >= 0 ? "#34D399" : "#EF4444" }}>
+                  {netFlowMonth >= 0 ? "+" : "−"}${usd(Math.abs(netFlowMonth))} USDC this month
+                </div>
+              )}
               <button onClick={addCash} disabled={onrampBusy || !isConnected}
                 className="font-mono text-[12px] font-bold px-4 py-2.5 rounded-xl mt-4 disabled:opacity-50"
                 style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>
@@ -319,6 +329,35 @@ export default function BankPage() {
             <BaseTvlChart />
 
           </div>
+
+          {/* Stats row — gas saved (est.) · best APY · always-on */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
+            <StatCard icon="💡" label="Gas saved" value={gasSavedUsd != null ? `$${usd(gasSavedUsd)}` : "—"}
+              sub={`${transferCountMonth} transfer${transferCountMonth === 1 ? "" : "s"} · est.`} />
+            <StatCard icon="📈" label="Best APY" value={bestApy != null ? `${bestApy.toFixed(1)}%` : "—"}
+              sub="Earn on idle USDC" />
+            <StatCard icon="🔗" label="24/7" value="On-chain" sub="Not in a silo" />
+          </div>
+
+          {/* Yield prominence — encourage when idle, show position when earning */}
+          {bestApy != null && (
+            <div className="rounded-2xl border p-4 mb-4 flex items-center justify-between gap-3"
+              style={{ borderColor: "#34D39930", background: "linear-gradient(90deg,#34D39912,#0a0a0f 65%)" }}>
+              <div className="min-w-0">
+                <div className="font-mono text-[13px] font-bold text-[#34D399]">📈 Earning {bestApy.toFixed(1)}% APY</div>
+                <div className="font-mono text-[10px] text-slate-500 mt-0.5 truncate">
+                  {inYield > 0
+                    ? <>${usd(inYield)} growing inside your bank · via Aave on Base</>
+                    : <>Your USDC grows right inside your bank · via Aave on Base</>}
+                </div>
+              </div>
+              <button onClick={() => openAction("earn")}
+                className="font-mono text-[11px] font-bold px-4 py-2 rounded-xl shrink-0"
+                style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>
+                Earn →
+              </button>
+            </div>
+          )}
 
           {/* Action modal — Positions / Earn / Send / Receive (opened from the hero) */}
           {actionOpen && (
@@ -507,39 +546,16 @@ export default function BankPage() {
             <ApyCompareChart />
           </div>
 
-          {/* Activity — real on-chain history (Etherscan V2) */}
-          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className="font-mono text-[10px] text-slate-500 tracking-widest">ACTIVITY · {net.short}</div>
-              <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer" className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7]">Basescan ↗</a>
-            </div>
-            {activity?.items?.length ? (
-              <div>
-                {activity.items.map(it => (
-                  <a key={`${it.hash}-${it.ts}-${it.asset}`} href={`${net.explorer}/tx/${it.hash}`} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center justify-between py-2 border-b border-[#13131f] last:border-0 hover:bg-[#0d0d12] -mx-2 px-2 rounded transition-colors">
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-7 h-7 rounded-lg flex items-center justify-center text-[12px]"
-                        style={{ background: it.dir === "in" ? "#34D39915" : "#EF444415", color: it.dir === "in" ? "#34D399" : "#EF4444" }}>{it.dir === "in" ? "↘" : "↗"}</span>
-                      <div>
-                        <div className="font-mono text-[11px] text-slate-200">{it.label} <span className="text-slate-600">{shortAddr(it.counterparty)}</span></div>
-                        <div className="font-mono text-[9px] text-slate-600">{relTime(it.ts)}</div>
-                      </div>
-                    </div>
-                    <div className="font-mono text-[11px]" style={{ color: it.dir === "in" ? "#34D399" : "#e2e8f0" }}>
-                      {it.dir === "in" ? "+" : "−"}{it.amount.toLocaleString("en-US", { maximumFractionDigits: it.asset === "ETH" ? 5 : 2 })} {it.asset}
-                    </div>
-                  </a>
-                ))}
-              </div>
-            ) : (
-              <p className="font-mono text-[11px] text-slate-600">
-                {activity?.needsKey
-                  ? <>Live history needs an Etherscan key (set <span className="text-slate-400">ETHERSCAN_API_KEY</span>). View full history on <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer" className="text-[#4FC3F7]">Basescan ↗</a></>
-                  : <>No transactions yet on {net.short}. Your USDC / ETH activity will appear here.</>}
-              </p>
-            )}
-          </div>
+          {/* Transaction history — real wallet history (Moralis), 4 tab filters */}
+          <TransactionHistory
+            transactions={txData?.transactions ?? []}
+            loading={txLoading}
+            error={txError}
+            needsKey={txData?.needsKey}
+            onRetry={() => setTxReload(k => k + 1)}
+            explorer={net.explorer}
+            address={acct}
+          />
         </div>
         </div>
       </main>
@@ -556,6 +572,17 @@ function Card({ title, note, children }: { title: string; note?: string; childre
         {note && <div className="font-mono text-[9px] text-slate-700">{note}</div>}
       </div>
       {children}
+    </div>
+  );
+}
+
+// Compact stat tile for the hero stats row (gas saved / APY / 24-7).
+function StatCard({ icon, label, value, sub }: { icon: string; label: string; value: string; sub: string }) {
+  return (
+    <div className="rounded-xl border border-[#1A1A2E] bg-[#0d0d12] p-3">
+      <div className="font-mono text-[9px] text-slate-500 tracking-wide flex items-center gap-1"><span>{icon}</span>{label}</div>
+      <div className="font-mono text-[15px] sm:text-[18px] font-bold text-white mt-1 truncate">{value}</div>
+      <div className="font-mono text-[8px] sm:text-[9px] text-slate-600 mt-0.5 truncate">{sub}</div>
     </div>
   );
 }
