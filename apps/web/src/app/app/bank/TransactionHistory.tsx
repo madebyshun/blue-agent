@@ -7,7 +7,21 @@
 // the parent can share the same fetch with the balance + stats cards.
 
 import { useState } from "react";
-import { shortAddr } from "@/lib/useBasename";
+import { useBasename, shortAddr } from "@/lib/useBasename";
+
+// Known Base contracts we can label by name — real, deterministic enrichment
+// (no fabricated merchant names). Lowercased addresses; covers mainnet + Sepolia
+// venues the BlueBank Earn/Convert flows touch.
+const KNOWN: Record<string, string> = {
+  // Base mainnet
+  "0xa238dd80c259a72e81d7e4664a9801593f98d1c5": "Aave v3",
+  "0x4e65fe4dba92790696d040ac24aa414708f5c0ab": "Aave (aUSDC)",
+  "0xee8f4ec5672f09119b96ab6fb59c27e1b7e44b61": "Morpho",
+  "0x0000000000001ff3684f28c67538d4d072c22734": "0x Protocol",
+  // Base Sepolia
+  "0x8bab6d1b75f19e9ed9fce8b9bd338844ff79ae27": "Aave v3",
+  "0x10f1a9d11cdf50041f3f8cb7191cbe2f31750acc": "Aave (aUSDC)",
+};
 
 export type WalletTx = {
   hash: string;
@@ -44,14 +58,6 @@ const STATUS: Record<WalletTx["status"], { label: string; color: string }> = {
 
 const fmtDate = (ts: number) =>
   new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-
-function title(tx: WalletTx): string {
-  const cp = tx.counterparty ? shortAddr(tx.counterparty) : "";
-  if (tx.kind === "received") return `Received from ${cp}`;
-  if (tx.kind === "sent") return `Sent to ${cp}`;
-  if (tx.kind === "swap") return "Token swap";
-  return "Contract call";
-}
 
 export default function TransactionHistory({
   transactions, loading, error, needsKey, onRetry, explorer, address,
@@ -116,38 +122,59 @@ export default function TransactionHistory({
         <p className="font-mono text-[11px] text-slate-600 py-4">No transactions yet</p>
       ) : (
         <div>
-          {filtered.map((tx) => {
-            const ic = ICON[tx.kind];
-            const st = STATUS[tx.status];
-            return (
-              <a key={`${tx.hash}-${tx.ts}-${tx.asset ?? ""}`} href={`${explorer}/tx/${tx.hash}`}
-                target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-between py-2.5 border-b border-[#13131f] last:border-0 hover:bg-[#0d0d12] -mx-2 px-2 rounded transition-colors">
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="w-8 h-8 rounded-lg flex items-center justify-center text-[14px] shrink-0"
-                    style={{ background: ic.bg, color: ic.fg }}>{ic.glyph}</span>
-                  <div className="min-w-0">
-                    <div className="font-mono text-[11px] text-slate-200 truncate">{title(tx)}</div>
-                    <div className="font-mono text-[9px] text-slate-600 flex items-center gap-1.5">
-                      <span style={{ color: st.color }}>{st.label}</span>
-                      <span className="text-slate-700">·</span>
-                      <span>{fmtDate(tx.ts)}</span>
-                    </div>
-                  </div>
-                </div>
-                {tx.amount != null && (
-                  <div className="font-mono text-[12px] shrink-0 ml-2"
-                    style={{ color: tx.dir === "in" ? "#34D399" : tx.dir === "out" ? "#e2e8f0" : "#94a3b8" }}>
-                    {tx.dir === "in" ? "+" : tx.dir === "out" ? "−" : ""}
-                    {tx.amount.toLocaleString("en-US", { maximumFractionDigits: tx.asset === "ETH" ? 5 : 2 })} {tx.asset ?? ""}
-                  </div>
-                )}
-              </a>
-            );
-          })}
+          {filtered.map((tx) => (
+            <TxRow key={`${tx.hash}-${tx.ts}-${tx.asset ?? ""}`} tx={tx} explorer={explorer} />
+          ))}
         </div>
       )}
     </div>
+  );
+}
+
+// One history row. Resolves the counterparty to (1) a known-protocol label, or
+// (2) its Basename (reverse-resolved on-chain), falling back to the short 0x…
+// form — so "Received from 0x1a2B…" becomes "Received from madebyshun.base"
+// when a name exists. Basename lookup is skipped for known protocols / swaps /
+// contract calls to avoid needless reverse queries.
+function TxRow({ tx, explorer }: { tx: WalletTx; explorer: string }) {
+  const cp = tx.counterparty;
+  const known = cp ? KNOWN[cp.toLowerCase()] : undefined;
+  const wantName = (tx.kind === "received" || tx.kind === "sent") && !known && !!cp;
+  const { name } = useBasename(wantName ? cp : undefined);
+  const label = known ?? name ?? (cp ? shortAddr(cp) : "");
+
+  const ic = ICON[tx.kind];
+  const st = STATUS[tx.status];
+  const heading =
+    tx.kind === "received" ? `Received from ${label}`
+      : tx.kind === "sent" ? `Sent to ${label}`
+      : tx.kind === "swap" ? "Token swap"
+      : known ? `${known} interaction`
+      : "Contract call";
+
+  return (
+    <a href={`${explorer}/tx/${tx.hash}`} target="_blank" rel="noopener noreferrer"
+      className="flex items-center justify-between py-2.5 border-b border-[#13131f] last:border-0 hover:bg-[#0d0d12] -mx-2 px-2 rounded transition-colors">
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="w-8 h-8 rounded-lg flex items-center justify-center text-[14px] shrink-0"
+          style={{ background: ic.bg, color: ic.fg }}>{ic.glyph}</span>
+        <div className="min-w-0">
+          <div className="font-mono text-[11px] text-slate-200 truncate">{heading}</div>
+          <div className="font-mono text-[9px] text-slate-600 flex items-center gap-1.5">
+            <span style={{ color: st.color }}>{st.label}</span>
+            <span className="text-slate-700">·</span>
+            <span>{fmtDate(tx.ts)}</span>
+          </div>
+        </div>
+      </div>
+      {tx.amount != null && (
+        <div className="font-mono text-[12px] shrink-0 ml-2"
+          style={{ color: tx.dir === "in" ? "#34D399" : tx.dir === "out" ? "#e2e8f0" : "#94a3b8" }}>
+          {tx.dir === "in" ? "+" : tx.dir === "out" ? "−" : ""}
+          {tx.amount.toLocaleString("en-US", { maximumFractionDigits: tx.asset === "ETH" ? 5 : 2 })} {tx.asset ?? ""}
+        </div>
+      )}
+    </a>
   );
 }
 
