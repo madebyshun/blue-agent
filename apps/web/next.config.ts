@@ -11,17 +11,11 @@ const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   async redirects() {
     return [
-      // BlueBank is still in local testing — hide /app/bank (and its public
-      // /pay payment-request surface) on production/preview builds by
-      // redirecting to chat. Local `next dev` (NODE_ENV=development) keeps them
-      // reachable for testing. Remove these when BlueBank ships to GA.
-      ...(process.env.NODE_ENV === "production"
-        ? [
-            { source: "/app/bank",          destination: "/app/chat", permanent: false },
-            { source: "/app/bank/:path*",   destination: "/app/chat", permanent: false },
-            { source: "/pay/:path*",        destination: "/app/chat", permanent: false },
-          ]
-        : []),
+      // BlueBank's production gate (/app/bank + /pay) now lives in
+      // src/middleware.ts — it's a token-unlockable preview, which a static
+      // config redirect can't express (and config redirects run BEFORE
+      // middleware, so they'd shadow the gate). See the BlueBank preview gate
+      // there. Remove that block when BlueBank ships to GA.
       {
         // Clean marketing shortcut for the MCP setup guide (tweets, bio, etc.).
         // Temporary (307) so we can re-point to blueagent.dev/docs/mcp once the
