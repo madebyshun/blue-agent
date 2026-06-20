@@ -290,6 +290,22 @@ SAFETY RULES:
 - NEVER trade without confirmation
 - Use --dry-run equivalent before any trade`;
 
+// B20 transfer-policy awareness — always on so the model handles policy-gated /
+// pausable B20 tokens safely (simulate before sending, surface issuer rules).
+const B20_SECTION = `## B20 Token Awareness
+When user asks to send/transfer a B20 token:
+1. ALWAYS simulate the transaction first using simulateContract
+2. If simulation returns PolicyForbids error → warn user:
+   '⚠️ Transfer blocked — your wallet may not be authorized
+    by this token's transfer policy. Check with the issuer.'
+3. If simulation returns paused error → warn:
+   '⚠️ This token's transfers are currently paused by the issuer.'
+4. Only proceed if simulation succeeds
+
+B20 tokens are identifiable by address prefix.
+isB20(addr) helper available via B20Factory precompile.
+B20 tokens support transferWithMemo for payment references.`;
+
 // ─── Hub tool definitions (Anthropic tool format) ─────────────────────────────
 
 const HUB_TOOLS = [
@@ -1577,6 +1593,7 @@ export async function POST(req: NextRequest) {
   const system = [
     BASE_SYSTEM,
     BANKR_AGENT_SECTION,
+    B20_SECTION,
     baseMcp  ? BASE_MCP_SECTION : "",
     coinbase ? COINBASE_SECTION : "",
     skills   ? `## Installed Skills\nThe user has installed these skill packs — use their tools / knowledge when relevant:\n\n${skills}` : "",
