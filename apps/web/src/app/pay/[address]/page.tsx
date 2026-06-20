@@ -15,6 +15,7 @@ import { SendCard } from "@/app/chat/components/ToolCards";
 import { useBasename, shortAddr } from "@/lib/useBasename";
 import { buildPaymentUri } from "@/lib/payment-qr";
 import { YIELD_NETWORKS, type YieldNetwork } from "@/lib/yield-execution";
+import { isOrderId, findOrder, B20_ENABLED } from "@/lib/orders";
 
 const isName = (s: string) => /^[a-z0-9-]+(\.[a-z0-9-]+)*\.(base|eth)$/i.test(s);
 
@@ -58,6 +59,9 @@ function PayInner() {
   function copyAddr() {
     navigator.clipboard?.writeText(to).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
   }
+
+  // Order / invoice payment link (/pay/order-… or /pay/INV-…) — settled in B20 USDC.
+  if (isOrderId(to)) return <PayShell><OrderPay id={to} /></PayShell>;
 
   if (!valid) {
     return (
@@ -111,6 +115,52 @@ function PayInner() {
         </div>
       )}
     </PayShell>
+  );
+}
+
+// Public order/invoice payment screen. Settles in B20 USDC via transferWithMemo
+// (memo = the order id) once B20 mainnet is live; the merchant's dashboard flips
+// the request to Paid when the matching Memo event lands.
+function OrderPay({ id }: { id: string }) {
+  const order = findOrder(id); // present when opened on the merchant's device
+  const kind = id.toUpperCase().startsWith("INV") ? "Invoice" : "Order";
+  const paid = order?.status === "paid";
+
+  return (
+    <div className="text-center">
+      <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-1">{kind.toUpperCase()} PAYMENT</div>
+      <div className="font-mono text-[14px] font-bold text-white break-all">#{id}</div>
+
+      {order ? (
+        <>
+          <div className="font-mono text-[26px] font-bold text-[#34D399] mt-2">${order.amount.toLocaleString()} <span className="text-base text-slate-500">USDC</span></div>
+          {order.description && <div className="font-mono text-[11px] text-slate-400 mt-1.5">{order.description}</div>}
+          {order.client && <div className="font-mono text-[10px] text-slate-600 mt-1">Billed to {order.client}</div>}
+          {order.dueDate && <div className="font-mono text-[10px] text-slate-600 mt-0.5">Due {order.dueDate}</div>}
+        </>
+      ) : (
+        <div className="font-mono text-[11px] text-slate-500 mt-3 leading-relaxed">This request was created on another device — the amount is set by the merchant.</div>
+      )}
+
+      <div className="mt-5">
+        {paid ? (
+          <div className="rounded-xl p-3 font-mono text-[12px] text-[#34D399]" style={{ border: "1px solid #34D39930", background: "#34D3990d" }}>
+            Invoice paid ✓
+            {order?.txHash && <a href={`https://basescan.org/tx/${order.txHash}`} target="_blank" rel="noopener noreferrer" className="block font-mono text-[10px] text-slate-500 mt-1">tx ↗</a>}
+          </div>
+        ) : B20_ENABLED ? (
+          <button className="w-full font-mono text-[12px] font-bold py-2.5 rounded-xl hover:opacity-90 transition-opacity"
+            style={{ background: "#4FC3F7", color: "#050508" }}>
+            Pay with B20 USDC
+          </button>
+        ) : (
+          <button disabled className="w-full font-mono text-[12px] font-bold py-2.5 rounded-xl opacity-60 cursor-not-allowed"
+            style={{ background: "#1A1A2E", color: "#94a3b8" }}>
+            B20 payments go live June 25
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
