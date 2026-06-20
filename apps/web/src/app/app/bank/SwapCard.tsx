@@ -10,6 +10,7 @@ import { useAccount, useBalance, useReadContract, useSwitchChain, useWriteContra
 import { formatUnits, parseUnits } from "viem";
 import { base } from "wagmi/chains";
 import { ERC20_ABI } from "@/lib/yield-execution";
+import { DATA_SUFFIX } from "@/constants/builderCode";
 
 const NATIVE = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 type Token = { sym: string; addr: string; decimals: number; native?: boolean };
@@ -112,7 +113,9 @@ export default function SwapCard({ account }: { account?: `0x${string}` }) {
       setStep("swapping");
       const hash = await sendTransactionAsync({
         to: quote.transaction.to,
-        data: quote.transaction.data,
+        // Append the ERC-8021 builder-code suffix to the 0x swap calldata so the
+        // tx is credited to BlueAgent on base.dev (0x… data + suffix without 0x).
+        data: (quote.transaction.data + DATA_SUFFIX.slice(2)) as `0x${string}`,
         value: quote.transaction.value ? BigInt(quote.transaction.value) : undefined,
         chainId: base.id,
       });

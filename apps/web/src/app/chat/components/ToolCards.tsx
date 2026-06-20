@@ -10,6 +10,7 @@ import { useName } from "@coinbase/onchainkit/identity";
 import { YIELD_NETWORKS, ERC20_ABI, AAVE_POOL_ABI, ERC4626_ABI, WITHDRAW_ALL, parseUsdc, supplyApyPct, VENUES, VENUE_LIST, type YieldNetwork, type VenueId } from "@/lib/yield-execution";
 import { useChat } from "../ChatContext";
 import { useBasename } from "@/lib/useBasename";
+import { DATA_SUFFIX } from "@/constants/builderCode";
 
 function truncAddr(addr: string, len = 6) {
   if (!addr || addr.length < 12) return addr;
@@ -1567,7 +1568,12 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
         const res = await sendCallsAsync({
           calls: [call],
           chainId,
-          capabilities: { paymasterService: { url: `${origin}/api/paymaster?network=${network}` } },
+          // paymasterService → gas sponsorship; dataSuffix → ERC-8021 builder-code
+          // attribution (Coinbase Smart Wallet appends it to the executeBatch calldata).
+          capabilities: {
+            paymasterService: { url: `${origin}/api/paymaster?network=${network}` },
+            dataSuffix: { value: DATA_SUFFIX, optional: true },
+          },
         });
         setCallsId(typeof res === "string" ? res : res.id); // status hook → done
         return;
