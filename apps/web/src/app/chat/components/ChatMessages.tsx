@@ -525,8 +525,40 @@ export default function ChatMessages() {
             ))}
           </div>
 
+          {/* Product quick links — Blue Bank + Blue Feed */}
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            {[
+              { href: "/app/bank", icon: "🏦", label: "Blue Bank", color: "#4FC3F7", sub: "Send · Earn · Pay" },
+              { href: "/app/feed", icon: "📡", label: "Blue Feed", color: "#A78BFA", sub: "AI signals · Live alpha" },
+            ].map(p => (
+              <Link
+                key={p.href}
+                href={p.href}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl border transition-all group"
+                style={{ background: "#0D0D14", borderColor: "#1A1A2E" }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLElement).style.borderColor = `${p.color}30`;
+                  (e.currentTarget as HTMLElement).style.background = `${p.color}08`;
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.borderColor = "#1A1A2E";
+                  (e.currentTarget as HTMLElement).style.background = "#0D0D14";
+                }}
+              >
+                <span className="text-sm shrink-0">{p.icon}</span>
+                <div className="text-left">
+                  <span className="font-mono text-[12px] text-slate-300 group-hover:text-white transition-colors block">{p.label}</span>
+                  <span className="font-mono text-[9px] text-slate-600">{p.sub}</span>
+                </div>
+                <svg className="w-3 h-3 text-slate-700 group-hover:text-slate-500 shrink-0 ml-1 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            ))}
+          </div>
+
           {outOfCredits && (
-            <p className="font-mono text-[10px] text-red-400 mt-5">Out of credits — stake $BLUEAGENT to refill</p>
+            <p className="font-mono text-[10px] text-red-400 mt-4">Out of credits — stake $BLUEAGENT to refill</p>
           )}
         </div>
       ) : (
