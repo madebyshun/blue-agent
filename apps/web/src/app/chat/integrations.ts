@@ -41,6 +41,47 @@ const DEFAULT_SKILLS: InstalledSkill[] = [
     content: "Base: onchain data + actions on Base (chain 8453). Prefer Base, USDC, and Coinbase tooling for all onchain work.",
     enabled: true, installedAt: 0, default: true,
   },
+  // ── Bundled skill packs — each teaches the model to chain multiple tools ──
+  {
+    name: "token-safety-bundle",
+    description: "Token Safety bundle — chains hub_risk_gate + hub_honeypot + hub_contract_trust + hub_key_exposure",
+    url: "",
+    content: `## Token Safety Bundle (active)
+When the user asks about token or contract safety, run ALL four tools together (not just one):
+- hub_risk_gate: overall risk score and critical flags
+- hub_honeypot: buy/sell trap detection and tax analysis
+- hub_contract_trust: verification status and trust signals
+- hub_key_exposure: backdoor, private key, and ownership risk
+Chain them sequentially and synthesize into one verdict. A single tool gives an incomplete picture.`,
+    enabled: true, installedAt: 0, default: true,
+  },
+  {
+    name: "base-builder-bundle",
+    description: "Base Builder bundle — chains hub_repo_health + hub_builder_score + hub_base_grant + hub_builder_dd",
+    url: "",
+    content: `## Base Builder Bundle (active)
+When evaluating a Base builder, project, or team, run all four tools together:
+- hub_repo_health: GitHub activity, commit frequency, contributor count
+- hub_builder_score: overall credibility and onchain builder signals
+- hub_base_grant: grant eligibility and alignment with Base ecosystem
+- hub_builder_dd: comprehensive due diligence report
+Combine all four into a structured assessment with a clear INVEST / WATCH / PASS verdict.`,
+    enabled: true, installedAt: 0, default: true,
+  },
+  {
+    name: "trader-intel-bundle",
+    description: "Trader Intel bundle — chains hub_token_pick + hub_whale_signal + hub_narrative_pulse + hub_token_momentum + hub_dex_flow",
+    url: "",
+    content: `## Trader Intel Bundle (active)
+For trading decisions and market edge, run the full intelligence stack:
+- hub_token_pick: AI-generated token selection signal
+- hub_whale_signal: large wallet movements and smart money flow
+- hub_narrative_pulse: CT narrative tracker and trend signals
+- hub_token_momentum: price/volume momentum indicators
+- hub_dex_flow: real-time DEX order flow and liquidity depth
+For a serious trade thesis, synthesize all five into BUY / WATCH / AVOID with a confidence score.`,
+    enabled: true, installedAt: 0, default: true,
+  },
 ];
 
 // ── Skills CRUD ───────────────────────────────────────────────────────────────
@@ -49,8 +90,18 @@ export function loadSkills(): InstalledSkill[] {
   try {
     const raw = localStorage.getItem(SKILLS_KEY);
     if (!raw) { localStorage.setItem(SKILLS_KEY, JSON.stringify(DEFAULT_SKILLS)); return DEFAULT_SKILLS; }
-    const list = JSON.parse(raw);
-    return Array.isArray(list) ? list : DEFAULT_SKILLS;
+    const list: InstalledSkill[] = JSON.parse(raw);
+    if (!Array.isArray(list)) return DEFAULT_SKILLS;
+    // Merge: inject any DEFAULT_SKILLS not yet in the stored list so existing
+    // users automatically receive new default/bundled skills on next load.
+    const names = new Set(list.map(s => s.name));
+    const newDefaults = DEFAULT_SKILLS.filter(d => !names.has(d.name));
+    if (newDefaults.length > 0) {
+      const merged = [...list, ...newDefaults];
+      try { localStorage.setItem(SKILLS_KEY, JSON.stringify(merged.slice(0, 50))); } catch { /* blocked */ }
+      return merged;
+    }
+    return list;
   } catch { return DEFAULT_SKILLS; }
 }
 export function saveSkills(list: InstalledSkill[]): void {

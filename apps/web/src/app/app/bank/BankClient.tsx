@@ -16,9 +16,6 @@ import {
 } from "@/lib/yield-execution";
 import { MoveToYieldCard, SendCard } from "@/app/chat/components/ToolCards";
 import { useBasename, shortAddr } from "@/lib/useBasename";
-import BaseTvlChart from "./BaseTvlChart";
-import { ApyCompareChart } from "./BaseProtocolCharts";
-import BaseTokensCard from "./BaseTokensCard";
 import QrScanner from "./QrScanner";
 import SwapCard from "./SwapCard";
 import { parsePaymentQr, buildPaymentUri, type ParsedPayment } from "@/lib/payment-qr";
@@ -285,12 +282,11 @@ export default function BankPage() {
         <div className="w-full">
 
 
-          {/* Top row: cash balance + action panel — FIXED height so switching the
-              right-panel tab (Positions/Earn/Send/Receive) never reflows the page. */}
-          <div className="grid lg:grid-cols-3 gap-4 mb-4 lg:h-[440px]">
+          {/* Top row: cash balance (left) + your assets & live rates (right) */}
+          <div className="grid lg:grid-cols-[3fr_2fr] gap-4 mb-4">
 
-            {/* Cash balance + primary actions (stacked, fill the card) */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6 flex flex-col lg:h-full">
+            {/* Cash balance + primary actions */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6 flex flex-col">
               <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH BALANCE · {net.short}</div>
               <div className="font-mono text-4xl font-bold text-white">${usd(total)} <span className="text-base text-slate-500">USDC</span></div>
               <div className="font-mono text-[11px] text-slate-500 mt-2">
@@ -340,11 +336,40 @@ export default function BankPage() {
               </div>
             </div>
 
-            {/* BASE MARKET — selectable top tokens + per-token price chart */}
-            <BaseTokensCard />
+            {/* Right column: Your Assets + Rates on Base */}
+            <div className="flex flex-col gap-4">
 
-            {/* BASE TVL — compact interactive chart */}
-            <BaseTvlChart />
+              <Card title={`YOUR ASSETS · ${net.short}`}>
+                <AssetRow label="USDC" sub="in wallet" usd={walletUsdc} color="#4FC3F7" />
+                <AssetRow label="aUSDC" sub="Aave v3" usd={aavePos} color="#34D399" />
+                {morphoVnet && <AssetRow label="Morpho" sub="Gauntlet USDC Prime" usd={morphoPos} color="#A78BFA" />}
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <div className="font-mono text-[12px] text-slate-200">ETH</div>
+                    <div className="font-mono text-[9px] text-slate-600">gas</div>
+                  </div>
+                  <div className="font-mono text-[12px] text-slate-300">{ethBal != null ? ethBal.toFixed(4) : "—"}</div>
+                </div>
+              </Card>
+
+              <Card title="RATES ON BASE" note="live · DefiLlama">
+                {rates && rates.length ? rates.slice(0, 4).map((r, i) => {
+                  const max = Math.max(...rates.map(x => x.apy)) || 1;
+                  return (
+                    <div key={r.project} className="py-1">
+                      <div className="flex items-center justify-between font-mono text-[10px] mb-1">
+                        <span className={i === 0 ? "text-[#34D399]" : "text-slate-400"}>{i === 0 ? "★ " : ""}{r.label}</span>
+                        <span className={i === 0 ? "text-[#34D399]" : "text-slate-300"}>{r.apy.toFixed(2)}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-[#13131f] overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${(r.apy / max) * 100}%`, background: i === 0 ? "#34D399" : "#4FC3F7" }} />
+                      </div>
+                    </div>
+                  );
+                }) : <div className="font-mono text-[10px] text-slate-600">loading rates…</div>}
+              </Card>
+
+            </div>
 
           </div>
 
@@ -506,74 +531,44 @@ export default function BankPage() {
           {/* Scan-to-pay camera overlay */}
           {scanOpen && <QrScanner onResult={handleScan} onClose={() => setScanOpen(false)} />}
 
-          {/* Row 2: Assets · Rates · Projection */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+          {/* Transaction history — moved up: most users care about activity first */}
+          <div className="mb-4">
+            <TransactionHistory
+              transactions={txData?.transactions ?? []}
+              loading={txLoading}
+              error={txError}
+              needsKey={txData?.needsKey}
+              onRetry={() => setTxReload(k => k + 1)}
+              explorer={net.explorer}
+              address={acct}
+            />
+          </div>
 
-            {/* A. Your Assets */}
-            <Card title={`YOUR ASSETS · ${net.short}`}>
-              <AssetRow label="USDC" sub="in wallet" usd={walletUsdc} color="#4FC3F7" />
-              <AssetRow label="aUSDC" sub="Aave v3" usd={aavePos} color="#34D399" />
-              {morphoVnet && <AssetRow label="Morpho" sub="Gauntlet USDC Prime" usd={morphoPos} color="#A78BFA" />}
-              <div className="flex items-center justify-between py-2">
-                <div><div className="font-mono text-[12px] text-slate-200">ETH</div><div className="font-mono text-[9px] text-slate-600">gas</div></div>
-                <div className="font-mono text-[12px] text-slate-300">{ethBal != null ? ethBal.toFixed(4) : "—"}</div>
+          {/* Yield projection — below activity, for power users */}
+          {bestApy != null && (
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-mono text-[10px] text-slate-500 tracking-widest">YIELD PROJECTION</div>
+                <div className="font-mono text-[9px] text-slate-700">estimate</div>
               </div>
-            </Card>
-
-            {/* B. Rates on Base */}
-            <Card title="RATES ON BASE" note="live · DefiLlama">
-              {rates && rates.length ? rates.slice(0, 4).map((r, i) => {
-                const max = Math.max(...rates.map(x => x.apy)) || 1;
-                return (
-                  <div key={r.project} className="py-1">
-                    <div className="flex items-center justify-between font-mono text-[10px] mb-1">
-                      <span className={i === 0 ? "text-[#34D399]" : "text-slate-400"}>{i === 0 ? "★ " : ""}{r.label}</span>
-                      <span className={i === 0 ? "text-[#34D399]" : "text-slate-300"}>{r.apy.toFixed(2)}%</span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-[#13131f] overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${(r.apy / max) * 100}%`, background: i === 0 ? "#34D399" : "#4FC3F7" }} />
-                    </div>
-                  </div>
-                );
-              }) : <div className="font-mono text-[10px] text-slate-600">loading rates…</div>}
-            </Card>
-
-            {/* C. Yield projection */}
-            <Card title="YIELD PROJECTION" note="estimate">
               {inYield > 0 ? (
                 <>
                   <div className="font-mono text-[26px] font-bold text-[#34D399]">${usd(projAnnual)}<span className="text-sm text-slate-500"> /yr</span></div>
-                  <div className="font-mono text-[10px] text-slate-500 mt-1">${usd((projAnnual ?? 0) / 12)} /mo · on ${usd(inYield)} at {bestApy?.toFixed(2)}%</div>
+                  <div className="font-mono text-[10px] text-slate-500 mt-1">${usd((projAnnual ?? 0) / 12)} /mo · on ${usd(inYield)} at {bestApy.toFixed(2)}%</div>
                   <p className="font-mono text-[9px] text-slate-600 mt-3 leading-relaxed">Projected at the current best safe rate. Real yield accrues live in your aUSDC.</p>
                 </>
               ) : (
                 <>
                   <div className="font-mono text-[13px] text-slate-300">Your USDC is idle.</div>
                   <p className="font-mono text-[10px] text-slate-500 mt-1.5 leading-relaxed">
-                    Supplying <b>${usd(walletUsdc)}</b> at {bestApy != null ? `${bestApy.toFixed(1)}%` : "~5%"} would earn ≈{" "}
-                    <span className="text-[#34D399]">${usd((walletUsdc ?? 0) * ((bestApy ?? 5) / 100))}/yr</span>.
+                    Supplying <b>${usd(walletUsdc)}</b> at {bestApy.toFixed(1)}% would earn ≈{" "}
+                    <span className="text-[#34D399]">${usd((walletUsdc ?? 0) * (bestApy / 100))}/yr</span>.
                   </p>
-                  <button onClick={() => setPanel("earn")} className="font-mono text-[11px] px-3 py-1.5 rounded-lg mt-3" style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>🌾 Put it to work</button>
+                  <button onClick={() => openAction("earn")} className="font-mono text-[11px] px-3 py-1.5 rounded-lg mt-3" style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>🌾 Put it to work</button>
                 </>
               )}
-            </Card>
-          </div>
-
-          {/* USDC supply APY — Aave vs Morpho vs Moonwell (the one yield chart, tied to Earn) */}
-          <div className="mb-4">
-            <ApyCompareChart />
-          </div>
-
-          {/* Transaction history — real wallet history (Moralis), 4 tab filters */}
-          <TransactionHistory
-            transactions={txData?.transactions ?? []}
-            loading={txLoading}
-            error={txError}
-            needsKey={txData?.needsKey}
-            onRetry={() => setTxReload(k => k + 1)}
-            explorer={net.explorer}
-            address={acct}
-          />
+            </div>
+          )}
         </div>
         </div>
       </main>

@@ -13,6 +13,7 @@ const PROVIDER_BG: Record<SkillProvider, string> = {
   "Blue Agent": "#4FC3F7",
   "Bankr":      "#A78BFA",
   "Base MCP":   "#34D399",
+  "Bundled":    "#F59E0B",
 };
 
 // ── Status styles ──────────────────────────────────────────────────────────────
@@ -331,7 +332,7 @@ export default function SkillsPanel({ onPick }: { onPick?: () => void }) {
           {!lc && activeProvider === "all" && (
             <section className="border-t border-[#1A1A2E] pt-5">
               <p className="font-mono text-[9px] text-slate-600 tracking-widest mb-3">// POWERED BY</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 {SKILL_PROVIDERS.map(p => {
                   const color  = PROVIDER_BG[p];
                   const count  = AGENT_SKILLS.filter(s => s.provider === p && s.status === "active").length;
