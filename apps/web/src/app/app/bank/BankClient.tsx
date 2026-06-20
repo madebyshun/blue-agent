@@ -22,6 +22,8 @@ import BaseTokensCard from "./BaseTokensCard";
 import QrScanner from "./QrScanner";
 import SwapCard from "./SwapCard";
 import { parsePaymentQr, buildPaymentUri, type ParsedPayment } from "@/lib/payment-qr";
+import OrdersPanel from "./OrdersPanel";
+import { B20_ENABLED } from "@/lib/orders";
 
 const usd = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -36,7 +38,7 @@ function relTime(ts: number): string {
 
 
 
-type Panel = "positions" | "earn" | "send" | "receive" | "convert";
+type Panel = "positions" | "earn" | "send" | "receive" | "convert" | "orders";
 
 export default function BankPage() {
   const { address, isConnected } = useAccount();
@@ -201,6 +203,8 @@ export default function BankPage() {
     { id: "send",      label: "Send",      icon: "➡",  desc: "Pay anyone" },
     { id: "receive",   label: "Receive",   icon: "⬇",  desc: "Get paid" },
     { id: "convert",   label: "Convert",   icon: "⇅",  desc: "Swap tokens" },
+    // B20 orders/invoices — only when B20 mainnet payments are enabled.
+    ...(B20_ENABLED ? [{ id: "orders" as Panel, label: "Orders", icon: "🧾", desc: "Get paid in B20" }] : []),
   ];
 
   return (
@@ -362,6 +366,7 @@ export default function BankPage() {
                   )}
                   {panel === "earn" && <MoveToYieldCard result={{ network }} account={acct} />}
                   {panel === "convert" && <SwapCard account={acct} />}
+                  {panel === "orders" && <OrdersPanel />}
                   {panel === "send" && (
                     <div>
                       <button onClick={() => setScanOpen(true)}
