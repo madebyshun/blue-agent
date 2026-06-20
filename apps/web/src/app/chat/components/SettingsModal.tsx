@@ -8,10 +8,9 @@ import SettingsPanel, { type SettingsSection } from "./SettingsPanel";
 // drawer) so the mobile drawer stays focused. Tapping jumps to the chat tab and
 // closes the modal; Docs navigates to /docs/blue-chat. Hidden on desktop (lg:hidden), so
 // the web Settings experience is unchanged.
-type JumpTab = "models" | "tools" | "skills";
+type JumpTab = "models" | "skills";
 const QUICK_LINKS: { id: JumpTab; label: string; icon: string }[] = [
   { id: "models", label: "Models", icon: "🤖" },
-  { id: "tools",  label: "Tools",  icon: "🔧" },
   { id: "skills", label: "Skills", icon: "⚡" },
 ];
 

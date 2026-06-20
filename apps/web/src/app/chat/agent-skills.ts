@@ -2,7 +2,7 @@
 // Skills = prompt-grounded abilities backed by Bankr LLM + Base MCP.
 // These are NOT hub tools (those are productized Tools with pricing).
 
-export type SkillProvider = "Blue Agent" | "Bankr" | "Base MCP";
+export type SkillProvider = "Blue Agent" | "Bankr" | "Base MCP" | "Bundled";
 export type SkillStatus   = "active" | "available" | "soon";
 
 export interface AgentSkill {
@@ -11,8 +11,9 @@ export interface AgentSkill {
   description: string;
   provider:    SkillProvider;
   status:      SkillStatus;
-  trigger?:    string;   // example prompt to invoke
-  badge?:      string;   // e.g. "free", "x402", "Bankr API"
+  trigger?:    string;    // example prompt to invoke
+  badge?:      string;    // e.g. "free", "x402", "Bankr API"
+  tools?:      string[];  // Hub tool IDs bundled by this skill
 }
 
 export const AGENT_SKILLS: AgentSkill[] = [
@@ -201,6 +202,38 @@ export const AGENT_SKILLS: AgentSkill[] = [
     trigger:     "Help me deploy a contract to Base",
     badge:       "Base MCP",
   },
+  // ── Bundled Skills — curated tool groups that run together ──────────────────
+  {
+    id:          "bundle-token-safety",
+    name:        "Token Safety",
+    description: "Full safety sweep — risk score, honeypot, contract trust, key exposure — run all four together",
+    provider:    "Bundled",
+    status:      "active",
+    trigger:     "Check if this token/contract is safe: ",
+    badge:       "Bundle · 4 tools",
+    tools:       ["hub_risk_gate", "hub_honeypot", "hub_contract_trust", "hub_key_exposure"],
+  },
+  {
+    id:          "bundle-base-builder",
+    name:        "Base Builder",
+    description: "Builder intelligence — repo health, builder score, grant eligibility, deep due diligence",
+    provider:    "Bundled",
+    status:      "active",
+    trigger:     "Evaluate this Base builder/project: ",
+    badge:       "Bundle · 4 tools",
+    tools:       ["hub_repo_health", "hub_builder_score", "hub_base_grant", "hub_builder_dd"],
+  },
+  {
+    id:          "bundle-trader-intel",
+    name:        "Trader Intel",
+    description: "Market edge — token pick, whale signals, narrative pulse, momentum, DEX flow",
+    provider:    "Bundled",
+    status:      "active",
+    trigger:     "Give me full trader intel on: ",
+    badge:       "Bundle · 5 tools",
+    tools:       ["hub_token_pick", "hub_whale_signal", "hub_narrative_pulse", "hub_token_momentum", "hub_dex_flow"],
+  },
+
   {
     id:          "base-erc4337",
     name:        "Account Abstraction",
@@ -221,16 +254,18 @@ export const AGENT_SKILLS: AgentSkill[] = [
   },
 ];
 
-export const SKILL_PROVIDERS: SkillProvider[] = ["Blue Agent", "Bankr", "Base MCP"];
+export const SKILL_PROVIDERS: SkillProvider[] = ["Blue Agent", "Bankr", "Base MCP", "Bundled"];
 
 export const PROVIDER_COLORS: Record<SkillProvider, string> = {
   "Blue Agent": "#4FC3F7",
   "Bankr":      "#A78BFA",
   "Base MCP":   "#34D399",
+  "Bundled":    "#F59E0B",
 };
 
 export const PROVIDER_ICONS: Record<SkillProvider, string> = {
   "Blue Agent": "⚡",
   "Bankr":      "🔮",
   "Base MCP":   "🔵",
+  "Bundled":    "📦",
 };

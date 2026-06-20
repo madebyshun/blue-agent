@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { ActiveTab } from "../types";
 import { useChat } from "../ChatContext";
 
@@ -37,16 +38,6 @@ const NAV_TABS: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
     ),
   },
   {
-    id: "tools",
-    label: "Tools",
-    icon: (
-      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-          d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
-      </svg>
-    ),
-  },
-  {
     id: "skills",
     label: "Skills",
     icon: (
@@ -62,7 +53,7 @@ const NAV_TABS: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
 
 // The labeled action rows shown under "New chat" (skills · tools · scheduled).
 // "chat" is excluded — the conversation list itself is the chat surface.
-const ACTION_ORDER: ActiveTab[] = ["models", "skills", "tools"];
+const ACTION_ORDER: ActiveTab[] = ["models", "skills"];
 const ACTION_ITEMS = ACTION_ORDER
   .map(id => NAV_TABS.find(t => t.id === id))
   .filter((t): t is (typeof NAV_TABS)[number] => Boolean(t));
@@ -139,6 +130,30 @@ export default function AppSidebar({
           );
         })}
       </nav>
+
+      {/* ── Products — Blue Bank + Blue Feed ── */}
+      <div className="px-2 pb-2 border-t border-[#1A1A2E] shrink-0">
+        <p className="font-mono text-[9px] text-slate-600 tracking-widest px-3 pt-2.5 pb-1">// PRODUCTS</p>
+        {[
+          { href: "/app/bank", icon: "🏦", label: "Blue Bank", sub: "Send · Earn · Pay" },
+          { href: "/app/feed", icon: "📡", label: "Blue Feed", sub: "Live alpha · AI signals" },
+        ].map(p => (
+          <Link
+            key={p.href}
+            href={p.href}
+            className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#ffffff08] transition-colors group"
+          >
+            <span className="text-sm shrink-0">{p.icon}</span>
+            <div className="min-w-0 flex-1">
+              <span className="font-mono text-[12px] text-slate-300 group-hover:text-white transition-colors block">{p.label}</span>
+              <span className="font-mono text-[9px] text-slate-600">{p.sub}</span>
+            </div>
+            <svg className="w-3 h-3 text-slate-700 group-hover:text-slate-500 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
+        ))}
+      </div>
 
       {/* ── Conversations — "Recents" section ── */}
       <div className="flex-1 overflow-hidden flex flex-col min-h-0 border-t border-[#1A1A2E]">
