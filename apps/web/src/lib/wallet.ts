@@ -9,5 +9,5 @@ export function bestConnector() {
   if (typeof window !== "undefined" && (window as Window & { ethereum?: unknown }).ethereum) {
     return injected({ shimDisconnect: true });
   }
-  return coinbaseWallet({ appName: "Blue Agent", preference: { options: "all" } });
+  return coinbaseWallet({ appName: "Blue Agent", preference: { options: "smartWalletOnly" } });
 }
