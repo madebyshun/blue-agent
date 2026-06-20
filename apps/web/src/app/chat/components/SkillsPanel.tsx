@@ -43,8 +43,10 @@ export default function SkillsPanel({ onPick }: { onPick?: () => void }) {
   const [activeProvider, setActiveProvider] = useState<SkillProvider | "all">("all");
   const [search, setSearch] = useState("");
 
-  // Installed skills (localStorage, from /skill install or the modal below).
+  // All installed skills (localStorage). User-installed = non-default only;
+  // default/bundle skills are always active and shown in the ACTIVE catalog below.
   const { skills: installed } = useIntegrations();
+  const userInstalled = installed.filter(s => !s.default);
   const [installOpen, setInstallOpen] = useState(false);
   const [installInput, setInstallInput] = useState("");
   const [installBusy, setInstallBusy] = useState(false);
@@ -150,12 +152,13 @@ export default function SkillsPanel({ onPick }: { onPick?: () => void }) {
       <div className="flex-1 overflow-y-auto">
         <div className="px-6 py-4 space-y-6">
 
-          {/* Installed skills (GitHub SKILL.md, localStorage-backed) */}
+          {/* Installed skills — user-installed from GitHub SKILL.md.
+              Default / bundled skills are always-on and shown in the ACTIVE catalog below. */}
           <section>
             <div className="flex items-center justify-between mb-3">
               <p className="font-mono text-[9px] text-[#4FC3F7] tracking-widest flex items-center gap-2">
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#4FC3F7]" />
-                INSTALLED · {installed.length}
+                INSTALLED · {userInstalled.length}
               </p>
               <button
                 onClick={() => { setInstallMsg(""); setInstallOpen(true); }}
@@ -165,13 +168,10 @@ export default function SkillsPanel({ onPick }: { onPick?: () => void }) {
               </button>
             </div>
             <div className="space-y-1.5">
-              {installed.map(s => (
+              {userInstalled.map(s => (
                 <div key={s.name} className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-[#1A1A2E] bg-[#0A0A12]">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[13px] text-slate-200 truncate">{s.name}</span>
-                      {s.default && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded border border-slate-700 text-slate-600 shrink-0">default</span>}
-                    </div>
+                    <span className="font-mono text-[13px] text-slate-200 truncate block">{s.name}</span>
                     <p className="font-mono text-[10px] text-slate-600 truncate">{s.description}</p>
                   </div>
                   <button
@@ -191,8 +191,8 @@ export default function SkillsPanel({ onPick }: { onPick?: () => void }) {
                   </button>
                 </div>
               ))}
-              {installed.length === 0 && (
-                <p className="font-mono text-[10px] text-slate-700">No skills installed. Click + Install, or type <span className="text-slate-500">/skill install owner/repo</span> in chat.</p>
+              {userInstalled.length === 0 && (
+                <p className="font-mono text-[10px] text-slate-700">No custom skills installed. Click + Install, or type <span className="text-slate-500">/skill install owner/repo</span> in chat.</p>
               )}
             </div>
           </section>
@@ -241,6 +241,20 @@ export default function SkillsPanel({ onPick }: { onPick?: () => void }) {
                         <p className="font-mono text-[10px] text-slate-600 leading-relaxed truncate">
                           {skill.description}
                         </p>
+                        {/* Tool chips — shown for Bundled skills so user sees what gets chained */}
+                        {skill.tools && skill.tools.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {skill.tools.map(t => (
+                              <span
+                                key={t}
+                                className="font-mono text-[8px] px-1.5 py-0.5 rounded"
+                                style={{ background: "#F59E0B0A", color: "#F59E0B70", border: "1px solid #F59E0B20" }}
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       {/* Provider + use */}
