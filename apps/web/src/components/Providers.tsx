@@ -7,7 +7,6 @@ import { coinbaseWallet } from "wagmi/connectors";
 import { farcasterMiniApp } from "@farcaster/miniapp-wagmi-connector";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import MiniAppReady from "@/components/MiniAppReady";
-import { DATA_SUFFIX } from "@/constants/builderCode";
 
 // The Farcaster / Base App Mini App connector talks to a host frame over
 // postMessage. It is NOT inert in a normal browser tab: with no host to
@@ -44,9 +43,10 @@ const config = createConfig({
   // EIP-6963 discovery (default true in v3) handles MetaMask/Rabby/etc.
   multiInjectedProviderDiscovery: true,
   transports: { [base.id]: http(), [baseSepolia.id]: http() },
-  // ERC-8021 builder-code attribution — appended to tx calldata so Blue Bank
-  // activity is credited to BlueAgent on base.dev.
-  dataSuffix: DATA_SUFFIX,
+  // NOTE: wagmi 3.6 / viem 2.49 have no config-level `dataSuffix` — it was a
+  // silent no-op. ERC-8021 builder-code attribution is applied per-transaction
+  // instead: the EIP-5792 `dataSuffix` capability in the Smart Wallet send path
+  // (ToolCards SendCard) and a calldata suffix on the 0x swap (bank SwapCard).
   ssr: true,
 });
 
