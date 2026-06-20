@@ -100,10 +100,11 @@ export function getDailyCr(tier: TierInfo, hasWallet: boolean): number {
 // ── Credit costs ──────────────────────────────────────────────────────────────
 
 export const BASE_COST: Record<string, number> = {
-  // Bankr (Anthropic)
+  // Bankr (Anthropic + DeepSeek via Bankr gateway)
   fast:                   10,
   pro:                    50,
   max:                   200,
+  deepseek:               10,
   // Venice — standard
   "venice-deepseek":      10,
   "venice-deepseek-pro":  30,

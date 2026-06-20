@@ -13,6 +13,7 @@ import SkillsPanel   from "@/app/chat/components/SkillsPanel";
 import SettingsModal from "@/app/chat/components/SettingsModal";
 import ChatMessages  from "@/app/chat/components/ChatMessages";
 import ChatInput     from "@/app/chat/components/ChatInput";
+import ClaimBanner   from "@/app/chat/components/ClaimBanner";
 import ArtifactsPanel from "@/app/chat/components/ArtifactsPanel";
 import type { ActiveTab } from "@/app/chat/types";
 
@@ -116,6 +117,7 @@ function ChatShell() {
             {isChat && (
               <>
                 <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+                  <ClaimBanner />
                   <ChatMessages />
                   <ChatInput />
                 </div>

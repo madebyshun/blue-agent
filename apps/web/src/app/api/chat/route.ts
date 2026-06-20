@@ -123,9 +123,10 @@ function creditErrorSSE(needed: number, balance: number): Response {
 // into a 2000-token essay for a one-line price question. Verbose intents
 // ("explain in detail", "deep dive") use longer answers but still fit.
 const MODELS: Record<string, { id: string; maxTokens: number }> = {
-  fast: { id: "claude-haiku-4-5",  maxTokens: 768  },  // was 1024
-  pro:  { id: "claude-sonnet-4-6", maxTokens: 1200 },  // was 2048
-  max:  { id: "claude-sonnet-4-6", maxTokens: 2400 },  // was 4096
+  fast:     { id: "claude-haiku-4-5",   maxTokens: 768  },  // was 1024
+  pro:      { id: "claude-sonnet-4-6",  maxTokens: 1200 },  // was 2048
+  max:      { id: "claude-opus-4-7",    maxTokens: 2400 },  // real Opus 4.7 (Bankr serves it)
+  deepseek: { id: "deepseek-v4-flash",  maxTokens: 2400 },  // DeepSeek V4 Flash, 1M ctx — via Bankr
 };
 
 // ─── Model display names ──────────────────────────────────────────────────────
@@ -146,9 +147,10 @@ const VENICE_DISPLAY: Record<string, string> = {
 };
 
 const BANKR_DISPLAY: Record<string, string> = {
-  fast: "Claude Haiku 4.5 (Bankr · Fast)",
-  pro:  "Claude Sonnet 4.6 (Bankr · Pro)",
-  max:  "Claude Sonnet 4.6 (Bankr · Max)",
+  fast:     "Claude Haiku 4.5 (Bankr · Fast)",
+  pro:      "Claude Sonnet 4.6 (Bankr · Chat)",
+  max:      "Claude Opus 4.7 (Bankr · Deep Think)",
+  deepseek: "DeepSeek V4 Flash (Bankr · 1M ctx)",
 };
 
 function getModelLabel(tier: string, modelId?: string, provider?: string): string {
