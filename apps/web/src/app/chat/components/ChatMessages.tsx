@@ -378,22 +378,22 @@ interface EmptyState { heading: string; sub: string; starters: Starter[]; }
 const PERSONA_EMPTY: Record<string, EmptyState> = {
   "blue-agent": {
     heading: "What are you building?",
-    sub:     "Ideas, architecture, audits, launches, fundraising — grounded in Base.",
+    sub:     "Idea → Build → Audit → Launch — the full Base founder stack, plus Skills + live alpha.",
     starters: [
-      { icon: "💡", label: "Idea", text: "/idea USDC payroll on Base", color: "#4FC3F7" },
-      { icon: "🛠️", label: "Build", text: "/build ERC-4337 agent wallet", color: "#A78BFA" },
-      { icon: "🛡️", label: "Audit", text: "/audit my token launch plan", color: "#F87171" },
-      { icon: "🚀", label: "Pick", text: "/pick", color: "#34D399" },
+      { icon: "💡", label: "Idea",   text: "/idea USDC payroll on Base",   color: "#4FC3F7" },
+      { icon: "🛠️", label: "Build",  text: "/build ERC-4337 agent wallet", color: "#A78BFA" },
+      { icon: "🛡️", label: "Audit",  text: "/audit my token launch plan",  color: "#F87171" },
+      { icon: "🚀", label: "Launch", text: "/launch",                       color: "#34D399" },
     ],
   },
   "blue-trader": {
     heading: "What's the trade?",
-    sub:     "Position sizing, entries/exits, and on-chain alpha — Base-native.",
+    sub:     "Live alpha, smart money flow, safety checks — Base-native.",
     starters: [
-      { icon: "🎯", label: "Pick", text: "/pick", color: "#34D399" },
+      { icon: "🎯", label: "Pick",  text: "/pick",      color: "#34D399" },
       { icon: "🐋", label: "Whale", text: "/whale AERO", color: "#4FC3F7" },
-      { icon: "📈", label: "DEX flow", text: "/dex AERO", color: "#E879F9" },
-      { icon: "📊", label: "PnL", text: "/pnl 0x…", color: "#A78BFA" },
+      { icon: "🔍", label: "Scan",  text: "/scan 0x…",  color: "#FB923C" },
+      { icon: "📊", label: "PnL",   text: "/pnl 0x…",   color: "#A78BFA" },
     ],
   },
   "blue-auditor": {
@@ -420,10 +420,10 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
     heading: "How can I help?",
     sub:     "Your custom system prompt is active — ask anything.",
     starters: [
-      { icon: "💡", label: "Idea", text: "/idea USDC payroll on Base", color: "#4FC3F7" },
-      { icon: "🛠️", label: "Build", text: "/build ERC-4337 agent wallet", color: "#A78BFA" },
-      { icon: "🛡️", label: "Audit", text: "/audit my token launch plan", color: "#F87171" },
-      { icon: "🎯", label: "Pick", text: "/pick", color: "#34D399" },
+      { icon: "💡", label: "Idea",   text: "/idea USDC payroll on Base",   color: "#4FC3F7" },
+      { icon: "🛠️", label: "Build",  text: "/build ERC-4337 agent wallet", color: "#A78BFA" },
+      { icon: "🛡️", label: "Audit",  text: "/audit my token launch plan",  color: "#F87171" },
+      { icon: "🚀", label: "Launch", text: "/launch",                       color: "#34D399" },
     ],
   },
 };
