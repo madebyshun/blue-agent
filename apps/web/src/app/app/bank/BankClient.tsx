@@ -266,11 +266,19 @@ export default function BankPage() {
 
       {/* ── Content — single page ────────────────────────────────────────── */}
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        {/* Standard /app page header — // TITLE format (matches Chat / Hub) */}
-        <div className="px-4 sm:px-6 h-14 flex items-center border-b border-[#1A1A2E] shrink-0">
-          <div className="min-w-0">
-            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// YOUR ACCOUNT ON BASE</p>
-            <p className="font-mono text-[10px] text-slate-700 mt-1 truncate">{name || shortAddr(acct)} · <span className="text-[#34D399]">non-custodial</span> · you hold the keys</p>
+        {/* Page header — personalized greeting + trust chips (identity, not nav) */}
+        <div className="px-4 sm:px-6 h-14 flex items-center justify-between gap-3 border-b border-[#1A1A2E] shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Identicon address={acct} />
+            <div className="min-w-0">
+              <p className="font-mono text-[13px] text-white truncate">Welcome back, <span className="text-[#4FC3F7]">{name || shortAddr(acct)}</span></p>
+              <p className="font-mono text-[9px] text-slate-600 truncate">Your account on Base · you hold the keys</p>
+            </div>
+          </div>
+          <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+            {["Non-custodial", "Base", "Passkey"].map(c => (
+              <span key={c} className="font-mono text-[9px] px-2 py-1 rounded-md text-slate-400" style={{ border: "1px solid #1A1A2E", background: "#0d0d12" }}>{c}</span>
+            ))}
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
@@ -293,31 +301,41 @@ export default function BankPage() {
                   {netFlowMonth >= 0 ? "+" : "−"}${usd(Math.abs(netFlowMonth))} USDC this month
                 </div>
               )}
+              {/* Primary actions — Receive + Send (most-used, prominent) */}
+              <div className="grid grid-cols-2 gap-2 mt-4">
+                <button onClick={() => openAction("receive")}
+                  className="font-mono text-[12px] font-bold py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                  style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
+                  ⬇ Receive money
+                </button>
+                <button onClick={() => openAction("send")}
+                  className="font-mono text-[12px] font-bold py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-opacity hover:opacity-90"
+                  style={{ background: "#4FC3F7", color: "#050508" }}>
+                  ➡ Send money
+                </button>
+              </div>
+
               <button onClick={addCash} disabled={onrampBusy || !isConnected}
-                className="font-mono text-[12px] font-bold px-4 py-2.5 rounded-xl mt-4 disabled:opacity-50"
+                className="font-mono text-[12px] font-bold px-4 py-2.5 rounded-xl mt-2 disabled:opacity-50"
                 style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>
                 {onrampBusy ? "Starting…" : "💵 Add cash · card / bank → USDC"}
               </button>
               {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-1">{onrampMsg}</div>}
               <div className="font-mono text-[9px] text-slate-600 mt-1">via Coinbase · available in select regions · or fund with Receive</div>
+
+              {/* Secondary actions — Positions / Earn / Convert / (Orders) / Cash out */}
               <div className="grid grid-cols-2 gap-2 mt-3">
-                {TABS.map(tb => (
+                {TABS.filter(t => t.id !== "send" && t.id !== "receive").map(tb => (
                   <button key={tb.id} onClick={() => openAction(tb.id)}
-                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left">
-                    <span className="text-base leading-none shrink-0">{tb.icon}</span>
-                    <div className="min-w-0">
-                      <div className="font-mono text-[11px] text-slate-200 truncate">{tb.label}</div>
-                      <div className="font-mono text-[9px] text-slate-600 truncate">{tb.desc}</div>
-                    </div>
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left">
+                    <span className="text-sm leading-none shrink-0">{tb.icon}</span>
+                    <div className="font-mono text-[10px] text-slate-200 truncate">{tb.label}</div>
                   </button>
                 ))}
                 <button onClick={cashOut} disabled={cashOutBusy || !isConnected}
-                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left disabled:opacity-50">
-                  <span className="text-base leading-none shrink-0">🏦</span>
-                  <div className="min-w-0">
-                    <div className="font-mono text-[11px] text-slate-200 truncate">{cashOutBusy ? "Starting…" : "Cash out"}</div>
-                    <div className="font-mono text-[9px] text-slate-600 truncate">USDC → bank</div>
-                  </div>
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left disabled:opacity-50">
+                  <span className="text-sm leading-none shrink-0">🏦</span>
+                  <div className="font-mono text-[10px] text-slate-200 truncate">{cashOutBusy ? "Starting…" : "Cash out"}</div>
                 </button>
               </div>
             </div>
@@ -573,6 +591,22 @@ function Card({ title, note, children }: { title: string; note?: string; childre
       </div>
       {children}
     </div>
+  );
+}
+
+// Deterministic gradient avatar derived from the wallet address — a tiny,
+// dependency-free identicon so every account looks distinct in the greeting.
+function Identicon({ address }: { address?: string }) {
+  const hue = (s: string, fallback: number) => {
+    const n = parseInt(s, 16);
+    return Number.isFinite(n) ? n % 360 : fallback;
+  };
+  const a = address ?? "0x000000";
+  const h1 = hue(a.slice(2, 6), 200);
+  const h2 = hue(a.slice(-4), 280);
+  return (
+    <span className="w-8 h-8 rounded-full shrink-0 border border-[#1A1A2E]"
+      style={{ background: `linear-gradient(135deg, hsl(${h1} 70% 55%), hsl(${h2} 70% 45%))` }} />
   );
 }
 
