@@ -54,8 +54,10 @@ export interface ModelTier {
 // model that doesn't exist in the UI any more.
 
 export const BANKR_TIERS: ModelTier[] = [
-  { id: "pro",  label: "Pro", model: "Sonnet", color: "#4FC3F7", badge: "", note: "Balanced", group: "bankr", credits: 50  },
-  { id: "max",  label: "Max", model: "Opus",   color: "#A78BFA", badge: "", note: "Smartest", group: "bankr", credits: 200 },
+  { id: "fast",     label: "Fast",     model: "Haiku 4.5",   color: "#34D399", badge: "", note: "Fastest · cheap", group: "bankr", credits: 10  },
+  { id: "pro",      label: "Chat",     model: "Sonnet 4.6",  color: "#4FC3F7", badge: "", note: "Balanced",       group: "bankr", credits: 50  },
+  { id: "max",      label: "Deep",     model: "Opus 4.7",    color: "#A78BFA", badge: "", note: "Smartest",       group: "bankr", credits: 200 },
+  { id: "deepseek", label: "DeepSeek", model: "DeepSeek V4", color: "#F59E0B", badge: "", note: "1M ctx · cheap", group: "bankr", credits: 10  },
 ];
 
 export const VENICE_TIERS: ModelTier[] = [
@@ -104,13 +106,14 @@ export interface ModelPreset {
  * A 6th "🛠️ Code" preset is planned for when a code-specialised model
  * lands; the slot is intentionally left for it.
  */
+// All-Bankr lineup (funded by the $BLUEAGENT × Bankr loop). Web search is a
+// separate tool (Anthropic web_search server-tool) toggled with 🔍 in the
+// composer, so it works on any of these models — no Venice model in the picker.
 export const MODEL_PRESETS: ModelPreset[] = [
-  { id: "chat",       label: "Chat",        desc: "Balanced default · Sonnet · 200K ctx", icon: "💬", tier: "pro",                webSearch: false },
-  { id: "fast",       label: "Fast",        desc: "Cheapest · DeepSeek · 1M ctx",         icon: "⚡", tier: "venice-deepseek",    webSearch: false },
-  { id: "web-search", label: "Web Search",  desc: "~2s live multi-source · Grok 4",       icon: "🔍", tier: "venice-grok",        webSearch: true  },
-  { id: "deep-think", label: "Deep Think",  desc: "Heavy reasoning + web · Opus",         icon: "🔬", tier: "max",                webSearch: true  },
-  { id: "fable",      label: "Fable 5",     desc: "Creative Claude · 1M ctx · Venice",    icon: "✍️", tier: "venice-fable",       webSearch: false },
-  { id: "private",    label: "Private",     desc: "E2EE · no logs · Gemma 27B",           icon: "🔒", tier: "venice-e2ee-gemma",  webSearch: false },
+  { id: "chat",       label: "Chat",       desc: "Balanced default · Sonnet 4.6",     icon: "💬", tier: "pro",      webSearch: false },
+  { id: "fast",       label: "Fast",       desc: "Cheapest · Haiku 4.5",              icon: "⚡", tier: "fast",     webSearch: false },
+  { id: "deep-think", label: "Deep Think", desc: "Heavy reasoning · Opus 4.7",        icon: "🔬", tier: "max",      webSearch: false },
+  { id: "deepseek",   label: "DeepSeek",   desc: "1M context · DeepSeek V4 Flash",    icon: "✦",  tier: "deepseek", webSearch: false },
 ];
 
 export default function ChatInput() {

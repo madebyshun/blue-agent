@@ -378,22 +378,22 @@ interface EmptyState { heading: string; sub: string; starters: Starter[]; }
 const PERSONA_EMPTY: Record<string, EmptyState> = {
   "blue-agent": {
     heading: "What are you building?",
-    sub:     "Ideas, architecture, audits, launches, fundraising — grounded in Base.",
+    sub:     "Idea → Build → Audit → Launch — the full Base founder stack, plus Skills + live alpha.",
     starters: [
-      { icon: "💡", label: "Idea", text: "/idea USDC payroll on Base", color: "#4FC3F7" },
-      { icon: "🛠️", label: "Build", text: "/build ERC-4337 agent wallet", color: "#A78BFA" },
-      { icon: "🛡️", label: "Audit", text: "/audit my token launch plan", color: "#F87171" },
-      { icon: "🚀", label: "Pick", text: "/pick", color: "#34D399" },
+      { icon: "💡", label: "Idea",   text: "/idea USDC payroll on Base",   color: "#4FC3F7" },
+      { icon: "🛠️", label: "Build",  text: "/build ERC-4337 agent wallet", color: "#A78BFA" },
+      { icon: "🛡️", label: "Audit",  text: "/audit my token launch plan",  color: "#F87171" },
+      { icon: "🚀", label: "Launch", text: "/launch",                       color: "#34D399" },
     ],
   },
   "blue-trader": {
     heading: "What's the trade?",
-    sub:     "Position sizing, entries/exits, and on-chain alpha — Base-native.",
+    sub:     "Live alpha, smart money flow, safety checks — Base-native.",
     starters: [
-      { icon: "🎯", label: "Pick", text: "/pick", color: "#34D399" },
+      { icon: "🎯", label: "Pick",  text: "/pick",      color: "#34D399" },
       { icon: "🐋", label: "Whale", text: "/whale AERO", color: "#4FC3F7" },
-      { icon: "📈", label: "DEX flow", text: "/dex AERO", color: "#E879F9" },
-      { icon: "📊", label: "PnL", text: "/pnl 0x…", color: "#A78BFA" },
+      { icon: "🔍", label: "Scan",  text: "/scan 0x…",  color: "#FB923C" },
+      { icon: "📊", label: "PnL",   text: "/pnl 0x…",   color: "#A78BFA" },
     ],
   },
   "blue-auditor": {
@@ -420,10 +420,10 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
     heading: "How can I help?",
     sub:     "Your custom system prompt is active — ask anything.",
     starters: [
-      { icon: "💡", label: "Idea", text: "/idea USDC payroll on Base", color: "#4FC3F7" },
-      { icon: "🛠️", label: "Build", text: "/build ERC-4337 agent wallet", color: "#A78BFA" },
-      { icon: "🛡️", label: "Audit", text: "/audit my token launch plan", color: "#F87171" },
-      { icon: "🎯", label: "Pick", text: "/pick", color: "#34D399" },
+      { icon: "💡", label: "Idea",   text: "/idea USDC payroll on Base",   color: "#4FC3F7" },
+      { icon: "🛠️", label: "Build",  text: "/build ERC-4337 agent wallet", color: "#A78BFA" },
+      { icon: "🛡️", label: "Audit",  text: "/audit my token launch plan",  color: "#F87171" },
+      { icon: "🚀", label: "Launch", text: "/launch",                       color: "#34D399" },
     ],
   },
 };
@@ -440,6 +440,32 @@ export default function ChatMessages() {
   const isEmpty    = messages.length === 0;
   const tierColor  = MODEL_COLORS[chatTier] ?? "#4FC3F7";
   const empty      = PERSONA_EMPTY[personaId] ?? PERSONA_EMPTY["blue-agent"];
+
+  // ── Share conversation ────────────────────────────────────────────────────
+  const [shareStatus, setShareStatus] = useState<"idle" | "loading" | "copied">("idle");
+
+  const shareConversation = async () => {
+    if (!activeTask || streaming || shareStatus === "loading") return;
+    setShareStatus("loading");
+    try {
+      const res = await fetch("/api/chat/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title:    activeTask.title || "Shared conversation",
+          messages: activeTask.messages,
+        }),
+      });
+      if (!res.ok) throw new Error("share failed");
+      const { id } = await res.json() as { id: string };
+      const url = `${window.location.origin}/share/${id}`;
+      await navigator.clipboard.writeText(url);
+      setShareStatus("copied");
+      setTimeout(() => setShareStatus("idle"), 2500);
+    } catch {
+      setShareStatus("idle");
+    }
+  };
 
   // Thinking timer
   const [elapsed, setElapsed] = useState(0);
@@ -525,13 +551,78 @@ export default function ChatMessages() {
             ))}
           </div>
 
+          {/* Product quick links — Blue Bank + Blue Feed */}
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            {[
+              { href: "/app/bank", icon: "🏦", label: "Blue Bank", color: "#4FC3F7", sub: "Send · Earn · Pay" },
+              { href: "/app/feed", icon: "📡", label: "Blue Feed", color: "#A78BFA", sub: "AI signals · Live alpha" },
+            ].map(p => (
+              <Link
+                key={p.href}
+                href={p.href}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl border transition-all group"
+                style={{ background: "#0D0D14", borderColor: "#1A1A2E" }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLElement).style.borderColor = `${p.color}30`;
+                  (e.currentTarget as HTMLElement).style.background = `${p.color}08`;
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.borderColor = "#1A1A2E";
+                  (e.currentTarget as HTMLElement).style.background = "#0D0D14";
+                }}
+              >
+                <span className="text-sm shrink-0">{p.icon}</span>
+                <div className="text-left">
+                  <span className="font-mono text-[12px] text-slate-300 group-hover:text-white transition-colors block">{p.label}</span>
+                  <span className="font-mono text-[9px] text-slate-600">{p.sub}</span>
+                </div>
+                <svg className="w-3 h-3 text-slate-700 group-hover:text-slate-500 shrink-0 ml-1 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            ))}
+          </div>
+
           {outOfCredits && (
-            <p className="font-mono text-[10px] text-red-400 mt-5">Out of credits — stake $BLUEAGENT to refill</p>
+            <p className="font-mono text-[10px] text-red-400 mt-4">Out of credits — stake $BLUEAGENT to refill</p>
           )}
         </div>
       ) : (
         /* ── Message list ────────────────────────────────────────────────── */
         <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-1">
+
+          {/* Share bar — top-right, only when ≥1 completed assistant turn */}
+          {messages.some(m => m.role === "assistant" && m.content) && (
+            <div className="flex justify-end mb-2">
+              <button
+                onClick={shareConversation}
+                disabled={streaming || shareStatus === "loading"}
+                className="inline-flex items-center gap-1.5 font-mono text-[10px] px-2.5 py-1 rounded-lg border transition-all disabled:opacity-40"
+                style={shareStatus === "copied"
+                  ? { borderColor: "#34D39940", background: "#34D39910", color: "#34D399" }
+                  : { borderColor: "#1A1A2E", background: "#08080F", color: "#64748b" }
+                }
+              >
+                {shareStatus === "loading" ? (
+                  <>
+                    <span className="w-2.5 h-2.5 border border-slate-600 border-t-transparent rounded-full animate-spin" />
+                    sharing…
+                  </>
+                ) : shareStatus === "copied" ? (
+                  <>✓ Link copied</>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                    </svg>
+                    Share
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
           {messages.map((msg, i) => {
             const isAssistant = msg.role === "assistant";
 

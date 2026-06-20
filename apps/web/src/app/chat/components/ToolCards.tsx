@@ -1558,27 +1558,30 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
       await switchChainAsync({ chainId });
       setStep("sending");
 
-      // Gasless: Smart Wallet + paymaster → batch the call through EIP-5792 and
-      // let our /api/paymaster sponsor gas. The status hook resolves the hash.
-      if (gaslessSupported) {
+      // EIP-5792 path — route every 5792-capable wallet (Coinbase Smart Wallet,
+      // recent MetaMask) through wallet_sendCalls so we can attach the ERC-8021
+      // builder-code `dataSuffix`. Coinbase Smart Wallet appends it to the
+      // executeBatch calldata (attributed); wallets that don't support the
+      // capability ignore it (optional: true → never blocks the send). The
+      // paymaster is added only when the wallet exposes one (gasless). The
+      // status hook resolves the on-chain tx hash for both.
+      const supportsSendCalls = !!walletCapabilities;
+      if (supportsSendCalls) {
         const call = asset === "USDC"
           ? { to: net.usdc, data: encodeFunctionData({ abi: ERC20_ABI, functionName: "transfer", args: [toAddress, parseUnits(amount, net.usdcDecimals)] }) }
           : { to: toAddress, value: parseEther(amount) };
         const origin = typeof window !== "undefined" ? window.location.origin : "";
-        const res = await sendCallsAsync({
-          calls: [call],
-          chainId,
-          // paymasterService → gas sponsorship; dataSuffix → ERC-8021 builder-code
-          // attribution (Coinbase Smart Wallet appends it to the executeBatch calldata).
-          capabilities: {
-            paymasterService: { url: `${origin}/api/paymaster?network=${network}` },
-            dataSuffix: { value: DATA_SUFFIX, optional: true },
-          },
-        });
+        const dataSuffix = { value: DATA_SUFFIX, optional: true };
+        const capabilities = gaslessSupported
+          ? { paymasterService: { url: `${origin}/api/paymaster?network=${network}` }, dataSuffix }
+          : { dataSuffix };
+        const res = await sendCallsAsync({ calls: [call], chainId, capabilities });
         setCallsId(typeof res === "string" ? res : res.id); // status hook → done
         return;
       }
 
+      // Legacy fallback — wallets without EIP-5792 (older EOAs). Unattributed:
+      // builder-code attribution needs the sendCalls dataSuffix capability above.
       const hash = asset === "USDC"
         ? await writeContractAsync({ address: net.usdc, abi: ERC20_ABI, functionName: "transfer", args: [toAddress, parseUnits(amount, net.usdcDecimals)], chainId })
         : await sendTransactionAsync({ to: toAddress, value: parseEther(amount), chainId });
