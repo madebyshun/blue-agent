@@ -8,7 +8,6 @@ import { useAppChrome, type DrawerNavItem, type DrawerRecent } from "@/app/app/A
 
 import AppSidebar    from "@/app/chat/components/AppSidebar";
 import ModelsPanel   from "@/app/chat/components/ModelsPanel";
-import ToolsTab      from "@/app/chat/components/ToolsTab";
 import SkillsPanel   from "@/app/chat/components/SkillsPanel";
 import SettingsModal from "@/app/chat/components/SettingsModal";
 import ChatMessages  from "@/app/chat/components/ChatMessages";
@@ -22,7 +21,6 @@ import type { ActiveTab } from "@/app/chat/types";
 // not as a content tab.
 const TAB_META: Record<Exclude<ActiveTab, "chat" | "settings">, { title: string; subtitle: string }> = {
   models:   { title: "Models",   subtitle: "AI engines behind Blue Chat · pick by use-case" },
-  tools:    { title: "Tools",    subtitle: "50 hub tools · click to run in chat" },
   skills:   { title: "Skills",   subtitle: "Agent capabilities · Blue Agent · Bankr · Base MCP" },
 };
 
@@ -133,13 +131,6 @@ function ChatShell() {
             {activeTab === "models" && (
               <div className="flex-1 h-full overflow-hidden">
                 <ModelsPanel onPick={() => setActiveTab("chat")} />
-              </div>
-            )}
-
-            {/* 🔧 Tools */}
-            {activeTab === "tools" && (
-              <div className="flex-1 h-full overflow-hidden">
-                <ToolsTab onPick={() => setActiveTab("chat")} />
               </div>
             )}
 
