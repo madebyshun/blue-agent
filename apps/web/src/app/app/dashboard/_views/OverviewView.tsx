@@ -120,7 +120,8 @@ function loadChatStats(addr?: string): ChatStats {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 4)
       .map(([name, count]) => ({ name, count }));
-    return { totalSessions: tasks.length, totalMessages, totalCreditsUsed, toolsUsed, firstUsed };
+    const activeSessions = tasks.filter(t => t.messages.some((m: { role: string }) => m.role === "assistant")).length;
+    return { totalSessions: activeSessions, totalMessages, totalCreditsUsed, toolsUsed, firstUsed };
   } catch { return empty; }
 }
 
@@ -412,7 +413,7 @@ export default function OverviewView({ onSwitchTab }: Props) {
                   </svg>
                   <span>
                     {ledger.accrued.toFixed(0)} accrued
-                    {ledger.topup > 0  && <> + <span className="text-[#22C55E]">{ledger.topup.toLocaleString()} top-up</span></>}
+                    {ledger.topup > 0  && <> + <span className="text-[#22C55E]">{ledger.topup.toLocaleString()} {ledger.accrued === 0 ? "bonus" : "top-up"}</span></>}
                     {ledger.spent > 0  && <> − <span className="text-[#A78BFA]">{ledger.spent.toLocaleString()} spent</span></>}
                     {" "}= <span className="text-slate-400 font-medium">{ledger.balance.toLocaleString()} balance</span>
                   </span>
@@ -460,6 +461,22 @@ export default function OverviewView({ onSwitchTab }: Props) {
                   <div className="text-[11px] text-slate-600 mb-4">Earn USDC yield + AI credits</div>
                 </>
               )}
+              {/* Tier ladder */}
+              <div className="mt-3 mb-3 space-y-1.5">
+                {[
+                  { name: "Starter", min: "500K", color: "#4FC3F7", pct: staked >= 500_000 ? 100 : (staked / 500_000) * 100 },
+                  { name: "Pro",     min: "2M",   color: "#A78BFA", pct: staked >= 2_000_000 ? 100 : staked >= 500_000 ? (staked / 2_000_000) * 100 : 0 },
+                  { name: "Max",     min: "10M",  color: "#F59E0B", pct: staked >= 10_000_000 ? 100 : staked >= 2_000_000 ? (staked / 10_000_000) * 100 : 0 },
+                ].map(t => (
+                  <div key={t.name} className="flex items-center gap-2">
+                    <span className="font-mono text-[9px] w-12 shrink-0" style={{ color: t.pct > 0 ? t.color : "#334155" }}>{t.name}</span>
+                    <div className="flex-1 h-1 rounded-full bg-[#1A1A2E] overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.max(t.pct, t.pct > 0 ? 4 : 0)}%`, background: t.color, opacity: t.pct > 0 ? 1 : 0.3 }} />
+                    </div>
+                    <span className="font-mono text-[9px] text-slate-700 w-8 text-right shrink-0">{t.min}</span>
+                  </div>
+                ))}
+              </div>
               <button
                 onClick={() => onSwitchTab?.("stake")}
                 className="mt-auto inline-flex items-center justify-center gap-1.5 text-[11px] font-bold px-3 py-2 rounded-lg bg-[#4FC3F7]/15 text-[#4FC3F7] border border-[#4FC3F7]/40 hover:bg-[#4FC3F7]/20 transition-colors">
