@@ -189,6 +189,35 @@ export default function BankPage() {
   const [chatLoading, setChatLoading] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
+  // ── Draggable AI FAB ─────────────────────────────────────────────────────
+  const fabDrag = useRef<{ ox: number; oy: number; sx: number; sy: number; moved: boolean } | null>(null);
+  const [fabXY, setFabXY]       = useState<{ x: number; y: number } | null>(null);
+  const [fabDragging, setFabDragging] = useState(false);
+
+  function fabDown(e: React.PointerEvent<HTMLButtonElement>) {
+    e.preventDefault();
+    (e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId);
+    const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+    fabDrag.current = { ox: r.left, oy: r.top, sx: e.clientX, sy: e.clientY, moved: false };
+    setFabDragging(true);
+  }
+  function fabMove(e: React.PointerEvent<HTMLButtonElement>) {
+    if (!fabDrag.current) return;
+    const dx = e.clientX - fabDrag.current.sx;
+    const dy = e.clientY - fabDrag.current.sy;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) fabDrag.current.moved = true;
+    if (!fabDrag.current.moved) return;
+    setFabXY({
+      x: Math.max(8, Math.min(window.innerWidth  - 56, fabDrag.current.ox + dx)),
+      y: Math.max(8, Math.min(window.innerHeight - 56, fabDrag.current.oy + dy)),
+    });
+  }
+  function fabUp() {
+    if (fabDrag.current && !fabDrag.current.moved) setChatOpen(o => !o);
+    fabDrag.current = null;
+    setFabDragging(false);
+  }
+
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages, chatLoading]);
@@ -294,6 +323,21 @@ export default function BankPage() {
     { name: "Stablecoin", value: stableTotal, color: "#4FC3F7" },
     { name: "ETH",        value: ethUsd,      color: "#94A3B8" },
   ].filter(d => d.value > 0);
+
+  // ── Chat popup position relative to FAB ──────────────────────────────────
+  const FAB_SZ   = 48;
+  const POPUP_W  = 320;
+  const POPUP_H  = 432;
+  const chatPopupStyle: React.CSSProperties = fabXY
+    ? {
+        left: Math.max(8, Math.min(
+          (typeof window !== "undefined" ? window.innerWidth : 1440) - POPUP_W - 8,
+          fabXY.x + FAB_SZ / 2 - POPUP_W / 2,
+        )),
+        top: Math.max(8, fabXY.y - POPUP_H - 12),
+        height: POPUP_H,
+      }
+    : { right: 16, bottom: 76, height: POPUP_H };
 
   return (
     <div className="flex h-full w-full bg-[#050508] text-slate-200">
@@ -484,11 +528,9 @@ export default function BankPage() {
                 )}
               </div>
 
-              <button onClick={() => setChatOpen(true)}
-                className="w-full font-mono text-[10px] font-bold py-2 rounded-xl transition-opacity hover:opacity-80"
-                style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                💬 Ask BlueAgent
-              </button>
+              <div className="font-mono text-[9px] text-slate-600 text-center pt-1">
+                Use the <span className="text-[#4FC3F7]">💬</span> button at the corner to chat
+              </div>
             </div>
 
             {/* ── Onchain Activity ──────────────────────────────────── */}
@@ -818,9 +860,24 @@ export default function BankPage() {
         </div>
       </main>
 
-      {/* ── AI Chat popup — fixed bottom-right ──────────────────────────── */}
+      {/* ── Floating Ask BlueAgent — draggable FAB ───────────────────────── */}
+      <button
+        onPointerDown={fabDown}
+        onPointerMove={fabMove}
+        onPointerUp={fabUp}
+        className="fixed z-[65] w-12 h-12 rounded-full shadow-2xl flex items-center justify-center select-none touch-none transition-[box-shadow] hover:shadow-[0_0_24px_#4FC3F750]"
+        style={fabXY
+          ? { left: fabXY.x, top: fabXY.y, background: chatOpen ? "#050508" : "#4FC3F7", color: chatOpen ? "#4FC3F7" : "#050508", border: "2px solid #4FC3F7", cursor: fabDragging ? "grabbing" : "grab" }
+          : { right: 16, bottom: 16, background: chatOpen ? "#050508" : "#4FC3F7", color: chatOpen ? "#4FC3F7" : "#050508", border: "2px solid #4FC3F7", cursor: fabDragging ? "grabbing" : "grab" }
+        }
+      >
+        <span className="text-base leading-none pointer-events-none">{chatOpen ? "✕" : "💬"}</span>
+      </button>
+
+      {/* ── AI Chat popup — anchored above FAB ───────────────────────────── */}
       {chatOpen && (
-        <div className="fixed bottom-4 right-4 z-[60] w-80 h-[420px] flex flex-col rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] shadow-2xl overflow-hidden">
+        <div className="fixed z-[60] w-80 flex flex-col rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] shadow-2xl overflow-hidden"
+          style={chatPopupStyle}>
           {/* Header */}
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#1A1A2E] shrink-0"
             style={{ background: "#4FC3F708" }}>
