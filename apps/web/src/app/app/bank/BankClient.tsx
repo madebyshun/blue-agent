@@ -25,6 +25,11 @@ import TransactionHistory, { type WalletTx } from "./TransactionHistory";
 const usd = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const CAMPAIGNS: { name: string; desc: string; badge: string; color: string }[] = [
+  { name: "Base Ecosystem Fund", desc: "Builder grants — up to $50K", badge: "OPEN", color: "#4FC3F7" },
+  { name: "Morpho Boost", desc: "+0.5% APY on USDC deposits", badge: "LIVE", color: "#A78BFA" },
+];
+
 type Panel = "positions" | "earn" | "send" | "receive" | "convert" | "orders";
 
 export default function BankPage() {
@@ -194,6 +199,16 @@ export default function BankPage() {
   const [fabXY, setFabXY]       = useState<{ x: number; y: number } | null>(null);
   const [fabDragging, setFabDragging] = useState(false);
 
+  // ── Auto Earn ────────────────────────────────────────────────────────────
+  const [autoEarn, setAutoEarn]               = useState(false);
+  const [autoEarnThreshold, setAutoEarnThreshold] = useState(50);
+  useEffect(() => {
+    try { const s = localStorage.getItem("bluebank:autoEarn"); if (s) { const p = JSON.parse(s); setAutoEarn(!!p.enabled); setAutoEarnThreshold(p.threshold ?? 50); } } catch {}
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem("bluebank:autoEarn", JSON.stringify({ enabled: autoEarn, threshold: autoEarnThreshold })); } catch {}
+  }, [autoEarn, autoEarnThreshold]);
+
   function fabDown(e: React.PointerEvent<HTMLButtonElement>) {
     e.preventDefault();
     (e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId);
@@ -339,6 +354,47 @@ export default function BankPage() {
       }
     : { right: 16, bottom: 76, height: POPUP_H };
 
+  // ── Portfolio health score ────────────────────────────────────────────────
+  const deployedRatio  = total > 0 ? inYield / total : 0;
+  const yieldScore     = deployedRatio > 0.8 ? 95 : deployedRatio > 0.5 ? 80 : deployedRatio > 0.2 ? 60 : deployedRatio > 0 ? 40 : 20;
+  const divScore       = portfolioTotal > 0 && ethUsd / portfolioTotal > 0.05 ? 88 : ethUsd > 0 ? 65 : 45;
+  const gasScore       = ethBal == null ? 50 : ethBal > 0.05 ? 95 : ethBal > 0.01 ? 80 : ethBal > 0.005 ? 60 : 20;
+  const actScore       = transferCountMonth > 10 ? 90 : transferCountMonth > 5 ? 75 : transferCountMonth > 1 ? 55 : 20;
+  const portfolioScore = total === 0 ? 0 : Math.round(yieldScore * 0.4 + divScore * 0.25 + gasScore * 0.2 + actScore * 0.15);
+  const scoreGrade     = portfolioScore >= 85 ? "A" : portfolioScore >= 70 ? "B" : portfolioScore >= 55 ? "C" : "D";
+  const scoreColor     = portfolioScore >= 85 ? "#34D399" : portfolioScore >= 70 ? "#4FC3F7" : portfolioScore >= 55 ? "#F59E0B" : "#EF4444";
+  const scoreDims      = [
+    { label: "Yield", s: yieldScore }, { label: "Diversify", s: divScore },
+    { label: "Gas", s: gasScore },     { label: "Activity", s: actScore },
+  ];
+
+  // ── Mission Control items ─────────────────────────────────────────────────
+  interface MC { priority: "high"|"warn"|"good"|"info"; icon: string; text: string; action?: string; onAction?: () => void; color: string }
+  const allMissions: MC[] = [];
+  if (total === 0) {
+    allMissions.push({ priority: "info", icon: "💡", text: "Add USDC to start earning yield on Base", action: "Add cash", onAction: addCash, color: "#F59E0B" });
+  } else {
+    if ((walletUsdc ?? 0) > 50 && inYield === 0 && bestApy != null)
+      allMissions.push({ priority: "high", icon: "📈", text: `$${usd(walletUsdc)} idle — earn ~$${(((walletUsdc ?? 0) * bestApy / 100) / 12).toFixed(0)}/mo at ${bestApy.toFixed(1)}%`, action: "Earn now", onAction: () => openAction("earn"), color: "#34D399" });
+    if (inYield > 0 && bestApy != null)
+      allMissions.push({ priority: "good", icon: "✅", text: `$${usd(inYield)} earning ${bestApy.toFixed(1)}% · ~$${((inYield * bestApy / 100) / 12).toFixed(0)}/month`, color: "#34D399" });
+    if ((walletUsdc ?? 0) > 50 && !autoEarn)
+      allMissions.push({ priority: "info", icon: "⚙️", text: "Enable Auto Earn to auto-deploy idle USDC", action: "Enable", onAction: () => setAutoEarn(true), color: "#A78BFA" });
+    if (ethBal != null && ethBal < 0.005)
+      allMissions.push({ priority: "warn", icon: "⛽", text: "ETH too low for gas fees", action: "Get ETH", onAction: () => openAction("convert"), color: "#F59E0B" });
+    if (new Date() >= new Date("2026-06-25"))
+      allMissions.push({ priority: "info", icon: "⚡", text: "Beryl live — B20 payments + faster L1 withdrawals", action: "Try", onAction: () => openAction("orders"), color: "#4FC3F7" });
+  }
+  const topMissions = allMissions.slice(0, 3);
+  const missionSummary =
+    total === 0 ? "Connect and add funds to get started." :
+    (walletUsdc ?? 0) > 100 && inYield === 0 ? "Idle cash detected — put it to work." :
+    inYield > 0 && (walletUsdc ?? 0) < 50 ? `Fully deployed · earning ${bestApy?.toFixed(1) ?? "—"}% APY` :
+    `$${usd(walletUsdc)} liquid · $${usd(inYield)} earning`;
+
+  // ── Auto Earn surplus ─────────────────────────────────────────────────────
+  const autoEarnSurplus = Math.max(0, (walletUsdc ?? 0) - autoEarnThreshold);
+
   return (
     <div className="flex h-full w-full bg-[#050508] text-slate-200">
 
@@ -483,78 +539,100 @@ export default function BankPage() {
             </div>
             {onrampMsg && <div className="font-mono text-[9px] text-amber-400 -mt-1.5 mb-3">{onrampMsg}</div>}
 
-            {/* ── AI Copilot ────────────────────────────────────────── */}
+            {/* ── AI Mission Control ────────────────────────────────── */}
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-3">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-[9px] text-slate-500">🤖 AI COPILOT</span>
-                  <span className="font-mono text-[8px] px-1.5 py-0.5 rounded"
-                    style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                    BlueAgent
-                  </span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+                  <span className="font-mono text-[9px] text-slate-500 tracking-widest">AI MISSION CONTROL</span>
                 </div>
+                <span className="font-mono text-[8px] px-1.5 py-0.5 rounded"
+                  style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>BlueAgent</span>
               </div>
-
-              <div className="space-y-2 mb-3">
-                {/* Idle USDC */}
-                {(walletUsdc ?? 0) > 100 && inYield === 0 && bestApy != null && (
-                  <AISuggestion icon="📈"
-                    text={`$${usd(walletUsdc)} USDC idle. Earn ${bestApy.toFixed(1)}% on Aave/Morpho.`}
-                    action="Earn now" onAction={() => openAction("earn")} color="#34D399" />
-                )}
-                {/* Earning */}
-                {inYield > 0 && bestApy != null && (
-                  <AISuggestion icon="✅"
-                    text={`$${usd(inYield)} earning ${bestApy.toFixed(1)}% · +$${((inYield * bestApy / 100) / 12).toFixed(0)}/month`}
-                    color="#34D399" />
-                )}
-                {/* Low ETH */}
-                {ethBal != null && ethBal < 0.005 && (
-                  <AISuggestion icon="⛽"
-                    text="ETH balance low — may not have enough for gas fees."
-                    color="#F87171" />
-                )}
-                {/* Beryl B20 */}
-                {new Date() >= new Date("2026-06-25") && (
-                  <AISuggestion icon="⚡"
-                    text="B20 payments live. Send with memo for onchain invoice tracking."
-                    action="Try B20" onAction={() => openAction("orders")} color="#4FC3F7" />
-                )}
-                {/* Fallback */}
-                {(walletUsdc ?? 0) === 0 && inYield === 0 && (
-                  <AISuggestion icon="💡"
-                    text="Add USDC to start earning yield on Base."
-                    action="Add cash" onAction={addCash} color="#F59E0B" />
+              <p className="font-mono text-[11px] text-slate-300 mb-3 leading-relaxed">{missionSummary}</p>
+              <div className="space-y-2">
+                {topMissions.map((item, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2 p-2.5 rounded-xl"
+                    style={{ background: `${item.color}08`, border: `1px solid ${item.color}20` }}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {item.priority === "high" && <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444] animate-pulse" />}
+                        {item.priority === "warn" && <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]" />}
+                        {item.priority === "good" && <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />}
+                        {item.priority === "info" && <span className="w-1.5 h-1.5 rounded-full bg-[#64748b]" />}
+                        <span className="text-sm leading-none">{item.icon}</span>
+                      </div>
+                      <span className="font-mono text-[10px] text-slate-300 leading-snug">{item.text}</span>
+                    </div>
+                    {item.action && item.onAction && (
+                      <button onClick={item.onAction}
+                        className="font-mono text-[9px] px-2 py-1 rounded-lg shrink-0 font-bold whitespace-nowrap"
+                        style={{ background: `${item.color}20`, color: item.color, border: `1px solid ${item.color}40` }}>
+                        {item.action}
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {topMissions.length === 0 && (
+                  <div className="font-mono text-[10px] text-slate-600 py-2 text-center">✓ All good — no actions needed</div>
                 )}
               </div>
-
-              <div className="font-mono text-[9px] text-slate-600 text-center pt-1">
-                Use the <span className="text-[#4FC3F7]">💬</span> button at the corner to chat
+              <div className="font-mono text-[9px] text-slate-600 text-center mt-3">
+                💬 corner button to chat with BlueAgent
               </div>
             </div>
 
-            {/* ── Onchain Activity ──────────────────────────────────── */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-3">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-3">ONCHAIN ACTIVITY</div>
+            <div className="rounded-2xl bg-[#0a0a0f] p-4 mb-3 transition-colors"
+              style={{ border: `1px solid ${autoEarn ? "#A78BFA40" : "#1A1A2E"}`, background: autoEarn ? "#A78BFA04" : "#0a0a0f" }}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[9px] text-slate-500 tracking-widest">⚙️ AUTO EARN</span>
+                  <span className="font-mono text-[8px] px-1.5 py-0.5 rounded font-bold"
+                    style={autoEarn
+                      ? { background: "#A78BFA15", color: "#A78BFA", border: "1px solid #A78BFA30" }
+                      : { background: "#1A1A2E", color: "#475569", border: "1px solid #1A1A2E" }}>
+                    {autoEarn ? "ACTIVE" : "OFF"}
+                  </span>
+                </div>
+                <button onClick={() => setAutoEarn(o => !o)}
+                  className="relative w-10 h-5 rounded-full transition-colors shrink-0"
+                  style={{ background: autoEarn ? "#A78BFA" : "#1A1A2E" }}>
+                  <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all"
+                    style={{ left: autoEarn ? "calc(100% - 18px)" : "2px" }} />
+                </button>
+              </div>
+              <p className="font-mono text-[10px] text-slate-400 mb-3">
+                Keep <span className="text-slate-200 font-bold">${autoEarnThreshold}</span> liquid · auto-move surplus to Morpho
+              </p>
+              <div className="mb-3">
+                <div className="flex justify-between font-mono text-[9px] text-slate-600 mb-1.5">
+                  <span>Liquid reserve</span><span style={{ color: "#A78BFA" }}>${autoEarnThreshold}</span>
+                </div>
+                <input type="range" min={0} max={500} step={10} value={autoEarnThreshold}
+                  onChange={e => setAutoEarnThreshold(Number(e.target.value))}
+                  className="w-full h-1 rounded-full appearance-none cursor-pointer"
+                  style={{ accentColor: "#A78BFA" }} />
+                <div className="flex justify-between font-mono text-[8px] text-slate-700 mt-1"><span>$0</span><span>$500</span></div>
+              </div>
+              {autoEarn && autoEarnSurplus > 0 ? (
+                <>
+                  <div className="rounded-xl p-2.5 mb-2" style={{ background: "#A78BFA10", border: "1px solid #A78BFA30" }}>
+                    <div className="font-mono text-[9px] text-[#A78BFA] mb-0.5">→ ${usd(autoEarnSurplus)} surplus above threshold</div>
+                    <div className="font-mono text-[8px] text-slate-600">Projected: +${((autoEarnSurplus * (bestApy ?? 5) / 100) / 12).toFixed(2)}/month at {bestApy?.toFixed(1) ?? "—"}%</div>
+                  </div>
+                  <button onClick={() => openAction("earn")}
+                    className="w-full font-mono text-[10px] font-bold py-2 rounded-xl mb-3"
+                    style={{ background: "#A78BFA15", color: "#A78BFA", border: "1px solid #A78BFA40" }}>
+                    Deploy ${usd(autoEarnSurplus)} now →
+                  </button>
+                </>
+              ) : autoEarn ? (
+                <div className="font-mono text-[9px] text-slate-600 mb-3">✓ Balance within threshold — no action needed</div>
+              ) : null}
               <div className="grid grid-cols-3 gap-2">
-                <StatMini
-                  label="TRANSFERS"
-                  value={transferCountMonth || "—"}
-                  sub="this month"
-                  color="#4FC3F7"
-                />
-                <StatMini
-                  label="GAS SAVED"
-                  value={transferCountMonth > 0 ? `$${(transferCountMonth * 0.001 * 2500).toFixed(2)}` : "—"}
-                  sub="vs mainnet est."
-                  color="#34D399"
-                />
-                <StatMini
-                  label="NET FLOW"
-                  value={netFlowMonth !== 0 ? `${netFlowMonth >= 0 ? "+" : "−"}$${usd(Math.abs(netFlowMonth))}` : "—"}
-                  sub="USDC this month"
-                  color={netFlowMonth >= 0 ? "#34D399" : "#F87171"}
-                />
+                <StatMini label="TRANSFERS" value={transferCountMonth || "—"} sub="this month" color="#4FC3F7" />
+                <StatMini label="GAS SAVED" value={transferCountMonth > 0 ? `$${(transferCountMonth * 0.001 * 2500).toFixed(0)}` : "—"} sub="vs mainnet" color="#34D399" />
+                <StatMini label="NET FLOW" value={netFlowMonth !== 0 ? `${netFlowMonth >= 0 ? "+" : "−"}$${Math.abs(netFlowMonth).toFixed(0)}` : "—"} sub="USDC/mo" color={netFlowMonth >= 0 ? "#34D399" : "#F87171"} />
               </div>
             </div>
 
@@ -761,6 +839,30 @@ export default function BankPage() {
               ) : (
                 <div className="font-mono text-[10px] text-slate-600 py-2">No assets yet</div>
               )}
+              {portfolioScore > 0 && (
+                <div className="mt-3 pt-2.5 border-t border-[#1A1A2E]">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-mono text-[9px] text-slate-500">HEALTH SCORE</span>
+                    <span className="font-mono text-[13px] font-bold" style={{ color: scoreColor }}>
+                      {portfolioScore} <span className="text-[10px]">{scoreGrade}</span>
+                    </span>
+                  </div>
+                  <div className="h-1 rounded-full bg-[#1A1A2E] overflow-hidden mb-2">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${portfolioScore}%`, background: scoreColor }} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                    {scoreDims.map(d => (
+                      <div key={d.label} className="flex items-center justify-between">
+                        <span className="font-mono text-[8px] text-slate-600">{d.label}</span>
+                        <span className="font-mono text-[8px] font-bold"
+                          style={{ color: d.s >= 80 ? "#34D399" : d.s >= 60 ? "#4FC3F7" : d.s >= 40 ? "#F59E0B" : "#EF4444" }}>
+                          {d.s >= 85 ? "A" : d.s >= 70 ? "B" : d.s >= 55 ? "C" : "D"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 3. Yield Center */}
@@ -802,20 +904,50 @@ export default function BankPage() {
               )}
             </div>
 
-            {/* 4. Base Ecosystem */}
+            {/* 4. Opportunity Feed */}
             <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">BASE APPS</div>
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">⚡ OPPORTUNITIES</div>
+              {/* Yield rows */}
+              {rates && rates.length > 0 ? rates.slice(0, 2).map((r, i) => (
+                <div key={r.project} className="flex items-center justify-between py-1.5 border-b border-[#1A1A2E] last:border-0">
+                  <div>
+                    <div className="font-mono text-[10px]" style={{ color: i === 0 ? "#34D399" : "#94A3B8" }}>
+                      {i === 0 ? "★ " : ""}{r.label}
+                    </div>
+                    <div className="font-mono text-[8px] text-slate-600">Yield</div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-[10px] font-bold" style={{ color: i === 0 ? "#34D399" : "#94A3B8" }}>
+                      {r.apy.toFixed(2)}%
+                    </span>
+                    <button onClick={() => openAction("earn")}
+                      className="font-mono text-[8px] px-1.5 py-0.5 rounded"
+                      style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39930" }}>→</button>
+                  </div>
+                </div>
+              )) : <div className="font-mono text-[10px] text-slate-600 pb-1">loading…</div>}
+              {/* Campaigns */}
+              {CAMPAIGNS.map(c => (
+                <div key={c.name} className="flex items-center justify-between py-1.5 border-b border-[#1A1A2E] last:border-0">
+                  <div>
+                    <div className="font-mono text-[10px] text-slate-200">{c.name}</div>
+                    <div className="font-mono text-[8px] text-slate-600">{c.desc}</div>
+                  </div>
+                  <span className="font-mono text-[8px] px-1.5 py-0.5 rounded-full font-bold"
+                    style={{ background: `${c.color}15`, color: c.color, border: `1px solid ${c.color}30` }}>
+                    {c.badge}
+                  </span>
+                </div>
+              ))}
+              {/* Protocol shortcuts */}
+              <div className="grid grid-cols-3 gap-1 mt-2.5">
                 {[
-                  { name: "Aerodrome", url: "https://aerodrome.finance",    color: "#EF4444" },
-                  { name: "Moonwell",  url: "https://moonwell.fi",          color: "#A78BFA" },
-                  { name: "Morpho",    url: "https://morpho.org",           color: "#4FC3F7" },
-                  { name: "Uniswap",   url: "https://app.uniswap.org",      color: "#FF007A" },
-                  { name: "Aave",      url: "https://app.aave.com",         color: "#B6509E" },
-                  { name: "Compound",  url: "https://app.compound.finance", color: "#00D395" },
+                  { name: "Aerodrome", url: "https://aerodrome.finance", color: "#EF4444" },
+                  { name: "Morpho",    url: "https://morpho.org",        color: "#4FC3F7" },
+                  { name: "Uniswap",   url: "https://app.uniswap.org",   color: "#FF007A" },
                 ].map(p => (
                   <a key={p.name} href={p.url} target="_blank" rel="noopener noreferrer"
-                    className="font-mono text-[8px] py-1.5 px-1 rounded-lg text-center hover:opacity-80 transition-opacity"
+                    className="font-mono text-[8px] py-1 px-1 rounded-md text-center hover:opacity-80 transition-opacity"
                     style={{ background: `${p.color}10`, color: p.color, border: `1px solid ${p.color}25` }}>
                     {p.name}
                   </a>
