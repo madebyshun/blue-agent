@@ -212,6 +212,18 @@ export default function BankPage() {
     ...(B20_ENABLED ? [{ id: "orders" as Panel, label: "Orders", icon: "🧾", desc: "Get paid in B20" }] : []),
   ];
 
+  // ── AI Copilot suggestions (computed from real data) ─────────────────────
+  const monthly = inYield > 0 && bestApy != null ? inYield * bestApy / 100 / 12 : null;
+  const copilotTips: { icon: string; text: string; action?: () => void }[] = [];
+  if (inYield === 0 && (walletUsdc ?? 0) > 100 && bestApy != null)
+    copilotTips.push({ icon: "💡", text: `Idle USDC detected. Earn ${bestApy.toFixed(1)}% on Aave`, action: () => openAction("earn") });
+  if (inYield > 0 && bestApy != null && monthly != null)
+    copilotTips.push({ icon: "📈", text: `$${usd(inYield)} earning ${bestApy.toFixed(1)}% · +$${usd(monthly)}/month` });
+  if (ethBal != null && ethBal < 0.005)
+    copilotTips.push({ icon: "⚠️", text: "ETH balance low — you may not have enough for gas fees" });
+  if (new Date() >= new Date("2026-06-25"))
+    copilotTips.push({ icon: "⚡", text: "B20 payments live. Send with memo.", action: () => openAction("orders") });
+
   return (
     <div className="flex h-full w-full bg-[#050508] text-slate-200">
 
@@ -305,6 +317,21 @@ export default function BankPage() {
                 </div>
               )}
 
+              {/* Asset pills */}
+              <div className="flex gap-1.5 mt-2 flex-wrap">
+                <span className="font-mono text-[9px] px-2 py-0.5 rounded-full" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                  USDC {walletUsdc != null ? `$${usd(walletUsdc)}` : "—"}
+                </span>
+                {(aavePos ?? 0) > 0 && (
+                  <span className="font-mono text-[9px] px-2 py-0.5 rounded-full" style={{ background: "#34D39910", color: "#34D399", border: "1px solid #34D39930" }}>
+                    aUSDC ${usd(aavePos)}
+                  </span>
+                )}
+                <span className="font-mono text-[9px] px-2 py-0.5 rounded-full" style={{ background: "#94A3B810", color: "#94A3B8", border: "1px solid #94A3B820" }}>
+                  ETH {ethBal != null ? ethBal.toFixed(4) : "—"}
+                </span>
+              </div>
+
               {/* Primary CTAs */}
               <div className="flex gap-2 mt-3">
                 <button onClick={() => openAction("receive")}
@@ -338,6 +365,29 @@ export default function BankPage() {
               </div>
               {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-1.5">{onrampMsg}</div>}
             </div>
+
+            {/* AI Copilot */}
+            {copilotTips.length > 0 && (
+              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-4">
+                <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2.5">💬 COPILOT</div>
+                <div className="space-y-2">
+                  {copilotTips.map((tip, i) => (
+                    <div key={i} onClick={tip.action}
+                      className={`flex items-start gap-2.5 p-2.5 rounded-lg transition-colors ${tip.action ? "cursor-pointer hover:border-[#4FC3F7]/30" : ""}`}
+                      style={{ background: "#0d0d12", border: "1px solid #1A1A2E" }}>
+                      <span className="text-sm shrink-0 mt-0.5">{tip.icon}</span>
+                      <span className="font-mono text-[10px] text-slate-300 flex-1 leading-relaxed">{tip.text}</span>
+                      {tip.action && <span className="font-mono text-[9px] text-[#4FC3F7] shrink-0 mt-0.5">→</span>}
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => window.open("/app/chat")}
+                  className="w-full font-mono text-[11px] font-bold py-2 rounded-xl mt-3 transition-opacity hover:opacity-80"
+                  style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                  Ask BlueAgent →
+                </button>
+              </div>
+            )}
 
             {/* Transaction history — fills remaining center */}
             <TransactionHistory
@@ -485,7 +535,7 @@ export default function BankPage() {
               <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">YOUR ASSETS</div>
               <AssetRow label="USDC" sub="in wallet" usd={walletUsdc} color="#4FC3F7" />
               <AssetRow label="aUSDC" sub={`Aave · ${aaveApy != null ? `${aaveApy.toFixed(1)}%` : "—"} APY`} usd={aavePos} color="#34D399" />
-              {morphoVnet && <AssetRow label="Morpho" sub="Gauntlet USDC" usd={morphoPos} color="#A78BFA" />}
+              {morphoVnet && <AssetRow label="Morpho" sub={`Gauntlet USDC · ${morphoApy != null ? `${morphoApy.toFixed(1)}%` : "—"} APY`} usd={morphoPos} color="#A78BFA" />}
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
@@ -498,27 +548,61 @@ export default function BankPage() {
               </div>
             </div>
 
-            {/* Rates on Base */}
+            {/* Yield Center */}
             <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">RATES ON BASE · DefiLlama</div>
-              {rates && rates.length ? rates.slice(0, 3).map((r, i) => (
-                <div key={r.project} className="flex items-center justify-between py-1">
-                  <span className="font-mono text-[10px]" style={{ color: i === 0 ? "#34D399" : "#64748B" }}>
-                    {i === 0 ? "★ " : ""}{r.label}
-                  </span>
-                  <span className="font-mono text-[10px] font-bold" style={{ color: i === 0 ? "#34D399" : "#94A3B8" }}>
-                    {r.apy.toFixed(2)}%
-                  </span>
+              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">YIELD CENTER</div>
+              {/* Aave row */}
+              <div className="flex items-center justify-between py-1.5 border-b border-[#13131f]">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
+                  <span className="font-mono text-[10px] text-[#34D399]">★ Aave v3</span>
                 </div>
-              )) : <div className="font-mono text-[10px] text-slate-600">loading rates…</div>}
-              {bestApy != null && (
-                <button onClick={() => openAction("earn")}
-                  className="w-full font-mono text-[10px] font-bold py-1.5 rounded-lg mt-2"
-                  style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39930" }}>
-                  Earn {bestApy.toFixed(1)}% →
-                </button>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[11px] font-bold text-[#34D399]">
+                    {aaveApy != null ? `${aaveApy.toFixed(1)}%` : rates?.[0] != null ? `${rates[0].apy.toFixed(1)}%` : "—"}
+                  </span>
+                  <button onClick={() => openAction("earn")}
+                    className="font-mono text-[9px] px-1.5 py-0.5 rounded"
+                    style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39930" }}>
+                    Earn →
+                  </button>
+                </div>
+              </div>
+              {/* Morpho row */}
+              <div className="flex items-center justify-between py-1.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#A78BFA]" />
+                  <span className="font-mono text-[10px] text-slate-300">Morpho</span>
+                </div>
+                <span className="font-mono text-[11px] font-bold text-slate-300">
+                  {morphoApy != null ? `${morphoApy.toFixed(1)}%` : "—"}
+                </span>
+              </div>
+              {/* Idle cash nudge */}
+              {walletUsdc != null && walletUsdc > 100 && (
+                <div className="mt-2 p-2 rounded-lg font-mono text-[9px] text-amber-400 leading-relaxed"
+                  style={{ background: "#F59E0B08", border: "1px solid #F59E0B20" }}>
+                  💡 ${usd(walletUsdc)} idle · earn {bestApy != null ? `${bestApy.toFixed(1)}%` : "yield"} instead?
+                </div>
               )}
             </div>
+
+            {/* Beryl — live after June 25 */}
+            {new Date() >= new Date("2026-06-25") && (
+              <div className="rounded-xl p-3" style={{ border: "1px solid #4FC3F730", background: "#4FC3F708" }}>
+                <div className="font-mono text-[9px] text-[#4FC3F7] tracking-widest mb-2">⚡ BERYL IS LIVE</div>
+                <div className="space-y-1 mb-3">
+                  <div className="font-mono text-[10px] text-slate-300">→ B20 payments: send with memo</div>
+                  <div className="font-mono text-[10px] text-slate-300">→ Withdrawal delay: 5 days (was 7)</div>
+                  <div className="font-mono text-[10px] text-slate-300">→ Orders tab: get paid in B20</div>
+                </div>
+                <button onClick={() => openAction("orders")}
+                  className="w-full font-mono text-[10px] font-bold py-1.5 rounded-lg"
+                  style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                  Try B20 →
+                </button>
+              </div>
+            )}
 
             {/* Add cash */}
             <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
