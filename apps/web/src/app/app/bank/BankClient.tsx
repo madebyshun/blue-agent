@@ -287,8 +287,9 @@ export default function BankPage() {
   ];
 
   // ── Portfolio allocation (for pie chart) ─────────────────────────────────
-  const stableTotal = (walletUsdc ?? 0) + (aavePos ?? 0) + (morphoPos ?? 0);
-  const ethUsd      = (ethBal ?? 0) * 2500;
+  const stableTotal   = (walletUsdc ?? 0) + (aavePos ?? 0) + (morphoPos ?? 0);
+  const ethUsd        = (ethBal ?? 0) * 2500;
+  const portfolioTotal = stableTotal + ethUsd;
   const portfolioData = [
     { name: "Stablecoin", value: stableTotal, color: "#4FC3F7" },
     { name: "ETH",        value: ethUsd,      color: "#94A3B8" },
@@ -397,7 +398,7 @@ export default function BankPage() {
               </div>
 
               {/* Primary CTAs */}
-              <div className="flex gap-2 mt-3">
+              <div className="flex gap-2 mt-2">
                 <button onClick={() => openAction("receive")}
                   className="flex-1 font-mono text-[11px] font-bold py-2.5 rounded-xl transition-colors"
                   style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
@@ -410,25 +411,33 @@ export default function BankPage() {
                 </button>
               </div>
 
-              {/* Secondary actions — icon row */}
-              <div className="flex gap-1 mt-2">
+              {/* Secondary actions — icon only, no Add cash (moved below) */}
+              <div className="flex gap-1 mt-1.5">
                 {TABS.filter(t => !["send", "receive"].includes(t.id)).map(tb => (
                   <button key={tb.id} onClick={() => openAction(tb.id)}
-                    className="flex-1 font-mono text-[9px] py-1.5 rounded-lg border border-[#1A1A2E] text-slate-500 hover:text-slate-300 hover:border-[#4FC3F7]/20 flex flex-col items-center gap-0.5 transition-colors"
+                    className="flex-1 font-mono text-[9px] py-1 rounded-lg border border-[#1A1A2E] text-slate-500 hover:text-slate-300 hover:border-[#4FC3F7]/20 flex flex-col items-center gap-0.5 transition-colors"
                     style={{ background: "#050508" }}>
                     <span>{tb.icon}</span>
                     {tb.label}
                   </button>
                 ))}
-                <button onClick={addCash} disabled={onrampBusy || !isConnected}
-                  className="flex-1 font-mono text-[9px] py-1.5 rounded-lg border border-[#1A1A2E] text-slate-500 hover:text-slate-300 hover:border-[#4FC3F7]/20 flex flex-col items-center gap-0.5 transition-colors disabled:opacity-40"
-                  style={{ background: "#050508" }}>
-                  <span>💵</span>
-                  {onrampBusy ? "…" : "Add"}
-                </button>
               </div>
-              {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-1.5">{onrampMsg}</div>}
             </div>
+
+            {/* Add cash — compact row below hero */}
+            <div className="flex gap-2 mb-3">
+              <button onClick={addCash} disabled={onrampBusy || !isConnected}
+                className="flex-1 font-mono text-[10px] font-bold py-1.5 rounded-xl disabled:opacity-40 transition-opacity hover:opacity-80"
+                style={{ background: "#4FC3F708", color: "#4FC3F7", border: "1px solid #4FC3F720" }}>
+                {onrampBusy ? "Starting…" : "💵 Add cash"}
+              </button>
+              <button onClick={cashOut} disabled={cashOutBusy || !isConnected}
+                className="flex-1 font-mono text-[10px] py-1.5 rounded-xl text-slate-500 disabled:opacity-40 transition-opacity hover:text-slate-300"
+                style={{ border: "1px solid #1A1A2E" }}>
+                {cashOutBusy ? "…" : "🏦 Cash out"}
+              </button>
+            </div>
+            {onrampMsg && <div className="font-mono text-[9px] text-amber-400 -mt-1.5 mb-3">{onrampMsg}</div>}
 
             {/* ── AI Copilot ────────────────────────────────────────── */}
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-3">
@@ -480,6 +489,43 @@ export default function BankPage() {
                 style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
                 💬 Ask BlueAgent
               </button>
+            </div>
+
+            {/* ── Onchain Activity ──────────────────────────────────── */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-3">
+              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-3">ONCHAIN ACTIVITY</div>
+              <div className="grid grid-cols-3 gap-2">
+                <StatMini
+                  label="TRANSFERS"
+                  value={transferCountMonth || "—"}
+                  sub="this month"
+                  color="#4FC3F7"
+                />
+                <StatMini
+                  label="GAS SAVED"
+                  value={transferCountMonth > 0 ? `$${(transferCountMonth * 0.001 * 2500).toFixed(2)}` : "—"}
+                  sub="vs mainnet est."
+                  color="#34D399"
+                />
+                <StatMini
+                  label="NET FLOW"
+                  value={netFlowMonth !== 0 ? `${netFlowMonth >= 0 ? "+" : "−"}$${usd(Math.abs(netFlowMonth))}` : "—"}
+                  sub="USDC this month"
+                  color={netFlowMonth >= 0 ? "#34D399" : "#F87171"}
+                />
+              </div>
+            </div>
+
+            {/* ── Wallet Identity ───────────────────────────────────── */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-3">
+              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-3">WALLET IDENTITY</div>
+              <div className="flex flex-wrap gap-1.5">
+                <IdentityChip label="Smart Wallet" active={true} color="#4FC3F7" />
+                <IdentityChip label="Passkey" active={true} color="#34D399" />
+                <IdentityChip label={name ?? fname ?? "No Basename"} active={!!(name ?? fname)} color="#A78BFA" />
+                <IdentityChip label="Non-custodial" active={true} color="#34D399" />
+                <IdentityChip label="Base" active={true} color="#4FC3F7" />
+              </div>
             </div>
 
             {/* Transaction history — fills remaining center */}
@@ -625,7 +671,7 @@ export default function BankPage() {
 
             {/* 1. Your Assets */}
             <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">YOUR ASSETS</div>
+              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">WALLET</div>
               <AssetRow label="USDC" sub="in wallet" usd={walletUsdc} color="#4FC3F7" />
               <AssetRow label="aUSDC" sub={`Aave · ${aaveApy != null ? `${aaveApy.toFixed(1)}%` : bestApy != null ? `${bestApy.toFixed(1)}%` : "—"} APY`} usd={aavePos} color="#34D399" />
               {(morphoPos ?? 0) > 0 && (
@@ -665,7 +711,7 @@ export default function BankPage() {
                     {portfolioData.map(d => (
                       <div key={d.name} className="flex items-center gap-1 font-mono text-[9px] text-slate-400">
                         <div className="w-2 h-2 rounded-full" style={{ background: d.color }} />
-                        {d.name} {total > 0 ? Math.round(d.value / total * 100) : 0}%
+                        {d.name} {portfolioTotal > 0 ? Math.round(d.value / portfolioTotal * 100) : 0}%
                       </div>
                     ))}
                   </div>
@@ -678,7 +724,7 @@ export default function BankPage() {
             {/* 3. Yield Center */}
             <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
               <div className="flex items-center justify-between mb-2">
-                <span className="font-mono text-[9px] text-slate-500">⭐ YIELD CENTER</span>
+                <span className="font-mono text-[9px] text-slate-500">⭐ EARN</span>
                 {bestApy != null && (
                   <span className="font-mono text-[9px] text-[#34D399]">Best: {bestApy.toFixed(1)}%</span>
                 )}
@@ -716,7 +762,7 @@ export default function BankPage() {
 
             {/* 4. Base Ecosystem */}
             <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">BASE ECOSYSTEM</div>
+              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">BASE APPS</div>
               <div className="grid grid-cols-3 gap-1.5">
                 {[
                   { name: "Aerodrome", url: "https://aerodrome.finance",    color: "#EF4444" },
@@ -776,9 +822,11 @@ export default function BankPage() {
       {chatOpen && (
         <div className="fixed bottom-4 right-4 z-[60] w-80 h-[420px] flex flex-col rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] shadow-2xl overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#1A1A2E] shrink-0">
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#1A1A2E] shrink-0"
+            style={{ background: "#4FC3F708" }}>
             <div className="flex items-center gap-2">
-              <span className="font-mono text-[11px] text-[#4FC3F7] font-bold">🤖 BlueAgent</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+              <span className="font-mono text-[11px] text-[#4FC3F7] font-bold">BlueAgent</span>
               <span className="font-mono text-[9px] text-slate-600">Banking mode</span>
             </div>
             <button onClick={() => setChatOpen(false)}
@@ -790,7 +838,7 @@ export default function BankPage() {
             {chatMessages.length === 0 && (
               <div className="space-y-1.5">
                 <div className="font-mono text-[10px] text-slate-600 mb-2">Ask anything about your wallet:</div>
-                {["Best yield option?", "How to send USDC?", "My balance breakdown"].map(q => (
+                {["What's my best yield option?", "How do I send USDC?", "Show my balance breakdown"].map(q => (
                   <button key={q} onClick={() => sendChat(q)}
                     className="w-full text-left font-mono text-[10px] px-2 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
                     style={{ background: "#0d0d12", border: "1px solid #1A1A2E" }}>
@@ -800,10 +848,10 @@ export default function BankPage() {
               </div>
             )}
             {chatMessages.map((m, i) => (
-              <div key={i} className={`font-mono text-[10px] p-2 rounded-lg max-w-[90%] leading-relaxed ${
+              <div key={i} className={`font-mono text-[10px] p-2 rounded-lg leading-relaxed ${
                 m.role === "user"
-                  ? "ml-auto bg-[#4FC3F715] text-[#4FC3F7] border border-[#4FC3F730]"
-                  : "bg-[#0d0d12] text-slate-300 border border-[#1A1A2E]"
+                  ? "ml-6 bg-[#4FC3F715] text-[#4FC3F7] border border-[#4FC3F730]"
+                  : "mr-6 bg-[#0d0d12] text-slate-300 border border-[#1A1A2E]"
               }`}>
                 {m.content || (m.role === "assistant" && <span className="text-slate-600 animate-pulse">▌</span>)}
               </div>
@@ -815,15 +863,15 @@ export default function BankPage() {
           </div>
 
           {/* Input */}
-          <div className="flex gap-2 p-3 border-t border-[#1A1A2E] shrink-0">
+          <div className="flex gap-2 p-2.5 border-t border-[#1A1A2E] shrink-0">
             <input
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && sendChat(chatInput)}
+              onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChat(chatInput)}
               placeholder="Ask anything…"
               className="flex-1 bg-[#050508] border border-[#1A1A2E] rounded-lg px-3 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none focus:border-[#4FC3F7]/40"
             />
-            <button onClick={() => sendChat(chatInput)} disabled={chatLoading}
+            <button onClick={() => sendChat(chatInput)} disabled={chatLoading || !chatInput.trim()}
               className="font-mono text-[11px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-40"
               style={{ background: "#4FC3F7", color: "#050508" }}>
               →
@@ -894,6 +942,28 @@ function AISuggestion({ icon, text, action, onAction, color }: {
           {action}
         </button>
       )}
+    </div>
+  );
+}
+
+function StatMini({ label, value, sub, color }: { label: string; value: string | number; sub: string; color: string }) {
+  return (
+    <div className="rounded-xl border border-[#1A1A2E] bg-[#050508] p-2.5">
+      <div className="font-mono text-[9px] text-slate-500 mb-1">{label}</div>
+      <div className="font-mono text-[14px] font-bold" style={{ color }}>{value}</div>
+      <div className="font-mono text-[8px] text-slate-600 mt-0.5">{sub}</div>
+    </div>
+  );
+}
+
+function IdentityChip({ label, active, color }: { label: string; active: boolean; color: string }) {
+  return (
+    <div className="font-mono text-[9px] px-2 py-0.5 rounded-full flex items-center gap-1"
+      style={active
+        ? { background: `${color}15`, border: `1px solid ${color}30`, color }
+        : { background: "#0d0d12", border: "1px solid #1A1A2E", color: "#475569" }}>
+      {active && <span className="text-[8px]">✓</span>}
+      {label}
     </div>
   );
 }
