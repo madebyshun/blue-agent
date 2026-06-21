@@ -303,46 +303,64 @@ export default function BankPage() {
         <div className="w-full">
 
 
-          {/* Top row: cash balance (left) + your assets & live rates (right) */}
+          {/* Top row: cash balance + quick actions (left) + assets & rates (right) */}
           <div className="grid lg:grid-cols-[3fr_2fr] gap-4 mb-4">
 
-            {/* Cash balance + primary actions */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 flex flex-col self-start">
-              <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH BALANCE · {net.short}</div>
-              {/* Balance + primary actions side by side */}
-              <div className="flex items-center gap-4 mb-2">
-                <div className="flex-1 min-w-0">
-                  <div className="font-mono text-2xl font-bold text-white">${usd(total)} <span className="text-sm text-slate-500">USDC</span></div>
-                  <div className="font-mono text-[11px] text-slate-500 mt-0.5">
-                    {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
-                  </div>
-                  {netFlowMonth !== 0 && (
-                    <div className="font-mono text-[11px]" style={{ color: netFlowMonth >= 0 ? "#34D399" : "#EF4444" }}>
-                      {netFlowMonth >= 0 ? "+" : "−"}${usd(Math.abs(netFlowMonth))} USDC this month
+            {/* Left column: Cash Balance card + compact Quick Actions grid */}
+            <div className="flex flex-col gap-3">
+
+              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
+                <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH BALANCE · {net.short}</div>
+                <div className="flex items-center gap-4 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-mono text-2xl font-bold text-white">${usd(total)} <span className="text-sm text-slate-500">USDC</span></div>
+                    <div className="font-mono text-[11px] text-slate-500 mt-0.5">
+                      {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
                     </div>
-                  )}
+                    {netFlowMonth !== 0 && (
+                      <div className="font-mono text-[11px]" style={{ color: netFlowMonth >= 0 ? "#34D399" : "#EF4444" }}>
+                        {netFlowMonth >= 0 ? "+" : "−"}${usd(Math.abs(netFlowMonth))} USDC this month
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    <button onClick={() => openAction("receive")}
+                      className="font-mono text-[11px] font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-1 transition-colors"
+                      style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
+                      ⬇ Receive
+                    </button>
+                    <button onClick={() => openAction("send")}
+                      className="font-mono text-[11px] font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-1 transition-opacity hover:opacity-90"
+                      style={{ background: "#4FC3F7", color: "#050508" }}>
+                      ➡ Send
+                    </button>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1.5 shrink-0">
-                  <button onClick={() => openAction("receive")}
-                    className="font-mono text-[11px] font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-1 transition-colors"
-                    style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
-                    ⬇ Receive
-                  </button>
-                  <button onClick={() => openAction("send")}
-                    className="font-mono text-[11px] font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-1 transition-opacity hover:opacity-90"
-                    style={{ background: "#4FC3F7", color: "#050508" }}>
-                    ➡ Send
-                  </button>
-                </div>
+
+                <button onClick={addCash} disabled={onrampBusy || !isConnected}
+                  className="w-full font-mono text-[12px] font-bold px-4 py-2.5 rounded-xl mt-1 disabled:opacity-50"
+                  style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>
+                  {onrampBusy ? "Starting…" : "💵 Add cash · card / bank → USDC"}
+                </button>
+                {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-1">{onrampMsg}</div>}
+                <div className="font-mono text-[9px] text-slate-600 mt-1">via Coinbase · available in select regions · or fund with Receive</div>
               </div>
 
-              <button onClick={addCash} disabled={onrampBusy || !isConnected}
-                className="font-mono text-[12px] font-bold px-4 py-2.5 rounded-xl mt-2 disabled:opacity-50"
-                style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>
-                {onrampBusy ? "Starting…" : "💵 Add cash · card / bank → USDC"}
-              </button>
-              {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-1">{onrampMsg}</div>}
-              <div className="font-mono text-[9px] text-slate-600 mt-1">via Coinbase · available in select regions · or fund with Receive</div>
+              {/* Quick Actions — compact 2×2, fills left column to match right */}
+              <div className="grid grid-cols-2 gap-2 flex-1">
+                {TABS.filter(t => t.id !== "send" && t.id !== "receive").map(tb => (
+                  <button key={tb.id} onClick={() => openAction(tb.id)}
+                    className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3 py-3 flex items-center gap-2.5 hover:border-[#4FC3F7]/40 hover:bg-[#0d0d14] transition-all text-left">
+                    <span className="text-base leading-none shrink-0">{tb.icon}</span>
+                    <div className="font-mono text-[11px] font-medium text-slate-200">{tb.label}</div>
+                  </button>
+                ))}
+                <button onClick={cashOut} disabled={cashOutBusy || !isConnected}
+                  className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3 py-3 flex items-center gap-2.5 hover:border-[#4FC3F7]/40 hover:bg-[#0d0d14] transition-all text-left disabled:opacity-50">
+                  <span className="text-base leading-none shrink-0">🏦</span>
+                  <div className="font-mono text-[11px] font-medium text-slate-200">{cashOutBusy ? "Starting…" : "Cash out"}</div>
+                </button>
+              </div>
 
             </div>
 
@@ -381,22 +399,6 @@ export default function BankPage() {
 
             </div>
 
-          </div>
-
-          {/* Quick Actions row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-            {TABS.filter(t => t.id !== "send" && t.id !== "receive").map(tb => (
-              <button key={tb.id} onClick={() => openAction(tb.id)}
-                className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 flex flex-col gap-2 hover:border-[#4FC3F7]/40 hover:bg-[#0d0d14] transition-all text-left">
-                <span className="text-xl leading-none">{tb.icon}</span>
-                <div className="font-mono text-[11px] font-semibold text-slate-200">{tb.label}</div>
-              </button>
-            ))}
-            <button onClick={cashOut} disabled={cashOutBusy || !isConnected}
-              className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 flex flex-col gap-2 hover:border-[#4FC3F7]/40 hover:bg-[#0d0d14] transition-all text-left disabled:opacity-50">
-              <span className="text-xl leading-none">🏦</span>
-              <div className="font-mono text-[11px] font-semibold text-slate-200">{cashOutBusy ? "Starting…" : "Cash out"}</div>
-            </button>
           </div>
 
           {/* Stats row — gas saved (est.) · best APY · always-on */}
