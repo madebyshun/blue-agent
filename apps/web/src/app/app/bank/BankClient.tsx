@@ -210,17 +210,21 @@ export default function BankPage() {
     return first > 0 ? all.slice(first) : all;
   }, [txData]);
 
-  // Unique sent-to addresses → Quick Send. Dedup case-insensitively (checksummed
-  // vs lowercase can produce the same address from different Moralis rows).
+  // Unique sent-to addresses → Quick Send. Dedup by both normalized address AND
+  // shortAddr display (0x1234…5678) so two addresses with the same visible
+  // prefix+suffix don't produce visually identical chips.
   const recentContacts = useMemo(() => {
-    const seen = new Set<string>();
+    const seenAddr    = new Set<string>();
+    const seenDisplay = new Set<string>();
     const result: string[] = [];
     for (const tx of txData?.transactions ?? []) {
       if (tx.kind === "sent" && tx.counterparty) {
-        const key = tx.counterparty.toLowerCase();
-        if (!seen.has(key)) {
-          seen.add(key);
-          result.push(tx.counterparty);
+        const lower   = tx.counterparty.toLowerCase();
+        const display = lower.slice(0, 6) + "…" + lower.slice(-4);
+        if (!seenAddr.has(lower) && !seenDisplay.has(display)) {
+          seenAddr.add(lower);
+          seenDisplay.add(display);
+          result.push(lower);
           if (result.length >= 6) break;
         }
       }
@@ -359,8 +363,8 @@ export default function BankPage() {
             </p>
           </div>
 
-          {/* Top row: cash balance + quick actions (left) + assets & rates (right) */}
-          <div className="grid lg:grid-cols-[3fr_2fr] gap-4 mb-4">
+          {/* Top row: cash balance (left) + assets & rates (right) — items-start so columns take natural height */}
+          <div className="grid lg:grid-cols-[3fr_2fr] gap-4 mb-4 lg:items-start">
 
             {/* Left column: Cash Balance card (actions integrated inside) */}
             <div>
@@ -407,16 +411,16 @@ export default function BankPage() {
                   <div className="flex gap-1">
                     {TABS.filter(t => t.id !== "send" && t.id !== "receive").map(tb => (
                       <button key={tb.id} onClick={() => openAction(tb.id)}
-                        className="flex-1 font-mono text-[9px] py-2 rounded-lg border border-[#1A1A2E] hover:border-[#4FC3F7]/30 hover:text-slate-300 transition-all flex flex-col items-center gap-0.5 text-slate-500"
+                        className="flex-1 font-mono text-[9px] py-1.5 rounded-lg border border-[#1A1A2E] hover:border-[#4FC3F7]/30 hover:text-slate-300 transition-all flex flex-col items-center gap-0.5 text-slate-500"
                         style={{ background: "#050508" }}>
-                        <span className="text-sm leading-none">{tb.icon}</span>
+                        <span className="text-xs leading-none">{tb.icon}</span>
                         {tb.label}
                       </button>
                     ))}
                     <button onClick={cashOut} disabled={cashOutBusy || !isConnected}
-                      className="flex-1 font-mono text-[9px] py-2 rounded-lg border border-[#1A1A2E] hover:border-[#4FC3F7]/30 hover:text-slate-300 transition-all flex flex-col items-center gap-0.5 text-slate-500 disabled:opacity-40"
+                      className="flex-1 font-mono text-[9px] py-1.5 rounded-lg border border-[#1A1A2E] hover:border-[#4FC3F7]/30 hover:text-slate-300 transition-all flex flex-col items-center gap-0.5 text-slate-500 disabled:opacity-40"
                       style={{ background: "#050508" }}>
-                      <span className="text-sm leading-none">🏦</span>
+                      <span className="text-xs leading-none">🏦</span>
                       {cashOutBusy ? "…" : "Cash out"}
                     </button>
                   </div>
@@ -709,10 +713,10 @@ function Identicon({ address }: { address?: string }) {
 // Compact stat tile for the hero stats row (gas saved / APY / 24-7).
 function StatCard({ icon, label, value, sub }: { icon: string; label: string; value: string; sub: string }) {
   return (
-    <div className="rounded-xl border border-[#1A1A2E] bg-[#0d0d12] p-3">
+    <div className="rounded-xl border border-[#1A1A2E] bg-[#0d0d12] px-3 py-2">
       <div className="font-mono text-[9px] text-slate-500 tracking-wide flex items-center gap-1"><span>{icon}</span>{label}</div>
-      <div className="font-mono text-[15px] sm:text-[18px] font-bold text-white mt-1 truncate">{value}</div>
-      <div className="font-mono text-[8px] sm:text-[9px] text-slate-600 mt-0.5 truncate">{sub}</div>
+      <div className="font-mono text-[14px] sm:text-[16px] font-bold text-white mt-0.5 truncate">{value}</div>
+      <div className="font-mono text-[8px] text-slate-600 mt-0.5 truncate">{sub}</div>
     </div>
   );
 }
@@ -772,9 +776,21 @@ function PositionRow({ label, pos, apy, onManage, disabled, disabledNote }: {
 // ── Quick Send strip ─────────────────────────────────────────────────────────
 function QuickSendRow({ contacts, onSelect }: { contacts: string[]; onSelect: (addr: string) => void }) {
   if (contacts.length === 0) return null;
+
+  // Only 1 distinct contact → compact single-line button, no avatar row
+  if (contacts.length < 2) {
+    return (
+      <button onClick={() => onSelect(contacts[0])}
+        className="w-full font-mono text-[10px] text-slate-500 hover:text-[#4FC3F7] py-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] mb-4 flex items-center justify-center gap-2 transition-colors">
+        ➡ Send to recent · <span className="text-slate-400">{shortAddr(contacts[0])}</span>
+      </button>
+    );
+  }
+
+  // 2+ distinct contacts → avatar row
   return (
-    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3 mb-4">
+      <div className="flex items-center justify-between mb-2.5">
         <div className="font-mono text-[10px] text-slate-500 tracking-widest">QUICK SEND</div>
         <div className="font-mono text-[9px] text-slate-600">recent contacts</div>
       </div>
@@ -786,9 +802,9 @@ function QuickSendRow({ contacts, onSelect }: { contacts: string[]; onSelect: (a
             <button key={addr} onClick={() => onSelect(addr)}
               className="flex flex-col items-center gap-1.5 shrink-0 hover:opacity-75 transition-opacity group">
               <div className="relative">
-                <span className="w-10 h-10 rounded-full block border border-[#1A1A2E] group-hover:border-[#4FC3F7]/40 transition-colors"
+                <span className="w-9 h-9 rounded-full block border border-[#1A1A2E] group-hover:border-[#4FC3F7]/40 transition-colors"
                   style={{ background: `linear-gradient(135deg, hsl(${h1} 70% 55%), hsl(${h2} 70% 45%))` }} />
-                <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#050508] border border-[#1A1A2E] flex items-center justify-center font-mono text-[8px] text-[#4FC3F7]">➡</span>
+                <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#050508] border border-[#1A1A2E] flex items-center justify-center font-mono text-[7px] text-[#4FC3F7]">➡</span>
               </div>
               <span className="font-mono text-[8px] text-slate-500 group-hover:text-[#4FC3F7] transition-colors">{shortAddr(addr)}</span>
             </button>
@@ -815,30 +831,56 @@ function CashFlowChart({ data }: { data: MonthBucket[] }) {
   // No activity in the visible window → explicit empty state, no fake zeros.
   if (!hasData) {
     return (
-      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-4">
-        <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH FLOW · USDC</div>
-        <div className="font-mono text-[12px] text-slate-600 py-6 text-center">No activity yet</div>
+      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3 mb-4 flex items-center justify-between">
+        <div className="font-mono text-[10px] text-slate-500 tracking-widest">CASH FLOW · USDC</div>
+        <div className="font-mono text-[11px] text-slate-600">No activity yet</div>
       </div>
     );
   }
 
+  // Single data point → compact inline stat row, no bar chart
+  if (data.length === 1) {
+    const m = data[0];
+    const net = m.inflow - m.outflow;
+    return (
+      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3 mb-4">
+        <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH FLOW · {m.month.toUpperCase()} · USDC</div>
+        <div className="flex items-center gap-6">
+          <div>
+            <div className="font-mono text-[8px] text-slate-600 mb-0.5">Income</div>
+            <div className="font-mono text-[16px] font-bold text-[#34D399]">${usd(m.inflow)}</div>
+          </div>
+          <div>
+            <div className="font-mono text-[8px] text-slate-600 mb-0.5">Expense</div>
+            <div className="font-mono text-[16px] font-bold text-[#EF4444]">${usd(m.outflow)}</div>
+          </div>
+          <div>
+            <div className="font-mono text-[8px] text-slate-600 mb-0.5">Net</div>
+            <div className="font-mono text-[16px] font-bold" style={{ color: net >= 0 ? "#34D399" : "#EF4444" }}>
+              {net >= 0 ? "+" : "−"}${usd(Math.abs(net))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2+ months → bar chart (compact 110px)
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-4">
       <div className="flex items-center justify-between mb-1">
         <div>
           <div className="font-mono text-[10px] text-slate-500 tracking-widest">CASH FLOW · USDC</div>
-          <div className="font-mono text-[22px] font-bold text-white mt-0.5">
+          <div className="font-mono text-[18px] font-bold text-white mt-0.5">
             ${usd(Math.abs(totalVal))}
-            {tab === "net" && <span className="font-mono text-[11px] text-slate-500 ml-1.5">{totalVal >= 0 ? "net in" : "net out"}</span>}
+            {tab === "net" && <span className="font-mono text-[10px] text-slate-500 ml-1.5">{totalVal >= 0 ? "net in" : "net out"}</span>}
           </div>
-          <div className="font-mono text-[8px] text-slate-700">
-            {data.length}-month total · {CF_LABEL[tab].toLowerCase()} only
-          </div>
+          <div className="font-mono text-[8px] text-slate-700">{data.length}-month · {CF_LABEL[tab].toLowerCase()}</div>
         </div>
         <div className="flex gap-1">
           {(["inflow", "outflow", "net"] as CashFlowTab[]).map(t => (
             <button key={t} onClick={() => setTab(t)}
-              className="font-mono text-[10px] px-2.5 py-1.5 rounded-md transition-colors"
+              className="font-mono text-[9px] px-2 py-1.5 rounded-md transition-colors"
               style={tab === t
                 ? { background: CF_COLOR[t] + "15", color: CF_COLOR[t], border: `1px solid ${CF_COLOR[t]}40` }
                 : { color: "#64748b", border: "1px solid transparent" }}>
@@ -847,8 +889,8 @@ function CashFlowChart({ data }: { data: MonthBucket[] }) {
           ))}
         </div>
       </div>
-      <ResponsiveContainer width="100%" height={160}>
-        <BarChart data={chartData} margin={{ top: 8, right: 4, left: -20, bottom: 0 }}>
+      <ResponsiveContainer width="100%" height={110}>
+        <BarChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
           <XAxis dataKey="month" tick={{ fontFamily: "JetBrains Mono, monospace", fontSize: 9, fill: "#64748b" }} axisLine={false} tickLine={false} />
           <YAxis tick={{ fontFamily: "JetBrains Mono, monospace", fontSize: 9, fill: "#64748b" }} axisLine={false} tickLine={false}
             tickFormatter={(v: number) => v === 0 ? "" : `$${Math.abs(v) >= 1000 ? `${(Math.abs(v) / 1000).toFixed(0)}k` : Math.abs(v).toFixed(0)}`} />
