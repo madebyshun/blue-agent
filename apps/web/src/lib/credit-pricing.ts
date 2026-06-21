@@ -35,10 +35,13 @@ export const CREDITS_PER_USDC = Math.round(1 / CREDIT_USD); // 2000
  * Venice models are slotted by capability tier.
  */
 export const CHAT_BASE_COST: Record<string, number> = {
-  // Bankr (Anthropic)
-  fast: 10,
-  pro:  50,
-  max:  200,
+  // Bankr (Anthropic + Google + Moonshot)
+  fast:     10,
+  pro:      50,
+  max:      200,
+  deepseek: 10,
+  gemini:   20,
+  kimi:     20,
   // Venice — standard
   "venice-deepseek":     10,
   "venice-deepseek-pro": 30,
