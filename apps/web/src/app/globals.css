@@ -146,6 +146,16 @@ code, pre, .font-mono {
   to   { opacity: 1; transform: none; }
 }
 .feed-in { animation: feedIn .5s cubic-bezier(.22,1,.36,1) both; }
+/* H1 — feed card hover: subtle blue border lift */
+.feed-card {
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  cursor: pointer;
+}
+.feed-card:hover {
+  border-color: rgba(79,195,247,.18) !important;
+  box-shadow: 0 4px 24px rgba(79,195,247,.06);
+  transform: translateY(-1px);
+}
 
 /* Blue Feed — live status dot (scale + opacity breathe + green ring) */
 @keyframes liveDot {
