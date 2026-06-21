@@ -19,7 +19,7 @@ const JOBS: Job[] = [
   { tool: "base-pulse",       agent: "aeon",      body: {}, title: "Base Pulse" },
   { tool: "base-alpha",       agent: "consensus", body: {}, title: "Base Alpha" },
   { tool: "narrative-pulse",  agent: "aeon",      body: {}, title: "Narrative Pulse" },
-  { tool: "whale-tracker",    agent: "aeon",      body: { address: "0x940181a94a35a4569e4529a3cdfb74e38fd98631" } },
+  { tool: "whale-tracker",    agent: "aeon",      body: {} },
   { tool: "ecosystem-digest", agent: "consensus", body: {}, title: "Base Ecosystem Digest" },
   { tool: "new-pools",        agent: "aeon",      body: {}, title: "New Pools on Base" },
   { tool: "blue-stream",      agent: "aeon",      body: {}, title: "Base Onchain Activity" },
