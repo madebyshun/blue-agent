@@ -1489,6 +1489,7 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
   const [step, setStep] = useState<"idle" | "switching" | "sending" | "done" | "error">("idle");
   const [err,  setErr]  = useState("");
   const [txHash, setTxHash] = useState<string>("");
+  const [isEoa, setIsEoa] = useState(false);
 
   const net = YIELD_NETWORKS[network];
   const chainId = net.chainId;
@@ -1582,6 +1583,7 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
 
       // Legacy fallback — wallets without EIP-5792 (older EOAs). Unattributed:
       // builder-code attribution needs the sendCalls dataSuffix capability above.
+      setIsEoa(true);
       const hash = asset === "USDC"
         ? await writeContractAsync({ address: net.usdc, abi: ERC20_ABI, functionName: "transfer", args: [toAddress, parseUnits(amount, net.usdcDecimals)], chainId })
         : await sendTransactionAsync({ to: toAddress, value: parseEther(amount), chainId });
@@ -1716,6 +1718,12 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
       <p className="font-mono text-[9px] text-slate-700 mt-1.5">
         {net.label} · you sign every transaction · sends are final.
       </p>
+      {/* Notice when falling back to EOA — builder code requires Smart Wallet */}
+      {(!walletCapabilities || isEoa) && (
+        <p className="font-mono text-[9px] text-slate-600 mt-1">
+          💡 Builder attribution requires Coinbase Smart Wallet
+        </p>
+      )}
     </div>
   );
 }

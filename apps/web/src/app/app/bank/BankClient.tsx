@@ -32,6 +32,24 @@ export default function BankPage() {
   const { address, isConnected } = useAccount();
   const acct = address as `0x${string}` | undefined;
   const { name } = useBasename(acct);
+  const [fname, setFname] = useState<string | null>(null);
+  useEffect(() => {
+    if (!acct || name) { setFname(null); return; }
+    fetch(`https://hub.pinata.cloud/v1/userDataByVerification?address=${acct}`)
+      .then(r => r.json())
+      .then(d => {
+        const messages = d?.messages ?? [];
+        const fid = messages[0]?.data?.fid;
+        if (!fid) return;
+        return fetch(`https://hub.pinata.cloud/v1/userDataByFid?fid=${fid}&user_data_type=6`)
+          .then(r2 => r2.json())
+          .then(d2 => {
+            const v = d2?.messages?.[0]?.data?.userDataBody?.value;
+            if (v) setFname(v);
+          });
+      })
+      .catch(() => null);
+  }, [acct, name]);
   const { disconnect } = useDisconnect();
   const [network, setNetwork] = useState<YieldNetwork>("baseSepolia");
   const [panel, setPanel]     = useState<Panel>("positions");
@@ -250,7 +268,7 @@ export default function BankPage() {
 
         {/* Account chip */}
         <div className="px-4 py-3 border-t border-[#1A1A2E]">
-          <div className="font-mono text-[11px] text-slate-300 truncate">{name || shortAddr(acct)}</div>
+          <div className="font-mono text-[11px] text-slate-300 truncate">{name ?? fname ?? shortAddr(acct)}</div>
           <div className="flex items-center gap-2 mt-0.5">
             <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer"
               className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7]">Basescan ↗</a>
@@ -268,7 +286,7 @@ export default function BankPage() {
           <div className="flex items-center gap-2.5 min-w-0">
             <Identicon address={acct} />
             <div className="min-w-0">
-              <p className="font-mono text-[13px] text-white truncate">Welcome back, <span className="text-[#4FC3F7]">{name || shortAddr(acct)}</span></p>
+              <p className="font-mono text-[13px] text-white truncate">Welcome back, <span className="text-[#4FC3F7]">{name ?? fname ?? shortAddr(acct)}</span></p>
               <p className="font-mono text-[9px] text-slate-600 truncate">Your account on Base · you hold the keys</p>
             </div>
           </div>
@@ -276,6 +294,9 @@ export default function BankPage() {
             {["Non-custodial", "Base", "Passkey"].map(c => (
               <span key={c} className="font-mono text-[9px] px-2 py-1 rounded-md text-slate-400" style={{ border: "1px solid #1A1A2E", background: "#0d0d12" }}>{c}</span>
             ))}
+            {new Date() >= new Date("2026-06-25") && (
+              <span className="font-mono text-[9px] px-2 py-1 rounded-md font-bold" style={{ color: "#4FC3F7", border: "1px solid #4FC3F730", background: "#4FC3F710" }}>⚡ Beryl</span>
+            )}
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
@@ -286,29 +307,33 @@ export default function BankPage() {
           <div className="grid lg:grid-cols-[3fr_2fr] gap-4 mb-4">
 
             {/* Cash balance + primary actions */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6 flex flex-col">
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 flex flex-col">
               <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH BALANCE · {net.short}</div>
-              <div className="font-mono text-4xl font-bold text-white">${usd(total)} <span className="text-base text-slate-500">USDC</span></div>
-              <div className="font-mono text-[11px] text-slate-500 mt-2">
-                {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
-              </div>
-              {netFlowMonth !== 0 && (
-                <div className="font-mono text-[11px] mt-1" style={{ color: netFlowMonth >= 0 ? "#34D399" : "#EF4444" }}>
-                  {netFlowMonth >= 0 ? "+" : "−"}${usd(Math.abs(netFlowMonth))} USDC this month
+              {/* Balance + primary actions side by side */}
+              <div className="flex items-center gap-4 mb-2">
+                <div className="flex-1 min-w-0">
+                  <div className="font-mono text-2xl font-bold text-white">${usd(total)} <span className="text-sm text-slate-500">USDC</span></div>
+                  <div className="font-mono text-[11px] text-slate-500 mt-0.5">
+                    {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
+                  </div>
+                  {netFlowMonth !== 0 && (
+                    <div className="font-mono text-[11px]" style={{ color: netFlowMonth >= 0 ? "#34D399" : "#EF4444" }}>
+                      {netFlowMonth >= 0 ? "+" : "−"}${usd(Math.abs(netFlowMonth))} USDC this month
+                    </div>
+                  )}
                 </div>
-              )}
-              {/* Primary actions — Receive + Send (most-used, prominent) */}
-              <div className="grid grid-cols-2 gap-2 mt-4">
-                <button onClick={() => openAction("receive")}
-                  className="font-mono text-[12px] font-bold py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-colors"
-                  style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
-                  ⬇ Receive money
-                </button>
-                <button onClick={() => openAction("send")}
-                  className="font-mono text-[12px] font-bold py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-opacity hover:opacity-90"
-                  style={{ background: "#4FC3F7", color: "#050508" }}>
-                  ➡ Send money
-                </button>
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <button onClick={() => openAction("receive")}
+                    className="font-mono text-[11px] font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-1 transition-colors"
+                    style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
+                    ⬇ Receive
+                  </button>
+                  <button onClick={() => openAction("send")}
+                    className="font-mono text-[11px] font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-1 transition-opacity hover:opacity-90"
+                    style={{ background: "#4FC3F7", color: "#050508" }}>
+                    ➡ Send
+                  </button>
+                </div>
               </div>
 
               <button onClick={addCash} disabled={onrampBusy || !isConnected}

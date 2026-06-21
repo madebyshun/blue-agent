@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useAccount } from "wagmi";
 
 const ACCENT = "#F59E0B";
@@ -64,6 +64,65 @@ function truncAddr(a: string): string {
   return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
 }
 
+// A6 — Creator label helper
+function fmtCreator(fee: { type: string; value: string }): string {
+  if (fee.type === "x") return "@" + fee.value;
+  return truncAddr(fee.value);
+}
+
+// A8 — Mini sparkline SVG (5-point simulated from change24h)
+function Sparkline({ price, change24h }: { price: number; change24h: number | null }) {
+  if (price <= 0 || change24h == null) return null;
+  // Simulate 5 points: start at price/(1+change/100), end at price
+  const end = price;
+  const start = price / (1 + change24h / 100);
+  // Interpolate with a slight curve in the middle
+  const pts = [
+    start,
+    start + (end - start) * 0.15 + (end - start) * 0.05 * Math.sin(0.5),
+    start + (end - start) * 0.4 + (end - start) * 0.08 * Math.sin(1.2),
+    start + (end - start) * 0.75 + (end - start) * 0.04 * Math.sin(2.0),
+    end,
+  ];
+  const minPt = Math.min(...pts);
+  const maxPt = Math.max(...pts);
+  const range = maxPt - minPt || 1;
+  const W = 64;
+  const H = 20;
+  const coords = pts.map((v, i) => {
+    const x = (i / (pts.length - 1)) * W;
+    const y = H - ((v - minPt) / range) * H;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const polyline = coords.join(" ");
+  const color = change24h >= 0 ? "#22C55E" : "#EF4444";
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="shrink-0">
+      <polyline
+        points={polyline}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        opacity="0.8"
+      />
+    </svg>
+  );
+}
+
+// A5 — Hot badge
+function HotBadge() {
+  return (
+    <span
+      className="absolute top-2.5 right-2.5 font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-md"
+      style={{ background: "#F59E0B20", color: "#F59E0B", border: "1px solid #F59E0B40" }}
+    >
+      🔥 HOT
+    </span>
+  );
+}
+
 // ── Token card ─────────────────────────────────────────────────────────────────
 
 function LaunchCard({ l }: { l: Launch }) {
@@ -71,6 +130,7 @@ function LaunchCard({ l }: { l: Launch }) {
   const sym = (l.tokenSymbol || l.tokenName || "?").replace(/^\$/, "");
   const change = l.market?.change24h;
   const changeColor = change == null ? "#64748b" : change >= 0 ? "#22C55E" : "#EF4444";
+  const isHot = (l.market?.volume24h ?? 0) > 10000;
 
   function copyAddr() {
     navigator.clipboard?.writeText(l.tokenAddress).then(() => {
@@ -80,7 +140,10 @@ function LaunchCard({ l }: { l: Launch }) {
   }
 
   return (
-    <div className="card-surface card-hover rounded-2xl p-4 flex flex-col gap-3">
+    <div className="card-surface card-hover rounded-2xl p-4 flex flex-col gap-3 relative">
+      {/* A5 */}
+      {isHot && <HotBadge />}
+
       {/* Header: logo + name + age */}
       <div className="flex items-center gap-3">
         {l.image ? (
@@ -97,8 +160,15 @@ function LaunchCard({ l }: { l: Launch }) {
           <div className="font-mono text-sm font-bold text-white truncate">{l.tokenName || sym}</div>
           <div className="font-mono text-[11px] text-slate-500">${sym}</div>
         </div>
-        <div className="font-mono text-[9px] text-slate-600 shrink-0">{fmtAge(l.launchedAt)} ago</div>
+        <div className="font-mono text-[9px] text-slate-600 shrink-0 pr-1">{fmtAge(l.launchedAt)} ago</div>
       </div>
+
+      {/* A8 — Sparkline */}
+      {l.market?.priceUsd != null && (
+        <div className="flex justify-end">
+          <Sparkline price={l.market.priceUsd} change24h={l.market.change24h} />
+        </div>
+      )}
 
       {/* Stats grid */}
       <div className="grid grid-cols-3 gap-2 font-mono">
@@ -122,10 +192,11 @@ function LaunchCard({ l }: { l: Launch }) {
           <div className="text-[8px] text-slate-600 tracking-widest mb-0.5">LIQ</div>
           <div className="text-[11px] text-slate-200">{fmtUsd(l.market?.liquidityUsd)}</div>
         </div>
+        {/* A6 — Creator */}
         <div>
-          <div className="text-[8px] text-slate-600 tracking-widest mb-0.5">FEE →</div>
+          <div className="text-[8px] text-slate-600 tracking-widest mb-0.5">CREATOR</div>
           <div className="text-[11px] text-slate-400 truncate">
-            {l.feeRecipient.type === "wallet" ? truncAddr(l.feeRecipient.value) : `${l.feeRecipient.value}`}
+            {fmtCreator(l.feeRecipient)}
           </div>
         </div>
       </div>
@@ -167,6 +238,199 @@ function LaunchCard({ l }: { l: Launch }) {
   );
 }
 
+// ── List row (A1) ──────────────────────────────────────────────────────────────
+
+function LaunchRow({ l }: { l: Launch }) {
+  const [copied, setCopied] = useState(false);
+  const sym = (l.tokenSymbol || l.tokenName || "?").replace(/^\$/, "");
+  const change = l.market?.change24h;
+  const changeColor = change == null ? "#64748b" : change >= 0 ? "#22C55E" : "#EF4444";
+  const isHot = (l.market?.volume24h ?? 0) > 10000;
+
+  function copyAddr() {
+    navigator.clipboard?.writeText(l.tokenAddress).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    });
+  }
+
+  return (
+    <div className="grid items-center gap-3 px-4 py-2.5 border-b border-[#1A1A2E] hover:bg-[#0d0d16] transition-colors font-mono text-[11px]"
+      style={{ gridTemplateColumns: "180px 90px 100px 70px 100px 50px 1fr" }}>
+      {/* Logo + Name */}
+      <div className="flex items-center gap-2 min-w-0">
+        {l.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={l.image} alt={sym} className="w-6 h-6 rounded-md object-cover shrink-0 bg-[#0d0d12]"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+        ) : (
+          <div className="w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-bold shrink-0"
+            style={{ background: `${ACCENT}15`, border: `1px solid ${ACCENT}30`, color: ACCENT }}>
+            {sym.slice(0, 2).toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0">
+          <div className="text-white font-bold truncate text-[11px] flex items-center gap-1">
+            {l.tokenName || sym}
+            {isHot && <span style={{ color: ACCENT }}>🔥</span>}
+          </div>
+          <div className="text-slate-600 text-[9px]">${sym}</div>
+        </div>
+      </div>
+      {/* Price */}
+      <div className="text-slate-200 tabular-nums">{fmtPrice(l.market?.priceUsd)}</div>
+      {/* MCAP */}
+      <div className="text-slate-200 tabular-nums">{fmtUsd(l.market?.marketCap)}</div>
+      {/* 24H% */}
+      <div style={{ color: changeColor }} className="tabular-nums">{fmtPct(change)}</div>
+      {/* Volume */}
+      <div className="text-slate-200 tabular-nums">{fmtUsd(l.market?.volume24h)}</div>
+      {/* Age */}
+      <div className="text-slate-600 tabular-nums">{fmtAge(l.launchedAt)}</div>
+      {/* Actions */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <a href={`https://app.uniswap.org/swap?outputCurrency=${l.tokenAddress}&chain=base`}
+          target="_blank" rel="noopener noreferrer"
+          className="px-2 py-0.5 rounded border text-[9px] transition-colors"
+          style={{ borderColor: `${ACCENT}30`, color: ACCENT }}>
+          Trade ↗
+        </a>
+        <a href={`https://bankr.bot/launches/${l.tokenAddress}`}
+          target="_blank" rel="noopener noreferrer"
+          className="px-2 py-0.5 rounded border border-[#4FC3F730] text-[#4FC3F7] text-[9px] transition-colors">
+          Bankr ↗
+        </a>
+        <button onClick={copyAddr}
+          className="px-2 py-0.5 rounded border border-[#1A1A2E] text-[9px] text-slate-600 hover:text-slate-300 transition-colors">
+          {copied ? "✓" : truncAddr(l.tokenAddress)}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── List header (A1) ──────────────────────────────────────────────────────────
+
+function ListHeader({
+  sort,
+  onSort,
+}: {
+  sort: SortKey;
+  onSort: (k: SortKey) => void;
+}) {
+  const col = (label: string, key: SortKey | null, style?: string) => (
+    <div
+      className={`font-mono text-[8px] tracking-widest text-slate-600 select-none ${key ? "cursor-pointer hover:text-slate-400 transition-colors" : ""} ${style ?? ""}`}
+      onClick={key ? () => onSort(key) : undefined}
+    >
+      {label}
+      {key && sort === key && <span className="ml-0.5" style={{ color: ACCENT }}>▼</span>}
+    </div>
+  );
+  return (
+    <div className="grid items-center gap-3 px-4 py-2 border-b border-[#1A1A2E] bg-[#07070b]"
+      style={{ gridTemplateColumns: "180px 90px 100px 70px 100px 50px 1fr" }}>
+      {col("NAME", null)}
+      {col("PRICE", "price")}
+      {col("MCAP", "mcap")}
+      {col("24H%", "change")}
+      {col("VOLUME", "volume")}
+      {col("AGE", "age")}
+      {col("ACTIONS", null)}
+    </div>
+  );
+}
+
+// ── Sort / Filter / Search types ───────────────────────────────────────────────
+
+type SortKey = "newest" | "volume" | "mcap" | "change" | "price" | "age";
+type FilterTab = "all" | "live" | "new" | "hot";
+type ViewMode = "grid" | "list";
+
+const SORT_OPTIONS: { label: string; key: SortKey }[] = [
+  { label: "Newest", key: "newest" },
+  { label: "Volume", key: "volume" },
+  { label: "MCAP", key: "mcap" },
+  { label: "24H%", key: "change" },
+];
+
+const FILTER_TABS: { label: string; key: FilterTab }[] = [
+  { label: "All", key: "all" },
+  { label: "Live", key: "live" },
+  { label: "New", key: "new" },
+  { label: "Hot 🔥", key: "hot" },
+];
+
+function applyFilter(launches: Launch[], tab: FilterTab): Launch[] {
+  switch (tab) {
+    case "live":
+      return launches.filter((l) => l.market?.priceUsd != null);
+    case "new":
+      return launches.filter((l) => l.launchedAt > Date.now() - 86400000);
+    case "hot":
+      return launches.filter((l) => (l.market?.volume24h ?? 0) > 10000);
+    default:
+      return launches;
+  }
+}
+
+function applySort(launches: Launch[], key: SortKey): Launch[] {
+  const copy = [...launches];
+  switch (key) {
+    case "newest":
+      return copy.sort((a, b) => b.launchedAt - a.launchedAt);
+    case "volume":
+      return copy.sort((a, b) => (b.market?.volume24h ?? 0) - (a.market?.volume24h ?? 0));
+    case "mcap":
+      return copy.sort((a, b) => (b.market?.marketCap ?? 0) - (a.market?.marketCap ?? 0));
+    case "change":
+      return copy.sort((a, b) => (b.market?.change24h ?? -Infinity) - (a.market?.change24h ?? -Infinity));
+    case "price":
+      return copy.sort((a, b) => (b.market?.priceUsd ?? 0) - (a.market?.priceUsd ?? 0));
+    case "age":
+      return copy.sort((a, b) => a.launchedAt - b.launchedAt);
+  }
+}
+
+function applySearch(launches: Launch[], q: string): Launch[] {
+  if (!q.trim()) return launches;
+  const lower = q.toLowerCase();
+  return launches.filter(
+    (l) =>
+      l.tokenName?.toLowerCase().includes(lower) ||
+      l.tokenSymbol?.toLowerCase().includes(lower)
+  );
+}
+
+function isTestToken(l: Launch): boolean {
+  return (
+    l.tokenName?.toLowerCase() === "test" ||
+    l.tokenSymbol?.toLowerCase() === "test"
+  );
+}
+
+// ── Auto-refresh countdown dot (A7) ───────────────────────────────────────────
+
+function RefreshDot({ countdown }: { countdown: number }) {
+  // countdown: 0-30, fill proportion
+  const pct = countdown / 30;
+  return (
+    <span
+      title={`Auto-refresh in ${countdown}s`}
+      className="inline-flex items-center gap-1 font-mono text-[9px] text-slate-700 select-none"
+    >
+      <span
+        className="inline-block w-1.5 h-1.5 rounded-full transition-colors"
+        style={{
+          background: pct > 0.5 ? "#22C55E" : pct > 0.15 ? ACCENT : "#EF4444",
+          opacity: 0.7,
+        }}
+      />
+      {countdown}s
+    </span>
+  );
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function LaunchesPage() {
@@ -174,6 +438,25 @@ export default function LaunchesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showLaunch, setShowLaunch] = useState(false);
+
+  // A1 — view mode
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+
+  // A2 — sort
+  const [sort, setSort] = useState<SortKey>("newest");
+
+  // A3 — filter tab
+  const [filterTab, setFilterTab] = useState<FilterTab>("all");
+
+  // A4 — search
+  const [search, setSearch] = useState("");
+
+  // A7 — auto-refresh countdown
+  const [countdown, setCountdown] = useState(30);
+  const countdownRef = useRef(30);
+
+  // A9 — show test tokens toggle
+  const [showTest, setShowTest] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -186,23 +469,80 @@ export default function LaunchesPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const launches = data?.launches ?? [];
+  // A7 — 30s auto-refresh + countdown ticker
+  useEffect(() => {
+    const tick = setInterval(() => {
+      countdownRef.current -= 1;
+      setCountdown(countdownRef.current);
+      if (countdownRef.current <= 0) {
+        countdownRef.current = 30;
+        setCountdown(30);
+        load();
+      }
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [load]);
+
+  // Reset countdown on manual load
+  const manualLoad = useCallback(() => {
+    countdownRef.current = 30;
+    setCountdown(30);
+    load();
+  }, [load]);
+
+  // Derived list: filter test → filter tab → search → sort
+  const allLaunches = data?.launches ?? [];
+  const withoutTest = showTest ? allLaunches : allLaunches.filter((l) => !isTestToken(l));
+  const filtered = applyFilter(withoutTest, filterTab);
+  const searched = applySearch(filtered, search);
+  const launches = applySort(searched, sort);
 
   return (
     <div className="flex flex-col h-full bg-[#050508] text-white font-mono overflow-hidden">
-      {showLaunch && <LaunchModal onClose={() => setShowLaunch(false)} onLaunched={load} />}
+      {showLaunch && <LaunchModal onClose={() => setShowLaunch(false)} onLaunched={manualLoad} />}
+
+      {/* Header bar */}
       <div className="flex items-center justify-between gap-3 px-4 sm:px-6 h-14 border-b border-[#1A1A2E] shrink-0">
         <div className="min-w-0">
           <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// LAUNCHES</p>
           <p className="font-mono text-[10px] text-slate-700 truncate mt-1">Fair launch on Base via Bankr</p>
         </div>
-        <button
-          onClick={() => setShowLaunch(true)}
-          className="font-mono text-[12px] font-bold px-4 py-2 rounded-lg transition-all shrink-0 hover:opacity-90"
-          style={{ background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}40` }}
-        >
-          Launch Token →
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* A7 — refresh dot */}
+          <RefreshDot countdown={countdown} />
+          {/* A1 — view toggle */}
+          <div className="flex items-center rounded-lg border border-[#1A1A2E] overflow-hidden">
+            <button
+              onClick={() => setViewMode("grid")}
+              className="px-2 py-1.5 font-mono text-[10px] transition-colors"
+              style={{
+                background: viewMode === "grid" ? `${ACCENT}18` : "transparent",
+                color: viewMode === "grid" ? ACCENT : "#64748b",
+              }}
+              title="Grid view"
+            >
+              ⊞
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className="px-2 py-1.5 font-mono text-[10px] transition-colors"
+              style={{
+                background: viewMode === "list" ? `${ACCENT}18` : "transparent",
+                color: viewMode === "list" ? ACCENT : "#64748b",
+              }}
+              title="List view"
+            >
+              ≡
+            </button>
+          </div>
+          <button
+            onClick={() => setShowLaunch(true)}
+            className="font-mono text-[12px] font-bold px-4 py-2 rounded-lg transition-all shrink-0 hover:opacity-90"
+            style={{ background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}40` }}
+          >
+            Launch Token →
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto relative">
@@ -214,10 +554,57 @@ export default function LaunchesPage() {
 
         <div className="relative px-4 sm:px-6 py-6">
           {/* Stats strip */}
-          <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="grid grid-cols-3 gap-3 mb-5">
             <StatChip label="TOKENS LAUNCHED" value={loading ? "…" : String(data?.count ?? 0)} />
             <StatChip label="TOTAL MCAP" value={loading ? "…" : fmtUsd(data?.stats.totalMarketCap)} />
             <StatChip label="24H VOLUME" value={loading ? "…" : fmtUsd(data?.stats.totalVolume24h)} />
+          </div>
+
+          {/* A3 — Filter tabs */}
+          <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+            {FILTER_TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setFilterTab(t.key)}
+                className="font-mono text-[10px] px-3 py-1 rounded-full border transition-colors"
+                style={{
+                  background: filterTab === t.key ? `${ACCENT}15` : "transparent",
+                  color: filterTab === t.key ? ACCENT : "#64748b",
+                  borderColor: filterTab === t.key ? `${ACCENT}40` : "#1A1A2E",
+                }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* A4 Search + A2 Sort row */}
+          <div className="flex items-center gap-2 mb-5 flex-wrap">
+            {/* A4 — search */}
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search token name or symbol…"
+              className="flex-1 min-w-[180px] bg-[#0a0a0f] border border-[#1A1A2E] focus:border-[#F59E0B]/30 rounded-lg px-3 py-1.5 font-mono text-[11px] text-slate-300 placeholder:text-slate-700 outline-none transition-colors"
+            />
+            {/* A2 — sort */}
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="font-mono text-[9px] text-slate-700 mr-1">SORT</span>
+              {SORT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setSort(opt.key)}
+                  className="font-mono text-[9px] px-2 py-1 rounded-md border transition-colors"
+                  style={{
+                    background: sort === opt.key ? `${ACCENT}15` : "transparent",
+                    color: sort === opt.key ? ACCENT : "#64748b",
+                    borderColor: sort === opt.key ? `${ACCENT}40` : "#1A1A2E",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {loading ? (
@@ -232,23 +619,53 @@ export default function LaunchesPage() {
           ) : launches.length === 0 ? (
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-10 text-center">
               <div className="text-3xl mb-3">🚀</div>
-              <p className="text-sm text-slate-400 mb-1">No tokens launched yet</p>
-              <p className="text-[11px] text-slate-600 mb-4">
-                Be the first — launch a token on Base in seconds through Blue Chat.
+              <p className="text-sm text-slate-400 mb-1">
+                {search || filterTab !== "all" ? "No tokens match your filters" : "No tokens launched yet"}
               </p>
-              <button onClick={() => setShowLaunch(true)}
-                className="inline-block font-mono text-[12px] font-bold px-4 py-2 rounded-lg transition-all"
-                style={{ background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}40` }}>
-                Launch a token →
-              </button>
+              <p className="text-[11px] text-slate-600 mb-4">
+                {search || filterTab !== "all"
+                  ? "Try adjusting your search or filter."
+                  : "Be the first — launch a token on Base in seconds through Blue Chat."}
+              </p>
+              {!search && filterTab === "all" && (
+                <button onClick={() => setShowLaunch(true)}
+                  className="inline-block font-mono text-[12px] font-bold px-4 py-2 rounded-lg transition-all"
+                  style={{ background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}40` }}>
+                  Launch a token →
+                </button>
+              )}
             </div>
-          ) : (
+          ) : viewMode === "grid" ? (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {launches.map((l) => <LaunchCard key={l.tokenAddress} l={l} />)}
             </div>
+          ) : (
+            /* List view */
+            <div className="rounded-xl border border-[#1A1A2E] overflow-hidden">
+              <ListHeader sort={sort} onSort={setSort} />
+              <div>
+                {launches.map((l) => <LaunchRow key={l.tokenAddress} l={l} />)}
+              </div>
+            </div>
           )}
 
-          <p className="font-mono text-[9px] text-slate-700 text-center mt-8">
+          {/* A9 — Show test tokens toggle */}
+          <div className="flex justify-center mt-6">
+            <button
+              onClick={() => setShowTest((v) => !v)}
+              className="font-mono text-[9px] text-slate-700 hover:text-slate-500 transition-colors flex items-center gap-1.5"
+            >
+              <span
+                className="inline-block w-3 h-3 rounded border border-[#1A1A2E] flex items-center justify-center"
+                style={{ background: showTest ? `${ACCENT}20` : "transparent" }}
+              >
+                {showTest && <span style={{ color: ACCENT, fontSize: 8, lineHeight: 1 }}>✓</span>}
+              </span>
+              Show test tokens
+            </button>
+          </div>
+
+          <p className="font-mono text-[9px] text-slate-700 text-center mt-4">
             Market data from DexScreener · 100B fixed supply · Uniswap V4 · gas sponsored by Bankr
           </p>
         </div>
