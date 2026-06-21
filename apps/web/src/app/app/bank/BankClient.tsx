@@ -4,10 +4,11 @@
 // Non-custodial Base neobank: real on-chain balances (wagmi), live yield rates
 // (DefiLlama), real transactions (Moralis). Nothing is fabricated.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAccount, useReadContract, useBalance, useConnect, useDisconnect } from "wagmi";
 import { formatUnits } from "viem";
 import { QRCodeSVG } from "qrcode.react";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import {
   YIELD_NETWORKS, ERC20_ABI, AAVE_POOL_ABI, ERC4626_ABI, VENUES, supplyApyPct,
   type YieldNetwork,
@@ -178,7 +179,80 @@ export default function BankPage() {
   const total   = (walletUsdc ?? 0) + inYield;
 
   // Stats from real wallet history (this calendar month)
-  const netFlowMonth = txData?.stats?.netFlowUsdcMonth ?? 0;
+  const netFlowMonth      = txData?.stats?.netFlowUsdcMonth ?? 0;
+  const transferCountMonth = txData?.stats?.transferCountMonth ?? 0;
+
+  // ── AI Chat popup ────────────────────────────────────────────────────────
+  const [chatOpen, setChatOpen]       = useState(false);
+  const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [chatInput, setChatInput]     = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages, chatLoading]);
+
+  async function sendChat(input: string) {
+    if (!input.trim() || chatLoading) return;
+    const userMsg = { role: "user" as const, content: input.trim() };
+    const historySnapshot = [...chatMessages, userMsg];
+    setChatMessages(historySnapshot);
+    setChatInput("");
+    setChatLoading(true);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: historySnapshot,
+          system: `You are BlueAgent Banking assistant. User: ${name ?? shortAddr(acct)}. Balance: $${usd(total)} · USDC: $${usd(walletUsdc)} · In yield: $${usd(inYield)} at ${bestApy?.toFixed(1) ?? "—"}%. ETH: ${ethBal?.toFixed(4) ?? "—"}. Answer concisely in 2-3 sentences. Focus on Base DeFi and banking.`,
+          model: "fast",
+        }),
+      });
+      if (!res.ok || !res.body) throw new Error("no body");
+      // SSE stream — accumulate text_delta events
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let accumulated = "";
+      setChatMessages(prev => [...prev, { role: "assistant", content: "" }]);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6).trim();
+          if (raw === "[DONE]") break;
+          try {
+            const parsed = JSON.parse(raw) as { type?: string; delta?: { text?: string } };
+            if (parsed.type === "text_delta" && parsed.delta?.text) {
+              accumulated += parsed.delta.text;
+              setChatMessages(prev => {
+                const msgs = [...prev];
+                msgs[msgs.length - 1] = { role: "assistant", content: accumulated };
+                return msgs;
+              });
+            }
+          } catch { /* ignore parse errors */ }
+        }
+      }
+      if (!accumulated) {
+        setChatMessages(prev => {
+          const msgs = [...prev];
+          msgs[msgs.length - 1] = { role: "assistant", content: "Sorry, couldn't get a response. Try again." };
+          return msgs;
+        });
+      }
+    } catch {
+      setChatMessages(prev => [...prev, { role: "assistant", content: "Connection error. Try again." }]);
+    } finally {
+      setChatLoading(false);
+    }
+  }
 
   function copyAddr() {
     if (!acct) return;
@@ -211,6 +285,14 @@ export default function BankPage() {
     { id: "convert",   label: "Convert",   icon: "⇅",  desc: "Swap tokens" },
     ...(B20_ENABLED ? [{ id: "orders" as Panel, label: "Orders", icon: "🧾", desc: "Get paid in B20" }] : []),
   ];
+
+  // ── Portfolio allocation (for pie chart) ─────────────────────────────────
+  const stableTotal = (walletUsdc ?? 0) + (aavePos ?? 0) + (morphoPos ?? 0);
+  const ethUsd      = (ethBal ?? 0) * 2500;
+  const portfolioData = [
+    { name: "Stablecoin", value: stableTotal, color: "#4FC3F7" },
+    { name: "ETH",        value: ethUsd,      color: "#94A3B8" },
+  ].filter(d => d.value > 0);
 
   return (
     <div className="flex h-full w-full bg-[#050508] text-slate-200">
@@ -292,18 +374,27 @@ export default function BankPage() {
           {/* ── CENTER — scrollable ───────────────────────────────────── */}
           <div className="flex-1 overflow-y-auto p-4">
 
-            {/* Balance hero */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-4">
-              <div className="font-mono text-[9px] text-slate-500 mb-1">CASH BALANCE · {net.short}</div>
-              <div className="font-mono text-[32px] font-bold text-[#34D399] leading-none">
+            {/* ── Balance hero ──────────────────────────────────────── */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-3">
+              <div className="font-mono text-[9px] text-slate-500 mb-1">TOTAL BALANCE · {net.short}</div>
+              <div className="font-mono text-[36px] font-bold text-[#34D399] leading-none">
                 ${usd(total)}
               </div>
               {netFlowMonth !== 0 && (
                 <div className="font-mono text-[10px] mt-1"
                   style={{ color: netFlowMonth >= 0 ? "#34D399" : "#EF4444" }}>
                   {netFlowMonth >= 0 ? "+" : "−"}${usd(Math.abs(netFlowMonth))} this month
+                  {transferCountMonth > 0 && ` · ${transferCountMonth} transfers`}
                 </div>
               )}
+
+              {/* Asset pills */}
+              <div className="flex gap-1.5 mt-2 flex-wrap">
+                {(walletUsdc ?? 0) > 0 && <AssetPill label="USDC" value={`$${usd(walletUsdc)}`} color="#4FC3F7" />}
+                {(aavePos ?? 0) > 0   && <AssetPill label="aUSDC" value={`$${usd(aavePos)}`} color="#34D399" />}
+                {(morphoPos ?? 0) > 0 && <AssetPill label="Morpho" value={`$${usd(morphoPos)}`} color="#A78BFA" />}
+                {ethBal != null        && <AssetPill label="ETH" value={ethBal.toFixed(4)} color="#94A3B8" />}
+              </div>
 
               {/* Primary CTAs */}
               <div className="flex gap-2 mt-3">
@@ -337,6 +428,58 @@ export default function BankPage() {
                 </button>
               </div>
               {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-1.5">{onrampMsg}</div>}
+            </div>
+
+            {/* ── AI Copilot ────────────────────────────────────────── */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-3">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[9px] text-slate-500">🤖 AI COPILOT</span>
+                  <span className="font-mono text-[8px] px-1.5 py-0.5 rounded"
+                    style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                    BlueAgent
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2 mb-3">
+                {/* Idle USDC */}
+                {(walletUsdc ?? 0) > 100 && inYield === 0 && bestApy != null && (
+                  <AISuggestion icon="📈"
+                    text={`$${usd(walletUsdc)} USDC idle. Earn ${bestApy.toFixed(1)}% on Aave/Morpho.`}
+                    action="Earn now" onAction={() => openAction("earn")} color="#34D399" />
+                )}
+                {/* Earning */}
+                {inYield > 0 && bestApy != null && (
+                  <AISuggestion icon="✅"
+                    text={`$${usd(inYield)} earning ${bestApy.toFixed(1)}% · +$${((inYield * bestApy / 100) / 12).toFixed(0)}/month`}
+                    color="#34D399" />
+                )}
+                {/* Low ETH */}
+                {ethBal != null && ethBal < 0.005 && (
+                  <AISuggestion icon="⛽"
+                    text="ETH balance low — may not have enough for gas fees."
+                    color="#F87171" />
+                )}
+                {/* Beryl B20 */}
+                {new Date() >= new Date("2026-06-25") && (
+                  <AISuggestion icon="⚡"
+                    text="B20 payments live. Send with memo for onchain invoice tracking."
+                    action="Try B20" onAction={() => openAction("orders")} color="#4FC3F7" />
+                )}
+                {/* Fallback */}
+                {(walletUsdc ?? 0) === 0 && inYield === 0 && (
+                  <AISuggestion icon="💡"
+                    text="Add USDC to start earning yield on Base."
+                    action="Add cash" onAction={addCash} color="#F59E0B" />
+                )}
+              </div>
+
+              <button onClick={() => setChatOpen(true)}
+                className="w-full font-mono text-[10px] font-bold py-2 rounded-xl transition-opacity hover:opacity-80"
+                style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                💬 Ask BlueAgent
+              </button>
             </div>
 
             {/* Transaction history — fills remaining center */}
@@ -480,50 +623,122 @@ export default function BankPage() {
           {/* ── RIGHT PANEL — hidden on mobile ───────────────────────── */}
           <aside className="hidden xl:flex flex-col w-64 shrink-0 border-l border-[#1A1A2E] overflow-y-auto p-4 gap-3">
 
-            {/* Your Assets */}
+            {/* 1. Your Assets */}
             <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
               <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">YOUR ASSETS</div>
               <AssetRow label="USDC" sub="in wallet" usd={walletUsdc} color="#4FC3F7" />
-              <AssetRow label="aUSDC" sub={`Aave · ${aaveApy != null ? `${aaveApy.toFixed(1)}%` : "—"} APY`} usd={aavePos} color="#34D399" />
-              {morphoVnet && <AssetRow label="Morpho" sub="Gauntlet USDC" usd={morphoPos} color="#A78BFA" />}
-              <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
-                  <div>
-                    <div className="font-mono text-[12px] text-slate-200">ETH</div>
-                    <div className="font-mono text-[9px] text-slate-600">gas</div>
-                  </div>
+              <AssetRow label="aUSDC" sub={`Aave · ${aaveApy != null ? `${aaveApy.toFixed(1)}%` : bestApy != null ? `${bestApy.toFixed(1)}%` : "—"} APY`} usd={aavePos} color="#34D399" />
+              {(morphoPos ?? 0) > 0 && (
+                <AssetRow label="Morpho" sub={`Gauntlet · ${morphoApy != null ? `${morphoApy.toFixed(1)}%` : "—"} APY`} usd={morphoPos} color="#A78BFA" />
+              )}
+              <div className="flex items-center justify-between py-2 border-t border-[#1A1A2E] mt-1">
+                <div>
+                  <div className="font-mono text-[11px] text-slate-200">ETH</div>
+                  <div className="font-mono text-[9px] text-slate-600">gas</div>
                 </div>
-                <div className="font-mono text-[12px] text-slate-300">{ethBal != null ? ethBal.toFixed(4) : "—"}</div>
+                <div className="font-mono text-[11px] text-slate-300">{ethBal != null ? ethBal.toFixed(4) : "—"}</div>
               </div>
             </div>
 
-            {/* Rates on Base */}
+            {/* 2. Portfolio Allocation (pie chart) */}
             <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">RATES ON BASE · DefiLlama</div>
-              {rates && rates.length ? rates.slice(0, 3).map((r, i) => (
-                <div key={r.project} className="flex items-center justify-between py-1">
-                  <span className="font-mono text-[10px]" style={{ color: i === 0 ? "#34D399" : "#64748B" }}>
-                    {i === 0 ? "★ " : ""}{r.label}
-                  </span>
-                  <span className="font-mono text-[10px] font-bold" style={{ color: i === 0 ? "#34D399" : "#94A3B8" }}>
-                    {r.apy.toFixed(2)}%
-                  </span>
-                </div>
-              )) : <div className="font-mono text-[10px] text-slate-600">loading rates…</div>}
-              {bestApy != null && (
-                <button onClick={() => openAction("earn")}
-                  className="w-full font-mono text-[10px] font-bold py-1.5 rounded-lg mt-2"
-                  style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39930" }}>
-                  Earn {bestApy.toFixed(1)}% →
-                </button>
+              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">PORTFOLIO ALLOCATION</div>
+              {portfolioData.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={100}>
+                    <PieChart>
+                      <Pie data={portfolioData} cx="50%" cy="50%"
+                        innerRadius={28} outerRadius={44}
+                        dataKey="value" paddingAngle={2}>
+                        {portfolioData.map((entry, i) => (
+                          <Cell key={i} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        formatter={(v: any) => [`$${usd(v as number)}`, ""]}
+                        contentStyle={{ background: "#0a0a0f", border: "1px solid #1A1A2E", fontFamily: "monospace", fontSize: "10px", color: "#94a3b8" }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="flex gap-3 justify-center mt-1">
+                    {portfolioData.map(d => (
+                      <div key={d.name} className="flex items-center gap-1 font-mono text-[9px] text-slate-400">
+                        <div className="w-2 h-2 rounded-full" style={{ background: d.color }} />
+                        {d.name} {total > 0 ? Math.round(d.value / total * 100) : 0}%
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="font-mono text-[10px] text-slate-600 py-2">No assets yet</div>
               )}
             </div>
 
-            {/* Add cash */}
+            {/* 3. Yield Center */}
+            <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-mono text-[9px] text-slate-500">⭐ YIELD CENTER</span>
+                {bestApy != null && (
+                  <span className="font-mono text-[9px] text-[#34D399]">Best: {bestApy.toFixed(1)}%</span>
+                )}
+              </div>
+              {rates && rates.length ? rates.slice(0, 3).map((r, i) => (
+                <div key={r.project}
+                  className="flex items-center justify-between py-1.5 border-b border-[#1A1A2E] last:border-0">
+                  <span className="font-mono text-[10px]" style={{ color: i === 0 ? "#34D399" : "#94A3B8" }}>
+                    {i === 0 ? "★ " : ""}{r.label}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] font-bold" style={{ color: i === 0 ? "#34D399" : "#94A3B8" }}>
+                      {r.apy.toFixed(2)}%
+                    </span>
+                    {i === 0 && (
+                      <button onClick={() => openAction("earn")}
+                        className="font-mono text-[8px] px-1.5 py-0.5 rounded"
+                        style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39930" }}>
+                        Earn →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )) : <div className="font-mono text-[10px] text-slate-600">loading rates…</div>}
+              {(walletUsdc ?? 0) > 100 && inYield === 0 && bestApy != null && (
+                <div className="mt-2 p-2 rounded-lg font-mono"
+                  style={{ background: "#F59E0B08", border: "1px solid #F59E0B20" }}>
+                  <div className="text-[9px] text-[#F59E0B]">💡 Idle cash detected</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    +${(((walletUsdc ?? 0) * bestApy / 100) / 12).toFixed(0)}/month potential
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 4. Base Ecosystem */}
+            <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
+              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">BASE ECOSYSTEM</div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { name: "Aerodrome", url: "https://aerodrome.finance",    color: "#EF4444" },
+                  { name: "Moonwell",  url: "https://moonwell.fi",          color: "#A78BFA" },
+                  { name: "Morpho",    url: "https://morpho.org",           color: "#4FC3F7" },
+                  { name: "Uniswap",   url: "https://app.uniswap.org",      color: "#FF007A" },
+                  { name: "Aave",      url: "https://app.aave.com",         color: "#B6509E" },
+                  { name: "Compound",  url: "https://app.compound.finance", color: "#00D395" },
+                ].map(p => (
+                  <a key={p.name} href={p.url} target="_blank" rel="noopener noreferrer"
+                    className="font-mono text-[8px] py-1.5 px-1 rounded-lg text-center hover:opacity-80 transition-opacity"
+                    style={{ background: `${p.color}10`, color: p.color, border: `1px solid ${p.color}25` }}>
+                    {p.name}
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {/* 5. Add cash */}
             <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
               <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">ADD CASH</div>
-              <div className="font-mono text-[10px] text-slate-400 mb-2">Buy USDC with card or bank account</div>
+              <div className="font-mono text-[10px] text-slate-400 mb-2">Buy USDC with card or bank</div>
               <button onClick={addCash} disabled={onrampBusy || !isConnected}
                 className="w-full font-mono text-[10px] font-bold py-2 rounded-lg disabled:opacity-40"
                 style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
@@ -536,10 +751,87 @@ export default function BankPage() {
               </button>
             </div>
 
+            {/* 6. Beryl — date-gated */}
+            {new Date() >= new Date("2026-06-25") && (
+              <div className="rounded-xl p-3" style={{ background: "#4FC3F708", border: "1px solid #4FC3F730" }}>
+                <div className="font-mono text-[9px] text-[#4FC3F7] font-bold mb-1">⚡ Beryl is live</div>
+                <div className="font-mono text-[9px] text-slate-400 space-y-0.5">
+                  <div>→ B20 payments with memo</div>
+                  <div>→ L1 withdrawals: 5 days (was 7)</div>
+                </div>
+                <button onClick={() => openAction("orders")}
+                  className="w-full font-mono text-[9px] font-bold py-1.5 rounded-lg mt-2"
+                  style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                  Try B20 payments →
+                </button>
+              </div>
+            )}
+
           </aside>
 
         </div>
       </main>
+
+      {/* ── AI Chat popup — fixed bottom-right ──────────────────────────── */}
+      {chatOpen && (
+        <div className="fixed bottom-4 right-4 z-[60] w-80 h-[420px] flex flex-col rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] shadow-2xl overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#1A1A2E] shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[11px] text-[#4FC3F7] font-bold">🤖 BlueAgent</span>
+              <span className="font-mono text-[9px] text-slate-600">Banking mode</span>
+            </div>
+            <button onClick={() => setChatOpen(false)}
+              className="font-mono text-slate-500 hover:text-white text-sm w-6 h-6 flex items-center justify-center rounded">✕</button>
+          </div>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {chatMessages.length === 0 && (
+              <div className="space-y-1.5">
+                <div className="font-mono text-[10px] text-slate-600 mb-2">Ask anything about your wallet:</div>
+                {["Best yield option?", "How to send USDC?", "My balance breakdown"].map(q => (
+                  <button key={q} onClick={() => sendChat(q)}
+                    className="w-full text-left font-mono text-[10px] px-2 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+                    style={{ background: "#0d0d12", border: "1px solid #1A1A2E" }}>
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
+            {chatMessages.map((m, i) => (
+              <div key={i} className={`font-mono text-[10px] p-2 rounded-lg max-w-[90%] leading-relaxed ${
+                m.role === "user"
+                  ? "ml-auto bg-[#4FC3F715] text-[#4FC3F7] border border-[#4FC3F730]"
+                  : "bg-[#0d0d12] text-slate-300 border border-[#1A1A2E]"
+              }`}>
+                {m.content || (m.role === "assistant" && <span className="text-slate-600 animate-pulse">▌</span>)}
+              </div>
+            ))}
+            {chatLoading && chatMessages[chatMessages.length - 1]?.role !== "assistant" && (
+              <div className="font-mono text-[10px] text-slate-600 p-2">thinking…</div>
+            )}
+            <div ref={chatBottomRef} />
+          </div>
+
+          {/* Input */}
+          <div className="flex gap-2 p-3 border-t border-[#1A1A2E] shrink-0">
+            <input
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && sendChat(chatInput)}
+              placeholder="Ask anything…"
+              className="flex-1 bg-[#050508] border border-[#1A1A2E] rounded-lg px-3 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none focus:border-[#4FC3F7]/40"
+            />
+            <button onClick={() => sendChat(chatInput)} disabled={chatLoading}
+              className="font-mono text-[11px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-40"
+              style={{ background: "#4FC3F7", color: "#050508" }}>
+              →
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -560,6 +852,16 @@ function Identicon({ address }: { address?: string }) {
   );
 }
 
+function AssetPill({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="font-mono text-[9px] px-2 py-0.5 rounded-full flex items-center gap-1"
+      style={{ background: `${color}15`, border: `1px solid ${color}30`, color }}>
+      <span className="text-slate-500">{label}</span>
+      <span className="font-bold">{value}</span>
+    </div>
+  );
+}
+
 function AssetRow({ label, sub, usd: val, color }: { label: string; sub: string; usd: number | null; color: string }) {
   return (
     <div className="flex items-center justify-between py-2 border-b border-[#13131f] last:border-0">
@@ -571,6 +873,27 @@ function AssetRow({ label, sub, usd: val, color }: { label: string; sub: string;
         </div>
       </div>
       <div className="font-mono text-[12px] text-slate-300">{val != null ? `$${usd(val)}` : "—"}</div>
+    </div>
+  );
+}
+
+function AISuggestion({ icon, text, action, onAction, color }: {
+  icon: string; text: string; action?: string; onAction?: () => void; color: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 p-2 rounded-lg"
+      style={{ background: `${color}08`, border: `1px solid ${color}20` }}>
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-sm shrink-0">{icon}</span>
+        <span className="font-mono text-[10px] text-slate-300 truncate">{text}</span>
+      </div>
+      {action && onAction && (
+        <button onClick={onAction}
+          className="font-mono text-[9px] px-2 py-1 rounded-md shrink-0 font-bold"
+          style={{ background: `${color}20`, color, border: `1px solid ${color}40` }}>
+          {action}
+        </button>
+      )}
     </div>
   );
 }
