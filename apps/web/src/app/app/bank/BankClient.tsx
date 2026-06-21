@@ -344,21 +344,6 @@ export default function BankPage() {
               {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-1">{onrampMsg}</div>}
               <div className="font-mono text-[9px] text-slate-600 mt-1">via Coinbase · available in select regions · or fund with Receive</div>
 
-              {/* Secondary actions — Positions / Earn / Convert / (Orders) / Cash out */}
-              <div className="grid grid-cols-2 gap-2 mt-3">
-                {TABS.filter(t => t.id !== "send" && t.id !== "receive").map(tb => (
-                  <button key={tb.id} onClick={() => openAction(tb.id)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left">
-                    <span className="text-sm leading-none shrink-0">{tb.icon}</span>
-                    <div className="font-mono text-[10px] text-slate-200 truncate">{tb.label}</div>
-                  </button>
-                ))}
-                <button onClick={cashOut} disabled={cashOutBusy || !isConnected}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors text-left disabled:opacity-50">
-                  <span className="text-sm leading-none shrink-0">🏦</span>
-                  <div className="font-mono text-[10px] text-slate-200 truncate">{cashOutBusy ? "Starting…" : "Cash out"}</div>
-                </button>
-              </div>
             </div>
 
             {/* Right column: Your Assets + Rates on Base */}
@@ -398,6 +383,22 @@ export default function BankPage() {
 
           </div>
 
+          {/* Quick Actions row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            {TABS.filter(t => t.id !== "send" && t.id !== "receive").map(tb => (
+              <button key={tb.id} onClick={() => openAction(tb.id)}
+                className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 flex flex-col gap-2 hover:border-[#4FC3F7]/40 hover:bg-[#0d0d14] transition-all text-left">
+                <span className="text-xl leading-none">{tb.icon}</span>
+                <div className="font-mono text-[11px] font-semibold text-slate-200">{tb.label}</div>
+              </button>
+            ))}
+            <button onClick={cashOut} disabled={cashOutBusy || !isConnected}
+              className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 flex flex-col gap-2 hover:border-[#4FC3F7]/40 hover:bg-[#0d0d14] transition-all text-left disabled:opacity-50">
+              <span className="text-xl leading-none">🏦</span>
+              <div className="font-mono text-[11px] font-semibold text-slate-200">{cashOutBusy ? "Starting…" : "Cash out"}</div>
+            </button>
+          </div>
+
           {/* Stats row — gas saved (est.) · best APY · always-on */}
           <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
             <StatCard icon="💡" label="Gas saved" value={gasSavedUsd != null ? `$${usd(gasSavedUsd)}` : "—"}
@@ -429,9 +430,9 @@ export default function BankPage() {
 
           {/* Action modal — Positions / Earn / Send / Receive (opened from the hero) */}
           {actionOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] p-4">
               <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setActionOpen(false)} />
-              <div className="relative z-10 w-full max-w-md rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] shadow-2xl max-h-[88vh] min-h-[480px] flex flex-col">
+              <div className="relative z-10 w-full max-w-md h-[580px] max-h-[85vh] rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] shadow-2xl flex flex-col">
                 {/* Tabs + close */}
                 <div className="flex items-center gap-1 p-3 border-b border-[#1A1A2E] shrink-0">
                   {TABS.map(tb => (
