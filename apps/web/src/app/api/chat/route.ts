@@ -127,6 +127,8 @@ const MODELS: Record<string, { id: string; maxTokens: number }> = {
   pro:      { id: "claude-sonnet-4-6",  maxTokens: 1200 },  // was 2048
   max:      { id: "claude-opus-4-7",    maxTokens: 2400 },  // real Opus 4.7 (Bankr serves it)
   deepseek: { id: "deepseek-v4-flash",  maxTokens: 2400 },  // DeepSeek V4 Flash, 1M ctx — via Bankr
+  gemini:   { id: "gemini-2.5-flash",   maxTokens: 2400 },  // Gemini 2.5 Flash — via Bankr
+  kimi:     { id: "kimi-k2-6",          maxTokens: 2400 },  // Kimi K2, long context — via Bankr
 };
 
 // ─── Model display names ──────────────────────────────────────────────────────
@@ -147,10 +149,12 @@ const VENICE_DISPLAY: Record<string, string> = {
 };
 
 const BANKR_DISPLAY: Record<string, string> = {
-  fast:     "Claude Haiku 4.5 (Bankr · Fast)",
-  pro:      "Claude Sonnet 4.6 (Bankr · Chat)",
-  max:      "Claude Opus 4.7 (Bankr · Deep Think)",
-  deepseek: "DeepSeek V4 Flash (Bankr · 1M ctx)",
+  fast:     "Haiku 4.5 · Fast",
+  pro:      "Sonnet 4.6 · Chat",
+  max:      "Opus 4.7 · Deep Think",
+  deepseek: "DeepSeek V4 · 1M ctx",
+  gemini:   "Gemini 2.5 Flash · Google",
+  kimi:     "Kimi K2 · Long Context",
 };
 
 function getModelLabel(tier: string, modelId?: string, provider?: string): string {
@@ -1099,6 +1103,7 @@ just your assumptions. YOU MUST call BOTH tools first, in parallel (do not skip)
 1. hub_market_fit — with { project: "<the user's concept>" }
 2. hub_competitor_scan — with { project: "<the user's concept>" }
 Call ONLY these two — do not add any other tool. NEVER answer from training data alone — always call the tools first.
+CRITICAL: NEVER call prepare_token_launch or any token-launch tool for /idea. Even if the concept is "launching a token", create a fundable BRIEF about it using hub_market_fit and hub_competitor_scan. The /launch command handles actual token deployment.
 
 After the tools return, synthesize the brief in this exact format:
 **Problem** — 1 crisp sentence

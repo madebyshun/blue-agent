@@ -345,10 +345,12 @@ export function MarkdownRenderer({ content }: { content: string }) {
 // ── Model label / color maps ───────────────────────────────────────────────────
 
 const MODEL_LABELS: Record<string, string> = {
-  fast: "Haiku · Fast", pro: "Sonnet · Pro", max: "Sonnet · Max",
+  fast: "Claude Haiku 4.5", pro: "Claude Sonnet 4.6", max: "Claude Opus 4.7",
+  deepseek: "DeepSeek V4",
   "venice-deepseek": "DeepSeek V4 Flash", "venice-deepseek-pro": "DeepSeek V4 Pro",
   "venice-kimi": "Kimi K2", "venice-claude": "Claude Opus 4",
   "venice-grok": "Grok 4", "venice-qwen": "Qwen3 235B",
+  "venice-fable": "Fable 5",
   "venice-mistral": "Mistral Small", "venice-uncut": "Uncensored",
   "venice-e2ee-venice": "Private Venice", "venice-e2ee-gemma": "Private Gemma",
   "venice-e2ee-qwen": "Private Qwen",

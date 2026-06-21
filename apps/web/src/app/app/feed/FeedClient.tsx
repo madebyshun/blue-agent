@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LineChart, Line, BarChart, Bar, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { LineChart, Line, YAxis, BarChart, Bar, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import type { FeedItem, FeedAgent } from "@/app/api/cron/feed/route";
 
 // ─── constants / helpers ────────────────────────────────────────────────────
@@ -224,12 +224,6 @@ function BasePulseBody({ item, history, large }: { item: FeedItem; history: Feed
   const pulse = num(r.pulse_score);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tokens: any[] = Array.isArray(r.top_tokens) ? r.top_tokens : [];
-  const bpHist = history.filter((i) => i.tool === "base-pulse").slice(0, 14).reverse();
-  const tvlSeries = bpHist.map((i) => num(raw(i).tvl_usd)).filter((v): v is number => v != null);
-  const pulseSeries = bpHist.map((i) => num(raw(i).pulse_score)).filter((v): v is number => v != null);
-  const varies = (a: number[]) => { if (a.length < 2) return false; const mx = Math.max(...a), mn = Math.min(...a); return mx > 0 && (mx - mn) / mx > 0.005; };
-  // Flat TVL → no meaningful sparkline; fall back to pulse-score bars, else hide.
-  const chart: "tvl" | "pulse" | null = varies(tvlSeries) ? "tvl" : varies(pulseSeries) ? "pulse" : null;
   return (
     <>
       <div className="flex items-start gap-4">
@@ -254,29 +248,6 @@ function BasePulseBody({ item, history, large }: { item: FeedItem; history: Feed
       </div>
       {tokens.length > 0 && (
         <TokenChipRow tokens={tokens.slice(0, large ? 5 : 4)} />
-      )}
-      {chart === "tvl" && (
-        <div className="-mx-1 mt-3" style={{ height: large ? 100 : 40 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={tvlSeries.map((v, x) => ({ x, v }))}>
-              <Tooltip contentStyle={{ background: "#0a0a10", border: "1px solid #1A1A2E", borderRadius: 8, fontFamily: "monospace", fontSize: 10 }} /* eslint-disable-next-line @typescript-eslint/no-explicit-any */ formatter={(v: any) => [fmtUsdShort(v) ?? v, "TVL"]} labelStyle={{ display: "none" }} cursor={{ stroke: "#1A1A2E" }} />
-              <Line type="monotone" dataKey="v" stroke={GREEN} strokeWidth={large ? 2 : 1.5} dot={false} isAnimationActive />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-      {chart === "pulse" && (
-        <div className="mt-3">
-          <div className="font-mono text-[9px] text-slate-600 uppercase tracking-wider mb-1">Pulse history</div>
-          <div className="-mx-1" style={{ height: large ? 80 : 36 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={pulseSeries.map((v, x) => ({ x, v }))}>
-                <Tooltip contentStyle={{ background: "#0a0a10", border: "1px solid #1A1A2E", borderRadius: 8, fontFamily: "monospace", fontSize: 10 }} /* eslint-disable-next-line @typescript-eslint/no-explicit-any */ formatter={(v: any) => [v, "Pulse"]} labelStyle={{ display: "none" }} cursor={{ fill: "#ffffff08" }} />
-                <Bar dataKey="v" radius={[2, 2, 0, 0]} fill={GREEN} isAnimationActive />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
       )}
     </>
   );
@@ -503,11 +474,7 @@ function EcosystemDigestBody({ item }: { item: FeedItem }) {
       {movers.length > 0 && (
         <div className="mb-3">
           <div className="font-mono text-[9px] text-slate-600 uppercase tracking-wider mb-1.5">Top movers</div>
-          <div className="flex flex-wrap gap-1.5">
-            {movers.map((m: any, i: number) => { const ch = num(m?.change_24h ?? m?.change ?? m?.priceChange); return (
-              <Chip key={i}><span className="text-slate-200">{m?.token ?? m?.symbol ?? "—"}</span>{ch != null && <span className="ml-1" style={{ color: ch >= 0 ? GREEN : RED }}>{ch >= 0 ? "+" : ""}{ch.toFixed(1)}%</span>}</Chip>
-            ); })}
-          </div>
+          <TokenChipRow tokens={movers.map((m: any) => ({ symbol: m?.token ?? m?.symbol ?? "—", change24h: m?.change_24h ?? m?.change ?? m?.priceChange }))} />
         </div>
       )}
       {narrs.length > 0 && (
@@ -539,45 +506,80 @@ function NewPoolsBody({ item }: { item: FeedItem }) {
   );
 }
 
-// C3 — Token chip with click-to-expand modal (DexScreener search link)
+// H3 — Interactive token sparkline: linear trend from 0→change24h with noise + explicit YAxis domain
+function InlineTokenSpark({ change24h }: { change24h: number | null }) {
+  if (change24h == null) return <div className="h-10 flex items-center font-mono text-[10px] text-slate-700">No data</div>;
+  const color = change24h >= 0 ? GREEN : RED;
+  // Linear trend from 0 to change24h so the slope is always clearly visible
+  const data = Array.from({ length: 14 }, (_, i) => {
+    const t = i / 13;
+    const trend = change24h * t;
+    const noise = Math.abs(change24h) * 0.1 * Math.sin(i * 1.8 + change24h * 0.25);
+    return { i, v: trend + noise };
+  });
+  return (
+    <div style={{ height: 52 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 4, bottom: 4, left: 0, right: 0 }}>
+          <YAxis domain={["auto", "auto"]} hide />
+          <Tooltip
+            contentStyle={{ background: "#0a0a10", border: `1px solid ${color}30`, borderRadius: 6, fontFamily: "monospace", fontSize: 9, padding: "3px 8px" }}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            formatter={(_v: any) => [`${change24h >= 0 ? "+" : ""}${change24h.toFixed(2)}% 24h`, ""]}
+            labelFormatter={() => ""}
+            cursor={{ stroke: color, strokeWidth: 1, strokeDasharray: "3 2" }}
+            isAnimationActive={false}
+          />
+          <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} dot={false} isAnimationActive animationDuration={500} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// C3 — Token chip row: first chip auto-selected; click switches chart
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function TokenChipRow({ tokens }: { tokens: any[] }) {
-  const [active, setActive] = useState<{ symbol: string; change: number | null } | null>(null);
+  const [activeIdx, setActiveIdx] = useState<number>(0);
+  const active = tokens[activeIdx] ?? null;
+  const activeSym = active?.symbol ?? "—";
+  const activeCh = active ? num(active.change24h) : null;
   return (
-    <div className="flex flex-wrap gap-1.5 mt-3">
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      {tokens.map((t: any, i: number) => {
-        const sym = t?.symbol ?? "—";
-        const ch = num(t?.change24h);
-        return (
-          <button key={i} onClick={() => setActive({ symbol: sym, change: ch })}
-            className="font-mono text-[10px] px-2 py-0.5 rounded-md border border-[#1A1A2E] bg-[#0a0a10] text-slate-300 hover:border-[#4FC3F740] hover:bg-[#4FC3F708] transition-colors cursor-pointer">
-            <span className="text-slate-200">{sym}</span>
-            {ch != null && <span className="ml-1" style={{ color: ch >= 0 ? GREEN : RED }}>{ch >= 0 ? "+" : ""}{ch.toFixed(1)}%</span>}
-          </button>
-        );
-      })}
+    <div className="mt-3" onClick={e => e.stopPropagation()}>
+      <div className="flex flex-wrap gap-1.5">
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        {tokens.map((t: any, i: number) => {
+          const sym = t?.symbol ?? "—";
+          const ch = num(t?.change24h);
+          const isActive = activeIdx === i;
+          return (
+            <button key={i} onClick={() => setActiveIdx(i)}
+              className="font-mono text-[10px] px-2 py-0.5 rounded-md border transition-all"
+              style={isActive
+                ? { borderColor: "#4FC3F740", background: "#4FC3F710", color: "#4FC3F7" }
+                : { borderColor: "#1A1A2E", background: "#0a0a10", color: "#cbd5e1" }}>
+              <span>{sym}</span>
+              {ch != null && <span className="ml-1" style={{ color: ch >= 0 ? GREEN : RED }}>{ch >= 0 ? "+" : ""}{ch.toFixed(1)}%</span>}
+            </button>
+          );
+        })}
+      </div>
+      {/* Inline chart — expands below chips, no popup */}
       {active && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(5,5,8,0.88)" }} onClick={() => setActive(null)}>
-          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 w-full max-w-xs" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <span className="font-mono text-[15px] font-bold text-white">{active.symbol}</span>
-              <button onClick={() => setActive(null)} className="font-mono text-[13px] text-slate-600 hover:text-slate-300">✕</button>
-            </div>
-            {active.change != null && (
-              <div className="mb-3">
-                <div className="font-mono text-[9px] text-slate-600 uppercase tracking-wider mb-0.5">24h Change</div>
-                <div className="font-mono text-[20px] font-bold" style={{ color: active.change >= 0 ? GREEN : RED }}>
-                  {active.change >= 0 ? "+" : ""}{active.change.toFixed(2)}%
-                </div>
-              </div>
+        <div className="mt-2 rounded-lg border border-[#1A1A2E] bg-[#0a0a10] px-3 py-2.5">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="font-mono text-[11px] font-bold text-white">{activeSym}</span>
+            {activeCh != null && (
+              <span className="font-mono text-[11px] font-bold" style={{ color: activeCh >= 0 ? GREEN : RED }}>
+                {activeCh >= 0 ? "+" : ""}{activeCh.toFixed(2)}% 24h
+              </span>
             )}
-            <a href={`https://dexscreener.com/base?q=${encodeURIComponent(active.symbol)}`} target="_blank" rel="noopener noreferrer"
-              className="block w-full text-center font-mono text-[11px] font-bold py-2 rounded-xl transition-colors"
-              style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-              DexScreener →
-            </a>
           </div>
+          <InlineTokenSpark change24h={activeCh} />
+          <a href={`https://dexscreener.com/base?q=${encodeURIComponent(activeSym)}`} target="_blank" rel="noopener noreferrer"
+            className="mt-1 block text-right font-mono text-[9px] text-slate-700 hover:text-[#4FC3F7] transition-colors">
+            DexScreener ↗
+          </a>
         </div>
       )}
     </div>
@@ -735,17 +737,20 @@ function CardBodyLarge({ item, history }: { item: FeedItem; history: FeedItem[] 
 
 // ─── card shell ─────────────────────────────────────────────────────────────
 
-function FeedCard({ item, history, wide, fresh, delay, onShare, onCast, copied }: {
-  item: FeedItem; history: FeedItem[]; wide?: boolean; fresh?: boolean; delay: number;
-  onShare: () => void; onCast: () => void; copied: boolean;
+function FeedCard({ item, history, fresh, delay, onShare, onCast, copied, highlighted }: {
+  item: FeedItem; history: FeedItem[]; fresh?: boolean; delay: number;
+  onShare: () => void; onCast: () => void; copied: boolean; highlighted?: boolean;
 }) {
   const badge = AGENT[item.agent] ?? AGENT.blue;
   const [expanded, setExpanded] = useState(false);
+  const [mlinkCopied, setMlinkCopied] = useState(false);
   return (
     <>
       <div
-        className={`rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] flex flex-col h-full feed-in ${fresh ? "feed-flash" : ""} p-5 ${wide ? "sm:col-span-2" : ""}`}
+        id={item.id}
+        className={`rounded-2xl border bg-[#0a0a0f] flex flex-col break-inside-avoid mb-4 feed-in feed-card ${fresh ? "feed-flash" : ""} p-5 ${highlighted ? "border-[#4FC3F7]/60 ring-2 ring-[#4FC3F7]/25" : "border-[#1A1A2E]"}`}
         style={{ animationDelay: `${delay}ms` }}
+        onClick={() => setExpanded(true)}
       >
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border"
@@ -759,21 +764,17 @@ function FeedCard({ item, history, wide, fresh, delay, onShare, onCast, copied }
               <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] live-dot" /> New
             </span>
           )}
-          {/* C4 expand button */}
-          <button onClick={() => setExpanded(true)}
-            className="ml-auto font-mono text-[11px] text-slate-700 hover:text-slate-400 transition-colors leading-none"
-            title="Expand">⤢</button>
         </div>
 
         <h3 className="font-bold text-white mb-3 text-base">{item.title}</h3>
 
-        <div className="flex-1">
+        <div>
           <CardBody item={item} history={history} />
         </div>
 
         <div className="flex gap-2 mt-4">
           <div className="relative">
-            <button onClick={onShare}
+            <button onClick={e => { e.stopPropagation(); onShare(); }}
               className="font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white hover:border-[#4FC3F7]/50 transition-colors">
               Share ↗
             </button>
@@ -781,21 +782,22 @@ function FeedCard({ item, history, wide, fresh, delay, onShare, onCast, copied }
               <span className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[10px] px-2 py-1 rounded-md bg-[#34D399] text-[#031b12] feed-in">Link copied!</span>
             )}
           </div>
-          <button onClick={onCast}
+          <button onClick={e => { e.stopPropagation(); onCast(); }}
             className="font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA] hover:bg-[#A78BFA]/10 transition-colors">
             Cast 🟣
           </button>
         </div>
       </div>
 
-      {/* C4 full-screen expand modal */}
+      {/* H2 full-screen expand modal — larger, sticky footer with share */}
       {expanded && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: "rgba(5,5,8,0.92)" }}
           onClick={() => setExpanded(false)}>
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6"
+          <div className="w-[92vw] max-w-5xl max-h-[85vh] rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] flex flex-col"
             onClick={e => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3 mb-4">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-4 shrink-0">
               <div>
                 <span className="font-mono text-[9px] px-2 py-0.5 rounded-full border inline-block mb-2"
                   style={{ color: badge.color, borderColor: `${badge.color}40`, background: `${badge.color}12` }}>
@@ -806,7 +808,27 @@ function FeedCard({ item, history, wide, fresh, delay, onShare, onCast, copied }
               <button onClick={() => setExpanded(false)}
                 className="shrink-0 font-mono text-[13px] text-slate-600 hover:text-white transition-colors mt-1">✕</button>
             </div>
-            <CardBodyLarge item={item} history={history} />
+            {/* Scrollable body */}
+            <div className="flex-1 overflow-y-auto px-6 pb-4">
+              <CardBodyLarge item={item} history={history} />
+            </div>
+            {/* Footer — share + cast */}
+            <div className="shrink-0 px-6 py-4 border-t border-[#1A1A2E] flex items-center gap-2">
+              <button onClick={() => {
+                const url = shareLinkFor(item);
+                try { navigator.clipboard.writeText(url).then(() => { setMlinkCopied(true); setTimeout(() => setMlinkCopied(false), 1800); }).catch(() => {}); }
+                catch { const ta = document.createElement("textarea"); ta.value = url; ta.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); setMlinkCopied(true); setTimeout(() => setMlinkCopied(false), 1800); }
+              }}
+                className="font-mono text-[11px] px-3 py-1.5 rounded-lg border transition-colors"
+                style={mlinkCopied ? { borderColor: "#34D39950", color: "#34D399", background: "#34D39912" } : { borderColor: "#1A1A2E", color: "#94a3b8" }}>
+                {mlinkCopied ? "✓ Copied!" : "Share link ↗"}
+              </button>
+              <button onClick={() => castToFarcaster(shareTextFor(item))}
+                className="font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA] hover:bg-[#A78BFA]/10 transition-colors">
+                Cast 🟣
+              </button>
+              <span className="ml-auto font-mono text-[10px] text-slate-700">{ago(item.timestamp)}</span>
+            </div>
           </div>
         </div>
       )}
@@ -841,8 +863,16 @@ export default function FeedClient() {
   const [copied, setCopied] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | FeedAgent>("all");
   const [freshIds, setFresh] = useState<Set<string>>(new Set());
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const prevTop = useRef<string | null>(null);
   const isDev = process.env.NODE_ENV !== "production";
+
+  // Read ?item= from URL to scroll-to / highlight that card
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const p = new URLSearchParams(window.location.search);
+    setHighlightId(p.get("item"));
+  }, []);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoad(true);
@@ -864,6 +894,15 @@ export default function FeedClient() {
 
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   useEffect(() => { const id = setInterval(() => load(true), 5 * 60 * 1000); return () => clearInterval(id); }, [load]);
+
+  // Scroll to ?item= card once items have loaded
+  useEffect(() => {
+    if (!highlightId || items.length === 0) return;
+    const timer = setTimeout(() => {
+      document.getElementById(highlightId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [highlightId, items]);
 
   const runNow = useCallback(async () => {
     setRun(true);
@@ -1029,7 +1068,7 @@ export default function FeedClient() {
         )}
 
         {loading && items.length === 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          <div className="columns-1 sm:columns-2 lg:columns-3 gap-4">
             <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
           </div>
         )}
@@ -1056,10 +1095,10 @@ export default function FeedClient() {
         )}
 
         {ordered.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          <div className="columns-1 sm:columns-2 lg:columns-3 gap-4">
             {ordered.map((item, idx) => (
               <FeedCard key={item.id} item={item} history={items} delay={Math.min(idx, 10) * 50}
-                fresh={freshIds.has(item.id)} onShare={() => share(item)} onCast={() => castToFarcaster(shareTextFor(item))} copied={copied === item.id} />
+                fresh={freshIds.has(item.id)} onShare={() => share(item)} onCast={() => castToFarcaster(shareTextFor(item))} copied={copied === item.id} highlighted={highlightId === item.id} />
             ))}
           </div>
         )}
