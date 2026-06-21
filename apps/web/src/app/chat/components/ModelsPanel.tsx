@@ -32,6 +32,9 @@ const BEST_FOR: Record<string, string> = {
   "deep-think": "Hard reasoning: audits, architecture, tricky debugging, multi-step analysis.",
   "fable":      "Long-form writing, narrative, and creative copy with a 1M-token context.",
   "private":    "Sensitive prompts — runs end-to-end encrypted with no logs retained.",
+  "gemini":     "Google Gemini 2.5 Flash — multimodal, fast, and strong at structured reasoning tasks.",
+  "kimi":       "Moonshot Kimi K2 — long-context powerhouse, ideal for large docs and extended analysis.",
+  "deepseek":   "DeepSeek V4 · 1M token context at minimal cost. Best for bulk or long-document tasks.",
 };
 
 export default function ModelsPanel({ onPick }: { onPick?: () => void }) {
