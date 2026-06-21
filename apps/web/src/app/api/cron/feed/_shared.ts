@@ -227,20 +227,38 @@ function topTokenFrom(items: FeedItem[]): string {
 export async function runCycle(jobs: Job[]): Promise<{ ok: boolean; added: number; total: number; cycleId: number; token?: string }> {
   const cycleId = Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
 
-  // token-alpha runs AFTER context tools so it can use the cycle's top mover.
+  // token-alpha + whale-tracker run AFTER context tools to use the cycle's top mover.
   const tokenJobs = jobs.filter((j) => j.tool === "token-alpha");
-  const otherJobs = jobs.filter((j) => j.tool !== "token-alpha");
+  const whaleJobs = jobs.filter((j) => j.tool === "whale-tracker");
+  const otherJobs = jobs.filter((j) => j.tool !== "token-alpha" && j.tool !== "whale-tracker");
 
   const otherResults = (await Promise.all(otherJobs.map((j) => callTool(j, cycleId)))).filter((x): x is FeedItem => x !== null);
+
+  const topToken = topTokenFrom(otherResults);
 
   let token: string | undefined;
   let tokenResults: FeedItem[] = [];
   if (tokenJobs.length) {
-    token = topTokenFrom(otherResults);
+    token = topToken;
     tokenResults = (await Promise.all(tokenJobs.map((j) => callTool({ ...j, body: { token } }, cycleId)))).filter((x): x is FeedItem => x !== null);
   }
 
-  const fresh = [...otherResults, ...tokenResults];
+  // whale-tracker uses top mover address from base-pulse top_tokens
+  let whaleResults: FeedItem[] = [];
+  if (whaleJobs.length) {
+    // topTokenFrom returns symbol — get address from base-pulse top_tokens
+    const bp = otherResults.find((r) => r.tool === "base-pulse");
+    const topAddr = Array.isArray((bp?.data as Record<string, unknown>)?.top_tokens)
+      ? ((bp?.data as Record<string, unknown>).top_tokens as Array<{address?: string; token?: string}>)
+          .find((t) => t.token === topToken || t.address)?.address
+      : undefined;
+    whaleResults = (await Promise.all(whaleJobs.map((j) => callTool(
+      topAddr ? { ...j, body: { address: topAddr } } : j,
+      cycleId
+    )))).filter((x): x is FeedItem => x !== null);
+  }
+
+  const fresh = [...otherResults, ...whaleResults, ...tokenResults];
   const context = deriveContext(fresh);
   fresh.forEach((it) => { (it.data as Record<string, unknown>).context = context; });
 
