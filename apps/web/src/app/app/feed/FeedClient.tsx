@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LineChart, Line, BarChart, Bar, Cell, ResponsiveContainer } from "recharts";
+import { LineChart, Line, BarChart, Bar, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import type { FeedItem, FeedAgent } from "@/app/api/cron/feed/route";
 
 // ─── constants / helpers ────────────────────────────────────────────────────
@@ -253,19 +253,13 @@ function BasePulseBody({ item, history, large }: { item: FeedItem; history: Feed
         )}
       </div>
       {tokens.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-3">
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          {tokens.slice(0, large ? 5 : 4).map((t: any, i: number) => { const ch = num(t?.change24h); return (
-            <span key={i} className="font-mono text-[10px] px-2 py-0.5 rounded-md border border-[#1A1A2E] bg-[#0a0a10] text-slate-300">
-              <span className="text-slate-200">{t?.symbol ?? "—"}</span>{ch != null && <span className="ml-1" style={{ color: ch >= 0 ? GREEN : RED }}>{ch >= 0 ? "+" : ""}{ch.toFixed(1)}%</span>}
-            </span>
-          ); })}
-        </div>
+        <TokenChipRow tokens={tokens.slice(0, large ? 5 : 4)} />
       )}
       {chart === "tvl" && (
         <div className="-mx-1 mt-3" style={{ height: large ? 100 : 40 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={tvlSeries.map((v, x) => ({ x, v }))}>
+              <Tooltip contentStyle={{ background: "#0a0a10", border: "1px solid #1A1A2E", borderRadius: 8, fontFamily: "monospace", fontSize: 10 }} /* eslint-disable-next-line @typescript-eslint/no-explicit-any */ formatter={(v: any) => [fmtUsdShort(v) ?? v, "TVL"]} labelStyle={{ display: "none" }} cursor={{ stroke: "#1A1A2E" }} />
               <Line type="monotone" dataKey="v" stroke={GREEN} strokeWidth={large ? 2 : 1.5} dot={false} isAnimationActive />
             </LineChart>
           </ResponsiveContainer>
@@ -277,6 +271,7 @@ function BasePulseBody({ item, history, large }: { item: FeedItem; history: Feed
           <div className="-mx-1" style={{ height: large ? 80 : 36 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pulseSeries.map((v, x) => ({ x, v }))}>
+                <Tooltip contentStyle={{ background: "#0a0a10", border: "1px solid #1A1A2E", borderRadius: 8, fontFamily: "monospace", fontSize: 10 }} /* eslint-disable-next-line @typescript-eslint/no-explicit-any */ formatter={(v: any) => [v, "Pulse"]} labelStyle={{ display: "none" }} cursor={{ fill: "#ffffff08" }} />
                 <Bar dataKey="v" radius={[2, 2, 0, 0]} fill={GREEN} isAnimationActive />
               </BarChart>
             </ResponsiveContainer>
@@ -377,6 +372,7 @@ function TokenAlphaBody({ item, large }: { item: FeedItem; large?: boolean }) {
         <div className="-mx-1 mb-2" style={{ height: 120 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={bars} margin={{ top: 4, bottom: 0, left: 0, right: 0 }}>
+              <Tooltip contentStyle={{ background: "#0a0a10", border: "1px solid #1A1A2E", borderRadius: 8, fontFamily: "monospace", fontSize: 10 }} /* eslint-disable-next-line @typescript-eslint/no-explicit-any */ formatter={(v: any) => [`$${v}`, ""]} labelFormatter={(l) => l} cursor={{ fill: "#ffffff08" }} />
               <Bar dataKey="value" radius={[4, 4, 0, 0]} isAnimationActive>{bars.map((b, i) => <Cell key={i} fill={b.fill} />)}</Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -543,20 +539,83 @@ function NewPoolsBody({ item }: { item: FeedItem }) {
   );
 }
 
+// C3 — Token chip with click-to-expand modal (DexScreener search link)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function TokenChipRow({ tokens }: { tokens: any[] }) {
+  const [active, setActive] = useState<{ symbol: string; change: number | null } | null>(null);
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-3">
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      {tokens.map((t: any, i: number) => {
+        const sym = t?.symbol ?? "—";
+        const ch = num(t?.change24h);
+        return (
+          <button key={i} onClick={() => setActive({ symbol: sym, change: ch })}
+            className="font-mono text-[10px] px-2 py-0.5 rounded-md border border-[#1A1A2E] bg-[#0a0a10] text-slate-300 hover:border-[#4FC3F740] hover:bg-[#4FC3F708] transition-colors cursor-pointer">
+            <span className="text-slate-200">{sym}</span>
+            {ch != null && <span className="ml-1" style={{ color: ch >= 0 ? GREEN : RED }}>{ch >= 0 ? "+" : ""}{ch.toFixed(1)}%</span>}
+          </button>
+        );
+      })}
+      {active && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(5,5,8,0.88)" }} onClick={() => setActive(null)}>
+          <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 w-full max-w-xs" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="font-mono text-[15px] font-bold text-white">{active.symbol}</span>
+              <button onClick={() => setActive(null)} className="font-mono text-[13px] text-slate-600 hover:text-slate-300">✕</button>
+            </div>
+            {active.change != null && (
+              <div className="mb-3">
+                <div className="font-mono text-[9px] text-slate-600 uppercase tracking-wider mb-0.5">24h Change</div>
+                <div className="font-mono text-[20px] font-bold" style={{ color: active.change >= 0 ? GREEN : RED }}>
+                  {active.change >= 0 ? "+" : ""}{active.change.toFixed(2)}%
+                </div>
+              </div>
+            )}
+            <a href={`https://dexscreener.com/base?q=${encodeURIComponent(active.symbol)}`} target="_blank" rel="noopener noreferrer"
+              className="block w-full text-center font-mono text-[11px] font-bold py-2 rounded-xl transition-colors"
+              style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+              DexScreener →
+            </a>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// C2 — BlueStream horizontal bar chart (trending tokens by 24h change%)
 function BlueStreamBody({ item }: { item: FeedItem }) {
   const r = raw(item);
-  const trending = (Array.isArray(r.trending) ? r.trending : []).slice(0, 5);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const trending = (Array.isArray(r.trending) ? r.trending : []).slice(0, 6) as any[];
   const newp = Array.isArray(r.new_pools) ? r.new_pools : [];
+  const changes = trending.map((t) => num(t?.change_24h ?? t?.change ?? t?.priceChange)).filter((c): c is number => c !== null);
+  const maxAbs = changes.length > 0 ? Math.max(...changes.map(Math.abs), 1) : 1;
+
+  if (trending.length === 0) return <p className="text-[13px] text-slate-400">{item.summary}</p>;
   return (
     <>
       <div className="flex gap-5 mb-3">
         <Stat label="Trending" value={`${trending.length}`} />
         <Stat label="New pools" value={`${newp.length}`} />
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        {trending.map((t: any, i: number) => { const ch = num(t?.change_24h ?? t?.change ?? t?.priceChange); return (
-          <Chip key={i}><span className="text-slate-200">{t?.token ?? t?.symbol ?? t?.baseSymbol ?? "—"}</span>{ch != null && <span className="ml-1" style={{ color: ch >= 0 ? GREEN : RED }}>{ch >= 0 ? "+" : ""}{ch.toFixed(1)}%</span>}</Chip>
-        ); })}
+      <div className="flex flex-col gap-1.5">
+        {trending.map((t, i) => {
+          const ch = num(t?.change_24h ?? t?.change ?? t?.priceChange);
+          const sym = t?.token ?? t?.symbol ?? t?.baseSymbol ?? "—";
+          const color = ch == null ? "#64748b" : ch >= 0 ? GREEN : RED;
+          const pct = ch == null ? 0 : (Math.abs(ch) / maxAbs) * 100;
+          return (
+            <div key={i} className="flex items-center gap-2">
+              <span className="font-mono text-[10px] text-slate-300 w-16 shrink-0 truncate">{sym}</span>
+              <div className="flex-1 h-1.5 rounded-full bg-[#1A1A2E] overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.max(pct, 4)}%`, background: color, opacity: 0.8 }} />
+              </div>
+              {ch != null && <span className="font-mono text-[10px] w-14 text-right shrink-0" style={{ color }}>{ch >= 0 ? "+" : ""}{ch.toFixed(1)}%</span>}
+            </div>
+          );
+        })}
       </div>
     </>
   );
@@ -646,6 +705,34 @@ function CardBody({ item, history }: { item: FeedItem; history: FeedItem[] }) {
   }
 }
 
+// C4 — Large body for full-screen expand modal
+function CardBodyLarge({ item, history }: { item: FeedItem; history: FeedItem[] }) {
+  switch (item.tool) {
+    case "base-pulse":      return <BasePulseBody item={item} history={history} large />;
+    case "token-alpha":     return <TokenAlphaBody item={item} large />;
+    case "narrative-pulse": return <NarrativeBody item={item} />;
+    case "whale-tracker":   return <WhaleBody item={item} />;
+    case "base-alpha":      return <BaseAlphaBody item={item} />;
+    case "ecosystem-digest": return <EcosystemDigestBody item={item} />;
+    case "new-pools":        return <NewPoolsBody item={item} />;
+    case "blue-stream":      return <BlueStreamBody item={item} />;
+    case "token-momentum-scanner": return <MomentumBody item={item} />;
+    case "narrative-position":     return <NarrativePositionBody item={item} />;
+    case "defi-opportunity":       return <DefiOpportunityBody item={item} />;
+    default: {
+      const ms = metricsOf(item);
+      return (
+        <>
+          <p className="text-[13px] text-slate-400 leading-relaxed mb-3">{item.summary}</p>
+          {ms.length > 0 && (
+            <div className="flex flex-wrap gap-x-5 gap-y-2">{ms.map((m, i) => <Stat key={i} label={m.label} value={m.value} />)}</div>
+          )}
+        </>
+      );
+    }
+  }
+}
+
 // ─── card shell ─────────────────────────────────────────────────────────────
 
 function FeedCard({ item, history, wide, fresh, delay, onShare, onCast, copied }: {
@@ -653,49 +740,77 @@ function FeedCard({ item, history, wide, fresh, delay, onShare, onCast, copied }
   onShare: () => void; onCast: () => void; copied: boolean;
 }) {
   const badge = AGENT[item.agent] ?? AGENT.blue;
-  // Uniform card — same primitive as BlueBank (rounded-2xl, #0a0a0f, #1A1A2E
-  // border, p-5). No per-tool tint/accent: cards stay consistent across the app.
+  const [expanded, setExpanded] = useState(false);
   return (
-    <div
-      className={`rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] flex flex-col h-full feed-in ${fresh ? "feed-flash" : ""} p-5 ${wide ? "sm:col-span-2" : ""}`}
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border"
-          style={{ color: badge.color, borderColor: `${badge.color}40`, background: `${badge.color}12` }}>
-          {badge.emoji} {badge.label}
-        </span>
-        <span className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">{item.tool}</span>
-        <span className="font-mono text-[10px] text-slate-700">· {ago(item.timestamp)}</span>
-        {fresh && (
-          <span className="ml-auto flex items-center gap-1.5 font-mono text-[9px] text-[#34D399] uppercase tracking-widest">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] live-dot" /> New
+    <>
+      <div
+        className={`rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] flex flex-col h-full feed-in ${fresh ? "feed-flash" : ""} p-5 ${wide ? "sm:col-span-2" : ""}`}
+        style={{ animationDelay: `${delay}ms` }}
+      >
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border"
+            style={{ color: badge.color, borderColor: `${badge.color}40`, background: `${badge.color}12` }}>
+            {badge.emoji} {badge.label}
           </span>
-        )}
-      </div>
-
-      <h3 className="font-bold text-white mb-3 text-base">{item.title}</h3>
-
-      <div className="flex-1">
-        <CardBody item={item} history={history} />
-      </div>
-
-      <div className="flex gap-2 mt-4">
-        <div className="relative">
-          <button onClick={onShare}
-            className="font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white hover:border-[#4FC3F7]/50 transition-colors">
-            Share ↗
-          </button>
-          {copied && (
-            <span className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[10px] px-2 py-1 rounded-md bg-[#34D399] text-[#031b12] feed-in">Link copied!</span>
+          <span className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">{item.tool}</span>
+          <span className="font-mono text-[10px] text-slate-700">· {ago(item.timestamp)}</span>
+          {fresh && (
+            <span className="ml-auto flex items-center gap-1.5 font-mono text-[9px] text-[#34D399] uppercase tracking-widest">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] live-dot" /> New
+            </span>
           )}
+          {/* C4 expand button */}
+          <button onClick={() => setExpanded(true)}
+            className="ml-auto font-mono text-[11px] text-slate-700 hover:text-slate-400 transition-colors leading-none"
+            title="Expand">⤢</button>
         </div>
-        <button onClick={onCast}
-          className="font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA] hover:bg-[#A78BFA]/10 transition-colors">
-          Cast 🟣
-        </button>
+
+        <h3 className="font-bold text-white mb-3 text-base">{item.title}</h3>
+
+        <div className="flex-1">
+          <CardBody item={item} history={history} />
+        </div>
+
+        <div className="flex gap-2 mt-4">
+          <div className="relative">
+            <button onClick={onShare}
+              className="font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white hover:border-[#4FC3F7]/50 transition-colors">
+              Share ↗
+            </button>
+            {copied && (
+              <span className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[10px] px-2 py-1 rounded-md bg-[#34D399] text-[#031b12] feed-in">Link copied!</span>
+            )}
+          </div>
+          <button onClick={onCast}
+            className="font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA] hover:bg-[#A78BFA]/10 transition-colors">
+            Cast 🟣
+          </button>
+        </div>
       </div>
-    </div>
+
+      {/* C4 full-screen expand modal */}
+      {expanded && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(5,5,8,0.92)" }}
+          onClick={() => setExpanded(false)}>
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <span className="font-mono text-[9px] px-2 py-0.5 rounded-full border inline-block mb-2"
+                  style={{ color: badge.color, borderColor: `${badge.color}40`, background: `${badge.color}12` }}>
+                  {badge.emoji} {badge.label} · {item.tool}
+                </span>
+                <h3 className="font-bold text-white text-lg leading-snug">{item.title}</h3>
+              </div>
+              <button onClick={() => setExpanded(false)}
+                className="shrink-0 font-mono text-[13px] text-slate-600 hover:text-white transition-colors mt-1">✕</button>
+            </div>
+            <CardBodyLarge item={item} history={history} />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -899,6 +1014,19 @@ export default function FeedClient() {
             </button>
           ))}
         </div>
+
+        {/* C5 Beryl banner — shows until June 30 2026 */}
+        {Date.now() < new Date("2026-06-30T00:00:00Z").getTime() && (
+          <div className="mb-4 rounded-xl border border-[#4FC3F730] bg-[#4FC3F708] px-4 py-3 flex items-center gap-3">
+            <span className="text-[16px] shrink-0">⚡</span>
+            <div className="flex-1 min-w-0">
+              <p className="font-mono text-[11px] font-bold text-[#4FC3F7]">Beryl upgrade live on Base · June 25, 2026</p>
+              <p className="font-mono text-[10px] text-slate-500 mt-0.5">B20 native token standard · 5-day withdrawal finalization · Reth V2 node</p>
+            </div>
+            <a href="https://docs.base.org/base-chain/specs/upgrades/beryl/overview" target="_blank" rel="noopener noreferrer"
+              className="font-mono text-[10px] text-[#4FC3F7] hover:underline shrink-0 whitespace-nowrap">Docs →</a>
+          </div>
+        )}
 
         {loading && items.length === 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
