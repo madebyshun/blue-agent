@@ -224,12 +224,6 @@ function BasePulseBody({ item, history, large }: { item: FeedItem; history: Feed
   const pulse = num(r.pulse_score);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tokens: any[] = Array.isArray(r.top_tokens) ? r.top_tokens : [];
-  const bpHist = history.filter((i) => i.tool === "base-pulse").slice(0, 14).reverse();
-  const tvlSeries = bpHist.map((i) => num(raw(i).tvl_usd)).filter((v): v is number => v != null);
-  const pulseSeries = bpHist.map((i) => num(raw(i).pulse_score)).filter((v): v is number => v != null);
-  const varies = (a: number[]) => { if (a.length < 2) return false; const mx = Math.max(...a), mn = Math.min(...a); return mx > 0 && (mx - mn) / mx > 0.005; };
-  // Flat TVL → no meaningful sparkline; fall back to pulse-score bars, else hide.
-  const chart: "tvl" | "pulse" | null = varies(tvlSeries) ? "tvl" : varies(pulseSeries) ? "pulse" : null;
   return (
     <>
       <div className="flex items-start gap-4">
@@ -254,29 +248,6 @@ function BasePulseBody({ item, history, large }: { item: FeedItem; history: Feed
       </div>
       {tokens.length > 0 && (
         <TokenChipRow tokens={tokens.slice(0, large ? 5 : 4)} />
-      )}
-      {chart === "tvl" && (
-        <div className="-mx-1 mt-3" style={{ height: large ? 100 : 40 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={tvlSeries.map((v, x) => ({ x, v }))}>
-              <Tooltip contentStyle={{ background: "#0a0a10", border: "1px solid #1A1A2E", borderRadius: 8, fontFamily: "monospace", fontSize: 10 }} /* eslint-disable-next-line @typescript-eslint/no-explicit-any */ formatter={(v: any) => [fmtUsdShort(v) ?? v, "TVL"]} labelStyle={{ display: "none" }} cursor={{ stroke: "#1A1A2E" }} />
-              <Line type="monotone" dataKey="v" stroke={GREEN} strokeWidth={large ? 2 : 1.5} dot={false} isAnimationActive />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-      {chart === "pulse" && (
-        <div className="mt-3">
-          <div className="font-mono text-[9px] text-slate-600 uppercase tracking-wider mb-1">Pulse history</div>
-          <div className="-mx-1" style={{ height: large ? 80 : 36 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={pulseSeries.map((v, x) => ({ x, v }))}>
-                <Tooltip contentStyle={{ background: "#0a0a10", border: "1px solid #1A1A2E", borderRadius: 8, fontFamily: "monospace", fontSize: 10 }} /* eslint-disable-next-line @typescript-eslint/no-explicit-any */ formatter={(v: any) => [v, "Pulse"]} labelStyle={{ display: "none" }} cursor={{ fill: "#ffffff08" }} />
-                <Bar dataKey="v" radius={[2, 2, 0, 0]} fill={GREEN} isAnimationActive />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
       )}
     </>
   );
@@ -503,11 +474,7 @@ function EcosystemDigestBody({ item }: { item: FeedItem }) {
       {movers.length > 0 && (
         <div className="mb-3">
           <div className="font-mono text-[9px] text-slate-600 uppercase tracking-wider mb-1.5">Top movers</div>
-          <div className="flex flex-wrap gap-1.5">
-            {movers.map((m: any, i: number) => { const ch = num(m?.change_24h ?? m?.change ?? m?.priceChange); return (
-              <Chip key={i}><span className="text-slate-200">{m?.token ?? m?.symbol ?? "—"}</span>{ch != null && <span className="ml-1" style={{ color: ch >= 0 ? GREEN : RED }}>{ch >= 0 ? "+" : ""}{ch.toFixed(1)}%</span>}</Chip>
-            ); })}
-          </div>
+          <TokenChipRow tokens={movers.map((m: any) => ({ symbol: m?.token ?? m?.symbol ?? "—", change24h: m?.change_24h ?? m?.change ?? m?.priceChange }))} />
         </div>
       )}
       {narrs.length > 0 && (
@@ -539,15 +506,32 @@ function NewPoolsBody({ item }: { item: FeedItem }) {
   );
 }
 
-// H3 — Inline token sparkline (simulated from change24h) — no popup, chart in-card
+// H3 — Interactive token sparkline (recharts LineChart with hover tooltip)
 function InlineTokenSpark({ change24h }: { change24h: number | null }) {
   if (change24h == null) return <div className="h-10 flex items-center font-mono text-[10px] text-slate-700">No data</div>;
+  const color = change24h >= 0 ? GREEN : RED;
   const end = 100, start = 100 / (1 + change24h / 100);
-  const pts = Array.from({ length: 8 }, (_, i) => {
-    const t = i / 7;
-    return start + (end - start) * Math.pow(t, 0.65) + Math.sin(t * 4.7 + change24h * 0.1) * Math.abs(end - start) * 0.08;
+  const data = Array.from({ length: 14 }, (_, i) => {
+    const t = i / 13;
+    return { i, v: start + (end - start) * Math.pow(t, 0.65) + Math.sin(t * 4.7 + change24h * 0.1) * Math.abs(end - start) * 0.06 };
   });
-  return <Spark points={pts} color={change24h >= 0 ? GREEN : RED} height={40} />;
+  return (
+    <div style={{ height: 48 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 3, bottom: 3, left: 0, right: 0 }}>
+          <Tooltip
+            contentStyle={{ background: "#0a0a10", border: `1px solid ${color}30`, borderRadius: 6, fontFamily: "monospace", fontSize: 9, padding: "3px 8px" }}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            formatter={(_v: any) => [`${change24h >= 0 ? "+" : ""}${change24h.toFixed(2)}% 24h`, ""]}
+            labelFormatter={() => ""}
+            cursor={{ stroke: color, strokeWidth: 1, strokeDasharray: "3 2" }}
+            isAnimationActive={false}
+          />
+          <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} dot={false} isAnimationActive animationDuration={500} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
 }
 
 // C3 — Token chip row: click toggles inline sparkline chart inside card
@@ -750,16 +734,17 @@ function CardBodyLarge({ item, history }: { item: FeedItem; history: FeedItem[] 
 
 // ─── card shell ─────────────────────────────────────────────────────────────
 
-function FeedCard({ item, history, wide, fresh, delay, onShare, onCast, copied }: {
-  item: FeedItem; history: FeedItem[]; wide?: boolean; fresh?: boolean; delay: number;
+function FeedCard({ item, history, fresh, delay, onShare, onCast, copied }: {
+  item: FeedItem; history: FeedItem[]; fresh?: boolean; delay: number;
   onShare: () => void; onCast: () => void; copied: boolean;
 }) {
   const badge = AGENT[item.agent] ?? AGENT.blue;
   const [expanded, setExpanded] = useState(false);
+  const [mlinkCopied, setMlinkCopied] = useState(false);
   return (
     <>
       <div
-        className={`rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] flex flex-col h-full feed-in feed-card ${fresh ? "feed-flash" : ""} p-5 ${wide ? "sm:col-span-2" : ""}`}
+        className={`rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] flex flex-col break-inside-avoid mb-4 feed-in feed-card ${fresh ? "feed-flash" : ""} p-5`}
         style={{ animationDelay: `${delay}ms` }}
         onClick={() => setExpanded(true)}
       >
@@ -779,7 +764,7 @@ function FeedCard({ item, history, wide, fresh, delay, onShare, onCast, copied }
 
         <h3 className="font-bold text-white mb-3 text-base">{item.title}</h3>
 
-        <div className="flex-1">
+        <div>
           <CardBody item={item} history={history} />
         </div>
 
@@ -805,7 +790,7 @@ function FeedCard({ item, history, wide, fresh, delay, onShare, onCast, copied }
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: "rgba(5,5,8,0.92)" }}
           onClick={() => setExpanded(false)}>
-          <div className="w-[92vw] max-w-5xl h-[88vh] rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] flex flex-col"
+          <div className="w-[92vw] max-w-5xl max-h-[85vh] rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] flex flex-col"
             onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-4 shrink-0">
@@ -825,9 +810,14 @@ function FeedCard({ item, history, wide, fresh, delay, onShare, onCast, copied }
             </div>
             {/* Footer — share + cast */}
             <div className="shrink-0 px-6 py-4 border-t border-[#1A1A2E] flex items-center gap-2">
-              <button onClick={() => { navigator.clipboard?.writeText(shareLinkFor(item)); }}
-                className="font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white hover:border-[#4FC3F7]/50 transition-colors">
-                Share link ↗
+              <button onClick={() => {
+                const url = shareLinkFor(item);
+                try { navigator.clipboard.writeText(url).then(() => { setMlinkCopied(true); setTimeout(() => setMlinkCopied(false), 1800); }).catch(() => {}); }
+                catch { const ta = document.createElement("textarea"); ta.value = url; ta.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); setMlinkCopied(true); setTimeout(() => setMlinkCopied(false), 1800); }
+              }}
+                className="font-mono text-[11px] px-3 py-1.5 rounded-lg border transition-colors"
+                style={mlinkCopied ? { borderColor: "#34D39950", color: "#34D399", background: "#34D39912" } : { borderColor: "#1A1A2E", color: "#94a3b8" }}>
+                {mlinkCopied ? "✓ Copied!" : "Share link ↗"}
               </button>
               <button onClick={() => castToFarcaster(shareTextFor(item))}
                 className="font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA] hover:bg-[#A78BFA]/10 transition-colors">
@@ -1057,7 +1047,7 @@ export default function FeedClient() {
         )}
 
         {loading && items.length === 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          <div className="columns-1 sm:columns-2 lg:columns-3 gap-4">
             <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
           </div>
         )}
@@ -1084,7 +1074,7 @@ export default function FeedClient() {
         )}
 
         {ordered.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          <div className="columns-1 sm:columns-2 lg:columns-3 gap-4">
             {ordered.map((item, idx) => (
               <FeedCard key={item.id} item={item} history={items} delay={Math.min(idx, 10) * 50}
                 fresh={freshIds.has(item.id)} onShare={() => share(item)} onCast={() => castToFarcaster(shareTextFor(item))} copied={copied === item.id} />
