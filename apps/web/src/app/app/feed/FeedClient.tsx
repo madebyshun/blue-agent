@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LineChart, Line, BarChart, Bar, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { LineChart, Line, YAxis, BarChart, Bar, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import type { FeedItem, FeedAgent } from "@/app/api/cron/feed/route";
 
 // ─── constants / helpers ────────────────────────────────────────────────────
@@ -506,19 +506,22 @@ function NewPoolsBody({ item }: { item: FeedItem }) {
   );
 }
 
-// H3 — Interactive token sparkline (recharts LineChart with hover tooltip)
+// H3 — Interactive token sparkline: linear trend from 0→change24h with noise + explicit YAxis domain
 function InlineTokenSpark({ change24h }: { change24h: number | null }) {
   if (change24h == null) return <div className="h-10 flex items-center font-mono text-[10px] text-slate-700">No data</div>;
   const color = change24h >= 0 ? GREEN : RED;
-  const end = 100, start = 100 / (1 + change24h / 100);
+  // Linear trend from 0 to change24h so the slope is always clearly visible
   const data = Array.from({ length: 14 }, (_, i) => {
     const t = i / 13;
-    return { i, v: start + (end - start) * Math.pow(t, 0.65) + Math.sin(t * 4.7 + change24h * 0.1) * Math.abs(end - start) * 0.06 };
+    const trend = change24h * t;
+    const noise = Math.abs(change24h) * 0.1 * Math.sin(i * 1.8 + change24h * 0.25);
+    return { i, v: trend + noise };
   });
   return (
-    <div style={{ height: 48 }}>
+    <div style={{ height: 52 }}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 3, bottom: 3, left: 0, right: 0 }}>
+        <LineChart data={data} margin={{ top: 4, bottom: 4, left: 0, right: 0 }}>
+          <YAxis domain={["auto", "auto"]} hide />
           <Tooltip
             contentStyle={{ background: "#0a0a10", border: `1px solid ${color}30`, borderRadius: 6, fontFamily: "monospace", fontSize: 9, padding: "3px 8px" }}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -534,11 +537,11 @@ function InlineTokenSpark({ change24h }: { change24h: number | null }) {
   );
 }
 
-// C3 — Token chip row: click toggles inline sparkline chart inside card
+// C3 — Token chip row: first chip auto-selected; click switches chart
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function TokenChipRow({ tokens }: { tokens: any[] }) {
-  const [activeIdx, setActiveIdx] = useState<number | null>(null);
-  const active = activeIdx != null ? tokens[activeIdx] : null;
+  const [activeIdx, setActiveIdx] = useState<number>(0);
+  const active = tokens[activeIdx] ?? null;
   const activeSym = active?.symbol ?? "—";
   const activeCh = active ? num(active.change24h) : null;
   return (
@@ -550,7 +553,7 @@ function TokenChipRow({ tokens }: { tokens: any[] }) {
           const ch = num(t?.change24h);
           const isActive = activeIdx === i;
           return (
-            <button key={i} onClick={() => setActiveIdx(isActive ? null : i)}
+            <button key={i} onClick={() => setActiveIdx(i)}
               className="font-mono text-[10px] px-2 py-0.5 rounded-md border transition-all"
               style={isActive
                 ? { borderColor: "#4FC3F740", background: "#4FC3F710", color: "#4FC3F7" }
@@ -734,9 +737,9 @@ function CardBodyLarge({ item, history }: { item: FeedItem; history: FeedItem[] 
 
 // ─── card shell ─────────────────────────────────────────────────────────────
 
-function FeedCard({ item, history, fresh, delay, onShare, onCast, copied }: {
+function FeedCard({ item, history, fresh, delay, onShare, onCast, copied, highlighted }: {
   item: FeedItem; history: FeedItem[]; fresh?: boolean; delay: number;
-  onShare: () => void; onCast: () => void; copied: boolean;
+  onShare: () => void; onCast: () => void; copied: boolean; highlighted?: boolean;
 }) {
   const badge = AGENT[item.agent] ?? AGENT.blue;
   const [expanded, setExpanded] = useState(false);
@@ -744,7 +747,8 @@ function FeedCard({ item, history, fresh, delay, onShare, onCast, copied }: {
   return (
     <>
       <div
-        className={`rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] flex flex-col break-inside-avoid mb-4 feed-in feed-card ${fresh ? "feed-flash" : ""} p-5`}
+        id={item.id}
+        className={`rounded-2xl border bg-[#0a0a0f] flex flex-col break-inside-avoid mb-4 feed-in feed-card ${fresh ? "feed-flash" : ""} p-5 ${highlighted ? "border-[#4FC3F7]/60 ring-2 ring-[#4FC3F7]/25" : "border-[#1A1A2E]"}`}
         style={{ animationDelay: `${delay}ms` }}
         onClick={() => setExpanded(true)}
       >
@@ -859,8 +863,16 @@ export default function FeedClient() {
   const [copied, setCopied] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | FeedAgent>("all");
   const [freshIds, setFresh] = useState<Set<string>>(new Set());
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const prevTop = useRef<string | null>(null);
   const isDev = process.env.NODE_ENV !== "production";
+
+  // Read ?item= from URL to scroll-to / highlight that card
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const p = new URLSearchParams(window.location.search);
+    setHighlightId(p.get("item"));
+  }, []);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoad(true);
@@ -882,6 +894,15 @@ export default function FeedClient() {
 
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   useEffect(() => { const id = setInterval(() => load(true), 5 * 60 * 1000); return () => clearInterval(id); }, [load]);
+
+  // Scroll to ?item= card once items have loaded
+  useEffect(() => {
+    if (!highlightId || items.length === 0) return;
+    const timer = setTimeout(() => {
+      document.getElementById(highlightId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [highlightId, items]);
 
   const runNow = useCallback(async () => {
     setRun(true);
@@ -1077,7 +1098,7 @@ export default function FeedClient() {
           <div className="columns-1 sm:columns-2 lg:columns-3 gap-4">
             {ordered.map((item, idx) => (
               <FeedCard key={item.id} item={item} history={items} delay={Math.min(idx, 10) * 50}
-                fresh={freshIds.has(item.id)} onShare={() => share(item)} onCast={() => castToFarcaster(shareTextFor(item))} copied={copied === item.id} />
+                fresh={freshIds.has(item.id)} onShare={() => share(item)} onCast={() => castToFarcaster(shareTextFor(item))} copied={copied === item.id} highlighted={highlightId === item.id} />
             ))}
           </div>
         )}
