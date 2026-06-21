@@ -183,7 +183,9 @@ export default function BankPage() {
     return () => { off = true; };
   }, [acct, network, txReload]);
 
-  // Aggregate wallet tx history into monthly cash flow buckets (last 6 months).
+  // Aggregate USDC-only wallet history into monthly cash flow buckets.
+  // Leading months with zero activity are trimmed so the chart doesn't show
+  // empty columns. Only USDC/USDbC transfers are counted (not raw ETH amounts).
   const cashFlowData = useMemo(() => {
     const months: Array<{ month: string; key: string; inflow: number; outflow: number }> = [];
     for (let i = 5; i >= 0; i--) {
@@ -194,6 +196,7 @@ export default function BankPage() {
       months.push({ month: d.toLocaleDateString("en-US", { month: "short" }), key, inflow: 0, outflow: 0 });
     }
     for (const tx of txData?.transactions ?? []) {
+      if (tx.asset !== "USDC" && tx.asset !== "USDbC") continue;
       const d = new Date(tx.ts);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       const bucket = months.find(m => m.key === key);
@@ -201,18 +204,25 @@ export default function BankPage() {
       if (tx.dir === "in") bucket.inflow += tx.amount;
       else if (tx.dir === "out") bucket.outflow += tx.amount;
     }
-    return months.map(({ month, inflow, outflow }) => ({ month, inflow, outflow }));
+    const all = months.map(({ month, inflow, outflow }) => ({ month, inflow, outflow }));
+    // Drop leading empty months so chart starts where data begins.
+    const first = all.findIndex(m => m.inflow > 0 || m.outflow > 0);
+    return first > 0 ? all.slice(first) : all;
   }, [txData]);
 
-  // Unique sent-to addresses from recent transactions → Quick Send shortcuts.
+  // Unique sent-to addresses → Quick Send. Dedup case-insensitively (checksummed
+  // vs lowercase can produce the same address from different Moralis rows).
   const recentContacts = useMemo(() => {
     const seen = new Set<string>();
     const result: string[] = [];
     for (const tx of txData?.transactions ?? []) {
-      if (tx.kind === "sent" && tx.counterparty && !seen.has(tx.counterparty)) {
-        seen.add(tx.counterparty);
-        result.push(tx.counterparty);
-        if (result.length >= 6) break;
+      if (tx.kind === "sent" && tx.counterparty) {
+        const key = tx.counterparty.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          result.push(tx.counterparty);
+          if (result.length >= 6) break;
+        }
       }
     }
     return result;
@@ -352,60 +362,65 @@ export default function BankPage() {
           {/* Top row: cash balance + quick actions (left) + assets & rates (right) */}
           <div className="grid lg:grid-cols-[3fr_2fr] gap-4 mb-4">
 
-            {/* Left column: Cash Balance card + compact Quick Actions grid */}
-            <div className="flex flex-col gap-3">
+            {/* Left column: Cash Balance card (actions integrated inside) */}
+            <div>
 
               <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
                 <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH BALANCE · {net.short}</div>
-                <div className="flex items-center gap-4 mb-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-mono text-2xl font-bold text-white">${usd(total)} <span className="text-sm text-slate-500">USDC</span></div>
-                    <div className="font-mono text-[11px] text-slate-500 mt-0.5">
-                      {usd(walletUsdc)} in wallet · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
-                    </div>
-                    {netFlowMonth !== 0 && (
-                      <div className="font-mono text-[11px]" style={{ color: netFlowMonth >= 0 ? "#34D399" : "#EF4444" }}>
-                        {netFlowMonth >= 0 ? "+" : "−"}${usd(Math.abs(netFlowMonth))} USDC this month
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-1.5 shrink-0">
-                    <button onClick={() => openAction("receive")}
-                      className="font-mono text-[11px] font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-1 transition-colors"
-                      style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
-                      ⬇ Receive
-                    </button>
-                    <button onClick={() => openAction("send")}
-                      className="font-mono text-[11px] font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-1 transition-opacity hover:opacity-90"
-                      style={{ background: "#4FC3F7", color: "#050508" }}>
-                      ➡ Send
-                    </button>
-                  </div>
+
+                {/* Anchor number — visually dominant */}
+                <div className="font-mono text-[34px] sm:text-[40px] font-bold text-[#34D399] leading-none mb-1">
+                  ${usd(total)}
+                </div>
+                <div className="font-mono text-[10px] text-slate-600 mb-3">
+                  {usd(walletUsdc)} USDC · {usd(inYield)} earning{ethBal != null ? ` · ${ethBal.toFixed(4)} ETH` : ""}
+                  {netFlowMonth !== 0 && (
+                    <span className="ml-2 font-medium" style={{ color: netFlowMonth >= 0 ? "#34D399" : "#EF4444" }}>
+                      {netFlowMonth >= 0 ? "+" : "−"}${usd(Math.abs(netFlowMonth))} this month
+                    </span>
+                  )}
+                </div>
+
+                {/* Primary CTAs */}
+                <div className="flex gap-2 mb-2">
+                  <button onClick={() => openAction("receive")}
+                    className="flex-1 font-mono text-[11px] font-bold py-2.5 rounded-xl transition-colors"
+                    style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
+                    ⬇ Receive
+                  </button>
+                  <button onClick={() => openAction("send")}
+                    className="flex-1 font-mono text-[11px] font-bold py-2.5 rounded-xl hover:opacity-90 transition-opacity"
+                    style={{ background: "#4FC3F7", color: "#050508" }}>
+                    ➡ Send
+                  </button>
                 </div>
 
                 <button onClick={addCash} disabled={onrampBusy || !isConnected}
-                  className="w-full font-mono text-[12px] font-bold px-4 py-2.5 rounded-xl mt-1 disabled:opacity-50"
-                  style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>
+                  className="w-full font-mono text-[11px] font-bold px-4 py-2 rounded-xl mb-2 disabled:opacity-50"
+                  style={{ background: "#34D39910", color: "#34D399", border: "1px solid #34D39930" }}>
                   {onrampBusy ? "Starting…" : "💵 Add cash · card / bank → USDC"}
                 </button>
-                {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-1">{onrampMsg}</div>}
-                <div className="font-mono text-[9px] text-slate-600 mt-1">via Coinbase · available in select regions · or fund with Receive</div>
-              </div>
+                {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mb-1">{onrampMsg}</div>}
 
-              {/* Quick Actions — compact 2×2, fills left column to match right */}
-              <div className="grid grid-cols-2 gap-2 flex-1">
-                {TABS.filter(t => t.id !== "send" && t.id !== "receive").map(tb => (
-                  <button key={tb.id} onClick={() => openAction(tb.id)}
-                    className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3 py-3 flex items-center gap-2.5 hover:border-[#4FC3F7]/40 hover:bg-[#0d0d14] transition-all text-left">
-                    <span className="text-base leading-none shrink-0">{tb.icon}</span>
-                    <div className="font-mono text-[11px] font-medium text-slate-200">{tb.label}</div>
-                  </button>
-                ))}
-                <button onClick={cashOut} disabled={cashOutBusy || !isConnected}
-                  className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3 py-3 flex items-center gap-2.5 hover:border-[#4FC3F7]/40 hover:bg-[#0d0d14] transition-all text-left disabled:opacity-50">
-                  <span className="text-base leading-none shrink-0">🏦</span>
-                  <div className="font-mono text-[11px] font-medium text-slate-200">{cashOutBusy ? "Starting…" : "Cash out"}</div>
-                </button>
+                {/* Compact secondary actions — single row, no empty cards */}
+                <div className="border-t border-[#1A1A2E] pt-2 mt-1">
+                  <div className="flex gap-1">
+                    {TABS.filter(t => t.id !== "send" && t.id !== "receive").map(tb => (
+                      <button key={tb.id} onClick={() => openAction(tb.id)}
+                        className="flex-1 font-mono text-[9px] py-2 rounded-lg border border-[#1A1A2E] hover:border-[#4FC3F7]/30 hover:text-slate-300 transition-all flex flex-col items-center gap-0.5 text-slate-500"
+                        style={{ background: "#050508" }}>
+                        <span className="text-sm leading-none">{tb.icon}</span>
+                        {tb.label}
+                      </button>
+                    ))}
+                    <button onClick={cashOut} disabled={cashOutBusy || !isConnected}
+                      className="flex-1 font-mono text-[9px] py-2 rounded-lg border border-[#1A1A2E] hover:border-[#4FC3F7]/30 hover:text-slate-300 transition-all flex flex-col items-center gap-0.5 text-slate-500 disabled:opacity-40"
+                      style={{ background: "#050508" }}>
+                      <span className="text-sm leading-none">🏦</span>
+                      {cashOutBusy ? "…" : "Cash out"}
+                    </button>
+                  </div>
+                </div>
               </div>
 
             </div>
@@ -454,12 +469,13 @@ export default function BankPage() {
             openAction("send");
           }} />
 
-          {/* Stats row — 4 key metrics */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
-            <StatCard icon="💰" label="Total Balance" value={`$${usd(total)}`} sub="USDC + Earning" />
-            <StatCard icon="🌱" label="In Yield" value={`$${usd(inYield)}`} sub={bestApy != null ? `${bestApy.toFixed(1)}% APY` : "—"} />
-            <StatCard icon="📊" label="Net Flow" value={netFlowMonth === 0 ? "—" : `${netFlowMonth >= 0 ? "+" : "−"}$${usd(Math.abs(netFlowMonth))}`} sub="This month · USDC" />
-            <StatCard icon="💡" label="Gas Saved" value={gasSavedUsd != null ? `$${usd(gasSavedUsd)}` : "—"} sub={`${transferCountMonth} transfer${transferCountMonth === 1 ? "" : "s"} · est.`} />
+          {/* Stats row — 3 real metrics (no fabricated estimates) */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
+            <StatCard icon="🌱" label="In Yield" value={`$${usd(inYield)}`} sub={bestApy != null ? `${bestApy.toFixed(1)}% APY · Aave/Morpho` : "—"} />
+            <StatCard icon="📊" label="Net Flow"
+              value={transferCountMonth === 0 ? "No activity" : netFlowMonth === 0 ? "±$0.00" : `${netFlowMonth >= 0 ? "+" : "−"}$${usd(Math.abs(netFlowMonth))}`}
+              sub={`${transferCountMonth} transfer${transferCountMonth === 1 ? "" : "s"} this month`} />
+            <StatCard icon="📈" label="Best APY" value={bestApy != null ? `${bestApy.toFixed(1)}%` : "—"} sub="Live · DefiLlama" />
           </div>
 
           {/* Cash Flow chart — 6-month income / expense / savings from wallet history */}
@@ -794,15 +810,29 @@ function CashFlowChart({ data }: { data: MonthBucket[] }) {
   const chartData = data.map(d => ({ ...d, net: d.inflow - d.outflow }));
   const totalVal  = chartData.reduce((s, d) => s + d[tab], 0);
   const color     = CF_COLOR[tab];
+  const hasData   = data.some(m => m.inflow > 0 || m.outflow > 0);
+
+  // No activity in the visible window → explicit empty state, no fake zeros.
+  if (!hasData) {
+    return (
+      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-4">
+        <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH FLOW · USDC</div>
+        <div className="font-mono text-[12px] text-slate-600 py-6 text-center">No activity yet</div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-4">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-1">
         <div>
-          <div className="font-mono text-[10px] text-slate-500 tracking-widest">CASH FLOW</div>
+          <div className="font-mono text-[10px] text-slate-500 tracking-widest">CASH FLOW · USDC</div>
           <div className="font-mono text-[22px] font-bold text-white mt-0.5">
             ${usd(Math.abs(totalVal))}
             {tab === "net" && <span className="font-mono text-[11px] text-slate-500 ml-1.5">{totalVal >= 0 ? "net in" : "net out"}</span>}
+          </div>
+          <div className="font-mono text-[8px] text-slate-700">
+            {data.length}-month total · {CF_LABEL[tab].toLowerCase()} only
           </div>
         </div>
         <div className="flex gap-1">
@@ -818,14 +848,14 @@ function CashFlowChart({ data }: { data: MonthBucket[] }) {
         </div>
       </div>
       <ResponsiveContainer width="100%" height={160}>
-        <BarChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+        <BarChart data={chartData} margin={{ top: 8, right: 4, left: -20, bottom: 0 }}>
           <XAxis dataKey="month" tick={{ fontFamily: "JetBrains Mono, monospace", fontSize: 9, fill: "#64748b" }} axisLine={false} tickLine={false} />
           <YAxis tick={{ fontFamily: "JetBrains Mono, monospace", fontSize: 9, fill: "#64748b" }} axisLine={false} tickLine={false}
             tickFormatter={(v: number) => v === 0 ? "" : `$${Math.abs(v) >= 1000 ? `${(Math.abs(v) / 1000).toFixed(0)}k` : Math.abs(v).toFixed(0)}`} />
           <Tooltip
             contentStyle={{ background: "#0d0d14", border: "1px solid #1A1A2E", borderRadius: 8, fontFamily: "JetBrains Mono, monospace", fontSize: 10, padding: "6px 10px" }}
             /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-            formatter={(v: any) => [`$${usd(Math.abs(v as number))}`, CF_LABEL[tab]]}
+            formatter={(v: any) => [`$${usd(Math.abs(v as number))} USDC`, CF_LABEL[tab]]}
             labelStyle={{ color: "#94a3b8", marginBottom: 2 }}
             cursor={{ fill: color + "08" }}
           />
@@ -836,7 +866,6 @@ function CashFlowChart({ data }: { data: MonthBucket[] }) {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-      <div className="font-mono text-[8px] text-slate-700 mt-1">Last 6 months · USDC on Base</div>
     </div>
   );
 }
