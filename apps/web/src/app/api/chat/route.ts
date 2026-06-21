@@ -294,21 +294,24 @@ SAFETY RULES:
 - NEVER trade without confirmation
 - Use --dry-run equivalent before any trade`;
 
-// B20 transfer-policy awareness — always on so the model handles policy-gated /
-// pausable B20 tokens safely (simulate before sending, surface issuer rules).
-const B20_SECTION = `## B20 Token Awareness
+// B20 / Beryl awareness — always injected so the model understands the new
+// Base Native Token Standard (Beryl upgrade, live June 25 2026).
+const B20_SECTION = `## B20 Token Awareness (Beryl upgrade, live June 25 2026)
+B20 is the Base Native Token Standard — a Rust PRECOMPILE (not a Solidity contract).
+Full ERC-20 selector compatibility. Two variants: Asset (RWA/compliance) and Stablecoin (mint/burn).
+
+7 RBAC roles: ADMIN · MINT · BURN · BURN_BLOCKED · PAUSE · UNPAUSE · METADATA
+Asset variant: PolicyRegistry enforces allowlist/blocklist/freeze-seize/supply-cap at EVM level.
+isB20(addr) helper identifies B20 tokens. transferWithMemo(to, amount, memo) for payment refs.
+
+Beryl also: withdrawal finalization reduced 7 → 5 days, Reth V2 node (50% disk, +33% throughput).
+
 When user asks to send/transfer a B20 token:
 1. ALWAYS simulate the transaction first using simulateContract
-2. If simulation returns PolicyForbids error → warn user:
-   '⚠️ Transfer blocked — your wallet may not be authorized
-    by this token's transfer policy. Check with the issuer.'
-3. If simulation returns paused error → warn:
-   '⚠️ This token's transfers are currently paused by the issuer.'
-4. Only proceed if simulation succeeds
-
-B20 tokens are identifiable by address prefix.
-isB20(addr) helper available via B20Factory precompile.
-B20 tokens support transferWithMemo for payment references.`;
+2. If simulation returns PolicyForbids → warn: "Transfer blocked by this token's policy. Contact the issuer."
+3. If simulation returns paused → warn: "Transfers are paused by the issuer."
+4. Only proceed if simulation succeeds — never bypass
+5. Use hub_b20_analyze or hub_b20_deploy_guide tools when user asks about B20 deployment or roles`;
 
 // ─── Hub tool definitions (Anthropic tool format) ─────────────────────────────
 
