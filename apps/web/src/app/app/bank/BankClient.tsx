@@ -205,9 +205,10 @@ export default function BankPage() {
       else if (tx.dir === "out") bucket.outflow += tx.amount;
     }
     const all = months.map(({ month, inflow, outflow }) => ({ month, inflow, outflow }));
-    // Drop leading empty months so chart starts where data begins.
+    // Return only months from first activity onward. Empty array when no USDC history.
     const first = all.findIndex(m => m.inflow > 0 || m.outflow > 0);
-    return first > 0 ? all.slice(first) : all;
+    if (first === -1) return [];
+    return first === 0 ? all : all.slice(first);
   }, [txData]);
 
   // Unique sent-to addresses → Quick Send. Dedup by both normalized address AND
@@ -237,7 +238,6 @@ export default function BankPage() {
   const projAnnual  = bestApy != null ? inYield * (bestApy / 100) : null;
 
   // Stats derived from real wallet history (this calendar month).
-  const gasSavedUsd        = txData?.stats?.gasSavedUsd ?? null;
   const transferCountMonth = txData?.stats?.transferCountMonth ?? 0;
   const netFlowMonth       = txData?.stats?.netFlowUsdcMonth ?? 0;
 
@@ -352,22 +352,13 @@ export default function BankPage() {
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
         <div className="w-full">
 
-          {/* Greeting */}
-          <div className="mb-5">
-            <h2 className="font-mono text-xl font-bold text-white leading-tight">
-              {new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 17 ? "Good afternoon" : "Good evening"}{", "}
-              <span className="text-[#4FC3F7]">{name ?? fname ?? shortAddr(acct)}</span>
-            </h2>
-            <p className="font-mono text-[11px] text-slate-500 mt-1">
-              Monitor your portfolio, track activity, and earn on Base.
-            </p>
-          </div>
+          {/* Top row: flex-row so each column takes natural content height.
+              CSS grid `items-start` only controls alignment within a fixed-height
+              track; flex `items-start` genuinely makes items content-height. */}
+          <div className="flex flex-col lg:flex-row lg:items-start gap-4 mb-4">
 
-          {/* Top row: cash balance (left) + assets & rates (right) — items-start so columns take natural height */}
-          <div className="grid lg:grid-cols-[3fr_2fr] gap-4 mb-4 lg:items-start">
-
-            {/* Left column: Cash Balance card (actions integrated inside) */}
-            <div>
+            {/* Left column (~60%): Cash Balance, content-driven height */}
+            <div className="lg:w-[60%] shrink-0">
 
               <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
                 <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH BALANCE · {net.short}</div>
@@ -429,8 +420,8 @@ export default function BankPage() {
 
             </div>
 
-            {/* Right column: Your Assets + Rates on Base */}
-            <div className="flex flex-col gap-4">
+            {/* Right column (flex-1): Your Assets + Rates on Base */}
+            <div className="flex-1 flex flex-col gap-4">
 
               <Card title={`YOUR ASSETS · ${net.short}`}>
                 <AssetRow label="USDC" sub="in wallet" usd={walletUsdc} color="#4FC3F7" />
@@ -466,14 +457,7 @@ export default function BankPage() {
 
           </div>
 
-          {/* Quick Send — recent wallet contacts */}
-          <QuickSendRow contacts={recentContacts} onSelect={(addr) => {
-            setScanPrefill({ to: addr, asset: "USDC", network });
-            setScanKey(k => k + 1);
-            openAction("send");
-          }} />
-
-          {/* Stats row — 3 real metrics (no fabricated estimates) */}
+          {/* Stats row — 3 real metrics */}
           <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
             <StatCard icon="🌱" label="In Yield" value={`$${usd(inYield)}`} sub={bestApy != null ? `${bestApy.toFixed(1)}% APY · Aave/Morpho` : "—"} />
             <StatCard icon="📊" label="Net Flow"
@@ -482,9 +466,23 @@ export default function BankPage() {
             <StatCard icon="📈" label="Best APY" value={bestApy != null ? `${bestApy.toFixed(1)}%` : "—"} sub="Live · DefiLlama" />
           </div>
 
-          {/* Cash Flow chart — 6-month income / expense / savings from wallet history */}
-          {txData && !txData.needsKey && (
-            <CashFlowChart data={cashFlowData} />
+          {/* Quick Send + Cash Flow — side by side.
+              If no contacts, Cash Flow takes full width. */}
+          {recentContacts.length > 0 ? (
+            <div className="flex flex-col lg:flex-row lg:items-start gap-4 mb-4">
+              <div className="lg:w-[36%] shrink-0">
+                <QuickSendRow noMargin contacts={recentContacts} onSelect={(addr) => {
+                  setScanPrefill({ to: addr, asset: "USDC", network });
+                  setScanKey(k => k + 1);
+                  openAction("send");
+                }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                {txData && !txData.needsKey && <CashFlowChart noMargin data={cashFlowData} />}
+              </div>
+            </div>
+          ) : (
+            txData && !txData.needsKey && <CashFlowChart data={cashFlowData} />
           )}
 
           {/* Yield prominence — encourage when idle, show position when earning */}
@@ -774,14 +772,15 @@ function PositionRow({ label, pos, apy, onManage, disabled, disabledNote }: {
 }
 
 // ── Quick Send strip ─────────────────────────────────────────────────────────
-function QuickSendRow({ contacts, onSelect }: { contacts: string[]; onSelect: (addr: string) => void }) {
+function QuickSendRow({ contacts, onSelect, noMargin }: { contacts: string[]; onSelect: (addr: string) => void; noMargin?: boolean }) {
   if (contacts.length === 0) return null;
+  const mb = noMargin ? "" : "mb-4";
 
   // Only 1 distinct contact → compact single-line button, no avatar row
   if (contacts.length < 2) {
     return (
       <button onClick={() => onSelect(contacts[0])}
-        className="w-full font-mono text-[10px] text-slate-500 hover:text-[#4FC3F7] py-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] mb-4 flex items-center justify-center gap-2 transition-colors">
+        className={`w-full font-mono text-[10px] text-slate-500 hover:text-[#4FC3F7] py-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] ${mb} flex items-center justify-center gap-2 transition-colors`}>
         ➡ Send to recent · <span className="text-slate-400">{shortAddr(contacts[0])}</span>
       </button>
     );
@@ -789,7 +788,7 @@ function QuickSendRow({ contacts, onSelect }: { contacts: string[]; onSelect: (a
 
   // 2+ distinct contacts → avatar row
   return (
-    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3 mb-4">
+    <div className={`rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3 ${mb}`}>
       <div className="flex items-center justify-between mb-2.5">
         <div className="font-mono text-[10px] text-slate-500 tracking-widest">QUICK SEND</div>
         <div className="font-mono text-[9px] text-slate-600">recent contacts</div>
@@ -821,17 +820,18 @@ type MonthBucket = { month: string; inflow: number; outflow: number };
 const CF_COLOR: Record<CashFlowTab, string> = { inflow: "#34D399", outflow: "#EF4444", net: "#4FC3F7" };
 const CF_LABEL: Record<CashFlowTab, string> = { inflow: "Income", outflow: "Expense", net: "Savings" };
 
-function CashFlowChart({ data }: { data: MonthBucket[] }) {
+function CashFlowChart({ data, noMargin }: { data: MonthBucket[]; noMargin?: boolean }) {
   const [tab, setTab] = useState<CashFlowTab>("inflow");
   const chartData = data.map(d => ({ ...d, net: d.inflow - d.outflow }));
   const totalVal  = chartData.reduce((s, d) => s + d[tab], 0);
   const color     = CF_COLOR[tab];
   const hasData   = data.some(m => m.inflow > 0 || m.outflow > 0);
+  const mb        = noMargin ? "" : "mb-4";
 
   // No activity in the visible window → explicit empty state, no fake zeros.
   if (!hasData) {
     return (
-      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3 mb-4 flex items-center justify-between">
+      <div className={`rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3 ${mb} flex items-center justify-between`}>
         <div className="font-mono text-[10px] text-slate-500 tracking-widest">CASH FLOW · USDC</div>
         <div className="font-mono text-[11px] text-slate-600">No activity yet</div>
       </div>
@@ -843,7 +843,7 @@ function CashFlowChart({ data }: { data: MonthBucket[] }) {
     const m = data[0];
     const net = m.inflow - m.outflow;
     return (
-      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3 mb-4">
+      <div className={`rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3 ${mb}`}>
         <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH FLOW · {m.month.toUpperCase()} · USDC</div>
         <div className="flex items-center gap-6">
           <div>
@@ -867,7 +867,7 @@ function CashFlowChart({ data }: { data: MonthBucket[] }) {
 
   // 2+ months → bar chart (compact 110px)
   return (
-    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-4">
+    <div className={`rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 ${mb}`}>
       <div className="flex items-center justify-between mb-1">
         <div>
           <div className="font-mono text-[10px] text-slate-500 tracking-widest">CASH FLOW · USDC</div>
