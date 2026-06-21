@@ -54,10 +54,10 @@ export interface ModelTier {
 // model that doesn't exist in the UI any more.
 
 export const BANKR_TIERS: ModelTier[] = [
-  { id: "fast",     label: "Fast",     model: "Haiku 4.5",   color: "#34D399", badge: "", note: "Fastest · cheap", group: "bankr", credits: 10  },
-  { id: "pro",      label: "Chat",     model: "Sonnet 4.6",  color: "#4FC3F7", badge: "", note: "Balanced",       group: "bankr", credits: 50  },
-  { id: "max",      label: "Deep",     model: "Opus 4.7",    color: "#A78BFA", badge: "", note: "Smartest",       group: "bankr", credits: 200 },
-  { id: "deepseek", label: "DeepSeek", model: "DeepSeek V4", color: "#F59E0B", badge: "", note: "1M ctx · cheap", group: "bankr", credits: 10  },
+  { id: "fast",     label: "Haiku 4.5",    model: "Haiku 4.5",   color: "#34D399", badge: "", note: "Fastest · cheap", group: "bankr", credits: 10  },
+  { id: "pro",      label: "Sonnet 4.6",   model: "Sonnet 4.6",  color: "#4FC3F7", badge: "", note: "Balanced",       group: "bankr", credits: 50  },
+  { id: "max",      label: "Opus 4.7",     model: "Opus 4.7",    color: "#A78BFA", badge: "", note: "Smartest",       group: "bankr", credits: 200 },
+  { id: "deepseek", label: "DeepSeek V4",  model: "DeepSeek V4", color: "#F59E0B", badge: "", note: "1M ctx · cheap", group: "bankr", credits: 10  },
 ];
 
 export const VENICE_TIERS: ModelTier[] = [
@@ -110,10 +110,10 @@ export interface ModelPreset {
 // separate tool (Anthropic web_search server-tool) toggled with 🔍 in the
 // composer, so it works on any of these models — no Venice model in the picker.
 export const MODEL_PRESETS: ModelPreset[] = [
-  { id: "chat",       label: "Chat",       desc: "Balanced default · Sonnet 4.6",     icon: "💬", tier: "pro",      webSearch: false },
-  { id: "fast",       label: "Fast",       desc: "Cheapest · Haiku 4.5",              icon: "⚡", tier: "fast",     webSearch: false },
-  { id: "deep-think", label: "Deep Think", desc: "Heavy reasoning · Opus 4.7",        icon: "🔬", tier: "max",      webSearch: false },
-  { id: "deepseek",   label: "DeepSeek",   desc: "1M context · DeepSeek V4 Flash",    icon: "✦",  tier: "deepseek", webSearch: false },
+  { id: "chat",       label: "Chat",       desc: "Claude Sonnet 4.6 · balanced",      icon: "💬", tier: "pro",      webSearch: false },
+  { id: "fast",       label: "Fast",       desc: "Claude Haiku 4.5 · cheapest",       icon: "⚡", tier: "fast",     webSearch: false },
+  { id: "deep-think", label: "Deep Think", desc: "Claude Opus 4.7 · heavy reasoning", icon: "🔬", tier: "max",      webSearch: false },
+  { id: "deepseek",   label: "DeepSeek",   desc: "DeepSeek V4 · 1M context",          icon: "✦",  tier: "deepseek", webSearch: false },
 ];
 
 export default function ChatInput() {

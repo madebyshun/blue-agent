@@ -307,7 +307,7 @@ export default function BankPage() {
           <div className="grid lg:grid-cols-[3fr_2fr] gap-4 mb-4">
 
             {/* Cash balance + primary actions */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 flex flex-col">
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 flex flex-col self-start">
               <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">CASH BALANCE · {net.short}</div>
               {/* Balance + primary actions side by side */}
               <div className="flex items-center gap-4 mb-2">
@@ -431,7 +431,7 @@ export default function BankPage() {
           {actionOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setActionOpen(false)} />
-              <div className="relative z-10 w-full max-w-md rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] shadow-2xl max-h-[88vh] flex flex-col">
+              <div className="relative z-10 w-full max-w-md rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] shadow-2xl max-h-[88vh] min-h-[480px] flex flex-col">
                 {/* Tabs + close */}
                 <div className="flex items-center gap-1 p-3 border-b border-[#1A1A2E] shrink-0">
                   {TABS.map(tb => (
