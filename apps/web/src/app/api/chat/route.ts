@@ -670,18 +670,18 @@ Default to "base" for Base-related queries.`,
   },
   {
     name: "hub_b20_launch",
-    description: "Generate a complete B20 token deployment package — foundry.toml config, Solidity deploy script, and CLI commands. Use when user wants to DEPLOY or LAUNCH a B20 token (not just learn about it). Returns ready-to-run code.",
+    description: "Open B20 token launch form. User fills name, symbol, variant (asset/stablecoin), optional decimals/supply_cap/currency_code. Generates complete Foundry deployment scripts with copy buttons. Call when user wants to DEPLOY or LAUNCH a B20 token.",
     input_schema: {
       type: "object",
       properties: {
-        name:          { type: "string", description: "Token name, e.g. 'My Token'" },
-        symbol:        { type: "string", description: "Token symbol, e.g. 'MTK'" },
-        variant:       { type: "string", enum: ["asset", "stablecoin"], description: "B20 variant: asset (general) or stablecoin (fiat-backed)" },
-        decimals:      { type: "number", description: "Optional: decimals (default 18 for asset, 6 for stablecoin)" },
-        supply_cap:    { type: "string", description: "Optional: max supply, e.g. '1000000' for 1M tokens" },
-        currency_code: { type: "string", description: "Optional: ISO currency code for stablecoin variant, e.g. 'USD', 'VND'" },
+        name:          { type: "string", description: "Token name" },
+        symbol:        { type: "string", description: "Token symbol" },
+        variant:       { type: "string", enum: ["asset", "stablecoin"] },
+        decimals:      { type: "number" },
+        supply_cap:    { type: "string" },
+        currency_code: { type: "string" },
       },
-      required: ["name", "symbol", "variant"],
+      required: [],
     },
   },
 ];
@@ -804,6 +804,14 @@ async function callHubTool(
     return {
       text: "Send/Pay card rendered. The card shows recipient, amount and asset — the user reviews and SIGNS the transfer in their own wallet (non-custodial). Do NOT claim funds were sent and do NOT restate the recipient as if confirmed. Reply with one short line: tell the user to review the recipient + amount and sign in the card.",
       result: { kind: "send", ...args },
+    };
+  }
+  if (toolName === "hub_b20_launch") {
+    // Client-rendered marker — B20LaunchCard handles form + script generation
+    // entirely in the browser. No server execution, no funds moved.
+    return {
+      text: "B20 launch form rendered. The card is pre-filled with the token details — the user can edit fields and click Generate Scripts to get the foundry.toml, deploy script, and CLI commands. Do NOT restate the fields as a table. Reply with one short line: tell the user to review the form and click Generate Scripts.",
+      result: { kind: "b20_launch", ...args },
     };
   }
 

@@ -1146,6 +1146,255 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
   );
 }
 
+// ── B20 Launch Card ──────────────────────────────────────────────────────────
+// Rendered for hub_b20_launch marker. Pre-fills from LLM args, user edits,
+// then [Generate Scripts] produces foundry.toml + deploy script + CLI commands
+// with per-network tabs. Fully client-side — no API call, no funds moved.
+
+interface B20LaunchResult {
+  name?: string;
+  symbol?: string;
+  variant?: "asset" | "stablecoin";
+  decimals?: number;
+  supply_cap?: string;
+  currency_code?: string;
+}
+
+const B20_NETWORKS = [
+  { id: "sepolia", label: "Sepolia", rpc: "https://sepolia.base.org",      chain: 84532    },
+  { id: "vibenet", label: "Vibenet", rpc: "https://rpc.vibes.base.org/",   chain: 84538453 },
+  { id: "mainnet", label: "Mainnet", rpc: "https://mainnet.base.org",       chain: 8453     },
+] as const;
+type B20Net = typeof B20_NETWORKS[number]["id"];
+
+function B20Block({ title, code }: { title: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    navigator.clipboard?.writeText(code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
+  }
+  return (
+    <div className="rounded-xl border border-[#1A1A2E] bg-[#070710] overflow-hidden mb-3">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#1A1A2E]">
+        <span className="font-mono text-[9px] text-slate-500 tracking-widest">{title}</span>
+        <button onClick={copy} className="font-mono text-[9px] px-2 py-0.5 rounded border border-[#1A1A2E] text-slate-400 hover:text-white hover:border-[#4FC3F7]/30 transition-colors">
+          {copied ? "Copied ✓" : "Copy"}
+        </button>
+      </div>
+      <pre className="p-3 overflow-x-auto"><code className="font-mono text-[10px] text-slate-300 leading-relaxed whitespace-pre">{code}</code></pre>
+    </div>
+  );
+}
+
+function B20Field({ label, value, onChange, placeholder, disabled }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder: string; disabled?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="font-mono text-[9px] text-slate-600 block mb-1">{label}</span>
+      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
+        className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed" />
+    </label>
+  );
+}
+
+function B20LaunchCard({ result }: { result: B20LaunchResult }) {
+  const initVariant = result.variant ?? "asset";
+  const [name,          setName]          = useState(result.name ?? "");
+  const [symbol,        setSymbol]        = useState((result.symbol ?? "").toUpperCase());
+  const [variant,       setVariant]       = useState<"asset" | "stablecoin">(initVariant);
+  const [decimals,      setDecimals]      = useState<number>(result.decimals ?? (initVariant === "stablecoin" ? 6 : 18));
+  const [decOverridden, setDecOverridden] = useState(!!result.decimals);
+  const [supplyCap,     setSupplyCap]     = useState(result.supply_cap ?? "");
+  const [currCode,      setCurrCode]      = useState((result.currency_code ?? "").toUpperCase());
+  const [generated,     setGenerated]     = useState(false);
+  const [network,       setNetwork]       = useState<B20Net>("sepolia");
+  const [cmdCopied,     setCmdCopied]     = useState(false);
+
+  function switchVariant(v: "asset" | "stablecoin") {
+    setVariant(v);
+    if (!decOverridden) setDecimals(v === "stablecoin" ? 6 : 18);
+  }
+
+  const n  = name.trim();
+  const s  = symbol.replace(/^\$/, "").trim();
+  const cap = supplyCap.trim();
+  const cur = currCode.trim() || "USD";
+  const net = B20_NETWORKS.find(x => x.id === network)!;
+  const canGen = !!n && !!s;
+
+  // ── Script bodies ─────────────────────────────────────────────────────────
+
+  const foundryToml = `[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+base = true
+remappings = [
+  "base-std/=lib/base-std/src/",
+  "forge-std/=lib/forge-std/src/",
+]`;
+
+  const hasCap    = !!cap;
+  const nCalls    = hasCap ? 2 : 1;
+  const encParams = variant === "asset"
+    ? `B20FactoryLib.encodeAssetCreateParams(\n      "${n}", "${s}", ${decimals}\n    )`
+    : `B20FactoryLib.encodeStablecoinCreateParams(\n      "${n}", "${s}", "${cur}", ${decimals}\n    )`;
+  const b20Type   = variant === "asset" ? "IB20Factory.B20Type.ASSET" : "IB20Factory.B20Type.STABLECOIN";
+  const capLine   = hasCap ? `\n    initCalls[1] = B20FactoryLib.encodeUpdateSupplyCap(${cap}e${decimals});` : "";
+
+  const deployScript = `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+import {Script, console} from "forge-std/Script.sol";
+import {B20Constants} from "base-std/lib/B20Constants.sol";
+import {B20FactoryLib} from "base-std/lib/B20FactoryLib.sol";
+import {IB20Factory} from "base-std/interfaces/IB20Factory.sol";
+import {StdPrecompiles} from "base-std/StdPrecompiles.sol";
+
+contract CreateToken is Script {
+  function run() external returns (address token) {
+    address account = vm.envAddress("ACCOUNT_ADDRESS");
+    bytes32 salt = keccak256("${s}-deploy");
+    bytes memory params = ${encParams};
+    bytes[] memory initCalls = new bytes[](${nCalls});
+    initCalls[0] = B20FactoryLib.encodeGrantRole(B20Constants.MINT_ROLE, account);${capLine}
+    vm.startBroadcast();
+    token = StdPrecompiles.B20_FACTORY.createB20(
+      ${b20Type}, salt, params, initCalls
+    );
+    vm.stopBroadcast();
+    console.log("${n} deployed at:", token);
+  }
+}`;
+
+  const capWei = hasCap ? `${cap}${"0".repeat(decimals)}` : `1000000${"0".repeat(decimals)}`;
+  const commands = `# Install
+curl -L https://raw.githubusercontent.com/base/base-anvil/HEAD/foundryup/install | bash
+base-foundryup --install v1.1.0
+
+# Setup
+mkdir ${s.toLowerCase() || "my"}-b20 && cd ${s.toLowerCase() || "my"}-b20
+base-forge init . --force
+base-forge install base/base-std --no-git
+
+# Deploy
+export RPC_URL="${net.rpc}"
+source .env
+base-forge script script/CreateToken.s.sol \\
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast
+
+# Mint (replace $TOKEN_ADDRESS with deployed address)
+base-cast send $TOKEN_ADDRESS "mint(address,uint256)" \\
+  $ACCOUNT_ADDRESS ${capWei} \\
+  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+
+# Verify
+base-cast call $TOKEN_ADDRESS \\
+  "balanceOf(address)(uint256)" $ACCOUNT_ADDRESS \\
+  --rpc-url $RPC_URL`;
+
+  return (
+    <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
+      <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold mb-3">B20 TOKEN · BASE</div>
+
+      {/* Preview pill */}
+      <div className="flex items-center gap-2.5 mb-3">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center font-mono text-sm font-bold shrink-0"
+             style={{ background: "#4FC3F715", border: "1px solid #4FC3F730", color: "#4FC3F7" }}>
+          {(s || n).slice(0, 2).toUpperCase() || "B2"}
+        </div>
+        <div className="min-w-0">
+          <div className="font-mono text-sm font-bold text-white truncate">{n || "Token Name"}</div>
+          <div className="font-mono text-[11px] text-slate-500">${s || "SYMBOL"} · {variant} · B20</div>
+        </div>
+      </div>
+
+      {/* Form */}
+      <div className="space-y-2 mb-3">
+        <div className="grid grid-cols-2 gap-2">
+          <B20Field label="TOKEN NAME *" value={name} onChange={setName} placeholder="e.g. Base Dollar" />
+          <B20Field label="SYMBOL *" value={symbol} onChange={v => setSymbol(v.toUpperCase())} placeholder="e.g. BUSD" />
+        </div>
+
+        {/* Variant toggle */}
+        <div>
+          <span className="font-mono text-[9px] text-slate-600 block mb-1">VARIANT</span>
+          <div className="flex gap-1">
+            {(["asset", "stablecoin"] as const).map(v => (
+              <button key={v} onClick={() => switchVariant(v)}
+                className="font-mono text-[10px] px-3 py-1 rounded-md transition-colors capitalize"
+                style={variant === v
+                  ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                  : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+                {v}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block">
+            <span className="font-mono text-[9px] text-slate-600 block mb-1">
+              DECIMALS <span className="text-slate-700">(6–18)</span>
+            </span>
+            <input
+              type="number" min={6} max={18} value={decimals}
+              disabled={variant === "stablecoin"}
+              onChange={e => { setDecOverridden(true); setDecimals(Number(e.target.value)); }}
+              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 outline-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            />
+          </label>
+          <B20Field label="SUPPLY CAP (optional)" value={supplyCap} onChange={setSupplyCap} placeholder="e.g. 1000000" />
+        </div>
+
+        {variant === "stablecoin" && (
+          <B20Field label="CURRENCY CODE" value={currCode} onChange={v => setCurrCode(v.toUpperCase())} placeholder="e.g. USD" />
+        )}
+      </div>
+
+      <button
+        onClick={() => setGenerated(true)}
+        disabled={!canGen}
+        className="w-full font-mono text-[12px] font-bold py-2 rounded-lg transition-all disabled:opacity-40 mb-3"
+        style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+        Generate Scripts →
+      </button>
+
+      {generated && (
+        <>
+          <B20Block title="foundry.toml" code={foundryToml} />
+          <B20Block title="script/CreateToken.s.sol" code={deployScript} />
+
+          {/* Commands with network tabs */}
+          <div className="rounded-xl border border-[#1A1A2E] bg-[#070710] overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#1A1A2E]">
+              <div className="flex gap-1">
+                {B20_NETWORKS.map(nx => (
+                  <button key={nx.id} onClick={() => setNetwork(nx.id)}
+                    className="font-mono text-[9px] px-2 py-0.5 rounded transition-colors"
+                    style={network === nx.id
+                      ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                      : { color: "#64748b", border: "1px solid transparent" }}>
+                    {nx.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => { navigator.clipboard?.writeText(commands); setCmdCopied(true); setTimeout(() => setCmdCopied(false), 1500); }}
+                className="font-mono text-[9px] px-2 py-0.5 rounded border border-[#1A1A2E] text-slate-400 hover:text-white hover:border-[#4FC3F7]/30 transition-colors">
+                {cmdCopied ? "Copied ✓" : "Copy"}
+              </button>
+            </div>
+            <pre className="p-3 overflow-x-auto"><code className="font-mono text-[10px] text-slate-300 leading-relaxed whitespace-pre">{commands}</code></pre>
+          </div>
+          <p className="font-mono text-[9px] text-slate-700 mt-2">
+            Chain {net.chain} · {net.rpc}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 // Rendered for the `prepare_yield` marker. NON-custodial move-to-yield: the user
 // signs supply/withdraw on the chosen venue (Aave v3 or Morpho) from their OWN
 // wallet via wagmi. Verified addresses (see lib/yield-execution). Best-rate
@@ -1749,6 +1998,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_quantum":       return <QuantumCard      result={r} />;
     case "hub_yield":         return <YieldCard        result={r} />;
     case "show_portfolio":    return <PortfolioCard />;
+    case "hub_b20_launch":       return <B20LaunchCard   result={r as B20LaunchResult} />;
     case "prepare_token_launch": return <TokenLaunchCard result={r as TokenLaunchResult} />;
     case "prepare_yield":     return <MoveToYieldCard  result={r as YieldMoveResult} account={account} />;
     case "prepare_send":      return <SendCard         result={r as SendResult} account={account} />;
