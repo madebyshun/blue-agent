@@ -512,42 +512,48 @@ export default function ChatMessages() {
             {empty.sub}
           </p>
 
-          {/* Quick-action starters — persona-aware */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full max-w-md sm:max-w-2xl mx-auto mb-5">
-            {empty.starters.map(s => (
+          {/* NL example starters */}
+          <div className="w-full max-w-sm space-y-2 mb-6">
+            {[
+              "build me a DeFi app on Base",
+              "is this token safe: 0x...",
+              "best APY on Base right now?",
+              "launch a token called BlueBot",
+              "deploy a B20 token called vUSD",
+              "what's trending on Base today?",
+            ].map(q => (
               <button
-                key={s.label}
+                key={q}
                 onClick={() => {
-                  const needsInput = s.text.includes("…");
+                  const needsInput = q.includes("0x...");
                   if (needsInput) {
-                    setInput(s.text.replace(/0x…|…/g, "").replace(/\s+$/, "") + " ");
+                    setInput(q.replace("0x...", "").replace(/\s+$/, "") + " ");
                     document.getElementById("chat-composer")?.focus();
                   } else {
-                    send(s.text);
+                    send(q);
                   }
                 }}
                 disabled={outOfCredits}
-                className="flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-all disabled:opacity-40 group"
-                style={{ background: "#0D0D14", borderColor: "#1A1A2E" }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.borderColor = `${s.color}30`;
-                  e.currentTarget.style.background  = `${s.color}08`;
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.borderColor = "#1A1A2E";
-                  e.currentTarget.style.background  = "#0D0D14";
-                }}
+                className="w-full text-left font-mono text-[11px] px-3 py-2 rounded-xl text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-40"
+                style={{ background: "#0d0d12", border: "1px solid #1A1A2E" }}
               >
-                <span className="text-base shrink-0">{s.icon}</span>
-                <span className="font-mono text-[12px] text-slate-400 group-hover:text-white truncate transition-colors">
-                  {s.label}
-                </span>
+                {q}
               </button>
             ))}
           </div>
 
+          {/* Badge row */}
+          <div className="flex gap-2 flex-wrap justify-center mb-4">
+            {["74 Tools", "Base MCP", "Bankr", "Skills"].map(b => (
+              <span key={b} className="font-mono text-[9px] px-2 py-1 rounded-md text-slate-600"
+                style={{ border: "1px solid #1A1A2E" }}>
+                {b}
+              </span>
+            ))}
+          </div>
+
           {outOfCredits && (
-            <p className="font-mono text-[10px] text-red-400 mt-4">Out of credits — stake $BLUEAGENT to refill</p>
+            <p className="font-mono text-[10px] text-red-400 mt-2">Out of credits — stake $BLUEAGENT to refill</p>
           )}
         </div>
       ) : (

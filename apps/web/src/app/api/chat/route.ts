@@ -138,14 +138,6 @@ const VENICE_DISPLAY: Record<string, string> = {
   "deepseek-v4-pro":                    "DeepSeek V4 Pro (Venice)",
   "kimi-k2-6":                          "Kimi K2 (Venice)",
   "claude-opus-4-7":                    "Claude Opus 4 (Venice)",
-  "claude-fable-5":                     "Claude Fable 5 (Venice)",
-  "grok-4-3":                           "Grok 4 (Venice)",
-  "qwen3-235b-a22b-instruct-2507":      "Qwen3 235B (Venice)",
-  "mistral-small-3-2-24b-instruct":     "Mistral Small 3.2 (Venice)",
-  "venice-uncensored-1-2":              "Venice Uncensored 1.2 (Venice)",
-  "e2ee-venice-uncensored-24b-p":       "Venice Uncensored 24B · E2EE (Venice Privacy)",
-  "e2ee-gemma-3-27b-p":                 "Gemma 3 27B · E2EE (Venice Privacy)",
-  "e2ee-qwen3-6-35b-a3b":               "Qwen3 35B · E2EE (Venice Privacy)",
 };
 
 const BANKR_DISPLAY: Record<string, string> = {
@@ -246,19 +238,7 @@ Be concise by default. Most users want a quick answer, not an essay.
 Only go long when the user explicitly says "explain in detail", "deep dive", "step-by-step", or asks a multi-part question.
 
 ## Follow-up suggestions
-After your main answer, ALWAYS append 2-3 follow-up question suggestions on their own lines, each prefixed with "↳ " (the arrow + space).
-Pick follow-ups the user is *likely* to ask next based on the topic — not generic.
-
-Example for "ETH price":
-↳ ETH staking yield on Lido / Aerodrome
-↳ Bridge ETH from Base to mainnet
-↳ Best ETH/USDC LP on Base today
-
-Example for "how to deploy a contract on Base":
-↳ Verify the contract on Basescan
-↳ Set up a frontend with Wagmi + viem
-↳ Add a monitoring webhook with Blue Sentinel
-
+For complex answers only (not simple price/data queries), optionally append 1-2 follow-up suggestions, each prefixed with "↳ " (the arrow + space).
 Keep them short (≤ 8 words), specific, and actionable.`;
 
 // ─── Integration prompt sections (conditionally appended) ─────────────────────
@@ -677,6 +657,33 @@ Default to "base" for Base-related queries.`,
     description: "Live snapshot feed of Base onchain activity — trending/new pools, TVL, real prices. Use when user asks 'what's happening on Base now', 'live feed', 'what's moving'.",
     input_schema: { type: "object", properties: { feed: { type: "string", description: "movers | new | all" } } },
   },
+  {
+    name: "hub_b20_analyze",
+    description: "Explain B20 token standard, variants (Asset/Stablecoin), roles, policies, and compliance features. Use when user asks about B20 architecture, how B20 works, B20 roles/policies, or wants to understand the Beryl upgrade.",
+    input_schema: {
+      type: "object",
+      properties: {
+        question: { type: "string", description: "The B20 question or topic to explain" },
+        mode: { type: "string", enum: ["guide", "roles", "policy", "analyze", "compare", "full"], description: "Optional: specific aspect to focus on" },
+      },
+    },
+  },
+  {
+    name: "hub_b20_launch",
+    description: "Generate a complete B20 token deployment package — foundry.toml config, Solidity deploy script, and CLI commands. Use when user wants to DEPLOY or LAUNCH a B20 token (not just learn about it). Returns ready-to-run code.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name:          { type: "string", description: "Token name, e.g. 'My Token'" },
+        symbol:        { type: "string", description: "Token symbol, e.g. 'MTK'" },
+        variant:       { type: "string", enum: ["asset", "stablecoin"], description: "B20 variant: asset (general) or stablecoin (fiat-backed)" },
+        decimals:      { type: "number", description: "Optional: decimals (default 18 for asset, 6 for stablecoin)" },
+        supply_cap:    { type: "string", description: "Optional: max supply, e.g. '1000000' for 1M tokens" },
+        currency_code: { type: "string", description: "Optional: ISO currency code for stablecoin variant, e.g. 'USD', 'VND'" },
+      },
+      required: ["name", "symbol", "variant"],
+    },
+  },
 ];
 
 // ─── Venice tools (OpenAI function-calling format) ───────────────────────────
@@ -1041,7 +1048,7 @@ async function veniceToolStream(
             signal: AbortSignal.timeout(60_000),
           });
         } catch (e) {
-          emit({ delta: { text: `[Venice tool synthesis failed: ${(e as Error).message}]` } });
+          emit({ delta: { text: "Tool temporarily unavailable. Please try again." } });
           controller.enqueue(enc.encode("data: [DONE]\n\n")); controller.close(); return;
         }
         if (!streamRes.ok) {
@@ -1156,7 +1163,7 @@ async function callVeniceStream(
       signal: AbortSignal.timeout(60_000),
     });
   } catch (e) {
-    return textToSSE(`[Venice request failed: ${(e as Error).message}]`);
+    return textToSSE("AI service temporarily unavailable. Try a different model.");
   }
 
   if (!veniceRes.ok) {
@@ -1502,7 +1509,7 @@ export async function POST(req: NextRequest) {
   if (provider === "venice" && modelId) {
     const apiKey = process.env.VENICE_INFERENCE_KEY ?? process.env.VENICE_API_KEY;
     if (!apiKey) {
-      return textToSSE("[Venice is not configured on this server. Please use a Bankr model (Fast / Pro / Max).]");
+      return textToSSE("Please select a model: Fast · Chat · Deep Think · DeepSeek");
     }
 
     const veniceMessages = injectAttachments(cleanMessages, attachments, "venice");
