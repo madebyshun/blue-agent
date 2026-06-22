@@ -483,7 +483,7 @@ export default function BankPage() {
 
         {/* Grid body */}
         <div className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 p-3 sm:p-4 w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 p-3 sm:p-4 w-full items-start">
 
             {/* Card 1: Profile (col-span-1 lg:col-span-2 2xl:col-span-2) */}
             <div className="lg:col-span-2 2xl:col-span-2 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
@@ -559,8 +559,8 @@ export default function BankPage() {
               </div>
             </div>
 
-            {/* Card 3: Actions (col-span-1 lg:col-span-2) */}
-            <div className="lg:col-span-2 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
+            {/* Card 3: Actions */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
               <div className="grid grid-cols-4 gap-2">
                 <button onClick={() => openAction("receive")}
                   className="font-mono text-[11px] font-bold py-2.5 px-3 rounded-xl transition-colors"
