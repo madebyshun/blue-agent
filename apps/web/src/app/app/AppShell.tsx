@@ -77,18 +77,6 @@ const APP_NAV = [
       </svg>
     ),
   },
-  {
-    id: "bankr",
-    label: "Bankr",
-    href: "https://bankr.bot/agents/blue-agent",
-    external: true,
-    icon: (
-      <svg style={{ width: 18, height: 18 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round"
-          d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253" />
-      </svg>
-    ),
-  },
 ];
 
 const APP_BOTTOM = [
@@ -247,12 +235,9 @@ function AppSideNav() {
 // Tools / Skills / Scheduled and recent conversations. Shown below lg so the
 // tablet gap (md rail, no chat sidebar) keeps full nav access.
 
-// BlueBank is still in local testing — hide its nav entry on production builds
-// (NODE_ENV=production). Local `next dev` keeps it visible. The /app/bank route
-// is also redirected away in production (see next.config.ts) as a hard gate.
-const NAV_ITEMS = APP_NAV.filter(
-  (i) => !(i.id === "bank" && process.env.NODE_ENV === "production"),
-);
+// BlueBank is live — show in sidebar on all environments.
+// Access is gated by BANK_PREVIEW_TOKEN cookie in middleware.
+const NAV_ITEMS = APP_NAV;
 
 const PRODUCTS = [...NAV_ITEMS, ...APP_BOTTOM];
 

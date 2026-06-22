@@ -240,10 +240,10 @@ export default function Home() {
               className="text-sm font-semibold px-7 py-3 rounded-xl transition-all border border-[#34D399]/30 text-[#34D399] hover:bg-[#34D399]/5">
               Connect Wallet
             </Link>
-            <a href="https://app.uniswap.org/swap?outputCurrency=0xf895783b2931c919955e18b5e3343e7c7c456ba3&chain=base"
+            <a href="https://dexscreener.com/base/0xf895783b2931c919955e18b5e3343e7c7c456ba3"
               target="_blank" rel="noopener noreferrer"
               className="text-sm font-semibold px-7 py-3 rounded-xl transition-all border border-[#4FC3F7]/30 text-[#4FC3F7] hover:bg-[#4FC3F7]/5">
-              Buy $BLUEAGENT ↗
+              $BLUEAGENT ↗
             </a>
           </div>
 
