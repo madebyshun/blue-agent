@@ -379,7 +379,7 @@ interface EmptyState { heading: string; sub: string; starters: Starter[]; exampl
 const PERSONA_EMPTY: Record<string, EmptyState> = {
   "blue-agent": {
     heading: "What are you building?",
-    sub:     "Idea → Build → Audit → Launch — just ask in plain English.",
+    sub:     "Build anything on Base",
     examples: [
       "build me a DeFi app on Base",
       "launch a token called BlueBot",

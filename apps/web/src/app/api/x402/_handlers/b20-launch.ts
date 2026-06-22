@@ -46,8 +46,8 @@ remappings = [
   const createParamsCall = isAsset
     ? `B20FactoryLib.encodeAssetCreateParams("${name}", "${symbol}", account, ${decimals})`
     : currency_code
-      ? `B20FactoryLib.encodeStablecoinCreateParams("${name}", "${symbol}", account, "${currency_code}", ${decimals})`
-      : `B20FactoryLib.encodeStablecoinCreateParams("${name}", "${symbol}", account, "USD", ${decimals})`;
+      ? `B20FactoryLib.encodeStablecoinCreateParams("${name}", "${symbol}", account, "${currency_code}")`
+      : `B20FactoryLib.encodeStablecoinCreateParams("${name}", "${symbol}", account, "USD")`;
 
   const variantEnum = isAsset ? "IB20Factory.B20Variant.ASSET" : "IB20Factory.B20Variant.STABLECOIN";
 
@@ -98,16 +98,16 @@ ${supply_cap !== null ? `        ${supplyCap_line}\n` : ""
   ];
 
   const deploy_command =
-    `ACCOUNT_ADDRESS=<your_wallet> base-forge script script/CreateToken.s.sol ` +
-    `--rpc-url https://mainnet.base.org --broadcast --private-key <your_key>`;
+    `source .env && base-forge script script/CreateToken.s.sol ` +
+    `--rpc-url https://mainnet.base.org --broadcast --private-key $PRIVATE_KEY`;
 
   const mint_command =
-    `cast send <TOKEN_ADDRESS> "mint(address,uint256)" <RECIPIENT> <AMOUNT> ` +
+    `base-cast send <TOKEN_ADDRESS> "mint(address,uint256)" <RECIPIENT> <AMOUNT> ` +
     `--rpc-url https://mainnet.base.org --private-key <your_key>`;
 
   const verify_command =
-    `cast call <TOKEN_ADDRESS> "name()(string)" --rpc-url https://mainnet.base.org && ` +
-    `cast call <TOKEN_ADDRESS> "symbol()(string)" --rpc-url https://mainnet.base.org`;
+    `base-cast call <TOKEN_ADDRESS> "name()(string)" --rpc-url https://mainnet.base.org && ` +
+    `base-cast call <TOKEN_ADDRESS> "symbol()(string)" --rpc-url https://mainnet.base.org`;
 
   // ── Summary ────────────────────────────────────────────────────────────────
   const supplyCapNote = supply_cap !== null ? ` Supply cap: ${supply_cap.toLocaleString()} ${symbol}.` : "";

@@ -411,9 +411,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const userMsg = text.trim();
     if (!userMsg || streaming) return;
 
-    // /skill commands run entirely client-side (GitHub fetch + localStorage) —
+    // /skill commands + NL equivalents run entirely client-side —
     // they never reach the LLM and never cost credits.
-    if (/^\/skill(\s|$)/i.test(userMsg)) {
+    const isSkillNL = /^(list( my)? skills?|what skills?( do i have| (are|is) installed)?|show( my)? skills?|my skills?)$/i.test(userMsg.trim());
+    const skillCmd = isSkillNL ? "/skill list" : userMsg;
+    if (/^\/skill(\s|$)/i.test(userMsg) || isSkillNL) {
       let stid = activeTaskId;
       let sbase: Message[] = activeTask?.messages ?? [];
       if (!stid) {
@@ -424,7 +426,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         sbase = [];
       }
       setInput("");
-      const result = await runSkillCommand(userMsg);
+      const result = await runSkillCommand(skillCmd);
       const turn: Message[] = [
         { role: "user", content: userMsg, createdAt: Date.now() },
         { role: "assistant", content: result, createdAt: Date.now() },
