@@ -315,7 +315,8 @@ When user asks to send/transfer a B20 token:
 2. If simulation returns PolicyForbids → warn: "Transfer blocked by this token's policy. Contact the issuer."
 3. If simulation returns paused → warn: "Transfers are paused by the issuer."
 4. Only proceed if simulation succeeds — never bypass
-5. Use hub_b20_analyze or hub_b20_deploy_guide tools when user asks about B20 deployment or roles`;
+5. Use hub_b20_analyze for B20 deployment questions / role explanations
+6. Use hub_b20_launch when user asks to deploy/launch/create a B20 token — call with { name, symbol, variant: "asset"|"stablecoin", optional supply_cap, currency_code }. Returns complete foundry.toml + deploy script + CLI commands.`;
 
 // ─── Hub tool definitions (Anthropic tool format) ─────────────────────────────
 
@@ -1101,43 +1102,22 @@ Show the user their credit system status. Format it cleanly:
 Keep it short, practical, and actionable.`,
 
   help: `## COMMAND: /help
-Show user what Blue Chat can do using natural language examples.
-
 Blue Chat understands natural language — no commands needed.
 
-Examples of what you can ask:
-🔵 Builder
+Try asking:
 "build me a token launchpad on Base"
-"audit this smart contract for vulnerabilities"
-"what stack should I use for a DeFi app?"
+"is this token safe: 0x..."
+"best APY on Base right now?"
+"launch a token called BlueBot"
+"deploy a B20 stablecoin called vUSD"
+"what's the narrative on Base this week?"
+"analyze this B20 contract: 0x..."
+"screen this wallet for AML risks: 0x..."
+"compare Aave vs Morpho yields"
 "write a pitch for my Base project"
 
-📊 Trading & Alpha
-"what's the best token to buy on Base right now?"
-"is this token a honeypot: 0x..."
-"show me whale activity for AERO"
-"what's the narrative on Base this week?"
-
-🔐 Wallet & Security
-"screen this wallet for AML risks: 0x..."
-"check my Base airdrop eligibility"
-"analyze my wallet strategy"
-
-💰 DeFi & Yield
-"what's the best APY on Base right now?"
-"compare Aave vs Morpho yields"
-
-🚀 Launch
-"launch a token called BlueBot"
-"help me deploy to Base mainnet"
-
-⚡ B20 & Beryl
-"explain B20 token standard"
-"help me deploy a B20 token"
-"analyze this B20 contract: 0x..."
-
-Type /credits to check your balance.
-Type /skill install <url> to add custom skills.`,
+Type /credits to check balance.
+Type /skill install <url> for custom skills.`,
 };
 
 // ─── Venice direct stream (no tools) ─────────────────────────────────────────
