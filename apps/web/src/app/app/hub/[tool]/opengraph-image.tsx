@@ -15,11 +15,7 @@ export default async function Image({ params }: { params: Promise<{ tool: string
   const name = t?.name ?? "Blue Hub";
   const desc = t?.description ?? "AI agent tools for Base builders";
   const price = t?.price ?? "";
-  const agents: [string, string][] = t?.isComposite
-    ? [["Blueagent", C.cyan], ["Aeon", C.violet], ["MiroShark", C.green]]
-    : t?.agentName === "Aeon" ? [["Aeon", C.violet]]
-    : t?.agentName === "MiroShark" ? [["MiroShark", C.green]]
-    : [["Blueagent", C.cyan]];
+  const agents: [string, string][] = [["BlueAgent", C.cyan]];
 
   return new ImageResponse(
     (
