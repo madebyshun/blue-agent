@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, http } from "viem";
-import { base, baseSepolia } from "viem/chains";
 import { buildB20Calldata } from "@/lib/b20/encode";
 
 const NETWORKS = {
-  sepolia: { chain: baseSepolia, rpc: "https://sepolia.base.org", id: 84532 },
-  mainnet: { chain: base,        rpc: "https://mainnet.base.org",  id: 8453  },
+  sepolia: { id: 84532 },
+  mainnet: { id: 8453  },
 } as const;
+
+// Timestamp-based Beryl activation — B20 factory is a Rust precompile,
+// getCode always returns "0x" even when active.
+const BERYL_ACTIVATION: Record<string, number> = {
+  sepolia: 1781805600, // 2026-06-18 18:00 UTC
+  mainnet: 1782410400, // 2026-06-25 18:00 UTC
+};
 
 export async function POST(req: NextRequest) {
   try {
@@ -32,8 +37,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "invalid admin address" }, { status: 400 });
     }
 
-    const net    = NETWORKS[(network as keyof typeof NETWORKS)] ?? NETWORKS.sepolia;
-    const client = createPublicClient({ chain: net.chain, transport: http(net.rpc) });
+    const net = NETWORKS[(network as keyof typeof NETWORKS)] ?? NETWORKS.sepolia;
 
     // Build calldata via shared helper
     const { data, factory, decimals: dec } = buildB20Calldata({
@@ -45,9 +49,10 @@ export async function POST(req: NextRequest) {
       admin,
     });
 
-    // Verify Beryl activated — check factory has code
-    const code     = await client.getCode({ address: factory });
-    const berylLive = !!code && code !== "0x";
+    // Timestamp-based activation check (precompile has no EVM bytecode → getCode = "0x")
+    const now        = Math.floor(Date.now() / 1000);
+    const activation = BERYL_ACTIVATION[network] ?? BERYL_ACTIVATION.sepolia;
+    const berylLive  = now >= activation;
 
     return NextResponse.json({
       ok: true,

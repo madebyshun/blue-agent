@@ -1211,8 +1211,9 @@ function B20LaunchCard({ result }: { result: B20LaunchResult }) {
   const [cmdCopied,     setCmdCopied]     = useState(false);
 
   // Deploy flow
-  const { address }             = useAccount();
-  const { sendTransactionAsync } = useSendTransaction();
+  const { address, chainId: currentChainId } = useAccount();
+  const { sendTransactionAsync }              = useSendTransaction();
+  const { switchChainAsync }                  = useSwitchChain();
   const [deploying,      setDeploying]      = useState(false);
   const [polling,        setPolling]        = useState(false);
   const [deployErr,      setDeployErr]      = useState("");
@@ -1257,11 +1258,23 @@ function B20LaunchCard({ result }: { result: B20LaunchResult }) {
         );
       }
 
+      // Auto-switch to target chain if needed
+      const targetChainId = network === "mainnet" ? 8453 : 84532;
+      if (currentChainId !== targetChainId) {
+        try {
+          await switchChainAsync({ chainId: targetChainId });
+        } catch {
+          throw new Error(
+            `Switch your wallet to Base ${network === "mainnet" ? "Mainnet" : "Sepolia"} and try again`,
+          );
+        }
+      }
+
       const hash = await sendTransactionAsync({
         to:      prep.tx.to as `0x${string}`,
         data:    prep.tx.data as `0x${string}`,
         value:   0n,
-        chainId: prep.chainId,
+        chainId: targetChainId,
       });
       setDeployTxHash(hash);
       setPolling(true);
