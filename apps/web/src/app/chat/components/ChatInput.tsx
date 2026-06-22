@@ -20,8 +20,6 @@ interface SlashCommand {
 // Slash commands are natural language now — only 3 utility commands remain.
 // /skill is handled client-side in ChatContext.tsx.
 const SLASH_COMMANDS: SlashCommand[] = [
-  { cmd: "credits", icon: "⚡", label: "Credits",     hint: "Show balance, tier, and how to earn more",        example: "/credits" },
-  { cmd: "help",    icon: "📖", label: "Help",        hint: "Show what Blue Chat can do — natural language",   example: "/help" },
   { cmd: "skill",   icon: "📦", label: "Skill Packs", hint: "install / list / remove GitHub skill packs",      example: "/skill install owner/repo" },
 ];
 
