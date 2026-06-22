@@ -471,7 +471,7 @@ export default function BankPage() {
 
         {/* Body — 2-col grid */}
         <div className="flex-1 overflow-y-auto">
-          <div className="p-4 max-w-[1360px] mx-auto">
+          <div className="p-4">
             <div className="xl:grid xl:grid-cols-[1fr_288px] xl:gap-5 xl:items-start">
 
               {/* ── MAIN COLUMN ──────────────────────────────────────── */}
@@ -1007,7 +1007,10 @@ export default function BankPage() {
           : { right: 16, bottom: 16, background: chatOpen ? "#050508" : "#4FC3F7", color: chatOpen ? "#4FC3F7" : "#050508", border: "2px solid #4FC3F7", cursor: fabDragging ? "grabbing" : "grab" }
         }
       >
-        <span className="text-base leading-none pointer-events-none">{chatOpen ? "✕" : "💬"}</span>
+        {chatOpen
+          ? <span className="text-base leading-none pointer-events-none">✕</span>
+          : <img src="/logomark.svg" alt="BlueAgent" className="w-6 h-6 pointer-events-none" />
+        }
       </button>
 
       {/* ── AI Chat popup — anchored above FAB ───────────────────────────── */}
