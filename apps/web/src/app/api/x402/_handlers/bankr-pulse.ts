@@ -8,6 +8,18 @@ const DEXSCREENER_URL     = `https://api.dexscreener.com/latest/dex/tokens/${BNK
 // Symbols/names to filter out (spam/meme tokens)
 const SPAM_SYMBOLS = new Set(["B20", ".", "Another"]);
 
+function looksLikeSpam(name: string, symbol: string): boolean {
+  const s = symbol.trim();
+  const n = name.trim();
+  if (/\s/.test(s)) return true;                                         // symbol has space e.g. "LU K"
+  if (s.length < 2 || s.length > 12) return true;                        // too short or too long
+  if (n.length < 3) return true;                                          // name too short
+  if (!/[a-zA-Z]/.test(s)) return true;                                  // symbol has no letters
+  if (/^[.\s]+$/.test(n)) return true;                                    // name is only dots/spaces
+  if (s === s.toLowerCase() && n.toLowerCase() === s.toLowerCase() && s.length <= 6) return true; // "ajglu" style
+  return false;
+}
+
 export default async function handler(_req: Request): Promise<Response> {
   const sig   = new AbortController();
   const timer = setTimeout(() => sig.abort(), 8000);
@@ -90,8 +102,11 @@ export default async function handler(_req: Request): Promise<Response> {
     seen.add(s); return true;
   });
 
+  // Strong spam filter — applied after dedup
+  const finalDedup = dedup.filter(l => !looksLikeSpam(l.tokenName ?? "", l.tokenSymbol ?? ""));
+
   // ── Build output ──────────────────────────────────────────────────────────
-  const launchSample = dedup.slice(0, 15).map(l => ({
+  const launchSample = finalDedup.slice(0, 15).map(l => ({
     name:       l.tokenName   ?? "Unknown",
     symbol:     l.tokenSymbol ?? "—",
     deployer:   l.deployer?.xUsername ?? null,
@@ -99,7 +114,7 @@ export default async function handler(_req: Request): Promise<Response> {
     launchType: l.launchType ?? null,
   }));
 
-  const recentLaunches = dedup.slice(0, 8);
+  const recentLaunches = finalDedup.slice(0, 8);
   const topNames = recentLaunches.slice(0, 4)
     .map(l => l.tokenSymbol)
     .filter(Boolean) as string[];
@@ -111,8 +126,8 @@ export default async function handler(_req: Request): Promise<Response> {
     sentiment: "neutral" as const,
   }));
 
-  const summary = launches.length
-    ? `${launches.length} recent token launches on Bankr. Latest: ${topNames.join(" · ")}.${bnkrPrice != null ? ` $BNKR at $${bnkrPrice.toFixed(6)}.` : ""}`
+  const summary = finalDedup.length
+    ? `${finalDedup.length} recent token launches on Bankr. Latest: ${topNames.join(" · ")}.${bnkrPrice != null ? ` $BNKR at $${bnkrPrice.toFixed(6)}.` : ""}`
     : "Bankr ecosystem pulse — no recent launches.";
 
   const sentiment = bnkrChange != null && bnkrChange > 0 ? "bullish"
@@ -129,7 +144,7 @@ export default async function handler(_req: Request): Promise<Response> {
     bnkr_price:  bnkrPrice,
     bnkr_change: bnkrChange,
     sentiment,
-    metrics:     { total_launches: launches.length, avg_change24h: null },
+    metrics:     { total_launches: finalDedup.length, avg_change24h: null },
     data_source: "Bankr API + DexScreener (live)",
     disclaimer:  "Snapshot only — not financial advice.",
   });
