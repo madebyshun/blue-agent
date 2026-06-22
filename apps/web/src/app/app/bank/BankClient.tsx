@@ -318,6 +318,17 @@ export default function BankPage() {
     }
   }
 
+  // ── Wallet state (canonical derived state) — MUST be before any early return ──
+  const walletState = useMemo(() => buildWalletState({
+    walletUsdc: walletUsdc ?? 0,
+    aavePos: aavePos ?? 0,
+    morphoPos: morphoPos ?? 0,
+    ethBal: ethBal ?? 0,
+    bestApy,
+    netFlowMonth,
+    transferCountMonth,
+  }), [walletUsdc, aavePos, morphoPos, ethBal, bestApy, netFlowMonth, transferCountMonth]);
+
   if (!isConnected) {
     return <BankLanding bestApy={bestApy} />;
   }
@@ -395,17 +406,6 @@ export default function BankPage() {
 
   // ── Auto Earn surplus ─────────────────────────────────────────────────────
   const autoEarnSurplus = Math.max(0, (walletUsdc ?? 0) - autoEarnThreshold);
-
-  // ── Wallet state (canonical derived state) ───────────────────────────────
-  const walletState = useMemo(() => buildWalletState({
-    walletUsdc: walletUsdc ?? 0,
-    aavePos: aavePos ?? 0,
-    morphoPos: morphoPos ?? 0,
-    ethBal: ethBal ?? 0,
-    bestApy,
-    netFlowMonth,
-    transferCountMonth,
-  }), [walletUsdc, aavePos, morphoPos, ethBal, bestApy, netFlowMonth, transferCountMonth]);
 
   return (
     <div className="flex h-full w-full bg-[#050508] text-slate-200">
