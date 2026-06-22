@@ -550,15 +550,7 @@ export default function ChatMessages() {
             ))}
           </div>
 
-          {/* Badge row */}
-          <div className="flex gap-2 flex-wrap justify-center mb-4">
-            {["74 Tools", "Base MCP", "Bankr", "Skills"].map(b => (
-              <span key={b} className="font-mono text-[9px] px-2 py-1 rounded-md text-slate-600"
-                style={{ border: "1px solid #1A1A2E" }}>
-                {b}
-              </span>
-            ))}
-          </div>
+
 
           {outOfCredits && (
             <p className="font-mono text-[10px] text-red-400 mt-2">Out of credits — stake $BLUEAGENT to refill</p>

@@ -17,7 +17,7 @@ const CRON_SECRET          = process.env.CRON_SECRET ?? "";
 const BASE_URL             = "https://blueagent.dev/api/x402";
 const HOUR_MS              = 3_600_000;
 
-export type FeedAgent = "aeon" | "blue" | "miroshark" | "consensus";
+export type FeedAgent = "blueagent";
 
 export interface FeedItem {
   id: string;
@@ -150,6 +150,32 @@ function toFeedItem(job: Job, resp: Any, cycleId: number, idx: number): FeedItem
         const opps = Array.isArray(resp.opportunities) ? resp.opportunities : [];
         summary = resp.summary ?? (opps[0]?.protocol ? `Best: ${opps[0].protocol}${opps[0].apy ? ` · ${opps[0].apy} APY` : ""}.` : "Base DeFi opportunity scan.");
         metrics = clean([metric("Opps", opps.length ? `${opps.length}` : null), metric("Top APY", opps[0]?.apy ? `${opps[0].apy}` : null), metric("Risk", opps[0]?.risk ?? null)]);
+        break;
+      }
+      case "bankr-pulse": {
+        title = "Bankr Trending";
+        const trending = Array.isArray(resp.trending) ? resp.trending : [];
+        const price    = resp.bnkr_price;
+        const change   = resp.bnkr_change;
+        summary = resp.summary ?? (trending[0]?.symbol
+          ? `Trending on Bankr: ${trending.slice(0, 3).map((t: Any) => t.symbol).filter(Boolean).join(" · ")}`
+          : "Bankr ecosystem pulse updated.");
+        metrics = clean([
+          metric("$BNKR",    price  != null ? fmtUsd(price)  : null),
+          metric("24h",      change != null ? fmtPct(change) : null),
+          metric("Launches", resp.metrics?.total_launches != null ? `${resp.metrics.total_launches}` : null),
+        ]);
+        break;
+      }
+      case "b20-tracker": {
+        title = resp.title ?? "B20 on Base";
+        const tracked = Array.isArray(resp.tracked) ? resp.tracked : [];
+        summary = resp.summary ?? "B20 tracking on Base.";
+        metrics = clean([
+          metric("Tracked", tracked.length ? `${tracked.length}` : null),
+          metric("Beryl",   resp.berylActive ? "LIVE" : (resp.daysToBeryl != null ? `${resp.daysToBeryl}d` : null)),
+          metric("Top",     tracked[0]?.symbol ?? null),
+        ]);
         break;
       }
     }

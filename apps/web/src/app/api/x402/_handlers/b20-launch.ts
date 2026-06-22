@@ -20,6 +20,30 @@ export default async function handler(req: Request): Promise<Response> {
     );
   }
 
+  // ── action=prepare: return unsigned calldata for direct wallet dispatch ──
+  const action = (body.action as string | undefined) ?? "script";
+  if (action === "prepare") {
+    const admin = body.admin as string | undefined;
+    if (!admin || !/^0x[a-fA-F0-9]{40}$/.test(admin)) {
+      return Response.json({ error: "admin address required for prepare action" }, { status: 400 });
+    }
+    const { buildB20Calldata, B20_FACTORY } = await import("@/lib/b20/encode");
+    const { data, factory } = buildB20Calldata({
+      name, symbol, variant, decimals,
+      supply_cap: supply_cap !== null ? String(supply_cap) : undefined,
+      currency_code: currency_code ?? undefined,
+      admin,
+    });
+    return Response.json({
+      tool:    "b20-launch",
+      action:  "prepare",
+      config:  { name, symbol, variant, decimals },
+      factory: B20_FACTORY,
+      tx:      { to: factory, data, value: "0x0" },
+      note:    "Unsigned tx. Sign + broadcast once Beryl is active on your target network.",
+    });
+  }
+
   // ── Foundry config ─────────────────────────────────────────────────────────
   const foundry_config = `[profile.default]
 src = "src"

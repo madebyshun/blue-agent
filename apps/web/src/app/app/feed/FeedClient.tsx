@@ -7,10 +7,7 @@ import type { FeedItem, FeedAgent } from "@/app/api/cron/feed/route";
 // ─── constants / helpers ────────────────────────────────────────────────────
 
 const AGENT: Record<FeedAgent, { label: string; emoji: string; color: string }> = {
-  aeon:      { label: "Aeon",       emoji: "⭐",   color: "#FB923C" },
-  miroshark: { label: "MiroShark",  emoji: "🦈",   color: "#A78BFA" },
-  blue:      { label: "Blue Agent", emoji: "🟦",   color: "#4FC3F7" },
-  consensus: { label: "Consensus",  emoji: "⭐🟦🦈", color: "#34D399" },
+  blueagent: { label: "BlueAgent", emoji: "🟦", color: "#4FC3F7" },
 };
 
 const SIGNAL_COLOR: Record<string, string> = {
@@ -741,7 +738,7 @@ function FeedCard({ item, history, fresh, delay, onShare, onCast, copied, highli
   item: FeedItem; history: FeedItem[]; fresh?: boolean; delay: number;
   onShare: () => void; onCast: () => void; copied: boolean; highlighted?: boolean;
 }) {
-  const badge = AGENT[item.agent] ?? AGENT.blue;
+  const badge = AGENT.blueagent;
   const [expanded, setExpanded] = useState(false);
   const [mlinkCopied, setMlinkCopied] = useState(false);
   return (
@@ -838,11 +835,8 @@ function FeedCard({ item, history, fresh, delay, onShare, onCast, copied, highli
 
 // ─── page ───────────────────────────────────────────────────────────────────
 
-const FILTERS: { id: "all" | FeedAgent; label: string; emoji: string }[] = [
+const FILTERS: { id: "all"; label: string; emoji: string }[] = [
   { id: "all", label: "All", emoji: "◎" },
-  { id: "aeon", label: "Aeon", emoji: "⭐" },
-  { id: "miroshark", label: "MiroShark", emoji: "🦈" },
-  { id: "consensus", label: "Consensus", emoji: "⭐🟦🦈" },
 ];
 
 function SkeletonCard() {
@@ -861,7 +855,7 @@ export default function FeedClient() {
   const [loading, setLoad]  = useState(true);
   const [running, setRun]   = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | FeedAgent>("all");
+  const [filter, setFilter] = useState<"all">("all");
   const [freshIds, setFresh] = useState<Set<string>>(new Set());
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const prevTop = useRef<string | null>(null);
@@ -919,9 +913,8 @@ export default function FeedClient() {
   }, []);
 
   const filtered = useMemo(() => {
-    const byAgent = filter === "all" ? items : items.filter((i) => i.agent === filter);
     // whale-tracker with no real on-chain movements → hide (no fabricated card).
-    return byAgent.filter((i) => {
+    return items.filter((i) => {
       if (i.tool !== "whale-tracker") return true;
       const mv = raw(i).topMovements;
       return Array.isArray(mv) && mv.length > 0;
@@ -994,19 +987,12 @@ export default function FeedClient() {
           </div>
         </div>
 
-        {/* Agent filters */}
+        {/* Agent badge */}
         <div className="px-3 pt-4">
-          <div className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-1.5">Agents</div>
-          <div className="flex flex-col gap-1">
-            {FILTERS.map((f) => (
-              <button key={f.id} onClick={() => setFilter(f.id)}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg font-mono text-[11px] transition-colors text-left"
-                style={filter === f.id
-                  ? { color: "#4FC3F7", background: "#4FC3F712", border: "1px solid #4FC3F730" }
-                  : { color: "#64748b", border: "1px solid #1A1A2E" }}>
-                <span className="text-[12px] leading-none">{f.emoji}</span>{f.label}
-              </button>
-            ))}
+          <div className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-1.5">Agent</div>
+          <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg font-mono text-[11px]"
+            style={{ color: "#4FC3F7", background: "#4FC3F712", border: "1px solid #4FC3F730" }}>
+            <span className="text-[12px] leading-none">🟦</span>BlueAgent
           </div>
         </div>
 
@@ -1021,7 +1007,7 @@ export default function FeedClient() {
               {running ? "Running…" : "Run Now →"}
             </button>
           )}
-          <div className="font-mono text-[8px] text-slate-700 mt-2">Powered by Bankr · Venice AI</div>
+          <div className="font-mono text-[8px] text-slate-700 mt-2">Powered by Bankr</div>
         </div>
       </aside>
 
@@ -1041,17 +1027,12 @@ export default function FeedClient() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
-        {/* Mobile filters (sidebar is lg-only, matching Chat / Hub) */}
-        <div className="lg:hidden flex items-center gap-1.5 mb-4 overflow-x-auto">
-          {FILTERS.map((f) => (
-            <button key={f.id} onClick={() => setFilter(f.id)}
-              className="font-mono text-[11px] px-2.5 py-1 rounded-full border transition-colors shrink-0"
-              style={filter === f.id
-                ? { color: "#4FC3F7", borderColor: "#4FC3F755", background: "#4FC3F718" }
-                : { color: "#64748b", borderColor: "#1A1A2E" }}>
-              {f.emoji} {f.label}
-            </button>
-          ))}
+        {/* Mobile agent badge */}
+        <div className="lg:hidden flex items-center gap-1.5 mb-4">
+          <span className="font-mono text-[11px] px-2.5 py-1 rounded-full border shrink-0"
+            style={{ color: "#4FC3F7", borderColor: "#4FC3F755", background: "#4FC3F718" }}>
+            🟦 BlueAgent
+          </span>
         </div>
 
         {/* C5 Beryl banner — shows until June 30 2026 */}
