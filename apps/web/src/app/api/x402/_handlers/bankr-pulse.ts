@@ -1,40 +1,30 @@
 // x402/bankr-pulse — Bankr ecosystem pulse (trending agent launches + $BNKR price)
-// Price: $0.05 — real data from Bankr API + DexScreener; LLM only synthesizes narrative
+// Price: $0.05 — real data from Bankr API + DexScreener; deterministic summary (no LLM)
 
-import { callVeniceLLM, extractJsonObject } from "@/app/api/_lib/llm";
+const BNKR_ADDRESS        = "0x05fa92bc81ae6c6d7e65b636a72398f6d0b15c85";
+const BANKR_LAUNCHES_URL  = "https://api.bankr.bot/token-launches?limit=20";
+const DEXSCREENER_URL     = `https://api.dexscreener.com/latest/dex/tokens/${BNKR_ADDRESS}`;
 
-const BNKR_ADDRESS = "0x05fa92bc81ae6c6d7e65b636a72398f6d0b15c85";
-const BANKR_LAUNCHES_URL = "https://api.bankr.bot/token-launches?limit=20";
-const DEXSCREENER_URL = `https://api.dexscreener.com/latest/dex/tokens/${BNKR_ADDRESS}`;
-
-const SYSTEM = `Respond with ONLY a raw JSON object. Start immediately with { and end with }. No markdown, no explanation, no text before or after.
-
-You are a Bankr ecosystem analyst on Base. Use ONLY the data provided in the user message.
-NEVER invent token names, prices, addresses, or metrics not present in the input data.
-If a field is missing, return null — never estimate or fabricate.
-
-Return ONLY raw JSON:
-{
-  "title": "string (headline for this Bankr pulse, ≤12 words)",
-  "summary": "string (2-3 sentences: ecosystem mood, notable launches, $BNKR action)",
-  "trending": [
-    { "name": "string", "symbol": "string", "change24h": number|null, "volume24h": number|null, "sentiment": "hot" | "rising" | "neutral" | "cooling" }
-  ],
-  "bnkr_price": number|null,
-  "bnkr_change": number|null,
-  "sentiment": "bullish" | "neutral" | "bearish",
-  "metrics": { "total_launches": number|null, "avg_change24h": number|null }
-}`;
+// Symbols/names to filter out (spam/meme tokens)
+const SPAM_SYMBOLS = new Set(["B20", ".", "Another"]);
 
 export default async function handler(_req: Request): Promise<Response> {
-  const sig = new AbortController();
+  const sig   = new AbortController();
   const timer = setTimeout(() => sig.abort(), 8000);
 
-  let launches: { name?: string; symbol?: string; priceChange24h?: number; volume24h?: number }[] = [];
+  let launches: {
+    tokenName?:    string;
+    tokenSymbol?:  string;
+    tokenAddress?: string;
+    deployer?:     { walletAddress?: string; xUsername?: string };
+    timestamp?:    number;
+    status?:       string;
+    launchType?:   string;
+  }[] = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let bnkrPair: any = null;
   let launchesOk = true;
-  let bnkrOk = true;
+  let bnkrOk     = true;
 
   try {
     const [launchRes, dexRes] = await Promise.allSettled([
@@ -51,8 +41,10 @@ export default async function handler(_req: Request): Promise<Response> {
 
     if (dexRes.status === "fulfilled" && dexRes.value.ok) {
       try {
-        const raw = await dexRes.value.json();
-        const pairs: typeof bnkrPair[] = raw?.pairs ?? [];
+        const raw   = await dexRes.value.json();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pairs: any[] = raw?.pairs ?? [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         bnkrPair = pairs.sort((a: any, b: any) => (b?.volume?.h24 ?? 0) - (a?.volume?.h24 ?? 0))[0] ?? null;
       } catch { bnkrOk = false; }
     } else { bnkrOk = false; }
@@ -64,62 +56,81 @@ export default async function handler(_req: Request): Promise<Response> {
 
   if (!launchesOk && !bnkrOk) {
     return Response.json({
-      tool: "bankr-pulse",
-      timestamp: new Date().toISOString(),
-      title: "Bankr data temporarily unavailable",
-      summary: "Live Bankr and DexScreener data could not be fetched. Please retry.",
-      trending: [],
+      tool:       "bankr-pulse",
+      timestamp:  new Date().toISOString(),
+      title:      "Bankr data temporarily unavailable",
+      summary:    "Live Bankr and DexScreener data could not be fetched. Please retry.",
+      trending:   [],
       bnkr_price: null,
       bnkr_change: null,
-      sentiment: "neutral",
-      metrics: { total_launches: null, avg_change24h: null },
-      note: "Both data sources unavailable — no fabricated data shown.",
+      sentiment:  "neutral",
+      metrics:    { total_launches: null, avg_change24h: null },
+      note:       "Both data sources unavailable — no fabricated data shown.",
     });
   }
 
   const bnkrPrice  = bnkrPair?.priceUsd != null ? parseFloat(bnkrPair.priceUsd) : null;
   const bnkrChange = bnkrPair?.priceChange?.h24 ?? null;
 
-  const launchSample = launches.slice(0, 15).map(l => ({
-    name:      l.name     ?? "Unknown",
-    symbol:    l.symbol   ?? "—",
-    change24h: l.priceChange24h ?? null,
-    volume24h: l.volume24h      ?? null,
+  // ── Scam / spam filter ────────────────────────────────────────────────────
+  const cleanLaunches = launches.filter(l => {
+    const sym  = (l.tokenSymbol ?? "").trim();
+    const name = (l.tokenName ?? "").trim();
+    if (!sym || !name) return false;
+    if (SPAM_SYMBOLS.has(sym)) return false;
+    if (name.length < 2 || /^[.\s]+$/.test(name)) return false;
+    return true;
+  });
+
+  // Dedupe by symbol (keep first occurrence)
+  const seen  = new Set<string>();
+  const dedup = cleanLaunches.filter(l => {
+    const s = l.tokenSymbol!;
+    if (seen.has(s)) return false;
+    seen.add(s); return true;
+  });
+
+  // ── Build output ──────────────────────────────────────────────────────────
+  const launchSample = dedup.slice(0, 15).map(l => ({
+    name:       l.tokenName   ?? "Unknown",
+    symbol:     l.tokenSymbol ?? "—",
+    deployer:   l.deployer?.xUsername ?? null,
+    address:    l.tokenAddress ?? null,
+    launchType: l.launchType ?? null,
   }));
 
-  const userContent = [
-    "Summarize the current Bankr ecosystem pulse using this live data.\n",
-    launchesOk && launchSample.length > 0
-      ? `Recent Bankr token launches (${launchSample.length} of ${launches.length} total):\n${JSON.stringify(launchSample, null, 2)}`
-      : "Bankr launch data: unavailable",
-    "\n",
-    bnkrOk && bnkrPrice != null
-      ? `$BNKR price: $${bnkrPrice.toFixed(6)} | 24h change: ${bnkrChange != null ? bnkrChange.toFixed(2) + "%" : "n/a"} | 24h volume: $${(bnkrPair?.volume?.h24 ?? 0).toLocaleString()}`
-      : "$BNKR price data: unavailable",
-  ].join("\n");
+  const recentLaunches = dedup.slice(0, 8);
+  const topNames = recentLaunches.slice(0, 4)
+    .map(l => l.tokenSymbol)
+    .filter(Boolean) as string[];
 
-  const ask = () => callVeniceLLM({ system: SYSTEM, messages: [{ role: "user", content: userContent }], temperature: 0.2, maxTokens: 900 });
+  const trending = recentLaunches.map(l => ({
+    name:      l.tokenName  ?? "Unknown",
+    symbol:    l.tokenSymbol ?? "—",
+    deployer:  l.deployer?.xUsername ?? null,
+    sentiment: "neutral" as const,
+  }));
 
-  let result = extractJsonObject(await ask());
-  if (!result) result = extractJsonObject(await ask());
-  if (!result) {
-    result = {
-      title: "Bankr Pulse",
-      summary: "Live data fetched but synthesis is briefly unavailable. Please retry.",
-      trending: [],
-      sentiment: "neutral",
-      metrics: { total_launches: launches.length, avg_change24h: null },
-      degraded: true,
-    };
-  }
+  const summary = launches.length
+    ? `${launches.length} recent token launches on Bankr. Latest: ${topNames.join(" · ")}.${bnkrPrice != null ? ` $BNKR at $${bnkrPrice.toFixed(6)}.` : ""}`
+    : "Bankr ecosystem pulse — no recent launches.";
+
+  const sentiment = bnkrChange != null && bnkrChange > 0 ? "bullish"
+                  : bnkrChange != null && bnkrChange < 0 ? "bearish"
+                  : "neutral";
 
   return Response.json({
-    tool: "bankr-pulse",
-    timestamp: new Date().toISOString(),
-    ...result,
-    bnkr_price:  result.bnkr_price  ?? bnkrPrice,
-    bnkr_change: result.bnkr_change ?? bnkrChange,
+    tool:        "bankr-pulse",
+    timestamp:   new Date().toISOString(),
+    title:       "Bankr Trending",
+    summary,
+    trending,
+    launches:    launchSample,
+    bnkr_price:  bnkrPrice,
+    bnkr_change: bnkrChange,
+    sentiment,
+    metrics:     { total_launches: launches.length, avg_change24h: null },
     data_source: "Bankr API + DexScreener (live)",
-    disclaimer: "Snapshot only — not financial advice.",
+    disclaimer:  "Snapshot only — not financial advice.",
   });
 }
