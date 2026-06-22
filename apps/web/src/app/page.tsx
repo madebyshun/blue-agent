@@ -228,7 +228,7 @@ export default function Home() {
             Chat with AI agents. Run 74 tools. Launch tokens. Build and scale onchain — all in one platform.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 mb-10">
+          <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
             <Link href="/app/chat" className="text-sm font-semibold px-7 py-3 rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
               style={{ background: "linear-gradient(135deg, #4FC3F7, #29ABE2)", color: "#050508", boxShadow: "0 0 26px #4FC3F733" }}>
               Open Blue Chat →
@@ -236,6 +236,15 @@ export default function Home() {
             <Link href="/hub" className="text-sm font-semibold text-[#4FC3F7] border border-[#4FC3F7]/30 px-7 py-3 rounded-xl hover:bg-[#4FC3F7]/5 transition-all">
               Browse Hub
             </Link>
+            <Link href="/app/bank"
+              className="text-sm font-semibold px-7 py-3 rounded-xl transition-all border border-[#34D399]/30 text-[#34D399] hover:bg-[#34D399]/5">
+              Connect Wallet
+            </Link>
+            <a href="https://app.uniswap.org/swap?outputCurrency=0xf895783b2931c919955e18b5e3343e7c7c456ba3&chain=base"
+              target="_blank" rel="noopener noreferrer"
+              className="text-sm font-semibold px-7 py-3 rounded-xl transition-all border border-[#4FC3F7]/30 text-[#4FC3F7] hover:bg-[#4FC3F7]/5">
+              Buy $BLUEAGENT ↗
+            </a>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 font-mono text-[11px] text-slate-600">

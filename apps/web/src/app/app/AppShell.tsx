@@ -77,6 +77,18 @@ const APP_NAV = [
       </svg>
     ),
   },
+  {
+    id: "bankr",
+    label: "Bankr",
+    href: "https://bankr.bot/agents/blue-agent",
+    external: true,
+    icon: (
+      <svg style={{ width: 18, height: 18 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round"
+          d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253" />
+      </svg>
+    ),
+  },
 ];
 
 const APP_BOTTOM = [
@@ -136,17 +148,10 @@ function AppSideNav() {
       <nav className="flex flex-col items-center gap-0.5 pt-2 flex-1 px-2">
         {NAV_ITEMS.map((item) => {
           const active = isActive(item.href);
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              className="group relative flex flex-col items-center justify-center gap-0.5 w-full h-[50px] rounded-xl transition-all"
-              style={
-                active
-                  ? { color: "#4FC3F7", background: "#4FC3F712", boxShadow: "0 0 0 1px #4FC3F720" }
-                  : { color: "#334155" }
-              }
-            >
+          const isExt = !!(item as { external?: boolean }).external;
+          const navCls = "group relative flex flex-col items-center justify-center gap-0.5 w-full h-[50px] rounded-xl transition-all";
+          const navInner = (
+            <>
               <span className="group-hover:text-slate-300 transition-colors">
                 {item.icon}
               </span>
@@ -156,12 +161,33 @@ function AppSideNav() {
               >
                 {item.label}
               </span>
-
               {/* Active left-bar indicator */}
               {active && (
                 <span className="absolute -left-2 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-[#4FC3F7]"
                   style={{ boxShadow: "0 0 6px #4FC3F780" }} />
               )}
+            </>
+          );
+          if (isExt) {
+            return (
+              <a key={item.id} href={item.href} target="_blank" rel="noopener noreferrer"
+                className={navCls} style={{ color: "#334155" }}>
+                {navInner}
+              </a>
+            );
+          }
+          return (
+            <Link
+              key={item.id}
+              href={item.href}
+              className={navCls}
+              style={
+                active
+                  ? { color: "#4FC3F7", background: "#4FC3F712", boxShadow: "0 0 0 1px #4FC3F720" }
+                  : { color: "#334155" }
+              }
+            >
+              {navInner}
             </Link>
           );
         })}
@@ -392,16 +418,33 @@ function MobileDrawer() {
             <p className="px-3 pt-3 pb-1 font-mono text-[9px] text-slate-600 tracking-widest uppercase">Products</p>
             {DRAWER_PRODUCTS.map(item => {
               const active = pathname === item.href || pathname.startsWith(item.href + "/");
+              const isExt = !!(item as { external?: boolean }).external;
+              const drawerCls = "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-[#ffffff06]";
+              const drawerInner = (
+                <>
+                  <span className="shrink-0" style={{ color: active ? "#4FC3F7" : "#64748b" }}>{item.icon}</span>
+                  <span className="font-mono text-[13px]" style={{ color: active ? "#4FC3F7" : "#cbd5e1" }}>{item.label}</span>
+                  {isExt && <span className="ml-auto font-mono text-[9px] text-slate-600">↗</span>}
+                </>
+              );
+              if (isExt) {
+                return (
+                  <a key={item.id} href={item.href} target="_blank" rel="noopener noreferrer"
+                    onClick={() => setDrawerOpen(false)}
+                    className={drawerCls}>
+                    {drawerInner}
+                  </a>
+                );
+              }
               return (
                 <Link
                   key={item.id}
                   href={item.href}
                   onClick={() => setDrawerOpen(false)}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-[#ffffff06]"
+                  className={drawerCls}
                   style={active ? { background: "#4FC3F712" } : undefined}
                 >
-                  <span className="shrink-0" style={{ color: active ? "#4FC3F7" : "#64748b" }}>{item.icon}</span>
-                  <span className="font-mono text-[13px]" style={{ color: active ? "#4FC3F7" : "#cbd5e1" }}>{item.label}</span>
+                  {drawerInner}
                 </Link>
               );
             })}

@@ -378,8 +378,8 @@ interface EmptyState { heading: string; sub: string; starters: Starter[]; }
 
 const PERSONA_EMPTY: Record<string, EmptyState> = {
   "blue-agent": {
-    heading: "What are you building?",
-    sub:     "Idea → Build → Audit → Launch — just ask in plain English.",
+    heading: "🟦 BlueAgent",
+    sub:     "The Builder OS for Base",
     starters: [
       { icon: "💡", label: "Idea",   text: "idea brief: USDC payroll app for freelancers on Base", color: "#4FC3F7" },
       { icon: "🛠️", label: "Build",  text: "build an ERC-4337 agent wallet on Base",               color: "#A78BFA" },
@@ -505,12 +505,25 @@ export default function ChatMessages() {
           </div>
 
           {/* Heading — persona-aware */}
-          <h2 className="font-mono text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2">
-            {empty.heading}
-          </h2>
-          <p className="font-mono text-sm text-slate-600 mb-8">
-            {empty.sub}
-          </p>
+          {personaId === "blue-agent" ? (
+            <>
+              <p className="font-mono text-[13px] font-bold text-white tracking-tight mb-1">
+                {empty.heading}
+              </p>
+              <p className="font-mono text-[10px] text-slate-600 mb-8">
+                {empty.sub}
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 className="font-mono text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2">
+                {empty.heading}
+              </h2>
+              <p className="font-mono text-sm text-slate-600 mb-8">
+                {empty.sub}
+              </p>
+            </>
+          )}
 
           {/* NL example starters */}
           <div className="w-full max-w-sm space-y-2 mb-6">
