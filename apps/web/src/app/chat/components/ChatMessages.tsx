@@ -512,41 +512,6 @@ export default function ChatMessages() {
             {empty.sub}
           </p>
 
-          {/* Quick action cards — persona-aware. Natural language prompts send
-              immediately; prompts with a 0x… placeholder prefill the composer
-              so the user can fill in their address before sending. */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full max-w-md sm:max-w-2xl mx-auto mb-5">
-            {empty.starters.map(s => (
-              <button
-                key={s.label}
-                onClick={() => {
-                  const needsInput = s.text.includes("…");
-                  if (needsInput) {
-                    setInput(s.text.replace(/0x…|…/g, "").replace(/\s+$/, "") + " ");
-                    document.getElementById("chat-composer")?.focus();
-                  } else {
-                    send(s.text);
-                  }
-                }}
-                disabled={outOfCredits}
-                className="flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-all disabled:opacity-40 group"
-                style={{ background: "#0D0D14", borderColor: "#1A1A2E" }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.borderColor = `${s.color}30`;
-                  e.currentTarget.style.background = `${s.color}08`;
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.borderColor = "#1A1A2E";
-                  e.currentTarget.style.background = "#0D0D14";
-                }}
-              >
-                <span className="text-base shrink-0">{s.icon}</span>
-                <span className="font-mono text-[12px] text-slate-400 group-hover:text-white truncate transition-colors">
-                  {s.label}
-                </span>
-              </button>
-            ))}
-          </div>
 
           {outOfCredits && (
             <p className="font-mono text-[10px] text-red-400 mt-4">Out of credits — stake $BLUEAGENT to refill</p>
