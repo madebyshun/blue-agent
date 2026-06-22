@@ -381,10 +381,10 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
     heading: "What are you building?",
     sub:     "Idea → Build → Audit → Launch — just ask in plain English.",
     starters: [
-      { icon: "💡", label: "Idea",   text: "build me a USDC payroll app on Base",  color: "#4FC3F7" },
-      { icon: "🛠️", label: "Build",  text: "build an ERC-4337 agent wallet",        color: "#A78BFA" },
-      { icon: "🛡️", label: "Audit",  text: "audit my token launch plan",            color: "#F87171" },
-      { icon: "🚀", label: "Launch", text: "launch a token called BlueBot on Base", color: "#34D399" },
+      { icon: "💡", label: "Idea",   text: "idea brief: USDC payroll app for freelancers on Base", color: "#4FC3F7" },
+      { icon: "🛠️", label: "Build",  text: "build an ERC-4337 agent wallet on Base",               color: "#A78BFA" },
+      { icon: "🛡️", label: "Audit",  text: "audit my token launch plan for risks",                 color: "#F87171" },
+      { icon: "🚀", label: "Launch", text: "launch a token called BlueBot on Base",                color: "#34D399" },
     ],
   },
   "blue-trader": {
@@ -421,10 +421,10 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
     heading: "How can I help?",
     sub:     "Your custom system prompt is active — ask anything.",
     starters: [
-      { icon: "💡", label: "Idea",   text: "build me a USDC payroll app on Base",  color: "#4FC3F7" },
-      { icon: "🛠️", label: "Build",  text: "build an ERC-4337 agent wallet",        color: "#A78BFA" },
-      { icon: "🛡️", label: "Audit",  text: "audit my token launch plan",            color: "#F87171" },
-      { icon: "🚀", label: "Launch", text: "launch a token called BlueBot on Base", color: "#34D399" },
+      { icon: "💡", label: "Idea",   text: "idea brief: USDC payroll app for freelancers on Base", color: "#4FC3F7" },
+      { icon: "🛠️", label: "Build",  text: "build an ERC-4337 agent wallet on Base",               color: "#A78BFA" },
+      { icon: "🛡️", label: "Audit",  text: "audit my token launch plan for risks",                 color: "#F87171" },
+      { icon: "🚀", label: "Launch", text: "launch a token called BlueBot on Base",                color: "#34D399" },
     ],
   },
 };
@@ -512,6 +512,39 @@ export default function ChatMessages() {
             {empty.sub}
           </p>
 
+          {/* Quick-action starters — persona-aware */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full max-w-md sm:max-w-2xl mx-auto mb-5">
+            {empty.starters.map(s => (
+              <button
+                key={s.label}
+                onClick={() => {
+                  const needsInput = s.text.includes("…");
+                  if (needsInput) {
+                    setInput(s.text.replace(/0x…|…/g, "").replace(/\s+$/, "") + " ");
+                    document.getElementById("chat-composer")?.focus();
+                  } else {
+                    send(s.text);
+                  }
+                }}
+                disabled={outOfCredits}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-all disabled:opacity-40 group"
+                style={{ background: "#0D0D14", borderColor: "#1A1A2E" }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = `${s.color}30`;
+                  e.currentTarget.style.background  = `${s.color}08`;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = "#1A1A2E";
+                  e.currentTarget.style.background  = "#0D0D14";
+                }}
+              >
+                <span className="text-base shrink-0">{s.icon}</span>
+                <span className="font-mono text-[12px] text-slate-400 group-hover:text-white truncate transition-colors">
+                  {s.label}
+                </span>
+              </button>
+            ))}
+          </div>
 
           {outOfCredits && (
             <p className="font-mono text-[10px] text-red-400 mt-4">Out of credits — stake $BLUEAGENT to refill</p>
