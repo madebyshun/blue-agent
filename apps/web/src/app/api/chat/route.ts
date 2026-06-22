@@ -203,6 +203,7 @@ You have access to real-time Hub tools. Use them when the user asks about:
 - Builder scores, repo health, grants → hub_builder_score, hub_repo_health, hub_base_grant
 - Fundraising timing, ecosystem digest → hub_fundraise_timing, hub_ecosystem
 - Live onchain data: balance, tx, block, gas, contract calls → hub_crypto_rpc (21 chains: base, ethereum, arbitrum, optimism, polygon, etc.)
+- User's own wallet balance → hub_crypto_rpc with eth_getBalance for ETH, eth_call for ERC-20 tokens. Present as a clean text list.
 - Anything requiring live web data (news, events, rumours, OFFICIAL announcements) → web_search
 
 Tool selection rules:
@@ -245,15 +246,11 @@ Keep them short (≤ 8 words), specific, and actionable.`;
 
 // Bankr agent — always on (Bankr is the default LLM + agent provider).
 const BANKR_AGENT_SECTION = `## Bankr Agent
-You have access to Bankr agent capabilities:
-- Real-time token prices across chains (use hub_token_price for Base first)
-- Token swaps on Base and other chains
-- Polymarket prediction markets
-- Portfolio management via Bankr wallet
-
-For Base tokens: always use hub_token_price first ($0.01)
-For other chains: use Bankr price tools
-For swaps: show preview before executing, require confirmation`;
+Bankr is the LLM + execution provider for Blue Chat.
+- Token prices: use hub_token_price for any chain
+- Onchain actions: use Base MCP tools when available
+- Polymarket: available via Bankr
+For swaps: always show preview, require confirmation.`;
 
 // Base MCP — appended only when the client enables it (body.baseMcp).
 const BASE_MCP_SECTION = `## Base MCP
@@ -310,11 +307,6 @@ When user asks to send/transfer a B20 token:
 // ─── Hub tool definitions (Anthropic tool format) ─────────────────────────────
 
 const HUB_TOOLS = [
-  {
-    name: "show_portfolio",
-    description: "Render the user's OWN live Base wallet portfolio as an inline card (ETH + BLUE + USDC + WETH + cbBTC + AERO balances, read live from THEIR connected wallet — no signing). Call this with NO arguments ONLY when the user asks about THEIR OWN holdings: 'my balance', 'my wallet', 'my portfolio', 'what do I hold', 'check my holdings'.\n\nCRITICAL — ONLY the connected user's own wallet. If the user refers to a SPECIFIC address from the conversation — 'this wallet', 'that wallet', 'that address', 'the address above', or a pasted 0x… that is NOT theirs — this is NOT 'my wallet'. Do NOT call this tool for it (it would wrongly show the user's own balance). There is no portfolio card for an external address: use hub_crypto_rpc (eth_getBalance) for its ETH balance, and say a full portfolio card isn't available for someone else's address.\n\nThis tool returns NO balance figures to you — only the card shows the real, live numbers. After calling you do NOT know any token amounts. NEVER print a balance table, NEVER state or estimate any specific token amounts, tier, or credits (you would be fabricating — the user can see the real numbers in the card). Reply with at most ONE short non-numeric line, e.g. 'Here's your live Base portfolio 👇'. If the user then asks about a specific number, say it's shown in the card.",
-    input_schema: { type: "object", properties: {} },
-  },
   {
     name: "prepare_token_launch",
     description: "Open the token-launch FORM card (Bankr launchpad → real token on Base, Uniswap V4, 100B fixed supply, gas SPONSORED by Bankr). The CARD itself collects every field — token name, ticker, description, logo URL, website, and fee recipient — as editable inputs; the user fills them in and clicks Launch to deploy. \n\nCRITICAL — NEVER INVENT ANYTHING: do NOT make up a token name, ticker, description, logo, or website. Pass through ONLY values the user explicitly typed in THIS request; leave every other field empty so the user fills it in the card. If the user gave no details, call this with NO arguments. \n\nALWAYS A BRAND-NEW TOKEN: ignore any 'Active project' from memory and any token discussed or already deployed earlier; never assume a relaunch and never claim a launch is 'paused' or 'pending'. Only reuse an earlier token if the user explicitly names it now. \n\nDo NOT gather details by asking questions and do NOT mention total supply (fixed at 100B). Fee recipient defaults to BlueAgent when left blank, so you don't need to collect it. \n\nAfter calling, reply with ONE short line telling the user to fill in the card above and hit Launch — never claim the token launched (only the user's Launch click deploys it) and never quote a gas/ETH cost.",
@@ -771,16 +763,7 @@ async function callHubTool(
   isInternal = false,
 ): Promise<ToolCallResult> {
   // Client-rendered marker tools — no server endpoint. The chat UI reads the
-  // result.kind and renders an interactive card that talks to the user's
-  // connected wallet directly (read-only here). show_portfolio reads balances.
-  if (toolName === "show_portfolio") {
-    return {
-      // The model reads this text — make the no-data contract explicit so it
-      // can't fabricate a balance table next to the (real) card.
-      text: "Portfolio card rendered for the user. You were given NO balance figures — do not state, table, or estimate any token amounts, tier, or credits. Reply with one short non-numeric line only.",
-      result: { kind: "portfolio", address: userAddress ?? null },
-    };
-  }
+  // result.kind and renders an interactive card.
   if (toolName === "prepare_token_launch") {
     // Preview only — the LaunchCard takes an explicit user confirmation before
     // it POSTs to /api/launch-token. We never deploy from here.
