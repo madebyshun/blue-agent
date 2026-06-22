@@ -670,18 +670,18 @@ Default to "base" for Base-related queries.`,
   },
   {
     name: "hub_b20_launch",
-    description: "Generate a complete B20 token deployment package — foundry.toml config, Solidity deploy script, and CLI commands. Use when user wants to DEPLOY or LAUNCH a B20 token (not just learn about it). Returns ready-to-run code.",
+    description: "Open B20 token launch form. User fills name, symbol, variant (asset/stablecoin), optional decimals/supply_cap/currency_code. Generates complete Foundry deployment scripts with copy buttons. Call when user wants to DEPLOY or LAUNCH a B20 token.",
     input_schema: {
       type: "object",
       properties: {
-        name:          { type: "string", description: "Token name, e.g. 'My Token'" },
-        symbol:        { type: "string", description: "Token symbol, e.g. 'MTK'" },
-        variant:       { type: "string", enum: ["asset", "stablecoin"], description: "B20 variant: asset (general) or stablecoin (fiat-backed)" },
-        decimals:      { type: "number", description: "Optional: decimals (default 18 for asset, 6 for stablecoin)" },
-        supply_cap:    { type: "string", description: "Optional: max supply, e.g. '1000000' for 1M tokens" },
-        currency_code: { type: "string", description: "Optional: ISO currency code for stablecoin variant, e.g. 'USD', 'VND'" },
+        name:          { type: "string", description: "Token name" },
+        symbol:        { type: "string", description: "Token symbol" },
+        variant:       { type: "string", enum: ["asset", "stablecoin"] },
+        decimals:      { type: "number" },
+        supply_cap:    { type: "string" },
+        currency_code: { type: "string" },
       },
-      required: ["name", "symbol", "variant"],
+      required: [],
     },
   },
 ];
@@ -804,6 +804,14 @@ async function callHubTool(
     return {
       text: "Send/Pay card rendered. The card shows recipient, amount and asset — the user reviews and SIGNS the transfer in their own wallet (non-custodial). Do NOT claim funds were sent and do NOT restate the recipient as if confirmed. Reply with one short line: tell the user to review the recipient + amount and sign in the card.",
       result: { kind: "send", ...args },
+    };
+  }
+  if (toolName === "hub_b20_launch") {
+    // Client-rendered marker — B20LaunchCard handles form + script generation
+    // entirely in the browser. No server execution, no funds moved.
+    return {
+      text: "B20 launch form rendered. The card is pre-filled with the token details — the user can edit fields and click Generate Scripts to get the foundry.toml, deploy script, and CLI commands. Do NOT restate the fields as a table. Reply with one short line: tell the user to review the form and click Generate Scripts.",
+      result: { kind: "b20_launch", ...args },
     };
   }
 
@@ -1093,9 +1101,35 @@ async function veniceToolStream(
 function extractCommand(messages: LLMMessage[]): { cmd: string; args: string } | null {
   const last = messages[messages.length - 1];
   if (last?.role !== "user" || typeof last.content !== "string") return null;
-  const match = last.content.match(/^\/(\w+)(?:\s+([\s\S]*))?$/);
-  if (!match) return null;
-  return { cmd: match[1].toLowerCase(), args: (match[2] ?? "").trim() };
+  const text = last.content.trim();
+
+  // Slash command (exact prefix match)
+  const match = text.match(/^\/(\w+)(?:\s+([\s\S]*))?$/);
+  if (match) {
+    const cmd = match[1].toLowerCase();
+    if (cmd in COMMAND_PROMPTS) return { cmd, args: (match[2] ?? "").trim() };
+  }
+
+  // NL intent detection — only short messages to avoid false positives
+  const lower = text.toLowerCase().replace(/[?!.,]/g, "").trim();
+
+  // credits intent
+  if (
+    text.length < 100 &&
+    /\b(credit|credits|how many credits|check.*credit|credit.*left|credit.*remain|my balance|credit balance)\b/.test(lower)
+  ) {
+    return { cmd: "credits", args: text };
+  }
+
+  // help intent
+  if (
+    text.length < 60 &&
+    /^(help|help me|what can you do|what do you do|your capabilities|how do i use this|how does this work|what can i ask)/.test(lower)
+  ) {
+    return { cmd: "help", args: "" };
+  }
+
+  return null;
 }
 
 const COMMAND_PROMPTS: Record<string, string> = {
