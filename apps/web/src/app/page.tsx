@@ -236,11 +236,7 @@ export default function Home() {
             <Link href="/hub" className="text-sm font-semibold text-[#4FC3F7] border border-[#4FC3F7]/30 px-7 py-3 rounded-xl hover:bg-[#4FC3F7]/5 transition-all">
               Browse Hub
             </Link>
-            <Link href="/app/bank"
-              className="text-sm font-semibold px-7 py-3 rounded-xl transition-all border border-[#34D399]/30 text-[#34D399] hover:bg-[#34D399]/5">
-              Connect Wallet
-            </Link>
-            <a href="https://dexscreener.com/base/0xf895783b2931c919955e18b5e3343e7c7c456ba3"
+<a href="https://dexscreener.com/base/0xf895783b2931c919955e18b5e3343e7c7c456ba3"
               target="_blank" rel="noopener noreferrer"
               className="text-sm font-semibold px-7 py-3 rounded-xl transition-all border border-[#4FC3F7]/30 text-[#4FC3F7] hover:bg-[#4FC3F7]/5">
               $BLUEAGENT ↗
