@@ -12,6 +12,9 @@ import { buildRequirements, cdpVerify, cdpSettle } from "@/app/api/_lib/x402-cdp
 import { HANDLERS } from "@/app/api/x402/_handlers";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { kv } from "@/lib/kv";
+import { declareBuilderCodeExtension } from "@x402/extensions/builder-code";
+
+const BUILDER_CODE_EXT = declareBuilderCodeExtension("bc_2ejr35xc");
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -81,6 +84,7 @@ function buildPaymentRequired(
     },
     extensions: {
       bazaar: buildBazaarExtension(meta),
+      "builder-code": BUILDER_CODE_EXT,
     },
   };
 }
@@ -312,7 +316,8 @@ async function handle(
     tags: ["base", "ai", "defi", "agents", "builder"],
     iconUrl: "https://blueagent.dev/icon.png",
   };
-  const verify = await cdpVerify(paymentPayload, requirements, resourceInfo, { bazaar: bazaarExt });
+  const allExtensions = { bazaar: bazaarExt, "builder-code": BUILDER_CODE_EXT };
+  const verify = await cdpVerify(paymentPayload, requirements, resourceInfo, allExtensions);
   if (!verify.ok) {
     return NextResponse.json(
       { error: "Payment verification failed", status: verify.status, detail: verify.detail },
@@ -348,9 +353,9 @@ async function handle(
   }
 
   // 3. SETTLE (charge) only after a successful run
-  // Forward Bazaar extension so CDP can catalog via the settle call
-  // (the official x402 middleware sends extensions at settle time via processSettlement)
-  const settle = await cdpSettle(paymentPayload, requirements, resourceInfo, { bazaar: bazaarExt });
+  // Forward Bazaar + builder-code extensions so CDP catalogs the call and appends
+  // the ERC-8021 suffix with bc_2ejr35xc attribution to the settlement calldata.
+  const settle = await cdpSettle(paymentPayload, requirements, resourceInfo, allExtensions);
   try { await kv.incr(`usage:${tool}`); } catch {}
   return NextResponse.json({ ...data, _settle: { ok: settle.ok, status: settle.status, tx: settle.tx } });
 }
