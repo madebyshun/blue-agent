@@ -1,12 +1,11 @@
 // x402/b20-tracker — Track B20 native token standard activation + B20-themed launches.
-// Price: $0.05 — live Bankr API + on-chain factory check; deterministic (no LLM).
+// Price: $0.05 — live Bankr API + timestamp-based Beryl check; deterministic (no LLM).
+// Note: B20 factory is a Rust precompile — getCode always returns "0x" even when active,
+// so activation is determined by timestamp only.
 
-import { createPublicClient, http } from "viem";
-import { base } from "viem/chains";
-
-const B20_FACTORY     = "0xB20f000000000000000000000000000000000000" as const;
-const BERYL_MAINNET   = 1782410400; // June 25 2026 18:00 UTC (unix seconds)
-const LAUNCHES_URL    = "https://api.bankr.bot/token-launches?limit=30";
+const B20_FACTORY   = "0xB20f000000000000000000000000000000000000" as const;
+const BERYL_MAINNET = 1782410400; // June 25 2026 18:00 UTC (unix seconds)
+const LAUNCHES_URL  = "https://api.bankr.bot/token-launches?limit=30";
 
 interface BankrLaunch {
   tokenName?:    string;
@@ -21,32 +20,22 @@ export default async function handler(_req: Request): Promise<Response> {
   const sig   = new AbortController();
   const timer = setTimeout(() => sig.abort(), 8000);
 
-  let launches:   BankrLaunch[] = [];
-  let berylLive   = false;
+  let launches: BankrLaunch[] = [];
 
   try {
-    const client = createPublicClient({ chain: base, transport: http("https://mainnet.base.org") });
-
-    const [launchRes, codeRes] = await Promise.allSettled([
-      fetch(LAUNCHES_URL, { signal: sig.signal }),
-      client.getCode({ address: B20_FACTORY }),
-    ]);
-
-    if (launchRes.status === "fulfilled" && launchRes.value.ok) {
+    const res = await fetch(LAUNCHES_URL, { signal: sig.signal });
+    if (res.ok) {
       try {
-        const raw = await launchRes.value.json();
+        const raw = await res.json();
         launches = Array.isArray(raw) ? raw : (raw?.launches ?? raw?.data ?? []);
       } catch { /* skip */ }
-    }
-
-    if (codeRes.status === "fulfilled") {
-      berylLive = !!codeRes.value && codeRes.value !== "0x";
     }
   } catch { /* defensive */ }
   finally { clearTimeout(timer); }
 
+  // Timestamp-based activation (precompile has no EVM bytecode → getCode = "0x")
   const now         = Math.floor(Date.now() / 1000);
-  const berylActive = now >= BERYL_MAINNET || berylLive;
+  const berylActive = now >= BERYL_MAINNET;
   const daysToBeryl = berylActive ? 0 : Math.ceil((BERYL_MAINNET - now) / 86400);
 
   // Filter B20-themed launches (NOT native B20 standard — themed/named only)
@@ -71,11 +60,11 @@ export default async function handler(_req: Request): Promise<Response> {
     })
     .slice(0, 10)
     .map((l) => ({
-      name:      l.tokenName    ?? "Unknown",
-      symbol:    l.tokenSymbol  ?? "—",
-      address:   l.tokenAddress ?? null,
-      deployer:  l.deployer?.xUsername ?? null,
-      launchType: l.launchType ?? null,
+      name:       l.tokenName    ?? "Unknown",
+      symbol:     l.tokenSymbol  ?? "—",
+      address:    l.tokenAddress ?? null,
+      deployer:   l.deployer?.xUsername ?? null,
+      launchType: l.launchType  ?? null,
     }));
 
   const title = berylActive
