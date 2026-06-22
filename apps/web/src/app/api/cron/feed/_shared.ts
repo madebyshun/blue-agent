@@ -152,6 +152,21 @@ function toFeedItem(job: Job, resp: Any, cycleId: number, idx: number): FeedItem
         metrics = clean([metric("Opps", opps.length ? `${opps.length}` : null), metric("Top APY", opps[0]?.apy ? `${opps[0].apy}` : null), metric("Risk", opps[0]?.risk ?? null)]);
         break;
       }
+      case "bankr-pulse": {
+        title = "Bankr Trending";
+        const trending = Array.isArray(resp.trending) ? resp.trending : [];
+        const price    = resp.bnkr_price;
+        const change   = resp.bnkr_change;
+        summary = resp.summary ?? (trending[0]?.symbol
+          ? `Trending on Bankr: ${trending.slice(0, 3).map((t: Any) => t.symbol).filter(Boolean).join(" · ")}`
+          : "Bankr ecosystem pulse updated.");
+        metrics = clean([
+          metric("$BNKR",    price  != null ? fmtUsd(price)  : null),
+          metric("24h",      change != null ? fmtPct(change) : null),
+          metric("Launches", resp.metrics?.total_launches != null ? `${resp.metrics.total_launches}` : null),
+        ]);
+        break;
+      }
     }
   } catch { /* defaults */ }
 
