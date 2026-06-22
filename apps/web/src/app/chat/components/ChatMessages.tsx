@@ -540,23 +540,13 @@ export default function ChatMessages() {
           {/* NL example starters — 3 per persona */}
           <div className="w-full max-w-sm space-y-2 mb-6">
             {empty.examples.map(q => (
-              <button
+              <div
                 key={q}
-                onClick={() => {
-                  const needsInput = q.includes("0x...");
-                  if (needsInput) {
-                    setInput(q.replace("0x...", "").replace(/\s+$/, "") + " ");
-                    document.getElementById("chat-composer")?.focus();
-                  } else {
-                    send(q);
-                  }
-                }}
-                disabled={outOfCredits}
-                className="w-full text-left font-mono text-[11px] px-3 py-2 rounded-xl text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-40"
+                className="w-full text-left font-mono text-[11px] px-3 py-2 rounded-xl text-slate-500 cursor-default select-none"
                 style={{ background: "#0d0d12", border: "1px solid #1A1A2E" }}
               >
                 {q}
-              </button>
+              </div>
             ))}
           </div>
 
