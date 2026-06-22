@@ -97,11 +97,11 @@ export interface ModelPreset {
 // separate tool (Anthropic web_search server-tool) toggled with 🔍 in the
 // composer, so it works on any of these models — no Venice model in the picker.
 export const MODEL_PRESETS: ModelPreset[] = [
-  { id: "chat",       label: "Chat",       desc: "Claude Sonnet 4.6 · balanced",      icon: "💬", tier: "pro",      webSearch: false },
-  { id: "fast",       label: "Fast",       desc: "Claude Haiku 4.5 · cheapest",       icon: "⚡", tier: "fast",     webSearch: false },
-  { id: "deep-think", label: "Deep Think", desc: "Claude Opus 4.7 · heavy reasoning", icon: "🔬", tier: "max",      webSearch: false },
-  { id: "deepseek",   label: "DeepSeek",   desc: "DeepSeek V4 · 1M context",          icon: "✦",  tier: "deepseek", webSearch: false },
-  { id: "gemini",     label: "Gemini",     desc: "Gemini 2.5 Flash · Google",         icon: "🔮", tier: "gemini",   webSearch: false },
+  { id: "chat",       label: "Sonnet 4.6", desc: "Claude Sonnet 4.6 · balanced",      icon: "💬", tier: "pro",      webSearch: false },
+  { id: "fast",       label: "Haiku 4.5",  desc: "Claude Haiku 4.5 · cheapest",       icon: "⚡", tier: "fast",     webSearch: false },
+  { id: "deep-think", label: "Opus 4.7",   desc: "Claude Opus 4.7 · heavy reasoning", icon: "🔬", tier: "max",      webSearch: false },
+  { id: "deepseek",   label: "DeepSeek V4",desc: "DeepSeek V4 · 1M context",          icon: "✦",  tier: "deepseek", webSearch: false },
+  { id: "gemini",     label: "Gemini 2.5", desc: "Gemini 2.5 Flash · Google",         icon: "🔮", tier: "gemini",   webSearch: false },
   { id: "kimi",       label: "Kimi K2",    desc: "Kimi K2 · long context",            icon: "🌊", tier: "kimi",     webSearch: false },
 ];
 
