@@ -374,12 +374,17 @@ const MODEL_COLORS: Record<string, string> = {
 // `label` = compact display; `text` = the natural language prompt sent on click.
 // Cards send immediately — they are plain English questions, not slash commands.
 interface Starter { icon: string; label: string; text: string; color: string; }
-interface EmptyState { heading: string; sub: string; starters: Starter[]; }
+interface EmptyState { heading: string; sub: string; starters: Starter[]; examples: string[]; }
 
 const PERSONA_EMPTY: Record<string, EmptyState> = {
   "blue-agent": {
     heading: "What are you building?",
     sub:     "Idea → Build → Audit → Launch — just ask in plain English.",
+    examples: [
+      "build me a DeFi app on Base",
+      "launch a token called BlueBot",
+      "what's trending on Base today?",
+    ],
     starters: [
       { icon: "💡", label: "Idea",   text: "idea brief: USDC payroll app for freelancers on Base", color: "#4FC3F7" },
       { icon: "🛠️", label: "Build",  text: "build an ERC-4337 agent wallet on Base",               color: "#A78BFA" },
@@ -390,6 +395,11 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
   "blue-trader": {
     heading: "What's the trade?",
     sub:     "Live alpha, smart money flow, safety checks — Base-native.",
+    examples: [
+      "best APY on Base right now?",
+      "is this token a honeypot: 0x...",
+      "show me whale activity for AERO",
+    ],
     starters: [
       { icon: "🎯", label: "Pick",      text: "what's the best token to buy on Base right now?", color: "#34D399" },
       { icon: "🐋", label: "Whale",     text: "show me whale activity for AERO",                 color: "#4FC3F7" },
@@ -400,6 +410,11 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
   "blue-auditor": {
     heading: "What should I audit?",
     sub:     "Vulnerabilities, severity ratings, Solidity fixes, and a go/no-go call.",
+    examples: [
+      "audit this smart contract for vulnerabilities",
+      "check if this token is safe: 0x...",
+      "screen this wallet for AML risks: 0x...",
+    ],
     starters: [
       { icon: "🛡️", label: "Audit",     text: "audit this smart contract for vulnerabilities",   color: "#F87171" },
       { icon: "🔍", label: "Scan",      text: "check if this token is safe: 0x…",                color: "#4FC3F7" },
@@ -410,6 +425,11 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
   "blue-researcher": {
     heading: "What should I research?",
     sub:     "Evidence-backed DD, on-chain data, and contrarian takes.",
+    examples: [
+      "deep DD on Aerodrome",
+      "what's the top narrative on Base now?",
+      "analyze my wallet strategy: 0x...",
+    ],
     starters: [
       { icon: "🔬", label: "Deep DD",   text: "deep DD on Aerodrome",                color: "#A78BFA" },
       { icon: "🐋", label: "Whale",     text: "show me whale activity for AERO",     color: "#4FC3F7" },
@@ -420,6 +440,11 @@ const PERSONA_EMPTY: Record<string, EmptyState> = {
   "custom": {
     heading: "How can I help?",
     sub:     "Your custom system prompt is active — ask anything.",
+    examples: [
+      "build me a DeFi app on Base",
+      "best APY on Base right now?",
+      "what's trending on Base today?",
+    ],
     starters: [
       { icon: "💡", label: "Idea",   text: "idea brief: USDC payroll app for freelancers on Base", color: "#4FC3F7" },
       { icon: "🛠️", label: "Build",  text: "build an ERC-4337 agent wallet on Base",               color: "#A78BFA" },
@@ -512,16 +537,9 @@ export default function ChatMessages() {
             {empty.sub}
           </p>
 
-          {/* NL example starters */}
+          {/* NL example starters — 3 per persona */}
           <div className="w-full max-w-sm space-y-2 mb-6">
-            {[
-              "build me a DeFi app on Base",
-              "is this token safe: 0x...",
-              "best APY on Base right now?",
-              "launch a token called BlueBot",
-              "deploy a B20 token called vUSD",
-              "what's trending on Base today?",
-            ].map(q => (
+            {empty.examples.map(q => (
               <button
                 key={q}
                 onClick={() => {
