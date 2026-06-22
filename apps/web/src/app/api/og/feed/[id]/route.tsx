@@ -18,10 +18,7 @@ const BG_GLOW =
   "radial-gradient(720px 460px at 0% 100%, rgba(167,139,250,0.12), transparent 58%)";
 
 const AGENTS: Record<FeedAgent, { label: string; color: string }> = {
-  aeon:      { label: "Aeon",       color: "#FB923C" },
-  miroshark: { label: "MiroShark",  color: "#A78BFA" },
-  blue:      { label: "Blue Agent", color: "#4FC3F7" },
-  consensus: { label: "Consensus",  color: "#34D399" },
+  blueagent: { label: "BlueAgent", color: "#4FC3F7" },
 };
 
 type Metric = { label: string; value: string };
@@ -37,7 +34,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const items = (await kvGet<FeedItem[]>("feed:items").catch(() => null)) ?? [];
   const item = items.find((i) => i.id === id) ?? null;
 
-  const agent = AGENTS[(item?.agent as FeedAgent) ?? "blue"] ?? AGENTS.blue;
+  const agent = AGENTS.blueagent;
   const tool = item?.tool ?? "blue-feed";
   const title = item?.title ?? "Live Base intelligence";
   const metrics = ((item?.data as { metrics?: Metric[] })?.metrics ?? []).slice(0, 3);
