@@ -1237,9 +1237,9 @@ remappings = [
   const hasCap    = !!cap;
   const nCalls    = hasCap ? 2 : 1;
   const encParams = variant === "asset"
-    ? `B20FactoryLib.encodeAssetCreateParams(\n      "${n}", "${s}", ${decimals}\n    )`
+    ? `B20FactoryLib.encodeAssetCreateParams(\n      "${n}", "${s}", account, ${decimals}\n    )`
     : `B20FactoryLib.encodeStablecoinCreateParams(\n      "${n}", "${s}", "${cur}", ${decimals}\n    )`;
-  const b20Type   = variant === "asset" ? "IB20Factory.B20Type.ASSET" : "IB20Factory.B20Type.STABLECOIN";
+  const b20Type   = variant === "asset" ? "IB20Factory.B20Variant.ASSET" : "IB20Factory.B20Variant.STABLECOIN";
   const capLine   = hasCap ? `\n    initCalls[1] = B20FactoryLib.encodeUpdateSupplyCap(${cap}e${decimals});` : "";
 
   const deployScript = `// SPDX-License-Identifier: MIT
@@ -1997,7 +1997,6 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_aml":           return <AmlCard         result={r} />;
     case "hub_quantum":       return <QuantumCard      result={r} />;
     case "hub_yield":         return <YieldCard        result={r} />;
-    case "show_portfolio":    return <PortfolioCard />;
     case "hub_b20_launch":       return <B20LaunchCard   result={r as B20LaunchResult} />;
     case "prepare_token_launch": return <TokenLaunchCard result={r as TokenLaunchResult} />;
     case "prepare_yield":     return <MoveToYieldCard  result={r as YieldMoveResult} account={account} />;
