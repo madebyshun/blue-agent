@@ -44,6 +44,70 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
+  // ── action=receipt: check tx status + extract deployed token address ────────
+  if (action === "receipt") {
+    const txHash  = body.tx_hash as string | undefined;
+    const network = (body.network as string | undefined) ?? "mainnet";
+
+    if (!txHash || !/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
+      return Response.json({ error: "valid tx_hash required for receipt action" }, { status: 400 });
+    }
+
+    const { createPublicClient, http } = await import("viem");
+    const { base, baseSepolia }        = await import("viem/chains");
+
+    const NETS = {
+      mainnet: { chain: base,        rpc: "https://mainnet.base.org",  explorer: "https://basescan.org"          },
+      sepolia: { chain: baseSepolia, rpc: "https://sepolia.base.org",  explorer: "https://sepolia.basescan.org" },
+    } as const;
+    const net    = NETS[(network as keyof typeof NETS)] ?? NETS.mainnet;
+    const client = createPublicClient({ chain: net.chain, transport: http(net.rpc) });
+
+    const B20_FACTORY     = "0xb20f000000000000000000000000000000000000";
+    const B20_CREATED_SIG = "0xfd9bf2730513a1709722ff379a0844dfd8f997d600693c2bcc659e188bbdba0d";
+
+    let receipt;
+    try {
+      receipt = await client.getTransactionReceipt({ hash: txHash as `0x${string}` });
+    } catch {
+      return Response.json({ tool: "b20-launch", action: "receipt", status: "pending", tx_hash: txHash });
+    }
+
+    // Parse token address from B20Created event topic[1]
+    let tokenAddress: string | null = null;
+    for (const log of receipt.logs) {
+      if (
+        log.address?.toLowerCase() === B20_FACTORY &&
+        log.topics[0]?.toLowerCase() === B20_CREATED_SIG &&
+        log.topics[1]
+      ) {
+        tokenAddress = "0x" + log.topics[1].slice(-40);
+        break;
+      }
+    }
+    // Fallback: log address starts 0xb20 but is not the factory
+    if (!tokenAddress) {
+      for (const log of receipt.logs) {
+        const addr = log.address?.toLowerCase();
+        if (addr && addr.startsWith("0xb20") && addr !== B20_FACTORY) {
+          tokenAddress = log.address;
+          break;
+        }
+      }
+    }
+
+    return Response.json({
+      tool:        "b20-launch",
+      action:      "receipt",
+      status:      receipt.status,
+      tokenAddress,
+      blockNumber: Number(receipt.blockNumber),
+      gasUsed:     receipt.gasUsed.toString(),
+      txUrl:       `${net.explorer}/tx/${txHash}`,
+      tokenUrl:    tokenAddress ? `${net.explorer}/token/${tokenAddress}` : null,
+    });
+  }
+
   // ── Foundry config ─────────────────────────────────────────────────────────
   const foundry_config = `[profile.default]
 src = "src"
