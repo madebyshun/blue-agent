@@ -138,14 +138,6 @@ const VENICE_DISPLAY: Record<string, string> = {
   "deepseek-v4-pro":                    "DeepSeek V4 Pro (Venice)",
   "kimi-k2-6":                          "Kimi K2 (Venice)",
   "claude-opus-4-7":                    "Claude Opus 4 (Venice)",
-  "claude-fable-5":                     "Claude Fable 5 (Venice)",
-  "grok-4-3":                           "Grok 4 (Venice)",
-  "qwen3-235b-a22b-instruct-2507":      "Qwen3 235B (Venice)",
-  "mistral-small-3-2-24b-instruct":     "Mistral Small 3.2 (Venice)",
-  "venice-uncensored-1-2":              "Venice Uncensored 1.2 (Venice)",
-  "e2ee-venice-uncensored-24b-p":       "Venice Uncensored 24B · E2EE (Venice Privacy)",
-  "e2ee-gemma-3-27b-p":                 "Gemma 3 27B · E2EE (Venice Privacy)",
-  "e2ee-qwen3-6-35b-a3b":               "Qwen3 35B · E2EE (Venice Privacy)",
 };
 
 const BANKR_DISPLAY: Record<string, string> = {
@@ -188,9 +180,10 @@ function veniceMaxTokens(modelId: string): number {
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
-const BASE_SYSTEM = `You are Blue Agent — the Base-native AI assistant for builders.
-You help founders and developers on Base with idea generation, smart contract architecture, DeFi design, agent development, and launch strategy.
-Be direct, technical, and actionable. Prefer Base, USDC, Coinbase tools, and the Bankr ecosystem.
+const BASE_SYSTEM = `You are Blue Agent — the AI assistant for builders.
+You help with ANY coding or development request: web apps, games, scripts, frontends, APIs, smart contracts, agents — whatever the user needs built.
+For Base and onchain projects you have live hub tools for prices, security, DeFi, and on-chain data (see below).
+Be direct, technical, and actionable. When relevant, suggest Base/USDC/onchain integrations — but never refuse a general coding request.
 
 ## Credit system (IMPORTANT — know this)
 Blue Agent uses a credit system based on $BLUEAGENT token balance:
@@ -222,10 +215,18 @@ Tool selection rules:
 7. **Transparency — one-line tool note.** When you run tools, open your response with a single concise line before your actual answer: "🔍 [tool] → [key result in 10 words or fewer]". For multiple tools chain them: "🔍 hub_risk_gate + hub_honeypot → HIGH risk, honeypot confirmed". This is for trust, not verbosity.
 8. **Proactive offer.** If the user's message would clearly benefit from a live tool but you can answer from knowledge, answer first, then end with one line: "↳ Want me to run a live [tool name] on this?"
 9. **Act only on what the CURRENT message asks.** Do NOT re-run tools on a token/address/contract from an EARLIER message unless the user explicitly references it again now.
-10. **If a tool returns an error, "[unavailable]", or "[payment required]" — DO NOT fabricate.** Say plainly that the live tool is temporarily unavailable and stop. NEVER invent a price, score, verdict, balance, or risk review to fill the gap. For /audit and /scan: a fabricated "preliminary" audit is worse than no audit.
+10. **If a tool returns an error, "[unavailable]", or "[payment required]" — DO NOT fabricate.** Say plainly that the live tool is temporarily unavailable and stop. NEVER invent a price, score, verdict, balance, or risk review to fill the gap. For security audits and token scans: a fabricated "preliminary" audit is worse than no audit.
 
 If a tool is unavailable, answer from your own knowledge and note that live data is unavailable.
 If the user has memory context below, use it to personalize responses — reference their project, remember what they're building.
+
+## Code generation (CRITICAL)
+When the user asks you to build, create, or generate any code (app, game, website, script, contract, component):
+- **ALWAYS output complete, runnable code.** Never truncate mid-function or mid-block.
+- **If the full implementation won't fit:** output a simpler but 100% complete working version first. Drop non-essential features to stay within output limits — but the code MUST run end-to-end with no missing pieces.
+- **HTML/game requests:** the file must have a closing </html> tag. JS must have all functions closed. Canvas games must have the requestAnimationFrame loop.
+- **Never** output a partial implementation and say "add the rest yourself". Output what works NOW, then offer to extend feature by feature.
+- Wrap all code in a single fenced code block with the correct language tag (html, tsx, sol, etc.).
 
 ## Output style
 Be concise by default. Most users want a quick answer, not an essay.
@@ -237,19 +238,7 @@ Be concise by default. Most users want a quick answer, not an essay.
 Only go long when the user explicitly says "explain in detail", "deep dive", "step-by-step", or asks a multi-part question.
 
 ## Follow-up suggestions
-After your main answer, ALWAYS append 2-3 follow-up question suggestions on their own lines, each prefixed with "↳ " (the arrow + space).
-Pick follow-ups the user is *likely* to ask next based on the topic — not generic.
-
-Example for "ETH price":
-↳ ETH staking yield on Lido / Aerodrome
-↳ Bridge ETH from Base to mainnet
-↳ Best ETH/USDC LP on Base today
-
-Example for "how to deploy a contract on Base":
-↳ Verify the contract on Basescan
-↳ Set up a frontend with Wagmi + viem
-↳ Add a monitoring webhook with Blue Sentinel
-
+For complex answers only (not simple price/data queries), optionally append 1-2 follow-up suggestions, each prefixed with "↳ " (the arrow + space).
 Keep them short (≤ 8 words), specific, and actionable.`;
 
 // ─── Integration prompt sections (conditionally appended) ─────────────────────
@@ -315,7 +304,8 @@ When user asks to send/transfer a B20 token:
 2. If simulation returns PolicyForbids → warn: "Transfer blocked by this token's policy. Contact the issuer."
 3. If simulation returns paused → warn: "Transfers are paused by the issuer."
 4. Only proceed if simulation succeeds — never bypass
-5. Use hub_b20_analyze or hub_b20_deploy_guide tools when user asks about B20 deployment or roles`;
+5. Use hub_b20_analyze for B20 deployment questions / role explanations
+6. Use hub_b20_launch when user asks to deploy/launch/create a B20 token — call with { name, symbol, variant: "asset"|"stablecoin", optional supply_cap, currency_code }. Returns complete foundry.toml + deploy script + CLI commands.`;
 
 // ─── Hub tool definitions (Anthropic tool format) ─────────────────────────────
 
@@ -429,7 +419,7 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_market_fit",
-    description: "Market-fit analysis for a project — problem clarity, timing, competition, demand signals. USE WHEN: the user asks to VALIDATE / SCORE market fit or demand for a described product, or as part of the /idea brief. NOT FOR: writing code, building an app/game/frontend, explaining concepts, designing architecture, or debugging — answer those directly without a tool.",
+    description: "Market-fit analysis for a project — problem clarity, timing, competition, demand signals. USE WHEN: the user asks to VALIDATE / SCORE market fit or demand for a described product, or when the user asks for an idea brief. NOT FOR: writing code, building an app/game/frontend, explaining concepts, designing architecture, or debugging — answer those directly without a tool.",
     input_schema: {
       type: "object",
       properties: {
@@ -466,7 +456,7 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_fundraise_timing",
-    description: "Assess if now is the right time to raise — market conditions, stage readiness, investor appetite. USE WHEN: the user asks WHETHER/WHEN to raise, or as part of the /raise pitch. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
+    description: "Assess if now is the right time to raise — market conditions, stage readiness, investor appetite. USE WHEN: the user asks WHETHER/WHEN to raise, or when the user asks for a pitch narrative. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
     input_schema: {
       type: "object",
       properties: {
@@ -478,7 +468,7 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_base_grant",
-    description: "Find active grants and funding for Base projects. USE WHEN: the user asks about GRANTS / funding programs on Base, or as part of the /raise pitch. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
+    description: "Find active grants and funding for Base projects. USE WHEN: the user asks about GRANTS / funding programs on Base, or when the user wants funding paths. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
     input_schema: {
       type: "object",
       properties: {
@@ -508,7 +498,7 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_ecosystem",
-    description: "Daily Base ecosystem digest — top launches, protocol updates, builder activity. USE WHEN: the user explicitly asks what's happening on Base TODAY / latest news / ecosystem updates. NOT FOR: writing code, building, explaining concepts, architecture, or /idea-style brainstorming — answer those directly without a tool.",
+    description: "Daily Base ecosystem digest — top launches, protocol updates, builder activity. USE WHEN: the user explicitly asks what's happening on Base TODAY / latest news / ecosystem updates. NOT FOR: writing code, building, explaining concepts, architecture, or idea/concept brainstorming — answer those directly without a tool.",
     input_schema: {
       type: "object",
       properties: { focus: { type: "string", description: "Focus area e.g. DeFi, AI agents, NFT (optional)" } },
@@ -666,6 +656,33 @@ Default to "base" for Base-related queries.`,
     name: "blue_stream",
     description: "Live snapshot feed of Base onchain activity — trending/new pools, TVL, real prices. Use when user asks 'what's happening on Base now', 'live feed', 'what's moving'.",
     input_schema: { type: "object", properties: { feed: { type: "string", description: "movers | new | all" } } },
+  },
+  {
+    name: "hub_b20_analyze",
+    description: "Explain B20 token standard, variants (Asset/Stablecoin), roles, policies, and compliance features. Use when user asks about B20 architecture, how B20 works, B20 roles/policies, or wants to understand the Beryl upgrade.",
+    input_schema: {
+      type: "object",
+      properties: {
+        question: { type: "string", description: "The B20 question or topic to explain" },
+        mode: { type: "string", enum: ["guide", "roles", "policy", "analyze", "compare", "full"], description: "Optional: specific aspect to focus on" },
+      },
+    },
+  },
+  {
+    name: "hub_b20_launch",
+    description: "Generate a complete B20 token deployment package — foundry.toml config, Solidity deploy script, and CLI commands. Use when user wants to DEPLOY or LAUNCH a B20 token (not just learn about it). Returns ready-to-run code.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name:          { type: "string", description: "Token name, e.g. 'My Token'" },
+        symbol:        { type: "string", description: "Token symbol, e.g. 'MTK'" },
+        variant:       { type: "string", enum: ["asset", "stablecoin"], description: "B20 variant: asset (general) or stablecoin (fiat-backed)" },
+        decimals:      { type: "number", description: "Optional: decimals (default 18 for asset, 6 for stablecoin)" },
+        supply_cap:    { type: "string", description: "Optional: max supply, e.g. '1000000' for 1M tokens" },
+        currency_code: { type: "string", description: "Optional: ISO currency code for stablecoin variant, e.g. 'USD', 'VND'" },
+      },
+      required: ["name", "symbol", "variant"],
+    },
   },
 ];
 
@@ -1031,7 +1048,7 @@ async function veniceToolStream(
             signal: AbortSignal.timeout(60_000),
           });
         } catch (e) {
-          emit({ delta: { text: `[Venice tool synthesis failed: ${(e as Error).message}]` } });
+          emit({ delta: { text: "Tool temporarily unavailable. Please try again." } });
           controller.enqueue(enc.encode("data: [DONE]\n\n")); controller.close(); return;
         }
         if (!streamRes.ok) {
@@ -1069,6 +1086,9 @@ async function veniceToolStream(
 }
 
 // ─── Slash command → system prompt injection ─────────────────────────────────
+// Only /credits and /help remain as slash commands.
+// /skill is handled entirely client-side (ChatContext.tsx) — never reaches the API.
+// All other commands (/idea /build /audit /scan etc.) are now natural language.
 
 function extractCommand(messages: LLMMessage[]): { cmd: string; args: string } | null {
   const last = messages[messages.length - 1];
@@ -1092,158 +1112,28 @@ Show the user their credit system status. Format it cleanly:
 
 **How to earn more credits:**
 - Hold $BLUEAGENT on Base → credits refresh daily automatically
-- Buy $BLUEAGENT: click "Buy $BLUEAGENT" in the sidebar or type /idea to get started
+- Buy $BLUEAGENT: click "Buy $BLUEAGENT" in the sidebar to get started
 - $BLUEAGENT contract: 0xf895783b2931c919955e18b5e3343e7c7c456ba3 (Base)
 
 Keep it short, practical, and actionable.`,
 
-  idea: `## COMMAND: /idea
-The user wants a FUNDABLE BRIEF for their concept — GROUNDED IN LIVE DATA, not
-just your assumptions. YOU MUST call BOTH tools first, in parallel (do not skip):
-1. hub_market_fit — with { project: "<the user's concept>" }
-2. hub_competitor_scan — with { project: "<the user's concept>" }
-Call ONLY these two — do not add any other tool. NEVER answer from training data alone — always call the tools first.
-CRITICAL: NEVER call prepare_token_launch or any token-launch tool for /idea. Even if the concept is "launching a token", create a fundable BRIEF about it using hub_market_fit and hub_competitor_scan. The /launch command handles actual token deployment.
-
-After the tools return, synthesize the brief in this exact format:
-**Problem** — 1 crisp sentence
-**Why Now** — the timing catalyst that makes this urgent
-**Why Base** — specific Base advantage (onchain UX, USDC, Coinbase ecosystem, etc.)
-**Market Fit** — cite the hub_market_fit signal (demand, timing, problem clarity)
-**Competition** — cite hub_competitor_scan (who exists) + the defensible edge
-**MVP Scope** — 3 bullet points, each shippable in ≤2 weeks
-**Risks** — top 2 risks and how to mitigate
-**24h Plan** — the first 3 concrete actions to take today
-Base the Market Fit + Competition sections on the TOOL DATA. Be direct, opinionated, no filler.`,
-
-  build: `## COMMAND: /build
-Generate a TECHNICAL ARCHITECTURE:
-**Stack** — exact packages, versions, why each
-**Folder Structure** — show key files as a tree
-**Key Integrations** — APIs, contracts, SDKs with setup notes
-**Critical Snippets** — 1-2 key code pieces
-**Test Plan** — what to write tests for first
-Optimize for Base + TypeScript + Next.js 15 + Vercel stack.`,
-
-  audit: `## COMMAND: /audit
-SECURITY + PRODUCT RISK REVIEW.
-
-IF the user provided a CONTRACT or WALLET ADDRESS (0x…): YOU MUST call these
-tools first, in parallel, and base the review on their LIVE on-chain data
-(never answer from training data alone when an address is present):
-1. hub_deep_analysis — with { token: "<address>" }
-2. hub_risk_gate — with { action: "scan", to: "<address>" }
-3. hub_honeypot — with { token: "<address>" }
-Call ONLY these three — do NOT add hub_token_price or any other tool.
-
-Then present (use the tool data when an address was given; otherwise do a plain
-code/product review from your knowledge):
-**🔴 Critical** — blockers that must be fixed before launch
-**🟡 Medium** — important issues to address
-**🟢 Suggestions** — nice-to-have improvements
-**Verdict** — GO / NO-GO / GO WITH FIXES (bold, one line)
-Be specific. Cite exact attack vectors and severity.`,
-
-  ship: `## COMMAND: /ship
-Generate a DEPLOYMENT CHECKLIST for Base Mainnet:
-**Pre-Deploy** — env vars, contract verification, security scan
-**Deploy Steps** — ordered actions with commands
-**Verify** — post-deploy checks (contract on Basescan, x402 pricing, health endpoint)
-**Monitor** — first 24h metrics to watch
-**Release Note** — 2-sentence announcement ready to post
-Be precise, include exact CLI commands where relevant.`,
-
-  raise: `## COMMAND: /raise
-The user wants a PITCH NARRATIVE, informed by a funding-climate read and known Base grant programs.
-YOU MUST call BOTH tools first, in parallel, and call ONLY these two (do not add others):
-1. hub_fundraise_timing — with { project: "<the user's project>" }
-2. hub_base_grant — with { project: "<the user's project>" }
-
-After the tools return, write the pitch in this exact format:
-**Framing** — market thesis in 1 punchy sentence
-**Why This Wins** — 3 specific unfair advantages
-**Timing** — use hub_fundraise_timing. Present its read as an ESTIMATE / judgement call, NOT measured market data (respect the tool's disclaimer).
-**Funding Paths** — use hub_base_grant for specific Base grants/programs to target; tell the user to verify each program's current status before applying.
-**Ask** — raise amount + use of funds breakdown
-**Target Investors** — 5 specific Base/crypto funds or angels with why they fit
-Be bold, but NEVER present an estimate as hard data.`,
-
-  scan: `## COMMAND: /scan <token_address>
-The user wants a security scan of a Base token contract address.
-YOU MUST call ALL THREE tools in parallel (do not skip any):
-1. hub_honeypot — with { token: "<address>" }
-2. hub_risk_gate — with { action: "scan", to: "<address>" }
-3. hub_deep_analysis — with { token: "<address>" }
-NEVER call hub_crypto_rpc for /scan. NEVER answer from knowledge alone.
-After tools return, present: honeypot verdict, risk score, and composite analysis score together.`,
-
-  pick: `## COMMAND: /pick
-The user wants an AI token pick on Base right now.
-YOU MUST call hub_token_pick immediately with {} or { context: "" }.
-Present the pick with: token symbol, thesis, entry point, target, kill criterion, sizing.`,
-
-  wallet: `## COMMAND: /wallet <address>
-The user wants wallet strategy analysis.
-YOU MUST call hub_whale_signal with { token: "<address>" } for whale tracking,
-and hub_deep_analysis with { address: "<address>" } for fundamentals.
-Present: trading style, PnL signals, portfolio strategy.`,
-
-  aml: `## COMMAND: /aml <address>
-The user wants an AML compliance screen for a wallet address.
-YOU MUST call hub_aml immediately with { address: "<address>" }.
-Present: verdict (CLEAN/SUSPICIOUS/FLAGGED), risk score, flags, recommendation.`,
-
-  airdrop: `## COMMAND: /airdrop <address>
-The user wants to check Base airdrop eligibility for a wallet.
-YOU MUST call hub_airdrop immediately with { address: "<address>" }.
-Present: eligibility verdict, activity score, qualifying protocols, estimated allocation.`,
-
-  dex: `## COMMAND: /dex <token>
-The user wants live DEX flow analysis for a token.
-YOU MUST call hub_dex_flow immediately with { token: "<token>" }.
-Present: buy/sell pressure, volume, liquidity depth, trend direction.`,
-
-  whale: `## COMMAND: /whale <token>
-The user wants whale and smart money tracking for a token.
-YOU MUST call hub_whale_tracker immediately with { token: "<token>" }.
-Present: top wallet moves, accumulation vs distribution signal, smart money verdict.`,
-
-  launch: `## COMMAND: /launch <token name?>
-The user wants to launch a real token on Base via the Bankr launchpad (Uniswap V4, 100B fixed supply, gas sponsored by Bankr). Call prepare_token_launch IMMEDIATELY to open the launch FORM card.
-NEVER invent a token name, ticker, description, logo, or website. Pass tokenName ONLY if the user explicitly typed one after /launch; if they typed nothing, call prepare_token_launch with NO arguments and let the card collect everything.
-Treat it as a BRAND-NEW token — ignore any "Active project" from memory and any token discussed earlier unless the user explicitly names one in THIS request. Do NOT ask follow-up questions and do NOT mention total supply (fixed at 100B).
-The card collects name, ticker, description, logo URL, website, and fee recipient (fees default to BlueAgent if left blank), then the user clicks Launch to deploy. After calling, reply with ONE short line: tell them to fill in the card above and hit Launch. Never claim it launched just from calling the tool, and never quote a gas/ETH cost.`,
-
   help: `## COMMAND: /help
-List all available Blue Chat slash commands in a clean format.
-Commands to document:
-── Builder ──
-/idea <concept> — Fundable brief: problem, MVP, 24h plan
-/build <project> — Architecture, stack, folder structure
-/audit <code/plan> — Security + product risk, GO/NO-GO
-/ship <project> — Deployment checklist for Base Mainnet
-/raise <project> — Pitch narrative + investor targets
-── Trading & Alpha ──
-/pick — AI token pick on Base
-/scan <address> — Honeypot + risk check for a token
-/whale <token> — Smart money flow tracking
-/dex <token> — Live DEX buy/sell pressure
-── Wallet ──
-/wallet <address> — Wallet strategy analysis
-/pnl <address> — Deep PnL report
-/aml <address> — AML compliance screen
-/quantum <address> — Quantum vulnerability scan
-/airdrop <address> — Base airdrop eligibility check
-── DeFi ──
-/yield — Best APY on Base right now
-── Launch ──
-/launch <token> — Launch a real token on Base via Bankr (gas sponsored)
-── Meta ──
-/credits — Credit balance, tier, how to earn more
-/models — Available AI models + costs
-/skills — All Hub tools in chat
-/help — This command list
-Format as a clean grouped reference.`,
+Blue Chat understands natural language — no commands needed.
+
+Try asking:
+"build me a token launchpad on Base"
+"is this token safe: 0x..."
+"best APY on Base right now?"
+"launch a token called BlueBot"
+"deploy a B20 stablecoin called vUSD"
+"what's the narrative on Base this week?"
+"analyze this B20 contract: 0x..."
+"screen this wallet for AML risks: 0x..."
+"compare Aave vs Morpho yields"
+"write a pitch for my Base project"
+
+Type /credits to check balance.
+Type /skill install <url> for custom skills.`,
 };
 
 // ─── Venice direct stream (no tools) ─────────────────────────────────────────
@@ -1273,7 +1163,7 @@ async function callVeniceStream(
       signal: AbortSignal.timeout(60_000),
     });
   } catch (e) {
-    return textToSSE(`[Venice request failed: ${(e as Error).message}]`);
+    return textToSSE("AI service temporarily unavailable. Try a different model.");
   }
 
   if (!veniceRes.ok) {
@@ -1586,20 +1476,8 @@ export async function POST(req: NextRequest) {
   const detectedCmd = extractCommand(messages as LLMMessage[]);
   const cmdPrompt = detectedCmd ? COMMAND_PROMPTS[detectedCmd.cmd] : null;
 
-  // /build (architecture) and /ship (deploy checklist) are pure expertise — no
-  // live/on-chain data and no real-data Hub tool backs them. Tools are DISABLED
-  // so the model can't mis-fire a paid tool and burn credits for nothing.
-  // /idea and /raise ARE real-data commands (they force their backing tools —
-  // see COMMAND_PROMPTS). Data/exec commands (/scan /pick /pnl …) keep tools.
-  const KNOWLEDGE_COMMANDS = new Set(["build", "ship"]);
-  // /audit is real-data ONLY when the user passes a contract/wallet address to
-  // analyse (→ its prompt forces the on-chain security tools). A plain
-  // "review my plan/code" /audit has nothing live to fetch, so it stays
-  // knowledge-only (tools off) to avoid a wasted paid-tool call.
-  const auditWithoutAddress = detectedCmd?.cmd === "audit" &&
-    !/0x[a-fA-F0-9]{40}/.test(detectedCmd.args ?? "");
-  const knowledgeOnly =
-    (!!detectedCmd && KNOWLEDGE_COMMANDS.has(detectedCmd.cmd)) || auditWithoutAddress;
+  // /credits and /help are knowledge-only — no live tools needed.
+  const knowledgeOnly = !!cmdPrompt;
   const modelLabel = getModelLabel(tier, modelId, provider);
   const modelLine = `## Active model\nYou are currently running as: **${modelLabel}**. When asked "what model are you?", "which AI are you?", "what are you running on?", or similar — answer precisely with this model name.`;
   const system = [
@@ -1616,13 +1494,13 @@ export async function POST(req: NextRequest) {
 
   // Strip the /command prefix from last message so LLM only sees args
   let cleanMessages = messages as LLMMessage[];
-  if (detectedCmd?.args !== undefined && COMMAND_PROMPTS[detectedCmd.cmd]) {
-    // Strip the /command prefix — pass only args to the model (e.g. "0x..." for /scan)
+  if (cmdPrompt) {
+    // Strip the /command prefix — pass only args to the model
     cleanMessages = [
       ...messages.slice(0, -1),
       {
         role: "user",
-        content: detectedCmd.args || `Run the /${detectedCmd.cmd} command — no specific input provided, give a general example.`,
+        content: detectedCmd!.args || `Run the /${detectedCmd!.cmd} command.`,
       },
     ] as LLMMessage[];
   }
@@ -1631,7 +1509,7 @@ export async function POST(req: NextRequest) {
   if (provider === "venice" && modelId) {
     const apiKey = process.env.VENICE_INFERENCE_KEY ?? process.env.VENICE_API_KEY;
     if (!apiKey) {
-      return textToSSE("[Venice is not configured on this server. Please use a Bankr model (Fast / Pro / Max).]");
+      return textToSSE("Please select a model: Fast · Chat · Deep Think · DeepSeek");
     }
 
     const veniceMessages = injectAttachments(cleanMessages, attachments, "venice");
