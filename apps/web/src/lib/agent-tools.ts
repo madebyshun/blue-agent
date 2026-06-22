@@ -178,6 +178,18 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => ({ action: v.action ?? "guide", address: v.address, context: v.context }),
   },
   {
+    id: "b20-tracker",
+    name: "B20 Tracker",
+    description: "Live B20 activity on Base — B20-related launches and Beryl activation status. Distinguishes B20-themed tokens from native B20 standard.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "data",
+    inputs: [],
+    isComposite: true,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/b20-tracker`,
+    x402Body: () => ({}),
+  },
+  {
     id: "b20-launch",
     name: "B20 Launch",
     description: "Generate complete B20 token deployment package — foundry.toml, Solidity deploy script, setup + deploy + mint commands. Input: name, symbol, variant (asset/stablecoin), optional supply_cap/currency_code.",

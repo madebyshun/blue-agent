@@ -53,6 +53,25 @@ function tintRGBA(hex: string, a = 0.08): string {
   return `rgba(${r},${g},${b},${a})`;
 }
 
+// Download card as PNG via html-to-image (dynamically imported to avoid SSR issues).
+// Elements with data-exclude="true" are hidden during capture.
+async function downloadCard(el: HTMLElement, title: string) {
+  try {
+    const { toPng } = await import("html-to-image");
+    const dataUrl = await toPng(el, {
+      backgroundColor: "#050508",
+      pixelRatio: 2,
+      filter: (node) => !(node as HTMLElement).dataset?.exclude,
+    });
+    const link = document.createElement("a");
+    link.download = `blueagent-${title.toLowerCase().replace(/\s+/g, "-")}.png`;
+    link.href = dataUrl;
+    link.click();
+  } catch (e) {
+    console.error("Download failed:", e);
+  }
+}
+
 // Cast to Farcaster — composeCast inside a mini-app, else open Warpcast compose.
 async function castToFarcaster(text: string) {
   try {
@@ -741,9 +760,11 @@ function FeedCard({ item, history, fresh, delay, onShare, onCast, copied, highli
   const badge = AGENT.blueagent;
   const [expanded, setExpanded] = useState(false);
   const [mlinkCopied, setMlinkCopied] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
   return (
     <>
       <div
+        ref={cardRef}
         id={item.id}
         className={`rounded-2xl border bg-[#0a0a0f] flex flex-col break-inside-avoid mb-4 feed-in feed-card ${fresh ? "feed-flash" : ""} p-5 ${highlighted ? "border-[#4FC3F7]/60 ring-2 ring-[#4FC3F7]/25" : "border-[#1A1A2E]"}`}
         style={{ animationDelay: `${delay}ms` }}
@@ -782,6 +803,13 @@ function FeedCard({ item, history, fresh, delay, onShare, onCast, copied, highli
           <button onClick={e => { e.stopPropagation(); onCast(); }}
             className="font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA] hover:bg-[#A78BFA]/10 transition-colors">
             Cast 🟣
+          </button>
+          <button
+            data-exclude="true"
+            onClick={e => { e.stopPropagation(); cardRef.current && downloadCard(cardRef.current, item.title); }}
+            className="ml-auto font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white hover:border-[#4FC3F7]/30 transition-colors"
+            title="Download as image">
+            ⬇
           </button>
         </div>
       </div>
