@@ -48,7 +48,7 @@ function toV2PaymentPayload(
   incoming: unknown,
   requirements: PaymentRequirements,
   resource?: { url: string; description?: string; mimeType?: string },
-  extensions?: { bazaar?: BazaarExtension },
+  extensions?: Record<string, unknown>,
 ) {
   const obj = (incoming ?? {}) as Record<string, unknown>;
   // Preserve all client fields (scheme, network, payload, etc.) so CDP validation passes.
@@ -83,7 +83,7 @@ async function cdpCall(
   paymentPayload: unknown,
   requirements: PaymentRequirements,
   resource?: { url: string; description?: string; mimeType?: string },
-  extensions?: { bazaar?: BazaarExtension },
+  extensions?: Record<string, unknown>,
 ): Promise<SettleResult> {
   const id = process.env.CDP_API_KEY_ID;
   const secret = process.env.CDP_API_KEY_SECRET;
@@ -145,7 +145,7 @@ export async function cdpVerify(
   paymentPayload: unknown,
   requirements: PaymentRequirements,
   resource?: { url: string; description?: string; mimeType?: string; serviceName?: string; tags?: string[]; iconUrl?: string },
-  extensions?: { bazaar?: BazaarExtension },
+  extensions?: Record<string, unknown>,
 ): Promise<SettleResult> {
   const r = await cdpCall("/verify", paymentPayload, requirements, resource, extensions);
   const d = r.detail as Record<string, unknown> | string;
@@ -159,7 +159,7 @@ export async function cdpSettle(
   paymentPayload: unknown,
   requirements: PaymentRequirements,
   resource?: { url: string; description?: string; mimeType?: string; serviceName?: string; tags?: string[]; iconUrl?: string },
-  extensions?: { bazaar?: BazaarExtension },
+  extensions?: Record<string, unknown>,
 ): Promise<SettleResult> {
   const r = await cdpCall("/settle", paymentPayload, requirements, resource, extensions);
   const d = r.detail as Record<string, unknown> | string;
