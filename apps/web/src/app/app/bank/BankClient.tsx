@@ -273,7 +273,7 @@ export default function BankPage() {
           if (raw === "[DONE]") break;
           try {
             const parsed = JSON.parse(raw) as { type?: string; delta?: { text?: string } };
-            if (parsed.type === "text_delta" && parsed.delta?.text) {
+            if (parsed.delta?.text) {
               accumulated += parsed.delta.text;
               setChatMessages(prev => {
                 const msgs = [...prev];
@@ -469,11 +469,13 @@ export default function BankPage() {
           </div>
         </div>
 
-        {/* Body — center + right panel */}
-        <div className="flex-1 flex overflow-hidden">
+        {/* Body — 2-col grid */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-4 max-w-[1360px] mx-auto">
+            <div className="xl:grid xl:grid-cols-[1fr_288px] xl:gap-5 xl:items-start">
 
-          {/* ── CENTER — scrollable ───────────────────────────────────── */}
-          <div className="flex-1 overflow-y-auto p-4">
+              {/* ── MAIN COLUMN ──────────────────────────────────────── */}
+              <div>
 
             {/* ── Balance hero ──────────────────────────────────────── */}
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-3">
@@ -543,7 +545,7 @@ export default function BankPage() {
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+                  <img src="/logomark.svg" alt="" className="w-4 h-4 opacity-90" />
                   <span className="font-mono text-[9px] text-slate-500 tracking-widest">AI MISSION CONTROL</span>
                 </div>
                 <span className="font-mono text-[8px] px-1.5 py-0.5 rounded"
@@ -784,10 +786,10 @@ export default function BankPage() {
             {/* Scan-to-pay camera overlay */}
             {scanOpen && <QrScanner onResult={handleScan} onClose={() => setScanOpen(false)} />}
 
-          </div>
+              </div>
 
-          {/* ── RIGHT PANEL — hidden on mobile ───────────────────────── */}
-          <aside className="hidden xl:flex flex-col w-64 shrink-0 border-l border-[#1A1A2E] overflow-y-auto p-4 gap-3">
+              {/* ── RIGHT COLUMN ─────────────────────────────────────── */}
+              <div className="mt-4 xl:mt-0 flex flex-col gap-3">
 
             {/* 1. Your Assets */}
             <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
@@ -987,8 +989,10 @@ export default function BankPage() {
               </div>
             )}
 
-          </aside>
+              </div>
 
+            </div>
+          </div>
         </div>
       </main>
 
@@ -1014,7 +1018,7 @@ export default function BankPage() {
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#1A1A2E] shrink-0"
             style={{ background: "#4FC3F708" }}>
             <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+              <img src="/logomark.svg" alt="BlueAgent" className="w-5 h-5" />
               <span className="font-mono text-[11px] text-[#4FC3F7] font-bold">BlueAgent</span>
               <span className="font-mono text-[9px] text-slate-600">Banking mode</span>
             </div>
