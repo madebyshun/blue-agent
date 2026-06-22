@@ -16,15 +16,15 @@ export const maxDuration = 60;
 export type { FeedItem, FeedAgent, CycleContext } from "./_shared";
 
 const JOBS: Job[] = [
-  { tool: "base-pulse",       agent: "aeon",      body: {}, title: "Base Pulse" },
-  { tool: "base-alpha",       agent: "consensus", body: {}, title: "Base Alpha" },
-  { tool: "narrative-pulse",  agent: "aeon",      body: {}, title: "Narrative Pulse" },
-  { tool: "whale-tracker",    agent: "aeon",      body: {} },
-  { tool: "ecosystem-digest", agent: "consensus", body: {}, title: "Base Ecosystem Digest" },
-  { tool: "new-pools",        agent: "aeon",      body: {}, title: "New Pools on Base" },
-  { tool: "blue-stream",      agent: "aeon",      body: {}, title: "Base Onchain Activity" },
+  { tool: "base-pulse",       agent: "blueagent", body: {}, title: "Base Pulse" },
+  { tool: "base-alpha",       agent: "blueagent", body: {}, title: "Base Alpha" },
+  { tool: "narrative-pulse",  agent: "blueagent", body: {}, title: "Narrative Pulse" },
+  { tool: "whale-tracker",    agent: "blueagent", body: {} },
+  { tool: "ecosystem-digest", agent: "blueagent", body: {}, title: "Base Ecosystem Digest" },
+  { tool: "new-pools",        agent: "blueagent", body: {}, title: "New Pools on Base" },
+  { tool: "blue-stream",      agent: "blueagent", body: {}, title: "Base Onchain Activity" },
   // token-alpha runs last in runCycle — its token is the cycle's top mover.
-  { tool: "token-alpha",      agent: "miroshark", body: {} },
+  { tool: "token-alpha",      agent: "blueagent", body: {} },
 ];
 
 async function handle(req: NextRequest) {

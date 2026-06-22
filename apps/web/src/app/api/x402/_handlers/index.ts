@@ -9,6 +9,7 @@ import hWalletRisk from "./wallet-risk";
 import hB20Check from "./b20-check";
 import hB20Analyze from "./b20-analyze";
 import hB20Launch from "./b20-launch";
+import hB20Tracker from "./b20-tracker";
 import hLiquidityDepth from "./liquidity-depth";
 import hTokenDistribution from "./token-distribution";
 import hBaseAlpha from "./base-alpha";
@@ -85,9 +86,10 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "gas-tracker": hGasTracker,
   "quick-safety": hQuickSafety,
   "wallet-risk": hWalletRisk,
-  "b20-check": hB20Check,
+  "b20-check":   hB20Check,
   "b20-analyze": hB20Analyze,
-  "b20-launch": hB20Launch,
+  "b20-launch":  hB20Launch,
+  "b20-tracker": hB20Tracker,
   "liquidity-depth": hLiquidityDepth,
   "token-distribution": hTokenDistribution,
   "base-alpha": hBaseAlpha,

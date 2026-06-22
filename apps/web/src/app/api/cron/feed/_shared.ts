@@ -17,7 +17,7 @@ const CRON_SECRET          = process.env.CRON_SECRET ?? "";
 const BASE_URL             = "https://blueagent.dev/api/x402";
 const HOUR_MS              = 3_600_000;
 
-export type FeedAgent = "aeon" | "blue" | "miroshark" | "consensus";
+export type FeedAgent = "blueagent";
 
 export interface FeedItem {
   id: string;
@@ -164,6 +164,17 @@ function toFeedItem(job: Job, resp: Any, cycleId: number, idx: number): FeedItem
           metric("$BNKR",    price  != null ? fmtUsd(price)  : null),
           metric("24h",      change != null ? fmtPct(change) : null),
           metric("Launches", resp.metrics?.total_launches != null ? `${resp.metrics.total_launches}` : null),
+        ]);
+        break;
+      }
+      case "b20-tracker": {
+        title = resp.title ?? "B20 on Base";
+        const tracked = Array.isArray(resp.tracked) ? resp.tracked : [];
+        summary = resp.summary ?? "B20 tracking on Base.";
+        metrics = clean([
+          metric("Tracked", tracked.length ? `${tracked.length}` : null),
+          metric("Beryl",   resp.berylActive ? "LIVE" : (resp.daysToBeryl != null ? `${resp.daysToBeryl}d` : null)),
+          metric("Top",     tracked[0]?.symbol ?? null),
         ]);
         break;
       }
