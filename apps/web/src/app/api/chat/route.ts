@@ -1093,9 +1093,35 @@ async function veniceToolStream(
 function extractCommand(messages: LLMMessage[]): { cmd: string; args: string } | null {
   const last = messages[messages.length - 1];
   if (last?.role !== "user" || typeof last.content !== "string") return null;
-  const match = last.content.match(/^\/(\w+)(?:\s+([\s\S]*))?$/);
-  if (!match) return null;
-  return { cmd: match[1].toLowerCase(), args: (match[2] ?? "").trim() };
+  const text = last.content.trim();
+
+  // Slash command (exact prefix match)
+  const match = text.match(/^\/(\w+)(?:\s+([\s\S]*))?$/);
+  if (match) {
+    const cmd = match[1].toLowerCase();
+    if (cmd in COMMAND_PROMPTS) return { cmd, args: (match[2] ?? "").trim() };
+  }
+
+  // NL intent detection — only short messages to avoid false positives
+  const lower = text.toLowerCase().replace(/[?!.,]/g, "").trim();
+
+  // credits intent
+  if (
+    text.length < 100 &&
+    /\b(credit|credits|how many credits|check.*credit|credit.*left|credit.*remain|my balance|credit balance)\b/.test(lower)
+  ) {
+    return { cmd: "credits", args: text };
+  }
+
+  // help intent
+  if (
+    text.length < 60 &&
+    /^(help|help me|what can you do|what do you do|your capabilities|how do i use this|how does this work|what can i ask)/.test(lower)
+  ) {
+    return { cmd: "help", args: "" };
+  }
+
+  return null;
 }
 
 const COMMAND_PROMPTS: Record<string, string> = {
