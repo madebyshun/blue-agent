@@ -31,7 +31,8 @@ export function middleware(request: NextRequest) {
   // NOTE: this gate lives in middleware, not next.config redirects, because
   // config redirects run BEFORE middleware and can't be conditionally bypassed.
   const isBankSurface =
-    pathname === "/app/bank" || pathname.startsWith("/app/bank/") ||
+    ((pathname === "/app/bank" || pathname.startsWith("/app/bank/")) &&
+    pathname !== "/app/bank/access") ||
     pathname === "/pay" || pathname.startsWith("/pay/");
   if (isBankSurface && process.env.NODE_ENV === "production") {
     const token = process.env.BANK_PREVIEW_TOKEN;
@@ -50,9 +51,9 @@ export function middleware(request: NextRequest) {
       });
       return res;
     }
-    // No valid cookie (or token not configured) → keep BlueBank hidden.
+    // No valid cookie (or token not configured) → show Early Access page.
     if (!unlocked) {
-      return NextResponse.redirect(new URL("/app/chat", request.url));
+      return NextResponse.redirect(new URL("/app/bank/access", request.url));
     }
     // Unlocked — fall through to the app.
   }

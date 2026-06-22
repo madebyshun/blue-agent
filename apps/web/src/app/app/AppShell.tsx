@@ -136,17 +136,10 @@ function AppSideNav() {
       <nav className="flex flex-col items-center gap-0.5 pt-2 flex-1 px-2">
         {NAV_ITEMS.map((item) => {
           const active = isActive(item.href);
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              className="group relative flex flex-col items-center justify-center gap-0.5 w-full h-[50px] rounded-xl transition-all"
-              style={
-                active
-                  ? { color: "#4FC3F7", background: "#4FC3F712", boxShadow: "0 0 0 1px #4FC3F720" }
-                  : { color: "#334155" }
-              }
-            >
+          const isExt = !!(item as { external?: boolean }).external;
+          const navCls = "group relative flex flex-col items-center justify-center gap-0.5 w-full h-[50px] rounded-xl transition-all";
+          const navInner = (
+            <>
               <span className="group-hover:text-slate-300 transition-colors">
                 {item.icon}
               </span>
@@ -156,12 +149,33 @@ function AppSideNav() {
               >
                 {item.label}
               </span>
-
               {/* Active left-bar indicator */}
               {active && (
                 <span className="absolute -left-2 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-[#4FC3F7]"
                   style={{ boxShadow: "0 0 6px #4FC3F780" }} />
               )}
+            </>
+          );
+          if (isExt) {
+            return (
+              <a key={item.id} href={item.href} target="_blank" rel="noopener noreferrer"
+                className={navCls} style={{ color: "#334155" }}>
+                {navInner}
+              </a>
+            );
+          }
+          return (
+            <Link
+              key={item.id}
+              href={item.href}
+              className={navCls}
+              style={
+                active
+                  ? { color: "#4FC3F7", background: "#4FC3F712", boxShadow: "0 0 0 1px #4FC3F720" }
+                  : { color: "#334155" }
+              }
+            >
+              {navInner}
             </Link>
           );
         })}
@@ -221,12 +235,9 @@ function AppSideNav() {
 // Tools / Skills / Scheduled and recent conversations. Shown below lg so the
 // tablet gap (md rail, no chat sidebar) keeps full nav access.
 
-// BlueBank is still in local testing — hide its nav entry on production builds
-// (NODE_ENV=production). Local `next dev` keeps it visible. The /app/bank route
-// is also redirected away in production (see next.config.ts) as a hard gate.
-const NAV_ITEMS = APP_NAV.filter(
-  (i) => !(i.id === "bank" && process.env.NODE_ENV === "production"),
-);
+// BlueBank is live — show in sidebar on all environments.
+// Access is gated by BANK_PREVIEW_TOKEN cookie in middleware.
+const NAV_ITEMS = APP_NAV;
 
 const PRODUCTS = [...NAV_ITEMS, ...APP_BOTTOM];
 
@@ -392,16 +403,33 @@ function MobileDrawer() {
             <p className="px-3 pt-3 pb-1 font-mono text-[9px] text-slate-600 tracking-widest uppercase">Products</p>
             {DRAWER_PRODUCTS.map(item => {
               const active = pathname === item.href || pathname.startsWith(item.href + "/");
+              const isExt = !!(item as { external?: boolean }).external;
+              const drawerCls = "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-[#ffffff06]";
+              const drawerInner = (
+                <>
+                  <span className="shrink-0" style={{ color: active ? "#4FC3F7" : "#64748b" }}>{item.icon}</span>
+                  <span className="font-mono text-[13px]" style={{ color: active ? "#4FC3F7" : "#cbd5e1" }}>{item.label}</span>
+                  {isExt && <span className="ml-auto font-mono text-[9px] text-slate-600">↗</span>}
+                </>
+              );
+              if (isExt) {
+                return (
+                  <a key={item.id} href={item.href} target="_blank" rel="noopener noreferrer"
+                    onClick={() => setDrawerOpen(false)}
+                    className={drawerCls}>
+                    {drawerInner}
+                  </a>
+                );
+              }
               return (
                 <Link
                   key={item.id}
                   href={item.href}
                   onClick={() => setDrawerOpen(false)}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-[#ffffff06]"
+                  className={drawerCls}
                   style={active ? { background: "#4FC3F712" } : undefined}
                 >
-                  <span className="shrink-0" style={{ color: active ? "#4FC3F7" : "#64748b" }}>{item.icon}</span>
-                  <span className="font-mono text-[13px]" style={{ color: active ? "#4FC3F7" : "#cbd5e1" }}>{item.label}</span>
+                  {drawerInner}
                 </Link>
               );
             })}
