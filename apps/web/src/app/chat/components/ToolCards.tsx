@@ -1210,17 +1210,86 @@ function B20LaunchCard({ result }: { result: B20LaunchResult }) {
   const [network,       setNetwork]       = useState<B20Net>("sepolia");
   const [cmdCopied,     setCmdCopied]     = useState(false);
 
+  // Deploy flow
+  const { address }             = useAccount();
+  const { sendTransactionAsync } = useSendTransaction();
+  const [deploying,      setDeploying]      = useState(false);
+  const [polling,        setPolling]        = useState(false);
+  const [deployErr,      setDeployErr]      = useState("");
+  const [deployTxHash,   setDeployTxHash]   = useState("");
+  const [deployedToken,  setDeployedToken]  = useState("");
+
   function switchVariant(v: "asset" | "stablecoin") {
     setVariant(v);
     if (!decOverridden) setDecimals(v === "stablecoin" ? 6 : 18);
   }
 
-  const n  = name.trim();
-  const s  = symbol.replace(/^\$/, "").trim();
-  const cap = supplyCap.trim();
-  const cur = currCode.trim() || "USD";
-  const net = B20_NETWORKS.find(x => x.id === network)!;
+  const n      = name.trim();
+  const s      = symbol.replace(/^\$/, "").trim();
+  const cap    = supplyCap.trim();
+  const cur    = currCode.trim() || "USD";
+  const net    = B20_NETWORKS.find(x => x.id === network)!;
   const canGen = !!n && !!s;
+
+  async function deployB20() {
+    if (!address) { setDeployErr("Connect your wallet first"); return; }
+    if (!n || !s) { setDeployErr("Name and symbol required"); return; }
+    setDeploying(true); setDeployErr(""); setDeployTxHash(""); setDeployedToken("");
+    try {
+      const prepRes = await fetch("/api/b20/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: n, symbol: s, variant, decimals,
+          supply_cap:    cap || undefined,
+          currency_code: variant === "stablecoin" ? cur : undefined,
+          admin:         address,
+          network,
+        }),
+      });
+      const prep = await prepRes.json();
+      if (!prep.ok) throw new Error(prep.error || "Prepare failed");
+      if (!prep.berylLive) {
+        throw new Error(
+          network === "mainnet"
+            ? "Mainnet Beryl activates June 25, 2026 18:00 UTC"
+            : "B20 factory not active on this network yet",
+        );
+      }
+
+      const hash = await sendTransactionAsync({
+        to:      prep.tx.to as `0x${string}`,
+        data:    prep.tx.data as `0x${string}`,
+        value:   0n,
+        chainId: prep.chainId,
+      });
+      setDeployTxHash(hash);
+      setPolling(true);
+
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 3000));
+        const recRes = await fetch("/api/b20/receipt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tx_hash: hash, network }),
+        });
+        const rec = await recRes.json();
+        if (rec.ok && rec.status === "success" && rec.tokenAddress) {
+          setDeployedToken(rec.tokenAddress);
+          break;
+        }
+        if (rec.ok && rec.status === "reverted") {
+          throw new Error("Transaction reverted");
+        }
+      }
+      setPolling(false);
+    } catch (e) {
+      setDeployErr((e as Error).message);
+    } finally {
+      setDeploying(false);
+      setPolling(false);
+    }
+  }
 
   // ── Script bodies ─────────────────────────────────────────────────────────
 
@@ -1391,6 +1460,70 @@ base-cast call $TOKEN_ADDRESS \\
           </p>
         </>
       )}
+
+      {/* ── Direct deploy section ────────────────────────────────────────── */}
+      <div className="mt-3 pt-3 border-t border-[#1A1A2E]">
+        {!deployedToken ? (
+          <>
+            <button
+              onClick={deployB20}
+              disabled={deploying || !canGen || !address || network === "vibenet"}
+              className="w-full font-mono text-[12px] font-bold py-2.5 rounded-xl disabled:opacity-40 transition-opacity"
+              style={{ background: "#34D399", color: "#050508" }}>
+              {!address
+                ? "Connect wallet to deploy"
+                : deploying
+                  ? (polling ? "Confirming onchain…" : "Preparing…")
+                  : network === "vibenet"
+                    ? "Vibenet — script-only"
+                    : `Deploy B20 on ${net.label} →`}
+            </button>
+
+            {network === "mainnet" && (
+              <p className="font-mono text-[9px] text-amber-500/70 mt-1.5 text-center">
+                ⚠ Mainnet Beryl activates June 25, 2026 18:00 UTC
+              </p>
+            )}
+            {network === "sepolia" && (
+              <p className="font-mono text-[9px] text-slate-600 mt-1.5 text-center">
+                Sepolia testnet · live now.{" "}
+                <a href="https://portal.cdp.coinbase.com/products/faucet"
+                  target="_blank" rel="noopener noreferrer"
+                  className="text-[#4FC3F7] hover:opacity-80">
+                  Get free test ETH →
+                </a>
+              </p>
+            )}
+            {network === "vibenet" && (
+              <p className="font-mono text-[9px] text-slate-600 mt-1.5 text-center">
+                Vibenet — script-only. Use Sepolia or Mainnet to deploy from here.
+              </p>
+            )}
+
+            {deployErr && (
+              <p className="font-mono text-[9px] text-red-400 mt-1.5 text-center">{deployErr}</p>
+            )}
+            {deployTxHash && !deployedToken && (
+              <p className="font-mono text-[9px] text-slate-500 mt-1.5 text-center break-all">
+                tx: {deployTxHash.slice(0, 10)}…{deployTxHash.slice(-8)}
+              </p>
+            )}
+          </>
+        ) : (
+          <div className="rounded-xl border border-[#34D399]/30 bg-[#34D399]/5 p-3">
+            <p className="font-mono text-[10px] text-[#34D399] mb-1">✓ B20 deployed</p>
+            <p className="font-mono text-[11px] text-white break-all mb-2">{deployedToken}</p>
+            <div className="flex gap-2 flex-wrap">
+              <a
+                href={`${net.chain === 8453 ? "https://basescan.org" : "https://sepolia.basescan.org"}/token/${deployedToken}`}
+                target="_blank" rel="noopener noreferrer"
+                className="font-mono text-[9px] px-2 py-1 rounded border border-[#1A1A2E] text-[#4FC3F7] hover:border-[#4FC3F7]/30 transition-colors">
+                View on Basescan →
+              </a>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
