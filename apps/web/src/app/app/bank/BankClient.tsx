@@ -1,10 +1,10 @@
 "use client";
 
-// BlueBank dashboard — 3-column layout: sidebar | center | right panel.
+// BlueBank dashboard — responsive grid layout: sidebar | grid content.
 // Non-custodial Base neobank: real on-chain balances (wagmi), live yield rates
 // (DefiLlama), real transactions (Moralis). Nothing is fabricated.
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useAccount, useReadContract, useBalance, useConnect, useDisconnect } from "wagmi";
 import { formatUnits } from "viem";
 import { QRCodeSVG } from "qrcode.react";
@@ -21,9 +21,15 @@ import { parsePaymentQr, buildPaymentUri, type ParsedPayment } from "@/lib/payme
 import OrdersPanel from "./OrdersPanel";
 import { B20_ENABLED } from "@/lib/orders";
 import TransactionHistory, { type WalletTx } from "./TransactionHistory";
+import { buildWalletState } from "@/lib/state";
 
 const usd = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const CAMPAIGNS: { name: string; desc: string; badge: string; color: string }[] = [
+  { name: "Base Ecosystem Fund", desc: "Builder grants — up to $50K", badge: "OPEN", color: "#4FC3F7" },
+  { name: "Morpho Boost", desc: "+0.5% APY on USDC deposits", badge: "LIVE", color: "#A78BFA" },
+];
 
 type Panel = "positions" | "earn" | "send" | "receive" | "convert" | "orders";
 
@@ -189,6 +195,45 @@ export default function BankPage() {
   const [chatLoading, setChatLoading] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
+  // ── Draggable AI FAB ─────────────────────────────────────────────────────
+  const fabDrag = useRef<{ ox: number; oy: number; sx: number; sy: number; moved: boolean } | null>(null);
+  const [fabXY, setFabXY]       = useState<{ x: number; y: number } | null>(null);
+  const [fabDragging, setFabDragging] = useState(false);
+
+  // ── Auto Earn ────────────────────────────────────────────────────────────
+  const [autoEarn, setAutoEarn]               = useState(false);
+  const [autoEarnThreshold, setAutoEarnThreshold] = useState(50);
+  useEffect(() => {
+    try { const s = localStorage.getItem("bluebank:autoEarn"); if (s) { const p = JSON.parse(s); setAutoEarn(!!p.enabled); setAutoEarnThreshold(p.threshold ?? 50); } } catch {}
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem("bluebank:autoEarn", JSON.stringify({ enabled: autoEarn, threshold: autoEarnThreshold })); } catch {}
+  }, [autoEarn, autoEarnThreshold]);
+
+  function fabDown(e: React.PointerEvent<HTMLButtonElement>) {
+    e.preventDefault();
+    (e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId);
+    const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+    fabDrag.current = { ox: r.left, oy: r.top, sx: e.clientX, sy: e.clientY, moved: false };
+    setFabDragging(true);
+  }
+  function fabMove(e: React.PointerEvent<HTMLButtonElement>) {
+    if (!fabDrag.current) return;
+    const dx = e.clientX - fabDrag.current.sx;
+    const dy = e.clientY - fabDrag.current.sy;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) fabDrag.current.moved = true;
+    if (!fabDrag.current.moved) return;
+    setFabXY({
+      x: Math.max(8, Math.min(window.innerWidth  - 56, fabDrag.current.ox + dx)),
+      y: Math.max(8, Math.min(window.innerHeight - 56, fabDrag.current.oy + dy)),
+    });
+  }
+  function fabUp() {
+    if (fabDrag.current && !fabDrag.current.moved) setChatOpen(o => !o);
+    fabDrag.current = null;
+    setFabDragging(false);
+  }
+
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages, chatLoading]);
@@ -229,7 +274,7 @@ export default function BankPage() {
           if (raw === "[DONE]") break;
           try {
             const parsed = JSON.parse(raw) as { type?: string; delta?: { text?: string } };
-            if (parsed.type === "text_delta" && parsed.delta?.text) {
+            if (parsed.delta?.text) {
               accumulated += parsed.delta.text;
               setChatMessages(prev => {
                 const msgs = [...prev];
@@ -273,6 +318,17 @@ export default function BankPage() {
     }
   }
 
+  // ── Wallet state (canonical derived state) — MUST be before any early return ──
+  const walletState = useMemo(() => buildWalletState({
+    walletUsdc: walletUsdc ?? 0,
+    aavePos: aavePos ?? 0,
+    morphoPos: morphoPos ?? 0,
+    ethBal: ethBal ?? 0,
+    bestApy,
+    netFlowMonth,
+    transferCountMonth,
+  }), [walletUsdc, aavePos, morphoPos, ethBal, bestApy, netFlowMonth, transferCountMonth]);
+
   if (!isConnected) {
     return <BankLanding bestApy={bestApy} />;
   }
@@ -287,37 +343,160 @@ export default function BankPage() {
   ];
 
   // ── Portfolio allocation (for pie chart) ─────────────────────────────────
-  const stableTotal = (walletUsdc ?? 0) + (aavePos ?? 0) + (morphoPos ?? 0);
-  const ethUsd      = (ethBal ?? 0) * 2500;
+  const stableTotal   = (walletUsdc ?? 0) + (aavePos ?? 0) + (morphoPos ?? 0);
+  const ethUsd        = (ethBal ?? 0) * 2500;
+  const portfolioTotal = stableTotal + ethUsd;
   const portfolioData = [
     { name: "Stablecoin", value: stableTotal, color: "#4FC3F7" },
     { name: "ETH",        value: ethUsd,      color: "#94A3B8" },
   ].filter(d => d.value > 0);
 
+  // ── Chat popup position relative to FAB ──────────────────────────────────
+  const FAB_SZ   = 48;
+  const POPUP_W  = 320;
+  const POPUP_H  = 432;
+  const chatPopupStyle: React.CSSProperties = fabXY
+    ? {
+        left: Math.max(8, Math.min(
+          (typeof window !== "undefined" ? window.innerWidth : 1440) - POPUP_W - 8,
+          fabXY.x + FAB_SZ / 2 - POPUP_W / 2,
+        )),
+        top: Math.max(8, fabXY.y - POPUP_H - 12),
+        height: POPUP_H,
+      }
+    : { right: 16, bottom: 76, height: POPUP_H };
+
+  // ── Portfolio health score ────────────────────────────────────────────────
+  const deployedRatio  = total > 0 ? inYield / total : 0;
+  const yieldScore     = deployedRatio > 0.8 ? 95 : deployedRatio > 0.5 ? 80 : deployedRatio > 0.2 ? 60 : deployedRatio > 0 ? 40 : 20;
+  const divScore       = portfolioTotal > 0 && ethUsd / portfolioTotal > 0.05 ? 88 : ethUsd > 0 ? 65 : 45;
+  const gasScore       = ethBal == null ? 50 : ethBal > 0.05 ? 95 : ethBal > 0.01 ? 80 : ethBal > 0.005 ? 60 : 20;
+  const actScore       = transferCountMonth > 10 ? 90 : transferCountMonth > 5 ? 75 : transferCountMonth > 1 ? 55 : 20;
+  const portfolioScore = total === 0 ? 0 : Math.round(yieldScore * 0.4 + divScore * 0.25 + gasScore * 0.2 + actScore * 0.15);
+  const scoreGrade     = portfolioScore >= 85 ? "A" : portfolioScore >= 70 ? "B" : portfolioScore >= 55 ? "C" : "D";
+  const scoreColor     = portfolioScore >= 85 ? "#34D399" : portfolioScore >= 70 ? "#4FC3F7" : portfolioScore >= 55 ? "#F59E0B" : "#EF4444";
+  const scoreDims      = [
+    { label: "Yield", s: yieldScore }, { label: "Diversify", s: divScore },
+    { label: "Gas", s: gasScore },     { label: "Activity", s: actScore },
+  ];
+
+  // ── Mission Control items ─────────────────────────────────────────────────
+  interface MC { priority: "high"|"warn"|"good"|"info"; icon: string; text: string; action?: string; onAction?: () => void; color: string }
+  const allMissions: MC[] = [];
+  if (total === 0) {
+    allMissions.push({ priority: "info", icon: "💡", text: "Add USDC to start earning yield on Base", action: "Add cash", onAction: addCash, color: "#F59E0B" });
+  } else {
+    if ((walletUsdc ?? 0) > 50 && inYield === 0 && bestApy != null)
+      allMissions.push({ priority: "high", icon: "📈", text: `$${usd(walletUsdc)} idle — earn ~$${(((walletUsdc ?? 0) * bestApy / 100) / 12).toFixed(0)}/mo at ${bestApy.toFixed(1)}%`, action: "Earn now", onAction: () => openAction("earn"), color: "#34D399" });
+    if (inYield > 0 && bestApy != null)
+      allMissions.push({ priority: "good", icon: "✅", text: `$${usd(inYield)} earning ${bestApy.toFixed(1)}% · ~$${((inYield * bestApy / 100) / 12).toFixed(0)}/month`, color: "#34D399" });
+    if ((walletUsdc ?? 0) > 50 && !autoEarn)
+      allMissions.push({ priority: "info", icon: "⚙️", text: "Enable Auto Earn to auto-deploy idle USDC", action: "Enable", onAction: () => setAutoEarn(true), color: "#A78BFA" });
+    if (ethBal != null && ethBal < 0.005)
+      allMissions.push({ priority: "warn", icon: "⛽", text: "ETH too low for gas fees", action: "Get ETH", onAction: () => openAction("convert"), color: "#F59E0B" });
+    if (new Date() >= new Date("2026-06-25"))
+      allMissions.push({ priority: "info", icon: "⚡", text: "Beryl live — B20 payments + faster L1 withdrawals", action: "Try", onAction: () => openAction("orders"), color: "#4FC3F7" });
+  }
+  const topMissions = allMissions.slice(0, 3);
+  const missionSummary =
+    total === 0 ? "Connect and add funds to get started." :
+    (walletUsdc ?? 0) > 100 && inYield === 0 ? "Idle cash detected — put it to work." :
+    inYield > 0 && (walletUsdc ?? 0) < 50 ? `Fully deployed · earning ${bestApy?.toFixed(1) ?? "—"}% APY` :
+    `$${usd(walletUsdc)} liquid · $${usd(inYield)} earning`;
+
+  // ── Auto Earn surplus ─────────────────────────────────────────────────────
+  const autoEarnSurplus = Math.max(0, (walletUsdc ?? 0) - autoEarnThreshold);
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
+
   return (
-    <div className="flex h-full w-full bg-[#050508] text-slate-200">
+    <div className="flex h-full w-full bg-[#050508] text-slate-200 overflow-hidden">
 
-      {/* ── LEFT SIDEBAR ────────────────────────────────────────────────── */}
-      <aside className="hidden lg:flex flex-col w-72 shrink-0 h-full border-r border-[#1A1A2E] bg-[#050508] overflow-y-auto">
-        <div className="px-5 h-14 flex items-center border-b border-[#1A1A2E] shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0 mr-2" />
-          <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUEBANK</p>
+      {/* ── SIDEBAR ─────────────────────────────────────────────────────── */}
+      <aside className="hidden md:flex flex-col shrink-0 h-full border-r border-[#1A1A2E] bg-[#050508] overflow-y-auto w-56 lg:w-60 xl:w-64 2xl:w-72 3xl:w-80">
+        {/* 1. Header */}
+        <div className="px-4 h-14 flex items-center gap-2 border-b border-[#1A1A2E] shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0" />
+          <p className="font-mono text-[11px] text-[#4FC3F7] tracking-widest">// BLUEBANK</p>
         </div>
 
-        {/* Earning widget */}
+        {/* 2. Net Worth widget */}
         <div className="m-3 rounded-xl border border-[#1A1A2E] bg-gradient-to-b from-[#0d1117] to-[#0a0a0f] p-3.5">
-          <div className="font-mono text-[9px] text-slate-500 tracking-wide">EARNING</div>
-          <div className="font-mono text-[20px] font-bold text-[#34D399] mt-0.5">${usd(inYield)}</div>
-          <div className="font-mono text-[9px] text-slate-600 mt-0.5 mb-2">
-            best rate {bestApy != null ? `${bestApy.toFixed(1)}%` : "—"} · via Aave · Morpho
-          </div>
+          <div className="font-mono text-[9px] text-slate-500 tracking-wide mb-0.5">NET WORTH</div>
+          <div className="font-mono text-[22px] font-bold text-[#34D399]">${usd(walletState.balance)}</div>
+          <div className="font-mono text-[9px] text-slate-600 mt-0.5 mb-2">USDC + yield · Base</div>
           <Spark points={hist?.points ?? []} color="#34D399" height={28} />
-          <div className="font-mono text-[8px] text-slate-700 mt-1">Morpho USDC · 30d APY trend</div>
+          <div className="font-mono text-[8px] text-slate-700 mt-1">Morpho USDC · 30d trend</div>
         </div>
 
+        {/* 3. Earn widget */}
+        <div className="mx-3 mb-3 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
+          <div className="font-mono text-[9px] text-slate-500 tracking-wide mb-1">EARNING</div>
+          <div className="font-mono text-[18px] font-bold text-[#A78BFA]">${usd(walletState.inYield)}</div>
+          <div className="font-mono text-[9px] text-slate-600 mt-0.5">
+            best {bestApy != null ? `${bestApy.toFixed(1)}%` : "—"} APY
+          </div>
+          {walletState.inYield === 0 && walletState.balance > 0 && (
+            <button onClick={() => openAction("earn")}
+              className="w-full font-mono text-[10px] font-bold mt-2 py-1.5 rounded-lg"
+              style={{ background: "#A78BFA15", color: "#A78BFA", border: "1px solid #A78BFA40" }}>
+              Deploy →
+            </button>
+          )}
+        </div>
+
+        {/* 4. BlueAgent mini chat */}
+        <div className="mx-3 mb-3">
+          <div className="font-mono text-[9px] text-slate-600 mb-1.5">ASK BLUEAGENT</div>
+          <div className="flex gap-1.5">
+            <input
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && chatInput.trim()) {
+                  sendChat(chatInput);
+                  setChatOpen(true);
+                }
+              }}
+              onClick={() => setChatOpen(true)}
+              placeholder="Ask anything…"
+              className="flex-1 min-w-0 bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[10px] text-slate-200 placeholder:text-slate-700 outline-none"
+            />
+            <button
+              onClick={() => { if (chatInput.trim()) { sendChat(chatInput); } setChatOpen(true); }}
+              className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center transition-colors"
+              style={{ background: "#4FC3F720", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
+              →
+            </button>
+          </div>
+        </div>
+
+        {/* 5. Base Apps grid */}
+        <div className="mx-3 mb-3">
+          <div className="font-mono text-[9px] text-slate-600 mb-1.5">⚡ BASE APPS</div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {[
+              { name: "Aerodrome", url: "https://aerodrome.finance",    color: "#EF4444" },
+              { name: "Moonwell",  url: "https://moonwell.fi",          color: "#A78BFA" },
+              { name: "Morpho",    url: "https://morpho.org",           color: "#4FC3F7" },
+              { name: "Uniswap",   url: "https://app.uniswap.org",      color: "#FF007A" },
+              { name: "Aave",      url: "https://app.aave.com",         color: "#B6509E" },
+              { name: "Compound",  url: "https://app.compound.finance", color: "#00D395" },
+            ].map(p => (
+              <a key={p.name} href={p.url} target="_blank" rel="noopener noreferrer"
+                className="font-mono text-[9px] py-1.5 px-2 rounded-lg text-center hover:opacity-80 transition-opacity"
+                style={{ background: `${p.color}10`, color: p.color, border: `1px solid ${p.color}25` }}>
+                {p.name}
+              </a>
+            ))}
+          </div>
+        </div>
+
+        {/* 6. Spacer */}
         <div className="flex-1" />
 
-        {/* Network */}
+        {/* 7. Network */}
         <div className="px-3 pb-3">
           <div className="font-mono text-[9px] text-slate-600 mb-1.5">NETWORK</div>
           <div className="flex gap-1">
@@ -333,7 +512,7 @@ export default function BankPage() {
           </div>
         </div>
 
-        {/* Account chip */}
+        {/* 8. Account chip */}
         <div className="px-4 py-3 border-t border-[#1A1A2E]">
           <div className="font-mono text-[11px] text-slate-300 truncate">{name ?? fname ?? shortAddr(acct)}</div>
           <div className="flex items-center gap-2 mt-0.5">
@@ -349,436 +528,437 @@ export default function BankPage() {
       {/* ── MAIN ────────────────────────────────────────────────────────── */}
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
 
-        {/* Page header */}
-        <div className="px-4 sm:px-6 h-14 flex items-center justify-between gap-3 border-b border-[#1A1A2E] shrink-0">
+        {/* Header h-14: greeting + trust chips */}
+        <div className="px-4 sm:px-5 h-14 flex items-center justify-between gap-3 border-b border-[#1A1A2E] shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <Identicon address={acct} />
             <div className="min-w-0">
-              <p className="font-mono text-[13px] text-white truncate">Welcome back, <span className="text-[#4FC3F7]">{name ?? fname ?? shortAddr(acct)}</span></p>
-              <p className="font-mono text-[9px] text-slate-600 truncate">Your account on Base · you hold the keys</p>
+              <p className="font-mono text-[13px] text-white">
+                Good {greeting}, <span className="text-[#4FC3F7]">{name ?? fname ?? shortAddr(acct)}</span>
+              </p>
+              <p className="font-mono text-[9px] text-slate-600 truncate">Base · Non-custodial · You hold the keys</p>
             </div>
           </div>
           <div className="hidden sm:flex items-center gap-1.5 shrink-0">
             {["Non-custodial", "Base", "Passkey"].map(c => (
-              <span key={c} className="font-mono text-[9px] px-2 py-1 rounded-md text-slate-400" style={{ border: "1px solid #1A1A2E", background: "#0d0d12" }}>{c}</span>
+              <span key={c} className="font-mono text-[9px] px-2 py-1 rounded-md text-slate-400"
+                style={{ border: "1px solid #1A1A2E", background: "#0d0d12" }}>{c}</span>
             ))}
             {new Date() >= new Date("2026-06-25") && (
-              <span className="font-mono text-[9px] px-2 py-1 rounded-md font-bold" style={{ color: "#4FC3F7", border: "1px solid #4FC3F730", background: "#4FC3F710" }}>⚡ Beryl</span>
+              <span className="font-mono text-[9px] px-2 py-1 rounded-md font-bold"
+                style={{ color: "#4FC3F7", border: "1px solid #4FC3F730", background: "#4FC3F710" }}>⚡ Beryl</span>
             )}
           </div>
         </div>
 
-        {/* Body — center + right panel */}
-        <div className="flex-1 flex overflow-hidden">
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 xl:p-5 2xl:p-6 3xl:p-8">
 
-          {/* ── CENTER — scrollable ───────────────────────────────────── */}
-          <div className="flex-1 overflow-y-auto p-4">
+          {/* ── Section 1: Balance | Actions | Health ─────────────────────── */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3 items-start">
 
-            {/* ── Balance hero ──────────────────────────────────────── */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-3">
-              <div className="font-mono text-[9px] text-slate-500 mb-1">TOTAL BALANCE · {net.short}</div>
-              <div className="font-mono text-[36px] font-bold text-[#34D399] leading-none">
-                ${usd(total)}
+            {/* Balance card */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
+              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">TOTAL BALANCE</div>
+              <div className="font-mono text-[28px] font-bold text-[#34D399]">${usd(walletState.balance)}</div>
+              <div className="flex flex-col gap-1.5 mt-3">
+                {(walletUsdc ?? 0) > 0 && (
+                  <div className="flex justify-between font-mono text-[10px]">
+                    <span className="text-slate-500">USDC</span>
+                    <span className="text-slate-300">${usd(walletUsdc)}</span>
+                  </div>
+                )}
+                {(aavePos ?? 0) > 0 && (
+                  <div className="flex justify-between font-mono text-[10px]">
+                    <span className="text-slate-500">aUSDC (Aave)</span>
+                    <span className="text-[#34D399]">${usd(aavePos)}</span>
+                  </div>
+                )}
+                {(morphoPos ?? 0) > 0 && (
+                  <div className="flex justify-between font-mono text-[10px]">
+                    <span className="text-slate-500">Morpho</span>
+                    <span className="text-[#A78BFA]">${usd(morphoPos)}</span>
+                  </div>
+                )}
+                {ethBal != null && ethBal > 0 && (
+                  <div className="flex justify-between font-mono text-[10px]">
+                    <span className="text-slate-500">ETH (gas)</span>
+                    <span className="text-slate-400">{ethBal.toFixed(4)}</span>
+                  </div>
+                )}
               </div>
-              {netFlowMonth !== 0 && (
-                <div className="font-mono text-[10px] mt-1"
-                  style={{ color: netFlowMonth >= 0 ? "#34D399" : "#EF4444" }}>
-                  {netFlowMonth >= 0 ? "+" : "−"}${usd(Math.abs(netFlowMonth))} this month
-                  {transferCountMonth > 0 && ` · ${transferCountMonth} transfers`}
-                </div>
-              )}
+            </div>
 
-              {/* Asset pills */}
-              <div className="flex gap-1.5 mt-2 flex-wrap">
-                {(walletUsdc ?? 0) > 0 && <AssetPill label="USDC" value={`$${usd(walletUsdc)}`} color="#4FC3F7" />}
-                {(aavePos ?? 0) > 0   && <AssetPill label="aUSDC" value={`$${usd(aavePos)}`} color="#34D399" />}
-                {(morphoPos ?? 0) > 0 && <AssetPill label="Morpho" value={`$${usd(morphoPos)}`} color="#A78BFA" />}
-                {ethBal != null        && <AssetPill label="ETH" value={ethBal.toFixed(4)} color="#94A3B8" />}
-              </div>
-
-              {/* Primary CTAs */}
-              <div className="flex gap-2 mt-3">
+            {/* Actions card */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
+              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-3">ACTIONS</div>
+              <div className="grid grid-cols-2 gap-2 mb-2">
                 <button onClick={() => openAction("receive")}
-                  className="flex-1 font-mono text-[11px] font-bold py-2.5 rounded-xl transition-colors"
+                  className="font-mono text-[11px] font-bold py-2.5 px-3 rounded-xl transition-colors"
                   style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
                   ⬇ Receive
                 </button>
                 <button onClick={() => openAction("send")}
-                  className="flex-1 font-mono text-[11px] font-bold py-2.5 rounded-xl hover:opacity-90 transition-opacity"
+                  className="font-mono text-[11px] font-bold py-2.5 px-3 rounded-xl hover:opacity-90 transition-opacity"
                   style={{ background: "#4FC3F7", color: "#050508" }}>
                   ➡ Send
                 </button>
-              </div>
-
-              {/* Secondary actions — icon row */}
-              <div className="flex gap-1 mt-2">
-                {TABS.filter(t => !["send", "receive"].includes(t.id)).map(tb => (
-                  <button key={tb.id} onClick={() => openAction(tb.id)}
-                    className="flex-1 font-mono text-[9px] py-1.5 rounded-lg border border-[#1A1A2E] text-slate-500 hover:text-slate-300 hover:border-[#4FC3F7]/20 flex flex-col items-center gap-0.5 transition-colors"
-                    style={{ background: "#050508" }}>
-                    <span>{tb.icon}</span>
-                    {tb.label}
-                  </button>
-                ))}
                 <button onClick={addCash} disabled={onrampBusy || !isConnected}
-                  className="flex-1 font-mono text-[9px] py-1.5 rounded-lg border border-[#1A1A2E] text-slate-500 hover:text-slate-300 hover:border-[#4FC3F7]/20 flex flex-col items-center gap-0.5 transition-colors disabled:opacity-40"
-                  style={{ background: "#050508" }}>
-                  <span>💵</span>
-                  {onrampBusy ? "…" : "Add"}
+                  className="font-mono text-[11px] font-bold py-2.5 px-3 rounded-xl disabled:opacity-40 transition-opacity hover:opacity-80"
+                  style={{ background: "#34D39910", color: "#34D399", border: "1px solid #34D39930" }}>
+                  {onrampBusy ? "…" : "💵 Add"}
+                </button>
+                <button onClick={cashOut} disabled={cashOutBusy || !isConnected}
+                  className="font-mono text-[11px] py-2.5 px-3 rounded-xl text-slate-400 disabled:opacity-40 transition-opacity hover:text-slate-200"
+                  style={{ border: "1px solid #1A1A2E" }}>
+                  {cashOutBusy ? "…" : "🏦 Out"}
                 </button>
               </div>
-              {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-1.5">{onrampMsg}</div>}
+              <div className="flex gap-1.5">
+                <button onClick={() => openAction("earn")}
+                  className="flex-1 font-mono text-[10px] py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+                  style={{ border: "1px solid #1A1A2E" }}>
+                  🌾 Earn
+                </button>
+                <button onClick={() => openAction("convert")}
+                  className="flex-1 font-mono text-[10px] py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+                  style={{ border: "1px solid #1A1A2E" }}>
+                  ⇅ Swap
+                </button>
+                <button onClick={() => setScanOpen(true)}
+                  className="flex-1 font-mono text-[10px] py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+                  style={{ border: "1px solid #1A1A2E" }}>
+                  📷 Scan
+                </button>
+              </div>
+              {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-2">{onrampMsg}</div>}
             </div>
 
-            {/* ── AI Copilot ────────────────────────────────────────── */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-3">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[9px] text-slate-500">🤖 AI COPILOT</span>
-                  <span className="font-mono text-[8px] px-1.5 py-0.5 rounded"
-                    style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                    BlueAgent
-                  </span>
-                </div>
+            {/* Health card */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
+              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">PORTFOLIO HEALTH</div>
+              <div className="flex items-end gap-2 mb-3">
+                <div className="font-mono text-[32px] font-bold leading-none" style={{ color: scoreColor }}>{portfolioScore}</div>
+                <div className="font-mono text-[13px] text-slate-500 mb-1">/100 · {scoreGrade}</div>
               </div>
-
-              <div className="space-y-2 mb-3">
-                {/* Idle USDC */}
-                {(walletUsdc ?? 0) > 100 && inYield === 0 && bestApy != null && (
-                  <AISuggestion icon="📈"
-                    text={`$${usd(walletUsdc)} USDC idle. Earn ${bestApy.toFixed(1)}% on Aave/Morpho.`}
-                    action="Earn now" onAction={() => openAction("earn")} color="#34D399" />
-                )}
-                {/* Earning */}
-                {inYield > 0 && bestApy != null && (
-                  <AISuggestion icon="✅"
-                    text={`$${usd(inYield)} earning ${bestApy.toFixed(1)}% · +$${((inYield * bestApy / 100) / 12).toFixed(0)}/month`}
-                    color="#34D399" />
-                )}
-                {/* Low ETH */}
-                {ethBal != null && ethBal < 0.005 && (
-                  <AISuggestion icon="⛽"
-                    text="ETH balance low — may not have enough for gas fees."
-                    color="#F87171" />
-                )}
-                {/* Beryl B20 */}
-                {new Date() >= new Date("2026-06-25") && (
-                  <AISuggestion icon="⚡"
-                    text="B20 payments live. Send with memo for onchain invoice tracking."
-                    action="Try B20" onAction={() => openAction("orders")} color="#4FC3F7" />
-                )}
-                {/* Fallback */}
-                {(walletUsdc ?? 0) === 0 && inYield === 0 && (
-                  <AISuggestion icon="💡"
-                    text="Add USDC to start earning yield on Base."
-                    action="Add cash" onAction={addCash} color="#F59E0B" />
-                )}
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                <IdentityChip label="Smart Wallet" active={true} color="#4FC3F7" />
+                <IdentityChip label="Passkey" active={true} color="#34D399" />
+                <IdentityChip label={name ?? fname ?? "No Basename"} active={!!(name ?? fname)} color="#A78BFA" />
+                <IdentityChip label="Non-custodial" active={true} color="#34D399" />
               </div>
-
-              <button onClick={() => setChatOpen(true)}
-                className="w-full font-mono text-[10px] font-bold py-2 rounded-xl transition-opacity hover:opacity-80"
+              <button
+                onClick={() => {
+                  const text = `My Base wallet health: ${portfolioScore}/100 @blueagent_`;
+                  navigator.clipboard?.writeText(text).catch(() => {});
+                }}
+                className="font-mono text-[9px] px-2.5 py-1 rounded-full transition-colors hover:opacity-80"
                 style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                💬 Ask BlueAgent
+                Share
               </button>
             </div>
-
-            {/* Transaction history — fills remaining center */}
-            <TransactionHistory
-              transactions={txData?.transactions ?? []}
-              loading={txLoading}
-              error={txError}
-              needsKey={txData?.needsKey}
-              onRetry={() => setTxReload(k => k + 1)}
-              explorer={net.explorer}
-              address={acct}
-            />
-
-            {/* Action modal */}
-            {actionOpen && (
-              <div className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] p-4">
-                <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setActionOpen(false)} />
-                <div className="relative z-10 w-full max-w-md h-[580px] max-h-[85vh] rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] shadow-2xl flex flex-col">
-                  <div className="flex items-center gap-1 p-3 border-b border-[#1A1A2E] shrink-0">
-                    {TABS.map(tb => (
-                      <button key={tb.id} onClick={() => { if (tb.id === "send") { setScanPrefill(null); setScanKey(k => k + 1); } setPanel(tb.id); }}
-                        className="flex-1 font-mono text-[10px] py-1.5 rounded-md transition-colors"
-                        style={panel === tb.id
-                          ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
-                          : { color: "#64748b", border: "1px solid transparent" }}>
-                        {tb.label}
-                      </button>
-                    ))}
-                    <button onClick={() => setActionOpen(false)} className="ml-1 w-7 h-7 rounded-md font-mono text-[13px] text-slate-500 hover:text-white hover:bg-[#1A1A2E] shrink-0">✕</button>
-                  </div>
-
-                  <div className="overflow-y-auto p-4 min-h-0">
-                    {panel === "positions" && (
-                      <div>
-                        <PositionRow label="Aave v3" pos={aavePos} apy={aaveApy} onManage={() => setPanel("earn")} />
-                        <PositionRow label="Morpho · Gauntlet USDC Prime" pos={morphoPos} apy={morphoApy}
-                          disabled={!morphoVnet} disabledNote="mainnet only" onManage={() => setPanel("earn")} />
-                        <div className="mt-3 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-3">
-                          <div className="font-mono text-[9px] text-slate-600 mb-1.5">BEST SAFE RATE · BASE</div>
-                          {rates && rates.length ? rates.slice(0, 3).map((r, i) => (
-                            <div key={r.project} className="flex items-center justify-between py-0.5 font-mono text-[10px]">
-                              <span className={i === 0 ? "text-[#34D399]" : "text-slate-400"}>{i === 0 ? "★ " : "  "}{r.label}</span>
-                              <span className={i === 0 ? "text-[#34D399]" : "text-slate-300"}>{r.apy.toFixed(2)}%</span>
-                            </div>
-                          )) : <div className="font-mono text-[10px] text-slate-600">loading…</div>}
-                        </div>
-                        <button onClick={() => setPanel("earn")}
-                          className="w-full font-mono text-[12px] font-bold py-2.5 rounded-xl mt-3"
-                          style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>
-                          🌾 {inYield > 0 ? "Manage yield" : "Start earning"}
-                        </button>
-                        <p className="font-mono text-[9px] text-slate-600 mt-2 leading-relaxed px-0.5">
-                          Supply idle USDC into Aave or Morpho — non-custodial, you sign, withdraw anytime.
-                        </p>
-                      </div>
-                    )}
-                    {panel === "earn" && <MoveToYieldCard result={{ network }} account={acct} />}
-                    {panel === "convert" && <SwapCard account={acct} />}
-                    {panel === "orders" && <OrdersPanel />}
-                    {panel === "send" && (
-                      <div>
-                        <button onClick={() => setScanOpen(true)}
-                          className="w-full font-mono text-[11px] font-bold py-2 rounded-xl mb-3 flex items-center justify-center gap-2"
-                          style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                          📷 Scan to pay
-                        </button>
-                        {scanPrefill && (
-                          <div className="font-mono text-[9px] text-[#34D399] mb-2">
-                            ✓ scanned{scanPrefill.amount ? ` · request ${scanPrefill.amount} ${scanPrefill.asset ?? "USDC"}` : ""} — confirm + sign below
-                          </div>
-                        )}
-                        <SendCard key={scanKey}
-                          result={{
-                            network: scanPrefill?.network ?? network,
-                            to: scanPrefill?.to,
-                            amount: scanPrefill?.amount,
-                            asset: scanPrefill?.asset,
-                          }}
-                          account={acct} />
-                      </div>
-                    )}
-                    {panel === "receive" && (
-                      <div>
-                        <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-3">RECEIVE · {net.short}</div>
-                        <div className="flex items-center gap-1.5 mb-3">
-                          <div className="flex gap-1">
-                            {(["USDC", "ETH"] as const).map(a => (
-                              <button key={a} onClick={() => setReqAsset(a)}
-                                className="font-mono text-[10px] px-2.5 py-1.5 rounded-lg transition-colors"
-                                style={reqAsset === a
-                                  ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
-                                  : { color: "#64748b", border: "1px solid #1A1A2E" }}>
-                                {a}
-                              </button>
-                            ))}
-                          </div>
-                          <input value={reqAmount} onChange={e => setReqAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-                            inputMode="decimal" placeholder="amount (optional)"
-                            className="flex-1 bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[10px] text-slate-200 placeholder:text-slate-700 outline-none" />
-                          {reqAmount && (
-                            <button onClick={() => setReqAmount("")} className="font-mono text-[10px] px-2 py-1.5 rounded-lg text-slate-500 hover:text-white border border-[#1A1A2E]">✕</button>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-center text-center">
-                          <div className="bg-white p-2.5 rounded-xl">
-                            <QRCodeSVG value={acct ? buildPaymentUri({ to: acct, amount: reqAmount, asset: reqAsset, network }) : ""} size={180} bgColor="#ffffff" fgColor="#0a0a0f" level="M" />
-                          </div>
-                          {parseFloat(reqAmount) > 0 && (
-                            <div className="font-mono text-[12px] text-[#34D399] mt-3 font-bold">requesting {reqAmount} {reqAsset}</div>
-                          )}
-                          {name && <div className="font-mono text-[13px] text-[#4FC3F7] mt-2">{name}</div>}
-                          <div className="font-mono text-[9px] text-slate-400 mt-1.5 break-all px-2">{acct}</div>
-                          <div className="flex items-center gap-2 mt-3">
-                            <button onClick={copyAddr} className="font-mono text-[11px] px-4 py-2 rounded-lg" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                              {copied ? "✓ Copied" : "Copy address"}
-                            </button>
-                            <button onClick={sharePayLink} className="font-mono text-[11px] px-4 py-2 rounded-lg" style={{ background: "#34D39910", color: "#34D399", border: "1px solid #34D39930" }}>
-                              {linkCopied ? "✓ Link copied" : "🔗 Share pay link"}
-                            </button>
-                          </div>
-                        </div>
-                        <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-2.5 mt-4">
-                          <p className="font-mono text-[9px] text-slate-500 leading-relaxed">
-                            {parseFloat(reqAmount) > 0
-                              ? <>Payment-request QR — a payer scanning it (BlueBank <b className="text-slate-300">Scan to pay</b>, or any EIP-681 wallet) gets <b className="text-slate-300">{reqAmount} {reqAsset}</b> prefilled.</>
-                              : <>Scan the QR with any wallet, or set an amount above to make a payment request. <b className="text-slate-300">USDC / ETH on Base</b> ({net.short}) only.</>}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Scan-to-pay camera overlay */}
-            {scanOpen && <QrScanner onResult={handleScan} onClose={() => setScanOpen(false)} />}
 
           </div>
 
-          {/* ── RIGHT PANEL — hidden on mobile ───────────────────────── */}
-          <aside className="hidden xl:flex flex-col w-64 shrink-0 border-l border-[#1A1A2E] overflow-y-auto p-4 gap-3">
+          {/* ── Section 2: Wallet+Earn | AI+Portfolio ─────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3 items-start">
 
-            {/* 1. Your Assets */}
-            <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">YOUR ASSETS</div>
-              <AssetRow label="USDC" sub="in wallet" usd={walletUsdc} color="#4FC3F7" />
-              <AssetRow label="aUSDC" sub={`Aave · ${aaveApy != null ? `${aaveApy.toFixed(1)}%` : bestApy != null ? `${bestApy.toFixed(1)}%` : "—"} APY`} usd={aavePos} color="#34D399" />
-              {(morphoPos ?? 0) > 0 && (
-                <AssetRow label="Morpho" sub={`Gauntlet · ${morphoApy != null ? `${morphoApy.toFixed(1)}%` : "—"} APY`} usd={morphoPos} color="#A78BFA" />
-              )}
-              <div className="flex items-center justify-between py-2 border-t border-[#1A1A2E] mt-1">
-                <div>
-                  <div className="font-mono text-[11px] text-slate-200">ETH</div>
-                  <div className="font-mono text-[9px] text-slate-600">gas</div>
-                </div>
-                <div className="font-mono text-[11px] text-slate-300">{ethBal != null ? ethBal.toFixed(4) : "—"}</div>
-              </div>
-            </div>
+            {/* Left stack */}
+            <div className="flex flex-col gap-3">
 
-            {/* 2. Portfolio Allocation (pie chart) */}
-            <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">PORTFOLIO ALLOCATION</div>
-              {portfolioData.length > 0 ? (
-                <>
-                  <ResponsiveContainer width="100%" height={100}>
-                    <PieChart>
-                      <Pie data={portfolioData} cx="50%" cy="50%"
-                        innerRadius={28} outerRadius={44}
-                        dataKey="value" paddingAngle={2}>
-                        {portfolioData.map((entry, i) => (
-                          <Cell key={i} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        formatter={(v: any) => [`$${usd(v as number)}`, ""]}
-                        contentStyle={{ background: "#0a0a0f", border: "1px solid #1A1A2E", fontFamily: "monospace", fontSize: "10px", color: "#94a3b8" }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="flex gap-3 justify-center mt-1">
-                    {portfolioData.map(d => (
-                      <div key={d.name} className="flex items-center gap-1 font-mono text-[9px] text-slate-400">
-                        <div className="w-2 h-2 rounded-full" style={{ background: d.color }} />
-                        {d.name} {total > 0 ? Math.round(d.value / total * 100) : 0}%
-                      </div>
-                    ))}
+              {/* Wallet card */}
+              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
+                <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-3">WALLET</div>
+                <AssetRow label="USDC" sub="in wallet" usd={walletUsdc} color="#4FC3F7" />
+                <AssetRow label="aUSDC" sub={`Aave · ${aaveApy != null ? `${aaveApy.toFixed(1)}%` : bestApy != null ? `${bestApy.toFixed(1)}%` : "—"} APY`} usd={aavePos} color="#34D399" />
+                {(morphoPos ?? 0) > 0 && (
+                  <AssetRow label="Morpho" sub={`Gauntlet · ${morphoApy != null ? `${morphoApy.toFixed(1)}%` : "—"} APY`} usd={morphoPos} color="#A78BFA" />
+                )}
+                <div className="mt-2 pt-2 border-t border-[#1A1A2E]">
+                  <div className="font-mono text-[9px] text-slate-500 mb-1">GAS RESERVE</div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[11px] text-slate-400">ETH</span>
+                    <span className="font-mono text-[11px] text-slate-300">{walletState.gasReserveEth.toFixed(4)}</span>
                   </div>
-                </>
-              ) : (
-                <div className="font-mono text-[10px] text-slate-600 py-2">No assets yet</div>
-              )}
-            </div>
+                  {walletState.gasReserveEth < 0.005 && (
+                    <div className="font-mono text-[9px] text-amber-400 mt-1">⚠ Low — get ETH for gas</div>
+                  )}
+                </div>
+              </div>
 
-            {/* 3. Yield Center */}
-            <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-mono text-[9px] text-slate-500">⭐ YIELD CENTER</span>
-                {bestApy != null && (
-                  <span className="font-mono text-[9px] text-[#34D399]">Best: {bestApy.toFixed(1)}%</span>
+              {/* Earn card with APY bars */}
+              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="font-mono text-[9px] text-slate-500 tracking-widest">YIELD RATES · BASE</div>
+                  <button onClick={() => openAction("earn")}
+                    className="font-mono text-[9px] px-2 py-1 rounded-lg"
+                    style={{ background: "#34D39910", color: "#34D399", border: "1px solid #34D39920" }}>
+                    Earn →
+                  </button>
+                </div>
+                {rates && rates.length ? rates.slice(0, 4).map((r, i) => (
+                  <div key={r.project} className="mb-2">
+                    <div className="flex justify-between font-mono text-[10px] mb-1">
+                      <span className={i === 0 ? "text-[#34D399]" : "text-slate-400"}>{i === 0 ? "★ " : ""}{r.label}</span>
+                      <span className={i === 0 ? "text-[#34D399] font-bold" : "text-slate-300"}>{r.apy.toFixed(2)}%</span>
+                    </div>
+                    <div className="h-1 rounded-full bg-[#1A1A2E] overflow-hidden">
+                      <div className="h-full rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (r.apy / (rates[0].apy + 1)) * 100)}%`, background: i === 0 ? "#34D399" : "#4FC3F740" }} />
+                    </div>
+                  </div>
+                )) : (
+                  <div className="font-mono text-[10px] text-slate-600">loading rates…</div>
                 )}
               </div>
-              {rates && rates.length ? rates.slice(0, 3).map((r, i) => (
-                <div key={r.project}
-                  className="flex items-center justify-between py-1.5 border-b border-[#1A1A2E] last:border-0">
-                  <span className="font-mono text-[10px]" style={{ color: i === 0 ? "#34D399" : "#94A3B8" }}>
-                    {i === 0 ? "★ " : ""}{r.label}
-                  </span>
+
+            </div>
+
+            {/* Right stack */}
+            <div className="flex flex-col gap-3">
+
+              {/* AI Mission Control */}
+              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
+                <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-[10px] font-bold" style={{ color: i === 0 ? "#34D399" : "#94A3B8" }}>
-                      {r.apy.toFixed(2)}%
-                    </span>
-                    {i === 0 && (
-                      <button onClick={() => openAction("earn")}
-                        className="font-mono text-[8px] px-1.5 py-0.5 rounded"
-                        style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39930" }}>
-                        Earn →
-                      </button>
-                    )}
+                    <img src="/logomark.svg" alt="" className="w-4 h-4 opacity-90" />
+                    <span className="font-mono text-[9px] text-slate-500 tracking-widest">AI MISSION CONTROL</span>
                   </div>
+                  <button onClick={() => setChatOpen(o => !o)}
+                    className="font-mono text-[9px] px-2.5 py-1 rounded-lg font-bold transition-colors"
+                    style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                    Ask BlueAgent →
+                  </button>
                 </div>
-              )) : <div className="font-mono text-[10px] text-slate-600">loading rates…</div>}
-              {(walletUsdc ?? 0) > 100 && inYield === 0 && bestApy != null && (
-                <div className="mt-2 p-2 rounded-lg font-mono"
-                  style={{ background: "#F59E0B08", border: "1px solid #F59E0B20" }}>
-                  <div className="text-[9px] text-[#F59E0B]">💡 Idle cash detected</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">
-                    +${(((walletUsdc ?? 0) * bestApy / 100) / 12).toFixed(0)}/month potential
+                <p className="font-mono text-[11px] text-slate-300 mb-3 leading-relaxed">{missionSummary}</p>
+                <div className="space-y-2">
+                  {topMissions.map((item, i) => (
+                    <div key={i} className="flex items-center justify-between gap-2 p-2.5 rounded-xl"
+                      style={{ background: `${item.color}08`, border: `1px solid ${item.color}20` }}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {item.priority === "high" && <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444] animate-pulse" />}
+                          {item.priority === "warn" && <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]" />}
+                          {item.priority === "good" && <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />}
+                          {item.priority === "info" && <span className="w-1.5 h-1.5 rounded-full bg-[#64748b]" />}
+                          <span className="text-sm leading-none">{item.icon}</span>
+                        </div>
+                        <span className="font-mono text-[10px] text-slate-300 leading-snug">{item.text}</span>
+                      </div>
+                      {item.action && item.onAction && (
+                        <button onClick={item.onAction}
+                          className="font-mono text-[9px] px-2 py-1 rounded-lg shrink-0 font-bold whitespace-nowrap"
+                          style={{ background: `${item.color}20`, color: item.color, border: `1px solid ${item.color}40` }}>
+                          {item.action}
+                        </button>
+                        )}
+                    </div>
+                  ))}
+                  {topMissions.length === 0 && (
+                    <div className="font-mono text-[10px] text-slate-600 py-2 text-center">✓ All good — no actions needed</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Portfolio Allocation with donut chart */}
+              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
+                <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-3">PORTFOLIO ALLOCATION</div>
+                {walletState.balance > 0 ? (
+                  <div className="flex items-center gap-4">
+                    <div className="w-20 h-20 shrink-0">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={portfolioData} cx="50%" cy="50%" innerRadius={24} outerRadius={36}
+                            dataKey="value" strokeWidth={0}>
+                            {portfolioData.map((entry, i) => (
+                              <Cell key={i} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(v: unknown) => `$${usd(v as number)}`}
+                            contentStyle={{ background: "#0a0a0f", border: "1px solid #1A1A2E", fontSize: 10 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex-1 space-y-1.5">
+                      {portfolioData.map(d => (
+                        <div key={d.name} className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full" style={{ background: d.color }} />
+                            <span className="font-mono text-[10px] text-slate-400">{d.name}</span>
+                          </div>
+                          <span className="font-mono text-[10px] text-slate-300">${usd(d.value)}</span>
+                        </div>
+                      ))}
+                      <div className="font-mono text-[8px] text-slate-700 pt-1">ETH counted as gas reserve</div>
+                      {walletState.gasSavedUsd != null && (
+                        <div className="font-mono text-[9px] text-[#34D399]">~${walletState.gasSavedUsd} saved vs mainnet</div>
+                      )}
+                    </div>
                   </div>
+                ) : (
+                  <div className="font-mono text-[10px] text-slate-600">No assets yet</div>
+                )}
+                <div className="mt-3 flex items-center justify-between font-mono text-[10px]">
+                  <span className="text-slate-500">Stablecoin</span>
+                  <span className="text-[#4FC3F7] font-bold">{walletState.allocation.stablecoin}%</span>
                 </div>
-              )}
-            </div>
-
-            {/* 4. Base Ecosystem */}
-            <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">BASE ECOSYSTEM</div>
-              <div className="grid grid-cols-3 gap-1.5">
-                {[
-                  { name: "Aerodrome", url: "https://aerodrome.finance",    color: "#EF4444" },
-                  { name: "Moonwell",  url: "https://moonwell.fi",          color: "#A78BFA" },
-                  { name: "Morpho",    url: "https://morpho.org",           color: "#4FC3F7" },
-                  { name: "Uniswap",   url: "https://app.uniswap.org",      color: "#FF007A" },
-                  { name: "Aave",      url: "https://app.aave.com",         color: "#B6509E" },
-                  { name: "Compound",  url: "https://app.compound.finance", color: "#00D395" },
-                ].map(p => (
-                  <a key={p.name} href={p.url} target="_blank" rel="noopener noreferrer"
-                    className="font-mono text-[8px] py-1.5 px-1 rounded-lg text-center hover:opacity-80 transition-opacity"
-                    style={{ background: `${p.color}10`, color: p.color, border: `1px solid ${p.color}25` }}>
-                    {p.name}
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            {/* 5. Add cash */}
-            <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">ADD CASH</div>
-              <div className="font-mono text-[10px] text-slate-400 mb-2">Buy USDC with card or bank</div>
-              <button onClick={addCash} disabled={onrampBusy || !isConnected}
-                className="w-full font-mono text-[10px] font-bold py-2 rounded-lg disabled:opacity-40"
-                style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                {onrampBusy ? "Starting…" : "💵 Add cash"}
-              </button>
-              <button onClick={cashOut} disabled={cashOutBusy || !isConnected}
-                className="w-full font-mono text-[10px] py-1.5 rounded-lg mt-1 text-slate-500 disabled:opacity-40"
-                style={{ border: "1px solid #1A1A2E" }}>
-                {cashOutBusy ? "…" : "🏦 Cash out"}
-              </button>
-            </div>
-
-            {/* 6. Beryl — date-gated */}
-            {new Date() >= new Date("2026-06-25") && (
-              <div className="rounded-xl p-3" style={{ background: "#4FC3F708", border: "1px solid #4FC3F730" }}>
-                <div className="font-mono text-[9px] text-[#4FC3F7] font-bold mb-1">⚡ Beryl is live</div>
-                <div className="font-mono text-[9px] text-slate-400 space-y-0.5">
-                  <div>→ B20 payments with memo</div>
-                  <div>→ L1 withdrawals: 5 days (was 7)</div>
+                <div className="h-1.5 rounded-full bg-[#1A1A2E] overflow-hidden mt-1">
+                  <div className="h-full rounded-full bg-[#4FC3F7]"
+                    style={{ width: `${walletState.allocation.stablecoin}%` }} />
                 </div>
-                <button onClick={() => openAction("orders")}
-                  className="w-full font-mono text-[9px] font-bold py-1.5 rounded-lg mt-2"
-                  style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                  Try B20 payments →
-                </button>
               </div>
-            )}
 
-          </aside>
+            </div>
+          </div>
+
+          {/* ── Section 3: Transaction History ─────────────────────────────── */}
+          <TransactionHistory
+            transactions={txData?.transactions ?? []}
+            loading={txLoading}
+            error={txError}
+            needsKey={txData?.needsKey}
+            onRetry={() => setTxReload(k => k + 1)}
+            explorer={net.explorer}
+            address={acct}
+          />
 
         </div>
+
+        {/* Action modal — fixed, inside main */}
+        {actionOpen && (
+          <div className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setActionOpen(false)} />
+            <div className="relative z-10 w-full max-w-md h-[580px] max-h-[85vh] rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] shadow-2xl flex flex-col">
+              <div className="flex items-center gap-1 p-3 border-b border-[#1A1A2E] shrink-0">
+                {TABS.map(tb => (
+                  <button key={tb.id} onClick={() => { if (tb.id === "send") { setScanPrefill(null); setScanKey(k => k + 1); } setPanel(tb.id); }}
+                    className="flex-1 font-mono text-[10px] py-1.5 rounded-md transition-colors"
+                    style={panel === tb.id
+                      ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                      : { color: "#64748b", border: "1px solid transparent" }}>
+                    {tb.label}
+                  </button>
+                ))}
+                <button onClick={() => setActionOpen(false)} className="ml-1 w-7 h-7 rounded-md font-mono text-[13px] text-slate-500 hover:text-white hover:bg-[#1A1A2E] shrink-0">✕</button>
+              </div>
+
+              <div className="overflow-y-auto p-4 min-h-0">
+                {panel === "positions" && (
+                  <div>
+                    <PositionRow label="Aave v3" pos={aavePos} apy={aaveApy} onManage={() => setPanel("earn")} />
+                    <PositionRow label="Morpho · Gauntlet USDC Prime" pos={morphoPos} apy={morphoApy}
+                      disabled={!morphoVnet} disabledNote="mainnet only" onManage={() => setPanel("earn")} />
+                    <div className="mt-3 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-3">
+                      <div className="font-mono text-[9px] text-slate-600 mb-1.5">BEST SAFE RATE · BASE</div>
+                      {rates && rates.length ? rates.slice(0, 3).map((r, i) => (
+                        <div key={r.project} className="flex items-center justify-between py-0.5 font-mono text-[10px]">
+                          <span className={i === 0 ? "text-[#34D399]" : "text-slate-400"}>{i === 0 ? "★ " : "  "}{r.label}</span>
+                          <span className={i === 0 ? "text-[#34D399]" : "text-slate-300"}>{r.apy.toFixed(2)}%</span>
+                        </div>
+                      )) : <div className="font-mono text-[10px] text-slate-600">loading…</div>}
+                    </div>
+                    <button onClick={() => setPanel("earn")}
+                      className="w-full font-mono text-[12px] font-bold py-2.5 rounded-xl mt-3"
+                      style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }}>
+                      🌾 {inYield > 0 ? "Manage yield" : "Start earning"}
+                    </button>
+                    <p className="font-mono text-[9px] text-slate-600 mt-2 leading-relaxed px-0.5">
+                      Supply idle USDC into Aave or Morpho — non-custodial, you sign, withdraw anytime.
+                    </p>
+                  </div>
+                )}
+                {panel === "earn" && <MoveToYieldCard result={{ network }} account={acct} />}
+                {panel === "convert" && <SwapCard account={acct} />}
+                {panel === "orders" && <OrdersPanel />}
+                {panel === "send" && (
+                  <div>
+                    <button onClick={() => setScanOpen(true)}
+                      className="w-full font-mono text-[11px] font-bold py-2 rounded-xl mb-3 flex items-center justify-center gap-2"
+                      style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                      📷 Scan to pay
+                    </button>
+                    {scanPrefill && (
+                      <div className="font-mono text-[9px] text-[#34D399] mb-2">
+                        ✓ scanned{scanPrefill.amount ? ` · request ${scanPrefill.amount} ${scanPrefill.asset ?? "USDC"}` : ""} — confirm + sign below
+                      </div>
+                    )}
+                    <SendCard key={scanKey}
+                      result={{
+                        network: scanPrefill?.network ?? network,
+                        to: scanPrefill?.to,
+                        amount: scanPrefill?.amount,
+                        asset: scanPrefill?.asset,
+                      }}
+                      account={acct} />
+                  </div>
+                )}
+                {panel === "receive" && (
+                  <div>
+                    <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-3">RECEIVE · {net.short}</div>
+                    <div className="flex items-center gap-1.5 mb-3">
+                      <div className="flex gap-1">
+                        {(["USDC", "ETH"] as const).map(a => (
+                          <button key={a} onClick={() => setReqAsset(a)}
+                            className="font-mono text-[10px] px-2.5 py-1.5 rounded-lg transition-colors"
+                            style={reqAsset === a
+                              ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                              : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+                            {a}
+                          </button>
+                        ))}
+                      </div>
+                      <input value={reqAmount} onChange={e => setReqAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                        inputMode="decimal" placeholder="amount (optional)"
+                        className="flex-1 bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[10px] text-slate-200 placeholder:text-slate-700 outline-none" />
+                      {reqAmount && (
+                        <button onClick={() => setReqAmount("")} className="font-mono text-[10px] px-2 py-1.5 rounded-lg text-slate-500 hover:text-white border border-[#1A1A2E]">✕</button>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-center text-center">
+                      <div className="bg-white p-2.5 rounded-xl">
+                        <QRCodeSVG value={acct ? buildPaymentUri({ to: acct, amount: reqAmount, asset: reqAsset, network }) : ""} size={180} bgColor="#ffffff" fgColor="#0a0a0f" level="M" />
+                      </div>
+                      {parseFloat(reqAmount) > 0 && (
+                        <div className="font-mono text-[12px] text-[#34D399] mt-3 font-bold">requesting {reqAmount} {reqAsset}</div>
+                      )}
+                      {name && <div className="font-mono text-[13px] text-[#4FC3F7] mt-2">{name}</div>}
+                      <div className="font-mono text-[9px] text-slate-400 mt-1.5 break-all px-2">{acct}</div>
+                      <div className="flex items-center gap-2 mt-3">
+                        <button onClick={copyAddr} className="font-mono text-[11px] px-4 py-2 rounded-lg" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                          {copied ? "✓ Copied" : "Copy address"}
+                        </button>
+                        <button onClick={sharePayLink} className="font-mono text-[11px] px-4 py-2 rounded-lg" style={{ background: "#34D39910", color: "#34D399", border: "1px solid #34D39930" }}>
+                          {linkCopied ? "✓ Link copied" : "🔗 Share pay link"}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-2.5 mt-4">
+                      <p className="font-mono text-[9px] text-slate-500 leading-relaxed">
+                        {parseFloat(reqAmount) > 0
+                          ? <>Payment-request QR — a payer scanning it (BlueBank <b className="text-slate-300">Scan to pay</b>, or any EIP-681 wallet) gets <b className="text-slate-300">{reqAmount} {reqAsset}</b> prefilled.</>
+                          : <>Scan the QR with any wallet, or set an amount above to make a payment request. <b className="text-slate-300">USDC / ETH on Base</b> ({net.short}) only.</>}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {scanOpen && <QrScanner onResult={handleScan} onClose={() => setScanOpen(false)} />}
+
       </main>
 
-      {/* ── AI Chat popup — fixed bottom-right ──────────────────────────── */}
+      {/* ── Chat popup: fixed bottom-4 right-4 ─────────────────────────── */}
       {chatOpen && (
-        <div className="fixed bottom-4 right-4 z-[60] w-80 h-[420px] flex flex-col rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] shadow-2xl overflow-hidden">
+        <div className="fixed bottom-4 right-4 z-[60] w-72 sm:w-80 h-[420px] flex flex-col rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] shadow-2xl overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#1A1A2E] shrink-0">
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#1A1A2E] shrink-0"
+            style={{ background: "#4FC3F708" }}>
             <div className="flex items-center gap-2">
-              <span className="font-mono text-[11px] text-[#4FC3F7] font-bold">🤖 BlueAgent</span>
+              <img src="/logomark.svg" alt="BlueAgent" className="w-5 h-5" />
+              <span className="font-mono text-[11px] text-[#4FC3F7] font-bold">BlueAgent</span>
               <span className="font-mono text-[9px] text-slate-600">Banking mode</span>
             </div>
             <button onClick={() => setChatOpen(false)}
@@ -790,7 +970,7 @@ export default function BankPage() {
             {chatMessages.length === 0 && (
               <div className="space-y-1.5">
                 <div className="font-mono text-[10px] text-slate-600 mb-2">Ask anything about your wallet:</div>
-                {["Best yield option?", "How to send USDC?", "My balance breakdown"].map(q => (
+                {["What's my best yield option?", "How do I send USDC?", "Show my balance breakdown"].map(q => (
                   <button key={q} onClick={() => sendChat(q)}
                     className="w-full text-left font-mono text-[10px] px-2 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
                     style={{ background: "#0d0d12", border: "1px solid #1A1A2E" }}>
@@ -800,10 +980,10 @@ export default function BankPage() {
               </div>
             )}
             {chatMessages.map((m, i) => (
-              <div key={i} className={`font-mono text-[10px] p-2 rounded-lg max-w-[90%] leading-relaxed ${
+              <div key={i} className={`font-mono text-[10px] p-2 rounded-lg leading-relaxed ${
                 m.role === "user"
-                  ? "ml-auto bg-[#4FC3F715] text-[#4FC3F7] border border-[#4FC3F730]"
-                  : "bg-[#0d0d12] text-slate-300 border border-[#1A1A2E]"
+                  ? "ml-6 bg-[#4FC3F715] text-[#4FC3F7] border border-[#4FC3F730]"
+                  : "mr-6 bg-[#0d0d12] text-slate-300 border border-[#1A1A2E]"
               }`}>
                 {m.content || (m.role === "assistant" && <span className="text-slate-600 animate-pulse">▌</span>)}
               </div>
@@ -815,15 +995,15 @@ export default function BankPage() {
           </div>
 
           {/* Input */}
-          <div className="flex gap-2 p-3 border-t border-[#1A1A2E] shrink-0">
+          <div className="flex gap-2 p-2.5 border-t border-[#1A1A2E] shrink-0">
             <input
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && sendChat(chatInput)}
+              onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChat(chatInput)}
               placeholder="Ask anything…"
               className="flex-1 bg-[#050508] border border-[#1A1A2E] rounded-lg px-3 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none focus:border-[#4FC3F7]/40"
             />
-            <button onClick={() => sendChat(chatInput)} disabled={chatLoading}
+            <button onClick={() => sendChat(chatInput)} disabled={chatLoading || !chatInput.trim()}
               className="font-mono text-[11px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-40"
               style={{ background: "#4FC3F7", color: "#050508" }}>
               →
@@ -831,6 +1011,25 @@ export default function BankPage() {
           </div>
         </div>
       )}
+
+      {/* ── FAB: simple toggle, moves up when chat open ───────────────────── */}
+      <button
+        onClick={() => setChatOpen(o => !o)}
+        className="fixed z-[65] w-12 h-12 rounded-full shadow-2xl flex items-center justify-center transition-all hover:shadow-[0_0_24px_#4FC3F750]"
+        style={{
+          right: "16px",
+          bottom: chatOpen ? "444px" : "16px",
+          background: chatOpen ? "#050508" : "#4FC3F7",
+          color: chatOpen ? "#4FC3F7" : "#050508",
+          border: "2px solid #4FC3F7",
+          transition: "bottom 0.2s ease, background 0.15s ease",
+        }}
+      >
+        {chatOpen
+          ? <span className="text-base leading-none">✕</span>
+          : <img src="/logomark.svg" alt="BlueAgent" className="w-6 h-6" />
+        }
+      </button>
 
     </div>
   );
@@ -894,6 +1093,28 @@ function AISuggestion({ icon, text, action, onAction, color }: {
           {action}
         </button>
       )}
+    </div>
+  );
+}
+
+function StatMini({ label, value, sub, color }: { label: string; value: string | number; sub: string; color: string }) {
+  return (
+    <div className="rounded-xl border border-[#1A1A2E] bg-[#050508] p-2.5">
+      <div className="font-mono text-[9px] text-slate-500 mb-1">{label}</div>
+      <div className="font-mono text-[14px] font-bold" style={{ color }}>{value}</div>
+      <div className="font-mono text-[8px] text-slate-600 mt-0.5">{sub}</div>
+    </div>
+  );
+}
+
+function IdentityChip({ label, active, color }: { label: string; active: boolean; color: string }) {
+  return (
+    <div className="font-mono text-[9px] px-2 py-0.5 rounded-full flex items-center gap-1"
+      style={active
+        ? { background: `${color}15`, border: `1px solid ${color}30`, color }
+        : { background: "#0d0d12", border: "1px solid #1A1A2E", color: "#475569" }}>
+      {active && <span className="text-[8px]">✓</span>}
+      {label}
     </div>
   );
 }
