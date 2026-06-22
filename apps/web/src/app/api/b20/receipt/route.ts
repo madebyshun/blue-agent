@@ -36,17 +36,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, status: "pending" });
     }
 
-    // B20 token address — addresses start with 0xB20
+    // B20 token address — parse from B20Created event emitted by the factory.
+    // The token address is in topic[1] (last 20 bytes), NOT log.address (= factory).
+    const B20_FACTORY     = "0xb20f000000000000000000000000000000000000";
+    const B20_CREATED_SIG = "0xfd9bf2730513a1709722ff379a0844dfd8f997d600693c2bcc659e188bbdba0d";
+
     let tokenAddress: string | null = null;
+
+    // Primary: B20Created event from factory — topic[1] holds the token address
     for (const log of receipt.logs) {
-      if (log.address?.toLowerCase().startsWith("0xb20")) {
-        tokenAddress = log.address;
+      if (
+        log.address?.toLowerCase() === B20_FACTORY &&
+        log.topics[0]?.toLowerCase() === B20_CREATED_SIG &&
+        log.topics[1]
+      ) {
+        tokenAddress = "0x" + log.topics[1].slice(-40);
         break;
       }
     }
-    // Fallback: first log emitter
-    if (!tokenAddress && receipt.logs[0]) {
-      tokenAddress = receipt.logs[0].address;
+
+    // Fallback: any log emitted by an address starting 0xb20 that is NOT the factory
+    if (!tokenAddress) {
+      for (const log of receipt.logs) {
+        const addr = log.address?.toLowerCase();
+        if (addr && addr.startsWith("0xb20") && addr !== B20_FACTORY) {
+          tokenAddress = log.address;
+          break;
+        }
+      }
     }
 
     return NextResponse.json({
