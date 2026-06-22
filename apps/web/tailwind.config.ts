@@ -23,6 +23,10 @@ const config: Config = {
         surface: "#0D0D14",
         border: "#1A1A2E",
       },
+      screens: {
+        "3xl": "1920px",
+        "4xl": "2560px",
+      },
       fontFamily: {
         mono: ["'JetBrains Mono'", "monospace"],
         sans: ["Inter", "system-ui", "sans-serif"],

@@ -407,30 +407,96 @@ export default function BankPage() {
   // ── Auto Earn surplus ─────────────────────────────────────────────────────
   const autoEarnSurplus = Math.max(0, (walletUsdc ?? 0) - autoEarnThreshold);
 
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
+
   return (
-    <div className="flex h-full w-full bg-[#050508] text-slate-200">
+    <div className="flex h-full w-full bg-[#050508] text-slate-200 overflow-hidden">
 
-      {/* ── LEFT SIDEBAR ────────────────────────────────────────────────── */}
-      <aside className="hidden lg:flex flex-col w-72 shrink-0 h-full border-r border-[#1A1A2E] bg-[#050508] overflow-y-auto">
-        <div className="px-5 h-14 flex items-center border-b border-[#1A1A2E] shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0 mr-2" />
-          <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// BLUEBANK</p>
+      {/* ── SIDEBAR ─────────────────────────────────────────────────────── */}
+      <aside className="hidden md:flex flex-col shrink-0 h-full border-r border-[#1A1A2E] bg-[#050508] overflow-y-auto w-56 lg:w-60 xl:w-64 2xl:w-72 3xl:w-80">
+        {/* 1. Header */}
+        <div className="px-4 h-14 flex items-center gap-2 border-b border-[#1A1A2E] shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0" />
+          <p className="font-mono text-[11px] text-[#4FC3F7] tracking-widest">// BLUEBANK</p>
         </div>
 
-        {/* Earning widget */}
+        {/* 2. Net Worth widget */}
         <div className="m-3 rounded-xl border border-[#1A1A2E] bg-gradient-to-b from-[#0d1117] to-[#0a0a0f] p-3.5">
-          <div className="font-mono text-[9px] text-slate-500 tracking-wide">EARNING</div>
-          <div className="font-mono text-[20px] font-bold text-[#34D399] mt-0.5">${usd(inYield)}</div>
-          <div className="font-mono text-[9px] text-slate-600 mt-0.5 mb-2">
-            best rate {bestApy != null ? `${bestApy.toFixed(1)}%` : "—"} · via Aave · Morpho
-          </div>
+          <div className="font-mono text-[9px] text-slate-500 tracking-wide mb-0.5">NET WORTH</div>
+          <div className="font-mono text-[22px] font-bold text-[#34D399]">${usd(walletState.balance)}</div>
+          <div className="font-mono text-[9px] text-slate-600 mt-0.5 mb-2">USDC + yield · Base</div>
           <Spark points={hist?.points ?? []} color="#34D399" height={28} />
-          <div className="font-mono text-[8px] text-slate-700 mt-1">Morpho USDC · 30d APY trend</div>
+          <div className="font-mono text-[8px] text-slate-700 mt-1">Morpho USDC · 30d trend</div>
         </div>
 
+        {/* 3. Earn widget */}
+        <div className="mx-3 mb-3 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
+          <div className="font-mono text-[9px] text-slate-500 tracking-wide mb-1">EARNING</div>
+          <div className="font-mono text-[18px] font-bold text-[#A78BFA]">${usd(walletState.inYield)}</div>
+          <div className="font-mono text-[9px] text-slate-600 mt-0.5">
+            best {bestApy != null ? `${bestApy.toFixed(1)}%` : "—"} APY
+          </div>
+          {walletState.inYield === 0 && walletState.balance > 0 && (
+            <button onClick={() => openAction("earn")}
+              className="w-full font-mono text-[10px] font-bold mt-2 py-1.5 rounded-lg"
+              style={{ background: "#A78BFA15", color: "#A78BFA", border: "1px solid #A78BFA40" }}>
+              Deploy →
+            </button>
+          )}
+        </div>
+
+        {/* 4. BlueAgent mini chat */}
+        <div className="mx-3 mb-3">
+          <div className="font-mono text-[9px] text-slate-600 mb-1.5">ASK BLUEAGENT</div>
+          <div className="flex gap-1.5">
+            <input
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && chatInput.trim()) {
+                  sendChat(chatInput);
+                  setChatOpen(true);
+                }
+              }}
+              onClick={() => setChatOpen(true)}
+              placeholder="Ask anything…"
+              className="flex-1 min-w-0 bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[10px] text-slate-200 placeholder:text-slate-700 outline-none"
+            />
+            <button
+              onClick={() => { if (chatInput.trim()) { sendChat(chatInput); } setChatOpen(true); }}
+              className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center transition-colors"
+              style={{ background: "#4FC3F720", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
+              →
+            </button>
+          </div>
+        </div>
+
+        {/* 5. Base Apps grid */}
+        <div className="mx-3 mb-3">
+          <div className="font-mono text-[9px] text-slate-600 mb-1.5">⚡ BASE APPS</div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {[
+              { name: "Aerodrome", url: "https://aerodrome.finance",    color: "#EF4444" },
+              { name: "Moonwell",  url: "https://moonwell.fi",          color: "#A78BFA" },
+              { name: "Morpho",    url: "https://morpho.org",           color: "#4FC3F7" },
+              { name: "Uniswap",   url: "https://app.uniswap.org",      color: "#FF007A" },
+              { name: "Aave",      url: "https://app.aave.com",         color: "#B6509E" },
+              { name: "Compound",  url: "https://app.compound.finance", color: "#00D395" },
+            ].map(p => (
+              <a key={p.name} href={p.url} target="_blank" rel="noopener noreferrer"
+                className="font-mono text-[9px] py-1.5 px-2 rounded-lg text-center hover:opacity-80 transition-opacity"
+                style={{ background: `${p.color}10`, color: p.color, border: `1px solid ${p.color}25` }}>
+                {p.name}
+              </a>
+            ))}
+          </div>
+        </div>
+
+        {/* 6. Spacer */}
         <div className="flex-1" />
 
-        {/* Network */}
+        {/* 7. Network */}
         <div className="px-3 pb-3">
           <div className="font-mono text-[9px] text-slate-600 mb-1.5">NETWORK</div>
           <div className="flex gap-1">
@@ -446,7 +512,7 @@ export default function BankPage() {
           </div>
         </div>
 
-        {/* Account chip */}
+        {/* 8. Account chip */}
         <div className="px-4 py-3 border-t border-[#1A1A2E]">
           <div className="font-mono text-[11px] text-slate-300 truncate">{name ?? fname ?? shortAddr(acct)}</div>
           <div className="flex items-center gap-2 mt-0.5">
@@ -462,106 +528,71 @@ export default function BankPage() {
       {/* ── MAIN ────────────────────────────────────────────────────────── */}
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
 
-        {/* Page header — unchanged */}
-        <div className="px-4 sm:px-6 h-14 flex items-center justify-between gap-3 border-b border-[#1A1A2E] shrink-0">
+        {/* Header h-14: greeting + trust chips */}
+        <div className="px-4 sm:px-5 h-14 flex items-center justify-between gap-3 border-b border-[#1A1A2E] shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <Identicon address={acct} />
             <div className="min-w-0">
-              <p className="font-mono text-[13px] text-white truncate">Welcome back, <span className="text-[#4FC3F7]">{name ?? fname ?? shortAddr(acct)}</span></p>
-              <p className="font-mono text-[9px] text-slate-600 truncate">Your account on Base · you hold the keys</p>
+              <p className="font-mono text-[13px] text-white">
+                Good {greeting}, <span className="text-[#4FC3F7]">{name ?? fname ?? shortAddr(acct)}</span>
+              </p>
+              <p className="font-mono text-[9px] text-slate-600 truncate">Base · Non-custodial · You hold the keys</p>
             </div>
           </div>
           <div className="hidden sm:flex items-center gap-1.5 shrink-0">
             {["Non-custodial", "Base", "Passkey"].map(c => (
-              <span key={c} className="font-mono text-[9px] px-2 py-1 rounded-md text-slate-400" style={{ border: "1px solid #1A1A2E", background: "#0d0d12" }}>{c}</span>
+              <span key={c} className="font-mono text-[9px] px-2 py-1 rounded-md text-slate-400"
+                style={{ border: "1px solid #1A1A2E", background: "#0d0d12" }}>{c}</span>
             ))}
             {new Date() >= new Date("2026-06-25") && (
-              <span className="font-mono text-[9px] px-2 py-1 rounded-md font-bold" style={{ color: "#4FC3F7", border: "1px solid #4FC3F730", background: "#4FC3F710" }}>⚡ Beryl</span>
+              <span className="font-mono text-[9px] px-2 py-1 rounded-md font-bold"
+                style={{ color: "#4FC3F7", border: "1px solid #4FC3F730", background: "#4FC3F710" }}>⚡ Beryl</span>
             )}
           </div>
         </div>
 
-        {/* Grid body */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 p-3 sm:p-4 w-full items-start">
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 xl:p-5 2xl:p-6 3xl:p-8">
 
-            {/* Card 1: Profile (col-span-1 lg:col-span-2 2xl:col-span-2) */}
-            <div className="lg:col-span-2 2xl:col-span-2 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Identicon address={acct} />
-                  <div>
-                    <div className="font-mono text-[13px] text-white">{name ?? fname ?? shortAddr(acct)}</div>
-                    <div className="font-mono text-[9px] text-slate-600 truncate max-w-[200px]">{acct}</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="text-right">
-                    <div className="font-mono text-[22px] font-bold" style={{ color: walletState.healthScore >= 75 ? "#34D399" : walletState.healthScore >= 50 ? "#F59E0B" : "#EF4444" }}>
-                      {walletState.healthScore}<span className="text-[12px] text-slate-500">/100</span>
-                    </div>
-                    <div className="font-mono text-[9px] text-slate-500">
-                      {walletState.healthScore >= 75 ? "Healthy" : walletState.healthScore >= 50 ? "Fair" : "Poor"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-1.5 mt-3">
-                <IdentityChip label="Smart Wallet" active={true} color="#4FC3F7" />
-                <IdentityChip label="Passkey" active={true} color="#34D399" />
-                <IdentityChip label={name ?? fname ?? "No Basename"} active={!!(name ?? fname)} color="#A78BFA" />
-                <IdentityChip label="Non-custodial" active={true} color="#34D399" />
-                {walletState.transferCountMonth > 0 && (
-                  <IdentityChip label={`${walletState.transferCountMonth} transfers`} active={true} color="#4FC3F7" />
-                )}
-                <button
-                  onClick={() => {
-                    const text = `My Base wallet health: ${walletState.healthScore}/100 @blueagent_`;
-                    navigator.clipboard?.writeText(text).catch(() => {});
-                  }}
-                  className="font-mono text-[9px] px-2 py-0.5 rounded-full transition-colors hover:opacity-80"
-                  style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                  Share
-                </button>
-              </div>
-            </div>
+          {/* ── Section 1: Balance | Actions | Health ─────────────────────── */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3 items-start">
 
-            {/* Card 2: Hero metrics (col-span-1 lg:col-span-2 2xl:col-span-3) */}
-            <div className="lg:col-span-2 2xl:col-span-3 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
-              <div className="flex flex-wrap gap-4 sm:gap-8">
-                <div>
-                  <div className="font-mono text-[9px] text-slate-500 mb-0.5">TOTAL BALANCE</div>
-                  <div className="font-mono text-[20px] font-bold text-[#34D399]">${usd(walletState.balance)}</div>
-                </div>
-                <div>
-                  <div className="font-mono text-[9px] text-slate-500 mb-0.5">IN YIELD</div>
-                  <div className="font-mono text-[20px] font-bold text-[#A78BFA]">${usd(walletState.inYield)}</div>
-                </div>
-                <div>
-                  <div className="font-mono text-[9px] text-slate-500 mb-0.5">NET FLOW</div>
-                  <div className="font-mono text-[20px] font-bold" style={{ color: walletState.netFlowMonth >= 0 ? "#34D399" : "#EF4444" }}>
-                    {walletState.netFlowMonth >= 0 ? "+" : "−"}${usd(Math.abs(walletState.netFlowMonth))}
-                  </div>
-                </div>
-                <div>
-                  <div className="font-mono text-[9px] text-slate-500 mb-0.5">HEALTH</div>
-                  <div className="font-mono text-[20px] font-bold" style={{ color: walletState.healthScore >= 75 ? "#34D399" : walletState.healthScore >= 50 ? "#F59E0B" : "#EF4444" }}>
-                    {walletState.healthScore}<span className="text-[12px]">/100</span>
-                  </div>
-                </div>
-              </div>
-              {/* Asset pills */}
-              <div className="flex gap-1.5 mt-2 flex-wrap">
-                {(walletUsdc ?? 0) > 0 && <AssetPill label="USDC" value={`$${usd(walletUsdc)}`} color="#4FC3F7" />}
-                {(aavePos ?? 0) > 0   && <AssetPill label="aUSDC" value={`$${usd(aavePos)}`} color="#34D399" />}
-                {(morphoPos ?? 0) > 0 && <AssetPill label="Morpho" value={`$${usd(morphoPos)}`} color="#A78BFA" />}
-                {ethBal != null       && <AssetPill label="ETH" value={`${ethBal.toFixed(4)}`} color="#94A3B8" />}
-              </div>
-            </div>
-
-            {/* Card 3: Actions */}
+            {/* Balance card */}
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
-              <div className="grid grid-cols-4 gap-2">
+              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">TOTAL BALANCE</div>
+              <div className="font-mono text-[28px] font-bold text-[#34D399]">${usd(walletState.balance)}</div>
+              <div className="flex flex-col gap-1.5 mt-3">
+                {(walletUsdc ?? 0) > 0 && (
+                  <div className="flex justify-between font-mono text-[10px]">
+                    <span className="text-slate-500">USDC</span>
+                    <span className="text-slate-300">${usd(walletUsdc)}</span>
+                  </div>
+                )}
+                {(aavePos ?? 0) > 0 && (
+                  <div className="flex justify-between font-mono text-[10px]">
+                    <span className="text-slate-500">aUSDC (Aave)</span>
+                    <span className="text-[#34D399]">${usd(aavePos)}</span>
+                  </div>
+                )}
+                {(morphoPos ?? 0) > 0 && (
+                  <div className="flex justify-between font-mono text-[10px]">
+                    <span className="text-slate-500">Morpho</span>
+                    <span className="text-[#A78BFA]">${usd(morphoPos)}</span>
+                  </div>
+                )}
+                {ethBal != null && ethBal > 0 && (
+                  <div className="flex justify-between font-mono text-[10px]">
+                    <span className="text-slate-500">ETH (gas)</span>
+                    <span className="text-slate-400">{ethBal.toFixed(4)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Actions card */}
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
+              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-3">ACTIONS</div>
+              <div className="grid grid-cols-2 gap-2 mb-2">
                 <button onClick={() => openAction("receive")}
                   className="font-mono text-[11px] font-bold py-2.5 px-3 rounded-xl transition-colors"
                   style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
@@ -583,184 +614,214 @@ export default function BankPage() {
                   {cashOutBusy ? "…" : "🏦 Out"}
                 </button>
               </div>
+              <div className="flex gap-1.5">
+                <button onClick={() => openAction("earn")}
+                  className="flex-1 font-mono text-[10px] py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+                  style={{ border: "1px solid #1A1A2E" }}>
+                  🌾 Earn
+                </button>
+                <button onClick={() => openAction("convert")}
+                  className="flex-1 font-mono text-[10px] py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+                  style={{ border: "1px solid #1A1A2E" }}>
+                  ⇅ Swap
+                </button>
+                <button onClick={() => setScanOpen(true)}
+                  className="flex-1 font-mono text-[10px] py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+                  style={{ border: "1px solid #1A1A2E" }}>
+                  📷 Scan
+                </button>
+              </div>
               {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-2">{onrampMsg}</div>}
             </div>
 
-            {/* Card 4: Wallet (col-span-1) */}
+            {/* Health card */}
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-3">WALLET</div>
-              <AssetRow label="USDC" sub="in wallet" usd={walletUsdc} color="#4FC3F7" />
-              <AssetRow label="aUSDC" sub={`Aave · ${aaveApy != null ? `${aaveApy.toFixed(1)}%` : bestApy != null ? `${bestApy.toFixed(1)}%` : "—"} APY`} usd={aavePos} color="#34D399" />
-              {(morphoPos ?? 0) > 0 && (
-                <AssetRow label="Morpho" sub={`Gauntlet · ${morphoApy != null ? `${morphoApy.toFixed(1)}%` : "—"} APY`} usd={morphoPos} color="#A78BFA" />
-              )}
-              <div className="mt-2 pt-2 border-t border-[#1A1A2E]">
-                <div className="font-mono text-[9px] text-slate-500 mb-1">GAS RESERVE</div>
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-[11px] text-slate-400">ETH</span>
-                  <span className="font-mono text-[11px] text-slate-300">{walletState.gasReserveEth.toFixed(4)}</span>
-                </div>
-                {walletState.gasReserveEth < 0.005 && (
-                  <div className="font-mono text-[9px] text-amber-400 mt-1">⚠ Low — get ETH for gas</div>
-                )}
+              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">PORTFOLIO HEALTH</div>
+              <div className="flex items-end gap-2 mb-3">
+                <div className="font-mono text-[32px] font-bold leading-none" style={{ color: scoreColor }}>{portfolioScore}</div>
+                <div className="font-mono text-[13px] text-slate-500 mb-1">/100 · {scoreGrade}</div>
               </div>
-              <button onClick={() => openAction("positions")}
-                className="w-full font-mono text-[9px] mt-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-300 transition-colors"
-                style={{ border: "1px solid #1A1A2E" }}>
-                View positions →
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                <IdentityChip label="Smart Wallet" active={true} color="#4FC3F7" />
+                <IdentityChip label="Passkey" active={true} color="#34D399" />
+                <IdentityChip label={name ?? fname ?? "No Basename"} active={!!(name ?? fname)} color="#A78BFA" />
+                <IdentityChip label="Non-custodial" active={true} color="#34D399" />
+              </div>
+              <button
+                onClick={() => {
+                  const text = `My Base wallet health: ${portfolioScore}/100 @blueagent_`;
+                  navigator.clipboard?.writeText(text).catch(() => {});
+                }}
+                className="font-mono text-[9px] px-2.5 py-1 rounded-full transition-colors hover:opacity-80"
+                style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                Share
               </button>
             </div>
 
-            {/* Card 5: Auto Earn (col-span-1) */}
-            <div className="rounded-2xl p-4 transition-colors"
-              style={{ border: `1px solid ${autoEarn ? "#A78BFA40" : "#1A1A2E"}`, background: autoEarn ? "#A78BFA04" : "#0a0a0f" }}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[9px] text-slate-500 tracking-widest">⚙️ AUTO EARN</span>
-                  <span className="font-mono text-[8px] px-1.5 py-0.5 rounded font-bold"
-                    style={autoEarn ? { background: "#A78BFA15", color: "#A78BFA", border: "1px solid #A78BFA30" }
-                                   : { background: "#1A1A2E", color: "#475569", border: "1px solid #1A1A2E" }}>
-                    {autoEarn ? "ACTIVE" : "OFF"}
-                  </span>
-                </div>
-                <button onClick={() => setAutoEarn(o => !o)}
-                  className="relative w-10 h-5 rounded-full transition-colors shrink-0"
-                  style={{ background: autoEarn ? "#A78BFA" : "#1A1A2E" }}>
-                  <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all"
-                    style={{ left: autoEarn ? "calc(100% - 18px)" : "2px" }} />
-                </button>
-              </div>
-              {bestApy != null && (
-                <div className="font-mono text-[11px] text-slate-300 mb-2">
-                  Best: <span className="text-[#34D399] font-bold">{bestApy.toFixed(1)}%</span> APY
-                </div>
-              )}
-              {autoEarn && autoEarnSurplus > 0 ? (
-                <>
-                  <div className="rounded-xl p-2 mb-2" style={{ background: "#A78BFA10", border: "1px solid #A78BFA30" }}>
-                    <div className="font-mono text-[9px] text-[#A78BFA]">→ ${usd(autoEarnSurplus)} surplus</div>
-                    <div className="font-mono text-[8px] text-slate-600">
-                      +${((autoEarnSurplus * (bestApy ?? 5) / 100) / 12).toFixed(2)}/month projected
-                    </div>
-                  </div>
-                  <button onClick={() => openAction("earn")}
-                    className="w-full font-mono text-[10px] font-bold py-2 rounded-xl"
-                    style={{ background: "#A78BFA15", color: "#A78BFA", border: "1px solid #A78BFA40" }}>
-                    Deploy →
-                  </button>
-                </>
-              ) : autoEarn ? (
-                <div className="font-mono text-[9px] text-slate-600">✓ Balance within threshold</div>
-              ) : (
-                <div className="font-mono text-[9px] text-slate-600">Enable to auto-deploy idle USDC</div>
-              )}
-            </div>
+          </div>
 
-            {/* Card 6: Portfolio Allocation (col-span-1) */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-3">PORTFOLIO</div>
-              {walletState.balance > 0 ? (
-                <>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-mono text-[10px] text-slate-400">Stablecoin</span>
-                    <span className="font-mono text-[12px] font-bold text-[#4FC3F7]">
-                      {walletState.allocation.stablecoin}%
-                    </span>
+          {/* ── Section 2: Wallet+Earn | AI+Portfolio ─────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3 items-start">
+
+            {/* Left stack */}
+            <div className="flex flex-col gap-3">
+
+              {/* Wallet card */}
+              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
+                <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-3">WALLET</div>
+                <AssetRow label="USDC" sub="in wallet" usd={walletUsdc} color="#4FC3F7" />
+                <AssetRow label="aUSDC" sub={`Aave · ${aaveApy != null ? `${aaveApy.toFixed(1)}%` : bestApy != null ? `${bestApy.toFixed(1)}%` : "—"} APY`} usd={aavePos} color="#34D399" />
+                {(morphoPos ?? 0) > 0 && (
+                  <AssetRow label="Morpho" sub={`Gauntlet · ${morphoApy != null ? `${morphoApy.toFixed(1)}%` : "—"} APY`} usd={morphoPos} color="#A78BFA" />
+                )}
+                <div className="mt-2 pt-2 border-t border-[#1A1A2E]">
+                  <div className="font-mono text-[9px] text-slate-500 mb-1">GAS RESERVE</div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[11px] text-slate-400">ETH</span>
+                    <span className="font-mono text-[11px] text-slate-300">{walletState.gasReserveEth.toFixed(4)}</span>
                   </div>
-                  <div className="h-2 rounded-full bg-[#1A1A2E] overflow-hidden">
-                    <div className="h-full rounded-full bg-[#4FC3F7]"
-                      style={{ width: `${walletState.allocation.stablecoin}%` }} />
-                  </div>
-                  <div className="font-mono text-[8px] text-slate-700 mt-1.5">ETH is gas reserve — not in allocation</div>
-                  {walletState.gasSavedUsd != null && (
-                    <div className="mt-2 rounded-lg p-2" style={{ background: "#34D39910", border: "1px solid #34D39920" }}>
-                      <div className="font-mono text-[9px] text-[#34D399]">~${walletState.gasSavedUsd} saved vs mainnet gas</div>
-                    </div>
+                  {walletState.gasReserveEth < 0.005 && (
+                    <div className="font-mono text-[9px] text-amber-400 mt-1">⚠ Low — get ETH for gas</div>
                   )}
-                </>
-              ) : (
-                <div className="font-mono text-[10px] text-slate-600">No assets yet</div>
-              )}
-            </div>
-
-            {/* Card 7: AI Mission Control (col-span-1 lg:col-span-2) */}
-            <div className="lg:col-span-2 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <img src="/logomark.svg" alt="" className="w-4 h-4 opacity-90" />
-                  <span className="font-mono text-[9px] text-slate-500 tracking-widest">AI MISSION CONTROL</span>
                 </div>
-                <button onClick={() => setChatOpen(o => !o)}
-                  className="font-mono text-[9px] px-2.5 py-1 rounded-lg font-bold transition-colors"
-                  style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                  Ask BlueAgent →
-                </button>
               </div>
-              <p className="font-mono text-[11px] text-slate-300 mb-3 leading-relaxed">{missionSummary}</p>
-              <div className="space-y-2">
-                {topMissions.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between gap-2 p-2.5 rounded-xl"
-                    style={{ background: `${item.color}08`, border: `1px solid ${item.color}20` }}>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {item.priority === "high" && <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444] animate-pulse" />}
-                        {item.priority === "warn" && <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]" />}
-                        {item.priority === "good" && <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />}
-                        {item.priority === "info" && <span className="w-1.5 h-1.5 rounded-full bg-[#64748b]" />}
-                        <span className="text-sm leading-none">{item.icon}</span>
-                      </div>
-                      <span className="font-mono text-[10px] text-slate-300 leading-snug">{item.text}</span>
+
+              {/* Earn card with APY bars */}
+              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="font-mono text-[9px] text-slate-500 tracking-widest">YIELD RATES · BASE</div>
+                  <button onClick={() => openAction("earn")}
+                    className="font-mono text-[9px] px-2 py-1 rounded-lg"
+                    style={{ background: "#34D39910", color: "#34D399", border: "1px solid #34D39920" }}>
+                    Earn →
+                  </button>
+                </div>
+                {rates && rates.length ? rates.slice(0, 4).map((r, i) => (
+                  <div key={r.project} className="mb-2">
+                    <div className="flex justify-between font-mono text-[10px] mb-1">
+                      <span className={i === 0 ? "text-[#34D399]" : "text-slate-400"}>{i === 0 ? "★ " : ""}{r.label}</span>
+                      <span className={i === 0 ? "text-[#34D399] font-bold" : "text-slate-300"}>{r.apy.toFixed(2)}%</span>
                     </div>
-                    {item.action && item.onAction && (
-                      <button onClick={item.onAction}
-                        className="font-mono text-[9px] px-2 py-1 rounded-lg shrink-0 font-bold whitespace-nowrap"
-                        style={{ background: `${item.color}20`, color: item.color, border: `1px solid ${item.color}40` }}>
-                        {item.action}
-                      </button>
-                    )}
+                    <div className="h-1 rounded-full bg-[#1A1A2E] overflow-hidden">
+                      <div className="h-full rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (r.apy / (rates[0].apy + 1)) * 100)}%`, background: i === 0 ? "#34D399" : "#4FC3F740" }} />
+                    </div>
                   </div>
-                ))}
-                {topMissions.length === 0 && (
-                  <div className="font-mono text-[10px] text-slate-600 py-2 text-center">✓ All good — no actions needed</div>
+                )) : (
+                  <div className="font-mono text-[10px] text-slate-600">loading rates…</div>
                 )}
               </div>
+
             </div>
 
-            {/* Card 8: Base Apps (col-span-1) */}
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-3">⚡ BASE APPS</div>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { name: "Aerodrome", url: "https://aerodrome.finance",    color: "#EF4444" },
-                  { name: "Moonwell",  url: "https://moonwell.fi",          color: "#A78BFA" },
-                  { name: "Morpho",    url: "https://morpho.org",           color: "#4FC3F7" },
-                  { name: "Uniswap",   url: "https://app.uniswap.org",      color: "#FF007A" },
-                  { name: "Aave",      url: "https://app.aave.com",         color: "#B6509E" },
-                  { name: "Compound",  url: "https://app.compound.finance",  color: "#00D395" },
-                ].map(p => (
-                  <a key={p.name} href={p.url} target="_blank" rel="noopener noreferrer"
-                    className="font-mono text-[10px] py-2 px-3 rounded-xl text-center hover:opacity-80 transition-opacity"
-                    style={{ background: `${p.color}10`, color: p.color, border: `1px solid ${p.color}25` }}>
-                    {p.name}
-                  </a>
-                ))}
+            {/* Right stack */}
+            <div className="flex flex-col gap-3">
+
+              {/* AI Mission Control */}
+              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <img src="/logomark.svg" alt="" className="w-4 h-4 opacity-90" />
+                    <span className="font-mono text-[9px] text-slate-500 tracking-widest">AI MISSION CONTROL</span>
+                  </div>
+                  <button onClick={() => setChatOpen(o => !o)}
+                    className="font-mono text-[9px] px-2.5 py-1 rounded-lg font-bold transition-colors"
+                    style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                    Ask BlueAgent →
+                  </button>
+                </div>
+                <p className="font-mono text-[11px] text-slate-300 mb-3 leading-relaxed">{missionSummary}</p>
+                <div className="space-y-2">
+                  {topMissions.map((item, i) => (
+                    <div key={i} className="flex items-center justify-between gap-2 p-2.5 rounded-xl"
+                      style={{ background: `${item.color}08`, border: `1px solid ${item.color}20` }}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {item.priority === "high" && <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444] animate-pulse" />}
+                          {item.priority === "warn" && <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]" />}
+                          {item.priority === "good" && <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />}
+                          {item.priority === "info" && <span className="w-1.5 h-1.5 rounded-full bg-[#64748b]" />}
+                          <span className="text-sm leading-none">{item.icon}</span>
+                        </div>
+                        <span className="font-mono text-[10px] text-slate-300 leading-snug">{item.text}</span>
+                      </div>
+                      {item.action && item.onAction && (
+                        <button onClick={item.onAction}
+                          className="font-mono text-[9px] px-2 py-1 rounded-lg shrink-0 font-bold whitespace-nowrap"
+                          style={{ background: `${item.color}20`, color: item.color, border: `1px solid ${item.color}40` }}>
+                          {item.action}
+                        </button>
+                        )}
+                    </div>
+                  ))}
+                  {topMissions.length === 0 && (
+                    <div className="font-mono text-[10px] text-slate-600 py-2 text-center">✓ All good — no actions needed</div>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Card 9: Onchain Timeline (col-span-1 lg:col-span-2 2xl:col-span-3) */}
-            <div className="lg:col-span-2 2xl:col-span-3">
-              <TransactionHistory
-                transactions={txData?.transactions ?? []}
-                loading={txLoading}
-                error={txError}
-                needsKey={txData?.needsKey}
-                onRetry={() => setTxReload(k => k + 1)}
-                explorer={net.explorer}
-                address={acct}
-              />
-            </div>
+              {/* Portfolio Allocation with donut chart */}
+              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
+                <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-3">PORTFOLIO ALLOCATION</div>
+                {walletState.balance > 0 ? (
+                  <div className="flex items-center gap-4">
+                    <div className="w-20 h-20 shrink-0">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={portfolioData} cx="50%" cy="50%" innerRadius={24} outerRadius={36}
+                            dataKey="value" strokeWidth={0}>
+                            {portfolioData.map((entry, i) => (
+                              <Cell key={i} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(v: unknown) => `$${usd(v as number)}`}
+                            contentStyle={{ background: "#0a0a0f", border: "1px solid #1A1A2E", fontSize: 10 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex-1 space-y-1.5">
+                      {portfolioData.map(d => (
+                        <div key={d.name} className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full" style={{ background: d.color }} />
+                            <span className="font-mono text-[10px] text-slate-400">{d.name}</span>
+                          </div>
+                          <span className="font-mono text-[10px] text-slate-300">${usd(d.value)}</span>
+                        </div>
+                      ))}
+                      <div className="font-mono text-[8px] text-slate-700 pt-1">ETH counted as gas reserve</div>
+                      {walletState.gasSavedUsd != null && (
+                        <div className="font-mono text-[9px] text-[#34D399]">~${walletState.gasSavedUsd} saved vs mainnet</div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="font-mono text-[10px] text-slate-600">No assets yet</div>
+                )}
+                <div className="mt-3 flex items-center justify-between font-mono text-[10px]">
+                  <span className="text-slate-500">Stablecoin</span>
+                  <span className="text-[#4FC3F7] font-bold">{walletState.allocation.stablecoin}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-[#1A1A2E] overflow-hidden mt-1">
+                  <div className="h-full rounded-full bg-[#4FC3F7]"
+                    style={{ width: `${walletState.allocation.stablecoin}%` }} />
+                </div>
+              </div>
 
+            </div>
           </div>
+
+          {/* ── Section 3: Transaction History ─────────────────────────────── */}
+          <TransactionHistory
+            transactions={txData?.transactions ?? []}
+            loading={txLoading}
+            error={txError}
+            needsKey={txData?.needsKey}
+            onRetry={() => setTxReload(k => k + 1)}
+            explorer={net.explorer}
+            address={acct}
+          />
+
         </div>
 
         {/* Action modal — fixed, inside main */}
@@ -889,27 +950,9 @@ export default function BankPage() {
 
       </main>
 
-      {/* ── Floating Ask BlueAgent — draggable FAB ───────────────────────── */}
-      <button
-        onPointerDown={fabDown}
-        onPointerMove={fabMove}
-        onPointerUp={fabUp}
-        className="fixed z-[65] w-12 h-12 rounded-full shadow-2xl flex items-center justify-center select-none touch-none transition-[box-shadow] hover:shadow-[0_0_24px_#4FC3F750]"
-        style={fabXY
-          ? { left: fabXY.x, top: fabXY.y, background: chatOpen ? "#050508" : "#4FC3F7", color: chatOpen ? "#4FC3F7" : "#050508", border: "2px solid #4FC3F7", cursor: fabDragging ? "grabbing" : "grab" }
-          : { right: 16, bottom: 16, background: chatOpen ? "#050508" : "#4FC3F7", color: chatOpen ? "#4FC3F7" : "#050508", border: "2px solid #4FC3F7", cursor: fabDragging ? "grabbing" : "grab" }
-        }
-      >
-        {chatOpen
-          ? <span className="text-base leading-none pointer-events-none">✕</span>
-          : <img src="/logomark.svg" alt="BlueAgent" className="w-6 h-6 pointer-events-none" />
-        }
-      </button>
-
-      {/* ── AI Chat popup — anchored above FAB ───────────────────────────── */}
+      {/* ── Chat popup: fixed bottom-4 right-4 ─────────────────────────── */}
       {chatOpen && (
-        <div className="fixed z-[60] w-80 flex flex-col rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] shadow-2xl overflow-hidden"
-          style={chatPopupStyle}>
+        <div className="fixed bottom-4 right-4 z-[60] w-72 sm:w-80 h-[420px] flex flex-col rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] shadow-2xl overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#1A1A2E] shrink-0"
             style={{ background: "#4FC3F708" }}>
@@ -968,6 +1011,25 @@ export default function BankPage() {
           </div>
         </div>
       )}
+
+      {/* ── FAB: simple toggle, moves up when chat open ───────────────────── */}
+      <button
+        onClick={() => setChatOpen(o => !o)}
+        className="fixed z-[65] w-12 h-12 rounded-full shadow-2xl flex items-center justify-center transition-all hover:shadow-[0_0_24px_#4FC3F750]"
+        style={{
+          right: "16px",
+          bottom: chatOpen ? "444px" : "16px",
+          background: chatOpen ? "#050508" : "#4FC3F7",
+          color: chatOpen ? "#4FC3F7" : "#050508",
+          border: "2px solid #4FC3F7",
+          transition: "bottom 0.2s ease, background 0.15s ease",
+        }}
+      >
+        {chatOpen
+          ? <span className="text-base leading-none">✕</span>
+          : <img src="/logomark.svg" alt="BlueAgent" className="w-6 h-6" />
+        }
+      </button>
 
     </div>
   );
