@@ -371,61 +371,60 @@ const MODEL_COLORS: Record<string, string> = {
 // Settings (or via the composer pill) immediately changes "what to do next" —
 // the heading + 4 starter cards all reflect that expert role.
 
-// `label` = compact display; `text` = the command/prompt run on click. A card
-// either sends immediately (self-contained, e.g. /pick) or prefills the composer
-// for the user to complete (freeform /idea, or a 0x… placeholder).
+// `label` = compact display; `text` = the natural language prompt sent on click.
+// Cards send immediately — they are plain English questions, not slash commands.
 interface Starter { icon: string; label: string; text: string; color: string; }
 interface EmptyState { heading: string; sub: string; starters: Starter[]; }
 
 const PERSONA_EMPTY: Record<string, EmptyState> = {
   "blue-agent": {
     heading: "What are you building?",
-    sub:     "Idea → Build → Audit → Launch — the full Base founder stack, plus Skills + live alpha.",
+    sub:     "Idea → Build → Audit → Launch — just ask in plain English.",
     starters: [
-      { icon: "💡", label: "Idea",   text: "/idea USDC payroll on Base",   color: "#4FC3F7" },
-      { icon: "🛠️", label: "Build",  text: "/build ERC-4337 agent wallet", color: "#A78BFA" },
-      { icon: "🛡️", label: "Audit",  text: "/audit my token launch plan",  color: "#F87171" },
-      { icon: "🚀", label: "Launch", text: "/launch",                       color: "#34D399" },
+      { icon: "💡", label: "Idea",   text: "build me a USDC payroll app on Base",  color: "#4FC3F7" },
+      { icon: "🛠️", label: "Build",  text: "build an ERC-4337 agent wallet",        color: "#A78BFA" },
+      { icon: "🛡️", label: "Audit",  text: "audit my token launch plan",            color: "#F87171" },
+      { icon: "🚀", label: "Launch", text: "launch a token called BlueBot on Base", color: "#34D399" },
     ],
   },
   "blue-trader": {
     heading: "What's the trade?",
     sub:     "Live alpha, smart money flow, safety checks — Base-native.",
     starters: [
-      { icon: "🎯", label: "Pick",  text: "/pick",      color: "#34D399" },
-      { icon: "🐋", label: "Whale", text: "/whale AERO", color: "#4FC3F7" },
-      { icon: "🔍", label: "Scan",  text: "/scan 0x…",  color: "#FB923C" },
-      { icon: "📊", label: "PnL",   text: "/pnl 0x…",   color: "#A78BFA" },
+      { icon: "🎯", label: "Pick",      text: "what's the best token to buy on Base right now?", color: "#34D399" },
+      { icon: "🐋", label: "Whale",     text: "show me whale activity for AERO",                 color: "#4FC3F7" },
+      { icon: "🔍", label: "Scan",      text: "is this token a honeypot: 0x…",                   color: "#FB923C" },
+      { icon: "📊", label: "Yield",     text: "what's the best APY on Base right now?",          color: "#A78BFA" },
     ],
   },
   "blue-auditor": {
     heading: "What should I audit?",
     sub:     "Vulnerabilities, severity ratings, Solidity fixes, and a go/no-go call.",
     starters: [
-      { icon: "🛡️", label: "Audit", text: "/audit paste your contract here", color: "#F87171" },
-      { icon: "🔍", label: "Scan", text: "/scan 0x…", color: "#4FC3F7" },
-      { icon: "⚠️", label: "Reentrancy", text: "Audit for reentrancy risks", color: "#FB923C" },
-      { icon: "🧾", label: "AML", text: "/aml 0x…", color: "#A78BFA" },
+      { icon: "🛡️", label: "Audit",     text: "audit this smart contract for vulnerabilities",   color: "#F87171" },
+      { icon: "🔍", label: "Scan",      text: "check if this token is safe: 0x…",                color: "#4FC3F7" },
+      { icon: "⚠️", label: "Reentrancy",text: "audit for reentrancy risks",                       color: "#FB923C" },
+      { icon: "🧾", label: "AML",       text: "screen this wallet for AML risks: 0x…",            color: "#A78BFA" },
     ],
   },
   "blue-researcher": {
     heading: "What should I research?",
     sub:     "Evidence-backed DD, on-chain data, and contrarian takes.",
     starters: [
-      { icon: "🔬", label: "Deep DD", text: "Deep DD on Aerodrome", color: "#A78BFA" },
-      { icon: "🐋", label: "Whale", text: "/whale AERO", color: "#4FC3F7" },
-      { icon: "📡", label: "Narrative", text: "Top Base narrative now?", color: "#E879F9" },
-      { icon: "📊", label: "Wallet", text: "/wallet 0x…", color: "#34D399" },
+      { icon: "🔬", label: "Deep DD",   text: "deep DD on Aerodrome",                color: "#A78BFA" },
+      { icon: "🐋", label: "Whale",     text: "show me whale activity for AERO",     color: "#4FC3F7" },
+      { icon: "📡", label: "Narrative", text: "what's the top narrative on Base now?", color: "#E879F9" },
+      { icon: "📊", label: "Wallet",    text: "analyze my wallet strategy: 0x…",     color: "#34D399" },
     ],
   },
   "custom": {
     heading: "How can I help?",
     sub:     "Your custom system prompt is active — ask anything.",
     starters: [
-      { icon: "💡", label: "Idea",   text: "/idea USDC payroll on Base",   color: "#4FC3F7" },
-      { icon: "🛠️", label: "Build",  text: "/build ERC-4337 agent wallet", color: "#A78BFA" },
-      { icon: "🛡️", label: "Audit",  text: "/audit my token launch plan",  color: "#F87171" },
-      { icon: "🚀", label: "Launch", text: "/launch",                       color: "#34D399" },
+      { icon: "💡", label: "Idea",   text: "build me a USDC payroll app on Base",  color: "#4FC3F7" },
+      { icon: "🛠️", label: "Build",  text: "build an ERC-4337 agent wallet",        color: "#A78BFA" },
+      { icon: "🛡️", label: "Audit",  text: "audit my token launch plan",            color: "#F87171" },
+      { icon: "🚀", label: "Launch", text: "launch a token called BlueBot on Base", color: "#34D399" },
     ],
   },
 };
@@ -513,19 +512,15 @@ export default function ChatMessages() {
             {empty.sub}
           </p>
 
-          {/* Quick action cards — persona-aware. Each card runs a real command:
-              self-contained commands (e.g. /pick, /whale AERO) and full natural-
-              language prompts send immediately; freeform commands (/idea /build
-              /audit /ship /raise) or ones with a 0x… placeholder prefill the
-              composer + focus so the user fills in their own input. Uses the
-              existing send()/setInput() — no architecture change. */}
+          {/* Quick action cards — persona-aware. Natural language prompts send
+              immediately; prompts with a 0x… placeholder prefill the composer
+              so the user can fill in their address before sending. */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full max-w-md sm:max-w-2xl mx-auto mb-5">
             {empty.starters.map(s => (
               <button
                 key={s.label}
                 onClick={() => {
-                  const needsInput =
-                    s.text.includes("…") || /^\/(idea|build|audit|ship|raise)\b/.test(s.text);
+                  const needsInput = s.text.includes("…");
                   if (needsInput) {
                     setInput(s.text.replace(/0x…|…/g, "").replace(/\s+$/, "") + " ");
                     document.getElementById("chat-composer")?.focus();

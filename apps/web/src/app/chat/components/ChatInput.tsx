@@ -17,25 +17,12 @@ interface SlashCommand {
   cmd: string; icon: string; label: string; hint: string; example: string;
 }
 
+// Slash commands are natural language now — only 3 utility commands remain.
+// /skill is handled client-side in ChatContext.tsx.
 const SLASH_COMMANDS: SlashCommand[] = [
-  { cmd: "idea",   icon: "💡", label: "Idea Brief",      hint: "Fundable brief — problem, MVP, 24h plan",   example: "/idea <concept>" },
-  { cmd: "build",  icon: "🛠️", label: "Architecture",    hint: "Stack, folder structure, integrations",     example: "/build <project>" },
-  { cmd: "audit",  icon: "🛡️", label: "Audit",           hint: "Security + product risk, GO/NO-GO",         example: "/audit <code>" },
-  { cmd: "ship",   icon: "🚀", label: "Ship Checklist",  hint: "Deploy steps, verify, monitor for Base",    example: "/ship <project>" },
-  { cmd: "raise",  icon: "💰", label: "Pitch",           hint: "Narrative, ask, target investors",          example: "/raise <project>" },
-  { cmd: "pick",   icon: "🎯", label: "Token Pick",      hint: "AI-powered token pick on Base",             example: "/pick" },
-  { cmd: "scan",   icon: "🔍", label: "Scan Token",      hint: "Honeypot + risk check before buying",       example: "/scan <address>" },
-  { cmd: "wallet", icon: "👛", label: "Wallet Analysis", hint: "Analyze on-chain activity and strategy",    example: "/wallet <address>" },
-  { cmd: "aml",     icon: "🛡️", label: "AML Screen",      hint: "AML compliance — CLEAN / SUSPICIOUS",        example: "/aml <address>" },
-  { cmd: "airdrop", icon: "🪂", label: "Airdrop Check",   hint: "Base airdrop eligibility + activity score",  example: "/airdrop <address>" },
-  { cmd: "dex",     icon: "📈", label: "DEX Flow",        hint: "Live buy/sell pressure for a token",         example: "/dex <token>" },
-  { cmd: "whale",   icon: "🐋", label: "Whale Tracker",   hint: "Smart money flow for any token",             example: "/whale <token>" },
-  { cmd: "launch",  icon: "🚀", label: "Launch Token",    hint: "Deploy a real token on Base via Bankr",       example: "/launch <token>" },
-  { cmd: "credits", icon: "⚡", label: "Credits",         hint: "Show balance, tier, and how to earn more",   example: "/credits" },
-  { cmd: "models",  icon: "🤖", label: "Models",          hint: "List all available AI models + costs",       example: "/models" },
-  { cmd: "skill",   icon: "📦", label: "Skill Packs",     hint: "install / list / remove GitHub skills",      example: "/skill install owner/repo" },
-  { cmd: "skills",  icon: "⚡", label: "Skills / Tools",  hint: "List all Hub tools available in chat",       example: "/skills" },
-  { cmd: "help",    icon: "📖", label: "Help",            hint: "Show all available commands",                example: "/help" },
+  { cmd: "credits", icon: "⚡", label: "Credits",     hint: "Show balance, tier, and how to earn more",        example: "/credits" },
+  { cmd: "help",    icon: "📖", label: "Help",        hint: "Show what Blue Chat can do — natural language",   example: "/help" },
+  { cmd: "skill",   icon: "📦", label: "Skill Packs", hint: "install / list / remove GitHub skill packs",      example: "/skill install owner/repo" },
 ];
 
 export interface ModelTier {
@@ -198,7 +185,7 @@ export default function ChatInput() {
   }
 
   function selectCommand(cmd: SlashCommand) {
-    const needsArg = !["pick", "help", "models", "skills", "status"].includes(cmd.cmd);
+    const needsArg = !["credits", "help", "pick", "models", "skills", "status"].includes(cmd.cmd);
     const newVal   = needsArg ? `/${cmd.cmd} ` : `/${cmd.cmd}`;
     setInput(newVal);
     setCmdMenu(false);
@@ -486,7 +473,7 @@ export default function ChatInput() {
               value={input}
               onChange={(e) => handleInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={outOfCredits ? "No credits — get more $BLUEAGENT" : "Message Blue Agent… or / for commands"}
+              placeholder={outOfCredits ? "No credits — get more $BLUEAGENT" : "Ask BlueAgent anything…"}
               rows={1}
               disabled={streaming || outOfCredits}
               className="flex-1 resize-none bg-transparent outline-none font-mono text-sm text-white placeholder:text-slate-700 leading-relaxed"
