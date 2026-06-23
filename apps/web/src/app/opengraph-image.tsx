@@ -30,7 +30,7 @@ export default async function Image() {
             <span style={{ color: C.white }}>BLUEAGENT</span>
           </div>
         </div>
-        <div style={{ display: "flex", fontSize: 84, fontWeight: 700, lineHeight: 1.05, letterSpacing: -1.5, maxWidth: "1050px" }}>
+        <div style={{ display: "flex", fontSize: 70, fontWeight: 700, lineHeight: 1.08, letterSpacing: -1, maxWidth: "1050px" }}>
           AI Agent Tools for Base
         </div>
         <div style={{ display: "flex", fontFamily: f.mono, fontSize: 30, color: C.muted, marginTop: 28 }}>
