@@ -4,6 +4,7 @@
 // Price: $0.05
 
 import { getBaseTrending, getBaseNewPools, getBaseTvl, type Pool } from "@/lib/market-data";
+import { filterScamPools } from "./_scam-filter";
 
 function pct(n: number | null): string | null {
   return n == null ? null : `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
@@ -51,8 +52,8 @@ export default async function handler(req: Request): Promise<Response> {
       base_tvl: tvl
         ? { usd: tvl.tvlUsd, change_1d: pct(tvl.change1dPct), change_7d: pct(tvl.change7dPct) }
         : null,
-      trending: trending.map(mapPool),
-      new_pools: newPools.map(mapPool),
+      trending: filterScamPools(trending).map(mapPool),
+      new_pools: filterScamPools(newPools).map(mapPool),
       note: "Snapshot of live Base onchain activity. Poll this endpoint for a near-real-time feed; pair with blue-monitor for per-target watch + alerts.",
     });
   } catch (e) {

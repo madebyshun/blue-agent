@@ -1,12 +1,15 @@
 // x402/base-pulse — Base chain market pulse (TVL + DEX volume + trending). No LLM.
 // Price: $0.05
 import { getBaseTvl, getBaseTrending, getBaseNewPools } from "@/lib/market-data";
+import { filterScamPools } from "./_scam-filter";
 
 const fmtB = (n: number | null | undefined) => (n == null ? "n/a" : n >= 1e9 ? `$${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : `$${n.toFixed(0)}`);
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    const [tvl, trending, fresh] = await Promise.all([getBaseTvl(), getBaseTrending(15), getBaseNewPools(30)]);
+    const [tvl, trendingRaw, freshRaw] = await Promise.all([getBaseTvl(), getBaseTrending(15), getBaseNewPools(30)]);
+    const trending = filterScamPools(trendingRaw);
+    const fresh    = filterScamPools(freshRaw);
     const top = [...trending].sort((a, b) => (b.volume24h ?? 0) - (a.volume24h ?? 0)).slice(0, 5);
     const dexVol = trending.reduce((s, p) => s + (p.volume24h ?? 0), 0);
     const avgChange = trending.length ? trending.reduce((s, p) => s + (p.change.h24 ?? 0), 0) / trending.length : 0;

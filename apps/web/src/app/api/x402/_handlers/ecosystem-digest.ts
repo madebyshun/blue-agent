@@ -5,6 +5,7 @@
 // Price: $0.20
 
 import { getBaseTvl, getBaseTrending, poolsToPrompt, tvlToPrompt, type Pool } from "@/lib/market-data";
+import { filterScamPools } from "./_scam-filter";
 
 type BankrMessage = { role: string; content: string };
 
@@ -61,7 +62,8 @@ function buildMovers(pools: Pool[]): { token: string; change: string; change24hR
 
 export default async function handler(): Promise<Response> {
   try {
-    const [tvl, trending] = await Promise.all([getBaseTvl(), getBaseTrending(12)]);
+    const [tvl, trendingRaw] = await Promise.all([getBaseTvl(), getBaseTrending(12)]);
+    const trending = filterScamPools(trendingRaw);
 
     if (!trending.length && !tvl) {
       return Response.json(
