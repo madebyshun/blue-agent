@@ -235,15 +235,15 @@ function toFeedItem(job: Job, resp: Any, cycleId: number, idx: number): FeedItem
         break;
       }
       case "picks-check": {
-        title = "Signal Track Record";
+        title = "Signal Accuracy";  // "accuracy" not "track record" — filter correctness, not investment returns
         const tr = resp.track_record as Any;
         summary = tr?.win_rate != null
-          ? `${tr.win_rate}% win rate across ${tr.total ?? 0} picks. Avg win: ${tr.avg_win_pct != null ? `+${tr.avg_win_pct}%` : "—"}, avg loss: ${tr.avg_loss_pct != null ? `${tr.avg_loss_pct}%` : "—"}.`
-          : `${resp.checked ?? 0} picks evaluated.`;
+          ? `Filter direction correct ${tr.win_rate}% of the time across ${tr.total ?? 0} signals (22h check). Not financial advice.`
+          : `${resp.checked ?? 0} signals evaluated.`;
         metrics = clean([
-          metric("Win rate", tr?.win_rate != null ? `${tr.win_rate}%` : null),
+          metric("Accuracy", tr?.win_rate != null ? `${tr.win_rate}%` : null),
           metric("W/L",     (tr?.wins != null && tr?.losses != null) ? `${tr.wins}W / ${tr.losses}L` : null),
-          metric("Picks",   tr?.total != null ? `${tr.total}` : null),
+          metric("Signals",  tr?.total != null ? `${tr.total}` : null),
         ]);
         break;
       }

@@ -16,8 +16,8 @@ const JOBS: Job[] = [
   { tool: "base-pulse",      agent: "blueagent", body: {}, title: "Base Pulse" },
   // DeFi Yield Scan: deduped protocol yields, APY ≥ 4%, no LLM.
   { tool: "defi-yield-scan", agent: "blueagent", body: {}, title: "DeFi Yield Scan" },
-  // Picks Check: evaluates base-token-scan signals 22h later.
-  { tool: "picks-check",     agent: "blueagent", body: {}, title: "Signal Track Record" },
+  // Picks Check: evaluates base-token-scan signals 22h later (filter accuracy, not investment returns).
+  { tool: "picks-check",     agent: "blueagent", body: {}, title: "Signal Accuracy" },
   // B20 Tracker: Beryl 20 on Base index.
   { tool: "b20-tracker",     agent: "blueagent", body: {}, title: "B20 on Base" },
 ];
