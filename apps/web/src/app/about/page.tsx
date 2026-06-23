@@ -28,13 +28,13 @@ const SURFACES = [
   },
   {
     icon: "⚡",
-    name: "x402 API",
-    handle: "api.blueagent.dev",
-    desc: "78+ pay-per-use AI tools for agents and developers. Each tool costs fractions of a cent in USDC on Base. No subscriptions.",
-    link: "https://api.blueagent.dev/docs",
-    linkLabel: "View API →",
+    name: "MCP Server",
+    handle: "blueagent.dev/api/mcp",
+    desc: "81 tools via MCP — plug into Claude Desktop, Cursor, or any MCP client. No API key needed. Tools run free via internal bypass.",
+    link: "https://blueagent.dev/api/mcp",
+    linkLabel: "Connect MCP →",
     color: "#F59E0B",
-    stats: [{ label: "Endpoints", value: "78+" }, { label: "Cost", value: "USDC/call" }],
+    stats: [{ label: "Tools", value: "81" }, { label: "Clients", value: "Cursor · Claude" }],
   },
 ];
 
