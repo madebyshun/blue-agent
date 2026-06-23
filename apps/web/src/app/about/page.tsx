@@ -30,11 +30,11 @@ const SURFACES = [
     icon: "⚡",
     name: "MCP Server",
     handle: "blueagent.dev/api/mcp",
-    desc: "81 tools via MCP — plug into Claude Desktop, Cursor, or any MCP client. No API key needed. Tools run free via internal bypass.",
+    desc: "70+ tools via MCP — plug into Claude Desktop, Cursor, or any MCP client. No API key needed. Tools run free via internal bypass.",
     link: "https://blueagent.dev/api/mcp",
     linkLabel: "Connect MCP →",
     color: "#F59E0B",
-    stats: [{ label: "Tools", value: "81" }, { label: "Clients", value: "Cursor · Claude" }],
+    stats: [{ label: "Tools", value: "70+" }, { label: "Clients", value: "Cursor · Claude" }],
   },
 ];
 
