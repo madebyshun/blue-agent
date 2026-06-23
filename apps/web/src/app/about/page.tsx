@@ -7,10 +7,20 @@ import Navbar from "@/components/Navbar";
 
 const SURFACES = [
   {
+    icon: "💬",
+    name: "Blue Chat",
+    handle: "blueagent.dev/app/chat",
+    desc: "Multi-model AI chat with live Base intelligence, tool execution, artifacts, and share links. Connect wallet → stake BLUE → unlock tools.",
+    link: "/app/chat",
+    linkLabel: "Open Chat →",
+    color: "#4FC3F7",
+    stats: [{ label: "Models", value: "6" }, { label: "Tools", value: "78+" }],
+  },
+  {
     icon: "🖥️",
     name: "Founder Console",
-    handle: "blueagent.dev",
-    desc: "The AI-native workflow for Base builders. idea → build → audit → ship → raise. 78 tools. Pay per use in USDC via x402.",
+    handle: "blueagent.dev/hub",
+    desc: "The AI-native workflow for Base builders. idea → build → audit → ship → raise. 78 x402 tools. Pay per use in USDC.",
     link: "/hub",
     linkLabel: "Open Hub →",
     color: "#A78BFA",
@@ -179,8 +189,8 @@ export default function AboutPage() {
         {/* ══ THREE SURFACES ═══════════════════════════════════════════════════ */}
         <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
           <div className="text-center mb-14">
-            <SectionLabel>Two Surfaces</SectionLabel>
-            <h2 className="text-3xl font-bold">One agent, two ways to access</h2>
+            <SectionLabel>Three Surfaces</SectionLabel>
+            <h2 className="text-3xl font-bold">One agent, three ways to access</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -254,11 +264,11 @@ export default function AboutPage() {
                   className="flex-1 py-2.5 rounded-xl font-mono text-xs text-center border border-[#2a2a3e] text-slate-400 hover:text-white hover:border-[#4FC3F740] transition-all">
                   Basescan ↗
                 </a>
-                <a href="https://app.uniswap.org"
+                <a href="https://dexscreener.com/base/0xf895783b2931c919955e18b5e3343e7c7c456ba3"
                   target="_blank" rel="noopener noreferrer"
                   className="flex-1 py-2.5 rounded-xl font-mono text-xs font-bold text-center transition-all hover:opacity-90"
-                  style={{ background: "#FF007A15", color: "#FF007A", border: "1px solid #FF007A30" }}>
-                  Buy on Uniswap →
+                  style={{ background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E30" }}>
+                  $BLUEAGENT ↗
                 </a>
               </div>
             </div>
