@@ -3,6 +3,7 @@
 
 import { callVeniceLLM, extractJsonObject } from "@/app/api/_lib/llm";
 import { getBaseTrending, getBaseTvl, poolsToPrompt, tvlToPrompt } from "@/lib/market-data";
+import { filterScamPools } from "./_scam-filter";
 
 const SYSTEM = `Respond with ONLY a raw JSON object. Start immediately with { and end with }. No markdown, no explanation, no text before or after.
 
@@ -27,10 +28,11 @@ export default async function handler(req: Request): Promise<Response> {
 
     console.log("[BaseAlpha] Building Base alpha digest");
 
-    const [trending, tvl] = await Promise.all([
+    const [trendingRaw, tvl] = await Promise.all([
       getBaseTrending(15).catch(() => []),
       getBaseTvl().catch(() => null),
     ]);
+    const trending = filterScamPools(trendingRaw);
 
     const base_tvl_usd = tvl?.tvlUsd ?? null;
     const tvl_change_7d = tvl?.change7dPct ?? null;

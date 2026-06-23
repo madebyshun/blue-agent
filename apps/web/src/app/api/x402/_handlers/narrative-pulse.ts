@@ -3,6 +3,7 @@
 
 import { callVeniceLLM, extractJsonObject } from "@/app/api/_lib/llm";
 import { getBaseTrending, type Pool } from "@/lib/market-data";
+import { filterScamPools } from "./_scam-filter";
 
 const SYSTEM = `Respond with ONLY a raw JSON object. Start immediately with { and end with }. No markdown, no explanation, no text before or after.
 
@@ -60,7 +61,7 @@ export default async function handler(req: Request): Promise<Response> {
       });
     }
 
-    const tokenData = trending.map((p) => ({
+    const tokenData = filterScamPools(trending).map((p) => ({
       symbol: p.baseSymbol,
       pair: p.name,
       change24h: p.change.h24,

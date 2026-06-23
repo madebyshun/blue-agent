@@ -4,6 +4,7 @@
 import { callVeniceLLM, extractJsonObject } from "@/app/api/_lib/llm";
 import { getTokenMarket } from "@/lib/market-data";
 import { getMoralisERC20Transfers } from "@/lib/moralis";
+import { isLikelyScam } from "./_scam-filter";
 
 const DEXSCREENER_URL = "https://api.dexscreener.com/latest/dex";
 
@@ -114,6 +115,36 @@ export default async function handler(req: Request): Promise<Response> {
     const ch1 = market?.change.h1 ?? p0?.priceChange?.h1 ?? null;
     const ch6 = market?.change.h6 ?? p0?.priceChange?.h6 ?? null;
     const ch24 = market?.change.h24 ?? p0?.priceChange?.h24 ?? null;
+
+    // Scam guard — if resolved symbol matches impersonated brand or extreme pump,
+    // return an AVOID signal immediately without spending LLM credits.
+    const tokenName = pairs[0]?.baseToken?.name ?? null;
+    if (isLikelyScam({ symbol, name: tokenName, change: ch24 ?? ch6 ?? ch1 })) {
+      return Response.json({
+        tool: "token-alpha",
+        token,
+        symbol,
+        signal: "AVOID",
+        confidence: 0,
+        entry_price: null,
+        stop_loss: null,
+        target: null,
+        whale_confirmation: false,
+        narrative_fit: null,
+        momentum_score: 0,
+        risk_flags: [
+          "SCAM_DETECTED: token matches known scam patterns (impersonated brand name or extreme price action)",
+        ],
+        thesis: `${symbol ?? token} has been flagged as a likely scam or impersonation. Blue Agent will not generate a trade signal for this token.`,
+        scam_detected: true,
+        liquidity_usd: liq,
+        volume_24h: vol24,
+        change_24h: ch24,
+        dataSource: "Blue Agent scam filter",
+        disclaimer: "Scam detection is heuristic-based — always verify independently.",
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     const whaleCount = Array.isArray(transfers) ? transfers.length : 0;
     const dataLines = [
