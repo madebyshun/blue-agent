@@ -1385,7 +1385,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "picks-check",
     name: "Signal Track Record",
-    description: "Evaluates base-token-scan picks 22h after signal. Calculates win rate, avg win/loss %, and returns last 30 outcomes. No LLM — live price via GeckoTerminal.",
+    description: "Measures base-token-scan signal filter accuracy 22h after detection. WIN/LOSS = filter direction correct, not trading profit. Not financial advice.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "signal",
     inputs: [],
