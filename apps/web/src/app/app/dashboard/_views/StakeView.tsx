@@ -254,7 +254,7 @@ export default function StakeView() {
         <div className="grid grid-cols-3 gap-2.5 mb-4">
           {[
             { label: "TOTAL STAKED", value: globalStaked ? fmtBlue(globalStaked) : "—", accent: "#4FC3F7" },
-            { label: "x402 REVENUE", value: "20%",                                       accent: "#22C55E" },
+            { label: "USDC YIELD",   value: "Live",                                      accent: "#22C55E" },
             { label: "COOLDOWN",     value: "1 day",                                     accent: "#A78BFA" },
           ].map(s => (
             <div key={s.label} className="rounded-2xl border p-4 text-center relative overflow-hidden"
@@ -559,7 +559,7 @@ export default function StakeView() {
                       <div className="font-mono text-3xl font-bold text-[#22C55E] mb-1">
                         ${(Number(pendingUSDC) / 1e6).toFixed(6)}
                       </div>
-                      <div className="font-mono text-[10px] text-slate-600">from x402 API revenue</div>
+                      <div className="font-mono text-[10px] text-slate-600">real USDC, claimed onchain</div>
                     </div>
 
                     <button
@@ -603,7 +603,7 @@ export default function StakeView() {
             {[
               { icon: "📌", text: "Credits accrue on-chain",      color: "#4FC3F7" },
               { icon: "💬", text: "Unlock Blue Chat AI",          color: "#A78BFA" },
-              { icon: "💵", text: "20% x402 revenue → stakers",   color: "#22C55E" },
+              { icon: "💵", text: "stake BLUE → earn USDC yield",  color: "#22C55E" },
               { icon: "⏳", text: "1-day cooldown to unstake",    color: "#F59E0B" },
             ].map(item => (
               <div key={item.text} className="flex items-start gap-2.5 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3 py-2.5"
