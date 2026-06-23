@@ -1343,6 +1343,57 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/grant-evaluator`,
     x402Body: (v) => ({ projectName: v.projectName ?? "", description: v.description ?? "", teamBackground: v.teamBackground ?? "", requestedAmount: v.requestedAmount ?? "", milestones: v.milestones ?? "", githubUrl: v.githubUrl ?? "" }),
   },
+
+  // ── Feed scan tools (internal — power Blue Feed v2) ──────────────────────────
+
+  {
+    id: "base-token-scan",
+    name: "Base Token Scan",
+    description: "Hard-filter token scan on Base — 5 quality gates (vol, liquidity, depth ratio, momentum, scam filter). Returns ≤ 3 grounded signals only. No LLM.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "signal",
+    inputs: [],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/base-token-scan`,
+    x402Body: () => ({}),
+  },
+  {
+    id: "defi-yield-scan",
+    name: "DeFi Yield Scan",
+    description: "Hard-filter DeFi yield scan on Base — deduped by protocol, APY ≥ 4%, TVL ≥ $500K. Returns top 5 live opportunities. No LLM.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "earn",
+    inputs: [],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/defi-yield-scan`,
+    x402Body: () => ({}),
+  },
+  {
+    id: "narrative-scan",
+    name: "Narrative Scan",
+    description: "Detects active Base narratives from real trending token data. Tracks Emerging → Rising → Peak → Fading lifecycle in KV. Venice LLM grounded by GeckoTerminal.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "signal",
+    inputs: [],
+    isComposite: false,
+    price: "$0.10", priceUSDC: 100000,
+    x402Url: `${X402_BASE}/narrative-scan`,
+    x402Body: () => ({}),
+  },
+  {
+    id: "picks-check",
+    name: "Signal Track Record",
+    description: "Evaluates base-token-scan picks 22h after signal. Calculates win rate, avg win/loss %, and returns last 30 outcomes. No LLM — live price via GeckoTerminal.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "signal",
+    inputs: [],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/picks-check`,
+    x402Body: () => ({}),
+  },
 ];
 
 // ─── v2 defaults ──────────────────────────────────────────────────────────────
