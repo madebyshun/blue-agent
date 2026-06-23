@@ -27,7 +27,7 @@ export default async function Image() {
 
         {/* Middle: headline + subline */}
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", fontSize: 78, fontWeight: 700, lineHeight: 1.05, letterSpacing: -1.5, color: C.white, maxWidth: "1050px" }}>
+          <div style={{ display: "flex", fontSize: 64, fontWeight: 700, lineHeight: 1.08, letterSpacing: -0.5, color: C.white, maxWidth: "1050px" }}>
             Build anything on Base
           </div>
           <div style={{ display: "flex", fontFamily: f.mono, fontSize: 26, color: C.muted, marginTop: 24, maxWidth: "1000px", lineHeight: 1.5 }}>
