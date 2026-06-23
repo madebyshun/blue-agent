@@ -169,14 +169,13 @@ export default async function handler(req: Request): Promise<Response> {
       tool: "token-alpha",
       token,
       symbol,
-      // Ground entry_price to the real current price regardless of LLM output.
-      entry_price: price,
-      // Real market context (code-computed) — exposed so the feed SIGNALS strip
-      // reads measured liquidity/volume/momentum, never LLM-estimated numbers.
+      // LLM output spread first — then grounded code values override any LLM estimates.
+      ...result,
+      // These MUST come AFTER ...result so LLM values cannot override real data.
+      entry_price: price,           // real DexScreener price, always wins
       liquidity_usd: liq,
       volume_24h: vol24,
       change_24h: ch24,
-      ...result,
       dataSource: "DexScreener (price/liquidity) + Moralis (transfers)",
       disclaimer: "Model-generated signal grounded in live data — not financial advice.",
       timestamp: new Date().toISOString(),

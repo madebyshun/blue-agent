@@ -15,16 +15,13 @@ export const maxDuration = 60;
 // Re-export the feed types so existing importers (the feed page) keep working.
 export type { FeedItem, FeedAgent, CycleContext } from "./_shared";
 
+// Blue Feed v2 — fewer, higher-signal tools.
+// Runs every 4h via GitHub Actions (feed.yml cron: '0 */4 * * *').
 const JOBS: Job[] = [
-  { tool: "base-pulse",       agent: "blueagent", body: {}, title: "Base Pulse" },
-  { tool: "base-alpha",       agent: "blueagent", body: {}, title: "Base Alpha" },
-  { tool: "narrative-pulse",  agent: "blueagent", body: {}, title: "Narrative Pulse" },
-  { tool: "whale-tracker",    agent: "blueagent", body: {} },
-  { tool: "ecosystem-digest", agent: "blueagent", body: {}, title: "Base Ecosystem Digest" },
-  { tool: "new-pools",        agent: "blueagent", body: {}, title: "New Pools on Base" },
-  { tool: "blue-stream",      agent: "blueagent", body: {}, title: "Base Onchain Activity" },
-  // token-alpha runs last in runCycle — its token is the cycle's top mover.
-  { tool: "token-alpha",      agent: "blueagent", body: {} },
+  // Hard-filter token scan: 5 quality gates, ≤3 signals, silent if nothing passes.
+  { tool: "base-token-scan", agent: "blueagent", body: {}, title: "Base Token Signals" },
+  // Narrative lifecycle tracker: Emerging → Rising → Peak → Fading.
+  { tool: "narrative-scan",  agent: "blueagent", body: {}, title: "Narrative Scan" },
 ];
 
 async function handle(req: NextRequest) {

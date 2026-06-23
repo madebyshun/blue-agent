@@ -10,12 +10,16 @@ import { runCycle, authError, type Job } from "../_shared";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+// Blue Feed v2 — daily heavier scan (once/day at 9am via vercel.json).
 const JOBS: Job[] = [
-  { tool: "token-momentum-scanner", agent: "blueagent", body: {}, title: "Base Momentum Scan" },
-  { tool: "narrative-position",     agent: "blueagent", body: {}, title: "Narrative Positions" },
-  { tool: "defi-opportunity",       agent: "blueagent", body: {}, title: "DeFi Opportunities on Base" },
-  { tool: "bankr-pulse",            agent: "blueagent", body: {}, title: "Bankr Trending" },
-  { tool: "b20-tracker",            agent: "blueagent", body: {}, title: "B20 on Base" },
+  // Base Pulse: TVL + market sentiment snapshot (real DefiLlama data).
+  { tool: "base-pulse",      agent: "blueagent", body: {}, title: "Base Pulse" },
+  // DeFi Yield Scan: deduped protocol yields, APY ≥ 4%, no LLM.
+  { tool: "defi-yield-scan", agent: "blueagent", body: {}, title: "DeFi Yield Scan" },
+  // Picks Check: evaluates base-token-scan signals 22h later.
+  { tool: "picks-check",     agent: "blueagent", body: {}, title: "Signal Track Record" },
+  // B20 Tracker: Beryl 20 on Base index.
+  { tool: "b20-tracker",     agent: "blueagent", body: {}, title: "B20 on Base" },
 ];
 
 async function handle(req: NextRequest) {

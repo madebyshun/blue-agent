@@ -77,6 +77,10 @@ import h50 from "./launch-simulator-3";
 import h52 from "./grant-evaluator";
 import h53 from "./key-exposure";
 import h54 from "./launch-simulator-1";
+import hBaseTokenScan  from "./base-token-scan";
+import hDefiYieldScan  from "./defi-yield-scan";
+import hNarrativeScan  from "./narrative-scan";
+import hPicksCheck     from "./picks-check";
 
 export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "token-price": hTokenPrice,
@@ -161,4 +165,8 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "grant-evaluator": h52,
   "key-exposure":    h53,
   "launch-simulator-1": h54,
+  "base-token-scan":    hBaseTokenScan,
+  "defi-yield-scan":    hDefiYieldScan,
+  "narrative-scan":     hNarrativeScan,
+  "picks-check":        hPicksCheck,
 };
