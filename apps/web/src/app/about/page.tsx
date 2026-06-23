@@ -165,6 +165,12 @@ export default function AboutPage() {
 
           <div className="space-y-6 text-slate-400 leading-relaxed text-base">
             <p>
+              Blue Agent started as a Telegram bot — a simple idea to bring AI
+              and onchain actions together on Base. It outgrew the chat window.
+              So we rebuilt it from scratch, web-native, on Base. Since March 2026,
+              it&apos;s grown into the Builder OS for Base.
+            </p>
+            <p>
               AI tools should work like onchain transactions — instant, composable, paid exactly for what you use.
               No subscriptions. No monthly seats. No middlemen taking 70%.
               x402 makes that possible: one HTTP header, one USDC micropayment, one tool call.
