@@ -9,4 +9,4 @@
 export { POST } from "@/app/api/x402/[tool]/route";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 30; // legacy alias — tools complete well under 30s

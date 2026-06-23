@@ -3,7 +3,7 @@ import { getLaunches } from "@/lib/launches";
 import { getTokenMarket } from "@/lib/market-data";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 15;
 
 /**
  * GET /api/launches — public showcase feed of tokens launched through Blue Chat.
