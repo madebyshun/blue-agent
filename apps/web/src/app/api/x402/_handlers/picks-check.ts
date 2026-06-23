@@ -118,8 +118,10 @@ export default async function handler(_req: Request): Promise<Response> {
         signal_ts:   o.signal_ts,
       })),
       pending_remaining: stillPending.length,
-      dataSource: "GeckoTerminal (current price lookup)",
-      timestamp:  new Date().toISOString(),
+      dataSource:    "GeckoTerminal (current price lookup)",
+      disclaimer:    "Tracks signal filter accuracy, not investment returns. Price changes measured after detection. Not financial advice.",
+      framing_note:  "WIN/LOSS measures whether the filter's signal direction was correct after 22h, not trading profit.",
+      timestamp:     new Date().toISOString(),
     });
   } catch (e) {
     return Response.json(
