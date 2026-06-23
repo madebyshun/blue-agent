@@ -10,7 +10,16 @@
  *
  * Tools run via the internal x402 bypass (X-Blue-Internal + X-Blue-Service).
  */
-import { kvGet, kvSet } from "@/lib/kv";
+import { kvGet, kvSet }              from "@/lib/kv";
+// PendingPick is written here and read by picks-check.ts handler (same schema).
+type PendingPick = {
+  symbol:          string;
+  price_at_signal: number | null;
+  signal_ts:       number;
+  check_after:     number;
+  volume_24h:      number | null;
+  liquidity_usd:   number | null;
+};
 
 const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY ?? "";
 const CRON_SECRET          = process.env.CRON_SECRET ?? "";
@@ -26,6 +35,8 @@ export interface FeedItem {
   cycleId: number;
   title: string;
   summary: string;
+  /** Hint for feed card rendering: signal (buy/watch), info, watch, track */
+  itemType?: "signal" | "info" | "watch" | "track";
   data: Record<string, unknown>;
   shareText: string;
   agent: FeedAgent;
@@ -178,6 +189,64 @@ function toFeedItem(job: Job, resp: Any, cycleId: number, idx: number): FeedItem
         ]);
         break;
       }
+
+      // ── Blue Feed v2 scan tools ─────────────────────────────────────────────
+
+      case "base-token-scan": {
+        title = "Base Token Signals";
+        const sigs = Array.isArray(resp.signals) ? resp.signals : [];
+        const top  = sigs[0];
+        summary = sigs.length
+          ? `${sigs.length} signal${sigs.length !== 1 ? "s" : ""} passed all 5 filters. Top: ${top?.symbol ?? "—"} ${top?.change_24h != null ? `(${top.change_24h > 0 ? "+" : ""}${top.change_24h.toFixed(1)}% 24h)` : ""}.`
+          : "Scan complete — no tokens passed quality filters.";
+        metrics = clean([
+          metric("Signals", sigs.length ? `${sigs.length}` : null),
+          metric("Top", top?.symbol ?? null),
+          metric("24h", top?.change_24h != null ? `${top.change_24h > 0 ? "+" : ""}${top.change_24h.toFixed(1)}%` : null),
+        ]);
+        break;
+      }
+      case "defi-yield-scan": {
+        title = "DeFi Yield Scan";
+        const opps = Array.isArray(resp.opportunities) ? resp.opportunities : [];
+        summary = opps.length
+          ? `Top yield on Base: ${opps[0]?.protocol ?? "—"} ${opps[0]?.symbol ?? ""} at ${opps[0]?.apy != null ? `${opps[0].apy}% APY` : "—"}. ${opps.length} opportunities found.`
+          : "No Base yield pools passed filters this scan.";
+        metrics = clean([
+          metric("Top APY",   opps[0]?.apy != null ? `${opps[0].apy}%` : null),
+          metric("Protocol",  opps[0]?.protocol ?? null),
+          metric("Pools",     opps.length ? `${opps.length}` : null),
+        ]);
+        break;
+      }
+      case "narrative-scan": {
+        title = "Narrative Scan";
+        const narrs = Array.isArray(resp.narratives) ? resp.narratives : [];
+        const top   = narrs[0];
+        const fading = narrs.filter((n: Any) => n.phase === "Fading");
+        summary = top?.name
+          ? `${top.name} (${top.phase ?? "—"}) leading on Base.${narrs.length > 1 ? ` Also: ${narrs.slice(1, 3).map((n: Any) => n.name).join(", ")}.` : ""}${fading.length ? ` Fading: ${fading.map((n: Any) => n.name).join(", ")}.` : ""}`
+          : "Narrative scan complete.";
+        metrics = clean([
+          metric("Top",    top?.name ?? null),
+          metric("Phase",  top?.phase ?? null),
+          metric("Active", narrs.filter((n: Any) => n.phase !== "Fading").length ? `${narrs.filter((n: Any) => n.phase !== "Fading").length}` : null),
+        ]);
+        break;
+      }
+      case "picks-check": {
+        title = "Signal Track Record";
+        const tr = resp.track_record as Any;
+        summary = tr?.win_rate != null
+          ? `${tr.win_rate}% win rate across ${tr.total ?? 0} picks. Avg win: ${tr.avg_win_pct != null ? `+${tr.avg_win_pct}%` : "—"}, avg loss: ${tr.avg_loss_pct != null ? `${tr.avg_loss_pct}%` : "—"}.`
+          : `${resp.checked ?? 0} picks evaluated.`;
+        metrics = clean([
+          metric("Win rate", tr?.win_rate != null ? `${tr.win_rate}%` : null),
+          metric("W/L",     (tr?.wins != null && tr?.losses != null) ? `${tr.wins}W / ${tr.losses}L` : null),
+          metric("Picks",   tr?.total != null ? `${tr.total}` : null),
+        ]);
+        break;
+      }
     }
   } catch { /* defaults */ }
 
@@ -189,7 +258,12 @@ function toFeedItem(job: Job, resp: Any, cycleId: number, idx: number): FeedItem
   if (!summary) summary = "Updated.";
 
   const shareText = `${title} — ${summary} via @blueagent_ blueagent.dev/app/feed`;
-  return { id: `${job.tool}-${cycleId}`, tool: job.tool, timestamp: ts, cycleId, agent: job.agent, title, summary, data: { metrics, raw: resp }, shareText };
+  const itemType: FeedItem["itemType"] =
+    job.tool === "base-token-scan" ? "signal" :
+    job.tool === "picks-check"     ? "track"  :
+    job.tool === "narrative-scan"  ? "watch"  :
+    "info";
+  return { id: `${job.tool}-${cycleId}`, tool: job.tool, timestamp: ts, cycleId, agent: job.agent, title, summary, itemType, data: { metrics, raw: resp }, shareText };
 }
 
 async function callTool(job: Job, cycleId: number): Promise<FeedItem | null> {
@@ -203,6 +277,8 @@ async function callTool(job: Job, cycleId: number): Promise<FeedItem | null> {
     if (!res.ok) { console.warn(`[feed] ${job.tool} → HTTP ${res.status}`); return null; }
     const data = await res.json().catch(() => null);
     if (!data || data.error) { console.warn(`[feed] ${job.tool} → no data / error`); return null; }
+    // _noCard means the tool ran cleanly but produced nothing worth showing.
+    if (data._noCard) { console.info(`[feed] ${job.tool} → silent (nothing passed filters)`); return null; }
     return toFeedItem(job, data, cycleId, 0);
   } catch (e) {
     console.warn(`[feed] ${job.tool} failed:`, (e as Error).message);
@@ -259,6 +335,32 @@ export async function runCycle(jobs: Job[]): Promise<{ ok: boolean; added: numbe
   const otherJobs = jobs.filter((j) => j.tool !== "token-alpha" && j.tool !== "whale-tracker");
 
   const otherResults = (await Promise.all(otherJobs.map((j) => callTool(j, cycleId)))).filter((x): x is FeedItem => x !== null);
+
+  // After base-token-scan runs, store its signals as pending picks for picks-check.
+  const scanResult = otherResults.find((r) => r.tool === "base-token-scan");
+  if (scanResult) {
+    const raw = (scanResult.data as { raw?: Any })?.raw ?? {};
+    const signals: Array<Any> = Array.isArray(raw.signals) ? raw.signals : [];
+    if (signals.length > 0) {
+      const now          = Date.now();
+      const CHECK_DELAY  = 22 * 3_600_000; // 22 hours
+      const existing     = (await kvGet<PendingPick[]>("feed:picks:pending")) ?? [];
+      const existingSyms = new Set(existing.map((p) => p.symbol.toUpperCase()));
+      const newPicks: PendingPick[] = signals
+        .filter((s) => s.symbol && !existingSyms.has(String(s.symbol).toUpperCase()))
+        .map((s) => ({
+          symbol:          String(s.symbol),
+          price_at_signal: typeof s.price_usd === "number" ? s.price_usd : null,
+          signal_ts:       now,
+          check_after:     now + CHECK_DELAY,
+          volume_24h:      typeof s.volume_24h === "number" ? s.volume_24h : null,
+          liquidity_usd:   typeof s.liquidity_usd === "number" ? s.liquidity_usd : null,
+        }));
+      if (newPicks.length > 0) {
+        await kvSet("feed:picks:pending", [...existing, ...newPicks], 7 * 24 * 3600);
+      }
+    }
+  }
 
   const topToken = topTokenFrom(otherResults);
 
