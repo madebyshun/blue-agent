@@ -165,23 +165,24 @@ export default function AboutPage() {
 
           <div className="space-y-6 text-slate-400 leading-relaxed text-base">
             <p>
-              Blue Agent started as a simple idea: Base has the best infrastructure for onchain apps,
-              but building on Base still requires too much context, too many tools, and too much friction.
-              Founders were losing weeks to research that should take hours.
+              AI tools should work like onchain transactions — instant, composable, paid exactly for what you use.
+              No subscriptions. No monthly seats. No middlemen taking 70%.
+              x402 makes that possible: one HTTP header, one USDC micropayment, one tool call.
             </p>
             <p>
-              We built the five core commands — <span className="text-white font-mono text-sm">idea · build · audit · ship · raise</span> — to compress that workflow.
-              Each command is grounded in 34+ skill files covering Base-native patterns, verified addresses,
-              security checks, and ecosystem knowledge. No hallucinated addresses. No generic advice.
+              We built Blue Hub around that primitive — 78 tools covering everything a Base builder needs:
+              token analysis, security audits, launch simulation, grant discovery, DeFi yield, whale signals.
+              Every tool is a live API endpoint. Agents and developers call them directly, pay in USDC, get structured data back.
             </p>
             <p>
-              Then we added tools. Then a chat interface. Then staking. Then an API. Each piece emerged
-              from what Base builders actually needed — not from a product roadmap decided in a boardroom.
+              Blue Chat layers on top — a multi-model AI interface where your wallet is your identity.
+              Stake <span className="text-white font-mono text-sm">$BLUEAGENT</span> to earn daily credits.
+              Credits unlock tools. Tools generate value. The loop closes onchain.
             </p>
             <p className="text-slate-300">
-              Today Blue Agent is the flagship AI agent of the Base ecosystem — 78 tools live,
-              $BLUEAGENT token on Uniswap v4, x402 micropayments powering every API call,
-              and a staking model that turns holding into earning.
+              MCP makes the whole stack agent-native: 70+ tools plug directly into Claude Desktop and Cursor,
+              no API key, no setup. The same tools that power Blue Chat run inside your IDE.
+              One platform. Three surfaces. Built on Base.
             </p>
           </div>
         </section>
