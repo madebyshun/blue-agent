@@ -40,7 +40,7 @@ export default async function Image({ params }: { params: Promise<{ tool: string
 
         {/* Middle: tool name + desc */}
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", fontSize: 74, fontWeight: 700, lineHeight: 1.05, letterSpacing: -1, color: C.white, maxWidth: "1000px" }}>{name}</div>
+          <div style={{ display: "flex", fontSize: 62, fontWeight: 700, lineHeight: 1.08, letterSpacing: -0.5, color: C.white, maxWidth: "1000px" }}>{name}</div>
           <div style={{ display: "flex", fontSize: 30, color: C.muted, marginTop: 24, maxWidth: "1000px", lineHeight: 1.4 }}>{desc.length > 140 ? desc.slice(0, 140) + "…" : desc}</div>
         </div>
 

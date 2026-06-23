@@ -60,8 +60,8 @@ export async function getBrandFonts(): Promise<OgFont[]> {
 /** Resolved font-family names — pass `loaded` (fonts.length > 0) to pick the brand font or a safe fallback. */
 export function brandFonts(loaded: boolean) {
   return {
-    display: loaded ? "DM Sans" : "sans-serif",   // wordmark, headings
-    mono: loaded ? "JetBrains Mono" : "monospace", // prices, scores, tags
+    display: loaded ? "JetBrains Mono" : "monospace", // wordmark, headings — monospace design system
+    mono:    loaded ? "JetBrains Mono" : "monospace", // prices, scores, tags
   };
 }
 

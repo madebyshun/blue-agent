@@ -31,7 +31,7 @@ export default async function Image() {
             <span style={{ color: C.cyan }}>HUB</span>
           </div>
         </div>
-        <div style={{ display: "flex", fontSize: 80, fontWeight: 700, lineHeight: 1.05, letterSpacing: -1.5, maxWidth: "1050px" }}>
+        <div style={{ display: "flex", fontSize: 66, fontWeight: 700, lineHeight: 1.08, letterSpacing: -0.5, maxWidth: "1050px" }}>
           {count} AI agent tools for Base builders
         </div>
         <div style={{ display: "flex", fontFamily: f.mono, fontSize: 30, color: C.muted, marginTop: 28 }}>
