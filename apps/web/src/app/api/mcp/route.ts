@@ -11,8 +11,8 @@
  *   }
  *
  * Protocol: JSON-RPC 2.0 over HTTP POST
- * Tools: 72 — 5 console + 57 hub_* + 8 blue_* first-party + blue_score/blue_new
- *        (full parity with the 69-tool x402 catalog; blue_score/blue_new are MCP-only)
+ * Tools: 81 — 5 console + 66 hub_* + 8 blue_* first-party + blue_score/blue_new
+ *        (78 unique x402 hub tools fully covered; 1 narrative alias; blue_score/blue_new are MCP-only)
  * Docs: https://api.blueagent.dev/docs
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -333,6 +333,128 @@ const TOOLS = [
     description: "Grant Evaluator — Base ecosystem grant scoring: innovation, feasibility, impact, team quality.",
     inputSchema: { type: "object", properties: { projectName: { type: "string", description: "Project name" }, description: { type: "string", description: "What you're building and why it matters for Base" }, teamBackground: { type: "string", description: "Team background (optional)" }, requestedAmount: { type: "string", description: "Requested grant amount (optional)" }, milestones: { type: "string", description: "Milestones (optional)" }, githubUrl: { type: "string", description: "GitHub URL (optional)" } }, required: ["projectName", "description"] },
   },
+  // ── B20 / Beryl ───────────────────────────────────────────────────────────
+  {
+    name: "hub_b20_analyze",
+    description: "B20 (Base Native Token Standard) guide — variants, roles, policies, integration tips. Powered by Beryl upgrade docs. Optionally analyze a specific contract address.",
+    inputSchema: { type: "object", properties: { action: { type: "string", description: "guide | roles | policy | analyze | compare (default: guide)" }, address: { type: "string", description: "Token contract address 0x... (optional)" }, context: { type: "string", description: "Your use case or question (optional)" } } },
+  },
+  {
+    name: "hub_b20_tracker",
+    description: "Live B20 activity on Base — B20-related token launches and Beryl activation status. Distinguishes B20-themed tokens from the native B20 standard.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  // ── On-chain primitives & data (new batch) ────────────────────────────────
+  {
+    name: "hub_token_price",
+    description: "Live price, market cap, volume and liquidity for any Base token (DexScreener).",
+    inputSchema: { type: "object", properties: { token: { type: "string", description: "Token contract address 0x... or ticker" } }, required: ["token"] },
+  },
+  {
+    name: "hub_pool_scan",
+    description: "Trending + newly-active Base pools with the chain TVL snapshot.",
+    inputSchema: { type: "object", properties: { limit: { type: "number", description: "Number of pools to return (default 10)" } } },
+  },
+  {
+    name: "hub_wallet_holdings",
+    description: "Live ERC-20 and ETH holdings with USD values for a Base wallet (Moralis).",
+    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
+  },
+  {
+    name: "hub_new_pools",
+    description: "Freshly-created Base pools with thin-liquidity honeypot flags.",
+    inputSchema: { type: "object", properties: { hours: { type: "number", description: "Window in hours (default 24)" } } },
+  },
+  {
+    name: "hub_gas_tracker",
+    description: "Live Base gas price and USD cost estimates for common actions (transfer, swap, deploy).",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "hub_quick_safety",
+    description: "Fast contract safety check — liquidity, Basescan verification, and risk verdict.",
+    inputSchema: { type: "object", properties: { contract: { type: "string", description: "Contract address 0x..." } }, required: ["contract"] },
+  },
+  {
+    name: "hub_wallet_risk",
+    description: "AML / risk screen for a Base wallet from real on-chain flow (Moralis).",
+    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
+  },
+  {
+    name: "hub_b20_check",
+    description: "ERC-20 compliance (B20) role and policy detection from verified contract source.",
+    inputSchema: { type: "object", properties: { contract: { type: "string", description: "Contract address 0x..." } }, required: ["contract"] },
+  },
+  {
+    name: "hub_b20_launch",
+    description: "Generate complete B20 token deployment package — foundry.toml, Solidity deploy script, setup + deploy + mint commands. Supports asset and stablecoin variants.",
+    inputSchema: { type: "object", properties: { name: { type: "string", description: "Token name" }, symbol: { type: "string", description: "Token symbol, e.g. MTK" }, variant: { type: "string", enum: ["asset", "stablecoin"], description: "B20 variant" }, decimals: { type: "number", description: "Decimals (default 18)" }, supply_cap: { type: "number", description: "Max supply (optional)" }, currency_code: { type: "string", description: "Currency code for stablecoin variant, e.g. USD" } }, required: ["name", "symbol", "variant"] },
+  },
+  {
+    name: "hub_liquidity_depth",
+    description: "Liquidity depth, slippage estimate and exit risk for a Base token.",
+    inputSchema: { type: "object", properties: { token: { type: "string", description: "Token contract address 0x... or ticker" } }, required: ["token"] },
+  },
+  {
+    name: "hub_token_distribution",
+    description: "Holder concentration and rug-risk distribution score for a Base token (Moralis holders).",
+    inputSchema: { type: "object", properties: { contract: { type: "string", description: "Token contract address 0x..." } }, required: ["contract"] },
+  },
+  {
+    name: "hub_base_alpha",
+    description: "Base market alpha — narratives, momentum picks, divergence signals. No inputs needed.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "hub_token_alpha",
+    description: "Token trade signal — entry, whale confirmation, momentum and risk for a specific Base token.",
+    inputSchema: { type: "object", properties: { token: { type: "string", description: "Token contract address 0x... or ticker" } }, required: ["token"] },
+  },
+  {
+    name: "hub_protocol_health",
+    description: "Protocol TVL health, trend and risk signals from DefiLlama.",
+    inputSchema: { type: "object", properties: { protocol: { type: "string", description: "Protocol name, e.g. Aerodrome" } }, required: ["protocol"] },
+  },
+  {
+    name: "hub_founder_check",
+    description: "GitHub-based founder trust score — repos, stars, commit activity.",
+    inputSchema: { type: "object", properties: { handle: { type: "string", description: "GitHub handle" } }, required: ["handle"] },
+  },
+  {
+    name: "hub_narrative_live",
+    description: "Live Base narrative phases, velocity and entry windows — real-time tracking of what's building vs peaking.",
+    inputSchema: { type: "object", properties: { focus: { type: "string", description: "Narrative focus (optional), e.g. AI agents, RWA, DeFi" } } },
+  },
+  {
+    name: "hub_base_activity",
+    description: "Onchain activity score and tier for a Base wallet (Moralis).",
+    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
+  },
+  {
+    name: "hub_scam_detector",
+    description: "Detect honeypot, rug and fake-token patterns on a Base contract.",
+    inputSchema: { type: "object", properties: { contract: { type: "string", description: "Contract address 0x..." } }, required: ["contract"] },
+  },
+  {
+    name: "hub_cross_yield",
+    description: "Best Base yield for a token across protocols (DefiLlama) with risk-adjusted ranking.",
+    inputSchema: { type: "object", properties: { token: { type: "string", description: "Token address 0x... or ticker" }, risk_tolerance: { type: "string", enum: ["low", "medium", "high"], description: "Risk tolerance (default medium)" } }, required: ["token"] },
+  },
+  {
+    name: "hub_agent_readiness",
+    description: "x402 and MCP readiness probe for an agent endpoint — checks payment support, protocol compliance, and integration.",
+    inputSchema: { type: "object", properties: { url: { type: "string", description: "Agent endpoint URL https://..." } }, required: ["url"] },
+  },
+  {
+    name: "hub_base_pulse",
+    description: "Base chain market pulse — TVL, DEX volume, sentiment, pulse score. No inputs needed.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "hub_bankr_pulse",
+    description: "Live Bankr ecosystem pulse — trending agent token launches, $BNKR price and 24h change, ecosystem sentiment.",
+    inputSchema: { type: "object", properties: {} },
+  },
   // ── Utility ───────────────────────────────────────────────────────────────
   {
     name: "blue_score",
@@ -454,6 +576,32 @@ const HUB_MAP: Record<string, string> = {
   hub_launch_sim_tier2:     "launch-simulator-2",
   hub_launch_sim_tier3:     "launch-simulator-3",
   hub_grant_eval:           "grant-evaluator",
+  // B20 / Beryl
+  hub_b20_analyze:          "b20-analyze",
+  hub_b20_tracker:          "b20-tracker",
+  // On-chain primitives & data (new batch)
+  hub_token_price:          "token-price",
+  hub_pool_scan:            "pool-scan",
+  hub_wallet_holdings:      "wallet-holdings",
+  hub_new_pools:            "new-pools",
+  hub_gas_tracker:          "gas-tracker",
+  hub_quick_safety:         "quick-safety",
+  hub_wallet_risk:          "wallet-risk",
+  hub_b20_check:            "b20-check",
+  hub_b20_launch:           "b20-launch",
+  hub_liquidity_depth:      "liquidity-depth",
+  hub_token_distribution:   "token-distribution",
+  hub_base_alpha:           "base-alpha",
+  hub_token_alpha:          "token-alpha",
+  hub_protocol_health:      "protocol-health",
+  hub_founder_check:        "founder-check",
+  hub_narrative_live:       "narrative-pulse",
+  hub_base_activity:        "base-activity-score",
+  hub_scam_detector:        "scam-detector",
+  hub_cross_yield:          "cross-protocol-yield",
+  hub_agent_readiness:      "agent-readiness",
+  hub_base_pulse:           "base-pulse",
+  hub_bankr_pulse:          "bankr-pulse",
 };
 
 const CONSOLE_MAP: Record<string, string> = {
@@ -490,6 +638,15 @@ const ARG_REMAP: Record<string, (a: Record<string, unknown>) => Record<string, u
   "launch-simulator-2":       (a) => ({ ...a, description: a.description ?? "", ticker: a.ticker ?? "", contract: a.contract ?? "" }),
   "launch-simulator-3":       (a) => ({ ...a, description: a.description ?? "", ticker: a.ticker ?? "", contract: a.contract ?? "" }),
   "grant-evaluator":          (a) => ({ ...a, teamBackground: a.teamBackground ?? "", requestedAmount: a.requestedAmount ?? "", milestones: a.milestones ?? "", githubUrl: a.githubUrl ?? "" }),
+  // On-chain primitives & data (new batch) — numeric coercions + defaults
+  "pool-scan":               (a) => ({ ...a, limit: a.limit !== undefined ? Number(a.limit) : 10 }),
+  "new-pools":               (a) => ({ ...a, hours: a.hours !== undefined ? Number(a.hours) : 24 }),
+  "b20-launch":              (a) => ({ ...a, decimals: a.decimals !== undefined ? Number(a.decimals) : undefined, supply_cap: a.supply_cap !== undefined ? Number(a.supply_cap) : undefined }),
+  "cross-protocol-yield":    (a) => ({ ...a, risk_tolerance: a.risk_tolerance ?? "medium" }),
+  "narrative-pulse":         (a) => ({ ...a, focus: a.focus ?? "" }),
+  "base-alpha":              (a) => a,
+  "base-pulse":              (a) => a,
+  "bankr-pulse":             (a) => a,
 };
 
 async function callHubTool(toolId: string, rawArgs: Record<string, unknown>): Promise<string> {
