@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 // Vercel kills serverless functions at 60s by default — explicit budget
 // so it fails loudly instead of silently 504-ing.
-export const maxDuration = 30;
+export const maxDuration = 15;
 
 const VENICE_RPC = "https://api.venice.ai/api/v1/crypto/rpc";
 

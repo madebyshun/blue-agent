@@ -2,7 +2,7 @@ name: Blue Feed — data push
 
 on:
   schedule:
-    - cron: '0 * * * *'   # hourly feed
+    - cron: '0 */4 * * *'  # every 4h feed (was hourly — cut 75% Vercel GB-Hrs)
     - cron: '0 9 * * *'   # daily feed (heavier tools)
   workflow_dispatch:
 
