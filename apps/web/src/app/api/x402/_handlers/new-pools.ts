@@ -2,6 +2,7 @@
 // Price: $0.05 — live GeckoTerminal new-pools, no LLM, no fabricated numbers.
 
 import { getBaseNewPools } from "@/lib/market-data";
+import { filterScamPools } from "./_scam-filter";
 
 export default async function handler(req: Request): Promise<Response> {
   try {
@@ -19,7 +20,7 @@ export default async function handler(req: Request): Promise<Response> {
 
     console.log(`[NewPools] Fetching new Base pools within ${hours}h`);
 
-    const pools = await getBaseNewPools(30).catch(() => []);
+    const pools = filterScamPools(await getBaseNewPools(30).catch(() => []));
 
     // GeckoTerminal's new_pools list does not expose a creation timestamp in the
     // mapped Pool shape, so age is unknown. We keep age_hours null rather than

@@ -7,24 +7,34 @@ import Navbar from "@/components/Navbar";
 
 const SURFACES = [
   {
-    icon: "🖥️",
-    name: "Founder Console",
-    handle: "blueagent.dev",
-    desc: "The AI-native workflow for Base builders. idea → build → audit → ship → raise. 78 tools. Pay per use in USDC via x402.",
-    link: "/hub",
+    icon: "💬",
+    name: "Blue Chat",
+    handle: "blueagent.dev/app/chat",
+    desc: "Multi-model AI chat with live Base intelligence, tool execution, artifacts, and share links. Stake BLUE → earn credits → unlock tools.",
+    link: "/app/chat",
+    linkLabel: "Open Chat →",
+    color: "#4FC3F7",
+    stats: [{ label: "Models", value: "6" }, { label: "Access", value: "Stake · Earn" }],
+  },
+  {
+    icon: "🛠️",
+    name: "Blue Hub",
+    handle: "blueagent.dev/app/hub",
+    desc: "70+ pay-per-use AI tools for Base builders and agents. idea → build → audit → ship → raise. Pay per call in USDC via x402.",
+    link: "/app/hub",
     linkLabel: "Open Hub →",
     color: "#A78BFA",
-    stats: [{ label: "Tools", value: "78+" }, { label: "Commands", value: "5 core" }],
+    stats: [{ label: "Tools", value: "70+" }, { label: "Commands", value: "5 core" }],
   },
   {
     icon: "⚡",
-    name: "x402 API",
-    handle: "api.blueagent.dev",
-    desc: "78+ pay-per-use AI tools for agents and developers. Each tool costs fractions of a cent in USDC on Base. No subscriptions.",
-    link: "https://api.blueagent.dev/docs",
-    linkLabel: "View API →",
+    name: "MCP Server",
+    handle: "blueagent.dev/api/mcp",
+    desc: "70+ tools via MCP — plug into Claude Desktop, Cursor, or any MCP client. No API key needed. Tools run free via internal bypass.",
+    link: "https://blueagent.dev/api/mcp",
+    linkLabel: "Connect MCP →",
     color: "#F59E0B",
-    stats: [{ label: "Endpoints", value: "78+" }, { label: "Cost", value: "USDC/call" }],
+    stats: [{ label: "Tools", value: "70+" }, { label: "Clients", value: "Cursor · Claude" }],
   },
 ];
 
@@ -155,23 +165,30 @@ export default function AboutPage() {
 
           <div className="space-y-6 text-slate-400 leading-relaxed text-base">
             <p>
-              Blue Agent started as a simple idea: Base has the best infrastructure for onchain apps,
-              but building on Base still requires too much context, too many tools, and too much friction.
-              Founders were losing weeks to research that should take hours.
+              Blue Agent started as a Telegram bot — a simple idea to bring AI
+              and onchain actions together on Base. It outgrew the chat window.
+              So we rebuilt it from scratch, web-native, on Base. Since March 2026,
+              it&apos;s grown into the Builder OS for Base.
             </p>
             <p>
-              We built the five core commands — <span className="text-white font-mono text-sm">idea · build · audit · ship · raise</span> — to compress that workflow.
-              Each command is grounded in 34+ skill files covering Base-native patterns, verified addresses,
-              security checks, and ecosystem knowledge. No hallucinated addresses. No generic advice.
+              AI tools should work like onchain transactions — instant, composable, paid exactly for what you use.
+              No subscriptions. No monthly seats. No middlemen taking 70%.
+              x402 makes that possible: one HTTP header, one USDC micropayment, one tool call.
             </p>
             <p>
-              Then we added tools. Then a chat interface. Then staking. Then an API. Each piece emerged
-              from what Base builders actually needed — not from a product roadmap decided in a boardroom.
+              We built Blue Hub around that primitive — 78 tools covering everything a Base builder needs:
+              token analysis, security audits, launch simulation, grant discovery, DeFi yield, whale signals.
+              Every tool is a live API endpoint. Agents and developers call them directly, pay in USDC, get structured data back.
+            </p>
+            <p>
+              Blue Chat layers on top — a multi-model AI interface where your wallet is your identity.
+              Stake <span className="text-white font-mono text-sm">$BLUEAGENT</span> to earn daily credits.
+              Credits unlock tools. Tools generate value. The loop closes onchain.
             </p>
             <p className="text-slate-300">
-              Today Blue Agent is the flagship AI agent of the Base ecosystem — 78 tools live,
-              $BLUEAGENT token on Uniswap v4, x402 micropayments powering every API call,
-              and a staking model that turns holding into earning.
+              MCP makes the whole stack agent-native: 70+ tools plug directly into Claude Desktop and Cursor,
+              no API key, no setup. The same tools that power Blue Chat run inside your IDE.
+              One platform. Three surfaces. Built on Base.
             </p>
           </div>
         </section>
@@ -179,8 +196,8 @@ export default function AboutPage() {
         {/* ══ THREE SURFACES ═══════════════════════════════════════════════════ */}
         <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
           <div className="text-center mb-14">
-            <SectionLabel>Two Surfaces</SectionLabel>
-            <h2 className="text-3xl font-bold">One agent, two ways to access</h2>
+            <SectionLabel>Three Surfaces</SectionLabel>
+            <h2 className="text-3xl font-bold">One agent, three ways to access</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -254,11 +271,11 @@ export default function AboutPage() {
                   className="flex-1 py-2.5 rounded-xl font-mono text-xs text-center border border-[#2a2a3e] text-slate-400 hover:text-white hover:border-[#4FC3F740] transition-all">
                   Basescan ↗
                 </a>
-                <a href="https://app.uniswap.org"
+                <a href="https://dexscreener.com/base/0xf895783b2931c919955e18b5e3343e7c7c456ba3"
                   target="_blank" rel="noopener noreferrer"
                   className="flex-1 py-2.5 rounded-xl font-mono text-xs font-bold text-center transition-all hover:opacity-90"
-                  style={{ background: "#FF007A15", color: "#FF007A", border: "1px solid #FF007A30" }}>
-                  Buy on Uniswap →
+                  style={{ background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E30" }}>
+                  $BLUEAGENT ↗
                 </a>
               </div>
             </div>
@@ -336,87 +353,6 @@ export default function AboutPage() {
                 </div>
               );
             })}
-          </div>
-        </section>
-
-        {/* ══ TEAM ═════════════════════════════════════════════════════════════ */}
-        <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
-          <div className="text-center mb-14">
-            <SectionLabel>Team</SectionLabel>
-            <h2 className="text-3xl font-bold">Built by Blocky Studio</h2>
-          </div>
-
-          <div className="max-w-md mx-auto">
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-8 text-center">
-              {/* Avatar placeholder */}
-              <div className="w-20 h-20 rounded-2xl bg-[#4FC3F710] border border-[#4FC3F730] flex items-center justify-center mx-auto mb-5">
-                <span className="text-3xl">🤖</span>
-              </div>
-              <div className="font-bold text-xl text-white mb-1">Shun</div>
-              <div className="font-mono text-sm text-[#4FC3F7] mb-3">@madebyshun · Blocky Studio</div>
-              <p className="text-slate-500 text-sm leading-relaxed mb-6">
-                Base builder. Building AI-native tools for founders who ship.
-                $BLUEAGENT is the flagship product of Blocky Studio.
-              </p>
-              <div className="flex gap-3 justify-center">
-                <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[#1A1A2E] font-mono text-xs text-slate-400 hover:text-white hover:border-[#2a2a3e] transition-all">
-                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                  </svg>
-                  @blueagent_
-                </a>
-                <a href="https://bankr.bot/agent/blue-agent" target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[#1A1A2E] font-mono text-xs text-slate-400 hover:text-white hover:border-[#2a2a3e] transition-all">
-                  🤖 Bankr profile
-                </a>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ══ COMMUNITY ════════════════════════════════════════════════════════ */}
-        <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
-          <div className="text-center mb-12">
-            <SectionLabel>Community</SectionLabel>
-            <h2 className="text-3xl font-bold mb-4">Join the ecosystem</h2>
-            <p className="text-slate-500 text-sm">Base builders, $BLUEAGENT holders, and AI agent developers.</p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
-            {[
-              {
-                icon: "𝕏",
-                name: "X / Twitter",
-                desc: "Daily updates, Base ecosystem news, tool launches",
-                href: "https://x.com/blueagent_",
-                label: "@blueagent_",
-                color: "#ffffff",
-              },
-              {
-                icon: "🤖",
-                name: "Bankr",
-                desc: "Agent profile, token data, community ranking",
-                href: "https://bankr.bot/agent/blue-agent",
-                label: "bankr.bot/agent/blue-agent",
-                color: "#A78BFA",
-              },
-            ].map((c) => (
-              <a key={c.name} href={c.href} target="_blank" rel="noopener noreferrer"
-                className="group rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-6 flex flex-col gap-3 hover:border-[#2a2a3e] transition-all">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
-                    style={{ background: `${c.color}12`, border: `1px solid ${c.color}20` }}>
-                    {c.icon}
-                  </div>
-                  <div className="font-bold text-white">{c.name}</div>
-                </div>
-                <p className="text-slate-500 text-sm leading-relaxed flex-1">{c.desc}</p>
-                <div className="font-mono text-[10px] group-hover:text-[#4FC3F7] transition-colors" style={{ color: c.color }}>
-                  {c.label} ↗
-                </div>
-              </a>
-            ))}
           </div>
         </section>
 
