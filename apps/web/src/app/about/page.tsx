@@ -7,83 +7,74 @@ import Navbar from "@/components/Navbar";
 
 const SURFACES = [
   {
-    icon: "✈️",
-    name: "Telegram Bot",
-    handle: "@blueagent_",
-    desc: "Community hub, wallet, trading, and rewards. Where $BLUEAGENT holders interact, check portfolio, run tools, and earn points.",
-    link: "https://t.me/blueagent_hub",
-    linkLabel: "Join Telegram →",
-    color: "#4FC3F7",
-    stats: [{ label: "Community", value: "Active" }, { label: "Network", value: "Base" }],
-  },
-  {
     icon: "🖥️",
     name: "Founder Console",
     handle: "blueagent.dev",
-    desc: "The AI-native workflow for Base builders. idea → build → audit → ship → raise. 64 tools. Pay per use in USDC via x402.",
+    desc: "The AI-native workflow for Base builders. idea → build → audit → ship → raise. 78 tools. Pay per use in USDC via x402.",
     link: "/hub",
     linkLabel: "Open Hub →",
     color: "#A78BFA",
-    stats: [{ label: "Tools", value: "64+" }, { label: "Commands", value: "5 core" }],
+    stats: [{ label: "Tools", value: "78+" }, { label: "Commands", value: "5 core" }],
   },
   {
     icon: "⚡",
     name: "x402 API",
     handle: "api.blueagent.dev",
-    desc: "70+ pay-per-use AI tools for agents and developers. Each tool costs fractions of a cent in USDC on Base. No subscriptions.",
+    desc: "78+ pay-per-use AI tools for agents and developers. Each tool costs fractions of a cent in USDC on Base. No subscriptions.",
     link: "https://api.blueagent.dev/docs",
     linkLabel: "View API →",
     color: "#F59E0B",
-    stats: [{ label: "Endpoints", value: "70+" }, { label: "Cost", value: "USDC/call" }],
+    stats: [{ label: "Endpoints", value: "78+" }, { label: "Cost", value: "USDC/call" }],
   },
 ];
 
 const ROADMAP = [
   {
-    period: "2024",
+    period: "Mar–Jun 2026",
     status: "done",
     items: [
-      { done: true,  text: "Blue Agent Telegram bot launched" },
-      { done: true,  text: "$BLUEAGENT token — Base mainnet, Uniswap v4" },
-      { done: true,  text: "Builder Score API — 0-100 onchain reputation" },
-      { done: true,  text: "Blue Sentinel — onchain security monitor" },
+      { done: true, text: "$BLUEAGENT — Base, Uniswap v4, stake → credits + USDC yield" },
+      { done: true, text: "Bankr integration — LLM + agent execution layer" },
+      { done: true, text: "Blue Hub — 78 x402 tools, pay-per-call in USDC" },
+      { done: true, text: "Blue Chat — multi-model AI, artifacts, public share links" },
+      { done: true, text: "Blue Feed — live Base intelligence, hourly + daily" },
+      { done: true, text: "Blue Bank — send, swap, yield, invoices, QR pay" },
+      { done: true, text: "MCP Server — 81 tools, full x402 catalog parity" },
+      { done: true, text: "Agent SDK — @blueagent/x402, agents pay + call tools onchain" },
+      { done: true, text: "B20 — deploy from chat, plus tracker, check, analyze, launch" },
+      { done: true, text: "x402 Builder Codes — every paid call attributed onchain" },
     ],
   },
   {
-    period: "Early 2025",
-    status: "done",
-    items: [
-      { done: true,  text: "Blue Hub v1 — 64 AI tools live" },
-      { done: true,  text: "Blue Chat — AI conversations + x402 tool execution" },
-      { done: true,  text: "ERC-8257 ToolRegistry — 64 tools registered on Base" },
-      { done: true,  text: "BlueMarketStaking — stake BLUE, earn credits + USDC" },
-    ],
-  },
-  {
-    period: "2025",
+    period: "Q3 2026 — Marketplace",
     status: "building",
     items: [
-      { done: false, text: "api.blueagent.dev — public API for developers" },
-      { done: false, text: "Blue Agent App — unified dApp (chat, market, sentinel)" },
-      { done: false, text: "Multi-agent platform — Poe onchain for Base agents" },
-      { done: false, text: "Blue Sentinel public score API" },
+      { done: false, text: "Builder Registry — submit your tool, earn 80% in USDC" },
+      { done: false, text: "Tool discovery — search, rank by calls/revenue, verified badges" },
+      { done: false, text: "B20 — mainnet deploy at Beryl, payment rails, issuer tracking" },
+      { done: false, text: "Tool chains — compose multiple tools, one payment" },
+      { done: false, text: "Feed track record — signal → outcome → win rate" },
+      { done: false, text: "Real yield — 20% Hub fees auto-route to staking pool" },
+      { done: false, text: "Distribution — listed on Smithery, MCP.SO, CDP Bazaar" },
+      { done: false, text: "Blue Bank — scan-to-pay USDC, pay links, B20 holdings + PnL" },
     ],
   },
   {
-    period: "Future",
+    period: "Q4 2026 — Network",
     status: "planned",
     items: [
-      { done: false, text: "Open marketplace — builder registration + revenue split" },
-      { done: false, text: "Tool NFTs + $BLUEAGENT staking discounts" },
-      { done: false, text: "Blocky Echo NFT — Blocky Studio ecosystem" },
-      { done: false, text: "Community Kit — white-label bot for Base projects" },
+      { done: false, text: "Public API — api.blueagent.dev, the Stripe of AI tools on Base" },
+      { done: false, text: "Cross-agent routing — best agent + tool per intent" },
+      { done: false, text: "Agent registry — directory of active buyer agents" },
+      { done: false, text: "Tool creator rewards — top tools earn weekly" },
+      { done: false, text: "Cobalt-ready — gas in B20, account abstraction support" },
     ],
   },
 ];
 
 const STATS = [
-  { value: "64+",    label: "AI Tools",       color: "#4FC3F7" },
-  { value: "70+",    label: "API Endpoints",  color: "#A78BFA" },
+  { value: "78+",    label: "AI Tools",       color: "#4FC3F7" },
+  { value: "78+",    label: "API Endpoints",  color: "#A78BFA" },
   { value: "Base",   label: "Network",        color: "#2563EB" },
   { value: "x402",   label: "Payment rail",   color: "#F59E0B" },
 ];
@@ -178,7 +169,7 @@ export default function AboutPage() {
               from what Base builders actually needed — not from a product roadmap decided in a boardroom.
             </p>
             <p className="text-slate-300">
-              Today Blue Agent is the flagship AI agent of the Base ecosystem — 64 tools live,
+              Today Blue Agent is the flagship AI agent of the Base ecosystem — 78 tools live,
               $BLUEAGENT token on Uniswap v4, x402 micropayments powering every API call,
               and a staking model that turns holding into earning.
             </p>
@@ -188,8 +179,8 @@ export default function AboutPage() {
         {/* ══ THREE SURFACES ═══════════════════════════════════════════════════ */}
         <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
           <div className="text-center mb-14">
-            <SectionLabel>Three Surfaces</SectionLabel>
-            <h2 className="text-3xl font-bold">One agent, three ways to access</h2>
+            <SectionLabel>Two Surfaces</SectionLabel>
+            <h2 className="text-3xl font-bold">One agent, two ways to access</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -281,7 +272,7 @@ export default function AboutPage() {
                   { step: "01", icon: "💎", title: "Hold $BLUEAGENT", desc: "500K → Starter · 2M → Pro · 10M → Max tier" },
                   { step: "02", icon: "⚡", title: "Earn credits daily", desc: "Credits accrue on-chain every second you hold" },
                   { step: "03", icon: "🛠️", title: "Use Blue Chat tools", desc: "AI tools, 3-agent consensus, deep research" },
-                  { step: "04", icon: "💵", title: "Earn USDC yield", desc: "20% of x402 API revenue → stakers pro-rata" },
+                  { step: "04", icon: "💵", title: "Earn USDC yield", desc: "Earn real USDC yield, claimed onchain" },
                 ].map(item => (
                   <div key={item.step} className="flex gap-4 p-3 rounded-xl bg-[#0a0a0f] border border-[#1A1A2E]">
                     <div className="font-mono text-[10px] text-slate-700 mt-0.5 w-4 shrink-0">{item.step}</div>
@@ -392,16 +383,8 @@ export default function AboutPage() {
             <p className="text-slate-500 text-sm">Base builders, $BLUEAGENT holders, and AI agent developers.</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
             {[
-              {
-                icon: "✈️",
-                name: "Telegram",
-                desc: "Community hub — announcements, builder chat, tool updates",
-                href: "https://t.me/blueagent_hub",
-                label: "t.me/blueagent_hub",
-                color: "#4FC3F7",
-              },
               {
                 icon: "𝕏",
                 name: "X / Twitter",
