@@ -18,9 +18,11 @@ ARCHITECTURE:
 
 TWO VARIANTS:
 1. Asset — compliance-first for RWA/security tokens:
-   - Transfer policies enforced at EVM level (precompile, not hook)
-   - Allowlist/blocklist, freeze-seize, supply cap via PolicyRegistry
-   - Identity-gated transfers possible
+   - Transfer policies enforced at NODE level — B20 is a Rust precompile in the Base node, NOT EVM bytecode
+   - PolicyRegistry (0x8453000000000000000000000000000000000002) enforces exactly TWO policy types: ALLOWLIST and BLOCKLIST
+   - Freeze-seize = burnBlocked() gated by BURN_BLOCKED_ROLE (NOT a policy type)
+   - Supply cap = updateSupplyCap() gated by DEFAULT_ADMIN_ROLE (NOT a policy type)
+   - Identity-gated transfers possible via ALLOWLIST policy
 
 2. Stablecoin — mint/burn + compliance for fiat-backed tokens:
    - Mint/burn controls, pause/unpause, blocklist
@@ -37,11 +39,14 @@ TWO VARIANTS:
 7. METADATA — updates token name, symbol, metadata URI
 
 POLICY REGISTRY (Asset variant only):
-- Singleton contract on Base
-- registerPolicy(tokenAddr, policyConfig) — attach policies to a token
-- Policy types: allowlist-only, blocklist, freeze-seize, supply cap
-- All policies enforced at precompile level before any transfer executes
-- Cannot be bypassed by smart contract logic
+- Singleton precompile at 0x8453000000000000000000000000000000000002 on Base
+- Exactly TWO policy types: ALLOWLIST and BLOCKLIST (no others)
+- Create policy: policyRegistry.createPolicy(admin, PolicyType) → uint64 policyId
+- Attach to token: token.updatePolicy(scope, policyId) — NO registerPolicy()
+- 4 policy scopes: TRANSFER_SENDER_POLICY, TRANSFER_RECEIVER_POLICY, TRANSFER_EXECUTOR_POLICY, MINT_RECEIVER_POLICY
+- Freeze-seize: burnBlocked() gated by BURN_BLOCKED_ROLE — separate from PolicyRegistry
+- Supply cap: updateSupplyCap() gated by DEFAULT_ADMIN_ROLE — separate from PolicyRegistry
+- All enforcement is node-level (Rust precompile), cannot be bypassed by EVM logic
 
 KEY DIFFERENTIATORS vs ERC-20:
 - Compliance is protocol-level, not contract-level (cannot be circumvented)
@@ -51,9 +56,11 @@ KEY DIFFERENTIATORS vs ERC-20:
 
 DEPLOYMENT STEPS:
 1. Choose variant: Asset (compliance-heavy) or Stablecoin (mint/burn)
-2. Call B20Factory.deploy(name, symbol, decimals, variant, initialAdmin)
+2. Call B20Factory.createB20(name, symbol, decimals, variant, initialAdmin) → token address
 3. Assign roles: token.grantRole(ROLE_HASH, address)
-4. Asset only: PolicyRegistry.registerPolicy(tokenAddr, { type, config })
+4. Asset only (if restricted transfers needed):
+   a. policyRegistry.createPolicy(admin, PolicyType) → uint64 policyId
+   b. token.updatePolicy(scope, policyId) — where scope is one of the 4 POLICY bytes32 constants
 5. Mint initial supply: token.mint(to, amount) — requires MINT role
 
 INTEGRATION TIPS:
@@ -87,7 +94,7 @@ export default async function handler(req: Request): Promise<Response> {
     const prompts: Record<Action, string> = {
       guide: "Provide a complete B20 builder guide: what B20 is, when to use Asset vs Stablecoin, the 7 roles with one-line descriptions, deployment steps, and top 3 integration tips. Be concise and practical.",
       roles: "List all 7 B20 RBAC roles with: name, who should hold it, security risk if compromised, and recommended multi-sig pattern. Return as roles array in JSON.",
-      policy: "Explain B20 PolicyRegistry in detail: the 4 policy types (allowlist, blocklist, freeze-seize, supply cap), how to register them, enforcement mechanism, and when to use each. Include a practical example for an RWA token.",
+      policy: "Explain B20 PolicyRegistry in detail: exactly TWO policy types exist (ALLOWLIST and BLOCKLIST — freeze-seize and supply-cap are NOT policy types). Explain how to create a policy (createPolicy(admin, PolicyType) → policyId) and attach it (token.updatePolicy(scope, policyId)), the 4 policy scopes, enforcement at node level, and when to use each type. Note that freeze-seize uses BURN_BLOCKED_ROLE and supply cap uses updateSupplyCap() — both separate from PolicyRegistry. Include a practical example for an RWA token.",
       analyze: body.address
         ? `Analyze this Base address as a potential B20 token: ${body.address}. Based on B20 architecture, explain what roles and policies it likely has, what variant it is, and integration considerations.${body.context ? ` Context: ${body.context}` : ""}`
         : `Explain B20 token architecture with focus on: how to identify a B20 token (isB20 helper), what makes it different from ERC-20, and how to safely integrate B20 into a dApp.${body.context ? ` Context: ${body.context}` : ""}`,

@@ -291,7 +291,12 @@ B20 is the Base Native Token Standard — a Rust PRECOMPILE (not a Solidity cont
 Full ERC-20 selector compatibility. Two variants: Asset (RWA/compliance) and Stablecoin (mint/burn).
 
 7 RBAC roles: ADMIN · MINT · BURN · BURN_BLOCKED · PAUSE · UNPAUSE · METADATA
-Asset variant: PolicyRegistry enforces allowlist/blocklist/freeze-seize/supply-cap at EVM level.
+B20 is a Rust precompile in the Base node — NOT EVM bytecode, enforcement is node-level.
+PolicyRegistry (0x8453000000000000000000000000000000000002) enforces exactly TWO policy types: ALLOWLIST and BLOCKLIST.
+Freeze-seize = burnBlocked() gated by BURN_BLOCKED_ROLE (NOT a policy type).
+Supply cap = updateSupplyCap() gated by DEFAULT_ADMIN_ROLE (NOT a policy type).
+Create policy: policyRegistry.createPolicy(admin, PolicyType) → uint64 policyId; then token.updatePolicy(scope, policyId). NO registerPolicy().
+4 policy scopes: TRANSFER_SENDER_POLICY, TRANSFER_RECEIVER_POLICY, TRANSFER_EXECUTOR_POLICY, MINT_RECEIVER_POLICY.
 isB20(addr) helper identifies B20 tokens. transferWithMemo(to, amount, memo) for payment refs.
 
 Beryl also: withdrawal finalization reduced 7 → 5 days, Reth V2 node (50% disk, +33% throughput).
@@ -302,7 +307,7 @@ When user asks to send/transfer a B20 token:
 3. If simulation returns paused → warn: "Transfers are paused by the issuer."
 4. Only proceed if simulation succeeds — never bypass
 5. Use hub_b20_analyze for B20 deployment questions / role explanations
-6. Use hub_b20_launch when user asks to deploy/launch/create a B20 token — call with { name, symbol, variant: "asset"|"stablecoin", optional supply_cap, currency_code }. Returns complete foundry.toml + deploy script + CLI commands.
+6. Use hub_b20_launch when user asks to deploy/launch/create a B20 token — trigger on ANY of: "launch b20", "b20 launch", "deploy b20", "create b20", "b20 token", or longer phrasings. Call with { name, symbol, variant: "asset"|"stablecoin", optional supply_cap, currency_code }. Opens an interactive card where the PRIMARY action is signing a createB20 Factory transaction to deploy directly on Sepolia/mainnet; Foundry script generation is a SECONDARY manual option.
 7. Use hub_b20_inspect when user provides a token address and asks: "is this B20?", "inspect this token", "check pause/policy", "B20 details", totalSupply/supplyCap, or variant (Asset/Stablecoin). Reads REAL on-chain state via multicall — zero LLM. Call with { address: "0x…", network: "mainnet" }.`;
 
 // ─── Hub tool definitions (Anthropic tool format) ─────────────────────────────
@@ -663,7 +668,7 @@ Default to "base" for Base-related queries.`,
   },
   {
     name: "hub_b20_launch",
-    description: "Open B20 token launch form. User fills name, symbol, variant (asset/stablecoin), optional decimals/supply_cap/currency_code. Generates complete Foundry deployment scripts with copy buttons. Call when user wants to DEPLOY or LAUNCH a B20 token.",
+    description: "Open B20 token launch form. User fills name, symbol, variant (asset/stablecoin), optional decimals/supply_cap/currency_code. PRIMARY action: wallet-signed createB20 Factory transaction to deploy directly on Sepolia/mainnet. SECONDARY option: Foundry deployment scripts. Trigger on: 'launch b20', 'b20 launch', 'deploy b20', 'create b20', 'b20 token deploy', or any B20 deploy/launch/create intent.",
     input_schema: {
       type: "object",
       properties: {

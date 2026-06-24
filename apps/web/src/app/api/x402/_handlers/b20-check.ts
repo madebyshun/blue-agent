@@ -1,8 +1,13 @@
 // x402/b20-check — detect B20 (compliance-aware ERC-20) patterns in a verified
 // Base contract's source. Price: $0.20 — LLM analyses real Basescan source only.
+//
+// Native B20 tokens (deployed via B20Factory) are Rust precompiles with NO Solidity
+// source on Basescan. We detect them first via the B20Factory isB20() on-chain check
+// and route to inspectB20 — never fabricate analysis for them via LLM.
 
 import { getBasescanSource } from "@/lib/moralis";
 import { callVeniceLLM } from "@/app/api/_lib/llm";
+import { inspectB20 } from "@/lib/b20/inspect";
 
 type BankrMessage = { role: string; content: string };
 
@@ -58,6 +63,56 @@ export default async function handler(req: Request): Promise<Response> {
 
     console.log(`[B20Check] Inspecting: ${contract}`);
 
+    // ── Native B20 gate ────────────────────────────────────────────────────────
+    // Native B20 tokens (deployed via B20Factory) are Rust precompiles — they
+    // have NO Solidity source on Basescan. LLM source analysis would fabricate.
+    // Check B20Factory.isB20() first; if true, return real on-chain data from
+    // inspectB20 and skip the source/LLM path entirely.
+    // Try mainnet first; fall back to sepolia for testnet addresses.
+    let nativeB20Check: Awaited<ReturnType<typeof inspectB20>> | null = null;
+    try {
+      const mainnetCheck = await inspectB20(contract, "mainnet");
+      if (mainnetCheck.isB20) {
+        nativeB20Check = mainnetCheck;
+      } else {
+        // Try sepolia — some deployments are testnet-only
+        const sepoliaCheck = await inspectB20(contract, "sepolia");
+        if (sepoliaCheck.isB20) nativeB20Check = sepoliaCheck;
+      }
+    } catch { /* network error — fall through to source path */ }
+
+    if (nativeB20Check?.isB20) {
+      const info = nativeB20Check;
+      return Response.json({
+        tool:           "b20-check",
+        contract,
+        is_b20:         true,
+        native_b20:     true,
+        network:        info.network,
+        b20_variant:    info.variant ?? "UNKNOWN",
+        name:           info.name ?? null,
+        symbol:         info.symbol ?? null,
+        decimals:       info.decimals ?? null,
+        total_supply:   info.totalSupplyFormatted ?? null,
+        supply_cap:     info.supplyCapFormatted ?? null,
+        paused:         info.paused ?? null,
+        policies:       info.policies ?? null,
+        roles_detected: [],   // roles not enumerable on native B20 (no AccessControlEnumerable)
+        policies_detected: info.policies
+          ? Object.entries(info.policies)
+              .filter(([, p]) => p.restricted)
+              .map(([scope, p]) => `${scope}: policyId ${p.policyId}`)
+          : [],
+        compliance_score: null,
+        recommendation: `Native B20 token (${info.variant ?? "unknown variant"}) — use hub_b20_inspect for full on-chain state. Source-based analysis does not apply (no Solidity source — it's a Rust node precompile).`,
+        data_source:    "B20Factory.isB20() + on-chain multicall",
+        explorer_url:   info.explorerUrl,
+        note:           info._note,
+        timestamp:      new Date().toISOString(),
+      });
+    }
+
+    // ── Non-native path: source + LLM analysis ────────────────────────────────
     const source = await getBasescanSource(contract).catch(() => null);
     const sourceCode = typeof source?.SourceCode === "string" ? source.SourceCode : "";
     const contractName = typeof source?.ContractName === "string" ? source.ContractName : null;
