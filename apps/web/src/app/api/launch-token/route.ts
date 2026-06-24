@@ -17,14 +17,9 @@ const BANKR_DEPLOY = "https://api.bankr.bot/token-launches/deploy";
  * The deploy is irreversible + public — the UI takes an explicit user
  * confirmation before calling this.
  *
- * Auth: BANKR_PARTNER_KEY (bk_ptr_…) is REQUIRED for token deployment.
- * Per Bankr docs: "Partner keys are required for token deployment.
- * A standard wallet/LLM key cannot deploy tokens."
- * BANKR_API_KEY (bk_usr_…) is the LLM/chat key — it does NOT have
- * token launch scope and will return 500 if used for deploy.
- *
- * To fix: go to Bankr dashboard → Partnership → get a partner key
- * (bk_ptr_…) → set BANKR_PARTNER_KEY in Vercel env vars.
+ * Auth: BANKR_API_KEY (bk_usr_…) is sufficient for token deployment — the
+ * LLM/chat key has deploy scope. BANKR_PARTNER_KEY (bk_ptr_…) is optional;
+ * if set it takes priority (partner keys have higher deploy limits).
  */
 export async function POST(req: NextRequest) {
   // Tight rate limit — this is a real, irreversible onchain deploy.
@@ -33,25 +28,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Too many launches. Slow down." }, { status: 429 });
   }
 
-  // Partner key (bk_ptr_…) is REQUIRED for token deployment.
-  // Wallet/LLM key (BANKR_API_KEY) will always fail with 500 for this endpoint.
   const partnerKey = process.env.BANKR_PARTNER_KEY;
-  const apiKey     = process.env.BANKR_API_KEY; // fallback — will fail for token launch
+  const apiKey     = process.env.BANKR_API_KEY;
   if (!partnerKey && !apiKey) {
     return NextResponse.json(
-      { error: "Token launch not configured — set BANKR_PARTNER_KEY (partner key bk_ptr_…) in Vercel env vars." },
+      { error: "Token launch not configured — set BANKR_API_KEY or BANKR_PARTNER_KEY in Vercel env vars." },
       { status: 500 },
-    );
-  }
-  if (!partnerKey) {
-    // Wallet/LLM key present but no partner key — surface a clear actionable error
-    // instead of letting the call through and getting Bankr 500.
-    return NextResponse.json(
-      {
-        error: "Token launch requires a Bankr partner key (BANKR_PARTNER_KEY). The current BANKR_API_KEY is an LLM key and does not have token deployment scope. Go to Bankr dashboard → Partnership to get a bk_ptr_… key, then set it in Vercel env vars.",
-        setup: true,
-      },
-      { status: 503 },
     );
   }
 
@@ -139,11 +121,10 @@ export async function POST(req: NextRequest) {
   // irreversible deploy.
   if (body.simulateOnly) payload.simulateOnly = true;
 
-  // partnerKey is guaranteed non-null here (we returned 503 above if missing).
-  const headers: Record<string, string> = {
-    "Content-Type":  "application/json",
-    "X-Partner-Key": partnerKey,
-  };
+  // Prefer partner key (higher limits); fall back to LLM/API key.
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (partnerKey) headers["X-Partner-Key"] = partnerKey;
+  else            headers["X-API-Key"]     = apiKey!;
 
   let upstream: Response;
   try {
