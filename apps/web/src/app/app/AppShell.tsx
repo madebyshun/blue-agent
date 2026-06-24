@@ -65,7 +65,7 @@ const APP_NAV = [
   },
   {
     id: "b20",
-    label: "B20 Scan",
+    label: "B20 Hub",
     href: "/app/b20",
     icon: (
       <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
