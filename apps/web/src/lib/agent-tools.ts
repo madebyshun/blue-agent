@@ -214,6 +214,21 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     }),
   },
   {
+    id: "b20-inspect",
+    name: "B20 Inspect",
+    description: "Live on-chain B20 token inspector — reads real state from Base RPC via multicall. Returns isB20 flag, name/symbol/decimals, totalSupply, supplyCap, variant (ASSET/STABLECOIN), pause status per feature, and policy IDs per transfer/mint scope. Zero LLM.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "security",
+    inputs: [
+      { key: "address", label: "Token address", placeholder: "0x… (B20 token on Base)", required: true  },
+      { key: "network", label: "Network",        placeholder: "mainnet (default) or sepolia",             required: false },
+    ],
+    isComposite: true,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/b20-inspect`,
+    x402Body: (v) => ({ address: v.address ?? "", network: v.network ?? "mainnet" }),
+  },
+  {
     id: "liquidity-depth",
     name: "Liquidity Depth",
     description: "Liquidity depth, slippage estimate and exit risk for a Base token.",

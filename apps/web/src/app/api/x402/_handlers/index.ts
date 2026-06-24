@@ -6,10 +6,11 @@ import hNewPools from "./new-pools";
 import hGasTracker from "./gas-tracker";
 import hQuickSafety from "./quick-safety";
 import hWalletRisk from "./wallet-risk";
-import hB20Check from "./b20-check";
+import hB20Check   from "./b20-check";
 import hB20Analyze from "./b20-analyze";
-import hB20Launch from "./b20-launch";
+import hB20Launch  from "./b20-launch";
 import hB20Tracker from "./b20-tracker";
+import hB20Inspect from "./b20-inspect";
 import hLiquidityDepth from "./liquidity-depth";
 import hTokenDistribution from "./token-distribution";
 import hBaseAlpha from "./base-alpha";
@@ -94,6 +95,7 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "b20-analyze": hB20Analyze,
   "b20-launch":  hB20Launch,
   "b20-tracker": hB20Tracker,
+  "b20-inspect": hB20Inspect,
   "liquidity-depth": hLiquidityDepth,
   "token-distribution": hTokenDistribution,
   "base-alpha": hBaseAlpha,
