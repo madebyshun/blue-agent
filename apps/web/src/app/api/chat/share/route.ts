@@ -6,10 +6,11 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { kv } from "@vercel/kv";
+import { kv } from "@/lib/kv";
 import { randomUUID } from "crypto";
 
 export const runtime = "nodejs";
+export const maxDuration = 15;
 
 const TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 const KEY_PREFIX   = "chatshare:";
