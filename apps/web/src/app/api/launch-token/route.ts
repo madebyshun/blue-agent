@@ -106,10 +106,18 @@ export async function POST(req: NextRequest) {
   // Field names per Bankr's deploy schema: tokenSymbol (optional → omit to let
   // Bankr default to the first 4 chars of the name), description, image,
   // websiteUrl, tweetUrl.
-  const payload: Record<string, unknown> = {
-    tokenName,
-    feeRecipient: { type: feeType, value: feeValue },
-  };
+  const payload: Record<string, unknown> = { tokenName };
+
+  // feeRecipient — only send when user explicitly provided one.
+  // With X-API-Key, omitting it defaults fees to the BlueAgent Bankr wallet
+  // (the key owner). Sending type:"x" with an unregistered X handle causes
+  // Bankr to return 500 (handle lookup fails server-side).
+  // "blueagent_" is our UI default — omit it so Bankr routes fees correctly
+  // without needing the handle to be a registered Bankr user.
+  const isOurXDefault = feeType === "x" && feeValue === "blueagent_";
+  if (!isOurXDefault) {
+    payload.feeRecipient = { type: feeType, value: feeValue };
+  }
   if (tokenSymbol)       payload.tokenSymbol  = tokenSymbol;
   if (description)       payload.description  = description;
   if (body.image)        payload.image        = body.image;
@@ -157,7 +165,12 @@ export async function POST(req: NextRequest) {
     );
   }
   if (!upstream.ok) {
-    const detail = typeof data?.error === "string" ? data.error : `status ${upstream.status}`;
+    // Log the full Bankr response for debugging — the error field alone is often
+    // too generic ("Internal server error") to diagnose the root cause.
+    console.error("[launch-token] Bankr error", upstream.status, JSON.stringify(data));
+    const detail = typeof data?.error === "string" ? data.error
+      : typeof data?.message === "string" ? data.message
+      : `status ${upstream.status}`;
     return NextResponse.json({ error: `Bankr launch failed: ${detail}` }, { status: 502 });
   }
 
