@@ -101,16 +101,13 @@ export async function POST(req: NextRequest) {
   // websiteUrl, tweetUrl.
   const payload: Record<string, unknown> = { tokenName };
 
-  // feeRecipient — only send when user explicitly provided one.
-  // With X-API-Key, omitting it defaults fees to the BlueAgent Bankr wallet
-  // (the key owner). Sending type:"x" with an unregistered X handle causes
-  // Bankr to return 500 (handle lookup fails server-side).
-  // "blueagent_" is our UI default — omit it so Bankr routes fees correctly
-  // without needing the handle to be a registered Bankr user.
-  const isOurXDefault = feeType === "x" && feeValue === "blueagent_";
-  if (!isOurXDefault) {
-    payload.feeRecipient = { type: feeType, value: feeValue };
-  }
+  // feeRecipient is REQUIRED by Bankr's deploy schema — always send it.
+  // The UI defaults to type:"x", value:"blueagent_" when user leaves blank,
+  // but @blueagent_ may not be a registered Bankr user → resolve fails → 500.
+  // Fallback chain: if it's our X default and no connected wallet was provided,
+  // we still send it — the UI should always pass the connected wallet address
+  // via feeRecipientType:"wallet", feeRecipientValue:"0x…" instead.
+  payload.feeRecipient = { type: feeType, value: feeValue };
   if (tokenSymbol)       payload.tokenSymbol  = tokenSymbol;
   if (description)       payload.description  = description;
   if (body.image)        payload.image        = body.image;
