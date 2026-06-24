@@ -165,7 +165,16 @@ export async function POST(req: NextRequest) {
     const detail = typeof data?.error === "string" ? data.error
       : typeof data?.message === "string" ? data.message
       : `status ${upstream.status}`;
-    return NextResponse.json({ error: `Bankr launch failed: ${detail}` }, { status: 502 });
+    return NextResponse.json({
+      error: `Bankr launch failed: ${detail}`,
+      // Debug fields — help diagnose root cause without exposing the key value.
+      _debug: {
+        bankrStatus: upstream.status,
+        bankrBody:   data,
+        authUsed:    partnerKey ? "X-Partner-Key" : "X-API-Key",
+        sentPayload: payload,
+      },
+    }, { status: 502 });
   }
 
   // Surface the result. 201 = deployed (tokenAddress, txHash, pool, fee split);
@@ -231,5 +240,47 @@ export async function POST(req: NextRequest) {
       ? `https://app.uniswap.org/swap?outputCurrency=${tokenAddress}&chain=base`
       : null,
     bankr:    tokenAddress ? `https://bankr.bot/launches/${tokenAddress}` : null,
+  });
+}
+
+/**
+ * GET /api/launch-token — diagnostic: simulateOnly ping to Bankr.
+ * Sends a fake token name with simulateOnly: true so Bankr predicts the
+ * address without broadcasting. No rate-limit check (diagnostic only).
+ * Returns the full Bankr response + which auth header was used.
+ */
+export async function GET() {
+  const partnerKey = process.env.BANKR_PARTNER_KEY;
+  const apiKey     = process.env.BANKR_API_KEY;
+
+  if (!partnerKey && !apiKey) {
+    return NextResponse.json({ error: "No Bankr key configured." }, { status: 500 });
+  }
+
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (partnerKey) headers["X-Partner-Key"] = partnerKey;
+  else            headers["X-API-Key"]     = apiKey!;
+
+  const testPayload = { tokenName: "DiagnosticTest", simulateOnly: true };
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(BANKR_DEPLOY, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(testPayload),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (e) {
+    return NextResponse.json({ error: `Bankr unreachable: ${(e as Error).message}` }, { status: 502 });
+  }
+
+  const data = await upstream.json().catch(() => null);
+  return NextResponse.json({
+    authUsed:    partnerKey ? "X-Partner-Key" : "X-API-Key",
+    keyPresent:  partnerKey ? "BANKR_PARTNER_KEY" : "BANKR_API_KEY",
+    bankrStatus: upstream.status,
+    bankrBody:   data,
+    testPayload,
   });
 }
