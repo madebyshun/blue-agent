@@ -17,6 +17,12 @@ const PHASE_COLOR: Record<string, string> = {
   emerging: "#4FC3F7", rising: "#34D399", peak: "#F59E0B", fading: "#EF4444", mid: "#A78BFA",
 };
 const GREEN = "#34D399", RED = "#EF4444", AMBER = "#F59E0B", BLUE = "#4FC3F7", PURPLE = "#A78BFA";
+const ITEM_TYPE: Record<string, { label: string; color: string }> = {
+  signal: { label: "signal", color: GREEN  },
+  info:   { label: "info",   color: BLUE   },
+  watch:  { label: "watch",  color: AMBER  },
+  track:  { label: "track",  color: PURPLE },
+};
 
 type Metric = { label: string; value: string };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -694,6 +700,138 @@ function DefiOpportunityBody({ item }: { item: FeedItem }) {
     </div>
   );
 }
+// ── Blue Feed v2 card bodies ──────────────────────────────────────────────────
+
+function BaseTokenScanBody({ item }: { item: FeedItem }) {
+  const signals: any[] = Array.isArray(raw(item).signals) ? raw(item).signals : [];
+  if (signals.length === 0) return <p className="text-[13px] text-slate-400">{item.summary}</p>;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {signals.map((s: any, i: number) => {
+        const ch = num(s?.change_24h);
+        const liq = fmtUsdShort(s?.liquidity_usd);
+        const vol = fmtUsdShort(s?.volume_24h);
+        const chColor = ch != null && ch >= 0 ? GREEN : RED;
+        return (
+          <Row key={i}>
+            <span className="font-mono text-[12px] font-bold text-white w-16 shrink-0">{s?.symbol ?? "—"}</span>
+            {ch != null && <span className="font-mono text-[12px] font-semibold" style={{ color: chColor }}>{ch >= 0 ? "+" : ""}{ch.toFixed(1)}%</span>}
+            <span className="flex-1" />
+            {vol && <span className="font-mono text-[9px] text-slate-600">vol {vol}</span>}
+            {liq && <span className="font-mono text-[9px] text-slate-600">liq {liq}</span>}
+          </Row>
+        );
+      })}
+      <div className="font-mono text-[9px] text-slate-700 mt-1">5 filters · GeckoTerminal</div>
+    </div>
+  );
+}
+
+function DefiYieldScanBody({ item }: { item: FeedItem }) {
+  const opps: any[] = Array.isArray(raw(item).opportunities) ? raw(item).opportunities : [];
+  if (opps.length === 0) return <p className="text-[13px] text-slate-400">{item.summary}</p>;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {opps.map((o: any, i: number) => {
+        const apy = num(o?.apy);
+        const tvl = fmtUsdShort(o?.tvl_usd);
+        return (
+          <Row key={i}>
+            <span className="font-mono text-[11px] text-slate-200 flex-1 truncate">{o?.protocol ?? "—"}</span>
+            {o?.symbol && <span className="font-mono text-[9px] text-slate-600 truncate max-w-[80px]">{o.symbol}</span>}
+            {apy != null && <span className="font-mono text-[12px] font-semibold" style={{ color: GREEN }}>{apy.toFixed(2)}%</span>}
+            {tvl && <span className="font-mono text-[9px] text-slate-600">{tvl}</span>}
+            {o?.stablecoin && <span className="font-mono text-[9px]" style={{ color: BLUE }}>stable</span>}
+          </Row>
+        );
+      })}
+      <div className="font-mono text-[9px] text-slate-700 mt-1">APY ≥4% · TVL ≥$500K · deduped · DefiLlama</div>
+    </div>
+  );
+}
+
+function NarrativeScanBody({ item }: { item: FeedItem }) {
+  const all: any[] = Array.isArray(raw(item).narratives) ? raw(item).narratives : [];
+  const active = all.filter((n: any) => n?.phase !== "Fading");
+  const fading = all.filter((n: any) => n?.phase === "Fading");
+  if (all.length === 0) return <p className="text-[13px] text-slate-400">{item.summary}</p>;
+  return (
+    <div className="flex flex-col gap-2">
+      {active.map((n: any, i: number) => {
+        const phase = String(n?.phase ?? "").toLowerCase();
+        const color = PHASE_COLOR[phase] ?? AMBER;
+        const tokens: string[] = Array.isArray(n?.tokens) ? n.tokens.slice(0, 3) : [];
+        return (
+          <div key={i}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-mono text-[12px] text-slate-200 truncate flex-1">{n?.name ?? "—"}</span>
+              {n?.phase && <Badge text={String(n.phase)} color={color} />}
+            </div>
+            {tokens.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {tokens.map((t: string, j: number) => <Chip key={j}>{t}</Chip>)}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {fading.length > 0 && (
+        <div className="pt-1.5 border-t border-[#1A1A2E]">
+          <div className="font-mono text-[9px] text-slate-600 uppercase tracking-wider mb-1.5">Fading</div>
+          <div className="flex flex-wrap gap-1.5">
+            {fading.map((n: any, i: number) => (
+              <span key={i} className="font-mono text-[10px] px-1.5 py-0.5 rounded-md" style={{ color: RED, background: `${RED}1a`, border: `1px solid ${RED}40` }}>{n?.name ?? "—"}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PicksCheckBody({ item }: { item: FeedItem }) {
+  const r = raw(item) as any;
+  const tr = r?.track_record as any;
+  const winRate = num(tr?.win_rate);
+  const recent: any[] = Array.isArray(r?.recent_picks) ? r.recent_picks.slice(0, 3) : [];
+  if (!tr && recent.length === 0) return <p className="text-[13px] text-slate-400">{item.summary}</p>;
+  return (
+    <>
+      {tr && winRate != null && (
+        <div className="mb-3">
+          <div className="flex justify-between font-mono text-[9px] text-slate-600 uppercase mb-1">
+            <span>Filter accuracy</span>
+            <span style={{ color: winRate >= 60 ? GREEN : winRate >= 40 ? AMBER : RED }}>{winRate}%</span>
+          </div>
+          <Bar01 value={winRate} color={winRate >= 60 ? GREEN : winRate >= 40 ? AMBER : RED} />
+          <div className="flex gap-4 mt-2 flex-wrap">
+            {tr.wins  != null && <Stat label="Wins"    value={`${tr.wins}`}   tone={GREEN} />}
+            {tr.losses != null && <Stat label="Losses"  value={`${tr.losses}`} tone={RED}   />}
+            {tr.neutral != null && tr.neutral > 0 && <Stat label="Neutral" value={`${tr.neutral}`} tone={AMBER} />}
+            {tr.total  != null && <Stat label="Signals" value={`${tr.total}`} />}
+          </div>
+        </div>
+      )}
+      {recent.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <div className="font-mono text-[9px] text-slate-600 uppercase tracking-wider mb-0.5">Recent checks</div>
+          {recent.map((p: any, i: number) => {
+            const tone = p?.outcome === "WIN" ? GREEN : p?.outcome === "LOSS" ? RED : AMBER;
+            return (
+              <Row key={i}>
+                <span className="font-mono text-[11px] text-slate-200 flex-1">{p?.symbol ?? "—"}</span>
+                {p?.outcome_pct != null && <span className="font-mono text-[11px]" style={{ color: tone }}>{p.outcome_pct > 0 ? "+" : ""}{p.outcome_pct.toFixed(1)}%</span>}
+                {p?.outcome && <Badge text={p.outcome} color={tone} />}
+              </Row>
+            );
+          })}
+        </div>
+      )}
+      <div className="font-mono text-[9px] text-slate-700 mt-2">22h accuracy · filter correctness only · not financial advice</div>
+    </>
+  );
+}
+
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 function CardBody({ item, history }: { item: FeedItem; history: FeedItem[] }) {
@@ -709,6 +847,10 @@ function CardBody({ item, history }: { item: FeedItem; history: FeedItem[] }) {
     case "token-momentum-scanner": return <MomentumBody item={item} />;
     case "narrative-position":     return <NarrativePositionBody item={item} />;
     case "defi-opportunity":       return <DefiOpportunityBody item={item} />;
+    case "base-token-scan":        return <BaseTokenScanBody item={item} />;
+    case "defi-yield-scan":        return <DefiYieldScanBody item={item} />;
+    case "narrative-scan":         return <NarrativeScanBody item={item} />;
+    case "picks-check":            return <PicksCheckBody item={item} />;
     default: {
       const ms = metricsOf(item);
       return (
@@ -737,6 +879,10 @@ function CardBodyLarge({ item, history }: { item: FeedItem; history: FeedItem[] 
     case "token-momentum-scanner": return <MomentumBody item={item} />;
     case "narrative-position":     return <NarrativePositionBody item={item} />;
     case "defi-opportunity":       return <DefiOpportunityBody item={item} />;
+    case "base-token-scan":        return <BaseTokenScanBody item={item} />;
+    case "defi-yield-scan":        return <DefiYieldScanBody item={item} />;
+    case "narrative-scan":         return <NarrativeScanBody item={item} />;
+    case "picks-check":            return <PicksCheckBody item={item} />;
     default: {
       const ms = metricsOf(item);
       return (
@@ -775,6 +921,12 @@ function FeedCard({ item, history, fresh, delay, onShare, onCast, copied, highli
             style={{ color: badge.color, borderColor: `${badge.color}40`, background: `${badge.color}12` }}>
             {badge.emoji} {badge.label}
           </span>
+          {item.itemType && ITEM_TYPE[item.itemType] && (
+            <span className="font-mono text-[9px] px-1.5 py-0.5 rounded tracking-wider"
+              style={{ color: ITEM_TYPE[item.itemType].color, background: `${ITEM_TYPE[item.itemType].color}1a`, border: `1px solid ${ITEM_TYPE[item.itemType].color}40` }}>
+              [{ITEM_TYPE[item.itemType].label}]
+            </span>
+          )}
           <span className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">{item.tool}</span>
           <span className="font-mono text-[10px] text-slate-700">· {ago(item.timestamp)}</span>
           {fresh && (
