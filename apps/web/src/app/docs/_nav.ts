@@ -19,6 +19,7 @@ export const DOC_NAV: DocGroup[] = [
   { group: "Knowledge", items: [
     { title: "Skills",      href: "/docs/skills" },
     { title: "Aeon Skills", href: "/docs/aeon-skills" },
+    { title: "Beryl / B20", href: "/docs/beryl" },
   ]},
   { group: "Platform", items: [
     { title: "x402 Tools",      href: "/docs/x402" },
