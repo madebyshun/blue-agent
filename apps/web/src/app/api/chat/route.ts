@@ -302,7 +302,8 @@ When user asks to send/transfer a B20 token:
 3. If simulation returns paused → warn: "Transfers are paused by the issuer."
 4. Only proceed if simulation succeeds — never bypass
 5. Use hub_b20_analyze for B20 deployment questions / role explanations
-6. Use hub_b20_launch when user asks to deploy/launch/create a B20 token — call with { name, symbol, variant: "asset"|"stablecoin", optional supply_cap, currency_code }. Returns complete foundry.toml + deploy script + CLI commands.`;
+6. Use hub_b20_launch when user asks to deploy/launch/create a B20 token — call with { name, symbol, variant: "asset"|"stablecoin", optional supply_cap, currency_code }. Returns complete foundry.toml + deploy script + CLI commands.
+7. Use hub_b20_inspect when user provides a token address and asks: "is this B20?", "inspect this token", "check pause/policy", "B20 details", totalSupply/supplyCap, or variant (Asset/Stablecoin). Reads REAL on-chain state via multicall — zero LLM. Call with { address: "0x…", network: "mainnet" }.`;
 
 // ─── Hub tool definitions (Anthropic tool format) ─────────────────────────────
 
@@ -676,6 +677,18 @@ Default to "base" for Base-related queries.`,
       required: [],
     },
   },
+  {
+    name: "hub_b20_inspect",
+    description: "Inspect a B20 token's live on-chain state — reads real data from Base RPC via multicall, zero LLM. Returns: isB20 flag, name/symbol/decimals, totalSupply, supplyCap (uncapped sentinel detected), variant (ASSET/STABLECOIN), pause status per feature (TRANSFER/MINT/BURN), and policy IDs per scope (transferSender/transferReceiver/transferExecutor/mintReceiver). Use when the user provides a token address and asks: 'is this B20?', 'check this token', 'is it paused?', 'what's the supply cap?', 'inspect B20 state', or 'what policy does this have?'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        address: { type: "string", description: "0x-prefixed B20 token address on Base (40 hex chars)" },
+        network: { type: "string", enum: ["mainnet", "sepolia"], description: "mainnet (default) or sepolia" },
+      },
+      required: ["address"],
+    },
+  },
 ];
 
 // ─── Venice tools (OpenAI function-calling format) ───────────────────────────
@@ -718,6 +731,7 @@ const TOOL_ENDPOINT: Record<string, string> = {
   blue_analytics:       "blue-analytics",
   blue_simulate:        "blue-simulate",
   blue_stream:          "blue-stream",
+  hub_b20_inspect:      "b20-inspect",
 };
 
 // ─── Internal Hub tool caller ─────────────────────────────────────────────────
