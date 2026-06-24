@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useAccount, useSendTransaction, useSwitchChain } from "wagmi";
 import { useAppChrome } from "@/app/app/AppChrome";
 import { runB20Inspect }  from "./inspect-action";
 import { runB20Roles }    from "./roles-action";
@@ -348,38 +349,108 @@ const OUTCOME_CONFIG: Record<SimulateOutcome, { color: string; icon: string; lab
   other_revert:         { color: "#EF4444", icon: "×", label: "Reverts — unexpected error",            hint: "Transaction reverts for an unrecognised reason. See revert reason below." },
 };
 
-// ── Launch tab (own component for clean state) ────────────────────────────────
+// ── Launch tab — direct wallet deploy via /api/b20/prepare ────────────────────
 
-type LaunchVariant = "ASSET" | "STABLECOIN";
+const LAUNCH_NETS = {
+  sepolia: { chainId: 84532, label: "Sepolia",  explorer: "https://sepolia.basescan.org" },
+  mainnet: { chainId: 8453,  label: "Mainnet",  explorer: "https://basescan.org"         },
+} as const;
+type LaunchNet = keyof typeof LAUNCH_NETS;
 
-function LaunchTab() {
-  const [name,     setName]     = useState("");
-  const [symbol,   setSymbol]   = useState("");
-  const [decimals, setDecimals] = useState("18");
-  const [variant,  setVariant]  = useState<LaunchVariant>("ASSET");
-  const [currency, setCurrency] = useState("USD");
-  const [copied,   setCopied]   = useState(false);
+function LaunchTab({ onScanToken }: { onScanToken: (addr: string, net: Network) => void }) {
+  // Form
+  const [name,       setName]       = useState("");
+  const [symbol,     setSymbol]     = useState("");
+  const [variant,    setVariant]    = useState<"asset" | "stablecoin">("asset");
+  const [decimals,   setDecimals]   = useState(18);
+  const [decManual,  setDecManual]  = useState(false);
+  const [supplyCap,  setSupplyCap]  = useState("");
+  const [currCode,   setCurrCode]   = useState("USD");
+  const [lNetwork,   setLNetwork]   = useState<LaunchNet>("sepolia");
 
-  const variantInt    = variant === "ASSET" ? 0 : 1;
-  const variantParams = variant === "STABLECOIN"
-    ? `abi.encode("${currency || "USD"}")`
-    : '""';
+  // Deploy
+  const [deploying,     setDeploying]     = useState(false);
+  const [polling,       setPolling]       = useState(false);
+  const [deployErr,     setDeployErr]     = useState("");
+  const [deployTxHash,  setDeployTxHash]  = useState("");
+  const [deployedToken, setDeployedToken] = useState("");
 
-  const callSolidity = `IB20Factory factory = IB20Factory(
-  0xB20f000000000000000000000000000000000000
-);
+  // Wagmi
+  const { address, chainId: currentChainId } = useAccount();
+  const { sendTransactionAsync }             = useSendTransaction();
+  const { switchChainAsync }                 = useSwitchChain();
 
-address token = factory.createB20(
-  "${name    || "My Token"}",   // name
-  "${symbol  || "MTK"}",        // symbol
-  ${decimals || "18"},           // decimals
-  ${variantInt},                 // variant: ${variantInt} = ${variant}
-  ${variantParams}               // variantParams
-);`;
+  function switchVariant(v: "asset" | "stablecoin") {
+    setVariant(v);
+    if (!decManual) setDecimals(v === "stablecoin" ? 6 : 18);
+  }
 
-  function copy() {
-    navigator.clipboard.writeText(callSolidity)
-      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); });
+  const n      = name.trim();
+  const s      = symbol.replace(/^\$/, "").trim();
+  const cap    = supplyCap.trim();
+  const cur    = currCode.trim() || "USD";
+  const net    = LAUNCH_NETS[lNetwork];
+  const canDeploy = !!n && !!s;
+
+  async function deploy() {
+    if (!address || !canDeploy) return;
+    setDeploying(true); setDeployErr(""); setDeployTxHash(""); setDeployedToken("");
+    try {
+      const prepRes = await fetch("/api/b20/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: n, symbol: s, variant, decimals,
+          supply_cap:    cap || undefined,
+          currency_code: variant === "stablecoin" ? cur : undefined,
+          admin: address,
+          network: lNetwork,
+        }),
+      });
+      const prep = await prepRes.json();
+      if (!prep.ok) throw new Error(prep.error || "Prepare failed");
+      if (!prep.berylLive) {
+        throw new Error(
+          lNetwork === "mainnet"
+            ? "Mainnet Beryl activates June 25, 2026 18:00 UTC"
+            : "B20 factory not active on this network yet",
+        );
+      }
+
+      if (currentChainId !== net.chainId) {
+        try { await switchChainAsync({ chainId: net.chainId }); }
+        catch { throw new Error(`Switch wallet to Base ${net.label} and try again`); }
+      }
+
+      const hash = await sendTransactionAsync({
+        to:      prep.tx.to as `0x${string}`,
+        data:    prep.tx.data as `0x${string}`,
+        value:   0n,
+        chainId: net.chainId,
+      });
+      setDeployTxHash(hash);
+      setPolling(true);
+
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 3000));
+        const rec = await fetch("/api/b20/receipt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tx_hash: hash, network: lNetwork }),
+        }).then(r => r.json());
+        if (rec.ok && rec.status === "success" && rec.tokenAddress) {
+          setDeployedToken(rec.tokenAddress);
+          break;
+        }
+        if (rec.ok && rec.status === "reverted") throw new Error("Transaction reverted");
+      }
+      setPolling(false);
+    } catch (e) {
+      setDeployErr((e as Error).message);
+    } finally {
+      setDeploying(false);
+      setPolling(false);
+    }
   }
 
   return (
@@ -391,134 +462,186 @@ address token = factory.createB20(
           <h2 className="font-mono text-xl font-bold text-white">Launch B20 Token</h2>
         </div>
         <p className="font-mono text-sm text-slate-500">
-          Configure parameters and generate calldata. Deploy via Blue Chat or paste into your contract.
+          Connect your wallet and deploy a B20 token directly on Base.
+          The hub builds the calldata, your wallet signs the transaction.
         </p>
       </div>
 
-      {/* Card */}
-      <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
-        <div className="grid lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-[#1A1A2E]">
+      {/* Main deploy card */}
+      <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden mb-5">
 
-          {/* Left: config form */}
-          <div className="p-5 space-y-4">
+        {/* Token preview header */}
+        <div className="px-5 py-4 bg-[#0a0a0f] border-b border-[#1A1A2E] flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center font-mono text-sm font-bold shrink-0"
+            style={{ background: "#4FC3F715", border: "1px solid #4FC3F730", color: "#4FC3F7" }}>
+            {(s || n).slice(0, 2).toUpperCase() || "B2"}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-mono text-sm font-bold text-white truncate">{n || "Token Name"}</p>
+            <p className="font-mono text-xs text-slate-500">${s || "SYMBOL"} · {variant} · B20</p>
+          </div>
+          {/* Network toggle */}
+          <div className="flex rounded-lg border border-[#1A1A2E] overflow-hidden shrink-0">
+            {(["sepolia", "mainnet"] as const).map(nk => (
+              <button key={nk} onClick={() => setLNetwork(nk)}
+                className="px-3 py-1.5 font-mono text-xs transition-colors"
+                style={lNetwork === nk
+                  ? { background: "#4FC3F715", color: "#4FC3F7" }
+                  : { color: "#475569" }}>
+                {LAUNCH_NETS[nk].label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Form */}
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
-                Token Name
+                Token Name *
               </label>
               <input value={name} onChange={e => setName(e.target.value)}
                 placeholder="My Token" spellCheck={false} className={INPUT_CLS} />
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
-                  Symbol
-                </label>
-                <input value={symbol} onChange={e => setSymbol(e.target.value.toUpperCase())}
-                  placeholder="MTK" spellCheck={false} className={INPUT_CLS} />
-              </div>
-              <div>
-                <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
-                  Decimals
-                </label>
-                <input value={decimals} onChange={e => setDecimals(e.target.value)}
-                  placeholder="18" spellCheck={false} className={INPUT_CLS} />
-              </div>
-            </div>
-
-            {/* Variant toggle */}
             <div>
               <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
-                Variant
+                Symbol *
               </label>
-              <div className="flex rounded-xl border border-[#1A1A2E] overflow-hidden">
-                {(["ASSET", "STABLECOIN"] as const).map(v => (
-                  <button key={v} onClick={() => setVariant(v)}
-                    className="flex-1 py-2.5 font-mono text-xs transition-all"
-                    style={variant === v
-                      ? v === "ASSET"
-                        ? { background: "#4FC3F715", color: "#4FC3F7", borderRight: "1px solid #1A1A2E" }
-                        : { background: "#22C55E15", color: "#22C55E" }
-                      : v === "ASSET"
-                        ? { color: "#475569", borderRight: "1px solid #1A1A2E" }
-                        : { color: "#475569" }}>
-                    {v}
-                  </button>
-                ))}
-              </div>
+              <input value={symbol} onChange={e => setSymbol(e.target.value.toUpperCase())}
+                placeholder="MTK" spellCheck={false} className={INPUT_CLS} />
             </div>
+          </div>
 
-            {/* Variant info + currency */}
-            <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3">
-              {variant === "ASSET" ? (
-                <p className="font-mono text-xs text-slate-500 leading-relaxed">
-                  <span className="text-[#4FC3F7] font-medium">ASSET</span> — real-world assets
-                  (stocks, commodities, real estate). Supports{" "}
-                  <code className="text-[#4FC3F7]">multiplier()</code> for rebase accounting.
-                  No variant params needed.
+          {/* Variant */}
+          <div>
+            <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+              Variant
+            </label>
+            <div className="flex rounded-xl border border-[#1A1A2E] overflow-hidden">
+              {(["asset", "stablecoin"] as const).map(v => (
+                <button key={v} onClick={() => switchVariant(v)}
+                  className="flex-1 py-2.5 font-mono text-xs transition-all capitalize"
+                  style={variant === v
+                    ? v === "asset"
+                      ? { background: "#4FC3F715", color: "#4FC3F7", borderRight: "1px solid #1A1A2E" }
+                      : { background: "#22C55E15", color: "#22C55E" }
+                    : v === "asset"
+                      ? { color: "#475569", borderRight: "1px solid #1A1A2E" }
+                      : { color: "#475569" }}>
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+                Decimals <span className="text-slate-700 font-normal normal-case">(6–18)</span>
+              </label>
+              <input type="number" min={6} max={18} value={decimals}
+                disabled={variant === "stablecoin"}
+                onChange={e => { setDecManual(true); setDecimals(Number(e.target.value)); }}
+                className="w-full bg-[#0a0a12] border border-[#1A1A2E] focus:border-[#4FC3F740] rounded-xl px-3 py-2.5 font-mono text-sm text-slate-200 outline-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed" />
+            </div>
+            <div>
+              <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+                Supply Cap <span className="text-slate-700 font-normal normal-case">(optional)</span>
+              </label>
+              <input value={supplyCap} onChange={e => setSupplyCap(e.target.value)}
+                placeholder="e.g. 1000000" spellCheck={false} className={INPUT_CLS} />
+            </div>
+          </div>
+
+          {variant === "stablecoin" && (
+            <div>
+              <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+                Currency Code
+              </label>
+              <input value={currCode} onChange={e => setCurrCode(e.target.value.toUpperCase())}
+                placeholder="USD" spellCheck={false}
+                className="w-full bg-[#0a0a12] border border-[#1A1A2E] focus:border-[#22C55E40] rounded-xl px-3 py-2.5 font-mono text-sm text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+            </div>
+          )}
+        </div>
+
+        {/* Deploy section */}
+        <div className="px-5 pb-5">
+          {!deployedToken ? (
+            <>
+              <button onClick={deploy}
+                disabled={!canDeploy || deploying || !address}
+                className="w-full font-mono text-sm font-bold py-3 rounded-xl transition-all disabled:opacity-40"
+                style={{ background: "#34D399", color: "#050508" }}>
+                {!address
+                  ? "Connect wallet to deploy"
+                  : deploying
+                    ? (polling ? "Confirming on-chain…" : "Preparing transaction…")
+                    : `Deploy B20 on ${net.label} →`}
+              </button>
+
+              {lNetwork === "sepolia" && (
+                <p className="font-mono text-[9px] text-slate-600 mt-2 text-center">
+                  Sepolia testnet · free to test.{" "}
+                  <a href="https://portal.cdp.coinbase.com/products/faucet"
+                    target="_blank" rel="noopener noreferrer"
+                    className="text-[#4FC3F7] hover:opacity-80">Get test ETH →</a>
                 </p>
-              ) : (
-                <div className="space-y-3">
-                  <p className="font-mono text-xs text-slate-500 leading-relaxed">
-                    <span className="text-[#22C55E] font-medium">STABLECOIN</span> — fiat-backed
-                    assets. Requires a <code className="text-[#22C55E]">currency</code> field
-                    (abi.encoded as bytes).
-                  </p>
-                  <div>
-                    <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
-                      Currency
-                    </label>
-                    <input value={currency} onChange={e => setCurrency(e.target.value.toUpperCase())}
-                      placeholder="USD" spellCheck={false}
-                      className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#22C55E40] rounded-xl px-3 py-2.5 font-mono text-sm text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
-                  </div>
+              )}
+              {lNetwork === "mainnet" && (
+                <p className="font-mono text-[9px] text-amber-400/70 mt-2 text-center">
+                  Beryl is live on Mainnet. Real ETH required for gas.
+                </p>
+              )}
+
+              {deployErr && (
+                <div className="rounded-xl border border-[#EF444430] px-4 py-2.5 mt-3">
+                  <p className="font-mono text-xs text-[#EF4444]">{deployErr}</p>
                 </div>
               )}
+              {deployTxHash && !deployedToken && (
+                <p className="font-mono text-[9px] text-slate-600 mt-2 text-center break-all">
+                  tx: {deployTxHash.slice(0, 16)}…{deployTxHash.slice(-8)}
+                </p>
+              )}
+            </>
+          ) : (
+            <div className="rounded-2xl border border-[#34D399]/30 bg-[#34D399]/5 p-4">
+              <p className="font-mono text-sm text-[#34D399] font-bold mb-1">✓ B20 Deployed</p>
+              <p className="font-mono text-xs text-white break-all mb-3">{deployedToken}</p>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => onScanToken(deployedToken, lNetwork as Network)}
+                  className="font-mono text-xs px-3 py-1.5 rounded-xl transition-all"
+                  style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                  Scan in Scanner →
+                </button>
+                <a href={`${net.explorer}/token/${deployedToken}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="font-mono text-xs px-3 py-1.5 rounded-xl border border-[#1A1A2E] text-slate-400 hover:text-white transition-colors">
+                  Basescan ↗
+                </a>
+              </div>
             </div>
-          </div>
-
-          {/* Right: calldata preview */}
-          <div className="flex flex-col">
-            <div className="px-4 py-3 bg-[#0a0a0f] border-b border-[#1A1A2E] flex items-center justify-between shrink-0">
-              <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">Generated Call</p>
-              <span className="font-mono text-[9px] px-2 py-0.5 rounded border"
-                style={{ background: "#4FC3F710", color: "#4FC3F7", borderColor: "#4FC3F730" }}>
-                Solidity
-              </span>
-            </div>
-            <pre className="flex-1 p-4 font-mono text-xs leading-relaxed overflow-auto whitespace-pre-wrap"
-              style={{ color: "#a5d8ff" }}>
-              {callSolidity}
-            </pre>
-            <div className="px-4 py-3 border-t border-[#1A1A2E] flex flex-wrap gap-2 shrink-0">
-              <button onClick={copy}
-                className="font-mono text-xs px-4 py-2 rounded-xl transition-all"
-                style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F735" }}>
-                {copied ? "Copied ✓" : "Copy Solidity"}
-              </button>
-              <a href="/app/chat"
-                className="font-mono text-xs px-4 py-2 rounded-xl border border-[#1A1A2E] text-slate-400 hover:text-white transition-colors">
-                Open in Chat →
-              </a>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Post-deploy steps */}
-      <div className="mt-5 rounded-2xl border border-[#1A1A2E] overflow-hidden">
+      {/* After deployment guide */}
+      <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
         <div className="px-4 py-3 bg-[#0a0a0f] border-b border-[#1A1A2E]">
           <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">After Deployment</p>
         </div>
         <div className="divide-y divide-[#0d0d18]">
           {[
-            { n: "1", title: "Assign roles",    desc: "Grant MINT_ROLE, PAUSE_ROLE, etc. via grantRole(role, address) from DEFAULT_ADMIN_ROLE." },
-            { n: "2", title: "Set supply cap",  desc: "Call updateSupplyCap(amount) to enforce a hard supply ceiling. Sentinel value uint128.max = uncapped." },
+            { n: "1", title: "Assign roles",     desc: "Grant MINT_ROLE, PAUSE_ROLE, BURN_ROLE, etc. via grantRole(role, address) from DEFAULT_ADMIN_ROLE." },
+            { n: "2", title: "Set supply cap",   desc: "Call updateSupplyCap(amount) to enforce a hard ceiling. Omit (or set uint128.max) for uncapped." },
             { n: "3", title: "Configure policy", desc: "Create an ALLOWLIST or BLOCKLIST on PolicyRegistry, then apply with token.updatePolicy(scope, policyId)." },
-            { n: "4", title: "Verify in Scanner", desc: "Paste your deployed address in the Scanner tab to confirm all on-chain config is correct." },
-          ].map(({ n, title, desc }) => (
-            <div key={n} className="flex items-start gap-4 px-5 py-4">
-              <span className="font-mono text-sm text-slate-600 w-5 shrink-0 pt-0.5">{n}.</span>
+            { n: "4", title: "Verify in Scanner", desc: "Paste your token address into the Scanner tab to confirm all on-chain config is correct before going live." },
+          ].map(({ n: step, title, desc }) => (
+            <div key={step} className="flex items-start gap-4 px-5 py-4">
+              <span className="font-mono text-sm text-slate-600 w-5 shrink-0 pt-0.5">{step}.</span>
               <div>
                 <p className="font-mono text-sm text-slate-300 font-medium mb-0.5">{title}</p>
                 <p className="font-mono text-xs text-slate-600 leading-relaxed">{desc}</p>
@@ -715,6 +838,23 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
     startSim(async () => {
       try { setSimResult(await runB20Simulate(simToken.trim(), simSender.trim(), simReceiver.trim(), simAmount.trim() || "1", network)); }
       catch (e) { setSimError((e as Error).message ?? "Simulation failed."); }
+    });
+  }
+
+  // ── Cross-tab: scan a just-deployed token ─────────────────────────────────
+  function handleScanDeployed(addr: string, net: Network) {
+    setScanAddr(addr);
+    setNetwork(net);
+    setActiveTab("scanner");
+    setScanError(""); setScanResult(null);
+    startScan(async () => {
+      try {
+        const result = await runB20Inspect(addr.trim(), net);
+        setScanResult(result);
+        if (result.isB20 && result.name)
+          setRecentScans(p => [{ addr: addr.trim(), name: result.name!, symbol: result.symbol ?? "", net }, ...p.filter(r => r.addr !== addr.trim())].slice(0, 8));
+        window.history.replaceState({}, "", `/app/b20?${new URLSearchParams({ address: addr.trim(), network: net })}`);
+      } catch (e) { setScanError((e as Error).message ?? "Inspection failed."); }
     });
   }
 
@@ -1165,6 +1305,30 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                   </div>
                 )}
 
+                {/* Initial placeholder — shown briefly before auto-load completes */}
+                {!registryResult && !regPending && !registryError && (
+                  <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
+                    <div className="px-4 py-3 bg-[#0a0a0f] border-b border-[#1A1A2E]">
+                      <p className="font-mono text-xs text-slate-400 font-medium mb-0.5">B20Factory</p>
+                      <p className="font-mono text-[10px] text-slate-600 break-all">
+                        0xB20f000000000000000000000000000000000000
+                      </p>
+                    </div>
+                    <div className="divide-y divide-[#0d0d18]">
+                      {[
+                        { label: "B20Created event", desc: "Emitted on every token deployment — name, symbol, variant, creator" },
+                        { label: "On-chain only",    desc: "Registry is reconstructed from raw event logs — no database, no indexer" },
+                        { label: "Beryl required",   desc: "Factory only emits events after Beryl activation on the selected network" },
+                      ].map(({ label, desc }) => (
+                        <div key={label} className="flex items-start gap-4 px-4 py-3">
+                          <span className="font-mono text-[9px] text-[#4FC3F7] w-[130px] shrink-0 pt-0.5">{label}</span>
+                          <span className="font-mono text-xs text-slate-600 leading-relaxed">{desc}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {regPending && (
                   <div className="flex items-center gap-2 mb-4">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
@@ -1322,6 +1486,51 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                   </div>
                 )}
 
+                {/* Empty state — what is the simulator for? */}
+                {!simResult && !simPending && !simError && (
+                  <div className="space-y-3">
+                    {/* Use cases */}
+                    <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
+                      <div className="px-4 py-3 bg-[#0a0a0f] border-b border-[#1A1A2E]">
+                        <p className="font-mono text-sm text-slate-300 font-medium mb-0.5">What is this for?</p>
+                        <p className="font-mono text-xs text-slate-600 leading-relaxed">
+                          Before sending B20 tokens, simulate the transfer via <code className="text-[#4FC3F7]">eth_call</code> — purely read-only, nothing is broadcast. Catches all B20-specific failure modes before you waste gas.
+                        </p>
+                      </div>
+                      <div className="divide-y divide-[#0d0d18]">
+                        {[
+                          { icon: "🔍", text: "Pre-flight check before a real transfer or batch airdrop" },
+                          { icon: "🔐", text: "Verify a wallet is allowed by an allowlist policy before mint" },
+                          { icon: "🛡️", text: "Test that a paused token correctly blocks all outflows" },
+                          { icon: "💰", text: "Confirm a sender holds enough balance for an exact amount" },
+                        ].map(({ icon, text }) => (
+                          <div key={text} className="flex items-center gap-3 px-4 py-3">
+                            <span className="text-base w-5 shrink-0 text-center">{icon}</span>
+                            <span className="font-mono text-xs text-slate-500 leading-relaxed">{text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Outcomes reference */}
+                    <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
+                      <div className="px-4 py-3 bg-[#0a0a0f] border-b border-[#1A1A2E]">
+                        <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">Possible Outcomes</p>
+                      </div>
+                      <div className="divide-y divide-[#0d0d18]">
+                        {(Object.entries(OUTCOME_CONFIG) as [SimulateOutcome, typeof OUTCOME_CONFIG[SimulateOutcome]][]).map(([key, cfg]) => (
+                          <div key={key} className="flex items-start gap-3 px-4 py-3">
+                            <span className="font-mono text-sm shrink-0 w-5 text-center pt-px" style={{ color: cfg.color }}>{cfg.icon}</span>
+                            <div>
+                              <p className="font-mono text-xs font-medium" style={{ color: cfg.color }}>{cfg.label}</p>
+                              <p className="font-mono text-[10px] text-slate-600 mt-0.5 leading-relaxed">{cfg.hint}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {simResult && !simPending && (() => {
                   const cfg = OUTCOME_CONFIG[simResult.outcome];
                   return (
@@ -1360,7 +1569,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
             )}
 
             {/* ── LAUNCH ────────────────────────────────────────────── */}
-            {activeTab === "launch" && <LaunchTab />}
+            {activeTab === "launch" && <LaunchTab onScanToken={handleScanDeployed} />}
 
           </div>
         </div>
