@@ -171,7 +171,13 @@ export async function POST(req: NextRequest) {
     const detail = typeof data?.error === "string" ? data.error
       : typeof data?.message === "string" ? data.message
       : `status ${upstream.status}`;
-    return NextResponse.json({ error: `Bankr launch failed: ${detail}` }, { status: 502 });
+    // Include full Bankr response for client-side debugging (no secrets in this object).
+    return NextResponse.json({
+      error: `Bankr launch failed: ${detail}`,
+      bankrStatus: upstream.status,
+      bankrBody: data,
+      sentPayload: { ...payload, _note: "key omitted" },
+    }, { status: 502 });
   }
 
   // Surface the result. 201 = deployed (tokenAddress, txHash, pool, fee split);
@@ -237,5 +243,55 @@ export async function POST(req: NextRequest) {
       ? `https://app.uniswap.org/swap?outputCurrency=${tokenAddress}&chain=base`
       : null,
     bankr:    tokenAddress ? `https://bankr.bot/launches/${tokenAddress}` : null,
+  });
+}
+
+/**
+ * GET /api/launch-token — diagnostic: simulateOnly test call to Bankr.
+ * Returns the full raw Bankr response (including errors) so we can debug
+ * auth + schema issues without exposing the API key.
+ * Remove or gate behind admin check once fixed.
+ */
+export async function GET(req: NextRequest) {
+  void req; // unused but required for Next.js
+  const partnerKey = process.env.BANKR_PARTNER_KEY;
+  const apiKey     = process.env.BANKR_API_KEY;
+
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (partnerKey) {
+    headers["X-Partner-Key"] = partnerKey;
+  } else if (apiKey) {
+    // Try both auth formats — Bankr docs list X-API-Key and Authorization: Bearer
+    headers["X-API-Key"]     = apiKey;
+    headers["Authorization"] = `Bearer ${apiKey}`;
+  }
+
+  const keyPresent = !!(partnerKey || apiKey);
+  const keyType    = partnerKey ? "partner" : apiKey ? "api" : "none";
+
+  let bankrRes: Response | null = null;
+  let bankrBody: unknown = null;
+  let networkErr: string | null = null;
+
+  if (keyPresent) {
+    try {
+      bankrRes = await fetch(BANKR_DEPLOY, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ tokenName: "DiagTest", tokenSymbol: "DIAG", simulateOnly: true }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      bankrBody = await bankrRes.json().catch(() => null);
+    } catch (e) {
+      networkErr = (e as Error).message;
+    }
+  }
+
+  return NextResponse.json({
+    keyPresent,
+    keyType,
+    bankrStatus: bankrRes?.status ?? null,
+    bankrBody,
+    networkErr,
   });
 }
