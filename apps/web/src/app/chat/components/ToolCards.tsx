@@ -1048,7 +1048,13 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
         }),
       });
       const d = await res.json();
-      if (!res.ok) { setErr(d?.error ?? `Launch failed (${res.status})`); setStep("error"); return; }
+      if (!res.ok) {
+        // 503 = missing partner key — surface setup instruction directly
+        const msg = d?.setup
+          ? "Token launch needs a Bankr partner key — set BANKR_PARTNER_KEY in Vercel env vars."
+          : (d?.error ?? `Launch failed (${res.status})`);
+        setErr(msg); setStep("error"); return;
+      }
       setOut({ tokenAddress: d.tokenAddress ?? null, basescan: d.basescan ?? null, uniswap: d.uniswap ?? null, bankr: d.bankr ?? null });
       setStep("done");
     } catch (e) {
