@@ -140,15 +140,14 @@ export async function POST(req: NextRequest) {
 
   const data = await upstream.json().catch(() => null) as Record<string, unknown> | null;
 
-  // 429 — Bankr's deploy rate limit. Partner keys are capped at 1/min, 20/day,
-  // 1 concurrent *per fee recipient*; user keys at 50/day. Surface a clear,
-  // non-alarming message with the retry hint instead of a generic failure.
+  // 429 — Bankr's deploy rate limit. Standard 50/day, Bankr Club 100/day
+  // (gas sponsored within these). High-volume bursts can trip spam protection.
   if (upstream.status === 429) {
     const retry = upstream.headers.get("retry-after");
     const wait  = retry ? `${retry}s` : "a minute";
     return NextResponse.json(
       {
-        error: `Bankr rate limit reached — only 1 launch per minute per wallet (20/day). Wait ${wait} and try again.`,
+        error: `Bankr deploy limit reached (Bankr Club: 100/day). Wait ${wait} and try again.`,
         rateLimited: true,
         retryAfter: retry ? Number(retry) : null,
       },
