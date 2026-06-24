@@ -15,7 +15,7 @@ async function getShare(id: string): Promise<ShareDoc | null> {
   try {
     const res = await fetch(
       `${process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev"}/api/chat/share?id=${encodeURIComponent(id)}`,
-      { next: { revalidate: 60 } },
+      { next: { revalidate: 60 }, signal: AbortSignal.timeout(8000) },
     );
     if (!res.ok) return null;
     return res.json() as Promise<ShareDoc>;
