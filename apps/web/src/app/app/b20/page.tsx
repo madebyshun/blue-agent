@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import AppShell from "../AppShell";
 import B20Client from "./B20Client";
 
 export const metadata: Metadata = {
@@ -16,9 +15,5 @@ export default async function Page({ searchParams }: Props) {
   const address = sp.address ?? "";
   const network = sp.network === "sepolia" ? "sepolia" : "mainnet";
 
-  return (
-    <AppShell>
-      <B20Client initialAddress={address} initialNetwork={network} />
-    </AppShell>
-  );
+  return <B20Client initialAddress={address} initialNetwork={network} />;
 }
