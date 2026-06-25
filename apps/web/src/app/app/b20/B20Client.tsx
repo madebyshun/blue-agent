@@ -1023,10 +1023,11 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [network]);
 
-  function doManageLoad(tokenAddr?: string) {
+  function doManageLoad(tokenAddr?: string, isRefresh = false) {
     const addr = (tokenAddr ?? manageToken).trim();
     if (!isValidAddr(addr) || !connectedAddress) return;
-    setManageError(""); setManageData(null);
+    setManageError("");
+    if (!isRefresh) setManageData(null); // keep panel mounted during refresh so toast persists
     startManage(async () => {
       try {
         const d = await runB20ManageLoad(addr, connectedAddress, network);
@@ -1368,7 +1369,15 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                           roles={scanWalletData.roles}
                           scopeHashes={scanWalletData.scopeHashes}
                           balance={scanWalletData.balance}
-                          onRefresh={() => doScan(scanResult.address)}
+                          onRefresh={() => {
+                            // Refresh wallet data only — do NOT clear scanResult/scanWalletData
+                            // so the panel stays mounted and the toast persists.
+                            if (scanResult?.isB20 && connectedAddress) {
+                              runB20ManageLoad(scanResult.address, connectedAddress, scanResult.network as Network)
+                                .then(d => setScanWalletData(d))
+                                .catch(() => {});
+                            }
+                          }}
                           compact={true}
                         />
                       </div>
@@ -1706,7 +1715,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                             roles={manageData.roles}
                             scopeHashes={manageData.scopeHashes}
                             balance={manageData.balance}
-                            onRefresh={() => doManageLoad()}
+                            onRefresh={() => doManageLoad(undefined, true)}
                             compact={false}
                           />
                         </div>
