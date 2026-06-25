@@ -1640,9 +1640,10 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                   {!connectedAddress ? (
                     <div className="rounded-2xl border border-[#F59E0B25] bg-[#F59E0B05] px-5 py-6 text-center">
                       <p className="font-mono text-sm text-[#F59E0B] font-medium mb-1">Connect Wallet</p>
-                      <p className="font-mono text-xs text-slate-500">
+                      <p className="font-mono text-xs text-slate-500 mb-4">
                         Connect your wallet to perform management actions on a B20 token.
                       </p>
+                      <ConnectButton label="Connect Wallet" />
                     </div>
                   ) : (
                     <>

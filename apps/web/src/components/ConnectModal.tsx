@@ -1,7 +1,7 @@
 "use client";
 
 import { useConnect, useAccount, useDisconnect } from "wagmi";
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 
 /**
  * ConnectModal — shows all available wagmi connectors.
@@ -20,17 +20,6 @@ export function ConnectButton({
   const { disconnect } = useDisconnect();
   const { connectors, connect, isPending } = useConnect();
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
 
   if (isConnected && address) {
     return (
@@ -44,9 +33,9 @@ export function ConnectButton({
   }
 
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen(true)}
         disabled={isPending}
         className={className ?? "font-mono text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all disabled:opacity-50"}
         style={style ?? { borderColor: "#4FC3F7", color: "#4FC3F7", background: "#4FC3F710" }}
@@ -54,33 +43,45 @@ export function ConnectButton({
         {isPending ? "Connecting…" : label}
       </button>
 
+      {/* Full-screen overlay — never clipped by overflow:hidden ancestors */}
       {open && (
-        <div className="absolute right-0 mt-2 w-56 z-50 rounded-xl border border-[#1A1A2E] bg-[#0D0D1A] shadow-xl shadow-black/60 overflow-hidden">
-          <p className="font-mono text-[10px] text-slate-600 px-4 pt-3 pb-2 tracking-widest">
-            SELECT WALLET
-          </p>
-          {connectors.map((connector) => (
-            <button
-              key={connector.uid}
-              onClick={() => {
-                connect({ connector });
-                setOpen(false);
-              }}
-              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[#1A1A2E] transition-colors"
-            >
-              {/* Icon */}
-              <span className="w-7 h-7 rounded-lg bg-[#1A1A2E] flex items-center justify-center text-base shrink-0">
-                {getWalletIcon(connector.name)}
-              </span>
-              <div>
-                <p className="font-mono text-xs text-white">{connector.name}</p>
-                <p className="font-mono text-[10px] text-slate-600">{getWalletSubtitle(connector.name)}</p>
-              </div>
-            </button>
-          ))}
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="w-full max-w-xs rounded-2xl border border-[#1A1A2E] bg-[#0D0D1A] shadow-2xl shadow-black/80 overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <p className="font-mono text-[10px] text-slate-600 px-4 pt-4 pb-2 tracking-widest uppercase">
+              Select Wallet
+            </p>
+            {connectors.map((connector) => (
+              <button
+                key={connector.uid}
+                onClick={() => { connect({ connector }); setOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[#1A1A2E] transition-colors"
+              >
+                <span className="w-7 h-7 rounded-lg bg-[#1A1A2E] flex items-center justify-center text-base shrink-0">
+                  {getWalletIcon(connector.name)}
+                </span>
+                <div>
+                  <p className="font-mono text-xs text-white">{connector.name}</p>
+                  <p className="font-mono text-[10px] text-slate-600">{getWalletSubtitle(connector.name)}</p>
+                </div>
+              </button>
+            ))}
+            <div className="px-4 pb-4 pt-1">
+              <button
+                onClick={() => setOpen(false)}
+                className="w-full font-mono text-[10px] text-slate-600 hover:text-slate-400 py-2 transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
