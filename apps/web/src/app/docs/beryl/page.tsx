@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DocHeader, H2, P, CodeBlock, Callout, Card, CardGrid, PrevNext } from "../_ui";
+import { DocHeader, H2, H3, P, CodeBlock, Callout, Card, CardGrid, PrevNext } from "../_ui";
 
 export const metadata: Metadata = {
   title: "Beryl / B20 — Blue Agent Docs",
@@ -180,6 +180,69 @@ token.burnBlocked(holderAddress, amount);`}
         <code className="text-slate-300">deploy a B20 asset token named "My Token" symbol "MTK"</code> —
         the agent will generate and sign a createB20 Factory transaction directly.
       </Callout>
+
+      <H2 id="methodology">How the B20 scanner works</H2>
+      <P>
+        Every result in the <a href="/app/b20" className="text-[#4FC3F7] underline">B20 Hub</a> Scanner is
+        read live from Base RPC via multicall — zero LLM, zero guessing. The numbers and flags come straight
+        from on-chain state, never from a model.
+      </P>
+
+      <H3 id="inspection-flow">Inspection flow</H3>
+      <P>The scanner reads each token in a fixed, deterministic sequence:</P>
+      <ol className="space-y-2.5 my-5">
+        {[
+          "Validate the address format.",
+          "Check isB20 against the B20Factory precompile — confirm it is a real B20, not arbitrary EVM bytecode.",
+          "Read core state: name, symbol, decimals, total supply, supply cap, and variant.",
+          "Read pause status per feature: transfer, mint, and burn.",
+          "Read the policy ID per scope: transfer sender, transfer receiver, transfer executor, and mint receiver.",
+          "Read variant detail: the rebase multiplier (Asset) or the currency code (Stablecoin).",
+        ].map((step, i) => (
+          <li key={i} className="flex gap-3 font-mono text-[12px] text-slate-400 leading-relaxed">
+            <span className="text-[#4FC3F7] shrink-0">{i + 1}.</span>
+            <span>{step}</span>
+          </li>
+        ))}
+      </ol>
+
+      <H3 id="trust-verdict">Trust verdict — deterministic, not a score</H3>
+      <P>
+        We surface concrete flags, never a single pass/fail number that would overstate certainty. The
+        verdict is computed in code from the reads above, so the same on-chain state always yields the same
+        flags.
+      </P>
+      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] divide-y divide-[#1A1A2E] my-5">
+        {[
+          { kind: "warn", text: "Transfers, mint, or burn are paused — the issuer can freeze that operation." },
+          { kind: "warn", text: "A transfer or mint scope is policy-gated by an allowlist or blocklist, not open." },
+          { kind: "warn", text: "Supply is uncapped — the issuer can mint without limit." },
+          { kind: "ok",   text: "No pauses, no restrictive policies, and a capped supply — no issuer-side transfer restrictions detected at read time." },
+        ].map(({ kind, text }, i) => (
+          <div key={i} className="flex items-start gap-3 px-4 py-3">
+            <span className="font-mono text-sm shrink-0" style={{ color: kind === "warn" ? "#F59E0B" : "#22C55E" }}>
+              {kind === "warn" ? "!" : "✓"}
+            </span>
+            <span className="font-mono text-[12px] leading-relaxed" style={{ color: kind === "warn" ? "#FCD34D" : "#86efac" }}>
+              {text}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <H3 id="limitations">Limitations</H3>
+      <ul className="space-y-2.5 my-5">
+        {[
+          "B20 omits AccessControlEnumerable, so role holders cannot be listed — each role is only checked per wallet via hasRole.",
+          "Reads reflect on-chain state at the moment of the scan. Roles and policies can change afterward.",
+          "Advisory only — verify independently before trusting or trading a token.",
+        ].map((text, i) => (
+          <li key={i} className="flex gap-3 font-mono text-[12px] text-slate-400 leading-relaxed">
+            <span className="text-slate-600 shrink-0">—</span>
+            <span>{text}</span>
+          </li>
+        ))}
+      </ul>
 
       <PrevNext current="/docs/beryl" />
     </article>
