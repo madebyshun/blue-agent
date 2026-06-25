@@ -60,6 +60,7 @@ const FRESH_MS = 5 * 60 * 1_000;    // return cache immediately if fresher than 
 const KV_TTL_S = 24 * 3_600;        // 24 h
 
 const cacheKey = (network: string) => `b20:registry:cdp:${network}`;
+const tokenSetKey = (network: string) => `b20:tokenset:cdp:${network}`;
 type CachedResult = B20RegistryResult & { _updatedAt?: number };
 
 // ── CDP SQL transport ───────────────────────────────────────────────────────
@@ -210,6 +211,65 @@ export async function getB20RegistryCDP(
   }
 
   return result;
+}
+
+/**
+ * Authoritative isB20 allowlist: the set of token addresses (lowercase) minted
+ * by the B20Factory (B20Created, action='added'). An address is a genuine B20
+ * token IFF it is in this set.
+ *
+ * Why this exists: the `0xb200…` prefix is a vanity-address convention, NOT a
+ * proof of B20-ness. Plenty of ordinary ERC-20s deployed via CallZap (or any
+ * CREATE2 vanity miner) also start with 0xb200, and because they use
+ * OpenZeppelin AccessControl they emit the SAME RoleGranted/RoleRevoked/Paused
+ * events. Filtering Activity by prefix alone therefore surfaces ERC-20
+ * impostors as if they were B20 control actions (verified: 2 mainnet
+ * "RoleRevoked" came from the CFB index fund, isB20=false). Intersecting event
+ * emitters with this set drops them.
+ *
+ * Same WAF-safe single-address query + KV cache as the registry. Cached under
+ * "b20:tokenset:cdp:{network}". Throws on CDP failure (caller decides fallback).
+ */
+export async function getB20TokenSet(
+  network: "mainnet" | "sepolia",
+): Promise<Set<string>> {
+  // Fresh cache → return immediately.
+  try {
+    const cached = await kv.get<{ tokens: string[]; _updatedAt: number }>(
+      tokenSetKey(network),
+    );
+    if (cached?._updatedAt && Date.now() - cached._updatedAt < FRESH_MS) {
+      return new Set(cached.tokens);
+    }
+  } catch {
+    /* ignore cache read errors — fall through to a live query */
+  }
+
+  // Same minimal WAF-safe query as the registry (address-only filter).
+  const sql =
+    `SELECT action, parameters ` +
+    `FROM ${TABLE[network]}.events ` +
+    `WHERE address = '${FACTORY_LC}' LIMIT 50000`;
+  const rows = await runCdpSql(sql); // throws on failure
+
+  const set = new Set<string>();
+  for (const row of rows) {
+    if (row.action !== "added") continue; // reorg-safe
+    const token = (row.parameters?.token ?? "").toLowerCase();
+    if (token) set.add(token);
+  }
+
+  try {
+    await kv.set(
+      tokenSetKey(network),
+      { tokens: [...set], _updatedAt: Date.now() },
+      { ex: KV_TTL_S },
+    );
+  } catch {
+    /* stale cache acceptable */
+  }
+
+  return set;
 }
 
 /** Parse a decimal block-number string to bigint; 0n on any bad input. */
