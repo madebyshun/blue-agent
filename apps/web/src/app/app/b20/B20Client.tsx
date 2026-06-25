@@ -333,9 +333,15 @@ function ResultCard({ info, onScanAnother }: { info: B20Inspection; onScanAnothe
                 </span>
               </div>
             ))}
-            <p className="font-mono text-[9px] text-slate-600 pt-2 border-t border-[#1A1A2E]">
-              Reflects on-chain config at read time. Roles and policies can be changed by the issuer.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-2 border-t border-[#1A1A2E]">
+              <p className="font-mono text-[9px] text-slate-600">
+                Reflects on-chain config at read time. Roles and policies can be changed by the issuer.
+              </p>
+              <a href="/docs/beryl#methodology"
+                className="font-mono text-[9px] text-[#4FC3F7] hover:opacity-80 transition-opacity shrink-0">
+                How this works ↗
+              </a>
+            </div>
           </div>
         </div>
 
@@ -428,9 +434,8 @@ const LAUNCH_NETS = {
   sepolia: { chainId: 84532, label: "Sepolia",  explorer: "https://sepolia.basescan.org" },
   mainnet: { chainId: 8453,  label: "Mainnet",  explorer: "https://basescan.org"         },
 } as const;
-type LaunchNet = keyof typeof LAUNCH_NETS;
 
-function LaunchTab({ onScanToken }: { onScanToken: (addr: string, net: Network) => void }) {
+function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: string, net: Network) => void; network: Network; setNetwork: (n: Network) => void }) {
   const [name,       setName]       = useState("");
   const [symbol,     setSymbol]     = useState("");
   const [variant,    setVariant]    = useState<"asset" | "stablecoin">("asset");
@@ -438,7 +443,6 @@ function LaunchTab({ onScanToken }: { onScanToken: (addr: string, net: Network) 
   const [decManual,  setDecManual]  = useState(false);
   const [supplyCap,  setSupplyCap]  = useState("");
   const [currCode,   setCurrCode]   = useState("USD");
-  const [lNetwork,   setLNetwork]   = useState<LaunchNet>("sepolia");
 
   const [deploying,     setDeploying]     = useState(false);
   const [polling,       setPolling]       = useState(false);
@@ -457,7 +461,7 @@ function LaunchTab({ onScanToken }: { onScanToken: (addr: string, net: Network) 
         address:   deployedToken,
         name:      name.trim(),
         symbol:    symbol.replace(/^\$/, "").trim(),
-        network:   lNetwork,
+        network:   network,
         deployer:  address.toLowerCase(),
         timestamp: Date.now(),
       };
@@ -476,7 +480,7 @@ function LaunchTab({ onScanToken }: { onScanToken: (addr: string, net: Network) 
   const s      = symbol.replace(/^\$/, "").trim();
   const cap    = supplyCap.trim();
   const cur    = currCode.trim() || "USD";
-  const net    = LAUNCH_NETS[lNetwork];
+  const net    = LAUNCH_NETS[network];
   const canDeploy = !!n && !!s;
 
   async function deploy() {
@@ -491,14 +495,14 @@ function LaunchTab({ onScanToken }: { onScanToken: (addr: string, net: Network) 
           supply_cap:    cap || undefined,
           currency_code: variant === "stablecoin" ? cur : undefined,
           admin: address,
-          network: lNetwork,
+          network: network,
         }),
       });
       const prep = await prepRes.json();
       if (!prep.ok) throw new Error(prep.error || "Prepare failed");
       if (!prep.berylLive) {
         throw new Error(
-          lNetwork === "mainnet"
+          network === "mainnet"
             ? "Mainnet Beryl activates June 25, 2026 18:00 UTC"
             : "B20 factory not active on this network yet",
         );
@@ -523,7 +527,7 @@ function LaunchTab({ onScanToken }: { onScanToken: (addr: string, net: Network) 
         const rec = await fetch("/api/b20/receipt", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tx_hash: hash, network: lNetwork }),
+          body: JSON.stringify({ tx_hash: hash, network: network }),
         }).then(r => r.json());
         if (rec.ok && rec.status === "success" && rec.tokenAddress) {
           setDeployedToken(rec.tokenAddress);
@@ -558,9 +562,9 @@ function LaunchTab({ onScanToken }: { onScanToken: (addr: string, net: Network) 
           {/* Network toggle */}
           <div className="flex rounded-lg border border-[#1A1A2E] overflow-hidden shrink-0">
             {(["sepolia", "mainnet"] as const).map(nk => (
-              <button key={nk} onClick={() => setLNetwork(nk)}
+              <button key={nk} onClick={() => setNetwork(nk)}
                 className="px-3 py-1.5 font-mono text-xs transition-colors"
-                style={lNetwork === nk
+                style={network === nk
                   ? { background: "#4FC3F715", color: "#4FC3F7" }
                   : { color: "#475569" }}>
                 {LAUNCH_NETS[nk].label}
@@ -658,7 +662,7 @@ function LaunchTab({ onScanToken }: { onScanToken: (addr: string, net: Network) 
                 </button>
               )}
 
-              {lNetwork === "sepolia" && (
+              {network === "sepolia" && (
                 <p className="font-mono text-[9px] text-slate-600 mt-2 text-center">
                   Sepolia testnet · free to test.{" "}
                   <a href="https://portal.cdp.coinbase.com/products/faucet"
@@ -666,7 +670,7 @@ function LaunchTab({ onScanToken }: { onScanToken: (addr: string, net: Network) 
                     className="text-[#4FC3F7] hover:opacity-80">Get test ETH →</a>
                 </p>
               )}
-              {lNetwork === "mainnet" && (
+              {network === "mainnet" && (
                 <p className="font-mono text-[9px] text-amber-400/70 mt-2 text-center">
                   Beryl is live on Mainnet. Real ETH required for gas.
                 </p>
@@ -689,7 +693,7 @@ function LaunchTab({ onScanToken }: { onScanToken: (addr: string, net: Network) 
               <p className="font-mono text-xs text-white break-all mb-3">{deployedToken}</p>
               <div className="flex gap-2 flex-wrap">
                 <button
-                  onClick={() => onScanToken(deployedToken, lNetwork as Network)}
+                  onClick={() => onScanToken(deployedToken, network as Network)}
                   className="font-mono text-xs px-3 py-1.5 rounded-xl transition-all"
                   style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
                   Scan in Scanner →
@@ -1641,7 +1645,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
               )}
 
               {/* ── LAUNCH MAIN ───────────────────────────────────── */}
-              {activeTab === "launch" && <LaunchTab onScanToken={handleScanDeployed} />}
+              {activeTab === "launch" && <LaunchTab onScanToken={handleScanDeployed} network={network} setNetwork={setNetwork} />}
 
               {/* ── MANAGE MAIN ───────────────────────────────────── */}
               {activeTab === "manage" && (
