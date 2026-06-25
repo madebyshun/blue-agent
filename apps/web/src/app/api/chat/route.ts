@@ -308,7 +308,10 @@ When user asks to send/transfer a B20 token:
 4. Only proceed if simulation succeeds — never bypass
 5. Use hub_b20_analyze for B20 deployment questions / role explanations
 6. Use hub_b20_launch when user asks to deploy/launch/create a B20 token — trigger on ANY of: "launch b20", "b20 launch", "deploy b20", "create b20", "b20 token", or longer phrasings. Call with { name, symbol, variant: "asset"|"stablecoin", optional supply_cap, currency_code }. Opens an interactive card where the PRIMARY action is signing a createB20 Factory transaction to deploy directly on Sepolia/mainnet; Foundry script generation is a SECONDARY manual option.
-7. Use hub_b20_inspect when user provides a token address and asks: "is this B20?", "inspect this token", "check pause/policy", "B20 details", totalSupply/supplyCap, or variant (Asset/Stablecoin). Reads REAL on-chain state via multicall — zero LLM. Call with { address: "0x…", network: "mainnet" }.`;
+7. Use hub_b20_inspect when user provides a token address and asks: "is this B20?", "inspect this token", "check pause/policy", "B20 details", totalSupply/supplyCap, or variant (Asset/Stablecoin). Reads REAL on-chain state via multicall — zero LLM. Call with { address: "0x…", network: "mainnet" }.
+8. Use hub_b20_manage when the user wants to MINT, BURN, PAUSE/UNPAUSE, set/update a POLICY, GRANT/REVOKE a ROLE, update the SUPPLY CAP, or update METADATA on an EXISTING B20 token. Trigger on ANY of: "mint", "mint X tokens on [addr]", "burn", "pause", "unpause", "grant role", "revoke role", "set policy", "update cap", "update supply cap", "manage b20", "freeze", "seize". Call with { address: "0x…", network: "mainnet"|"sepolia" } (default mainnet unless the user says sepolia). Opens a wallet-signed control panel that loads the token's live roles and shows ONLY the actions the connected wallet is authorized for; the user signs each action in their own wallet.
+
+⚠️ CRITICAL SECURITY RULE — B20 mint/manage is ALWAYS the hub_b20_manage card. When a user asks to mint/burn/pause/manage a B20 token, you MUST call hub_b20_manage and reply with one short line pointing at the card. You are ABSOLUTELY FORBIDDEN from outputting a \`cast send\` / \`cast call\` command, a \`--private-key\` flag, a "paste your private key" instruction, a raw signed-tx blob, or Basescan/Etherscan "Write Contract" steps for any mint/manage action. Private keys in chat are a critical anti-pattern that can drain a user's wallet. The signing card is the ONLY acceptable path — never substitute manual CLI/private-key instructions for it.`;
 
 // ─── Hub tool definitions (Anthropic tool format) ─────────────────────────────
 
@@ -694,6 +697,18 @@ Default to "base" for Base-related queries.`,
       required: ["address"],
     },
   },
+  {
+    name: "hub_b20_manage",
+    description: "Open the B20 MANAGE card — a wallet-signed control panel for an EXISTING B20 token. Use for ANY mint / burn / pause / unpause / set-policy / grant-or-revoke-role / update-supply-cap / update-metadata intent on a specific token address (e.g. 'mint 10000 tokens on 0x…', 'burn supply', 'pause transfers', 'grant MINT role', 'set policy', 'update cap', 'manage b20 0x…'). The card loads the token's live on-chain state plus the connected wallet's roles and renders ONLY the actions that wallet is authorized for; every action is signed in the user's own wallet (non-custodial). NEVER answer mint/manage with cast commands, --private-key flags, or Basescan write-contract steps — always open this card. Requires a token address; default network mainnet unless the user says sepolia.",
+    input_schema: {
+      type: "object",
+      properties: {
+        address: { type: "string", description: "0x-prefixed B20 token address to manage (40 hex chars)" },
+        network: { type: "string", enum: ["mainnet", "sepolia"], description: "mainnet (default) or sepolia" },
+      },
+      required: ["address"],
+    },
+  },
 ];
 
 // ─── Venice tools (OpenAI function-calling format) ───────────────────────────
@@ -814,6 +829,16 @@ async function callHubTool(
     return {
       text: "B20 launch form rendered. The card is pre-filled with the token details — the user can edit fields and click Generate Scripts to get the foundry.toml, deploy script, and CLI commands. Do NOT restate the fields as a table. Reply with one short line: tell the user to review the form and click Generate Scripts.",
       result: { kind: "b20_launch", ...args },
+    };
+  }
+  if (toolName === "hub_b20_manage") {
+    // Client-rendered marker — B20ManageCard loads the token's on-chain state +
+    // the connected wallet's roles and renders the role-gated ManagePanel. Every
+    // action (mint/burn/pause/policy/role/cap) is signed in the user's own wallet.
+    // No server execution here, no private keys, no funds moved.
+    return {
+      text: "B20 manage card rendered. The card loads the token's live state and shows only the actions the connected wallet is authorized for — the user signs each action in their own wallet (non-custodial). Do NOT output cast commands, private keys, or Basescan write steps, and do NOT restate the actions as a table. Reply with one short line: tell the user to use the manage card above to sign their action.",
+      result: { kind: "b20_manage", ...args },
     };
   }
 
