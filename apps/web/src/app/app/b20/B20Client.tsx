@@ -523,11 +523,18 @@ function ResultCard({ info, onScanAnother, onHowItWorks }: { info: B20Inspection
 function LaunchMyTokens() {
   const { address } = useAccount();
   const [myTokens, setMyTokens] = useState<MyToken[]>([]);
+  const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
 
   useEffect(() => {
     const all = lsGet<MyToken[]>(LS_MY_TOKENS, []);
     setMyTokens(address ? all.filter(t => t.deployer.toLowerCase() === address.toLowerCase()) : []);
   }, [address]);
+
+  const copyAddr = (addr: string) => {
+    navigator.clipboard.writeText(addr)
+      .then(() => { setCopiedAddr(addr); setTimeout(() => setCopiedAddr(c => (c === addr ? null : c)), 1500); })
+      .catch(() => {});
+  };
 
   return (
     <SideCard title="Your Deployed Tokens">
@@ -553,15 +560,33 @@ function LaunchMyTokens() {
                 <p className="font-mono text-xs text-white truncate">
                   {t.name} <span className="text-slate-500">${t.symbol}</span>
                 </p>
-                <p className="font-mono text-[9px] text-slate-700">
-                  {t.address.slice(0, 14)}… · {t.network === "mainnet" ? "Main" : "Sepolia"}
-                </p>
+                <button onClick={() => copyAddr(t.address)} title={`Copy ${t.address}`}
+                  className="font-mono text-[9px] text-slate-700 hover:text-[#4FC3F7] transition-colors max-w-full truncate block text-left">
+                  {copiedAddr === t.address
+                    ? "Copied full address ✓"
+                    : `${t.address.slice(0, 14)}… · ${t.network === "mainnet" ? "Main" : "Sepolia"}`}
+                </button>
               </div>
-              <a href={`https://${t.network === "mainnet" ? "" : "sepolia."}basescan.org/token/${t.address}`}
-                target="_blank" rel="noopener noreferrer"
-                className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7] transition-colors shrink-0">
-                ↗
-              </a>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button onClick={() => copyAddr(t.address)} title="Copy contract address"
+                  className="text-slate-600 hover:text-[#4FC3F7] transition-colors p-0.5">
+                  {copiedAddr === t.address ? (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="#22C55E" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                    </svg>
+                  ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                      <path strokeLinecap="round" strokeLinejoin="round"
+                        d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
+                    </svg>
+                  )}
+                </button>
+                <a href={`https://${t.network === "mainnet" ? "" : "sepolia."}basescan.org/token/${t.address}`}
+                  target="_blank" rel="noopener noreferrer" title="View on Basescan"
+                  className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7] transition-colors">
+                  ↗
+                </a>
+              </div>
             </div>
           ))}
         </div>
