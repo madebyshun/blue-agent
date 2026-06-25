@@ -7,20 +7,25 @@
 
 import { Metadata } from "next";
 import Link from "next/link";
+import { cache } from "react";
+import { kvGet } from "@/lib/kv";
 import type { ShareDoc } from "@/app/api/chat/share/route";
+
+export const runtime = "nodejs";
 
 // ── Data fetching ─────────────────────────────────────────────────────────────
 
-async function getShare(id: string): Promise<ShareDoc | null> {
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev"}/api/chat/share?id=${encodeURIComponent(id)}`,
-      { next: { revalidate: 60 }, signal: AbortSignal.timeout(8000) },
-    );
-    if (!res.ok) return null;
-    return res.json() as Promise<ShareDoc>;
-  } catch { return null; }
-}
+// Read the shared conversation straight from KV. We deliberately do NOT fetch our
+// own /api/chat/share over HTTP here: a server component fetching its own Vercel
+// deployment self-deadlocks (the page hung ~20s then timed out, HTTP 000), and it
+// forced a needless second function invocation. cache() de-dupes the read so
+// generateMetadata and the page body share a single KV GET per request.
+const SHARE_KEY = "chatshare:"; // source of truth: KEY_PREFIX in /api/chat/share
+
+const getShare = cache(async (id: string): Promise<ShareDoc | null> => {
+  if (!/^[0-9a-f-]{36}$/.test(id)) return null;
+  return kvGet<ShareDoc>(`${SHARE_KEY}${id}`);
+});
 
 // ── Metadata ──────────────────────────────────────────────────────────────────
 
