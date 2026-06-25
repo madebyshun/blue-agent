@@ -7,15 +7,13 @@ import { useAppChrome } from "@/app/app/AppChrome";
 import { runB20Inspect }  from "./inspect-action";
 import { runB20Roles }    from "./roles-action";
 import { runB20Registry } from "./registry-action";
-import { runB20Simulate } from "./simulate-action";
 import type { B20Inspection, PolicyInfo } from "@/lib/b20/inspect";
 import type { B20RolesResult }            from "@/lib/b20/roles";
 import type { B20RegistryResult }         from "@/lib/b20/registry-logs";
-import type { B20SimulateResult, SimulateOutcome } from "@/lib/b20/simulate";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab     = "scanner" | "roles" | "registry" | "simulator" | "launch";
+type Tab     = "scanner" | "roles" | "registry" | "launch";
 type Network = "mainnet" | "sepolia";
 
 // ── Shared input style (module-level so LaunchTab can use it) ─────────────────
@@ -48,12 +46,6 @@ const TabIcons: Record<Tab, React.ReactNode> = {
         d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
     </svg>
   ),
-  simulator: (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round"
-        d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
-    </svg>
-  ),
   launch: (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
       <path strokeLinecap="round" strokeLinejoin="round"
@@ -70,11 +62,10 @@ const DocsIcon = (
 );
 
 const TABS: Array<{ id: Tab; label: string }> = [
-  { id: "scanner",   label: "Scanner"  },
-  { id: "roles",     label: "Roles"    },
-  { id: "registry",  label: "Registry" },
-  { id: "simulator", label: "Simulate" },
-  { id: "launch",    label: "Launch"   },
+  { id: "scanner",  label: "Scanner"  },
+  { id: "roles",    label: "Roles"    },
+  { id: "registry", label: "Registry" },
+  { id: "launch",   label: "Launch"   },
 ];
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -338,16 +329,6 @@ function ResultCard({ info, onScanAnother }: { info: B20Inspection; onScanAnothe
     </div>
   );
 }
-
-// ── Simulate outcome config ───────────────────────────────────────────────────
-
-const OUTCOME_CONFIG: Record<SimulateOutcome, { color: string; icon: string; label: string; hint: string }> = {
-  success:              { color: "#22C55E", icon: "✓", label: "Transfer would succeed",               hint: "No pause, no policy block. Simulation completed without revert." },
-  paused:               { color: "#F59E0B", icon: "!", label: "Blocked — token is paused",             hint: "The issuer has paused this operation. Only PAUSE_ROLE / UNPAUSE_ROLE can change this." },
-  policy_forbids:       { color: "#F59E0B", icon: "!", label: "Blocked — policy forbids this transfer", hint: "Sender, receiver, or executor is not in an allowlist (or is in a blocklist)." },
-  insufficient_balance: { color: "#EF4444", icon: "×", label: "Reverts — insufficient balance",        hint: "Sender doesn't hold enough tokens. Policy/pause checks run before balance checks." },
-  other_revert:         { color: "#EF4444", icon: "×", label: "Reverts — unexpected error",            hint: "Transaction reverts for an unrecognised reason. See revert reason below." },
-};
 
 // ── Launch tab — direct wallet deploy via /api/b20/prepare ────────────────────
 
@@ -803,7 +784,6 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
     setRegistryResult(null); setRegistryError("");
     setScanResult(null);     setScanError("");
     setRolesResult(null);
-    setSimResult(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [network]);
 
@@ -820,24 +800,6 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
           setRecentScans(p => [{ addr: addr.trim(), name: result.name!, symbol: result.symbol ?? "", net: network }, ...p.filter(r => r.addr !== addr.trim())].slice(0, 8));
         window.history.replaceState({}, "", `/app/b20?${new URLSearchParams({ address: addr.trim(), network })}`);
       } catch (e) { setScanError((e as Error).message ?? "Inspection failed."); }
-    });
-  }
-
-  // ── Simulator ─────────────────────────────────────────────────────────────
-  const [simToken,    setSimToken]    = useState("");
-  const [simSender,   setSimSender]   = useState("");
-  const [simReceiver, setSimReceiver] = useState("");
-  const [simAmount,   setSimAmount]   = useState("1");
-  const [simResult,   setSimResult]   = useState<B20SimulateResult | null>(null);
-  const [simError,    setSimError]    = useState("");
-  const [simPending,  startSim]       = useTransition();
-
-  function doSim() {
-    if (!isValidAddr(simToken) || !isValidAddr(simSender) || !isValidAddr(simReceiver)) return;
-    setSimError(""); setSimResult(null);
-    startSim(async () => {
-      try { setSimResult(await runB20Simulate(simToken.trim(), simSender.trim(), simReceiver.trim(), simAmount.trim() || "1", network)); }
-      catch (e) { setSimError((e as Error).message ?? "Simulation failed."); }
     });
   }
 
@@ -1398,173 +1360,6 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                     </div>
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* ── SIMULATOR ─────────────────────────────────────────── */}
-            {activeTab === "simulator" && (
-              <div>
-                <div className="mb-6">
-                  <h2 className="font-mono text-xl font-bold text-white mb-1">Transfer Simulator</h2>
-                  <p className="font-mono text-sm text-slate-500 mb-3">
-                    Simulate a transfer via <code className="text-[#4FC3F7] text-xs">eth_call</code> — read-only, no broadcast, no gas cost.
-                    Predicts success, pause blocks, policy denials, and balance errors.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <InfoChip>eth_call only</InfoChip>
-                    <InfoChip>No broadcast</InfoChip>
-                    <InfoChip color="#22C55E">Zero gas</InfoChip>
-                  </div>
-                </div>
-
-                {/* Flow diagram */}
-                <div className="flex items-center gap-3 mb-5 px-4 py-3 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f]">
-                  <div className="text-center min-w-0 flex-1">
-                    <p className="font-mono text-[9px] text-slate-600 mb-1 tracking-widest">SENDER</p>
-                    <p className="font-mono text-[10px] text-slate-400 truncate">
-                      {simSender ? truncAddr(simSender, 7) : "0x…"}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
-                    <p className="font-mono text-[8px] text-slate-700 truncate max-w-full px-2">
-                      {simToken ? truncAddr(simToken, 7) : "token"}
-                    </p>
-                    <div className="flex items-center gap-1 w-full">
-                      <div className="flex-1 h-px bg-gradient-to-r from-transparent to-[#4FC3F740]" />
-                      <span className="font-mono text-base text-[#4FC3F7]">→</span>
-                      <div className="flex-1 h-px bg-gradient-to-r from-[#4FC3F740] to-transparent" />
-                    </div>
-                    <p className="font-mono text-[9px] text-slate-600">{simAmount || "0"} tokens</p>
-                  </div>
-                  <div className="text-center min-w-0 flex-1">
-                    <p className="font-mono text-[9px] text-slate-600 mb-1 tracking-widest">RECEIVER</p>
-                    <p className="font-mono text-[10px] text-slate-400 truncate">
-                      {simReceiver ? truncAddr(simReceiver, 7) : "0x…"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-3 mb-5">
-                  <div>
-                    <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">Token Address</label>
-                    <input value={simToken}    onChange={e => setSimToken(e.target.value)}    placeholder="0x…" spellCheck={false} className={INPUT_CLS} />
-                  </div>
-                  <div>
-                    <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">Sender</label>
-                    <input value={simSender}   onChange={e => setSimSender(e.target.value)}   placeholder="0x…" spellCheck={false} className={INPUT_CLS} />
-                  </div>
-                  <div>
-                    <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">Receiver</label>
-                    <input value={simReceiver} onChange={e => setSimReceiver(e.target.value)} placeholder="0x…" spellCheck={false} className={INPUT_CLS} />
-                  </div>
-                  <div>
-                    <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">Amount (human units)</label>
-                    <input value={simAmount}   onChange={e => setSimAmount(e.target.value)}   placeholder="100" spellCheck={false} className={INPUT_CLS} />
-                  </div>
-                </div>
-
-                <button onClick={doSim}
-                  disabled={!isValidAddr(simToken) || !isValidAddr(simSender) || !isValidAddr(simReceiver) || simPending}
-                  className="px-5 py-2.5 rounded-xl font-mono text-xs font-semibold transition-all mb-5"
-                  style={isValidAddr(simToken) && isValidAddr(simSender) && isValidAddr(simReceiver) && !simPending
-                    ? { background: "#4FC3F720", color: "#4FC3F7", border: "1px solid #4FC3F740" }
-                    : { background: "#0d0d18", color: "#334155", border: "1px solid #1A1A2E", cursor: "not-allowed" }}>
-                  {simPending ? "Simulating…" : "Simulate Transfer"}
-                </button>
-
-                {simPending && (
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-                    <span className="font-mono text-xs text-slate-500">
-                      Running eth_call on Base {network}…
-                    </span>
-                  </div>
-                )}
-                {simError && !simPending && (
-                  <div className="rounded-2xl border border-[#EF444430] px-4 py-3 mb-4">
-                    <p className="font-mono text-xs text-[#EF4444]">{simError}</p>
-                  </div>
-                )}
-
-                {/* Empty state — what is the simulator for? */}
-                {!simResult && !simPending && !simError && (
-                  <div className="space-y-3">
-                    {/* Use cases */}
-                    <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
-                      <div className="px-4 py-3 bg-[#0a0a0f] border-b border-[#1A1A2E]">
-                        <p className="font-mono text-sm text-slate-300 font-medium mb-0.5">What is this for?</p>
-                        <p className="font-mono text-xs text-slate-600 leading-relaxed">
-                          Before sending B20 tokens, simulate the transfer via <code className="text-[#4FC3F7]">eth_call</code> — purely read-only, nothing is broadcast. Catches all B20-specific failure modes before you waste gas.
-                        </p>
-                      </div>
-                      <div className="divide-y divide-[#0d0d18]">
-                        {[
-                          { icon: "🔍", text: "Pre-flight check before a real transfer or batch airdrop" },
-                          { icon: "🔐", text: "Verify a wallet is allowed by an allowlist policy before mint" },
-                          { icon: "🛡️", text: "Test that a paused token correctly blocks all outflows" },
-                          { icon: "💰", text: "Confirm a sender holds enough balance for an exact amount" },
-                        ].map(({ icon, text }) => (
-                          <div key={text} className="flex items-center gap-3 px-4 py-3">
-                            <span className="text-base w-5 shrink-0 text-center">{icon}</span>
-                            <span className="font-mono text-xs text-slate-500 leading-relaxed">{text}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    {/* Outcomes reference */}
-                    <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
-                      <div className="px-4 py-3 bg-[#0a0a0f] border-b border-[#1A1A2E]">
-                        <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">Possible Outcomes</p>
-                      </div>
-                      <div className="divide-y divide-[#0d0d18]">
-                        {(Object.entries(OUTCOME_CONFIG) as [SimulateOutcome, typeof OUTCOME_CONFIG[SimulateOutcome]][]).map(([key, cfg]) => (
-                          <div key={key} className="flex items-start gap-3 px-4 py-3">
-                            <span className="font-mono text-sm shrink-0 w-5 text-center pt-px" style={{ color: cfg.color }}>{cfg.icon}</span>
-                            <div>
-                              <p className="font-mono text-xs font-medium" style={{ color: cfg.color }}>{cfg.label}</p>
-                              <p className="font-mono text-[10px] text-slate-600 mt-0.5 leading-relaxed">{cfg.hint}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {simResult && !simPending && (() => {
-                  const cfg = OUTCOME_CONFIG[simResult.outcome];
-                  return (
-                    <div className="rounded-2xl border overflow-hidden" style={{ borderColor: `${cfg.color}40` }}>
-                      <div className="px-5 py-4 flex items-center gap-4" style={{ background: `${cfg.color}08` }}>
-                        <span className="font-mono text-3xl shrink-0" style={{ color: cfg.color }}>{cfg.icon}</span>
-                        <div>
-                          <p className="font-mono text-base font-bold text-white mb-0.5">{cfg.label}</p>
-                          <p className="font-mono text-xs text-slate-400 leading-relaxed">{cfg.hint}</p>
-                        </div>
-                      </div>
-                      <div className="px-5 py-4 space-y-2 border-t border-[#1A1A2E]">
-                        {[
-                          { k: "Token",    v: simResult.token    },
-                          { k: "Sender",   v: simResult.sender   },
-                          { k: "Receiver", v: simResult.receiver },
-                          { k: "Amount",   v: `${simResult.amount} (${simResult.amountWei} wei)` },
-                          ...(simResult.gasEstimate ? [{ k: "Gas est.", v: `${Number(simResult.gasEstimate).toLocaleString()} units` }] : []),
-                        ].map(({ k, v }) => (
-                          <div key={k} className="flex gap-3">
-                            <span className="font-mono text-xs text-slate-600 w-20 shrink-0">{k}</span>
-                            <span className="font-mono text-xs text-slate-400 break-all">{v}</span>
-                          </div>
-                        ))}
-                        {simResult.revertReason && (
-                          <div className="mt-3 pt-3 border-t border-[#1A1A2E]">
-                            <p className="font-mono text-[9px] text-slate-600 mb-1 tracking-widest uppercase">Revert reason</p>
-                            <p className="font-mono text-xs text-slate-500 break-all leading-relaxed">{simResult.revertReason}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
               </div>
             )}
 
