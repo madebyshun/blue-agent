@@ -12,6 +12,7 @@
 import { getB20Registry, type B20RegistryResult } from "@/lib/b20/registry-logs";
 import { getB20RegistryCDP } from "@/lib/b20/registry-cdp";
 import { getB20Activity, type B20ActivityResult } from "@/lib/b20/activity-cdp";
+import { getB20Activation, type B20Activation } from "@/lib/b20/activation";
 
 export async function runB20Registry(
   network: "mainnet" | "sepolia",
@@ -42,5 +43,24 @@ export async function runB20Activity(
       `[b20-activity] CDP path failed (${(err as Error).message}) — activity unavailable`,
     );
     return { network, events: [], total: 0, unavailable: true };
+  }
+}
+
+/**
+ * ActivationRegistry gate for the Launch tab — is the B20 createB20 feature live
+ * for ASSET / STABLECOIN on this network? Read on-chain (0x8453…0001) so the UI
+ * can disable Deploy with a clear message before the wallet hits a confusing
+ * "Unable to estimate fee" revert. Never throws; ok:false ⟹ unknown (don't block).
+ */
+export async function runB20Activation(
+  network: "mainnet" | "sepolia",
+): Promise<B20Activation> {
+  try {
+    return await getB20Activation(network);
+  } catch (err) {
+    console.warn(
+      `[b20-activation] check failed (${(err as Error).message}) — treating as unknown`,
+    );
+    return { network, ok: false, asset: true, stablecoin: true, checkedAt: Date.now() };
   }
 }

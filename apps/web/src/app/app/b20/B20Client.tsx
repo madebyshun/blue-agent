@@ -7,13 +7,14 @@ import { useAppChrome } from "@/app/app/AppChrome";
 import { ConnectButton } from "@/components/ConnectModal";
 import { runB20Inspect }  from "./inspect-action";
 import { runB20Roles }    from "./roles-action";
-import { runB20Registry, runB20Activity } from "./registry-action";
+import { runB20Registry, runB20Activity, runB20Activation } from "./registry-action";
 import { runB20ManageLoad, type ManageData } from "./manage-action";
 import ManagePanel from "./ManagePanel";
 import type { B20Inspection, PolicyInfo } from "@/lib/b20/inspect";
 import type { B20RolesResult }            from "@/lib/b20/roles";
 import type { B20RegistryResult }         from "@/lib/b20/registry-logs";
 import type { B20ActivityResult, B20ActivityCategory } from "@/lib/b20/activity-cdp";
+import type { B20Activation }             from "@/lib/b20/activation";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -650,6 +651,20 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
   const [deployTxHash,  setDeployTxHash]  = useState("");
   const [deployedToken, setDeployedToken] = useState("");
 
+  // ActivationRegistry gate — read on-chain isActivated for this network so we can
+  // block Deploy BEFORE the wallet hits a confusing "Unable to estimate fee"
+  // (createB20 reverts FeatureNotActivated until the registry enables B20).
+  // Re-runs on mount + every network switch → auto-detects mainnet going live.
+  const [activation, setActivation] = useState<B20Activation | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setActivation(null);
+    runB20Activation(network)
+      .then(a => { if (!cancelled) setActivation(a); })
+      .catch(() => { if (!cancelled) setActivation(null); });
+    return () => { cancelled = true; };
+  }, [network]);
+
   const { address, chainId: currentChainId } = useAccount();
   const { sendTransactionAsync }             = useSendTransaction();
   const { switchChainAsync }                 = useSwitchChain();
@@ -681,7 +696,10 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
   const cap    = supplyCap.trim();
   const cur    = currCode.trim() || "USD";
   const net    = LAUNCH_NETS[network];
-  const canDeploy = !!n && !!s;
+  // Only block when the on-chain read succeeded (ok) AND the selected variant is
+  // not yet activated. Unknown reads (ok:false) or still-loading → don't block.
+  const notActivated = !!activation && activation.ok && !activation[variant];
+  const canDeploy = !!n && !!s && !notActivated;
 
   async function deploy() {
     if (!address || !canDeploy) return;
@@ -858,11 +876,34 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
                   style={{ background: "#34D399", color: "#050508" }}>
                   {deploying
                     ? (polling ? "Confirming on-chain…" : "Preparing transaction…")
-                    : `Deploy B20 on ${net.label} →`}
+                    : notActivated
+                      ? `B20 not active on ${net.label} yet`
+                      : `Deploy B20 on ${net.label} →`}
                 </button>
               )}
 
-              {network === "sepolia" && (
+              {/* ActivationRegistry gate — block + explain before the wallet sees a
+                  FeatureNotActivated revert as a confusing "Unable to estimate fee". */}
+              {notActivated && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 mt-3">
+                  <p className="font-mono text-xs text-amber-400/90 leading-relaxed">
+                    B20 isn&apos;t active on {net.label} yet. The Activation Registry
+                    hasn&apos;t been enabled (can take ~1h after the Beryl hardfork).
+                    {network === "mainnet" && (
+                      <>
+                        {" "}
+                        <button onClick={() => setNetwork("sepolia")}
+                          className="text-[#4FC3F7] hover:opacity-80 underline">
+                          Use Base Sepolia
+                        </button>
+                        {" "}to deploy and test now.
+                      </>
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {network === "sepolia" && !notActivated && (
                 <p className="font-mono text-[9px] text-slate-600 mt-2 text-center">
                   Sepolia testnet · free to test.{" "}
                   <a href="https://portal.cdp.coinbase.com/products/faucet"
@@ -870,7 +911,7 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
                     className="text-[#4FC3F7] hover:opacity-80">Get test ETH →</a>
                 </p>
               )}
-              {network === "mainnet" && (
+              {network === "mainnet" && !notActivated && (
                 <p className="font-mono text-[9px] text-amber-400/70 mt-2 text-center">
                   Beryl is live on Mainnet. Real ETH required for gas.
                 </p>
