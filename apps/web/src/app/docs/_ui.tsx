@@ -19,6 +19,10 @@ export function H2({ id, children }: { id?: string; children: ReactNode }) {
   return <h2 id={id} className="text-xl font-bold text-white mt-12 mb-4 scroll-mt-24">{children}</h2>;
 }
 
+export function H3({ id, children }: { id?: string; children: ReactNode }) {
+  return <h3 id={id} className="text-base font-bold text-white mt-8 mb-3 scroll-mt-24">{children}</h3>;
+}
+
 export function P({ children }: { children: ReactNode }) {
   return <p className="text-slate-400 text-sm leading-relaxed mb-4">{children}</p>;
 }
