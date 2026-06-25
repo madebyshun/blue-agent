@@ -21,6 +21,7 @@ import {
 import type { B20Inspection } from "@/lib/b20/inspect";
 import type { B20RolesResult } from "@/lib/b20/roles";
 import type { ScopeHashes } from "./manage-action";
+import { ConnectButton } from "@/components/ConnectModal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -332,11 +333,14 @@ export default function ManagePanel({
 
   if (!address) {
     return (
-      <div className="rounded-2xl border border-[#1A1A2E] px-5 py-8 text-center">
-        <p className="font-mono text-sm text-slate-400">Connect wallet to manage this token</p>
-        <p className="font-mono text-xs text-slate-700 mt-1">
-          Actions are role-gated — only shown for roles your wallet holds.
-        </p>
+      <div className="rounded-2xl border border-[#1A1A2E] px-5 py-8 text-center space-y-3">
+        <div>
+          <p className="font-mono text-sm text-slate-400 mb-1">Connect wallet to manage this token</p>
+          <p className="font-mono text-xs text-slate-700">
+            Actions are role-gated — only shown for roles your wallet holds.
+          </p>
+        </div>
+        <ConnectButton label="Connect Wallet" />
       </div>
     );
   }
