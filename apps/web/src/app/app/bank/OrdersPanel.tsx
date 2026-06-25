@@ -3,14 +3,66 @@
 // Blue Bank — Orders & Invoices. Create a payment request (USDC), share a
 // /pay/<id> link, and track pending → paid. Settlement runs in B20 USDC via
 // transferWithMemo once B20 mainnet is live (NEXT_PUBLIC_B20_ENABLED).
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useAccount, usePublicClient } from "wagmi";
+import { isAddress, type Hex } from "viem";
 import {
-  B20_ENABLED, type OrderKind,
-  loadOrders, createOrder, removeOrder, payLink, ordersToCsv,
+  B20_ENABLED, B20_USDC, type OrderKind,
+  loadOrders, createOrder, removeOrder, markPaid, payLink, ordersToCsv,
 } from "@/lib/orders";
+import { MEMO_EVENT_ABI, orderMemo, memoToOrderId } from "@/lib/b20/encode";
 
 const input =
   "w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors";
+
+// While the dashboard is open, poll Base for Memo events whose indexed memo matches
+// a pending order id and flip those orders to Paid. This is the cross-device
+// settlement path: the payer signs transferWithMemo on their own device, and the
+// merchant's dashboard reconciles from the on-chain Memo log (no backend needed).
+function useMemoWatcher(pendingKey: string, onPaid: () => void) {
+  const client = usePublicClient({ chainId: 8453 });
+  const onPaidRef = useRef(onPaid);
+  onPaidRef.current = onPaid;
+
+  useEffect(() => {
+    const ids = pendingKey ? pendingKey.split(",") : [];
+    if (!B20_ENABLED || !isAddress(B20_USDC) || !client || ids.length === 0) return;
+    const c = client;
+    const memos = ids.map((id) => orderMemo(id));
+    let cancelled = false;
+    let cursor: bigint | undefined;
+
+    async function tick() {
+      try {
+        const latest = await c.getBlockNumber();
+        // First pass looks back ~1500 blocks (≤ public-RPC 2000-block cap); then incremental.
+        const from = cursor ?? (latest > 1500n ? latest - 1500n : 0n);
+        if (from > latest) return;
+        const logs = await c.getLogs({
+          address: B20_USDC as `0x${string}`,
+          event: MEMO_EVENT_ABI[0],
+          args: { memo: memos },
+          fromBlock: from,
+          toBlock: latest,
+        });
+        cursor = latest + 1n;
+        if (cancelled) return;
+        let changed = false;
+        for (const log of logs) {
+          const memo = (log.args as { memo?: Hex }).memo;
+          if (!memo) continue;
+          const oid = memoToOrderId(memo);
+          if (ids.includes(oid)) { markPaid(oid, log.transactionHash ?? undefined); changed = true; }
+        }
+        if (changed) onPaidRef.current();
+      } catch { /* RPC hiccup — retry next tick */ }
+    }
+
+    tick();
+    const iv = setInterval(tick, 15000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [client, pendingKey]);
+}
 
 export default function OrdersPanel() {
   const [, force] = useState(0);
@@ -22,7 +74,12 @@ export default function OrdersPanel() {
   const [due, setDue] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
 
+  const { address } = useAccount();
   const orders = loadOrders();
+
+  // Auto-reconcile pending requests from on-chain Memo events while open.
+  const pendingKey = orders.filter((o) => o.status === "pending").map((o) => o.id).sort().join(",");
+  useMemoWatcher(pendingKey, refresh);
 
   function create() {
     const amt = parseFloat(amount);
@@ -31,6 +88,7 @@ export default function OrdersPanel() {
       kind, amount: amt, description: desc,
       client: kind === "invoice" ? client : undefined,
       dueDate: kind === "invoice" ? due : undefined,
+      payTo: address,
     });
     setAmount(""); setDesc(""); setClient(""); setDue("");
     refresh();
@@ -81,6 +139,14 @@ export default function OrdersPanel() {
         <div className="rounded-lg px-2.5 py-2 mb-3" style={{ border: "1px solid #F59E0B30", background: "#F59E0B0d" }}>
           <p className="font-mono text-[9px] text-[#F59E0B] leading-relaxed">
             Payment links work now. B20 USDC auto-settlement + paid-status detection go live at B20 mainnet (June 25).
+          </p>
+        </div>
+      )}
+
+      {B20_ENABLED && !address && (
+        <div className="rounded-lg px-2.5 py-2 mb-3" style={{ border: "1px solid #4FC3F730", background: "#4FC3F70d" }}>
+          <p className="font-mono text-[9px] text-[#4FC3F7] leading-relaxed">
+            Connect your wallet so new payment links settle B20 USDC to you.
           </p>
         </div>
       )}
