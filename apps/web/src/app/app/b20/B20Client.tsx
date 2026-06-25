@@ -7,13 +7,15 @@ import { useAppChrome } from "@/app/app/AppChrome";
 import { runB20Inspect }  from "./inspect-action";
 import { runB20Roles }    from "./roles-action";
 import { runB20Registry } from "./registry-action";
+import { runB20ManageLoad, type ManageData } from "./manage-action";
+import ManagePanel from "./ManagePanel";
 import type { B20Inspection, PolicyInfo } from "@/lib/b20/inspect";
 import type { B20RolesResult }            from "@/lib/b20/roles";
 import type { B20RegistryResult }         from "@/lib/b20/registry-logs";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab     = "scanner" | "roles" | "registry" | "launch";
+type Tab     = "scanner" | "roles" | "registry" | "launch" | "manage";
 type Network = "mainnet" | "sepolia";
 
 // ── localStorage helpers ──────────────────────────────────────────────────────
@@ -70,6 +72,13 @@ const TabIcons: Record<Tab, React.ReactNode> = {
         d="M15.59 14.37a6 6 0 0 1-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 0 0 6.16-12.12A14.98 14.98 0 0 0 9.631 8.41m5.96 5.96a14.926 14.926 0 0 1-5.841 2.58m-.119-8.54a6 6 0 0 0-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 0 0-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 0 1-2.448-2.448 14.9 14.9 0 0 1 .06-.312m-2.24 2.39a4.493 4.493 0 0 0-1.757 4.306 4.493 4.493 0 0 0 4.306-1.758M16.5 9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
     </svg>
   ),
+  manage: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+    </svg>
+  ),
 };
 
 const DocsIcon = (
@@ -84,6 +93,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "roles",    label: "Roles"    },
   { id: "registry", label: "Registry" },
   { id: "launch",   label: "Launch"   },
+  { id: "manage",   label: "Manage"   },
 ];
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -956,12 +966,85 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
     });
   }
 
+  // ── Manage tab state ──────────────────────────────────────────────────────
+  const [manageToken,  setManageToken]  = useState("");
+  const [manageData,   setManageData]   = useState<ManageData | null>(null);
+  const [manageError,  setManageError]  = useState("");
+  const [managePending, startManage]    = useTransition();
+
+  // Connected wallet roles for scanner inline panel (auto-fetched after scan)
+  const [scanWalletRoles, setScanWalletRoles] = useState<B20RolesResult | null>(null);
+  const [scanWalletData,  setScanWalletData]  = useState<ManageData | null>(null);
+
+  const { address: connectedAddress } = useAccount();
+
+  // Auto-fetch roles + manage data after successful scan (for inline panel)
+  useEffect(() => {
+    if (!scanResult?.isB20 || !connectedAddress) {
+      setScanWalletRoles(null);
+      setScanWalletData(null);
+      return;
+    }
+    let cancelled = false;
+    runB20Roles(scanResult.address, connectedAddress, scanResult.network as Network)
+      .then(r => { if (!cancelled) setScanWalletRoles(r); })
+      .catch(() => { if (!cancelled) setScanWalletRoles(null); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanResult?.address, connectedAddress, scanResult?.network]);
+
+  // Load full manage data when roles show any held role
+  useEffect(() => {
+    if (!scanResult?.isB20 || !connectedAddress || !scanWalletRoles) {
+      setScanWalletData(null);
+      return;
+    }
+    const hasAny = scanWalletRoles.roles.some(r => r.held);
+    if (!hasAny) { setScanWalletData(null); return; }
+    let cancelled = false;
+    runB20ManageLoad(scanResult.address, connectedAddress, scanResult.network as Network)
+      .then(d => { if (!cancelled) setScanWalletData(d); })
+      .catch(() => { if (!cancelled) setScanWalletData(null); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanWalletRoles]);
+
+  // Reset manage data on network change
+  useEffect(() => {
+    setScanWalletRoles(null);
+    setScanWalletData(null);
+    setManageData(null);
+    setManageError("");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [network]);
+
+  function doManageLoad(tokenAddr?: string) {
+    const addr = (tokenAddr ?? manageToken).trim();
+    if (!isValidAddr(addr) || !connectedAddress) return;
+    setManageError(""); setManageData(null);
+    startManage(async () => {
+      try {
+        const d = await runB20ManageLoad(addr, connectedAddress, network);
+        setManageData(d);
+        if (tokenAddr) setManageToken(tokenAddr);
+      } catch (e) { setManageError((e as Error).message ?? "Load failed."); }
+    });
+  }
+
+  // Pre-fill manage token from scanner and jump to manage tab
+  function goToManage(addr: string) {
+    setManageToken(addr);
+    setActiveTab("manage");
+    doManageLoad(addr);
+  }
+
   // ── Tab header labels ─────────────────────────────────────────────────────
   const TAB_LABELS: Record<Tab, string> = {
     scanner:  "Token Scanner",
     roles:    "Role Checker",
     registry: "Registry",
     launch:   "Launch B20",
+    manage:   "Manage",
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -1163,6 +1246,14 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
               <span className="font-mono text-[9px] text-slate-600">connect wallet → sign tx → token live on Base</span>
             )}
 
+            {activeTab === "manage" && (
+              <>
+                <InfoChip>Client-side encode</InfoChip>
+                <InfoChip>Role-gated</InfoChip>
+                <InfoChip>wagmi sign</InfoChip>
+              </>
+            )}
+
             {/* Beryl badge on right */}
             {berylLabel && (
               <div className="ml-auto flex items-center gap-1.5">
@@ -1248,6 +1339,35 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                         setScanResult(null); setScanError(""); setScanAddr("");
                         window.history.replaceState({}, "", "/app/b20");
                       }} />
+                  )}
+
+                  {/* Inline manage panel — only when connected wallet holds a role */}
+                  {scanResult?.isB20 && !scanPending && scanWalletData && (
+                    <div className="mt-4 rounded-2xl border overflow-hidden" style={{ borderColor: "#4FC3F730" }}>
+                      <div className="px-4 py-3 bg-[#0a0a0f] border-b border-[#1A1A2E] flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] shrink-0"
+                            style={{ boxShadow: "0 0 4px #4FC3F780" }} />
+                          <p className="font-mono text-xs text-[#4FC3F7] font-semibold">You can manage this token</p>
+                        </div>
+                        <button onClick={() => goToManage(scanResult.address)}
+                          className="font-mono text-[9px] text-slate-500 hover:text-[#4FC3F7] transition-colors">
+                          All actions →
+                        </button>
+                      </div>
+                      <div className="p-4">
+                        <ManagePanel
+                          token={scanResult.address}
+                          network={network}
+                          inspect={scanWalletData.inspect}
+                          roles={scanWalletData.roles}
+                          scopeHashes={scanWalletData.scopeHashes}
+                          balance={scanWalletData.balance}
+                          onRefresh={() => doScan(scanResult.address)}
+                          compact={true}
+                        />
+                      </div>
+                    </div>
                   )}
 
                   {/* Empty state hint */}
@@ -1509,6 +1629,97 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
               {/* ── LAUNCH MAIN ───────────────────────────────────── */}
               {activeTab === "launch" && <LaunchTab onScanToken={handleScanDeployed} />}
 
+              {/* ── MANAGE MAIN ───────────────────────────────────── */}
+              {activeTab === "manage" && (
+                <div>
+                  {!connectedAddress ? (
+                    <div className="rounded-2xl border border-[#F59E0B25] bg-[#F59E0B05] px-5 py-6 text-center">
+                      <p className="font-mono text-sm text-[#F59E0B] font-medium mb-1">Connect Wallet</p>
+                      <p className="font-mono text-xs text-slate-500">
+                        Connect your wallet to perform management actions on a B20 token.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Token input */}
+                      <div className="mb-2">
+                        <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+                          Token Address
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            value={manageToken}
+                            onChange={e => setManageToken(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter" && isValidAddr(manageToken.trim()) && !managePending) doManageLoad();
+                            }}
+                            placeholder="0x… B20 token address"
+                            spellCheck={false}
+                            className={`flex-1 min-w-0 ${INPUT_CLS}`}
+                          />
+                          <button
+                            onClick={() => doManageLoad()}
+                            disabled={!isValidAddr(manageToken.trim()) || managePending}
+                            className="px-5 py-2.5 rounded-xl font-mono text-xs font-semibold transition-all shrink-0"
+                            style={isValidAddr(manageToken.trim()) && !managePending
+                              ? { background: "#4FC3F720", color: "#4FC3F7", border: "1px solid #4FC3F740" }
+                              : { background: "#0d0d18", color: "#334155", border: "1px solid #1A1A2E", cursor: "not-allowed" }}>
+                            {managePending ? "Loading…" : "Load"}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Loading */}
+                      {managePending && (
+                        <div className="mt-4 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+                          <span className="font-mono text-xs text-slate-500">
+                            Fetching roles + scope hashes via multicall…
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Error */}
+                      {manageError && !managePending && (
+                        <div className="mt-4 rounded-2xl border border-[#EF444430] px-4 py-3">
+                          <p className="font-mono text-sm text-[#EF4444]">{manageError}</p>
+                          <button onClick={() => setManageError("")}
+                            className="font-mono text-xs text-slate-500 hover:text-slate-300 mt-2 transition-colors">
+                            Dismiss
+                          </button>
+                        </div>
+                      )}
+
+                      {/* ManagePanel */}
+                      {manageData && !managePending && (
+                        <div className="mt-4">
+                          <ManagePanel
+                            token={manageToken.trim()}
+                            network={network}
+                            inspect={manageData.inspect}
+                            roles={manageData.roles}
+                            scopeHashes={manageData.scopeHashes}
+                            balance={manageData.balance}
+                            onRefresh={() => doManageLoad()}
+                            compact={false}
+                          />
+                        </div>
+                      )}
+
+                      {/* Empty state */}
+                      {!manageData && !managePending && !manageError && (
+                        <div className="mt-4 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-5 py-6 text-center">
+                          <p className="font-mono text-sm text-slate-500 mb-1">Enter a B20 token address</p>
+                          <p className="font-mono text-xs text-slate-700">
+                            Actions are gated by your connected wallet&apos;s roles.
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
             </div>
 
             {/* SIDE ~38% */}
@@ -1726,6 +1937,74 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                           <span className="font-mono text-[10px] text-slate-500 leading-relaxed">{item}</span>
                         </div>
                       ))}
+                    </div>
+                  </SideCard>
+                </>
+              )}
+
+              {/* ── MANAGE SIDE ───────────────────────────────────── */}
+              {activeTab === "manage" && (
+                <>
+                  <SideCard title="Connected Wallet">
+                    <div className="px-4 py-3">
+                      {connectedAddress ? (
+                        <div>
+                          <code className="font-mono text-[10px] text-[#4FC3F7] break-all">
+                            {truncAddr(connectedAddress, 8)}
+                          </code>
+                          <p className="font-mono text-[9px] text-slate-700 mt-1 break-all">{connectedAddress}</p>
+                        </div>
+                      ) : (
+                        <p className="font-mono text-xs text-slate-600">No wallet connected</p>
+                      )}
+                      {manageData && (
+                        <div className="mt-3 border-t border-[#1A1A2E] pt-3 space-y-1.5">
+                          {manageData.roles.roles.filter(r => r.held).map(r => (
+                            <div key={r.roleKey} className="flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] shrink-0"
+                                style={{ boxShadow: "0 0 4px #22C55E60" }} />
+                              <span className="font-mono text-[9px] text-[#22C55E]">{r.name}</span>
+                            </div>
+                          ))}
+                          {manageData.roles.roles.every(r => !r.held) && (
+                            <p className="font-mono text-[9px] text-slate-600">No roles held on this token</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </SideCard>
+
+                  <SideCard title="Manage Actions">
+                    <div className="divide-y divide-[#0d0d18]">
+                      {[
+                        { role: "MINT_ROLE",          action: "mint(to, amount)",          desc: "Issue new tokens" },
+                        { role: "BURN_ROLE",          action: "burn(amount)",              desc: "Burn your balance" },
+                        { role: "BURN_BLOCKED_ROLE",  action: "burnBlocked(from, amount)", desc: "Confiscate + burn" },
+                        { role: "PAUSE_ROLE",         action: "pause([features])",         desc: "Pause transfer/mint/burn" },
+                        { role: "UNPAUSE_ROLE",       action: "unpause([features])",       desc: "Unpause operations" },
+                        { role: "DEFAULT_ADMIN_ROLE", action: "updatePolicy + grantRole",  desc: "Policy + role admin" },
+                        { role: "METADATA_ROLE",      action: "updateName/Symbol/URI",     desc: "Update token metadata" },
+                      ].map(({ role, action, desc }) => (
+                        <div key={role} className="px-4 py-2.5">
+                          <code className="font-mono text-[8px] text-[#4FC3F7] block mb-0.5">{role}</code>
+                          <code className="font-mono text-[9px] text-slate-400 block mb-0.5">{action}</code>
+                          <span className="font-mono text-[9px] text-slate-600">{desc}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </SideCard>
+
+                  <SideCard title="Safety Notes">
+                    <div className="px-4 py-3 space-y-2.5">
+                      <p className="font-mono text-[10px] text-[#EF4444] leading-relaxed">
+                        <span className="font-semibold">renounceLastAdmin</span> permanently removes DEFAULT_ADMIN_ROLE. Irreversible.
+                      </p>
+                      <p className="font-mono text-[10px] text-[#F59E0B] leading-relaxed">
+                        <span className="font-semibold">burnBlocked</span> forcibly confiscates a holder&apos;s tokens without consent.
+                      </p>
+                      <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
+                        Transactions are encoded client-side and signed by your wallet. No keys or tx data sent to Blue Agent servers.
+                      </p>
                     </div>
                   </SideCard>
                 </>
