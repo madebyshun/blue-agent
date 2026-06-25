@@ -7,12 +7,13 @@ import { useAppChrome } from "@/app/app/AppChrome";
 import { ConnectButton } from "@/components/ConnectModal";
 import { runB20Inspect }  from "./inspect-action";
 import { runB20Roles }    from "./roles-action";
-import { runB20Registry } from "./registry-action";
+import { runB20Registry, runB20Activity } from "./registry-action";
 import { runB20ManageLoad, type ManageData } from "./manage-action";
 import ManagePanel from "./ManagePanel";
 import type { B20Inspection, PolicyInfo } from "@/lib/b20/inspect";
 import type { B20RolesResult }            from "@/lib/b20/roles";
 import type { B20RegistryResult }         from "@/lib/b20/registry-logs";
+import type { B20ActivityResult, B20ActivityCategory } from "@/lib/b20/activity-cdp";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -108,6 +109,38 @@ const TABS: Array<{ id: Tab; label: string }> = [
 
 function isValidAddr(v: string) { return /^0x[a-fA-F0-9]{40}$/.test(v.trim()); }
 function truncAddr(a: string, n = 6) { return `${a.slice(0, n)}…${a.slice(-4)}`; }
+
+// ── Recent Activity (control events) — color map + relative time ──────────────
+// pause=amber · policy=blue · cap=gray · role=purple · burnBlocked=red · admin=magenta
+const ACTIVITY_COLOR: Record<B20ActivityCategory, string> = {
+  pause:       "#F59E0B",
+  policy:      "#4FC3F7",
+  cap:         "#94A3B8",
+  role:        "#A78BFA",
+  burnBlocked: "#EF4444",
+  admin:       "#D946EF",
+};
+const ACTIVITY_LABEL: Record<B20ActivityCategory, string> = {
+  pause:       "PAUSE",
+  policy:      "POLICY",
+  cap:         "CAP",
+  role:        "ROLE",
+  burnBlocked: "FREEZE",
+  admin:       "ADMIN",
+};
+function timeAgo(iso: string): string {
+  const t = Date.parse(iso);
+  if (!iso || Number.isNaN(t)) return "";
+  const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (s < 60)     return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60)     return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24)     return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 30)     return `${d}d ago`;
+  return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
 
 interface VerdictLine { kind: "warn" | "ok"; text: string }
 
@@ -1090,10 +1123,35 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
     if (activeTab === "registry" && regLoadedFor.current !== network) doRegistry();
   }, [activeTab, network, doRegistry]);
 
+  // ── Recent Activity (control events) — loads alongside the registry ─────────
+  const [activityResult, setActivityResult] = useState<B20ActivityResult | null>(null);
+  const [activityPending, startActivity]    = useTransition();
+  const activityLoadedFor = useRef<Network | null>(null);
+
+  const doActivity = useCallback(() => {
+    startActivity(async () => {
+      try {
+        const r = await runB20Activity(network);
+        setActivityResult(r);
+        activityLoadedFor.current = network;
+      } catch {
+        // Honest fallback — section shows "activity unavailable".
+        setActivityResult({ network, events: [], total: 0, unavailable: true });
+        activityLoadedFor.current = network;
+      }
+    });
+  }, [network]);
+
+  useEffect(() => {
+    if (activeTab === "registry" && activityLoadedFor.current !== network) doActivity();
+  }, [activeTab, network, doActivity]);
+
   // Network change → reset all tab results
   useEffect(() => {
     regLoadedFor.current = null;
+    activityLoadedFor.current = null;
     setRegistryResult(null); setRegistryError("");
+    setActivityResult(null);
     setScanResult(null);     setScanError("");
     setRolesResult(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1818,6 +1876,85 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                       </div>
                     </div>
                   )}
+
+                  {/* ── Recent Activity (CONTROL events) ───────────────── */}
+                  <div className="mt-6 pt-5 border-t border-[#1A1A2E]">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-mono text-xs font-semibold text-white">Recent Activity</span>
+                      <span className="font-mono text-[9px] text-slate-600">control events</span>
+                      {activityResult && !activityResult.unavailable && activityResult.events.length > 0 && (
+                        <span className="font-mono text-[9px] text-slate-700">· {activityResult.total} total</span>
+                      )}
+                      <button onClick={doActivity} disabled={activityPending}
+                        className="ml-auto font-mono text-[9px] text-slate-600 hover:text-slate-400 transition-colors">
+                        {activityPending ? "Loading…" : "↻ Refresh"}
+                      </button>
+                    </div>
+                    <p className="font-mono text-[9px] text-slate-700 mb-3 leading-relaxed">
+                      Pause · policy · supply-cap · freeze-seize · role — operator actions on live B20 tokens.
+                      Berry &amp; Charon don&apos;t surface these.
+                    </p>
+
+                    {/* Loading */}
+                    {activityPending && !activityResult && (
+                      <div className="flex items-center gap-2 py-3">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+                        <span className="font-mono text-xs text-slate-500">Loading control events…</span>
+                      </div>
+                    )}
+
+                    {/* Unavailable — honest fallback */}
+                    {activityResult?.unavailable && (
+                      <div className="rounded-2xl border border-[#1A1A2E] px-4 py-4 text-center">
+                        <p className="font-mono text-xs text-slate-500">Activity unavailable right now.</p>
+                        <button onClick={doActivity}
+                          className="font-mono text-[10px] text-slate-600 hover:text-slate-400 mt-1 transition-colors">
+                          Retry
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Empty — mainnet pre-activation / no control events */}
+                    {activityResult && !activityResult.unavailable && !activityPending && activityResult.events.length === 0 && (
+                      <div className="rounded-2xl border border-[#1A1A2E] px-4 py-5 text-center">
+                        <p className="font-mono text-xs text-slate-500">
+                          {network === "mainnet"
+                            ? "No B20 control events on mainnet yet."
+                            : "No control events yet."}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Feed */}
+                    {activityResult && !activityResult.unavailable && activityResult.events.length > 0 && (
+                      <div className="flex flex-col gap-1.5">
+                        {activityResult.events.map((ev, i) => {
+                          const color = ACTIVITY_COLOR[ev.category];
+                          return (
+                            <div key={`${ev.txHash}-${ev.token}-${i}`}
+                              className="flex items-center gap-2.5 rounded-xl border border-[#1A1A2E] px-3 py-2 hover:bg-[#0d0d18] transition-colors">
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0"
+                                style={{ background: color, boxShadow: `0 0 5px ${color}80` }} />
+                              <span className="font-mono text-[8px] px-1.5 py-0.5 rounded shrink-0 hidden sm:inline"
+                                style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}>
+                                {ACTIVITY_LABEL[ev.category]}
+                              </span>
+                              <button onClick={() => handleRegistrySelect(ev.token)}
+                                title="Inspect this token"
+                                className="flex-1 min-w-0 font-mono text-[11px] text-slate-200 hover:text-white transition-colors text-left truncate">
+                                {ev.text}
+                              </button>
+                              <span className="font-mono text-[9px] text-slate-600 shrink-0">{timeAgo(ev.timestamp)}</span>
+                              <a href={ev.explorerUrl} target="_blank" rel="noopener noreferrer"
+                                className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7] transition-colors shrink-0">
+                                tx ↗
+                              </a>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
