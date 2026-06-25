@@ -16,7 +16,25 @@ import type { B20RegistryResult }         from "@/lib/b20/registry-logs";
 type Tab     = "scanner" | "roles" | "registry" | "launch";
 type Network = "mainnet" | "sepolia";
 
-// ── Shared input style (module-level so LaunchTab can use it) ─────────────────
+// ── localStorage helpers ──────────────────────────────────────────────────────
+
+const LS_RECENT    = "b20:recent-scans";
+const LS_MY_TOKENS = "b20:my-tokens";
+
+type RecentScan = { address: string; name: string; symbol: string; network: Network; timestamp: number };
+type MyToken    = { address: string; name: string; symbol: string; network: Network; deployer: string; timestamp: number };
+
+function lsGet<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try { const raw = localStorage.getItem(key); if (!raw) return fallback; return JSON.parse(raw) as T; }
+  catch { return fallback; }
+}
+function lsSet<T>(key: string, value: T): void {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
+// ── Shared input style ────────────────────────────────────────────────────────
 
 const INPUT_CLS = [
   "w-full bg-[#0a0a12] border border-[#1A1A2E]",
@@ -157,6 +175,17 @@ function InfoChip({ children, color = "#4FC3F7" }: { children: React.ReactNode; 
       style={{ color, borderColor: `${color}35`, background: `${color}0a` }}>
       {children}
     </span>
+  );
+}
+
+function SideCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
+      <div className="px-4 py-3 bg-[#0a0a0f] border-b border-[#1A1A2E]">
+        <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">{title}</p>
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -330,7 +359,58 @@ function ResultCard({ info, onScanAnother }: { info: B20Inspection; onScanAnothe
   );
 }
 
-// ── Launch tab — direct wallet deploy via /api/b20/prepare ────────────────────
+// ── LaunchMyTokens ────────────────────────────────────────────────────────────
+
+function LaunchMyTokens() {
+  const { address } = useAccount();
+  const [myTokens, setMyTokens] = useState<MyToken[]>([]);
+
+  useEffect(() => {
+    const all = lsGet<MyToken[]>(LS_MY_TOKENS, []);
+    setMyTokens(address ? all.filter(t => t.deployer.toLowerCase() === address.toLowerCase()) : []);
+  }, [address]);
+
+  return (
+    <SideCard title="Your Deployed Tokens">
+      {!address ? (
+        <div className="px-4 py-5 text-center">
+          <p className="font-mono text-xs text-slate-600">Connect wallet to see your tokens</p>
+        </div>
+      ) : myTokens.length === 0 ? (
+        <div className="px-4 py-5 text-center">
+          <p className="font-mono text-xs text-slate-600">No tokens deployed yet</p>
+          <p className="font-mono text-[9px] text-slate-700 mt-1">Deploy a B20 above to see it here</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-[#0d0d18]">
+          {myTokens.map(t => (
+            <div key={t.address} className="flex items-center gap-3 px-4 py-3">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center font-mono text-[10px] font-bold shrink-0"
+                style={{ background: "#4FC3F715", border: "1px solid #4FC3F730", color: "#4FC3F7" }}>
+                {(t.symbol || t.name).slice(0, 2).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-mono text-xs text-white truncate">
+                  {t.name} <span className="text-slate-500">${t.symbol}</span>
+                </p>
+                <p className="font-mono text-[9px] text-slate-700">
+                  {t.address.slice(0, 14)}… · {t.network === "mainnet" ? "Main" : "Sepolia"}
+                </p>
+              </div>
+              <a href={`https://${t.network === "mainnet" ? "" : "sepolia."}basescan.org/token/${t.address}`}
+                target="_blank" rel="noopener noreferrer"
+                className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7] transition-colors shrink-0">
+                ↗
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
+    </SideCard>
+  );
+}
+
+// ── Launch tab ────────────────────────────────────────────────────────────────
 
 const LAUNCH_NETS = {
   sepolia: { chainId: 84532, label: "Sepolia",  explorer: "https://sepolia.basescan.org" },
@@ -339,7 +419,6 @@ const LAUNCH_NETS = {
 type LaunchNet = keyof typeof LAUNCH_NETS;
 
 function LaunchTab({ onScanToken }: { onScanToken: (addr: string, net: Network) => void }) {
-  // Form
   const [name,       setName]       = useState("");
   const [symbol,     setSymbol]     = useState("");
   const [variant,    setVariant]    = useState<"asset" | "stablecoin">("asset");
@@ -349,17 +428,32 @@ function LaunchTab({ onScanToken }: { onScanToken: (addr: string, net: Network) 
   const [currCode,   setCurrCode]   = useState("USD");
   const [lNetwork,   setLNetwork]   = useState<LaunchNet>("sepolia");
 
-  // Deploy
   const [deploying,     setDeploying]     = useState(false);
   const [polling,       setPolling]       = useState(false);
   const [deployErr,     setDeployErr]     = useState("");
   const [deployTxHash,  setDeployTxHash]  = useState("");
   const [deployedToken, setDeployedToken] = useState("");
 
-  // Wagmi
   const { address, chainId: currentChainId } = useAccount();
   const { sendTransactionAsync }             = useSendTransaction();
   const { switchChainAsync }                 = useSwitchChain();
+
+  // Save to localStorage on successful deploy
+  useEffect(() => {
+    if (deployedToken && address) {
+      const entry: MyToken = {
+        address:   deployedToken,
+        name:      name.trim(),
+        symbol:    symbol.replace(/^\$/, "").trim(),
+        network:   lNetwork,
+        deployer:  address.toLowerCase(),
+        timestamp: Date.now(),
+      };
+      const prev = lsGet<MyToken[]>(LS_MY_TOKENS, []);
+      lsSet(LS_MY_TOKENS, [entry, ...prev.filter(t => t.address !== deployedToken)].slice(0, 50));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deployedToken]);
 
   function switchVariant(v: "asset" | "stablecoin") {
     setVariant(v);
@@ -436,18 +530,6 @@ function LaunchTab({ onScanToken }: { onScanToken: (addr: string, net: Network) 
 
   return (
     <div>
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-1">
-          <span className="text-2xl">🚀</span>
-          <h2 className="font-mono text-xl font-bold text-white">Launch B20 Token</h2>
-        </div>
-        <p className="font-mono text-sm text-slate-500">
-          Connect your wallet and deploy a B20 token directly on Base.
-          The hub builds the calldata, your wallet signs the transaction.
-        </p>
-      </div>
-
       {/* Main deploy card */}
       <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden mb-5">
 
@@ -616,9 +698,9 @@ function LaunchTab({ onScanToken }: { onScanToken: (addr: string, net: Network) 
         </div>
         <div className="divide-y divide-[#0d0d18]">
           {[
-            { n: "1", title: "Assign roles",     desc: "Grant MINT_ROLE, PAUSE_ROLE, BURN_ROLE, etc. via grantRole(role, address) from DEFAULT_ADMIN_ROLE." },
-            { n: "2", title: "Set supply cap",   desc: "Call updateSupplyCap(amount) to enforce a hard ceiling. Omit (or set uint128.max) for uncapped." },
-            { n: "3", title: "Configure policy", desc: "Create an ALLOWLIST or BLOCKLIST on PolicyRegistry, then apply with token.updatePolicy(scope, policyId)." },
+            { n: "1", title: "Assign roles",      desc: "Grant MINT_ROLE, PAUSE_ROLE, BURN_ROLE, etc. via grantRole(role, address) from DEFAULT_ADMIN_ROLE." },
+            { n: "2", title: "Set supply cap",    desc: "Call updateSupplyCap(amount) to enforce a hard ceiling. Omit (or set uint128.max) for uncapped." },
+            { n: "3", title: "Configure policy",  desc: "Create an ALLOWLIST or BLOCKLIST on PolicyRegistry, then apply with token.updatePolicy(scope, policyId)." },
             { n: "4", title: "Verify in Scanner", desc: "Paste your token address into the Scanner tab to confirm all on-chain config is correct before going live." },
           ].map(({ n: step, title, desc }) => (
             <div key={step} className="flex items-start gap-4 px-5 py-4">
@@ -667,7 +749,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
     }
   }, [network]);
 
-  // Register mobile contextual nav (Docs opens /docs/beryl as external link)
+  // Register mobile contextual nav
   useEffect(() => {
     setContextual({
       barTitle:   "B20 Hub",
@@ -697,7 +779,10 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
   const [scanResult,  setScanResult]  = useState<B20Inspection | null>(null);
   const [scanError,   setScanError]   = useState("");
   const [scanPending, startScan]      = useTransition();
-  const [recentScans, setRecentScans] = useState<Array<{ addr: string; name: string; symbol: string; net: Network }>>([]);
+  const [recentScans, setRecentScans] = useState<RecentScan[]>([]);
+
+  // Load recent scans from localStorage on mount
+  useEffect(() => { setRecentScans(lsGet<RecentScan[]>(LS_RECENT, [])); }, []);
 
   const addrClean = scanAddr.trim();
   const addrValid = isValidAddr(addrClean);
@@ -717,7 +802,13 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
             if (alt.isB20) {
               setNetwork(other);
               setScanResult(alt);
-              if (alt.name) setRecentScans(p => [{ addr: clean, name: alt.name!, symbol: alt.symbol ?? "", net: other }, ...p.filter(r => r.addr !== clean)].slice(0, 8));
+              if (alt.name) {
+                setRecentScans(p => {
+                  const next = [{ address: clean, name: alt.name!, symbol: alt.symbol ?? "", network: other, timestamp: Date.now() }, ...p.filter(r => r.address !== clean)].slice(0, 10);
+                  lsSet(LS_RECENT, next);
+                  return next;
+                });
+              }
               window.history.replaceState({}, "", `/app/b20?${new URLSearchParams({ address: clean, network: other })}`);
               return;
             }
@@ -725,7 +816,11 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
         }
         setScanResult(result);
         if (result.isB20 && result.name) {
-          setRecentScans(p => [{ addr: clean, name: result.name!, symbol: result.symbol ?? "", net: network }, ...p.filter(r => r.addr !== clean)].slice(0, 8));
+          setRecentScans(p => {
+            const next = [{ address: clean, name: result.name!, symbol: result.symbol ?? "", network, timestamp: Date.now() }, ...p.filter(r => r.address !== clean)].slice(0, 10);
+            lsSet(LS_RECENT, next);
+            return next;
+          });
         }
         window.history.replaceState({}, "", `/app/b20?${new URLSearchParams({ address: clean, network })}`);
       } catch (e) {
@@ -763,6 +858,37 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
   const [regPending,     startReg]          = useTransition();
   const regLoadedFor = useRef<Network | null>(null);
 
+  // Filter / search / sort state
+  const [regFilter, setRegFilter] = useState<"all" | "asset" | "stablecoin">("all");
+  const [regSearch, setRegSearch] = useState("");
+  const [regSort,   setRegSort]   = useState<"newest" | "oldest">("newest");
+
+  // Computed stats (no extra RPC)
+  const regStats = registryResult ? (() => {
+    const entries      = registryResult.entries;
+    const assetCount   = entries.filter(e => e.variant === 0).length;
+    const stableCount  = entries.filter(e => e.variant === 1).length;
+    const latestBlock  = Number(registryResult.toBlock);
+    const recentCount  = entries.filter(e => Number(e.blockNumber) > latestBlock - 172_800).length;
+    return { assetCount, stableCount, recentCount, total: registryResult.total };
+  })() : null;
+
+  // Computed filtered+sorted entries (client-side, no RPC)
+  const filteredEntries = (registryResult?.entries ?? [])
+    .filter(e => {
+      if (regFilter === "asset"      && e.variant !== 0) return false;
+      if (regFilter === "stablecoin" && e.variant !== 1) return false;
+      if (regSearch) {
+        const q = regSearch.toLowerCase();
+        return e.name.toLowerCase().includes(q) || e.symbol.toLowerCase().includes(q);
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const diff = Number(b.blockNumber) - Number(a.blockNumber);
+      return regSort === "newest" ? diff : -diff;
+    });
+
   const doRegistry = useCallback(() => {
     setRegistryError("");
     startReg(async () => {
@@ -796,14 +922,19 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
       try {
         const result = await runB20Inspect(addr.trim(), network);
         setScanResult(result);
-        if (result.isB20 && result.name)
-          setRecentScans(p => [{ addr: addr.trim(), name: result.name!, symbol: result.symbol ?? "", net: network }, ...p.filter(r => r.addr !== addr.trim())].slice(0, 8));
+        if (result.isB20 && result.name) {
+          setRecentScans(p => {
+            const next = [{ address: addr.trim(), name: result.name!, symbol: result.symbol ?? "", network, timestamp: Date.now() }, ...p.filter(r => r.address !== addr.trim())].slice(0, 10);
+            lsSet(LS_RECENT, next);
+            return next;
+          });
+        }
         window.history.replaceState({}, "", `/app/b20?${new URLSearchParams({ address: addr.trim(), network })}`);
       } catch (e) { setScanError((e as Error).message ?? "Inspection failed."); }
     });
   }
 
-  // ── Cross-tab: scan a just-deployed token ─────────────────────────────────
+  // Cross-tab: scan a just-deployed token
   function handleScanDeployed(addr: string, net: Network) {
     setScanAddr(addr);
     setNetwork(net);
@@ -813,12 +944,25 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
       try {
         const result = await runB20Inspect(addr.trim(), net);
         setScanResult(result);
-        if (result.isB20 && result.name)
-          setRecentScans(p => [{ addr: addr.trim(), name: result.name!, symbol: result.symbol ?? "", net }, ...p.filter(r => r.addr !== addr.trim())].slice(0, 8));
+        if (result.isB20 && result.name) {
+          setRecentScans(p => {
+            const next = [{ address: addr.trim(), name: result.name!, symbol: result.symbol ?? "", network: net, timestamp: Date.now() }, ...p.filter(r => r.address !== addr.trim())].slice(0, 10);
+            lsSet(LS_RECENT, next);
+            return next;
+          });
+        }
         window.history.replaceState({}, "", `/app/b20?${new URLSearchParams({ address: addr.trim(), network: net })}`);
       } catch (e) { setScanError((e as Error).message ?? "Inspection failed."); }
     });
   }
+
+  // ── Tab header labels ─────────────────────────────────────────────────────
+  const TAB_LABELS: Record<Tab, string> = {
+    scanner:  "Token Scanner",
+    roles:    "Role Checker",
+    registry: "Registry",
+    launch:   "Launch B20",
+  };
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -827,7 +971,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
       {/* ══════════════════════════════════════════════════════════════════
           SUB-SIDEBAR (lg+)
       ══════════════════════════════════════════════════════════════════ */}
-      <aside className="hidden lg:flex flex-col w-72 shrink-0 h-full border-r border-[#1A1A2E] bg-[#050508]">
+      <aside className="hidden lg:flex flex-col w-64 shrink-0 h-full border-r border-[#1A1A2E] bg-[#050508]">
 
         {/* Header */}
         <div className="px-5 h-14 flex items-center justify-between border-b border-[#1A1A2E] shrink-0">
@@ -879,7 +1023,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
             );
           })}
 
-          {/* Docs — navigates to /docs/beryl */}
+          {/* Docs */}
           <a href="/docs/beryl"
             className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors"
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#ffffff08"; }}
@@ -913,10 +1057,10 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
             </div>
             <div className="flex-1 overflow-y-auto pb-2">
               {recentScans.map(r => {
-                const isActive = scanResult?.address?.toLowerCase() === r.addr && activeTab === "scanner";
+                const isActive = scanResult?.address?.toLowerCase() === r.address.toLowerCase() && activeTab === "scanner";
                 return (
-                  <button key={r.addr}
-                    onClick={() => { setScanAddr(r.addr); setActiveTab("scanner"); doScan(r.addr); }}
+                  <button key={r.address}
+                    onClick={() => { setScanAddr(r.address); setActiveTab("scanner"); doScan(r.address); }}
                     className={`w-full text-left flex items-center gap-2 px-5 py-2 transition-all ${isActive ? "bg-[#4FC3F7]/8" : "hover:bg-[#ffffff05]"}`}>
                     <span className="w-1.5 h-1.5 rounded-full shrink-0"
                       style={{ background: isActive ? "#4FC3F7" : "#334155" }} />
@@ -924,10 +1068,10 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                       <p className={`font-mono text-[12px] truncate ${isActive ? "text-white" : "text-slate-400"}`}>
                         {r.name}{r.symbol ? ` $${r.symbol}` : ""}
                       </p>
-                      <p className="font-mono text-[8px] text-slate-700 truncate">{r.addr.slice(0, 10)}…</p>
+                      <p className="font-mono text-[8px] text-slate-700 truncate">{r.address.slice(0, 10)}…</p>
                     </div>
                     <span className="font-mono text-[8px] text-slate-700 shrink-0">
-                      {r.net === "mainnet" ? "M" : "S"}
+                      {r.network === "mainnet" ? "M" : "S"}
                     </span>
                   </button>
                 );
@@ -973,399 +1117,621 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
           </div>
         </div>
 
-        {/* Scrollable tab content */}
+        {/* Scrollable area */}
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-2xl mx-auto px-6 py-8">
 
-            {/* ── SCANNER ───────────────────────────────────────────── */}
+          {/* ── Full-width stats header ─────────────────────────────── */}
+          <div className="px-6 py-3 border-b border-[#1A1A2E] flex items-center gap-3 flex-wrap">
+            <span className="font-mono text-xs font-semibold text-white">{TAB_LABELS[activeTab]}</span>
+            <span className="w-px h-3 bg-[#1A1A2E] shrink-0" />
+
             {activeTab === "scanner" && (
-              <div>
-                <div className="mb-6">
-                  <h2 className="font-mono text-xl font-bold text-white mb-1">Token Scanner</h2>
-                  <p className="font-mono text-sm text-slate-500 mb-3">
-                    Real on-chain state via multicall. Zero LLM. Auto-detects Mainnet vs Sepolia.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <InfoChip>Multicall</InfoChip>
-                    <InfoChip>Zero LLM</InfoChip>
-                    <InfoChip>Auto-detect</InfoChip>
-                  </div>
-                </div>
-
-                {/* Input */}
-                <div className="flex gap-2">
-                  <input value={scanAddr}
-                    onChange={e => setScanAddr(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter" && addrValid && !scanPending) doScan(); }}
-                    placeholder="0x… token address (40 hex chars)"
-                    spellCheck={false}
-                    className={`flex-1 min-w-0 ${INPUT_CLS}`}
-                  />
-                  <button onClick={() => doScan()} disabled={!addrValid || scanPending}
-                    className="px-5 py-2.5 rounded-xl font-mono text-xs font-semibold transition-all shrink-0"
-                    style={addrValid && !scanPending
-                      ? { background: "#4FC3F720", color: "#4FC3F7", border: "1px solid #4FC3F740" }
-                      : { background: "#0d0d18", color: "#334155", border: "1px solid #1A1A2E", cursor: "not-allowed" }}>
-                    {scanPending ? "Reading…" : "Inspect"}
-                  </button>
-                </div>
-
-                {scanAddr && !addrValid && (
-                  <p className="font-mono text-xs text-[#EF4444] mt-1.5 ml-1">
-                    Must be 0x followed by 40 hex characters.
-                  </p>
-                )}
-
-                {/* Example chips */}
-                {!scanResult && !scanPending && (
-                  <div className="flex flex-wrap gap-1.5 mt-2.5">
-                    <span className="font-mono text-[9px] text-slate-700 self-center">Try:</span>
-                    {[
-                      { label: "B20Factory",     addr: "0xB20f000000000000000000000000000000000000" },
-                      { label: "PolicyRegistry", addr: "0x8453000000000000000000000000000000000002" },
-                    ].map(({ label, addr }) => (
-                      <button key={addr} onClick={() => setScanAddr(addr)}
-                        className="font-mono text-[9px] px-2 py-0.5 rounded border border-[#1A1A2E] text-slate-500 hover:text-slate-300 hover:border-[#2a2a3e] transition-colors">
-                        {label}
-                      </button>
-                    ))}
-                    {registryResult?.entries.slice(0, 2).map(e => (
-                      <button key={e.token} onClick={() => setScanAddr(e.token)}
-                        className="font-mono text-[9px] px-2 py-0.5 rounded border border-[#1A1A2E] text-[#4FC3F7] hover:border-[#4FC3F730] transition-colors">
-                        {e.symbol || "B20"} ↗
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Refresh */}
-                {scanResult && !scanPending && (
-                  <div className="mt-2">
-                    <button onClick={() => doScan()} disabled={!addrValid}
-                      className="font-mono text-xs px-3 py-1 rounded-lg border border-[#1A1A2E] text-slate-500 hover:text-slate-300 transition-colors">
-                      Refresh
-                    </button>
-                  </div>
-                )}
-
-                {/* Loading */}
-                {scanPending && (
-                  <div className="mt-6 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-                    <span className="font-mono text-xs text-slate-500">
-                      Reading from Base {network === "mainnet" ? "Mainnet" : "Sepolia"} RPC…
-                    </span>
-                  </div>
-                )}
-
-                {/* Error */}
-                {scanError && !scanPending && (
-                  <div className="mt-4 rounded-2xl border border-[#EF444430] px-4 py-3">
-                    <p className="font-mono text-sm text-[#EF4444]">{scanError}</p>
-                    <button onClick={() => setScanError("")}
-                      className="font-mono text-xs text-slate-500 hover:text-slate-300 mt-2 transition-colors">
-                      Dismiss
-                    </button>
-                  </div>
-                )}
-
-                {/* Result */}
-                {scanResult && !scanPending && (
-                  <ResultCard info={scanResult}
-                    onScanAnother={() => {
-                      setScanResult(null); setScanError(""); setScanAddr("");
-                      window.history.replaceState({}, "", "/app/b20");
-                    }} />
-                )}
-
-                {/* Empty state */}
-                {!scanResult && !scanPending && !scanError && (
-                  <div className="mt-6 rounded-2xl border border-[#1A1A2E] overflow-hidden">
-                    <div className="px-5 py-4 border-b border-[#1A1A2E] bg-[#0a0a0f]">
-                      <p className="font-mono text-sm text-slate-300 font-medium mb-1">What this checks</p>
-                      <p className="font-mono text-xs text-slate-600">
-                        Paste any Base token address to read real-time on-chain data via multicall. No LLM involved.
-                      </p>
-                    </div>
-                    <div className="divide-y divide-[#0d0d18]">
-                      {[
-                        { icon: "✓",  label: "B20 verification",   desc: "Confirms if the token is a real B20 precompile token on Base" },
-                        { icon: "⏸",  label: "Pause status",       desc: "Transfer, Mint, and Burn pause state — each independently controlled" },
-                        { icon: "🔐", label: "Policy gates",       desc: "Which scopes are allowlist/blocklist restricted (KYC, compliance)" },
-                        { icon: "📊", label: "Supply & decimals",  desc: "Total supply, supply cap, decimals, variant-specific fields" },
-                      ].map(({ icon, label, desc }) => (
-                        <div key={label} className="flex items-center gap-4 px-5 py-4">
-                          <span className="text-lg w-6 shrink-0 text-center">{icon}</span>
-                          <div>
-                            <p className="font-mono text-sm text-slate-300">{label}</p>
-                            <p className="font-mono text-xs text-slate-600 mt-0.5">{desc}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <>
+                <InfoChip>Multicall</InfoChip>
+                <InfoChip>Zero LLM</InfoChip>
+                <InfoChip>Auto-detect</InfoChip>
+              </>
             )}
 
-            {/* ── ROLES ─────────────────────────────────────────────── */}
             {activeTab === "roles" && (
-              <div>
-                <div className="mb-6">
-                  <h2 className="font-mono text-xl font-bold text-white mb-1">Role Checker</h2>
-                  <p className="font-mono text-sm text-slate-500 mb-4">
-                    Check which of the 7 B20 roles a wallet holds on a specific token.
-                  </p>
-                  <div className="rounded-2xl border border-[#F59E0B25] bg-[#F59E0B05] px-4 py-3">
+              <span className="font-mono text-[9px] text-slate-600">7 roles · multicall in 2 rounds</span>
+            )}
+
+            {activeTab === "registry" && (
+              <>
+                {registryResult ? (
+                  <>
+                    <span className="font-mono text-[9px] text-slate-500">{registryResult.total} tokens</span>
+                    {regStats && (
+                      <>
+                        <span className="font-mono text-[9px]" style={{ color: "#4FC3F7" }}>{regStats.assetCount} ASSET</span>
+                        <span className="font-mono text-[9px]" style={{ color: "#22C55E" }}>{regStats.stableCount} STABLECOIN</span>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <span className="font-mono text-[9px] text-slate-600">B20Factory event log</span>
+                )}
+                <button onClick={doRegistry} disabled={regPending}
+                  className="font-mono text-[9px] text-slate-600 hover:text-slate-400 transition-colors">
+                  {regPending ? "Loading…" : "↻ Refresh"}
+                </button>
+              </>
+            )}
+
+            {activeTab === "launch" && (
+              <span className="font-mono text-[9px] text-slate-600">connect wallet → sign tx → token live on Base</span>
+            )}
+
+            {/* Beryl badge on right */}
+            {berylLabel && (
+              <div className="ml-auto flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full shrink-0"
+                  style={{ background: berylLabel.active ? "#22C55E" : "#F59E0B",
+                           boxShadow:  berylLabel.active ? "0 0 4px #22C55E80" : "0 0 4px #F59E0B80" }} />
+                <span className="font-mono text-[9px]"
+                  style={{ color: berylLabel.active ? "#22C55E" : "#F59E0B" }}>
+                  {berylLabel.text}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* ── 2-column body ───────────────────────────────────────── */}
+          <div className="flex flex-col lg:flex-row">
+
+            {/* MAIN ~62% */}
+            <div className="w-full lg:w-[62%] px-6 py-6 border-b border-[#1A1A2E] lg:border-b-0 lg:border-r">
+
+              {/* ── SCANNER MAIN ──────────────────────────────────── */}
+              {activeTab === "scanner" && (
+                <div>
+                  {/* Input */}
+                  <div className="flex gap-2 mb-2">
+                    <input value={scanAddr}
+                      onChange={e => setScanAddr(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter" && addrValid && !scanPending) doScan(); }}
+                      placeholder="0x… token address (40 hex chars)"
+                      spellCheck={false}
+                      className={`flex-1 min-w-0 ${INPUT_CLS}`}
+                    />
+                    <button onClick={() => doScan()} disabled={!addrValid || scanPending}
+                      className="px-5 py-2.5 rounded-xl font-mono text-xs font-semibold transition-all shrink-0"
+                      style={addrValid && !scanPending
+                        ? { background: "#4FC3F720", color: "#4FC3F7", border: "1px solid #4FC3F740" }
+                        : { background: "#0d0d18", color: "#334155", border: "1px solid #1A1A2E", cursor: "not-allowed" }}>
+                      {scanPending ? "Reading…" : "Inspect"}
+                    </button>
+                  </div>
+
+                  {scanAddr && !addrValid && (
+                    <p className="font-mono text-xs text-[#EF4444] mb-2 ml-1">
+                      Must be 0x followed by 40 hex characters.
+                    </p>
+                  )}
+
+                  {/* Refresh when result */}
+                  {scanResult && !scanPending && (
+                    <div className="mb-2">
+                      <button onClick={() => doScan()} disabled={!addrValid}
+                        className="font-mono text-xs px-3 py-1 rounded-lg border border-[#1A1A2E] text-slate-500 hover:text-slate-300 transition-colors">
+                        Refresh
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Loading */}
+                  {scanPending && (
+                    <div className="mt-4 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+                      <span className="font-mono text-xs text-slate-500">
+                        Reading from Base {network === "mainnet" ? "Mainnet" : "Sepolia"} RPC…
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Error */}
+                  {scanError && !scanPending && (
+                    <div className="mt-4 rounded-2xl border border-[#EF444430] px-4 py-3">
+                      <p className="font-mono text-sm text-[#EF4444]">{scanError}</p>
+                      <button onClick={() => setScanError("")}
+                        className="font-mono text-xs text-slate-500 hover:text-slate-300 mt-2 transition-colors">
+                        Dismiss
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Result */}
+                  {scanResult && !scanPending && (
+                    <ResultCard info={scanResult}
+                      onScanAnother={() => {
+                        setScanResult(null); setScanError(""); setScanAddr("");
+                        window.history.replaceState({}, "", "/app/b20");
+                      }} />
+                  )}
+
+                  {/* Empty state hint */}
+                  {!scanResult && !scanPending && !scanError && (
+                    <div className="mt-4 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-5 py-6 text-center">
+                      <p className="font-mono text-sm text-slate-500 mb-1">Paste any Base token address</p>
+                      <p className="font-mono text-xs text-slate-700">
+                        Real-time on-chain data via multicall. No LLM involved.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── ROLES MAIN ────────────────────────────────────── */}
+              {activeTab === "roles" && (
+                <div>
+                  <div className="rounded-2xl border border-[#F59E0B25] bg-[#F59E0B05] px-4 py-3 mb-5">
                     <p className="font-mono text-sm text-[#F59E0B] font-medium mb-0.5">
                       B20 omits AccessControlEnumerable
                     </p>
                     <p className="font-mono text-xs text-slate-500 leading-relaxed">
                       Role holders cannot be enumerated — you must check specific wallet addresses.
-                      Use this to verify whether a known address holds a given role.
                     </p>
                   </div>
-                </div>
 
-                <div className="space-y-3 mb-4">
-                  <div>
-                    <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
-                      Token Address
-                    </label>
-                    <input value={roleToken} onChange={e => setRoleToken(e.target.value)}
-                      placeholder="0x… B20 token address" spellCheck={false} className={INPUT_CLS} />
+                  <div className="space-y-3 mb-4">
+                    <div>
+                      <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+                        Token Address
+                      </label>
+                      <input value={roleToken} onChange={e => setRoleToken(e.target.value)}
+                        placeholder="0x… B20 token address" spellCheck={false} className={INPUT_CLS} />
+                    </div>
+                    <div>
+                      <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+                        Wallet to Check
+                      </label>
+                      <input value={roleWallet} onChange={e => setRoleWallet(e.target.value)}
+                        placeholder="0x… wallet address" spellCheck={false} className={INPUT_CLS} />
+                    </div>
                   </div>
-                  <div>
-                    <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
-                      Wallet to Check
-                    </label>
-                    <input value={roleWallet} onChange={e => setRoleWallet(e.target.value)}
-                      placeholder="0x… wallet address" spellCheck={false} className={INPUT_CLS} />
-                  </div>
-                </div>
 
-                <button onClick={doRoles}
-                  disabled={!isValidAddr(roleToken) || !isValidAddr(roleWallet) || rolesPending}
-                  className="px-5 py-2.5 rounded-xl font-mono text-xs font-semibold transition-all mb-6"
-                  style={isValidAddr(roleToken) && isValidAddr(roleWallet) && !rolesPending
-                    ? { background: "#4FC3F720", color: "#4FC3F7", border: "1px solid #4FC3F740" }
-                    : { background: "#0d0d18", color: "#334155", border: "1px solid #1A1A2E", cursor: "not-allowed" }}>
-                  {rolesPending ? "Checking…" : "Check Roles"}
-                </button>
+                  <button onClick={doRoles}
+                    disabled={!isValidAddr(roleToken) || !isValidAddr(roleWallet) || rolesPending}
+                    className="px-5 py-2.5 rounded-xl font-mono text-xs font-semibold transition-all mb-5"
+                    style={isValidAddr(roleToken) && isValidAddr(roleWallet) && !rolesPending
+                      ? { background: "#4FC3F720", color: "#4FC3F7", border: "1px solid #4FC3F740" }
+                      : { background: "#0d0d18", color: "#334155", border: "1px solid #1A1A2E", cursor: "not-allowed" }}>
+                    {rolesPending ? "Checking…" : "Check Roles"}
+                  </button>
 
-                {rolesPending && (
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-                    <span className="font-mono text-xs text-slate-500">Multicall in 2 rounds — fetching role hashes, then checking…</span>
-                  </div>
-                )}
-                {rolesError && !rolesPending && (
-                  <div className="rounded-2xl border border-[#EF444430] px-4 py-3 mb-4">
-                    <p className="font-mono text-xs text-[#EF4444]">{rolesError}</p>
-                  </div>
-                )}
+                  {rolesPending && (
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+                      <span className="font-mono text-xs text-slate-500">Multicall in 2 rounds — fetching role hashes, then checking…</span>
+                    </div>
+                  )}
+                  {rolesError && !rolesPending && (
+                    <div className="rounded-2xl border border-[#EF444430] px-4 py-3 mb-4">
+                      <p className="font-mono text-xs text-[#EF4444]">{rolesError}</p>
+                    </div>
+                  )}
 
-                {/* Results */}
-                {rolesResult && !rolesPending && (
-                  <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
-                    <div className="px-4 py-3 bg-[#0a0a0f] border-b border-[#1A1A2E]">
-                      <p className="font-mono text-xs text-slate-500">
-                        <span className="text-slate-300">{truncAddr(rolesResult.wallet, 8)}</span>
-                        <span className="text-slate-600"> on token </span>
-                        <span className="text-slate-300">{truncAddr(rolesResult.token, 8)}</span>
-                        <span className="text-slate-600"> · {rolesResult.network}</span>
+                  {rolesResult && !rolesPending && (
+                    <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
+                      <div className="px-4 py-3 bg-[#0a0a0f] border-b border-[#1A1A2E]">
+                        <p className="font-mono text-xs text-slate-500">
+                          <span className="text-slate-300">{truncAddr(rolesResult.wallet, 8)}</span>
+                          <span className="text-slate-600"> on </span>
+                          <span className="text-slate-300">{truncAddr(rolesResult.token, 8)}</span>
+                          <span className="text-slate-600"> · {rolesResult.network}</span>
+                        </p>
+                      </div>
+                      <div className="divide-y divide-[#0d0d18]">
+                        {rolesResult.roles.map(role => (
+                          <div key={role.roleKey} className="flex items-center justify-between px-4 py-3.5">
+                            <div>
+                              <span className="font-mono text-sm text-slate-200">{role.name}</span>
+                              {role.hash && (
+                                <span className="font-mono text-[9px] text-slate-700 ml-3 hidden sm:inline">
+                                  {role.hash.slice(0, 14)}…
+                                </span>
+                              )}
+                            </div>
+                            <span className="font-mono text-xs font-semibold px-2.5 py-1 rounded-full"
+                              style={role.held === null
+                                ? { background: "#64748b15", color: "#64748b" }
+                                : role.held
+                                  ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E30" }
+                                  : { background: "#0f0f14", color: "#334155" }}>
+                              {role.held === null ? "unknown" : role.held ? "HELD" : "—"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="px-4 py-2.5 bg-[#0a0a0f] border-t border-[#1A1A2E]">
+                        <p className="font-mono text-[9px] text-slate-700">
+                          Checked {new Date(rolesResult.checkedAt).toLocaleTimeString()} via multicall (2 rounds).
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {!rolesResult && !rolesPending && !rolesError && (
+                    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-5 py-6 text-center">
+                      <p className="font-mono text-sm text-slate-500 mb-1">Enter a token + wallet address</p>
+                      <p className="font-mono text-xs text-slate-700">
+                        Checks all 7 B20 roles via multicall in 2 rounds.
                       </p>
                     </div>
-                    <div className="divide-y divide-[#0d0d18]">
-                      {rolesResult.roles.map(role => (
-                        <div key={role.roleKey} className="flex items-center justify-between px-4 py-3.5">
-                          <div>
-                            <span className="font-mono text-sm text-slate-200">{role.name}</span>
-                            {role.hash && (
-                              <span className="font-mono text-[9px] text-slate-700 ml-3 hidden sm:inline">
-                                {role.hash.slice(0, 14)}…
+                  )}
+                </div>
+              )}
+
+              {/* ── REGISTRY MAIN ─────────────────────────────────── */}
+              {activeTab === "registry" && (
+                <div>
+                  {/* Filter + search + sort */}
+                  <div className="flex items-center gap-2 flex-wrap mb-4">
+                    {(["all", "asset", "stablecoin"] as const).map(f => (
+                      <button key={f} onClick={() => setRegFilter(f)}
+                        className="font-mono text-[10px] px-2.5 py-1 rounded-full border transition-colors"
+                        style={regFilter === f
+                          ? f === "asset"
+                            ? { background: "#4FC3F715", color: "#4FC3F7", borderColor: "#4FC3F740" }
+                            : f === "stablecoin"
+                              ? { background: "#22C55E15", color: "#22C55E", borderColor: "#22C55E40" }
+                              : { background: "#ffffff10", color: "#e2e8f0", borderColor: "#ffffff20" }
+                          : { color: "#475569", borderColor: "#1A1A2E" }}>
+                        {f === "all" ? "All" : f === "asset" ? "ASSET" : "STABLECOIN"}
+                      </button>
+                    ))}
+                    <div className="flex-1 min-w-[120px]">
+                      <input value={regSearch} onChange={e => setRegSearch(e.target.value)}
+                        placeholder="Search name or symbol…" spellCheck={false}
+                        className="w-full bg-[#0a0a12] border border-[#1A1A2E] rounded-xl px-3 py-1.5 font-mono text-xs text-slate-200 placeholder:text-slate-700 outline-none focus:border-[#4FC3F740]" />
+                    </div>
+                    <div className="flex rounded-lg border border-[#1A1A2E] overflow-hidden shrink-0">
+                      {(["newest", "oldest"] as const).map(s => (
+                        <button key={s} onClick={() => setRegSort(s)}
+                          className="px-2.5 py-1 font-mono text-[9px] transition-colors capitalize"
+                          style={regSort === s ? { background: "#4FC3F715", color: "#4FC3F7" } : { color: "#475569" }}>
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Loading */}
+                  {regPending && (
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+                      <span className="font-mono text-xs text-slate-500">Scanning B20Factory event log…</span>
+                    </div>
+                  )}
+
+                  {/* Error */}
+                  {registryError && !regPending && (
+                    <div className="rounded-2xl border border-[#EF444430] px-4 py-3 mb-4">
+                      <p className="font-mono text-xs text-[#EF4444]">{registryError}</p>
+                      <button onClick={doRegistry}
+                        className="font-mono text-xs text-slate-500 hover:text-slate-300 mt-2 transition-colors">
+                        Retry
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Initial placeholder */}
+                  {!registryResult && !regPending && !registryError && (
+                    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-5 py-8 text-center">
+                      <p className="font-mono text-sm text-slate-500 mb-1">Loading B20Factory events…</p>
+                      <p className="font-mono text-xs text-slate-700">Scanning backwards from latest block</p>
+                    </div>
+                  )}
+
+                  {/* Empty state */}
+                  {registryResult && !regPending && registryResult.entries.length === 0 && (
+                    <div className="rounded-2xl border border-[#1A1A2E] px-5 py-10 text-center">
+                      <p className="font-mono text-sm text-slate-400 mb-2">No B20 tokens on {network} yet.</p>
+                      <p className="font-mono text-xs text-slate-600 mb-5">
+                        {network === "mainnet"
+                          ? "Beryl mainnet is live. Tokens will appear here as they are deployed."
+                          : "Deploy a B20 token on Sepolia to see it here."}
+                      </p>
+                      <button onClick={() => setActiveTab("launch")}
+                        className="font-mono text-xs px-5 py-2 rounded-xl transition-all"
+                        style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F735" }}>
+                        Launch your first B20 →
+                      </button>
+                    </div>
+                  )}
+
+                  {/* No search results */}
+                  {registryResult && !regPending && registryResult.entries.length > 0 && filteredEntries.length === 0 && (
+                    <div className="rounded-2xl border border-[#1A1A2E] px-5 py-8 text-center">
+                      <p className="font-mono text-sm text-slate-500">No tokens match your filter</p>
+                      <button onClick={() => { setRegFilter("all"); setRegSearch(""); }}
+                        className="font-mono text-xs text-[#4FC3F7] mt-2 hover:opacity-80 transition-opacity">
+                        Clear filters
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Token grid */}
+                  {filteredEntries.length > 0 && !regPending && (
+                    <div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                        {filteredEntries.map(entry => (
+                          <button key={`${entry.token}-${entry.blockNumber}`}
+                            onClick={() => handleRegistrySelect(entry.token)}
+                            className="flex items-center gap-3 rounded-2xl border border-[#1A1A2E] px-3 py-3 hover:bg-[#0d0d18] transition-colors text-left w-full">
+                            <div className="w-9 h-9 rounded-xl flex items-center justify-center font-mono text-[11px] font-bold shrink-0"
+                              style={{
+                                background: entry.variant === 0 ? "#4FC3F715" : "#22C55E15",
+                                border:     `1px solid ${entry.variant === 0 ? "#4FC3F730" : "#22C55E30"}`,
+                                color:      entry.variant === 0 ? "#4FC3F7" : "#22C55E",
+                              }}>
+                              {(entry.symbol || entry.name).slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                                <span className="font-mono text-xs text-white font-medium truncate max-w-[100px]">
+                                  {entry.name || "—"}
+                                </span>
+                                {entry.symbol && (
+                                  <span className="font-mono text-[9px] text-slate-500">${entry.symbol}</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <VariantBadge variant={entry.variantLabel} />
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                              <span className="font-mono text-[9px] text-slate-600">
+                                #{Number(entry.blockNumber).toLocaleString()}
                               </span>
-                            )}
+                              <span className="font-mono text-[9px] text-[#4FC3F7]">Inspect →</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex items-center justify-between px-1">
+                        <p className="font-mono text-[9px] text-slate-700">
+                          {filteredEntries.length} of {registryResult?.total ?? 0} tokens
+                          {registryResult?.capped ? " (capped at 100)" : ""}
+                        </p>
+                        <a href={`https://${network === "mainnet" ? "" : "sepolia."}basescan.org/address/0xb20f000000000000000000000000000000000000#events`}
+                          target="_blank" rel="noopener noreferrer"
+                          className="font-mono text-[9px] text-slate-600 hover:text-slate-400 transition-colors">
+                          All events ↗
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── LAUNCH MAIN ───────────────────────────────────── */}
+              {activeTab === "launch" && <LaunchTab onScanToken={handleScanDeployed} />}
+
+            </div>
+
+            {/* SIDE ~38% */}
+            <div className="w-full lg:w-[38%] px-5 py-6 space-y-4">
+
+              {/* ── SCANNER SIDE ──────────────────────────────────── */}
+              {activeTab === "scanner" && (
+                <>
+                  {/* Recent scans */}
+                  {recentScans.length > 0 && (
+                    <SideCard title={`Recent Scans (${recentScans.length})`}>
+                      <div className="divide-y divide-[#0d0d18]">
+                        {recentScans.map(r => {
+                          const isActive = scanResult?.address?.toLowerCase() === r.address.toLowerCase();
+                          return (
+                            <button key={r.address}
+                              onClick={() => { setScanAddr(r.address); doScan(r.address); }}
+                              className={`w-full text-left flex items-center gap-3 px-4 py-3 transition-colors ${isActive ? "bg-[#4FC3F7]/8" : "hover:bg-[#0d0d18]"}`}>
+                              <div className="flex-1 min-w-0">
+                                <p className={`font-mono text-xs truncate ${isActive ? "text-white" : "text-slate-400"}`}>
+                                  {r.name}{r.symbol ? ` $${r.symbol}` : ""}
+                                </p>
+                                <p className="font-mono text-[8px] text-slate-700">{r.address.slice(0, 14)}…</p>
+                              </div>
+                              <span className="font-mono text-[8px] text-slate-700 shrink-0">
+                                {r.network === "mainnet" ? "Main" : "Sepolia"}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </SideCard>
+                  )}
+
+                  {/* Quick examples */}
+                  <SideCard title="Quick Examples">
+                    <div className="px-4 py-3 space-y-2">
+                      {[
+                        { label: "B20Factory",     addr: "0xB20f000000000000000000000000000000000000", desc: "The factory contract — not a B20 token" },
+                        { label: "PolicyRegistry", addr: "0x8453000000000000000000000000000000000002", desc: "Global on-chain policy registry" },
+                      ].map(({ label, addr, desc }) => (
+                        <button key={addr} onClick={() => { setScanAddr(addr); doScan(addr); }}
+                          className="w-full text-left rounded-xl border border-[#1A1A2E] px-3 py-2.5 hover:bg-[#0d0d18] transition-colors">
+                          <p className="font-mono text-xs text-slate-300">{label}</p>
+                          <p className="font-mono text-[8px] text-slate-700 mt-0.5">{desc}</p>
+                        </button>
+                      ))}
+                      {registryResult?.entries.slice(0, 2).map(e => (
+                        <button key={e.token} onClick={() => { setScanAddr(e.token); doScan(e.token); }}
+                          className="w-full text-left rounded-xl border border-[#1A1A2E] px-3 py-2.5 hover:bg-[#0d0d18] transition-colors">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <p className="font-mono text-xs text-slate-300">{e.name || e.symbol}</p>
+                            <VariantBadge variant={e.variantLabel} />
                           </div>
-                          <span className="font-mono text-xs font-semibold px-2.5 py-1 rounded-full"
-                            style={role.held === null
-                              ? { background: "#64748b15", color: "#64748b" }
-                              : role.held
-                                ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E30" }
-                                : { background: "#0f0f14", color: "#334155" }}>
-                            {role.held === null ? "unknown" : role.held ? "HELD" : "—"}
-                          </span>
+                          <p className="font-mono text-[8px] text-slate-700">{e.token.slice(0, 18)}…</p>
+                        </button>
+                      ))}
+                    </div>
+                  </SideCard>
+
+                  {/* What this checks */}
+                  <SideCard title="What This Checks">
+                    <div className="divide-y divide-[#0d0d18]">
+                      {[
+                        { icon: "✓",  label: "B20 verification",  desc: "Confirms the token is a real B20 precompile on Base" },
+                        { icon: "⏸",  label: "Pause status",      desc: "Transfer, Mint, and Burn — each independently controlled" },
+                        { icon: "🔐", label: "Policy gates",      desc: "Which scopes are allowlist/blocklist restricted (KYC, compliance)" },
+                        { icon: "📊", label: "Supply & decimals", desc: "Total supply, supply cap, decimals, variant-specific fields" },
+                      ].map(({ icon, label, desc }) => (
+                        <div key={label} className="flex items-start gap-3 px-4 py-3">
+                          <span className="text-sm w-5 shrink-0 text-center leading-relaxed">{icon}</span>
+                          <div>
+                            <p className="font-mono text-xs text-slate-300">{label}</p>
+                            <p className="font-mono text-[9px] text-slate-600 mt-0.5 leading-relaxed">{desc}</p>
+                          </div>
                         </div>
                       ))}
                     </div>
-                    <div className="px-4 py-2.5 bg-[#0a0a0f] border-t border-[#1A1A2E]">
-                      <p className="font-mono text-[9px] text-slate-700">
-                        Checked {new Date(rolesResult.checkedAt).toLocaleTimeString()} via multicall (2 rounds).
+                    <div className="px-4 py-3 border-t border-[#1A1A2E]">
+                      <p className="font-mono text-[9px] text-slate-700 leading-relaxed">
+                        Zero LLM — all data is read directly from Base via multicall. Results reflect on-chain state at read time.
                       </p>
                     </div>
-                  </div>
-                )}
+                  </SideCard>
+                </>
+              )}
 
-                {/* Empty state — role reference */}
-                {!rolesResult && !rolesPending && !rolesError && (
-                  <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
-                    <div className="px-4 py-3 bg-[#0a0a0f] border-b border-[#1A1A2E]">
-                      <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">
-                        7 B20 Roles Reference
-                      </p>
-                    </div>
+              {/* ── ROLES SIDE ────────────────────────────────────── */}
+              {activeTab === "roles" && (
+                <>
+                  <SideCard title="The 7 B20 Roles">
                     <div className="divide-y divide-[#0d0d18]">
                       {[
                         { r: "DEFAULT_ADMIN_ROLE", d: "Manages all roles + supply cap via updateSupplyCap()" },
                         { r: "MINT_ROLE",          d: "Mint new tokens to any address" },
-                        { r: "BURN_ROLE",          d: "Burn tokens (holder must approve or consent)" },
-                        { r: "BURN_BLOCKED_ROLE",  d: "Freeze-seize — burnBlocked(from, amount) forcibly confiscates" },
+                        { r: "BURN_ROLE",          d: "Burn tokens (holder approval required)" },
+                        { r: "BURN_BLOCKED_ROLE",  d: "Freeze-seize: burnBlocked() forcibly confiscates" },
                         { r: "PAUSE_ROLE",         d: "Pause TRANSFER, MINT, or BURN independently" },
-                        { r: "UNPAUSE_ROLE",       d: "Unpause any paused feature" },
+                        { r: "UNPAUSE_ROLE",       d: "Unpause any paused operation" },
                         { r: "METADATA_ROLE",      d: "Update token name, symbol, and metadata" },
                       ].map(({ r, d }) => (
-                        <div key={r} className="flex items-start gap-4 px-4 py-3">
-                          <code className="font-mono text-[10px] text-[#4FC3F7] w-[155px] shrink-0 pt-0.5">{r}</code>
-                          <span className="font-mono text-xs text-slate-500 leading-relaxed">{d}</span>
+                        <div key={r} className="px-4 py-3">
+                          <code className="font-mono text-[9px] text-[#4FC3F7] block mb-0.5">{r}</code>
+                          <span className="font-mono text-[10px] text-slate-600 leading-relaxed">{d}</span>
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
+                  </SideCard>
 
-            {/* ── REGISTRY ──────────────────────────────────────────── */}
-            {activeTab === "registry" && (
-              <div>
-                <div className="mb-6 flex items-start justify-between gap-4">
-                  <div>
-                    <h2 className="font-mono text-xl font-bold text-white mb-1">On-chain Registry</h2>
-                    <p className="font-mono text-sm text-slate-500">
-                      All B20 tokens from B20Factory events. Newest first. Click a row to inspect.
-                    </p>
-                  </div>
-                  <button onClick={doRegistry} disabled={regPending}
-                    className="font-mono text-xs px-3 py-1.5 rounded-xl border border-[#1A1A2E] text-slate-500 hover:text-slate-300 transition-colors shrink-0 mt-0.5">
-                    {regPending ? "Loading…" : "Refresh"}
-                  </button>
-                </div>
-
-                {/* Stats */}
-                {registryResult && !regPending && (
-                  <div className="grid grid-cols-3 gap-2 mb-5">
-                    {[
-                      { label: "Total tokens", value: registryResult.total.toString() },
-                      { label: "Network",      value: registryResult.network === "mainnet" ? "Mainnet" : "Sepolia" },
-                      { label: "From block",   value: `#${Number(registryResult.fromBlock).toLocaleString()}` },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="rounded-xl bg-[#0a0a12] border border-[#1A1A2E] px-3 py-2.5">
-                        <p className="font-mono text-[9px] text-slate-600 mb-0.5">{label}</p>
-                        <p className="font-mono text-xs text-slate-200">{value}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Initial placeholder — shown briefly before auto-load completes */}
-                {!registryResult && !regPending && !registryError && (
-                  <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
-                    <div className="px-4 py-3 bg-[#0a0a0f] border-b border-[#1A1A2E]">
-                      <p className="font-mono text-xs text-slate-400 font-medium mb-0.5">B20Factory</p>
-                      <p className="font-mono text-[10px] text-slate-600 break-all">
-                        0xB20f000000000000000000000000000000000000
+                  <SideCard title="Why This Matters">
+                    <div className="px-4 py-4 space-y-3">
+                      <p className="font-mono text-xs text-slate-500 leading-relaxed">
+                        B20 omits <code className="text-[#4FC3F7]">AccessControlEnumerable</code> — role holders cannot be listed on-chain. You must check specific addresses.
+                      </p>
+                      <p className="font-mono text-xs text-slate-500 leading-relaxed">
+                        Use this checker to verify role assignments before trusting a token or granting permissions in a protocol.
+                      </p>
+                      <p className="font-mono text-xs leading-relaxed" style={{ color: "#F59E0B80" }}>
+                        <span style={{ color: "#F59E0B" }}>BURN_BLOCKED_ROLE</span> is especially sensitive — it allows forcible confiscation of any holder's tokens without their consent.
                       </p>
                     </div>
+                  </SideCard>
+                </>
+              )}
+
+              {/* ── REGISTRY SIDE ─────────────────────────────────── */}
+              {activeTab === "registry" && (
+                <>
+                  <SideCard title="Registry Stats">
                     <div className="divide-y divide-[#0d0d18]">
                       {[
-                        { label: "B20Created event", desc: "Emitted on every token deployment — name, symbol, variant, creator" },
-                        { label: "On-chain only",    desc: "Registry is reconstructed from raw event logs — no database, no indexer" },
-                        { label: "Beryl required",   desc: "Factory only emits events after Beryl activation on the selected network" },
-                      ].map(({ label, desc }) => (
-                        <div key={label} className="flex items-start gap-4 px-4 py-3">
-                          <span className="font-mono text-[9px] text-[#4FC3F7] w-[130px] shrink-0 pt-0.5">{label}</span>
-                          <span className="font-mono text-xs text-slate-600 leading-relaxed">{desc}</span>
+                        { label: "Total tokens",      value: regStats ? regStats.total.toString()       : "—", color: "#e2e8f0" },
+                        { label: "ASSET tokens",      value: regStats ? regStats.assetCount.toString()  : "—", color: "#4FC3F7" },
+                        { label: "STABLECOIN tokens", value: regStats ? regStats.stableCount.toString() : "—", color: "#22C55E" },
+                        { label: "Recent (~5d)",      value: regStats ? regStats.recentCount.toString() : "—", color: "#F59E0B" },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} className="flex items-center justify-between px-4 py-2.5">
+                          <span className="font-mono text-xs text-slate-500">{label}</span>
+                          <span className="font-mono text-sm font-semibold" style={{ color }}>{value}</span>
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                    {registryResult?.cached && (
+                      <div className="px-4 py-2 border-t border-[#1A1A2E]">
+                        <p className="font-mono text-[9px] text-slate-700">KV cached · TTL 120s</p>
+                      </div>
+                    )}
+                  </SideCard>
 
-                {regPending && (
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-                    <span className="font-mono text-xs text-slate-500">Scanning B20Factory event log…</span>
-                  </div>
-                )}
-                {registryError && !regPending && (
-                  <div className="rounded-2xl border border-[#EF444430] px-4 py-3 mb-4">
-                    <p className="font-mono text-xs text-[#EF4444]">{registryError}</p>
-                    <button onClick={doRegistry}
-                      className="font-mono text-xs text-slate-500 hover:text-slate-300 mt-2 transition-colors">
-                      Retry
-                    </button>
-                  </div>
-                )}
-
-                {/* Empty */}
-                {registryResult && !regPending && registryResult.entries.length === 0 && (
-                  <div className="rounded-2xl border border-[#1A1A2E] px-5 py-10 text-center">
-                    <p className="font-mono text-sm text-slate-400 mb-2">No B20 tokens on {network} yet.</p>
-                    <p className="font-mono text-xs text-slate-600 mb-5">
-                      {network === "mainnet"
-                        ? "Beryl mainnet is live. Tokens will appear here as they are deployed."
-                        : "Deploy a B20 token on Sepolia to see it here."}
-                    </p>
-                    <button onClick={() => setActiveTab("launch")}
-                      className="font-mono text-xs px-5 py-2 rounded-xl transition-all"
-                      style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F735" }}>
-                      Launch your first B20 →
-                    </button>
-                  </div>
-                )}
-
-                {/* Token list */}
-                {registryResult && !regPending && registryResult.entries.length > 0 && (
-                  <div>
-                    <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden divide-y divide-[#0d0d18]">
-                      {registryResult.entries.map(entry => (
-                        <button key={`${entry.token}-${entry.blockNumber}`}
-                          onClick={() => handleRegistrySelect(entry.token)}
-                          className="w-full flex items-center justify-between px-4 py-4 hover:bg-[#0d0d18] transition-colors text-left">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <span className="font-mono text-sm text-white font-medium">{entry.name || "—"}</span>
-                              {entry.symbol && <span className="font-mono text-xs text-slate-400">${entry.symbol}</span>}
-                              <VariantBadge variant={entry.variantLabel} />
-                            </div>
-                            <div className="font-mono text-[9px] text-slate-600 truncate">{entry.token}</div>
-                          </div>
-                          <div className="flex items-center gap-3 shrink-0 ml-4">
-                            <span className="font-mono text-xs text-slate-600">#{Number(entry.blockNumber).toLocaleString()}</span>
-                            <span className="font-mono text-xs text-[#4FC3F7]">Inspect →</span>
-                          </div>
-                        </button>
+                  <SideCard title="How the Registry Works">
+                    <div className="divide-y divide-[#0d0d18]">
+                      {[
+                        { label: "B20Created event",  desc: "Emitted by B20Factory on every token deployment" },
+                        { label: "No database",       desc: "Reconstructed from raw getLogs — backwards chunked scan in 2000-block windows" },
+                        { label: "KV cache 120s",     desc: "Results cached server-side so repeated loads are instant" },
+                        { label: "Beryl required",    desc: "Factory only active after Beryl upgrade on each network" },
+                      ].map(({ label, desc }) => (
+                        <div key={label} className="flex items-start gap-3 px-4 py-3">
+                          <span className="font-mono text-[9px] text-[#4FC3F7] shrink-0 w-[100px] pt-0.5 leading-relaxed">{label}</span>
+                          <span className="font-mono text-[10px] text-slate-600 leading-relaxed">{desc}</span>
+                        </div>
                       ))}
                     </div>
-                    <div className="flex items-center justify-between mt-2 px-1">
-                      <p className="font-mono text-[9px] text-slate-700">
-                        {registryResult.entries.length} of {registryResult.total} tokens
-                        {registryResult.capped ? " (capped at 100)" : ""}
-                      </p>
+                    <div className="px-4 py-3 border-t border-[#1A1A2E]">
                       <a href={`https://${network === "mainnet" ? "" : "sepolia."}basescan.org/address/0xb20f000000000000000000000000000000000000#events`}
                         target="_blank" rel="noopener noreferrer"
-                        className="font-mono text-[9px] text-slate-600 hover:text-slate-400 transition-colors">
-                        All events on Basescan ↗
+                        className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7] transition-colors">
+                        All B20Created events on Basescan ↗
                       </a>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
+                  </SideCard>
+                </>
+              )}
 
-            {/* ── LAUNCH ────────────────────────────────────────────── */}
-            {activeTab === "launch" && <LaunchTab onScanToken={handleScanDeployed} />}
+              {/* ── LAUNCH SIDE ───────────────────────────────────── */}
+              {activeTab === "launch" && (
+                <>
+                  <SideCard title="Variant Comparison">
+                    <div className="divide-y divide-[#0d0d18]">
+                      <div className="grid grid-cols-3 gap-2 px-4 py-2.5">
+                        <span className="font-mono text-[9px] text-slate-700" />
+                        <span className="font-mono text-[9px] text-[#4FC3F7] font-semibold">ASSET</span>
+                        <span className="font-mono text-[9px] text-[#22C55E] font-semibold">STABLECOIN</span>
+                      </div>
+                      {[
+                        { prop: "variant id",   asset: "0",                    stable: "1"               },
+                        { prop: "decimals",     asset: "18 (default)",         stable: "6 (fixed)"       },
+                        { prop: "currency",     asset: "—",                    stable: "USD, EUR, …"     },
+                        { prop: "multiplier",   asset: "rebase-capable",       stable: "—"               },
+                        { prop: "use case",     asset: "governance, utility",  stable: "dollar-pegged"   },
+                      ].map(({ prop, asset, stable }) => (
+                        <div key={prop} className="grid grid-cols-3 gap-2 px-4 py-2.5">
+                          <span className="font-mono text-[9px] text-slate-600">{prop}</span>
+                          <span className="font-mono text-[9px] text-[#4FC3F7]">{asset}</span>
+                          <span className="font-mono text-[9px] text-[#22C55E]">{stable}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </SideCard>
 
+                  <LaunchMyTokens />
+
+                  <SideCard title="Before You Deploy">
+                    <div className="divide-y divide-[#0d0d18]">
+                      {[
+                        "Choose variant carefully — cannot be changed after deploy",
+                        "Use Sepolia first to test deploy + role setup flow",
+                        "Assign DEFAULT_ADMIN_ROLE to a multisig, not an EOA",
+                        "Set supply cap before minting via updateSupplyCap()",
+                        "Configure PolicyRegistry if you need KYC / compliance gates",
+                        "Verify in Scanner tab after deployment to confirm config",
+                      ].map((item, i) => (
+                        <div key={i} className="flex items-start gap-3 px-4 py-2.5">
+                          <span className="font-mono text-[9px] text-slate-600 shrink-0 w-4 pt-0.5">{i + 1}.</span>
+                          <span className="font-mono text-[10px] text-slate-500 leading-relaxed">{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </SideCard>
+                </>
+              )}
+
+            </div>
           </div>
         </div>
       </div>
