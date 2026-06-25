@@ -4,6 +4,7 @@ import { useState, useTransition, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount, useSendTransaction, useSwitchChain } from "wagmi";
 import { useAppChrome } from "@/app/app/AppChrome";
+import { ConnectButton } from "@/components/ConnectModal";
 import { runB20Inspect }  from "./inspect-action";
 import { runB20Roles }    from "./roles-action";
 import { runB20Registry } from "./registry-action";
@@ -383,8 +384,9 @@ function LaunchMyTokens() {
   return (
     <SideCard title="Your Deployed Tokens">
       {!address ? (
-        <div className="px-4 py-5 text-center">
+        <div className="px-4 py-5 text-center space-y-3">
           <p className="font-mono text-xs text-slate-600">Connect wallet to see your tokens</p>
+          <ConnectButton label="Connect Wallet" />
         </div>
       ) : myTokens.length === 0 ? (
         <div className="px-4 py-5 text-center">
@@ -643,16 +645,18 @@ function LaunchTab({ onScanToken }: { onScanToken: (addr: string, net: Network) 
         <div className="px-5 pb-5">
           {!deployedToken ? (
             <>
-              <button onClick={deploy}
-                disabled={!canDeploy || deploying || !address}
-                className="w-full font-mono text-sm font-bold py-3 rounded-xl transition-all disabled:opacity-40"
-                style={{ background: "#34D399", color: "#050508" }}>
-                {!address
-                  ? "Connect wallet to deploy"
-                  : deploying
+              {!address ? (
+                <ConnectButton label="Connect Wallet to Deploy" />
+              ) : (
+                <button onClick={deploy}
+                  disabled={!canDeploy || deploying}
+                  className="w-full font-mono text-sm font-bold py-3 rounded-xl transition-all disabled:opacity-40"
+                  style={{ background: "#34D399", color: "#050508" }}>
+                  {deploying
                     ? (polling ? "Confirming on-chain…" : "Preparing transaction…")
                     : `Deploy B20 on ${net.label} →`}
-              </button>
+                </button>
+              )}
 
               {lNetwork === "sepolia" && (
                 <p className="font-mono text-[9px] text-slate-600 mt-2 text-center">
