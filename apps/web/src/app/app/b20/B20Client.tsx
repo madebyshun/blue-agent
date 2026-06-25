@@ -16,7 +16,7 @@ import type { B20RegistryResult }         from "@/lib/b20/registry-logs";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab     = "scanner" | "roles" | "registry" | "launch" | "manage";
+type Tab     = "scanner" | "roles" | "registry" | "launch" | "manage" | "methodology";
 type Network = "mainnet" | "sepolia";
 
 // ── localStorage helpers ──────────────────────────────────────────────────────
@@ -80,6 +80,12 @@ const TabIcons: Record<Tab, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
     </svg>
   ),
+  methodology: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
+    </svg>
+  ),
 };
 
 const DocsIcon = (
@@ -95,6 +101,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "registry", label: "Registry" },
   { id: "launch",   label: "Launch"   },
   { id: "manage",   label: "Manage"   },
+  { id: "methodology", label: "Methodology" },
 ];
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -200,9 +207,144 @@ function SideCard({ title, children }: { title: string; children: React.ReactNod
   );
 }
 
+// ── Methodology tab ───────────────────────────────────────────────────────────
+// Facts here MUST match computeVerdict() + inspectB20(). Do not invent steps.
+
+const METHOD_FLOW: string[] = [
+  "Validate the address format.",
+  "Check isB20 against the B20Factory — confirm it is a real B20, not arbitrary EVM bytecode.",
+  "Read core state: name, symbol, decimals, total supply, supply cap, and variant.",
+  "Read pause status per feature: transfer, mint, and burn.",
+  "Read the policy ID per scope: transfer sender, receiver, executor, and mint receiver.",
+  "Read variant detail: the rebase multiplier (Asset) or the currency code (Stablecoin).",
+];
+
+const METHOD_VERDICT: { kind: "warn" | "ok"; text: string }[] = [
+  { kind: "warn", text: "Transfers, mint, or burn are paused — the issuer can freeze that operation." },
+  { kind: "warn", text: "A transfer or mint scope is policy-gated by an allowlist or blocklist, not open." },
+  { kind: "warn", text: "Supply is uncapped — the issuer can mint without limit." },
+  { kind: "ok",   text: "No pauses, no restrictive policies, and a capped supply — no issuer-side transfer restrictions detected at read time." },
+];
+
+const METHOD_LIMITS: string[] = [
+  "B20 omits AccessControlEnumerable, so role holders cannot be listed — each role is only checked per wallet via hasRole.",
+  "Reads reflect on-chain state at the moment of the scan. Roles and policies can change afterward.",
+  "Advisory only — verify independently before trusting or trading a token.",
+];
+
+function MethodologyMain({ onScan }: { onScan: () => void }) {
+  return (
+    <div className="max-w-2xl">
+      <h2 className="font-mono text-base font-semibold text-white mb-1.5">How the B20 scanner works</h2>
+      <p className="font-mono text-xs text-slate-400 leading-relaxed mb-6">
+        Every result in the Scanner is read live from Base RPC via multicall — zero LLM, zero guessing.
+        The numbers and flags come straight from on-chain state, never from a model.
+      </p>
+
+      {/* Inspection flow */}
+      <SectionLabel>Inspection flow</SectionLabel>
+      <ol className="space-y-2 mb-7 mt-1">
+        {METHOD_FLOW.map((step, i) => (
+          <li key={i} className="flex gap-3 items-start">
+            <span className="font-mono text-[11px] text-[#4FC3F7] shrink-0 mt-px w-4">{i + 1}.</span>
+            <span className="font-mono text-[11px] text-slate-400 leading-relaxed">{step}</span>
+          </li>
+        ))}
+      </ol>
+
+      {/* Trust verdict */}
+      <SectionLabel>Trust verdict — deterministic, not a score</SectionLabel>
+      <p className="font-mono text-[11px] text-slate-500 leading-relaxed mb-3 mt-1">
+        We surface concrete flags, never a single pass/fail number that would overstate certainty. The verdict
+        is computed in code from the reads above, so the same on-chain state always yields the same flags.
+      </p>
+      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a12] divide-y divide-[#0d0d18] mb-7">
+        {METHOD_VERDICT.map(({ kind, text }, i) => (
+          <div key={i} className="flex items-start gap-3 px-4 py-3">
+            <span className="font-mono text-sm shrink-0 mt-px" style={{ color: kind === "warn" ? "#F59E0B" : "#22C55E" }}>
+              {kind === "warn" ? "!" : "✓"}
+            </span>
+            <span className="font-mono text-[11px] leading-relaxed" style={{ color: kind === "warn" ? "#FCD34D" : "#86efac" }}>
+              {text}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Limitations */}
+      <SectionLabel>Limitations</SectionLabel>
+      <ul className="space-y-2 mb-7 mt-1">
+        {METHOD_LIMITS.map((text, i) => (
+          <li key={i} className="flex gap-3 items-start">
+            <span className="font-mono text-[11px] text-slate-600 shrink-0 mt-px">—</span>
+            <span className="font-mono text-[11px] text-slate-400 leading-relaxed">{text}</span>
+          </li>
+        ))}
+      </ul>
+
+      <button onClick={onScan}
+        className="font-mono text-xs px-4 py-2 rounded-xl transition-all"
+        style={{ background: "#4FC3F720", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
+        Scan a token →
+      </button>
+    </div>
+  );
+}
+
+function MethodologySide() {
+  const sources: { name: string; reads: string }[] = [
+    { name: "B20Factory",     reads: "isB20 · isB20Initialized" },
+    { name: "Token contract", reads: "name · symbol · decimals · totalSupply · supplyCap · isPaused · policyId" },
+    { name: "PolicyRegistry", reads: "policyAdmin (per restricted policy)" },
+  ];
+  return (
+    <>
+      <SideCard title="Data Sources">
+        <div className="divide-y divide-[#0d0d18]">
+          {sources.map(s => (
+            <div key={s.name} className="px-4 py-3">
+              <code className="font-mono text-[10px] text-[#4FC3F7] block mb-0.5">{s.name}</code>
+              <span className="font-mono text-[9px] text-slate-500 leading-relaxed break-words">{s.reads}</span>
+            </div>
+          ))}
+        </div>
+      </SideCard>
+
+      <SideCard title="Guarantees">
+        <div className="px-4 py-3 space-y-2.5">
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] shrink-0" style={{ boxShadow: "0 0 4px #22C55E60" }} />
+            <span className="font-mono text-[10px] text-slate-400">No LLM in the read path</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] shrink-0" style={{ boxShadow: "0 0 4px #22C55E60" }} />
+            <span className="font-mono text-[10px] text-slate-400">Same state → same verdict</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] shrink-0" style={{ boxShadow: "0 0 4px #22C55E60" }} />
+            <span className="font-mono text-[10px] text-slate-400">All reads on Base, on-chain</span>
+          </div>
+        </div>
+      </SideCard>
+
+      <SideCard title="Full Spec">
+        <div className="px-4 py-3">
+          <p className="font-mono text-[10px] text-slate-500 leading-relaxed mb-2">
+            Roles, policy system, variants, and key addresses in the Beryl / B20 docs.
+          </p>
+          <a href="/docs/beryl#methodology"
+            className="font-mono text-[10px] text-[#4FC3F7] hover:opacity-80 transition-opacity">
+            Read the B20 docs ↗
+          </a>
+        </div>
+      </SideCard>
+    </>
+  );
+}
+
 // ── Scanner result card ───────────────────────────────────────────────────────
 
-function ResultCard({ info, onScanAnother }: { info: B20Inspection; onScanAnother: () => void }) {
+function ResultCard({ info, onScanAnother, onHowItWorks }: { info: B20Inspection; onScanAnother: () => void; onHowItWorks?: () => void }) {
   const [copied, setCopied] = useState(false);
   const verdict   = computeVerdict(info);
   const hasWarns  = verdict.some(v => v.kind === "warn");
@@ -337,10 +479,10 @@ function ResultCard({ info, onScanAnother }: { info: B20Inspection; onScanAnothe
               <p className="font-mono text-[9px] text-slate-600">
                 Reflects on-chain config at read time. Roles and policies can be changed by the issuer.
               </p>
-              <a href="/docs/beryl#methodology"
+              <button onClick={onHowItWorks}
                 className="font-mono text-[9px] text-[#4FC3F7] hover:opacity-80 transition-opacity shrink-0">
                 How this works ↗
-              </a>
+              </button>
             </div>
           </div>
         </div>
@@ -381,11 +523,18 @@ function ResultCard({ info, onScanAnother }: { info: B20Inspection; onScanAnothe
 function LaunchMyTokens() {
   const { address } = useAccount();
   const [myTokens, setMyTokens] = useState<MyToken[]>([]);
+  const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
 
   useEffect(() => {
     const all = lsGet<MyToken[]>(LS_MY_TOKENS, []);
     setMyTokens(address ? all.filter(t => t.deployer.toLowerCase() === address.toLowerCase()) : []);
   }, [address]);
+
+  const copyAddr = (addr: string) => {
+    navigator.clipboard.writeText(addr)
+      .then(() => { setCopiedAddr(addr); setTimeout(() => setCopiedAddr(c => (c === addr ? null : c)), 1500); })
+      .catch(() => {});
+  };
 
   return (
     <SideCard title="Your Deployed Tokens">
@@ -411,15 +560,33 @@ function LaunchMyTokens() {
                 <p className="font-mono text-xs text-white truncate">
                   {t.name} <span className="text-slate-500">${t.symbol}</span>
                 </p>
-                <p className="font-mono text-[9px] text-slate-700">
-                  {t.address.slice(0, 14)}… · {t.network === "mainnet" ? "Main" : "Sepolia"}
-                </p>
+                <button onClick={() => copyAddr(t.address)} title={`Copy ${t.address}`}
+                  className="font-mono text-[9px] text-slate-700 hover:text-[#4FC3F7] transition-colors max-w-full truncate block text-left">
+                  {copiedAddr === t.address
+                    ? "Copied full address ✓"
+                    : `${t.address.slice(0, 14)}… · ${t.network === "mainnet" ? "Main" : "Sepolia"}`}
+                </button>
               </div>
-              <a href={`https://${t.network === "mainnet" ? "" : "sepolia."}basescan.org/token/${t.address}`}
-                target="_blank" rel="noopener noreferrer"
-                className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7] transition-colors shrink-0">
-                ↗
-              </a>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button onClick={() => copyAddr(t.address)} title="Copy contract address"
+                  className="text-slate-600 hover:text-[#4FC3F7] transition-colors p-0.5">
+                  {copiedAddr === t.address ? (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="#22C55E" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                    </svg>
+                  ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                      <path strokeLinecap="round" strokeLinejoin="round"
+                        d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
+                    </svg>
+                  )}
+                </button>
+                <a href={`https://${t.network === "mainnet" ? "" : "sepolia."}basescan.org/token/${t.address}`}
+                  target="_blank" rel="noopener noreferrer" title="View on Basescan"
+                  className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7] transition-colors">
+                  ↗
+                </a>
+              </div>
             </div>
           ))}
         </div>
@@ -1055,6 +1222,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
     registry: "Registry",
     launch:   "Launch B20",
     manage:   "Manage",
+    methodology: "Methodology",
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -1264,6 +1432,14 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
               </>
             )}
 
+            {activeTab === "methodology" && (
+              <>
+                <InfoChip>Live Base RPC</InfoChip>
+                <InfoChip>Multicall</InfoChip>
+                <InfoChip>Deterministic</InfoChip>
+              </>
+            )}
+
             {/* Beryl badge on right */}
             {berylLabel && (
               <div className="ml-auto flex items-center gap-1.5">
@@ -1345,6 +1521,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                   {/* Result */}
                   {scanResult && !scanPending && (
                     <ResultCard info={scanResult}
+                      onHowItWorks={() => setActiveTab("methodology")}
                       onScanAnother={() => {
                         setScanResult(null); setScanError(""); setScanAddr("");
                         window.history.replaceState({}, "", "/app/b20");
@@ -1739,6 +1916,11 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                 </div>
               )}
 
+              {/* ── METHODOLOGY MAIN ──────────────────────────────── */}
+              {activeTab === "methodology" && (
+                <MethodologyMain onScan={() => setActiveTab("scanner")} />
+              )}
+
             </div>
 
             {/* SIDE ~38% */}
@@ -2028,6 +2210,9 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                   </SideCard>
                 </>
               )}
+
+              {/* ── METHODOLOGY SIDE ──────────────────────────────── */}
+              {activeTab === "methodology" && <MethodologySide />}
 
             </div>
           </div>

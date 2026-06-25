@@ -2,7 +2,7 @@
 // Tool output cards — rendered inline after tool execution logs
 // One card per tool type: honeypot, risk-gate, deep-analysis, token-pick, contract-trust
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAccount, useReadContracts, useBalance, useReadContract, useWriteContract, useSwitchChain, usePublicClient, useSendTransaction, useCapabilities, useSendCalls, useCallsStatus } from "wagmi";
 import { formatUnits, parseUnits, parseEther, isAddress, namehash, encodeFunctionData } from "viem";
 import { base } from "viem/chains";
@@ -11,6 +11,9 @@ import { YIELD_NETWORKS, ERC20_ABI, AAVE_POOL_ABI, ERC4626_ABI, WITHDRAW_ALL, pa
 import { useChat } from "../ChatContext";
 import { useBasename } from "@/lib/useBasename";
 import { DATA_SUFFIX } from "@/constants/builderCode";
+import ManagePanel from "@/app/app/b20/ManagePanel";
+import { runB20ManageLoad, type ManageData } from "@/app/app/b20/manage-action";
+import { ConnectButton } from "@/components/ConnectModal";
 
 function truncAddr(addr: string, len = 6) {
   if (!addr || addr.length < 12) return addr;
@@ -1551,6 +1554,100 @@ base-cast call $TOKEN_ADDRESS \\
 // signs supply/withdraw on the chosen venue (Aave v3 or Morpho) from their OWN
 // wallet via wagmi. Verified addresses (see lib/yield-execution). Best-rate
 // router: pick a venue, the card builds the right protocol calls.
+// ── B20 Manage (reuses ManagePanel: full mint/burn/pause/policy/role/cap) ──────
+// Anti-pattern killer: chat "mint X" must open a wallet-signing panel, never
+// emit cast / --private-key / Basescan-write text. Loads on-chain state + the
+// connected wallet's roles, then renders the SAME role-gated ManagePanel as
+// /app/b20 (compact mode). Every action is signed in the user's own wallet.
+interface B20ManageResult { address?: string; network?: string }
+
+function B20ManageCard({ result }: { result: B20ManageResult }) {
+  const token = (result.address ?? "").trim();
+  const network: "mainnet" | "sepolia" = result.network === "sepolia" ? "sepolia" : "mainnet";
+  const validToken = /^0x[a-fA-F0-9]{40}$/.test(token);
+
+  const { address } = useAccount();
+  const [data,    setData]    = useState<ManageData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState("");
+
+  const load = useCallback(() => {
+    if (!validToken || !address) return;
+    setLoading(true); setError("");
+    runB20ManageLoad(token, address, network)
+      .then((d) => setData(d))
+      .catch((e) => setError((e as Error)?.message ?? "Load failed"))
+      .finally(() => setLoading(false));
+  }, [token, address, network, validToken]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const netLabel = network === "mainnet" ? "BASE" : "SEPOLIA";
+
+  return (
+    <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
+      <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold mb-2">
+        B20 MANAGE · {netLabel}
+      </div>
+      <div className="font-mono text-[11px] text-slate-400 mb-3 break-all">
+        {validToken ? token : <span className="text-[#EF4444]">No token address provided</span>}
+      </div>
+
+      {/* Connect gate */}
+      {validToken && !address && (
+        <div className="rounded-xl border border-[#1A1A2E] bg-[#070710] px-4 py-5 text-center">
+          <p className="font-mono text-xs text-slate-500 mb-3">Connect your wallet to manage this token</p>
+          <div className="flex justify-center">
+            <ConnectButton label="Connect Wallet" />
+          </div>
+        </div>
+      )}
+
+      {/* Loading */}
+      {validToken && address && loading && (
+        <div className="flex items-center gap-2 px-1 py-3">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0" />
+          <span className="font-mono text-xs text-slate-500">Loading roles + on-chain state…</span>
+        </div>
+      )}
+
+      {/* Error */}
+      {validToken && address && error && !loading && (
+        <div className="rounded-xl border border-[#EF444430] bg-[#EF444408] px-4 py-3">
+          <p className="font-mono text-xs text-[#EF4444]">{error}</p>
+          <button onClick={load} className="font-mono text-[10px] text-slate-500 hover:text-slate-300 mt-2 transition-colors">
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Not a B20 token */}
+      {validToken && address && data && !loading && !data.inspect.isB20 && (
+        <div className="rounded-xl border border-[#F59E0B30] bg-[#F59E0B08] px-4 py-3">
+          <p className="font-mono text-xs text-[#F59E0B]">
+            Not a B20 token on {network}. Check the address or switch network.
+          </p>
+        </div>
+      )}
+
+      {/* Role-gated manage panel — wallet-signed. compact=true → mint/burn/pause in chat;
+          policy/role/cap/metadata live in the full /app/b20 Manage tab. */}
+      {validToken && address && data && !loading && data.inspect.isB20 && (
+        <ManagePanel
+          token={token}
+          network={network}
+          inspect={data.inspect}
+          roles={data.roles}
+          scopeHashes={data.scopeHashes}
+          balance={data.balance}
+          onRefresh={load}
+          compact={true}
+        />
+      )}
+    </div>
+  );
+}
+
 interface YieldMoveResult { action?: string; amount?: number | string; network?: string }
 
 export function MoveToYieldCard({ result, account }: { result: YieldMoveResult; account?: `0x${string}` }) {
@@ -2150,6 +2247,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_quantum":       return <QuantumCard      result={r} />;
     case "hub_yield":         return <YieldCard        result={r} />;
     case "hub_b20_launch":       return <B20LaunchCard   result={r as B20LaunchResult} />;
+    case "hub_b20_manage":       return <B20ManageCard   result={r as B20ManageResult} />;
     case "prepare_token_launch": return <TokenLaunchCard result={r as TokenLaunchResult} />;
     case "prepare_yield":     return <MoveToYieldCard  result={r as YieldMoveResult} account={account} />;
     case "prepare_send":      return <SendCard         result={r as SendResult} account={account} />;
