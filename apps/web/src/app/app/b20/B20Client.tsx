@@ -876,8 +876,9 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
   // Computed stats (no extra RPC)
   const regStats = registryResult ? (() => {
     const entries      = registryResult.entries;
-    const assetCount   = entries.filter(e => e.variant === 0).length;
-    const stableCount  = entries.filter(e => e.variant === 1).length;
+    // Use full-history counts from registry (accurate even when total > 100 entries shown)
+    const assetCount   = registryResult.assetCount  ?? entries.filter(e => e.variant === 0).length;
+    const stableCount  = registryResult.stablecoinCount ?? entries.filter(e => e.variant === 1).length;
     const latestBlock  = Number(registryResult.toBlock);
     const recentCount  = entries.filter(e => Number(e.blockNumber) > latestBlock - 172_800).length;
     return { assetCount, stableCount, recentCount, total: registryResult.total };
