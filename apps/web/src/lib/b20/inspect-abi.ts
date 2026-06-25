@@ -14,6 +14,21 @@
 
 export const B20_FACTORY_ADDRESS        = "0xB20f000000000000000000000000000000000000" as const;
 export const POLICY_REGISTRY_ADDRESS    = "0x8453000000000000000000000000000000000002" as const;
+export const ACTIVATION_REGISTRY_ADDRESS = "0x8453000000000000000000000000000000000001" as const;
+
+// ── ActivationRegistry feature IDs ────────────────────────────────────────────
+// isActivated(id) gates createB20: false ⟹ the call reverts FeatureNotActivated,
+// which surfaces in the wallet as a confusing "Unable to estimate fee". B20 on
+// mainnet is not enabled until the ActivationRegistry flips these on (can be ~1h
+// after the Beryl hardfork). Hashes are keccak256(utf8) of the feature name —
+// verified live against 0x8453…0001 (asset/stablecoin = false on mainnet, true on
+// sepolia as of 2026-06-26).
+/** keccak256("base.b20_asset") — gates ASSET-variant deploys */
+export const B20_ASSET_FEATURE_ID =
+  "0xcdcc772fe4cbdb1029f822861176d09e646db96723d4c1e82ddfdeb8163ef54c" as const;
+/** keccak256("base.b20_stablecoin") — gates STABLECOIN-variant deploys */
+export const B20_STABLECOIN_FEATURE_ID =
+  "0xecfa0def2c10020caaf65e6155aa69c84b24892aaef76eeac52e0e2b3a0b8601" as const;
 
 // ── Sentinel values ───────────────────────────────────────────────────────────
 
@@ -112,6 +127,15 @@ export const STABLECOIN_ABI = [
     type: "function", name: "currency", stateMutability: "view",
     inputs:  [],
     outputs: [{ type: "string" }],
+  },
+] as const;
+
+/** ActivationRegistry — isActivated(featureId) gate read */
+export const ACTIVATION_REGISTRY_ABI = [
+  {
+    type: "function", name: "isActivated", stateMutability: "view",
+    inputs:  [{ name: "id", type: "bytes32" }],
+    outputs: [{ type: "bool" }],
   },
 ] as const;
 
