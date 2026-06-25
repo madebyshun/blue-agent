@@ -5,6 +5,8 @@ import {
   parseUnits,
   keccak256,
   stringToHex,
+  hexToString,
+  type Hex,
 } from "viem";
 
 // OFFICIAL từ base-std StdPrecompiles.sol — KHÔNG dùng 0x4200...b20
@@ -100,4 +102,55 @@ export function buildB20Calldata(input: B20BuildInput): {
   });
 
   return { data, factory: B20_FACTORY, salt, variantEnum, decimals: dec };
+}
+
+// ─── B20 payment primitive — transferWithMemo + Memo event ──────────────────
+// Verified against Base's "Accept B20 payments" standard:
+//   function transferWithMemo(address to, uint256 amount, bytes32 memo)
+//   event    Memo(address indexed caller, bytes32 indexed memo)
+// The memo is a bytes32 — an order id packed via stringToHex(id, { size: 32 }).
+// A merchant matches the indexed `memo` topic back to the order to reconcile.
+
+export const TRANSFER_WITH_MEMO_ABI = [{
+  type: "function", name: "transferWithMemo", stateMutability: "nonpayable",
+  inputs: [
+    { name: "to",     type: "address" },
+    { name: "amount", type: "uint256" },
+    { name: "memo",   type: "bytes32" },
+  ],
+  outputs: [{ name: "", type: "bool" }],
+}] as const;
+
+export const MEMO_EVENT_ABI = [{
+  type: "event", name: "Memo",
+  inputs: [
+    { name: "caller", type: "address", indexed: true },
+    { name: "memo",   type: "bytes32", indexed: true },
+  ],
+}] as const;
+
+/** Order id → bytes32 memo (right-padded). Order ids are ≤32 bytes by design. */
+export function orderMemo(orderId: string): Hex {
+  return stringToHex(orderId, { size: 32 });
+}
+
+/** bytes32 memo → order id (strips the trailing zero padding). "" if undecodable. */
+export function memoToOrderId(memo: Hex): string {
+  try { return hexToString(memo, { size: 32 }); } catch { return ""; }
+}
+
+/** Encode transferWithMemo calldata. `amount` is human units; decimals defaults
+ *  to 6 (B20 USDC is a fixed-6-decimal stablecoin). `memo` is the order id. */
+export function encodeTransferWithMemo(opts: {
+  to: string;
+  amount: string | number;
+  decimals?: number;
+  memo: string;
+}): Hex {
+  const dec = opts.decimals ?? 6;
+  return encodeFunctionData({
+    abi: TRANSFER_WITH_MEMO_ABI,
+    functionName: "transferWithMemo",
+    args: [opts.to as `0x${string}`, parseUnits(String(opts.amount), dec), orderMemo(opts.memo)],
+  });
 }
