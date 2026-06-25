@@ -8,14 +8,15 @@
 
 import { Suspense, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { useAccount, useConnect } from "wagmi";
+import { useAccount, useConnect, useSendTransaction, useSwitchChain } from "wagmi";
 import { isAddress } from "viem";
 import { QRCodeSVG } from "qrcode.react";
 import { SendCard } from "@/app/chat/components/ToolCards";
 import { useBasename, shortAddr } from "@/lib/useBasename";
 import { buildPaymentUri } from "@/lib/payment-qr";
 import { YIELD_NETWORKS, type YieldNetwork } from "@/lib/yield-execution";
-import { isOrderId, findOrder, B20_ENABLED } from "@/lib/orders";
+import { isOrderId, findOrder, markPaid, B20_ENABLED, B20_USDC } from "@/lib/orders";
+import { encodeTransferWithMemo } from "@/lib/b20/encode";
 
 const isName = (s: string) => /^[a-z0-9-]+(\.[a-z0-9-]+)*\.(base|eth)$/i.test(s);
 
@@ -61,7 +62,7 @@ function PayInner() {
   }
 
   // Order / invoice payment link (/pay/order-… or /pay/INV-…) — settled in B20 USDC.
-  if (isOrderId(to)) return <PayShell><OrderPay id={to} /></PayShell>;
+  if (isOrderId(to)) return <PayShell><OrderPay id={to} payToParam={search.get("to") ?? undefined} amountParam={amount} label={label} /></PayShell>;
 
   if (!valid) {
     return (
@@ -119,24 +120,69 @@ function PayInner() {
 }
 
 // Public order/invoice payment screen. Settles in B20 USDC via transferWithMemo
-// (memo = the order id) once B20 mainnet is live; the merchant's dashboard flips
-// the request to Paid when the matching Memo event lands.
-function OrderPay({ id }: { id: string }) {
+// (memo = the order id) once B20 mainnet is live; the indexed Memo event lets the
+// merchant's dashboard flip the request to Paid when the matching payment lands.
+function OrderPay({ id, payToParam, amountParam, label }: {
+  id: string;
+  payToParam?: string;
+  amountParam?: string;
+  label?: string;
+}) {
   const order = findOrder(id); // present when opened on the merchant's device
   const kind = id.toUpperCase().startsWith("INV") ? "Invoice" : "Order";
-  const paid = order?.status === "paid";
+
+  // Local order copy wins; otherwise fall back to the self-contained link params.
+  const payTo  = order?.payTo ?? payToParam;
+  const amount = order?.amount ?? (amountParam ? Number(amountParam) : undefined);
+  const desc   = order?.description ?? label;
+
+  const { address, isConnected, chainId } = useAccount();
+  const { sendTransactionAsync } = useSendTransaction();
+  const { switchChainAsync } = useSwitchChain();
+
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState("");
+  const [txHash, setTxHash] = useState("");
+
+  const paid    = order?.status === "paid" || !!txHash;
+  const finalTx = txHash || order?.txHash;
+
+  const tokenReady     = isAddress(B20_USDC);
+  const recipientReady = !!payTo && isAddress(payTo);
+  const amountReady    = typeof amount === "number" && amount > 0;
+
+  async function pay() {
+    if (!B20_ENABLED || !tokenReady || !payTo || !amountReady || amount === undefined) return;
+    setSending(true); setErr("");
+    try {
+      if (chainId !== 8453) {
+        try { await switchChainAsync({ chainId: 8453 }); }
+        catch { throw new Error("Switch your wallet to Base mainnet and try again."); }
+      }
+      const data = encodeTransferWithMemo({ to: payTo, amount, decimals: 6, memo: id });
+      const hash = await sendTransactionAsync({
+        to: B20_USDC as `0x${string}`, data, value: 0n, chainId: 8453,
+      });
+      markPaid(id, hash); // flips the local copy; cross-device flips via the Memo watcher
+      setTxHash(hash);
+    } catch (e) {
+      setErr(friendlyB20Error((e as Error).message));
+    } finally {
+      setSending(false);
+    }
+  }
 
   return (
     <div className="text-center">
       <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-1">{kind.toUpperCase()} PAYMENT</div>
       <div className="font-mono text-[14px] font-bold text-white break-all">#{id}</div>
 
-      {order ? (
+      {amountReady ? (
         <>
-          <div className="font-mono text-[26px] font-bold text-[#34D399] mt-2">${order.amount.toLocaleString()} <span className="text-base text-slate-500">USDC</span></div>
-          {order.description && <div className="font-mono text-[11px] text-slate-400 mt-1.5">{order.description}</div>}
-          {order.client && <div className="font-mono text-[10px] text-slate-600 mt-1">Billed to {order.client}</div>}
-          {order.dueDate && <div className="font-mono text-[10px] text-slate-600 mt-0.5">Due {order.dueDate}</div>}
+          <div className="font-mono text-[26px] font-bold text-[#34D399] mt-2">${amount?.toLocaleString()} <span className="text-base text-slate-500">USDC</span></div>
+          {desc && <div className="font-mono text-[11px] text-slate-400 mt-1.5">{desc}</div>}
+          {order?.client && <div className="font-mono text-[10px] text-slate-600 mt-1">Billed to {order.client}</div>}
+          {order?.dueDate && <div className="font-mono text-[10px] text-slate-600 mt-0.5">Due {order.dueDate}</div>}
         </>
       ) : (
         <div className="font-mono text-[11px] text-slate-500 mt-3 leading-relaxed">This request was created on another device — the amount is set by the merchant.</div>
@@ -145,23 +191,52 @@ function OrderPay({ id }: { id: string }) {
       <div className="mt-5">
         {paid ? (
           <div className="rounded-xl p-3 font-mono text-[12px] text-[#34D399]" style={{ border: "1px solid #34D39930", background: "#34D3990d" }}>
-            Invoice paid ✓
-            {order?.txHash && <a href={`https://basescan.org/tx/${order.txHash}`} target="_blank" rel="noopener noreferrer" className="block font-mono text-[10px] text-slate-500 mt-1">tx ↗</a>}
+            {kind} paid ✓
+            {finalTx && <a href={`https://basescan.org/tx/${finalTx}`} target="_blank" rel="noopener noreferrer" className="block font-mono text-[10px] text-slate-500 mt-1">tx ↗</a>}
           </div>
-        ) : B20_ENABLED ? (
-          <button className="w-full font-mono text-[12px] font-bold py-2.5 rounded-xl hover:opacity-90 transition-opacity"
-            style={{ background: "#4FC3F7", color: "#050508" }}>
-            Pay with B20 USDC
-          </button>
-        ) : (
+        ) : !B20_ENABLED ? (
           <button disabled className="w-full font-mono text-[12px] font-bold py-2.5 rounded-xl opacity-60 cursor-not-allowed"
             style={{ background: "#1A1A2E", color: "#94a3b8" }}>
             B20 payments go live June 25
           </button>
+        ) : !tokenReady ? (
+          <div className="font-mono text-[10px] text-slate-500 leading-relaxed rounded-xl p-3" style={{ border: "1px solid #1A1A2E", background: "#0d0d12" }}>
+            B20 USDC token address is not configured yet. Check back shortly.
+          </div>
+        ) : !recipientReady ? (
+          <div className="font-mono text-[10px] text-slate-500 leading-relaxed rounded-xl p-3" style={{ border: "1px solid #1A1A2E", background: "#0d0d12" }}>
+            This payment link is missing the merchant payout address.
+          </div>
+        ) : !amountReady ? (
+          <div className="font-mono text-[10px] text-slate-500 leading-relaxed rounded-xl p-3" style={{ border: "1px solid #1A1A2E", background: "#0d0d12" }}>
+            The amount is unavailable on this device — reopen the original pay link.
+          </div>
+        ) : !isConnected || !address ? (
+          <PayConnect />
+        ) : (
+          <>
+            <button onClick={pay} disabled={sending}
+              className="w-full font-mono text-[12px] font-bold py-2.5 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-60"
+              style={{ background: "#4FC3F7", color: "#050508" }}>
+              {sending ? "Confirm in wallet…" : `Pay ${amount?.toLocaleString()} USDC`}
+            </button>
+            <p className="font-mono text-[9px] text-slate-600 mt-2">B20 USDC on Base · memo ties this payment to #{id}</p>
+          </>
         )}
+        {err && <p className="font-mono text-[10px] text-red-400 mt-2 leading-relaxed">{err}</p>}
       </div>
     </div>
   );
+}
+
+// Map common B20 transfer reverts / wallet errors to a human message.
+function friendlyB20Error(msg: string): string {
+  const m = (msg || "").toLowerCase();
+  if (m.includes("user rejected") || m.includes("user denied") || m.includes("rejected the request")) return "Payment cancelled.";
+  if (m.includes("policyforbids") || m.includes("policy")) return "This token's transfer policy blocked the payment (allowlist/blocklist). Contact the merchant.";
+  if (m.includes("paused") || m.includes("enforcedpause")) return "Transfers are paused on this token right now. Try again later.";
+  if (m.includes("insufficient")) return "Insufficient B20 USDC balance for this payment.";
+  return msg.length > 140 ? msg.slice(0, 140) + "…" : msg;
 }
 
 // Compact connect control — Coinbase Smart Wallet first, EIP-6963 injected second.

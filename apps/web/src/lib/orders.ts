@@ -7,6 +7,12 @@
 
 export const B20_ENABLED = process.env.NEXT_PUBLIC_B20_ENABLED === "true";
 
+// The canonical B20 USDC token on Base. Intentionally NOT hardcoded — it is read
+// from env (NEXT_PUBLIC_B20_USDC) and stays empty until a verified address is set,
+// so a guessed/placeholder address can never be paid. The Pay button checks this
+// is a real address before sending; the Memo watcher reads logs from it.
+export const B20_USDC = (process.env.NEXT_PUBLIC_B20_USDC ?? "").trim();
+
 export type OrderKind = "order" | "invoice";
 export type OrderStatus = "pending" | "paid";
 
@@ -17,6 +23,7 @@ export interface Order {
   description?: string;
   client?: string;       // invoice only
   dueDate?: string;      // invoice only — yyyy-mm-dd
+  payTo?: string;        // merchant wallet — where B20 USDC settles
   status: OrderStatus;
   txHash?: string;
   createdAt: number;
@@ -36,7 +43,7 @@ export function saveOrders(list: Order[]): void {
   try { localStorage.setItem(KEY, JSON.stringify(list.slice(0, 200))); } catch { /* blocked */ }
 }
 export function createOrder(input: {
-  kind?: OrderKind; amount: number; description?: string; client?: string; dueDate?: string;
+  kind?: OrderKind; amount: number; description?: string; client?: string; dueDate?: string; payTo?: string;
 }): Order {
   const kind = input.kind ?? "order";
   const order: Order = {
@@ -46,6 +53,7 @@ export function createOrder(input: {
     description: input.description?.trim() || undefined,
     client: input.client?.trim() || undefined,
     dueDate: input.dueDate || undefined,
+    payTo: input.payTo?.trim() || undefined,
     status: "pending",
     createdAt: Date.now(),
   };
@@ -62,10 +70,18 @@ export function markPaid(id: string, txHash?: string): void {
   saveOrders(loadOrders().map((o) => (o.id === id ? { ...o, status: "paid", txHash, paidAt: Date.now() } : o)));
 }
 
-/** Shareable public payment link, e.g. blueagent.dev/pay/order-1719…  */
-export function payLink(id: string): string {
+/** Shareable public payment link, e.g. blueagent.dev/pay/order-1719…
+ *  Carries recipient + amount + label in the query so a payer on a different
+ *  device (no localStorage copy of the order) can still settle it. */
+export function payLink(id: string, order?: Order): string {
   const origin = isClient ? window.location.origin : "https://blueagent.dev";
-  return `${origin}/pay/${id}`;
+  const o = order ?? findOrder(id) ?? undefined;
+  const qs = new URLSearchParams();
+  if (o?.payTo) qs.set("to", o.payTo);
+  if (o?.amount) qs.set("amount", String(o.amount));
+  if (o?.description) qs.set("for", o.description);
+  const q = qs.toString();
+  return `${origin}/pay/${id}${q ? `?${q}` : ""}`;
 }
 
 /** Order/invoice ids are slugs; addresses are 0x… — lets /pay/[address] branch. */
