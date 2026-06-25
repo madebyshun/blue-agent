@@ -6,7 +6,7 @@
  * Encodes tx client-side (viem), signs via wagmi, polls receipt.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { encodeFunctionData, parseUnits, formatUnits } from "viem";
 import { useAccount, useSendTransaction, useSwitchChain } from "wagmi";
 import {
@@ -26,12 +26,17 @@ import type { ScopeHashes } from "./manage-action";
 
 type Network = "mainnet" | "sepolia";
 const CHAIN_IDS: Record<Network, number> = { mainnet: 8453, sepolia: 84532 };
+const EXPLORER:  Record<Network, string>  = {
+  mainnet: "https://basescan.org",
+  sepolia: "https://sepolia.basescan.org",
+};
 
 interface TxState {
   action: string;
   status: "pending" | "polling" | "success" | "error";
   hash?:  string;
   error?: string;
+  msg?:   string;   // human-readable success message, e.g. "Minted 100 TEST to 0x…"
 }
 
 export interface ManagePanelProps {
@@ -55,6 +60,7 @@ const INPUT = [
 ].join(" ");
 
 const LABEL = "font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1";
+const DESC  = "font-mono text-[9px] text-slate-600 leading-relaxed mb-2";
 
 function isAddr(v: string) { return /^0x[a-fA-F0-9]{40}$/.test(v.trim()); }
 function isAmt (v: string) { return /^\d+(\.\d+)?$/.test(v.trim()) && parseFloat(v) > 0; }
@@ -78,43 +84,82 @@ function Section({
   );
 }
 
-// ── Tx status display ─────────────────────────────────────────────────────────
+// ── In-progress indicator (inline) ────────────────────────────────────────────
 
-function TxStatus({ tx, onDismiss }: { tx: TxState; onDismiss: () => void }) {
-  const explorerBase = tx.hash ? "#" : undefined; // placeholder
+function TxProgress({ tx }: { tx: TxState }) {
+  if (tx.status !== "pending" && tx.status !== "polling") return null;
   return (
-    <div className={`rounded-xl border px-3 py-2.5 ${
-      tx.status === "success" ? "border-[#22C55E30] bg-[#22C55E08]"
-      : tx.status === "error" ? "border-[#EF444430] bg-[#EF444408]"
-      : "border-[#4FC3F730] bg-[#4FC3F708]"
-    }`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <p className="font-mono text-[10px] font-semibold" style={{
-            color: tx.status === "success" ? "#22C55E" : tx.status === "error" ? "#EF4444" : "#4FC3F7",
-          }}>
-            {tx.action} · {
-              tx.status === "pending"  ? "Waiting for wallet…" :
-              tx.status === "polling"  ? "Confirming on-chain…" :
-              tx.status === "success"  ? "Confirmed ✓" :
-              "Failed"
-            }
+    <div className="rounded-xl border border-[#4FC3F730] bg-[#4FC3F708] px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0" />
+        <div>
+          <p className="font-mono text-[10px] font-semibold text-[#4FC3F7]">{tx.action}</p>
+          <p className="font-mono text-[9px] text-slate-500 mt-0.5">
+            {tx.status === "pending" ? "Waiting for wallet signature…" : "Confirming on-chain…"}
           </p>
-          {tx.hash && (
-            <p className="font-mono text-[8px] text-slate-600 mt-0.5 break-all">
-              {tx.hash.slice(0, 18)}…{tx.hash.slice(-8)}
+          {tx.status === "polling" && tx.hash && (
+            <p className="font-mono text-[8px] text-slate-600 mt-0.5 truncate">
+              {tx.hash.slice(0, 20)}…
             </p>
           )}
-          {tx.error && (
-            <p className="font-mono text-[9px] text-[#EF4444] mt-0.5 leading-relaxed">{tx.error}</p>
-          )}
         </div>
-        {(tx.status === "success" || tx.status === "error") && (
+      </div>
+    </div>
+  );
+}
+
+// ── Toast (success / error popup) ─────────────────────────────────────────────
+
+function Toast({
+  tx, explorerBase, onDismiss,
+}: {
+  tx: TxState; explorerBase: string; onDismiss: () => void;
+}) {
+  if (tx.status !== "success" && tx.status !== "error") return null;
+  const ok = tx.status === "success";
+  return (
+    <div className="fixed bottom-5 right-5 z-50 w-full max-w-[320px] rounded-2xl border shadow-2xl"
+      style={{
+        background:   ok ? "#070f07" : "#0f0707",
+        borderColor:  ok ? "#22C55E50" : "#EF444450",
+        boxShadow:    ok ? "0 8px 32px #22C55E18" : "0 8px 32px #EF444418",
+      }}>
+      <div className="px-4 py-3.5">
+        <div className="flex items-start gap-3">
+          {/* Icon */}
+          <span className="text-base shrink-0 mt-0.5" style={{ color: ok ? "#22C55E" : "#EF4444" }}>
+            {ok ? "✓" : "✕"}
+          </span>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <p className="font-mono text-[11px] font-bold leading-tight"
+              style={{ color: ok ? "#22C55E" : "#EF4444" }}>
+              {ok ? (tx.msg ?? tx.action) : `${tx.action} failed`}
+            </p>
+
+            {!ok && tx.error && (
+              <p className="font-mono text-[9px] leading-relaxed mt-1"
+                style={{ color: "#EF444480" }}>
+                {tx.error}
+              </p>
+            )}
+
+            {tx.hash && (
+              <a href={`${explorerBase}/tx/${tx.hash}`}
+                target="_blank" rel="noopener noreferrer"
+                className="font-mono text-[8px] text-slate-500 hover:text-[#4FC3F7] transition-colors mt-1.5 block truncate">
+                {tx.hash.slice(0, 18)}…{tx.hash.slice(-8)} ↗
+              </a>
+            )}
+          </div>
+
+          {/* Close */}
           <button onClick={onDismiss}
-            className="font-mono text-[9px] text-slate-600 hover:text-slate-400 shrink-0">
+            className="font-mono text-[9px] text-slate-600 hover:text-slate-300 shrink-0 mt-0.5 transition-colors">
             ✕
           </button>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -128,7 +173,8 @@ function ConfirmDialog({
   msg: string; consequence?: string; onConfirm: () => void; onCancel: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onCancel}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onClick={onCancel}>
       <div className="bg-[#0a0a12] border border-[#EF444430] rounded-2xl p-5 max-w-sm w-full"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-start gap-3 mb-4">
@@ -164,13 +210,21 @@ export default function ManagePanel({
   const { address, chainId: currentChainId } = useAccount();
   const { sendTransactionAsync }             = useSendTransaction();
   const { switchChainAsync }                 = useSwitchChain();
-  const chainId = CHAIN_IDS[network];
+  const chainId     = CHAIN_IDS[network];
+  const explorerBase= EXPLORER[network];
 
   // ── Tx & confirm state ────────────────────────────────────────────────────
   const [activeTx, setActiveTx] = useState<TxState | null>(null);
   const [confirm,  setConfirm]  = useState<{
     msg: string; consequence?: string; run: () => void;
   } | null>(null);
+
+  // Auto-dismiss toast after 6s on success
+  useEffect(() => {
+    if (activeTx?.status !== "success") return;
+    const t = setTimeout(() => setActiveTx(null), 6_000);
+    return () => clearTimeout(t);
+  }, [activeTx?.hash]); // re-arm each time a new tx hash succeeds
 
   // ── Form state — Supply ───────────────────────────────────────────────────
   const [mintTo,  setMintTo]  = useState("");
@@ -189,8 +243,8 @@ export default function ManagePanel({
   const [roleAddr, setRoleAddr] = useState("");
 
   // ── Form state — Supply cap ───────────────────────────────────────────────
-  const [capAmt,     setCapAmt]     = useState("");
-  const [capUncapped,setCapUncapped]= useState(false);
+  const [capAmt,      setCapAmt]     = useState("");
+  const [capUncapped, setCapUncapped]= useState(false);
 
   // ── Form state — Metadata ─────────────────────────────────────────────────
   const [metaField, setMetaField] = useState<"name" | "symbol" | "uri">("name");
@@ -226,7 +280,7 @@ export default function ManagePanel({
 
   const isBusy = activeTx?.status === "pending" || activeTx?.status === "polling";
 
-  async function exec(actionLabel: string, data: `0x${string}`) {
+  async function exec(actionLabel: string, data: `0x${string}`, successMsg?: string) {
     if (!address || isBusy) return;
     setActiveTx({ action: actionLabel, status: "pending" });
     try {
@@ -245,29 +299,26 @@ export default function ManagePanel({
           body: JSON.stringify({ tx_hash: hash, network }),
         }).then(res => res.json());
         if (rec.ok && rec.status === "success") {
-          setActiveTx({ action: actionLabel, status: "success", hash });
+          setActiveTx({ action: actionLabel, status: "success", hash, msg: successMsg });
           onRefresh?.();
           return;
         }
         if (rec.ok && rec.status === "reverted") {
-          throw new Error("Transaction reverted on-chain. Check role / pause / cap state.");
+          throw new Error("Transaction reverted. Possible causes: paused, policy restriction, supply cap exceeded, or insufficient balance.");
         }
       }
-      throw new Error("Timeout — tx may still confirm. Check Basescan.");
+      throw new Error("Timeout — tx may still confirm. Check Basescan for the tx hash above.");
     } catch (e) {
-      setActiveTx(prev => prev ? { ...prev, status: "error", error: (e as Error).message } : null);
+      setActiveTx(prev => prev
+        ? { ...prev, status: "error", error: (e as Error).message }
+        : null
+      );
     }
   }
 
   function dangerous(msg: string, consequence: string, run: () => void) {
     setConfirm({ msg, consequence, run });
   }
-
-  // ── Tx status banner ──────────────────────────────────────────────────────
-
-  const txBanner = activeTx && (
-    <TxStatus tx={activeTx} onDismiss={() => setActiveTx(null)} />
-  );
 
   // ── Pause feature rows ────────────────────────────────────────────────────
 
@@ -306,26 +357,38 @@ export default function ManagePanel({
 
   return (
     <div className="space-y-3">
-      {/* Wallet + role summary */}
-      {!compact && (
-        <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-2.5 flex flex-wrap items-center gap-2">
+
+      {/* ── WALLET HEADER + BALANCE ────────────────────────────────────────── */}
+      <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3 space-y-2">
+        {/* Address + balance row */}
+        <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-[9px] text-slate-600">Connected:</span>
           <span className="font-mono text-[9px] text-slate-400">{address.slice(0, 10)}…{address.slice(-4)}</span>
           <span className="mx-1 text-slate-700">·</span>
-          <span className="font-mono text-[9px] text-slate-600">Roles:</span>
-          {held.isAdmin      && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#4FC3F710] text-[#4FC3F7] border border-[#4FC3F720]">ADMIN</span>}
-          {held.canMint      && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#22C55E10] text-[#22C55E] border border-[#22C55E20]">MINT</span>}
-          {held.canBurn      && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#F59E0B10] text-[#F59E0B] border border-[#F59E0B20]">BURN</span>}
-          {held.canBurnBlock && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#EF444410] text-[#EF4444] border border-[#EF444420]">BURN_BLOCKED</span>}
-          {held.canPause     && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#F59E0B10] text-[#F59E0B] border border-[#F59E0B20]">PAUSE</span>}
-          {held.canUnpause   && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#22C55E10] text-[#22C55E] border border-[#22C55E20]">UNPAUSE</span>}
-          {held.canMetadata  && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#4FC3F710] text-[#4FC3F7] border border-[#4FC3F720]">METADATA</span>}
-          {held.hasBalance   && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#ffffff08] text-slate-400 border border-[#ffffff10]">HOLDER</span>}
+          <span className="font-mono text-[9px] text-slate-600">Balance:</span>
+          <span className="font-mono text-[11px] font-semibold text-white">
+            {balFmt} <span className="text-[#4FC3F7]">{symbol}</span>
+          </span>
         </div>
-      )}
 
-      {/* Tx banner */}
-      {txBanner}
+        {/* Roles (hidden in compact to save space) */}
+        {!compact && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-mono text-[9px] text-slate-600">Roles:</span>
+            {held.isAdmin      && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#4FC3F710] text-[#4FC3F7] border border-[#4FC3F720]">ADMIN</span>}
+            {held.canMint      && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#22C55E10] text-[#22C55E] border border-[#22C55E20]">MINT</span>}
+            {held.canBurn      && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#F59E0B10] text-[#F59E0B] border border-[#F59E0B20]">BURN</span>}
+            {held.canBurnBlock && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#EF444410] text-[#EF4444] border border-[#EF444420]">BURN_BLOCKED</span>}
+            {held.canPause     && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#F59E0B10] text-[#F59E0B] border border-[#F59E0B20]">PAUSE</span>}
+            {held.canUnpause   && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#22C55E10] text-[#22C55E] border border-[#22C55E20]">UNPAUSE</span>}
+            {held.canMetadata  && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#4FC3F710] text-[#4FC3F7] border border-[#4FC3F720]">METADATA</span>}
+            {held.hasBalance   && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#ffffff08] text-slate-400 border border-[#ffffff10]">HOLDER</span>}
+          </div>
+        )}
+      </div>
+
+      {/* In-progress indicator (visible during pending/polling) */}
+      {activeTx && <TxProgress tx={activeTx} />}
 
       {/* ── SUPPLY ──────────────────────────────────────────────────────── */}
       <Section title="Supply" icon="⚡"
@@ -335,6 +398,7 @@ export default function ManagePanel({
         {held.canMint && (
           <div className="space-y-2">
             <p className={LABEL}>Mint — MINT_ROLE</p>
+            <p className={DESC}>Create new tokens and send them to an address. Increases total supply.</p>
             {inspect.paused?.mint && (
               <p className="font-mono text-[9px] text-[#F59E0B] mb-1">⚠ Mint is currently paused</p>
             )}
@@ -352,10 +416,14 @@ export default function ManagePanel({
             </div>
             <button
               disabled={!isAddr(mintTo) || !isAmt(mintAmt) || isBusy}
-              onClick={() => exec("Mint", encodeFunctionData({
-                abi: B20_WRITE_ABI, functionName: "mint",
-                args: [mintTo as `0x${string}`, parseUnits(mintAmt, decimals)],
-              }))}
+              onClick={() => exec(
+                "Mint",
+                encodeFunctionData({
+                  abi: B20_WRITE_ABI, functionName: "mint",
+                  args: [mintTo as `0x${string}`, parseUnits(mintAmt, decimals)],
+                }),
+                `Minted ${mintAmt} ${symbol} to ${mintTo.slice(0, 8)}…`,
+              )}
               className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
               style={{ background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E30" }}>
               Mint →
@@ -367,6 +435,7 @@ export default function ManagePanel({
         {held.canBurn && (
           <div className="space-y-2 pt-2 border-t border-[#0d0d18]">
             <p className={LABEL}>Burn (from your balance) — BURN_ROLE</p>
+            <p className={DESC}>Destroy tokens from your own balance. Decreases total supply.</p>
             {inspect.paused?.burn && (
               <p className="font-mono text-[9px] text-[#F59E0B] mb-1">⚠ Burn is currently paused</p>
             )}
@@ -376,10 +445,14 @@ export default function ManagePanel({
                 className={`flex-1 ${INPUT}`} />
               <button
                 disabled={!isAmt(burnAmt) || isBusy}
-                onClick={() => exec("Burn", encodeFunctionData({
-                  abi: B20_WRITE_ABI, functionName: "burn",
-                  args: [parseUnits(burnAmt, decimals)],
-                }))}
+                onClick={() => exec(
+                  "Burn",
+                  encodeFunctionData({
+                    abi: B20_WRITE_ABI, functionName: "burn",
+                    args: [parseUnits(burnAmt, decimals)],
+                  }),
+                  `Burned ${burnAmt} ${symbol}`,
+                )}
                 className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
                 style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B30" }}>
                 Burn →
@@ -392,9 +465,10 @@ export default function ManagePanel({
         {held.canBurnBlock && (
           <div className="space-y-2 pt-2 border-t border-[#0d0d18]">
             <p className={LABEL}>Burn Blocked (seize) — BURN_BLOCKED_ROLE</p>
+            <p className={DESC}>Seize and destroy tokens from a blocklisted address without their consent.</p>
             <div className="rounded-xl border border-[#EF444430] bg-[#EF444408] px-3 py-2 mb-2">
               <p className="font-mono text-[9px] text-[#EF4444] leading-relaxed">
-                <strong>Seizes tokens from any holder without consent.</strong> Irreversible.
+                <strong>Forcibly confiscates tokens from any holder.</strong> Irreversible.
                 Use only for regulatory / compliance enforcement.
               </p>
             </div>
@@ -414,11 +488,15 @@ export default function ManagePanel({
               disabled={!isAddr(bbFrom) || !isAmt(bbAmt) || isBusy}
               onClick={() => dangerous(
                 "Seize tokens from holder?",
-                `This burns ${bbAmt} ${symbol} from ${bbFrom.slice(0,10)}… without their consent. This action cannot be undone.`,
-                () => exec("Burn Blocked", encodeFunctionData({
-                  abi: B20_WRITE_ABI, functionName: "burnBlocked",
-                  args: [bbFrom as `0x${string}`, parseUnits(bbAmt, decimals)],
-                })),
+                `This burns ${bbAmt} ${symbol} from ${bbFrom.slice(0, 10)}… without their consent. This action cannot be undone.`,
+                () => exec(
+                  "Burn Blocked",
+                  encodeFunctionData({
+                    abi: B20_WRITE_ABI, functionName: "burnBlocked",
+                    args: [bbFrom as `0x${string}`, parseUnits(bbAmt, decimals)],
+                  }),
+                  `Seized ${bbAmt} ${symbol} from ${bbFrom.slice(0, 8)}…`,
+                ),
               )}
               className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
               style={{ background: "#EF444415", color: "#EF4444", border: "1px solid #EF444430" }}>
@@ -429,17 +507,17 @@ export default function ManagePanel({
       </Section>
 
       {/* ── PAUSE ───────────────────────────────────────────────────────── */}
-      <Section title="Pause / Unpause" icon="⏸"
-        color="#F59E0B"
+      <Section title="Pause / Unpause" icon="⏸" color="#F59E0B"
         visible={held.canPause || held.canUnpause}>
 
+        <p className={DESC}>Pause or unpause TRANSFER, MINT, and BURN independently. Paused operations revert until unpaused.</p>
         <div className="space-y-2">
           {features.map(f => (
             <div key={f.label} className="flex items-center justify-between py-2 border-b border-[#0d0d18] last:border-0">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full shrink-0"
                   style={{ background: f.paused ? "#EF4444" : "#22C55E",
-                           boxShadow: f.paused ? "0 0 4px #EF444480" : "0 0 4px #22C55E80" }} />
+                           boxShadow:  f.paused ? "0 0 4px #EF444480" : "0 0 4px #22C55E80" }} />
                 <span className="font-mono text-xs text-slate-300">{f.label}</span>
                 <span className="font-mono text-[9px]" style={{ color: f.paused ? "#EF4444" : "#22C55E" }}>
                   {f.paused ? "paused" : "active"}
@@ -449,10 +527,14 @@ export default function ManagePanel({
                 {held.canPause && !f.paused && (
                   <button
                     disabled={isBusy}
-                    onClick={() => exec(`Pause ${f.label}`, encodeFunctionData({
-                      abi: B20_WRITE_ABI, functionName: "pause",
-                      args: [[f.idx]],
-                    }))}
+                    onClick={() => exec(
+                      `Pause ${f.label}`,
+                      encodeFunctionData({
+                        abi: B20_WRITE_ABI, functionName: "pause",
+                        args: [[f.idx]],
+                      }),
+                      `Paused ${f.label}`,
+                    )}
                     className="font-mono text-[9px] px-3 py-1 rounded-lg transition-all disabled:opacity-40"
                     style={{ background: "#EF444415", color: "#EF4444", border: "1px solid #EF444430" }}>
                     Pause
@@ -461,10 +543,14 @@ export default function ManagePanel({
                 {held.canUnpause && f.paused && (
                   <button
                     disabled={isBusy}
-                    onClick={() => exec(`Unpause ${f.label}`, encodeFunctionData({
-                      abi: B20_WRITE_ABI, functionName: "unpause",
-                      args: [[f.idx]],
-                    }))}
+                    onClick={() => exec(
+                      `Unpause ${f.label}`,
+                      encodeFunctionData({
+                        abi: B20_WRITE_ABI, functionName: "unpause",
+                        args: [[f.idx]],
+                      }),
+                      `Unpaused ${f.label}`,
+                    )}
                     className="font-mono text-[9px] px-3 py-1 rounded-lg transition-all disabled:opacity-40"
                     style={{ background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E30" }}>
                     Unpause
@@ -486,10 +572,7 @@ export default function ManagePanel({
       {!compact && (
         <Section title="Policy" icon="🔐" visible={held.isAdmin}>
           <div className="space-y-2">
-            <p className="font-mono text-[9px] text-slate-600 leading-relaxed">
-              Set a PolicyRegistry policy on a transfer/mint scope. policyId 0 = ALWAYS_ALLOW (no restriction).
-              Policy IDs must exist in the PolicyRegistry at 0x8453…0002.
-            </p>
+            <p className={DESC}>Gate who can send, receive, or be minted to via allowlist / blocklist. Policy IDs live in the PolicyRegistry at 0x8453…0002. Policy ID 0 = ALWAYS_ALLOW (no restriction).</p>
             <div>
               <p className={LABEL}>Scope</p>
               <select value={policyScope}
@@ -507,10 +590,14 @@ export default function ManagePanel({
                   placeholder="e.g. 42" spellCheck={false} className={`flex-1 ${INPUT}`} />
                 <button
                   disabled={!/^\d+$/.test(policyId.trim()) || isBusy || !scopeHashes[policyScope]}
-                  onClick={() => exec("Update Policy", encodeFunctionData({
-                    abi: B20_WRITE_ABI, functionName: "updatePolicy",
-                    args: [scopeHashes[policyScope] as `0x${string}`, BigInt(policyId)],
-                  }))}
+                  onClick={() => exec(
+                    "Update Policy",
+                    encodeFunctionData({
+                      abi: B20_WRITE_ABI, functionName: "updatePolicy",
+                      args: [scopeHashes[policyScope] as `0x${string}`, BigInt(policyId)],
+                    }),
+                    `Policy updated — ${POLICY_SCOPE_LABELS[policyScope]}`,
+                  )}
                   className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
                   style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
                   Update →
@@ -525,8 +612,10 @@ export default function ManagePanel({
       {!compact && (
         <Section title="Roles" icon="🔑" visible={held.isAdmin}>
           <div className="space-y-3">
-            {/* Grant / Revoke */}
-            <div className="flex rounded-lg border border-[#1A1A2E] overflow-hidden mb-2">
+            <p className={DESC}>Give or remove a permission for an address. Roles are bytes32 hashes — use the selector below to pick the correct one.</p>
+
+            {/* Grant / Revoke toggle */}
+            <div className="flex rounded-lg border border-[#1A1A2E] overflow-hidden">
               {(["grant", "revoke"] as const).map(op => (
                 <button key={op} onClick={() => setRoleOp(op)}
                   className="flex-1 py-1.5 font-mono text-[10px] capitalize transition-colors"
@@ -560,6 +649,9 @@ export default function ManagePanel({
                   functionName: roleOp === "grant" ? "grantRole" : "revokeRole",
                   args: [roleHashes[roleKey] as `0x${string}`, roleAddr as `0x${string}`],
                 }),
+                roleOp === "grant"
+                  ? `Role granted — ${roleKey} → ${roleAddr.slice(0, 8)}…`
+                  : `Role revoked — ${roleKey} from ${roleAddr.slice(0, 8)}…`,
               )}
               className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
               style={roleOp === "grant"
@@ -580,9 +672,13 @@ export default function ManagePanel({
                 onClick={() => dangerous(
                   "Renounce all admin permanently?",
                   "This calls renounceLastAdmin() and permanently removes DEFAULT_ADMIN_ROLE from all holders. No one can grant roles, update policy, or change supply cap after this. It cannot be undone.",
-                  () => exec("Renounce Admin", encodeFunctionData({
-                    abi: B20_WRITE_ABI, functionName: "renounceLastAdmin", args: [],
-                  })),
+                  () => exec(
+                    "Renounce Admin",
+                    encodeFunctionData({
+                      abi: B20_WRITE_ABI, functionName: "renounceLastAdmin", args: [],
+                    }),
+                    "Admin renounced — token is now immutable",
+                  ),
                 )}
                 className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
                 style={{ background: "#EF444415", color: "#EF4444", border: "1px solid #EF444430" }}>
@@ -597,13 +693,14 @@ export default function ManagePanel({
       {!compact && (
         <Section title="Supply Cap" icon="📊" visible={held.isAdmin}>
           <div className="space-y-2">
+            <p className={DESC}>Set the maximum tokens that can ever exist. Uncapped (uint128.max) means no limit — issuers can mint freely.</p>
             {inspect.supplyCapFormatted && (
               <p className="font-mono text-[9px] text-slate-500">
                 Current cap: <span className="text-slate-300">{inspect.supplyCapFormatted} {symbol}</span>
                 {inspect.supplyCapUncapped && " (uncapped)"}
               </p>
             )}
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2">
               <input type="checkbox" id="cap-uncapped" checked={capUncapped}
                 onChange={e => setCapUncapped(e.target.checked)}
                 className="accent-[#4FC3F7]" />
@@ -619,10 +716,14 @@ export default function ManagePanel({
               disabled={(!capUncapped && !isAmt(capAmt)) || isBusy}
               onClick={() => {
                 const newCap = capUncapped ? SUPPLY_CAP_MAX : parseUnits(capAmt, decimals);
-                exec("Update Supply Cap", encodeFunctionData({
-                  abi: B20_WRITE_ABI, functionName: "updateSupplyCap",
-                  args: [newCap],
-                }));
+                exec(
+                  "Update Supply Cap",
+                  encodeFunctionData({
+                    abi: B20_WRITE_ABI, functionName: "updateSupplyCap",
+                    args: [newCap],
+                  }),
+                  capUncapped ? "Supply cap removed (uncapped)" : `Supply cap set to ${capAmt} ${symbol}`,
+                );
               }}
               className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
               style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
@@ -636,6 +737,7 @@ export default function ManagePanel({
       {!compact && (
         <Section title="Metadata" icon="✏️" visible={held.canMetadata}>
           <div className="space-y-2">
+            <p className={DESC}>Update token name, symbol, or contract URI. Changes are reflected on explorers after the next indexer update.</p>
             <div>
               <p className={LABEL}>Field</p>
               <div className="flex rounded-lg border border-[#1A1A2E] overflow-hidden mb-2">
@@ -661,9 +763,12 @@ export default function ManagePanel({
                   metaField === "name"   ? "updateName" :
                   metaField === "symbol" ? "updateSymbol" :
                   "updateContractURI";
-                exec(`Update ${metaField}`, encodeFunctionData({
-                  abi: B20_WRITE_ABI, functionName: fn, args: [metaValue.trim()],
-                }));
+                const label = metaField === "uri" ? "URI" : metaField.charAt(0).toUpperCase() + metaField.slice(1);
+                exec(
+                  `Update ${label}`,
+                  encodeFunctionData({ abi: B20_WRITE_ABI, functionName: fn, args: [metaValue.trim()] }),
+                  `Token ${label.toLowerCase()} updated`,
+                );
               }}
               className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
               style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
@@ -677,12 +782,10 @@ export default function ManagePanel({
       {held.hasBalance && (
         <Section title="Transfer" icon="→" visible={true}>
           <div className="space-y-2">
+            <p className={DESC}>Send your tokens to another address. Subject to transfer policy and pause state.</p>
             {inspect.paused?.transfer && (
-              <p className="font-mono text-[9px] text-[#F59E0B] mb-1">⚠ Transfers are currently paused</p>
+              <p className="font-mono text-[9px] text-[#F59E0B]">⚠ Transfers are currently paused</p>
             )}
-            <p className="font-mono text-[9px] text-slate-600">
-              Balance: <span className="text-slate-300">{balFmt} {symbol}</span>
-            </p>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <p className={LABEL}>To</p>
@@ -697,16 +800,25 @@ export default function ManagePanel({
             </div>
             <button
               disabled={!isAddr(xferTo) || !isAmt(xferAmt) || isBusy}
-              onClick={() => exec("Transfer", encodeFunctionData({
-                abi: B20_WRITE_ABI, functionName: "transfer",
-                args: [xferTo as `0x${string}`, parseUnits(xferAmt, decimals)],
-              }))}
+              onClick={() => exec(
+                "Transfer",
+                encodeFunctionData({
+                  abi: B20_WRITE_ABI, functionName: "transfer",
+                  args: [xferTo as `0x${string}`, parseUnits(xferAmt, decimals)],
+                }),
+                `Transferred ${xferAmt} ${symbol} to ${xferTo.slice(0, 8)}…`,
+              )}
               className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
               style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
               Transfer →
             </button>
           </div>
         </Section>
+      )}
+
+      {/* Success / error toast (fixed bottom-right) */}
+      {activeTx && (
+        <Toast tx={activeTx} explorerBase={explorerBase} onDismiss={() => setActiveTx(null)} />
       )}
 
       {/* Confirm dialog */}
