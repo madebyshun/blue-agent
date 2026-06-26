@@ -105,10 +105,11 @@ export function middleware(request: NextRequest) {
     const gate = bankGate(request, isBankSurface, "/bank/access");
     if (gate) return gate;
 
-    // Root of the app host → in-app home.
+    // Root of the app host → Blue Chat (product home). Rewrite straight to
+    // /app/chat so the URL stays "/" with no redirect hop through /app.
     if (pathname === "/") {
       const url = request.nextUrl.clone();
-      url.pathname = "/app";
+      url.pathname = "/app/chat";
       return NextResponse.rewrite(url);
     }
 
