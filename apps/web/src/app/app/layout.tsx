@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "BlueAgent — The Builder OS for Base",
     description: "74 AI tools. Blue Chat. Blue Hub. Blue Feed.",
-    url: "https://blueagent.dev/app",
+    url: "https://app.blueagent.dev",
     siteName: "BlueAgent",
     images: [{ url: OG_IMAGE, width: 1200, height: 630 }],
     type: "website",

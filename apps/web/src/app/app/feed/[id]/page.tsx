@@ -32,7 +32,7 @@ export async function generateMetadata(
     openGraph: {
       title: item.title,
       description: item.summary,
-      url: `https://blueagent.dev/app/feed/${id}`,
+      url: `https://app.blueagent.dev/feed/${id}`,
       siteName: "BlueAgent",
       type: "website",
       images: [{ url: ogImage, width: 1200, height: 630 }],
@@ -48,7 +48,7 @@ export async function generateMetadata(
 
 export default async function FeedItemPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const target = `/app/feed?item=${encodeURIComponent(id)}`;
+  const target = `/feed?item=${encodeURIComponent(id)}`;
   return (
     <>
       {/* Bots read the og tags above (head); humans get redirected to the feed. */}

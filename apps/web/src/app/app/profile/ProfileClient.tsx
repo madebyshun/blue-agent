@@ -425,8 +425,7 @@ export default function ProfilePage() {
               <div className="flex flex-wrap gap-3 text-[10px] text-slate-700 justify-center">
                 <a href={`https://basescan.org/address/${address}`} target="_blank" rel="noopener noreferrer"
                   className="hover:text-slate-500 transition-colors">Basescan ↗</a>
-                <Link href="/app/dashboard" className="hover:text-slate-500 transition-colors">Dashboard →</Link>
-                <Link href="/score" className="hover:text-slate-500 transition-colors">Builder Score →</Link>
+                <Link href="/dashboard" className="hover:text-slate-500 transition-colors">Dashboard →</Link>
               </div>
             </>
           )}
