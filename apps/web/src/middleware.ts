@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const APP_HOST = "app.blueagent.dev";
+const MAIN_HOST = "blueagent.dev";
+
+// Root routes that legitimately live on the app subdomain even though they're
+// outside the /app/* tree: public links generated with the app origin
+// (/pay from BlueBank, /share from chat) and public embeds (/badge). Everything
+// else outside APP_SEGMENTS is marketing — its canonical home is the main host,
+// so on the app subdomain it 301s to blueagent.dev to avoid duplicate pages
+// (e.g. app.blueagent.dev/docs was duplicating blueagent.dev/docs).
+const APP_PUBLIC = new Set(["pay", "share", "badge"]);
 
 // Top-level segments that belong to the in-app surface (src/app/app/*). On the
 // app subdomain these are served from the internal /app/* tree while the URL
@@ -120,8 +129,17 @@ export function middleware(request: NextRequest) {
       return NextResponse.rewrite(url);
     }
 
-    // Anything else (/pay, /docs, public assets) is a real root route — serve as-is.
-    return NextResponse.next();
+    // Public app-origin routes (/pay, /share, /badge) genuinely live here — serve as-is.
+    if (APP_PUBLIC.has(firstSeg)) {
+      return NextResponse.next();
+    }
+
+    // Everything else is marketing — its canonical home is the main host. 301 it
+    // over so the subdomain never duplicates /docs, /about, /skills, etc.
+    return NextResponse.redirect(
+      `https://${MAIN_HOST}${pathname}${request.nextUrl.search}`,
+      { status: 301 }
+    );
   }
 
   // ── blueagent.dev (main host) ───────────────────────────────────────────────
