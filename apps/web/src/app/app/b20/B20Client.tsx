@@ -1294,17 +1294,15 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
   const [manageError,  setManageError]  = useState("");
   const [managePending, startManage]    = useTransition();
 
-  // Connected wallet roles for scanner inline panel (auto-fetched after scan)
+  // Connected wallet roles for scanner read-only CTA (auto-fetched after scan)
   const [scanWalletRoles, setScanWalletRoles] = useState<B20RolesResult | null>(null);
-  const [scanWalletData,  setScanWalletData]  = useState<ManageData | null>(null);
 
   const { address: connectedAddress } = useAccount();
 
-  // Auto-fetch roles + manage data after successful scan (for inline panel)
+  // Auto-fetch roles after successful scan (drives the "Manage this token →" CTA)
   useEffect(() => {
     if (!scanResult?.isB20 || !connectedAddress) {
       setScanWalletRoles(null);
-      setScanWalletData(null);
       return;
     }
     let cancelled = false;
@@ -1315,26 +1313,9 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanResult?.address, connectedAddress, scanResult?.network]);
 
-  // Load full manage data when roles show any held role
-  useEffect(() => {
-    if (!scanResult?.isB20 || !connectedAddress || !scanWalletRoles) {
-      setScanWalletData(null);
-      return;
-    }
-    const hasAny = scanWalletRoles.roles.some(r => r.held);
-    if (!hasAny) { setScanWalletData(null); return; }
-    let cancelled = false;
-    runB20ManageLoad(scanResult.address, connectedAddress, scanResult.network as Network)
-      .then(d => { if (!cancelled) setScanWalletData(d); })
-      .catch(() => { if (!cancelled) setScanWalletData(null); });
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scanWalletRoles]);
-
   // Reset manage data on network change
   useEffect(() => {
     setScanWalletRoles(null);
-    setScanWalletData(null);
     setManageData(null);
     setManageError("");
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1674,39 +1655,36 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                       }} />
                   )}
 
-                  {/* Inline manage panel — only when connected wallet holds a role */}
-                  {scanResult?.isB20 && !scanPending && scanWalletData && (
+                  {/* Read-only CTA — Scanner stays report-only; manage lives on the Manage tab */}
+                  {scanResult?.isB20 && !scanPending && scanWalletRoles?.roles.some(r => r.held) && (
                     <div className="mt-4 rounded-2xl border overflow-hidden" style={{ borderColor: "#4FC3F730" }}>
-                      <div className="px-4 py-3 bg-[#0a0a0f] border-b border-[#1A1A2E] flex items-center justify-between">
+                      <div className="px-4 py-4 bg-[#0a0a0f] space-y-3">
                         <div className="flex items-center gap-2">
                           <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] shrink-0"
                             style={{ boxShadow: "0 0 4px #4FC3F780" }} />
                           <p className="font-mono text-xs text-[#4FC3F7] font-semibold">You can manage this token</p>
                         </div>
+
+                        {/* Role chips for context */}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-mono text-[9px] text-slate-600">Your roles:</span>
+                          {scanWalletRoles.roles.filter(r => r.held).map(r => (
+                            <span key={r.roleKey}
+                              className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#4FC3F710] text-[#4FC3F7] border border-[#4FC3F720]">
+                              {r.roleKey.replace(/_ROLE$/, "")}
+                            </span>
+                          ))}
+                        </div>
+
+                        <p className="font-mono text-[10px] text-slate-500 leading-relaxed">
+                          Mint, transfer, manage roles, policy, pause and more — all actions live on the Manage tab.
+                        </p>
+
                         <button onClick={() => goToManage(scanResult.address)}
-                          className="font-mono text-[9px] text-slate-500 hover:text-[#4FC3F7] transition-colors">
-                          All actions →
+                          className="font-mono text-xs px-4 py-2 rounded-xl transition-all"
+                          style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                          Manage this token →
                         </button>
-                      </div>
-                      <div className="p-4">
-                        <ManagePanel
-                          token={scanResult.address}
-                          network={network}
-                          inspect={scanWalletData.inspect}
-                          roles={scanWalletData.roles}
-                          scopeHashes={scanWalletData.scopeHashes}
-                          balance={scanWalletData.balance}
-                          onRefresh={() => {
-                            // Refresh wallet data only — do NOT clear scanResult/scanWalletData
-                            // so the panel stays mounted and the toast persists.
-                            if (scanResult?.isB20 && connectedAddress) {
-                              runB20ManageLoad(scanResult.address, connectedAddress, scanResult.network as Network)
-                                .then(d => setScanWalletData(d))
-                                .catch(() => {});
-                            }
-                          }}
-                          compact={true}
-                        />
                       </div>
                     </div>
                   )}
