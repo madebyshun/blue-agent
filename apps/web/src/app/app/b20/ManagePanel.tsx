@@ -302,6 +302,38 @@ export default function ManagePanel({
   const [xferTo,  setXferTo]  = useState("");
   const [xferAmt, setXferAmt] = useState("");
 
+  // ── Form state — Check Memo (read-only RPC lookup, no signing) ─────────────
+  const [memoTx,      setMemoTx]      = useState("");
+  const [memoLoading, setMemoLoading] = useState(false);
+  const [memoResult,  setMemoResult]  = useState<{
+    found: boolean; memo: string; caller: string | null; txUrl?: string;
+    status: "found" | "no_memo" | "pending" | "invalid";
+  } | null>(null);
+  const [memoErr,     setMemoErr]     = useState("");
+
+  function isTxHash(v: string) { return /^0x[a-fA-F0-9]{64}$/.test(v.trim()); }
+
+  async function lookupMemo() {
+    const hash = memoTx.trim();
+    setMemoResult(null); setMemoErr("");
+    if (!isTxHash(hash)) { setMemoErr("Invalid tx hash"); return; }
+    setMemoLoading(true);
+    try {
+      const res = await fetch("/api/b20/memo", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ txHash: hash, network: network === "mainnet" ? "base" : "baseSepolia" }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setMemoErr(d?.error ?? "Lookup failed"); return; }
+      setMemoResult({ found: !!d.found, memo: d.memo ?? "", caller: d.caller ?? null, txUrl: d.txUrl, status: d.status });
+    } catch (e) {
+      setMemoErr((e as Error)?.message ?? "Lookup failed");
+    } finally {
+      setMemoLoading(false);
+    }
+  }
+
   // ── Role-gating ───────────────────────────────────────────────────────────
   const r = roles.roles;
   const held = {
@@ -872,6 +904,63 @@ export default function ManagePanel({
           </div>
         </Section>
       )}
+
+      {/* Check Memo — read-only lookup of the onchain Memo event on a tx hash */}
+      <Section title="Check Memo" icon="🔖" color="#A78BFA" visible={true}>
+        <div className="space-y-2">
+          <p className={DESC}>
+            Read the memo attached to a B20 transaction (mint/burn/transfer WithMemo). No signing — just an RPC lookup.
+          </p>
+          <div>
+            <p className={LABEL}>Tx Hash</p>
+            <input
+              value={memoTx}
+              onChange={e => { setMemoTx(e.target.value); setMemoResult(null); setMemoErr(""); }}
+              placeholder="0x… (66 chars)"
+              spellCheck={false}
+              className={INPUT}
+            />
+          </div>
+          <button
+            disabled={!isTxHash(memoTx) || memoLoading}
+            onClick={lookupMemo}
+            className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
+            style={{ background: "#A78BFA15", color: "#A78BFA", border: "1px solid #A78BFA30" }}>
+            {memoLoading ? "Checking…" : "Check Memo →"}
+          </button>
+
+          {/* Error state */}
+          {memoErr && !memoLoading && (
+            <p className="font-mono text-[10px] text-[#EF4444]">⚠ {memoErr}</p>
+          )}
+
+          {/* Result */}
+          {memoResult && !memoLoading && (
+            memoResult.found ? (
+              <div className="rounded-xl border border-[#A78BFA30] bg-[#A78BFA08] px-3 py-2 space-y-1">
+                <p className="font-mono text-xs text-[#A78BFA] break-all">✓ Memo: {memoResult.memo}</p>
+                {memoResult.caller && (
+                  <p className="font-mono text-[10px] text-slate-500">
+                    Caller {memoResult.caller.slice(0, 8)}…{memoResult.caller.slice(-6)}
+                  </p>
+                )}
+                {memoResult.txUrl && (
+                  <a href={memoResult.txUrl} target="_blank" rel="noopener noreferrer"
+                    className="inline-block font-mono text-[10px] text-slate-400 hover:text-[#A78BFA]">
+                    View tx ↗
+                  </a>
+                )}
+              </div>
+            ) : (
+              <p className="font-mono text-[10px] text-slate-500">
+                {memoResult.status === "pending"
+                  ? "Transaction not found or not yet mined on this network."
+                  : "No memo found in this transaction."}
+              </p>
+            )
+          )}
+        </div>
+      </Section>
 
       {/* Success / error toast (fixed bottom-right) */}
       {activeTx && (

@@ -1557,6 +1557,75 @@ base-cast call $TOKEN_ADDRESS \\
 // wallet via wagmi. Verified addresses (see lib/yield-execution). Best-rate
 // router: pick a venue, the card builds the right protocol calls.
 // ── B20 Manage (reuses ManagePanel: full mint/burn/pause/policy/role/cap) ──────
+// check_memo result — server-read of the B20 Memo(address,bytes32) event on a tx.
+// Inline, read-only card (no signing): shows the decoded memo + caller + tx link.
+interface MemoResultData {
+  found?:   boolean;
+  memo?:    string;
+  caller?:  string | null;
+  txHash?:  string;
+  network?: string;
+  txUrl?:   string;
+  status?:  "found" | "no_memo" | "pending" | "invalid";
+}
+
+function MemoResultCard({ result }: { result: MemoResultData }) {
+  const found  = !!result.found;
+  const status = result.status ?? (found ? "found" : "no_memo");
+  const caller = (result.caller ?? "").trim();
+  const txUrl  = result.txUrl;
+
+  const label =
+    status === "invalid" ? "Invalid transaction hash"
+    : status === "pending" ? "Transaction not found or not yet mined"
+    : !found ? "No memo found in this transaction"
+    : null;
+
+  return (
+    <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3.5 py-3">
+      {found ? (
+        <>
+          <div className="flex items-center gap-2">
+            <span className="text-base leading-none">🔖</span>
+            <span className="font-mono text-[10px] text-slate-500 tracking-widest font-bold">MEMO</span>
+            <span className="font-mono text-[13px] text-[#4FC3F7] break-all">{result.memo}</span>
+          </div>
+          {caller && (
+            <div className="font-mono text-[11px] text-slate-500 mt-1.5">
+              Caller {caller.slice(0, 6)}…{caller.slice(-4)}
+            </div>
+          )}
+          {txUrl && (
+            <a
+              href={txUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block font-mono text-[11px] text-slate-400 hover:text-[#4FC3F7] mt-1.5"
+            >
+              View tx ↗
+            </a>
+          )}
+        </>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span className="text-base leading-none">{status === "invalid" ? "⚠️" : "∅"}</span>
+          <span className="font-mono text-xs text-slate-400">{label}</span>
+          {txUrl && status !== "invalid" && (
+            <a
+              href={txUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-[11px] text-slate-500 hover:text-[#4FC3F7]"
+            >
+              tx ↗
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Anti-pattern killer: chat "mint X" must open a wallet-signing panel, never
 // emit cast / --private-key / Basescan-write text. Loads on-chain state + the
 // connected wallet's roles, then renders the SAME role-gated ManagePanel as
@@ -2309,6 +2378,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_yield":         return <YieldCard        result={r} />;
     case "hub_b20_launch":       return <B20LaunchCard   result={r as B20LaunchResult} />;
     case "hub_b20_manage":       return <B20ManageCard   result={r as B20ManageResult} />;
+    case "check_memo":           return <MemoResultCard  result={r as MemoResultData} />;
     case "prepare_token_launch": return <TokenLaunchCard result={r as TokenLaunchResult} />;
     case "prepare_yield":     return <MoveToYieldCard  result={r as YieldMoveResult} account={account} />;
     case "prepare_send":      return <SendCard         result={r as SendResult} account={account} />;

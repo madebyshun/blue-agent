@@ -11,6 +11,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
+import { checkMemo } from "@/lib/b20/check-memo";
 
 export const runtime = "nodejs";
 // Vercel kills serverless functions at 60s by default — explicit budget so
@@ -710,6 +711,18 @@ Default to "base" for Base-related queries.`,
       required: ["address"],
     },
   },
+  {
+    name: "check_memo",
+    description: "Look up the onchain memo attached to a B20 transaction. Use when user asks: 'check memo of tx 0x...', 'what memo was in this tx', 'look up payment reference for tx 0x...'. CRITICAL: pass txHash ONLY if user gave one explicitly. Never invent. Reply with the memo string from result, or 'no memo' if not found.",
+    input_schema: {
+      type: "object",
+      properties: {
+        txHash:  { type: "string", description: "0x-prefixed transaction hash (66 chars) to read the Memo event from" },
+        network: { type: "string", enum: ["base", "baseSepolia"], description: "base (mainnet) or baseSepolia (default)" },
+      },
+      required: ["txHash"],
+    },
+  },
 ];
 
 // ─── Venice tools (OpenAI function-calling format) ───────────────────────────
@@ -840,6 +853,24 @@ async function callHubTool(
     return {
       text: "B20 manage card rendered. The card loads the token's live state and shows only the actions the connected wallet is authorized for — the user signs each action in their own wallet (non-custodial). Do NOT output cast commands, private keys, or Basescan write steps, and do NOT restate the actions as a table. Reply with one short line: tell the user to use the manage card above to sign their action.",
       result: { kind: "b20_manage", ...args },
+    };
+  }
+  if (toolName === "check_memo") {
+    // Server-executed read: look up the B20 Memo event on a tx hash. No payment,
+    // no signing — just an RPC read. Returns a memo_result the UI renders inline.
+    const txHash  = typeof args.txHash === "string" ? args.txHash.trim() : "";
+    const network = typeof args.network === "string" ? args.network : "baseSepolia";
+    const r = await checkMemo(txHash, network);
+    const text = r.found
+      ? `Memo found: "${r.memo}". Reply with one short line stating the memo string. The result card shows the tx link.`
+      : r.status === "invalid"
+        ? "Invalid transaction hash. Reply with one short line telling the user the hash isn't valid."
+        : r.status === "pending"
+          ? "Transaction not found or not yet mined on that network. Reply with one short line saying so."
+          : "No memo found in this transaction. Reply with one short line: 'no memo'.";
+    return {
+      text,
+      result: { kind: "memo_result", found: r.found, memo: r.memo, caller: r.caller, txHash: r.txHash, network: r.network, txUrl: r.txUrl, status: r.status },
     };
   }
 
