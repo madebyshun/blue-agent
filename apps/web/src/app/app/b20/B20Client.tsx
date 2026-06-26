@@ -532,7 +532,7 @@ function ResultCard({ info, onScanAnother, onHowItWorks }: { info: B20Inspection
           </button>
           <button onClick={() => {
               const p = new URLSearchParams({ address: info.address, network: info.network });
-              navigator.clipboard.writeText(`${window.location.origin}/app/b20?${p}`);
+              navigator.clipboard.writeText(`${window.location.origin}/b20?${p}`);
             }}
             className="font-mono text-xs px-3 py-1.5 rounded-xl border border-[#1A1A2E] text-slate-400 hover:text-white transition-colors">
             Share link
