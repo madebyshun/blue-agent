@@ -473,9 +473,8 @@ export default function ManagePanel({
       {/* In-progress indicator (visible during pending/polling) */}
       {activeTx && <TxProgress tx={activeTx} />}
 
-      {/* ── SUPPLY ──────────────────────────────────────────────────────── */}
-      <Section title="Supply" icon="⚡"
-        visible={held.canMint || held.canBurn || held.canBurnBlock}>
+      {/* ── COMMON ACTIONS (grouped on top) ─────────────────────────────── */}
+      <Section title="Common actions" icon="⚡" visible={true}>
 
         {/* Mint */}
         {held.canMint && (
@@ -517,9 +516,107 @@ export default function ManagePanel({
           </div>
         )}
 
+        {/* Transfer */}
+        {held.hasBalance && (
+          <div className={`space-y-2${held.canMint ? " pt-3 border-t border-[#0d0d18]" : ""}`}>
+            <p className={LABEL}>Transfer</p>
+            <p className={DESC}>Send your tokens to another address. Subject to transfer policy and pause state.</p>
+            {inspect.paused?.transfer && (
+              <p className="font-mono text-[9px] text-[#F59E0B]">⚠ Transfers are currently paused</p>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className={LABEL}>To</p>
+                <input value={xferTo} onChange={e => setXferTo(e.target.value)}
+                  placeholder="0x…" spellCheck={false} className={INPUT} />
+              </div>
+              <div>
+                <p className={LABEL}>Amount ({symbol})</p>
+                <input value={xferAmt} onChange={e => setXferAmt(e.target.value)}
+                  placeholder="0.0" spellCheck={false} className={INPUT} />
+              </div>
+            </div>
+            <button
+              disabled={!isAddr(xferTo) || !isAmt(xferAmt) || isBusy}
+              onClick={() => exec(
+                "Transfer",
+                encodeFunctionData({
+                  abi: B20_WRITE_ABI, functionName: "transfer",
+                  args: [xferTo as `0x${string}`, parseUnits(xferAmt, decimals)],
+                }),
+                `Transferred ${xferAmt} ${symbol} to ${xferTo.slice(0, 8)}…`,
+              )}
+              className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
+              style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+              Transfer →
+            </button>
+          </div>
+        )}
+
+        {/* Check Memo — read-only lookup of the onchain Memo event on a tx hash */}
+        <div className={`space-y-2${held.canMint || held.hasBalance ? " pt-3 border-t border-[#0d0d18]" : ""}`}>
+          <p className={LABEL + " text-[#A78BFA]"}>🔖 Check Memo</p>
+          <p className={DESC}>
+            Read the memo attached to a B20 transaction (mint/burn/transfer WithMemo). No signing — just an RPC lookup.
+          </p>
+          <div>
+            <p className={LABEL}>Tx Hash</p>
+            <input
+              value={memoTx}
+              onChange={e => { setMemoTx(e.target.value); setMemoResult(null); setMemoErr(""); }}
+              placeholder="0x… (66 chars)"
+              spellCheck={false}
+              className={INPUT}
+            />
+          </div>
+          <button
+            disabled={!isTxHash(memoTx) || memoLoading}
+            onClick={lookupMemo}
+            className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
+            style={{ background: "#A78BFA15", color: "#A78BFA", border: "1px solid #A78BFA30" }}>
+            {memoLoading ? "Checking…" : "Check Memo →"}
+          </button>
+
+          {/* Error state */}
+          {memoErr && !memoLoading && (
+            <p className="font-mono text-[10px] text-[#EF4444]">⚠ {memoErr}</p>
+          )}
+
+          {/* Result */}
+          {memoResult && !memoLoading && (
+            memoResult.found ? (
+              <div className="rounded-xl border border-[#A78BFA30] bg-[#A78BFA08] px-3 py-2 space-y-1">
+                <p className="font-mono text-xs text-[#A78BFA] break-all">✓ Memo: {memoResult.memo}</p>
+                {memoResult.caller && (
+                  <p className="font-mono text-[10px] text-slate-500">
+                    Caller {memoResult.caller.slice(0, 8)}…{memoResult.caller.slice(-6)}
+                  </p>
+                )}
+                {memoResult.txUrl && (
+                  <a href={memoResult.txUrl} target="_blank" rel="noopener noreferrer"
+                    className="inline-block font-mono text-[10px] text-slate-400 hover:text-[#A78BFA]">
+                    View tx ↗
+                  </a>
+                )}
+              </div>
+            ) : (
+              <p className="font-mono text-[10px] text-slate-500">
+                {memoResult.status === "pending"
+                  ? "Transaction not found or not yet mined on this network."
+                  : "No memo found in this transaction."}
+              </p>
+            )
+          )}
+        </div>
+      </Section>
+
+      {/* ── SUPPLY (burn / seize) ───────────────────────────────────────── */}
+      <Section title="Supply" icon="🔥" color="#F59E0B"
+        visible={held.canBurn || held.canBurnBlock}>
+
         {/* Burn */}
         {held.canBurn && (
-          <div className="space-y-2 pt-2 border-t border-[#0d0d18]">
+          <div className="space-y-2">
             <p className={LABEL}>Burn (from your balance) — BURN_ROLE</p>
             <p className={DESC}>Destroy tokens from your own balance. Decreases total supply.</p>
             {inspect.paused?.burn && (
@@ -866,101 +963,6 @@ export default function ManagePanel({
           </div>
         </Section>
       )}
-
-      {/* ── TRANSFER ────────────────────────────────────────────────────── */}
-      {held.hasBalance && (
-        <Section title="Transfer" icon="→" visible={true}>
-          <div className="space-y-2">
-            <p className={DESC}>Send your tokens to another address. Subject to transfer policy and pause state.</p>
-            {inspect.paused?.transfer && (
-              <p className="font-mono text-[9px] text-[#F59E0B]">⚠ Transfers are currently paused</p>
-            )}
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <p className={LABEL}>To</p>
-                <input value={xferTo} onChange={e => setXferTo(e.target.value)}
-                  placeholder="0x…" spellCheck={false} className={INPUT} />
-              </div>
-              <div>
-                <p className={LABEL}>Amount ({symbol})</p>
-                <input value={xferAmt} onChange={e => setXferAmt(e.target.value)}
-                  placeholder="0.0" spellCheck={false} className={INPUT} />
-              </div>
-            </div>
-            <button
-              disabled={!isAddr(xferTo) || !isAmt(xferAmt) || isBusy}
-              onClick={() => exec(
-                "Transfer",
-                encodeFunctionData({
-                  abi: B20_WRITE_ABI, functionName: "transfer",
-                  args: [xferTo as `0x${string}`, parseUnits(xferAmt, decimals)],
-                }),
-                `Transferred ${xferAmt} ${symbol} to ${xferTo.slice(0, 8)}…`,
-              )}
-              className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
-              style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-              Transfer →
-            </button>
-          </div>
-        </Section>
-      )}
-
-      {/* Check Memo — read-only lookup of the onchain Memo event on a tx hash */}
-      <Section title="Check Memo" icon="🔖" color="#A78BFA" visible={true}>
-        <div className="space-y-2">
-          <p className={DESC}>
-            Read the memo attached to a B20 transaction (mint/burn/transfer WithMemo). No signing — just an RPC lookup.
-          </p>
-          <div>
-            <p className={LABEL}>Tx Hash</p>
-            <input
-              value={memoTx}
-              onChange={e => { setMemoTx(e.target.value); setMemoResult(null); setMemoErr(""); }}
-              placeholder="0x… (66 chars)"
-              spellCheck={false}
-              className={INPUT}
-            />
-          </div>
-          <button
-            disabled={!isTxHash(memoTx) || memoLoading}
-            onClick={lookupMemo}
-            className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
-            style={{ background: "#A78BFA15", color: "#A78BFA", border: "1px solid #A78BFA30" }}>
-            {memoLoading ? "Checking…" : "Check Memo →"}
-          </button>
-
-          {/* Error state */}
-          {memoErr && !memoLoading && (
-            <p className="font-mono text-[10px] text-[#EF4444]">⚠ {memoErr}</p>
-          )}
-
-          {/* Result */}
-          {memoResult && !memoLoading && (
-            memoResult.found ? (
-              <div className="rounded-xl border border-[#A78BFA30] bg-[#A78BFA08] px-3 py-2 space-y-1">
-                <p className="font-mono text-xs text-[#A78BFA] break-all">✓ Memo: {memoResult.memo}</p>
-                {memoResult.caller && (
-                  <p className="font-mono text-[10px] text-slate-500">
-                    Caller {memoResult.caller.slice(0, 8)}…{memoResult.caller.slice(-6)}
-                  </p>
-                )}
-                {memoResult.txUrl && (
-                  <a href={memoResult.txUrl} target="_blank" rel="noopener noreferrer"
-                    className="inline-block font-mono text-[10px] text-slate-400 hover:text-[#A78BFA]">
-                    View tx ↗
-                  </a>
-                )}
-              </div>
-            ) : (
-              <p className="font-mono text-[10px] text-slate-500">
-                {memoResult.status === "pending"
-                  ? "Transaction not found or not yet mined on this network."
-                  : "No memo found in this transaction."}
-              </p>
-            )
-          )}
-        </div>
-      </Section>
 
       {/* Success / error toast (fixed bottom-right) */}
       {activeTx && (
