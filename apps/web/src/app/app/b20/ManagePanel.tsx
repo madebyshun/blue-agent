@@ -18,6 +18,12 @@ import {
   POLICY_SCOPE_LABELS,
   type PolicyScopeKey,
 } from "@/lib/b20/manage-abi";
+import {
+  encodeMintWithMemo,
+  encodeBurnWithMemo,
+  isValidMemo,
+  MEMO_MAX_CHARS,
+} from "@/lib/b20/encode";
 import type { B20Inspection } from "@/lib/b20/inspect";
 import type { B20RolesResult } from "@/lib/b20/roles";
 import type { ScopeHashes } from "./manage-action";
@@ -49,6 +55,7 @@ export interface ManagePanelProps {
   balance:     string;   // raw uint256 string (wallet token balance)
   onRefresh?:  () => void;
   compact?:    boolean;  // true = scanner inline (fewer groups)
+  initialMemo?: string;  // optional LLM/url-supplied memo to seed the mint form
 }
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
@@ -65,6 +72,44 @@ const DESC  = "font-mono text-[9px] text-slate-600 leading-relaxed mb-2";
 
 function isAddr(v: string) { return /^0x[a-fA-F0-9]{40}$/.test(v.trim()); }
 function isAmt (v: string) { return /^\d+(\.\d+)?$/.test(v.trim()) && parseFloat(v) > 0; }
+/** Memo overflows bytes32 (more than 31 chars). Empty is allowed (optional). */
+function memoTooLong(v: string) { return v.trim().length > MEMO_MAX_CHARS; }
+
+// ── Optional onchain memo input (bytes32) ───────────────────────────────────────
+
+function MemoField({
+  value, onChange, disabled,
+}: {
+  value: string; onChange: (v: string) => void; disabled?: boolean;
+}) {
+  const tooLong = memoTooLong(value);
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <p className={LABEL + " mb-0"}>Memo (optional)</p>
+        <span className={`font-mono text-[9px] ${tooLong ? "text-[#EF4444]" : "text-slate-600"}`}>
+          {value.trim().length}/{MEMO_MAX_CHARS}
+        </span>
+      </div>
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        disabled={disabled}
+        placeholder="INV-2026-001 (optional)"
+        spellCheck={false}
+        className={INPUT + (tooLong ? " border-[#EF444450]" : "")}
+      />
+      <p className={DESC + " mt-1 mb-0"}>
+        Attached onchain — order IDs, payment refs, audit trail.
+      </p>
+      {tooLong && (
+        <p className="font-mono text-[9px] text-[#EF4444] mt-1">
+          Memo must be ≤ {MEMO_MAX_CHARS} characters (fits in bytes32).
+        </p>
+      )}
+    </div>
+  );
+}
 
 // ── Section wrapper ───────────────────────────────────────────────────────────
 
@@ -206,7 +251,7 @@ function ConfirmDialog({
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function ManagePanel({
-  token, network, inspect, roles, scopeHashes, balance, onRefresh, compact = false,
+  token, network, inspect, roles, scopeHashes, balance, onRefresh, compact = false, initialMemo,
 }: ManagePanelProps) {
   const { address, chainId: currentChainId } = useAccount();
   const { sendTransactionAsync }             = useSendTransaction();
@@ -228,11 +273,13 @@ export default function ManagePanel({
   }, [activeTx?.hash]); // re-arm each time a new tx hash succeeds
 
   // ── Form state — Supply ───────────────────────────────────────────────────
-  const [mintTo,  setMintTo]  = useState("");
-  const [mintAmt, setMintAmt] = useState("");
-  const [burnAmt, setBurnAmt] = useState("");
-  const [bbFrom,  setBbFrom]  = useState("");
-  const [bbAmt,   setBbAmt]   = useState("");
+  const [mintTo,   setMintTo]   = useState("");
+  const [mintAmt,  setMintAmt]  = useState("");
+  const [mintMemo, setMintMemo] = useState((initialMemo ?? "").slice(0, MEMO_MAX_CHARS));
+  const [burnAmt,  setBurnAmt]  = useState("");
+  const [burnMemo, setBurnMemo] = useState("");
+  const [bbFrom,   setBbFrom]   = useState("");
+  const [bbAmt,    setBbAmt]    = useState("");
 
   // ── Form state — Policy ───────────────────────────────────────────────────
   const [policyScope, setPolicyScope] = useState<PolicyScopeKey>("transferSender");
@@ -418,15 +465,18 @@ export default function ManagePanel({
                   placeholder="0.0" spellCheck={false} className={INPUT} />
               </div>
             </div>
+            <MemoField value={mintMemo} onChange={setMintMemo} disabled={isBusy} />
             <button
-              disabled={!isAddr(mintTo) || !isAmt(mintAmt) || isBusy}
+              disabled={!isAddr(mintTo) || !isAmt(mintAmt) || memoTooLong(mintMemo) || isBusy}
               onClick={() => exec(
                 "Mint",
-                encodeFunctionData({
-                  abi: B20_WRITE_ABI, functionName: "mint",
-                  args: [mintTo as `0x${string}`, parseUnits(mintAmt, decimals)],
-                }),
-                `Minted ${mintAmt} ${symbol} to ${mintTo.slice(0, 8)}…`,
+                isValidMemo(mintMemo)
+                  ? encodeMintWithMemo({ to: mintTo, amount: mintAmt, decimals, memo: mintMemo })
+                  : encodeFunctionData({
+                      abi: B20_WRITE_ABI, functionName: "mint",
+                      args: [mintTo as `0x${string}`, parseUnits(mintAmt, decimals)],
+                    }),
+                `Minted ${mintAmt} ${symbol} to ${mintTo.slice(0, 8)}…${isValidMemo(mintMemo) ? ` · memo "${mintMemo.trim()}"` : ""}`,
               )}
               className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
               style={{ background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E30" }}>
@@ -448,20 +498,23 @@ export default function ManagePanel({
                 placeholder={`Amount in ${symbol}`} spellCheck={false}
                 className={`flex-1 ${INPUT}`} />
               <button
-                disabled={!isAmt(burnAmt) || isBusy}
+                disabled={!isAmt(burnAmt) || memoTooLong(burnMemo) || isBusy}
                 onClick={() => exec(
                   "Burn",
-                  encodeFunctionData({
-                    abi: B20_WRITE_ABI, functionName: "burn",
-                    args: [parseUnits(burnAmt, decimals)],
-                  }),
-                  `Burned ${burnAmt} ${symbol}`,
+                  isValidMemo(burnMemo)
+                    ? encodeBurnWithMemo({ amount: burnAmt, decimals, memo: burnMemo })
+                    : encodeFunctionData({
+                        abi: B20_WRITE_ABI, functionName: "burn",
+                        args: [parseUnits(burnAmt, decimals)],
+                      }),
+                  `Burned ${burnAmt} ${symbol}${isValidMemo(burnMemo) ? ` · memo "${burnMemo.trim()}"` : ""}`,
                 )}
                 className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
                 style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B30" }}>
                 Burn →
               </button>
             </div>
+            <MemoField value={burnMemo} onChange={setBurnMemo} disabled={isBusy} />
           </div>
         )}
 

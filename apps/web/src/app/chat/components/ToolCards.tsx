@@ -14,6 +14,8 @@ import { DATA_SUFFIX } from "@/constants/builderCode";
 import ManagePanel from "@/app/app/b20/ManagePanel";
 import { runB20ManageLoad, type ManageData } from "@/app/app/b20/manage-action";
 import { ConnectButton } from "@/components/ConnectModal";
+import { B20_ENABLED, B20_USDC } from "@/lib/orders";
+import { encodeTransferWithMemo, isValidMemo, MEMO_MAX_CHARS } from "@/lib/b20/encode";
 
 function truncAddr(addr: string, len = 6) {
   if (!addr || addr.length < 12) return addr;
@@ -1559,7 +1561,7 @@ base-cast call $TOKEN_ADDRESS \\
 // emit cast / --private-key / Basescan-write text. Loads on-chain state + the
 // connected wallet's roles, then renders the SAME role-gated ManagePanel as
 // /app/b20 (compact mode). Every action is signed in the user's own wallet.
-interface B20ManageResult { address?: string; network?: string }
+interface B20ManageResult { address?: string; network?: string; memo?: string }
 
 function B20ManageCard({ result }: { result: B20ManageResult }) {
   const token = (result.address ?? "").trim();
@@ -1642,6 +1644,7 @@ function B20ManageCard({ result }: { result: B20ManageResult }) {
           balance={data.balance}
           onRefresh={load}
           compact={true}
+          initialMemo={result.memo}
         />
       )}
     </div>
@@ -1979,11 +1982,27 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
   const { data: walletCapabilities } = useCapabilities({ account, query: { enabled: !!account } });
   const [callsId, setCallsId] = useState<string>("");
 
-  const [asset,     setAsset]     = useState<"USDC" | "ETH">(result.asset === "ETH" ? "ETH" : "USDC");
-  const [network,   setNetwork]   = useState<YieldNetwork>(result.network === "base" ? "base" : "baseSepolia");
+  // B20 native settlement token (supports transferWithMemo). Only offered as a
+  // send asset when enabled + a verified address is configured — Circle USDC and
+  // ETH have no memo, so the memo field only appears for this asset.
+  const b20Available = B20_ENABLED && isAddress(B20_USDC);
+  const initialAsset: "USDC" | "ETH" | "B20" =
+    result.asset === "ETH" ? "ETH" : (result.asset === "B20" && b20Available) ? "B20" : "USDC";
+
+  const [asset,     setAsset]     = useState<"USDC" | "ETH" | "B20">(initialAsset);
+  const [network,   setNetwork]   = useState<YieldNetwork>(
+    initialAsset === "B20" ? "base" : (result.network === "base" ? "base" : "baseSepolia"));
   const [recipient, setRecipient] = useState<string>(typeof result.to === "string" ? result.to : "");
   const [amount,    setAmount]    = useState<string>(
     result.amount != null && (typeof result.amount === "number" || typeof result.amount === "string") ? String(result.amount) : "");
+  const [memo,      setMemo]      = useState<string>("");
+
+  const isB20Asset = asset === "B20";
+  // B20 USDC is mainnet-only and fixed at 6 decimals. Picking it forces Base mainnet.
+  function pickAsset(a: "USDC" | "ETH" | "B20") {
+    setAsset(a);
+    if (a === "B20") setNetwork("base");
+  }
   const [step, setStep] = useState<"idle" | "switching" | "sending" | "done" | "error">("idle");
   const [err,  setErr]  = useState("");
   const [txHash, setTxHash] = useState<string>("");
@@ -2034,9 +2053,16 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
     query: { enabled: !!fromAddr && asset === "USDC" },
   });
   const { data: ethBal } = useBalance({ address: fromAddr, chainId, query: { enabled: !!fromAddr && asset === "ETH" } });
+  const { data: b20BalRaw } = useReadContract({
+    address: B20_USDC as `0x${string}`, abi: ERC20_ABI, functionName: "balanceOf",
+    args: fromAddr ? [fromAddr] : undefined, chainId: base.id,
+    query: { enabled: !!fromAddr && isB20Asset && b20Available },
+  });
   const balance = asset === "USDC"
     ? (usdcBalRaw != null ? Number(formatUnits(usdcBalRaw as bigint, net.usdcDecimals)) : null)
-    : (ethBal ? Number(formatUnits(ethBal.value, ethBal.decimals)) : null);
+    : asset === "ETH"
+    ? (ethBal ? Number(formatUnits(ethBal.value, ethBal.decimals)) : null)
+    : (b20BalRaw != null ? Number(formatUnits(b20BalRaw as bigint, 6)) : null);
   function setMax() {
     if (balance == null) return;
     setAmount(String(asset === "ETH" ? Math.max(0, balance - 0.00005) : balance)); // leave a little ETH for gas
@@ -2044,8 +2070,26 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
 
   const amt = parseFloat(amount);
   const overBalance = balance != null && amt > balance;
-  const valid = !!toAddress && amt > 0 && !overBalance;
+  const memoTooLong = isB20Asset && memo.trim().length > MEMO_MAX_CHARS;
+  const valid = !!toAddress && amt > 0 && !overBalance && !memoTooLong;
   const busy = step === "switching" || step === "sending";
+
+  // Build the value-transfer call for the selected asset. B20 native routes
+  // through transferWithMemo when a memo is present (else a plain transfer);
+  // USDC/ETH paths are unchanged.
+  function buildTransferCall(to: `0x${string}`): { to: `0x${string}`; data?: `0x${string}`; value?: bigint } {
+    if (asset === "USDC") {
+      return { to: net.usdc, data: encodeFunctionData({ abi: ERC20_ABI, functionName: "transfer", args: [to, parseUnits(amount, net.usdcDecimals)] }) };
+    }
+    if (asset === "ETH") {
+      return { to, value: parseEther(amount) };
+    }
+    // B20 native
+    const data = isValidMemo(memo)
+      ? encodeTransferWithMemo({ to, amount, decimals: 6, memo })
+      : encodeFunctionData({ abi: ERC20_ABI, functionName: "transfer", args: [to, parseUnits(amount, 6)] });
+    return { to: B20_USDC as `0x${string}`, data };
+  }
 
   async function send() {
     if (!fromAddr)  { setErr("Connect your wallet first"); setStep("error"); return; }
@@ -2066,9 +2110,7 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
       // status hook resolves the on-chain tx hash for both.
       const supportsSendCalls = !!walletCapabilities;
       if (supportsSendCalls) {
-        const call = asset === "USDC"
-          ? { to: net.usdc, data: encodeFunctionData({ abi: ERC20_ABI, functionName: "transfer", args: [toAddress, parseUnits(amount, net.usdcDecimals)] }) }
-          : { to: toAddress, value: parseEther(amount) };
+        const call = buildTransferCall(toAddress);
         const origin = typeof window !== "undefined" ? window.location.origin : "";
         const dataSuffix = { value: DATA_SUFFIX, optional: true };
         const capabilities = gaslessSupported
@@ -2082,9 +2124,10 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
       // Legacy fallback — wallets without EIP-5792 (older EOAs). Unattributed:
       // builder-code attribution needs the sendCalls dataSuffix capability above.
       setIsEoa(true);
+      const call = buildTransferCall(toAddress);
       const hash = asset === "USDC"
         ? await writeContractAsync({ address: net.usdc, abi: ERC20_ABI, functionName: "transfer", args: [toAddress, parseUnits(amount, net.usdcDecimals)], chainId })
-        : await sendTransactionAsync({ to: toAddress, value: parseEther(amount), chainId });
+        : await sendTransactionAsync({ to: call.to, value: call.value, data: call.data, chainId });
       setTxHash(hash); setStep("done");
     } catch (e) {
       setErr(((e as Error).message || String(e)).slice(0, 160)); setStep("error");
@@ -2149,12 +2192,12 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
         </div>
       )}
 
-      {/* Asset toggle */}
+      {/* Asset toggle — B20 native appears only when a settlement token is configured */}
       <div className="flex gap-1 mb-3">
-        {(["USDC", "ETH"] as const).map(a => {
+        {(b20Available ? (["USDC", "ETH", "B20"] as const) : (["USDC", "ETH"] as const)).map(a => {
           const active = asset === a;
           return (
-            <button key={a} onClick={() => setAsset(a)}
+            <button key={a} onClick={() => pickAsset(a)}
               className="flex-1 font-mono text-[11px] py-1.5 rounded-md transition-colors"
               style={active
                 ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
@@ -2190,6 +2233,24 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
           className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
         {overBalance && <span className="font-mono text-[9px] text-red-500 mt-1 block">Amount exceeds your {asset} balance</span>}
       </label>
+
+      {/* Memo (B20 native only — transferWithMemo attaches a bytes32 reference) */}
+      {isB20Asset && (
+        <label className="block mb-3">
+          <div className="flex items-center justify-between mb-1">
+            <span className="font-mono text-[9px] text-slate-600">MEMO (OPTIONAL)</span>
+            <span className={`font-mono text-[9px] ${memoTooLong ? "text-red-500" : "text-slate-600"}`}>
+              {memo.trim().length}/{MEMO_MAX_CHARS}
+            </span>
+          </div>
+          <input value={memo} onChange={e => setMemo(e.target.value)}
+            placeholder="INV-2026-001"
+            className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+          <span className="font-mono text-[9px] text-slate-600 mt-1 block">
+            Attached onchain — order ID / payment ref. {memoTooLong && <span className="text-red-500">Max {MEMO_MAX_CHARS} chars.</span>}
+          </span>
+        </label>
+      )}
 
       {/* Network */}
       <label className="block mb-3">
