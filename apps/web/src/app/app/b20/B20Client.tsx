@@ -143,7 +143,27 @@ function timeAgo(iso: string): string {
   return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-interface VerdictLine { kind: "warn" | "ok"; text: string }
+interface VerdictLine { kind: "danger" | "warn" | "info" | "ok"; text: string }
+
+const WAD = 1_000_000_000_000_000_000n; // 1e18 — multiplier base (no rebase)
+
+/** Format a WAD-precision rebase multiplier (1e18) → "1.05×". "1.00×" = no rebase. */
+function formatMultiplier(raw?: string): string | null {
+  if (!raw) return null;
+  let v: bigint;
+  try { v = BigInt(raw); } catch { return null; }
+  // 2-decimal fixed: (v * 100) / 1e18, then insert the decimal point.
+  const scaled = (v * 100n) / WAD;
+  const whole  = scaled / 100n;
+  const frac   = (scaled % 100n).toString().padStart(2, "0");
+  return `${whole}.${frac}×`;
+}
+
+/** True when the multiplier is anything other than exactly 1e18 (rebase active). */
+function hasRebase(raw?: string): boolean {
+  if (!raw) return false;
+  try { return BigInt(raw) !== WAD; } catch { return false; }
+}
 
 function computeVerdict(info: B20Inspection): VerdictLine[] {
   const lines: VerdictLine[] = [];
@@ -156,13 +176,25 @@ function computeVerdict(info: B20Inspection): VerdictLine[] {
   };
   if (info.policies) {
     for (const [scope, policy] of Object.entries(info.policies) as [string, PolicyInfo][]) {
-      if (policy.restricted)
-        lines.push({ kind: "warn", text: `Policy-gated on ${sl[scope] ?? scope} scope.` });
+      if (policy.kind === "blocked")
+        lines.push({ kind: "danger", text: `One or more transfer scopes are completely blocked — ${sl[scope] ?? scope} uses ALWAYS_BLOCK (denies everyone).` });
+      else if (policy.kind === "custom")
+        lines.push({ kind: "warn", text: `Policy-gated on ${sl[scope] ?? scope} scope (custom policy #${policy.policyId}).` });
     }
   }
   if (info.supplyCapUncapped) lines.push({ kind: "warn", text: "Uncapped supply — issuer can mint unlimited tokens." });
+  // Rebase multiplier is informational, not a warning — balances are scaled by it.
+  if (info.variant === "ASSET" && hasRebase(info.multiplier))
+    lines.push({ kind: "info", text: `Token uses a rebase multiplier (${formatMultiplier(info.multiplier)}) — displayed balance may differ from the raw minted amount.` });
+  // Admin status — only what we can verify for the connected wallet.
+  if (info.admin?.checkedAccount) {
+    if (info.admin.connectedIsAdmin)
+      lines.push({ kind: "info", text: "Your connected wallet holds DEFAULT_ADMIN on this token." });
+    else
+      lines.push({ kind: "info", text: "Your connected wallet does not hold DEFAULT_ADMIN. Other holders can't be listed (B20 omits role enumeration)." });
+  }
   const noPause = !info.paused?.transfer && !info.paused?.mint && !info.paused?.burn;
-  const noGate  = !info.policies || Object.values(info.policies).every(p => !p.restricted);
+  const noGate  = !info.policies || Object.values(info.policies).every(p => p.kind === "open");
   if (noPause && noGate) lines.push({ kind: "ok", text: "No issuer-side transfer restrictions detected." });
   if (!info.supplyCapUncapped && info.supplyCapFormatted && info.supplyCapFormatted !== "uncapped")
     lines.push({ kind: "ok", text: `Supply capped at ${info.supplyCapFormatted} ${info.symbol ?? "tokens"}.` });
@@ -171,17 +203,20 @@ function computeVerdict(info: B20Inspection): VerdictLine[] {
 
 // ── Shared UI pieces ──────────────────────────────────────────────────────────
 
-function VariantBadge({ variant }: { variant?: string }) {
+function VariantBadge({ variant, currency }: { variant?: string; currency?: string }) {
   const colors: Record<string, { bg: string; text: string; border: string }> = {
     ASSET:      { bg: "#4FC3F718", text: "#4FC3F7", border: "#4FC3F730" },
     STABLECOIN: { bg: "#22C55E18", text: "#22C55E", border: "#22C55E30" },
     UNKNOWN:    { bg: "#64748b18", text: "#94a3b8", border: "#64748b30" },
   };
   const c = colors[variant ?? "UNKNOWN"] ?? colors.UNKNOWN;
+  const label = variant === "STABLECOIN" && currency
+    ? `STABLECOIN · ${currency}`
+    : (variant ?? "UNKNOWN");
   return (
     <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border"
       style={{ background: c.bg, color: c.text, borderColor: c.border }}>
-      {variant ?? "UNKNOWN"}
+      {label}
     </span>
   );
 }
@@ -202,13 +237,17 @@ function PolicyRow({ label, policy }: { label: string; policy: PolicyInfo }) {
   return (
     <div className="flex items-center justify-between py-2.5 border-b border-[#0d0d18] last:border-0">
       <span className="font-mono text-xs text-slate-400">{label}</span>
-      {policy.restricted ? (
+      {policy.kind === "blocked" ? (
+        <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border"
+          style={{ background: "#EF444418", color: "#EF4444", borderColor: "#EF444440" }}>
+          ALWAYS_BLOCK ⛔
+        </span>
+      ) : policy.kind === "custom" ? (
         <div className="flex items-center gap-2">
           <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border"
             style={{ background: "#F59E0B15", color: "#F59E0B", borderColor: "#F59E0B30" }}>
-            RESTRICTED
+            CUSTOM #{policy.policyId}
           </span>
-          {policy.policyId && <span className="font-mono text-[9px] text-slate-600">id:{policy.policyId}</span>}
         </div>
       ) : (
         <span className="font-mono text-xs" style={{ color: "#22C55E" }}>ALWAYS_ALLOW</span>
@@ -381,8 +420,9 @@ function MethodologySide() {
 function ResultCard({ info, onScanAnother, onHowItWorks }: { info: B20Inspection; onScanAnother: () => void; onHowItWorks?: () => void }) {
   const [copied, setCopied] = useState(false);
   const verdict   = computeVerdict(info);
+  const hasDanger = verdict.some(v => v.kind === "danger");
   const hasWarns  = verdict.some(v => v.kind === "warn");
-  const trustColor = hasWarns ? "#F59E0B" : "#22C55E";
+  const trustColor = hasDanger ? "#EF4444" : hasWarns ? "#F59E0B" : "#22C55E";
 
   if (!info.isB20) {
     return (
@@ -426,7 +466,7 @@ function ResultCard({ info, onScanAnother, onHowItWorks }: { info: B20Inspection
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border"
                 style={{ background: "#22C55E18", color: "#22C55E", borderColor: "#22C55E30" }}>✓ B20</span>
-              <VariantBadge variant={info.variant} />
+              <VariantBadge variant={info.variant} currency={info.currency} />
               <span className="font-mono text-[10px] text-slate-500">
                 {info.network === "mainnet" ? "Base Mainnet" : "Base Sepolia"}
               </span>
@@ -437,7 +477,7 @@ function ResultCard({ info, onScanAnother, onHowItWorks }: { info: B20Inspection
           </div>
           <span className="font-mono text-xs px-2.5 py-1 rounded-full border shrink-0"
             style={{ background: `${trustColor}12`, color: trustColor, borderColor: `${trustColor}40` }}>
-            {hasWarns ? "Restrictions found" : "No restrictions"}
+            {hasDanger ? "Transfers blocked" : hasWarns ? "Restrictions found" : "No restrictions"}
           </span>
         </div>
         <a href={info.explorerUrl} target="_blank" rel="noopener noreferrer"
@@ -458,7 +498,12 @@ function ResultCard({ info, onScanAnother, onHowItWorks }: { info: B20Inspection
               ...(info.variant === "STABLECOIN" && info.currency
                 ? [{ label: "Currency", value: info.currency }] : []),
               ...(info.variant === "ASSET" && info.multiplier
-                ? [{ label: "Multiplier", value: info.multiplier === "1000000000000000000" ? "1× (no rebase)" : info.multiplier }] : []),
+                ? [{ label: "Multiplier", value: hasRebase(info.multiplier)
+                      ? `${formatMultiplier(info.multiplier)} (rebase active)`
+                      : "No rebase (1.00×)" }] : []),
+              ...(info.admin?.checkedAccount
+                ? [{ label: "Admin (your wallet)", value: info.admin.connectedIsAdmin ? "You hold admin" : "Not admin" }]
+                : [{ label: "Admin", value: "Unknown — connect wallet" }]),
             ].map(({ label, value }) => (
               <div key={label} className="rounded-xl bg-[#0a0a12] border border-[#1A1A2E] px-3 py-2.5">
                 <p className="font-mono text-[9px] text-slate-600 mb-0.5">{label}</p>
@@ -498,17 +543,17 @@ function ResultCard({ info, onScanAnother, onHowItWorks }: { info: B20Inspection
           <SectionLabel>Trust Verdict</SectionLabel>
           <div className="rounded-xl border px-4 py-3 space-y-2.5"
             style={{ borderColor: `${trustColor}25`, background: `${trustColor}05` }}>
-            {verdict.map((line, i) => (
-              <div key={i} className="flex items-start gap-2.5">
-                <span className="font-mono text-sm shrink-0 mt-px" style={{ color: line.kind === "warn" ? "#F59E0B" : "#22C55E" }}>
-                  {line.kind === "warn" ? "!" : "✓"}
-                </span>
-                <span className="font-mono text-xs leading-relaxed"
-                  style={{ color: line.kind === "warn" ? "#FCD34D" : "#86efac" }}>
-                  {line.text}
-                </span>
-              </div>
-            ))}
+            {verdict.map((line, i) => {
+              const icon  = line.kind === "danger" ? "⛔" : line.kind === "warn" ? "!" : line.kind === "info" ? "ℹ" : "✓";
+              const iconC = line.kind === "danger" ? "#EF4444" : line.kind === "warn" ? "#F59E0B" : line.kind === "info" ? "#4FC3F7" : "#22C55E";
+              const textC = line.kind === "danger" ? "#FCA5A5" : line.kind === "warn" ? "#FCD34D" : line.kind === "info" ? "#7DD3FC" : "#86efac";
+              return (
+                <div key={i} className="flex items-start gap-2.5">
+                  <span className="font-mono text-sm shrink-0 mt-px" style={{ color: iconC }}>{icon}</span>
+                  <span className="font-mono text-xs leading-relaxed" style={{ color: textC }}>{line.text}</span>
+                </div>
+              );
+            })}
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-2 border-t border-[#1A1A2E]">
               <p className="font-mono text-[9px] text-slate-600">
                 Reflects on-chain config at read time. Roles and policies can be changed by the issuer.
@@ -990,6 +1035,8 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
   const [activeTab, setActiveTab] = useState<Tab>("scanner");
   const [network,   setNetwork]   = useState<Network>(initialNetwork);
   const { setContextual } = useAppChrome();
+  // Connected wallet — fed to the scanner so it can run the per-wallet admin check.
+  const { address: scanWallet } = useAccount();
 
   // Beryl badge (client-only to avoid hydration mismatch)
   const [berylLabel, setBerylLabel] = useState<{ active: boolean; text: string } | null>(null);
@@ -1052,12 +1099,12 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
     setScanError(""); setScanResult(null);
     startScan(async () => {
       try {
-        const result = await runB20Inspect(clean, network);
+        const result = await runB20Inspect(clean, network, scanWallet);
         // Auto-detect: if not found on this network, try the other
         if (!result.isB20) {
           const other: Network = network === "mainnet" ? "sepolia" : "mainnet";
           try {
-            const alt = await runB20Inspect(clean, other);
+            const alt = await runB20Inspect(clean, other, scanWallet);
             if (alt.isB20) {
               setNetwork(other);
               setScanResult(alt);
@@ -1087,7 +1134,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addrClean, addrValid, network]);
+  }, [addrClean, addrValid, network, scanWallet]);
 
   // Auto-trigger on mount (share link)
   useEffect(() => {

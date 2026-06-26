@@ -13,6 +13,8 @@ import {
   B20_FACTORY_ADDRESS,
   POLICY_REGISTRY_ADDRESS,
   ALWAYS_ALLOW_POLICY_ID,
+  ALWAYS_BLOCK_POLICY_ID,
+  DEFAULT_ADMIN_ROLE,
   SUPPLY_CAP_UNCAPPED,
   PAUSABLE_FEATURE,
   FACTORY_ABI,
@@ -34,7 +36,19 @@ const NETS = {
 export interface PolicyInfo {
   policyId:   string;   // uint64 as decimal string
   restricted: boolean;  // true when policyId !== 0 (ALWAYS_ALLOW)
-  admin?:     string;   // policy admin address — set when restricted
+  kind:       "open" | "blocked" | "custom"; // open=ALWAYS_ALLOW, blocked=ALWAYS_BLOCK, custom=other
+  admin?:     string;   // policy admin address — set for custom policies
+}
+
+/**
+ * Admin status. B20 omits AccessControlEnumerable, so role holders cannot be
+ * listed — we can only confirm whether a *specific* wallet holds DEFAULT_ADMIN.
+ * "Admin-less / immutable" therefore cannot be proven from reads alone; we report
+ * what we can verify and leave the rest "unknown".
+ */
+export interface AdminInfo {
+  checkedAccount?:  string;   // the wallet we ran hasRole against (when provided)
+  connectedIsAdmin?: boolean; // true if checkedAccount holds DEFAULT_ADMIN_ROLE
 }
 
 export interface B20Inspection {
@@ -75,6 +89,9 @@ export interface B20Inspection {
     mintReceiver:     PolicyInfo;
   };
 
+  // Admin status — only populated/meaningful when an account is passed to inspect
+  admin?: AdminInfo;
+
   // Basescan link
   explorerUrl: string;
 
@@ -102,6 +119,10 @@ function safeFormat(raw: bigint, dec: number): string {
 export async function inspectB20(
   address: string,
   network: "mainnet" | "sepolia" = "mainnet",
+  // Optional connected wallet. When supplied we run hasRole(DEFAULT_ADMIN, account)
+  // so the Scanner can show whether THIS wallet is an admin. B20 can't enumerate
+  // role holders, so we never claim "admin-less" — only what we can verify.
+  account?: string,
 ): Promise<B20Inspection> {
   const t0      = Date.now();
   const net     = NETS[network];
@@ -213,11 +234,12 @@ export async function inspectB20(
     const pidExec   = ok<bigint>(r2[2]) ?? ALWAYS_ALLOW_POLICY_ID;
     const pidMintR  = ok<bigint>(r2[3]) ?? ALWAYS_ALLOW_POLICY_ID;
 
-    // ── Round 3 — policyAdmin for restricted policies ─────────────────────
+    // ── Round 3 — policyAdmin for custom policies ─────────────────────────
+    // Exclude both sentinels: ALWAYS_ALLOW (0) and ALWAYS_BLOCK have no admin.
     const uniqueRestricted = [
       ...new Set(
         [pidSender, pidRcvr, pidExec, pidMintR]
-          .filter(id => id !== ALWAYS_ALLOW_POLICY_ID),
+          .filter(id => id !== ALWAYS_ALLOW_POLICY_ID && id !== ALWAYS_BLOCK_POLICY_ID),
       ),
     ];
 
@@ -238,11 +260,18 @@ export async function inspectB20(
       });
     }
 
-    const mkPolicy = (id: bigint): PolicyInfo => ({
-      policyId:   id.toString(),
-      restricted: id !== ALWAYS_ALLOW_POLICY_ID,
-      admin:      id !== ALWAYS_ALLOW_POLICY_ID ? adminMap[id.toString()] : undefined,
-    });
+    const mkPolicy = (id: bigint): PolicyInfo => {
+      const kind: PolicyInfo["kind"] =
+        id === ALWAYS_ALLOW_POLICY_ID ? "open" :
+        id === ALWAYS_BLOCK_POLICY_ID ? "blocked" : "custom";
+      return {
+        policyId:   id.toString(),
+        restricted: id !== ALWAYS_ALLOW_POLICY_ID,
+        kind,
+        // ALWAYS_BLOCK is a sentinel, not a registered policy → no admin to look up.
+        admin:      kind === "custom" ? adminMap[id.toString()] : undefined,
+      };
+    };
 
     policies = {
       transferSender:   mkPolicy(pidSender),
@@ -250,6 +279,24 @@ export async function inspectB20(
       transferExecutor: mkPolicy(pidExec),
       mintReceiver:     mkPolicy(pidMintR),
     };
+  }
+
+  // ── Admin check — only when a connected wallet was supplied ────────────────
+  // B20 has no role enumeration, so we can only verify a specific account. We
+  // never infer "admin-less"; absence of this wallet's role is reported as such.
+  let admin: AdminInfo | undefined;
+  if (account && /^0x[a-fA-F0-9]{40}$/.test(account)) {
+    try {
+      const isAdmin = await client.readContract({
+        address: addr,
+        abi: TOKEN_READ_ABI,
+        functionName: "hasRole",
+        args: [DEFAULT_ADMIN_ROLE, account as `0x${string}`],
+      });
+      admin = { checkedAccount: account, connectedIsAdmin: !!isAdmin };
+    } catch {
+      admin = { checkedAccount: account };
+    }
   }
 
   return {
@@ -270,6 +317,7 @@ export async function inspectB20(
     supplyCapUncapped,
     paused:  { transfer: pauseXfer, mint: pauseMint, burn: pauseBurn },
     policies,
+    admin,
     explorerUrl: explorer,
     // Role enumeration is intentionally absent — B20 does not expose
     // getRoleMemberCount / getRoleMembers (no AccessControlEnumerable).
