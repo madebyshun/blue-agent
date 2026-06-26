@@ -157,12 +157,20 @@ function TxProgress({ tx }: { tx: TxState }) {
 // ── Toast (success / error popup) ─────────────────────────────────────────────
 
 function Toast({
-  tx, explorerBase, onDismiss,
+  tx, explorerBase, onDismiss, onCheckMemo,
 }: {
   tx: TxState; explorerBase: string; onDismiss: () => void;
+  onCheckMemo?: (hash: string) => void;
 }) {
+  const [copied, setCopied] = useState(false);
   if (tx.status !== "success" && tx.status !== "error") return null;
   const ok = tx.status === "success";
+
+  async function copyHash() {
+    if (!tx.hash) return;
+    try { await navigator.clipboard.writeText(tx.hash); setCopied(true); setTimeout(() => setCopied(false), 1500); }
+    catch { /* clipboard unavailable */ }
+  }
   return (
     <div className="fixed bottom-5 right-5 z-50 w-full max-w-[320px] rounded-2xl border shadow-2xl"
       style={{
@@ -197,6 +205,21 @@ function Toast({
                 className="font-mono text-[8px] text-slate-500 hover:text-[#4FC3F7] transition-colors mt-1.5 block truncate">
                 {tx.hash.slice(0, 18)}…{tx.hash.slice(-8)} ↗
               </a>
+            )}
+
+            {ok && tx.hash && (
+              <div className="flex items-center gap-3 mt-2">
+                <button onClick={copyHash}
+                  className="font-mono text-[9px] text-slate-400 hover:text-[#4FC3F7] transition-colors">
+                  {copied ? "✓ Copied" : "⧉ Copy hash"}
+                </button>
+                {onCheckMemo && (
+                  <button onClick={() => onCheckMemo(tx.hash!)}
+                    className="font-mono text-[9px] text-[#A78BFA] hover:text-[#C4B5FD] transition-colors">
+                    🔖 Check memo →
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
@@ -313,8 +336,9 @@ export default function ManagePanel({
 
   function isTxHash(v: string) { return /^0x[a-fA-F0-9]{64}$/.test(v.trim()); }
 
-  async function lookupMemo() {
-    const hash = memoTx.trim();
+  async function lookupMemo(hashArg?: string) {
+    const hash = (hashArg ?? memoTx).trim();
+    if (hashArg) setMemoTx(hashArg);
     setMemoResult(null); setMemoErr("");
     if (!isTxHash(hash)) { setMemoErr("Invalid tx hash"); return; }
     setMemoLoading(true);
@@ -571,7 +595,7 @@ export default function ManagePanel({
           </div>
           <button
             disabled={!isTxHash(memoTx) || memoLoading}
-            onClick={lookupMemo}
+            onClick={() => lookupMemo()}
             className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
             style={{ background: "#A78BFA15", color: "#A78BFA", border: "1px solid #A78BFA30" }}>
             {memoLoading ? "Checking…" : "Check Memo →"}
@@ -966,7 +990,14 @@ export default function ManagePanel({
 
       {/* Success / error toast (fixed bottom-right) */}
       {activeTx && (
-        <Toast tx={activeTx} explorerBase={explorerBase} onDismiss={() => setActiveTx(null)} />
+        <Toast tx={activeTx} explorerBase={explorerBase}
+          onDismiss={() => setActiveTx(null)}
+          onCheckMemo={(hash) => {
+            setActiveTx(null);
+            lookupMemo(hash);
+            if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        />
       )}
 
       {/* Confirm dialog */}
