@@ -35,6 +35,21 @@ export const B20_STABLECOIN_FEATURE_ID =
 /** policyId 0 ⟹ ALWAYS_ALLOW — no transfer/mint restriction */
 export const ALWAYS_ALLOW_POLICY_ID = 0n;
 
+/**
+ * policyId sentinel that denies everyone. Per B20 docs:
+ *   ALWAYS_BLOCK = (uint64(ALLOWLIST=1) << 56) | 1
+ * A scope set to this policy rejects all addresses — transfers/mints on that
+ * scope are completely blocked.
+ */
+export const ALWAYS_BLOCK_POLICY_ID = (1n << 56n) | 1n; // 72057594037927937n
+
+/** DEFAULT_ADMIN_ROLE — bytes32(0) in OpenZeppelin AccessControl (B20 inherits it) */
+export const DEFAULT_ADMIN_ROLE =
+  "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
+
+/** address(0) — used as the "admin-less" sentinel (initialAdmin == address(0)) */
+export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
+
 /** supplyCap() returns this sentinel when the token has no cap (type(uint128).max) */
 export const SUPPLY_CAP_UNCAPPED =
   340282366920938463463374607431768211455n; // type(uint128).max
