@@ -10,7 +10,7 @@ export default function BankAccessPage() {
   function unlock() {
     if (!code.trim() || loading) return;
     setLoading(true);
-    router.push(`/app/bank?key=${encodeURIComponent(code.trim())}`);
+    router.push(`/bank?key=${encodeURIComponent(code.trim())}`);
   }
 
   return (
@@ -61,7 +61,7 @@ export default function BankAccessPage() {
             </a>
           </div>
           <div>
-            <a href="/app/chat" className="font-mono text-[9px] text-slate-600 hover:text-slate-400 transition-colors">
+            <a href="/chat" className="font-mono text-[9px] text-slate-600 hover:text-slate-400 transition-colors">
               ← Back to Blue Chat
             </a>
           </div>

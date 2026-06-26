@@ -257,7 +257,7 @@ export default function SettingsPanel({ section }: { section: SettingsSection })
               </p>
 
               <Link
-                href="/app/dashboard?tab=stake"
+                href="/dashboard?tab=stake"
                 className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-[#A78BFA] hover:opacity-80 transition-opacity"
               >
                 Stake $BLUEAGENT on the dashboard →

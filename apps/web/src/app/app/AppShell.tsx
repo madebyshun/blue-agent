@@ -11,7 +11,7 @@ const APP_NAV = [
   {
     id: "chat",
     label: "Chat",
-    href: "/app/chat",
+    href: "/chat",
     icon: (
       <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round"
@@ -22,7 +22,7 @@ const APP_NAV = [
   {
     id: "hub",
     label: "Hub",
-    href: "/app/hub",
+    href: "/hub",
     icon: (
       <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round"
@@ -33,7 +33,7 @@ const APP_NAV = [
   {
     id: "feed",
     label: "Feed",
-    href: "/app/feed",
+    href: "/feed",
     icon: (
       <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round"
@@ -44,7 +44,7 @@ const APP_NAV = [
   {
     id: "bank",
     label: "Bank",
-    href: "/app/bank",
+    href: "/bank",
     icon: (
       <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round"
@@ -55,7 +55,7 @@ const APP_NAV = [
   {
     id: "launches",
     label: "Launches",
-    href: "/app/launches",
+    href: "/launches",
     icon: (
       <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round"
@@ -66,7 +66,7 @@ const APP_NAV = [
   {
     id: "b20",
     label: "B20 Hub",
-    href: "/app/b20",
+    href: "/b20",
     icon: (
       <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round"
@@ -80,7 +80,7 @@ const APP_NAV = [
     // Dashboard now hosts Overview + Stake + Alerts as tabs; the standalone
     // /app/rewards and /app/alerts entries are gone from the sidebar (they
     // redirect into the right tab for anyone hitting old links).
-    href: "/app/dashboard",
+    href: "/dashboard",
     icon: (
       <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round"
@@ -97,7 +97,7 @@ const APP_BOTTOM = [
   {
     id: "profile",
     label: "Profile",
-    href: "/app/profile",
+    href: "/profile",
     icon: (
       <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round"
@@ -123,9 +123,10 @@ const APP_BOTTOM = [
 function AppSideNav() {
   const pathname = usePathname();
 
+  // The app surface is served on app.blueagent.dev under clean, /app-less URLs
+  // (middleware rewrites /chat → /app/chat internally), so usePathname() returns
+  // the clean path here — compare nav hrefs against that, not against /app/*.
   const isActive = (href: string) => {
-    if (href === "/app/chat") return pathname === "/app/chat" || pathname.startsWith("/app/chat/");
-    if (href.startsWith("/app/")) return pathname.startsWith(href);
     return pathname === href || pathname.startsWith(href + "/");
   };
 
@@ -343,7 +344,7 @@ function MobileDrawer() {
           {/* Profile — surfaced at the very top (ChatGPT-style account entry). */}
           <div className="px-2">
             <Link
-              href="/app/profile"
+              href="/profile"
               onClick={() => setDrawerOpen(false)}
               className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-[#ffffff06]"
             >
