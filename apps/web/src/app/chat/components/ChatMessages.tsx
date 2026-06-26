@@ -784,7 +784,7 @@ export default function ChatMessages() {
                                 )}
                               </p>
                               <div className="flex gap-2 mt-2 flex-wrap">
-                                <Link href="/app/dashboard?tab=stake"
+                                <Link href="/dashboard?tab=stake"
                                   className="inline-flex items-center gap-1 font-mono text-[10px] font-bold px-2.5 py-1 rounded-md bg-[#F59E0B]/15 text-[#F59E0B] border border-[#F59E0B]/40 hover:bg-[#F59E0B]/25 transition-colors">
                                   Stake more BLUE →
                                 </Link>

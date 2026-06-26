@@ -1260,12 +1260,12 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
   const selectTool = (t: Tool) => {
     setPreload(null); // normal click → fresh form, never an old result
     setSelected(t);
-    if (inShell && typeof window !== "undefined") window.history.pushState(null, "", `/app/hub/${t.id}`);
+    if (inShell && typeof window !== "undefined") window.history.pushState(null, "", `/hub/${t.id}`);
   };
   const clearSelected = () => {
     setPreload(null);
     setSelected(null);
-    if (inShell && typeof window !== "undefined") window.history.pushState(null, "", "/app/hub");
+    if (inShell && typeof window !== "undefined") window.history.pushState(null, "", "/hub");
   };
 
   // Open the tool from the route param (/app/hub/[tool]). Applies once the tool
@@ -1389,7 +1389,7 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
         setSelected(t);
         // Legacy ?tool= links — normalize to the clean path for the surface
         // we're on (app shell vs public hub).
-        window.history.replaceState(null, "", inShell ? `/app/hub/${t.id}` : `/hub/${t.id}`);
+        window.history.replaceState(null, "", inShell ? `/hub/${t.id}` : `/hub/${t.id}`);
       }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1446,7 +1446,7 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
         sApplied.current = true;
         setPreload({ toolId: p.toolId, data: { result: p.result, isMock: !!p.isMock, mockReason: p.mockReason ?? "dev" } });
         setSelected(tool);
-        window.history.replaceState(null, "", `/app/hub/${p.toolId}`);
+        window.history.replaceState(null, "", `/hub/${p.toolId}`);
       })
       .catch(() => {});
     return () => { off = true; };

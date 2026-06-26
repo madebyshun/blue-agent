@@ -514,10 +514,10 @@ export default function OverviewView({ onSwitchTab }: Props) {
               <div className="text-[10px] text-slate-500 tracking-widest font-bold mb-3">QUICK ACTIONS</div>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { label: "Chat",      icon: "💬", href: "/app/chat",  color: "#4FC3F7" },
-                  { label: "Hub",       icon: "🧰", href: "/app/hub",   color: "#22C55E" },
-                  { label: "Blue Bank", icon: "🏦", href: "/app/bank",  color: "#818CF8" },
-                  { label: "Blue Feed", icon: "📡", href: "/app/feed",  color: "#F59E0B" },
+                  { label: "Chat",      icon: "💬", href: "/chat",  color: "#4FC3F7" },
+                  { label: "Hub",       icon: "🧰", href: "/hub",   color: "#22C55E" },
+                  { label: "Blue Bank", icon: "🏦", href: "/bank",  color: "#818CF8" },
+                  { label: "Blue Feed", icon: "📡", href: "/feed",  color: "#F59E0B" },
                 ].map(a => (
                   <Link key={a.label} href={a.href}
                     className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] hover:border-[#2a2a3e] hover:bg-white/[0.02] transition-all">
@@ -535,7 +535,7 @@ export default function OverviewView({ onSwitchTab }: Props) {
               <div className="flex items-center justify-between mb-3">
                 <div className="text-[10px] text-slate-500 tracking-widest font-bold">BLUE CHAT ACTIVITY</div>
                 {chatStats.totalSessions > 0 && (
-                  <Link href="/app/chat" className="text-[10px] text-[#4FC3F7] hover:underline">Open chat →</Link>
+                  <Link href="/chat" className="text-[10px] text-[#4FC3F7] hover:underline">Open chat →</Link>
                 )}
               </div>
               {chatStats.totalSessions > 0 ? (
@@ -583,7 +583,7 @@ export default function OverviewView({ onSwitchTab }: Props) {
                   <div className="text-2xl mb-2">💬</div>
                   <p className="text-sm font-bold text-white mb-1">Start your first chat</p>
                   <p className="text-[11px] text-slate-600 mb-4">5 commands · 69 tools · 3-agent consensus</p>
-                  <Link href="/app/chat"
+                  <Link href="/chat"
                     className="inline-flex items-center justify-center gap-1.5 text-[11px] font-bold px-4 py-2 rounded-lg bg-[#4FC3F7] text-[#050508] hover:bg-[#29ABE2] transition-colors">
                     Open Blue Chat →
                   </Link>
@@ -595,7 +595,7 @@ export default function OverviewView({ onSwitchTab }: Props) {
             <div className="sm:col-span-3 flex flex-wrap gap-3 text-[10px] text-slate-700 justify-center pt-2">
               <a href={`https://basescan.org/address/${address}`} target="_blank" rel="noopener noreferrer"
                 className="hover:text-slate-500 transition-colors">Basescan ↗</a>
-              <Link href="/app/profile" className="hover:text-slate-500 transition-colors">Profile →</Link>
+              <Link href="/profile" className="hover:text-slate-500 transition-colors">Profile →</Link>
             </div>
 
           </div>

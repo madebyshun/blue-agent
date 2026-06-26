@@ -93,7 +93,7 @@ async function castToFarcaster(text: string) {
 
 // Per-item share link → server route /app/feed/[id], which renders crawler-
 // readable OG tags then redirects humans to the live feed (?item=<id>).
-function shareLinkFor(item: FeedItem): string { return `https://blueagent.dev/app/feed/${item.id}`; }
+function shareLinkFor(item: FeedItem): string { return `https://app.blueagent.dev/feed/${item.id}`; }
 function shareTextFor(item: FeedItem): string { return `${item.title} — ${item.summary} via @blueagent_ ${shareLinkFor(item)}`; }
 
 // ─── small UI atoms ─────────────────────────────────────────────────────────

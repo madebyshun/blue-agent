@@ -17,7 +17,7 @@ export async function generateMetadata(
 
   const title = `${t.name}${t.price ? ` — ${t.price}` : ""} · Blue Hub`;
   const description = t.description;
-  const canonical = `https://blueagent.dev/app/hub/${t.id}`;
+  const canonical = `https://app.blueagent.dev/hub/${t.id}`;
 
   // Shared result (?s=<id>) → dynamic OG image (verdict + confidence). Without
   // it, the file-based opengraph-image (static tool card) is used automatically.
