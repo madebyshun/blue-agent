@@ -596,7 +596,6 @@ export default function OverviewView({ onSwitchTab }: Props) {
               <a href={`https://basescan.org/address/${address}`} target="_blank" rel="noopener noreferrer"
                 className="hover:text-slate-500 transition-colors">Basescan ↗</a>
               <Link href="/app/profile" className="hover:text-slate-500 transition-colors">Profile →</Link>
-              <Link href="/score" className="hover:text-slate-500 transition-colors">Score →</Link>
             </div>
 
           </div>

@@ -426,7 +426,6 @@ export default function ProfilePage() {
                 <a href={`https://basescan.org/address/${address}`} target="_blank" rel="noopener noreferrer"
                   className="hover:text-slate-500 transition-colors">Basescan ↗</a>
                 <Link href="/app/dashboard" className="hover:text-slate-500 transition-colors">Dashboard →</Link>
-                <Link href="/score" className="hover:text-slate-500 transition-colors">Builder Score →</Link>
               </div>
             </>
           )}
