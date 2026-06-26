@@ -2068,8 +2068,9 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                         </div>
                       </div>
 
-                      {/* Loading */}
-                      {managePending && (
+                      {/* Loading — only on the initial load, not on a silent refresh
+                          (so the panel stays mounted during refresh and the success toast persists) */}
+                      {managePending && !manageData && (
                         <div className="mt-4 flex items-center gap-2">
                           <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
                           <span className="font-mono text-xs text-slate-500">
@@ -2089,8 +2090,8 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                         </div>
                       )}
 
-                      {/* ManagePanel */}
-                      {manageData && !managePending && (
+                      {/* ManagePanel — kept mounted during refresh so the success toast persists */}
+                      {manageData && (
                         <div className="mt-4">
                           <ManagePanel
                             token={manageToken.trim()}
