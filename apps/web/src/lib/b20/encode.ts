@@ -154,3 +154,66 @@ export function encodeTransferWithMemo(opts: {
     args: [opts.to as `0x${string}`, parseUnits(String(opts.amount), dec), orderMemo(opts.memo)],
   });
 }
+
+// ─── B20 mint/burn memo variants — verified against base-std IB20.sol ────────
+//   function mintWithMemo(address to, uint256 amount, bytes32 memo)   // no return
+//   function burnWithMemo(uint256 amount, bytes32 memo)               // no return
+//   event    Memo(address indexed caller, bytes32 indexed memo)
+// Same Memo event as transferWithMemo — emitted right after the Transfer event.
+
+export const MINT_WITH_MEMO_ABI = [{
+  type: "function", name: "mintWithMemo", stateMutability: "nonpayable",
+  inputs: [
+    { name: "to",     type: "address" },
+    { name: "amount", type: "uint256" },
+    { name: "memo",   type: "bytes32" },
+  ],
+  outputs: [],
+}] as const;
+
+export const BURN_WITH_MEMO_ABI = [{
+  type: "function", name: "burnWithMemo", stateMutability: "nonpayable",
+  inputs: [
+    { name: "amount", type: "uint256" },
+    { name: "memo",   type: "bytes32" },
+  ],
+  outputs: [],
+}] as const;
+
+/** A bytes32 memo holds at most 32 bytes; we cap at 31 chars so multi-byte
+ *  (UTF-8) order ids never overflow stringToHex({ size: 32 }). */
+export const MEMO_MAX_CHARS = 31;
+
+/** True when a memo string is non-empty after trim AND fits in bytes32. */
+export function isValidMemo(memo: string): boolean {
+  const t = memo.trim();
+  if (!t) return false;
+  return new TextEncoder().encode(t).length <= 32;
+}
+
+/** Encode mintWithMemo calldata. `amount` is human units; pass token decimals. */
+export function encodeMintWithMemo(opts: {
+  to: string;
+  amount: string | number;
+  decimals: number;
+  memo: string;
+}): Hex {
+  return encodeFunctionData({
+    abi: MINT_WITH_MEMO_ABI,
+    functionName: "mintWithMemo",
+    args: [opts.to as `0x${string}`, parseUnits(String(opts.amount), opts.decimals), orderMemo(opts.memo.trim())],
+  });
+}
+
+/** Encode burnWithMemo calldata. `amount` is human units; pass token decimals. */
+export function encodeBurnWithMemo(opts: {
+  amount: string | number;
+  decimals: number;
+  memo: string;
+}): Hex {
+  return encodeFunctionData({
+    abi: BURN_WITH_MEMO_ABI,
+    functionName: "burnWithMemo",
+    args: [parseUnits(String(opts.amount), opts.decimals), orderMemo(opts.memo.trim())],
+  });
+}

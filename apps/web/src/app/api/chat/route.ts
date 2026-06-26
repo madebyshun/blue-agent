@@ -705,6 +705,7 @@ Default to "base" for Base-related queries.`,
       properties: {
         address: { type: "string", description: "0x-prefixed B20 token address to manage (40 hex chars)" },
         network: { type: "string", enum: ["mainnet", "sepolia"], description: "mainnet (default) or sepolia" },
+        memo: { type: "string", description: "OPTIONAL onchain memo (≤31 chars, e.g. 'INV-2026-001') attached to a mint/burn via mintWithMemo/burnWithMemo. Pass ONLY if the user explicitly gave a memo / order ID / payment ref string. Never invent one." },
       },
       required: ["address"],
     },
