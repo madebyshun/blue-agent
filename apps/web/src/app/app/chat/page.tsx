@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Blue Chat — Build anything on Base",
     description: "AI chat, launch tokens, deploy B20, audit contracts, live Base intelligence.",
-    url: "https://blueagent.dev/app/chat",
+    url: "https://app.blueagent.dev/chat",
     siteName: "BlueAgent",
     type: "website",
   },

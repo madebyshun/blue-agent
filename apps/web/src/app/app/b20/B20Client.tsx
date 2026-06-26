@@ -1068,7 +1068,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                   return next;
                 });
               }
-              window.history.replaceState({}, "", `/app/b20?${new URLSearchParams({ address: clean, network: other })}`);
+              window.history.replaceState({}, "", `/b20?${new URLSearchParams({ address: clean, network: other })}`);
               return;
             }
           } catch { /* ignore */ }
@@ -1081,7 +1081,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
             return next;
           });
         }
-        window.history.replaceState({}, "", `/app/b20?${new URLSearchParams({ address: clean, network })}`);
+        window.history.replaceState({}, "", `/b20?${new URLSearchParams({ address: clean, network })}`);
       } catch (e) {
         setScanError((e as Error).message ?? "Inspection failed.");
       }
@@ -1214,7 +1214,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
             return next;
           });
         }
-        window.history.replaceState({}, "", `/app/b20?${new URLSearchParams({ address: addr.trim(), network })}`);
+        window.history.replaceState({}, "", `/b20?${new URLSearchParams({ address: addr.trim(), network })}`);
       } catch (e) { setScanError((e as Error).message ?? "Inspection failed."); }
     });
   }
@@ -1236,7 +1236,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
             return next;
           });
         }
-        window.history.replaceState({}, "", `/app/b20?${new URLSearchParams({ address: addr.trim(), network: net })}`);
+        window.history.replaceState({}, "", `/b20?${new URLSearchParams({ address: addr.trim(), network: net })}`);
       } catch (e) { setScanError((e as Error).message ?? "Inspection failed."); }
     });
   }
@@ -1623,7 +1623,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                       onHowItWorks={() => setActiveTab("methodology")}
                       onScanAnother={() => {
                         setScanResult(null); setScanError(""); setScanAddr("");
-                        window.history.replaceState({}, "", "/app/b20");
+                        window.history.replaceState({}, "", "/b20");
                       }} />
                   )}
 

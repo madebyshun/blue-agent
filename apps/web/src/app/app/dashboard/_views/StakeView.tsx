@@ -619,7 +619,7 @@ export default function StakeView() {
               className="font-mono text-[10px] text-slate-700 hover:text-slate-500 transition-colors">
               {STAKING_ADDRESS.slice(0, 10)}…{STAKING_ADDRESS.slice(-8)} ↗
             </a>
-            <Link href="/app/chat" className="font-mono text-[11px] text-[#4FC3F7]/60 hover:text-[#4FC3F7] transition-colors">
+            <Link href="/chat" className="font-mono text-[11px] text-[#4FC3F7]/60 hover:text-[#4FC3F7] transition-colors">
               Blue Chat →
             </Link>
           </div>

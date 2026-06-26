@@ -1260,12 +1260,12 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
   const selectTool = (t: Tool) => {
     setPreload(null); // normal click → fresh form, never an old result
     setSelected(t);
-    if (inShell && typeof window !== "undefined") window.history.pushState(null, "", `/app/hub/${t.id}`);
+    if (inShell && typeof window !== "undefined") window.history.pushState(null, "", `/hub/${t.id}`);
   };
   const clearSelected = () => {
     setPreload(null);
     setSelected(null);
-    if (inShell && typeof window !== "undefined") window.history.pushState(null, "", "/app/hub");
+    if (inShell && typeof window !== "undefined") window.history.pushState(null, "", "/hub");
   };
 
   // Open the tool from the route param (/app/hub/[tool]). Applies once the tool
@@ -1389,7 +1389,7 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
         setSelected(t);
         // Legacy ?tool= links — normalize to the clean path for the surface
         // we're on (app shell vs public hub).
-        window.history.replaceState(null, "", inShell ? `/app/hub/${t.id}` : `/hub/${t.id}`);
+        window.history.replaceState(null, "", inShell ? `/hub/${t.id}` : `/hub/${t.id}`);
       }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1446,7 +1446,7 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
         sApplied.current = true;
         setPreload({ toolId: p.toolId, data: { result: p.result, isMock: !!p.isMock, mockReason: p.mockReason ?? "dev" } });
         setSelected(tool);
-        window.history.replaceState(null, "", `/app/hub/${p.toolId}`);
+        window.history.replaceState(null, "", `/hub/${p.toolId}`);
       })
       .catch(() => {});
     return () => { off = true; };
@@ -1591,22 +1591,6 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
               <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] shrink-0" />
               <span className="font-mono text-[11px] text-slate-500 group-hover:text-[#34D399] transition-colors">
                 Builder dashboard
-              </span>
-            </Link>
-          </div>
-
-          {/* Sentinel link */}
-          <div className="px-4 pb-2 border-t border-[#1A1A2E] pt-3">
-            <Link
-              href="/sentinel"
-              className="flex items-center gap-2 w-full px-2 py-2 rounded-lg hover:bg-red-500/5 transition-colors group"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-              <span className="font-mono text-[11px] text-slate-500 group-hover:text-red-400 transition-colors">
-                🛡️ Blue Sentinel
-              </span>
-              <span className="ml-auto font-mono text-[9px] text-slate-700 group-hover:text-red-500">
-                24/7
               </span>
             </Link>
           </div>
