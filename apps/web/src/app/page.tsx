@@ -32,21 +32,9 @@ const HUB_CATEGORIES = [
   { label: "Builder",      color: "#A78BFA", tools: "repo health · founder check · roadmap validator" },
 ];
 
-const FEED_METRICS = [
-  { label: "Base TVL",    value: "$4.2B",        delta: "↑ +0.8%",  deltaColor: "#34D399", valueColor: "#fff" },
-  { label: "Sentiment",   value: "bullish 🟢",   delta: null,       deltaColor: "",        valueColor: "#34D399" },
-  { label: "Trending",    value: "AERO +10.2%",  delta: null,       deltaColor: "",        valueColor: "#4FC3F7" },
-  { label: "Pulse Score", value: "84/100",       delta: null,       deltaColor: "",        valueColor: "#fff" },
-  { label: "New Pools",   value: "12",           delta: "last hour",deltaColor: "#64748b", valueColor: "#fff" },
-];
-
-const FEED_TOOLS = [
-  { id: "base-pulse",      desc: "ecosystem snapshot" },
-  { id: "narrative-pulse", desc: "trending narratives" },
-  { id: "token-alpha",     desc: "best signal now" },
-  { id: "whale-tracker",   desc: "smart money moving" },
-  { id: "base-alpha",      desc: "daily alpha digest" },
-];
+// Blue Feed homepage section removed while the feature is rebuilt (route /feed
+// returns 404). FEED_METRICS / FEED_TOOLS lived here — restore them with the
+// "3.0 FEED" section when the feed relaunches.
 
 const AGENTS = [
   { icon: "logo", name: "Blue Agent", color: "#4FC3F7", role: "orchestration · routing · execution" },
@@ -370,59 +358,9 @@ export default function Home() {
           </Reveal>
         </section>
 
-        {/* ══════════ 3.0 FEED ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
-          <SectionHead
-            num="3.0" kicker={t("home.s_feed_kicker")} accent="#FB923C"
-            title={lang === "zh" ? t("home.s_feed_title")
-              : <>Live Base intelligence. <span className="text-[#FB923C]">24/7.</span></>}
-            sub={lang === "zh"
-              ? <>由 <span className="text-[#FB923C]">⭐ Aeon</span> · 🟦 BlueAgent · 🦈 MiroShark 提供支持 · 每小时更新</>
-              : <>Powered by <span className="text-[#FB923C]">⭐ Aeon</span> · 🟦 BlueAgent · 🦈 MiroShark · updates every hour</>}
-          />
-          {/* TOP — feed card mockup */}
-          <Reveal>
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden">
-              <div className="px-5 py-3 border-b border-[#15151f] font-mono text-[12px] text-slate-400">
-                ⭐ Aeon · <span className="text-[#FB923C]">base-pulse</span> · just now
-              </div>
-              <div className="p-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-                {FEED_METRICS.map((m) => (
-                  <div key={m.label}>
-                    <div className="font-mono text-[10px] text-slate-600 uppercase tracking-wider mb-1">{m.label}</div>
-                    <div className="font-mono text-[13px] font-semibold" style={{ color: m.valueColor }}>
-                      {m.value}
-                      {m.delta && <span className="ml-1.5 text-[11px] font-normal" style={{ color: m.deltaColor }}>{m.delta}</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="px-5 py-3 border-t border-[#15151f] flex flex-wrap items-center justify-between gap-3">
-                <span className="font-mono text-[11px] text-slate-500">$0.05 USDC · auto · Base ✓</span>
-                <div className="flex gap-2">
-                  <button disabled className="font-mono text-[11px] text-slate-500 border border-[#1A1A2E] rounded-lg px-3 py-1.5 opacity-50 cursor-not-allowed">Share ↗</button>
-                  <button disabled className="font-mono text-[11px] text-slate-500 border border-[#1A1A2E] rounded-lg px-3 py-1.5 opacity-50 cursor-not-allowed">Cast to Farcaster</button>
-                </div>
-              </div>
-            </div>
-          </Reveal>
-          {/* BOTTOM — tool grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-4">
-            {FEED_TOOLS.map((t, i) => (
-              <Reveal key={t.id} delay={i * 50}>
-                <div className="ba-card h-full rounded-xl p-4">
-                  <div className="font-mono text-[12px] text-[#FB923C] mb-1 break-words">{t.id}</div>
-                  <div className="font-mono text-[11px] text-slate-500 leading-snug">{t.desc}</div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-          <div className="mt-6">
-            <Link href="/app/feed" className="inline-block text-sm font-semibold text-[#FB923C] border border-[#FB923C]/30 px-7 py-3 rounded-xl hover:bg-[#FB923C]/5 transition-all">
-              {t("home.feed_cta")}
-            </Link>
-          </div>
-        </section>
+        {/* 3.0 FEED section removed while Blue Feed is rebuilt (route /feed → 404).
+            Restore the full section + FEED_METRICS/FEED_TOOLS from git history
+            when the feed relaunches. */}
 
         {/* ══════════ 4.0 AGENTS ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">

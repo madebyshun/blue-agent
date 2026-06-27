@@ -5,7 +5,7 @@
  * snapshot-once pattern + storage as the hourly cron — shared via ../_shared.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { runCycle, authError, type Job } from "../_shared";
+import { runCycle, authError, FEED_PAUSED, type Job } from "../_shared";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -23,6 +23,9 @@ const JOBS: Job[] = [
 ];
 
 async function handle(req: NextRequest) {
+  // Feed paused while rebuilding — no-op (no LLM/x402 spend), 200 so the cron
+  // logs success. Remove this guard (and flip FEED_PAUSED) to resume.
+  if (FEED_PAUSED) return NextResponse.json({ ok: true, paused: true, added: 0, total: 0 });
   const err = authError(req);
   if (err) return NextResponse.json(err.body, { status: err.status });
   return NextResponse.json(await runCycle(JOBS));

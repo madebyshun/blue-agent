@@ -32,17 +32,8 @@ const APP_NAV = [
       </svg>
     ),
   },
-  {
-    id: "feed",
-    label: "Feed",
-    href: "/feed",
-    icon: (
-      <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round"
-          d="M12.75 19.5v-.75a7.5 7.5 0 0 0-7.5-7.5H4.5m0-6.75h.75c7.87 0 14.25 6.38 14.25 14.25v.75M6 18.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
-      </svg>
-    ),
-  },
+  // Feed nav item removed — Blue Feed is hidden while it's rebuilt (route /feed
+  // returns 404 + noindex). Restore this entry when the feed relaunches.
   {
     id: "bank",
     label: "Bank",
