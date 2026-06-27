@@ -33,10 +33,34 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const doc = await getShare(id);
   const title = doc?.title ?? "Shared conversation";
+  const fullTitle = `${title} — Blue Agent`;
+  const count = doc?.messages?.length ?? 0;
+  const description = count
+    ? `A Blue Agent conversation · ${count} message${count === 1 ? "" : "s"} — AI for Base builders and traders.`
+    : "A conversation shared from Blue Agent — AI for Base builders and traders.";
+
+  // og:image + twitter:image. We must set images here: Next shallow-merges the
+  // openGraph object, so declaring openGraph WITHOUT images would drop the root
+  // layout's banner and leave the share page with no preview image at all.
+  // The title/description carry the per-conversation text (rendered by the
+  // social platform's own fonts, so CJK titles render fine).
+  const banner = { url: "/og-chat.png", width: 1200, height: 630, alt: "Blue Agent — shared conversation" };
   return {
-    title: `${title} — Blue Agent`,
-    description: "A conversation shared from Blue Agent — AI for Base builders and traders.",
-    openGraph: { title: `${title} — Blue Agent`, siteName: "Blue Agent" },
+    title: fullTitle,
+    description,
+    openGraph: {
+      title: fullTitle,
+      description,
+      siteName: "Blue Agent",
+      type: "article",
+      images: [banner],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: fullTitle,
+      description,
+      images: [banner.url],
+    },
   };
 }
 
