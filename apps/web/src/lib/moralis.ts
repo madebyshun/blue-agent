@@ -7,6 +7,53 @@
 
 const MORALIS_BASE = "https://deep-index.moralis.io/api/v2.2";
 
+/** One token row from Moralis `/wallets/{address}/tokens` (verified live shape). */
+export interface MoralisWalletToken {
+  token_address:     string;   // 0xeeee…eeee for native ETH
+  symbol:            string;
+  name:              string;
+  logo?:             string | null;
+  decimals:          number;
+  balance:           string;   // raw integer (wei) as string
+  balance_formatted: string;   // human-readable decimal string
+  possible_spam:     boolean;
+  verified_contract: boolean;
+  native_token:      boolean;  // true only for the native-ETH row
+  usd_value?:        number | null;
+  usd_price?:        number | null;
+}
+
+/**
+ * Full live token list for a Base wallet (Moralis). Returns every token the
+ * address actually holds (balance > 0), including the native-ETH row. Returns
+ * `null` (not []) when there's no API key or the request fails, so callers can
+ * distinguish "Moralis unavailable → fall back to RPC" from "wallet is empty".
+ *
+ * @param chain  "base" (mainnet) or "base sepolia" (testnet) — Moralis chain id.
+ */
+export async function getWalletTokenBalances(
+  address: string,
+  chain: "base" | "base sepolia" = "base",
+): Promise<MoralisWalletToken[] | null> {
+  const key = process.env.MORALIS_API_KEY ?? "";
+  if (!key) return null;
+  try {
+    const qs = new URLSearchParams({ chain, limit: "100" });
+    // 12s: the price-enriched token list can take ~7s for whale wallets with
+    // hundreds of positions (normal wallets return in ~1.5s). On timeout the
+    // caller falls back to the curated-token RPC read rather than fabricating.
+    const res = await fetch(
+      `${MORALIS_BASE}/wallets/${address}/tokens?${qs}`,
+      { headers: { "X-API-Key": key, Accept: "application/json" }, signal: AbortSignal.timeout(12000) }
+    );
+    if (!res.ok) return null;
+    const data = await res.json() as { result?: MoralisWalletToken[] };
+    return data.result ?? [];
+  } catch {
+    return null;
+  }
+}
+
 /** Live ERC-20 transfers for a Base address (Moralis). Returns [] on failure. */
 export async function getMoralisERC20Transfers(address: string, limit = 100): Promise<Record<string, unknown>[]> {
   const key = process.env.MORALIS_API_KEY ?? "";
