@@ -26,6 +26,13 @@ const CRON_SECRET          = process.env.CRON_SECRET ?? "";
 const BASE_URL             = "https://blueagent.dev/api/x402";
 const HOUR_MS              = 3_600_000;
 
+/**
+ * Blue Feed is HIDDEN + PAUSED while it's rebuilt. The hourly/daily cron routes
+ * short-circuit on this flag so they do NO LLM/x402 work and write no items
+ * (the feed UI is parked at 404 anyway). Flip to `false` to resume the feed.
+ */
+export const FEED_PAUSED = true;
+
 export type FeedAgent = "blueagent";
 
 export interface FeedItem {
