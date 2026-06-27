@@ -14,6 +14,7 @@ import { DATA_SUFFIX } from "@/constants/builderCode";
 import ManagePanel from "@/app/app/b20/ManagePanel";
 import { runB20ManageLoad, type ManageData } from "@/app/app/b20/manage-action";
 import { ConnectButton } from "@/components/ConnectModal";
+import { useLang } from "@/lib/i18n/context";
 import { B20_ENABLED, B20_USDC } from "@/lib/orders";
 import { encodeTransferWithMemo, isValidMemo, MEMO_MAX_CHARS } from "@/lib/b20/encode";
 
@@ -1638,6 +1639,7 @@ interface BalanceResultData {
 }
 
 function BalanceResultCard({ result }: { result: BalanceResultData }) {
+  const { t } = useLang();
   const netLabel = result.network === "mainnet" ? "Base" : "Base Sepolia";
   const addr = (result.address ?? "").trim();
 
@@ -1646,7 +1648,7 @@ function BalanceResultCard({ result }: { result: BalanceResultData }) {
       <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3.5 py-3">
         <div className="flex items-center gap-2">
           <span className="text-base leading-none">🔌</span>
-          <span className="font-mono text-xs text-slate-400">Connect your wallet first to check your balance.</span>
+          <span className="font-mono text-xs text-slate-400">{t("balance_card.connect_first")}</span>
         </div>
       </div>
     );
@@ -1691,7 +1693,7 @@ function BalanceResultCard({ result }: { result: BalanceResultData }) {
           rel="noopener noreferrer"
           className="inline-block font-mono text-[11px] text-slate-500 hover:text-[#4FC3F7] mt-2"
         >
-          View on explorer ↗
+          {t("balance_card.view_explorer")}
         </a>
       )}
     </div>

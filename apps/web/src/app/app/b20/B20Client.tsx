@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAccount, useSendTransaction, useSwitchChain } from "wagmi";
 import { useAppChrome } from "@/app/app/AppChrome";
 import { ConnectButton } from "@/components/ConnectModal";
+import { useLang } from "@/lib/i18n/context";
 import { runB20Inspect }  from "./inspect-action";
 import { runB20Roles }    from "./roles-action";
 import { runB20Registry, runB20Activity, runB20Activation } from "./registry-action";
@@ -418,6 +419,7 @@ function MethodologySide() {
 // ── Scanner result card ───────────────────────────────────────────────────────
 
 function ResultCard({ info, onScanAnother, onHowItWorks }: { info: B20Inspection; onScanAnother: () => void; onHowItWorks?: () => void }) {
+  const { t } = useLang();
   const [copied, setCopied] = useState(false);
   const verdict   = computeVerdict(info);
   const hasDanger = verdict.some(v => v.kind === "danger");
@@ -502,8 +504,8 @@ function ResultCard({ info, onScanAnother, onHowItWorks }: { info: B20Inspection
                       ? `${formatMultiplier(info.multiplier)} (rebase active)`
                       : "No rebase (1.00×)" }] : []),
               ...(info.admin?.checkedAccount
-                ? [{ label: "Admin (your wallet)", value: info.admin.connectedIsAdmin ? "You hold admin" : "Not admin" }]
-                : [{ label: "Admin", value: "Unknown — connect wallet" }]),
+                ? [{ label: "Admin (your wallet)", value: info.admin.connectedIsAdmin ? t("scanner.you_hold_admin") : t("scanner.not_admin") }]
+                : [{ label: "Admin", value: t("scanner.unknown_admin") }]),
             ].map(({ label, value }) => (
               <div key={label} className="rounded-xl bg-[#0a0a12] border border-[#1A1A2E] px-3 py-2.5">
                 <p className="font-mono text-[9px] text-slate-600 mb-0.5">{label}</p>
@@ -540,7 +542,7 @@ function ResultCard({ info, onScanAnother, onHowItWorks }: { info: B20Inspection
 
         {/* Trust Verdict */}
         <div>
-          <SectionLabel>Trust Verdict</SectionLabel>
+          <SectionLabel>{t("scanner.trust_verdict")}</SectionLabel>
           <div className="rounded-xl border px-4 py-3 space-y-2.5"
             style={{ borderColor: `${trustColor}25`, background: `${trustColor}05` }}>
             {verdict.map((line, i) => {
@@ -682,6 +684,7 @@ const LAUNCH_NETS = {
 } as const;
 
 function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: string, net: Network) => void; network: Network; setNetwork: (n: Network) => void }) {
+  const { t } = useLang();
   const [name,       setName]       = useState("");
   const [symbol,     setSymbol]     = useState("");
   const [variant,    setVariant]    = useState<"asset" | "stablecoin">("asset");
@@ -841,14 +844,14 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
-                Token Name *
+                {t("launch.token_name")} *
               </label>
               <input value={name} onChange={e => setName(e.target.value)}
                 placeholder="My Token" spellCheck={false} className={INPUT_CLS} />
             </div>
             <div>
               <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
-                Symbol *
+                {t("launch.token_symbol")} *
               </label>
               <input value={symbol} onChange={e => setSymbol(e.target.value.toUpperCase())}
                 placeholder="MTK" spellCheck={false} className={INPUT_CLS} />
@@ -880,7 +883,7 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
-                Decimals <span className="text-slate-700 font-normal normal-case">(6–18)</span>
+                {t("launch.decimals")} <span className="text-slate-700 font-normal normal-case">(6–18)</span>
               </label>
               <input type="number" min={6} max={18} value={decimals}
                 disabled={variant === "stablecoin"}
@@ -1030,6 +1033,7 @@ interface B20ClientProps {
 
 export default function B20Client({ initialAddress = "", initialNetwork = "mainnet" }: B20ClientProps) {
   const router = useRouter();
+  const { t } = useLang();
 
   // ── Shared ────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<Tab>("scanner");
@@ -1595,7 +1599,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                     <input value={scanAddr}
                       onChange={e => setScanAddr(e.target.value)}
                       onKeyDown={e => { if (e.key === "Enter" && addrValid && !scanPending) doScan(); }}
-                      placeholder="0x… token address (40 hex chars)"
+                      placeholder={t("scanner.placeholder")}
                       spellCheck={false}
                       className={`flex-1 min-w-0 ${INPUT_CLS}`}
                     />
@@ -1604,7 +1608,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                       style={addrValid && !scanPending
                         ? { background: "#4FC3F720", color: "#4FC3F7", border: "1px solid #4FC3F740" }
                         : { background: "#0d0d18", color: "#334155", border: "1px solid #1A1A2E", cursor: "not-allowed" }}>
-                      {scanPending ? "Reading…" : "Inspect"}
+                      {scanPending ? "Reading…" : t("scanner.inspect_btn")}
                     </button>
                   </div>
 
@@ -1683,7 +1687,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                         <button onClick={() => goToManage(scanResult.address)}
                           className="font-mono text-xs px-4 py-2 rounded-xl transition-all"
                           style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                          Manage this token →
+                          {t("scanner.manage_cta")}
                         </button>
                       </div>
                     </div>
@@ -1822,7 +1826,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                     ))}
                     <div className="flex-1 min-w-[120px]">
                       <input value={regSearch} onChange={e => setRegSearch(e.target.value)}
-                        placeholder="Search name or symbol…" spellCheck={false}
+                        placeholder={t("registry.search_placeholder")} spellCheck={false}
                         className="w-full bg-[#0a0a12] border border-[#1A1A2E] rounded-xl px-3 py-1.5 font-mono text-xs text-slate-200 placeholder:text-slate-700 outline-none focus:border-[#4FC3F740]" />
                     </div>
                     <div className="flex rounded-lg border border-[#1A1A2E] overflow-hidden shrink-0">
@@ -1946,14 +1950,14 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                   {/* ── Recent Activity (CONTROL events) ───────────────── */}
                   <div className="mt-6 pt-5 border-t border-[#1A1A2E]">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-mono text-xs font-semibold text-white">Recent Activity</span>
-                      <span className="font-mono text-[9px] text-slate-600">control events</span>
+                      <span className="font-mono text-xs font-semibold text-white">{t("activity.title")}</span>
+                      <span className="font-mono text-[9px] text-slate-600">{t("activity.control_events")}</span>
                       {activityResult && !activityResult.unavailable && activityResult.events.length > 0 && (
                         <span className="font-mono text-[9px] text-slate-700">· {activityResult.total} total</span>
                       )}
                       <button onClick={doActivity} disabled={activityPending}
                         className="ml-auto font-mono text-[9px] text-slate-600 hover:text-slate-400 transition-colors">
-                        {activityPending ? "Loading…" : "↻ Refresh"}
+                        {activityPending ? "Loading…" : `↻ ${t("activity.refresh")}`}
                       </button>
                     </div>
                     <p className="font-mono text-[9px] text-slate-700 mb-3 leading-relaxed">
@@ -1972,7 +1976,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                     {/* Unavailable — honest fallback */}
                     {activityResult?.unavailable && (
                       <div className="rounded-2xl border border-[#1A1A2E] px-4 py-4 text-center">
-                        <p className="font-mono text-xs text-slate-500">Activity unavailable right now.</p>
+                        <p className="font-mono text-xs text-slate-500">{t("activity.unavailable")}</p>
                         <button onClick={doActivity}
                           className="font-mono text-[10px] text-slate-600 hover:text-slate-400 mt-1 transition-colors">
                           Retry
