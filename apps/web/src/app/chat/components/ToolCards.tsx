@@ -2,7 +2,7 @@
 // Tool output cards — rendered inline after tool execution logs
 // One card per tool type: honeypot, risk-gate, deep-analysis, token-pick, contract-trust
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAccount, useReadContracts, useBalance, useReadContract, useWriteContract, useSwitchChain, usePublicClient, useSendTransaction, useCapabilities, useSendCalls, useCallsStatus } from "wagmi";
 import { formatUnits, parseUnits, parseEther, isAddress, namehash, encodeFunctionData } from "viem";
 import { base } from "viem/chains";
@@ -1698,18 +1698,43 @@ function AuthorizationResultCard({ result }: { result: AuthorizationResultData }
 
 // Read-only wallet balance — connected wallet's live ETH + major token amounts
 // on Base. No signing, no price feed (honest: raw on-chain amounts only).
-interface BalanceResultData {
+interface WalletHoldingView {
+  symbol:    string;
+  name?:     string;
+  address:   string;
+  amount:    string;
+  raw:       string;
+  decimals?: number;
+  isNative?: boolean;
+  isB20?:    boolean;
+  usdValue?: number;
+  logo?:     string;
+}
+interface WalletResultData {
   connected?:  boolean;
   address?:    string;
   network?:    "mainnet" | "sepolia";
+  explorer?:   string;
   addressUrl?: string;
-  balances?:   Array<{ symbol: string; amount: string; raw: string; isNative?: boolean }>;
+  source?:     "moralis" | "rpc";
+  partial?:    boolean;
+  holdings?:   WalletHoldingView[];
   error?:      string;
 }
 
-function BalanceResultCard({ result }: { result: BalanceResultData }) {
+function fmtUsdSmall(n?: number): string | null {
+  if (n == null || !Number.isFinite(n) || n <= 0) return null;
+  if (n >= 1000) return "$" + (n / 1000).toFixed(1) + "K";
+  if (n >= 1)    return "$" + n.toFixed(2);
+  return "$" + n.toFixed(4);
+}
+
+// Connected-wallet portfolio card (check_wallet). Lists EVERY token held
+// (balance > 0) on Base — Moralis primary, RPC fallback. Honest: only real
+// holdings, never zero-balance defaults. B20 tokens get a 🟦 badge + deep-link.
+function WalletCard({ result }: { result: WalletResultData }) {
   const { t } = useLang();
-  const netLabel = result.network === "mainnet" ? "Base" : "Base Sepolia";
+  const netLabel = result.network === "mainnet" ? "Base Mainnet" : "Base Sepolia";
   const addr = (result.address ?? "").trim();
 
   if (result.connected === false) {
@@ -1723,7 +1748,9 @@ function BalanceResultCard({ result }: { result: BalanceResultData }) {
     );
   }
 
-  if (result.error) {
+  const holdings = result.holdings ?? [];
+
+  if (result.error && holdings.length === 0) {
     return (
       <div className="mt-2 rounded-xl border border-[#EF444430] bg-[#0a0a0f] px-3.5 py-3">
         <div className="flex items-center gap-2">
@@ -1734,8 +1761,6 @@ function BalanceResultCard({ result }: { result: BalanceResultData }) {
     );
   }
 
-  const balances = result.balances ?? [];
-
   return (
     <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3.5 py-3">
       <div className="flex items-center gap-2 mb-2">
@@ -1743,18 +1768,43 @@ function BalanceResultCard({ result }: { result: BalanceResultData }) {
         {addr && (
           <span className="font-mono text-[11px] text-slate-400">{addr.slice(0, 6)}…{addr.slice(-4)}</span>
         )}
-        <span className="font-mono text-[10px] text-slate-600 ml-auto">{netLabel}</span>
+        <span className="font-mono text-[10px] text-slate-600 ml-auto">· {netLabel}</span>
       </div>
-      <div className="space-y-1">
-        {balances.map(b => (
-          <div key={b.symbol} className="flex items-center justify-between">
-            <span className="font-mono text-[11px] text-slate-500">{b.symbol}</span>
-            <span className={`font-mono text-[13px] ${b.raw === "0" ? "text-slate-600" : "text-slate-200"}`}>
-              {b.amount}
-            </span>
-          </div>
-        ))}
-      </div>
+
+      {holdings.length === 0 ? (
+        <div className="font-mono text-[11px] text-slate-500 py-1">No tokens found on {netLabel}.</div>
+      ) : (
+        <div className="space-y-1">
+          {holdings.map((h, i) => {
+            const usd = fmtUsdSmall(h.usdValue);
+            const sym = (
+              <span className="font-mono text-[11px] text-slate-300 flex items-center gap-1">
+                {h.symbol}
+                {h.isB20 && (
+                  <span className="text-[9px] px-1 py-px rounded bg-[#4FC3F715] text-[#4FC3F7] border border-[#4FC3F730]">🟦 B20</span>
+                )}
+              </span>
+            );
+            return (
+              <div key={`${h.address}-${i}`} className="flex items-center justify-between">
+                {h.isB20 && h.address ? (
+                  <a href={`/app/b20?address=${h.address}`} className="hover:opacity-80">{sym}</a>
+                ) : sym}
+                <span className="font-mono text-[13px] text-slate-200 flex items-baseline gap-2">
+                  {usd && <span className="text-[9px] text-slate-600">{usd}</span>}
+                  {h.amount}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {result.partial && (
+        <p className="font-mono text-[9px] text-slate-600 mt-2">
+          Showing major tokens only — connect Moralis for the full portfolio.
+        </p>
+      )}
       {result.addressUrl && (
         <a
           href={result.addressUrl}
@@ -2499,6 +2549,229 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
   );
 }
 
+// ── Swap card (prepare_swap) ──────────────────────────────────────────────────
+// Marker-driven inline swap. Fetches a LIVE 0x quote (/api/swap/quote) and lets
+// the user review the rate + SIGN in their own wallet (non-custodial). Mirrors
+// the Launches TradeModal flow. ZERO fabrication — every number is from 0x.
+type SwapResult = {
+  tokenIn?: string; tokenOut?: string; amountIn?: string;
+  tokenInAddress?: string; tokenOutAddress?: string; network?: string;
+};
+type ChatSwapQuote = {
+  needsKey?: boolean; error?: string;
+  buyAmount?: string; minBuyAmount?: string;
+  transaction?: { to: `0x${string}`; data: `0x${string}`; value?: string };
+  issues?: { allowance?: { spender: `0x${string}` } | null };
+};
+
+const SWAP_NATIVE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+const DECIMALS_ABI = [
+  { name: "decimals", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] },
+] as const;
+
+function fmtSwapNum(n: number): string {
+  return n.toLocaleString("en-US", { maximumFractionDigits: 6 });
+}
+
+export function SwapCard({ result, account }: { result: SwapResult; account?: `0x${string}` }) {
+  const isConnected = !!account;
+  const { switchChainAsync } = useSwitchChain();
+  const { writeContractAsync } = useWriteContract();
+  const { sendTransactionAsync } = useSendTransaction();
+
+  const sellSym  = (result.tokenIn  || "TOKEN").replace(/^\$/, "");
+  const buySym   = (result.tokenOut || "TOKEN").replace(/^\$/, "");
+  const sellAddr = (result.tokenInAddress  || "").trim();
+  const buyAddr  = (result.tokenOutAddress || "").trim();
+  const sellNative = sellAddr.toLowerCase() === SWAP_NATIVE;
+  const buyNative  = buyAddr.toLowerCase()  === SWAP_NATIVE;
+  const unresolved = !sellAddr || !buyAddr;
+
+  // On-chain decimals for non-native legs (native = 18). 0x works in base units.
+  const { data: sellDecRaw } = useReadContract({
+    address: sellAddr as `0x${string}`, abi: DECIMALS_ABI, functionName: "decimals",
+    chainId: base.id, query: { enabled: !!sellAddr && !sellNative },
+  });
+  const { data: buyDecRaw } = useReadContract({
+    address: buyAddr as `0x${string}`, abi: DECIMALS_ABI, functionName: "decimals",
+    chainId: base.id, query: { enabled: !!buyAddr && !buyNative },
+  });
+  const sellDec = sellNative ? 18 : (sellDecRaw != null ? Number(sellDecRaw) : undefined);
+  const buyDec  = buyNative  ? 18 : (buyDecRaw  != null ? Number(buyDecRaw)  : undefined);
+
+  const [amount, setAmount] = useState<string>(result.amountIn ?? "");
+  const [quote,  setQuote]  = useState<ChatSwapQuote | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<"idle" | "approving" | "swapping" | "done" | "error">("idle");
+  const [err,  setErr]  = useState("");
+  const [txHash, setTxHash] = useState("");
+
+  // Balance of the sell leg.
+  const { data: nativeBal } = useBalance({ address: account, chainId: base.id, query: { enabled: !!account && sellNative } });
+  const { data: erc20Bal } = useReadContract({
+    address: sellAddr as `0x${string}`, abi: ERC20_ABI, functionName: "balanceOf",
+    args: account ? [account] : undefined, chainId: base.id,
+    query: { enabled: !!account && !!sellAddr && !sellNative },
+  });
+  const balance = sellNative
+    ? (nativeBal ? Number(formatUnits(nativeBal.value, 18)) : null)
+    : (erc20Bal != null && sellDec != null ? Number(formatUnits(erc20Bal as bigint, sellDec)) : null);
+
+  const amt = parseFloat(amount);
+  const sellBase = amount && amt > 0 && sellDec != null
+    ? (() => { try { return parseUnits(amount, sellDec).toString(); } catch { return ""; } })()
+    : "";
+  const overBalance = balance != null && amt > balance;
+
+  // Debounced 0x quote.
+  const reqId = useRef(0);
+  useEffect(() => {
+    if (!sellBase || !sellAddr || !buyAddr || sellAddr.toLowerCase() === buyAddr.toLowerCase()) { setQuote(null); return; }
+    const id = ++reqId.current;
+    setLoading(true);
+    const tmo = setTimeout(() => {
+      const qs = new URLSearchParams({ sellToken: sellAddr, buyToken: buyAddr, sellAmount: sellBase, ...(account ? { taker: account } : {}) });
+      fetch(`/api/swap/quote?${qs}`).then(r => r.json()).then((j: ChatSwapQuote) => {
+        if (id !== reqId.current) return; setQuote(j); setLoading(false);
+      }).catch(() => { if (id === reqId.current) { setQuote({ error: "quote failed" }); setLoading(false); } });
+    }, 450);
+    return () => clearTimeout(tmo);
+  }, [sellBase, sellAddr, buyAddr, account]);
+
+  const buyAmount = quote?.buyAmount && buyDec != null ? Number(formatUnits(BigInt(quote.buyAmount), buyDec)) : null;
+  const minBuy    = quote?.minBuyAmount && buyDec != null ? Number(formatUnits(BigInt(quote.minBuyAmount), buyDec)) : null;
+  const rate = buyAmount != null && amt > 0 ? buyAmount / amt : null;
+
+  const canSwap = !!account && !!quote?.transaction && amt > 0 && !overBalance && !loading && sellDec != null;
+  const busy = step === "approving" || step === "swapping";
+
+  function setMax() {
+    if (balance == null) return;
+    setAmount(String(sellNative ? Math.max(0, balance - 0.00005) : balance));
+  }
+
+  async function doSwap() {
+    if (!account) { setErr("Connect your wallet"); setStep("error"); return; }
+    if (quote?.needsKey) { setErr("Swap needs a 0x API key (ZEROX_API_KEY)"); setStep("error"); return; }
+    if (!quote?.transaction || sellDec == null) { setErr(quote?.error || "No route for this pair"); setStep("error"); return; }
+    setErr(""); setTxHash("");
+    try {
+      await switchChainAsync({ chainId: base.id });
+      // ERC-20 sells need an allowance to the 0x AllowanceHolder first.
+      if (!sellNative && quote.issues?.allowance?.spender) {
+        setStep("approving");
+        await writeContractAsync({
+          address: sellAddr as `0x${string}`, abi: ERC20_ABI, functionName: "approve",
+          args: [quote.issues.allowance.spender, parseUnits(amount, sellDec)], chainId: base.id,
+        });
+      }
+      setStep("swapping");
+      const hash = await sendTransactionAsync({
+        to: quote.transaction.to,
+        // Append the ERC-8021 builder-code suffix → tx credited to BlueAgent.
+        data: (quote.transaction.data + DATA_SUFFIX.slice(2)) as `0x${string}`,
+        value: quote.transaction.value ? BigInt(quote.transaction.value) : undefined,
+        chainId: base.id,
+      });
+      setTxHash(hash); setStep("done");
+    } catch (e) {
+      const m = (e as Error).message || String(e);
+      const cancelled = /user rejected|denied|cancell?ed/i.test(m);
+      setErr(cancelled ? "Swap cancelled." : m.slice(0, 160)); setStep("error");
+    }
+  }
+
+  // Unknown token → ask for the contract address (never fabricate one).
+  if (unresolved) {
+    return (
+      <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3.5 py-3">
+        <div className="font-mono text-[11px] text-amber-400">
+          Couldn’t resolve {!sellAddr ? sellSym : buySym}. Re-ask with its contract address (0x…).
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "done") {
+    return (
+      <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
+        <div className="font-mono text-[12px] font-bold mb-1" style={{ color: "#22C55E" }}>
+          ✓ Swapped {fmtSwapNum(amt)} {sellSym} → {buyAmount != null ? fmtSwapNum(buyAmount) : ""} {buySym}
+        </div>
+        {txHash && (
+          <a href={`https://basescan.org/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
+            className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] inline-block mt-1">View tx ↗</a>
+        )}
+        <button onClick={() => { setStep("idle"); setQuote(null); }}
+          className="font-mono text-[10px] text-slate-500 hover:text-slate-300 ml-3">Swap again</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
+      <div className="flex items-center gap-2 mb-2.5">
+        <span className="text-base leading-none">🔄</span>
+        <span className="font-mono text-[11px] font-bold text-white">Swap {sellSym} → {buySym}</span>
+        <span className="font-mono text-[9px] text-slate-600 ml-auto">Base · via 0x</span>
+      </div>
+
+      {/* You pay */}
+      <div className="rounded-lg border border-[#1A1A2E] bg-[#050508] p-2.5 mb-1">
+        <div className="flex items-center justify-between mb-1">
+          <span className="font-mono text-[9px] text-slate-600">YOU PAY</span>
+          {balance != null && (
+            <span className="font-mono text-[9px] text-slate-600">Bal {balance.toFixed(sellDec === 6 ? 2 : 5)}
+              <button type="button" onClick={setMax} className="text-[#4FC3F7] ml-1">Max</button></span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <input type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.0"
+            className="flex-1 bg-transparent font-mono text-[16px] text-white outline-none placeholder:text-slate-700 w-0" />
+          <span className="font-mono text-[11px] text-slate-200 px-2 py-1.5 border border-[#1A1A2E] rounded-lg">{sellSym}</span>
+        </div>
+        {overBalance && <div className="font-mono text-[9px] text-red-500 mt-1">Exceeds your {sellSym} balance</div>}
+      </div>
+
+      <div className="flex justify-center -my-1 relative z-10">
+        <div className="w-7 h-7 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] text-slate-500 font-mono text-[12px] flex items-center justify-center">↓</div>
+      </div>
+
+      {/* You receive */}
+      <div className="rounded-lg border border-[#1A1A2E] bg-[#050508] p-2.5 mt-1 mb-3">
+        <div className="font-mono text-[9px] text-slate-600 mb-1">YOU RECEIVE</div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 font-mono text-[16px] text-white w-0 truncate">
+            {loading ? <span className="text-slate-600">…</span> : buyAmount != null ? fmtSwapNum(buyAmount) : <span className="text-slate-700">0.0</span>}
+          </div>
+          <span className="font-mono text-[11px] text-slate-200 px-2 py-1.5 border border-[#1A1A2E] rounded-lg">{buySym}</span>
+        </div>
+      </div>
+
+      {rate != null && (
+        <div className="font-mono text-[9px] text-slate-500 mb-2 flex items-center justify-between">
+          <span>1 {sellSym} ≈ {fmtSwapNum(rate)} {buySym}</span>
+          {minBuy != null && <span className="text-slate-600">min {fmtSwapNum(minBuy)} {buySym}</span>}
+        </div>
+      )}
+
+      {quote?.needsKey && <p className="font-mono text-[9px] text-amber-400 mb-2">Swap needs a free 0x API key — set <span className="text-slate-300">ZEROX_API_KEY</span>.</p>}
+      {quote?.error && !quote.needsKey && !loading && amt > 0 && <p className="font-mono text-[9px] text-amber-400 mb-2">No route found for this pair.</p>}
+      {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
+
+      <button onClick={doSwap} disabled={!canSwap || busy}
+        className="w-full font-mono text-[12px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
+        style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
+        {!isConnected ? "Connect your wallet"
+          : busy ? (step === "approving" ? "Approve in wallet…" : "Confirm in wallet…")
+          : overBalance ? "Insufficient balance"
+          : amt > 0 ? `Swap ${fmtSwapNum(amt)} ${sellSym}` : "Enter an amount"}
+      </button>
+      <p className="font-mono text-[9px] text-slate-700 mt-1.5 text-center">Best route via 0x · you sign · non-custodial · Base mainnet.</p>
+    </div>
+  );
+}
+
 export function ToolResultCard({ tool, result }: { tool: string; result: Record<string, unknown> }) {
   // Always called inside the chat (ChatMessages) — read the canonical wallet
   // here and hand it to the action cards as a prop so they don't depend on chat.
@@ -2523,10 +2796,11 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_b20_manage":       return <B20ManageCard   result={r as B20ManageResult} />;
     case "check_memo":           return <MemoResultCard  result={r as MemoResultData} />;
     case "check_authorization":  return <AuthorizationResultCard result={r as AuthorizationResultData} />;
-    case "check_balance":        return <BalanceResultCard result={r as BalanceResultData} />;
+    case "check_wallet":         return <WalletCard      result={r as WalletResultData} />;
     case "prepare_token_launch": return <TokenLaunchCard result={r as TokenLaunchResult} />;
     case "prepare_yield":     return <MoveToYieldCard  result={r as YieldMoveResult} account={account} />;
     case "prepare_send":      return <SendCard         result={r as SendResult} account={account} />;
+    case "prepare_swap":      return <SwapCard         result={r as SwapResult} account={account} />;
     default:                  return <GenericCard      tool={tool} result={r} />;
   }
 }

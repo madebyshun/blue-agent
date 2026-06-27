@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { checkMemo } from "@/lib/b20/check-memo";
 import { checkAuthorization } from "@/lib/b20/check-authorization";
-import { checkBalance } from "@/lib/wallet/balance";
+import { checkWallet } from "@/lib/wallet/holdings";
 
 export const runtime = "nodejs";
 // Vercel kills serverless functions at 60s by default — explicit budget so
@@ -206,7 +206,8 @@ You have access to real-time Hub tools. Use them when the user asks about:
 - Builder scores, repo health, grants → hub_builder_score, hub_repo_health, hub_base_grant
 - Fundraising timing, ecosystem digest → hub_fundraise_timing, hub_ecosystem
 - Live onchain data: balance, tx, block, gas, contract calls → hub_crypto_rpc (21 chains: base, ethereum, arbitrum, optimism, polygon, etc.)
-- User's OWN wallet balance ("check my balance", "how much ETH/USDC do I have", "show my balance") → check_balance. It auto-uses the connected wallet (no address arg), reads ETH + USDC + WETH + cbBTC in ONE multicall, and renders a result card. NEVER invent figures; if no wallet is connected the result says so. Do NOT use hub_crypto_rpc for the user's own balance.
+- User's OWN wallet / portfolio ("check my balance", "what's in my wallet", "my tokens", "my holdings", "my portfolio") → check_wallet. It auto-uses the connected wallet (no address arg) and lists EVERY token the wallet actually holds (balance > 0) on Base via Moralis, then renders a result card. NEVER invent figures or tokens; if no wallet is connected the result says so. Do NOT use hub_crypto_rpc for the user's own balance.
+- Prepare a token swap ("swap 0.1 ETH to USDC", "兑换", "trade X for Y") → prepare_swap. It renders an interactive swap card that fetches a live 0x quote and lets the user sign in their own wallet. NEVER invent a quote, rate, or output amount — only call when the user gives an explicit tokenIn, tokenOut, and amount.
 - Anything requiring live web data (news, events, rumours, OFFICIAL announcements) → web_search
 
 Tool selection rules:
@@ -761,14 +762,28 @@ Default to "base" for Base-related queries.`,
     },
   },
   {
-    name: "check_balance",
-    description: "Check the CONNECTED wallet's live on-chain balance on Base — native ETH plus major tokens (USDC, WETH, cbBTC). Reads REAL on-chain state via a single multicall; ZERO LLM. Use when the user asks: 'check my balance', 'how much ETH do I have', \"what's my USDC balance\", 'show my balance', 'my wallet balance', 'what do I hold'. CRITICAL: only call when a wallet is connected — it auto-uses the connected address (no address argument). NEVER invent or estimate balances; reply with the EXACT figures from the result and do NOT add USD values (there is no price feed).",
+    name: "check_wallet",
+    description: "Show ALL tokens the CONNECTED wallet currently holds (balance > 0) on Base — native ETH plus every ERC-20 it owns. Uses Moralis for the full live portfolio (no hardcoded token list); ZERO LLM. Use when the user asks: 'check my balance', \"what's in my wallet\", 'my portfolio', 'my tokens', 'my holdings', 'show my tokens', '查询余额', '我的资产', 'how much ETH do I have'. CRITICAL: only call when a wallet is connected — it auto-uses the connected address (no address argument). NEVER show tokens with zero balance and NEVER invent balances; reply with the EXACT figures from the result card and do NOT add USD totals of your own.",
     input_schema: {
       type: "object",
       properties: {
-        network: { type: "string", enum: ["base", "baseSepolia"], description: "base (mainnet) or baseSepolia (default)" },
+        network: { type: "string", enum: ["base", "baseSepolia"], description: "base (mainnet, default) or baseSepolia" },
       },
       required: [],
+    },
+  },
+  {
+    name: "prepare_swap",
+    description: "Prepare a token swap on Base and render an interactive swap card. The card fetches a LIVE quote from the 0x Swap API and lets the user review and SIGN the swap in their own wallet (non-custodial) — nothing is swapped server-side. ZERO fabrication: NEVER invent a quote, rate, output amount, or price. Only call when the user gives an explicit tokenIn, tokenOut, AND amount — e.g. 'swap 0.1 ETH to USDC', 'trade 100 USDC for WETH', '兑换 50 USDC 到 ETH'. Tokens may be a known symbol (ETH, WETH, USDC, cbBTC) or a 0x… contract address; if a symbol is unknown, pass it through and the card asks the user for the address.",
+    input_schema: {
+      type: "object",
+      properties: {
+        tokenIn:  { type: "string", description: "Token to sell — symbol (ETH/WETH/USDC/cbBTC) or 0x… address" },
+        tokenOut: { type: "string", description: "Token to receive — symbol (ETH/WETH/USDC/cbBTC) or 0x… address" },
+        amountIn: { type: "string", description: "Amount of tokenIn to swap, as a decimal string (e.g. '0.1')" },
+        network:  { type: "string", enum: ["base", "baseSepolia"], description: "base (mainnet, default) or baseSepolia" },
+      },
+      required: ["tokenIn", "tokenOut", "amountIn"],
     },
   },
 ];
@@ -847,6 +862,32 @@ interface ToolCallResult {
 const WALLET_REQUIRED_MSG =
   "🔒 This needs a connected wallet.\n\nConnect your wallet — and hold $BLUEAGENT for a daily credit allowance — to run real-data Hub tools like this. Guests get free chat; live-data tools require a wallet.";
 
+// Known Base token symbols → contract address for prepare_swap. Symbols are the
+// only thing we resolve server-side; an unknown symbol passes through verbatim so
+// the SwapCard can ask for the contract address (never fabricated). A 0x… address
+// is returned as-is. ETH uses the 0x Swap API native sentinel.
+const SWAP_TOKENS: Record<"base" | "baseSepolia", Record<string, string>> = {
+  base: {
+    ETH:   "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
+    WETH:  "0x4200000000000000000000000000000000000006",
+    USDC:  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    CBBTC: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+  },
+  baseSepolia: {
+    ETH:  "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
+    WETH: "0x4200000000000000000000000000000000000006",
+    USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  },
+};
+
+/** Resolve a swap token: 0x… address → as-is; known symbol → its Base address;
+ *  unknown symbol → "" so the card prompts for the contract address. */
+function resolveSwapToken(token: string, network: "base" | "baseSepolia"): string {
+  const t = (token || "").trim();
+  if (/^0x[a-fA-F0-9]{40}$/.test(t)) return t;
+  return SWAP_TOKENS[network][t.toUpperCase().replace(/^\$/, "")] ?? "";
+}
+
 async function callHubTool(
   toolName: string,
   args:     Record<string, unknown>,
@@ -883,6 +924,26 @@ async function callHubTool(
     return {
       text: "Send/Pay card rendered. The card shows recipient, amount and asset — the user reviews and SIGNS the transfer in their own wallet (non-custodial). Do NOT claim funds were sent and do NOT restate the recipient as if confirmed. Reply with one short line: tell the user to review the recipient + amount and sign in the card.",
       result: { kind: "send", ...args },
+    };
+  }
+  if (toolName === "prepare_swap") {
+    // Marker only — the SwapCard fetches a LIVE 0x quote and the user SIGNS the
+    // swap in their own wallet (non-custodial). No quote is computed here, no
+    // funds move. Resolve known symbols → Base addresses; unknown symbols pass
+    // through so the card can ask the user for the contract address.
+    const network = args.network === "baseSepolia" ? "baseSepolia" : "base";
+    const tokenIn  = typeof args.tokenIn  === "string" ? args.tokenIn.trim()  : "";
+    const tokenOut = typeof args.tokenOut === "string" ? args.tokenOut.trim() : "";
+    const amountIn = typeof args.amountIn === "string" ? args.amountIn.trim()
+      : typeof args.amountIn === "number" ? String(args.amountIn) : "";
+    return {
+      text: "Swap card rendered. The card fetches a live 0x quote and the user reviews the rate and SIGNS the swap in their own wallet (non-custodial). Do NOT quote a rate or output amount yourself, do NOT claim the swap happened. Reply with one short line: tell the user to review the quote in the card and sign.",
+      result: {
+        kind: "swap",
+        tokenIn, tokenOut, amountIn, network,
+        tokenInAddress:  resolveSwapToken(tokenIn,  network),
+        tokenOutAddress: resolveSwapToken(tokenOut, network),
+      },
     };
   }
   if (toolName === "hub_b20_launch") {
@@ -941,23 +1002,30 @@ async function callHubTool(
       result: { kind: "authorization_result", ...r },
     };
   }
-  if (toolName === "check_balance") {
-    // Server-executed read of the CONNECTED wallet's on-chain balances. No
-    // payment, no signing — one multicall. Honest: no USD value (no price feed).
+  if (toolName === "check_wallet") {
+    // Server-executed read of the CONNECTED wallet's FULL token list (Moralis,
+    // RPC fallback). No payment, no signing. Honest: only tokens held (balance>0).
     if (!userAddress || !/^0x[a-fA-F0-9]{40}$/.test(userAddress)) {
       return {
         text: "No wallet is connected. Reply with one short line asking the user to connect their wallet first — do NOT invent any balance.",
-        result: { kind: "balance_result", connected: false, address: "", network: "sepolia", balances: [] },
+        result: { kind: "wallet_result", connected: false, address: "", network: "mainnet", holdings: [] },
       };
     }
     const network = typeof args.network === "string" ? args.network : "base";
-    const r = await checkBalance(userAddress, network);
-    const text = r.error
-      ? `Balance lookup failed: ${r.error}. Reply with one short line telling the user it couldn't be read; do NOT invent figures.`
-      : `Balances read on-chain for the connected wallet. The result card shows them. Reply with ONE short line stating the exact ETH${r.balances.some(b => b.symbol === "USDC" && b.raw !== "0") ? " + USDC" : ""} figures from the result — never invent numbers and never add USD values.`;
+    const r = await checkWallet(userAddress, network);
+    const top = r.holdings.slice(0, 4).map(h => `${h.amount} ${h.symbol}`).join(", ");
+    const text = r.error && r.holdings.length === 0
+      ? `Wallet lookup failed: ${r.error}. Reply with one short line telling the user it couldn't be read; do NOT invent figures.`
+      : r.holdings.length === 0
+        ? "The connected wallet holds no tokens on this network. Reply with one short line saying so — do NOT invent any token."
+        : `The wallet holds ${r.holdings.length} token(s): ${top}${r.holdings.length > 4 ? ", …" : ""}. The result card lists them all. Reply with ONE short line referencing the holdings — never invent tokens or numbers and never add a USD total of your own.`;
     return {
       text,
-      result: { kind: "balance_result", connected: true, address: r.address, network: r.network, explorer: r.explorer, addressUrl: r.addressUrl, balances: r.balances, error: r.error },
+      result: {
+        kind: "wallet_result", connected: true,
+        address: r.address, network: r.network, explorer: r.explorer, addressUrl: r.addressUrl,
+        source: r.source, partial: r.partial, holdings: r.holdings, error: r.error,
+      },
     };
   }
 
@@ -1264,7 +1332,7 @@ function extractCommand(messages: LLMMessage[]): { cmd: string; args: string } |
 
   // credits intent — note: "balance" alone is NOT here. Bare "my balance" /
   // "check my balance" means the on-chain WALLET balance (handled by the
-  // check_balance tool), not credits. Only fire credits when "credit(s)" is
+  // check_wallet tool), not credits. Only fire credits when "credit(s)" is
   // explicitly present, otherwise we'd hijack wallet-balance queries into the
   // knowledge-only /credits command and the balance card would never render.
   if (
@@ -1286,9 +1354,9 @@ function extractCommand(messages: LLMMessage[]): { cmd: string; args: string } |
 }
 
 /**
- * True when the last user message is asking for their on-chain WALLET balance.
- * Used to force the check_balance tool (tool_choice) so the model reliably
- * emits a real tool_use block — otherwise Sonnet sometimes narrates
+ * True when the last user message is asking for their on-chain WALLET balance /
+ * portfolio. Used to force the check_wallet tool (tool_choice) so the model
+ * reliably emits a real tool_use block — otherwise Sonnet sometimes narrates
  * "I'll check your balance…" as plain text and the result card never renders.
  * Deliberately excludes "credit(s)" so it never collides with the /credits flow.
  */
@@ -1300,6 +1368,7 @@ function wantsWalletBalance(messages: LLMMessage[]): boolean {
   return /\bbalance\b/.test(t)
       || /\bhow much (eth|usdc|money)\b/.test(t)
       || /what.?s in my wallet\b/.test(t)
+      || /\bmy (tokens|holdings|portfolio)\b/.test(t)
       || /\bwallet holdings?\b/.test(t);
 }
 
@@ -1749,11 +1818,11 @@ export async function POST(req: NextRequest) {
 
     if (!isE2EE && !knowledgeOnly) {
       // Phase 1: detect tool intent (skipped for pure-knowledge commands).
-      // Force check_balance when the user clearly asks for their wallet balance
-      // and a wallet is connected, so the balance card reliably renders.
+      // Force check_wallet when the user clearly asks for their wallet balance
+      // and a wallet is connected, so the wallet card reliably renders.
       const forceTool =
         address && /^0x[a-fA-F0-9]{40}$/.test(address) && wantsWalletBalance(cleanMessages)
-          ? "check_balance"
+          ? "check_wallet"
           : undefined;
       const phase1    = await callVenicePhase1(apiKey, modelId, openaiMsgs, maxTok, autoSearch, forceTool);
       const toolCalls = phase1?.choices?.[0]?.message?.tool_calls;
@@ -1792,8 +1861,8 @@ export async function POST(req: NextRequest) {
     : (webSearch ? [...HUB_TOOLS, webSearchTool] : [...HUB_TOOLS]);
 
   // When the user clearly asks for their wallet balance AND a wallet is
-  // connected, force the check_balance tool so a real tool_use block (and thus
-  // the balance card) is guaranteed — instead of relying on the model to pick
+  // connected, force the check_wallet tool so a real tool_use block (and thus
+  // the wallet card) is guaranteed — instead of relying on the model to pick
   // it under tool_choice:auto, which it sometimes narrates as text instead.
   const forceBalance =
     !knowledgeOnly &&
@@ -1811,7 +1880,7 @@ export async function POST(req: NextRequest) {
         messages:   cleanMessages,
         tools:      ANTHROPIC_TOOLS,
         max_tokens: model.maxTokens,
-        ...(forceBalance ? { tool_choice: { type: "tool", name: "check_balance" } } : {}),
+        ...(forceBalance ? { tool_choice: { type: "tool", name: "check_wallet" } } : {}),
       }),
     });
 
