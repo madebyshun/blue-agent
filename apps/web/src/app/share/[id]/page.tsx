@@ -144,8 +144,14 @@ function BlockRenderer({ content }: { content: string }) {
     } else if (line.trim() === "") {
       i++;
     } else {
-      // Paragraph — collect until blank line or structural element
-      const paraLines: string[] = [];
+      // Paragraph — always consume the current line first (it fell through every
+      // block handler above), THEN collect continuation lines. Taking lines[i]
+      // unconditionally guarantees `i` advances: a line that begins with a
+      // structural marker char (** , a digit, #no-space, etc.) but matched no
+      // handler would otherwise satisfy the inner-loop's negative lookahead,
+      // collect nothing, and spin forever — hanging the server render.
+      const paraLines: string[] = [lines[i]];
+      i++;
       while (i < lines.length && lines[i].trim() !== "" && !/^[#\-\*`\d]/.test(lines[i])) {
         paraLines.push(lines[i]);
         i++;
