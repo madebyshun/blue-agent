@@ -517,7 +517,7 @@ export default function OverviewView({ onSwitchTab }: Props) {
                   { label: "Chat",      icon: "💬", href: "/chat",  color: "#4FC3F7" },
                   { label: "Hub",       icon: "🧰", href: "/hub",   color: "#22C55E" },
                   { label: "Blue Bank", icon: "🏦", href: "/bank",  color: "#818CF8" },
-                  { label: "Blue Feed", icon: "📡", href: "/feed",  color: "#F59E0B" },
+                  // Blue Feed hidden while rebuilding — re-add when /feed relaunches.
                 ].map(a => (
                   <Link key={a.label} href={a.href}
                     className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] hover:border-[#2a2a3e] hover:bg-white/[0.02] transition-all">
