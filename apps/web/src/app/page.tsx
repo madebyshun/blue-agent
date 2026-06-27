@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import { useLang } from "@/lib/i18n/context";
 
 // Marketing surface → mono-forward. JetBrains Mono is the PRIMARY brand voice
 // here (display headlines + reading body). DM Sans (.font-ui) is reserved for the
@@ -201,6 +202,7 @@ function ChatMockup() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Home() {
+  const { t, lang } = useLang();
   return (
     <div className="min-h-screen bg-[#050508] text-white" style={{ fontFamily: MONO }}>
       <Navbar />
@@ -218,23 +220,25 @@ export default function Home() {
 
           <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-3.5 py-1.5 mb-8">
             <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-            <span className="font-mono text-[10px] text-[#4FC3F7] tracking-[0.18em]">BUILT ON BASE · x402 NATIVE</span>
+            <span className="font-mono text-[10px] text-[#4FC3F7] tracking-[0.18em] uppercase">{t("home.badge")}</span>
           </div>
 
           <h1 className="text-[2.75rem] leading-[1.04] sm:text-6xl lg:text-7xl font-bold tracking-tight mb-5">
-            The Builder OS<br className="hidden sm:block" /> for <span className="text-[#4FC3F7]">Base</span>
+            {lang === "zh"
+              ? <>Base <span className="text-[#4FC3F7]">的构建者操作系统</span></>
+              : <>The Builder OS<br className="hidden sm:block" /> for <span className="text-[#4FC3F7]">Base</span></>}
           </h1>
           <p className="text-base sm:text-xl text-slate-400 mb-9 max-w-2xl mx-auto leading-relaxed">
-            Chat with AI agents. Run 74 tools. Launch tokens. Build and scale onchain — all in one platform.
+            {t("home.hero_subtitle")}
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
             <Link href="/app/chat" className="text-sm font-semibold px-7 py-3 rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
               style={{ background: "linear-gradient(135deg, #4FC3F7, #29ABE2)", color: "#050508", boxShadow: "0 0 26px #4FC3F733" }}>
-              Open Blue Chat →
+              {t("home.cta_open_chat")}
             </Link>
             <Link href="/hub" className="text-sm font-semibold text-[#4FC3F7] border border-[#4FC3F7]/30 px-7 py-3 rounded-xl hover:bg-[#4FC3F7]/5 transition-all">
-              Browse Hub
+              {t("home.cta_browse_hub")}
             </Link>
 <a href="https://dexscreener.com/base/0xf895783b2931c919955e18b5e3343e7c7c456ba3"
               target="_blank" rel="noopener noreferrer"
@@ -298,9 +302,10 @@ export default function Home() {
         {/* ══════════ 1.0 CHAT ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
-            num="1.0" kicker="Chat"
-            title={<>Talk to AI. <span className="text-[#4FC3F7]">Build onchain.</span></>}
-            sub="Blue Chat routes your intent to the right tool. Live Hub tools, multi-model, skill-based. Built for Base."
+            num="1.0" kicker={t("home.s_chat_kicker")}
+            title={lang === "zh" ? t("home.s_chat_title")
+              : <>Talk to AI. <span className="text-[#4FC3F7]">Build onchain.</span></>}
+            sub={t("home.s_chat_sub")}
           />
           <div className="grid lg:grid-cols-2 gap-4 sm:gap-5 items-stretch">
             {/* LEFT — typing chat mockup */}
@@ -336,9 +341,10 @@ export default function Home() {
         {/* ══════════ 2.0 HUB ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
-            num="2.0" kicker="Hub" accent="#A78BFA"
-            title={<>74 tools. <span className="text-[#A78BFA]">Pay what you use.</span></>}
-            sub="The intelligence layer for Base agents. Raw data, security checks, alpha signals — all x402 native. No API key. No subscription."
+            num="2.0" kicker={t("home.s_hub_kicker")} accent="#A78BFA"
+            title={lang === "zh" ? t("home.s_hub_title")
+              : <>74 tools. <span className="text-[#A78BFA]">Pay what you use.</span></>}
+            sub={t("home.s_hub_sub")}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
             {HUB_CATEGORIES.map((cat, i) => (
@@ -354,24 +360,25 @@ export default function Home() {
             ))}
             <Reveal delay={300}>
               <Link href="/hub" className="ba-card h-full flex flex-col justify-center items-start rounded-2xl p-5">
-                <span className="text-sm font-semibold text-[#A78BFA] mb-1">Browse all 74 →</span>
-                <span className="font-mono text-[11px] text-slate-600">9 categories · live data</span>
+                <span className="text-sm font-semibold text-[#A78BFA] mb-1">{t("home.hub_browse_all")}</span>
+                <span className="font-mono text-[11px] text-slate-600">{t("home.hub_browse_sub")}</span>
               </Link>
             </Reveal>
           </div>
           <Reveal>
-            <p className="font-mono text-[12px] text-slate-500">
-              From <span className="text-white">$0.01/call</span> · Pay in USDC or <span className="text-[#34D399]">$BLUEAGENT</span>
-            </p>
+            <p className="font-mono text-[12px] text-slate-500">{t("home.hub_pricing_line")}</p>
           </Reveal>
         </section>
 
         {/* ══════════ 3.0 FEED ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
-            num="3.0" kicker="Feed" accent="#FB923C"
-            title={<>Live Base intelligence. <span className="text-[#FB923C]">24/7.</span></>}
-            sub={<>Powered by <span className="text-[#FB923C]">⭐ Aeon</span> · 🟦 BlueAgent · 🦈 MiroShark · updates every hour</>}
+            num="3.0" kicker={t("home.s_feed_kicker")} accent="#FB923C"
+            title={lang === "zh" ? t("home.s_feed_title")
+              : <>Live Base intelligence. <span className="text-[#FB923C]">24/7.</span></>}
+            sub={lang === "zh"
+              ? <>由 <span className="text-[#FB923C]">⭐ Aeon</span> · 🟦 BlueAgent · 🦈 MiroShark 提供支持 · 每小时更新</>
+              : <>Powered by <span className="text-[#FB923C]">⭐ Aeon</span> · 🟦 BlueAgent · 🦈 MiroShark · updates every hour</>}
           />
           {/* TOP — feed card mockup */}
           <Reveal>
@@ -412,7 +419,7 @@ export default function Home() {
           </div>
           <div className="mt-6">
             <Link href="/app/feed" className="inline-block text-sm font-semibold text-[#FB923C] border border-[#FB923C]/30 px-7 py-3 rounded-xl hover:bg-[#FB923C]/5 transition-all">
-              View Blue Feed →
+              {t("home.feed_cta")}
             </Link>
           </div>
         </section>
@@ -420,9 +427,10 @@ export default function Home() {
         {/* ══════════ 4.0 AGENTS ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
-            num="4.0" kicker="Agents"
-            title={<>Three agents. <span className="text-[#4FC3F7]">One platform.</span></>}
-            sub="Every output is a 3-agent consensus. Not one model guessing — three roles reasoning."
+            num="4.0" kicker={t("home.s_agents_kicker")}
+            title={lang === "zh" ? t("home.s_agents_title")
+              : <>Three agents. <span className="text-[#4FC3F7]">One platform.</span></>}
+            sub={t("home.s_agents_sub")}
           />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             {AGENTS.map((a, i) => (
@@ -440,9 +448,10 @@ export default function Home() {
         {/* ══════════ 5.0 INTEGRATIONS ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
-            num="5.0" kicker="Integrations" accent="#60A5FA"
-            title={<>Built for the <span className="text-[#60A5FA]">agent economy</span></>}
-            sub="BlueAgent is x402 native from day one. Agents pay agents. No human in the loop."
+            num="5.0" kicker={t("home.s_integrations_kicker")} accent="#60A5FA"
+            title={lang === "zh" ? t("home.s_integrations_title")
+              : <>Built for the <span className="text-[#60A5FA]">agent economy</span></>}
+            sub={t("home.s_integrations_sub")}
           />
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
             {INTEGRATIONS.map((it, i) => (
@@ -475,9 +484,10 @@ export default function Home() {
         {/* ══════════ 6.0 PRICING ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
-            num="6.0" kicker="Pricing" accent="#34D399"
-            title={<>Hold $BLUEAGENT. <span className="text-[#34D399]">Build for free.</span></>}
-            sub="Credits refresh every day. No subscription. Just hold $BLUEAGENT and build."
+            num="6.0" kicker={t("home.s_pricing_kicker")} accent="#34D399"
+            title={lang === "zh" ? t("home.s_pricing_title")
+              : <>Hold $BLUEAGENT. <span className="text-[#34D399]">Build for free.</span></>}
+            sub={t("home.s_pricing_sub")}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
             {PRICING.map((p, i) => (
@@ -493,20 +503,16 @@ export default function Home() {
           </div>
           <Reveal>
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5 sm:p-6 flex flex-col gap-4">
-              <p className="font-mono text-[12px] text-slate-500">
-                x402: <span className="text-white">$0.01–$0.20/call</span> · USDC or $BLUEAGENT · no signup
-              </p>
-              <p className="text-[15px] sm:text-base text-slate-300">
-                The more <span className="text-[#34D399] font-semibold">$BLUEAGENT</span> you hold, the more you build for free.
-              </p>
+              <p className="font-mono text-[12px] text-slate-500">{t("home.pricing_x402_line")}</p>
+              <p className="text-[15px] sm:text-base text-slate-300">{t("home.pricing_hold_line")}</p>
               <div className="flex flex-col sm:flex-row gap-3">
                 <a href={BUY_URL} target="_blank" rel="noopener noreferrer"
                   className="text-sm font-semibold px-6 py-2.5 rounded-xl text-center transition-all hover:opacity-90 active:scale-[0.98]"
                   style={{ background: "linear-gradient(135deg, #34D399, #10B981)", color: "#031b12" }}>
-                  Buy $BLUEAGENT →
+                  {t("home.buy_token")}
                 </a>
                 <Link href="/app/rewards" className="text-sm font-semibold text-[#34D399] border border-[#34D399]/30 px-6 py-2.5 rounded-xl text-center hover:bg-[#34D399]/5 transition-all">
-                  Stake now →
+                  {t("home.stake_now")}
                 </Link>
               </div>
             </div>
@@ -518,21 +524,22 @@ export default function Home() {
           <Reveal>
             <div className="rounded-3xl border border-[#4FC3F7]/20 p-8 sm:p-14 text-center" style={{ background: "radial-gradient(ellipse 80% 70% at 50% 40%, #4FC3F710 0%, transparent 70%)" }}>
               <h2 className="text-3xl sm:text-5xl font-bold tracking-tight mb-8">
-                Start building on <span className="text-[#4FC3F7]">Base</span> today
+                {lang === "zh" ? t("home.final_title")
+                  : <>Start building on <span className="text-[#4FC3F7]">Base</span> today</>}
               </h2>
               <div className="flex flex-wrap justify-center gap-3">
                 <Link href="/app/chat" className="text-sm font-semibold px-7 py-3 rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"
                   style={{ background: "linear-gradient(135deg, #4FC3F7, #29ABE2)", color: "#050508", boxShadow: "0 0 26px #4FC3F733" }}>
-                  Open Blue Chat →
+                  {t("home.final_open_chat")}
                 </Link>
                 <Link href="/hub" className="text-sm font-semibold text-[#4FC3F7] border border-[#4FC3F7]/30 px-7 py-3 rounded-xl hover:bg-[#4FC3F7]/5 transition-all">
-                  Browse 74 Hub Tools →
+                  {t("home.final_browse_hub")}
                 </Link>
                 <Link href="/docs" className="text-sm font-semibold text-slate-400 border border-[#1A1A2E] px-7 py-3 rounded-xl hover:text-white hover:border-[#4FC3F7]/30 transition-all">
-                  Install MCP →
+                  {t("home.final_install_mcp")}
                 </Link>
                 <Link href="/docs" className="text-sm font-semibold text-slate-400 border border-[#1A1A2E] px-7 py-3 rounded-xl hover:text-white hover:border-[#4FC3F7]/30 transition-all">
-                  Read Docs →
+                  {t("home.final_read_docs")}
                 </Link>
               </div>
             </div>
@@ -546,9 +553,9 @@ export default function Home() {
               <div className="flex items-center gap-2.5 mb-2">
                 <img src="/logomark.svg" alt="BlueAgent" width={20} height={20} className="rounded-md" />
                 <span className="font-semibold text-white">BlueAgent</span>
-                <span className="text-xs text-slate-500">· The Builder OS for Base</span>
+                <span className="text-xs text-slate-500">· {t("home.footer_tagline")}</span>
               </div>
-              <p className="font-mono text-[11px] text-slate-600">Powered by Bankr · Venice AI · x402 native · Base</p>
+              <p className="font-mono text-[11px] text-slate-600">{t("home.footer_powered")}</p>
             </div>
             <div className="flex items-center gap-5 font-mono text-xs text-slate-600">
               <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">X</a>
