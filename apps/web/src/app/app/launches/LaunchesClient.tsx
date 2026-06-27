@@ -1,10 +1,25 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { useAccount, useSendTransaction, useSwitchChain } from "wagmi";
+import {
+  useAccount, useSendTransaction, useSwitchChain, useWriteContract,
+  useReadContract, useBalance,
+} from "wagmi";
+import { formatUnits, parseUnits } from "viem";
+import { base } from "wagmi/chains";
+import { ERC20_ABI } from "@/lib/yield-execution";
+import { DATA_SUFFIX } from "@/constants/builderCode";
 
 const ACCENT = "#F59E0B";
+
+// Pay-side tokens for the in-page swap (Base mainnet). The launched token is the
+// other leg — added dynamically per-card.
+const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+type PayToken = { sym: string; addr: string; decimals: number; native?: boolean };
+const PAY_TOKENS: PayToken[] = [
+  { sym: "ETH",  addr: NATIVE_ETH, decimals: 18, native: true },
+  { sym: "USDC", addr: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6 },
+];
 
 // ── Types (mirror /api/launches) ───────────────────────────────────────────────
 
@@ -124,25 +139,17 @@ function HotBadge() {
   );
 }
 
-// ── In-app Trade button ─────────────────────────────────────────────────────────
-// Replaces the old external Uniswap deep-link. Routes into Blue Chat with a
-// pre-filled (NOT auto-sent) trade prompt so the user never leaves BlueAgent —
-// the LLM then guides price/liquidity/swap. Bankr's /wallet/swap API operates on
-// Bankr's own custodial wallet (not the user's connected EOA), so it's the wrong
-// tool for "let the connected user trade"; the chat redirect is the right path.
+// ── In-app Trade button + swap modal ────────────────────────────────────────────
+// Opens a Uniswap-style Buy/Sell swap modal IN the Launches page (no redirect).
+// The user swaps their own connected wallet (non-custodial) via the 0x Swap API
+// (/api/swap/quote) — they approve (for token sells) and sign from their wallet.
+// Base mainnet only. Honest: no fake "Limit" orders (no infra) — Buy/Sell only.
 
-function buildTradeUrl(l: Launch): string {
-  const sym = (l.tokenSymbol || l.tokenName || "token").replace(/^\$/, "");
-  const msg = `I want to buy $${sym} (${l.tokenAddress}) on Base. What's the current price, liquidity, and the safest way to swap into it?`;
-  return `/app/chat?prefill=${encodeURIComponent(msg)}`;
-}
-
-function TradeButton({ l, compact }: { l: Launch; compact?: boolean }) {
-  const router = useRouter();
+function TradeButton({ l, compact, onTrade }: { l: Launch; compact?: boolean; onTrade: (l: Launch) => void }) {
   return (
     <button
-      onClick={() => router.push(buildTradeUrl(l))}
-      title="Trade in Blue Chat"
+      onClick={() => onTrade(l)}
+      title="Swap on Base"
       className={compact
         ? "px-2 py-0.5 rounded border text-[9px] transition-colors hover:opacity-90"
         : "font-mono text-[10px] px-2 py-1 rounded-lg border transition-colors hover:opacity-90"}
@@ -153,9 +160,261 @@ function TradeButton({ l, compact }: { l: Launch; compact?: boolean }) {
   );
 }
 
+type SwapQuote = {
+  needsKey?: boolean; error?: string;
+  buyAmount?: string; minBuyAmount?: string;
+  transaction?: { to: `0x${string}`; data: `0x${string}`; value?: string };
+  issues?: { allowance?: { spender: `0x${string}` } | null };
+};
+
+function fmtNum(n: number): string {
+  return n.toLocaleString("en-US", { maximumFractionDigits: 6 });
+}
+
+function TradeModal({ l, onClose }: { l: Launch; onClose: () => void }) {
+  const { address, isConnected } = useAccount();
+  const { switchChainAsync } = useSwitchChain();
+  const { writeContractAsync } = useWriteContract();
+  const { sendTransactionAsync } = useSendTransaction();
+
+  const tokenSym = (l.tokenSymbol || l.tokenName || "TOKEN").replace(/^\$/, "");
+
+  const [mode, setMode] = useState<"buy" | "sell">("buy");
+  const [pay, setPay] = useState<PayToken>(PAY_TOKENS[0]); // ETH
+  const [amount, setAmount] = useState("");
+  const [quote, setQuote] = useState<SwapQuote | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<"idle" | "approving" | "swapping" | "done" | "error">("idle");
+  const [err, setErr] = useState("");
+  const [txHash, setTxHash] = useState("");
+
+  // Doppler launchpad tokens are standard ERC-20 with 18 decimals (100B fixed
+  // supply). The 0x quote works in base units, so this only affects display.
+  const tokenDecimals = 18;
+
+  // Resolve the sell / buy legs from the Buy|Sell mode.
+  // Buy  → spend `pay` token, receive the launched token.
+  // Sell → spend the launched token, receive `pay` token.
+  const sell = mode === "buy"
+    ? { sym: pay.sym, addr: pay.addr, decimals: pay.decimals, native: !!pay.native }
+    : { sym: tokenSym, addr: l.tokenAddress, decimals: tokenDecimals, native: false };
+  const buy = mode === "buy"
+    ? { sym: tokenSym, addr: l.tokenAddress, decimals: tokenDecimals, native: false }
+    : { sym: pay.sym, addr: pay.addr, decimals: pay.decimals, native: !!pay.native };
+
+  // Balance of the sell leg.
+  const { data: nativeBal } = useBalance({
+    address, chainId: base.id, query: { enabled: !!address && !!sell.native },
+  });
+  const { data: erc20Bal } = useReadContract({
+    address: sell.addr as `0x${string}`, abi: ERC20_ABI, functionName: "balanceOf",
+    args: address ? [address] : undefined, chainId: base.id,
+    query: { enabled: !!address && !sell.native },
+  });
+  const balance = sell.native
+    ? (nativeBal ? Number(formatUnits(nativeBal.value, 18)) : null)
+    : (erc20Bal != null ? Number(formatUnits(erc20Bal as bigint, sell.decimals)) : null);
+
+  const amt = parseFloat(amount);
+  const sellBase = amount && amt > 0 ? (() => { try { return parseUnits(amount, sell.decimals).toString(); } catch { return ""; } })() : "";
+  const overBalance = balance != null && amt > balance;
+
+  // Debounced 0x quote.
+  const reqId = useRef(0);
+  useEffect(() => {
+    if (!sellBase || sell.addr.toLowerCase() === buy.addr.toLowerCase()) { setQuote(null); return; }
+    const id = ++reqId.current;
+    setLoading(true);
+    const t = setTimeout(() => {
+      const qs = new URLSearchParams({ sellToken: sell.addr, buyToken: buy.addr, sellAmount: sellBase, ...(address ? { taker: address } : {}) });
+      fetch(`/api/swap/quote?${qs}`).then(r => r.json()).then((j: SwapQuote) => {
+        if (id !== reqId.current) return;
+        setQuote(j); setLoading(false);
+      }).catch(() => { if (id === reqId.current) { setQuote({ error: "quote failed" }); setLoading(false); } });
+    }, 450);
+    return () => clearTimeout(t);
+  }, [sellBase, sell.addr, buy.addr, address]);
+
+  const buyAmount = quote?.buyAmount ? Number(formatUnits(BigInt(quote.buyAmount), buy.decimals)) : null;
+  const minBuy = quote?.minBuyAmount ? Number(formatUnits(BigInt(quote.minBuyAmount), buy.decimals)) : null;
+  const rate = buyAmount != null && amt > 0 ? buyAmount / amt : null;
+
+  function switchMode(m: "buy" | "sell") { if (m === mode) return; setMode(m); setAmount(""); setQuote(null); setStep("idle"); setErr(""); }
+  function setMax() {
+    if (balance == null) return;
+    setAmount(String(sell.native ? Math.max(0, balance - 0.00005) : balance));
+  }
+
+  const canSwap = !!address && !!quote?.transaction && amt > 0 && !overBalance && !loading;
+  const busy = step === "approving" || step === "swapping";
+
+  async function doSwap() {
+    if (!address) { setErr("Connect your wallet"); setStep("error"); return; }
+    if (quote?.needsKey) { setErr("Swap needs a 0x API key (ZEROX_API_KEY)"); setStep("error"); return; }
+    if (!quote?.transaction) { setErr(quote?.error || "No route for this pair"); setStep("error"); return; }
+    setErr(""); setTxHash("");
+    try {
+      await switchChainAsync({ chainId: base.id });
+      // ERC-20 sells need an allowance to the 0x AllowanceHolder first.
+      if (!sell.native && quote.issues?.allowance?.spender) {
+        setStep("approving");
+        await writeContractAsync({
+          address: sell.addr as `0x${string}`, abi: ERC20_ABI, functionName: "approve",
+          args: [quote.issues.allowance.spender, parseUnits(amount, sell.decimals)], chainId: base.id,
+        });
+      }
+      setStep("swapping");
+      const hash = await sendTransactionAsync({
+        to: quote.transaction.to,
+        // Append the ERC-8021 builder-code suffix so the tx is credited to BlueAgent.
+        data: (quote.transaction.data + DATA_SUFFIX.slice(2)) as `0x${string}`,
+        value: quote.transaction.value ? BigInt(quote.transaction.value) : undefined,
+        chainId: base.id,
+      });
+      setTxHash(hash); setStep("done");
+    } catch (e) {
+      const m = (e as Error).message || String(e);
+      const cancelled = /user rejected|denied|cancell?ed/i.test(m);
+      setErr(cancelled ? "Swap cancelled." : m.slice(0, 160)); setStep("error");
+    }
+  }
+
+  const tokenLogo = l.image
+    ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={l.image} alt={tokenSym} className="w-8 h-8 rounded-lg object-cover bg-[#0d0d12] shrink-0"
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+      )
+    : (
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center font-mono text-[11px] font-bold shrink-0"
+          style={{ background: `${ACCENT}15`, border: `1px solid ${ACCENT}30`, color: ACCENT }}>
+          {tokenSym.slice(0, 2).toUpperCase()}
+        </div>
+      );
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={busy ? undefined : onClose} />
+      <div className="relative w-full max-w-sm rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center gap-2.5 mb-4">
+          {tokenLogo}
+          <div className="min-w-0 flex-1">
+            <div className="font-mono text-sm font-bold text-white truncate">{l.tokenName || tokenSym}</div>
+            <div className="font-mono text-[11px] text-slate-500">${tokenSym} · {fmtPrice(l.market?.priceUsd)}</div>
+          </div>
+          <button onClick={onClose} disabled={busy}
+            className="font-mono text-slate-600 hover:text-white text-xl leading-none disabled:opacity-40">×</button>
+        </div>
+
+        {step === "done" ? (
+          <div className="rounded-xl border p-4" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
+            <div className="font-mono text-[12px] font-bold mb-1" style={{ color: "#22C55E" }}>
+              ✓ {mode === "buy" ? "Bought" : "Sold"} {fmtNum(amt)} {sell.sym} → {buyAmount != null ? fmtNum(buyAmount) : ""} {buy.sym}
+            </div>
+            {txHash && (
+              <a href={`https://basescan.org/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
+                className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] inline-block mt-1">View tx ↗</a>
+            )}
+            <button onClick={() => { setStep("idle"); setAmount(""); setQuote(null); }}
+              className="font-mono text-[10px] text-slate-500 hover:text-slate-300 ml-3">Swap again</button>
+          </div>
+        ) : (
+          <>
+            {/* Buy / Sell tabs */}
+            <div className="flex items-center rounded-lg border border-[#1A1A2E] overflow-hidden mb-3">
+              {(["buy", "sell"] as const).map((m) => (
+                <button key={m} onClick={() => switchMode(m)}
+                  className="flex-1 font-mono text-[11px] font-bold py-2 transition-colors"
+                  style={{
+                    background: mode === m ? (m === "buy" ? "#22C55E15" : "#EF444415") : "transparent",
+                    color: mode === m ? (m === "buy" ? "#22C55E" : "#EF4444") : "#64748b",
+                  }}>
+                  {m === "buy" ? "Buy" : "Sell"}
+                </button>
+              ))}
+            </div>
+
+            {/* Sell (you pay) */}
+            <div className="rounded-lg border border-[#1A1A2E] bg-[#050508] p-2.5 mb-1">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-mono text-[9px] text-slate-600">YOU PAY</span>
+                {balance != null && (
+                  <span className="font-mono text-[9px] text-slate-600">Bal {balance.toFixed(sell.decimals === 6 ? 2 : 5)}
+                    <button type="button" onClick={setMax} className="text-[#4FC3F7] ml-1">Max</button></span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.0"
+                  className="flex-1 bg-transparent font-mono text-[16px] text-white outline-none placeholder:text-slate-700 w-0" />
+                {mode === "buy" ? (
+                  <select value={pay.sym} onChange={e => { setPay(PAY_TOKENS.find(p => p.sym === e.target.value)!); setAmount(""); setQuote(null); }}
+                    className="bg-[#050508] border border-[#1A1A2E] rounded-lg px-2 py-1.5 font-mono text-[11px] text-slate-200 outline-none">
+                    {PAY_TOKENS.map(p => <option key={p.sym} value={p.sym}>{p.sym}</option>)}
+                  </select>
+                ) : (
+                  <span className="font-mono text-[11px] text-slate-200 px-2 py-1.5 border border-[#1A1A2E] rounded-lg">{tokenSym}</span>
+                )}
+              </div>
+              {overBalance && <div className="font-mono text-[9px] text-red-500 mt-1">Exceeds your {sell.sym} balance</div>}
+            </div>
+
+            <div className="flex justify-center -my-1 relative z-10">
+              <div className="w-7 h-7 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] text-slate-500 font-mono text-[12px] flex items-center justify-center">↓</div>
+            </div>
+
+            {/* Buy (you receive) */}
+            <div className="rounded-lg border border-[#1A1A2E] bg-[#050508] p-2.5 mt-1 mb-3">
+              <div className="font-mono text-[9px] text-slate-600 mb-1">YOU RECEIVE</div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 font-mono text-[16px] text-white w-0 truncate">
+                  {loading ? <span className="text-slate-600">…</span> : buyAmount != null ? fmtNum(buyAmount) : <span className="text-slate-700">0.0</span>}
+                </div>
+                {mode === "sell" ? (
+                  <select value={pay.sym} onChange={e => { setPay(PAY_TOKENS.find(p => p.sym === e.target.value)!); setAmount(""); setQuote(null); }}
+                    className="bg-[#050508] border border-[#1A1A2E] rounded-lg px-2 py-1.5 font-mono text-[11px] text-slate-200 outline-none">
+                    {PAY_TOKENS.map(p => <option key={p.sym} value={p.sym}>{p.sym}</option>)}
+                  </select>
+                ) : (
+                  <span className="font-mono text-[11px] text-slate-200 px-2 py-1.5 border border-[#1A1A2E] rounded-lg">{tokenSym}</span>
+                )}
+              </div>
+            </div>
+
+            {rate != null && (
+              <div className="font-mono text-[9px] text-slate-500 mb-2 flex items-center justify-between">
+                <span>1 {sell.sym} ≈ {fmtNum(rate)} {buy.sym}</span>
+                {minBuy != null && <span className="text-slate-600">min {fmtNum(minBuy)} {buy.sym}</span>}
+              </div>
+            )}
+
+            {quote?.needsKey && <p className="font-mono text-[9px] text-amber-400 mb-2">Swap needs a free 0x API key — set <span className="text-slate-300">ZEROX_API_KEY</span>.</p>}
+            {quote?.error && !quote.needsKey && !loading && amt > 0 && <p className="font-mono text-[9px] text-amber-400 mb-2">No route: {quote.error}</p>}
+            {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
+
+            <button onClick={doSwap} disabled={!canSwap || busy}
+              className="w-full font-mono text-[12px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
+              style={mode === "buy"
+                ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E40" }
+                : { background: "#EF444415", color: "#EF4444", border: "1px solid #EF444440" }}>
+              {!isConnected ? "Connect your wallet"
+                : busy ? (step === "approving" ? "Approve in wallet…" : "Confirm in wallet…")
+                : overBalance ? "Insufficient balance"
+                : mode === "buy"
+                  ? `Buy ${tokenSym}${amt > 0 ? ` with ${fmtNum(amt)} ${sell.sym}` : ""}`
+                  : `Sell ${amt > 0 ? fmtNum(amt) : ""} ${tokenSym}`}
+            </button>
+            <p className="font-mono text-[9px] text-slate-700 mt-1.5 text-center">Best route via 0x · you sign · non-custodial · Base mainnet.</p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Token card ─────────────────────────────────────────────────────────────────
 
-function LaunchCard({ l }: { l: Launch }) {
+function LaunchCard({ l, onTrade }: { l: Launch; onTrade: (l: Launch) => void }) {
   const [copied, setCopied] = useState(false);
   const sym = (l.tokenSymbol || l.tokenName || "?").replace(/^\$/, "");
   const change = l.market?.change24h;
@@ -241,7 +500,7 @@ function LaunchCard({ l }: { l: Launch }) {
 
       {/* Links */}
       <div className="flex flex-wrap gap-1.5 pt-1 border-t border-[#1A1A2E]">
-        <TradeButton l={l} />
+        <TradeButton l={l} onTrade={onTrade} />
         <a href={`https://bankr.bot/launches/${l.tokenAddress}`}
           target="_blank" rel="noopener noreferrer"
           className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] transition-colors">
@@ -265,7 +524,7 @@ function LaunchCard({ l }: { l: Launch }) {
 
 // ── List row (A1) ──────────────────────────────────────────────────────────────
 
-function LaunchRow({ l }: { l: Launch }) {
+function LaunchRow({ l, onTrade }: { l: Launch; onTrade: (l: Launch) => void }) {
   const [copied, setCopied] = useState(false);
   const sym = (l.tokenSymbol || l.tokenName || "?").replace(/^\$/, "");
   const change = l.market?.change24h;
@@ -314,7 +573,7 @@ function LaunchRow({ l }: { l: Launch }) {
       <div className="text-slate-600 tabular-nums">{fmtAge(l.launchedAt)}</div>
       {/* Actions */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        <TradeButton l={l} compact />
+        <TradeButton l={l} compact onTrade={onTrade} />
         <a href={`https://bankr.bot/launches/${l.tokenAddress}`}
           target="_blank" rel="noopener noreferrer"
           className="px-2 py-0.5 rounded border border-[#4FC3F730] text-[#4FC3F7] text-[9px] transition-colors">
@@ -721,6 +980,9 @@ export default function LaunchesPage() {
   const [error, setError] = useState("");
   const [showLaunch, setShowLaunch] = useState(false);
 
+  // In-page swap modal: which token the user is trading (null = closed).
+  const [tradeToken, setTradeToken] = useState<Launch | null>(null);
+
   // A1 — view mode
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
 
@@ -782,6 +1044,7 @@ export default function LaunchesPage() {
   return (
     <div className="flex flex-col h-full bg-[#050508] text-white font-mono overflow-hidden">
       {showLaunch && <LaunchModal onClose={() => setShowLaunch(false)} onLaunched={manualLoad} />}
+      {tradeToken && <TradeModal l={tradeToken} onClose={() => setTradeToken(null)} />}
 
       {/* Header bar */}
       <div className="flex items-center justify-between gap-3 px-4 sm:px-6 h-14 border-b border-[#1A1A2E] shrink-0">
@@ -923,14 +1186,14 @@ export default function LaunchesPage() {
             </div>
           ) : viewMode === "grid" ? (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {launches.map((l) => <LaunchCard key={l.tokenAddress} l={l} />)}
+              {launches.map((l) => <LaunchCard key={l.tokenAddress} l={l} onTrade={setTradeToken} />)}
             </div>
           ) : (
             /* List view */
             <div className="rounded-xl border border-[#1A1A2E] overflow-hidden">
               <ListHeader sort={sort} onSort={setSort} />
               <div>
-                {launches.map((l) => <LaunchRow key={l.tokenAddress} l={l} />)}
+                {launches.map((l) => <LaunchRow key={l.tokenAddress} l={l} onTrade={setTradeToken} />)}
               </div>
             </div>
           )}
