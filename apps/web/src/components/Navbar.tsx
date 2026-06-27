@@ -2,16 +2,19 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import LanguageToggle from "@/components/LanguageToggle";
+import { useLang } from "@/lib/i18n/context";
 
 const NAV_LINKS = [
-  { label: "About",  href: "/about" },
-  { label: "Skills", href: "/skills" },
-  { label: "Docs",   href: "/docs" },
+  { key: "about",  href: "/about" },
+  { key: "skills", href: "/skills" },
+  { key: "docs",   href: "/docs" },
 ];
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const { t } = useLang();
   const isActive = (href: string) => pathname.startsWith(href);
 
   return (
@@ -40,7 +43,7 @@ export default function Navbar() {
                   : { color: "#64748b" }}
               >
                 <span className="relative z-10 hover:text-slate-200 transition-colors">
-                  {item.label}
+                  {t(`nav_marketing.${item.key}`)}
                 </span>
                 {active && (
                   <span
@@ -55,6 +58,9 @@ export default function Navbar() {
 
         {/* ── Right actions ── */}
         <div className="hidden md:flex items-center gap-3 ml-auto shrink-0">
+          {/* Language toggle — EN | 中文 (shared cookie syncs marketing + app) */}
+          <LanguageToggle />
+
           {/* X / Twitter */}
           <a
             href="https://x.com/blueagent_"
@@ -81,7 +87,7 @@ export default function Navbar() {
               boxShadow: "0 0 16px #4FC3F730",
             }}
           >
-            Launch App →
+            {t("nav_marketing.launch_app")}
           </Link>
         </div>
 
@@ -113,11 +119,11 @@ export default function Navbar() {
                   ? { color: "#4FC3F7", background: "#4FC3F710" }
                   : { color: "#94a3b8" }}
               >
-                {item.label}
+                {t(`nav_marketing.${item.key}`)}
               </Link>
             ))}
           </div>
-          <div className="border-t border-[#1A1A2E] pt-3 flex items-center justify-between px-1">
+          <div className="border-t border-[#1A1A2E] pt-3 flex items-center justify-between px-1 mb-3">
             <a
               href="https://x.com/blueagent_"
               target="_blank"
@@ -135,8 +141,12 @@ export default function Navbar() {
                 color: "#050508",
               }}
             >
-              Launch App →
+              {t("nav_marketing.launch_app")}
             </Link>
+          </div>
+          {/* Language toggle (mobile) */}
+          <div className="flex justify-center pt-1">
+            <LanguageToggle />
           </div>
         </div>
       )}

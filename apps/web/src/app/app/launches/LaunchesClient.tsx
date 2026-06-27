@@ -9,6 +9,7 @@ import { formatUnits, parseUnits } from "viem";
 import { base } from "wagmi/chains";
 import { ERC20_ABI } from "@/lib/yield-execution";
 import { DATA_SUFFIX } from "@/constants/builderCode";
+import { useLang } from "@/lib/i18n/context";
 
 const ACCENT = "#F59E0B";
 
@@ -633,12 +634,12 @@ const SORT_OPTIONS: { label: string; key: SortKey }[] = [
   { label: "24H%", key: "change" },
 ];
 
-const FILTER_TABS: { label: string; key: FilterTab }[] = [
-  { label: "All", key: "all" },
-  { label: "Live", key: "live" },
-  { label: "New", key: "new" },
-  { label: "Hot 🔥", key: "hot" },
-  { label: "My Tokens 👤", key: "mine" },
+const FILTER_TABS: { label: string; key: FilterTab; tkey: string }[] = [
+  { label: "All", key: "all", tkey: "all" },
+  { label: "Live", key: "live", tkey: "live" },
+  { label: "New", key: "new", tkey: "new" },
+  { label: "Hot 🔥", key: "hot", tkey: "hot" },
+  { label: "My Tokens 👤", key: "mine", tkey: "my_tokens" },
 ];
 
 function applyFilter(launches: Launch[], tab: FilterTab): Launch[] {
@@ -975,6 +976,7 @@ function MyTokensView({ onLaunch }: { onLaunch: () => void }) {
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function LaunchesPage() {
+  const { t } = useLang();
   const [data, setData] = useState<FeedResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1107,18 +1109,18 @@ export default function LaunchesPage() {
 
           {/* A3 — Filter tabs */}
           <div className="flex items-center gap-1.5 mb-4 flex-wrap">
-            {FILTER_TABS.map((t) => (
+            {FILTER_TABS.map((tab) => (
               <button
-                key={t.key}
-                onClick={() => setFilterTab(t.key)}
+                key={tab.key}
+                onClick={() => setFilterTab(tab.key)}
                 className="font-mono text-[10px] px-3 py-1 rounded-full border transition-colors"
                 style={{
-                  background: filterTab === t.key ? `${ACCENT}15` : "transparent",
-                  color: filterTab === t.key ? ACCENT : "#64748b",
-                  borderColor: filterTab === t.key ? `${ACCENT}40` : "#1A1A2E",
+                  background: filterTab === tab.key ? `${ACCENT}15` : "transparent",
+                  color: filterTab === tab.key ? ACCENT : "#64748b",
+                  borderColor: filterTab === tab.key ? `${ACCENT}40` : "#1A1A2E",
                 }}
               >
-                {t.label}
+                {t(`launches.${tab.tkey}`)}
               </button>
             ))}
           </div>
@@ -1130,7 +1132,7 @@ export default function LaunchesPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search token name or symbol…"
+              placeholder={t("launches.search")}
               className="flex-1 min-w-[180px] bg-[#0a0a0f] border border-[#1A1A2E] focus:border-[#F59E0B]/30 rounded-lg px-3 py-1.5 font-mono text-[11px] text-slate-300 placeholder:text-slate-700 outline-none transition-colors"
             />
             {/* A2 — sort */}
@@ -1169,7 +1171,7 @@ export default function LaunchesPage() {
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-10 text-center">
               <div className="text-3xl mb-3">🚀</div>
               <p className="text-sm text-slate-400 mb-1">
-                {search || filterTab !== "all" ? "No tokens match your filters" : "No tokens launched yet"}
+                {search || filterTab !== "all" ? "No tokens match your filters" : t("launches.no_tokens")}
               </p>
               <p className="text-[11px] text-slate-600 mb-4">
                 {search || filterTab !== "all"

@@ -3,6 +3,7 @@ import { useRef, useCallback, useState } from "react";
 import { useChat } from "../ChatContext";
 import { PERSONAS } from "../personas";
 import { creditCost } from "@/lib/credits";
+import { useLang } from "@/lib/i18n/context";
 import type { Attachment } from "../types";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -113,6 +114,7 @@ export default function ChatInput() {
     setBuyOpen, webSearch, setWebSearch, pendingFiles, setPendingFiles,
     personaId, setPersonaId,
   } = useChat();
+  const { t } = useLang();
 
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -471,7 +473,7 @@ export default function ChatInput() {
               value={input}
               onChange={(e) => handleInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={outOfCredits ? "No credits — get more $BLUEAGENT" : "Ask BlueAgent anything…"}
+              placeholder={outOfCredits ? "No credits — get more $BLUEAGENT" : t("chat.placeholder")}
               rows={1}
               disabled={streaming || outOfCredits}
               className="flex-1 resize-none bg-transparent outline-none font-mono text-sm text-white placeholder:text-slate-700 leading-relaxed"

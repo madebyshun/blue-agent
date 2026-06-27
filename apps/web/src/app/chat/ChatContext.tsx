@@ -534,9 +534,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const integ = loadIntegrations();
 
     try {
+      // Language preference for the assistant's replies. Read from the shared
+      // `.blueagent.dev` cookie the LanguageToggle writes; the chat route injects
+      // a "respond in Simplified Chinese" instruction when this is "zh".
+      const langPref =
+        typeof document !== "undefined" && /(?:^|;\s*)lang=zh\b/.test(document.cookie)
+          ? "zh"
+          : "en";
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-lang": langPref },
         body: JSON.stringify({
           messages:    next,
           tier:        chatTier,

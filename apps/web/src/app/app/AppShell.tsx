@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { AppChromeProvider, useAppChrome } from "./AppChrome";
+import LanguageToggle from "@/components/LanguageToggle";
+import { useLang } from "@/lib/i18n/context";
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
@@ -122,6 +124,7 @@ const APP_BOTTOM = [
 
 function AppSideNav() {
   const pathname = usePathname();
+  const { t } = useLang();
 
   // The app surface is served on app.blueagent.dev under clean, /app-less URLs
   // (middleware rewrites /chat → /app/chat internally), so usePathname() returns
@@ -159,7 +162,7 @@ function AppSideNav() {
                 className="font-mono text-[7px] tracking-wide transition-colors group-hover:text-slate-400 truncate max-w-[56px] text-center"
                 style={{ color: active ? "#4FC3F7" : undefined }}
               >
-                {item.label}
+                {t(`nav.${item.id}`)}
               </span>
               {/* Active left-bar indicator */}
               {active && (
@@ -213,7 +216,7 @@ function AppSideNav() {
                 {item.icon}
               </span>
               <span className="font-mono text-[7px] tracking-wide text-slate-700 group-hover:text-slate-500 transition-colors">
-                {item.label}
+                {t(`nav.${item.id}`)}
               </span>
             </Link>
           );
@@ -221,6 +224,11 @@ function AppSideNav() {
 
         {/* Divider */}
         <div className="w-8 h-px bg-[#1A1A2E] my-0.5" />
+
+        {/* Language toggle — EN / 中文 (vertical to fit the 72px rail) */}
+        <div className="px-1 w-full">
+          <LanguageToggle vertical />
+        </div>
 
         {/* Back to marketing site */}
         <a
@@ -232,7 +240,7 @@ function AppSideNav() {
               d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
           </svg>
           <span className="font-mono text-[7px] tracking-wide text-slate-700 group-hover:text-slate-500 transition-colors">
-            Home
+            {t("nav.home")}
           </span>
         </a>
       </div>
@@ -257,15 +265,19 @@ const PRODUCTS = [...NAV_ITEMS, ...APP_BOTTOM];
 // Settings (mobile), so both are dropped from the drawer's product list.
 const DRAWER_PRODUCTS = PRODUCTS.filter(i => i.id !== "profile" && i.id !== "docs");
 
-function labelForPath(pathname: string): string {
+// Returns the nav id for the current path so the title can be translated via
+// t(`nav.${id}`); falls back to null (→ generic "Blue Agent" brand label).
+function navIdForPath(pathname: string): string | null {
   const match = PRODUCTS.find(i => pathname === i.href || pathname.startsWith(i.href + "/"));
-  return match?.label ?? "Blue Agent";
+  return match?.id ?? null;
 }
 
 function MobileTopBar() {
   const { setDrawerOpen, contextual } = useAppChrome();
   const pathname = usePathname();
-  const title = contextual?.barTitle ?? labelForPath(pathname);
+  const { t } = useLang();
+  const navId = navIdForPath(pathname);
+  const title = contextual?.barTitle ?? (navId ? t(`nav.${navId}`) : "Blue Agent");
 
   return (
     <header className="lg:hidden flex items-center gap-3 h-12 px-3 border-b border-[#1A1A2E] bg-[#050508] shrink-0">
@@ -281,6 +293,8 @@ function MobileTopBar() {
       <span className="font-mono text-[11px] text-[#4FC3F7] tracking-widest truncate flex-1">
         // {title.toUpperCase()}
       </span>
+      {/* Language toggle — EN | 中文 */}
+      <LanguageToggle />
       {/* One-tap New chat (compose) — ChatGPT-style, no need to open the drawer. */}
       {contextual?.newChat && (
         <button
@@ -300,6 +314,7 @@ function MobileTopBar() {
 function MobileDrawer() {
   const { drawerOpen, setDrawerOpen, contextual } = useAppChrome();
   const pathname = usePathname();
+  const { t } = useLang();
 
   // Close the drawer whenever the route changes (e.g. after tapping a product).
   useEffect(() => { setDrawerOpen(false); }, [pathname, setDrawerOpen]);
@@ -353,7 +368,7 @@ function MobileDrawer() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
               </span>
-              <span className="font-mono text-[13px] text-slate-200">Profile</span>
+              <span className="font-mono text-[13px] text-slate-200">{t("nav.profile")}</span>
             </Link>
           </div>
 
@@ -420,7 +435,7 @@ function MobileDrawer() {
               const drawerInner = (
                 <>
                   <span className="shrink-0" style={{ color: active ? "#4FC3F7" : "#64748b" }}>{item.icon}</span>
-                  <span className="font-mono text-[13px]" style={{ color: active ? "#4FC3F7" : "#cbd5e1" }}>{item.label}</span>
+                  <span className="font-mono text-[13px]" style={{ color: active ? "#4FC3F7" : "#cbd5e1" }}>{t(`nav.${item.id}`)}</span>
                   {isExt && <span className="ml-auto font-mono text-[9px] text-slate-600">↗</span>}
                 </>
               );

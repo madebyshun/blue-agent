@@ -1629,6 +1629,20 @@ export async function POST(req: NextRequest) {
   const knowledgeOnly = !!cmdPrompt;
   const modelLabel = getModelLabel(tier, modelId, provider);
   const modelLine = `## Active model\nYou are currently running as: **${modelLabel}**. When asked "what model are you?", "which AI are you?", "what are you running on?", or similar — answer precisely with this model name.`;
+
+  // ── Language preference (EN / 中文) ───────────────────────────────────────
+  // The web client sends `x-lang` (from the shared .blueagent.dev cookie the
+  // LanguageToggle writes); fall back to the `lang` cookie for non-browser
+  // callers. When "zh", instruct the model to default to Simplified Chinese.
+  const langPref =
+    req.headers.get("x-lang") ||
+    req.cookies.get("lang")?.value ||
+    "en";
+  const langLine =
+    langPref === "zh"
+      ? `## Language\nThe user has selected Chinese as their language. Respond in Simplified Chinese (简体中文) by default. If the user writes in English, respond in English.`
+      : "";
+
   const system = [
     BASE_SYSTEM,
     BANKR_AGENT_SECTION,
@@ -1637,6 +1651,7 @@ export async function POST(req: NextRequest) {
     coinbase ? COINBASE_SECTION : "",
     skills   ? `## Installed Skills\nThe user has installed these skill packs — use their tools / knowledge when relevant:\n\n${skills}` : "",
     modelLine,
+    langLine,
     memoryContext ?? "",
     cmdPrompt ?? "",
   ].filter(Boolean).join("\n\n");
