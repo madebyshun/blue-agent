@@ -168,6 +168,10 @@ function hasRebase(raw?: string): boolean {
 
 function computeVerdict(info: B20Inspection): VerdictLine[] {
   const lines: VerdictLine[] = [];
+  // Initialization gate — a B20 can exist (factory registered it) before its
+  // initCalls finished, so roles / supply cap / policies may not be set yet.
+  if (info.isB20 && info.initialized === false)
+    lines.push({ kind: "warn", text: "B20 exists but is not fully initialized — roles, supply cap, or policies may not be set yet. Treat its config as incomplete." });
   if (info.paused?.transfer) lines.push({ kind: "warn", text: "Transfers are paused by the issuer." });
   if (info.paused?.mint)     lines.push({ kind: "warn", text: "Minting is paused." });
   if (info.paused?.burn)     lines.push({ kind: "warn", text: "Burns are paused." });
@@ -468,6 +472,10 @@ function ResultCard({ info, onScanAnother, onHowItWorks }: { info: B20Inspection
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border"
                 style={{ background: "#22C55E18", color: "#22C55E", borderColor: "#22C55E30" }}>✓ B20</span>
+              {info.initialized === false && (
+                <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border"
+                  style={{ background: "#F59E0B18", color: "#F59E0B", borderColor: "#F59E0B30" }}>⚠ Not initialized</span>
+              )}
               <VariantBadge variant={info.variant} currency={info.currency} />
               <span className="font-mono text-[10px] text-slate-500">
                 {info.network === "mainnet" ? "Base Mainnet" : "Base Sepolia"}
@@ -691,6 +699,7 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
   const [decimals,   setDecimals]   = useState(18);
   const [decManual,  setDecManual]  = useState(false);
   const [supplyCap,  setSupplyCap]  = useState("");
+  const [initSupply, setInitSupply] = useState("");
   const [currCode,   setCurrCode]   = useState("USD");
 
   const [deploying,     setDeploying]     = useState(false);
@@ -742,12 +751,15 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
   const n      = name.trim();
   const s      = symbol.replace(/^\$/, "").trim();
   const cap    = supplyCap.trim();
+  const seed   = initSupply.trim();
   const cur    = currCode.trim() || "USD";
   const net    = LAUNCH_NETS[network];
+  // Local guard mirroring buildB20Calldata: seed-mint can't exceed the cap.
+  const seedOverCap = !!cap && !!seed && Number(seed) > Number(cap);
   // Only block when the on-chain read succeeded (ok) AND the selected variant is
   // not yet activated. Unknown reads (ok:false) or still-loading → don't block.
   const notActivated = !!activation && activation.ok && !activation[variant];
-  const canDeploy = !!n && !!s && !notActivated;
+  const canDeploy = !!n && !!s && !notActivated && !seedOverCap;
 
   async function deploy() {
     if (!address || !canDeploy) return;
@@ -758,8 +770,9 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: n, symbol: s, variant, decimals,
-          supply_cap:    cap || undefined,
-          currency_code: variant === "stablecoin" ? cur : undefined,
+          supply_cap:     cap || undefined,
+          initial_supply: seed || undefined,
+          currency_code:  variant === "stablecoin" ? cur : undefined,
           admin: address,
           network: network,
         }),
@@ -897,6 +910,21 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
               <input value={supplyCap} onChange={e => setSupplyCap(e.target.value)}
                 placeholder="e.g. 1000000" spellCheck={false} className={INPUT_CLS} />
             </div>
+          </div>
+
+          {/* Initial Supply — optional seed-mint to admin, minted atomically in the
+              same createB20 tx (deploy + grant MINT_ROLE + set cap + seed = 1 tx). */}
+          <div>
+            <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+              Initial Supply <span className="text-slate-700 font-normal normal-case">(optional · minted to you at deploy)</span>
+            </label>
+            <input value={initSupply} onChange={e => setInitSupply(e.target.value)}
+              placeholder="e.g. 1000000" spellCheck={false} className={INPUT_CLS} />
+            {seedOverCap && (
+              <p className="font-mono text-[9px] text-[#EF4444] mt-1.5">
+                Initial supply can&apos;t exceed the supply cap.
+              </p>
+            )}
           </div>
 
           {variant === "stablecoin" && (

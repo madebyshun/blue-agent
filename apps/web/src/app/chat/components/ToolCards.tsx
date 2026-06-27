@@ -1627,6 +1627,75 @@ function MemoResultCard({ result }: { result: MemoResultData }) {
   );
 }
 
+// check_authorization result — server-read of a B20 token's policy: is `account`
+// allowed for a scope (sender/receiver/executor/mint_receiver)? Inline, read-only.
+interface AuthorizationResultData {
+  authorized?:           boolean | null;
+  token?:                string;
+  account?:              string;
+  accountInput?:         string;
+  resolvedFromBasename?: boolean;
+  scope?:                string;
+  scopeLabel?:           string;
+  policyId?:             string;
+  policyKind?:           "open" | "blocked" | "custom" | "unknown";
+  network?:              string;
+  status?:               string;
+  message?:              string;
+  explorerUrl?:          string;
+}
+
+function AuthorizationResultCard({ result }: { result: AuthorizationResultData }) {
+  const determined = result.status === "authorized" || result.status === "denied";
+  const allowed    = result.authorized === true;
+  const accent     = !determined ? "#64748b" : allowed ? "#22C55E" : "#EF4444";
+  const icon       = !determined ? "ℹ" : allowed ? "✓" : "✗";
+  const acct       = (result.account ?? "").trim();
+  const acctShort  = /^0x[a-fA-F0-9]{40}$/.test(acct) ? `${acct.slice(0, 6)}…${acct.slice(-4)}` : acct;
+  const headline   = !determined
+    ? "Authorization unknown"
+    : allowed ? "Authorized" : "Not authorized";
+
+  return (
+    <div className="mt-2 rounded-xl border bg-[#0a0a0f] px-3.5 py-3"
+      style={{ borderColor: `${accent}35` }}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="font-mono text-sm font-bold shrink-0" style={{ color: accent }}>{icon}</span>
+        <span className="font-mono text-[13px] font-bold" style={{ color: accent }}>{headline}</span>
+        {result.scopeLabel && (
+          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full border text-slate-400 border-[#1A1A2E]">
+            {result.scopeLabel}
+          </span>
+        )}
+        {result.policyKind && result.policyKind !== "unknown" && (
+          <span className="font-mono text-[10px] text-slate-500">
+            {result.policyKind === "open" ? "ALWAYS_ALLOW"
+              : result.policyKind === "blocked" ? "ALWAYS_BLOCK"
+              : `policy #${result.policyId ?? "?"}`}
+          </span>
+        )}
+      </div>
+      {acctShort && (
+        <div className="font-mono text-[11px] text-slate-400 mt-1.5 break-all">
+          {acctShort}
+          {result.resolvedFromBasename && result.accountInput && (
+            <span className="text-slate-600"> · {result.accountInput}</span>
+          )}
+        </div>
+      )}
+      {result.message && (
+        <p className="font-mono text-[11px] text-slate-500 leading-relaxed mt-1.5">{result.message}</p>
+      )}
+      {result.explorerUrl && result.status !== "invalid_token" && (
+        <a href={result.explorerUrl} target="_blank" rel="noopener noreferrer"
+          className="inline-block font-mono text-[11px] text-slate-400 hover:text-[#4FC3F7] mt-1.5">
+          Token on Basescan ↗
+        </a>
+      )}
+    </div>
+  );
+}
+
 // Read-only wallet balance — connected wallet's live ETH + major token amounts
 // on Base. No signing, no price feed (honest: raw on-chain amounts only).
 interface BalanceResultData {
@@ -2453,6 +2522,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_b20_launch":       return <B20LaunchCard   result={r as B20LaunchResult} />;
     case "hub_b20_manage":       return <B20ManageCard   result={r as B20ManageResult} />;
     case "check_memo":           return <MemoResultCard  result={r as MemoResultData} />;
+    case "check_authorization":  return <AuthorizationResultCard result={r as AuthorizationResultData} />;
     case "check_balance":        return <BalanceResultCard result={r as BalanceResultData} />;
     case "prepare_token_launch": return <TokenLaunchCard result={r as TokenLaunchResult} />;
     case "prepare_yield":     return <MoveToYieldCard  result={r as YieldMoveResult} account={account} />;
