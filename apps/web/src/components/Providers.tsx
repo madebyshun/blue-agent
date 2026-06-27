@@ -8,6 +8,7 @@ import { farcasterMiniApp } from "@farcaster/miniapp-wagmi-connector";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import MiniAppReady from "@/components/MiniAppReady";
 import BaseAppAutoConnect from "@/components/BaseAppAutoConnect";
+import { LanguageProvider } from "@/lib/i18n/context";
 
 // The Farcaster / Base App Mini App connector talks to a host frame over
 // postMessage. It is NOT inert in a normal browser tab: with no host to
@@ -61,7 +62,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         <MiniAppReady />
         {/* Silently binds the host wallet when embedded in Base App / Farcaster. */}
         <BaseAppAutoConnect />
-        {children}
+        {/* EN / 中文 — wraps both marketing + app (root layout uses <Providers>). */}
+        <LanguageProvider>{children}</LanguageProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );
