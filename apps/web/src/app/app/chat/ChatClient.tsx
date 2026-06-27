@@ -30,10 +30,28 @@ function ChatShell() {
     buyOpen, setBuyOpen, triggerWalletRefresh, artifactsPanelOpen,
     onWalletChange, walletRefresh,
     createNewTask, tasks, selectTask, activeTaskId,
+    setInput,
   } = useChat();
   const [activeTab, setActiveTab] = useState<ActiveTab>("chat");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { setContextual } = useAppChrome();
+
+  // Deep-link prefill: other surfaces (e.g. the /app/launches "Trade" button)
+  // route here as /app/chat?prefill=<message> to seed — NOT auto-send — the
+  // composer with a token-trade prompt. The user reviews/edits, then sends.
+  // Runs once on mount; we strip the param afterwards so a refresh won't re-seed.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const prefill = url.searchParams.get("prefill");
+    if (prefill) {
+      setInput(prefill);
+      setActiveTab("chat");
+      url.searchParams.delete("prefill");
+      window.history.replaceState({}, "", url.pathname + url.search);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isChat = activeTab === "chat";
   const meta   = activeTab !== "chat" && activeTab !== "settings" ? TAB_META[activeTab] : null;
