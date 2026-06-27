@@ -1626,6 +1626,78 @@ function MemoResultCard({ result }: { result: MemoResultData }) {
   );
 }
 
+// Read-only wallet balance — connected wallet's live ETH + major token amounts
+// on Base. No signing, no price feed (honest: raw on-chain amounts only).
+interface BalanceResultData {
+  connected?:  boolean;
+  address?:    string;
+  network?:    "mainnet" | "sepolia";
+  addressUrl?: string;
+  balances?:   Array<{ symbol: string; amount: string; raw: string; isNative?: boolean }>;
+  error?:      string;
+}
+
+function BalanceResultCard({ result }: { result: BalanceResultData }) {
+  const netLabel = result.network === "mainnet" ? "Base" : "Base Sepolia";
+  const addr = (result.address ?? "").trim();
+
+  if (result.connected === false) {
+    return (
+      <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3.5 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-base leading-none">🔌</span>
+          <span className="font-mono text-xs text-slate-400">Connect your wallet first to check your balance.</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (result.error) {
+    return (
+      <div className="mt-2 rounded-xl border border-[#EF444430] bg-[#0a0a0f] px-3.5 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-base leading-none">⚠️</span>
+          <span className="font-mono text-xs text-[#EF4444]">{result.error}</span>
+        </div>
+      </div>
+    );
+  }
+
+  const balances = result.balances ?? [];
+
+  return (
+    <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3.5 py-3">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-base leading-none">💰</span>
+        {addr && (
+          <span className="font-mono text-[11px] text-slate-400">{addr.slice(0, 6)}…{addr.slice(-4)}</span>
+        )}
+        <span className="font-mono text-[10px] text-slate-600 ml-auto">{netLabel}</span>
+      </div>
+      <div className="space-y-1">
+        {balances.map(b => (
+          <div key={b.symbol} className="flex items-center justify-between">
+            <span className="font-mono text-[11px] text-slate-500">{b.symbol}</span>
+            <span className={`font-mono text-[13px] ${b.raw === "0" ? "text-slate-600" : "text-slate-200"}`}>
+              {b.amount}
+            </span>
+          </div>
+        ))}
+      </div>
+      {result.addressUrl && (
+        <a
+          href={result.addressUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block font-mono text-[11px] text-slate-500 hover:text-[#4FC3F7] mt-2"
+        >
+          View on explorer ↗
+        </a>
+      )}
+    </div>
+  );
+}
+
 // Anti-pattern killer: chat "mint X" must open a wallet-signing panel, never
 // emit cast / --private-key / Basescan-write text. Loads on-chain state + the
 // connected wallet's roles, then renders the SAME role-gated ManagePanel as
@@ -2379,6 +2451,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_b20_launch":       return <B20LaunchCard   result={r as B20LaunchResult} />;
     case "hub_b20_manage":       return <B20ManageCard   result={r as B20ManageResult} />;
     case "check_memo":           return <MemoResultCard  result={r as MemoResultData} />;
+    case "check_balance":        return <BalanceResultCard result={r as BalanceResultData} />;
     case "prepare_token_launch": return <TokenLaunchCard result={r as TokenLaunchResult} />;
     case "prepare_yield":     return <MoveToYieldCard  result={r as YieldMoveResult} account={account} />;
     case "prepare_send":      return <SendCard         result={r as SendResult} account={account} />;
