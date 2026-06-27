@@ -39,12 +39,23 @@ const SUPPLY_CAP_ABI = [{
   outputs: [],
 }] as const;
 
+const MINT_ABI = [{
+  type: "function", name: "mint",
+  inputs: [
+    { name: "to",     type: "address" },
+    { name: "amount", type: "uint256" },
+  ],
+  outputs: [],
+}] as const;
+
 export interface B20BuildInput {
   name: string;
   symbol: string;
   variant?: "asset" | "stablecoin";
   decimals?: number;
   supply_cap?: string;
+  /** Optional seed-mint to admin at deploy. Minted atomically inside createB20. */
+  initial_supply?: string;
   currency_code?: string;
   admin: string;
 }
@@ -80,14 +91,38 @@ export function buildB20Calldata(input: B20BuildInput): {
     }),
   ];
 
-  // initCalls[1] = updateSupplyCap (optional)
+  // initCalls[1] = updateSupplyCap (optional). Keep the cap value so we can
+  // validate the optional seed-mint never exceeds it (the factory bypasses the
+  // role gate during init, but the supply cap is still enforced → mint reverts).
+  let capWei: bigint | undefined;
   if (input.supply_cap && String(input.supply_cap).trim()) {
-    const capWei = parseUnits(String(input.supply_cap).trim(), dec);
+    capWei = parseUnits(String(input.supply_cap).trim(), dec);
     initCalls.push(
       encodeFunctionData({
         abi: SUPPLY_CAP_ABI,
         functionName: "updateSupplyCap",
         args: [capWei],
+      }),
+    );
+  }
+
+  // initCalls[2] = mint(admin, initialSupply) — optional seed-mint at deploy.
+  // Runs after grantRole + updateSupplyCap so the cap (if any) is already in
+  // place. The factory bypasses the MINT_ROLE gate during init, but NOT the
+  // supply cap → reject upfront when the seed would exceed the cap.
+  if (input.initial_supply && String(input.initial_supply).trim()) {
+    const seedWei = parseUnits(String(input.initial_supply).trim(), dec);
+    if (seedWei <= 0n) {
+      throw new Error("initial_supply must be greater than 0");
+    }
+    if (capWei !== undefined && seedWei > capWei) {
+      throw new Error("initial_supply exceeds supply_cap");
+    }
+    initCalls.push(
+      encodeFunctionData({
+        abi: MINT_ABI,
+        functionName: "mint",
+        args: [admin as `0x${string}`, seedWei],
       }),
     );
   }

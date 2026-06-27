@@ -13,6 +13,16 @@ export const B20_WRITE_ABI = [
     outputs: [],
   },
   {
+    // Mint to many recipients in one tx. Gated by MINT_ROLE, same as mint().
+    // No WithMemo variant — attach context off-chain or per-token instead.
+    type: "function", name: "batchMint", stateMutability: "nonpayable",
+    inputs:  [
+      { name: "recipients", type: "address[]" },
+      { name: "amounts",    type: "uint256[]" },
+    ],
+    outputs: [],
+  },
+  {
     type: "function", name: "burn", stateMutability: "nonpayable",
     inputs:  [{ name: "amount", type: "uint256" }],
     outputs: [],
