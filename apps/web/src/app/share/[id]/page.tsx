@@ -33,10 +33,32 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const doc = await getShare(id);
   const title = doc?.title ?? "Shared conversation";
+  const fullTitle = `${title} — Blue Agent`;
+  const count = doc?.messages?.length ?? 0;
+  const description = count
+    ? `A Blue Agent conversation · ${count} message${count === 1 ? "" : "s"} — AI for Base builders and traders.`
+    : "A conversation shared from Blue Agent — AI for Base builders and traders.";
+
+  // og:image + twitter:image are supplied automatically by the sibling
+  // opengraph-image.tsx (Next's file convention), which renders a per-conversation
+  // banner for EVERY id. We deliberately do NOT set `images` here — hard-setting
+  // them would override the dynamic card. The title/description carry the
+  // per-conversation text (social platforms render it with their own fonts, so
+  // CJK titles display correctly).
   return {
-    title: `${title} — Blue Agent`,
-    description: "A conversation shared from Blue Agent — AI for Base builders and traders.",
-    openGraph: { title: `${title} — Blue Agent`, siteName: "Blue Agent" },
+    title: fullTitle,
+    description,
+    openGraph: {
+      title: fullTitle,
+      description,
+      siteName: "Blue Agent",
+      type: "article",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: fullTitle,
+      description,
+    },
   };
 }
 
