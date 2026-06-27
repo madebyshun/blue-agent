@@ -299,6 +299,14 @@ export default function ManagePanel({
   const [mintTo,   setMintTo]   = useState("");
   const [mintAmt,  setMintAmt]  = useState("");
   const [mintMemo, setMintMemo] = useState((initialMemo ?? "").slice(0, MEMO_MAX_CHARS));
+
+  // ── Form state — Batch Mint (batchMint, MINT_ROLE; no WithMemo variant) ────
+  const [batchRows, setBatchRows] = useState<Array<{ to: string; amount: string }>>([
+    { to: "", amount: "" },
+  ]);
+  const [csvOpen, setCsvOpen] = useState(false);
+  const [csvText, setCsvText] = useState("");
+
   const [burnAmt,  setBurnAmt]  = useState("");
   const [burnMemo, setBurnMemo] = useState("");
   const [bbFrom,   setBbFrom]   = useState("");
@@ -379,6 +387,47 @@ export default function ManagePanel({
   const decimals = inspect.decimals ?? 18;
   const symbol   = inspect.symbol ?? "";
   const balFmt   = formatUnits(BigInt(balance), decimals);
+
+  // ── Derived — Batch Mint ──────────────────────────────────────────────────
+  // Only fully-valid rows (address + positive amount) are counted/submitted.
+  const batchValidRows = batchRows.filter(row => isAddr(row.to) && isAmt(row.amount));
+  let batchTotalWei = 0n;
+  try {
+    for (const row of batchValidRows) batchTotalWei += parseUnits(row.amount.trim(), decimals);
+  } catch { batchTotalWei = 0n; }
+  const batchTotalFmt = formatUnits(batchTotalWei, decimals);
+  // Headroom before the supply cap — only meaningful when capped and reads are present.
+  const batchCapRemainingWei =
+    !inspect.supplyCapUncapped && inspect.supplyCap != null && inspect.totalSupply != null
+      ? BigInt(inspect.supplyCap) - BigInt(inspect.totalSupply)
+      : null;
+  const batchOverCap = batchCapRemainingWei != null && batchTotalWei > batchCapRemainingWei;
+
+  function addBatchRow() {
+    setBatchRows(rows => [...rows, { to: "", amount: "" }]);
+  }
+  function removeBatchRow(i: number) {
+    setBatchRows(rows => (rows.length <= 1 ? rows : rows.filter((_, idx) => idx !== i)));
+  }
+  function updateBatchRow(i: number, field: "to" | "amount", value: string) {
+    setBatchRows(rows => rows.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
+  }
+  /** Parse "address,amount" (comma or whitespace separated) — one per line. Replaces the rows. */
+  function applyCsv() {
+    const parsed = csvText
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(line => {
+        const [to, amount] = line.split(/[,\s]+/);
+        return { to: (to ?? "").trim(), amount: (amount ?? "").trim() };
+      });
+    if (parsed.length) {
+      setBatchRows(parsed);
+      setCsvOpen(false);
+      setCsvText("");
+    }
+  }
 
   // ── Tx executor ───────────────────────────────────────────────────────────
 
@@ -536,6 +585,103 @@ export default function ManagePanel({
               className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
               style={{ background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E30" }}>
               Mint →
+            </button>
+          </div>
+        )}
+
+        {/* Batch Mint — batchMint(address[], uint256[]), MINT_ROLE gated.
+            No WithMemo variant exists for batchMint; the announce() wrapper from
+            the spec was intentionally skipped (no verified ABI in the codebase). */}
+        {held.canMint && (
+          <div className="space-y-2 pt-3 border-t border-[#0d0d18]">
+            <p className={LABEL}>Batch Mint — MINT_ROLE</p>
+            <p className={DESC}>Mint to many recipients in a single transaction. Cheaper than separate mints and all-or-nothing — if one recipient is blocked by policy, the whole tx reverts.</p>
+            {inspect.paused?.mint && (
+              <p className="font-mono text-[9px] text-[#F59E0B] mb-1">⚠ Mint is currently paused</p>
+            )}
+
+            {/* Recipient rows */}
+            <div className="space-y-1.5">
+              {batchRows.map((row, i) => (
+                <div key={i} className="flex gap-1.5 items-start">
+                  <input value={row.to} onChange={e => updateBatchRow(i, "to", e.target.value)}
+                    placeholder="0x… recipient" spellCheck={false}
+                    className={`flex-[2] ${INPUT}${row.to && !isAddr(row.to) ? " border-[#EF444450]" : ""}`} />
+                  <input value={row.amount} onChange={e => updateBatchRow(i, "amount", e.target.value)}
+                    placeholder="0.0" spellCheck={false}
+                    className={`flex-1 ${INPUT}${row.amount && !isAmt(row.amount) ? " border-[#EF444450]" : ""}`} />
+                  <button onClick={() => removeBatchRow(i)} disabled={batchRows.length <= 1}
+                    title="Remove recipient"
+                    className="font-mono text-xs px-2.5 py-2 rounded-xl text-slate-600 hover:text-[#EF4444] disabled:opacity-30 transition-colors shrink-0">
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Add / CSV controls */}
+            <div className="flex gap-2">
+              <button onClick={addBatchRow}
+                className="font-mono text-[10px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-[#22C55E] hover:border-[#22C55E30] transition-colors">
+                + Add recipient
+              </button>
+              <button onClick={() => setCsvOpen(v => !v)}
+                className="font-mono text-[10px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-[#4FC3F7] hover:border-[#4FC3F730] transition-colors">
+                📋 Paste CSV
+              </button>
+            </div>
+
+            {/* CSV paste */}
+            {csvOpen && (
+              <div className="space-y-1.5">
+                <p className={DESC + " mb-0"}>
+                  One <span className="text-slate-400">address,amount</span> per line (comma or space separated). Replaces the rows above.
+                </p>
+                <textarea value={csvText} onChange={e => setCsvText(e.target.value)}
+                  rows={4} spellCheck={false}
+                  placeholder={"0xabc…,100\n0xdef…,250"}
+                  className={INPUT + " resize-y"} />
+                <button onClick={applyCsv} disabled={!csvText.trim()}
+                  className="font-mono text-[10px] px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+                  style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                  Apply CSV
+                </button>
+              </div>
+            )}
+
+            {/* Total + cap headroom */}
+            {batchValidRows.length > 0 && (
+              <div className="flex items-center justify-between rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3 py-2">
+                <span className="font-mono text-[9px] text-slate-600">
+                  {batchValidRows.length} recipient{batchValidRows.length === 1 ? "" : "s"}
+                </span>
+                <span className="font-mono text-[11px] font-semibold text-white">
+                  Total {batchTotalFmt} <span className="text-[#4FC3F7]">{symbol}</span>
+                </span>
+              </div>
+            )}
+            {batchOverCap && batchCapRemainingWei != null && (
+              <p className="font-mono text-[9px] text-[#EF4444]">
+                ⚠ Total exceeds remaining supply-cap headroom ({formatUnits(batchCapRemainingWei, decimals)} {symbol}). The tx would revert.
+              </p>
+            )}
+
+            <button
+              disabled={batchValidRows.length === 0 || batchOverCap || isBusy}
+              onClick={() => exec(
+                "Batch Mint",
+                encodeFunctionData({
+                  abi: B20_WRITE_ABI, functionName: "batchMint",
+                  args: [
+                    batchValidRows.map(row => row.to.trim() as `0x${string}`),
+                    batchValidRows.map(row => parseUnits(row.amount.trim(), decimals)),
+                  ],
+                }),
+                `Batch minted ${batchTotalFmt} ${symbol} to ${batchValidRows.length} recipient${batchValidRows.length === 1 ? "" : "s"}`,
+              )}
+              className="font-mono text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-40"
+              style={{ background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E30" }}>
+              Batch Mint →{batchValidRows.length > 0 ? ` (${batchValidRows.length})` : ""}
             </button>
           </div>
         )}

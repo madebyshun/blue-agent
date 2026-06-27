@@ -5,6 +5,17 @@ import { useChat } from "../ChatContext";
 import { ToolResultCard } from "./ToolCards";
 import ArtifactCard from "./ArtifactCard";
 import { isArtifactCardLang } from "../artifacts";
+import { useLang } from "@/lib/i18n/context";
+
+// B20 education starters — shown ONLY in the empty state when the UI language is
+// Chinese (zh). These send a plain question that the chat's B20 Education Mode
+// answers in 简体中文 from verified facts (no tool call, no fabrication).
+const ZH_B20_PROMPTS = [
+  "B20 和 ERC-20 有什么区别？",
+  "如何在 Base 上发行 B20 代币？",
+  "解释 B20 的角色权限",
+  "B20 转账策略如何工作？",
+];
 
 // ── Animated dot ──────────────────────────────────────────────────────────────
 
@@ -466,6 +477,7 @@ export default function ChatMessages() {
   const isEmpty    = messages.length === 0;
   const tierColor  = MODEL_COLORS[chatTier] ?? "#4FC3F7";
   const empty      = PERSONA_EMPTY[personaId] ?? PERSONA_EMPTY["blue-agent"];
+  const { lang }   = useLang();
 
   // ── Share conversation ────────────────────────────────────────────────────
   const [shareStatus, setShareStatus] = useState<"idle" | "loading" | "copied">("idle");
@@ -550,7 +562,28 @@ export default function ChatMessages() {
             ))}
           </div>
 
-
+          {/* B20 education prompts — Chinese builders only. Clickable → sends the
+              question, answered in 简体中文 by B20 Education Mode. */}
+          {lang === "zh" && (
+            <div className="w-full max-w-sm mb-6">
+              <p className="font-mono text-[10px] text-slate-600 mb-2 tracking-widest uppercase">
+                B20 学习
+              </p>
+              <div className="grid grid-cols-1 gap-2">
+                {ZH_B20_PROMPTS.map(q => (
+                  <button
+                    key={q}
+                    onClick={() => !streaming && send(q)}
+                    disabled={streaming || outOfCredits}
+                    className="w-full text-left font-mono text-[11px] px-3 py-2 rounded-xl text-slate-300 transition-colors disabled:opacity-40 hover:border-[#4FC3F7]/40"
+                    style={{ background: "#0d0d12", border: "1px solid #1A1A2E" }}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {outOfCredits && (
             <p className="font-mono text-[10px] text-red-400 mt-2">Out of credits — stake $BLUEAGENT to refill</p>

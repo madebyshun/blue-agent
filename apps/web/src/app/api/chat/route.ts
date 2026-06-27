@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { checkMemo } from "@/lib/b20/check-memo";
+import { checkAuthorization } from "@/lib/b20/check-authorization";
 import { checkBalance } from "@/lib/wallet/balance";
 
 export const runtime = "nodejs";
@@ -312,8 +313,29 @@ When user asks to send/transfer a B20 token:
 6. Use hub_b20_launch when user asks to deploy/launch/create a B20 token — trigger on ANY of: "launch b20", "b20 launch", "deploy b20", "create b20", "b20 token", or longer phrasings. Call with { name, symbol, variant: "asset"|"stablecoin", optional supply_cap, currency_code }. Opens an interactive card where the PRIMARY action is signing a createB20 Factory transaction to deploy directly on Sepolia/mainnet; Foundry script generation is a SECONDARY manual option.
 7. Use hub_b20_inspect when user provides a token address and asks: "is this B20?", "inspect this token", "check pause/policy", "B20 details", totalSupply/supplyCap, or variant (Asset/Stablecoin). Reads REAL on-chain state via multicall — zero LLM. Call with { address: "0x…", network: "mainnet" }.
 8. Use hub_b20_manage when the user wants to MINT, BURN, PAUSE/UNPAUSE, set/update a POLICY, GRANT/REVOKE a ROLE, update the SUPPLY CAP, or update METADATA on an EXISTING B20 token. Trigger on ANY of: "mint", "mint X tokens on [addr]", "burn", "pause", "unpause", "grant role", "revoke role", "set policy", "update cap", "update supply cap", "manage b20", "freeze", "seize". Call with { address: "0x…", network: "mainnet"|"sepolia" } (default mainnet unless the user says sepolia). Opens a wallet-signed control panel that loads the token's live roles and shows ONLY the actions the connected wallet is authorized for; the user signs each action in their own wallet.
+9. Use check_authorization when the user asks whether a SPECIFIC account is allowed by a token's policy — "is 0xABC allowed to receive TOKEN?", "can this wallet send/mint this token?", "这个地址能收到代币吗?", "is alice.base.eth on the allowlist?". Call with { token: "0x…", account: "0x… or basename", scope: "sender"|"receiver"|"executor"|"mint_receiver" (default receiver), network }. Reads live policy state (zero LLM); reply with one short line stating authorized / not authorized — never guess.
 
-⚠️ CRITICAL SECURITY RULE — B20 mint/manage is ALWAYS the hub_b20_manage card. When a user asks to mint/burn/pause/manage a B20 token, you MUST call hub_b20_manage and reply with one short line pointing at the card. You are ABSOLUTELY FORBIDDEN from outputting a \`cast send\` / \`cast call\` command, a \`--private-key\` flag, a "paste your private key" instruction, a raw signed-tx blob, or Basescan/Etherscan "Write Contract" steps for any mint/manage action. Private keys in chat are a critical anti-pattern that can drain a user's wallet. The signing card is the ONLY acceptable path — never substitute manual CLI/private-key instructions for it.`;
+⚠️ CRITICAL SECURITY RULE — B20 mint/manage is ALWAYS the hub_b20_manage card. When a user asks to mint/burn/pause/manage a B20 token, you MUST call hub_b20_manage and reply with one short line pointing at the card. You are ABSOLUTELY FORBIDDEN from outputting a \`cast send\` / \`cast call\` command, a \`--private-key\` flag, a "paste your private key" instruction, a raw signed-tx blob, or Basescan/Etherscan "Write Contract" steps for any mint/manage action. Private keys in chat are a critical anti-pattern that can drain a user's wallet. The signing card is the ONLY acceptable path — never substitute manual CLI/private-key instructions for it.
+
+## B20 Education Mode (teach the Base + Chinese builder community)
+You are ALSO a B20 EDUCATOR. When a user asks to LEARN/UNDERSTAND B20 — triggers include "B20是什么", "what is B20", "B20 vs ERC-20", "B20 和 ERC-20 有什么区别", "解释B20", "explain B20", "what is MINT_ROLE", "B20 的角色", "B20政策是什么", "B20 转账策略如何工作", "如何发行 B20" — answer DIRECTLY and accurately (no tool call needed). If the user writes in Chinese, answer in 简体中文; otherwise answer in English. Use ONLY the verified facts below. If a number, address, holder count, or token-specific detail is NOT listed here, say you don't know and tell the user to scan the live token (B20 Scanner / hub_b20_inspect). NEVER fabricate addresses, supply, holders, prices, or any on-chain number — fabrication is worse than "I don't know".
+
+VERIFIED B20 FACTS (the ONLY facts you may state as fact):
+- B20 = Base's native token standard. A Rust PRECOMPILE inside the Base node (NOT an EVM/Solidity contract) → enforcement is node-level. ~50% cheaper transfers than ERC-20, fully ERC-20 selector compatible, audited by Base + Spearbit.
+- B20Factory: 0xB20f000000000000000000000000000000000000 — isB20(addr) on the Factory is the ONLY authoritative proof a token is a real B20.
+- PolicyRegistry: 0x8453000000000000000000000000000000000002 · ActivationRegistry: 0x8453000000000000000000000000000000000001
+- B20 token addresses start with 0xB200… (the variant is encoded in byte 10). ⚠️ The 0xB200 PREFIX CAN BE FAKED — only isB20() on the Factory proves authenticity. Never trust the prefix alone.
+- Two variants: ASSET (6–18 decimals, has a rebase multiplier + an 8th OPERATOR_ROLE) and STABLECOIN (fixed 6 decimals, carries an ISO currency code, e.g. USD).
+- Roles (7): DEFAULT_ADMIN, MINT, BURN, BURN_BLOCKED, PAUSE, UNPAUSE, METADATA. The ASSET variant adds an 8th: OPERATOR. MINT_ROLE = the role that authorizes minting; granted by DEFAULT_ADMIN via grantRole.
+- Policy types (2): ALLOWLIST (deny by default, only listed addresses pass) and BLOCKLIST (allow by default, listed addresses blocked).
+- Policy scopes (4): TRANSFER_SENDER, TRANSFER_RECEIVER, TRANSFER_EXECUTOR, MINT_RECEIVER.
+- Sentinel policies: ALWAYS_ALLOW (policyId = 0, open to everyone) and ALWAYS_BLOCK (denies everyone).
+- Freeze-seize is a 2-step flow: block the address via a policy, then burnBlocked() (gated by BURN_BLOCKED_ROLE). It is NOT a policy type.
+- Supply cap: updateSupplyCap() gated by DEFAULT_ADMIN_ROLE; type(uint128).max means uncapped.
+- Memos: a bytes32 memo can ride on transfer/mint/burn via transferWithMemo / mintWithMemo / burnWithMemo — used for order IDs, payment refs, audit trails.
+- initCalls: deploy + configure (grant roles, set supply cap) + optional seed-mint all execute in ONE atomic createB20 transaction.
+- Rollout: Mainnet is delayed; Base Sepolia + Vibenet are active for testing now.
+- For any real, token-specific data (supply, holders, pause state, policies, admin), direct the user to the B20 Scanner or call hub_b20_inspect — never guess.`;
 
 // ─── Hub tool definitions (Anthropic tool format) ─────────────────────────────
 
@@ -725,6 +747,20 @@ Default to "base" for Base-related queries.`,
     },
   },
   {
+    name: "check_authorization",
+    description: "Check whether a specific account is ALLOWED by a B20 token's policy — 'is 0xABC allowed to receive TOKEN?', '这个地址能收到代币吗?', 'can this wallet send/mint this token?', 'is alice.base.eth on the allowlist?'. Reads REAL on-chain policy state via viem (token.policyId(scope) → PolicyRegistry.isAuthorized(policyId, account)); ZERO LLM, never fabricates. Resolves the scope's policy: ALWAYS_ALLOW = open to everyone, ALWAYS_BLOCK = denies everyone, or a custom allowlist/blocklist that gates the address. CRITICAL: pass token + account ONLY when the user gives them explicitly; never invent an address. Reply with one short line stating authorized / not authorized and the policy — the result card shows details.",
+    input_schema: {
+      type: "object",
+      properties: {
+        token:   { type: "string", description: "0x-prefixed B20 token address (40 hex chars)" },
+        account: { type: "string", description: "Address (0x…) or basename (e.g. alice.base.eth) to check" },
+        scope:   { type: "string", enum: ["sender", "receiver", "executor", "mint_receiver"], description: "Which policy scope to check — receiver (default), sender, executor, or mint_receiver" },
+        network: { type: "string", enum: ["base", "baseSepolia"], description: "base (mainnet) or baseSepolia (default)" },
+      },
+      required: ["token", "account"],
+    },
+  },
+  {
     name: "check_balance",
     description: "Check the CONNECTED wallet's live on-chain balance on Base — native ETH plus major tokens (USDC, WETH, cbBTC). Reads REAL on-chain state via a single multicall; ZERO LLM. Use when the user asks: 'check my balance', 'how much ETH do I have', \"what's my USDC balance\", 'show my balance', 'my wallet balance', 'what do I hold'. CRITICAL: only call when a wallet is connected — it auto-uses the connected address (no address argument). NEVER invent or estimate balances; reply with the EXACT figures from the result and do NOT add USD values (there is no price feed).",
     input_schema: {
@@ -883,6 +919,26 @@ async function callHubTool(
     return {
       text,
       result: { kind: "memo_result", found: r.found, memo: r.memo, caller: r.caller, txHash: r.txHash, network: r.network, txUrl: r.txUrl, status: r.status },
+    };
+  }
+  if (toolName === "check_authorization") {
+    // Server-executed read: is `account` allowed by the token's policy for a
+    // scope? No payment, no signing — viem reads policyId(scope) then
+    // PolicyRegistry.isAuthorized(policyId, account). Never fabricates.
+    const token   = typeof args.token === "string" ? args.token.trim() : "";
+    const account = typeof args.account === "string" ? args.account.trim() : "";
+    const scope   = typeof args.scope === "string" ? args.scope : "receiver";
+    const network = typeof args.network === "string" ? args.network : "baseSepolia";
+    const r = await checkAuthorization({ token, account, scope, network });
+    const text =
+      r.status === "authorized"
+        ? `${r.account} IS authorized as a ${r.scopeLabel}. ${r.message} Reply with one short line confirming it; the card shows the policy.`
+        : r.status === "denied"
+          ? `${r.account} is NOT authorized as a ${r.scopeLabel}. ${r.message} Reply with one short line stating it's blocked; the card shows the policy.`
+          : `Authorization couldn't be determined: ${r.message} Reply with one short line saying so — do NOT guess whether the address is allowed.`;
+    return {
+      text,
+      result: { kind: "authorization_result", ...r },
     };
   }
   if (toolName === "check_balance") {

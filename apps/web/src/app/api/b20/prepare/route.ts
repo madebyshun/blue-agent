@@ -19,15 +19,17 @@ export async function POST(req: NextRequest) {
     const {
       name,
       symbol,
-      variant       = "asset",
-      decimals      = 18,
+      variant        = "asset",
+      decimals       = 18,
       supply_cap,
+      initial_supply,
       currency_code,
       admin,
-      network       = "sepolia",
+      network        = "sepolia",
     } = body as {
       name?: string; symbol?: string; variant?: string; decimals?: number;
-      supply_cap?: string; currency_code?: string; admin?: string; network?: string;
+      supply_cap?: string; initial_supply?: string; currency_code?: string;
+      admin?: string; network?: string;
     };
 
     if (!name || !symbol || !admin) {
@@ -45,6 +47,7 @@ export async function POST(req: NextRequest) {
       variant:       (variant === "stablecoin" ? "stablecoin" : "asset"),
       decimals,
       supply_cap,
+      initial_supply,
       currency_code,
       admin,
     });
@@ -62,6 +65,7 @@ export async function POST(req: NextRequest) {
         variant:       variant === "stablecoin" ? "stablecoin" : "asset",
         decimals:      dec,
         supply_cap:    supply_cap || null,
+        initial_supply: initial_supply || null,
         currency_code: variant === "stablecoin" ? (currency_code || "USD") : null,
       },
       factory,
