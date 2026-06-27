@@ -894,7 +894,7 @@ async function callHubTool(
         result: { kind: "balance_result", connected: false, address: "", network: "sepolia", balances: [] },
       };
     }
-    const network = typeof args.network === "string" ? args.network : "baseSepolia";
+    const network = typeof args.network === "string" ? args.network : "base";
     const r = await checkBalance(userAddress, network);
     const text = r.error
       ? `Balance lookup failed: ${r.error}. Reply with one short line telling the user it couldn't be read; do NOT invent figures.`
@@ -995,6 +995,7 @@ async function callVenicePhase1(
   openaiMsgs:      object[],
   maxTokens:       number,
   enableWebSearch: boolean,
+  forceTool?:      string,
 ): Promise<VenicePhase1Resp | null> {
   try {
     const res = await fetch(VENICE_API, {
@@ -1004,7 +1005,9 @@ async function callVenicePhase1(
         model:       modelId,
         messages:    openaiMsgs,
         tools:       VENICE_TOOLS,
-        tool_choice: "auto",
+        tool_choice: forceTool
+          ? { type: "function", function: { name: forceTool } }
+          : "auto",
         stream:      false,
         max_tokens:  Math.min(maxTokens, 1024), // intent only — keep short
         venice_parameters: {
@@ -1203,10 +1206,14 @@ function extractCommand(messages: LLMMessage[]): { cmd: string; args: string } |
   // NL intent detection — only short messages to avoid false positives
   const lower = text.toLowerCase().replace(/[?!.,]/g, "").trim();
 
-  // credits intent
+  // credits intent — note: "balance" alone is NOT here. Bare "my balance" /
+  // "check my balance" means the on-chain WALLET balance (handled by the
+  // check_balance tool), not credits. Only fire credits when "credit(s)" is
+  // explicitly present, otherwise we'd hijack wallet-balance queries into the
+  // knowledge-only /credits command and the balance card would never render.
   if (
     text.length < 100 &&
-    /\b(credit|credits|how many credits|check.*credit|credit.*left|credit.*remain|my balance|credit balance)\b/.test(lower)
+    /\bcredits?\b/.test(lower)
   ) {
     return { cmd: "credits", args: text };
   }
@@ -1220,6 +1227,24 @@ function extractCommand(messages: LLMMessage[]): { cmd: string; args: string } |
   }
 
   return null;
+}
+
+/**
+ * True when the last user message is asking for their on-chain WALLET balance.
+ * Used to force the check_balance tool (tool_choice) so the model reliably
+ * emits a real tool_use block — otherwise Sonnet sometimes narrates
+ * "I'll check your balance…" as plain text and the result card never renders.
+ * Deliberately excludes "credit(s)" so it never collides with the /credits flow.
+ */
+function wantsWalletBalance(messages: LLMMessage[]): boolean {
+  const last = messages[messages.length - 1];
+  if (last?.role !== "user" || typeof last.content !== "string") return false;
+  const t = last.content.toLowerCase();
+  if (t.length > 120 || /\bcredits?\b/.test(t)) return false;
+  return /\bbalance\b/.test(t)
+      || /\bhow much (eth|usdc|money)\b/.test(t)
+      || /what.?s in my wallet\b/.test(t)
+      || /\bwallet holdings?\b/.test(t);
 }
 
 const COMMAND_PROMPTS: Record<string, string> = {
@@ -1652,8 +1677,14 @@ export async function POST(req: NextRequest) {
     ];
 
     if (!isE2EE && !knowledgeOnly) {
-      // Phase 1: detect tool intent (skipped for pure-knowledge commands)
-      const phase1    = await callVenicePhase1(apiKey, modelId, openaiMsgs, maxTok, autoSearch);
+      // Phase 1: detect tool intent (skipped for pure-knowledge commands).
+      // Force check_balance when the user clearly asks for their wallet balance
+      // and a wallet is connected, so the balance card reliably renders.
+      const forceTool =
+        address && /^0x[a-fA-F0-9]{40}$/.test(address) && wantsWalletBalance(cleanMessages)
+          ? "check_balance"
+          : undefined;
+      const phase1    = await callVenicePhase1(apiKey, modelId, openaiMsgs, maxTok, autoSearch, forceTool);
       const toolCalls = phase1?.choices?.[0]?.message?.tool_calls;
       if (toolCalls?.length) {
         return veniceToolStream(apiKey, modelId, openaiMsgs, toolCalls, maxTok, autoSearch, address);
@@ -1689,6 +1720,16 @@ export async function POST(req: NextRequest) {
     ? (webSearch ? [webSearchTool] : [])
     : (webSearch ? [...HUB_TOOLS, webSearchTool] : [...HUB_TOOLS]);
 
+  // When the user clearly asks for their wallet balance AND a wallet is
+  // connected, force the check_balance tool so a real tool_use block (and thus
+  // the balance card) is guaranteed — instead of relying on the model to pick
+  // it under tool_choice:auto, which it sometimes narrates as text instead.
+  const forceBalance =
+    !knowledgeOnly &&
+    !!address &&
+    /^0x[a-fA-F0-9]{40}$/.test(address) &&
+    wantsWalletBalance(cleanMessages);
+
   try {
     const firstRes = await fetch(BANKR_LLM, {
       method:  "POST",
@@ -1699,6 +1740,7 @@ export async function POST(req: NextRequest) {
         messages:   cleanMessages,
         tools:      ANTHROPIC_TOOLS,
         max_tokens: model.maxTokens,
+        ...(forceBalance ? { tool_choice: { type: "tool", name: "check_balance" } } : {}),
       }),
     });
 
