@@ -39,12 +39,12 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     ? `A Blue Agent conversation · ${count} message${count === 1 ? "" : "s"} — AI for Base builders and traders.`
     : "A conversation shared from Blue Agent — AI for Base builders and traders.";
 
-  // og:image + twitter:image. We must set images here: Next shallow-merges the
-  // openGraph object, so declaring openGraph WITHOUT images would drop the root
-  // layout's banner and leave the share page with no preview image at all.
-  // The title/description carry the per-conversation text (rendered by the
-  // social platform's own fonts, so CJK titles render fine).
-  const banner = { url: "/og-chat.png", width: 1200, height: 630, alt: "Blue Agent — shared conversation" };
+  // og:image + twitter:image are supplied automatically by the sibling
+  // opengraph-image.tsx (Next's file convention), which renders a per-conversation
+  // banner for EVERY id. We deliberately do NOT set `images` here — hard-setting
+  // them would override the dynamic card. The title/description carry the
+  // per-conversation text (social platforms render it with their own fonts, so
+  // CJK titles display correctly).
   return {
     title: fullTitle,
     description,
@@ -53,13 +53,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       description,
       siteName: "Blue Agent",
       type: "article",
-      images: [banner],
     },
     twitter: {
       card: "summary_large_image",
       title: fullTitle,
       description,
-      images: [banner.url],
     },
   };
 }

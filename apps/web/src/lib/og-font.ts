@@ -57,6 +57,33 @@ export async function getBrandFonts(): Promise<OgFont[]> {
   return fonts;
 }
 
+/**
+ * A "Noto Sans SC" TTF subset covering exactly the glyphs in `text` — lets OG
+ * cards render CJK (and other non-Latin) titles without bundling a multi-MB
+ * font. Google returns a `format('truetype')` subset for the `&text=` param
+ * (the macOS UA above is what gets us TTF, not WOFF2). Returns null on failure
+ * so the card still renders — Satori then falls back to the brand font for any
+ * glyphs the subset would have covered.
+ */
+export async function getTitleFont(text: string): Promise<OgFont | null> {
+  const chars = Array.from(new Set([...text])).join("");
+  if (!chars.trim()) return null;
+  try {
+    const css = await fetch(
+      `https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@700&text=${encodeURIComponent(chars)}`,
+      { headers: { "User-Agent": UA } },
+    ).then(r => r.text());
+    const url =
+      css.match(/url\((https:\/\/[^)]+)\)\s*format\(['"]truetype['"]\)/)?.[1] ??
+      css.match(/url\((https:\/\/[^)]+\.ttf)\)/)?.[1];
+    if (!url) return null;
+    const data = await fetch(url).then(r => r.arrayBuffer());
+    return { name: "Noto Sans SC", data, weight: 700, style: "normal" };
+  } catch {
+    return null;
+  }
+}
+
 /** Resolved font-family names — pass `loaded` (fonts.length > 0) to pick the brand font or a safe fallback. */
 export function brandFonts(loaded: boolean) {
   return {
