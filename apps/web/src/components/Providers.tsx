@@ -7,6 +7,7 @@ import { coinbaseWallet } from "wagmi/connectors";
 import { farcasterMiniApp } from "@farcaster/miniapp-wagmi-connector";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import MiniAppReady from "@/components/MiniAppReady";
+import BaseAppAutoConnect from "@/components/BaseAppAutoConnect";
 
 // The Farcaster / Base App Mini App connector talks to a host frame over
 // postMessage. It is NOT inert in a normal browser tab: with no host to
@@ -58,6 +59,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         {/* Dismisses the Base App / Farcaster splash once mounted. */}
         <MiniAppReady />
+        {/* Silently binds the host wallet when embedded in Base App / Farcaster. */}
+        <BaseAppAutoConnect />
         {children}
       </QueryClientProvider>
     </WagmiProvider>

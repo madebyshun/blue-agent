@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useAccount } from "wagmi";
+import { useRouter } from "next/navigation";
+import { useAccount, useSendTransaction, useSwitchChain } from "wagmi";
 
 const ACCENT = "#F59E0B";
 
@@ -123,6 +124,35 @@ function HotBadge() {
   );
 }
 
+// ── In-app Trade button ─────────────────────────────────────────────────────────
+// Replaces the old external Uniswap deep-link. Routes into Blue Chat with a
+// pre-filled (NOT auto-sent) trade prompt so the user never leaves BlueAgent —
+// the LLM then guides price/liquidity/swap. Bankr's /wallet/swap API operates on
+// Bankr's own custodial wallet (not the user's connected EOA), so it's the wrong
+// tool for "let the connected user trade"; the chat redirect is the right path.
+
+function buildTradeUrl(l: Launch): string {
+  const sym = (l.tokenSymbol || l.tokenName || "token").replace(/^\$/, "");
+  const msg = `I want to buy $${sym} (${l.tokenAddress}) on Base. What's the current price, liquidity, and the safest way to swap into it?`;
+  return `/app/chat?prefill=${encodeURIComponent(msg)}`;
+}
+
+function TradeButton({ l, compact }: { l: Launch; compact?: boolean }) {
+  const router = useRouter();
+  return (
+    <button
+      onClick={() => router.push(buildTradeUrl(l))}
+      title="Trade in Blue Chat"
+      className={compact
+        ? "px-2 py-0.5 rounded border text-[9px] transition-colors hover:opacity-90"
+        : "font-mono text-[10px] px-2 py-1 rounded-lg border transition-colors hover:opacity-90"}
+      style={{ borderColor: `${ACCENT}30`, color: ACCENT }}
+    >
+      Trade →
+    </button>
+  );
+}
+
 // ── Token card ─────────────────────────────────────────────────────────────────
 
 function LaunchCard({ l }: { l: Launch }) {
@@ -211,12 +241,7 @@ function LaunchCard({ l }: { l: Launch }) {
 
       {/* Links */}
       <div className="flex flex-wrap gap-1.5 pt-1 border-t border-[#1A1A2E]">
-        <a href={`https://app.uniswap.org/swap?outputCurrency=${l.tokenAddress}&chain=base`}
-          target="_blank" rel="noopener noreferrer"
-          className="font-mono text-[10px] px-2 py-1 rounded-lg border transition-colors"
-          style={{ borderColor: `${ACCENT}30`, color: ACCENT }}>
-          Trade ↗
-        </a>
+        <TradeButton l={l} />
         <a href={`https://bankr.bot/launches/${l.tokenAddress}`}
           target="_blank" rel="noopener noreferrer"
           className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] transition-colors">
@@ -289,12 +314,7 @@ function LaunchRow({ l }: { l: Launch }) {
       <div className="text-slate-600 tabular-nums">{fmtAge(l.launchedAt)}</div>
       {/* Actions */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        <a href={`https://app.uniswap.org/swap?outputCurrency=${l.tokenAddress}&chain=base`}
-          target="_blank" rel="noopener noreferrer"
-          className="px-2 py-0.5 rounded border text-[9px] transition-colors"
-          style={{ borderColor: `${ACCENT}30`, color: ACCENT }}>
-          Trade ↗
-        </a>
+        <TradeButton l={l} compact />
         <a href={`https://bankr.bot/launches/${l.tokenAddress}`}
           target="_blank" rel="noopener noreferrer"
           className="px-2 py-0.5 rounded border border-[#4FC3F730] text-[#4FC3F7] text-[9px] transition-colors">
@@ -344,7 +364,7 @@ function ListHeader({
 // ── Sort / Filter / Search types ───────────────────────────────────────────────
 
 type SortKey = "newest" | "volume" | "mcap" | "change" | "price" | "age";
-type FilterTab = "all" | "live" | "new" | "hot";
+type FilterTab = "all" | "live" | "new" | "hot" | "mine";
 type ViewMode = "grid" | "list";
 
 const SORT_OPTIONS: { label: string; key: SortKey }[] = [
@@ -359,6 +379,7 @@ const FILTER_TABS: { label: string; key: FilterTab }[] = [
   { label: "Live", key: "live" },
   { label: "New", key: "new" },
   { label: "Hot 🔥", key: "hot" },
+  { label: "My Tokens 👤", key: "mine" },
 ];
 
 function applyFilter(launches: Launch[], tab: FilterTab): Launch[] {
@@ -428,6 +449,267 @@ function RefreshDot({ countdown }: { countdown: number }) {
       />
       {countdown}s
     </span>
+  );
+}
+
+// ── My Tokens (creator-fee dashboard) ───────────────────────────────────────────
+// Lists tokens the CONNECTED wallet launched, with unclaimed creator fees pulled
+// live from Bankr's public Doppler creator-fees endpoint (via /api/my-tokens).
+// Claim Fees is an ONCHAIN tx: /api/claim-fees builds Bankr's calldata, the user
+// signs it from their own wallet (wagmi). ZERO fabricated USD — raw amounts only.
+
+type MyToken = {
+  tokenAddress: string;
+  name: string;
+  symbol: string;
+  share: string | null;
+  token0Label: string | null;
+  token1Label: string | null;
+  claimable: { token0: string; token1: string };
+  claimed: { token0: string; token1: string; count: number };
+  hasClaimable: boolean;
+};
+type MyTokensResponse = { ok: boolean; address: string; tokens: MyToken[]; error?: string };
+type ClaimTx = { to: string; data: string; chainId: number; gasEstimate?: string; description?: string };
+type ClaimResponse = { ok: boolean; transactions: ClaimTx[]; error?: string };
+
+// Compact amount formatter for raw token strings (no USD invented).
+function fmtAmt(s: string): string {
+  const n = parseFloat(s);
+  if (!Number.isFinite(n) || n === 0) return "0";
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(2) + "K";
+  if (n >= 1) return n.toFixed(4);
+  if (n >= 0.0001) return n.toFixed(6);
+  return n.toExponential(2);
+}
+
+function MyTokenCard({ t, owner, onClaimed }: { t: MyToken; owner: string; onClaimed: () => void }) {
+  const { sendTransactionAsync } = useSendTransaction();
+  const { switchChainAsync } = useSwitchChain();
+  const [status, setStatus] = useState<"idle" | "building" | "signing" | "done" | "error">("idle");
+  const [msg, setMsg] = useState("");
+  const [txHash, setTxHash] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const sym = (t.symbol || t.name || "?").replace(/^\$/, "");
+  const busy = status === "building" || status === "signing";
+
+  function copyAddr() {
+    navigator.clipboard?.writeText(t.tokenAddress).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    });
+  }
+
+  async function claim() {
+    if (busy) return;
+    setStatus("building"); setMsg(""); setTxHash("");
+    try {
+      const res = await fetch("/api/claim-fees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ beneficiaryAddress: owner, tokenAddress: t.tokenAddress }),
+      });
+      const d = (await res.json()) as ClaimResponse;
+      if (!d.ok || d.transactions.length === 0) {
+        setMsg(d.error || "Nothing to claim."); setStatus("error"); return;
+      }
+      // Make sure we're on Base before signing.
+      try { await switchChainAsync({ chainId: 8453 }); } catch { /* user may already be on Base */ }
+      setStatus("signing");
+      let last = "";
+      for (const tx of d.transactions) {
+        last = await sendTransactionAsync({
+          to: tx.to as `0x${string}`,
+          data: tx.data as `0x${string}`,
+          chainId: 8453,
+        });
+      }
+      setTxHash(last);
+      setStatus("done");
+      setMsg("Fees claimed.");
+      setTimeout(onClaimed, 2500); // refresh balances after the tx settles
+    } catch (e) {
+      const m = (e as Error).message || "Claim failed.";
+      const cancelled = /user rejected|denied|cancell?ed/i.test(m);
+      setMsg(cancelled ? "Claim cancelled." : m.slice(0, 120));
+      setStatus("error");
+    }
+  }
+
+  return (
+    <div className="card-surface rounded-2xl p-4 flex flex-col gap-3">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center font-mono text-sm font-bold shrink-0"
+          style={{ background: `${ACCENT}15`, border: `1px solid ${ACCENT}30`, color: ACCENT }}>
+          {sym.slice(0, 2).toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-mono text-sm font-bold text-white truncate">{t.name || sym}</div>
+          <div className="font-mono text-[11px] text-slate-500">${sym}</div>
+        </div>
+        {t.share && (
+          <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-md shrink-0"
+            style={{ background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}30` }}>
+            {t.share} fee
+          </span>
+        )}
+      </div>
+
+      {/* Unclaimed fees */}
+      <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3">
+        <div className="font-mono text-[8px] text-slate-600 tracking-widest mb-1.5">UNCLAIMED FEES</div>
+        <div className="grid grid-cols-2 gap-2 font-mono">
+          <div>
+            <div className="text-[13px] font-bold text-slate-100 tabular-nums">{fmtAmt(t.claimable.token0)}</div>
+            <div className="text-[9px] text-slate-600">{t.token0Label ?? "token0"}</div>
+          </div>
+          <div>
+            <div className="text-[13px] font-bold text-slate-100 tabular-nums">{fmtAmt(t.claimable.token1)}</div>
+            <div className="text-[9px] text-slate-600">{t.token1Label ?? "token1"}</div>
+          </div>
+        </div>
+        {t.claimed.count > 0 && (
+          <div className="font-mono text-[9px] text-slate-600 mt-2 pt-2 border-t border-[#1A1A2E]">
+            Claimed {t.claimed.count}× already
+          </div>
+        )}
+      </div>
+
+      {/* Address */}
+      <button onClick={copyAddr}
+        className="flex items-center gap-1.5 font-mono text-[10px] text-slate-600 hover:text-slate-400 transition-colors self-start"
+        title="Copy token address">
+        <span>{truncAddr(t.tokenAddress)}</span>
+        <span style={{ color: copied ? "#22C55E" : undefined }}>{copied ? "✓ copied" : "⧉"}</span>
+      </button>
+
+      {/* Claim status */}
+      {status !== "idle" && (
+        <div className="font-mono text-[10px]"
+          style={{ color: status === "done" ? "#22C55E" : status === "error" ? "#EF4444" : ACCENT }}>
+          {status === "building" && "Building claim…"}
+          {status === "signing" && "Confirm in your wallet…"}
+          {status === "done" && (
+            <span>
+              ✓ {msg}{" "}
+              {txHash && (
+                <a href={`https://basescan.org/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
+                  className="underline hover:opacity-80">view tx ↗</a>
+              )}
+            </span>
+          )}
+          {status === "error" && `⚠ ${msg}`}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex flex-wrap gap-1.5 pt-1 border-t border-[#1A1A2E]">
+        <button
+          onClick={claim}
+          disabled={busy || !t.hasClaimable}
+          className="font-mono text-[10px] px-2.5 py-1 rounded-lg border transition-colors disabled:opacity-40"
+          style={{ borderColor: `${ACCENT}40`, color: ACCENT, background: `${ACCENT}10` }}
+          title={t.hasClaimable ? "Claim creator fees" : "No unclaimed fees yet"}>
+          {busy ? "Claiming…" : t.hasClaimable ? "Claim Fees" : "No fees yet"}
+        </button>
+        <a href={`/app/b20?address=${t.tokenAddress}`}
+          className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white transition-colors">
+          Scanner →
+        </a>
+        <a href={`https://bankr.bot/launches/${t.tokenAddress}`} target="_blank" rel="noopener noreferrer"
+          className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] transition-colors">
+          Bankr ↗
+        </a>
+        <a href={`https://basescan.org/token/${t.tokenAddress}`} target="_blank" rel="noopener noreferrer"
+          className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white transition-colors">
+          Basescan ↗
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function MyTokensView({ onLaunch }: { onLaunch: () => void }) {
+  const { address, isConnected } = useAccount();
+  const [tokens, setTokens] = useState<MyToken[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  const load = useCallback(() => {
+    if (!address) return;
+    setLoading(true); setErr("");
+    fetch(`/api/my-tokens?address=${address}`)
+      .then((r) => r.json())
+      .then((d: MyTokensResponse) => {
+        if (d.ok) setTokens(d.tokens);
+        else { setErr(d.error || "Failed to load your tokens."); setTokens([]); }
+      })
+      .catch(() => setErr("Failed to load your tokens."))
+      .finally(() => setLoading(false));
+  }, [address]);
+
+  useEffect(() => { if (isConnected && address) load(); }, [isConnected, address, load]);
+
+  // Not connected → connect gate.
+  if (!isConnected || !address) {
+    return (
+      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-10 text-center">
+        <div className="text-3xl mb-3">👤</div>
+        <p className="text-sm text-slate-400 mb-1">Connect your wallet</p>
+        <p className="text-[11px] text-slate-600">
+          See the tokens you&apos;ve launched and claim your creator fees.
+        </p>
+      </div>
+    );
+  }
+
+  if (loading && !tokens) {
+    return (
+      <div className="flex items-center gap-2 py-10 justify-center">
+        <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: ACCENT }} />
+        <span className="text-xs text-slate-600">Loading your tokens…</span>
+      </div>
+    );
+  }
+
+  if (err && (!tokens || tokens.length === 0)) {
+    return (
+      <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-5 text-center">
+        <p className="text-sm text-red-400 mb-3">{err}</p>
+        <button onClick={load}
+          className="font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-300 hover:text-white transition-colors">
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (tokens && tokens.length === 0) {
+    return (
+      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-10 text-center">
+        <div className="text-3xl mb-3">🚀</div>
+        <p className="text-sm text-slate-400 mb-1">No tokens launched yet</p>
+        <p className="text-[11px] text-slate-600 mb-4">
+          Launch a token on Base in seconds — you keep the 57% creator fee.
+        </p>
+        <button onClick={onLaunch}
+          className="inline-block font-mono text-[12px] font-bold px-4 py-2 rounded-lg transition-all"
+          style={{ background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}40` }}>
+          Launch a token →
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      {(tokens ?? []).map((t) => (
+        <MyTokenCard key={t.tokenAddress} t={t} owner={address} onClaimed={load} />
+      ))}
+    </div>
   );
 }
 
@@ -578,7 +860,8 @@ export default function LaunchesPage() {
             ))}
           </div>
 
-          {/* A4 Search + A2 Sort row */}
+          {/* A4 Search + A2 Sort row — hidden in My Tokens (operates on public feed) */}
+          {filterTab !== "mine" && (
           <div className="flex items-center gap-2 mb-5 flex-wrap">
             {/* A4 — search */}
             <input
@@ -606,8 +889,11 @@ export default function LaunchesPage() {
               ))}
             </div>
           </div>
+          )}
 
-          {loading ? (
+          {filterTab === "mine" ? (
+            <MyTokensView onLaunch={() => setShowLaunch(true)} />
+          ) : loading ? (
             <div className="flex items-center gap-2 py-10 justify-center">
               <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: ACCENT }} />
               <span className="text-xs text-slate-600">Loading launches…</span>

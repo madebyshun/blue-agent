@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { checkMemo } from "@/lib/b20/check-memo";
+import { checkBalance } from "@/lib/wallet/balance";
 
 export const runtime = "nodejs";
 // Vercel kills serverless functions at 60s by default — explicit budget so
@@ -204,7 +205,7 @@ You have access to real-time Hub tools. Use them when the user asks about:
 - Builder scores, repo health, grants → hub_builder_score, hub_repo_health, hub_base_grant
 - Fundraising timing, ecosystem digest → hub_fundraise_timing, hub_ecosystem
 - Live onchain data: balance, tx, block, gas, contract calls → hub_crypto_rpc (21 chains: base, ethereum, arbitrum, optimism, polygon, etc.)
-- User's own wallet balance → hub_crypto_rpc with eth_getBalance for ETH, eth_call for ERC-20 tokens. Present as a clean text list.
+- User's OWN wallet balance ("check my balance", "how much ETH/USDC do I have", "show my balance") → check_balance. It auto-uses the connected wallet (no address arg), reads ETH + USDC + WETH + cbBTC in ONE multicall, and renders a result card. NEVER invent figures; if no wallet is connected the result says so. Do NOT use hub_crypto_rpc for the user's own balance.
 - Anything requiring live web data (news, events, rumours, OFFICIAL announcements) → web_search
 
 Tool selection rules:
@@ -723,6 +724,17 @@ Default to "base" for Base-related queries.`,
       required: ["txHash"],
     },
   },
+  {
+    name: "check_balance",
+    description: "Check the CONNECTED wallet's live on-chain balance on Base — native ETH plus major tokens (USDC, WETH, cbBTC). Reads REAL on-chain state via a single multicall; ZERO LLM. Use when the user asks: 'check my balance', 'how much ETH do I have', \"what's my USDC balance\", 'show my balance', 'my wallet balance', 'what do I hold'. CRITICAL: only call when a wallet is connected — it auto-uses the connected address (no address argument). NEVER invent or estimate balances; reply with the EXACT figures from the result and do NOT add USD values (there is no price feed).",
+    input_schema: {
+      type: "object",
+      properties: {
+        network: { type: "string", enum: ["base", "baseSepolia"], description: "base (mainnet) or baseSepolia (default)" },
+      },
+      required: [],
+    },
+  },
 ];
 
 // ─── Venice tools (OpenAI function-calling format) ───────────────────────────
@@ -871,6 +883,25 @@ async function callHubTool(
     return {
       text,
       result: { kind: "memo_result", found: r.found, memo: r.memo, caller: r.caller, txHash: r.txHash, network: r.network, txUrl: r.txUrl, status: r.status },
+    };
+  }
+  if (toolName === "check_balance") {
+    // Server-executed read of the CONNECTED wallet's on-chain balances. No
+    // payment, no signing — one multicall. Honest: no USD value (no price feed).
+    if (!userAddress || !/^0x[a-fA-F0-9]{40}$/.test(userAddress)) {
+      return {
+        text: "No wallet is connected. Reply with one short line asking the user to connect their wallet first — do NOT invent any balance.",
+        result: { kind: "balance_result", connected: false, address: "", network: "sepolia", balances: [] },
+      };
+    }
+    const network = typeof args.network === "string" ? args.network : "baseSepolia";
+    const r = await checkBalance(userAddress, network);
+    const text = r.error
+      ? `Balance lookup failed: ${r.error}. Reply with one short line telling the user it couldn't be read; do NOT invent figures.`
+      : `Balances read on-chain for the connected wallet. The result card shows them. Reply with ONE short line stating the exact ETH${r.balances.some(b => b.symbol === "USDC" && b.raw !== "0") ? " + USDC" : ""} figures from the result — never invent numbers and never add USD values.`;
+    return {
+      text,
+      result: { kind: "balance_result", connected: true, address: r.address, network: r.network, explorer: r.explorer, addressUrl: r.addressUrl, balances: r.balances, error: r.error },
     };
   }
 
