@@ -135,13 +135,13 @@ function AppSideNav() {
 
       {/* Logo */}
       <div className="flex items-center justify-center h-14 border-b border-[#1A1A2E] shrink-0">
-        <Link href="/" title="blueagent.dev">
+        <a href="https://blueagent.dev" title="blueagent.dev">
           <img
             src="/logomark.svg"
             alt="Blue Agent"
             className="h-7 w-7 rounded-lg hover:opacity-75 transition-opacity"
           />
-        </Link>
+        </a>
       </div>
 
       {/* Primary nav */}
@@ -223,8 +223,8 @@ function AppSideNav() {
         <div className="w-8 h-px bg-[#1A1A2E] my-0.5" />
 
         {/* Back to marketing site */}
-        <Link
-          href="/"
+        <a
+          href="https://blueagent.dev"
           className="group relative flex flex-col items-center justify-center gap-0.5 w-full h-[46px] rounded-xl text-[#283040] hover:text-slate-500 transition-colors"
         >
           <svg style={{ width: 16, height: 16 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -234,7 +234,7 @@ function AppSideNav() {
           <span className="font-mono text-[7px] tracking-wide text-slate-700 group-hover:text-slate-500 transition-colors">
             Home
           </span>
-        </Link>
+        </a>
       </div>
     </aside>
   );
