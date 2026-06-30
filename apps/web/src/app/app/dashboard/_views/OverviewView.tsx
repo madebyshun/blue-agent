@@ -14,7 +14,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useAccount, useReadContracts, useDisconnect } from "wagmi";
+import { useAccount, useReadContracts } from "wagmi";
+import { useWalletDisconnect } from "@/lib/walletSession";
 import { formatUnits } from "viem";
 import AppConnectPrompt from "@/components/app/AppConnectPrompt";
 import { useBasename } from "@/lib/useBasename";
@@ -181,7 +182,7 @@ interface Props {
 
 export default function OverviewView({ onSwitchTab }: Props) {
   const { address, isConnected } = useAccount();
-  const { disconnect }           = useDisconnect();
+  const disconnect               = useWalletDisconnect();
   const { name: basename }       = useBasename(address);
   const [chatStats,    setChatStats]    = useState<ChatStats>({ totalSessions: 0, totalMessages: 0, totalCreditsUsed: 0, toolsUsed: [], firstUsed: null });
   const [copied,       setCopied]       = useState(false);

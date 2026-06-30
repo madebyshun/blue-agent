@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useConnect, useAccount } from "wagmi";
+import { wasUserDisconnected } from "@/lib/walletSession";
 
 /**
  * Auto-connects the wallet when BlueAgent is opened INSIDE Base App / Farcaster
@@ -22,6 +23,11 @@ export default function BaseAppAutoConnect() {
 
   useEffect(() => {
     if (isConnected || tried.current) return;
+
+    // Respect an explicit user disconnect: if the user tapped "Disconnect" this
+    // session, do NOT silently re-bind the host wallet on the next mount. The
+    // flag is cleared the moment they manually connect again.
+    if (wasUserDisconnected()) return;
 
     // Host detection — only an embedded Mini App / Coinbase context qualifies.
     const w = window as unknown as { ethereum?: { isCoinbaseWallet?: boolean } };
