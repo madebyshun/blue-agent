@@ -3,7 +3,7 @@
 // "tools" tab retired from chat — the 74-tool catalog now lives only on the Hub
 // (/hub). Tools still run inside chat (the model auto-calls them); they're just
 // not a browsable surface users must learn. Skills are the user-facing unit.
-export type ActiveTab = "chat" | "models" | "skills" | "settings";
+export type ActiveTab = "chat" | "models" | "skills" | "connectors" | "settings";
 
 export type ToolLog = {
   tool:    string;

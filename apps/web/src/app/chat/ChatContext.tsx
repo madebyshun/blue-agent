@@ -16,6 +16,7 @@ import {
 } from "./storage";
 import { extractArtifacts } from "./artifacts";
 import { enabledSkillsPrompt, loadIntegrations, runSkillCommand } from "./integrations";
+import { enabledConnectorsForChat } from "./connectors";
 import { getPersona } from "./personas";
 import {
   creditCost, deductCredits, addCredits,
@@ -532,6 +533,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     // Installed-skill prompt + integration toggles → extend the system prompt.
     const skillsPrompt = enabledSkillsPrompt();
     const integ = loadIntegrations();
+    // Enabled MCP connectors (external servers the user attached) → their tools
+    // become callable as mcp__<id>__<tool> server-side.
+    const mcpConnectors = enabledConnectorsForChat();
 
     try {
       // Language preference for the assistant's replies. Read from the shared
@@ -561,6 +565,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           ...(skillsPrompt  ? { skills: skillsPrompt } : {}),
           ...(integ.baseMcp  ? { baseMcp: true }  : {}),
           ...(integ.coinbase ? { coinbase: true } : {}),
+          ...(mcpConnectors.length ? { mcpConnectors } : {}),
         }),
         signal: abortRef.current.signal,
       });
