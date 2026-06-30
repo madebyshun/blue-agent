@@ -46,13 +46,23 @@ const NAV_TABS: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
       </svg>
     ),
   },
+  {
+    id: "connectors",
+    label: "Connectors",
+    icon: (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+          d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 10-5.656-5.656l-1.1 1.1" />
+      </svg>
+    ),
+  },
   // Settings is no longer a tab here — it opens as a modal from the footer
   // account chip (ChatGPT/Claude pattern). See SettingsModal + onOpenSettings.
 ];
 
 // The labeled action rows shown under "New chat" (skills · tools · scheduled).
 // "chat" is excluded — the conversation list itself is the chat surface.
-const ACTION_ORDER: ActiveTab[] = ["models", "skills"];
+const ACTION_ORDER: ActiveTab[] = ["models", "skills", "connectors"];
 const ACTION_ITEMS = ACTION_ORDER
   .map(id => NAV_TABS.find(t => t.id === id))
   .filter((t): t is (typeof NAV_TABS)[number] => Boolean(t));
