@@ -8,13 +8,13 @@ import { ConnectButton } from "@/components/ConnectModal";
 import { useLang } from "@/lib/i18n/context";
 import { runB20Inspect }  from "./inspect-action";
 import { runB20Roles }    from "./roles-action";
-import { runB20Registry, runB20Activity, runB20Activation } from "./registry-action";
+import { runB20Registry, runB20Activity, runB20Activation, runB20AdminRenounced } from "./registry-action";
 import { runB20ManageLoad, type ManageData } from "./manage-action";
 import ManagePanel from "./ManagePanel";
 import type { B20Inspection, PolicyInfo } from "@/lib/b20/inspect";
 import type { B20RolesResult }            from "@/lib/b20/roles";
 import type { B20RegistryResult }         from "@/lib/b20/registry-logs";
-import type { B20ActivityResult, B20ActivityCategory } from "@/lib/b20/activity-cdp";
+import type { B20ActivityResult, B20ActivityCategory, B20AdminRenounceResult } from "@/lib/b20/activity-cdp";
 import type { B20Activation }             from "@/lib/b20/activation";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -130,6 +130,45 @@ const ACTIVITY_LABEL: Record<B20ActivityCategory, string> = {
   burnBlocked: "FREEZE",
   admin:       "ADMIN",
 };
+// ── Compliance CSV export (control events) ────────────────────────────────────
+// Client-side only — serializes the activity events already loaded from CDP into
+// a CSV a compliance/regulator audit can ingest. No new fetch, no server call.
+
+/** RFC-4180 escape: wrap in quotes and double any embedded quotes. */
+function csvCell(v: string): string {
+  const s = (v ?? "").replace(/\r?\n/g, " ");
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+function activityToCsv(events: B20ActivityResult["events"]): string {
+  const header = ["timestamp", "event_type", "category", "token", "detail", "tx_hash", "explorer_url"];
+  const rows = events.map(e => [
+    e.timestamp ?? "",
+    e.eventName ?? "",
+    e.category ?? "",
+    e.token ?? "",
+    e.text ?? "",
+    e.txHash ?? "",
+    e.explorerUrl ?? "",
+  ].map(csvCell).join(","));
+  return [header.map(csvCell).join(","), ...rows].join("\r\n");
+}
+
+function downloadActivityCsv(result: B20ActivityResult): void {
+  if (typeof window === "undefined" || !result.events.length) return;
+  const csv  = activityToCsv(result.events);
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  const day  = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `b20-control-events-${result.network}-${day}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function timeAgo(iso: string): string {
   const t = Date.parse(iso);
   if (!iso || Number.isNaN(t)) return "";
@@ -422,7 +461,7 @@ function MethodologySide() {
 
 // ── Scanner result card ───────────────────────────────────────────────────────
 
-function ResultCard({ info, onScanAnother, onHowItWorks }: { info: B20Inspection; onScanAnother: () => void; onHowItWorks?: () => void }) {
+function ResultCard({ info, renounce, onScanAnother, onHowItWorks }: { info: B20Inspection; renounce?: B20AdminRenounceResult | null; onScanAnother: () => void; onHowItWorks?: () => void }) {
   const { t } = useLang();
   const [copied, setCopied] = useState(false);
   const verdict   = computeVerdict(info);
@@ -477,6 +516,19 @@ function ResultCard({ info, onScanAnother, onHowItWorks }: { info: B20Inspection
                   style={{ background: "#F59E0B18", color: "#F59E0B", borderColor: "#F59E0B30" }}>⚠ Not initialized</span>
               )}
               <VariantBadge variant={info.variant} currency={info.currency} />
+              {/* Immutability — shown ONLY when a LastAdminRenounced event is
+                  confirmed on-chain for this exact token. Absence ⟹ no badge
+                  (we never claim immutability we can't prove). */}
+              {renounce?.renounced && (
+                <a
+                  href={renounce.explorerUrl ?? info.explorerUrl}
+                  target="_blank" rel="noopener noreferrer"
+                  title="DEFAULT_ADMIN_ROLE was permanently renounced (renounceLastAdmin). Roles & policies can no longer be reassigned. Verified on-chain via LastAdminRenounced."
+                  className="font-mono text-[10px] px-2 py-0.5 rounded-full border transition-opacity hover:opacity-80"
+                  style={{ background: "#22C55E18", color: "#22C55E", borderColor: "#22C55E40" }}>
+                  🔒 Admin renounced
+                </a>
+              )}
               <span className="font-mono text-[10px] text-slate-500">
                 {info.network === "mainnet" ? "Base Mainnet" : "Base Sepolia"}
               </span>
@@ -497,6 +549,27 @@ function ResultCard({ info, onScanAnother, onHowItWorks }: { info: B20Inspection
       </div>
 
       <div className="p-5 space-y-5">
+        {/* Stablecoin peg banner — surfaces the currency peg prominently so a
+            B20 stablecoin reads clearly as "pegged to X", not buried in the
+            generic facts grid like an Asset token. */}
+        {info.variant === "STABLECOIN" && (
+          <div className="flex items-center gap-3 rounded-2xl border px-4 py-3"
+            style={{ background: "#22C55E0a", borderColor: "#22C55E30" }}>
+            <span className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0"
+              style={{ background: "#22C55E18" }}>💵</span>
+            <div className="min-w-0">
+              <p className="font-mono text-sm font-semibold" style={{ color: "#22C55E" }}>
+                B20 Stablecoin{info.currency ? ` · pegged to ${info.currency}` : ""}
+              </p>
+              <p className="font-mono text-[10px] text-slate-500 mt-0.5">
+                {info.currency
+                  ? `Issuer-declared currency peg: ${info.currency}. Backing & redemption are off-chain — verify with the issuer.`
+                  : "Stablecoin variant — currency code not set on-chain."}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Key Facts */}
         <div>
           <SectionLabel>Token Info</SectionLabel>
@@ -1345,6 +1418,23 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanResult?.address, connectedAddress, scanResult?.network]);
 
+  // Admin-renounce check after a successful scan — confirms (via the on-chain
+  // LastAdminRenounced event) whether DEFAULT_ADMIN was permanently removed.
+  // Non-blocking & fail-safe: any failure leaves renounce=null so the Scanner
+  // shows no badge and keeps its conservative "admin unknown" wording.
+  const [scanRenounce, setScanRenounce] = useState<B20AdminRenounceResult | null>(null);
+
+  useEffect(() => {
+    if (!scanResult?.isB20) { setScanRenounce(null); return; }
+    let cancelled = false;
+    setScanRenounce(null);
+    runB20AdminRenounced(scanResult.address, scanResult.network as Network)
+      .then(r => { if (!cancelled) setScanRenounce(r); })
+      .catch(() => { if (!cancelled) setScanRenounce(null); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanResult?.address, scanResult?.network]);
+
   // Reset manage data on network change
   useEffect(() => {
     setScanWalletRoles(null);
@@ -1680,6 +1770,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                   {/* Result */}
                   {scanResult && !scanPending && (
                     <ResultCard info={scanResult}
+                      renounce={scanRenounce}
                       onHowItWorks={() => setActiveTab("methodology")}
                       onScanAnother={() => {
                         setScanResult(null); setScanError(""); setScanAddr("");
@@ -1987,6 +2078,14 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                         className="ml-auto font-mono text-[9px] text-slate-600 hover:text-slate-400 transition-colors">
                         {activityPending ? "Loading…" : `↻ ${t("activity.refresh")}`}
                       </button>
+                      {activityResult && !activityResult.unavailable && activityResult.events.length > 0 && (
+                        <button onClick={() => downloadActivityCsv(activityResult)}
+                          title="Export the loaded control events as a CSV compliance report"
+                          className="font-mono text-[9px] px-2 py-0.5 rounded-md border transition-colors"
+                          style={{ color: "#22C55E", borderColor: "#22C55E30", background: "#22C55E0a" }}>
+                          ↓ Export CSV
+                        </button>
+                      )}
                     </div>
                     <p className="font-mono text-[9px] text-slate-700 mb-3 leading-relaxed">
                       Pause · policy · supply-cap · freeze-seize · role — operator actions on live B20 tokens.
