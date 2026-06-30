@@ -100,7 +100,7 @@ const TIERS = [
   { name: "None",    min: 0,          max: 500_000,    credits: 0,    color: "#475569" },
   { name: "Starter", min: 500_000,    max: 2_000_000,  credits: 500,  color: "#4FC3F7" },
   { name: "Pro",     min: 2_000_000,  max: 10_000_000, credits: 2000, color: "#A78BFA" },
-  { name: "Max",     min: 10_000_000, max: Infinity,   credits: 9999, color: "#F59E0B" },
+  { name: "Max",     min: 10_000_000, max: Infinity,   credits: 10000, color: "#F59E0B" },
 ];
 
 function getTier(blue: number) {
@@ -285,7 +285,7 @@ export default function StakeView() {
                     {t.name.toUpperCase()}
                   </div>
                   <div className="font-mono text-base font-bold text-white">
-                    {t.credits === 9999 ? "∞" : t.credits.toLocaleString()}
+                    {t.credits.toLocaleString()}
                     <span className="text-[11px] text-slate-600 ml-1">cr/day</span>
                   </div>
                   <div className="font-mono text-[11px] text-slate-600 mt-1.5">

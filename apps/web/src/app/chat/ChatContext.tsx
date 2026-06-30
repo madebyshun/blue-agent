@@ -383,7 +383,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // production build (the deployed app is unaffected). The server already skips
   // the ledger debit locally when INTERNAL_SERVICE_KEY is unset.
   const DEV_UNLIMITED = process.env.NODE_ENV !== "production";
-  const isUnlimited = DEV_UNLIMITED || (holderTier.dailyCr === -1 && !!walletAddr);
+  // Dev-only convenience: local builds never gate on credits. In production
+  // every tier (including Max) is finite and metered, so this is always false.
+  const isUnlimited = DEV_UNLIMITED;
   const daily = getDailyCr(holderTier, !!walletAddr);
   // Only block sending after wallet detection is done — avoids false "out of credits" on F5
   const outOfCredits = walletReady && !isUnlimited && credits < cost;
@@ -783,8 +785,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const last     = task.messages[lastIdx];
 
         // Stamp model + timing on the completed assistant message
-        // Max tier (unlimited) is free + unmetered server-side, and a blocked
-        // turn (connect-wallet wall) is refunded — both stamp the chip at 0 cr.
+        // Local dev (isUnlimited) is unmetered, and a blocked turn
+        // (connect-wallet wall) is refunded — both stamp the chip at 0 cr.
         const finalMsgs = task.messages.map((m, i) =>
           i === lastIdx && m.role === "assistant"
             ? { ...m, modelUsed: chatTier, responseMs, creditsUsed: (isUnlimited || walletBlocked) ? 0 : cost, isThinking: false }

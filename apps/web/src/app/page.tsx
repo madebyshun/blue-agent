@@ -54,7 +54,7 @@ const PRICING = [
   { tier: "Guest",   hold: "no wallet",       credits: "100 cr/day",   note: null,            highlight: false },
   { tier: "Starter", hold: "500K BLUEAGENT",  credits: "500 cr/day",   note: null,            highlight: false },
   { tier: "Pro",     hold: "2M BLUEAGENT",    credits: "2,000 cr/day", note: "20% discount",  highlight: false },
-  { tier: "Max",     hold: "10M BLUEAGENT",   credits: "unlimited",    note: "40% discount",  highlight: true  },
+  { tier: "Max",     hold: "10M BLUEAGENT",   credits: "10,000 cr/day", note: "40% discount",  highlight: true  },
 ];
 
 const BUY_URL = "https://bankr.bot/agents/blue-agent";

@@ -53,13 +53,8 @@ async function debitChatCredits(address: string, tier: string): Promise<DebitRes
   const blueBalance = await fetchBlueBalance(address);
   const holderTier  = getTierInfo(blueBalance);
 
-  // Max tier (10M+ BLUE, dailyCr === -1) is unlimited. The UI promises
-  // "Max tier · no metering, every model free" and shows ∞ credits — so
-  // honor that server-side and skip the debit entirely, instead of charging
-  // the (40%-discounted) per-message cost. Without this the backend silently
-  // contradicts the ∞ UI and bills holders for messages they were told are free.
-  if (holderTier.dailyCr === -1) return { kind: "skipped", reason: "unlimited-tier" };
-
+  // Every tier is metered, including Max (10M+ BLUE → 10,000 cr/day at a 40%
+  // discount). There is no unlimited tier to skip anymore.
   const cost = chatCreditCost(tier, holderTier);
 
   if (cost <= 0) return { kind: "skipped", reason: "zero-cost-tier" };
@@ -194,7 +189,7 @@ Blue Agent uses a credit system based on $BLUEAGENT token balance:
 - Guest (no wallet): 100 credits/day free (~10 messages — no signup needed)
 - Starter (hold 500K BLUE): 500 credits/day (~$0.50)
 - Pro (hold 2M BLUE): 2,000 credits/day + 20% discount (~$2)
-- Max (hold 10M BLUE): unlimited credits/day + 40% discount (~$10)
+- Max (hold 10M BLUE): 10,000 credits/day + 40% discount (~$10)
 Credits refresh automatically every 24h. To get more credits: buy $BLUEAGENT on Uniswap Base, or click "Buy $BLUEAGENT" in the sidebar. No USDC purchase needed — just hold $BLUEAGENT.
 If a user asks about buying credits, getting more credits, or topping up — explain the tier system and tell them to use the "Buy $BLUEAGENT" button in the sidebar.
 
@@ -1452,7 +1447,7 @@ Show the user their credit system status. Format it cleanly:
 | Guest | 0 | 30 | — |
 | Starter | 500K | 500 | — |
 | Pro | 2M | 2,000 | 20% off Hub |
-| Max | 10M | ∞ | 40% off Hub |
+| Max | 10M | 10,000 | 40% off Hub |
 
 **How to earn more credits:**
 - Hold $BLUEAGENT on Base → credits refresh daily automatically
