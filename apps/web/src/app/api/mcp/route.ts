@@ -676,7 +676,10 @@ async function callConsole(command: string, prompt: string): Promise<string> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ command, prompt }),
-    signal: AbortSignal.timeout(120_000),
+    // Stay under the route's maxDuration (120s) so a slow Bankr LLM aborts
+    // cleanly and surfaces as a JSON-RPC error envelope, instead of the whole
+    // function being killed at 120s → hard 504 → client retry storm.
+    signal: AbortSignal.timeout(100_000),
   });
   if (!res.ok) throw new Error(`console/${command} returned ${res.status}`);
   const data = await res.json() as { result?: string; text?: string };
@@ -853,19 +856,21 @@ export async function OPTIONS() {
 // discovery JSON for humans.
 //
 // When invoked with `Accept: text/event-stream` (MCP 2025-03-26 Streamable
-// HTTP), returns an empty SSE stream so clients that probe a GET endpoint
-// for server-initiated messages (notifications, sampling) don't error out.
+// HTTP), the client is opening the server→client notification stream. We do
+// NOT emit any server-initiated messages (no notifications/sampling), so per
+// the spec we MUST return 405 — this tells the client "no server stream here"
+// and it proceeds without holding a connection open.
+//
+// Previously we returned a never-closing SSE ReadableStream here. On serverless
+// that kept the function alive until maxDuration (120s) for EVERY connected
+// client, producing a ~2m P75 and a timeout/504 + retry storm on /api/mcp.
+// Returning 405 is instant and loop-free.
 export async function GET(req: NextRequest) {
   if (wantsSse(req)) {
-    // Empty heartbeat stream. We don't emit server-initiated messages yet, but
-    // mcp-remote pings this endpoint and disconnects cleanly when it gets SSE.
-    const stream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode(": blue-agent mcp stream\n\n"));
-      },
-      cancel() {},
-    });
-    return new NextResponse(stream, { headers: SSE_HEADERS });
+    return new NextResponse(
+      JSON.stringify({ jsonrpc: "2.0", error: { code: -32601, message: "Server-initiated SSE stream not supported" } }),
+      { status: 405, headers: { ...JSON_HEADERS, Allow: "POST, OPTIONS" } },
+    );
   }
 
   return NextResponse.json({
