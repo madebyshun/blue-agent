@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { useAccount, useConnect } from "wagmi";
 import {
   fetchBlueBalance,
   getTierInfo,
   getCredits,
   TierInfo,
 } from "@/lib/credits";
+import { useWalletDisconnect, clearUserDisconnected } from "@/lib/walletSession";
 import { useBasename } from "@/lib/useBasename"; // resolves wallet → shun.base
 
 interface WalletBarProps {
@@ -35,7 +36,7 @@ function walletIcon(name: string): string {
 export default function WalletBar({ onWalletChange, refreshTrigger = 0 }: WalletBarProps) {
   const { address, isConnected }            = useAccount();
   const { connectors, connect, isPending }  = useConnect();
-  const { disconnect }                      = useDisconnect();
+  const disconnect                          = useWalletDisconnect();
   const { name: basename }                  = useBasename(address);
 
   const [tier,    setTier]    = useState<TierInfo>({ tier: "Starter", blueBalance: 0, dailyCr: 200, discount: 0, color: "#4FC3F7" });
@@ -103,7 +104,7 @@ export default function WalletBar({ onWalletChange, refreshTrigger = 0 }: Wallet
               {wallets.map((c) => (
                 <button
                   key={c.uid}
-                  onClick={() => { connect({ connector: c }); setPicker(false); }}
+                  onClick={() => { clearUserDisconnected(); connect({ connector: c }); setPicker(false); }}
                   className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#1A1A2E] transition-colors"
                 >
                   <span className="w-7 h-7 rounded-lg bg-[#1A1A2E] flex items-center justify-center text-base shrink-0">

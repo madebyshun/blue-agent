@@ -5,7 +5,8 @@
 // (DefiLlama), real transactions (Moralis). Nothing is fabricated.
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useAccount, useReadContract, useBalance, useConnect, useDisconnect } from "wagmi";
+import { useAccount, useReadContract, useBalance, useConnect } from "wagmi";
+import { useWalletDisconnect, clearUserDisconnected } from "@/lib/walletSession";
 import { formatUnits } from "viem";
 import { QRCodeSVG } from "qrcode.react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
@@ -55,7 +56,7 @@ export default function BankPage() {
       })
       .catch(() => null);
   }, [acct, name]);
-  const { disconnect } = useDisconnect();
+  const disconnect = useWalletDisconnect();
   const [network, setNetwork] = useState<YieldNetwork>("baseSepolia");
   const [panel, setPanel]     = useState<Panel>("positions");
   const [actionOpen, setActionOpen] = useState(false);
@@ -1231,7 +1232,7 @@ function ConnectButton() {
     <div className="relative">
       {coinbase && (
         <>
-          <button onClick={() => connect({ connector: coinbase })} disabled={isPending}
+          <button onClick={() => { clearUserDisconnected(); connect({ connector: coinbase }); }} disabled={isPending}
             className="w-full font-mono text-[13px] font-bold py-3 rounded-xl transition-all disabled:opacity-60 flex items-center justify-center gap-2"
             style={{ background: "#4FC3F7", color: "#050508" }}>
             {isPending ? "Connecting…" : <>🔵 Create a free wallet</>}
@@ -1250,7 +1251,7 @@ function ConnectButton() {
           <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-xl border border-[#1A1A2E] bg-[#0A0A12] shadow-2xl overflow-hidden">
             <p className="font-mono text-[10px] text-slate-600 px-3 pt-3 pb-2 tracking-widest">SELECT WALLET</p>
             {wallets.map(c => (
-              <button key={c.uid} onClick={() => { connect({ connector: c }); setOpen(false); }}
+              <button key={c.uid} onClick={() => { clearUserDisconnected(); connect({ connector: c }); setOpen(false); }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#1A1A2E] transition-colors">
                 <span className="w-7 h-7 rounded-lg bg-[#1A1A2E] flex items-center justify-center text-base shrink-0">{icon(c.name)}</span>
                 <span className="font-mono text-xs text-slate-200">{c.name}</span>
