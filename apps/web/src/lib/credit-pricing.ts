@@ -99,9 +99,8 @@ function roundCredits(n: number): number {
  * credits are deducted.
  */
 export function toolCreditCost(toolId: string, tier: TierInfo): number {
-  // Max tier (dailyCr === -1) = unlimited, no metering → tools are free too,
-  // matching "Max · every model free". (The 40% discount only matters below Max.)
-  if (tier.dailyCr === -1) return 0;
+  // Every tier is metered. Max gets the deepest discount (40% off) but still
+  // pays — no tier is free/unlimited.
   const tool = AGENT_TOOLS.find(t => t.id === toolId);
   const usd  = parseUsd(tool?.price);
   if (usd === null || usd <= 0) return 0;

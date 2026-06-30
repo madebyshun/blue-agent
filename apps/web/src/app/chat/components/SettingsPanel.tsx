@@ -25,7 +25,7 @@ const TIER_ROWS: { need: string; tier: string; perk: string; color: string }[] =
   { need: "No wallet", tier: "Guest",   perk: "100 cr/day",   color: "#64748b" },
   { need: "500K BLUE", tier: "Starter", perk: "500 cr/day",   color: "#4FC3F7" },
   { need: "2M BLUE",   tier: "Pro",     perk: "2,000 cr/day", color: "#A78BFA" },
-  { need: "10M BLUE",  tier: "Max",     perk: "∞ + 40% off",  color: "#F59E0B" },
+  { need: "10M BLUE",  tier: "Max",     perk: "10,000 cr/day · 40% off",  color: "#F59E0B" },
 ];
 
 // Section content header — mirrors Claude's right-pane title + subtitle.
@@ -141,12 +141,12 @@ export default function SettingsPanel({ section }: { section: SettingsSection })
                     <span className="font-mono text-sm text-slate-600 ml-2">spendable</span>
                   </div>
                   <span className="font-mono text-[10px] text-slate-600 mb-1">
-                    {isUnlimited ? `${holderTier.tier} · unlimited` : daily > 0 ? `+${daily.toLocaleString()}/day` : "—"}
+                    {isUnlimited ? "Dev · unmetered" : daily > 0 ? `+${daily.toLocaleString()}/day` : "—"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-[10px] text-slate-600">
-                    {isUnlimited ? "Max tier · no metering, every model free" : "Daily tier allowance + staked accrual"}
+                    {isUnlimited ? "Dev mode · no metering" : "Daily tier allowance + staked accrual"}
                   </span>
                   {holderTier.discount > 0 && (
                     <span className="font-mono text-[10px]" style={{ color: holderTier.color }}>
@@ -205,7 +205,7 @@ export default function SettingsPanel({ section }: { section: SettingsSection })
               </span>
               {" "}→ earn{" "}
               <span style={{ color: holderTier.color }}>
-                {holderTier.nextTier.dailyCr === -1 ? "∞" : holderTier.nextTier.dailyCr.toLocaleString()} cr/day
+                {holderTier.nextTier.dailyCr.toLocaleString()} cr/day
               </span>
             </p>
           )}

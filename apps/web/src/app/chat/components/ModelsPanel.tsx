@@ -133,8 +133,8 @@ export default function ModelsPanel({ onPick }: { onPick?: () => void }) {
 
         <p className="font-mono text-[10px] text-slate-700 mt-4 leading-relaxed">
           Cost shown is the base credit price per message before any holder discount.
-          1 credit ≈ $0.0005. Connect a wallet holding $BLUEAGENT for a discount or
-          unlimited use at the top tier.
+          1 credit ≈ $0.0005. Connect a wallet holding $BLUEAGENT for a discount and
+          up to 10,000 credits/day at the top tier.
         </p>
       </div>
     </div>

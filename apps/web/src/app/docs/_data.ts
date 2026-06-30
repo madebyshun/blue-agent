@@ -43,7 +43,7 @@ export const TIERS = [
   { tier: "Guest",   need: "No wallet", perk: "100 cr/day · ~10 messages", color: "#64748b" },
   { tier: "Starter", need: "500K BLUE", perk: "500 cr/day",                color: "#4FC3F7" },
   { tier: "Pro",     need: "2M BLUE",   perk: "2,000 cr/day",              color: "#A78BFA" },
-  { tier: "Max",     need: "10M BLUE",  perk: "∞ credits · 40% off",       color: "#F59E0B" },
+  { tier: "Max",     need: "10M BLUE",  perk: "10,000 cr/day · 40% off",   color: "#F59E0B" },
 ];
 
 export const CORE_COMMANDS = [

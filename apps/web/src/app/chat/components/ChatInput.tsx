@@ -130,12 +130,6 @@ export default function ChatInput() {
 
   const activeTier = ALL_TIERS.find(t => t.id === chatTier) ?? BANKR_TIERS[1];
 
-  // Max tier (dailyCr === -1) is unlimited — UI promises "every model free",
-  // and the backend skips the debit (see debitChatCredits). Mirror that here so
-  // the per-msg cost + remaining-credits footers don't show metering numbers
-  // that contradict the ∞ shown everywhere else.
-  const isUnlimited = holderTier.dailyCr === -1;
-
   // ── File handling ────────────────────────────────────────────────────────────
   const handleFiles = useCallback(async (fileList: FileList | null) => {
     if (!fileList) return;
@@ -424,7 +418,7 @@ export default function ChatInput() {
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: holderTier.color }} />
                 <span className="font-mono text-[10px]" style={{ color: holderTier.color }}>{holderTier.tier}</span>
                 <span className="font-mono text-[10px] text-slate-600">
-                  {holderTier.dailyCr === -1 ? "∞" : holderTier.dailyCr} cr/day
+                  {holderTier.dailyCr.toLocaleString()} cr/day
                 </span>
               </div>
               {/* Arrow + next tier */}
@@ -434,7 +428,7 @@ export default function ChatInput() {
                   <div className="flex items-center gap-1.5">
                     <span className="font-mono text-[10px] text-slate-400 font-bold">{holderTier.nextTier.name}</span>
                     <span className="font-mono text-[10px] text-slate-600">
-                      {holderTier.nextTier.dailyCr === -1 ? "∞" : holderTier.nextTier.dailyCr} cr/day
+                      {holderTier.nextTier.dailyCr.toLocaleString()} cr/day
                     </span>
                     <span className="font-mono text-[9px] text-slate-700">
                       (+{(holderTier.nextTier.need / 1_000_000).toFixed(1)}M BLUE)
@@ -581,13 +575,13 @@ export default function ChatInput() {
 
             <div className="flex-1" />
 
-            <span className="font-mono text-[10px] text-slate-700">{isUnlimited ? "Free" : `${cost}cr/msg`}</span>
+            <span className="font-mono text-[10px] text-slate-700">{`${cost}cr/msg`}</span>
           </div>
 
           {/* Footer hint */}
           <div className="flex items-center justify-between px-3 pb-2.5">
             <span className="hidden md:inline font-mono text-[10px] text-slate-700">Enter ↵ send · Shift+Enter newline</span>
-            <span className="font-mono text-[10px] text-slate-700">{isUnlimited ? "∞ credits" : `${credits} credits left`}</span>
+            <span className="font-mono text-[10px] text-slate-700">{`${credits} credits left`}</span>
           </div>
         </div>
       </div>

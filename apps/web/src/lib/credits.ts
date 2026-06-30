@@ -5,10 +5,13 @@
  * No purchase needed — just hold BLUE.
  *
  * Tiers (at $BLUEAGENT $0.000001/token):
- *   Guest    (no wallet):    100 cr/day  (≈10 free Fast messages — growth tier)
- *   Starter  (500K BLUE):   500 cr/day  (~$0.50)
- *   Pro      (2M BLUE):    2000 cr/day  (~$2)
- *   Max      (10M BLUE):      ∞ cr/day  (~$10)
+ *   Guest    (no wallet):     100 cr/day  (≈10 free Fast messages — growth tier)
+ *   Starter  (500K BLUE):     500 cr/day  (~$0.50)
+ *   Pro      (2M BLUE):     2,000 cr/day  (~$2)
+ *   Max      (10M BLUE):   10,000 cr/day  (~$10)
+ *
+ * Tiers scale linearly (~1,000 BLUE held/staked = 1 credit/day). Max is a high
+ * but FINITE allowance — it is metered like every other tier, not unlimited.
  */
 
 export const BLUE_TOKEN     = "0xf895783b2931c919955e18b5e3343e7c7c456ba3";
@@ -28,7 +31,6 @@ const BASE_RPCS = [
 ];
 
 const REFRESH_MS = 24 * 60 * 60 * 1000; // 24 hours
-const MAX_CAP    = 50_000;              // "unlimited" practical cap
 
 // ── LocalStorage key for last-known daily allowance ───────────────────────────
 // Used to detect real tier upgrades (user bought more BLUE) vs normal deductions
@@ -41,14 +43,14 @@ export type HolderTier = "Guest" | "Starter" | "Pro" | "Max";
 export interface TierInfo {
   tier:        HolderTier;
   blueBalance: number;
-  dailyCr:     number;   // credits per day; -1 = unlimited (capped at WHALE_CAP)
+  dailyCr:     number;   // credits per day (finite for every tier)
   discount:    number;   // Hub tool discount 0–0.50
   color:       string;
   nextTier?:   { name: string; need: number; dailyCr: number };
 }
 
 const TIERS: { min: number; tier: HolderTier; dailyCr: number; discount: number; color: string }[] = [
-  { min: 10_000_000, tier: "Max",     dailyCr: -1,    discount: 0.40, color: "#F59E0B" },
+  { min: 10_000_000, tier: "Max",     dailyCr: 10_000, discount: 0.40, color: "#F59E0B" },
   { min:  2_000_000, tier: "Pro",     dailyCr: 2_000, discount: 0.20, color: "#A78BFA" },
   { min:    500_000, tier: "Starter", dailyCr:   500, discount: 0,    color: "#4FC3F7" },
 ];
@@ -57,7 +59,7 @@ const TIERS: { min: number; tier: HolderTier; dailyCr: number; discount: number;
  * Guest = no wallet connected. 100 cr/day ≈ 10 Fast messages — enough to chat
  * and feel the product. Tool usage (400–500 cr each) intentionally needs a
  * tier: hold $BLUEAGENT to step up (500K → Starter 500/day, 2M → Pro 2,000/day,
- * 10M → Max unlimited). The token bar is cheap, so "hold to use tools" is a
+ * 10M → Max 10,000/day). The token bar is cheap, so "hold to use tools" is a
  * low-friction ask that still gives the token real utility.
  */
 export const GUEST_DAILY = 100;
@@ -94,7 +96,7 @@ export function getTierInfo(blueBalance: number): TierInfo {
 
 export function getDailyCr(tier: TierInfo, hasWallet: boolean): number {
   if (!hasWallet) return GUEST_DAILY;
-  return tier.dailyCr === -1 ? MAX_CAP : tier.dailyCr;
+  return tier.dailyCr;
 }
 
 // ── Credit costs ──────────────────────────────────────────────────────────────

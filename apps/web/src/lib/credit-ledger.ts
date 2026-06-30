@@ -24,10 +24,10 @@ import { getTierInfo, fetchBlueBalance } from "./credits";
 
 // A connected wallet's spendable balance has TWO buckets:
 //   - daily allowance: tier.dailyCr, granted fresh each UTC day (HOLD-driven —
-//     hold 500K → Starter 500/day, 2M → Pro 2,000/day, 10M → Max unlimited).
+//     hold 500K → Starter 500/day, 2M → Pro 2,000/day, 10M → Max 10,000/day).
 //   - pool: on-chain stake accrual + USDC top-ups, CUMULATIVE (doesn't reset).
 // A spend drains the daily bucket first (use-it-or-lose-it), then the pool.
-const UNLIMITED_BALANCE = 1_000_000; // reported for Max; metering is skipped upstream
+// Every tier (including Max) is finite and metered — there is no unlimited bucket.
 function utcDay(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
 }
@@ -116,7 +116,7 @@ export interface BalanceSummary {
   spent:    number;     // off-chain credits debited from the pool
   balance:  number;     // total spendable now = dailyRemaining + pool
   pool?:           number;  // cumulative bucket: max(0, accrued + topup - spent)
-  dailyCr?:        number;  // tier daily allowance (-1 = Max/unlimited)
+  dailyCr?:        number;  // tier daily allowance (finite for every tier)
   dailyRemaining?: number;  // tier allowance left today
   recent:   LedgerEvent[];  // last few events
 }
@@ -135,14 +135,13 @@ export async function getBalance(address: string): Promise<BalanceSummary> {
     loadLedger(addr),
   ]);
 
-  const dailyCr = getTierInfo(blueBalance).dailyCr;   // -1 = Max (unlimited)
+  const dailyCr = getTierInfo(blueBalance).dailyCr;   // finite for every tier
   const pool    = Math.max(0, accrued + ledger.topup - ledger.spent);
 
   const dailySpent     = ledger.dailyDay === utcDay() ? (ledger.dailySpent ?? 0) : 0;
-  const dailyRemaining = dailyCr === -1 ? 0 : Math.max(0, dailyCr - dailySpent);
+  const dailyRemaining = Math.max(0, dailyCr - dailySpent);
 
-  // Max = unlimited (metering skipped upstream); report a large sentinel.
-  const balance = dailyCr === -1 ? UNLIMITED_BALANCE : pool + dailyRemaining;
+  const balance = pool + dailyRemaining;
 
   return {
     address: addr,
@@ -178,18 +177,6 @@ export async function spend(
   ]);
   const dailyCr = getTierInfo(blueBalance).dailyCr;
   const today   = utcDay();
-
-  // Max tier — unlimited, free. Record the event but debit nothing.
-  if (dailyCr === -1) {
-    ledger.history.push({ ts: Date.now(), kind: "spend", amount, reason, ref });
-    await saveLedger(addr, ledger);
-    return {
-      address: addr, accrued, topup: ledger.topup, spent: ledger.spent,
-      pool: Math.max(0, accrued + ledger.topup - ledger.spent),
-      dailyCr, dailyRemaining: 0, balance: UNLIMITED_BALANCE,
-      recent: ledger.history.slice(-10).reverse(),
-    };
-  }
 
   let dailySpent       = ledger.dailyDay === today ? (ledger.dailySpent ?? 0) : 0;
   const pool           = Math.max(0, accrued + ledger.topup - ledger.spent);

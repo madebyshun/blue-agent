@@ -35,7 +35,7 @@ const ERC20_ABI = [
 const TIERS = [
   { name: "Starter", blue: 500_000,    cr: 500,  color: "#4FC3F7" },
   { name: "Pro",     blue: 2_000_000,  cr: 2_000, color: "#A78BFA" },
-  { name: "Max",     blue: 10_000_000, cr: -1,    color: "#F59E0B" },
+  { name: "Max",     blue: 10_000_000, cr: 10_000, color: "#F59E0B" },
 ] as const;
 
 type TierName = typeof TIERS[number]["name"];
@@ -290,7 +290,7 @@ export default function BuyBlueModal({ onClose, onSuccess }: Props) {
                           <span className="font-mono text-[10px] text-slate-600">{fmtBlue(t.blue)} BLUE</span>
                         </div>
                         <div className="font-mono text-[10px] text-slate-600">
-                          {t.cr === -1 ? "∞ credits/day" : `${t.cr.toLocaleString()} credits/day`}
+                          {`${t.cr.toLocaleString()} credits/day`}
                           {t.name === "Pro" && <span className="ml-1.5 text-[#A78BFA]">· 20% off</span>}
                           {t.name === "Max" && <span className="ml-1.5 text-[#F59E0B]">· 40% off</span>}
                         </div>
