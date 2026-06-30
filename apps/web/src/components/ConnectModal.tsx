@@ -1,7 +1,8 @@
 "use client";
 
-import { useConnect, useAccount, useDisconnect } from "wagmi";
+import { useConnect, useAccount } from "wagmi";
 import { useState } from "react";
+import { useWalletDisconnect, clearUserDisconnected } from "@/lib/walletSession";
 
 /**
  * ConnectModal — shows all available wagmi connectors.
@@ -17,7 +18,7 @@ export function ConnectButton({
   style?: React.CSSProperties;
 }) {
   const { isConnected, address } = useAccount();
-  const { disconnect } = useDisconnect();
+  const disconnect = useWalletDisconnect();
   const { connectors, connect, isPending } = useConnect();
   const [open, setOpen] = useState(false);
 
@@ -59,7 +60,7 @@ export function ConnectButton({
             {connectors.map((connector) => (
               <button
                 key={connector.uid}
-                onClick={() => { connect({ connector }); setOpen(false); }}
+                onClick={() => { clearUserDisconnected(); connect({ connector }); setOpen(false); }}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[#1A1A2E] transition-colors"
               >
                 <span className="w-7 h-7 rounded-lg bg-[#1A1A2E] flex items-center justify-center text-base shrink-0">
