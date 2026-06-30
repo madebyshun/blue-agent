@@ -11,7 +11,7 @@
 
 import { getB20Registry, type B20RegistryResult } from "@/lib/b20/registry-logs";
 import { getB20RegistryCDP } from "@/lib/b20/registry-cdp";
-import { getB20Activity, type B20ActivityResult } from "@/lib/b20/activity-cdp";
+import { getB20Activity, getB20AdminRenounced, type B20ActivityResult, type B20AdminRenounceResult } from "@/lib/b20/activity-cdp";
 import { getB20Activation, type B20Activation } from "@/lib/b20/activation";
 
 export async function runB20Registry(
@@ -43,6 +43,26 @@ export async function runB20Activity(
       `[b20-activity] CDP path failed (${(err as Error).message}) — activity unavailable`,
     );
     return { network, events: [], total: 0, unavailable: true };
+  }
+}
+
+/**
+ * Confirms whether a specific B20 token permanently renounced DEFAULT_ADMIN
+ * (LastAdminRenounced event). The ONLY honest proof of "admin renounced" — B20
+ * can't enumerate role holders. On any CDP failure returns `unavailable` so the
+ * Scanner stays conservative and never claims immutability it can't prove.
+ */
+export async function runB20AdminRenounced(
+  token: string,
+  network: "mainnet" | "sepolia",
+): Promise<B20AdminRenounceResult> {
+  try {
+    return await getB20AdminRenounced(token, network);
+  } catch (err) {
+    console.warn(
+      `[b20-renounce] CDP path failed (${(err as Error).message}) — cannot confirm renounce`,
+    );
+    return { token: token.toLowerCase(), renounced: false, unavailable: true };
   }
 }
 
