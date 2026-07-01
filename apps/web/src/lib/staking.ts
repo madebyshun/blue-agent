@@ -18,6 +18,11 @@ export const STAKING_ADDRESS = (
   process.env.NEXT_PUBLIC_STAKING_CONTRACT ?? ""
 ) as `0x${string}`;
 
+// Verified deployed address (Base mainnet) — used as a fallback for read-only
+// public stats so the traction page works even when the env var isn't injected.
+export const STAKING_ADDRESS_VERIFIED =
+  "0x69e539684EE48F71eCDAd58618d8e8a2423E279d" as `0x${string}`;
+
 // ── ABI (read functions only) ─────────────────────────────────────────────────
 
 const STAKING_ABI = parseAbi([
@@ -123,6 +128,25 @@ export async function getCreditsPerDay(address: `0x${string}`): Promise<number> 
     return Number(cr);
   } catch {
     return 0;
+  }
+}
+
+/**
+ * Total BLUE staked across the whole contract (wei). Read-only, single call.
+ * Uses the env address when set, else the verified deployed address, so the
+ * public traction page works without NEXT_PUBLIC_STAKING_CONTRACT in the env.
+ * Returns null on RPC failure (caller shows "—", never a fabricated number).
+ */
+export async function getTotalStaked(): Promise<bigint | null> {
+  const addr = (STAKING_ADDRESS || STAKING_ADDRESS_VERIFIED) as `0x${string}`;
+  try {
+    return await client.readContract({
+      address: addr,
+      abi:     STAKING_ABI,
+      functionName: "totalStaked",
+    }) as bigint;
+  } catch {
+    return null;
   }
 }
 
