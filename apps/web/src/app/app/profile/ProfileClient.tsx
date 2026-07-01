@@ -16,7 +16,7 @@
  * flows (added in a follow-up commit once Twitter dev creds land).
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAccount, useReadContracts, useSignMessage } from "wagmi";
 import { formatUnits } from "viem";
@@ -108,28 +108,6 @@ function randomNonce(): string {
   return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-// Sign-in (kí ví) message — proves wallet ownership on app entry so the profile
-// can render. Distinct from the profile-update message above; this is a free,
-// gasless EIP-191 signature, NOT a transaction. The session-verify flag is UX
-// only (display gating); profile *writes* are still signature-verified server
-// side in /api/profile/[address].
-function buildVerifyMessage(address: string, issuedAt: string): string {
-  return [
-    `Blue Agent — Verify Wallet`,
-    ``,
-    `Wallet:    ${address.toLowerCase()}`,
-    `Issued at: ${issuedAt}`,
-    ``,
-    `Sign in to view your Blue Agent profile. This is a free,`,
-    `gasless signature that proves you own this wallet. It is`,
-    `not a transaction and moves no funds.`,
-  ].join("\n");
-}
-
-// Session-scoped "verified" flag — re-asked once per browser session (cleared
-// when the tab/app closes), so opening the app prompts the signature again.
-const verifyStorageKey = (addr: string) => `blueagent:verify:${addr.toLowerCase()}`;
-
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
@@ -148,17 +126,6 @@ export default function ProfilePage() {
   const [builderScore,  setBuilderScore] = useState<number | null>(null);
   const [scoreLoad,     setScoreLoad]    = useState(false);
 
-  // ── Wallet sign-in (kí ví) — verify ownership on entry before the profile ──
-  // renders. Inside Base App / a Mini App host the host wallet auto-connects
-  // with NO prompt, so without this the page would either show nothing useful
-  // or claim "auto-verified" with nothing behind it. The signature is the real
-  // verification step the user expects when opening the app on mobile.
-  const [verified,    setVerified]    = useState(false);
-  const [verifying,   setVerifying]   = useState(false);
-  const [verifyError, setVerifyError] = useState("");
-  const [isMiniApp,   setIsMiniApp]   = useState(false);
-  const autoVerifyTried = useRef(false);
-
   // ── Auto-detect identity from the Farcaster / Base App Mini App context ────
   // When opened inside Base App / a Farcaster client, the SDK gives us the
   // user's displayName, username, and pfp — no form needed. No-op in a browser.
@@ -169,7 +136,6 @@ export default function ProfilePage() {
       try {
         const { sdk } = await import("@farcaster/miniapp-sdk");
         if (!(await sdk.isInMiniApp().catch(() => false))) return;
-        if (!off) setIsMiniApp(true);
         const ctx = await sdk.context;
         if (!off && ctx?.user) {
           setFcUser({ displayName: ctx.user.displayName, username: ctx.user.username, pfpUrl: ctx.user.pfpUrl });
@@ -181,16 +147,6 @@ export default function ProfilePage() {
   // AFTER mount, so an empty-deps effect would capture fcUser before the
   // Mini App context (displayName/pfp) has hydrated and never retry.
   }, [isConnected, address]);
-
-  // Hydrate the session verify-flag whenever the connected address changes.
-  useEffect(() => {
-    autoVerifyTried.current = false;
-    setVerifyError("");
-    if (!address) { setVerified(false); return; }
-    try {
-      setVerified(sessionStorage.getItem(verifyStorageKey(address)) === "1");
-    } catch { setVerified(false); }
-  }, [address]);
 
   // ── Load on-chain identity ───────────────────────────────────────────────
 
@@ -242,41 +198,6 @@ export default function ProfilePage() {
       .finally(() => setProfileLoad(false));
   }, [address]);
 
-  // ── Verify (kí ví) ─────────────────────────────────────────────────────────
-  // Ask the wallet to sign the canonical verify message. On success we mark the
-  // wallet verified for this session and the profile renders.
-  async function handleVerify() {
-    if (!address || verifying) return;
-    setVerifying(true);
-    setVerifyError("");
-    const issuedAt = new Date().toISOString();
-    const message  = buildVerifyMessage(address, issuedAt);
-    try {
-      await signMessageAsync({ message });
-      try { sessionStorage.setItem(verifyStorageKey(address), "1"); } catch { /* private mode */ }
-      setVerified(true);
-    } catch (e) {
-      const msg = (e as Error)?.message ?? "Signature cancelled";
-      setVerifyError(/user rejected|denied|cancel/i.test(msg)
-        ? "Signature cancelled — tap Sign to verify when you're ready."
-        : msg);
-    } finally {
-      setVerifying(false);
-    }
-  }
-
-  // Inside Base App / a Mini App host the wallet auto-connects silently, so we
-  // auto-surface the signature once on entry (the "kí ví" the user expects on
-  // mobile). In a normal browser the user taps the Sign button instead.
-  useEffect(() => {
-    if (!isConnected || !address || verified || verifying) return;
-    if (!isMiniApp || autoVerifyTried.current) return;
-    autoVerifyTried.current = true;
-    void handleVerify();
-    // handleVerify is stable for our purposes; deps below are the real triggers.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, address, verified, verifying, isMiniApp]);
-
   // ── Save ─────────────────────────────────────────────────────────────────
 
   async function handleSave() {
@@ -325,11 +246,17 @@ export default function ProfilePage() {
 
   // ── Render ───────────────────────────────────────────────────────────────
 
-  // Identity prefers the live Mini App context, then a saved profile, then the
-  // wallet's Basename (shun.base — same source chat + dashboard use), then the
-  // short 0x… form. Without the Basename step a Base App user with no Farcaster
-  // profile and no saved displayName only ever saw the raw address.
-  const displayName = fcUser?.displayName?.trim() || profile?.displayName?.trim() || basename || (address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "");
+  // Identity order: live Base App context (displayName → username) → Basename
+  // (shun.base, same source as chat + dashboard) → saved profile name → short
+  // 0x… form. The context username matters because a Base App user often has no
+  // `displayName` and no `.base` reverse-record, so without it the profile fell
+  // all the way through to the raw address even after connecting.
+  const displayName =
+    fcUser?.displayName?.trim() ||
+    fcUser?.username?.trim() ||
+    basename ||
+    profile?.displayName?.trim() ||
+    (address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "");
   const avatarSrc   = fcUser?.pfpUrl || profile?.avatarUrl || "";
   const avatarInitial = address?.slice(2, 4).toUpperCase();
 
@@ -357,35 +284,6 @@ export default function ProfilePage() {
                 </svg>
               }
             />
-          ) : !verified ? (
-            // ── Wallet sign-in (kí ví) gate ──────────────────────────────────
-            // Connected but not yet verified this session. Inside Base App this
-            // signature is auto-prompted on entry; elsewhere the user taps Sign.
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-12 text-center">
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6"
-                style={{ background: `${tier.color}10`, border: `1px solid ${tier.color}20` }}>
-                <svg className="w-7 h-7" style={{ color: tier.color }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
-                </svg>
-              </div>
-              <h2 className="font-mono text-lg font-bold text-white mb-2">Verify your wallet</h2>
-              <p className="font-mono text-slate-500 text-sm mb-2 max-w-xs mx-auto">
-                {address?.slice(0, 6)}…{address?.slice(-4)} is connected. Sign a free, gasless message to confirm you own it and open your profile.
-              </p>
-              <p className="font-mono text-[10px] text-slate-700 mb-7 max-w-xs mx-auto">
-                Not a transaction · no gas · moves no funds
-              </p>
-              <button onClick={handleVerify} disabled={verifying}
-                className="px-6 py-2.5 rounded-xl text-[13px] font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ background: tier.color, color: "#050508" }}>
-                {verifying ? "Check your wallet…" : "Sign to verify"}
-              </button>
-              {verifyError && (
-                <div className={`mt-5 mx-auto max-w-xs rounded-xl border px-4 py-2.5 ${/cancel/i.test(verifyError) ? "border-amber-500/25 bg-amber-500/5" : "border-red-500/30 bg-red-500/5"}`}>
-                  <p className={`text-[11px] ${/cancel/i.test(verifyError) ? "text-amber-300/90" : "text-red-400"}`}>{verifyError}</p>
-                </div>
-              )}
-            </div>
           ) : (
             <>
               {/* ── Identity strip ────────────────────────────────────────── */}
@@ -530,10 +428,10 @@ export default function ProfilePage() {
                 <div className="space-y-2 text-[11px]">
                   <LinkedRow label="X / Twitter" icon="𝕏" status="Self-attest" />
                   <LinkedRow label="Farcaster"   icon="◌" status={fcUser?.username ? `@${fcUser.username}` : "Self-attest"} />
-                  <LinkedRow label="Wallet"      icon="⬡" status="Signature-verified" />
+                  <LinkedRow label="Wallet"      icon="⬡" status="Connected" />
                 </div>
                 <p className="mt-3 text-[10px] text-slate-700 leading-relaxed">
-                  Social handles are self-attested — type them in the form above. Your wallet was verified by signature this session{isMiniApp ? " (auto-prompted in Base App)" : ""}; opening the app again re-asks for the signature.
+                  Social handles are self-attested — type them in the form above. Viewing is open once your wallet is connected; saving edits requires a one-off wallet signature (verified server-side).
                 </p>
               </AppCard>
 
