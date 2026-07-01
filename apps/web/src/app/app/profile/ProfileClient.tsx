@@ -23,6 +23,7 @@ import { formatUnits } from "viem";
 import AppPageHeader from "@/components/app/AppPageHeader";
 import AppConnectPrompt from "@/components/app/AppConnectPrompt";
 import AppCard, { AppSectionLabel } from "@/components/app/AppCard";
+import { useBasename } from "@/lib/useBasename"; // resolves wallet → shun.base
 
 // ─── Contracts ───────────────────────────────────────────────────────────────
 
@@ -134,6 +135,7 @@ const verifyStorageKey = (addr: string) => `blueagent:verify:${addr.toLowerCase(
 export default function ProfilePage() {
   const { address, isConnected } = useAccount();
   const { signMessageAsync }     = useSignMessage();
+  const { name: basename }       = useBasename(address); // shun.base — same source as chat + dashboard
 
   const [profile,       setProfile]      = useState<ProfileResponse | null>(null);
   const [profileLoad,   setProfileLoad]  = useState(false);
@@ -175,7 +177,10 @@ export default function ProfilePage() {
       } catch { /* not in a Mini App host */ }
     })();
     return () => { off = true; };
-  }, []);
+  // Re-run once the wallet connects: inside Base App the host auto-connects
+  // AFTER mount, so an empty-deps effect would capture fcUser before the
+  // Mini App context (displayName/pfp) has hydrated and never retry.
+  }, [isConnected, address]);
 
   // Hydrate the session verify-flag whenever the connected address changes.
   useEffect(() => {
@@ -320,8 +325,11 @@ export default function ProfilePage() {
 
   // ── Render ───────────────────────────────────────────────────────────────
 
-  // Identity prefers the live Mini App context, then a saved profile, then address.
-  const displayName = fcUser?.displayName?.trim() || profile?.displayName?.trim() || (address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "");
+  // Identity prefers the live Mini App context, then a saved profile, then the
+  // wallet's Basename (shun.base — same source chat + dashboard use), then the
+  // short 0x… form. Without the Basename step a Base App user with no Farcaster
+  // profile and no saved displayName only ever saw the raw address.
+  const displayName = fcUser?.displayName?.trim() || profile?.displayName?.trim() || basename || (address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "");
   const avatarSrc   = fcUser?.pfpUrl || profile?.avatarUrl || "";
   const avatarInitial = address?.slice(2, 4).toUpperCase();
 
