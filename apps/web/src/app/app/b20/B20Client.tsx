@@ -11,6 +11,7 @@ import { runB20Roles }    from "./roles-action";
 import { runB20Registry, runB20Activity, runB20Activation, runB20AdminRenounced } from "./registry-action";
 import { runB20ManageLoad, type ManageData } from "./manage-action";
 import ManagePanel from "./ManagePanel";
+import WatchlistTab from "./WatchlistTab";
 import type { B20Inspection, PolicyInfo } from "@/lib/b20/inspect";
 import type { B20RolesResult }            from "@/lib/b20/roles";
 import type { B20RegistryResult }         from "@/lib/b20/registry-logs";
@@ -19,7 +20,7 @@ import type { B20Activation }             from "@/lib/b20/activation";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab     = "scanner" | "roles" | "registry" | "launch" | "manage" | "methodology";
+type Tab     = "scanner" | "roles" | "registry" | "launch" | "manage" | "watchlist" | "methodology";
 type Network = "mainnet" | "sepolia";
 
 // ── localStorage helpers ──────────────────────────────────────────────────────
@@ -83,6 +84,12 @@ const TabIcons: Record<Tab, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
     </svg>
   ),
+  watchlist: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+    </svg>
+  ),
   methodology: (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
       <path strokeLinecap="round" strokeLinejoin="round"
@@ -104,6 +111,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "registry", label: "Registry" },
   { id: "launch",   label: "Launch"   },
   { id: "manage",   label: "Manage"   },
+  { id: "watchlist", label: "Watchlist" },
   { id: "methodology", label: "Methodology" },
 ];
 
@@ -1471,6 +1479,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
     registry: "Registry",
     launch:   "Launch B20",
     manage:   "Manage",
+    watchlist: "Watchlist",
     methodology: "Methodology",
   };
 
@@ -1678,6 +1687,14 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                 <InfoChip>Client-side encode</InfoChip>
                 <InfoChip>Role-gated</InfoChip>
                 <InfoChip>wagmi sign</InfoChip>
+              </>
+            )}
+
+            {activeTab === "watchlist" && (
+              <>
+                <InfoChip>Per-wallet</InfoChip>
+                <InfoChip>View-time diff</InfoChip>
+                <InfoChip>No cron</InfoChip>
               </>
             )}
 
@@ -2251,6 +2268,15 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                 </div>
               )}
 
+              {/* ── WATCHLIST MAIN ────────────────────────────────── */}
+              {activeTab === "watchlist" && (
+                <WatchlistTab
+                  connectedAddress={connectedAddress}
+                  network={network}
+                  setNetwork={setNetwork}
+                />
+              )}
+
               {/* ── METHODOLOGY MAIN ──────────────────────────────── */}
               {activeTab === "methodology" && (
                 <MethodologyMain onScan={() => setActiveTab("scanner")} />
@@ -2540,6 +2566,55 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                       </p>
                       <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
                         Transactions are encoded client-side and signed by your wallet. No keys or tx data sent to Blue Agent servers.
+                      </p>
+                    </div>
+                  </SideCard>
+                </>
+              )}
+
+              {/* ── WATCHLIST SIDE ────────────────────────────────── */}
+              {activeTab === "watchlist" && (
+                <>
+                  <SideCard title="How it works">
+                    <div className="px-4 py-3 space-y-2.5">
+                      <p className="font-mono text-[10px] text-slate-400 leading-relaxed">
+                        Each watched token stores a <span className="text-[#4FC3F7]">baseline snapshot</span> of its
+                        compliance-critical state — variant, pause flags, per-scope policies, and supply cap.
+                      </p>
+                      <p className="font-mono text-[10px] text-slate-400 leading-relaxed">
+                        On every load we re-inspect each token live and <span className="text-[#4FC3F7]">diff</span> it
+                        against the baseline. Detected changes surface as badges; press
+                        <span className="text-[#4FC3F7]"> Acknowledge</span> to reset the baseline to the current state.
+                      </p>
+                      <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
+                        Pull-based — no cron, no push. Changes are evaluated the moment you open this tab.
+                      </p>
+                    </div>
+                  </SideCard>
+
+                  <SideCard title="What we diff">
+                    <div className="divide-y divide-[#0d0d18]">
+                      {[
+                        { k: "Pause", v: "transfer / mint / burn paused or resumed" },
+                        { k: "Policy", v: "per-scope policy changed (open / blocked / custom)" },
+                        { k: "Supply cap", v: "cap raised, lowered, set, or removed" },
+                      ].map(({ k, v }) => (
+                        <div key={k} className="px-4 py-2.5">
+                          <code className="font-mono text-[9px] text-[#4FC3F7] block mb-0.5">{k}</code>
+                          <span className="font-mono text-[9px] text-slate-500">{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </SideCard>
+
+                  <SideCard title="Note">
+                    <div className="px-4 py-3 space-y-2.5">
+                      <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
+                        Raw <span className="text-slate-400">totalSupply</span> is shown for context but never diffed —
+                        an active stablecoin mints/burns constantly, which would bury the real signal.
+                      </p>
+                      <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
+                        Watchlist is stored per connected wallet (max 25 tokens). Read-only monitoring — no signing required.
                       </p>
                     </div>
                   </SideCard>
