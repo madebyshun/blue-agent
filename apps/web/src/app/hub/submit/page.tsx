@@ -279,7 +279,7 @@ export default function SubmitToolPage() {
               Verification by Blue Agent is pending (1-2 days).
             </p>
             <div className="flex items-center justify-center gap-3">
-              <Link href={`/hub#tool=${submitted.id}`} className="text-xs px-4 py-2 rounded-xl border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 transition-all">
+              <Link href={`/hub/tool/${submitted.id}`} className="text-xs px-4 py-2 rounded-xl border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 transition-all">
                 View on Hub →
               </Link>
               <Link href="/hub/dashboard" className="text-xs px-4 py-2 rounded-xl border border-[#A78BFA]/30 text-[#A78BFA] bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 transition-all">
