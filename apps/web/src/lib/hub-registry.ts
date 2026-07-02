@@ -9,7 +9,7 @@
  *   hub:tools:index            → string[] of tool IDs (the master list)
  *   hub:tools:item:<id>        → RegisteredTool JSON
  *   hub:tools:calls:<id>       → integer (lifetime call count; mirrors usage:<id>)
- *   hub:tools:revenue:<id>     → integer (lifetime USDC units earned by builder, 80% split)
+ *   hub:tools:revenue:<id>     → integer (lifetime USDC units earned by builder, 95% split)
  *   hub:builders:tools:<addr>  → string[] of tool IDs owned by this wallet
  */
 
@@ -136,8 +136,8 @@ export async function incrCallCount(id: string): Promise<number> {
 
 /**
  * Add to the builder's lifetime revenue counter.
- * `usdcUnits` should be the BUILDER'S 80% share (caller already split off
- * the 20% treasury cut before invoking).
+ * `usdcUnits` should be the BUILDER'S 95% share (caller already split off
+ * the 5% treasury cut before invoking).
  */
 export async function addRevenue(id: string, usdcUnits: number): Promise<void> {
   const current = (await kvGet<number>(K.revenue(id))) ?? 0;
@@ -168,7 +168,7 @@ export function siweMessage(
     `Nonce:     ${nonce}`,
     ``,
     `By signing this message I confirm I control the wallet above and`,
-    `agree to the Blue Hub builder terms: 80/20 revenue split with the`,
+    `agree to the Blue Hub builder terms: 95/5 revenue split with the`,
     `Blue Hub treasury, USDC settlement on Base.`,
   ].join("\n");
 }
