@@ -1455,20 +1455,21 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
     return () => window.removeEventListener("keydown", handler);
   }, [selected]);
 
-  // ── On mount: deep-link ?tool=<id> (from /hub/[tool] pages) ───────────────
+  // ── On mount: deep-link ?tool=<id> (from /hub/[tool] pages & dashboard "Test") ──
+  // Community tools (external + hosted) load ASYNC, so a target may not exist at
+  // mount. Depend on allTools and retry until it appears — guarded to fire once.
+  const toolDeepLinkApplied = useRef(false);
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (toolDeepLinkApplied.current || typeof window === "undefined") return;
     const qTool = new URLSearchParams(window.location.search).get("tool");
-    if (qTool) {
-      const t = allTools.find(x => x.id === qTool);
-      if (t) {
-        setSelected(t);
-        // Legacy ?tool= links — normalize to the clean path for the surface
-        // we're on (app shell vs public hub).
-        window.history.replaceState(null, "", inShell ? `/hub/${t.id}` : `/hub/${t.id}`);
-      }
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!qTool) { toolDeepLinkApplied.current = true; return; }
+    const t = allTools.find(x => x.id === qTool);
+    if (!t) return;   // community tool not loaded yet — re-run when allTools changes
+    toolDeepLinkApplied.current = true;
+    setSelected(t);
+    // Normalize legacy ?tool= links to the clean per-tool path.
+    window.history.replaceState(null, "", `/hub/${t.id}`);
+  }, [allTools]);
 
   // ── On mount: load shared result from URL hash ────────────────────────────
   // Two formats supported:

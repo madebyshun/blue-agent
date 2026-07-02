@@ -76,7 +76,7 @@ export default async function BuilderProfile({
           <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] px-5 py-4">
             <p className="text-[10px] tracking-widest mb-1 text-[#34D399]">REVENUE</p>
             <p className="text-2xl font-bold leading-none text-[#34D399]">{usdc(stats.totalRevenue)}</p>
-            <p className="text-[10px] text-slate-700 mt-1">80% builder share</p>
+            <p className="text-[10px] text-slate-700 mt-1">95% builder share</p>
           </div>
         </div>
 
