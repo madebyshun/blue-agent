@@ -36,25 +36,135 @@ const isClient = typeof window !== "undefined";
 
 function emit() { if (isClient) window.dispatchEvent(new Event(EVENT)); }
 
-// ── Presets — one-click starting points (URL + which auth header to ask for) ──
+// ── Preset catalog — curated MCP servers for the Manus-style gallery ──────────
+//
+// auth model determines the enable flow:
+//   "none"   → true 1-click (probe + attach, no secret)
+//   "bearer" → 1 slim step to paste a token, then attach
+//   "oauth"  → surfaced for discovery, not attachable yet (OAuth flow TBD)
+//
+// Every URL below was live-verified (initialize + tools/list, or a 401 that
+// proves the endpoint exists and demands auth) on 2026-07-02 — no invented URLs.
+export type ConnectorAuth = "none" | "bearer" | "oauth";
+
 export interface ConnectorPreset {
   id: string;
   name: string;
   url: string;
-  authHeader: string;
-  authPlaceholder: string;
-  hint: string;
+  auth: ConnectorAuth;
+  category: string;          // grouping label shown on the card
+  icon: string;              // emoji glyph for recognizability
+  description: string;       // one-line card copy
+  authHeader?: string;       // bearer only — header to send the token in
+  authPlaceholder?: string;  // bearer only — input hint
+  docsUrl?: string;          // where to get a token / learn more
 }
+
 export const CONNECTOR_PRESETS: ConnectorPreset[] = [
+  {
+    id: "blue-hub",
+    name: "Blue Hub",
+    url: "https://blueagent.dev/api/mcp",
+    auth: "none",
+    category: "Base",
+    icon: "🔵",
+    description: "Blue Agent's own toolset — idea·build·audit·ship·raise plus on-chain Base intel. No key needed.",
+    docsUrl: "https://blueagent.dev/hub",
+  },
+  {
+    id: "deepwiki",
+    name: "DeepWiki",
+    url: "https://mcp.deepwiki.com/mcp",
+    auth: "none",
+    category: "Docs",
+    icon: "📖",
+    description: "Ask anything about a public GitHub repo — structure, docs, deep Q&A. By Devin / Cognition.",
+    docsUrl: "https://deepwiki.com",
+  },
+  {
+    id: "context7",
+    name: "Context7",
+    url: "https://mcp.context7.com/mcp",
+    auth: "none",
+    category: "Docs",
+    icon: "📚",
+    description: "Version-accurate library & framework docs, injected on demand. By Upstash.",
+    docsUrl: "https://context7.com",
+  },
+  {
+    id: "huggingface",
+    name: "Hugging Face",
+    url: "https://huggingface.co/mcp",
+    auth: "none",
+    category: "AI",
+    icon: "🤗",
+    description: "Search models, datasets, Spaces & papers on the HF Hub. Public search needs no key.",
+    docsUrl: "https://huggingface.co/settings/mcp",
+  },
   {
     id: "github",
     name: "GitHub",
     url: "https://api.githubcopilot.com/mcp/",
+    auth: "bearer",
+    category: "Dev",
+    icon: "🐙",
+    description: "Repos, issues, PRs, code search. Needs a GitHub personal access token.",
     authHeader: "Authorization",
     authPlaceholder: "Bearer ghp_… (GitHub PAT)",
-    hint: "GitHub MCP — repos, issues, PRs, code search. Needs a GitHub personal access token.",
+    docsUrl: "https://github.com/settings/tokens",
+  },
+  {
+    id: "notion",
+    name: "Notion",
+    url: "https://mcp.notion.com/mcp",
+    auth: "oauth",
+    category: "Product",
+    icon: "📝",
+    description: "Search workspace content, update pages, automate Notion workflows.",
+    docsUrl: "https://developers.notion.com",
+  },
+  {
+    id: "linear",
+    name: "Linear",
+    url: "https://mcp.linear.app/mcp",
+    auth: "oauth",
+    category: "Dev",
+    icon: "📐",
+    description: "Issues, projects & cycles — manage your Linear workspace from chat.",
+    docsUrl: "https://linear.app",
+  },
+  {
+    id: "sentry",
+    name: "Sentry",
+    url: "https://mcp.sentry.dev/mcp",
+    auth: "oauth",
+    category: "Dev",
+    icon: "🛡️",
+    description: "Query errors, issues & performance across your Sentry projects.",
+    docsUrl: "https://mcp.sentry.dev",
+  },
+  {
+    id: "stripe",
+    name: "Stripe",
+    url: "https://mcp.stripe.com",
+    auth: "oauth",
+    category: "Product",
+    icon: "💳",
+    description: "Payments, customers & invoices — read and manage Stripe data.",
+    docsUrl: "https://docs.stripe.com/mcp",
   },
 ];
+
+/** Normalize an MCP url for equality checks (drop trailing slashes + case). */
+function normalizeUrl(u: string): string {
+  return u.trim().toLowerCase().replace(/\/+$/, "");
+}
+
+/** True if a connector with this preset's endpoint is already attached. */
+export function isPresetAdded(list: McpConnector[], preset: ConnectorPreset): boolean {
+  const target = normalizeUrl(preset.url);
+  return list.some(c => normalizeUrl(c.url) === target);
+}
 
 // ── CRUD ────────────────────────────────────────────────────────────────────
 export function loadConnectors(): McpConnector[] {
