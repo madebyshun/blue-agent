@@ -34,6 +34,12 @@ interface Tool {
   // Phase 3 — community-submitted tools: when set, ToolRunner POSTs here
   // instead of /api/x402/[id]. Hub registry proxy → builder's endpoint.
   callPath?:       string;
+  // v2 marketplace: provenance + denormalized stats for the unified grid.
+  source?:         "native" | "external" | "hosted";
+  creatorHandle?:  string;   // "@handle" or brand shown as "by …" on community cards
+  callCount?:      number;   // lifetime paid runs (community tools carry this from KV)
+  // Hosted tools invoke asynchronously (202 + job poll) — see ToolRunner.run().
+  async?:          boolean;
 }
 
 const FEATURED_IDS = ["launch-simulator-1", "investor-memo", "market-fit", "token-launch-readiness"];
@@ -123,6 +129,7 @@ const TOOLS: Tool[] = AGENT_TOOLS.map(t => ({
   releasedAt:    t.releasedAt,
   x402Url:  t.x402Url,
   x402Body: t.x402Body,
+  source:   "native",
 }));
 
 const CATEGORIES: { key: Category; label: string }[] = [
@@ -655,7 +662,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
 
         setStep("paying");
 
-        // Single call with X-PAYMENT — proxy forwards to Bankr
+        // Single call with X-PAYMENT — proxy forwards to Bankr / CDP
         const xPayment = btoa(JSON.stringify({
           x402Version: 2,
           scheme:      "exact",
@@ -673,6 +680,45 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           },
         }));
 
+        // ── Hosted tools: async invoke (202 + job_id) → poll job status ──────────
+        // The invoke route verifies payment, returns immediately, runs in the
+        // background, and settles ONLY on success — so a failure leaves the user
+        // uncharged. We poll the job until it reports done | error.
+        if (tool.async) {
+          const inv = await fetch(tool.callPath!, {
+            method:  "POST",
+            headers: { "Content-Type": "application/json", "X-PAYMENT": xPayment },
+            body:    JSON.stringify(tool.x402Body(body)),
+          });
+          const invJson = await inv.json() as { job_id?: string; poll?: string; error?: string; detail?: unknown };
+          if (!inv.ok || !invJson.job_id) {
+            throw new Error([invJson.error, invJson.detail].filter(Boolean).join(": ") || `Invoke failed ${inv.status}`);
+          }
+          const pollUrl = invJson.poll ?? `/api/hub/community/jobs/${invJson.job_id}`;
+          type Job = { status: string; result?: { body?: string; contentType?: string }; error?: string };
+          let done: Job | null = null;
+          for (let i = 0; i < 40; i++) {              // ~60s budget (40 × 1.5s)
+            await new Promise(res => setTimeout(res, 1500));
+            const p = await fetch(pollUrl);
+            if (!p.ok) continue;
+            const pj = await p.json() as Job;
+            if (pj.status === "done" || pj.status === "error") { done = pj; break; }
+          }
+          if (!done) throw new Error("Timed out waiting for the tool — you were not charged.");
+          if (done.status === "error") throw new Error(done.error || "Tool failed — you were not charged.");
+          const raw = done.result?.body ?? "";
+          // Body is the tool output (never config). Render JSON as an object if it
+          // parses, otherwise show the raw text.
+          let parsed: Record<string,unknown> | string = raw;
+          try { const j = JSON.parse(raw); if (j && typeof j === "object") parsed = j as Record<string,unknown>; } catch {}
+          setResult(parsed);
+          setStep("done");
+          setMobileTab("output");
+          onResult({ result: parsed, isMock: false, mockReason: "dev" });
+          return;
+        }
+
+        // Single call with X-PAYMENT — proxy forwards to Bankr (synchronous)
         const r2 = await fetch(tool.callPath ?? `/api/x402/${tool.id}`, {
           method:  "POST",
           headers: { "Content-Type": "application/json", "X-PAYMENT": xPayment },
@@ -1322,38 +1368,68 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
       inputs: { key: string; label: string; placeholder: string; required?: boolean }[];
       verified: boolean; aiReady: boolean;
       builderAddress: string; submittedAt: number;
-      callCount?: number;
+      agentName?: string; callCount?: number;
     };
-    fetch("/api/hub/tools")
+    const asCat = (c: string): Exclude<Category, "all"> =>
+      (["intelligence","builder","trading","content","agent-economy","base-ecosystem","on-chain"] as const)
+        .includes(c as never) ? (c as Exclude<Category, "all">) : "intelligence";
+    const shortAddr = (a?: string) => a ? `${a.slice(0, 6)}…${a.slice(-4)}` : undefined;
+
+    // External tools (builder hosts the endpoint; Hub proxies + forwards payment).
+    const external = fetch("/api/hub/tools")
       .then(r => r.ok ? r.json() : { tools: [] })
-      .then((d: { tools: Registered[] }) => {
-        const mapped: Tool[] = (d.tools ?? []).map(r => ({
-          id:             r.id,
-          name:           r.name,
-          cat:            (["intelligence","builder","trading","content","agent-economy","base-ecosystem","on-chain"] as const).includes(r.category as never)
-                            ? (r.category as Exclude<Category, "all">)
-                            : ("intelligence" as Exclude<Category, "all">),
-          price:          r.price,
-          // Community tools default to a single "community" agent dot until
-          // Phase 4 introduces per-builder agent identity.
-          agents:         ["blue"],
-          desc:           r.description,
-          inputs:         r.inputs.map(i => ({ key: i.key, label: i.label, placeholder: i.placeholder, required: !!i.required })),
-          verified:       r.verified,
-          aiReady:        r.aiReady,
-          builderAddress: r.builderAddress,
-          releasedAt:    r.submittedAt,
-          // Route through Hub proxy (forwards to builder endpoint + tracks usage/revenue)
-          callPath:       `/api/hub/tools/${r.id}/call`,
-          // Build a body mapper so the existing ToolRunner x402 path works:
-          // for priced community tools, we still require a wallet + signature.
-          x402Body:       r.priceUSDC > 0
-                            ? (vals: Record<string, string>) => vals as Record<string, unknown>
-                            : undefined,
-        }));
-        setCommunityTools(mapped);
-      })
-      .catch(() => {});
+      .then((d: { tools: Registered[] }): Tool[] => (d.tools ?? []).map(r => ({
+        id:             r.id,
+        name:           r.name,
+        cat:            asCat(r.category),
+        price:          r.price,
+        agents:         ["blue"],
+        desc:           r.description,
+        inputs:         r.inputs.map(i => ({ key: i.key, label: i.label, placeholder: i.placeholder, required: !!i.required })),
+        verified:       r.verified,
+        aiReady:        r.aiReady,
+        builderAddress: r.builderAddress,
+        releasedAt:    r.submittedAt,
+        source:         "external",
+        creatorHandle:  r.agentName || shortAddr(r.builderAddress),
+        callCount:      r.callCount,
+        // Route through Hub proxy (forwards to builder endpoint + tracks usage/revenue)
+        callPath:       `/api/hub/tools/${r.id}/call`,
+        x402Body:       r.priceUSDC > 0
+                          ? (vals: Record<string, string>) => vals as Record<string, unknown>
+                          : undefined,
+      })))
+      .catch((): Tool[] => []);
+
+    // Hosted tools (Blue Hub runs them; paid invoke is async — 202 + job poll).
+    type Hosted = Registered & { template: string; slug: string };
+    const hosted = fetch("/api/hub/hosted")
+      .then(r => r.ok ? r.json() : { tools: [] })
+      .then((d: { tools: Hosted[] }): Tool[] => (d.tools ?? []).map(h => ({
+        id:             h.slug,
+        name:           h.name,
+        cat:            asCat(h.category),
+        price:          h.price,
+        agents:         ["blue"],
+        desc:           h.description,
+        inputs:         h.inputs.map(i => ({ key: i.key, label: i.label, placeholder: i.placeholder, required: !!i.required })),
+        verified:       h.verified,
+        aiReady:        h.template === "ai_tool",   // ai_tool returns text; api_wrapper varies
+        builderAddress: h.builderAddress,
+        releasedAt:    h.submittedAt,
+        source:         "hosted",
+        creatorHandle:  h.agentName || shortAddr(h.builderAddress),
+        callCount:      h.callCount,
+        // Paid invoke → 202 + poll (see ToolRunner async branch).
+        callPath:       `/api/hub/community/${h.slug}/invoke`,
+        async:          true,
+        x402Body:       h.priceUSDC > 0
+                          ? (vals: Record<string, string>) => vals as Record<string, unknown>
+                          : undefined,
+      })))
+      .catch((): Tool[] => []);
+
+    Promise.all([external, hosted]).then(([e, h]) => setCommunityTools([...e, ...h]));
   }, []);
 
   const featuredIds = useMemo<Set<string>>(() => {
