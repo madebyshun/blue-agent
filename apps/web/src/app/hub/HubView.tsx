@@ -583,19 +583,20 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         body: JSON.stringify({ toolId: tool.id, result, isMock, mockReason }),
       });
       const data = await res.json() as { id?: string };
-      // Share the in-app tool page (/app/hub/[tool]) — it has correct per-tool OG
-      // via generateMetadata, and ?s= loads the shared result inline. A hash like
-      // /app/hub#s= can't carry OG (crawlers never see the fragment), which is
+      // Share the public per-tool page (/hub/tool/[slug]) — self-contained,
+      // reachable without the app shell, with correct per-tool OG via
+      // generateMetadata; ?s= loads the shared result inline. A hash like
+      // /hub#s= can't carry OG (crawlers never see the fragment), which is
       // why shared links used to preview as generic Blue Chat.
       const url = data.id
-        ? `${window.location.origin}/app/hub/${tool.id}?s=${data.id}`
-        : `${window.location.origin}/app/hub/${tool.id}`;
+        ? `${window.location.origin}/hub/tool/${tool.id}?s=${data.id}`
+        : `${window.location.origin}/hub/tool/${tool.id}`;
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Fallback: copy plain tool page link
-      await navigator.clipboard.writeText(`${window.location.origin}/app/hub/${tool.id}`);
+      await navigator.clipboard.writeText(`${window.location.origin}/hub/tool/${tool.id}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -1013,7 +1014,15 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
               {typeof result === "string"
                 ? <MarkdownOutput content={result} />
                 : <ResultObj obj={result} />}
-              {isMock ? (
+              {tool.source && tool.source !== "native" ? (
+                // Community tool — attribute the builder, not the 3-agent stack.
+                <p className="font-mono text-[10px] text-slate-700 mt-6 pt-4 border-t border-[#1A1A2E]">
+                  powered by <span className="text-[#A78BFA]">{tool.creatorHandle || "an independent builder"}</span> via Blue Hub
+                  {!isMock && typeof result !== "string" && result.timestamp
+                    ? `  ·  ${new Date(result.timestamp as string).toLocaleString()}`
+                    : ""}
+                </p>
+              ) : isMock ? (
                 <p className="font-mono text-[10px] text-slate-700 mt-6 pt-4 border-t border-[#1A1A2E]">
                   preview data — live results powered by 3-agent consensus
                 </p>
@@ -1523,7 +1532,9 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
         sApplied.current = true;
         setPreload({ toolId: p.toolId, data: { result: p.result, isMock: !!p.isMock, mockReason: p.mockReason ?? "dev" } });
         setSelected(tool);
-        window.history.replaceState(null, "", `/hub/${p.toolId}`);
+        // Drop ?s= but keep the current path so a refresh still resolves the
+        // route (in-app: /app/hub/[tool]; public per-tool page: /hub/tool/[slug]).
+        window.history.replaceState(null, "", window.location.pathname);
       })
       .catch(() => {});
     return () => { off = true; };

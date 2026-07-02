@@ -291,7 +291,7 @@ function ToolRow({ t, owner, onRemoved }: { t: DashboardItem; owner: string; onR
 
         {/* Actions */}
         <div className="flex flex-col gap-1.5 shrink-0">
-          <Link href={`/hub?tool=${t.id}`}
+          <Link href={`/hub/tool/${t.id}`}
             className="text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 transition-all text-center">
             Test ▸
           </Link>
