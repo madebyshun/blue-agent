@@ -1,9 +1,15 @@
 "use client";
 
 /**
- * /hub/dashboard — Builder dashboard.
- * Shows tools owned by the connected wallet, live call counts, accrued revenue.
- * Withdraw button is a Phase 4 hook (splitter contract not yet live).
+ * /hub/dashboard — Builder dashboard (Blue Hub v2).
+ *
+ * Shows every tool the connected wallet owns across BOTH registries:
+ *   • 🌐 External — builder self-hosts the endpoint (95/5 split, per-tool revenue).
+ *   • ✨ Hosted   — Blue Hub runs the tool (90/10 split, pooled earnings).
+ *
+ * Data comes from /api/hub/builders/[address]/dashboard (secrets stripped there).
+ * Earnings are BOOKKEEPING only — the on-chain payout splitter is a Phase 4 hook.
+ * "Test" deep-links into the Hub runner so a creator can run their own live tool.
  */
 
 import { useEffect, useState } from "react";
@@ -11,56 +17,70 @@ import Link from "next/link";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
 
-interface BuilderTool {
-  id:            string;
-  name:          string;
-  description:   string;
-  category:      string;
-  endpoint:      string;
-  price:         string;
-  priceUSDC:     number;
-  verified:      boolean;
-  aiReady:       boolean;
-  submittedAt:   number;
-  callCount?:    number;
-  revenueTotal?: number;
+type Source = "external" | "hosted";
+
+interface DashboardItem {
+  source:      Source;
+  id:          string;
+  name:        string;
+  description: string;
+  category:    string;
+  price:       string;
+  priceUSDC:   number;
+  verified:    boolean;
+  aiReady:     boolean;
+  template?:   string;
+  submittedAt: number;
+  callCount:   number;
+  earnedUnits: number | null;   // external: per-tool 95% · hosted: null (pooled)
+  splitPct:    number;
 }
+
+interface DashboardData {
+  address:  string;
+  items:    DashboardItem[];
+  counts:   { external: number; hosted: number; total: number };
+  earnings: { externalUnits: number; hostedUnits: number; totalUnits: number };
+}
+
+const SOURCE_META: Record<Source, { icon: string; label: string; color: string; split: string }> = {
+  external: { icon: "🌐", label: "External", color: "#34D399", split: "95% builder · 5% Hub" },
+  hosted:   { icon: "✨", label: "Hosted",   color: "#A78BFA", split: "90% builder · 10% Hub" },
+};
 
 function shortAddr(a: string) { return a.slice(0, 6) + "…" + a.slice(-4); }
 function usdc(units: number)  { return `$${(units / 1_000_000).toFixed(4)}`; }
 function relTime(ms: number)  {
   const d = Date.now() - ms;
-  if (d < 60_000)    return "just now";
-  if (d < 3600_000)  return `${Math.floor(d / 60_000)}m ago`;
+  if (d < 60_000)     return "just now";
+  if (d < 3600_000)   return `${Math.floor(d / 60_000)}m ago`;
   if (d < 86_400_000) return `${Math.floor(d / 3600_000)}h ago`;
   return `${Math.floor(d / 86_400_000)}d ago`;
 }
 
 export default function BuilderDashboard() {
   const { address, isConnected } = useAccount();
-  const [tools, setTools]     = useState<BuilderTool[]>([]);
+  const [data, setData]       = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr]         = useState<string | null>(null);
 
   useEffect(() => {
-    if (!address) return;
+    if (!address) { setData(null); return; }
     setLoading(true);
     setErr(null);
-    fetch(`/api/hub/builders/${address}/tools`)
+    fetch(`/api/hub/builders/${address}/dashboard`)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((d: { tools: BuilderTool[] }) => setTools(d.tools))
+      .then((d: DashboardData) => setData(d))
       .catch((e: Error) => setErr(e.message))
       .finally(() => setLoading(false));
   }, [address]);
 
-  const stats = tools.reduce(
-    (acc, t) => ({
-      tools:   acc.tools + 1,
-      calls:   acc.calls + (t.callCount ?? 0),
-      revenue: acc.revenue + (t.revenueTotal ?? 0),
-    }),
-    { tools: 0, calls: 0, revenue: 0 },
-  );
+  const items = data?.items ?? [];
+  const stats = {
+    tools:   data?.counts.total ?? 0,
+    calls:   items.reduce((s, t) => s + t.callCount, 0),
+    revenue: data?.earnings.totalUnits ?? 0,
+  };
 
   return (
     <div className="min-h-screen bg-[#050508] text-white font-mono">
@@ -70,7 +90,7 @@ export default function BuilderDashboard() {
         <Link href="/hub" className="text-xs text-slate-500 hover:text-white transition-colors">← Hub</Link>
         <span className="w-1 h-1 rounded-full bg-[#34D399] animate-pulse" />
         <p className="text-xs text-[#34D399] tracking-widest">// BUILDER DASHBOARD</p>
-        <p className="text-[10px] text-slate-700 hidden sm:block">Your tools, calls, and revenue</p>
+        <p className="text-[10px] text-slate-700 hidden sm:block">Your tools, runs, and earnings</p>
         <div className="ml-auto flex items-center gap-3">
           <Link href="/hub/submit" className="text-[11px] px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA] bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 transition-all">
             + Submit tool
@@ -89,7 +109,7 @@ export default function BuilderDashboard() {
             </div>
             <h2 className="text-lg font-bold mb-2">Connect to view your dashboard</h2>
             <p className="text-sm text-slate-500 mb-6 max-w-xs mx-auto">
-              See tools you&apos;ve registered, live call counts, and accrued USDC revenue.
+              See tools you&apos;ve registered, live run counts, and accrued USDC earnings.
             </p>
             <ConnectButton label="Connect Wallet" />
           </div>
@@ -97,9 +117,10 @@ export default function BuilderDashboard() {
           <>
             {/* Stats row */}
             <div className="grid grid-cols-3 gap-3 mb-6">
-              <StatCard label="TOOLS"   value={String(stats.tools)} accent="#4FC3F7" />
-              <StatCard label="CALLS"   value={stats.calls.toLocaleString()} accent="#A78BFA" />
-              <StatCard label="REVENUE" value={usdc(stats.revenue)} accent="#34D399" sub="80% builder share" />
+              <StatCard label="TOOLS"    value={String(stats.tools)} accent="#4FC3F7"
+                sub={data ? `${data.counts.external} ext · ${data.counts.hosted} hosted` : undefined} />
+              <StatCard label="RUNS"     value={stats.calls.toLocaleString()} accent="#A78BFA" />
+              <StatCard label="EARNINGS" value={usdc(stats.revenue)} accent="#34D399" sub="accrued · your share" />
             </div>
 
             {/* Wallet badge */}
@@ -124,10 +145,14 @@ export default function BuilderDashboard() {
             )}
 
             {/* Empty */}
-            {!loading && !err && tools.length === 0 && (
+            {!loading && !err && items.length === 0 && (
               <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-8 text-center">
+                <p className="text-2xl mb-2">🛠️</p>
                 <p className="text-sm font-semibold mb-1">No tools registered yet</p>
-                <p className="text-[11px] text-slate-600 mb-4">List your first tool — earn USDC per call on Base.</p>
+                <p className="text-[11px] text-slate-600 mb-4 max-w-sm mx-auto">
+                  List your first tool and earn USDC on every call. Point Blue Hub at your API,
+                  or let us host an AI prompt or API wrapper for you — no server required.
+                </p>
                 <Link href="/hub/submit" className="inline-block text-xs px-4 py-2 rounded-xl border border-[#A78BFA]/30 text-[#A78BFA] bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 transition-all">
                   Submit your first tool →
                 </Link>
@@ -135,51 +160,89 @@ export default function BuilderDashboard() {
             )}
 
             {/* Tool list */}
-            {tools.length > 0 && (
-              <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
-                <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-4 px-4 py-2 border-b border-[#1A1A2E] bg-[#0a0a0f] text-[10px] tracking-widest text-slate-600">
-                  <span>TOOL</span>
-                  <span>STATUS</span>
-                  <span className="text-right">CALLS</span>
-                  <span className="text-right">REVENUE</span>
-                  <span className="text-right">SUBMITTED</span>
-                </div>
-                {tools.map(t => (
-                  <Link key={t.id} href={`/hub/${t.id}`}
-                    className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-4 px-4 py-3 border-b border-[#1A1A2E] last:border-0 hover:bg-[#A78BFA]/5 transition-colors items-center">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold truncate">{t.name}</p>
-                      <p className="text-[10px] text-slate-600 truncate">{t.description}</p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {t.verified ? (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded border border-[#34D399]/30 text-[#34D399]/90 bg-[#34D399]/5">✓ Verified</span>
-                      ) : (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded border border-amber-500/30 text-amber-400 bg-amber-500/5">pending review</span>
-                      )}
-                    </div>
-                    <span className="text-xs font-semibold text-right tabular-nums">{(t.callCount ?? 0).toLocaleString()}</span>
-                    <span className="text-xs font-semibold text-[#34D399] text-right tabular-nums">{usdc(t.revenueTotal ?? 0)}</span>
-                    <span className="text-[10px] text-slate-600 text-right">{relTime(t.submittedAt)}</span>
-                  </Link>
-                ))}
+            {items.length > 0 && (
+              <div className="space-y-2">
+                {items.map(t => <ToolRow key={`${t.source}:${t.id}`} t={t} />)}
               </div>
             )}
 
-            {/* Withdraw banner (Phase 4) */}
-            {tools.length > 0 && stats.revenue > 0 && (
-              <div className="mt-6 rounded-xl border border-[#A78BFA]/20 bg-[#A78BFA]/5 p-4 flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold mb-0.5">{usdc(stats.revenue)} accrued · ready to claim</p>
-                  <p className="text-[10px] text-slate-600">Splitter contract (80% builder / 20% treasury) launches Phase 4. Bookkeeping is live now.</p>
+            {/* Earnings breakdown + withdraw (Phase 4 hook) */}
+            {data && stats.revenue > 0 && (
+              <div className="mt-6 rounded-xl border border-[#A78BFA]/20 bg-[#A78BFA]/5 p-4">
+                <div className="flex items-center justify-between gap-4 mb-3">
+                  <div>
+                    <p className="text-xs font-semibold mb-0.5">{usdc(stats.revenue)} accrued · ready to claim</p>
+                    <p className="text-[10px] text-slate-600">On-chain payout splitter launches Phase 4. Bookkeeping is live now.</p>
+                  </div>
+                  <button disabled className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA]/60 bg-[#A78BFA]/5 cursor-not-allowed">
+                    Withdraw (soon)
+                  </button>
                 </div>
-                <button disabled className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA]/60 bg-[#A78BFA]/5 cursor-not-allowed">
-                  Withdraw (coming soon)
-                </button>
+                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-[#A78BFA]/15">
+                  <div>
+                    <p className="text-[9px] tracking-widest text-slate-600">🌐 EXTERNAL · 95%</p>
+                    <p className="text-sm font-bold text-[#34D399] tabular-nums">{usdc(data.earnings.externalUnits)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] tracking-widest text-slate-600">✨ HOSTED · 90% (pooled)</p>
+                    <p className="text-sm font-bold text-[#A78BFA] tabular-nums">{usdc(data.earnings.hostedUnits)}</p>
+                  </div>
+                </div>
               </div>
             )}
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ToolRow({ t }: { t: DashboardItem }) {
+  const m = SOURCE_META[t.source];
+  return (
+    <div className="rounded-xl border border-[#1A1A2E] bg-[#0d0d12] p-4 hover:border-[#A78BFA]/30 transition-colors">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <span className="font-mono text-[8px] px-1 py-0.5 rounded border inline-flex items-center gap-1"
+              style={{ color: m.color, borderColor: `${m.color}40`, background: `${m.color}0d` }}>
+              <span>{m.icon}</span>{m.label}
+            </span>
+            {t.template && (
+              <span className="font-mono text-[8px] px-1 py-0.5 rounded border border-slate-700 text-slate-500">{t.template}</span>
+            )}
+            {t.verified ? (
+              <span className="text-[8px] px-1.5 py-0.5 rounded border border-[#34D399]/30 text-[#34D399]/90 bg-[#34D399]/5">✓ Verified</span>
+            ) : (
+              <span className="text-[8px] px-1.5 py-0.5 rounded border border-amber-500/30 text-amber-400 bg-amber-500/5">pending review</span>
+            )}
+            <span className="text-[9px] text-slate-700 ml-auto">{relTime(t.submittedAt)}</span>
+          </div>
+          <p className="text-sm font-semibold truncate">{t.name}</p>
+          <p className="text-[10px] text-slate-600 line-clamp-1 mb-2">{t.description}</p>
+
+          {/* Metrics */}
+          <div className="flex items-center gap-4 text-[10px] text-slate-500">
+            <span><span className="text-white font-semibold tabular-nums">{t.callCount.toLocaleString()}</span> runs</span>
+            <span>·</span>
+            <span className="text-slate-600">{t.price} / call</span>
+            <span>·</span>
+            {t.earnedUnits != null ? (
+              <span><span className="text-[#34D399] font-semibold tabular-nums">{usdc(t.earnedUnits)}</span> earned</span>
+            ) : (
+              <span className="text-slate-600" title="Hosted earnings are pooled across your hosted tools — see the breakdown below.">earnings pooled ✨</span>
+            )}
+          </div>
+          <p className="text-[9px] text-slate-700 mt-1">{m.split}</p>
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-col gap-1.5 shrink-0">
+          <Link href={`/hub?tool=${t.id}`}
+            className="text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 transition-all text-center">
+            Test ▸
+          </Link>
+        </div>
       </div>
     </div>
   );
