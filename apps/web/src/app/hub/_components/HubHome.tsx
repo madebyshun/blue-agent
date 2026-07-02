@@ -190,12 +190,19 @@ function HomeView(props: HubHomeProps) {
               <span className="text-2xl">➕</span>
               <div className="flex-1">
                 <p className="font-mono text-sm font-bold text-white mb-0.5">Earn USDC — list your tool on Blue Hub</p>
-                <p className="font-mono text-[10px] text-slate-600">80% builder · 20% Hub · USDC on Base · no signup</p>
+                <p className="font-mono text-[10px] text-slate-600">95% builder · 5% Hub · USDC on Base · no signup</p>
               </div>
               <span className="font-mono text-xs font-semibold text-[#A78BFA] opacity-70 group-hover:opacity-100 transition-opacity">
                 Submit →
               </span>
             </div>
+          </Link>
+          {/* Dashboard entry — the desktop sidebar has this link but it's hidden on
+              mobile (lg:flex), so surface it here too for builders on small screens. */}
+          <Link href="/hub/dashboard"
+            className="mt-2 flex items-center justify-center gap-1.5 font-mono text-[11px] text-slate-600 hover:text-[#34D399] transition-colors">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
+            Already listed a tool? Builder dashboard →
           </Link>
         </section>
 

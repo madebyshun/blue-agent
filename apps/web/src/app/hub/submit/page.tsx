@@ -32,7 +32,7 @@ function buildSiweMessage(spec: {
     `Nonce:     ${nonce}`,
     ``,
     `By signing this message I confirm I control the wallet above and`,
-    `agree to the Blue Hub builder terms: 80/20 revenue split with the`,
+    `agree to the Blue Hub builder terms: 95/5 revenue split with the`,
     `Blue Hub treasury, USDC settlement on Base.`,
   ].join("\n");
 }
@@ -175,7 +175,7 @@ export default function SubmitToolPage() {
         <Link href="/hub" className="font-mono text-xs text-slate-500 hover:text-white transition-colors">← Hub</Link>
         <span className="w-1 h-1 rounded-full bg-[#A78BFA] animate-pulse" />
         <p className="text-xs text-[#A78BFA] tracking-widest">// SUBMIT TOOL</p>
-        <p className="text-[10px] text-slate-700 hidden sm:block">List your tool · 80/20 revenue split · USDC on Base</p>
+        <p className="text-[10px] text-slate-700 hidden sm:block">List your tool · 95/5 revenue split · USDC on Base</p>
       </div>
 
       <div className="max-w-3xl mx-auto px-6 py-8">
@@ -207,8 +207,8 @@ export default function SubmitToolPage() {
               <h1 className="text-2xl font-bold tracking-tight mb-1">List your tool on Blue Hub</h1>
               <p className="text-sm text-slate-500 leading-relaxed max-w-xl">
                 Anyone calling your tool pays in USDC on Base via x402.
-                You keep <span className="text-[#34D399]">80%</span>;
-                Blue Hub treasury takes <span className="text-[#A78BFA]">20%</span>.
+                You keep <span className="text-[#34D399]">95%</span>;
+                Blue Hub treasury takes <span className="text-[#A78BFA]">5%</span>.
                 No subscription, no API key.
               </p>
             </div>

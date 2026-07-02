@@ -1581,7 +1581,7 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
                 + Submit a tool
               </span>
               <span className="ml-auto font-mono text-[9px] text-slate-700 group-hover:text-[#A78BFA]">
-                80/20
+                95/5
               </span>
             </Link>
             <Link
