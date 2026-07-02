@@ -1,23 +1,29 @@
 /**
- * /api/hub/tools/[id]
- *   GET    — single registered (external) tool with live call/revenue stats.
- *   DELETE — remove the tool. Requires a SIWE signature over the canonical
+ * /api/hub/hosted/[slug]
+ *   GET    — single hosted tool, PUBLIC projection (secrets stripped).
+ *   DELETE — remove the hosted tool. Requires a SIWE signature over the canonical
  *            remove manifest, proving the requester owns tool.builderAddress.
- *            Non-custodial: no funds move, accrued earnings are preserved.
+ *            Non-custodial: no funds move; the pooled builder:earned:<wallet>
+ *            counter is preserved so a batched payout still settles it.
+ *
+ * SECURITY: the DELETE path reads the tool only to check its builderAddress and
+ * never echoes the secret config. The GET path uses getPublicHostedTool(), which
+ * runs toPublicHostedTool() — systemPrompt / authValue never reach the client.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { verifyMessage } from "viem";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
-import { getRegisteredTool, removeTool, removeToolSiweMessage } from "@/lib/hub-registry";
+import { getPublicHostedTool, removeHostedTool } from "@/lib/hub-hosted";
+import { removeToolSiweMessage } from "@/lib/hub-registry";
 
 export const runtime = "nodejs";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ slug: string }> },
 ) {
-  const { id } = await params;
-  const tool = await getRegisteredTool(id);
+  const { slug } = await params;
+  const tool = await getPublicHostedTool(slug);
   if (!tool) return NextResponse.json({ error: "Tool not found" }, { status: 404 });
   return NextResponse.json(tool, {
     headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120" },
@@ -32,12 +38,12 @@ interface DeleteBody {
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ slug: string }> },
 ) {
   const { success } = await rateLimit(getIdentifier(req), "api");
   if (!success) return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
 
-  const { id } = await params;
+  const { slug } = await params;
 
   let body: DeleteBody;
   try { body = await req.json(); }
@@ -51,15 +57,14 @@ export async function DELETE(
     return NextResponse.json({ error: "Invalid owner address" }, { status: 400 });
   }
 
-  const tool = await getRegisteredTool(id);
+  const tool = await getPublicHostedTool(slug);
   if (!tool) return NextResponse.json({ error: "Tool not found" }, { status: 404 });
 
-  // Ownership: signer must BE the builder wallet on record.
   if (tool.builderAddress.toLowerCase() !== owner.toLowerCase()) {
     return NextResponse.json({ error: "Only the tool owner can remove it." }, { status: 403 });
   }
 
-  const message = removeToolSiweMessage("external", id, owner, nonce);
+  const message = removeToolSiweMessage("hosted", slug, owner, nonce);
   let valid = false;
   try {
     valid = await verifyMessage({ address: owner, message, signature });
@@ -70,8 +75,8 @@ export async function DELETE(
     return NextResponse.json({ error: "Invalid signature — does not match owner." }, { status: 401 });
   }
 
-  await removeTool(id);
-  return NextResponse.json({ ok: true, removed: id }, {
+  await removeHostedTool(slug);
+  return NextResponse.json({ ok: true, removed: slug }, {
     status: 200,
     headers: { "Cache-Control": "no-store" },
   });

@@ -12,12 +12,31 @@
  * "Test" deep-links into the Hub runner so a creator can run their own live tool.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useAccount } from "wagmi";
+import { useAccount, useSignMessage } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
 
 type Source = "external" | "hosted";
+
+/**
+ * Byte-identical copy of hub-registry.removeToolSiweMessage — kept local so the
+ * dashboard never imports the server registry lib (which pulls in @upstash/redis)
+ * into the client bundle. If the lib format changes, change this too or the
+ * server-side signature verification will reject the delete.
+ */
+function buildRemoveSiwe(registry: Source, slug: string, owner: string, nonce: string): string {
+  return [
+    `Blue Hub — remove tool`,
+    ``,
+    `I am permanently removing my tool from Blue Hub.`,
+    ``,
+    `Registry: ${registry}`,
+    `Slug: ${slug}`,
+    `Owner: ${owner.toLowerCase()}`,
+    `Nonce: ${nonce}`,
+  ].join("\n");
+}
 
 interface DashboardItem {
   source:      Source;
@@ -64,7 +83,7 @@ export default function BuilderDashboard() {
   const [loading, setLoading] = useState(false);
   const [err, setErr]         = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!address) { setData(null); return; }
     setLoading(true);
     setErr(null);
@@ -74,6 +93,8 @@ export default function BuilderDashboard() {
       .catch((e: Error) => setErr(e.message))
       .finally(() => setLoading(false));
   }, [address]);
+
+  useEffect(() => { load(); }, [load]);
 
   const items = data?.items ?? [];
   const stats = {
@@ -160,9 +181,11 @@ export default function BuilderDashboard() {
             )}
 
             {/* Tool list */}
-            {items.length > 0 && (
+            {items.length > 0 && address && (
               <div className="space-y-2">
-                {items.map(t => <ToolRow key={`${t.source}:${t.id}`} t={t} />)}
+                {items.map(t => (
+                  <ToolRow key={`${t.source}:${t.id}`} t={t} owner={address} onRemoved={load} />
+                ))}
               </div>
             )}
 
@@ -197,8 +220,38 @@ export default function BuilderDashboard() {
   );
 }
 
-function ToolRow({ t }: { t: DashboardItem }) {
+function ToolRow({ t, owner, onRemoved }: { t: DashboardItem; owner: string; onRemoved: () => void }) {
   const m = SOURCE_META[t.source];
+  const { signMessageAsync } = useSignMessage();
+  const [removing, setRemoving] = useState(false);
+  const [rowErr, setRowErr]     = useState<string | null>(null);
+
+  async function handleRemove() {
+    if (removing) return;
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(`Remove "${t.name}"? This delists it from Blue Hub. Your accrued earnings are kept. This cannot be undone.`)) return;
+    setRowErr(null);
+    setRemoving(true);
+    try {
+      const nonce   = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+      const message = buildRemoveSiwe(t.source, t.id, owner, nonce);
+      const signature = await signMessageAsync({ message });
+      const endpoint  = t.source === "hosted" ? `/api/hub/hosted/${t.id}` : `/api/hub/tools/${t.id}`;
+      const res  = await fetch(endpoint, {
+        method:  "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ owner, signature, nonce }),
+      });
+      const json = await res.json().catch(() => ({})) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) throw new Error(json.error || `Remove failed (${res.status})`);
+      onRemoved();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setRowErr(msg.includes("rejected") || msg.includes("denied") ? "Signature cancelled" : msg);
+      setRemoving(false);
+    }
+  }
+
   return (
     <div className="rounded-xl border border-[#1A1A2E] bg-[#0d0d12] p-4 hover:border-[#A78BFA]/30 transition-colors">
       <div className="flex items-start gap-3">
@@ -242,8 +295,14 @@ function ToolRow({ t }: { t: DashboardItem }) {
             className="text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 transition-all text-center">
             Test ▸
           </Link>
+          <button onClick={handleRemove} disabled={removing}
+            className="text-[10px] px-2.5 py-1 rounded-lg border border-red-500/30 text-red-400/90 bg-red-500/5 hover:bg-red-500/10 transition-all text-center disabled:opacity-50 disabled:cursor-not-allowed">
+            {removing ? "Signing…" : "Remove"}
+          </button>
         </div>
       </div>
+
+      {rowErr && <p className="text-[10px] text-red-400 mt-2">{rowErr}</p>}
     </div>
   );
 }
