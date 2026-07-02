@@ -30,6 +30,33 @@ export interface HubTool {
   verified?:boolean;
   aiReady?: boolean;
   releasedAt?: number;
+  // v2 marketplace provenance + stats
+  source?:        "native" | "external" | "hosted";
+  creatorHandle?: string;
+  callCount?:     number;
+}
+
+// Source badge — provenance of a tool in the unified grid.
+const SOURCE_META: Record<NonNullable<HubTool["source"]>, { icon: string; label: string; color: string }> = {
+  native:   { icon: "🔵", label: "Native",   color: "#4FC3F7" },
+  external: { icon: "🌐", label: "External", color: "#34D399" },
+  hosted:   { icon: "✨", label: "Hosted",   color: "#A78BFA" },
+};
+
+function SourceBadge({ source }: { source?: HubTool["source"] }) {
+  const m = SOURCE_META[source ?? "native"];
+  return (
+    <span className="font-mono text-[8px] px-1 py-0.5 rounded border inline-flex items-center gap-1"
+      style={{ color: m.color, borderColor: `${m.color}40`, background: `${m.color}0d` }}>
+      <span>{m.icon}</span>{m.label}
+    </span>
+  );
+}
+
+// A tool's real run count = max(usage counter, denormalized callCount).
+// Native tools track usage:<id>; community tools also carry callCount from KV.
+function toolRuns(t: HubTool, usage: Record<string, number>): number {
+  return Math.max(usage[t.id] ?? 0, t.callCount ?? 0);
 }
 
 export interface HubGroup {
@@ -84,7 +111,18 @@ export default function HubHome(props: HubHomeProps) {
 
 function HomeView(props: HubHomeProps) {
   const { tools, groups, usage, featuredIds, recentIds, onSearch, onPickCat, onSelect } = props;
-  const runsOf = (id: string) => usage[id] ?? 0;
+  const byId = new Map(tools.map(t => [t.id, t] as const));
+  const runsOf = (id: string) => { const t = byId.get(id); return t ? toolRuns(t, usage) : (usage[id] ?? 0); };
+
+  // Trending — top 6 tools by real run count (source-agnostic). Only shown once
+  // there's real usage, so an empty marketplace doesn't render a dead row.
+  const trending: HubTool[] = [...tools]
+    .filter(t => runsOf(t.id) > 0)
+    .sort((a, b) => runsOf(b.id) - runsOf(a.id))
+    .slice(0, 6);
+
+  // How many community (external + hosted) tools are live — surfaced as a badge.
+  const communityCount = tools.filter(t => t.source === "external" || t.source === "hosted").length;
 
   // Editor's Picks — usage-ranked then padded with curated featuredIds (max 4)
   const picks: HubTool[] = (() => {
@@ -177,10 +215,23 @@ function HomeView(props: HubHomeProps) {
           </section>
         )}
 
+        {/* ── TRENDING — top 6 by real runs (native + community mixed) ── */}
+        {trending.length > 0 && (
+          <section className="mb-9">
+            <SectionHeader emoji="🔥" label="Trending" accent="#FB923C"
+              sub="Most-run tools right now" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {trending.map(t => (
+                <PickCard key={t.id} tool={t} runs={runsOf(t.id)} onSelect={onSelect} />
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* ── PROVIDERS + Submit CTA ── */}
         <section className="mb-9">
           <SectionHeader emoji="🤖" label="Top providers" accent="#FFFFFF"
-            sub="Agents shipping verified tools" />
+            sub={communityCount > 0 ? `${communityCount} community tool${communityCount !== 1 ? "s" : ""} live` : "Agents shipping verified tools"} />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
             {providers.map(p => <ProviderCard key={p.agent} p={p} />)}
           </div>
@@ -243,15 +294,27 @@ function HomeView(props: HubHomeProps) {
 // ─── BROWSE view — filtered grid ──────────────────────────────────────────────
 
 type SortMode = "popular" | "newest" | "price-asc" | "price-desc";
+type SourceFilter = "all" | NonNullable<HubTool["source"]>;
 
 function BrowseView(props: HubHomeProps) {
   const { filtered, search, cat, groups, usage, onSelect, onSearch, onPickCat } = props;
   const [sortMode, setSortMode] = useState<SortMode>("popular");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const runsOf = (id: string) => usage[id] ?? 0;
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+  const byId = new Map(filtered.map(t => [t.id, t] as const));
+  const runsOf = (id: string) => { const t = byId.get(id); return t ? toolRuns(t, usage) : (usage[id] ?? 0); };
+
+  // How many tools sit behind each source chip (drives labels + hides empty chips).
+  const sourceCounts: Record<SourceFilter, number> = {
+    all:      filtered.length,
+    native:   filtered.filter(t => (t.source ?? "native") === "native").length,
+    external: filtered.filter(t => t.source === "external").length,
+    hosted:   filtered.filter(t => t.source === "hosted").length,
+  };
 
   const sorted = (() => {
-    const tools = verifiedOnly ? filtered.filter(t => t.verified) : filtered;
+    let tools = verifiedOnly ? filtered.filter(t => t.verified) : filtered;
+    if (sourceFilter !== "all") tools = tools.filter(t => (t.source ?? "native") === sourceFilter);
     const price = (t: HubTool) => parseFloat(t.price.replace("$", "")) || 0;
     if (sortMode === "price-asc")  return [...tools].sort((a, b) => price(a) - price(b));
     if (sortMode === "price-desc") return [...tools].sort((a, b) => price(b) - price(a));
@@ -309,6 +372,32 @@ function BrowseView(props: HubHomeProps) {
             ✓ Verified
           </button>
         </div>
+
+        {/* Source filter chips — only shown once community tools exist alongside native */}
+        {(sourceCounts.external > 0 || sourceCounts.hosted > 0) && (
+          <div className="flex items-center gap-2 mb-5 flex-wrap">
+            <span className="font-mono text-[10px] text-slate-700">Source:</span>
+            {([
+              { key: "all",      label: "All",         color: "#94A3B8" },
+              { key: "native",   label: "🔵 Native",   color: "#4FC3F7" },
+              { key: "external", label: "🌐 External", color: "#34D399" },
+              { key: "hosted",   label: "✨ Hosted",    color: "#A78BFA" },
+            ] as { key: SourceFilter; label: string; color: string }[])
+              .filter(s => sourceCounts[s.key] > 0)
+              .map(s => {
+                const active = sourceFilter === s.key;
+                return (
+                  <button key={s.key} onClick={() => setSourceFilter(s.key)}
+                    className="font-mono text-[10px] px-2.5 py-0.5 rounded border transition-colors"
+                    style={active
+                      ? { color: s.color, borderColor: `${s.color}55`, background: `${s.color}12` }
+                      : { color: "#64748b", borderColor: "transparent" }}>
+                    {s.label} <span className="opacity-60">{sourceCounts[s.key]}</span>
+                  </button>
+                );
+              })}
+          </div>
+        )}
 
         {/* Empty state */}
         {sorted.length === 0 ? (
@@ -370,6 +459,7 @@ function VerifiedAiBadges({ tool }: { tool: HubTool }) {
 }
 
 function PickCard({ tool, runs, onSelect }: { tool: HubTool; runs: number; onSelect: (t: HubTool) => void }) {
+  const isCommunity = tool.source === "external" || tool.source === "hosted";
   return (
     <button onClick={() => onSelect(tool)}
       className="text-left rounded-2xl border border-[#1A1A2E] hover:border-[#A78BFA]/40 bg-[#0d0d12] p-4 transition-all flex flex-col group">
@@ -377,13 +467,17 @@ function PickCard({ tool, runs, onSelect }: { tool: HubTool; runs: number; onSel
         {tool.agents.map(a => (
           <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
         ))}
+        <SourceBadge source={tool.source} />
         <span className="font-mono text-[9px] text-slate-700 ml-auto">{tool.price}</span>
       </div>
       <p className="font-mono text-sm font-bold text-white mb-1 leading-snug group-hover:text-[#A78BFA] transition-colors">{tool.name}</p>
+      {isCommunity && tool.creatorHandle && (
+        <p className="font-mono text-[9px] text-slate-600 mb-1">by {tool.creatorHandle}</p>
+      )}
       <p className="font-mono text-[10px] text-slate-500 leading-relaxed line-clamp-2 flex-1 mb-3">{tool.desc}</p>
       <VerifiedAiBadges tool={tool} />
       <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[#1A1A2E]">
-        <span className="font-mono text-[10px] text-slate-600">{runs > 0 ? <><span className="text-white font-semibold">{runs}</span> calls</> : "new"}</span>
+        <span className="font-mono text-[10px] text-slate-600">{runs > 0 ? <><span className="text-white font-semibold">{runs}</span> runs</> : "new"}</span>
         <span className="font-mono text-[10px] font-semibold text-[#A78BFA] opacity-70 group-hover:opacity-100 transition-opacity">Try →</span>
       </div>
     </button>
