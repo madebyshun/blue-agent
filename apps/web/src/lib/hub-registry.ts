@@ -13,7 +13,7 @@
  *   hub:builders:tools:<addr>  → string[] of tool IDs owned by this wallet
  */
 
-import { kv, kvGet, kvSet } from "@/lib/kv";
+import { kv, kvGet, kvSet, kvDel } from "@/lib/kv";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -135,6 +135,25 @@ export async function incrCallCount(id: string): Promise<number> {
 }
 
 /**
+ * Permanently remove an external tool: deletes the item + its call/revenue
+ * counters and de-indexes it from the master list and the owner's builder list.
+ * Caller MUST have verified the requester owns tool.builderAddress (SIWE) first.
+ */
+export async function removeTool(id: string): Promise<void> {
+  const tool = await kvGet<RegisteredTool>(K.item(id));
+  await kvDel(K.item(id), K.calls(id), K.revenue(id));
+
+  const ids = await listRegisteredToolIds();
+  if (ids.includes(id)) await kvSet(K.index, ids.filter(x => x !== id));
+
+  if (tool) {
+    const bkey = K.builder(tool.builderAddress);
+    const bids = (await kvGet<string[]>(bkey)) ?? [];
+    if (bids.includes(id)) await kvSet(bkey, bids.filter(x => x !== id));
+  }
+}
+
+/**
  * Add to the builder's lifetime revenue counter.
  * `usdcUnits` should be the BUILDER'S 95% share (caller already split off
  * the 5% treasury cut before invoking).
@@ -170,6 +189,32 @@ export function siweMessage(
     `By signing this message I confirm I control the wallet above and`,
     `agree to the Blue Hub builder terms: 95/5 revenue split with the`,
     `Blue Hub treasury, USDC settlement on Base.`,
+  ].join("\n");
+}
+
+/**
+ * Canonical message a builder signs to REMOVE one of their tools. Covers BOTH
+ * registries (external + hosted) via the `registry` field. The dashboard client
+ * and the DELETE routes MUST build a byte-identical string, or verification fails.
+ * Signing proves wallet control — no funds move, accrued earnings are preserved.
+ */
+export function removeToolSiweMessage(
+  registry: "external" | "hosted",
+  slug: string,
+  owner: string,
+  nonce: string,
+): string {
+  // Single-space labels (no column alignment) so a client-side copy is trivially
+  // byte-identical — the /hub/dashboard Remove button mirrors this exactly.
+  return [
+    `Blue Hub — remove tool`,
+    ``,
+    `I am permanently removing my tool from Blue Hub.`,
+    ``,
+    `Registry: ${registry}`,
+    `Slug: ${slug}`,
+    `Owner: ${owner.toLowerCase()}`,
+    `Nonce: ${nonce}`,
   ].join("\n");
 }
 

@@ -29,7 +29,7 @@
  * by passing the creator prompt straight through as the system message.
  */
 
-import { kv, kvGet, kvSet } from "@/lib/kv";
+import { kv, kvGet, kvSet, kvDel } from "@/lib/kv";
 import { assertSafeMcpUrl } from "@/lib/mcp-client";
 import { callBankrLLM } from "@/app/api/_lib/llm";
 
@@ -175,6 +175,27 @@ export async function putHostedTool(tool: HostedTool): Promise<void> {
 
 export async function incrHostedCalls(slug: string): Promise<number> {
   try { return await kv.incr(K.usage(slug)); } catch { return 0; }
+}
+
+/**
+ * Permanently remove a hosted tool: deletes the item (secret config included)
+ * + usage counter and de-indexes it from the master list and the owner's builder
+ * list. Caller MUST have verified the requester owns tool.builderAddress (SIWE).
+ * The pooled builder:earned:<wallet> counter is PRESERVED — accrued earnings
+ * survive tool removal so a batched payout still settles them.
+ */
+export async function removeHostedTool(slug: string): Promise<void> {
+  const tool = await kvGet<HostedTool>(K.item(slug));
+  await kvDel(K.item(slug), K.usage(slug));
+
+  const slugs = await listHostedSlugs();
+  if (slugs.includes(slug)) await kvSet(K.index, slugs.filter(s => s !== slug));
+
+  if (tool) {
+    const bkey   = K.builder(tool.builderAddress);
+    const bslugs = (await kvGet<string[]>(bkey)) ?? [];
+    if (bslugs.includes(slug)) await kvSet(bkey, bslugs.filter(s => s !== slug));
+  }
 }
 
 /**
