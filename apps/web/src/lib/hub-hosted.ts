@@ -357,3 +357,35 @@ export async function runHostedTool(
   if (tool.config.kind === "api_wrapper") return runApiWrapper(tool.config, inputs);
   return { ok: false, contentType: "text/plain", body: "", error: "Unknown template" };
 }
+
+// ─── Async job store (invoke → 202 + poll) ───────────────────────────────────
+//
+// A paid invoke returns a job_id immediately and settles/runs in the background
+// (Next `after()`), so long LLM/API calls don't hold the request open — better
+// for Base App webviews. `result.body` is the tool output only; a job NEVER
+// carries secret config.
+
+export type HostedJobStatus = "running" | "done" | "error";
+
+export interface HostedJob {
+  id:         string;
+  slug:       string;
+  status:     HostedJobStatus;
+  result?:    { contentType: string; body: string };
+  error?:     string;
+  paid?:      { tx?: string; amountUnits: string; builderShareUnits: number };
+  createdAt:  number;
+  finishedAt?: number;
+}
+
+const HOSTED_JOB_TTL = 900;   // seconds
+
+export const hostedJobKey = (id: string) => `hub:job:${id}`;
+
+export async function saveHostedJob(job: HostedJob, ttl = HOSTED_JOB_TTL): Promise<void> {
+  await kvSet(hostedJobKey(job.id), job, ttl);
+}
+
+export async function getHostedJob(id: string): Promise<HostedJob | null> {
+  return kvGet<HostedJob>(hostedJobKey(id));
+}
