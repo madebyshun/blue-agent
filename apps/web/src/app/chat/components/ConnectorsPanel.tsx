@@ -1,22 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useConnectors, addConnector, removeConnector, setConnectorEnabled,
-  probeConnector, CONNECTOR_PRESETS, type ConnectorPreset, type McpToolDef,
+  probeConnector, isPresetAdded,
+  CONNECTOR_PRESETS, type ConnectorPreset, type ConnectorAuth, type McpToolDef,
 } from "../connectors";
 
-// Blue Chat Connectors — attach external MCP servers so their tools become
-// callable in chat (alongside the built-in Hub tools). Each connector's tools
-// are fetched once via /api/mcp-client and ride along to /api/chat at send-time.
+// Blue Chat Connectors — a Manus-style gallery of curated MCP servers plus the
+// full manual "Custom MCP" flow. Attaching a server makes its tools callable in
+// chat (alongside the built-in Hub tools). Tools are fetched once via
+// /api/mcp-client and ride along to /api/chat at send-time.
+//
+// Enable flow by auth type:
+//   none   → 1-click: probe + attach, no secret asked
+//   bearer → open the slim add modal prefilled, user pastes a token
+//   oauth  → surfaced for discovery, not attachable yet (tagged "soon")
 
 const ACCENT = "#A78BFA"; // purple — the "connect / integrate" accent
 
-export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
-  const connectors = useConnectors();
-  const [open, setOpen] = useState(false);
+const AUTH_BADGE: Record<ConnectorAuth, { label: string; color: string }> = {
+  none:   { label: "READY",       color: "#34D399" },
+  bearer: { label: "NEEDS KEY",   color: "#FBBF24" },
+  oauth:  { label: "OAUTH · SOON", color: "#64748B" },
+};
 
-  // Add-form state
+type Filter = "all" | ConnectorAuth;
+const FILTERS: { id: Filter; label: string }[] = [
+  { id: "all",    label: "All" },
+  { id: "none",   label: "Ready" },
+  { id: "bearer", label: "Needs key" },
+  { id: "oauth",  label: "Soon" },
+];
+
+export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
+  void onPick;
+  const connectors = useConnectors();
+
+  // Gallery state
+  const [query,  setQuery]  = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [addingId, setAddingId] = useState<string | null>(null);
+  const [flash, setFlash] = useState<{ id: string; msg: string } | null>(null);
+
+  // Add-modal state (bearer presets + custom)
+  const [open, setOpen]       = useState(false);
   const [preset, setPreset]   = useState<ConnectorPreset | null>(null);
   const [name, setName]       = useState("");
   const [url, setUrl]         = useState("");
@@ -31,10 +59,31 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
     setAuthValue(""); setBusy(false); setError(""); setPreview(null);
   }
   function choosePreset(p: ConnectorPreset) {
-    setPreset(p); setName(p.name); setUrl(p.url); setAuthHeader(p.authHeader);
+    setPreset(p); setName(p.name); setUrl(p.url);
+    setAuthHeader(p.authHeader ?? "Authorization");
     setAuthValue(""); setError(""); setPreview(null);
   }
+  function openCustom() { reset(); setOpen(true); }
 
+  // ── 1-click enable for no-auth presets ──────────────────────────────────────
+  async function quickAdd(p: ConnectorPreset) {
+    if (addingId) return;
+    setAddingId(p.id); setFlash(null);
+    const res = await probeConnector(p.url, {});
+    if (!res.ok) { setFlash({ id: p.id, msg: res.error || "Couldn't reach server" }); setAddingId(null); return; }
+    if (res.tools.length === 0) { setFlash({ id: p.id, msg: "Server returned no tools" }); setAddingId(null); return; }
+    addConnector({ id: p.id, name: p.name, url: p.url, tools: res.tools });
+    setAddingId(null);
+  }
+
+  function onPresetClick(p: ConnectorPreset, added: boolean) {
+    if (added || addingId) return;
+    if (p.auth === "none")   return void quickAdd(p);
+    if (p.auth === "bearer") { reset(); choosePreset(p); setOpen(true); return; }
+    // oauth → not attachable yet; no-op (card is visibly disabled)
+  }
+
+  // ── Modal two-step test → add (bearer / custom) ─────────────────────────────
   async function testAndAdd() {
     const u = url.trim();
     if (!u || busy) return;
@@ -43,9 +92,9 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
     const res = await probeConnector(u, headers);
     if (!res.ok) { setError(res.error); setBusy(false); return; }
     if (res.tools.length === 0) { setError("Server returned no tools."); setBusy(false); return; }
-    // Two-step: first probe shows a preview, second click commits.
     if (!preview) { setPreview(res.tools); setBusy(false); return; }
     addConnector({
+      id: preset?.id,
       name: name.trim() || u,
       url: u,
       authHeader: authHeader.trim() || undefined,
@@ -54,6 +103,16 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
     });
     setBusy(false); setOpen(false); reset();
   }
+
+  // ── Gallery filtering ───────────────────────────────────────────────────────
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return CONNECTOR_PRESETS.filter(p => {
+      if (filter !== "all" && p.auth !== filter) return false;
+      if (!q) return true;
+      return (p.name + " " + p.description + " " + p.category).toLowerCase().includes(q);
+    });
+  }, [query, filter]);
 
   return (
     <div className="flex flex-col h-full bg-[#050508] overflow-hidden">
@@ -64,8 +123,8 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
           <span className="font-mono text-[10px] text-slate-600">{connectors.length} attached</span>
         </div>
         <p className="font-mono text-[10px] text-slate-700 leading-relaxed">
-          Attach external <span style={{ color: ACCENT }}>MCP servers</span> — their tools become callable in chat.
-          Tool output is treated as untrusted third-party data.
+          One-click <span style={{ color: ACCENT }}>MCP servers</span> — enable a preset or attach your own.
+          Their tools become callable in chat; output is treated as untrusted third-party data.
         </p>
       </div>
 
@@ -73,112 +132,164 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
       <div className="flex-1 overflow-y-auto">
         <div className="px-6 py-4 space-y-6">
 
-          {/* Installed connectors */}
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <p className="font-mono text-[9px] tracking-widest flex items-center gap-2" style={{ color: ACCENT }}>
+          {/* Attached connectors */}
+          {connectors.length > 0 && (
+            <section>
+              <p className="font-mono text-[9px] tracking-widest flex items-center gap-2 mb-3" style={{ color: ACCENT }}>
                 <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: ACCENT }} />
                 ATTACHED · {connectors.length}
               </p>
+              <div className="space-y-1.5">
+                {connectors.map(c => (
+                  <div key={c.id} className="px-4 py-3 rounded-xl border border-[#1A1A2E] bg-[#0A0A12]">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <span className="font-mono text-[13px] text-slate-200 truncate block">{c.name}</span>
+                        <p className="font-mono text-[10px] text-slate-600 truncate">{c.url}</p>
+                      </div>
+                      <span className="font-mono text-[9px] px-1.5 py-0.5 rounded border shrink-0"
+                        style={{ color: ACCENT, borderColor: `${ACCENT}30`, background: `${ACCENT}10` }}>
+                        {c.tools.length} tools
+                      </span>
+                      <button
+                        onClick={() => setConnectorEnabled(c.id, !c.enabled)}
+                        title={c.enabled ? "Disable" : "Enable"}
+                        className="relative w-9 h-5 rounded-full transition-colors shrink-0"
+                        style={{ background: c.enabled ? "#34D39955" : "#1A1A2E" }}
+                      >
+                        <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: c.enabled ? 18 : 2 }} />
+                      </button>
+                      <button
+                        onClick={() => removeConnector(c.id)}
+                        title="Remove"
+                        className="font-mono text-[12px] text-slate-600 hover:text-red-400 transition-colors shrink-0"
+                      >✕</button>
+                    </div>
+                    {c.tools.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {c.tools.slice(0, 8).map(t => (
+                          <span key={t.name} className="font-mono text-[8px] px-1.5 py-0.5 rounded"
+                            style={{ background: `${ACCENT}0A`, color: `${ACCENT}B0`, border: `1px solid ${ACCENT}20` }}>
+                            {t.name}
+                          </span>
+                        ))}
+                        {c.tools.length > 8 && (
+                          <span className="font-mono text-[8px] px-1.5 py-0.5 text-slate-600">+{c.tools.length - 8}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Gallery */}
+          <section className={connectors.length > 0 ? "border-t border-[#1A1A2E] pt-5" : ""}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-mono text-[9px] text-slate-600 tracking-widest">// GALLERY</p>
               <button
-                onClick={() => { reset(); setOpen(true); }}
+                onClick={openCustom}
                 className="font-mono text-[10px] px-2.5 py-1 rounded-lg border transition-colors"
                 style={{ borderColor: `${ACCENT}30`, color: ACCENT }}
               >
-                + Add connector
+                + Custom MCP
               </button>
             </div>
 
-            <div className="space-y-1.5">
-              {connectors.map(c => (
-                <div key={c.id} className="px-4 py-3 rounded-xl border border-[#1A1A2E] bg-[#0A0A12]">
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <span className="font-mono text-[13px] text-slate-200 truncate block">{c.name}</span>
-                      <p className="font-mono text-[10px] text-slate-600 truncate">{c.url}</p>
-                    </div>
-                    <span className="font-mono text-[9px] px-1.5 py-0.5 rounded border shrink-0"
-                      style={{ color: ACCENT, borderColor: `${ACCENT}30`, background: `${ACCENT}10` }}>
-                      {c.tools.length} tools
-                    </span>
-                    <button
-                      onClick={() => setConnectorEnabled(c.id, !c.enabled)}
-                      title={c.enabled ? "Disable" : "Enable"}
-                      className="relative w-9 h-5 rounded-full transition-colors shrink-0"
-                      style={{ background: c.enabled ? "#34D39955" : "#1A1A2E" }}
-                    >
-                      <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: c.enabled ? 18 : 2 }} />
-                    </button>
-                    <button
-                      onClick={() => removeConnector(c.id)}
-                      title="Remove"
-                      className="font-mono text-[12px] text-slate-600 hover:text-red-400 transition-colors shrink-0"
-                    >✕</button>
-                  </div>
-                  {/* tool chips */}
-                  {c.tools.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {c.tools.slice(0, 8).map(t => (
-                        <span key={t.name} className="font-mono text-[8px] px-1.5 py-0.5 rounded"
-                          style={{ background: `${ACCENT}0A`, color: `${ACCENT}B0`, border: `1px solid ${ACCENT}20` }}>
-                          {t.name}
-                        </span>
-                      ))}
-                      {c.tools.length > 8 && (
-                        <span className="font-mono text-[8px] px-1.5 py-0.5 text-slate-600">+{c.tools.length - 8}</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-              {connectors.length === 0 && (
-                <p className="font-mono text-[10px] text-slate-700">No connectors yet. Click + Add connector to attach an MCP server.</p>
-              )}
-            </div>
-          </section>
-
-          {/* Presets */}
-          <section className="border-t border-[#1A1A2E] pt-5">
-            <p className="font-mono text-[9px] text-slate-600 tracking-widest mb-3">// QUICK ADD</p>
-            <div className="grid grid-cols-1 gap-2">
-              {CONNECTOR_PRESETS.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => { reset(); choosePreset(p); setOpen(true); }}
-                  className="px-3 py-3 rounded-xl border text-left transition-all hover:scale-[1.01]"
-                  style={{ borderColor: `${ACCENT}25`, background: `${ACCENT}08` }}
-                >
-                  <div className="font-mono text-xs font-semibold mb-0.5" style={{ color: ACCENT }}>{p.name}</div>
-                  <div className="font-mono text-[9px] text-slate-600 leading-relaxed">{p.hint}</div>
+            {/* Search + filter */}
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search connectors…"
+              className="w-full bg-[#0A0A12] border border-[#1A1A2E] focus:border-[#A78BFA]/40 rounded-lg px-3 py-2 font-mono text-[11px] text-white placeholder:text-slate-700 outline-none mb-2"
+            />
+            <div className="flex gap-1.5 flex-wrap mb-4">
+              {FILTERS.map(f => (
+                <button key={f.id} onClick={() => setFilter(f.id)}
+                  className="font-mono text-[9px] px-2.5 py-1 rounded-lg border transition-colors"
+                  style={filter === f.id
+                    ? { color: ACCENT, background: `${ACCENT}15`, borderColor: `${ACCENT}35` }
+                    : { color: "#475569", borderColor: "#1A1A2E" }}>
+                  {f.label}
                 </button>
               ))}
+            </div>
+
+            {/* Card grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {visible.map(p => {
+                const added   = isPresetAdded(connectors, p);
+                const badge   = AUTH_BADGE[p.auth];
+                const adding  = addingId === p.id;
+                const disabled = p.auth === "oauth" || added || adding;
+                return (
+                  <div key={p.id}
+                    className="px-4 py-3 rounded-xl border bg-[#0A0A12] flex flex-col"
+                    style={{ borderColor: added ? "#34D39930" : "#1A1A2E", opacity: p.auth === "oauth" ? 0.6 : 1 }}
+                  >
+                    <div className="flex items-start gap-2.5 mb-2">
+                      <span className="w-8 h-8 rounded-lg bg-[#12121C] flex items-center justify-center text-base shrink-0">
+                        {p.icon}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[12px] font-semibold text-slate-200 truncate">{p.name}</span>
+                          <span className="font-mono text-[8px] px-1 py-0.5 rounded border shrink-0"
+                            style={{ color: badge.color, borderColor: `${badge.color}30`, background: `${badge.color}10` }}>
+                            {badge.label}
+                          </span>
+                        </div>
+                        <span className="font-mono text-[8px] text-slate-600 tracking-widest">{p.category.toUpperCase()}</span>
+                      </div>
+                    </div>
+                    <p className="font-mono text-[9px] text-slate-500 leading-relaxed mb-3 flex-1">{p.description}</p>
+                    {flash?.id === p.id && (
+                      <p className="font-mono text-[8px] text-red-400 mb-2 leading-relaxed">{flash.msg}</p>
+                    )}
+                    <button
+                      onClick={() => onPresetClick(p, added)}
+                      disabled={disabled}
+                      className="w-full font-mono text-[10px] font-bold py-1.5 rounded-lg border transition-colors disabled:cursor-default"
+                      style={
+                        added
+                          ? { color: "#34D399", borderColor: "#34D39930", background: "#34D39910" }
+                          : p.auth === "oauth"
+                          ? { color: "#475569", borderColor: "#1A1A2E" }
+                          : { color: ACCENT, borderColor: `${ACCENT}40`, background: `${ACCENT}08` }
+                      }
+                    >
+                      {added ? "✓ Added" : adding ? "Adding…" : p.auth === "oauth" ? "OAuth · soon" : p.auth === "bearer" ? "+ Add key" : "+ Add"}
+                    </button>
+                  </div>
+                );
+              })}
+              {visible.length === 0 && (
+                <p className="font-mono text-[10px] text-slate-700 col-span-full">No connectors match “{query}”.</p>
+              )}
             </div>
           </section>
         </div>
       </div>
 
-      {/* Add modal */}
+      {/* Add modal (bearer preset + custom) */}
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setOpen(false); reset(); }} />
           <div className="relative z-10 w-full max-w-sm rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
-              <p className="font-mono text-[11px] tracking-widest" style={{ color: ACCENT }}>// ADD CONNECTOR</p>
+              <p className="font-mono text-[11px] tracking-widest" style={{ color: ACCENT }}>
+                {preset ? `// ADD ${preset.name.toUpperCase()}` : "// ADD CUSTOM MCP"}
+              </p>
               <button onClick={() => { setOpen(false); reset(); }} className="font-mono text-[13px] text-slate-500 hover:text-white">✕</button>
             </div>
 
-            {/* Preset chips */}
-            <div className="flex gap-1.5 flex-wrap mb-3">
-              {CONNECTOR_PRESETS.map(p => (
-                <button key={p.id} onClick={() => choosePreset(p)}
-                  className="font-mono text-[10px] px-2.5 py-1 rounded-lg border transition-colors"
-                  style={preset?.id === p.id
-                    ? { color: ACCENT, background: `${ACCENT}15`, borderColor: `${ACCENT}35` }
-                    : { color: "#475569", borderColor: "#1A1A2E" }}>
-                  {p.name}
-                </button>
-              ))}
-            </div>
+            {preset?.docsUrl && (
+              <a href={preset.docsUrl} target="_blank" rel="noopener noreferrer"
+                className="font-mono text-[9px] mb-3 inline-block hover:underline" style={{ color: ACCENT }}>
+                ↗ Where to get a token
+              </a>
+            )}
 
             <label className="font-mono text-[9px] text-slate-600 tracking-widest">NAME</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="My MCP server"
