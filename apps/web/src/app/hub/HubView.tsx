@@ -1318,13 +1318,14 @@ function decodeShare(hash: string): { toolId: string } & ToolResult | null {
 
 // ─── Hub page ─────────────────────────────────────────────────────────────────
 
-export default function HubPage({ inShell = false, initialToolId, initialView = "browse" }: { inShell?: boolean; initialToolId?: string; initialView?: "browse" | "dashboard" }) {
+export default function HubPage({ inShell = false, initialToolId, initialView = "browse" }: { inShell?: boolean; initialToolId?: string; initialView?: "browse" | "dashboard" | "submit" }) {
   const [cat, setCat]         = useState<Category>("all");
   const [selected, setSelected] = useState<Tool | null>(null);
   // View mode — "browse" shows the marketplace grid / tool runner; "dashboard"
-  // renders the creator dashboard IN-SHELL (sidebar + nav kept), mirroring the
-  // per-tool inShell pattern so a creator can jump back to Browse in one click.
-  const [view, setView]       = useState<"browse" | "dashboard">(initialView);
+  // renders the creator dashboard and "submit" the List-your-tool form, both
+  // IN-SHELL (sidebar + nav kept), mirroring the per-tool inShell pattern so a
+  // creator can jump back to Browse in one click.
+  const [view, setView]       = useState<"browse" | "dashboard" | "submit">(initialView);
   const [search, setSearch]   = useState("");
   const [cache, setCache]     = useState<Map<string, ToolResult>>(new Map());
   // Result to preload into the runner. Set ONLY by the ?s=/#s= share readers
@@ -1333,7 +1334,6 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
   const [preload, setPreload] = useState<{ toolId: string; data: ToolResult } | null>(null);
   const [usage, setUsage]     = useState<Record<string, number>>({});
   const [communityTools, setCommunityTools] = useState<Tool[]>([]);
-  const [showSubmit, setShowSubmit] = useState(false);   // "List your tool" modal
   const [source, setSource] = useState<SourceFilter>("all"); // v2 sidebar: provenance filter
   const [price, setPrice]   = useState<PriceFilter>("all");  // v2 sidebar: price bucket
   const searchRef             = useRef<HTMLInputElement>(null);
@@ -1362,6 +1362,12 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
     setView("dashboard");
     if (typeof window !== "undefined") window.history.pushState(null, "", "/hub/dashboard");
   };
+  // List-your-tool — same in-shell view swap (keeps sidebar + nav). URL → /hub/submit.
+  const openSubmit = () => {
+    setSelected(null);
+    setView("submit");
+    if (typeof window !== "undefined") window.history.pushState(null, "", "/hub/submit");
+  };
   const backToBrowse = () => {
     setView("browse");
     if (typeof window !== "undefined") window.history.pushState(null, "", "/hub");
@@ -1383,6 +1389,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
       const path = window.location.pathname;
       setPreload(null); // back/forward → fresh form
       if (/\/hub\/dashboard$/.test(path)) { setView("dashboard"); setSelected(null); return; }
+      if (/\/hub\/submit$/.test(path))    { setView("submit");    setSelected(null); return; }
       setView("browse");
       const m = path.match(/\/hub\/([^/?#]+)/);
       const id = m && m[1] !== "dashboard" ? m[1] : null;
@@ -1742,16 +1749,18 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
           <div className="px-4 pb-2 border-t border-[#1A1A2E] pt-3 space-y-1">
             <button
               type="button"
-              onClick={() => setShowSubmit(true)}
-              className="flex items-center gap-2 w-full px-2 py-2 rounded-lg hover:bg-[#A78BFA]/5 transition-colors group"
+              onClick={view === "submit" ? backToBrowse : openSubmit}
+              className={`flex items-center gap-2 w-full px-2 py-2 rounded-lg transition-colors group ${view === "submit" ? "bg-[#A78BFA]/10" : "hover:bg-[#A78BFA]/5"}`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#A78BFA] animate-pulse shrink-0" />
-              <span className="font-mono text-[11px] text-slate-500 group-hover:text-[#A78BFA] transition-colors">
-                + List your tool
+              <span className={`font-mono text-[11px] transition-colors ${view === "submit" ? "text-[#A78BFA]" : "text-slate-500 group-hover:text-[#A78BFA]"}`}>
+                {view === "submit" ? "← Browse tools" : "+ List your tool"}
               </span>
-              <span className="ml-auto font-mono text-[9px] text-slate-700 group-hover:text-[#A78BFA]">
-                95/5
-              </span>
+              {view !== "submit" && (
+                <span className="ml-auto font-mono text-[9px] text-slate-700 group-hover:text-[#A78BFA]">
+                  95/5
+                </span>
+              )}
             </button>
             <button
               type="button"
@@ -1826,7 +1835,9 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
             </div>
           )}
 
-          {view === "dashboard"
+          {view === "submit"
+            ? <SubmitTool variant="shell" onBack={backToBrowse} onSubmitted={() => loadCommunityTools()} />
+            : view === "dashboard"
             ? <DashboardView inShell onBack={backToBrowse} />
             : selected
             ? <ToolRunner
@@ -1850,7 +1861,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
                 cat={cat}
                 setCat={setCat}
                 filtered={filtered}
-                onListTool={() => setShowSubmit(true)}
+                onListTool={openSubmit}
                 source={source}
                 price={price}
                 onClearFilters={() => { setSearch(""); setCat("all"); setSource("all"); setPrice("all"); }}
@@ -1860,25 +1871,6 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
 
         </div>{/* end flex row */}
       </div>
-
-      {/* ── "List your tool" modal — primary submit path (route is a fallback) ── */}
-      {showSubmit && (
-        <div
-          className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-0 sm:p-6 bg-black/70 backdrop-blur-sm"
-          onClick={() => setShowSubmit(false)}
-        >
-          <div
-            className="relative w-full sm:max-w-3xl h-full sm:h-[min(88vh,900px)] bg-[#050508] sm:rounded-2xl border border-[#1A1A2E] overflow-hidden shadow-2xl"
-            onClick={e => e.stopPropagation()}
-          >
-            <SubmitTool
-              variant="modal"
-              onClose={() => setShowSubmit(false)}
-              onSubmitted={() => loadCommunityTools()}
-            />
-          </div>
-        </div>
-      )}
     </>
   );
 }

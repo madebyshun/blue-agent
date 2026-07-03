@@ -1,9 +1,10 @@
-// Route page for /hub/submit (public host + app-subdomain fallback via
-// /app/hub/submit). The form UI lives in SubmitTool, a client component also
-// mounted as the "List your tool" modal on the Hub. Thin wrapper satisfies
-// Next 15's PageProps constraint (pages only receive params/searchParams).
-import SubmitTool from "@/app/hub/_components/SubmitTool";
+// Route page for /hub/submit (public host). Renders the List-your-tool form
+// INSIDE the Hub shell (sidebar + nav) via HubView's initialView, so the layout
+// matches /hub/dashboard and the user can return to Browse in one click. The
+// app-subdomain variant lives at /app/hub/submit (inShell). Thin wrapper keeps
+// Next 15's PageProps constraint satisfied (pages only receive params).
+import HubView from "@/app/hub/HubView";
 
 export default function Page() {
-  return <SubmitTool variant="page" />;
+  return <HubView initialView="submit" />;
 }
