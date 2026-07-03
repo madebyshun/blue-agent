@@ -39,6 +39,7 @@ export interface RegisteredTool {
   signature:      string;                          // SIWE signature of the manifest
   verified:       boolean;                         // Blue Agent reviewed (default false)
   aiReady:        boolean;                         // returns structured JSON
+  status?:        "live";                          // x402 probe passed at submit → auto-live (agentic.market model)
   // Optional
   agentName?:     string;                          // builder's agent brand (default = short addr)
   iconUrl?:       string;
@@ -73,7 +74,8 @@ export async function getRegisteredTool(id: string): Promise<RegisteredTool | nu
     kvGet<number>(K.calls(id)),
     kvGet<number>(K.revenue(id)),
   ]);
-  return { ...tool, callCount: calls ?? 0, revenueTotal: revenue ?? 0 };
+  // Tools registered before the auto-live gate have no status → treat as live.
+  return { ...tool, status: tool.status ?? "live", callCount: calls ?? 0, revenueTotal: revenue ?? 0 };
 }
 
 /** Get every registered tool. Cached at the caller; pagination Phase 4. */
@@ -280,4 +282,68 @@ export async function probeEndpoint(endpoint: string): Promise<ProbeResult> {
       hint:        `Could not reach endpoint: ${(e as Error).message}`,
     };
   }
+}
+
+// ─── Strict x402 probe — the auto-live gate ────────────────────────────────────
+//
+// agentic.market model: an External tool goes live the moment it proves it is a
+// working x402 endpoint — no human moderation. The endpoint MUST answer an
+// unauthenticated POST with HTTP 402 and a valid x402 payment-requirements body
+// (`accepts[0]` carrying payTo + asset + network). Spam without a real paid
+// endpoint fails this probe and is rejected. Base-only per the platform rule.
+
+export interface X402ProbeResult {
+  ok:       boolean;
+  status:   number;
+  reason?:  string;                                // human-readable rejection reason (shown to submitter)
+  payTo?:   string;
+  asset?:   string;
+  network?: string;
+  aiReady:  boolean;                               // 402 body parsed as JSON
+}
+
+export async function probeX402Endpoint(endpoint: string): Promise<X402ProbeResult> {
+  const fail = (status: number, reason: string, extra: Partial<X402ProbeResult> = {}): X402ProbeResult =>
+    ({ ok: false, status, reason, aiReady: false, ...extra });
+
+  let res: Response;
+  try {
+    res = await fetch(endpoint, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({}),
+      signal:  AbortSignal.timeout(8000),
+    });
+  } catch (e) {
+    return fail(0, `Could not reach endpoint: ${(e as Error).message}`);
+  }
+
+  if (res.status !== 402) {
+    return fail(res.status, `Expected HTTP 402 (x402 payment required), got ${res.status}. External tools must be live, paid x402 endpoints.`);
+  }
+
+  let body: unknown;
+  try { body = await res.clone().json(); }
+  catch { return fail(402, "402 response was not JSON — missing x402 payment requirements.", { aiReady: false }); }
+
+  const accepts = (body as { accepts?: unknown })?.accepts;
+  const first   = Array.isArray(accepts) ? (accepts[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) {
+    return fail(402, "402 response has no `accepts` payment requirements — not a valid x402 endpoint.", { aiReady: true });
+  }
+
+  const payTo   = typeof first.payTo   === "string" ? first.payTo   : undefined;
+  const asset   = typeof first.asset   === "string" ? first.asset   : undefined;
+  const network = typeof first.network === "string" ? first.network : undefined;
+  const isAddr  = (s?: string) => !!s && /^0x[a-fA-F0-9]{40}$/.test(s);
+
+  if (!isAddr(payTo))  return fail(402, "x402 payment requirements missing a valid `payTo` address.", { aiReady: true });
+  if (!isAddr(asset))  return fail(402, "x402 payment requirements missing a valid `asset` (token) address.", { aiReady: true, payTo });
+  if (!network)        return fail(402, "x402 payment requirements missing `network`.", { aiReady: true, payTo, asset });
+  // Base-only platform rule (chain 8453).
+  if (!/base|8453/i.test(network)) {
+    return fail(402, `Network "${network}" is not Base. Blue Hub lists Base (chain 8453) x402 tools only.`, { aiReady: true, payTo, asset, network });
+  }
+
+  return { ok: true, status: 402, aiReady: true, payTo, asset, network };
 }
