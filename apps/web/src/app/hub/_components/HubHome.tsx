@@ -118,33 +118,26 @@ export default function HubHome(props: HubHomeProps) {
 // ─── HOME view — clean, opinionated ───────────────────────────────────────────
 
 function HomeView(props: HubHomeProps) {
-  const { tools, groups, usage, featuredIds, recentIds, onSearch, onPickCat, onSelect, onListTool } = props;
+  const { tools, usage, featuredIds, recentIds, onSearch, onPickCat, onSelect, onListTool } = props;
   const byId = new Map(tools.map(t => [t.id, t] as const));
   const runsOf = (id: string) => { const t = byId.get(id); return t ? toolRuns(t, usage) : (usage[id] ?? 0); };
-
-  // Trending — top 6 tools by real run count (source-agnostic). Only shown once
-  // there's real usage, so an empty marketplace doesn't render a dead row.
-  const trending: HubTool[] = [...tools]
-    .filter(t => runsOf(t.id) > 0)
-    .sort((a, b) => runsOf(b.id) - runsOf(a.id))
-    .slice(0, 6);
 
   // How many community (external + hosted) tools are live — surfaced as a badge.
   const communityCount = tools.filter(t => t.source === "external" || t.source === "hosted").length;
 
-  // Editor's Picks — usage-ranked then padded with curated featuredIds (max 4)
-  const picks: HubTool[] = (() => {
-    const byUsage = [...tools]
+  // Featured — ONE section merging the old "Editor's Picks" + "Trending" (which
+  // overlapped, showing the same top tools twice). Real usage ranks first, then
+  // curated featuredIds pad it out; deduped by id, capped at 8 for a tight grid.
+  const featured: HubTool[] = (() => {
+    const seen = new Set<string>();
+    const out: HubTool[] = [];
+    const push = (t?: HubTool) => { if (t && !seen.has(t.id)) { seen.add(t.id); out.push(t); } };
+    [...tools]
       .filter(t => runsOf(t.id) > 0)
       .sort((a, b) => runsOf(b.id) - runsOf(a.id))
-      .slice(0, 4);
-    if (byUsage.length >= 4) return byUsage;
-    const seen = new Set(byUsage.map(t => t.id));
-    const padded = [...featuredIds]
-      .filter(id => !seen.has(id))
-      .map(id => tools.find(t => t.id === id))
-      .filter((t): t is HubTool => !!t);
-    return [...byUsage, ...padded].slice(0, 4);
+      .forEach(push);
+    [...featuredIds].map(id => byId.get(id)).forEach(push);
+    return out.slice(0, 8);
   })();
 
   const recentTools = recentIds
@@ -165,7 +158,7 @@ function HomeView(props: HubHomeProps) {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
         {/* ── HERO — marketplace thesis + dual CTA + big search ── */}
         <section className="mb-8">
@@ -179,7 +172,7 @@ function HomeView(props: HubHomeProps) {
           <div className="flex flex-wrap gap-2 mb-5">
             <button
               type="button"
-              onClick={() => { const el = document.getElementById("hub-categories"); el?.scrollIntoView({ behavior: "smooth" }); }}
+              onClick={() => { const el = document.getElementById("hub-featured"); el?.scrollIntoView({ behavior: "smooth" }); }}
               className="font-mono text-xs font-semibold px-4 py-2.5 rounded-xl border border-[#4FC3F7]/40 bg-[#4FC3F7]/10 text-[#4FC3F7] hover:bg-[#4FC3F7]/20 transition-colors">
               Browse {tools.length} tools →
             </button>
@@ -229,91 +222,36 @@ function HomeView(props: HubHomeProps) {
           </div>
         </section>
 
-        {/* ── EDITOR'S PICKS — 4 hero tools ── */}
-        {picks.length > 0 && (
-          <section className="mb-9">
-            <SectionHeader emoji="⭐" label="Editor's Picks" accent="#A78BFA"
-              sub="Curated tools to try first" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {picks.map(t => (
+        {/* ── FEATURED — merged picks + trending, deduped, full-width grid ── */}
+        {featured.length > 0 && (
+          <section id="hub-featured" className="mb-9">
+            <SectionHeader emoji="⭐" label="Featured" accent="#A78BFA"
+              sub="Most-run + curated tools to try first" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {featured.map(t => (
                 <PickCard key={t.id} tool={t} runs={runsOf(t.id)} onSelect={onSelect} />
               ))}
             </div>
           </section>
         )}
 
-        {/* ── TRENDING — top 6 by real runs (native + community mixed) ── */}
-        {trending.length > 0 && (
-          <section className="mb-9">
-            <SectionHeader emoji="🔥" label="Trending" accent="#FB923C"
-              sub="Most-run tools right now" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {trending.map(t => (
-                <PickCard key={t.id} tool={t} runs={runsOf(t.id)} onSelect={onSelect} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ── PROVIDERS + Submit CTA ── */}
+        {/* ── PROVIDERS — compact single row (Blue + partner). "List your tool"
+            lives in the hero CTA + sidebar; categories live in the sidebar filter,
+            so both are dropped here to cut the page's vertical length. ── */}
         <section className="mb-9">
           <SectionHeader emoji="🤖" label="Providers" accent="#FFFFFF"
             sub={communityCount > 0 ? `${communityCount} community tool${communityCount !== 1 ? "s" : ""} live` : "Blue Agent + partners integrating"} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <ProviderCard p={blueProvider} />
             <PartnerComingSoonCard />
           </div>
-          {(() => {
-            const inner = (
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">➕</span>
-                <div className="flex-1">
-                  <p className="font-mono text-sm font-bold text-white mb-0.5">Earn USDC — list your tool on Blue Hub</p>
-                  <p className="font-mono text-[10px] text-slate-600">95% builder · 5% Hub · USDC on Base · no signup</p>
-                </div>
-                <span className="font-mono text-xs font-semibold text-[#A78BFA] opacity-70 group-hover:opacity-100 transition-opacity">
-                  List →
-                </span>
-              </div>
-            );
-            const cls = "block w-full text-left rounded-2xl border border-[#A78BFA]/25 bg-gradient-to-r from-[#A78BFA]/[0.06] to-[#4FC3F7]/[0.04] px-5 py-4 hover:border-[#A78BFA]/50 transition-all group";
-            // Modal is the primary path on the Hub; fall back to the route elsewhere.
-            return onListTool
-              ? <button type="button" onClick={onListTool} className={cls}>{inner}</button>
-              : <Link href="/hub/submit" className={cls}>{inner}</Link>;
-          })()}
           {/* Dashboard entry — the desktop sidebar has this link but it's hidden on
               mobile (lg:flex), so surface it here too for builders on small screens. */}
           <Link href="/hub/dashboard"
-            className="mt-2 flex items-center justify-center gap-1.5 font-mono text-[11px] text-slate-600 hover:text-[#34D399] transition-colors">
+            className="mt-3 flex items-center justify-center gap-1.5 font-mono text-[11px] text-slate-600 hover:text-[#34D399] transition-colors">
             <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
             Already listed a tool? Creator dashboard →
           </Link>
-        </section>
-
-        {/* ── CATEGORIES grid — drill-down (small tiles) ── */}
-        <section id="hub-categories" className="mb-9">
-          <SectionHeader emoji="📂" label="Browse categories" accent="#FFFFFF"
-            sub={`${groups.length} use-case bundles`} />
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-            {groups.map(g => {
-              const count = g.ids.length;
-              return (
-                <button key={g.id} onClick={() => onPickCat(g.id)}
-                  className="text-left rounded-xl border p-3 transition-all hover:scale-[1.02] group"
-                  style={{ borderColor: `${g.color}25`, background: `${g.color}05` }}>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: g.color }} />
-                    <p className="font-mono text-xs font-bold" style={{ color: g.color }}>{g.label}</p>
-                  </div>
-                  <p className="font-mono text-[9px] text-slate-600 line-clamp-2 leading-relaxed">{g.desc}</p>
-                  <p className="font-mono text-[9px] text-slate-700 mt-2 group-hover:opacity-100 opacity-70 transition-opacity">
-                    {count} tool{count !== 1 ? "s" : ""} →
-                  </p>
-                </button>
-              );
-            })}
-          </div>
         </section>
 
         {/* Footer — minimal */}
@@ -359,7 +297,7 @@ function BrowseView(props: HubHomeProps) {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
 
         {/* Breadcrumb + title */}
         <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -435,7 +373,7 @@ function BrowseView(props: HubHomeProps) {
           </div>
           )
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {sorted.map(t => <PickCard key={t.id} tool={t} runs={runsOf(t.id)} onSelect={onSelect} />)}
           </div>
         )}
