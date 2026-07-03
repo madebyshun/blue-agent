@@ -257,7 +257,7 @@ function HomeView(props: HubHomeProps) {
           <Link href="/hub/dashboard"
             className="mt-2 flex items-center justify-center gap-1.5 font-mono text-[11px] text-slate-600 hover:text-[#34D399] transition-colors">
             <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
-            Already listed a tool? Builder dashboard →
+            Already listed a tool? Creator dashboard →
           </Link>
         </section>
 
