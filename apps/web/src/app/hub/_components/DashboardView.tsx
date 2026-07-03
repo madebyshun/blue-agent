@@ -84,7 +84,7 @@ function relTime(ms: number)  {
   return `${Math.floor(d / 86_400_000)}d ago`;
 }
 
-export default function DashboardView({ inShell = false }: { inShell?: boolean }) {
+export default function DashboardView({ inShell = false, onBack }: { inShell?: boolean; onBack?: () => void }) {
   const { address, isConnected } = useAccount();
   const [data, setData]       = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -115,7 +115,9 @@ export default function DashboardView({ inShell = false }: { inShell?: boolean }
 
       {/* Header */}
       <div className="border-b border-[#1A1A2E] px-6 h-14 flex items-center gap-3">
-        <Link href="/hub" className="text-xs text-slate-500 hover:text-white transition-colors">← Hub</Link>
+        {onBack
+          ? <button onClick={onBack} className="text-xs text-slate-500 hover:text-white transition-colors">← Browse</button>
+          : <Link href="/hub" className="text-xs text-slate-500 hover:text-white transition-colors">← Hub</Link>}
         <span className="w-1 h-1 rounded-full bg-[#34D399] animate-pulse" />
         <p className="text-xs text-[#34D399] tracking-widest">// CREATOR DASHBOARD</p>
         <p className="text-[10px] text-slate-700 hidden sm:block">Your tools, runs, and earnings</p>

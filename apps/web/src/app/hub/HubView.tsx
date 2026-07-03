@@ -9,6 +9,7 @@ import { ConnectButton } from "@/components/ConnectModal";
 import AppPageHeader from "@/components/app/AppPageHeader";
 import HubHome from "./_components/HubHome";
 import SubmitTool from "./_components/SubmitTool";
+import DashboardView from "./_components/DashboardView";
 import MarkdownOutput from "@/components/MarkdownOutput";
 
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
@@ -1317,9 +1318,13 @@ function decodeShare(hash: string): { toolId: string } & ToolResult | null {
 
 // ─── Hub page ─────────────────────────────────────────────────────────────────
 
-export default function HubPage({ inShell = false, initialToolId }: { inShell?: boolean; initialToolId?: string }) {
+export default function HubPage({ inShell = false, initialToolId, initialView = "browse" }: { inShell?: boolean; initialToolId?: string; initialView?: "browse" | "dashboard" }) {
   const [cat, setCat]         = useState<Category>("all");
   const [selected, setSelected] = useState<Tool | null>(null);
+  // View mode — "browse" shows the marketplace grid / tool runner; "dashboard"
+  // renders the creator dashboard IN-SHELL (sidebar + nav kept), mirroring the
+  // per-tool inShell pattern so a creator can jump back to Browse in one click.
+  const [view, setView]       = useState<"browse" | "dashboard">(initialView);
   const [search, setSearch]   = useState("");
   const [cache, setCache]     = useState<Map<string, ToolResult>>(new Map());
   // Result to preload into the runner. Set ONLY by the ?s=/#s= share readers
@@ -1350,6 +1355,18 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
     if (inShell && typeof window !== "undefined") window.history.pushState(null, "", "/hub");
   };
 
+  // Creator dashboard — switch the in-shell view (keeps sidebar + nav). URL is
+  // updated to /hub/dashboard so a refresh/deep-link resolves to the same route.
+  const openDashboard = () => {
+    setSelected(null);
+    setView("dashboard");
+    if (typeof window !== "undefined") window.history.pushState(null, "", "/hub/dashboard");
+  };
+  const backToBrowse = () => {
+    setView("browse");
+    if (typeof window !== "undefined") window.history.pushState(null, "", "/hub");
+  };
+
   // Open the tool from the route param (/app/hub/[tool]). Applies once the tool
   // is present (community tools load async), and only once.
   const initialApplied = useRef(false);
@@ -1363,9 +1380,13 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
   useEffect(() => {
     if (!inShell || typeof window === "undefined") return;
     const onPop = () => {
-      const m = window.location.pathname.match(/^\/app\/hub\/([^/?#]+)/);
+      const path = window.location.pathname;
       setPreload(null); // back/forward → fresh form
-      setSelected(m ? (allTools.find(x => x.id === m[1]) ?? null) : null);
+      if (/\/hub\/dashboard$/.test(path)) { setView("dashboard"); setSelected(null); return; }
+      setView("browse");
+      const m = path.match(/\/hub\/([^/?#]+)/);
+      const id = m && m[1] !== "dashboard" ? m[1] : null;
+      setSelected(id ? (allTools.find(x => x.id === id) ?? null) : null);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -1732,15 +1753,16 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
                 95/5
               </span>
             </button>
-            <Link
-              href="/hub/dashboard"
-              className="flex items-center gap-2 w-full px-2 py-2 rounded-lg hover:bg-[#34D399]/5 transition-colors group"
+            <button
+              type="button"
+              onClick={view === "dashboard" ? backToBrowse : openDashboard}
+              className={`flex items-center gap-2 w-full px-2 py-2 rounded-lg transition-colors group ${view === "dashboard" ? "bg-[#34D399]/10" : "hover:bg-[#34D399]/5"}`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] shrink-0" />
-              <span className="font-mono text-[11px] text-slate-500 group-hover:text-[#34D399] transition-colors">
-                Creator dashboard
+              <span className={`font-mono text-[11px] transition-colors ${view === "dashboard" ? "text-[#34D399]" : "text-slate-500 group-hover:text-[#34D399]"}`}>
+                {view === "dashboard" ? "← Browse tools" : "Creator dashboard"}
               </span>
-            </Link>
+            </button>
           </div>
 
           {/* Footer */}
@@ -1753,7 +1775,7 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
         <main className="flex-1 h-full overflow-hidden flex flex-col">
 
           {/* Mobile search + filter chips (browse state only) */}
-          {!selected && (
+          {!selected && view === "browse" && (
             <div className="lg:hidden px-4 pt-3 pb-2 border-b border-[#1A1A2E] shrink-0 space-y-2">
               {/* On the home state the large SearchHero is the single search bar;
                   this compact input only appears once browsing (search/category). */}
@@ -1804,7 +1826,9 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
             </div>
           )}
 
-          {selected
+          {view === "dashboard"
+            ? <DashboardView inShell onBack={backToBrowse} />
+            : selected
             ? <ToolRunner
                 // Remount per tool (clean state); when a shared ?s= result
                 // arrives, the key flips to ":shared" so the runner re-inits
