@@ -59,7 +59,7 @@ const ROADMAP = [
     period: "Q3 2026 — Marketplace",
     status: "building",
     items: [
-      { done: false, text: "Builder Registry — submit your tool, earn 80% in USDC" },
+      { done: false, text: "Builder Registry — submit your tool, earn 95% in USDC" },
       { done: false, text: "Tool discovery — search, rank by calls/revenue, verified badges" },
       { done: false, text: "B20 — mainnet deploy at Beryl, payment rails, issuer tracking" },
       { done: false, text: "Tool chains — compose multiple tools, one payment" },
