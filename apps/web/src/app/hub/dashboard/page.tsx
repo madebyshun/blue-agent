@@ -1,9 +1,10 @@
-// Route page for /hub/dashboard (public host). The UI lives in DashboardView, a
-// client component reused by /app/hub/dashboard via the `inShell` prop. Thin
-// wrapper keeps Next 15's PageProps constraint satisfied (pages only receive
-// params/searchParams).
-import DashboardView from "@/app/hub/_components/DashboardView";
+// Route page for /hub/dashboard (public host). Renders the creator dashboard
+// INSIDE the Hub shell (sidebar + nav) via HubView's initialView, so the layout
+// matches /hub/[tool] and the user can return to Browse in one click. The
+// app-subdomain variant lives at /app/hub/dashboard (inShell). Thin wrapper keeps
+// Next 15's PageProps constraint satisfied (pages only receive params).
+import HubView from "@/app/hub/HubView";
 
 export default function Page() {
-  return <DashboardView />;
+  return <HubView initialView="dashboard" />;
 }
