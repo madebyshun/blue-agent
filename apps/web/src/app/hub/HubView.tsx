@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
@@ -8,6 +8,7 @@ import { useAccount, useSignTypedData, useReadContract } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
 import AppPageHeader from "@/components/app/AppPageHeader";
 import HubHome from "./_components/HubHome";
+import SubmitTool from "./_components/SubmitTool";
 import MarkdownOutput from "@/components/MarkdownOutput";
 
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
@@ -1109,7 +1110,7 @@ type ViewMode = "grid" | "list";
 
 function EmptyState({
   tools, onSelect, featuredIds, usage, recentIds,
-  search, setSearch, cat, setCat, filtered,
+  search, setSearch, cat, setCat, filtered, onListTool,
 }: {
   tools:       Tool[];
   onSelect:   (t: Tool) => void;
@@ -1121,6 +1122,7 @@ function EmptyState({
   cat:        Category;
   setCat:     (c: Category) => void;
   filtered:   Tool[];
+  onListTool?: () => void;
 }) {
   // Thin wrapper around HubHome (in _components/) — keeps page.tsx focused on
   // routing / state, while HubHome owns the marketplace UX.
@@ -1137,6 +1139,7 @@ function EmptyState({
       onSearch={setSearch}
       onPickCat={(id) => setCat(id as Category)}
       onSelect={(t) => onSelect(t as unknown as Tool)}
+      onListTool={onListTool}
     />
   );
 }
@@ -1293,6 +1296,7 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
   const [preload, setPreload] = useState<{ toolId: string; data: ToolResult } | null>(null);
   const [usage, setUsage]     = useState<Record<string, number>>({});
   const [communityTools, setCommunityTools] = useState<Tool[]>([]);
+  const [showSubmit, setShowSubmit] = useState(false);   // "List your tool" modal
   const searchRef             = useRef<HTMLInputElement>(null);
 
   // ── Merge first-party (TOOLS) + community-submitted (registered) ──────────
@@ -1358,8 +1362,9 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
 
   // ── Fetch community-submitted tools from the Builder Registry ──────────────
   // Maps RegisteredTool shape → local Tool shape and routes calls through the
-  // Hub proxy (which forwards to the builder's endpoint + tracks usage).
-  useEffect(() => {
+  // Hub proxy (which forwards to the builder's endpoint + tracks usage). Kept as
+  // a useCallback so the "List your tool" modal can refresh the grid on submit.
+  const loadCommunityTools = useCallback(() => {
     type Registered = {
       id: string; name: string; description: string; category: string;
       price: string; priceUSDC: number;
@@ -1429,6 +1434,8 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
 
     Promise.all([external, hosted]).then(([e, h]) => setCommunityTools([...e, ...h]));
   }, []);
+
+  useEffect(() => { loadCommunityTools(); }, [loadCommunityTools]);
 
   const featuredIds = useMemo<Set<string>>(() => {
     // Most-run tools first, then pad with static FEATURED_IDS so we always show 4
@@ -1649,18 +1656,19 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
 
           {/* Builder actions (v2) */}
           <div className="px-4 pb-2 border-t border-[#1A1A2E] pt-3 space-y-1">
-            <Link
-              href="/hub/submit"
+            <button
+              type="button"
+              onClick={() => setShowSubmit(true)}
               className="flex items-center gap-2 w-full px-2 py-2 rounded-lg hover:bg-[#A78BFA]/5 transition-colors group"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#A78BFA] animate-pulse shrink-0" />
               <span className="font-mono text-[11px] text-slate-500 group-hover:text-[#A78BFA] transition-colors">
-                + Submit a tool
+                + List your tool
               </span>
               <span className="ml-auto font-mono text-[9px] text-slate-700 group-hover:text-[#A78BFA]">
                 95/5
               </span>
-            </Link>
+            </button>
             <Link
               href="/hub/dashboard"
               className="flex items-center gap-2 w-full px-2 py-2 rounded-lg hover:bg-[#34D399]/5 transition-colors group"
@@ -1738,12 +1746,32 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
                 cat={cat}
                 setCat={setCat}
                 filtered={filtered}
+                onListTool={() => setShowSubmit(true)}
               /></div>
           }
         </main>
 
         </div>{/* end flex row */}
       </div>
+
+      {/* ── "List your tool" modal — primary submit path (route is a fallback) ── */}
+      {showSubmit && (
+        <div
+          className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-0 sm:p-6 bg-black/70 backdrop-blur-sm"
+          onClick={() => setShowSubmit(false)}
+        >
+          <div
+            className="relative w-full sm:max-w-3xl h-full sm:h-[min(88vh,900px)] bg-[#050508] sm:rounded-2xl border border-[#1A1A2E] overflow-hidden shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <SubmitTool
+              variant="modal"
+              onClose={() => setShowSubmit(false)}
+              onSubmitted={() => loadCommunityTools()}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -100,6 +100,7 @@ export interface HubHomeProps {
   onSearch:    (s: string) => void;
   onPickCat:   (id: string) => void;
   onSelect:    (t: HubTool) => void;
+  onListTool?: () => void;                 // opens the "List your tool" modal (Hub only)
 }
 
 export default function HubHome(props: HubHomeProps) {
@@ -110,7 +111,7 @@ export default function HubHome(props: HubHomeProps) {
 // ─── HOME view — clean, opinionated ───────────────────────────────────────────
 
 function HomeView(props: HubHomeProps) {
-  const { tools, groups, usage, featuredIds, recentIds, onSearch, onPickCat, onSelect } = props;
+  const { tools, groups, usage, featuredIds, recentIds, onSearch, onPickCat, onSelect, onListTool } = props;
   const byId = new Map(tools.map(t => [t.id, t] as const));
   const runsOf = (id: string) => { const t = byId.get(id); return t ? toolRuns(t, usage) : (usage[id] ?? 0); };
 
@@ -239,19 +240,25 @@ function HomeView(props: HubHomeProps) {
             <ProviderCard p={blueProvider} />
             <PartnerComingSoonCard />
           </div>
-          <Link href="/hub/submit"
-            className="block rounded-2xl border border-[#A78BFA]/25 bg-gradient-to-r from-[#A78BFA]/[0.06] to-[#4FC3F7]/[0.04] px-5 py-4 hover:border-[#A78BFA]/50 transition-all group">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">➕</span>
-              <div className="flex-1">
-                <p className="font-mono text-sm font-bold text-white mb-0.5">Earn USDC — list your tool on Blue Hub</p>
-                <p className="font-mono text-[10px] text-slate-600">95% builder · 5% Hub · USDC on Base · no signup</p>
+          {(() => {
+            const inner = (
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">➕</span>
+                <div className="flex-1">
+                  <p className="font-mono text-sm font-bold text-white mb-0.5">Earn USDC — list your tool on Blue Hub</p>
+                  <p className="font-mono text-[10px] text-slate-600">95% builder · 5% Hub · USDC on Base · no signup</p>
+                </div>
+                <span className="font-mono text-xs font-semibold text-[#A78BFA] opacity-70 group-hover:opacity-100 transition-opacity">
+                  List →
+                </span>
               </div>
-              <span className="font-mono text-xs font-semibold text-[#A78BFA] opacity-70 group-hover:opacity-100 transition-opacity">
-                Submit →
-              </span>
-            </div>
-          </Link>
+            );
+            const cls = "block w-full text-left rounded-2xl border border-[#A78BFA]/25 bg-gradient-to-r from-[#A78BFA]/[0.06] to-[#4FC3F7]/[0.04] px-5 py-4 hover:border-[#A78BFA]/50 transition-all group";
+            // Modal is the primary path on the Hub; fall back to the route elsewhere.
+            return onListTool
+              ? <button type="button" onClick={onListTool} className={cls}>{inner}</button>
+              : <Link href="/hub/submit" className={cls}>{inner}</Link>;
+          })()}
           {/* Dashboard entry — the desktop sidebar has this link but it's hidden on
               mobile (lg:flex), so surface it here too for builders on small screens. */}
           <Link href="/hub/dashboard"
