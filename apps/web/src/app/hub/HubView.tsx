@@ -1667,7 +1667,7 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] shrink-0" />
               <span className="font-mono text-[11px] text-slate-500 group-hover:text-[#34D399] transition-colors">
-                Builder dashboard
+                Creator dashboard
               </span>
             </Link>
           </div>
