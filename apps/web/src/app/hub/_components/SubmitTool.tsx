@@ -10,10 +10,13 @@
  *   ✨ api_wrapper  — Blue Hub forwards to your upstream API (optionally with a
  *                     secret auth header). 90/10 split. → POST /api/hub/hosted
  *
- * Reused two ways (variant prop):
+ * Reused three ways (variant prop):
  *   • "page"  — full-page route at /hub/submit (own header + ← Hub link).
- *   • "modal" — the primary path: a "List your tool" modal on the Hub. On success
- *               it fires onSubmitted(id) so the Hub can refresh its community grid.
+ *   • "shell" — the primary path: rendered INSIDE the Hub shell (sidebar + nav
+ *               kept) as a full-page view, mirroring the dashboard-in-shell
+ *               pattern. Header shows "← Browse tools" (onBack). On success it
+ *               fires onSubmitted(id) so the Hub can refresh its community grid.
+ *   • "modal" — legacy overlay path (kept for callers that still pop a modal).
  *
  * Flow: pick type → connect wallet → fill form → (optional) test → sign the
  * manifest (SIWE personal_sign) → POST. The signed manifest covers IDENTITY
@@ -90,13 +93,15 @@ const TEMPLATES: { id: Template; badge: string; title: string; blurb: string; sp
 ];
 
 export interface SubmitToolProps {
-  variant?:     "page" | "modal";
+  variant?:     "page" | "modal" | "shell";
   onClose?:     () => void;             // modal: close button + post-submit dismiss
+  onBack?:      () => void;             // shell: "← Browse tools" back to the grid
   onSubmitted?: (id: string) => void;   // fired once a tool registers OK (refresh grid)
 }
 
-export default function SubmitTool({ variant = "page", onClose, onSubmitted }: SubmitToolProps) {
+export default function SubmitTool({ variant = "page", onClose, onBack, onSubmitted }: SubmitToolProps) {
   const isModal = variant === "modal";
+  const isShell = variant === "shell";
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
 
@@ -271,7 +276,7 @@ export default function SubmitTool({ variant = "page", onClose, onSubmitted }: S
 
   // ── Render ──────────────────────────────────────────────────────────────────
   const body = (
-    <div className={isModal ? "" : "max-w-3xl mx-auto px-6 py-8"}>
+    <div className={isModal || isShell ? "" : "max-w-3xl mx-auto px-6 py-8"}>
 
       {/* Done state */}
       {step === "done" && submitted && (
@@ -533,6 +538,29 @@ export default function SubmitTool({ variant = "page", onClose, onSubmitted }: S
       )}
     </div>
   );
+
+  // ── In-shell view: full-page inside the Hub shell (sidebar + nav kept).
+  //     Header shows "← Browse tools" (onBack) — mirrors the dashboard-in-shell.
+  if (isShell) {
+    return (
+      <div className="flex flex-col h-full text-white font-mono">
+        <div className="border-b border-[#1A1A2E] px-5 h-14 flex items-center gap-3 shrink-0">
+          {onBack && (
+            <button onClick={onBack}
+              className="font-mono text-xs text-slate-500 hover:text-white transition-colors">
+              ← Browse tools
+            </button>
+          )}
+          <span className="w-1 h-1 rounded-full bg-[#A78BFA] animate-pulse" />
+          <p className="text-xs text-[#A78BFA] tracking-widest">// LIST YOUR TOOL</p>
+          <p className="text-[10px] text-slate-700 hidden sm:block">USDC on Base via x402 · 95/5</p>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-6">
+          <div className="max-w-3xl mx-auto">{body}</div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Modal shell: header (title + ✕) over a scrollable body ──
   if (isModal) {
