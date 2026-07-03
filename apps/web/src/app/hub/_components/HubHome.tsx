@@ -145,12 +145,15 @@ function HomeView(props: HubHomeProps) {
     .reverse()
     .slice(0, 6);
 
-  // Providers — derived
-  const providers = (["blue", "aeon", "miroshark"] as Agent[]).map(a => ({
-    agent: a,
-    toolCount:  tools.filter(t => t.agents.includes(a)).length,
-    totalCalls: tools.filter(t => t.agents.includes(a)).reduce((s, t) => s + runsOf(t.id), 0),
-  }));
+  // Providers — Blue is the only REAL first-party provider. Its tools carry
+  // agents:["blue"] and track real usage via usage:<id>. (Aeon / MiroShark were
+  // display-only placeholders with fabricated tool/call numbers — removed to keep
+  // provider stats honest. Real partners get a "coming soon" card, no fake data.)
+  const blueProvider = {
+    agent: "blue" as Agent,
+    toolCount:  tools.filter(t => t.agents.includes("blue")).length,
+    totalCalls: tools.filter(t => t.agents.includes("blue")).reduce((s, t) => s + runsOf(t.id), 0),
+  };
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -230,10 +233,11 @@ function HomeView(props: HubHomeProps) {
 
         {/* ── PROVIDERS + Submit CTA ── */}
         <section className="mb-9">
-          <SectionHeader emoji="🤖" label="Top providers" accent="#FFFFFF"
-            sub={communityCount > 0 ? `${communityCount} community tool${communityCount !== 1 ? "s" : ""} live` : "Agents shipping verified tools"} />
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-            {providers.map(p => <ProviderCard key={p.agent} p={p} />)}
+          <SectionHeader emoji="🤖" label="Providers" accent="#FFFFFF"
+            sub={communityCount > 0 ? `${communityCount} community tool${communityCount !== 1 ? "s" : ""} live` : "Blue Agent + partners integrating"} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <ProviderCard p={blueProvider} />
+            <PartnerComingSoonCard />
           </div>
           <Link href="/hub/submit"
             className="block rounded-2xl border border-[#A78BFA]/25 bg-gradient-to-r from-[#A78BFA]/[0.06] to-[#4FC3F7]/[0.04] px-5 py-4 hover:border-[#A78BFA]/50 transition-all group">
@@ -487,10 +491,7 @@ function PickCard({ tool, runs, onSelect }: { tool: HubTool; runs: number; onSel
 function ProviderCard({ p }: { p: { agent: Agent; toolCount: number; totalCalls: number } }) {
   const color = AGENT_COLORS[p.agent];
   const label = AGENT_LABELS[p.agent];
-  const blurb =
-    p.agent === "blue"      ? "Multi-agent orchestration · console commands · idea → ship"
-    : p.agent === "aeon"    ? "Ecosystem signals · narratives · token picks on Base"
-    :                         "Sentiment consensus · crowd intelligence for trades";
+  const blurb = "Live onchain AI tools · console commands · idea → ship on Base";
   return (
     <div className="rounded-2xl p-4 border flex flex-col" style={{ borderColor: `${color}25`, background: `${color}06` }}>
       <div className="flex items-center gap-2 mb-2">
@@ -513,6 +514,33 @@ function ProviderCard({ p }: { p: { agent: Agent; toolCount: number; totalCalls:
           <p className="font-mono text-[9px] text-slate-700">CALLS</p>
           <p className="font-mono text-sm font-bold tabular-nums" style={{ color }}>{p.totalCalls > 0 ? p.totalCalls.toLocaleString() : "—"}</p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// A real partner that's mid-integration — shown WITHOUT tool/call numbers because
+// none are live yet (zero-fabricated-data rule). Only PMFI qualifies today.
+function PartnerComingSoonCard() {
+  const color = "#64748B";
+  return (
+    <div className="rounded-2xl p-4 border border-dashed flex flex-col" style={{ borderColor: `${color}40`, background: `${color}08` }}>
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0"
+          style={{ background: `${color}18`, color, border: `1px solid ${color}40` }}>
+          PM
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-sm font-bold text-slate-300">PMFI</p>
+          <a href="https://x.com/pmfi_cc" target="_blank" rel="noopener noreferrer"
+            className="font-mono text-[10px] text-slate-600 hover:text-slate-400 transition-colors">@pmfi_cc ↗</a>
+        </div>
+        <span className="font-mono text-[8px] px-1.5 py-0.5 rounded border self-start"
+          style={{ color, borderColor: `${color}55`, background: `${color}0d` }}>integrating</span>
+      </div>
+      <p className="font-mono text-[10px] text-slate-500 leading-relaxed mb-3 flex-1">Prediction market arbitrage signals · coming soon to Blue Hub</p>
+      <div className="pt-2 border-t" style={{ borderColor: `${color}20` }}>
+        <p className="font-mono text-[10px] text-slate-700">Partner — tools not live yet</p>
       </div>
     </div>
   );

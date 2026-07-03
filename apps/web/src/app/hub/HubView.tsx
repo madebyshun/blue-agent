@@ -116,11 +116,9 @@ const TOOLS: Tool[] = AGENT_TOOLS.map(t => ({
   name:   t.name,
   cat:    t.category as Exclude<Category, "all">,
   price:  t.price ?? "",
-  agents: t.isComposite
-    ? (["blue", "aeon", "miroshark"] as Agent[])
-    : t.agentName === "Aeon"      ? (["aeon"]      as Agent[])
-    : t.agentName === "MiroShark" ? (["miroshark"] as Agent[])
-    :                               (["blue"]       as Agent[]),
+  // Blue is the only real first-party provider. (Aeon / MiroShark were
+  // display-only placeholders — removed to keep provider data honest.)
+  agents: ["blue"] as Agent[],
   desc:   t.description,
   inputs: t.inputs,
   verified:       t.verified,
@@ -343,26 +341,19 @@ function ResultObj({ obj, nested = false }: { obj: Record<string, unknown>; nest
 
 // ─── Agent scan log animation ─────────────────────────────────────────────────
 
-type LogLine = { agent: "aeon" | "miroshark" | "blue" | "sys"; text: string; delay: number };
+type LogLine = { agent: "blue" | "sys"; text: string; delay: number };
 
 function buildScanScript(tool: Tool): LogLine[] {
   const inp = Object.values(tool.inputs).map(i => i.key).join(", ");
   return [
-    { agent: "sys",       text: `> initializing 3-agent consensus · tool=${tool.id}`,                      delay: 0   },
-    { agent: "sys",       text: `> inputs=[${inp}] · chain=base · endpoint=/api/${tool.id}`,               delay: 180 },
-    { agent: "aeon",      text: `[AEON] booting narrative-tracker…`,                                       delay: 420 },
-    { agent: "aeon",      text: `[AEON] scanning Base ecosystem · ${new Date().toISOString().split("T")[0]}`,delay: 680 },
-    { agent: "aeon",      text: `[AEON] pulling token-movers · filtering by vol > $50k`,                   delay: 960 },
-    { agent: "aeon",      text: `[AEON] narrative fit scored · writing context block`,                     delay: 1280},
-    { agent: "miroshark", text: `[MIROSHARK] loading collab prompt · madebyshun/blue-agent`,               delay: 1600},
-    { agent: "miroshark", text: `[MIROSHARK] spawning crowd agents · personas=[retail,analyst,influencer,observer]`, delay: 1900 },
-    { agent: "miroshark", text: `[MIROSHARK] running weighted consensus · bull/bear/neutral`,              delay: 2250},
-    { agent: "miroshark", text: `[MIROSHARK] fomo_level detected · sentiment locked`,                      delay: 2600},
-    { agent: "blue",      text: `[BLUE] loading identity · skills/blue-agent-identity.md`,                 delay: 2950},
-    { agent: "blue",      text: `[BLUE] injecting base-ecosystem.md · base-addresses.md`,                  delay: 3280},
-    { agent: "blue",      text: `[BLUE] synthesizing aeon + miroshark signals…`,                           delay: 3600},
-    { agent: "blue",      text: `[BLUE] generating verdict · confidence scoring…`,                         delay: 3980},
-    { agent: "sys",       text: `> streaming response · parsing JSON output…`,                             delay: 4350},
+    { agent: "sys",  text: `> initializing Blue Agent · tool=${tool.id}`,                          delay: 0   },
+    { agent: "sys",  text: `> inputs=[${inp}] · chain=base · endpoint=/api/${tool.id}`,            delay: 180 },
+    { agent: "blue", text: `[BLUE] loading identity · skills/blue-agent-identity.md`,              delay: 420 },
+    { agent: "blue", text: `[BLUE] injecting base-ecosystem.md · base-addresses.md`,               delay: 720 },
+    { agent: "blue", text: `[BLUE] pulling live data · ${new Date().toISOString().split("T")[0]}`, delay: 1080},
+    { agent: "blue", text: `[BLUE] running analysis · scoring signals…`,                           delay: 1480},
+    { agent: "blue", text: `[BLUE] generating verdict · confidence scoring…`,                       delay: 1900},
+    { agent: "sys",  text: `> streaming response · parsing JSON output…`,                           delay: 2300},
   ];
 }
 
@@ -399,17 +390,15 @@ function AgentScanLog({ tool }: { tool: Tool }) {
   }, [lines]);
 
   const agentColor: Record<string, string> = {
-    aeon:      "#A78BFA",
-    miroshark: "#34D399",
-    blue:      "#4FC3F7",
-    sys:       "#475569",
+    blue: "#4FC3F7",
+    sys:  "#475569",
   };
 
   return (
     <div className="flex flex-col items-center justify-center h-full px-8 py-12">
-      {/* Agent status row */}
+      {/* Provider status row */}
       <div className="flex items-center gap-6 mb-8">
-        {(["aeon","miroshark","blue"] as const).map(a => {
+        {(["blue"] as const).map(a => {
           const hasStarted = lines.some(l => l.agent === a);
           const isDone     = lines.length > 0 && lines[lines.length - 1].agent === "sys" && lines.length >= script.current.length - 1;
           return (
@@ -422,7 +411,7 @@ function AgentScanLog({ tool }: { tool: Tool }) {
                 className="font-mono text-xs font-bold transition-all duration-500"
                 style={{ color: hasStarted ? agentColor[a] : "#1E293B" }}
               >
-                {a === "blue" ? "Blue" : a === "aeon" ? "Aeon" : "MiroShark"}
+                Blue Agent
               </span>
               {isDone && hasStarted && (
                 <span className="font-mono text-[9px] text-slate-600">✓</span>
@@ -439,7 +428,7 @@ function AgentScanLog({ tool }: { tool: Tool }) {
           <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F57]" />
           <span className="w-2.5 h-2.5 rounded-full bg-[#FEBC2E]" />
           <span className="w-2.5 h-2.5 rounded-full bg-[#28C840]" />
-          <span className="font-mono text-[10px] text-slate-600 ml-3">blue-agent · multi-agent</span>
+          <span className="font-mono text-[10px] text-slate-600 ml-3">blue-agent · x402</span>
         </div>
         {/* Log output */}
         <div className="px-4 py-4 space-y-1.5 min-h-[200px] max-h-[280px] overflow-y-auto">
@@ -933,7 +922,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                 ))}
               </div>
               <p className="font-mono text-xs text-slate-600 text-center max-w-xs leading-relaxed">
-                Fill in the inputs, then hit <span className="text-[#4FC3F7]">Run</span> to get multi-agent AI output.
+                Fill in the inputs, then hit <span className="text-[#4FC3F7]">Run</span> to get live AI output.
               </p>
               {/* Example prompt preview */}
               {hasExamples && (
@@ -982,7 +971,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                     : <span className={cls}>✓ Paid {tool.price}</span>;
                 })()}
                 <div className="ml-auto flex items-center gap-2">
-                  <span className="font-mono text-xs text-slate-700 mr-1">Blue · Aeon · MiroShark</span>
+                  <span className="font-mono text-xs text-slate-700 mr-1">Blue Agent</span>
                   <button
                     onClick={copyJson}
                     className={`font-mono text-[10px] px-2 py-1 rounded border transition-all ${
@@ -1024,14 +1013,14 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                 </p>
               ) : isMock ? (
                 <p className="font-mono text-[10px] text-slate-700 mt-6 pt-4 border-t border-[#1A1A2E]">
-                  preview data — live results powered by 3-agent consensus
+                  preview data — live results powered by Blue Agent
                 </p>
               ) : (
                 <p className="font-mono text-[10px] text-slate-700 mt-6 pt-4 border-t border-[#1A1A2E]">
                   {typeof result === "string"
-                    ? "3-agent consensus · Blue · Aeon · MiroShark"
+                    ? "powered by Blue Agent · Base"
                     : [
-                        result.data_source ? `source: ${result.data_source}` : "3-agent consensus · Blue · Aeon · MiroShark",
+                        result.data_source ? `source: ${result.data_source}` : "powered by Blue Agent · Base",
                         result.timestamp ? new Date(result.timestamp as string).toLocaleString() : null,
                       ].filter(Boolean).join("  ·  ")}
                 </p>

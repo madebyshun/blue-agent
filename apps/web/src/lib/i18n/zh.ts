@@ -75,7 +75,7 @@ export const zh: Dict = {
     bank: "银行",
     launches: "发行",
     b20: "B20",
-    dashboard: "仪表盘",
+    dashboard: "账户",
     profile: "个人资料",
     docs: "文档",
     home: "首页",
