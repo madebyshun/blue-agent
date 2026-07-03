@@ -22,7 +22,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyMessage } from "viem";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { assertSafeMcpUrl } from "@/lib/mcp-client";
-import { getRegisteredTool, isValidSlug } from "@/lib/hub-registry";
+import { getRegisteredTool, isValidSlug, sanitizeLogoUrl } from "@/lib/hub-registry";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import {
   getHostedTool,
@@ -64,6 +64,7 @@ interface SubmitBody {
   signature:      `0x${string}`;
   nonce:          string;
   agentName?:     string;
+  logoUrl?:       string;
   inputs:         HostedToolInput[];
   config:         Record<string, unknown>;   // validated per-template below
 }
@@ -194,6 +195,7 @@ export async function POST(req: NextRequest) {
     priceUSDC:      body.priceUSDC,
     builderAddress: body.builderAddress.toLowerCase() as `0x${string}`,
     agentName:      body.agentName?.slice(0, 40),
+    logoUrl:        sanitizeLogoUrl(body.logoUrl),
     inputs:         body.inputs.slice(0, 12).map(i => ({
       key:         String(i.key).slice(0, 32),
       label:       String(i.label).slice(0, 60),

@@ -74,6 +74,7 @@ export interface HostedTool {
   priceUSDC:      number;               // micro-units (6 decimals)
   builderAddress: `0x${string}`;        // earnings recipient (verified via SIWE)
   agentName?:     string;               // creator handle/brand (default = short addr)
+  logoUrl?:       string;               // creator-supplied logo (PUBLIC — kept by toPublicHostedTool)
   inputs:         HostedToolInput[];    // shown on the call form
   submittedAt:    number;
   signature:      string;               // SIWE signature of the manifest

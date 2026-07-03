@@ -10,10 +10,13 @@
  *   ✨ api_wrapper  — Blue Hub forwards to your upstream API (optionally with a
  *                     secret auth header). 90/10 split. → POST /api/hub/hosted
  *
- * Reused two ways (variant prop):
+ * Reused three ways (variant prop):
  *   • "page"  — full-page route at /hub/submit (own header + ← Hub link).
- *   • "modal" — the primary path: a "List your tool" modal on the Hub. On success
- *               it fires onSubmitted(id) so the Hub can refresh its community grid.
+ *   • "shell" — the primary path: rendered INSIDE the Hub shell (sidebar + nav
+ *               kept) as a full-page view, mirroring the dashboard-in-shell
+ *               pattern. Header shows "← Browse tools" (onBack). On success it
+ *               fires onSubmitted(id) so the Hub can refresh its community grid.
+ *   • "modal" — legacy overlay path (kept for callers that still pop a modal).
  *
  * Flow: pick type → connect wallet → fill form → (optional) test → sign the
  * manifest (SIWE personal_sign) → POST. The signed manifest covers IDENTITY
@@ -90,13 +93,15 @@ const TEMPLATES: { id: Template; badge: string; title: string; blurb: string; sp
 ];
 
 export interface SubmitToolProps {
-  variant?:     "page" | "modal";
+  variant?:     "page" | "modal" | "shell";
   onClose?:     () => void;             // modal: close button + post-submit dismiss
+  onBack?:      () => void;             // shell: "← Browse tools" back to the grid
   onSubmitted?: (id: string) => void;   // fired once a tool registers OK (refresh grid)
 }
 
-export default function SubmitTool({ variant = "page", onClose, onSubmitted }: SubmitToolProps) {
+export default function SubmitTool({ variant = "page", onClose, onBack, onSubmitted }: SubmitToolProps) {
   const isModal = variant === "modal";
+  const isShell = variant === "shell";
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
 
@@ -115,6 +120,8 @@ export default function SubmitTool({ variant = "page", onClose, onSubmitted }: S
     { key: "prompt", label: "Prompt", placeholder: "What you want the tool to do", required: true },
   ]);
   const [agentName, setAgentName]   = useState("");
+  const [logoUrl, setLogoUrl]       = useState("");           // optional creator logo (public)
+  const [logoOk, setLogoOk]         = useState<boolean | null>(null);  // image-load probe result
 
   // ai_tool config
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -239,12 +246,14 @@ export default function SubmitTool({ variant = "page", onClose, onSubmitted }: S
             config: buildConfig(), inputs, price, priceUSDC,
             builderAddress: address, signature, nonce,
             agentName: agentName || undefined,
+            logoUrl: logoTrimmed || undefined,
           }
         : {
             id, name, description, category, endpoint, inputs,
             price, priceUSDC,
             builderAddress: address, signature, nonce,
             agentName: agentName || undefined,
+            logoUrl: logoTrimmed || undefined,
           };
 
       const res  = await fetch(url, {
@@ -267,11 +276,26 @@ export default function SubmitTool({ variant = "page", onClose, onSubmitted }: S
   function removeInput(i: number)                { setInputs(p => p.filter((_, idx) => idx !== i)); }
   function updateInput(i: number, patch: Partial<Input>) { setInputs(p => p.map((inp, idx) => idx === i ? { ...inp, ...patch } : inp)); }
 
+  const logoTrimmed    = logoUrl.trim();
+  const logoLooksHttps = /^https:\/\/.+/i.test(logoTrimmed);
+
+  // Lean client-side validation — confirm the URL actually loads as an image.
+  // The logo is cosmetic (public), so a bad URL never blocks submit; it just
+  // shows a warning and the Hub card falls back to the source badge at render.
+  function checkLogo() {
+    if (!logoTrimmed)     { setLogoOk(null);  return; }
+    if (!logoLooksHttps)  { setLogoOk(false); return; }
+    const img = new window.Image();
+    img.onload  = () => setLogoOk(true);
+    img.onerror = () => setLogoOk(false);
+    img.src = logoTrimmed;
+  }
+
   const activeTpl = TEMPLATES.find(t => t.id === template)!;
 
   // ── Render ──────────────────────────────────────────────────────────────────
   const body = (
-    <div className={isModal ? "" : "max-w-3xl mx-auto px-6 py-8"}>
+    <div className={isModal || isShell ? "" : "max-w-3xl mx-auto px-6 py-8"}>
 
       {/* Done state */}
       {step === "done" && submitted && (
@@ -499,6 +523,21 @@ export default function SubmitTool({ variant = "page", onClose, onSubmitted }: S
                 placeholder="MyAgent" maxLength={40} className={inputCls(true)} />
             </Field>
 
+            {/* logo (optional) */}
+            <Field label="Logo URL (optional)" hint="https:// link to a square image (PNG/SVG/JPG). Shown on your tool card. Leave blank to use the default badge.">
+              <div className="flex items-center gap-2">
+                {logoOk && logoTrimmed
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={logoTrimmed} alt="" className="w-9 h-9 rounded-lg object-cover border border-[#1A1A2E] shrink-0" />
+                  : <div className="w-9 h-9 rounded-lg border border-[#1A1A2E] bg-[#050508] flex items-center justify-center text-slate-700 text-xs shrink-0">🔵</div>}
+                <input value={logoUrl} onChange={e => { setLogoUrl(e.target.value); setLogoOk(null); }} onBlur={checkLogo}
+                  placeholder="https://cdn.example.com/logo.png"
+                  className={inputCls(logoOk !== false) + " flex-1"} />
+              </div>
+              {logoOk === false && <p className="text-[10px] text-amber-400 mt-1">Couldn&apos;t load that as an image — check the URL. (Optional — you can still submit.)</p>}
+              {logoOk === true  && <p className="text-[10px] text-[#34D399] mt-1">✓ Image loads.</p>}
+            </Field>
+
             {/* Manifest preview */}
             <details className="border border-[#1A1A2E] rounded-lg overflow-hidden">
               <summary className="cursor-pointer text-[11px] text-slate-500 px-3 py-2 hover:bg-white/[0.02]">
@@ -533,6 +572,29 @@ export default function SubmitTool({ variant = "page", onClose, onSubmitted }: S
       )}
     </div>
   );
+
+  // ── In-shell view: full-page inside the Hub shell (sidebar + nav kept).
+  //     Header shows "← Browse tools" (onBack) — mirrors the dashboard-in-shell.
+  if (isShell) {
+    return (
+      <div className="flex flex-col h-full text-white font-mono">
+        <div className="border-b border-[#1A1A2E] px-5 h-14 flex items-center gap-3 shrink-0">
+          {onBack && (
+            <button onClick={onBack}
+              className="font-mono text-xs text-slate-500 hover:text-white transition-colors">
+              ← Browse tools
+            </button>
+          )}
+          <span className="w-1 h-1 rounded-full bg-[#A78BFA] animate-pulse" />
+          <p className="text-xs text-[#A78BFA] tracking-widest">// LIST YOUR TOOL</p>
+          <p className="text-[10px] text-slate-700 hidden sm:block">USDC on Base via x402 · 95/5</p>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-6">
+          <div className="max-w-3xl mx-auto">{body}</div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Modal shell: header (title + ✕) over a scrollable body ──
   if (isModal) {
