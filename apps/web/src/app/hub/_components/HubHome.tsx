@@ -33,6 +33,7 @@ export interface HubTool {
   // v2 marketplace provenance + stats
   source?:        "native" | "external" | "hosted";
   creatorHandle?: string;
+  logoUrl?:       string;   // creator-supplied logo (public); falls back to the source badge
   callCount?:     number;
 }
 
@@ -428,6 +429,12 @@ function PickCard({ tool, runs, onSelect }: { tool: HubTool; runs: number; onSel
     <button onClick={() => onSelect(tool)}
       className="text-left rounded-2xl border border-[#1A1A2E] hover:border-[#A78BFA]/40 bg-[#0d0d12] p-4 transition-all flex flex-col group">
       <div className="flex items-center gap-1.5 mb-2.5">
+        {tool.logoUrl && (
+          // Creator logo — hides itself on load error so the badge/dots remain.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={tool.logoUrl} alt="" className="w-4 h-4 rounded object-cover shrink-0"
+            onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+        )}
         {tool.agents.map(a => (
           <span key={a} className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[a] }} />
         ))}

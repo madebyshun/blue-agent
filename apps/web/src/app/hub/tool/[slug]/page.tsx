@@ -15,15 +15,15 @@ export function generateStaticParams() {
 // Resolve a tool's public display fields from whichever registry owns it.
 // Order: native catalog → hosted registry → external registry. Secrets are
 // never touched — getPublicHostedTool() already strips config/signature.
-async function resolveMeta(slug: string): Promise<{ name: string; description: string; price?: string } | null> {
+async function resolveMeta(slug: string): Promise<{ name: string; description: string; price?: string; logoUrl?: string } | null> {
   const native = AGENT_TOOLS.find(x => x.id === slug);
   if (native) return { name: native.name, description: native.description, price: native.price };
 
   const hosted = await getPublicHostedTool(slug).catch(() => null);
-  if (hosted) return { name: hosted.name, description: hosted.description, price: hosted.price };
+  if (hosted) return { name: hosted.name, description: hosted.description, price: hosted.price, logoUrl: hosted.logoUrl };
 
   const external = await getRegisteredTool(slug).catch(() => null);
-  if (external) return { name: external.name, description: external.description, price: external.price };
+  if (external) return { name: external.name, description: external.description, price: external.price, logoUrl: external.logoUrl };
 
   return null;
 }
@@ -40,10 +40,12 @@ export async function generateMetadata(
   const description = meta.description;
   const canonical = `https://blueagent.dev/hub/tool/${slug}`;
 
-  // Shared result (?s=<id>) → dynamic OG image (verdict + confidence). Without
-  // it, the default OG card is used.
+  // Shared result (?s=<id>) → dynamic OG image (verdict + confidence). Otherwise
+  // fall back to the creator's logo (if they supplied one); else the default card.
   const images = s && /^[a-f0-9]{6,32}$/.test(s)
     ? [{ url: `https://blueagent.dev/api/og/hub-result?s=${s}`, width: 1200, height: 630 }]
+    : meta.logoUrl
+    ? [{ url: meta.logoUrl }]
     : undefined;
 
   return {
