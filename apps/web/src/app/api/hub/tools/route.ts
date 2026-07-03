@@ -14,6 +14,7 @@ import {
   isValidSlug,
   siweMessage,
   probeEndpoint,
+  sanitizeLogoUrl,
   type RegisteredTool,
 } from "@/lib/hub-registry";
 
@@ -44,6 +45,7 @@ interface SubmitBody {
   nonce:          string;
   agentName?:     string;
   iconUrl?:       string;
+  logoUrl?:       string;
   tags?:          string[];
 }
 
@@ -139,6 +141,7 @@ export async function POST(req: NextRequest) {
     aiReady:        probe.aiReady,
     agentName:      body.agentName?.slice(0, 40),
     iconUrl:        body.iconUrl?.slice(0, 200),
+    logoUrl:        sanitizeLogoUrl(body.logoUrl),
     tags:           body.tags?.slice(0, 8).map(t => t.slice(0, 20)),
   };
 

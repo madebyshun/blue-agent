@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import SubmitTool from "@/app/hub/_components/SubmitTool";
+import HubView from "@/app/hub/HubView";
 
 export const metadata: Metadata = {
   title: "List your tool — Blue Hub",
   description: "Register an external, AI, or API-wrapper tool on Blue Hub and earn USDC per call.",
 };
 
-// /app/hub/submit — app-subdomain fallback route. The middleware rewrites
+// /app/hub/submit — the app-subdomain route. The middleware rewrites
 // /hub/submit → /app/hub/submit on app.blueagent.dev, so this wrapper must exist
-// or the submit route 404s there. The primary path is the "List your tool" modal
-// on the Hub (G3); this stays as a shareable/deep-link fallback.
+// or the submit route 404s there. Renders the submit form INSIDE the Hub shell
+// (sidebar + nav kept) via initialView, mirroring /app/hub/dashboard — so a
+// creator can jump back to Browse in one click instead of losing the shell.
 export default function AppHubSubmitPage() {
-  return <SubmitTool variant="page" />;
+  return <HubView inShell initialView="submit" />;
 }
