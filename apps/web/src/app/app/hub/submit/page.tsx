@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import SubmitToolPage from "@/app/hub/submit/page";
+import SubmitTool from "@/app/hub/_components/SubmitTool";
 
 export const metadata: Metadata = {
   title: "List your tool — Blue Hub",
@@ -11,5 +11,5 @@ export const metadata: Metadata = {
 // or the submit route 404s there. The primary path is the "List your tool" modal
 // on the Hub (G3); this stays as a shareable/deep-link fallback.
 export default function AppHubSubmitPage() {
-  return <SubmitToolPage />;
+  return <SubmitTool variant="page" />;
 }
