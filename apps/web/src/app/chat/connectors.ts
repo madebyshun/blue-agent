@@ -72,6 +72,20 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
     docsUrl: "https://blueagent.dev/hub",
   },
   {
+    // "Base Docs" — the docs.base.org MCP (live documentation search). Named
+    // "Base Docs" NOT "Base MCP" to avoid confusion with mcp.base.org (the
+    // onchain-actions server surfaced separately in the Skills panel). Base-native
+    // hero preset, sits next to Blue Hub. Tools are fetched at add-time via probe.
+    id: "base-docs",
+    name: "Base Docs",
+    url: "https://docs.base.org/mcp",
+    auth: "none",
+    category: "Base",
+    icon: "🔵",
+    description: "Search Base documentation live — contracts, RPC, deploy guides, MCP plugins. No key needed.",
+    docsUrl: "https://docs.base.org",
+  },
+  {
     id: "deepwiki",
     name: "DeepWiki",
     url: "https://mcp.deepwiki.com/mcp",
