@@ -97,20 +97,28 @@ export interface HubHomeProps {
   recentIds:   string[];                   // tool ids of cached results
   search:      string;
   cat:         string;                     // "all" | group.id | category
+  source?:     "all" | NonNullable<HubTool["source"]>; // v2 sidebar provenance filter
+  price?:      "all" | "free" | "under" | "over";      // v2 sidebar price bucket
   onSearch:    (s: string) => void;
   onPickCat:   (id: string) => void;
   onSelect:    (t: HubTool) => void;
+  onListTool?: () => void;                 // opens the "List your tool" modal (Hub only)
+  onClearFilters?: () => void;             // resets search + cat + source + price
 }
 
 export default function HubHome(props: HubHomeProps) {
-  const isBrowse = props.search.trim() !== "" || (props.cat !== "all" && props.cat !== "");
+  const isBrowse =
+    props.search.trim() !== "" ||
+    (props.cat !== "all" && props.cat !== "") ||
+    (!!props.source && props.source !== "all") ||
+    (!!props.price && props.price !== "all");
   return isBrowse ? <BrowseView {...props} /> : <HomeView {...props} />;
 }
 
 // ─── HOME view — clean, opinionated ───────────────────────────────────────────
 
 function HomeView(props: HubHomeProps) {
-  const { tools, groups, usage, featuredIds, recentIds, onSearch, onPickCat, onSelect } = props;
+  const { tools, groups, usage, featuredIds, recentIds, onSearch, onPickCat, onSelect, onListTool } = props;
   const byId = new Map(tools.map(t => [t.id, t] as const));
   const runsOf = (id: string) => { const t = byId.get(id); return t ? toolRuns(t, usage) : (usage[id] ?? 0); };
 
@@ -145,25 +153,44 @@ function HomeView(props: HubHomeProps) {
     .reverse()
     .slice(0, 6);
 
-  // Providers — derived
-  const providers = (["blue", "aeon", "miroshark"] as Agent[]).map(a => ({
-    agent: a,
-    toolCount:  tools.filter(t => t.agents.includes(a)).length,
-    totalCalls: tools.filter(t => t.agents.includes(a)).reduce((s, t) => s + runsOf(t.id), 0),
-  }));
+  // Providers — Blue is the only REAL first-party provider. Its tools carry
+  // agents:["blue"] and track real usage via usage:<id>. (Aeon / MiroShark were
+  // display-only placeholders with fabricated tool/call numbers — removed to keep
+  // provider stats honest. Real partners get a "coming soon" card, no fake data.)
+  const blueProvider = {
+    agent: "blue" as Agent,
+    toolCount:  tools.filter(t => t.agents.includes("blue")).length,
+    totalCalls: tools.filter(t => t.agents.includes("blue")).reduce((s, t) => s + runsOf(t.id), 0),
+  };
 
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
-        {/* ── HERO with big search ── */}
+        {/* ── HERO — marketplace thesis + dual CTA + big search ── */}
         <section className="mb-8">
-          <h1 className="font-mono text-2xl sm:text-3xl font-bold text-white tracking-tight mb-1">
-            Blue Hub — Onchain AI Tools <span className="text-[#4FC3F7]">for Base</span>
+          <h1 className="font-mono text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2 leading-tight">
+            The x402 tool marketplace <span className="text-[#4FC3F7]">on Base</span>.
           </h1>
-          <p className="font-mono text-xs sm:text-sm text-slate-500 mb-5 max-w-xl">
-            Pay-per-call AI tools from Blue Agent, partner agents, and community builders. No signup, no API key — USDC on Base.
+          <p className="font-mono text-sm sm:text-base text-slate-400 mb-5 max-w-xl">
+            Agents call. Creators earn <span className="text-[#A78BFA] font-semibold">95%</span>.
+            <span className="text-slate-600"> No signup, no API key — USDC per call.</span>
           </p>
+          <div className="flex flex-wrap gap-2 mb-5">
+            <button
+              type="button"
+              onClick={() => { const el = document.getElementById("hub-categories"); el?.scrollIntoView({ behavior: "smooth" }); }}
+              className="font-mono text-xs font-semibold px-4 py-2.5 rounded-xl border border-[#4FC3F7]/40 bg-[#4FC3F7]/10 text-[#4FC3F7] hover:bg-[#4FC3F7]/20 transition-colors">
+              Browse {tools.length} tools →
+            </button>
+            {(() => {
+              const cls = "font-mono text-xs font-semibold px-4 py-2.5 rounded-xl border border-[#A78BFA]/40 bg-[#A78BFA]/10 text-[#A78BFA] hover:bg-[#A78BFA]/20 transition-colors";
+              const inner = <>List your tool · earn 95% →</>;
+              return onListTool
+                ? <button type="button" onClick={onListTool} className={cls}>{inner}</button>
+                : <Link href="/hub/submit" className={cls}>{inner}</Link>;
+            })()}
+          </div>
           <SearchHero value={props.search} onChange={onSearch} totalTools={tools.length} />
         </section>
 
@@ -230,35 +257,42 @@ function HomeView(props: HubHomeProps) {
 
         {/* ── PROVIDERS + Submit CTA ── */}
         <section className="mb-9">
-          <SectionHeader emoji="🤖" label="Top providers" accent="#FFFFFF"
-            sub={communityCount > 0 ? `${communityCount} community tool${communityCount !== 1 ? "s" : ""} live` : "Agents shipping verified tools"} />
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-            {providers.map(p => <ProviderCard key={p.agent} p={p} />)}
+          <SectionHeader emoji="🤖" label="Providers" accent="#FFFFFF"
+            sub={communityCount > 0 ? `${communityCount} community tool${communityCount !== 1 ? "s" : ""} live` : "Blue Agent + partners integrating"} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <ProviderCard p={blueProvider} />
+            <PartnerComingSoonCard />
           </div>
-          <Link href="/hub/submit"
-            className="block rounded-2xl border border-[#A78BFA]/25 bg-gradient-to-r from-[#A78BFA]/[0.06] to-[#4FC3F7]/[0.04] px-5 py-4 hover:border-[#A78BFA]/50 transition-all group">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">➕</span>
-              <div className="flex-1">
-                <p className="font-mono text-sm font-bold text-white mb-0.5">Earn USDC — list your tool on Blue Hub</p>
-                <p className="font-mono text-[10px] text-slate-600">95% builder · 5% Hub · USDC on Base · no signup</p>
+          {(() => {
+            const inner = (
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">➕</span>
+                <div className="flex-1">
+                  <p className="font-mono text-sm font-bold text-white mb-0.5">Earn USDC — list your tool on Blue Hub</p>
+                  <p className="font-mono text-[10px] text-slate-600">95% builder · 5% Hub · USDC on Base · no signup</p>
+                </div>
+                <span className="font-mono text-xs font-semibold text-[#A78BFA] opacity-70 group-hover:opacity-100 transition-opacity">
+                  List →
+                </span>
               </div>
-              <span className="font-mono text-xs font-semibold text-[#A78BFA] opacity-70 group-hover:opacity-100 transition-opacity">
-                Submit →
-              </span>
-            </div>
-          </Link>
+            );
+            const cls = "block w-full text-left rounded-2xl border border-[#A78BFA]/25 bg-gradient-to-r from-[#A78BFA]/[0.06] to-[#4FC3F7]/[0.04] px-5 py-4 hover:border-[#A78BFA]/50 transition-all group";
+            // Modal is the primary path on the Hub; fall back to the route elsewhere.
+            return onListTool
+              ? <button type="button" onClick={onListTool} className={cls}>{inner}</button>
+              : <Link href="/hub/submit" className={cls}>{inner}</Link>;
+          })()}
           {/* Dashboard entry — the desktop sidebar has this link but it's hidden on
               mobile (lg:flex), so surface it here too for builders on small screens. */}
           <Link href="/hub/dashboard"
             className="mt-2 flex items-center justify-center gap-1.5 font-mono text-[11px] text-slate-600 hover:text-[#34D399] transition-colors">
             <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
-            Already listed a tool? Builder dashboard →
+            Already listed a tool? Creator dashboard →
           </Link>
         </section>
 
         {/* ── CATEGORIES grid — drill-down (small tiles) ── */}
-        <section className="mb-9">
+        <section id="hub-categories" className="mb-9">
           <SectionHeader emoji="📂" label="Browse categories" accent="#FFFFFF"
             sub={`${groups.length} use-case bundles`} />
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
@@ -294,27 +328,18 @@ function HomeView(props: HubHomeProps) {
 // ─── BROWSE view — filtered grid ──────────────────────────────────────────────
 
 type SortMode = "popular" | "newest" | "price-asc" | "price-desc";
-type SourceFilter = "all" | NonNullable<HubTool["source"]>;
 
 function BrowseView(props: HubHomeProps) {
-  const { filtered, search, cat, groups, usage, onSelect, onSearch, onPickCat } = props;
+  const { filtered, search, cat, groups, usage, onSelect, onSearch, onPickCat, onListTool, onClearFilters, source } = props;
   const [sortMode, setSortMode] = useState<SortMode>("popular");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const byId = new Map(filtered.map(t => [t.id, t] as const));
   const runsOf = (id: string) => { const t = byId.get(id); return t ? toolRuns(t, usage) : (usage[id] ?? 0); };
 
-  // How many tools sit behind each source chip (drives labels + hides empty chips).
-  const sourceCounts: Record<SourceFilter, number> = {
-    all:      filtered.length,
-    native:   filtered.filter(t => (t.source ?? "native") === "native").length,
-    external: filtered.filter(t => t.source === "external").length,
-    hosted:   filtered.filter(t => t.source === "hosted").length,
-  };
+  const clearAll = onClearFilters ?? (() => { onSearch(""); onPickCat("all"); });
 
   const sorted = (() => {
-    let tools = verifiedOnly ? filtered.filter(t => t.verified) : filtered;
-    if (sourceFilter !== "all") tools = tools.filter(t => (t.source ?? "native") === sourceFilter);
+    const tools = verifiedOnly ? filtered.filter(t => t.verified) : filtered;
     const price = (t: HubTool) => parseFloat(t.price.replace("$", "")) || 0;
     if (sortMode === "price-asc")  return [...tools].sort((a, b) => price(a) - price(b));
     if (sortMode === "price-desc") return [...tools].sort((a, b) => price(b) - price(a));
@@ -322,9 +347,14 @@ function BrowseView(props: HubHomeProps) {
     return [...tools].sort((a, b) => runsOf(b.id) - runsOf(a.id));
   })();
 
+  // Provenance labels for the header + empty state.
+  const sourceLabel = source && source !== "all" ? SOURCE_META[source].label : "";
+  const isCommunitySource = source === "external" || source === "hosted";
+
   const activeGroup = groups.find(g => g.id === cat);
   const title = search.trim()
     ? `Results for “${search}”`
+    : sourceLabel ? `${SOURCE_META[source as NonNullable<HubTool["source"]>].icon} ${sourceLabel} tools`
     : activeGroup ? activeGroup.label : "Filtered tools";
 
   return (
@@ -333,7 +363,7 @@ function BrowseView(props: HubHomeProps) {
 
         {/* Breadcrumb + title */}
         <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <button onClick={() => { onSearch(""); onPickCat("all"); }}
+          <button onClick={clearAll}
             className="font-mono text-[11px] text-slate-500 hover:text-white transition-colors">
             ← Hub home
           </button>
@@ -373,41 +403,37 @@ function BrowseView(props: HubHomeProps) {
           </button>
         </div>
 
-        {/* Source filter chips — only shown once community tools exist alongside native */}
-        {(sourceCounts.external > 0 || sourceCounts.hosted > 0) && (
-          <div className="flex items-center gap-2 mb-5 flex-wrap">
-            <span className="font-mono text-[10px] text-slate-700">Source:</span>
-            {([
-              { key: "all",      label: "All",         color: "#94A3B8" },
-              { key: "native",   label: "🔵 Native",   color: "#4FC3F7" },
-              { key: "external", label: "🌐 External", color: "#34D399" },
-              { key: "hosted",   label: "✨ Hosted",    color: "#A78BFA" },
-            ] as { key: SourceFilter; label: string; color: string }[])
-              .filter(s => sourceCounts[s.key] > 0)
-              .map(s => {
-                const active = sourceFilter === s.key;
-                return (
-                  <button key={s.key} onClick={() => setSourceFilter(s.key)}
-                    className="font-mono text-[10px] px-2.5 py-0.5 rounded border transition-colors"
-                    style={active
-                      ? { color: s.color, borderColor: `${s.color}55`, background: `${s.color}12` }
-                      : { color: "#64748b", borderColor: "transparent" }}>
-                    {s.label} <span className="opacity-60">{sourceCounts[s.key]}</span>
-                  </button>
-                );
-              })}
-          </div>
-        )}
-
-        {/* Empty state */}
+        {/* Empty state — community sources get a "be the first" recruiting CTA */}
         {sorted.length === 0 ? (
+          isCommunitySource ? (
+            <div className="text-center py-12 max-w-md mx-auto">
+              <div className="text-3xl mb-3">{SOURCE_META[source as NonNullable<HubTool["source"]>].icon}</div>
+              <p className="font-mono text-sm text-white font-bold mb-1">No {sourceLabel.toLowerCase()} tools yet.</p>
+              <p className="font-mono text-[11px] text-slate-500 mb-4">
+                Be the first to list — creators keep <span className="text-[#A78BFA] font-semibold">95%</span> of every call, in USDC on Base.
+              </p>
+              {(() => {
+                const cls = "inline-block font-mono text-xs font-semibold px-4 py-2.5 rounded-xl border border-[#A78BFA]/40 bg-[#A78BFA]/10 text-[#A78BFA] hover:bg-[#A78BFA]/20 transition-colors";
+                const inner = <>List your tool → earn 95%</>;
+                return onListTool
+                  ? <button type="button" onClick={onListTool} className={cls}>{inner}</button>
+                  : <Link href="/hub/submit" className={cls}>{inner}</Link>;
+              })()}
+              <div className="mt-4">
+                <button onClick={clearAll} className="font-mono text-[11px] text-slate-600 hover:text-white transition-colors">
+                  ← Back to all tools
+                </button>
+              </div>
+            </div>
+          ) : (
           <div className="text-center py-12">
             <p className="font-mono text-sm text-slate-500 mb-2">No tools match your filter.</p>
-            <button onClick={() => { onSearch(""); onPickCat("all"); }}
+            <button onClick={clearAll}
               className="font-mono text-[11px] text-[#4FC3F7] hover:underline">
               Clear and browse all →
             </button>
           </div>
+          )
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {sorted.map(t => <PickCard key={t.id} tool={t} runs={runsOf(t.id)} onSelect={onSelect} />)}
@@ -478,7 +504,7 @@ function PickCard({ tool, runs, onSelect }: { tool: HubTool; runs: number; onSel
       <VerifiedAiBadges tool={tool} />
       <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[#1A1A2E]">
         <span className="font-mono text-[10px] text-slate-600">{runs > 0 ? <><span className="text-white font-semibold">{runs}</span> runs</> : "new"}</span>
-        <span className="font-mono text-[10px] font-semibold text-[#A78BFA] opacity-70 group-hover:opacity-100 transition-opacity">Try →</span>
+        <span className="font-mono text-[10px] font-semibold text-[#A78BFA] opacity-70 group-hover:opacity-100 transition-opacity">Use →</span>
       </div>
     </button>
   );
@@ -487,10 +513,7 @@ function PickCard({ tool, runs, onSelect }: { tool: HubTool; runs: number; onSel
 function ProviderCard({ p }: { p: { agent: Agent; toolCount: number; totalCalls: number } }) {
   const color = AGENT_COLORS[p.agent];
   const label = AGENT_LABELS[p.agent];
-  const blurb =
-    p.agent === "blue"      ? "Multi-agent orchestration · console commands · idea → ship"
-    : p.agent === "aeon"    ? "Ecosystem signals · narratives · token picks on Base"
-    :                         "Sentiment consensus · crowd intelligence for trades";
+  const blurb = "Live onchain AI tools · console commands · idea → ship on Base";
   return (
     <div className="rounded-2xl p-4 border flex flex-col" style={{ borderColor: `${color}25`, background: `${color}06` }}>
       <div className="flex items-center gap-2 mb-2">
@@ -513,6 +536,33 @@ function ProviderCard({ p }: { p: { agent: Agent; toolCount: number; totalCalls:
           <p className="font-mono text-[9px] text-slate-700">CALLS</p>
           <p className="font-mono text-sm font-bold tabular-nums" style={{ color }}>{p.totalCalls > 0 ? p.totalCalls.toLocaleString() : "—"}</p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// A real partner that's mid-integration — shown WITHOUT tool/call numbers because
+// none are live yet (zero-fabricated-data rule). Only PMFI qualifies today.
+function PartnerComingSoonCard() {
+  const color = "#64748B";
+  return (
+    <div className="rounded-2xl p-4 border border-dashed flex flex-col" style={{ borderColor: `${color}40`, background: `${color}08` }}>
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0"
+          style={{ background: `${color}18`, color, border: `1px solid ${color}40` }}>
+          PM
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-sm font-bold text-slate-300">PMFI</p>
+          <a href="https://x.com/pmfi_cc" target="_blank" rel="noopener noreferrer"
+            className="font-mono text-[10px] text-slate-600 hover:text-slate-400 transition-colors">@pmfi_cc ↗</a>
+        </div>
+        <span className="font-mono text-[8px] px-1.5 py-0.5 rounded border self-start"
+          style={{ color, borderColor: `${color}55`, background: `${color}0d` }}>integrating</span>
+      </div>
+      <p className="font-mono text-[10px] text-slate-500 leading-relaxed mb-3 flex-1">Prediction market arbitrage signals · coming soon to Blue Hub</p>
+      <div className="pt-2 border-t" style={{ borderColor: `${color}20` }}>
+        <p className="font-mono text-[10px] text-slate-700">Partner — tools not live yet</p>
       </div>
     </div>
   );
