@@ -15,8 +15,8 @@ import { kv } from "@/lib/kv";
 
 export const runtime = "nodejs";
 
-const BUILDER_SHARE_BPS  = 8000;    // 80%
-const TREASURY_SHARE_BPS = 2000;    // 20%
+const BUILDER_SHARE_BPS  = 9500;    // 95% — external builder share (Blue Hub v2)
+const TREASURY_SHARE_BPS = 500;     // 5%  — Blue Hub treasury cut
 
 export async function POST(
   req: NextRequest,

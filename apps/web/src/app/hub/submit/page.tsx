@@ -1,14 +1,22 @@
 "use client";
 
 /**
- * /hub/submit — Builder registration form for Blue Hub v2.
+ * /hub/submit — Builder registration for Blue Hub v2. Three tool types:
  *
- * Flow:
- *   1. Connect wallet
- *   2. Fill form (slug, name, endpoint, price, input schema)
- *   3. (optional) Probe endpoint to verify it's reachable
- *   4. Sign manifest with personal_sign (SIWE-style)
- *   5. POST /api/hub/tools — server verifies signature + persists
+ *   🌐 external     — you host the endpoint. Blue Hub proxies calls to it and
+ *                     forwards the x402 payment. 95/5 split. → POST /api/hub/tools
+ *   ✨ ai_tool      — you write a prompt; Blue Hub runs it on the Bankr LLM.
+ *                     90/10 split. → POST /api/hub/hosted
+ *   ✨ api_wrapper  — Blue Hub forwards to your upstream API (optionally with a
+ *                     secret auth header). 90/10 split. → POST /api/hub/hosted
+ *
+ * Flow: pick type → connect wallet → fill form → (optional) test → sign the
+ * manifest (SIWE personal_sign) → POST. The signed manifest covers IDENTITY
+ * fields only — never the secret config (systemPrompt / auth token).
+ *
+ * ⚠ The two buildSiweMessage helpers below MUST stay byte-identical to
+ * siweMessage() (lib/hub-registry.ts) and hostedSiweMessage() (lib/hub-hosted.ts)
+ * respectively — otherwise the server signature check rejects the submission.
  */
 
 import { useMemo, useState } from "react";
@@ -16,10 +24,11 @@ import Link from "next/link";
 import { useAccount, useSignMessage } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
 
-// Match siweMessage() exactly in lib/hub-registry.ts
-function buildSiweMessage(spec: {
-  id: string; name: string; endpoint: string; priceUSDC: number;
-  builderAddress: string;
+type Template = "external" | "ai_tool" | "api_wrapper";
+
+// Match siweMessage() exactly in lib/hub-registry.ts (external tools).
+function buildExternalSiwe(spec: {
+  id: string; name: string; endpoint: string; priceUSDC: number; builderAddress: string;
 }, nonce: string): string {
   return [
     `Blue Hub Builder Registration`,
@@ -32,93 +41,172 @@ function buildSiweMessage(spec: {
     `Nonce:     ${nonce}`,
     ``,
     `By signing this message I confirm I control the wallet above and`,
-    `agree to the Blue Hub builder terms: 80/20 revenue split with the`,
+    `agree to the Blue Hub builder terms: 95/5 revenue split with the`,
     `Blue Hub treasury, USDC settlement on Base.`,
+  ].join("\n");
+}
+
+// Match hostedSiweMessage() exactly in lib/hub-hosted.ts (hosted tools).
+function buildHostedSiwe(spec: {
+  slug: string; name: string; template: Template; priceUSDC: number; builderAddress: string;
+}, nonce: string): string {
+  return [
+    `Blue Hub Hosted Tool Registration`,
+    ``,
+    `Wallet:    ${spec.builderAddress.toLowerCase()}`,
+    `Tool slug: ${spec.slug}`,
+    `Tool name: ${spec.name}`,
+    `Template:  ${spec.template}`,
+    `Price:     ${spec.priceUSDC} USDC units (6 decimals)`,
+    `Nonce:     ${nonce}`,
+    ``,
+    `By signing this message I confirm I control the wallet above and`,
+    `agree to the Blue Hub builder terms: 90/10 revenue split with the`,
+    `Blue Hub treasury (hosted tool), USDC settlement on Base. Blue Hub`,
+    `runs this tool on my behalf and accrues my 90% share for payout.`,
   ].join("\n");
 }
 
 const SLUG_RE = /^[a-z][a-z0-9-]{2,40}$/;
 const CATEGORIES = ["intelligence", "builder", "trading", "content", "agent-economy", "base-ecosystem", "on-chain", "other"];
+const MODELS = [
+  { id: "claude-haiku-4-5",  label: "Haiku 4.5 — fast & cheap" },
+  { id: "claude-sonnet-4-5", label: "Sonnet 4.5 — smarter" },
+];
 
 type Input = { key: string; label: string; placeholder: string; required: boolean };
+type Step  = "form" | "signing" | "submitting" | "done" | "error";
+type TestState = { ok: boolean; hint: string; body?: string } | null;
 
-type Step = "form" | "signing" | "submitting" | "done" | "error";
+const TEMPLATES: { id: Template; badge: string; title: string; blurb: string; split: string }[] = [
+  { id: "external",    badge: "🌐", title: "External tool",  blurb: "You host the endpoint. Blue Hub proxies calls and forwards the x402 payment.", split: "95 / 5" },
+  { id: "ai_tool",     badge: "✨", title: "AI tool",        blurb: "Write a prompt. Blue Hub runs it on the LLM for you — no server to host.",       split: "90 / 10" },
+  { id: "api_wrapper", badge: "✨", title: "API wrapper",    blurb: "Blue Hub forwards to your upstream API, injecting a secret key server-side.",     split: "90 / 10" },
+];
 
 export default function SubmitToolPage() {
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
 
-  // Form state
-  const [id, setId]                 = useState("");
+  // Which tool type
+  const [template, setTemplate] = useState<Template>("external");
+  const hosted = template !== "external";
+
+  // Shared form state
+  const [id, setId]                 = useState("");           // slug/id (both namespaces)
   const [name, setName]             = useState("");
   const [description, setDesc]      = useState("");
   const [category, setCategory]     = useState("intelligence");
-  const [endpoint, setEndpoint]     = useState("https://");
+  const [endpoint, setEndpoint]     = useState("https://");   // external service OR api_wrapper upstream
   const [priceUsd, setPriceUsd]     = useState("0.20");
   const [inputs, setInputs]         = useState<Input[]>([
     { key: "prompt", label: "Prompt", placeholder: "What you want the tool to do", required: true },
   ]);
   const [agentName, setAgentName]   = useState("");
 
+  // ai_tool config
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [model, setModel]               = useState("claude-haiku-4-5");
+  const [temperature, setTemperature]   = useState("0.7");
+  const [maxTokens, setMaxTokens]       = useState("900");
+
+  // api_wrapper config
+  const [method, setMethod]         = useState<"POST" | "GET">("POST");
+  const [authHeader, setAuthHeader] = useState("");
+  const [authValue, setAuthValue]   = useState("");
+
   // Workflow state
-  const [step, setStep]             = useState<Step>("form");
-  const [error, setError]           = useState<string | null>(null);
-  const [probe, setProbe]           = useState<{ ok: boolean; status: number; hint?: string } | null>(null);
-  const [probing, setProbing]       = useState(false);
-  const [submitted, setSubmitted]   = useState<{ id: string } | null>(null);
+  const [step, setStep]           = useState<Step>("form");
+  const [error, setError]         = useState<string | null>(null);
+  const [test, setTest]           = useState<TestState>(null);
+  const [testing, setTesting]     = useState(false);
+  const [submitted, setSubmitted] = useState<{ id: string } | null>(null);
 
   // Validation
-  const priceUSDC = Math.round((parseFloat(priceUsd) || 0) * 1_000_000);
-  const slugOk    = SLUG_RE.test(id);
+  const priceUSDC  = Math.round((parseFloat(priceUsd) || 0) * 1_000_000);
+  const slugOk     = SLUG_RE.test(id);
   const endpointOk = /^https:\/\/.+/.test(endpoint);
-  const formOk    = isConnected && slugOk && name.trim() && description.trim()
-    && endpointOk && priceUSDC >= 0 && inputs.length > 0
-    && inputs.every(i => i.key.trim() && i.label.trim());
+  const inputsOk   = inputs.length > 0 && inputs.every(i => i.key.trim() && i.label.trim());
+  const baseOk     = isConnected && slugOk && !!name.trim() && !!description.trim() && priceUSDC >= 0 && inputsOk;
+  const templateOk =
+    template === "external"    ? endpointOk :
+    template === "ai_tool"     ? !!systemPrompt.trim() :
+    /* api_wrapper */            endpointOk;
+  const formOk = baseOk && templateOk;
 
   const previewMessage = useMemo(() => {
     if (!address) return "(connect wallet to preview manifest)";
-    return buildSiweMessage({
-      id, name, endpoint, priceUSDC, builderAddress: address,
-    }, "<nonce>");
-  }, [address, id, name, endpoint, priceUSDC]);
+    return hosted
+      ? buildHostedSiwe({ slug: id, name, template, priceUSDC, builderAddress: address }, "<nonce>")
+      : buildExternalSiwe({ id, name, endpoint, priceUSDC, builderAddress: address }, "<nonce>");
+  }, [address, hosted, id, name, template, endpoint, priceUSDC]);
 
-  // ── Probe endpoint ──────────────────────────────────────────────────────
-  async function testEndpoint() {
-    if (!endpointOk) return;
-    setProbing(true);
-    setProbe(null);
+  // Build the hosted config object from the current form state.
+  function buildConfig() {
+    if (template === "ai_tool") {
+      return {
+        systemPrompt: systemPrompt.trim(),
+        model,
+        temperature: parseFloat(temperature) || 0.7,
+        maxTokens:   parseInt(maxTokens, 10) || 900,
+      };
+    }
+    return {
+      endpoint,
+      method,
+      authHeader: authHeader.trim() || undefined,
+      authValue:  authValue || undefined,
+    };
+  }
+
+  // Sample inputs for a dry-run: use each input's placeholder (fallback to key).
+  function sampleInputs(): Record<string, string> {
+    return Object.fromEntries(inputs.map(i => [i.key, i.placeholder || i.key]));
+  }
+
+  // ── Test ──────────────────────────────────────────────────────────────────
+  async function runTest() {
+    setTest(null);
+    setTesting(true);
     try {
-      // Inline probe via a simple no-op POST. Same logic as server-side probeEndpoint().
-      const t0 = Date.now();
-      const res = await fetch(endpoint, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({}),
-        signal:  AbortSignal.timeout(8000),
-      });
-      const ms = Date.now() - t0;
-      const ok = (res.status >= 200 && res.status < 300) || res.status === 402;
-      setProbe({
-        ok,
-        status: res.status,
-        hint:   ok ? `${res.status} · ${ms}ms` : `Got ${res.status} — expected 2xx or 402.`,
-      });
+      if (template === "external") {
+        // Client-side reachability probe (same as server probeEndpoint()).
+        const t0 = Date.now();
+        const res = await fetch(endpoint, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}), signal: AbortSignal.timeout(8000),
+        });
+        const ms = Date.now() - t0;
+        const ok = (res.status >= 200 && res.status < 300) || res.status === 402;
+        setTest({ ok, hint: ok ? `${res.status} · ${ms}ms — reachable` : `Got ${res.status} — expected 2xx or 402.` });
+      } else {
+        // Server dry-run — runs the tool once, nothing persisted or charged.
+        const res = await fetch("/api/hub/hosted/test", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ template, config: buildConfig(), inputs: sampleInputs() }),
+        });
+        const data = await res.json() as { ok?: boolean; body?: string; error?: string };
+        if (!res.ok) { setTest({ ok: false, hint: data.error ?? `Server returned ${res.status}` }); }
+        else if (data.ok) { setTest({ ok: true, hint: "Ran successfully with sample inputs", body: data.body }); }
+        else { setTest({ ok: false, hint: data.error ?? "Tool run failed", body: data.body }); }
+      }
     } catch (e) {
-      setProbe({ ok: false, status: 0, hint: `Unreachable: ${(e as Error).message}` });
+      setTest({ ok: false, hint: `Failed: ${(e as Error).message}` });
     } finally {
-      setProbing(false);
+      setTesting(false);
     }
   }
 
-  // ── Submit ──────────────────────────────────────────────────────────────
+  // ── Submit ──────────────────────────────────────────────────────────────────
   async function handleSubmit() {
     if (!formOk || !address) return;
     setError(null);
     setStep("signing");
 
     const nonce = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
-    const spec  = { id, name, endpoint, priceUSDC, builderAddress: address };
-    const message = buildSiweMessage(spec, nonce);
+    const message = hosted
+      ? buildHostedSiwe({ slug: id, name, template, priceUSDC, builderAddress: address }, nonce)
+      : buildExternalSiwe({ id, name, endpoint, priceUSDC, builderAddress: address }, nonce);
 
     let signature: `0x${string}`;
     try {
@@ -131,23 +219,29 @@ export default function SubmitToolPage() {
 
     setStep("submitting");
     try {
-      const res = await fetch("/api/hub/tools", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id, name, description, category, endpoint, inputs,
-          price: `$${parseFloat(priceUsd).toFixed(2)}`,
-          priceUSDC,
-          builderAddress: address,
-          signature, nonce,
-          agentName: agentName || undefined,
-        }),
+      const price = `$${parseFloat(priceUsd).toFixed(2)}`;
+      const url  = hosted ? "/api/hub/hosted" : "/api/hub/tools";
+      const payload = hosted
+        ? {
+            slug: id, name, description, category, template,
+            config: buildConfig(), inputs, price, priceUSDC,
+            builderAddress: address, signature, nonce,
+            agentName: agentName || undefined,
+          }
+        : {
+            id, name, description, category, endpoint, inputs,
+            price, priceUSDC,
+            builderAddress: address, signature, nonce,
+            agentName: agentName || undefined,
+          };
+
+      const res  = await fetch(url, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
-      const data = await res.json() as { error?: string; ok?: boolean; tool?: { id: string } };
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error ?? `Server returned ${res.status}`);
-      }
-      setSubmitted({ id: data.tool!.id });
+      const data = await res.json() as { error?: string; ok?: boolean; tool?: { id?: string; slug?: string } };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? `Server returned ${res.status}`);
+      setSubmitted({ id: data.tool?.slug ?? data.tool?.id ?? id });
       setStep("done");
     } catch (e) {
       setError((e as Error).message);
@@ -155,18 +249,13 @@ export default function SubmitToolPage() {
     }
   }
 
-  function addInput() {
-    if (inputs.length >= 12) return;
-    setInputs(prev => [...prev, { key: "", label: "", placeholder: "", required: false }]);
-  }
-  function removeInput(i: number) {
-    setInputs(prev => prev.filter((_, idx) => idx !== i));
-  }
-  function updateInput(i: number, patch: Partial<Input>) {
-    setInputs(prev => prev.map((inp, idx) => idx === i ? { ...inp, ...patch } : inp));
-  }
+  function addInput()    { if (inputs.length < 12) setInputs(p => [...p, { key: "", label: "", placeholder: "", required: false }]); }
+  function removeInput(i: number)                { setInputs(p => p.filter((_, idx) => idx !== i)); }
+  function updateInput(i: number, patch: Partial<Input>) { setInputs(p => p.map((inp, idx) => idx === i ? { ...inp, ...patch } : inp)); }
 
-  // ── Render ──────────────────────────────────────────────────────────────
+  const activeTpl = TEMPLATES.find(t => t.id === template)!;
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#050508] text-white font-mono">
 
@@ -175,7 +264,7 @@ export default function SubmitToolPage() {
         <Link href="/hub" className="font-mono text-xs text-slate-500 hover:text-white transition-colors">← Hub</Link>
         <span className="w-1 h-1 rounded-full bg-[#A78BFA] animate-pulse" />
         <p className="text-xs text-[#A78BFA] tracking-widest">// SUBMIT TOOL</p>
-        <p className="text-[10px] text-slate-700 hidden sm:block">List your tool · 80/20 revenue split · USDC on Base</p>
+        <p className="text-[10px] text-slate-700 hidden sm:block">List your tool · USDC on Base via x402</p>
       </div>
 
       <div className="max-w-3xl mx-auto px-6 py-8">
@@ -190,7 +279,7 @@ export default function SubmitToolPage() {
               Verification by Blue Agent is pending (1-2 days).
             </p>
             <div className="flex items-center justify-center gap-3">
-              <Link href={`/hub#tool=${submitted.id}`} className="text-xs px-4 py-2 rounded-xl border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 transition-all">
+              <Link href={`/hub/tool/${submitted.id}`} className="text-xs px-4 py-2 rounded-xl border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 transition-all">
                 View on Hub →
               </Link>
               <Link href="/hub/dashboard" className="text-xs px-4 py-2 rounded-xl border border-[#A78BFA]/30 text-[#A78BFA] bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 transition-all">
@@ -207,10 +296,30 @@ export default function SubmitToolPage() {
               <h1 className="text-2xl font-bold tracking-tight mb-1">List your tool on Blue Hub</h1>
               <p className="text-sm text-slate-500 leading-relaxed max-w-xl">
                 Anyone calling your tool pays in USDC on Base via x402.
-                You keep <span className="text-[#34D399]">80%</span>;
-                Blue Hub treasury takes <span className="text-[#A78BFA]">20%</span>.
+                You keep <span className="text-[#34D399]">{hosted ? "90%" : "95%"}</span>;
+                Blue Hub treasury takes <span className="text-[#A78BFA]">{hosted ? "10%" : "5%"}</span>.
                 No subscription, no API key.
               </p>
+            </div>
+
+            {/* Template picker */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+              {TEMPLATES.map(t => {
+                const active = t.id === template;
+                return (
+                  <button key={t.id} type="button" onClick={() => { setTemplate(t.id); setTest(null); }}
+                    className={`text-left rounded-2xl border p-4 transition-all ${
+                      active ? "border-[#A78BFA]/60 bg-[#A78BFA]/[0.06]" : "border-[#1A1A2E] bg-[#0d0d12] hover:border-[#A78BFA]/30"
+                    }`}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-lg">{t.badge}</span>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${active ? "bg-[#A78BFA]/20 text-[#A78BFA]" : "bg-white/[0.03] text-slate-600"}`}>{t.split}</span>
+                    </div>
+                    <p className="text-sm font-semibold mb-1">{t.title}</p>
+                    <p className="text-[10px] text-slate-600 leading-relaxed">{t.blurb}</p>
+                  </button>
+                );
+              })}
             </div>
 
             {/* Connect gate */}
@@ -227,19 +336,17 @@ export default function SubmitToolPage() {
             {/* Form */}
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-6 space-y-5">
 
-              {/* id */}
-              <Field label="Tool ID (slug)" hint="lowercase, digits, hyphens · 3-41 chars · must start with a letter · e.g. weather-on-base">
+              {/* slug/id */}
+              <Field label="Tool ID (slug)" hint="lowercase, digits, hyphens · 3-41 chars · must start with a letter · unique across all Hub tools">
                 <input value={id} onChange={e => setId(e.target.value.toLowerCase())}
-                  placeholder="weather-on-base"
-                  className={inputCls(!id || slugOk)} />
+                  placeholder="weather-on-base" className={inputCls(!id || slugOk)} />
                 {id && !slugOk && <p className="text-[10px] text-red-400 mt-1">Invalid — see hint above.</p>}
               </Field>
 
               {/* name */}
               <Field label="Display name" hint="Max 80 chars">
                 <input value={name} onChange={e => setName(e.target.value)}
-                  placeholder="Weather on Base" maxLength={80}
-                  className={inputCls(true)} />
+                  placeholder="Weather on Base" maxLength={80} className={inputCls(true)} />
               </Field>
 
               {/* description */}
@@ -256,37 +363,100 @@ export default function SubmitToolPage() {
                 </select>
               </Field>
 
-              {/* endpoint */}
-              <Field label="HTTPS endpoint" hint="POST URL — your service that receives the call body">
-                <div className="flex gap-2">
-                  <input value={endpoint} onChange={e => setEndpoint(e.target.value)}
-                    placeholder="https://your-service.com/api/weather"
-                    className={inputCls(!endpoint || endpointOk) + " flex-1"} />
-                  <button type="button" onClick={testEndpoint} disabled={!endpointOk || probing}
-                    className="text-xs px-3 py-2 rounded-lg border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 disabled:opacity-30 transition-all shrink-0">
-                    {probing ? "Testing…" : "Test"}
-                  </button>
-                </div>
-                {probe && (
-                  <p className={`text-[10px] mt-2 ${probe.ok ? "text-[#34D399]" : "text-red-400"}`}>
-                    {probe.ok ? "✓" : "✗"} {probe.hint}
+              {/* ── Template-specific config ──────────────────────────────── */}
+
+              {template === "external" && (
+                <Field label="HTTPS endpoint" hint="POST URL — your service that receives the call body. Blue Hub forwards the x402 payment header to it.">
+                  <div className="flex gap-2">
+                    <input value={endpoint} onChange={e => setEndpoint(e.target.value)}
+                      placeholder="https://your-service.com/api/weather"
+                      className={inputCls(!endpoint || endpointOk) + " flex-1"} />
+                    <TestButton testing={testing} disabled={!endpointOk} onClick={runTest} />
+                  </div>
+                </Field>
+              )}
+
+              {template === "ai_tool" && (
+                <>
+                  <Field label="System prompt" hint="Your instructions. Runs inside a platform safety envelope — it can define the task but cannot override Blue Hub's safety rules or impersonate Blue Agent. Max 8000 chars.">
+                    <textarea value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)}
+                      placeholder="You are a concise weather assistant. Given a city, return today's forecast in one paragraph…"
+                      rows={6} maxLength={8000} className={inputCls(!!systemPrompt.trim())} />
+                  </Field>
+                  <div className="grid grid-cols-3 gap-3">
+                    <Field label="Model">
+                      <select value={model} onChange={e => setModel(e.target.value)} className={inputCls(true)}>
+                        {MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Temperature" hint="0–1">
+                      <input type="number" step="0.1" min="0" max="1" value={temperature}
+                        onChange={e => setTemperature(e.target.value)} className={inputCls(true)} />
+                    </Field>
+                    <Field label="Max tokens" hint="100–2000">
+                      <input type="number" step="50" min="100" max="2000" value={maxTokens}
+                        onChange={e => setMaxTokens(e.target.value)} className={inputCls(true)} />
+                    </Field>
+                  </div>
+                  <div>
+                    <TestButton testing={testing} disabled={!systemPrompt.trim()} onClick={runTest} label="Test run (uses sample inputs)" />
+                  </div>
+                </>
+              )}
+
+              {template === "api_wrapper" && (
+                <>
+                  <Field label="Upstream URL" hint="Blue Hub forwards the call body here. Public hosts only (loopback/private IPs are blocked).">
+                    <input value={endpoint} onChange={e => setEndpoint(e.target.value)}
+                      placeholder="https://api.your-service.com/v1/run"
+                      className={inputCls(!endpoint || endpointOk)} />
+                  </Field>
+                  <div className="grid grid-cols-3 gap-3">
+                    <Field label="Method">
+                      <select value={method} onChange={e => setMethod(e.target.value as "POST" | "GET")} className={inputCls(true)}>
+                        <option value="POST">POST</option>
+                        <option value="GET">GET</option>
+                      </select>
+                    </Field>
+                    <Field label="Auth header (optional)" hint="e.g. Authorization">
+                      <input value={authHeader} onChange={e => setAuthHeader(e.target.value)}
+                        placeholder="Authorization" maxLength={80} className={inputCls(true)} />
+                    </Field>
+                    <Field label="Auth value (secret)" hint="Stored encrypted server-side · never shown again · never sent to callers">
+                      <input type="password" value={authValue} onChange={e => setAuthValue(e.target.value)}
+                        placeholder="Bearer sk-…" maxLength={2000} className={inputCls(true)} autoComplete="off" />
+                    </Field>
+                  </div>
+                  <div>
+                    <TestButton testing={testing} disabled={!endpointOk} onClick={runTest} label="Test run (uses sample inputs)" />
+                  </div>
+                </>
+              )}
+
+              {/* Test result */}
+              {test && (
+                <div className={`rounded-xl border p-3 ${test.ok ? "border-[#34D399]/30 bg-[#34D399]/5" : "border-red-500/30 bg-red-500/5"}`}>
+                  <p className={`text-[11px] ${test.ok ? "text-[#34D399]" : "text-red-400"}`}>
+                    {test.ok ? "✓" : "✗"} {test.hint}
                   </p>
-                )}
-              </Field>
+                  {test.body && (
+                    <pre className="text-[10px] text-slate-500 leading-relaxed mt-2 max-h-40 overflow-auto whitespace-pre-wrap">{test.body.slice(0, 2000)}</pre>
+                  )}
+                </div>
+              )}
 
               {/* price */}
               <Field label="Price per call (USD)" hint="0 = free · max $100 · settled in USDC on Base">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-slate-500">$</span>
-                  <input type="number" step="0.01" min="0" max="100"
-                    value={priceUsd} onChange={e => setPriceUsd(e.target.value)}
-                    className={inputCls(true) + " w-32"} />
+                  <input type="number" step="0.01" min="0" max="100" value={priceUsd}
+                    onChange={e => setPriceUsd(e.target.value)} className={inputCls(true) + " w-32"} />
                   <span className="text-[10px] text-slate-700">= {priceUSDC} USDC units</span>
                 </div>
               </Field>
 
               {/* Input schema */}
-              <Field label="Input schema" hint={`${inputs.length} of 12 inputs. These fields show up in the Hub call form.`}>
+              <Field label="Input schema" hint={`${inputs.length} of 12 inputs. These fields show up in the Hub call form${hosted ? " and are passed to your tool" : ""}.`}>
                 <div className="space-y-2">
                   {inputs.map((inp, i) => (
                     <div key={i} className="grid grid-cols-[1fr_1fr_2fr_auto_auto] gap-2 items-center">
@@ -320,7 +490,7 @@ export default function SubmitToolPage() {
               {/* Manifest preview */}
               <details className="border border-[#1A1A2E] rounded-lg overflow-hidden">
                 <summary className="cursor-pointer text-[11px] text-slate-500 px-3 py-2 hover:bg-white/[0.02]">
-                  Preview signed manifest
+                  Preview signed manifest ({activeTpl.title})
                 </summary>
                 <pre className="text-[10px] text-slate-600 leading-relaxed bg-[#050508] px-3 py-3 overflow-x-auto whitespace-pre">
 {previewMessage}
@@ -367,5 +537,14 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
       {children}
       {hint && <p className="text-[10px] text-slate-700 mt-1">{hint}</p>}
     </div>
+  );
+}
+
+function TestButton({ testing, disabled, onClick, label }: { testing: boolean; disabled: boolean; onClick: () => void; label?: string }) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled || testing}
+      className="text-xs px-3 py-2 rounded-lg border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 disabled:opacity-30 transition-all shrink-0">
+      {testing ? "Testing…" : (label ?? "Test")}
+    </button>
   );
 }
