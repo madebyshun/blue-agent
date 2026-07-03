@@ -21,6 +21,31 @@ const ERC20_BAL_ABI = [{
 
 type Agent = "blue" | "aeon" | "miroshark";
 type Category = "all" | "intelligence" | "builder" | "trading" | "content" | "agent-economy" | "base-ecosystem" | "on-chain";
+
+// v2 marketplace filters (sidebar-driven, applied to the unified grid).
+type SourceFilter = "all" | "native" | "external" | "hosted";
+type PriceFilter  = "all" | "free" | "under" | "over";
+
+// Parse a "$0.05" price string → number (community tools may carry raw values).
+function priceNum(p: string): number { return parseFloat((p || "").replace(/[^0-9.]/g, "")) || 0; }
+function matchPrice(f: PriceFilter, n: number): boolean {
+  if (f === "all")  return true;
+  if (f === "free") return n === 0;
+  if (f === "under") return n > 0 && n < 0.5;
+  return n >= 0.5; // "over"
+}
+const SOURCE_CHIPS: { key: SourceFilter; label: string; color: string }[] = [
+  { key: "all",      label: "All",         color: "#94A3B8" },
+  { key: "native",   label: "🔵 Native",   color: "#4FC3F7" },
+  { key: "external", label: "🌐 External", color: "#34D399" },
+  { key: "hosted",   label: "✨ Hosted",   color: "#A78BFA" },
+];
+const PRICE_CHIPS: { key: PriceFilter; label: string }[] = [
+  { key: "all",   label: "Any"     },
+  { key: "free",  label: "Free"    },
+  { key: "under", label: "< $0.50" },
+  { key: "over",  label: "$0.50+"  },
+];
 interface ToolInput { key: string; label: string; placeholder: string; required?: boolean; example?: string; }
 interface Tool {
   id: string; name: string; cat: Category; price: string;
@@ -1111,6 +1136,7 @@ type ViewMode = "grid" | "list";
 function EmptyState({
   tools, onSelect, featuredIds, usage, recentIds,
   search, setSearch, cat, setCat, filtered, onListTool,
+  source, price, onClearFilters,
 }: {
   tools:       Tool[];
   onSelect:   (t: Tool) => void;
@@ -1123,6 +1149,9 @@ function EmptyState({
   setCat:     (c: Category) => void;
   filtered:   Tool[];
   onListTool?: () => void;
+  source:      SourceFilter;
+  price:       PriceFilter;
+  onClearFilters: () => void;
 }) {
   // Thin wrapper around HubHome (in _components/) — keeps page.tsx focused on
   // routing / state, while HubHome owns the marketplace UX.
@@ -1136,10 +1165,13 @@ function EmptyState({
       recentIds={recentIds}
       search={search}
       cat={cat}
+      source={source}
+      price={price}
       onSearch={setSearch}
       onPickCat={(id) => setCat(id as Category)}
       onSelect={(t) => onSelect(t as unknown as Tool)}
       onListTool={onListTool}
+      onClearFilters={onClearFilters}
     />
   );
 }
@@ -1297,6 +1329,8 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
   const [usage, setUsage]     = useState<Record<string, number>>({});
   const [communityTools, setCommunityTools] = useState<Tool[]>([]);
   const [showSubmit, setShowSubmit] = useState(false);   // "List your tool" modal
+  const [source, setSource] = useState<SourceFilter>("all"); // v2 sidebar: provenance filter
+  const [price, setPrice]   = useState<PriceFilter>("all");  // v2 sidebar: price bucket
   const searchRef             = useRef<HTMLInputElement>(null);
 
   // ── Merge first-party (TOOLS) + community-submitted (registered) ──────────
@@ -1551,13 +1585,27 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
   const filtered = allTools.filter(t => {
     const matchesSearch = !search || t.name.toLowerCase().includes(search.toLowerCase()) || t.desc.toLowerCase().includes(search.toLowerCase());
     if (!matchesSearch) return false;
-    if (cat === "all") return true;
-    // Check if cat matches a group id
-    const group = TOOL_GROUPS.find(g => g.id === cat);
-    if (group) return group.ids.includes(t.id);
-    // Fallback to old category field
-    return t.cat === cat;
+    // v2 marketplace filters — provenance + price bucket
+    if (source !== "all" && (t.source ?? "native") !== source) return false;
+    if (!matchPrice(price, priceNum(t.price))) return false;
+    if (cat === "all") { /* fall through to source/price-only result */ }
+    else {
+      // Check if cat matches a group id
+      const group = TOOL_GROUPS.find(g => g.id === cat);
+      if (group) { if (!group.ids.includes(t.id)) return false; }
+      // Fallback to old category field
+      else if (t.cat !== cat) return false;
+    }
+    return true;
   });
+
+  // Per-source counts across the search/price/category-filtered set (drives sidebar chip labels).
+  const sourceCounts: Record<SourceFilter, number> = {
+    all:      allTools.length,
+    native:   allTools.filter(t => (t.source ?? "native") === "native").length,
+    external: allTools.filter(t => t.source === "external").length,
+    hosted:   allTools.filter(t => t.source === "hosted").length,
+  };
 
   return (
     <>
@@ -1581,77 +1629,92 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
 
           {/* Header */}
           <div className="px-5 h-14 flex items-center gap-3 border-b border-[#1A1A2E] shrink-0">
-            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// TOOLS</p>
+            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// MARKETPLACE</p>
             <span className="font-mono text-[10px] text-slate-700">{filtered.length} of {allTools.length}</span>
           </div>
 
-          {/* Search */}
-          <div className="px-4 pt-3 pb-2">
-            <input
-              ref={searchRef}
-              className="w-full bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 font-mono text-xs text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/30 transition-colors"
-              placeholder="Search tools… ( / )"
-              value={search}
-              onChange={e => { setSearch(e.target.value); setCat("all"); }}
-            />
-          </div>
+          {/* Filters — scrollable so the List / Creator actions stay pinned below */}
+          <div className="flex-1 overflow-y-auto">
 
-          {/* Group filter */}
-          <div className="px-4 pb-4 flex flex-wrap gap-1">
-            <button onClick={() => { setCat("all"); setSearch(""); }}
-              className={`font-mono text-[10px] px-2 py-1 rounded transition-colors ${cat === "all" ? "bg-[#4FC3F7]/15 text-[#4FC3F7]" : "text-slate-600 hover:text-slate-300"}`}>
-              All
-            </button>
-            {TOOL_GROUPS.map(g => (
-              <button key={g.id} onClick={() => { setSearch(""); setCat(g.id as Category); }}
-                className="font-mono text-[10px] px-2 py-1 rounded transition-colors"
-                style={cat === g.id
-                  ? { background: g.color + "20", color: g.color }
-                  : { color: "#475569" }}
-                onMouseEnter={e => { if (cat !== g.id) (e.currentTarget as HTMLElement).style.color = g.color; }}
-                onMouseLeave={e => { if (cat !== g.id) (e.currentTarget as HTMLElement).style.color = "#475569"; }}
-              >
-                {g.label}
-              </button>
-            ))}
-          </div>
+            {/* Search */}
+            <div className="px-4 pt-3 pb-2">
+              <input
+                ref={searchRef}
+                className="w-full bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 font-mono text-xs text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/30 transition-colors"
+                placeholder="Search tools… ( / )"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
 
-          {/* Tool list */}
-          <div className="flex-1 overflow-y-auto border-t border-[#1A1A2E]">
-            {filtered.length === 0 && (
-              <p className="font-mono text-[10px] text-slate-700 px-6 py-4">No tools found</p>
-            )}
-            {filtered.map(tool => {
-              const isFeatured = featuredIds.has(tool.id);
-              const hasCached  = cache.has(tool.id);
-              return (
-                <button key={tool.id} onClick={() => selectTool(tool)}
-                  className={`w-full text-left px-4 py-2.5 transition-all border-l-2 ${
-                    selected?.id === tool.id
-                      ? "border-[#4FC3F7] bg-[#4FC3F7]/5 text-white"
-                      : isFeatured
-                      ? "border-[#A78BFA]/30 text-slate-400 hover:text-slate-300 hover:bg-[#A78BFA]/5"
-                      : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-[#1A1A2E]/50"
-                  }`}>
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    {tool.agents.map(a => (
-                      <span key={a} className="w-1 h-1 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-                    ))}
-                    <div className="ml-auto flex items-center gap-1.5">
-                      {hasCached && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" title="Result cached" />
-                      )}
-                      {isFeatured && (
-                        <span className="font-mono text-[9px] px-1 py-0.5 rounded border border-[#A78BFA]/40 text-[#A78BFA]">
-                          ★
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="font-mono text-sm">{tool.name}</span>
+            {/* Source filter */}
+            <div className="px-4 pt-3 pb-3">
+              <p className="font-mono text-[9px] text-slate-700 tracking-widest mb-2">SOURCE</p>
+              <div className="flex flex-wrap gap-1.5">
+                {SOURCE_CHIPS.map(s => {
+                  const active = source === s.key;
+                  const count = sourceCounts[s.key];
+                  return (
+                    <button key={s.key} onClick={() => setSource(s.key)}
+                      className="font-mono text-[10px] px-2 py-1 rounded border transition-colors"
+                      style={active
+                        ? { color: s.color, borderColor: `${s.color}55`, background: `${s.color}12` }
+                        : { color: "#64748b", borderColor: "#1A1A2E" }}>
+                      {s.label} <span className="opacity-60">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Category filter */}
+            <div className="px-4 pt-2 pb-3 border-t border-[#1A1A2E]">
+              <p className="font-mono text-[9px] text-slate-700 tracking-widest mb-2">CATEGORY</p>
+              <div className="flex flex-wrap gap-1.5">
+                <button onClick={() => setCat("all")}
+                  className={`font-mono text-[10px] px-2 py-1 rounded border transition-colors ${cat === "all" ? "bg-[#4FC3F7]/15 text-[#4FC3F7] border-[#4FC3F7]/40" : "text-slate-600 border-[#1A1A2E] hover:text-slate-300"}`}>
+                  All
                 </button>
-              );
-            })}
+                {TOOL_GROUPS.map(g => (
+                  <button key={g.id} onClick={() => setCat(g.id as Category)}
+                    className="font-mono text-[10px] px-2 py-1 rounded border transition-colors"
+                    style={cat === g.id
+                      ? { background: g.color + "18", color: g.color, borderColor: g.color + "40" }
+                      : { color: "#475569", borderColor: "#1A1A2E" }}
+                    onMouseEnter={e => { if (cat !== g.id) (e.currentTarget as HTMLElement).style.color = g.color; }}
+                    onMouseLeave={e => { if (cat !== g.id) (e.currentTarget as HTMLElement).style.color = "#475569"; }}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Price filter */}
+            <div className="px-4 pt-2 pb-4 border-t border-[#1A1A2E]">
+              <p className="font-mono text-[9px] text-slate-700 tracking-widest mb-2">PRICE</p>
+              <div className="flex flex-wrap gap-1.5">
+                {PRICE_CHIPS.map(p => {
+                  const active = price === p.key;
+                  return (
+                    <button key={p.key} onClick={() => setPrice(p.key)}
+                      className={`font-mono text-[10px] px-2 py-1 rounded border transition-colors ${active ? "bg-[#34D399]/15 text-[#34D399] border-[#34D399]/40" : "text-slate-600 border-[#1A1A2E] hover:text-slate-300"}`}>
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Clear filters — only when a filter is active */}
+            {(search.trim() || cat !== "all" || source !== "all" || price !== "all") && (
+              <div className="px-4 pb-4">
+                <button onClick={() => { setSearch(""); setCat("all"); setSource("all"); setPrice("all"); }}
+                  className="font-mono text-[10px] text-slate-600 hover:text-white transition-colors">
+                  ✕ Clear filters
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Builder actions (v2) */}
@@ -1721,6 +1784,23 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
                 </div>
                 <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-10 bg-gradient-to-l from-[#050508] to-transparent" />
               </div>
+              {/* Source chips — only once community tools exist alongside native. */}
+              {(sourceCounts.external > 0 || sourceCounts.hosted > 0) && (
+                <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                  {SOURCE_CHIPS.filter(s => s.key === "all" || sourceCounts[s.key] > 0).map(s => {
+                    const active = source === s.key;
+                    return (
+                      <button key={s.key} onClick={() => setSource(s.key)}
+                        className="font-mono text-[10px] px-3 py-1.5 rounded-full whitespace-nowrap border shrink-0 transition-colors"
+                        style={active
+                          ? { color: s.color, borderColor: `${s.color}55`, background: `${s.color}15` }
+                          : { color: "#64748b", borderColor: "#1A1A2E" }}>
+                        {s.label} <span className="opacity-60">{sourceCounts[s.key]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -1747,6 +1827,9 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
                 setCat={setCat}
                 filtered={filtered}
                 onListTool={() => setShowSubmit(true)}
+                source={source}
+                price={price}
+                onClearFilters={() => { setSearch(""); setCat("all"); setSource("all"); setPrice("all"); }}
               /></div>
           }
         </main>
