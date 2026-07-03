@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
@@ -8,6 +8,7 @@ import { useAccount, useSignTypedData, useReadContract } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
 import AppPageHeader from "@/components/app/AppPageHeader";
 import HubHome from "./_components/HubHome";
+import SubmitTool from "./_components/SubmitTool";
 import MarkdownOutput from "@/components/MarkdownOutput";
 
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
@@ -20,6 +21,31 @@ const ERC20_BAL_ABI = [{
 
 type Agent = "blue" | "aeon" | "miroshark";
 type Category = "all" | "intelligence" | "builder" | "trading" | "content" | "agent-economy" | "base-ecosystem" | "on-chain";
+
+// v2 marketplace filters (sidebar-driven, applied to the unified grid).
+type SourceFilter = "all" | "native" | "external" | "hosted";
+type PriceFilter  = "all" | "free" | "under" | "over";
+
+// Parse a "$0.05" price string → number (community tools may carry raw values).
+function priceNum(p: string): number { return parseFloat((p || "").replace(/[^0-9.]/g, "")) || 0; }
+function matchPrice(f: PriceFilter, n: number): boolean {
+  if (f === "all")  return true;
+  if (f === "free") return n === 0;
+  if (f === "under") return n > 0 && n < 0.5;
+  return n >= 0.5; // "over"
+}
+const SOURCE_CHIPS: { key: SourceFilter; label: string; color: string }[] = [
+  { key: "all",      label: "All",         color: "#94A3B8" },
+  { key: "native",   label: "🔵 Native",   color: "#4FC3F7" },
+  { key: "external", label: "🌐 External", color: "#34D399" },
+  { key: "hosted",   label: "✨ Hosted",   color: "#A78BFA" },
+];
+const PRICE_CHIPS: { key: PriceFilter; label: string }[] = [
+  { key: "all",   label: "Any"     },
+  { key: "free",  label: "Free"    },
+  { key: "under", label: "< $0.50" },
+  { key: "over",  label: "$0.50+"  },
+];
 interface ToolInput { key: string; label: string; placeholder: string; required?: boolean; example?: string; }
 interface Tool {
   id: string; name: string; cat: Category; price: string;
@@ -116,11 +142,9 @@ const TOOLS: Tool[] = AGENT_TOOLS.map(t => ({
   name:   t.name,
   cat:    t.category as Exclude<Category, "all">,
   price:  t.price ?? "",
-  agents: t.isComposite
-    ? (["blue", "aeon", "miroshark"] as Agent[])
-    : t.agentName === "Aeon"      ? (["aeon"]      as Agent[])
-    : t.agentName === "MiroShark" ? (["miroshark"] as Agent[])
-    :                               (["blue"]       as Agent[]),
+  // Blue is the only real first-party provider. (Aeon / MiroShark were
+  // display-only placeholders — removed to keep provider data honest.)
+  agents: ["blue"] as Agent[],
   desc:   t.description,
   inputs: t.inputs,
   verified:       t.verified,
@@ -343,26 +367,19 @@ function ResultObj({ obj, nested = false }: { obj: Record<string, unknown>; nest
 
 // ─── Agent scan log animation ─────────────────────────────────────────────────
 
-type LogLine = { agent: "aeon" | "miroshark" | "blue" | "sys"; text: string; delay: number };
+type LogLine = { agent: "blue" | "sys"; text: string; delay: number };
 
 function buildScanScript(tool: Tool): LogLine[] {
   const inp = Object.values(tool.inputs).map(i => i.key).join(", ");
   return [
-    { agent: "sys",       text: `> initializing 3-agent consensus · tool=${tool.id}`,                      delay: 0   },
-    { agent: "sys",       text: `> inputs=[${inp}] · chain=base · endpoint=/api/${tool.id}`,               delay: 180 },
-    { agent: "aeon",      text: `[AEON] booting narrative-tracker…`,                                       delay: 420 },
-    { agent: "aeon",      text: `[AEON] scanning Base ecosystem · ${new Date().toISOString().split("T")[0]}`,delay: 680 },
-    { agent: "aeon",      text: `[AEON] pulling token-movers · filtering by vol > $50k`,                   delay: 960 },
-    { agent: "aeon",      text: `[AEON] narrative fit scored · writing context block`,                     delay: 1280},
-    { agent: "miroshark", text: `[MIROSHARK] loading collab prompt · madebyshun/blue-agent`,               delay: 1600},
-    { agent: "miroshark", text: `[MIROSHARK] spawning crowd agents · personas=[retail,analyst,influencer,observer]`, delay: 1900 },
-    { agent: "miroshark", text: `[MIROSHARK] running weighted consensus · bull/bear/neutral`,              delay: 2250},
-    { agent: "miroshark", text: `[MIROSHARK] fomo_level detected · sentiment locked`,                      delay: 2600},
-    { agent: "blue",      text: `[BLUE] loading identity · skills/blue-agent-identity.md`,                 delay: 2950},
-    { agent: "blue",      text: `[BLUE] injecting base-ecosystem.md · base-addresses.md`,                  delay: 3280},
-    { agent: "blue",      text: `[BLUE] synthesizing aeon + miroshark signals…`,                           delay: 3600},
-    { agent: "blue",      text: `[BLUE] generating verdict · confidence scoring…`,                         delay: 3980},
-    { agent: "sys",       text: `> streaming response · parsing JSON output…`,                             delay: 4350},
+    { agent: "sys",  text: `> initializing Blue Agent · tool=${tool.id}`,                          delay: 0   },
+    { agent: "sys",  text: `> inputs=[${inp}] · chain=base · endpoint=/api/${tool.id}`,            delay: 180 },
+    { agent: "blue", text: `[BLUE] loading identity · skills/blue-agent-identity.md`,              delay: 420 },
+    { agent: "blue", text: `[BLUE] injecting base-ecosystem.md · base-addresses.md`,               delay: 720 },
+    { agent: "blue", text: `[BLUE] pulling live data · ${new Date().toISOString().split("T")[0]}`, delay: 1080},
+    { agent: "blue", text: `[BLUE] running analysis · scoring signals…`,                           delay: 1480},
+    { agent: "blue", text: `[BLUE] generating verdict · confidence scoring…`,                       delay: 1900},
+    { agent: "sys",  text: `> streaming response · parsing JSON output…`,                           delay: 2300},
   ];
 }
 
@@ -399,17 +416,15 @@ function AgentScanLog({ tool }: { tool: Tool }) {
   }, [lines]);
 
   const agentColor: Record<string, string> = {
-    aeon:      "#A78BFA",
-    miroshark: "#34D399",
-    blue:      "#4FC3F7",
-    sys:       "#475569",
+    blue: "#4FC3F7",
+    sys:  "#475569",
   };
 
   return (
     <div className="flex flex-col items-center justify-center h-full px-8 py-12">
-      {/* Agent status row */}
+      {/* Provider status row */}
       <div className="flex items-center gap-6 mb-8">
-        {(["aeon","miroshark","blue"] as const).map(a => {
+        {(["blue"] as const).map(a => {
           const hasStarted = lines.some(l => l.agent === a);
           const isDone     = lines.length > 0 && lines[lines.length - 1].agent === "sys" && lines.length >= script.current.length - 1;
           return (
@@ -422,7 +437,7 @@ function AgentScanLog({ tool }: { tool: Tool }) {
                 className="font-mono text-xs font-bold transition-all duration-500"
                 style={{ color: hasStarted ? agentColor[a] : "#1E293B" }}
               >
-                {a === "blue" ? "Blue" : a === "aeon" ? "Aeon" : "MiroShark"}
+                Blue Agent
               </span>
               {isDone && hasStarted && (
                 <span className="font-mono text-[9px] text-slate-600">✓</span>
@@ -439,7 +454,7 @@ function AgentScanLog({ tool }: { tool: Tool }) {
           <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F57]" />
           <span className="w-2.5 h-2.5 rounded-full bg-[#FEBC2E]" />
           <span className="w-2.5 h-2.5 rounded-full bg-[#28C840]" />
-          <span className="font-mono text-[10px] text-slate-600 ml-3">blue-agent · multi-agent</span>
+          <span className="font-mono text-[10px] text-slate-600 ml-3">blue-agent · x402</span>
         </div>
         {/* Log output */}
         <div className="px-4 py-4 space-y-1.5 min-h-[200px] max-h-[280px] overflow-y-auto">
@@ -933,7 +948,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                 ))}
               </div>
               <p className="font-mono text-xs text-slate-600 text-center max-w-xs leading-relaxed">
-                Fill in the inputs, then hit <span className="text-[#4FC3F7]">Run</span> to get multi-agent AI output.
+                Fill in the inputs, then hit <span className="text-[#4FC3F7]">Run</span> to get live AI output.
               </p>
               {/* Example prompt preview */}
               {hasExamples && (
@@ -982,7 +997,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                     : <span className={cls}>✓ Paid {tool.price}</span>;
                 })()}
                 <div className="ml-auto flex items-center gap-2">
-                  <span className="font-mono text-xs text-slate-700 mr-1">Blue · Aeon · MiroShark</span>
+                  <span className="font-mono text-xs text-slate-700 mr-1">Blue Agent</span>
                   <button
                     onClick={copyJson}
                     className={`font-mono text-[10px] px-2 py-1 rounded border transition-all ${
@@ -1024,14 +1039,14 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                 </p>
               ) : isMock ? (
                 <p className="font-mono text-[10px] text-slate-700 mt-6 pt-4 border-t border-[#1A1A2E]">
-                  preview data — live results powered by 3-agent consensus
+                  preview data — live results powered by Blue Agent
                 </p>
               ) : (
                 <p className="font-mono text-[10px] text-slate-700 mt-6 pt-4 border-t border-[#1A1A2E]">
                   {typeof result === "string"
-                    ? "3-agent consensus · Blue · Aeon · MiroShark"
+                    ? "powered by Blue Agent · Base"
                     : [
-                        result.data_source ? `source: ${result.data_source}` : "3-agent consensus · Blue · Aeon · MiroShark",
+                        result.data_source ? `source: ${result.data_source}` : "powered by Blue Agent · Base",
                         result.timestamp ? new Date(result.timestamp as string).toLocaleString() : null,
                       ].filter(Boolean).join("  ·  ")}
                 </p>
@@ -1120,7 +1135,8 @@ type ViewMode = "grid" | "list";
 
 function EmptyState({
   tools, onSelect, featuredIds, usage, recentIds,
-  search, setSearch, cat, setCat, filtered,
+  search, setSearch, cat, setCat, filtered, onListTool,
+  source, price, onClearFilters,
 }: {
   tools:       Tool[];
   onSelect:   (t: Tool) => void;
@@ -1132,6 +1148,10 @@ function EmptyState({
   cat:        Category;
   setCat:     (c: Category) => void;
   filtered:   Tool[];
+  onListTool?: () => void;
+  source:      SourceFilter;
+  price:       PriceFilter;
+  onClearFilters: () => void;
 }) {
   // Thin wrapper around HubHome (in _components/) — keeps page.tsx focused on
   // routing / state, while HubHome owns the marketplace UX.
@@ -1145,9 +1165,13 @@ function EmptyState({
       recentIds={recentIds}
       search={search}
       cat={cat}
+      source={source}
+      price={price}
       onSearch={setSearch}
       onPickCat={(id) => setCat(id as Category)}
       onSelect={(t) => onSelect(t as unknown as Tool)}
+      onListTool={onListTool}
+      onClearFilters={onClearFilters}
     />
   );
 }
@@ -1304,6 +1328,9 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
   const [preload, setPreload] = useState<{ toolId: string; data: ToolResult } | null>(null);
   const [usage, setUsage]     = useState<Record<string, number>>({});
   const [communityTools, setCommunityTools] = useState<Tool[]>([]);
+  const [showSubmit, setShowSubmit] = useState(false);   // "List your tool" modal
+  const [source, setSource] = useState<SourceFilter>("all"); // v2 sidebar: provenance filter
+  const [price, setPrice]   = useState<PriceFilter>("all");  // v2 sidebar: price bucket
   const searchRef             = useRef<HTMLInputElement>(null);
 
   // ── Merge first-party (TOOLS) + community-submitted (registered) ──────────
@@ -1369,8 +1396,9 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
 
   // ── Fetch community-submitted tools from the Builder Registry ──────────────
   // Maps RegisteredTool shape → local Tool shape and routes calls through the
-  // Hub proxy (which forwards to the builder's endpoint + tracks usage).
-  useEffect(() => {
+  // Hub proxy (which forwards to the builder's endpoint + tracks usage). Kept as
+  // a useCallback so the "List your tool" modal can refresh the grid on submit.
+  const loadCommunityTools = useCallback(() => {
     type Registered = {
       id: string; name: string; description: string; category: string;
       price: string; priceUSDC: number;
@@ -1440,6 +1468,8 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
 
     Promise.all([external, hosted]).then(([e, h]) => setCommunityTools([...e, ...h]));
   }, []);
+
+  useEffect(() => { loadCommunityTools(); }, [loadCommunityTools]);
 
   const featuredIds = useMemo<Set<string>>(() => {
     // Most-run tools first, then pad with static FEATURED_IDS so we always show 4
@@ -1555,13 +1585,27 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
   const filtered = allTools.filter(t => {
     const matchesSearch = !search || t.name.toLowerCase().includes(search.toLowerCase()) || t.desc.toLowerCase().includes(search.toLowerCase());
     if (!matchesSearch) return false;
-    if (cat === "all") return true;
-    // Check if cat matches a group id
-    const group = TOOL_GROUPS.find(g => g.id === cat);
-    if (group) return group.ids.includes(t.id);
-    // Fallback to old category field
-    return t.cat === cat;
+    // v2 marketplace filters — provenance + price bucket
+    if (source !== "all" && (t.source ?? "native") !== source) return false;
+    if (!matchPrice(price, priceNum(t.price))) return false;
+    if (cat === "all") { /* fall through to source/price-only result */ }
+    else {
+      // Check if cat matches a group id
+      const group = TOOL_GROUPS.find(g => g.id === cat);
+      if (group) { if (!group.ids.includes(t.id)) return false; }
+      // Fallback to old category field
+      else if (t.cat !== cat) return false;
+    }
+    return true;
   });
+
+  // Per-source counts across the search/price/category-filtered set (drives sidebar chip labels).
+  const sourceCounts: Record<SourceFilter, number> = {
+    all:      allTools.length,
+    native:   allTools.filter(t => (t.source ?? "native") === "native").length,
+    external: allTools.filter(t => t.source === "external").length,
+    hosted:   allTools.filter(t => t.source === "hosted").length,
+  };
 
   return (
     <>
@@ -1585,100 +1629,116 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
 
           {/* Header */}
           <div className="px-5 h-14 flex items-center gap-3 border-b border-[#1A1A2E] shrink-0">
-            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// TOOLS</p>
+            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// MARKETPLACE</p>
             <span className="font-mono text-[10px] text-slate-700">{filtered.length} of {allTools.length}</span>
           </div>
 
-          {/* Search */}
-          <div className="px-4 pt-3 pb-2">
-            <input
-              ref={searchRef}
-              className="w-full bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 font-mono text-xs text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/30 transition-colors"
-              placeholder="Search tools… ( / )"
-              value={search}
-              onChange={e => { setSearch(e.target.value); setCat("all"); }}
-            />
-          </div>
+          {/* Filters — scrollable so the List / Creator actions stay pinned below */}
+          <div className="flex-1 overflow-y-auto">
 
-          {/* Group filter */}
-          <div className="px-4 pb-4 flex flex-wrap gap-1">
-            <button onClick={() => { setCat("all"); setSearch(""); }}
-              className={`font-mono text-[10px] px-2 py-1 rounded transition-colors ${cat === "all" ? "bg-[#4FC3F7]/15 text-[#4FC3F7]" : "text-slate-600 hover:text-slate-300"}`}>
-              All
-            </button>
-            {TOOL_GROUPS.map(g => (
-              <button key={g.id} onClick={() => { setSearch(""); setCat(g.id as Category); }}
-                className="font-mono text-[10px] px-2 py-1 rounded transition-colors"
-                style={cat === g.id
-                  ? { background: g.color + "20", color: g.color }
-                  : { color: "#475569" }}
-                onMouseEnter={e => { if (cat !== g.id) (e.currentTarget as HTMLElement).style.color = g.color; }}
-                onMouseLeave={e => { if (cat !== g.id) (e.currentTarget as HTMLElement).style.color = "#475569"; }}
-              >
-                {g.label}
-              </button>
-            ))}
-          </div>
+            {/* Search */}
+            <div className="px-4 pt-3 pb-2">
+              <input
+                ref={searchRef}
+                className="w-full bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 font-mono text-xs text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/30 transition-colors"
+                placeholder="Search tools… ( / )"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
 
-          {/* Tool list */}
-          <div className="flex-1 overflow-y-auto border-t border-[#1A1A2E]">
-            {filtered.length === 0 && (
-              <p className="font-mono text-[10px] text-slate-700 px-6 py-4">No tools found</p>
-            )}
-            {filtered.map(tool => {
-              const isFeatured = featuredIds.has(tool.id);
-              const hasCached  = cache.has(tool.id);
-              return (
-                <button key={tool.id} onClick={() => selectTool(tool)}
-                  className={`w-full text-left px-4 py-2.5 transition-all border-l-2 ${
-                    selected?.id === tool.id
-                      ? "border-[#4FC3F7] bg-[#4FC3F7]/5 text-white"
-                      : isFeatured
-                      ? "border-[#A78BFA]/30 text-slate-400 hover:text-slate-300 hover:bg-[#A78BFA]/5"
-                      : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-[#1A1A2E]/50"
-                  }`}>
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    {tool.agents.map(a => (
-                      <span key={a} className="w-1 h-1 rounded-full" style={{ background: AGENT_COLORS[a] }} />
-                    ))}
-                    <div className="ml-auto flex items-center gap-1.5">
-                      {hasCached && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" title="Result cached" />
-                      )}
-                      {isFeatured && (
-                        <span className="font-mono text-[9px] px-1 py-0.5 rounded border border-[#A78BFA]/40 text-[#A78BFA]">
-                          ★
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="font-mono text-sm">{tool.name}</span>
+            {/* Source filter */}
+            <div className="px-4 pt-3 pb-3">
+              <p className="font-mono text-[9px] text-slate-700 tracking-widest mb-2">SOURCE</p>
+              <div className="flex flex-wrap gap-1.5">
+                {SOURCE_CHIPS.map(s => {
+                  const active = source === s.key;
+                  const count = sourceCounts[s.key];
+                  return (
+                    <button key={s.key} onClick={() => setSource(s.key)}
+                      className="font-mono text-[10px] px-2 py-1 rounded border transition-colors"
+                      style={active
+                        ? { color: s.color, borderColor: `${s.color}55`, background: `${s.color}12` }
+                        : { color: "#64748b", borderColor: "#1A1A2E" }}>
+                      {s.label} <span className="opacity-60">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Category filter */}
+            <div className="px-4 pt-2 pb-3 border-t border-[#1A1A2E]">
+              <p className="font-mono text-[9px] text-slate-700 tracking-widest mb-2">CATEGORY</p>
+              <div className="flex flex-wrap gap-1.5">
+                <button onClick={() => setCat("all")}
+                  className={`font-mono text-[10px] px-2 py-1 rounded border transition-colors ${cat === "all" ? "bg-[#4FC3F7]/15 text-[#4FC3F7] border-[#4FC3F7]/40" : "text-slate-600 border-[#1A1A2E] hover:text-slate-300"}`}>
+                  All
                 </button>
-              );
-            })}
+                {TOOL_GROUPS.map(g => (
+                  <button key={g.id} onClick={() => setCat(g.id as Category)}
+                    className="font-mono text-[10px] px-2 py-1 rounded border transition-colors"
+                    style={cat === g.id
+                      ? { background: g.color + "18", color: g.color, borderColor: g.color + "40" }
+                      : { color: "#475569", borderColor: "#1A1A2E" }}
+                    onMouseEnter={e => { if (cat !== g.id) (e.currentTarget as HTMLElement).style.color = g.color; }}
+                    onMouseLeave={e => { if (cat !== g.id) (e.currentTarget as HTMLElement).style.color = "#475569"; }}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Price filter */}
+            <div className="px-4 pt-2 pb-4 border-t border-[#1A1A2E]">
+              <p className="font-mono text-[9px] text-slate-700 tracking-widest mb-2">PRICE</p>
+              <div className="flex flex-wrap gap-1.5">
+                {PRICE_CHIPS.map(p => {
+                  const active = price === p.key;
+                  return (
+                    <button key={p.key} onClick={() => setPrice(p.key)}
+                      className={`font-mono text-[10px] px-2 py-1 rounded border transition-colors ${active ? "bg-[#34D399]/15 text-[#34D399] border-[#34D399]/40" : "text-slate-600 border-[#1A1A2E] hover:text-slate-300"}`}>
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Clear filters — only when a filter is active */}
+            {(search.trim() || cat !== "all" || source !== "all" || price !== "all") && (
+              <div className="px-4 pb-4">
+                <button onClick={() => { setSearch(""); setCat("all"); setSource("all"); setPrice("all"); }}
+                  className="font-mono text-[10px] text-slate-600 hover:text-white transition-colors">
+                  ✕ Clear filters
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Builder actions (v2) */}
           <div className="px-4 pb-2 border-t border-[#1A1A2E] pt-3 space-y-1">
-            <Link
-              href="/hub/submit"
+            <button
+              type="button"
+              onClick={() => setShowSubmit(true)}
               className="flex items-center gap-2 w-full px-2 py-2 rounded-lg hover:bg-[#A78BFA]/5 transition-colors group"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#A78BFA] animate-pulse shrink-0" />
               <span className="font-mono text-[11px] text-slate-500 group-hover:text-[#A78BFA] transition-colors">
-                + Submit a tool
+                + List your tool
               </span>
               <span className="ml-auto font-mono text-[9px] text-slate-700 group-hover:text-[#A78BFA]">
                 95/5
               </span>
-            </Link>
+            </button>
             <Link
               href="/hub/dashboard"
               className="flex items-center gap-2 w-full px-2 py-2 rounded-lg hover:bg-[#34D399]/5 transition-colors group"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] shrink-0" />
               <span className="font-mono text-[11px] text-slate-500 group-hover:text-[#34D399] transition-colors">
-                Builder dashboard
+                Creator dashboard
               </span>
             </Link>
           </div>
@@ -1724,6 +1784,23 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
                 </div>
                 <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-10 bg-gradient-to-l from-[#050508] to-transparent" />
               </div>
+              {/* Source chips — only once community tools exist alongside native. */}
+              {(sourceCounts.external > 0 || sourceCounts.hosted > 0) && (
+                <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                  {SOURCE_CHIPS.filter(s => s.key === "all" || sourceCounts[s.key] > 0).map(s => {
+                    const active = source === s.key;
+                    return (
+                      <button key={s.key} onClick={() => setSource(s.key)}
+                        className="font-mono text-[10px] px-3 py-1.5 rounded-full whitespace-nowrap border shrink-0 transition-colors"
+                        style={active
+                          ? { color: s.color, borderColor: `${s.color}55`, background: `${s.color}15` }
+                          : { color: "#64748b", borderColor: "#1A1A2E" }}>
+                        {s.label} <span className="opacity-60">{sourceCounts[s.key]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -1749,12 +1826,35 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
                 cat={cat}
                 setCat={setCat}
                 filtered={filtered}
+                onListTool={() => setShowSubmit(true)}
+                source={source}
+                price={price}
+                onClearFilters={() => { setSearch(""); setCat("all"); setSource("all"); setPrice("all"); }}
               /></div>
           }
         </main>
 
         </div>{/* end flex row */}
       </div>
+
+      {/* ── "List your tool" modal — primary submit path (route is a fallback) ── */}
+      {showSubmit && (
+        <div
+          className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-0 sm:p-6 bg-black/70 backdrop-blur-sm"
+          onClick={() => setShowSubmit(false)}
+        >
+          <div
+            className="relative w-full sm:max-w-3xl h-full sm:h-[min(88vh,900px)] bg-[#050508] sm:rounded-2xl border border-[#1A1A2E] overflow-hidden shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <SubmitTool
+              variant="modal"
+              onClose={() => setShowSubmit(false)}
+              onSubmitted={() => loadCommunityTools()}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 }
