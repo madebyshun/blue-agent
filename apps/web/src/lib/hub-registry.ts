@@ -42,6 +42,7 @@ export interface RegisteredTool {
   // Optional
   agentName?:     string;                          // builder's agent brand (default = short addr)
   iconUrl?:       string;
+  logoUrl?:       string;                          // creator-supplied logo (PUBLIC — shown on cards/OG)
   tags?:          string[];
   // Runtime stats (denormalized from KV counters; populated on read)
   callCount?:     number;
@@ -169,6 +170,20 @@ const SLUG_RE = /^[a-z][a-z0-9-]{2,40}$/;
 
 export function isValidSlug(id: string): boolean {
   return SLUG_RE.test(id);
+}
+
+/**
+ * Sanitize a creator-supplied logo URL. Accept ONLY an https URL (capped at 300
+ * chars); anything else → undefined. The logo is PUBLIC (shown on cards/OG), not
+ * a signed identity field, so it isn't part of the SIWE manifest. Broken or
+ * non-image URLs degrade gracefully at render time (card falls back to the
+ * source badge via <img onError>).
+ */
+export function sanitizeLogoUrl(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const s = raw.trim();
+  if (!s || !/^https:\/\/.+/i.test(s)) return undefined;
+  return s.slice(0, 300);
 }
 
 /** Returns the canonical message a builder must sign to register a tool. */

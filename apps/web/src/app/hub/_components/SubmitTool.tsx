@@ -120,6 +120,8 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
     { key: "prompt", label: "Prompt", placeholder: "What you want the tool to do", required: true },
   ]);
   const [agentName, setAgentName]   = useState("");
+  const [logoUrl, setLogoUrl]       = useState("");           // optional creator logo (public)
+  const [logoOk, setLogoOk]         = useState<boolean | null>(null);  // image-load probe result
 
   // ai_tool config
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -244,12 +246,14 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
             config: buildConfig(), inputs, price, priceUSDC,
             builderAddress: address, signature, nonce,
             agentName: agentName || undefined,
+            logoUrl: logoTrimmed || undefined,
           }
         : {
             id, name, description, category, endpoint, inputs,
             price, priceUSDC,
             builderAddress: address, signature, nonce,
             agentName: agentName || undefined,
+            logoUrl: logoTrimmed || undefined,
           };
 
       const res  = await fetch(url, {
@@ -271,6 +275,21 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
   function addInput()    { if (inputs.length < 12) setInputs(p => [...p, { key: "", label: "", placeholder: "", required: false }]); }
   function removeInput(i: number)                { setInputs(p => p.filter((_, idx) => idx !== i)); }
   function updateInput(i: number, patch: Partial<Input>) { setInputs(p => p.map((inp, idx) => idx === i ? { ...inp, ...patch } : inp)); }
+
+  const logoTrimmed    = logoUrl.trim();
+  const logoLooksHttps = /^https:\/\/.+/i.test(logoTrimmed);
+
+  // Lean client-side validation — confirm the URL actually loads as an image.
+  // The logo is cosmetic (public), so a bad URL never blocks submit; it just
+  // shows a warning and the Hub card falls back to the source badge at render.
+  function checkLogo() {
+    if (!logoTrimmed)     { setLogoOk(null);  return; }
+    if (!logoLooksHttps)  { setLogoOk(false); return; }
+    const img = new window.Image();
+    img.onload  = () => setLogoOk(true);
+    img.onerror = () => setLogoOk(false);
+    img.src = logoTrimmed;
+  }
 
   const activeTpl = TEMPLATES.find(t => t.id === template)!;
 
@@ -502,6 +521,21 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
             <Field label="Agent / brand name (optional)" hint="Display name shown next to your tool. Defaults to your wallet short-address.">
               <input value={agentName} onChange={e => setAgentName(e.target.value)}
                 placeholder="MyAgent" maxLength={40} className={inputCls(true)} />
+            </Field>
+
+            {/* logo (optional) */}
+            <Field label="Logo URL (optional)" hint="https:// link to a square image (PNG/SVG/JPG). Shown on your tool card. Leave blank to use the default badge.">
+              <div className="flex items-center gap-2">
+                {logoOk && logoTrimmed
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={logoTrimmed} alt="" className="w-9 h-9 rounded-lg object-cover border border-[#1A1A2E] shrink-0" />
+                  : <div className="w-9 h-9 rounded-lg border border-[#1A1A2E] bg-[#050508] flex items-center justify-center text-slate-700 text-xs shrink-0">🔵</div>}
+                <input value={logoUrl} onChange={e => { setLogoUrl(e.target.value); setLogoOk(null); }} onBlur={checkLogo}
+                  placeholder="https://cdn.example.com/logo.png"
+                  className={inputCls(logoOk !== false) + " flex-1"} />
+              </div>
+              {logoOk === false && <p className="text-[10px] text-amber-400 mt-1">Couldn&apos;t load that as an image — check the URL. (Optional — you can still submit.)</p>}
+              {logoOk === true  && <p className="text-[10px] text-[#34D399] mt-1">✓ Image loads.</p>}
             </Field>
 
             {/* Manifest preview */}

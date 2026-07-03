@@ -64,6 +64,7 @@ interface Tool {
   // v2 marketplace: provenance + denormalized stats for the unified grid.
   source?:         "native" | "external" | "hosted";
   creatorHandle?:  string;   // "@handle" or brand shown as "by …" on community cards
+  logoUrl?:        string;   // creator-supplied logo (public) shown on the tool card
   callCount?:      number;   // lifetime paid runs (community tools carry this from KV)
   // Hosted tools invoke asynchronously (202 + job poll) — see ToolRunner.run().
   async?:          boolean;
@@ -1433,7 +1434,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
       inputs: { key: string; label: string; placeholder: string; required?: boolean }[];
       verified: boolean; aiReady: boolean;
       builderAddress: string; submittedAt: number;
-      agentName?: string; callCount?: number;
+      agentName?: string; callCount?: number; logoUrl?: string;
     };
     const asCat = (c: string): Exclude<Category, "all"> =>
       (["intelligence","builder","trading","content","agent-economy","base-ecosystem","on-chain"] as const)
@@ -1457,6 +1458,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
         releasedAt:    r.submittedAt,
         source:         "external",
         creatorHandle:  r.agentName || shortAddr(r.builderAddress),
+        logoUrl:        r.logoUrl,
         callCount:      r.callCount,
         // Route through Hub proxy (forwards to builder endpoint + tracks usage/revenue)
         callPath:       `/api/hub/tools/${r.id}/call`,
@@ -1484,6 +1486,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
         releasedAt:    h.submittedAt,
         source:         "hosted",
         creatorHandle:  h.agentName || shortAddr(h.builderAddress),
+        logoUrl:        h.logoUrl,
         callCount:      h.callCount,
         // Paid invoke → 202 + poll (see ToolRunner async branch).
         callPath:       `/api/hub/community/${h.slug}/invoke`,
