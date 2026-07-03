@@ -76,7 +76,7 @@ export const en = {
     bank: "Bank",
     launches: "Launches",
     b20: "B20",
-    dashboard: "Dashboard",
+    dashboard: "Account",
     profile: "Profile",
     docs: "Docs",
     home: "Home",
