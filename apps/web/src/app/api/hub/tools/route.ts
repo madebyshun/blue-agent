@@ -13,7 +13,7 @@ import {
   putTool,
   isValidSlug,
   siweMessage,
-  probeEndpoint,
+  probeX402Endpoint,
   sanitizeLogoUrl,
   type RegisteredTool,
 } from "@/lib/hub-registry";
@@ -116,10 +116,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid signature — does not match builderAddress." }, { status: 401 });
   }
 
-  // ── 4. Endpoint probe (lenient — don't block on failure, but report) ──────
-  const probe = await probeEndpoint(body.endpoint);
+  // ── 4. Auto-live gate: strict x402 probe ──────────────────────────────────
+  // agentic.market model — no human moderation. The endpoint must prove it is a
+  // working Base x402 endpoint (402 + valid payTo/asset/network). Fail → reject
+  // with the reason; pass → the tool is live immediately (status "live").
+  const probe = await probeX402Endpoint(body.endpoint);
+  if (!probe.ok) {
+    return NextResponse.json(
+      { error: probe.reason ?? "Endpoint failed the x402 probe.", probe },
+      { status: 422 },
+    );
+  }
 
-  // ── 5. Save ───────────────────────────────────────────────────────────────
+  // ── 5. Save (live) ────────────────────────────────────────────────────────
   const tool: RegisteredTool = {
     id:             body.id,
     name:           body.name.trim().slice(0, 80),
@@ -137,8 +146,9 @@ export async function POST(req: NextRequest) {
     builderAddress: body.builderAddress.toLowerCase() as `0x${string}`,
     submittedAt:    Date.now(),
     signature:      body.signature,
-    verified:       false,                                  // Blue Agent manual review
+    verified:       false,                                  // "✓ Verified" is a separate manual trust review
     aiReady:        probe.aiReady,
+    status:         "live",                                 // passed the x402 probe → auto-live now
     agentName:      body.agentName?.slice(0, 40),
     iconUrl:        body.iconUrl?.slice(0, 200),
     logoUrl:        sanitizeLogoUrl(body.logoUrl),

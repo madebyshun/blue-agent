@@ -1,7 +1,11 @@
 "use client";
 
 /**
- * SubmitTool — Builder registration form for Blue Hub v2. Three tool types:
+ * SubmitTool — Builder registration form for Blue Hub v2.
+ *
+ * UI currently offers ONE tool type: 🌐 external. The two Hosted types below
+ * (ai_tool / api_wrapper) stay fully defined — form + backend paths intact — but
+ * are hidden from the picker (VISIBLE_TEMPLATES) for a later phase. Tool types:
  *
  *   🌐 external     — you host the endpoint. Blue Hub proxies calls to it and
  *                     forwards the x402 payment. 95/5 split. → POST /api/hub/tools
@@ -91,6 +95,11 @@ const TEMPLATES: { id: Template; badge: string; title: string; blurb: string; sp
   { id: "ai_tool",     badge: "✨", title: "AI tool",        blurb: "Write a prompt. Blue Hub runs it on the LLM for you — no server to host.",       split: "90 / 10" },
   { id: "api_wrapper", badge: "✨", title: "API wrapper",    blurb: "Blue Hub forwards to your upstream API, injecting a secret key server-side.",     split: "90 / 10" },
 ];
+
+// Only the External template is offered right now. The Hosted templates
+// (ai_tool / api_wrapper) stay defined above — and their form + backend paths
+// remain wired — but are hidden from the submit UI for a later phase.
+const VISIBLE_TEMPLATES = TEMPLATES.filter(t => t.id === "external");
 
 export interface SubmitToolProps {
   variant?:     "page" | "modal" | "shell";
@@ -189,15 +198,17 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
     setTesting(true);
     try {
       if (template === "external") {
-        // Client-side reachability probe (same as server probeEndpoint()).
+        // Best-effort client preview of the server's x402 gate: a live x402
+        // endpoint answers an empty POST with 402. (Cross-origin reads can be
+        // blocked by CORS — the server probe on submit is the authority.)
         const t0 = Date.now();
         const res = await fetch(endpoint, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({}), signal: AbortSignal.timeout(8000),
         });
         const ms = Date.now() - t0;
-        const ok = (res.status >= 200 && res.status < 300) || res.status === 402;
-        setTest({ ok, hint: ok ? `${res.status} · ${ms}ms — reachable` : `Got ${res.status} — expected 2xx or 402.` });
+        const ok = res.status === 402;
+        setTest({ ok, hint: ok ? `402 · ${ms}ms — x402 endpoint detected` : `Got ${res.status} — expected HTTP 402 (paid x402 endpoint).` });
       } else {
         // Server dry-run — runs the tool once, nothing persisted or charged.
         const res = await fetch("/api/hub/hosted/test", {
@@ -303,8 +314,9 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
           <div className="text-3xl mb-3">✅</div>
           <h2 className="text-xl font-bold mb-2">Tool registered</h2>
           <p className="text-sm text-slate-400 mb-6">
-            <code className="text-[#34D399]">{submitted.id}</code> is now live on Blue Hub.
-            Verification by Blue Agent is pending (1-2 days).
+            <code className="text-[#34D399]">{submitted.id}</code> passed the x402 probe and is
+            live on Blue Hub now. The <span className="text-[#34D399]">✓ Verified</span> badge is a
+            separate manual review by Blue Agent.
           </p>
           <div className="flex items-center justify-center gap-3 flex-wrap">
             <Link href={`/hub/tool/${submitted.id}`} onClick={onClose}
@@ -338,9 +350,9 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
             </p>
           </div>
 
-          {/* Template picker */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-            {TEMPLATES.map(t => {
+          {/* Template picker — External only for now (Hosted hidden). */}
+          <div className="grid grid-cols-1 gap-3 mb-6">
+            {VISIBLE_TEMPLATES.map(t => {
               const active = t.id === template;
               return (
                 <button key={t.id} type="button" onClick={() => { setTemplate(t.id); setTest(null); }}
@@ -402,12 +414,20 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
             {/* ── Template-specific config ──────────────────────────────── */}
 
             {template === "external" && (
-              <Field label="HTTPS endpoint" hint="POST URL — your service that receives the call body. Blue Hub forwards the x402 payment header to it.">
+              <Field label="HTTPS x402 endpoint" hint="POST URL of your live x402 service. On submit we probe it: it must answer with HTTP 402 + x402 payment requirements (payTo · asset · network) on Base. Pass → your tool goes live instantly. No human review.">
                 <div className="flex gap-2">
                   <input value={endpoint} onChange={e => setEndpoint(e.target.value)}
                     placeholder="https://your-service.com/api/weather"
                     className={inputCls(!endpoint || endpointOk) + " flex-1"} />
                   <TestButton testing={testing} disabled={!endpointOk} onClick={runTest} />
+                </div>
+                <div className="mt-2 rounded-lg border border-[#4FC3F7]/20 bg-[#4FC3F7]/[0.04] px-3 py-2">
+                  <p className="text-[10px] text-slate-500 leading-relaxed">
+                    No endpoint yet? Deploy one free on{" "}
+                    <a href="https://bankr.bot" target="_blank" rel="noopener noreferrer"
+                      className="text-[#4FC3F7] hover:underline">Bankr x402 Cloud</a>, then come back to list it here.
+                    Blue Hub doesn&apos;t host your code — you own the endpoint and keep 95%.
+                  </p>
                 </div>
               </Field>
             )}

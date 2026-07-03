@@ -24,7 +24,10 @@ type Agent = "blue" | "aeon" | "miroshark";
 type Category = "all" | "intelligence" | "builder" | "trading" | "content" | "agent-economy" | "base-ecosystem" | "on-chain";
 
 // v2 marketplace filters (sidebar-driven, applied to the unified grid).
-type SourceFilter = "all" | "native" | "external" | "hosted";
+// Hosted tools (AI-tool / API-wrapper) are hidden from the marketplace for now —
+// the backend (hub-hosted.ts + /api/hub/community/*) is kept for a later phase.
+// The grid shows Native + live External only.
+type SourceFilter = "all" | "native" | "external";
 type PriceFilter  = "all" | "free" | "under" | "over";
 
 // Parse a "$0.05" price string → number (community tools may carry raw values).
@@ -39,7 +42,6 @@ const SOURCE_CHIPS: { key: SourceFilter; label: string; color: string }[] = [
   { key: "all",      label: "All",         color: "#94A3B8" },
   { key: "native",   label: "🔵 Native",   color: "#4FC3F7" },
   { key: "external", label: "🌐 External", color: "#34D399" },
-  { key: "hosted",   label: "✨ Hosted",   color: "#A78BFA" },
 ];
 const PRICE_CHIPS: { key: PriceFilter; label: string }[] = [
   { key: "all",   label: "Any"     },
@@ -63,6 +65,7 @@ interface Tool {
   callPath?:       string;
   // v2 marketplace: provenance + denormalized stats for the unified grid.
   source?:         "native" | "external" | "hosted";
+  status?:         "live";   // external tools auto-live after x402 probe; grid shows live only
   creatorHandle?:  string;   // "@handle" or brand shown as "by …" on community cards
   logoUrl?:        string;   // creator-supplied logo (public) shown on the tool card
   callCount?:      number;   // lifetime paid runs (community tools carry this from KV)
@@ -1432,7 +1435,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
       id: string; name: string; description: string; category: string;
       price: string; priceUSDC: number;
       inputs: { key: string; label: string; placeholder: string; required?: boolean }[];
-      verified: boolean; aiReady: boolean;
+      verified: boolean; aiReady: boolean; status?: "live";
       builderAddress: string; submittedAt: number;
       agentName?: string; callCount?: number; logoUrl?: string;
     };
@@ -1457,6 +1460,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
         builderAddress: r.builderAddress,
         releasedAt:    r.submittedAt,
         source:         "external",
+        status:         r.status ?? "live",
         creatorHandle:  r.agentName || shortAddr(r.builderAddress),
         logoUrl:        r.logoUrl,
         callCount:      r.callCount,
@@ -1468,36 +1472,12 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
       })))
       .catch((): Tool[] => []);
 
-    // Hosted tools (Blue Hub runs them; paid invoke is async — 202 + job poll).
-    type Hosted = Registered & { template: string; slug: string };
-    const hosted = fetch("/api/hub/hosted")
-      .then(r => r.ok ? r.json() : { tools: [] })
-      .then((d: { tools: Hosted[] }): Tool[] => (d.tools ?? []).map(h => ({
-        id:             h.slug,
-        name:           h.name,
-        cat:            asCat(h.category),
-        price:          h.price,
-        agents:         ["blue"],
-        desc:           h.description,
-        inputs:         h.inputs.map(i => ({ key: i.key, label: i.label, placeholder: i.placeholder, required: !!i.required })),
-        verified:       h.verified,
-        aiReady:        h.template === "ai_tool",   // ai_tool returns text; api_wrapper varies
-        builderAddress: h.builderAddress,
-        releasedAt:    h.submittedAt,
-        source:         "hosted",
-        creatorHandle:  h.agentName || shortAddr(h.builderAddress),
-        logoUrl:        h.logoUrl,
-        callCount:      h.callCount,
-        // Paid invoke → 202 + poll (see ToolRunner async branch).
-        callPath:       `/api/hub/community/${h.slug}/invoke`,
-        async:          true,
-        x402Body:       h.priceUSDC > 0
-                          ? (vals: Record<string, string>) => vals as Record<string, unknown>
-                          : undefined,
-      })))
-      .catch((): Tool[] => []);
-
-    Promise.all([external, hosted]).then(([e, h]) => setCommunityTools([...e, ...h]));
+    // NOTE: Hosted tools (AI-tool / API-wrapper) are intentionally NOT loaded into
+    // the marketplace grid right now — the backend (/api/hub/hosted + community
+    // /invoke + jobs) is kept intact for a later phase. To re-enable, fetch
+    // /api/hub/hosted, map source:"hosted" + async:true + callPath
+    // `/api/hub/community/<slug>/invoke`, and merge below.
+    external.then(e => setCommunityTools(e));
   }, []);
 
   useEffect(() => { loadCommunityTools(); }, [loadCommunityTools]);
@@ -1616,8 +1596,13 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
   const filtered = allTools.filter(t => {
     const matchesSearch = !search || t.name.toLowerCase().includes(search.toLowerCase()) || t.desc.toLowerCase().includes(search.toLowerCase());
     if (!matchesSearch) return false;
+    // Marketplace shows Native + live External only. Hosted is hidden (backend
+    // kept for a later phase); non-live externals never persist but guard anyway.
+    const src = t.source ?? "native";
+    if (src === "hosted") return false;
+    if (src === "external" && (t.status ?? "live") !== "live") return false;
     // v2 marketplace filters — provenance + price bucket
-    if (source !== "all" && (t.source ?? "native") !== source) return false;
+    if (source !== "all" && src !== source) return false;
     if (!matchPrice(price, priceNum(t.price))) return false;
     if (cat === "all") { /* fall through to source/price-only result */ }
     else {
@@ -1635,7 +1620,6 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
     all:      allTools.length,
     native:   allTools.filter(t => (t.source ?? "native") === "native").length,
     external: allTools.filter(t => t.source === "external").length,
-    hosted:   allTools.filter(t => t.source === "hosted").length,
   };
 
   return (
@@ -1819,7 +1803,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
                 <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-10 bg-gradient-to-l from-[#050508] to-transparent" />
               </div>
               {/* Source chips — only once community tools exist alongside native. */}
-              {(sourceCounts.external > 0 || sourceCounts.hosted > 0) && (
+              {sourceCounts.external > 0 && (
                 <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
                   {SOURCE_CHIPS.filter(s => s.key === "all" || sourceCounts[s.key] > 0).map(s => {
                     const active = source === s.key;
