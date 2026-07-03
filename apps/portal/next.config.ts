@@ -9,15 +9,29 @@ const nextConfig: NextConfig = {
   // subproject (non-fatal locally, fatal on Vercel).
   outputFileTracingRoot: path.join(process.cwd(), "..", ".."),
   async redirects() {
+    // ── Retiring the api.blueagent.dev product UI (0 users) ────────────────────
+    // The single live marketplace is now app.blueagent.dev/hub (95/5). The dead
+    // product-UI routes below (marketplace, agents, submit, staking, dashboard,
+    // providers, auth, home) redirect there.
+    //
+    // KEPT (still referenced — do NOT redirect): /docs/* (linked from
+    // blueagent.dev's /mcp + /api-docs redirects and the web docs pages), the
+    // /api/* backend, /blog, and the /terms + /privacy legal pages. A blanket
+    // redirect would break the docs, so these routes are preserved by omission.
+    const HUB = "https://app.blueagent.dev/hub";
+    const toHub = (source: string) => ({ source, destination: HUB, permanent: false });
     return [
-      {
-        // The secure builder-submit form (real wagmi SIWE) lives on the web app.
-        // Both write to the same registry KV, so point the marketplace submit
-        // entry there until the portal hosts its own wallet flow.
-        source: "/submit",
-        destination: "https://blueagent.dev/hub/submit",
-        permanent: false,
-      },
+      { source: "/submit", destination: "https://app.blueagent.dev/hub/submit", permanent: false },
+      toHub("/"),
+      toHub("/marketplace"),
+      toHub("/marketplace/:id"),
+      toHub("/agents"),
+      toHub("/staking"),
+      toHub("/dashboard"),
+      toHub("/providers"),
+      toHub("/providers/:handle"),
+      toHub("/signin"),
+      toHub("/signup"),
     ];
   },
 };
