@@ -14,14 +14,41 @@ const MONO = "'JetBrains Mono', monospace";
 
 const SOCIAL_PROOF = ["74 AI tools", "x402 native", "MCP", "Bankr Skills", "Base App"];
 
-const CHAT_COMMANDS = ["/idea", "/build", "/audit", "/ship", "/raise", "/pick", "/scan"];
+const CHAT_COMMANDS = ["/idea", "/build", "/audit", "/ship", "/raise", "/pick", "/scan", "/wallet", "/launch"];
 
-// icon: "logo" → BlueAgent logomark, otherwise an emoji glyph
-const CHAT_FEATURES = [
-  { label: "Hub Tools",     icon: "logo", color: "#4FC3F7", desc: "Token price · whale tracking · security checks. Live tools, run directly in chat." },
-  { label: "Skill System",  icon: "⭐",   color: "#34D399", desc: "Install Bankr · Base MCP · custom skills. Extend Blue Chat with any skill." },
-  { label: "Multi-model",   icon: "🦈",   color: "#A78BFA", desc: "Venice · Bankr · Claude. Best model for each task." },
-  { label: "Credits + x402",icon: "💎",   color: "#FBBF24", desc: "Stake $BLUEAGENT → free tools. Or pay $0.01–$0.20/call." },
+// Models available in Blue Chat — names verified against ChatMessages MODEL_LABELS.
+// Switchable mid-conversation; frontier + open + private (E2EE).
+const MODELS: { name: string; color: string }[] = [
+  { name: "Kimi K2",         color: "#818CF8" },
+  { name: "DeepSeek V4",     color: "#34D399" },
+  { name: "Claude Opus 4.7", color: "#4FC3F7" },
+  { name: "Grok 4",          color: "#E879F9" },
+  { name: "Qwen3 235B",      color: "#FB923C" },
+  { name: "Mistral Small",   color: "#60A5FA" },
+  { name: "Private (E2EE)",  color: "#6EE7B7" },
+];
+
+// One stack — the product suite. Each surface shares the same runtime on Base.
+// `k` maps to the i18n keys home.stack_<k>_label / home.stack_<k>_desc.
+// icon: "logo" → BlueAgent logomark, otherwise an emoji glyph.
+const PRODUCTS: { k: string; color: string; icon: string; href: string | null; soon?: boolean }[] = [
+  { k: "chat",  color: "#4FC3F7", icon: "logo", href: "/app/chat" },
+  { k: "hub",   color: "#A78BFA", icon: "🛒",  href: "/hub" },
+  { k: "mcp",   color: "#60A5FA", icon: "🔌",  href: "/docs/mcp" },
+  { k: "conn",  color: "#34D399", icon: "🧩",  href: "/docs/blue-chat" },
+  { k: "bank",  color: "#FBBF24", icon: "🏦",  href: null, soon: true },
+  { k: "image", color: "#F472B6", icon: "🎨",  href: null, soon: true },
+  { k: "video", color: "#E879F9", icon: "🎬",  href: null, soon: true },
+];
+
+// How you use Blue — modality tabs (Dot-style). `k` maps to home.use_<k>_label/desc.
+// `soon` modalities render a placeholder preview instead of a live mock.
+const USE_TABS: { k: string; color: string; icon: string; soon?: boolean }[] = [
+  { k: "chat",    color: "#4FC3F7", icon: "💬" },
+  { k: "code",    color: "#818CF8", icon: "‹›" },
+  { k: "connect", color: "#34D399", icon: "🧩" },
+  { k: "image",   color: "#F472B6", icon: "🎨", soon: true },
+  { k: "video",   color: "#E879F9", icon: "🎬", soon: true },
 ];
 
 const HUB_CATEGORIES = [
@@ -30,24 +57,6 @@ const HUB_CATEGORIES = [
   { label: "Intelligence", color: "#4FC3F7", tools: "token alpha · narrative pulse · base alpha" },
   { label: "DeFi",         color: "#34D399", tools: "cross-protocol yield · liquidity depth" },
   { label: "Builder",      color: "#A78BFA", tools: "repo health · founder check · roadmap validator" },
-];
-
-// Blue Feed homepage section removed while the feature is rebuilt (route /feed
-// returns 404). FEED_METRICS / FEED_TOOLS lived here — restore them with the
-// "3.0 FEED" section when the feed relaunches.
-
-const AGENTS = [
-  { icon: "logo", name: "Blue Agent", color: "#4FC3F7", role: "orchestration · routing · execution" },
-  { icon: "⭐",   name: "Aeon",       color: "#34D399", role: "sensing · detection · onchain reading" },
-  { icon: "🦈",   name: "MiroShark",  color: "#A78BFA", role: "simulation · forecasting · consensus" },
-];
-
-const INTEGRATIONS = [
-  { name: "x402 HTTP",    color: "#4FC3F7", desc: "Pay per call · USDC on Base · any agent" },
-  { name: "MCP",          color: "#A78BFA", desc: "Claude Code · Cursor · Claude Desktop" },
-  { name: "Bankr Skills", color: "#FBBF24", desc: "install blueagent skill" },
-  { name: "Base App",     color: "#60A5FA", desc: "Farcaster mini app · auto-verified" },
-  { name: "$BLUEAGENT",   color: "#34D399", desc: "Hold to pay less · stake for credits" },
 ];
 
 const PRICING = [
@@ -112,12 +121,14 @@ function SectionHead({ num, kicker, title, sub, accent = "#4FC3F7" }: {
   );
 }
 
-// ─── Chat mockup with typing animation (// 1.0) ───────────────────────────────
+// ─── Chat mockup with typing animation ────────────────────────────────────────
+// Reads the chain: the response numbers cite a live source (DexScreener + onchain
+// transfers), not a fabricated multi-agent framing.
 
 const CHAT_SEGMENTS: { t: string; cls: string }[] = [
   { t: "/pick", cls: "text-[#4FC3F7]" },
-  { t: "\n⭐ Aeon scanning Base momentum…", cls: "text-slate-400" },
-  { t: "\n🦈 MiroShark analyzing crowd signal…", cls: "text-slate-400" },
+  { t: " AERO — asymmetric setup?", cls: "text-slate-400" },
+  { t: "\n↳ token-pick-signal · whale-tracker", cls: "text-[#34D399]" },
   { t: "\n\n{ ", cls: "text-slate-500" },
   { t: '"signal"', cls: "text-slate-400" },
   { t: ": ", cls: "text-slate-500" },
@@ -133,8 +144,8 @@ const CHAT_SEGMENTS: { t: string; cls: string }[] = [
   { t: ": ", cls: "text-slate-500" },
   { t: '"$0.49"', cls: "text-white" },
   { t: ", ", cls: "text-slate-500" },
-  { t: '"thesis"', cls: "text-slate-400" },
-  { t: ': "narrative alignment + whale accumulation" }', cls: "text-slate-500" },
+  { t: '"source"', cls: "text-slate-400" },
+  { t: ': "live DexScreener + 50 transfers" }', cls: "text-slate-500" },
   { t: "\n\n$0.20 USDC · 2.1s · Base ", cls: "text-slate-500" },
   { t: "✓", cls: "text-[#34D399]" },
 ];
@@ -172,7 +183,7 @@ function ChatMockup() {
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden h-full flex flex-col">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-[#15151f]">
         <img src="/logomark.svg" alt="BlueAgent" width={18} height={18} className="rounded" />
-        <span className="font-mono text-[12px] text-slate-300">Blue Agent</span>
+        <span className="font-mono text-[12px] text-slate-300">Blue Chat</span>
         <span className="ml-auto flex gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/60" />
           <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/60" />
@@ -183,6 +194,120 @@ function ChatMockup() {
         {groups.map((g, i) => <span key={i} className={g.cls}>{g.text}</span>)}
         <span className="animate-blink text-[#4FC3F7]">_</span>
       </pre>
+    </div>
+  );
+}
+
+// ─── How you use Blue — modality tabs ─────────────────────────────────────────
+// Dot-style tabbed switcher. Each tab renders a left copy panel + a right preview.
+// `chat`/`code`/`connect` are live; `image`/`video` are Soon placeholders.
+
+function UsePreview({ tab }: { tab: string }) {
+  if (tab === "chat") return <ChatMockup />;
+
+  if (tab === "code") {
+    return (
+      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden h-full flex flex-col">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[#15151f]">
+          <span className="font-mono text-[12px] text-[#818CF8]">/build · Kimi K2</span>
+          <span className="ml-auto font-mono text-[10px] text-slate-600">$0.50 · USDC</span>
+        </div>
+        <pre className="flex-1 p-4 sm:p-5 whitespace-pre-wrap break-words font-mono text-[12px] sm:text-[13px] leading-relaxed m-0">
+<span className="text-[#818CF8]">/build</span><span className="text-slate-400"> a Base points program</span>
+{"\n\n"}<span className="text-[#34D399]">▸ stack</span><span className="text-slate-400">   Next.js · viem · Base 8453</span>
+{"\n"}<span className="text-[#34D399]">▸ contracts</span><span className="text-slate-400"> Points.sol · Distributor.sol</span>
+{"\n"}<span className="text-[#34D399]">▸ tests</span><span className="text-slate-400">   claim · rate-limit · reentrancy</span>
+{"\n\n"}<span className="text-slate-500">→ next: </span><span className="text-[#FBBF24]">/audit</span>
+        </pre>
+      </div>
+    );
+  }
+
+  if (tab === "connect") {
+    const conns = [
+      { icon: "🐙", name: "GitHub",    tools: "repos · PRs · code search" },
+      { icon: "🔵", name: "Base Docs", tools: "contracts · RPC · deploy" },
+      { icon: "📝", name: "Notion",    tools: "pages · search · update" },
+      { icon: "📖", name: "DeepWiki",  tools: "any public repo Q&A" },
+    ];
+    return (
+      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden h-full flex flex-col">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[#15151f]">
+          <span className="font-mono text-[12px] text-[#34D399]">Blue Connector · MCP</span>
+          <span className="ml-auto font-mono text-[10px] text-slate-600">attached</span>
+        </div>
+        <div className="flex-1 p-4 sm:p-5 space-y-2.5">
+          {conns.map((c) => (
+            <div key={c.name} className="flex items-center gap-3 rounded-lg border border-[#15151f] bg-[#0a0a10] px-3 py-2.5">
+              <span className="text-lg">{c.icon}</span>
+              <span className="font-mono text-[13px] text-slate-300">{c.name}</span>
+              <span className="ml-auto font-mono text-[11px] text-slate-600">{c.tools}</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" style={{ boxShadow: "0 0 6px #34D399" }} />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // image / video → Soon placeholder
+  return (
+    <div className="rounded-2xl border border-dashed border-[#1A1A2E] bg-[#0d0d12] h-full flex flex-col items-center justify-center gap-3 p-10 min-h-[280px]">
+      <span className="text-4xl opacity-70">{tab === "image" ? "🎨" : "🎬"}</span>
+      <span className="font-mono text-[11px] uppercase tracking-wider text-[#FBBF24] border border-[#FBBF24]/30 bg-[#FBBF24]/5 rounded px-2 py-0.5">Soon</span>
+    </div>
+  );
+}
+
+function HowYouUse() {
+  const { t } = useLang();
+  const [active, setActive] = useState("chat");
+  const tab = USE_TABS.find((x) => x.k === active) ?? USE_TABS[0];
+  return (
+    <div>
+      {/* Tab bar */}
+      <Reveal className="mb-8">
+        <div className="inline-flex flex-wrap gap-1.5 p-1.5 rounded-2xl border border-[#1A1A2E] bg-[#0a0a10]">
+          {USE_TABS.map((x) => {
+            const on = x.k === active;
+            return (
+              <button key={x.k} onClick={() => setActive(x.k)}
+                className="flex items-center gap-2 font-mono text-[12px] sm:text-[13px] rounded-xl px-3.5 py-2 transition-all"
+                style={on
+                  ? { background: `${x.color}1a`, color: x.color, border: `1px solid ${x.color}40` }
+                  : { color: "#64748b", border: "1px solid transparent" }}>
+                <span>{x.icon}</span>
+                {t(`home.use_${x.k}_label`)}
+                {x.soon && <span className="text-[9px] uppercase tracking-wider text-[#FBBF24]">soon</span>}
+              </button>
+            );
+          })}
+        </div>
+      </Reveal>
+
+      {/* Panel */}
+      <div className="grid lg:grid-cols-2 gap-4 sm:gap-5 items-stretch">
+        <Reveal key={`copy-${active}`}>
+          <div className="ba-card h-full rounded-2xl p-6 sm:p-7 flex flex-col justify-center">
+            <div className="text-lg font-semibold mb-2" style={{ color: tab.color }}>
+              {t(`home.use_${tab.k}_label`)}
+            </div>
+            <p className="text-slate-400 text-[14px] sm:text-[15px] leading-relaxed mb-5">
+              {t(`home.use_${tab.k}_desc`)}
+            </p>
+            {tab.k === "chat" && (
+              <div className="flex flex-wrap gap-2">
+                {CHAT_COMMANDS.map((c) => (
+                  <span key={c} className="font-mono text-[12px] text-[#4FC3F7] border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-lg px-2.5 py-1">{c}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        </Reveal>
+        <Reveal key={`prev-${active}`} delay={60}>
+          <UsePreview tab={active} />
+        </Reveal>
+      </div>
     </div>
   );
 }
@@ -213,8 +338,8 @@ export default function Home() {
 
           <h1 className="text-[2.75rem] leading-[1.04] sm:text-6xl lg:text-7xl font-bold tracking-tight mb-5">
             {lang === "zh"
-              ? <>Base <span className="text-[#4FC3F7]">的构建者操作系统</span></>
-              : <>The Builder OS<br className="hidden sm:block" /> for <span className="text-[#4FC3F7]">Base</span></>}
+              ? t("home.hero_title")
+              : <>The Builder OS<br className="hidden sm:block" /> for <span className="text-[#4FC3F7]">Base.</span></>}
           </h1>
           <p className="text-base sm:text-xl text-slate-400 mb-9 max-w-2xl mx-auto leading-relaxed">
             {t("home.hero_subtitle")}
@@ -228,7 +353,7 @@ export default function Home() {
             <Link href="/hub" className="text-sm font-semibold text-[#4FC3F7] border border-[#4FC3F7]/30 px-7 py-3 rounded-xl hover:bg-[#4FC3F7]/5 transition-all">
               {t("home.cta_browse_hub")}
             </Link>
-<a href="https://dexscreener.com/base/0xf895783b2931c919955e18b5e3343e7c7c456ba3"
+            <a href="https://dexscreener.com/base/0xf895783b2931c919955e18b5e3343e7c7c456ba3"
               target="_blank" rel="noopener noreferrer"
               className="text-sm font-semibold px-7 py-3 rounded-xl transition-all border border-[#4FC3F7]/30 text-[#4FC3F7] hover:bg-[#4FC3F7]/5">
               $BLUEAGENT ↗
@@ -274,7 +399,7 @@ export default function Home() {
                       <p className="text-[13px] text-slate-300 leading-relaxed">
                         <span className="text-white font-semibold">AERO</span> — $0.52, +5% 24h, $25.6M liquidity. Whale accumulation confirmed over the last 50 transfers. Entry near $0.49 support, kill below $0.46.
                       </p>
-                      <p className="text-[11px] text-slate-600 font-mono">3-agent consensus · Blue × Aeon × MiroShark</p>
+                      <p className="text-[11px] text-slate-600 font-mono">live DexScreener + onchain transfers · x402 settled on Base</p>
                     </div>
                   </div>
                 </div>
@@ -287,51 +412,100 @@ export default function Home() {
           </Reveal>
         </section>
 
-        {/* ══════════ 1.0 CHAT ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
-          <SectionHead
-            num="1.0" kicker={t("home.s_chat_kicker")}
-            title={lang === "zh" ? t("home.s_chat_title")
-              : <>Talk to AI. <span className="text-[#4FC3F7]">Build onchain.</span></>}
-            sub={t("home.s_chat_sub")}
-          />
-          <div className="grid lg:grid-cols-2 gap-4 sm:gap-5 items-stretch">
-            {/* LEFT — typing chat mockup */}
-            <Reveal>
-              <ChatMockup />
-            </Reveal>
-            {/* RIGHT — 2×2 feature cards */}
-            <Reveal delay={80}>
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 h-full">
-                {CHAT_FEATURES.map((card) => (
-                  <div
-                    key={card.label}
-                    className="ba-card rounded-2xl p-4 sm:p-5"
-                  >
-                    <Glyph icon={card.icon} size={22} />
-                    <div className="text-sm font-semibold mt-2.5 mb-1.5" style={{ color: card.color }}>{card.label}</div>
-                    <p className="font-mono text-[11px] text-slate-500 leading-relaxed">{card.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </Reveal>
-          </div>
-          {/* Slash command chips */}
-          <Reveal className="mt-5">
-            <div className="flex flex-wrap gap-2">
-              {CHAT_COMMANDS.map((c) => (
-                <span key={c} className="font-mono text-[13px] text-[#4FC3F7] border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-lg px-3 py-1.5">{c}</span>
+        {/* ══════════ MODELS STRIP ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-14 sm:py-20 border-t border-[#13131d]">
+          <Reveal className="text-center mb-8">
+            <div className="font-mono text-[11px] tracking-[0.22em] mb-3">
+              <span className="text-[#818CF8]">// 0.0</span>
+              <span className="text-slate-600 ml-2 uppercase">{t("home.s_models_kicker")}</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-3 text-white">
+              {lang === "zh" ? t("home.s_models_title")
+                : <>One chat. <span className="text-[#818CF8]">Every frontier model.</span></>}
+            </h2>
+            <p className="text-slate-400 text-[14px] sm:text-base leading-relaxed max-w-2xl mx-auto">{t("home.s_models_sub")}</p>
+          </Reveal>
+          <Reveal delay={80}>
+            <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3">
+              {MODELS.map((m) => (
+                <span key={m.name}
+                  className="flex items-center gap-2 font-mono text-[12px] sm:text-[13px] rounded-full border px-3.5 py-1.5"
+                  style={{ borderColor: `${m.color}33`, background: `${m.color}0d`, color: m.color }}>
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: m.color, boxShadow: `0 0 6px ${m.color}` }} />
+                  {m.name}
+                </span>
               ))}
             </div>
           </Reveal>
         </section>
 
-        {/* ══════════ 2.0 HUB ══════════ */}
+        {/* ══════════ 1.0 ONE STACK ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
-            num="2.0" kicker={t("home.s_hub_kicker")} accent="#A78BFA"
+            num="1.0" kicker={t("home.s_stack_kicker")}
+            title={lang === "zh" ? t("home.s_stack_title")
+              : <>One agent runtime on Base. <span className="text-[#4FC3F7]">Every surface shares it.</span></>}
+            sub={t("home.s_stack_sub")}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            {PRODUCTS.map((p, i) => {
+              const label = t(`home.stack_${p.k}_label`);
+              const desc  = t(`home.stack_${p.k}_desc`);
+              const inner = (
+                <div className="ba-card h-full rounded-2xl p-5 sm:p-6 relative">
+                  {p.soon && (
+                    <span className="absolute top-4 right-4 font-mono text-[10px] uppercase tracking-wider text-[#FBBF24] border border-[#FBBF24]/30 bg-[#FBBF24]/5 rounded px-1.5 py-0.5">
+                      {t("home.stack_soon")}
+                    </span>
+                  )}
+                  <div className="mb-3"><Glyph icon={p.icon} size={26} /></div>
+                  <div className="text-base font-semibold mb-1.5" style={{ color: p.color }}>{label}</div>
+                  <p className="font-mono text-[12px] text-slate-500 leading-relaxed">{desc}</p>
+                </div>
+              );
+              return (
+                <Reveal key={p.k} delay={i * 60}>
+                  {p.href
+                    ? <Link href={p.href} className="block h-full transition-transform hover:-translate-y-0.5">{inner}</Link>
+                    : <div className="h-full opacity-90">{inner}</div>}
+                </Reveal>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* ══════════ 2.0 MANIFESTO — reads the chain ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+          <Reveal>
+            <div className="font-mono text-[11px] tracking-[0.22em] mb-5">
+              <span className="text-[#4FC3F7]">// 2.0</span>
+              <span className="text-slate-600 ml-2 uppercase">{t("home.s_why_kicker")}</span>
+            </div>
+            <h2 className="text-3xl sm:text-5xl font-bold tracking-tight leading-[1.08] mb-6 max-w-3xl">
+              {lang === "zh" ? t("home.s_why_title")
+                : <>Most chatbots <span className="text-slate-500">guess</span> about crypto.<br className="hidden sm:block" /> Blue Chat <span className="text-[#4FC3F7]">reads it.</span></>}
+            </h2>
+            <p className="text-slate-400 text-[15px] sm:text-lg leading-relaxed max-w-2xl">{t("home.s_why_sub")}</p>
+          </Reveal>
+        </section>
+
+        {/* ══════════ 3.0 HOW YOU USE BLUE ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+          <SectionHead
+            num="3.0" kicker={t("home.s_chat_kicker")} accent="#34D399"
+            title={lang === "zh" ? t("home.s_chat_title")
+              : <>One chat. <span className="text-[#34D399]">Every job.</span></>}
+            sub={t("home.s_chat_sub")}
+          />
+          <HowYouUse />
+        </section>
+
+        {/* ══════════ 4.0 HUB ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+          <SectionHead
+            num="4.0" kicker={t("home.s_hub_kicker")} accent="#A78BFA"
             title={lang === "zh" ? t("home.s_hub_title")
-              : <>74 tools. <span className="text-[#A78BFA]">Pay what you use.</span></>}
+              : <>74 tools. <span className="text-[#A78BFA]">Called inside the chat.</span></>}
             sub={t("home.s_hub_sub")}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
@@ -358,48 +532,33 @@ export default function Home() {
           </Reveal>
         </section>
 
-        {/* 3.0 FEED section removed while Blue Feed is rebuilt (route /feed → 404).
-            Restore the full section + FEED_METRICS/FEED_TOOLS from git history
-            when the feed relaunches. */}
-
-        {/* ══════════ 4.0 AGENTS ══════════ */}
+        {/* ══════════ 5.0 TWO WAYS IN ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
-            num="4.0" kicker={t("home.s_agents_kicker")}
-            title={lang === "zh" ? t("home.s_agents_title")
-              : <>Three agents. <span className="text-[#4FC3F7]">One platform.</span></>}
-            sub={t("home.s_agents_sub")}
+            num="5.0" kicker={t("home.s_ways_kicker")} accent="#60A5FA"
+            title={lang === "zh" ? t("home.s_ways_title")
+              : <>One agent. <span className="text-[#60A5FA]">Two ways in.</span></>}
+            sub={t("home.s_ways_sub")}
           />
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-            {AGENTS.map((a, i) => (
-              <Reveal key={a.name} delay={i * 80}>
-                <div className="ba-card h-full rounded-2xl p-6">
-                  <div className="mb-3"><Glyph icon={a.icon} size={28} /></div>
-                  <div className="text-base font-semibold mb-1" style={{ color: a.color }}>{a.name}</div>
-                  <p className="font-mono text-[12px] text-slate-500 leading-relaxed">{a.role}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </section>
-
-        {/* ══════════ 5.0 INTEGRATIONS ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
-          <SectionHead
-            num="5.0" kicker={t("home.s_integrations_kicker")} accent="#60A5FA"
-            title={lang === "zh" ? t("home.s_integrations_title")
-              : <>Built for the <span className="text-[#60A5FA]">agent economy</span></>}
-            sub={t("home.s_integrations_sub")}
-          />
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
-            {INTEGRATIONS.map((it, i) => (
-              <Reveal key={it.name} delay={i * 55}>
-                <div className="ba-card h-full rounded-2xl p-5">
-                  <div className="text-sm font-semibold mb-2" style={{ color: it.color }}>{it.name}</div>
-                  <p className="font-mono text-[11px] text-slate-500 leading-relaxed">{it.desc}</p>
-                </div>
-              </Reveal>
-            ))}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 mb-6">
+            <Reveal>
+              <div className="ba-card h-full rounded-2xl p-6 flex flex-col">
+                <div className="text-sm font-semibold mb-2 text-[#4FC3F7]">{t("home.ways_chat_label")}</div>
+                <p className="font-mono text-[12px] text-slate-500 leading-relaxed mb-5">{t("home.ways_chat_desc")}</p>
+                <Link href="/app/chat" className="mt-auto text-sm font-semibold text-[#4FC3F7] border border-[#4FC3F7]/30 px-5 py-2.5 rounded-xl text-center hover:bg-[#4FC3F7]/5 transition-all">
+                  {t("home.cta_open_chat")}
+                </Link>
+              </div>
+            </Reveal>
+            <Reveal delay={80}>
+              <div className="ba-card h-full rounded-2xl p-6 flex flex-col">
+                <div className="text-sm font-semibold mb-2 text-[#60A5FA]">{t("home.ways_api_label")}</div>
+                <p className="font-mono text-[12px] text-slate-500 leading-relaxed mb-5">{t("home.ways_api_desc")}</p>
+                <Link href="/docs/x402" className="mt-auto text-sm font-semibold text-[#60A5FA] border border-[#60A5FA]/30 px-5 py-2.5 rounded-xl text-center hover:bg-[#60A5FA]/5 transition-all">
+                  {t("home.final_install_mcp")}
+                </Link>
+              </div>
+            </Reveal>
           </div>
           <Reveal>
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a10] overflow-hidden">
@@ -424,7 +583,7 @@ export default function Home() {
           <SectionHead
             num="6.0" kicker={t("home.s_pricing_kicker")} accent="#34D399"
             title={lang === "zh" ? t("home.s_pricing_title")
-              : <>Hold $BLUEAGENT. <span className="text-[#34D399]">Build for free.</span></>}
+              : <>Hold $BLUEAGENT. <span className="text-[#34D399]">Chat for free.</span></>}
             sub={t("home.s_pricing_sub")}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
