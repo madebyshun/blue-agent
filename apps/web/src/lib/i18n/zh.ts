@@ -7,42 +7,64 @@ export const zh: Dict = {
   // ─── Marketing (blueagent.dev) ──────────────────────────────────────────────
   home: {
     badge: "构建于 Base · x402 原生",
-    hero_title: "Base 的构建者操作系统",
+    hero_title: "与一个会读链上数据的智能体对话。",
     hero_subtitle:
-      "与 AI 智能体对话。运行 74 个工具。发行代币。在链上构建并扩展规模 —— 一站式平台。",
+      "Blue Chat 拉取实时 Base 数据，运行 74 个真实工具，并在对话中直接完成链上操作。无需安装，无需钱包即可开始。",
     cta_open_chat: "打开 Blue Chat →",
     cta_browse_hub: "浏览中心",
     cta_token: "$BLUEAGENT ↗",
 
-    s_chat_kicker: "聊天",
-    s_chat_title: "与 AI 对话，在链上构建。",
-    s_chat_sub:
-      "Blue Chat 将您的意图路由到合适的工具。实时中心工具、多模型、技能驱动。为 Base 而生。",
+    // 1 · 一套技术栈（产品矩阵）
+    s_stack_kicker: "技术栈",
+    s_stack_title: "Base 上的一套智能体运行时，所有入口共享它。",
+    s_stack_sub:
+      "对话、工具、MCP、连接器 —— 同一个大脑、同一个钱包、同一份实时 Base 数据。用最合适的入口。",
+    stack_chat_label: "Blue Chat",
+    stack_chat_desc: "直接对话 —— 无需钱包即可开始。多模型：Kimi K2、DeepSeek、Claude、Grok。",
+    stack_hub_label: "Blue Hub",
+    stack_hub_desc: "74 个 x402 工具，任何智能体都能调用。在 Base 上按次用 USDC 付费。",
+    stack_mcp_label: "Blue MCP",
+    stack_mcp_desc: "在 Claude Code、Cursor 和 Claude Desktop 中运行整套工具。",
+    stack_conn_label: "Blue Connector",
+    stack_conn_desc: "接入任意外部 MCP 服务器，在对话中直接使用它的工具。",
+    stack_bank_label: "BlueBank",
+    stack_bank_desc: "Base 上的非托管支付 —— 扫码即付。",
+    stack_soon: "即将推出",
 
+    // 2 · 宣言
+    s_why_kicker: "为什么选 Blue Chat",
+    s_why_title: "大多数聊天机器人在猜测加密数据。Blue Chat 直接读取它。",
+    s_why_sub:
+      "通用 AI 会编造代币数据、看不到钱包、也无法执行操作。Blue Chat 连接实时 Base 数据和 74 个真实工具 —— 每个数字都有来源，而非猜测。",
+
+    // 3 · 斜杠命令
+    s_chat_kicker: "命令",
+    s_chat_title: "输入 / —— 即刻运行。",
+    s_chat_sub:
+      "五个创始人命令加上实时链上工具，行内运行 —— 与 CLI 同等能力。",
+
+    // 4 · 中心
     s_hub_kicker: "中心",
-    s_hub_title: "74 个工具，按使用量付费。",
+    s_hub_title: "74 个工具，在对话中直接调用。",
     s_hub_sub:
       "Base 智能体的情报层。原始数据、安全检查、alpha 信号 —— 全部 x402 原生。无需 API 密钥，无需订阅。",
     hub_browse_all: "浏览全部 74 个 →",
     hub_browse_sub: "9 个分类 · 实时数据",
     hub_pricing_line: "低至 $0.01/次 · 使用 USDC 或 $BLUEAGENT 支付",
 
-    s_feed_kicker: "动态",
-    s_feed_title: "实时 Base 情报，全天候。",
-    feed_cta: "查看 Blue Feed →",
+    // 5 · 两种接入方式
+    s_ways_kicker: "接入",
+    s_ways_title: "一个智能体，两种接入方式。",
+    s_ways_sub:
+      "像人一样与它对话，或通过 x402 / MCP 从你自己的智能体调用它 —— 同一个大脑，同一份 Base 数据。",
+    ways_chat_label: "面向个人",
+    ways_chat_desc: "在浏览器打开 Blue Chat。无需安装，无需钱包即可开始。",
+    ways_api_label: "面向智能体",
+    ways_api_desc: "通过 x402 / MCP 调用任意工具。在 Base 上按次用 USDC 付费 —— 无需注册。",
 
-    s_agents_kicker: "智能体",
-    s_agents_title: "三个智能体，一个平台。",
-    s_agents_sub:
-      "每个输出都是三方智能体共识。不是单一模型的猜测 —— 而是三种角色的推理。",
-
-    s_integrations_kicker: "集成",
-    s_integrations_title: "为智能体经济而生",
-    s_integrations_sub:
-      "BlueAgent 从第一天起就是 x402 原生。智能体向智能体付费，无需人工介入。",
-
+    // 6 · 定价
     s_pricing_kicker: "定价",
-    s_pricing_title: "持有 $BLUEAGENT，免费构建。",
+    s_pricing_title: "持有 $BLUEAGENT，免费对话。",
     s_pricing_sub:
       "额度每天刷新。无需订阅。只需持有 $BLUEAGENT 即可构建。",
     pricing_x402_line: "x402：$0.01–$0.20/次 · USDC 或 $BLUEAGENT · 无需注册",
@@ -56,7 +78,7 @@ export const zh: Dict = {
     final_install_mcp: "安装 MCP →",
     final_read_docs: "阅读文档 →",
 
-    footer_tagline: "Base 的构建者操作系统",
+    footer_tagline: "Base 上的链上智能体",
     footer_powered: "由 Bankr · Venice AI 提供支持 · x402 原生 · Base",
   },
   nav_marketing: {
