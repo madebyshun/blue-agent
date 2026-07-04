@@ -16,22 +16,24 @@
  *                sum; no wallet is ever part of the key).
  *   - Users:     KV `claim:count` — # wallets that claimed the free-credit airdrop
  *                (a count only; capped at 300). The closest honest "onboarded" number.
- *   - Active:    KV `stats:users:count` — distinct wallets that ever spent credits.
- *   - Credits:   KV `stats:credits:spent` / `stats:chat:messages` — global running
- *                totals written at the spend() choke point (credit-ledger.ts).
+ *   - Activity:  Derived live from every `ledger:<addr>` row via getLedgerActivity()
+ *                — distinct wallets that spent, Σ credits debited, and chat-message
+ *                spend events. COUNTS/SUMS only; no address is ever emitted.
  *   - Product:   AGENT_TOOLS catalog length + the 5 core commands (static).
  *
- * NOTE (no fabrication): the active-users / credits-spent / chat-messages counters
- * are GLOBAL aggregates (no wallet in the key) incremented at the single spend()
- * choke point. They accumulate from instrumentation-deploy forward — they are NOT a
- * historical backfill, so the UI must frame them as "since <date>", not all-time.
- * Every value still degrades to 0 on a source failure; none is ever invented.
+ * NOTE (no fabrication): the active-users / credits-spent / chat-messages numbers
+ * are computed by scanning the existing per-wallet ledgers and summing their
+ * recorded spend history — real all-time activity, not a fabricated or forward-only
+ * counter. Per-row history is capped at 50 events, so the credit/message sums are
+ * exact at current scale and a conservative floor thereafter. Every value degrades
+ * to 0 on a source failure; none is ever invented.
  */
 
 import { getLaunches } from "./launches";
 import { getTotalStaked, STAKING_ADDRESS_VERIFIED, formatBlue } from "./staking";
 import { AGENT_TOOLS } from "./agent-tools";
 import { kvGet } from "./kv";
+import { getLedgerActivity } from "./credit-ledger";
 
 export interface PublicLaunchLite {
   name:       string;
@@ -166,14 +168,14 @@ export async function buildPublicStats(): Promise<PublicStats> {
   let claims = 0;
   try { claims = (await kvGet<number>("claim:count")) ?? 0; } catch { /* leave 0 */ }
 
-  // ── Active users + credits spent + chat messages (aggregate counters) ──
-  // Written at the spend() choke point in credit-ledger.ts. Each is a global
-  // running total with NO wallet in the key — accumulates from instrumentation
-  // deploy forward (not a historical backfill).
+  // ── Active users + credits spent + chat messages ──
+  // Derived live from the existing per-wallet ledgers (aggregate counts/sums only,
+  // no address emitted) — real all-time activity, not a forward-only counter.
   let totalUsers = 0, creditsSpent = 0, chatMessages = 0;
-  try { totalUsers   = (await kvGet<number>("stats:users:count"))    ?? 0; } catch { /* 0 */ }
-  try { creditsSpent = (await kvGet<number>("stats:credits:spent"))  ?? 0; } catch { /* 0 */ }
-  try { chatMessages = (await kvGet<number>("stats:chat:messages"))  ?? 0; } catch { /* 0 */ }
+  try {
+    const act = await getLedgerActivity();
+    totalUsers = act.activeUsers; creditsSpent = act.creditsSpent; chatMessages = act.chatMessages;
+  } catch { /* degrade to zeros */ }
 
   return {
     updatedAt: Date.now(),
