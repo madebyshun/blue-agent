@@ -7,12 +7,18 @@ export const zh: Dict = {
   // ─── Marketing (blueagent.dev) ──────────────────────────────────────────────
   home: {
     badge: "构建于 Base · x402 原生",
-    hero_title: "与一个会读链上数据的智能体对话。",
+    hero_title: "Base 上的构建者操作系统",
     hero_subtitle:
-      "Blue Chat 拉取实时 Base 数据，运行 74 个真实工具，并在对话中直接完成链上操作。无需安装，无需钱包即可开始。",
+      "与一个会读链上数据的智能体对话 —— 实时 Base 数据、74 个真实工具，以及在对话中直接完成的链上操作。从构思到融资：idea → build → audit → ship → raise。",
     cta_open_chat: "打开 Blue Chat →",
     cta_browse_hub: "浏览中心",
     cta_token: "$BLUEAGENT ↗",
+
+    // 0 · 模型
+    s_models_kicker: "模型",
+    s_models_title: "一个对话，接入所有前沿模型。",
+    s_models_sub:
+      "对话中随时切换模型 —— 前沿与开源、快速与私密。无需新密钥，无需新标签页。",
 
     // 1 · 一套技术栈（产品矩阵）
     s_stack_kicker: "技术栈",
@@ -29,6 +35,10 @@ export const zh: Dict = {
     stack_conn_desc: "接入任意外部 MCP 服务器，在对话中直接使用它的工具。",
     stack_bank_label: "BlueBank",
     stack_bank_desc: "Base 上的非托管支付 —— 扫码即付。",
+    stack_image_label: "Blue Image",
+    stack_image_desc: "在对话中生成图像 —— 链上原生，按次付费。",
+    stack_video_label: "Blue Video",
+    stack_video_desc: "在对话中文生视频，在 Base 上结算。",
     stack_soon: "即将推出",
 
     // 2 · 宣言
@@ -37,11 +47,21 @@ export const zh: Dict = {
     s_why_sub:
       "通用 AI 会编造代币数据、看不到钱包、也无法执行操作。Blue Chat 连接实时 Base 数据和 74 个真实工具 —— 每个数字都有来源，而非猜测。",
 
-    // 3 · 斜杠命令
-    s_chat_kicker: "命令",
-    s_chat_title: "输入 / —— 即刻运行。",
+    // 3 · 如何使用 Blue（模态标签）
+    s_chat_kicker: "如何使用",
+    s_chat_title: "一个对话，胜任每种任务。",
     s_chat_sub:
-      "五个创始人命令加上实时链上工具，行内运行 —— 与 CLI 同等能力。",
+      "对话、连接、写代码 —— 无需离开 Blue 即可切换模态。图像与视频即将到来。",
+    use_chat_label: "对话",
+    use_chat_desc: "提问、运行 / 命令、读取实时 Base 数据 —— 无需钱包即可开始。",
+    use_code_label: "代码",
+    use_code_desc: "用 Kimi K2 运行 /build 与 /audit —— 架构、安全审查、上线清单。",
+    use_connect_label: "连接",
+    use_connect_desc: "接入任意 MCP 服务器 —— GitHub、Notion、Base Docs —— 工具直接出现在对话中。",
+    use_image_label: "图像",
+    use_image_desc: "在对话中直接生成图像。即将推出。",
+    use_video_label: "视频",
+    use_video_desc: "在对话中文生视频。即将推出。",
 
     // 4 · 中心
     s_hub_kicker: "中心",
