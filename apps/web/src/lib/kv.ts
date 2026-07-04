@@ -37,6 +37,13 @@ const fallback = {
     memStore.set(key, { value: val, expiresAt: entry?.expiresAt });
     return val;
   },
+  async incrby(key: string, by: number): Promise<number> {
+    if (memClean(key)) memStore.set(key, { value: 0 });
+    const entry = memStore.get(key);
+    const val = ((entry?.value as number) ?? 0) + by;
+    memStore.set(key, { value: val, expiresAt: entry?.expiresAt });
+    return val;
+  },
 };
 
 // ─── Upstash Redis client ─────────────────────────────────────────────────────
@@ -45,6 +52,7 @@ type KVClient = {
   set(key: string, value: unknown, opts?: { ex?: number }): Promise<void>;
   del(...keys: string[]): Promise<void>;
   incr(key: string): Promise<number>;
+  incrby(key: string, by: number): Promise<number>;
 };
 
 // Resolve Upstash REST credentials from either env var convention:
@@ -73,6 +81,7 @@ function getKV(): KVClient {
               opts?.ex ? redis.set(key, value, { ex: opts.ex }) : redis.set(key, value),
       del:  (...keys: string[]) => redis.del(...keys),
       incr: (key: string) => redis.incr(key),
+      incrby: (key: string, by: number) => redis.incrby(key, by),
     };
   }
 
@@ -123,3 +132,36 @@ export async function kvSetNX(key: string, value: unknown, ttlSeconds: number): 
 }
 
 export const isKVEnabled = (): boolean => kvCreds() !== null;
+
+/**
+ * Scan keys matching a glob pattern (e.g. "ledger:*").
+ *
+ * Cursor-paginates the Upstash SCAN until exhausted or `max` keys collected
+ * (a safety cap so a huge keyspace can't blow up a request). In the in-memory
+ * fallback it filters the local Map by prefix. Fault-tolerant: returns whatever
+ * it gathered on error, never throws.
+ */
+export async function kvScan(match: string, max = 10000): Promise<string[]> {
+  try {
+    const creds = kvCreds();
+    if (!creds) {
+      // Fallback: only "prefix*" globs are supported locally.
+      const prefix = match.endsWith("*") ? match.slice(0, -1) : match;
+      return [...memStore.keys()].filter((k) => k.startsWith(prefix)).slice(0, max);
+    }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Redis } = require("@upstash/redis");
+    const redis = new Redis({ url: creds.url, token: creds.token });
+    const keys: string[] = [];
+    let cursor = "0";
+    do {
+      // scan(cursor, { match, count }) → [nextCursor, keys]
+      const [next, batch] = (await redis.scan(cursor, { match, count: 500 })) as [string, string[]];
+      keys.push(...batch);
+      cursor = next;
+    } while (cursor !== "0" && keys.length < max);
+    return keys.slice(0, max);
+  } catch {
+    return [];
+  }
+}
