@@ -10,40 +10,82 @@ export const en = {
     badge: "Built on Base · x402 native",
     hero_title: "The Builder OS for Base",
     hero_subtitle:
-      "Chat with AI agents. Run 74 tools. Launch tokens. Build and scale onchain — all in one platform.",
+      "Chat with an agent that reads the chain — live Base data, 74 real tools, and onchain actions right in the conversation. Idea → build → audit → ship → raise.",
     cta_open_chat: "Open Blue Chat →",
     cta_browse_hub: "Browse Hub",
     cta_token: "$BLUEAGENT ↗",
 
-    s_chat_kicker: "Chat",
-    s_chat_title: "Talk to AI. Build onchain.",
-    s_chat_sub:
-      "Blue Chat routes your intent to the right tool. Live Hub tools, multi-model, skill-based. Built for Base.",
+    // 0 · Models strip
+    s_models_kicker: "Models",
+    s_models_title: "One chat. Every frontier model.",
+    s_models_sub:
+      "Switch models mid-conversation — frontier and open, fast and private. No new key, no new tab.",
 
+    // 1 · One stack (product suite)
+    s_stack_kicker: "The stack",
+    s_stack_title: "One agent runtime on Base. Every surface shares it.",
+    s_stack_sub:
+      "Chat, tools, MCP, connectors — one brain, one wallet, one set of live Base data. Reach for whichever surface fits.",
+    stack_chat_label: "Blue Chat",
+    stack_chat_desc: "Talk to it — no wallet to start. Multi-model: Kimi K2, DeepSeek, Claude, Grok.",
+    stack_hub_label: "Blue Hub",
+    stack_hub_desc: "74 x402 tools any agent can call. Pay-per-call in USDC on Base.",
+    stack_mcp_label: "Blue MCP",
+    stack_mcp_desc: "Run the whole toolset inside Claude Code, Cursor & Claude Desktop.",
+    stack_conn_label: "Blue Connector",
+    stack_conn_desc: "Attach any external MCP server and use its tools right in chat.",
+    stack_bank_label: "BlueBank",
+    stack_bank_desc: "Non-custodial payments on Base — scan to pay.",
+    stack_image_label: "Blue Image",
+    stack_image_desc: "Generate images from chat — onchain-native, pay-per-render.",
+    stack_video_label: "Blue Video",
+    stack_video_desc: "Text-to-video right in the conversation, settled on Base.",
+    stack_soon: "Soon",
+
+    // 2 · Manifesto
+    s_why_kicker: "Why Blue Chat",
+    s_why_title: "Most chatbots guess about crypto. Blue Chat reads it.",
+    s_why_sub:
+      "Generic AI hallucinates token data, can't see a wallet, and can't act. Blue Chat is wired to live Base data and 74 real tools — every number comes from a source, not a guess.",
+
+    // 3 · How you use Blue (modality tabs)
+    s_chat_kicker: "How to use",
+    s_chat_title: "One chat. Every job.",
+    s_chat_sub:
+      "Chat, connect, and code — switch modality without ever leaving Blue. Image and video are coming.",
+    use_chat_label: "Chat",
+    use_chat_desc: "Ask anything, run /commands, read live Base data — no wallet to start.",
+    use_code_label: "Code",
+    use_code_desc: "/build and /audit with Kimi K2 — architecture, security review, ship checklist.",
+    use_connect_label: "Connect",
+    use_connect_desc: "Attach any MCP server — GitHub, Notion, Base Docs — its tools appear inline.",
+    use_image_label: "Image",
+    use_image_desc: "Generate images right in the chat. Coming soon.",
+    use_video_label: "Video",
+    use_video_desc: "Text-to-video in the conversation. Coming soon.",
+
+    // 4 · Hub
     s_hub_kicker: "Hub",
-    s_hub_title: "74 tools. Pay what you use.",
+    s_hub_title: "74 tools. Called inside the chat.",
     s_hub_sub:
       "The intelligence layer for Base agents. Raw data, security checks, alpha signals — all x402 native. No API key. No subscription.",
     hub_browse_all: "Browse all 74 →",
     hub_browse_sub: "9 categories · live data",
     hub_pricing_line: "From $0.01/call · Pay in USDC or $BLUEAGENT",
 
-    s_feed_kicker: "Feed",
-    s_feed_title: "Live Base intelligence. 24/7.",
-    feed_cta: "View Blue Feed →",
+    // 5 · Two ways in
+    s_ways_kicker: "Access",
+    s_ways_title: "One agent. Two ways in.",
+    s_ways_sub:
+      "Chat it like a human, or call it from your own agent over x402 / MCP — same brain, same Base data.",
+    ways_chat_label: "For people",
+    ways_chat_desc: "Open Blue Chat in the browser. No install, no wallet to start.",
+    ways_api_label: "For agents",
+    ways_api_desc: "Call any tool over x402 / MCP. Pay per call in USDC on Base — no signup.",
 
-    s_agents_kicker: "Agents",
-    s_agents_title: "Three agents. One platform.",
-    s_agents_sub:
-      "Every output is a 3-agent consensus. Not one model guessing — three roles reasoning.",
-
-    s_integrations_kicker: "Integrations",
-    s_integrations_title: "Built for the agent economy",
-    s_integrations_sub:
-      "BlueAgent is x402 native from day one. Agents pay agents. No human in the loop.",
-
+    // 6 · Pricing
     s_pricing_kicker: "Pricing",
-    s_pricing_title: "Hold $BLUEAGENT. Build for free.",
+    s_pricing_title: "Hold $BLUEAGENT. Chat for free.",
     s_pricing_sub:
       "Credits refresh every day. No subscription. Just hold $BLUEAGENT and build.",
     pricing_x402_line: "x402: $0.01–$0.20/call · USDC or $BLUEAGENT · no signup",
@@ -57,7 +99,7 @@ export const en = {
     final_install_mcp: "Install MCP →",
     final_read_docs: "Read Docs →",
 
-    footer_tagline: "The Builder OS for Base",
+    footer_tagline: "The onchain agent for Base",
     footer_powered: "Powered by Bankr · Venice AI · x402 native · Base",
   },
   nav_marketing: {
