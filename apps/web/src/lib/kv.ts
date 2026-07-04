@@ -37,6 +37,13 @@ const fallback = {
     memStore.set(key, { value: val, expiresAt: entry?.expiresAt });
     return val;
   },
+  async incrby(key: string, by: number): Promise<number> {
+    if (memClean(key)) memStore.set(key, { value: 0 });
+    const entry = memStore.get(key);
+    const val = ((entry?.value as number) ?? 0) + by;
+    memStore.set(key, { value: val, expiresAt: entry?.expiresAt });
+    return val;
+  },
 };
 
 // ─── Upstash Redis client ─────────────────────────────────────────────────────
@@ -45,6 +52,7 @@ type KVClient = {
   set(key: string, value: unknown, opts?: { ex?: number }): Promise<void>;
   del(...keys: string[]): Promise<void>;
   incr(key: string): Promise<number>;
+  incrby(key: string, by: number): Promise<number>;
 };
 
 // Resolve Upstash REST credentials from either env var convention:
@@ -73,6 +81,7 @@ function getKV(): KVClient {
               opts?.ex ? redis.set(key, value, { ex: opts.ex }) : redis.set(key, value),
       del:  (...keys: string[]) => redis.del(...keys),
       incr: (key: string) => redis.incr(key),
+      incrby: (key: string, by: number) => redis.incrby(key, by),
     };
   }
 

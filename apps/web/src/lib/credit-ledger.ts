@@ -19,7 +19,7 @@
  * via a contract redeploy + KV → on-chain migration.
  */
 
-import { kvGet, kvSet } from "./kv";
+import { kvGet, kvSet, kv, kvSetNX } from "./kv";
 import { getTierInfo, fetchBlueBalance } from "./credits";
 
 // A connected wallet's spendable balance has TWO buckets:
@@ -91,6 +91,30 @@ export interface LedgerEvent {
 }
 
 const key = (addr: string) => `ledger:${addr.toLowerCase()}`;
+
+// ─── Aggregate stats counters (for /stats — never per-user) ──────────────────
+// These are GLOBAL running totals with no wallet in the key, incremented at the
+// single spend() choke point. They accumulate from first-deploy forward — they
+// are NOT a historical backfill, so /stats labels them "since instrumentation".
+// Every write is fault-tolerant: a KV failure must never block a real spend.
+export const STATS_USERS_KEY    = "stats:users:count";    // distinct wallets that ever spent
+export const STATS_CREDITS_KEY  = "stats:credits:spent";  // Σ credits debited (chat + tool)
+export const STATS_MESSAGES_KEY = "stats:chat:messages";  // chat messages debited (reason "chat:*")
+
+async function bumpSpendStats(addr: string, amount: number, reason: string): Promise<void> {
+  try {
+    // Distinct-user count: first-ever spend from this wallet flips a permanent
+    // seen-flag (no TTL) → then bump the aggregate count. The flag key holds the
+    // address, but it is never emitted; only the COUNT is surfaced.
+    const firstSeen = await kvSetNX(`stats:user:seen:${addr}`, 1, 10 * 365 * 24 * 3600);
+    if (firstSeen) await kv.incr(STATS_USERS_KEY);
+
+    await kv.incrby(STATS_CREDITS_KEY, Math.round(amount));
+    if (reason.startsWith("chat:")) await kv.incr(STATS_MESSAGES_KEY);
+  } catch {
+    /* stats are best-effort — never block a spend on a counter write */
+  }
+}
 
 async function loadLedger(addr: string): Promise<LedgerRow> {
   const row = await kvGet<LedgerRow | string>(key(addr));
@@ -196,6 +220,7 @@ export async function spend(
   ledger.dailySpent = dailySpent;
   ledger.history.push({ ts: Date.now(), kind: "spend", amount, reason, ref });
   await saveLedger(addr, ledger);
+  await bumpSpendStats(addr, amount, reason);
 
   const newPool  = Math.max(0, accrued + ledger.topup - ledger.spent);
   const newDaily = Math.max(0, dailyCr - dailySpent);
