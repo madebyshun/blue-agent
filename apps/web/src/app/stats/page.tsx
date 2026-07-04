@@ -21,22 +21,22 @@ function fmt(n: number): string {
   return n.toLocaleString("en-US");
 }
 
-function relDay(ms: number): string {
-  if (!ms) return "";
-  const d = Math.floor((Date.now() - ms) / 86_400_000);
-  if (d <= 0) return "today";
-  if (d === 1) return "1d ago";
-  return `${d}d ago`;
-}
-
 export default async function StatsPage() {
   const stats = await buildPublicStats();
-  const { launches, staking, product } = stats;
+  const { launches, staking, product, usage, users } = stats;
 
   const heroCards = [
-    { value: fmt(launches.total),          label: "Tokens Launched", color: "#4FC3F7" },
-    { value: staking.totalStakedBlue,      label: "BLUE Staked",     color: "#34D399" },
-    { value: fmt(launches.uniqueCreators), label: "Creators",        color: "#A78BFA" },
+    { value: fmt(usage.totalRuns),    label: "Tool Runs",       color: "#4FC3F7" },
+    { value: staking.totalStakedBlue, label: "BLUE Staked",     color: "#34D399" },
+    { value: fmt(launches.total),     label: "Tokens Launched", color: "#A78BFA" },
+  ];
+
+  // Usage & user aggregates — every value has a real KV/on-chain source.
+  const usageCells = [
+    { value: fmt(usage.totalRuns),          label: "Total Tool Runs", sub: "lifetime paid x402 calls", color: "#4FC3F7" },
+    { value: usage.revenueEst,              label: "Est. Revenue",    sub: "Σ runs × price (USDC)",     color: "#34D399" },
+    { value: fmt(users.claims),             label: "Wallets Onboarded", sub: `free-credit claims · cap ${users.claimCap}`, color: "#A78BFA" },
+    { value: fmt(launches.uniqueCreators),  label: "Creators",        sub: "unique token launchers",   color: "#FBBF24" },
   ];
 
   return (
@@ -85,42 +85,28 @@ export default async function StatsPage() {
           </div>
         </section>
 
-        {/* ══ GROWTH CHART ══ */}
-        {launches.byDay.length > 0 && (
-          <section className="max-w-5xl mx-auto px-6 py-10">
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6">
-              <div className="flex items-baseline justify-between mb-6">
-                <h2 className="font-mono text-sm text-white">Launches per day</h2>
-                <span className="font-mono text-[10px] text-slate-600">
-                  peak {launches.peakPerDay}/day
-                </span>
+        {/* ══ USAGE & CREDITS ══ */}
+        <section className="max-w-5xl mx-auto px-6 py-6">
+          <div className="flex items-baseline justify-between mb-4">
+            <h2 className="font-mono text-sm text-white">Usage &amp; credits</h2>
+            <span className="font-mono text-[10px] text-slate-600">aggregate · real sources</span>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-[#1A1A2E] rounded-2xl overflow-hidden border border-[#1A1A2E]">
+            {usageCells.map((c) => (
+              <div key={c.label} className="bg-[#0a0a0f] p-5">
+                <div className="font-mono text-2xl sm:text-3xl font-bold mb-1" style={{ color: c.color }}>
+                  {c.value}
+                </div>
+                <div className="font-mono text-[10px] text-slate-400 tracking-wide uppercase">{c.label}</div>
+                <div className="font-mono text-[10px] text-slate-600 mt-1">{c.sub}</div>
               </div>
-              <div className="flex items-end gap-1 h-40">
-                {launches.byDay.map((d) => {
-                  const h = launches.peakPerDay ? Math.round((d.count / launches.peakPerDay) * 100) : 0;
-                  return (
-                    <div key={d.date} className="flex-1 flex flex-col items-center justify-end group" title={`${d.date}: ${d.count}`}>
-                      <span className="font-mono text-[8px] text-slate-500 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {d.count}
-                      </span>
-                      <div
-                        className="w-full rounded-t"
-                        style={{
-                          height: `${Math.max(h, 3)}%`,
-                          background: "linear-gradient(180deg, #4FC3F7 0%, #4FC3F730 100%)",
-                        }}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="flex justify-between mt-3 font-mono text-[9px] text-slate-700">
-                <span>{launches.byDay[0]?.date}</span>
-                <span>{launches.byDay[launches.byDay.length - 1]?.date}</span>
-              </div>
-            </div>
-          </section>
-        )}
+            ))}
+          </div>
+          <p className="font-mono text-[10px] text-slate-600 mt-3 leading-relaxed">
+            Credits are earned by staking $BLUEAGENT or claimed free at signup, then spent per Blue Chat message.
+            Balances are per-wallet and private — only these aggregate counts are shown.
+          </p>
+        </section>
 
         {/* ══ STAKING + PRODUCT ══ */}
         <section className="max-w-5xl mx-auto px-6 py-6 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -135,18 +121,10 @@ export default async function StatsPage() {
               </span>
               <span className="font-mono text-sm text-slate-500">BLUE</span>
             </div>
-            <p className="font-mono text-[11px] text-slate-500 leading-relaxed mb-4">
+            <p className="font-mono text-[11px] text-slate-500 leading-relaxed">
               Total $BLUEAGENT staked in the BlueMarketStaking contract, earning
-              USDC yield + Blue Chat credits.
+              USDC yield + Blue Chat credits. Verifiable on-chain on Base (8453).
             </p>
-            <a
-              href={staking.explorerUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-mono text-[10px] text-[#4FC3F7] hover:underline"
-            >
-              Verify on Basescan ↗
-            </a>
           </div>
 
           {/* Product breadth */}
@@ -174,41 +152,26 @@ export default async function StatsPage() {
           </div>
         </section>
 
-        {/* ══ LIVE FEED ══ */}
-        {launches.recent.length > 0 && (
+        {/* ══ TOP TOOLS BY RUNS ══ */}
+        {usage.topTools.length > 0 && (
           <section className="max-w-5xl mx-auto px-6 py-10">
             <div className="flex items-baseline justify-between mb-4">
-              <h2 className="font-mono text-sm text-white">Recently launched through Blue Agent</h2>
-              <span className="font-mono text-[10px] text-slate-600">newest first</span>
+              <h2 className="font-mono text-sm text-white">Most-used tools</h2>
+              <span className="font-mono text-[10px] text-slate-600">by lifetime runs</span>
             </div>
             <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden divide-y divide-[#111119]">
-              {launches.recent.map((l, i) => (
-                <a
-                  key={`${l.address}-${i}`}
-                  href={`https://basescan.org/token/${l.address}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 px-5 py-3 bg-[#0a0a0f] hover:bg-[#0d0d18] transition-colors"
-                >
-                  <div className="w-7 h-7 rounded-full bg-[#4FC3F715] border border-[#4FC3F730] flex items-center justify-center shrink-0">
-                    <span className="font-mono text-[10px] text-[#4FC3F7]">
-                      {(l.symbol || l.name || "?").slice(0, 2).toUpperCase()}
-                    </span>
+              {usage.topTools.map((tl, i) => {
+                const max = usage.topTools[0]?.runs || 1;
+                const pct = Math.max(4, Math.round((tl.runs / max) * 100));
+                return (
+                  <div key={`${tl.name}-${i}`} className="relative flex items-center gap-3 px-5 py-3 bg-[#0a0a0f]">
+                    <div className="absolute inset-y-0 left-0 bg-[#4FC3F70d]" style={{ width: `${pct}%` }} aria-hidden />
+                    <span className="relative font-mono text-[10px] text-slate-600 w-5 shrink-0">{i + 1}</span>
+                    <span className="relative font-mono text-xs text-white flex-1 truncate">{tl.name}</span>
+                    <span className="relative font-mono text-xs text-[#4FC3F7] shrink-0">{fmt(tl.runs)}</span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-mono text-xs text-white truncate">
-                      {l.name || "Unnamed"}
-                      {l.symbol ? <span className="text-slate-500"> ${l.symbol}</span> : null}
-                    </p>
-                    <p className="font-mono text-[9px] text-slate-600 truncate">
-                      {l.address.slice(0, 10)}…{l.address.slice(-6)}
-                    </p>
-                  </div>
-                  <span className="font-mono text-[9px] text-slate-700 shrink-0">
-                    {relDay(l.launchedAt)}
-                  </span>
-                </a>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}
