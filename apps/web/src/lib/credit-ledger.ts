@@ -19,7 +19,7 @@
  * via a contract redeploy + KV → on-chain migration.
  */
 
-import { kvGet, kvSet, kv, kvSetNX } from "./kv";
+import { kvGet, kvSet, kvScan } from "./kv";
 import { getTierInfo, fetchBlueBalance } from "./credits";
 
 // A connected wallet's spendable balance has TWO buckets:
@@ -92,30 +92,6 @@ export interface LedgerEvent {
 
 const key = (addr: string) => `ledger:${addr.toLowerCase()}`;
 
-// ─── Aggregate stats counters (for /stats — never per-user) ──────────────────
-// These are GLOBAL running totals with no wallet in the key, incremented at the
-// single spend() choke point. They accumulate from first-deploy forward — they
-// are NOT a historical backfill, so /stats labels them "since instrumentation".
-// Every write is fault-tolerant: a KV failure must never block a real spend.
-export const STATS_USERS_KEY    = "stats:users:count";    // distinct wallets that ever spent
-export const STATS_CREDITS_KEY  = "stats:credits:spent";  // Σ credits debited (chat + tool)
-export const STATS_MESSAGES_KEY = "stats:chat:messages";  // chat messages debited (reason "chat:*")
-
-async function bumpSpendStats(addr: string, amount: number, reason: string): Promise<void> {
-  try {
-    // Distinct-user count: first-ever spend from this wallet flips a permanent
-    // seen-flag (no TTL) → then bump the aggregate count. The flag key holds the
-    // address, but it is never emitted; only the COUNT is surfaced.
-    const firstSeen = await kvSetNX(`stats:user:seen:${addr}`, 1, 10 * 365 * 24 * 3600);
-    if (firstSeen) await kv.incr(STATS_USERS_KEY);
-
-    await kv.incrby(STATS_CREDITS_KEY, Math.round(amount));
-    if (reason.startsWith("chat:")) await kv.incr(STATS_MESSAGES_KEY);
-  } catch {
-    /* stats are best-effort — never block a spend on a counter write */
-  }
-}
-
 async function loadLedger(addr: string): Promise<LedgerRow> {
   const row = await kvGet<LedgerRow | string>(key(addr));
   if (!row) return { spent: 0, topup: 0, history: [] };
@@ -129,6 +105,54 @@ async function saveLedger(addr: string, row: LedgerRow): Promise<void> {
   // Cap history at last 50 events so the row never grows unbounded.
   if (row.history.length > 50) row.history = row.history.slice(-50);
   await kvSet(key(addr), JSON.stringify(row));
+}
+
+function coerceLedger(raw: LedgerRow | string | null): LedgerRow | null {
+  if (!raw) return null;
+  if (typeof raw === "string") {
+    try { return JSON.parse(raw) as LedgerRow; } catch { return null; }
+  }
+  return raw;
+}
+
+// ─── Aggregate activity (for /stats — AGGREGATE only, never per-wallet) ──────
+export interface LedgerActivity {
+  activeUsers:  number;  // distinct wallets that have spent at least once
+  creditsSpent: number;  // Σ credits debited across all wallets (chat + tools)
+  chatMessages: number;  // spend events whose reason begins "chat:"
+}
+
+/**
+ * Derive global activity totals by scanning every `ledger:<addr>` row and summing
+ * their recorded spend history. Returns COUNTS/SUMS only — no address is ever
+ * emitted. Because per-row history is capped at 50 events (see saveLedger), the
+ * credit/message sums reflect *recorded* history (exact at current scale; a
+ * conservative floor once any single wallet exceeds 50 lifetime events).
+ * Fully fault-tolerant: any failure degrades to zeros, never throws.
+ */
+export async function getLedgerActivity(): Promise<LedgerActivity> {
+  try {
+    const keys = await kvScan("ledger:*");
+    if (keys.length === 0) return { activeUsers: 0, creditsSpent: 0, chatMessages: 0 };
+
+    const rows = await Promise.all(keys.map((k) => kvGet<LedgerRow | string>(k)));
+
+    let activeUsers = 0, creditsSpent = 0, chatMessages = 0;
+    for (const raw of rows) {
+      const row = coerceLedger(raw);
+      if (!row || !Array.isArray(row.history)) continue;
+      const spends = row.history.filter((e) => e.kind === "spend");
+      if (spends.length === 0 && (row.spent ?? 0) <= 0) continue; // topup-only wallet
+      activeUsers += 1;
+      for (const e of spends) {
+        creditsSpent += e.amount || 0;
+        if (typeof e.reason === "string" && e.reason.startsWith("chat:")) chatMessages += 1;
+      }
+    }
+    return { activeUsers, creditsSpent, chatMessages };
+  } catch {
+    return { activeUsers: 0, creditsSpent: 0, chatMessages: 0 };
+  }
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -220,7 +244,6 @@ export async function spend(
   ledger.dailySpent = dailySpent;
   ledger.history.push({ ts: Date.now(), kind: "spend", amount, reason, ref });
   await saveLedger(addr, ledger);
-  await bumpSpendStats(addr, amount, reason);
 
   const newPool  = Math.max(0, accrued + ledger.topup - ledger.spent);
   const newDaily = Math.max(0, dailyCr - dailySpent);

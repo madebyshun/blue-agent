@@ -39,8 +39,8 @@ export default async function StatsPage() {
     { value: fmt(launches.uniqueCreators),  label: "Creators",        sub: "unique token launchers",   color: "#FBBF24" },
   ];
 
-  // Activity aggregates — global counters written at the spend() choke point.
-  // These accumulate from instrumentation deploy forward (not all-time history).
+  // Activity aggregates — derived live from the per-wallet ledgers (counts/sums
+  // only, no address emitted). Real all-time activity, not a forward-only counter.
   const activityCells = [
     { value: fmt(users.total),      label: "Active Users",   sub: "distinct wallets that spent", color: "#4FC3F7" },
     { value: fmt(credits.spent),    label: "Credits Spent",  sub: "Σ debited · chat + tools",    color: "#34D399" },
@@ -120,7 +120,7 @@ export default async function StatsPage() {
         <section className="max-w-5xl mx-auto px-6 py-6">
           <div className="flex items-baseline justify-between mb-4">
             <h2 className="font-mono text-sm text-white">Activity</h2>
-            <span className="font-mono text-[10px] text-slate-600">running totals · since instrumentation</span>
+            <span className="font-mono text-[10px] text-slate-600">all-time · from on-ledger history</span>
           </div>
           <div className="grid grid-cols-3 gap-px bg-[#1A1A2E] rounded-2xl overflow-hidden border border-[#1A1A2E]">
             {activityCells.map((c) => (
@@ -134,8 +134,8 @@ export default async function StatsPage() {
             ))}
           </div>
           <p className="font-mono text-[10px] text-slate-600 mt-3 leading-relaxed">
-            Global running totals, incremented per credit spend — aggregate only, no wallet is ever exposed.
-            Counting began when instrumentation shipped, so these reflect activity since then, not all-time.
+            Derived from the on-ledger spend history across all wallets — aggregate counts only, no wallet
+            is ever exposed. Reflects real activity to date.
           </p>
         </section>
 
