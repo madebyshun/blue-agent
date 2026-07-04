@@ -23,7 +23,7 @@ function fmt(n: number): string {
 
 export default async function StatsPage() {
   const stats = await buildPublicStats();
-  const { launches, staking, product, usage, users } = stats;
+  const { launches, staking, product, usage, users, credits } = stats;
 
   const heroCards = [
     { value: fmt(usage.totalRuns),    label: "Tool Runs",       color: "#4FC3F7" },
@@ -37,6 +37,14 @@ export default async function StatsPage() {
     { value: usage.revenueEst,              label: "Est. Revenue",    sub: "Σ runs × price (USDC)",     color: "#34D399" },
     { value: fmt(users.claims),             label: "Wallets Onboarded", sub: `free-credit claims · cap ${users.claimCap}`, color: "#A78BFA" },
     { value: fmt(launches.uniqueCreators),  label: "Creators",        sub: "unique token launchers",   color: "#FBBF24" },
+  ];
+
+  // Activity aggregates — global counters written at the spend() choke point.
+  // These accumulate from instrumentation deploy forward (not all-time history).
+  const activityCells = [
+    { value: fmt(users.total),      label: "Active Users",   sub: "distinct wallets that spent", color: "#4FC3F7" },
+    { value: fmt(credits.spent),    label: "Credits Spent",  sub: "Σ debited · chat + tools",    color: "#34D399" },
+    { value: fmt(credits.messages), label: "Chat Messages",  sub: "credited chat turns",         color: "#A78BFA" },
   ];
 
   return (
@@ -105,6 +113,29 @@ export default async function StatsPage() {
           <p className="font-mono text-[10px] text-slate-600 mt-3 leading-relaxed">
             Credits are earned by staking $BLUEAGENT or claimed free at signup, then spent per Blue Chat message.
             Balances are per-wallet and private — only these aggregate counts are shown.
+          </p>
+        </section>
+
+        {/* ══ ACTIVITY ══ */}
+        <section className="max-w-5xl mx-auto px-6 py-6">
+          <div className="flex items-baseline justify-between mb-4">
+            <h2 className="font-mono text-sm text-white">Activity</h2>
+            <span className="font-mono text-[10px] text-slate-600">running totals · since instrumentation</span>
+          </div>
+          <div className="grid grid-cols-3 gap-px bg-[#1A1A2E] rounded-2xl overflow-hidden border border-[#1A1A2E]">
+            {activityCells.map((c) => (
+              <div key={c.label} className="bg-[#0a0a0f] p-5">
+                <div className="font-mono text-2xl sm:text-3xl font-bold mb-1" style={{ color: c.color }}>
+                  {c.value}
+                </div>
+                <div className="font-mono text-[10px] text-slate-400 tracking-wide uppercase">{c.label}</div>
+                <div className="font-mono text-[10px] text-slate-600 mt-1">{c.sub}</div>
+              </div>
+            ))}
+          </div>
+          <p className="font-mono text-[10px] text-slate-600 mt-3 leading-relaxed">
+            Global running totals, incremented per credit spend — aggregate only, no wallet is ever exposed.
+            Counting began when instrumentation shipped, so these reflect activity since then, not all-time.
           </p>
         </section>
 

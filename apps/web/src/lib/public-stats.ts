@@ -16,12 +16,16 @@
  *                sum; no wallet is ever part of the key).
  *   - Users:     KV `claim:count` — # wallets that claimed the free-credit airdrop
  *                (a count only; capped at 300). The closest honest "onboarded" number.
+ *   - Active:    KV `stats:users:count` — distinct wallets that ever spent credits.
+ *   - Credits:   KV `stats:credits:spent` / `stats:chat:messages` — global running
+ *                totals written at the spend() choke point (credit-ledger.ts).
  *   - Product:   AGENT_TOOLS catalog length + the 5 core commands (static).
  *
- * NOTE (no fabrication): there is deliberately NO "total users", "credits spent",
- * or "chat messages" metric here — the codebase keeps no global counter for those
- * (the ledger is strictly per-wallet), so surfacing them would be invented. Only
- * numbers with a real aggregate source are exposed.
+ * NOTE (no fabrication): the active-users / credits-spent / chat-messages counters
+ * are GLOBAL aggregates (no wallet in the key) incremented at the single spend()
+ * choke point. They accumulate from instrumentation-deploy forward — they are NOT a
+ * historical backfill, so the UI must frame them as "since <date>", not all-time.
+ * Every value still degrades to 0 on a source failure; none is ever invented.
  */
 
 import { getLaunches } from "./launches";
@@ -64,6 +68,11 @@ export interface PublicStats {
   users: {
     claims:   number;  // wallets that claimed the free-credit airdrop (count only)
     claimCap: number;  // airdrop cap (300)
+    total:    number;  // distinct wallets that ever spent credits (count only)
+  };
+  credits: {
+    spent:    number;  // Σ credits debited across all wallets (chat + tool)
+    messages: number;  // chat messages debited (reason "chat:*")
   };
 }
 
@@ -157,6 +166,15 @@ export async function buildPublicStats(): Promise<PublicStats> {
   let claims = 0;
   try { claims = (await kvGet<number>("claim:count")) ?? 0; } catch { /* leave 0 */ }
 
+  // ── Active users + credits spent + chat messages (aggregate counters) ──
+  // Written at the spend() choke point in credit-ledger.ts. Each is a global
+  // running total with NO wallet in the key — accumulates from instrumentation
+  // deploy forward (not a historical backfill).
+  let totalUsers = 0, creditsSpent = 0, chatMessages = 0;
+  try { totalUsers   = (await kvGet<number>("stats:users:count"))    ?? 0; } catch { /* 0 */ }
+  try { creditsSpent = (await kvGet<number>("stats:credits:spent"))  ?? 0; } catch { /* 0 */ }
+  try { chatMessages = (await kvGet<number>("stats:chat:messages"))  ?? 0; } catch { /* 0 */ }
+
   return {
     updatedAt: Date.now(),
     launches: { total, uniqueCreators, peakPerDay, byDay, recent },
@@ -168,6 +186,7 @@ export async function buildPublicStats(): Promise<PublicStats> {
     },
     product: { tools, commands: CORE_COMMANDS },
     usage: { totalRuns, revenueEst: `$${revenueEstNum.toFixed(2)}`, topTools },
-    users: { claims, claimCap: CLAIM_CAP },
+    users: { claims, claimCap: CLAIM_CAP, total: totalUsers },
+    credits: { spent: creditsSpent, messages: chatMessages },
   };
 }
