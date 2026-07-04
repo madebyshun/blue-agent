@@ -8,12 +8,18 @@ export const en = {
   // ─── Marketing (blueagent.dev) ──────────────────────────────────────────────
   home: {
     badge: "Built on Base · x402 native",
-    hero_title: "Chat with an agent that reads the chain.",
+    hero_title: "The Builder OS for Base",
     hero_subtitle:
-      "Blue Chat pulls live Base data, runs 74 real tools, and ships onchain — right in the conversation. No install. Start with no wallet.",
+      "Chat with an agent that reads the chain — live Base data, 74 real tools, and onchain actions right in the conversation. Idea → build → audit → ship → raise.",
     cta_open_chat: "Open Blue Chat →",
     cta_browse_hub: "Browse Hub",
     cta_token: "$BLUEAGENT ↗",
+
+    // 0 · Models strip
+    s_models_kicker: "Models",
+    s_models_title: "One chat. Every frontier model.",
+    s_models_sub:
+      "Switch models mid-conversation — frontier and open, fast and private. No new key, no new tab.",
 
     // 1 · One stack (product suite)
     s_stack_kicker: "The stack",
@@ -30,6 +36,10 @@ export const en = {
     stack_conn_desc: "Attach any external MCP server and use its tools right in chat.",
     stack_bank_label: "BlueBank",
     stack_bank_desc: "Non-custodial payments on Base — scan to pay.",
+    stack_image_label: "Blue Image",
+    stack_image_desc: "Generate images from chat — onchain-native, pay-per-render.",
+    stack_video_label: "Blue Video",
+    stack_video_desc: "Text-to-video right in the conversation, settled on Base.",
     stack_soon: "Soon",
 
     // 2 · Manifesto
@@ -38,11 +48,21 @@ export const en = {
     s_why_sub:
       "Generic AI hallucinates token data, can't see a wallet, and can't act. Blue Chat is wired to live Base data and 74 real tools — every number comes from a source, not a guess.",
 
-    // 3 · Slash commands
-    s_chat_kicker: "Commands",
-    s_chat_title: "Type / — and it runs.",
+    // 3 · How you use Blue (modality tabs)
+    s_chat_kicker: "How to use",
+    s_chat_title: "One chat. Every job.",
     s_chat_sub:
-      "The five founder commands plus live on-chain tools, run inline — the same power as the CLI.",
+      "Chat, connect, and code — switch modality without ever leaving Blue. Image and video are coming.",
+    use_chat_label: "Chat",
+    use_chat_desc: "Ask anything, run /commands, read live Base data — no wallet to start.",
+    use_code_label: "Code",
+    use_code_desc: "/build and /audit with Kimi K2 — architecture, security review, ship checklist.",
+    use_connect_label: "Connect",
+    use_connect_desc: "Attach any MCP server — GitHub, Notion, Base Docs — its tools appear inline.",
+    use_image_label: "Image",
+    use_image_desc: "Generate images right in the chat. Coming soon.",
+    use_video_label: "Video",
+    use_video_desc: "Text-to-video in the conversation. Coming soon.",
 
     // 4 · Hub
     s_hub_kicker: "Hub",

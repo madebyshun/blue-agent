@@ -16,15 +16,39 @@ const SOCIAL_PROOF = ["74 AI tools", "x402 native", "MCP", "Bankr Skills", "Base
 
 const CHAT_COMMANDS = ["/idea", "/build", "/audit", "/ship", "/raise", "/pick", "/scan", "/wallet", "/launch"];
 
+// Models available in Blue Chat — names verified against ChatMessages MODEL_LABELS.
+// Switchable mid-conversation; frontier + open + private (E2EE).
+const MODELS: { name: string; color: string }[] = [
+  { name: "Kimi K2",         color: "#818CF8" },
+  { name: "DeepSeek V4",     color: "#34D399" },
+  { name: "Claude Opus 4.7", color: "#4FC3F7" },
+  { name: "Grok 4",          color: "#E879F9" },
+  { name: "Qwen3 235B",      color: "#FB923C" },
+  { name: "Mistral Small",   color: "#60A5FA" },
+  { name: "Private (E2EE)",  color: "#6EE7B7" },
+];
+
 // One stack — the product suite. Each surface shares the same runtime on Base.
 // `k` maps to the i18n keys home.stack_<k>_label / home.stack_<k>_desc.
 // icon: "logo" → BlueAgent logomark, otherwise an emoji glyph.
 const PRODUCTS: { k: string; color: string; icon: string; href: string | null; soon?: boolean }[] = [
-  { k: "chat", color: "#4FC3F7", icon: "logo", href: "/app/chat" },
-  { k: "hub",  color: "#A78BFA", icon: "🛒",  href: "/hub" },
-  { k: "mcp",  color: "#60A5FA", icon: "🔌",  href: "/docs/mcp" },
-  { k: "conn", color: "#34D399", icon: "🧩",  href: "/docs/blue-chat" },
-  { k: "bank", color: "#FBBF24", icon: "🏦",  href: null, soon: true },
+  { k: "chat",  color: "#4FC3F7", icon: "logo", href: "/app/chat" },
+  { k: "hub",   color: "#A78BFA", icon: "🛒",  href: "/hub" },
+  { k: "mcp",   color: "#60A5FA", icon: "🔌",  href: "/docs/mcp" },
+  { k: "conn",  color: "#34D399", icon: "🧩",  href: "/docs/blue-chat" },
+  { k: "bank",  color: "#FBBF24", icon: "🏦",  href: null, soon: true },
+  { k: "image", color: "#F472B6", icon: "🎨",  href: null, soon: true },
+  { k: "video", color: "#E879F9", icon: "🎬",  href: null, soon: true },
+];
+
+// How you use Blue — modality tabs (Dot-style). `k` maps to home.use_<k>_label/desc.
+// `soon` modalities render a placeholder preview instead of a live mock.
+const USE_TABS: { k: string; color: string; icon: string; soon?: boolean }[] = [
+  { k: "chat",    color: "#4FC3F7", icon: "💬" },
+  { k: "code",    color: "#818CF8", icon: "‹›" },
+  { k: "connect", color: "#34D399", icon: "🧩" },
+  { k: "image",   color: "#F472B6", icon: "🎨", soon: true },
+  { k: "video",   color: "#E879F9", icon: "🎬", soon: true },
 ];
 
 const HUB_CATEGORIES = [
@@ -174,6 +198,120 @@ function ChatMockup() {
   );
 }
 
+// ─── How you use Blue — modality tabs ─────────────────────────────────────────
+// Dot-style tabbed switcher. Each tab renders a left copy panel + a right preview.
+// `chat`/`code`/`connect` are live; `image`/`video` are Soon placeholders.
+
+function UsePreview({ tab }: { tab: string }) {
+  if (tab === "chat") return <ChatMockup />;
+
+  if (tab === "code") {
+    return (
+      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden h-full flex flex-col">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[#15151f]">
+          <span className="font-mono text-[12px] text-[#818CF8]">/build · Kimi K2</span>
+          <span className="ml-auto font-mono text-[10px] text-slate-600">$0.50 · USDC</span>
+        </div>
+        <pre className="flex-1 p-4 sm:p-5 whitespace-pre-wrap break-words font-mono text-[12px] sm:text-[13px] leading-relaxed m-0">
+<span className="text-[#818CF8]">/build</span><span className="text-slate-400"> a Base points program</span>
+{"\n\n"}<span className="text-[#34D399]">▸ stack</span><span className="text-slate-400">   Next.js · viem · Base 8453</span>
+{"\n"}<span className="text-[#34D399]">▸ contracts</span><span className="text-slate-400"> Points.sol · Distributor.sol</span>
+{"\n"}<span className="text-[#34D399]">▸ tests</span><span className="text-slate-400">   claim · rate-limit · reentrancy</span>
+{"\n\n"}<span className="text-slate-500">→ next: </span><span className="text-[#FBBF24]">/audit</span>
+        </pre>
+      </div>
+    );
+  }
+
+  if (tab === "connect") {
+    const conns = [
+      { icon: "🐙", name: "GitHub",    tools: "repos · PRs · code search" },
+      { icon: "🔵", name: "Base Docs", tools: "contracts · RPC · deploy" },
+      { icon: "📝", name: "Notion",    tools: "pages · search · update" },
+      { icon: "📖", name: "DeepWiki",  tools: "any public repo Q&A" },
+    ];
+    return (
+      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden h-full flex flex-col">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[#15151f]">
+          <span className="font-mono text-[12px] text-[#34D399]">Blue Connector · MCP</span>
+          <span className="ml-auto font-mono text-[10px] text-slate-600">attached</span>
+        </div>
+        <div className="flex-1 p-4 sm:p-5 space-y-2.5">
+          {conns.map((c) => (
+            <div key={c.name} className="flex items-center gap-3 rounded-lg border border-[#15151f] bg-[#0a0a10] px-3 py-2.5">
+              <span className="text-lg">{c.icon}</span>
+              <span className="font-mono text-[13px] text-slate-300">{c.name}</span>
+              <span className="ml-auto font-mono text-[11px] text-slate-600">{c.tools}</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" style={{ boxShadow: "0 0 6px #34D399" }} />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // image / video → Soon placeholder
+  return (
+    <div className="rounded-2xl border border-dashed border-[#1A1A2E] bg-[#0d0d12] h-full flex flex-col items-center justify-center gap-3 p-10 min-h-[280px]">
+      <span className="text-4xl opacity-70">{tab === "image" ? "🎨" : "🎬"}</span>
+      <span className="font-mono text-[11px] uppercase tracking-wider text-[#FBBF24] border border-[#FBBF24]/30 bg-[#FBBF24]/5 rounded px-2 py-0.5">Soon</span>
+    </div>
+  );
+}
+
+function HowYouUse() {
+  const { t } = useLang();
+  const [active, setActive] = useState("chat");
+  const tab = USE_TABS.find((x) => x.k === active) ?? USE_TABS[0];
+  return (
+    <div>
+      {/* Tab bar */}
+      <Reveal className="mb-8">
+        <div className="inline-flex flex-wrap gap-1.5 p-1.5 rounded-2xl border border-[#1A1A2E] bg-[#0a0a10]">
+          {USE_TABS.map((x) => {
+            const on = x.k === active;
+            return (
+              <button key={x.k} onClick={() => setActive(x.k)}
+                className="flex items-center gap-2 font-mono text-[12px] sm:text-[13px] rounded-xl px-3.5 py-2 transition-all"
+                style={on
+                  ? { background: `${x.color}1a`, color: x.color, border: `1px solid ${x.color}40` }
+                  : { color: "#64748b", border: "1px solid transparent" }}>
+                <span>{x.icon}</span>
+                {t(`home.use_${x.k}_label`)}
+                {x.soon && <span className="text-[9px] uppercase tracking-wider text-[#FBBF24]">soon</span>}
+              </button>
+            );
+          })}
+        </div>
+      </Reveal>
+
+      {/* Panel */}
+      <div className="grid lg:grid-cols-2 gap-4 sm:gap-5 items-stretch">
+        <Reveal key={`copy-${active}`}>
+          <div className="ba-card h-full rounded-2xl p-6 sm:p-7 flex flex-col justify-center">
+            <div className="text-lg font-semibold mb-2" style={{ color: tab.color }}>
+              {t(`home.use_${tab.k}_label`)}
+            </div>
+            <p className="text-slate-400 text-[14px] sm:text-[15px] leading-relaxed mb-5">
+              {t(`home.use_${tab.k}_desc`)}
+            </p>
+            {tab.k === "chat" && (
+              <div className="flex flex-wrap gap-2">
+                {CHAT_COMMANDS.map((c) => (
+                  <span key={c} className="font-mono text-[12px] text-[#4FC3F7] border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-lg px-2.5 py-1">{c}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        </Reveal>
+        <Reveal key={`prev-${active}`} delay={60}>
+          <UsePreview tab={active} />
+        </Reveal>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -201,7 +339,7 @@ export default function Home() {
           <h1 className="text-[2.75rem] leading-[1.04] sm:text-6xl lg:text-7xl font-bold tracking-tight mb-5">
             {lang === "zh"
               ? t("home.hero_title")
-              : <>Chat with an agent<br className="hidden sm:block" /> that <span className="text-[#4FC3F7]">reads the chain.</span></>}
+              : <>The Builder OS<br className="hidden sm:block" /> for <span className="text-[#4FC3F7]">Base.</span></>}
           </h1>
           <p className="text-base sm:text-xl text-slate-400 mb-9 max-w-2xl mx-auto leading-relaxed">
             {t("home.hero_subtitle")}
@@ -274,6 +412,33 @@ export default function Home() {
           </Reveal>
         </section>
 
+        {/* ══════════ MODELS STRIP ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-14 sm:py-20 border-t border-[#13131d]">
+          <Reveal className="text-center mb-8">
+            <div className="font-mono text-[11px] tracking-[0.22em] mb-3">
+              <span className="text-[#818CF8]">// 0.0</span>
+              <span className="text-slate-600 ml-2 uppercase">{t("home.s_models_kicker")}</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-3 text-white">
+              {lang === "zh" ? t("home.s_models_title")
+                : <>One chat. <span className="text-[#818CF8]">Every frontier model.</span></>}
+            </h2>
+            <p className="text-slate-400 text-[14px] sm:text-base leading-relaxed max-w-2xl mx-auto">{t("home.s_models_sub")}</p>
+          </Reveal>
+          <Reveal delay={80}>
+            <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3">
+              {MODELS.map((m) => (
+                <span key={m.name}
+                  className="flex items-center gap-2 font-mono text-[12px] sm:text-[13px] rounded-full border px-3.5 py-1.5"
+                  style={{ borderColor: `${m.color}33`, background: `${m.color}0d`, color: m.color }}>
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: m.color, boxShadow: `0 0 6px ${m.color}` }} />
+                  {m.name}
+                </span>
+              ))}
+            </div>
+          </Reveal>
+        </section>
+
         {/* ══════════ 1.0 ONE STACK ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
@@ -324,29 +489,15 @@ export default function Home() {
           </Reveal>
         </section>
 
-        {/* ══════════ 3.0 SLASH COMMANDS ══════════ */}
+        {/* ══════════ 3.0 HOW YOU USE BLUE ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
             num="3.0" kicker={t("home.s_chat_kicker")} accent="#34D399"
             title={lang === "zh" ? t("home.s_chat_title")
-              : <>Type <span className="text-[#34D399]">/</span> — and it runs.</>}
+              : <>One chat. <span className="text-[#34D399]">Every job.</span></>}
             sub={t("home.s_chat_sub")}
           />
-          <div className="grid lg:grid-cols-2 gap-4 sm:gap-5 items-stretch">
-            <Reveal><ChatMockup /></Reveal>
-            <Reveal delay={80}>
-              <div className="ba-card h-full rounded-2xl p-5 sm:p-6 flex flex-col justify-center">
-                <div className="flex flex-wrap gap-2">
-                  {CHAT_COMMANDS.map((c) => (
-                    <span key={c} className="font-mono text-[13px] text-[#4FC3F7] border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-lg px-3 py-1.5">{c}</span>
-                  ))}
-                </div>
-                <p className="font-mono text-[11px] text-slate-600 mt-4 leading-relaxed">
-                  The five founder commands — idea · build · audit · ship · raise — plus live on-chain tools, inline.
-                </p>
-              </div>
-            </Reveal>
-          </div>
+          <HowYouUse />
         </section>
 
         {/* ══════════ 4.0 HUB ══════════ */}
