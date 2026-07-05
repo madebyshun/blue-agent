@@ -287,10 +287,22 @@ export async function probeEndpoint(endpoint: string): Promise<ProbeResult> {
 // ─── Strict x402 probe — the auto-live gate ────────────────────────────────────
 //
 // agentic.market model: an External tool goes live the moment it proves it is a
-// working x402 endpoint — no human moderation. The endpoint MUST answer an
-// unauthenticated POST with HTTP 402 and a valid x402 payment-requirements body
-// (`accepts[0]` carrying payTo + asset + network). Spam without a real paid
-// endpoint fails this probe and is rejected. Base-only per the platform rule.
+// working x402 endpoint — no human moderation. Spam without a real paid endpoint
+// fails this probe and is rejected. Base-only per the platform rule.
+//
+// The probe sends an unauthenticated POST {} and looks for an x402 payment signal
+// that is BROADER than "status === 402", because some real x402 gateways validate
+// the request body FIRST and answer a body-less POST with 400 (missing fields) —
+// while STILL advertising payment requirements in the `payment-required` /
+// `x-payment-required` header (this is what blockrun.ai does). Treating those as
+// "not x402" wrongly rejected valid paid endpoints. We now accept an endpoint if
+// ANY of these hold, then parse the requirements (header first, then 402 body):
+//   • HTTP 402                                              (canonical)
+//   • a `payment-required` / `x-payment-required` header    (BlockRun, validate-first)
+//   • `www-authenticate` header mentioning x402
+//   • a JSON body carrying `x402Version` / `paymentInfo`, or the text "x402 payment"
+// Requirements (payTo + asset + network) are then extracted and the network is
+// verified as Base (8453 mainnet / 84532 sepolia). No signal → reject as before.
 
 export interface X402ProbeResult {
   ok:       boolean;
@@ -299,7 +311,58 @@ export interface X402ProbeResult {
   payTo?:   string;
   asset?:   string;
   network?: string;
-  aiReady:  boolean;                               // 402 body parsed as JSON
+  amount?:  string;                                // maxAmountRequired (atomic units) — kept as string to avoid precision loss
+  signal?:  string;                                // which x402 signal matched (status | payment-required header | www-authenticate | body)
+  aiReady:  boolean;                               // response body parsed as JSON
+}
+
+/** Base-only rule: accept Base mainnet (8453) or Base Sepolia (84532), in any
+ *  network encoding ("base", "base-sepolia", "eip155:8453", "eip155:84532"). */
+function isBaseNetwork(network: string): boolean {
+  const n = network.toLowerCase();
+  return n.includes("base") || /\b8453\b/.test(n) || /\b84532\b/.test(n);
+}
+
+/** Decode the `payment-required` header. x402 gateways carry the requirements as
+ *  base64(JSON); some send raw JSON. Try base64→JSON first, then raw JSON. */
+function parsePaymentRequiredHeader(raw: string): Record<string, unknown> | null {
+  const attempts: string[] = [];
+  try {
+    // base64 / base64url → utf8
+    const norm = raw.trim().replace(/-/g, "+").replace(/_/g, "/");
+    attempts.push(Buffer.from(norm, "base64").toString("utf8"));
+  } catch { /* ignore */ }
+  attempts.push(raw.trim()); // raw JSON fallback
+  for (const s of attempts) {
+    if (!s || !/[{[]/.test(s)) continue;
+    try {
+      const j = JSON.parse(s);
+      if (j && typeof j === "object") return j as Record<string, unknown>;
+    } catch { /* try next */ }
+  }
+  return null;
+}
+
+/** Pull the first payment-requirements object from a decoded header or 402 body.
+ *  Handles `{accepts:[…]}`, a bare `[…]`, `{paymentInfo:{accepts:[…]}}`, or a
+ *  single requirement object. */
+function firstRequirement(src: unknown): Record<string, unknown> | undefined {
+  if (!src || typeof src !== "object") return undefined;
+  const obj = src as Record<string, unknown>;
+  const accepts =
+    (Array.isArray(obj.accepts) ? obj.accepts : undefined) ??
+    (obj.paymentInfo && typeof obj.paymentInfo === "object"
+      ? (obj.paymentInfo as Record<string, unknown>).accepts
+      : undefined);
+  if (Array.isArray(accepts) && accepts[0] && typeof accepts[0] === "object") {
+    return accepts[0] as Record<string, unknown>;
+  }
+  if (Array.isArray(src) && src[0] && typeof src[0] === "object") {
+    return src[0] as Record<string, unknown>;
+  }
+  // A bare single requirement object (has payTo/asset/network directly).
+  if ("payTo" in obj || "network" in obj) return obj;
+  return undefined;
 }
 
 export async function probeX402Endpoint(endpoint: string): Promise<X402ProbeResult> {
@@ -318,32 +381,69 @@ export async function probeX402Endpoint(endpoint: string): Promise<X402ProbeResu
     return fail(0, `Could not reach endpoint: ${(e as Error).message}`);
   }
 
-  if (res.status !== 402) {
-    return fail(res.status, `Expected HTTP 402 (x402 payment required), got ${res.status}. External tools must be live, paid x402 endpoints.`);
+  // Read the body once as text, then try to parse JSON from it.
+  let bodyText = "";
+  try { bodyText = await res.text(); } catch { /* no body */ }
+  let bodyJson: Record<string, unknown> | undefined;
+  try {
+    const j = bodyText ? JSON.parse(bodyText) : undefined;
+    if (j && typeof j === "object") bodyJson = j as Record<string, unknown>;
+  } catch { /* not JSON */ }
+  const aiReady = bodyJson !== undefined;
+
+  // ── x402 signal detection (broader than status 402) ──
+  const hdr = (n: string) => res.headers.get(n) ?? "";
+  const payReqHeader = hdr("payment-required") || hdr("x-payment-required");
+  const wwwAuth      = hdr("www-authenticate");
+  const bodyHasX402  =
+    !!bodyJson && ("x402Version" in bodyJson || "paymentInfo" in bodyJson);
+
+  const signal =
+    res.status === 402       ? "status" :
+    payReqHeader             ? "payment-required header" :
+    /x402/i.test(wwwAuth)    ? "www-authenticate" :
+    bodyHasX402              ? "body" :
+    /x402 payment/i.test(bodyText) ? "body" :
+    null;
+
+  if (!signal) {
+    return fail(
+      res.status,
+      `No x402 payment signal (HTTP ${res.status}, no payment-required header). External tools must be live, paid x402 endpoints on Base.`,
+      { aiReady },
+    );
   }
 
-  let body: unknown;
-  try { body = await res.clone().json(); }
-  catch { return fail(402, "402 response was not JSON — missing x402 payment requirements.", { aiReady: false }); }
+  // ── Extract payment requirements (header first, then the 402 body) ──
+  let first: Record<string, unknown> | undefined;
+  if (payReqHeader) {
+    const decoded = parsePaymentRequiredHeader(payReqHeader);
+    if (decoded) first = firstRequirement(decoded);
+  }
+  if (!first && bodyJson) first = firstRequirement(bodyJson);
 
-  const accepts = (body as { accepts?: unknown })?.accepts;
-  const first   = Array.isArray(accepts) ? (accepts[0] as Record<string, unknown> | undefined) : undefined;
   if (!first) {
-    return fail(402, "402 response has no `accepts` payment requirements — not a valid x402 endpoint.", { aiReady: true });
+    return fail(
+      res.status,
+      "x402 signal present but no parseable payment requirements (accepts[]) — cannot verify payTo/asset/network.",
+      { aiReady, signal },
+    );
   }
 
-  const payTo   = typeof first.payTo   === "string" ? first.payTo   : undefined;
-  const asset   = typeof first.asset   === "string" ? first.asset   : undefined;
-  const network = typeof first.network === "string" ? first.network : undefined;
+  const str     = (v: unknown) => (typeof v === "string" ? v : typeof v === "number" ? String(v) : undefined);
+  const payTo   = str(first.payTo);
+  const asset   = str(first.asset);
+  const network = str(first.network);
+  const amount  = str(first.maxAmountRequired) ?? str(first.amount);
   const isAddr  = (s?: string) => !!s && /^0x[a-fA-F0-9]{40}$/.test(s);
 
-  if (!isAddr(payTo))  return fail(402, "x402 payment requirements missing a valid `payTo` address.", { aiReady: true });
-  if (!isAddr(asset))  return fail(402, "x402 payment requirements missing a valid `asset` (token) address.", { aiReady: true, payTo });
-  if (!network)        return fail(402, "x402 payment requirements missing `network`.", { aiReady: true, payTo, asset });
-  // Base-only platform rule (chain 8453).
-  if (!/base|8453/i.test(network)) {
-    return fail(402, `Network "${network}" is not Base. Blue Hub lists Base (chain 8453) x402 tools only.`, { aiReady: true, payTo, asset, network });
+  if (!isAddr(payTo))  return fail(res.status, "x402 payment requirements missing a valid `payTo` address.",            { aiReady, signal });
+  if (!isAddr(asset))  return fail(res.status, "x402 payment requirements missing a valid `asset` (token) address.",    { aiReady, signal, payTo });
+  if (!network)        return fail(res.status, "x402 payment requirements missing `network`.",                          { aiReady, signal, payTo, asset });
+  // Base-only platform rule (chain 8453 mainnet / 84532 sepolia).
+  if (!isBaseNetwork(network)) {
+    return fail(res.status, `Network "${network}" is not Base. Blue Hub lists Base (chain 8453) x402 tools only.`, { aiReady, signal, payTo, asset, network });
   }
 
-  return { ok: true, status: 402, aiReady: true, payTo, asset, network };
+  return { ok: true, status: res.status, aiReady, signal, payTo, asset, network, amount };
 }
