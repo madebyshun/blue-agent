@@ -353,7 +353,7 @@ function ModelUsageSection({ usage }: { usage: BankrUsage }) {
 // ─── main view ───────────────────────────────────────────────────────────────
 
 export default function StatsView({ stats, usage: modelUsage }: { stats: PublicStats; usage: BankrUsage }) {
-  const { launches, staking, product, usage, users, credits } = stats;
+  const { launches, staking, product, usage, users, credits, settlement } = stats;
   const staked = parseCompact(staking.totalStakedBlue);
   const revenue = parseFloat((usage.revenueEst ?? "").replace(/[^0-9.]/g, "")) || 0;
 
@@ -485,6 +485,58 @@ export default function StatsView({ stats, usage: modelUsage }: { stats: PublicS
             Derived from the on-ledger spend history across all wallets — aggregate counts only, no wallet
             is ever exposed. Reflects real activity to date.
           </p>
+        </section>
+
+        {/* ══ ONCHAIN SETTLEMENT (Coinbase CDP) ══ */}
+        <section className="max-w-5xl mx-auto px-6 py-6">
+          <Reveal>
+            <div className="flex items-baseline justify-between mb-4">
+              <h2 className="font-mono text-sm text-white">Onchain settlement</h2>
+              <span className="font-mono text-[10px] text-slate-600">real USDC · Coinbase CDP · Base</span>
+            </div>
+          </Reveal>
+          <Reveal delay={80}>
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6 transition-colors hover:border-[#0052FF40]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-2">USDC settled</p>
+                  {settlement.ok ? (
+                    <AnimatedNumber
+                      value={settlement.usdc} decimals={2} prefix="$"
+                      className="font-mono text-3xl font-bold text-[#0052FF]"
+                    />
+                  ) : (
+                    <span className="font-mono text-3xl font-bold text-slate-600">—</span>
+                  )}
+                </div>
+                <div>
+                  <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-2">Settlements</p>
+                  {settlement.ok ? (
+                    <AnimatedNumber
+                      value={settlement.count}
+                      className="font-mono text-3xl font-bold text-[#4FC3F7]"
+                    />
+                  ) : (
+                    <span className="font-mono text-3xl font-bold text-slate-600">—</span>
+                  )}
+                </div>
+              </div>
+              <p className="font-mono text-[11px] text-slate-500 leading-relaxed mt-4">
+                Real USDC settled on Base through the Coinbase CDP x402 facilitator for paid tool
+                calls — a live, forward-only meter of confirmed on-chain settlements. Aggregate only;
+                no payer address is ever stored.
+              </p>
+              {settlement.ok && settlement.lastTx && (
+                <a
+                  href={`https://basescan.org/tx/${settlement.lastTx}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="font-mono text-[10px] text-[#0052FF] hover:underline"
+                >
+                  Latest settlement on Basescan ↗
+                </a>
+              )}
+            </div>
+          </Reveal>
         </section>
 
         {/* ══ STAKING + PRODUCT ══ */}

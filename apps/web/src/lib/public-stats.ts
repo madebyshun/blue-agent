@@ -34,6 +34,7 @@ import { getTotalStaked, STAKING_ADDRESS_VERIFIED, formatBlue } from "./staking"
 import { AGENT_TOOLS } from "./agent-tools";
 import { kvGet } from "./kv";
 import { getLedgerActivity } from "./credit-ledger";
+import { getX402Settlements } from "./x402-settlements";
 
 export interface PublicLaunchLite {
   name:       string;
@@ -75,6 +76,12 @@ export interface PublicStats {
   credits: {
     spent:    number;  // Σ credits debited across all wallets (chat + tool)
     messages: number;  // chat messages debited (reason "chat:*")
+  };
+  settlement: {        // real USDC settled on Base via the Coinbase CDP facilitator
+    usdc:   number;    // human USDC settled (0 on source failure)
+    count:  number;    // # of confirmed on-chain settlements
+    lastTx: string | null; // latest settlement tx hash (Basescan proof) — null if none
+    ok:     boolean;   // false ⟹ meter unavailable → render "—", never a fake number
   };
 }
 
@@ -177,6 +184,15 @@ export async function buildPublicStats(): Promise<PublicStats> {
     totalUsers = act.activeUsers; creditsSpent = act.creditsSpent; chatMessages = act.chatMessages;
   } catch { /* degrade to zeros */ }
 
+  // ── Onchain settlement (Coinbase CDP facilitator) ──
+  // Aggregate USDC actually settled on Base via CDP /settle. Forward-only meter,
+  // count/sum/lastTx only — no wallet is ever stored. Null source ⟹ ok:false → "—".
+  let settlement = { usdc: 0, count: 0, lastTx: null as string | null, ok: false };
+  try {
+    const s = await getX402Settlements();
+    if (s) settlement = { usdc: s.usdc, count: s.count, lastTx: s.lastTx, ok: true };
+  } catch { /* leave ok:false → renders "—" */ }
+
   return {
     updatedAt: Date.now(),
     launches: { total, uniqueCreators, peakPerDay, byDay, recent },
@@ -190,5 +206,6 @@ export async function buildPublicStats(): Promise<PublicStats> {
     usage: { totalRuns, revenueEst: `$${revenueEstNum.toFixed(2)}`, topTools },
     users: { claims, claimCap: CLAIM_CAP, total: totalUsers },
     credits: { spent: creditsSpent, messages: chatMessages },
+    settlement,
   };
 }
