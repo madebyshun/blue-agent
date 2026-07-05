@@ -8,6 +8,7 @@
 
 import Navbar from "@/components/Navbar";
 import { buildPublicStats } from "@/lib/public-stats";
+import { getBankrUsage } from "@/lib/bankr-usage";
 import StatsView from "./StatsView";
 
 export const revalidate = 60;
@@ -19,12 +20,12 @@ export const metadata = {
 };
 
 export default async function StatsPage() {
-  const stats = await buildPublicStats();
+  const [stats, usage] = await Promise.all([buildPublicStats(), getBankrUsage()]);
 
   return (
     <div className="min-h-screen bg-[#050508] text-white">
       <Navbar />
-      <StatsView stats={stats} />
+      <StatsView stats={stats} usage={usage} />
     </div>
   );
 }
