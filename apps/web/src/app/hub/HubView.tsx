@@ -608,15 +608,21 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
       // generateMetadata; ?s= loads the shared result inline. A hash like
       // /hub#s= can't carry OG (crawlers never see the fragment), which is
       // why shared links used to preview as generic Blue Chat.
+      //
+      // Always the MARKETING origin: /hub/tool/<slug> only exists on
+      // blueagent.dev. On app.blueagent.dev the detail page is the clean
+      // /hub/<slug> (no /tool/), so using window.location.origin there would
+      // hand out a 404 link. The marketing host also owns the rich OG.
+      const SHARE_ORIGIN = "https://blueagent.dev";
       const url = data.id
-        ? `${window.location.origin}/hub/tool/${tool.id}?s=${data.id}`
-        : `${window.location.origin}/hub/tool/${tool.id}`;
+        ? `${SHARE_ORIGIN}/hub/tool/${tool.id}?s=${data.id}`
+        : `${SHARE_ORIGIN}/hub/tool/${tool.id}`;
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback: copy plain tool page link
-      await navigator.clipboard.writeText(`${window.location.origin}/hub/tool/${tool.id}`);
+      // Fallback: copy plain tool page link (marketing origin — see above)
+      await navigator.clipboard.writeText(`https://blueagent.dev/hub/tool/${tool.id}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }

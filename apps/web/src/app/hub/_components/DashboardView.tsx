@@ -23,6 +23,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAccount, useSignMessage } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
+import { useToolDetailHref } from "@/lib/hub-links";
 
 type Source = "external" | "hosted";
 
@@ -50,6 +51,7 @@ interface DashboardItem {
   id:          string;
   name:        string;
   description: string;
+  agentName?:  string;          // creator brand/handle (default = short owner addr)
   category:    string;
   price:       string;
   priceUSDC:   number;
@@ -234,6 +236,9 @@ function ToolRow({ t, owner, onRemoved }: { t: DashboardItem; owner: string; onR
   const { signMessageAsync } = useSignMessage();
   const [removing, setRemoving] = useState(false);
   const [rowErr, setRowErr]     = useState<string | null>(null);
+  const toolHref = useToolDetailHref();
+  // Who listed this tool — the creator's brand if they set one, else their wallet short-addr.
+  const creator = t.agentName?.trim() || shortAddr(owner);
 
   async function handleRemove() {
     if (removing) return;
@@ -281,6 +286,9 @@ function ToolRow({ t, owner, onRemoved }: { t: DashboardItem; owner: string; onR
             <span className="text-[9px] text-slate-700 ml-auto">{relTime(t.submittedAt)}</span>
           </div>
           <p className="text-sm font-semibold truncate">{t.name}</p>
+          <p className="text-[10px] text-slate-500 mb-0.5">
+            by <span className="text-[#A78BFA]">{creator}</span>
+          </p>
           <p className="text-[10px] text-slate-600 line-clamp-1 mb-2">{t.description}</p>
 
           {/* Metrics */}
@@ -300,7 +308,7 @@ function ToolRow({ t, owner, onRemoved }: { t: DashboardItem; owner: string; onR
 
         {/* Actions */}
         <div className="flex flex-col gap-1.5 shrink-0">
-          <Link href={`/hub/tool/${t.id}`}
+          <Link href={toolHref(t.id)}
             className="text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 transition-all text-center">
             Test ▸
           </Link>
