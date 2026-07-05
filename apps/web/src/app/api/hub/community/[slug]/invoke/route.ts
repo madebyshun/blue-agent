@@ -150,6 +150,9 @@ export async function POST(
         const builderShare = Math.floor((price * BUILDER_SHARE_BPS) / 10_000);
         await addBuilderEarnings(tool.builderAddress, builderShare);
         await incrHostedCalls(slug);
+        // Real USDC settled on Base via Coinbase CDP → aggregate /stats meter.
+        const { recordSettlement } = await import("@/lib/x402-settlements");
+        await recordSettlement(price, settle.tx);
         await finish({
           status: "done",
           result: { contentType: run.contentType, body: run.body },
