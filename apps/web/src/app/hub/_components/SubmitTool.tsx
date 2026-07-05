@@ -35,6 +35,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useAccount, useSignMessage } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
+import { useToolDetailHref } from "@/lib/hub-links";
 
 type Template = "external" | "ai_tool" | "api_wrapper";
 
@@ -113,6 +114,7 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
   const isShell = variant === "shell";
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
+  const toolHref = useToolDetailHref();
 
   // Which tool type
   const [template, setTemplate] = useState<Template>("external");
@@ -319,7 +321,7 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
             separate manual review by Blue Agent.
           </p>
           <div className="flex items-center justify-center gap-3 flex-wrap">
-            <Link href={`/hub/tool/${submitted.id}`} onClick={onClose}
+            <Link href={toolHref(submitted.id)} onClick={onClose}
               className="text-xs px-4 py-2 rounded-xl border border-[#4FC3F7]/30 text-[#4FC3F7] bg-[#4FC3F7]/5 hover:bg-[#4FC3F7]/10 transition-all">
               View on Hub →
             </Link>
