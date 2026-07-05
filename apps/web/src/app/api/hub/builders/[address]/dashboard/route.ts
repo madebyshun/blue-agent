@@ -25,6 +25,7 @@ interface DashboardItem {
   id:          string;             // external id | hosted slug
   name:        string;
   description: string;
+  agentName?:  string;             // creator brand/handle (default = short owner addr)
   category:    string;
   price:       string;
   priceUSDC:   number;
@@ -57,6 +58,7 @@ export async function GET(
     id:          t.id,
     name:        t.name,
     description: t.description,
+    agentName:   t.agentName,
     category:    t.category,
     price:       t.price,
     priceUSDC:   t.priceUSDC,
@@ -73,6 +75,7 @@ export async function GET(
     id:          h.slug,
     name:        h.name,
     description: h.description,
+    agentName:   h.agentName,
     category:    h.category,
     price:       h.price,
     priceUSDC:   h.priceUSDC,
