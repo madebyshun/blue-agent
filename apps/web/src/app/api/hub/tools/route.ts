@@ -128,6 +128,31 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // ── 4b. Price must match the endpoint's advertised amount ──────────────────
+  // x402 scheme "exact" verifies the signed authorization `value` against the
+  // endpoint's own maxAmountRequired byte-for-byte. If the listed price differs
+  // from what the endpoint actually charges, EVERY paid call fails at verify
+  // ("Payment verification failed") — a silently-broken tool. We already probe
+  // the real amount, so reject the mismatch up front. Only enforced when the
+  // probe returned a parseable positive integer amount (some validate-first
+  // gateways omit it — those we can't check, so we don't block).
+  const endpointUnits = probe.amount !== undefined ? Number(probe.amount) : NaN;
+  if (Number.isInteger(endpointUnits) && endpointUnits > 0 && endpointUnits !== body.priceUSDC) {
+    const usd = (u: number) => `$${(u / 1_000_000).toFixed(u % 10_000 === 0 ? 2 : 6)}`;
+    return NextResponse.json(
+      {
+        error:
+          `Price mismatch: your endpoint charges ${usd(endpointUnits)} (${endpointUnits} USDC units) ` +
+          `but you listed ${usd(body.priceUSDC)} (${body.priceUSDC} units). ` +
+          `Set the price to exactly match your endpoint, or every paid call will fail x402 verification.`,
+        endpointUnits,
+        listedUnits: body.priceUSDC,
+        probe,
+      },
+      { status: 422 },
+    );
+  }
+
   // ── 5. Save (live) ────────────────────────────────────────────────────────
   const tool: RegisteredTool = {
     id:             body.id,
