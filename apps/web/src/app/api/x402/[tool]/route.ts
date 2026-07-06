@@ -357,5 +357,11 @@ async function handle(
   // the ERC-8021 suffix with bc_2ejr35xc attribution to the settlement calldata.
   const settle = await cdpSettle(paymentPayload, requirements, resourceInfo, allExtensions);
   try { await kv.incr(`usage:${tool}`); } catch {}
+  // Real USDC settled on Base via Coinbase CDP → aggregate meter for /stats
+  // (only when the settlement actually cleared; aggregate, no wallet stored).
+  if (settle.ok) {
+    const { recordSettlement } = await import("@/lib/x402-settlements");
+    await recordSettlement(priceUnits, settle.tx);
+  }
   return NextResponse.json({ ...data, _settle: { ok: settle.ok, status: settle.status, tx: settle.tx } });
 }
