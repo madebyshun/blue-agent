@@ -24,8 +24,12 @@ export const runtime = "nodejs";
 
 export async function GET() {
   const tools = await listRegisteredTools();
+  // no-store: the registry is mutable (submit auto-lists, delete de-indexes). A
+  // CDN-cached list would keep serving a tool the creator just removed for up to
+  // the stale window — the reported "deleted tool still shows in Hub" bug. The
+  // list is tiny and KV-backed, so skipping the edge cache is cheap.
   return NextResponse.json({ tools, count: tools.length }, {
-    headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+    headers: { "Cache-Control": "no-store" },
   });
 }
 

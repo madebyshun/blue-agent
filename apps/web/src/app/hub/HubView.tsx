@@ -1382,6 +1382,11 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
     setView("browse");
     if (typeof window !== "undefined") window.history.pushState(null, "", "/hub");
   };
+  // Any sidebar filter (search / source / category / price) must drop you back
+  // into the browse grid. Without this, picking a filter while on the Creator
+  // Dashboard or Submit view mutates the filter state invisibly — the dashboard
+  // stays on screen and the "filtered" tools never appear.
+  const ensureBrowse = () => { if (view !== "browse") backToBrowse(); };
 
   // Open the tool from the route param (/app/hub/[tool]). Applies once the tool
   // is present (community tools load async), and only once.
@@ -1451,7 +1456,9 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
     const shortAddr = (a?: string) => a ? `${a.slice(0, 6)}…${a.slice(-4)}` : undefined;
 
     // External tools (builder hosts the endpoint; Hub proxies + forwards payment).
-    const external = fetch("/api/hub/tools")
+    // no-store: the registry is mutable (submit/delete) — a stale list would keep
+    // showing a tool the creator just removed, so never serve a cached copy here.
+    const external = fetch("/api/hub/tools", { cache: "no-store" })
       .then(r => r.ok ? r.json() : { tools: [] })
       .then((d: { tools: Registered[] }): Tool[] => (d.tools ?? []).map(r => ({
         id:             r.id,
@@ -1664,7 +1671,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
                 className="w-full bg-[#0D0D1A] border border-[#1A1A2E] rounded-lg px-3 py-2 font-mono text-xs text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/30 transition-colors"
                 placeholder="Search tools… ( / )"
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={e => { setSearch(e.target.value); ensureBrowse(); }}
               />
             </div>
 
@@ -1676,7 +1683,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
                   const active = source === s.key;
                   const count = sourceCounts[s.key];
                   return (
-                    <button key={s.key} onClick={() => setSource(s.key)}
+                    <button key={s.key} onClick={() => { setSource(s.key); ensureBrowse(); }}
                       className="font-mono text-[10px] px-2 py-1 rounded border transition-colors"
                       style={active
                         ? { color: s.color, borderColor: `${s.color}55`, background: `${s.color}12` }
@@ -1692,12 +1699,12 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
             <div className="px-4 pt-2 pb-3 border-t border-[#1A1A2E]">
               <p className="font-mono text-[9px] text-slate-700 tracking-widest mb-2">CATEGORY</p>
               <div className="flex flex-wrap gap-1.5">
-                <button onClick={() => setCat("all")}
+                <button onClick={() => { setCat("all"); ensureBrowse(); }}
                   className={`font-mono text-[10px] px-2 py-1 rounded border transition-colors ${cat === "all" ? "bg-[#4FC3F7]/15 text-[#4FC3F7] border-[#4FC3F7]/40" : "text-slate-600 border-[#1A1A2E] hover:text-slate-300"}`}>
                   All
                 </button>
                 {TOOL_GROUPS.map(g => (
-                  <button key={g.id} onClick={() => setCat(g.id as Category)}
+                  <button key={g.id} onClick={() => { setCat(g.id as Category); ensureBrowse(); }}
                     className="font-mono text-[10px] px-2 py-1 rounded border transition-colors"
                     style={cat === g.id
                       ? { background: g.color + "18", color: g.color, borderColor: g.color + "40" }
@@ -1718,7 +1725,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
                 {PRICE_CHIPS.map(p => {
                   const active = price === p.key;
                   return (
-                    <button key={p.key} onClick={() => setPrice(p.key)}
+                    <button key={p.key} onClick={() => { setPrice(p.key); ensureBrowse(); }}
                       className={`font-mono text-[10px] px-2 py-1 rounded border transition-colors ${active ? "bg-[#34D399]/15 text-[#34D399] border-[#34D399]/40" : "text-slate-600 border-[#1A1A2E] hover:text-slate-300"}`}>
                       {p.label}
                     </button>
@@ -1730,7 +1737,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
             {/* Clear filters — only when a filter is active */}
             {(search.trim() || cat !== "all" || source !== "all" || price !== "all") && (
               <div className="px-4 pb-4">
-                <button onClick={() => { setSearch(""); setCat("all"); setSource("all"); setPrice("all"); }}
+                <button onClick={() => { setSearch(""); setCat("all"); setSource("all"); setPrice("all"); ensureBrowse(); }}
                   className="font-mono text-[10px] text-slate-600 hover:text-white transition-colors">
                   ✕ Clear filters
                 </button>
@@ -1831,7 +1838,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
           {view === "submit"
             ? <SubmitTool variant="shell" onBack={backToBrowse} onSubmitted={() => loadCommunityTools()} />
             : view === "dashboard"
-            ? <DashboardView inShell onBack={backToBrowse} />
+            ? <DashboardView inShell onBack={() => { loadCommunityTools(); backToBrowse(); }} />
             : selected
             ? <ToolRunner
                 // Remount per tool (clean state); when a shared ?s= result
