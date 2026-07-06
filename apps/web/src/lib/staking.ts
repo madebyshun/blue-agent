@@ -155,8 +155,14 @@ export async function getTotalStaked(): Promise<bigint | null> {
 /** Format BLUE amount (wei) to human-readable string */
 export function formatBlue(wei: bigint): string {
   const whole = Number(wei) / 1e18;
-  if (whole >= 1_000_000) return (whole / 1_000_000).toFixed(1) + "M";
-  if (whole >= 1_000)     return (whole / 1_000).toFixed(0) + "K";
+  // Group with thousands separators so large balances stay readable, e.g. "1,322.3M".
+  if (whole >= 1_000_000) {
+    return (whole / 1_000_000).toLocaleString("en-US", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }) + "M";
+  }
+  if (whole >= 1_000) return (whole / 1_000).toFixed(0) + "K";
   return whole.toFixed(0);
 }
 
