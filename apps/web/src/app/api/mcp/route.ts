@@ -11,13 +11,24 @@
  *   }
  *
  * Protocol: JSON-RPC 2.0 over HTTP POST
- * Tools: 81 — 5 console + 66 hub_* + 8 blue_* first-party + blue_score/blue_new
- *        (78 unique x402 hub tools fully covered; 1 narrative alias; blue_score/blue_new are MCP-only)
+ * Tools: 86 — 5 console + 66 hub_* + 8 blue_* first-party + blue_score/blue_new
+ *        + 5 b20_* MCP-native calldata builders (deploy/mint/grant/payment/check_activation)
+ *        (78 unique x402 hub tools fully covered; 1 narrative alias; blue_score/blue_new
+ *         + the 5 b20_* encoders are MCP-only — pure calldata, no x402 payment)
  * Docs: https://api.blueagent.dev/docs
  */
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { kv } from "@/lib/kv";
+import {
+  buildB20Calldata,
+  encodeMint,
+  encodeMintWithMemo,
+  encodeGrantMintRole,
+  encodeTransferWithMemo,
+  isValidMemo,
+} from "@/lib/b20/encode";
+import { getB20Activation } from "@/lib/b20/activation";
 
 export const runtime = "nodejs";
 // Console commands (blue_idea/build/audit/ship/raise) wait on Bankr LLM which
@@ -390,6 +401,61 @@ const TOOLS = [
     description: "Generate complete B20 token deployment package — foundry.toml, Solidity deploy script, setup + deploy + mint commands. Supports asset and stablecoin variants.",
     inputSchema: { type: "object", properties: { name: { type: "string", description: "Token name" }, symbol: { type: "string", description: "Token symbol, e.g. MTK" }, variant: { type: "string", enum: ["asset", "stablecoin"], description: "B20 variant" }, decimals: { type: "number", description: "Decimals (default 18)" }, supply_cap: { type: "number", description: "Max supply (optional)" }, currency_code: { type: "string", description: "Currency code for stablecoin variant, e.g. USD" } }, required: ["name", "symbol", "variant"] },
   },
+  // ── B20 calldata builders (MCP-native, free — pure encoders, non-custodial) ──
+  // Return { to, data, value } ready for an EIP-5792 send_calls / Base MCP wallet
+  // call. The user signs in their own wallet; we never hold keys. No x402 payment.
+  {
+    name: "b20_encode_deploy",
+    description: "Encode a B20 token deployment (createB20). Returns { to, data, value } for the admin wallet to sign via EIP-5792 send_calls / Base MCP — after deploy the admin owns the token and holds MINT_ROLE. Pure calldata builder: no keys, no payment. Run b20_check_activation first — createB20 reverts until B20 is active on the target chain.",
+    inputSchema: { type: "object", properties: {
+      name: { type: "string", description: "Token name" },
+      symbol: { type: "string", description: "Token symbol, e.g. MTK" },
+      variant: { type: "string", enum: ["asset", "stablecoin"], description: "asset = configurable decimals 6-18; stablecoin = fixed 6 decimals + currency" },
+      admin: { type: "string", description: "0x wallet that signs the deploy and owns the token" },
+      decimals: { type: "number", description: "Decimals 6-18 (asset only, default 18)" },
+      currency_code: { type: "string", description: "3-letter currency, e.g. USD (stablecoin only)" },
+      supply_cap: { type: "string", description: "Max total supply in whole tokens (optional, omit for no cap)" },
+      initial_supply: { type: "string", description: "Seed-mint to admin at deploy, in whole tokens (optional)" },
+      chainId: { type: "number", description: "8453 = Base Mainnet (default), 84532 = Base Sepolia" },
+    }, required: ["name", "symbol", "variant", "admin"] },
+  },
+  {
+    name: "b20_encode_mint",
+    description: "Encode a mint on an existing B20 token. Returns { to, data, value } for a wallet holding MINT_ROLE to sign. Optional onchain memo (mintWithMemo). Pure calldata builder — no keys, no payment.",
+    inputSchema: { type: "object", properties: {
+      tokenAddress: { type: "string", description: "B20 token contract 0x..." },
+      to: { type: "string", description: "Recipient 0x..." },
+      amount: { type: "string", description: "Amount in whole tokens, e.g. '1000'" },
+      decimals: { type: "number", description: "Token decimals" },
+      memo: { type: "string", description: "Optional onchain memo, max 31 chars (uses mintWithMemo)" },
+    }, required: ["tokenAddress", "to", "amount", "decimals"] },
+  },
+  {
+    name: "b20_encode_grant_mint_role",
+    description: "Encode grantRole(MINT_ROLE, account) on a B20 token. Returns { to, data, value } for the DEFAULT_ADMIN_ROLE holder to sign. Pure calldata builder — no keys, no payment.",
+    inputSchema: { type: "object", properties: {
+      tokenAddress: { type: "string", description: "B20 token contract 0x..." },
+      account: { type: "string", description: "0x address to grant MINT_ROLE" },
+    }, required: ["tokenAddress", "account"] },
+  },
+  {
+    name: "b20_encode_payment",
+    description: "Encode transferWithMemo — send B20 tokens with an onchain memo (order id) for reconciliation. Returns { to, data, value } for the sender to sign. Pure calldata builder — no keys, no payment.",
+    inputSchema: { type: "object", properties: {
+      tokenAddress: { type: "string", description: "B20 token contract 0x..." },
+      to: { type: "string", description: "Recipient 0x..." },
+      amount: { type: "string", description: "Amount in whole tokens" },
+      decimals: { type: "number", description: "Token decimals (default 6)" },
+      memo: { type: "string", description: "Onchain memo / order id, max 31 chars" },
+    }, required: ["tokenAddress", "to", "amount", "memo"] },
+  },
+  {
+    name: "b20_check_activation",
+    description: "Check whether the B20 ASSET and STABLECOIN standards are activated on Base mainnet or Sepolia — read live from the on-chain ActivationRegistry (isActivated). No wallet, no payment.",
+    inputSchema: { type: "object", properties: {
+      chainId: { type: "number", description: "8453 = Base Mainnet (default), 84532 = Base Sepolia" },
+    } },
+  },
   {
     name: "hub_liquidity_depth",
     description: "Liquidity depth, slippage estimate and exit risk for a Base token.",
@@ -692,6 +758,131 @@ async function callBuilderScore(handle: string): Promise<string> {
   return JSON.stringify(await res.json(), null, 2);
 }
 
+// ─── B20 MCP-native calldata builders ─────────────────────────────────────────
+// Pure encoders — no keys, no x402 payment, no INTERNAL_SERVICE_KEY needed. Each
+// returns { to, data, value } for the user's own wallet to sign via EIP-5792
+// send_calls / Base MCP. This is why they work FREE even when the paid hub_*
+// tools are gated behind the payment bypass.
+
+const B20_ENCODE_TOOLS = new Set([
+  "b20_encode_deploy",
+  "b20_encode_mint",
+  "b20_encode_grant_mint_role",
+  "b20_encode_payment",
+  "b20_check_activation",
+]);
+
+const ADDR_RE = /^0x[a-fA-F0-9]{40}$/;
+function reqAddr(v: unknown, field: string): string {
+  const s = String(v ?? "").trim();
+  if (!ADDR_RE.test(s)) throw new Error(`${field} must be a 0x-prefixed 40-hex address`);
+  return s;
+}
+function chainIdToNetwork(c: unknown): "mainnet" | "sepolia" {
+  return Number(c) === 84532 ? "sepolia" : "mainnet";
+}
+
+async function callB20Native(name: string, args: Record<string, unknown>): Promise<string> {
+  switch (name) {
+    case "b20_encode_deploy": {
+      const variant = args.variant === "stablecoin" ? "stablecoin" : "asset";
+      const admin = reqAddr(args.admin, "admin");
+      const symbol = String(args.symbol ?? "").trim();
+      const tokenName = String(args.name ?? "").trim();
+      if (!tokenName) throw new Error("name is required");
+      if (!symbol) throw new Error("symbol is required");
+      const chainId = args.chainId !== undefined ? Number(args.chainId) : 8453;
+      const built = buildB20Calldata({
+        name: tokenName,
+        symbol,
+        variant,
+        admin,
+        decimals: args.decimals !== undefined ? Number(args.decimals) : undefined,
+        currency_code: args.currency_code ? String(args.currency_code) : undefined,
+        supply_cap: args.supply_cap ? String(args.supply_cap) : undefined,
+        initial_supply: args.initial_supply ? String(args.initial_supply) : undefined,
+      });
+      return JSON.stringify({
+        to: built.factory,
+        data: built.data,
+        value: "0x0",
+        chainId,
+        salt: built.salt,
+        decimals: built.decimals,
+        variant,
+        note: "Sign with the admin wallet via EIP-5792 send_calls / Base MCP. Run b20_check_activation first — createB20 reverts until B20 is active on this chain.",
+      }, null, 2);
+    }
+    case "b20_encode_mint": {
+      const tokenAddress = reqAddr(args.tokenAddress, "tokenAddress");
+      const to = reqAddr(args.to, "to");
+      const amount = String(args.amount ?? "").trim();
+      if (!amount) throw new Error("amount is required");
+      const decimals = Number(args.decimals);
+      if (!Number.isFinite(decimals)) throw new Error("decimals is required");
+      const memo = args.memo ? String(args.memo) : "";
+      if (memo && !isValidMemo(memo)) throw new Error("memo must be non-empty and fit in 32 bytes (≤31 chars)");
+      const data = memo
+        ? encodeMintWithMemo({ to, amount, decimals, memo })
+        : encodeMint({ to, amount, decimals });
+      return JSON.stringify({
+        to: tokenAddress,
+        data,
+        value: "0x0",
+        note: `Sign with a wallet holding MINT_ROLE.${memo ? " Uses mintWithMemo." : ""}`,
+      }, null, 2);
+    }
+    case "b20_encode_grant_mint_role": {
+      const tokenAddress = reqAddr(args.tokenAddress, "tokenAddress");
+      const account = reqAddr(args.account, "account");
+      return JSON.stringify({
+        to: tokenAddress,
+        data: encodeGrantMintRole(account),
+        value: "0x0",
+        note: "Sign with the DEFAULT_ADMIN_ROLE holder. Grants MINT_ROLE to the account.",
+      }, null, 2);
+    }
+    case "b20_encode_payment": {
+      const tokenAddress = reqAddr(args.tokenAddress, "tokenAddress");
+      const to = reqAddr(args.to, "to");
+      const amount = String(args.amount ?? "").trim();
+      if (!amount) throw new Error("amount is required");
+      const memo = String(args.memo ?? "").trim();
+      if (!isValidMemo(memo)) throw new Error("memo must be non-empty and fit in 32 bytes (≤31 chars)");
+      const decimals = args.decimals !== undefined ? Number(args.decimals) : 6;
+      return JSON.stringify({
+        to: tokenAddress,
+        data: encodeTransferWithMemo({ to, amount, decimals, memo }),
+        value: "0x0",
+        note: "Sign with the sender wallet. Emits a Memo event indexed by the order id for reconciliation.",
+      }, null, 2);
+    }
+    case "b20_check_activation": {
+      const network = chainIdToNetwork(args.chainId);
+      const act = await getB20Activation(network);
+      // act.ok === false ⟹ registry read failed → status UNKNOWN, never claim active.
+      const known = act.ok;
+      const asset = known ? act.asset : null;
+      const stablecoin = known ? act.stablecoin : null;
+      const live = known ? (act.asset || act.stablecoin) : null;
+      return JSON.stringify({
+        network,
+        chainId: network === "sepolia" ? 84532 : 8453,
+        known,
+        live,
+        asset,
+        stablecoin,
+        source: "on-chain ActivationRegistry 0x8453…0001 · isActivated",
+        note: known
+          ? (live ? "B20 is active — deploys will succeed." : "B20 is NOT yet active on this chain — createB20 will revert.")
+          : "Could not read the ActivationRegistry right now — status unknown. Retry shortly.",
+      }, null, 2);
+    }
+    default:
+      throw new Error(`Unknown B20 tool: ${name}`);
+  }
+}
+
 // ─── JSON-RPC helpers ─────────────────────────────────────────────────────────
 
 const JSON_HEADERS = {
@@ -824,6 +1015,12 @@ export async function POST(req: NextRequest) {
             ].join("\n"),
           }],
         }, useSse);
+      }
+
+      // B20 MCP-native calldata builders (free — no x402, no bypass key)
+      if (B20_ENCODE_TOOLS.has(name)) {
+        const text = await callB20Native(name, args);
+        return ok(id, { content: [{ type: "text", text }] }, useSse);
       }
 
       return err(id, -32601, `Unknown tool: ${name}`, useSse);

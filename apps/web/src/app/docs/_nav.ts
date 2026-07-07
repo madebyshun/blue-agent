@@ -13,6 +13,7 @@ export const DOC_NAV: DocGroup[] = [
   { group: "Products", items: [
     { title: "Blue Chat", href: "/docs/blue-chat" },
     { title: "Blue Hub",  href: "/docs/blue-hub" },
+    { title: "List a Tool", href: "/docs/list-a-tool" },
     // Blue Feed hidden while rebuilding — its docs page is parked (404).
     { title: "Blue Bank", href: "/docs/bluebank" },
   ]},
