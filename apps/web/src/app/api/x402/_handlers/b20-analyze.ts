@@ -3,12 +3,10 @@
 // Price: $0.05 — LLM advisory; no on-chain data required.
 
 import { callBankrLLM, extractJsonObject } from "@/app/api/_lib/llm";
-
-const BERYL_LAUNCH = "2026-06-25";
-const berylLive = () => new Date() >= new Date(BERYL_LAUNCH);
+import { getB20Activation } from "@/lib/b20/activation";
 
 const B20_KNOWLEDGE = `
-Base B20 is the Base Native Token Standard introduced in the Beryl upgrade (${BERYL_LAUNCH}).
+Base B20 is the Base Native Token Standard introduced in the Beryl upgrade.
 
 ARCHITECTURE:
 - Rust precompile (NOT a Solidity smart contract) at a fixed precompile address
@@ -56,7 +54,10 @@ KEY DIFFERENTIATORS vs ERC-20:
 
 DEPLOYMENT STEPS:
 1. Choose variant: Asset (compliance-heavy) or Stablecoin (mint/burn)
-2. Call B20Factory.createB20(name, symbol, decimals, variant, initialAdmin) → token address
+2. Call B20Factory.createB20(uint8 variant, bytes32 salt, bytes params, bytes[] initCalls) → token address
+   - variant: 0 = ASSET, 1 = STABLECOIN
+   - params: ASSET encodes decimals (uint8, 6–18); STABLECOIN encodes currency (string)
+   - initCalls: batched setup calls run atomically at deploy, e.g. grantRole(MINT_ROLE, admin), updateSupplyCap, mint(seed)
 3. Assign roles: token.grantRole(ROLE_HASH, address)
 4. Asset only (if restricted transfers needed):
    a. policyRegistry.createPolicy(admin, PolicyType) → uint64 policyId
@@ -103,21 +104,35 @@ export default async function handler(req: Request): Promise<Response> {
 
     const userMsg = prompts[action] ?? prompts.guide;
 
-    const raw = await callBankrLLM({
-      model: "claude-haiku-4-5",
-      temperature: 0,
-      maxTokens: 800,
-      system: SYSTEM,
-      messages: [{ role: "user", content: userMsg }],
-    });
+    // LLM advisory + live on-chain activation read, in parallel.
+    const [raw, act] = await Promise.all([
+      callBankrLLM({
+        model: "claude-haiku-4-5",
+        temperature: 0,
+        maxTokens: 800,
+        system: SYSTEM,
+        messages: [{ role: "user", content: userMsg }],
+      }),
+      getB20Activation("mainnet"),
+    ]);
 
     const parsed = extractJsonObject(raw);
+
+    // act.ok === false ⟹ registry read failed → status unknown, never claim active.
+    const assetLive  = act.ok && act.asset;
+    const stableLive = act.ok && act.stablecoin;
 
     return Response.json({
       action_taken: action,
       address: body.address ?? null,
-      beryl_live: berylLive(),
-      beryl_launch: BERYL_LAUNCH,
+      activation: {
+        network:      "mainnet",
+        known:        act.ok,
+        live:         act.ok ? (assetLive || stableLive) : null,
+        asset:        act.ok ? assetLive  : null,
+        stablecoin:   act.ok ? stableLive : null,
+        source:       "on-chain ActivationRegistry 0x8453…0001 · isActivated",
+      },
       b20_variants: ["Asset", "Stablecoin"],
       roles: ["ADMIN", "MINT", "BURN", "BURN_BLOCKED", "PAUSE", "UNPAUSE", "METADATA"],
       analysis: parsed ?? { summary: raw.slice(0, 500) },
