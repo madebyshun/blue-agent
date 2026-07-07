@@ -139,6 +139,28 @@ export function buildB20Calldata(input: B20BuildInput): {
   return { data, factory: B20_FACTORY, salt, variantEnum, decimals: dec };
 }
 
+// ─── Standalone encoders (MCP calldata-builder tools) ───────────────────────
+// Each returns ready-to-sign calldata for a wallet (EIP-5792 send_calls / Base
+// MCP). Pure functions — no network, no keys. The caller sends { to, data }.
+
+/** Encode a plain mint(to, amount). Caller must hold MINT_ROLE on the token. */
+export function encodeMint(opts: { to: string; amount: string | number; decimals: number }): Hex {
+  return encodeFunctionData({
+    abi: MINT_ABI,
+    functionName: "mint",
+    args: [opts.to as `0x${string}`, parseUnits(String(opts.amount), opts.decimals)],
+  });
+}
+
+/** Encode grantRole(MINT_ROLE, account). Caller must hold DEFAULT_ADMIN_ROLE. */
+export function encodeGrantMintRole(account: string): Hex {
+  return encodeFunctionData({
+    abi: GRANT_ROLE_ABI,
+    functionName: "grantRole",
+    args: [MINT_ROLE, account as `0x${string}`],
+  });
+}
+
 // ─── B20 payment primitive — transferWithMemo + Memo event ──────────────────
 // Verified against Base's "Accept B20 payments" standard:
 //   function transferWithMemo(address to, uint256 amount, bytes32 memo)

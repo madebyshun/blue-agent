@@ -13,7 +13,7 @@ export default function BerylDoc() {
       <DocHeader
         eyebrow="Base Protocol"
         title="Beryl / B20"
-        lead="B20 is Base's native standard for compliant tokenized assets — enforced by a Rust precompile in the node, not EVM bytecode. Activated by the Beryl upgrade on June 25, 2026."
+        lead="B20 is Base's native standard for compliant tokenized assets — enforced by a Rust precompile in the node, not EVM bytecode. Enabled by the Beryl upgrade, with mainnet activation scheduled for July 8, 2026 (the exact go-live is gated on-chain by the ActivationRegistry)."
       />
 
       <H2 id="what-is-b20">What is B20?</H2>
@@ -28,7 +28,7 @@ export default function BerylDoc() {
       </P>
 
       <Callout color="#4FC3F7" title="Beryl Activation">
-        Mainnet: June 25, 2026 at 18:00 UTC.
+        Mainnet: scheduled July 8, 2026 (exact go-live gated on-chain by the ActivationRegistry).
         {" "}Base Sepolia: already active.
         {" "}Use the <a href="/app/b20" className="underline">B20 Hub</a> to inspect tokens, check roles,
         and browse the on-chain registry.
