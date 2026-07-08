@@ -1159,9 +1159,21 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
       const d = await res.json();
       if (!res.ok) {
         // 503 = missing partner key — surface setup instruction directly
-        const msg = d?.setup
+        const setupMsg = d?.setup
           ? "Token launch needs a Bankr partner key — set BANKR_PARTNER_KEY in Vercel env vars."
-          : (d?.error ?? `Launch failed (${res.status})`);
+          : null;
+        // Otherwise show whatever Bankr actually returned so we don't hide
+        // "Internal server error" behind our own sanitized wrapper.
+        const bd = d?._debug?.bankrBody;
+        const bankrDetail =
+          typeof bd === "string" ? bd :
+          bd && typeof bd === "object"
+            ? (bd.error || bd.message || JSON.stringify(bd).slice(0, 300))
+            : null;
+        const msg = setupMsg
+          ?? (bankrDetail
+                ? `${d?.error ?? "Launch failed"} · Bankr: ${bankrDetail}`
+                : (d?.error ?? `Launch failed (${res.status})`));
         setErr(msg); setStep("error"); return;
       }
       setOut({
