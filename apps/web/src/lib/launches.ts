@@ -12,6 +12,8 @@ import { kvGet, kvSet } from "./kv";
 const LAUNCHES_KEY = "bluechat:launches";
 const MAX_LAUNCHES = 500;
 
+export type LaunchChain = "base" | "robinhood";
+
 export type LaunchRecord = {
   tokenAddress: string;
   tokenName: string;
@@ -22,25 +24,35 @@ export type LaunchRecord = {
   feeRecipient: { type: string; value: string };
   txHash?: string | null;
   launchedAt: number; // ms epoch
+  /** Which chain this token was deployed on. Absent on legacy records = "base"
+   *  (every launch recorded before Robinhood Chain support was Base-only). */
+  chain?: LaunchChain;
+  chainId?: number;
 };
 
-/** Read the full launch list (newest first). */
+/** Read the full launch list (newest first). Legacy records with no `chain`
+ *  field are all Base launches (Robinhood support didn't exist yet). */
 export async function getLaunches(limit = MAX_LAUNCHES): Promise<LaunchRecord[]> {
   const all = (await kvGet<LaunchRecord[]>(LAUNCHES_KEY)) ?? [];
-  return all.slice(0, limit);
+  return all.slice(0, limit).map((l) => ({ chain: "base" as const, ...l }));
+}
+
+function dedupeKey(rec: Pick<LaunchRecord, "tokenAddress" | "chain">): string {
+  return `${rec.chain ?? "base"}:${rec.tokenAddress?.toLowerCase() ?? ""}`;
 }
 
 /**
- * Record a launch. De-dupes by tokenAddress (a re-record updates in place),
- * keeps the list newest-first, and caps it at MAX_LAUNCHES. Best-effort: never
- * throws — the deploy already succeeded, bookkeeping must not break the flow.
+ * Record a launch. De-dupes by (chain, tokenAddress) — a re-record updates in
+ * place — keeps the list newest-first, and caps it at MAX_LAUNCHES.
+ * Best-effort: never throws — the deploy already succeeded, bookkeeping must
+ * not break the flow.
  */
 export async function recordLaunch(rec: LaunchRecord): Promise<void> {
   if (!rec.tokenAddress) return;
   try {
-    const addr = rec.tokenAddress.toLowerCase();
+    const key = dedupeKey(rec);
     const all = (await kvGet<LaunchRecord[]>(LAUNCHES_KEY)) ?? [];
-    const deduped = all.filter((l) => l.tokenAddress?.toLowerCase() !== addr);
+    const deduped = all.filter((l) => dedupeKey(l) !== key);
     deduped.unshift(rec);
     await kvSet(LAUNCHES_KEY, deduped.slice(0, MAX_LAUNCHES));
   } catch {

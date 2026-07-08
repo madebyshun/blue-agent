@@ -21,6 +21,10 @@ export type { CommandSpec } from "./schemas";
 export { TOOL_SCHEMAS } from "./tool-inputs";
 export type { Field, ToolSchema } from "./tool-inputs";
 
+// Supported chains for token launches (Base + Robinhood Chain)
+export { CHAINS, getChain, getChainById } from "./chains";
+export type { ChainKey, ChainConfig } from "./chains";
+
 // Utilities
 export function formatUsd(n: number): string {
   return `$${n.toFixed(2)}`;
