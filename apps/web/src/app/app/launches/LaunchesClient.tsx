@@ -1784,9 +1784,15 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
   const { sendTransactionAsync } = useSendTransaction();
   const { switchChainAsync } = useSwitchChain();
 
-  // Which chain to deploy on. Base uses Bankr's sponsored launchpad (server
-  // holds the wallet). Robinhood Chain has no launchpad — it's a raw ERC-20
-  // contract-creation tx signed directly by the user's own connected wallet.
+  // Which chain to deploy on. BOTH chains now go through Bankr's launchpad —
+  // Base (default) and Robinhood (`chain: "robinhood"` in the API body).
+  // Bankr auto-creates a Uniswap pool + splits 95% of the 0.7% swap fee to the
+  // creator on both chains. The old "Robinhood Chain · direct" path (raw
+  // ERC-20 contract-creation, self-signed) is kept in the codebase (see
+  // launchRobinhood() below + /api/robinhood/* routes) but is no longer
+  // reachable from the UI — the direct path required Robinhood Chain ETH for
+  // gas, no pool at launch time, and no fee share, which was too much friction
+  // for a first-time creator. Bankr owns the launch UX end-to-end now.
   const [launchChain, setLaunchChain] = useState<"base" | "robinhood">("base");
 
   const [name, setName] = useState("");
@@ -1800,15 +1806,19 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
   const [err, setErr] = useState("");
   const [out, setOut] = useState<{ tokenAddress?: string | null; basescan?: string | null; uniswap?: string | null; bankr?: string | null } | null>(null);
 
-  // Robinhood-only fields.
-  const [rhDecimals, setRhDecimals] = useState<number>(18);
-  const [rhSupply, setRhSupply] = useState("1000000000");
-  const [rhNetwork, setRhNetwork] = useState<RobinhoodNet>("mainnet");
+  // Dormant state for the direct-deploy Robinhood path (see launchRobinhood()
+  // below + /api/robinhood/* routes). The function is kept in the codebase
+  // but not currently wired to any button — both chain tabs now flow through
+  // /api/launch-token → Bankr. These state hooks stay declared so
+  // launchRobinhood() remains valid TS in case we ever re-wire it (needs
+  // Robinhood Chain ETH + no pool at launch, so it's a power-user path).
+  const [rhDecimals] = useState<number>(18);
+  const [rhSupply] = useState("1000000000");
+  const [rhNetwork] = useState<RobinhoodNet>("mainnet");
   const [rhTxHash, setRhTxHash] = useState("");
-  const [rhPolling, setRhPolling] = useState(false);
-  const [showReceive, setShowReceive] = useState(false);
+  const [, setRhPolling] = useState(false);
 
-  // Fee recipient is left BLANK by default → the 57% creator fee routes to
+  // Fee recipient is left BLANK by default → the 95% creator fee routes to
   // @blueagent_ (see `fee || "blueagent_"` in launch()). The user can opt to
   // redirect it to their own wallet/handle by filling the field.
 
@@ -1817,7 +1827,6 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
 
   async function launch() {
     if (!cleanName || step === "launching") return;
-    if (launchChain === "robinhood") return launchRobinhood();
     setStep("launching"); setErr("");
     try {
       const fee = feeRecipient.trim();
@@ -1832,14 +1841,25 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
           image: image.trim() || undefined,
           website: website.trim() || undefined,
           tweetUrl: tw ? `https://x.com/${tw}` : undefined,
-          // 57% creator fee → the entered wallet, else default to @blueagent_.
+          // 95% creator fee → the entered wallet, else default to @blueagent_.
           feeRecipientType: fee ? "wallet" : "x",
           feeRecipientValue: fee || "blueagent_",
+          // Bankr's /token-launches/deploy accepts { chain: "robinhood" } to
+          // deploy on Robinhood Chain (chainId 4663) with an auto Uniswap pool
+          // + 95%/5% fee split (docs.bankr.bot/token-launching/overview).
+          // Partner keys are Base-only; the server-side handler falls back to
+          // BANKR_API_KEY (user key) on Robinhood — no key handling here.
+          chain: launchChain,
         }),
       });
       const d = await res.json();
       if (!res.ok) { setErr(d?.error ?? `Launch failed (${res.status})`); setStep("error"); return; }
-      setOut({ tokenAddress: d.tokenAddress ?? null, basescan: d.basescan ?? null, uniswap: d.uniswap ?? null, bankr: d.bankr ?? null });
+      setOut({
+        tokenAddress: d.tokenAddress ?? null,
+        basescan: d.explorer ?? d.basescan ?? null, // chain-agnostic explorer URL
+        uniswap: d.uniswap ?? null,
+        bankr: d.bankr ?? null,
+      });
       setStep("done");
       onLaunched();
     } catch (e) {
@@ -1942,7 +1962,9 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
           </div>
         ) : (
           <>
-            {/* Chain toggle — Base (Bankr, sponsored) vs Robinhood Chain (direct, self-signed) */}
+            {/* Chain toggle — both chains now deploy through Bankr. Robinhood
+                sends { chain: "robinhood" } and forces the user-level BANKR_API_KEY
+                (partner keys are Base-only per docs). */}
             <div className="flex gap-1.5 mb-4">
               <button onClick={() => setLaunchChain("base")}
                 className="flex-1 font-mono text-[10px] font-bold py-1.5 rounded-lg transition-colors"
@@ -1956,7 +1978,7 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
                 style={launchChain === "robinhood"
                   ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E40" }
                   : { color: "#64748b", border: "1px solid #1A1A2E" }}>
-                Robinhood Chain · direct
+                Robinhood · via Bankr
               </button>
             </div>
 
@@ -1994,100 +2016,37 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
 
               <ModalField label="WEBSITE (optional)" value={website} onChange={setWebsite} placeholder="https://… (optional)" />
 
-              {launchChain === "base" ? (
-                <>
-                  <ModalField label="TWITTER (optional)" value={twitter} onChange={setTwitter} placeholder="@handle (optional)" />
-                  <ModalField label="FEE RECIPIENT · 57% creator fee" value={feeRecipient} onChange={setFeeRecipient}
-                    placeholder={address ? "your wallet — or 0x… / blank → @blueagent_" : "0x… — or blank → @blueagent_"} />
-                </>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="block">
-                      <span className="font-mono text-[9px] text-slate-600 block mb-1">DECIMALS</span>
-                      <input type="number" min={0} max={18} value={rhDecimals}
-                        onChange={e => setRhDecimals(Number(e.target.value))}
-                        className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#22C55E]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 outline-none transition-colors" />
-                    </label>
-                    <ModalField label="INITIAL SUPPLY" value={rhSupply} onChange={setRhSupply} placeholder="e.g. 1000000000" />
-                  </div>
-                  <div className="flex gap-1">
-                    {ROBINHOOD_NETWORKS.map(nx => (
-                      <button key={nx.id} onClick={() => setRhNetwork(nx.id)}
-                        className="font-mono text-[9px] px-2 py-0.5 rounded transition-colors"
-                        style={rhNetwork === nx.id
-                          ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E30" }
-                          : { color: "#64748b", border: "1px solid #1A1A2E" }}>
-                        {nx.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
+              {/* Same form for both chains — Bankr's launchpad handles supply,
+                  decimals, pool, and gas sponsorship on either chain. */}
+              <ModalField label="TWITTER (optional)" value={twitter} onChange={setTwitter} placeholder="@handle (optional)" />
+              <ModalField label="FEE RECIPIENT · 95% creator fee" value={feeRecipient} onChange={setFeeRecipient}
+                placeholder={address ? "your wallet — or 0x… / blank → @blueagent_" : "0x… — or blank → @blueagent_"} />
             </div>
 
 
             {launchChain === "base" ? (
               <p className="font-mono text-[9px] text-slate-600 mb-3 leading-relaxed">
-                Deploys a <span className="text-amber-400">real, irreversible</span> token on Base via Bankr · 100B fixed supply · gas sponsored. Leave fee recipient blank to default to @blueagent_.
+                Deploys a <span className="text-amber-400">real, irreversible</span> token on Base via Bankr · 100B fixed supply · Uniswap V4 pool auto-created · gas sponsored. Leave fee recipient blank to default to @blueagent_.
               </p>
             ) : (
               <p className="font-mono text-[9px] text-slate-600 mb-3 leading-relaxed">
-                No factory on Robinhood Chain — deploys a raw ERC-20 contract-creation tx, signed directly by <span className="text-[#22C55E]">your own wallet</span>. Gas paid in ETH on Robinhood Chain (not Base). No ETH there yet?{" "}
-                <a href={`https://portal.arbitrum.io/bridge?destinationChain=robinhood-chain&sourceChain=ethereum`}
-                  target="_blank" rel="noopener noreferrer" className="underline text-[#22C55E] hover:text-[#22C55E]/80">
-                  Bridge ETH via Arbitrum Portal ↗
-                </a>
-                {" "}or{" "}
-                <button type="button" onClick={() => setShowReceive(v => !v)} className="underline text-[#22C55E] hover:text-[#22C55E]/80">
-                  receive funds ↓
-                </button>
+                Deploys a <span className="text-amber-400">real, irreversible</span> token on <span className="text-[#22C55E]">Robinhood Chain (4663)</span> via Bankr · 100B fixed supply · Uniswap pool auto-created · 0.7% swap fee, 95% → creator (recurring). Bankr handles gas + wallet. Leave fee recipient blank to default to @blueagent_.
               </p>
             )}
 
-            {launchChain === "robinhood" && showReceive && address && (
-              <div className="mb-3 rounded-lg border border-[#1A1A2E] bg-[#050508] p-3 flex flex-col items-center">
-                <div className="font-mono text-[9px] text-slate-500 mb-2 text-center">
-                  Scan or copy your wallet address to receive ETH on {ROBINHOOD_NETWORKS.find(x => x.id === rhNetwork)!.label}.
-                </div>
-                <div className="bg-white p-2 rounded-lg">
-                  <QRCodeSVG value={address} size={128} bgColor="#ffffff" fgColor="#0a0a0f" level="M" />
-                </div>
-                <div className="flex items-center gap-2 mt-2.5 w-full">
-                  <div className="flex-1 font-mono text-[10px] text-slate-300 bg-[#0a0a0f] border border-[#1A1A2E] rounded-md px-2 py-1.5 truncate">
-                    {address}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => navigator.clipboard.writeText(address)}
-                    className="font-mono text-[9px] px-2 py-1.5 rounded-md border border-[#1A1A2E] text-slate-400 hover:text-slate-200 hover:border-[#22C55E]/40 transition-colors shrink-0">
-                    Copy
-                  </button>
-                </div>
-                <div className="font-mono text-[9px] text-amber-400/80 mt-2 text-center">
-                  ⚠ Only send ETH on {ROBINHOOD_NETWORKS.find(x => x.id === rhNetwork)!.label} to this address — same address, but wrong network funds may be unrecoverable.
-                </div>
-              </div>
-            )}
-
             {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
-            {launchChain === "robinhood" && rhTxHash && (
-              <p className="font-mono text-[9px] text-slate-500 mb-2 break-all">tx: {rhTxHash.slice(0, 10)}…{rhTxHash.slice(-8)}</p>
-            )}
 
-            <button onClick={launch} disabled={step === "launching" || !cleanName || (launchChain === "robinhood" && !address)}
+            <button onClick={launch} disabled={step === "launching" || !cleanName}
               className="w-full font-mono text-[12px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
               style={launchChain === "robinhood"
-                ? { background: "#22C55E", color: "#050508" }
+                ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E40" }
                 : { background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}40` }}>
-              {launchChain === "robinhood"
-                ? (!address ? "Connect wallet to deploy" : step === "launching" ? (rhPolling ? "Confirming onchain…" : "Preparing…") : `Deploy $${cleanSymbol || "TOKEN"} on ${ROBINHOOD_NETWORKS.find(x => x.id === rhNetwork)!.label} →`)
-                : (step === "launching" ? "Launching…" : `🚀 Launch $${cleanSymbol || "TOKEN"} on Base`)}
+              {step === "launching"
+                ? "Launching…"
+                : `🚀 Launch $${cleanSymbol || "TOKEN"} on ${launchChain === "robinhood" ? "Robinhood Chain" : "Base"}`}
             </button>
             <p className="font-mono text-[9px] text-slate-700 mt-1.5 text-center">
-              {launchChain === "robinhood"
-                ? "You sign and pay gas — Blue Agent never holds your funds or keys."
-                : cleanName ? "Bankr allows 1 launch/min per wallet." : "Enter a token name to launch."}
+              {cleanName ? "Bankr allows 1 launch/min per wallet." : "Enter a token name to launch."}
             </p>
           </>
         )}

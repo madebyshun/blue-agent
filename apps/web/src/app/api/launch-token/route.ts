@@ -47,6 +47,10 @@ export async function POST(req: NextRequest) {
     websiteUrl?: string; website?: string;   // website (back-compat: website)
     tweetUrl?: string;   tweet?: string;      // tweetUrl (back-compat: tweet)
     simulateOnly?: boolean;
+    /** "base" (default) or "robinhood" — Bankr's docs confirm both are
+     *  supported on POST /token-launches/deploy. Partner keys are Base-only,
+     *  so Robinhood forces the user-level X-API-Key path below. */
+    chain?: "base" | "robinhood";
   } = {};
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }); }
@@ -96,10 +100,17 @@ export async function POST(req: NextRequest) {
   // when the type IS wallet; non-wallet types resolve server-side at Bankr.
   const feeWallet = feeType === "wallet" ? feeValue : null;
 
+  // Chain selection — Bankr's deploy endpoint accepts { chain: "robinhood" }
+  // to deploy on Robinhood Chain (chainId 4663) instead of Base (default).
+  // Per Bankr docs, partner keys are BASE-ONLY, so a Robinhood launch MUST go
+  // via the user-level X-API-Key. We enforce that at header selection below.
+  const chain = body.chain === "robinhood" ? "robinhood" : "base";
+
   // Field names per Bankr's deploy schema: tokenSymbol (optional → omit to let
   // Bankr default to the first 4 chars of the name), description, image,
   // websiteUrl, tweetUrl.
   const payload: Record<string, unknown> = { tokenName };
+  if (chain === "robinhood") payload.chain = "robinhood";
 
   // feeRecipient is REQUIRED by Bankr's deploy schema — always send it.
   // The UI defaults to type:"x", value:"blueagent_" when user leaves blank,
@@ -118,10 +129,22 @@ export async function POST(req: NextRequest) {
   // irreversible deploy.
   if (body.simulateOnly) payload.simulateOnly = true;
 
-  // Prefer partner key (higher limits); fall back to LLM/API key.
+  // Prefer partner key (higher limits) on Base; fall back to user API key.
+  // Robinhood deploys REQUIRE X-API-Key — partner keys are Base-only per docs.
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (partnerKey) headers["X-Partner-Key"] = partnerKey;
-  else            headers["X-API-Key"]     = apiKey!;
+  if (chain === "robinhood") {
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "Robinhood launches need BANKR_API_KEY (user-level bk_usr_… key). Partner keys are Base-only." },
+        { status: 500 },
+      );
+    }
+    headers["X-API-Key"] = apiKey;
+  } else if (partnerKey) {
+    headers["X-Partner-Key"] = partnerKey;
+  } else {
+    headers["X-API-Key"] = apiKey!;
+  }
 
   let upstream: Response;
   try {
@@ -218,8 +241,26 @@ export async function POST(req: NextRequest) {
       feeRecipient: { type: feeType, value: feeValue },
       txHash,
       launchedAt: Date.now(),
+      // Tag Robinhood-via-Bankr launches so /launches filter tabs + explorer
+      // links resolve to the right chain (Blockscout instead of Basescan).
+      ...(chain === "robinhood" ? { chain: "robinhood" as const, chainId: 4663 } : {}),
     }).catch(() => {});
   }
+
+  // Explorer + trade links depend on chain — Basescan/Uniswap are Base-only;
+  // Robinhood Chain uses Blockscout (robinhoodchain.blockscout.com), and the
+  // trade UI is our own /launches Trade modal (routes through the deployed
+  // RobinhoodSwapRouter 0x3bb0…d23D — see PR #170).
+  const explorerUrl = tokenAddress
+    ? (chain === "robinhood"
+        ? `https://robinhoodchain.blockscout.com/token/${tokenAddress}`
+        : `https://basescan.org/token/${tokenAddress}`)
+    : null;
+  const tradeUrl = tokenAddress
+    ? (chain === "robinhood"
+        ? null // Robinhood pools may not exist yet at launch time; /launches Trade modal handles the "no pool" state honestly.
+        : `https://app.uniswap.org/swap?outputCurrency=${tokenAddress}&chain=base`)
+    : null;
 
   return NextResponse.json({
     ok: true,
@@ -229,12 +270,12 @@ export async function POST(req: NextRequest) {
     tokenSymbol: resolvedSymbol,
     tokenAddress,
     txHash,
+    chain,
     feeRecipient: { type: feeType, value: feeValue },
     raw: data,
-    basescan: tokenAddress ? `https://basescan.org/token/${tokenAddress}` : null,
-    uniswap:  tokenAddress
-      ? `https://app.uniswap.org/swap?outputCurrency=${tokenAddress}&chain=base`
-      : null,
+    basescan: chain === "base" ? explorerUrl : null,       // legacy field name — kept for back-compat
+    explorer: explorerUrl,                                  // chain-agnostic URL
+    uniswap:  tradeUrl,                                     // legacy field name — Base only
     bankr:    tokenAddress ? `https://bankr.bot/launches/${tokenAddress}` : null,
   });
 }

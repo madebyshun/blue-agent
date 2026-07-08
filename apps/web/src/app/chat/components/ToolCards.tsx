@@ -1150,6 +1150,10 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
           description: description.trim() || undefined,
           feeRecipientType: resolvedFeeType, feeRecipientValue: resolvedFeeValue,
           image: image.trim() || undefined, website: website.trim() || undefined,
+          // Route BOTH chains through Bankr's launchpad — chain:"robinhood"
+          // uses the user-level BANKR_API_KEY (partner keys are Base-only per
+          // docs.bankr.bot/token-launching/overview). Bankr handles gas + pool.
+          chain: chain === "robinhood" ? "robinhood" : "base",
         }),
       });
       const d = await res.json();
@@ -1160,7 +1164,13 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
           : (d?.error ?? `Launch failed (${res.status})`);
         setErr(msg); setStep("error"); return;
       }
-      setOut({ tokenAddress: d.tokenAddress ?? null, basescan: d.basescan ?? null, uniswap: d.uniswap ?? null, bankr: d.bankr ?? null });
+      setOut({
+        tokenAddress: d.tokenAddress ?? null,
+        // Chain-agnostic explorer URL from the API; fall back to legacy Base-only field.
+        basescan: d.explorer ?? d.basescan ?? null,
+        uniswap: d.uniswap ?? null,
+        bankr: d.bankr ?? null,
+      });
       setStep("done");
     } catch (e) {
       setErr((e as Error).message); setStep("error");
@@ -1281,12 +1291,14 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
 
   // ── Step 1: Robinhood Chain form ────────────────────────────────────────
   if (chain === "robinhood") {
-    const net = ROBINHOOD_NETWORKS.find(x => x.id === rhNetwork)!;
-    const canDeploy = !!cleanName && !!cleanSymbol;
+    // Robinhood-via-Bankr — same form as Base, just tagged with { chain: "robinhood" }
+    // in the API body. The dormant direct-deploy path (launchRobinhood + the
+    // decimals/supply/network fields + Receive QR) is kept in the codebase
+    // but not exposed anywhere in the UI.
     return (
       <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
         <div className="flex items-center justify-between mb-3">
-          <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold">ERC-20 · ROBINHOOD CHAIN</div>
+          <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold">LAUNCH TOKEN · ROBINHOOD CHAIN</div>
           <button onClick={() => setChain(null)} className="font-mono text-[9px] text-slate-600 hover:text-slate-400">← chain</button>
         </div>
 
@@ -1296,93 +1308,55 @@ function TokenLaunchCard({ result }: { result: TokenLaunchResult }) {
             {(cleanSymbol || cleanName).slice(0, 2).toUpperCase() || "RH"}
           </div>
           <div className="min-w-0">
-            <div className="font-mono text-sm font-bold text-white truncate">{cleanName || "Token Name"}</div>
-            <div className="font-mono text-[11px] text-slate-500">${cleanSymbol || "SYMBOL"} · plain ERC-20</div>
+            <div className="font-mono text-sm font-bold text-white truncate">{cleanName || "Your token name"}</div>
+            <div className="font-mono text-[11px] text-slate-500">${cleanSymbol || "TICKER"}</div>
           </div>
         </div>
 
         <div className="space-y-2 mb-3">
+          <LaunchField label="TOKEN NAME *"  value={name}        onChange={setName}        placeholder="e.g. Robinhood Games" />
           <div className="grid grid-cols-2 gap-2">
-            <LaunchField label="TOKEN NAME *" value={name}   onChange={setName}   placeholder="e.g. Robinhood Games" />
-            <LaunchField label="SYMBOL *"     value={symbol} onChange={v => setSymbol(v.toUpperCase())} placeholder="e.g. RGME" />
+            <LaunchField label="TICKER"      value={symbol}      onChange={setSymbol}      placeholder="auto from name" />
+            <LaunchField label="LOGO URL"    value={image}       onChange={setImage}       placeholder="https://…/logo.png" />
           </div>
-          <LaunchField label="LOGO URL"    value={image}       onChange={setImage}       placeholder="https://…/logo.png (optional)" />
-          <LaunchField label="WEBSITE"     value={website}     onChange={setWebsite}     placeholder="https://… (optional)" />
-          <div className="grid grid-cols-2 gap-2">
-            <label className="block">
-              <span className="font-mono text-[9px] text-slate-600 block mb-1">DECIMALS</span>
-              <input type="number" min={0} max={18} value={rhDecimals}
-                onChange={e => setRhDecimals(Number(e.target.value))}
-                className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#22C55E]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 outline-none transition-colors" />
-            </label>
-            <LaunchField label="INITIAL SUPPLY" value={rhSupply} onChange={setRhSupply} placeholder="e.g. 1000000000" />
-          </div>
+          <LaunchField label="DESCRIPTION"   value={description}  onChange={setDescription} placeholder="One-line pitch (optional)" />
+          <LaunchField label="WEBSITE"       value={website}      onChange={setWebsite}     placeholder="https://… (optional)" />
         </div>
 
-        <div className="flex gap-1 mb-3">
-          {ROBINHOOD_NETWORKS.map(nx => (
-            <button key={nx.id} onClick={() => setRhNetwork(nx.id)}
-              className="font-mono text-[9px] px-2 py-0.5 rounded transition-colors"
-              style={rhNetwork === nx.id
-                ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E30" }
-                : { color: "#64748b", border: "1px solid #1A1A2E" }}>
-              {nx.label}
-            </button>
-          ))}
+        {/* Fee recipient — same as Base */}
+        <div className="mb-3">
+          <div className="font-mono text-[9px] text-slate-600 mb-1.5">FEE RECIPIENT · 95% creator share · optional</div>
+          <div className="flex gap-1 mb-1.5 flex-wrap">
+            {FEE_TYPES.map(t => {
+              const active = feeType === t.id;
+              return (
+                <button key={t.id}
+                  onClick={() => { setFeeType(t.id); setFeeValue(t.id === "wallet" && address ? address : ""); }}
+                  className="font-mono text-[10px] px-2 py-1 rounded-md transition-colors"
+                  style={active
+                    ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E40" }
+                    : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+          <LaunchField label="" value={feeValue} onChange={setFeeValue}
+            placeholder={feeType === "wallet" ? "0x… — or blank → @blueagent_" : `@handle — or blank → @blueagent_`} />
         </div>
 
         {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
-        {rhTxHash && (
-          <p className="font-mono text-[9px] text-slate-500 mb-2 break-all">tx: {rhTxHash.slice(0, 10)}…{rhTxHash.slice(-8)}</p>
-        )}
 
         <button
-          onClick={launchRobinhood}
-          disabled={step === "launching" || !canDeploy || !address}
+          onClick={launch}
+          disabled={step === "launching" || !cleanName}
           className="w-full font-mono text-[12px] font-bold py-2.5 rounded-xl disabled:opacity-40 transition-opacity"
-          style={{ background: "#22C55E", color: "#050508" }}>
-          {!address
-            ? "Connect wallet to deploy"
-            : step === "launching"
-              ? (rhPolling ? "Confirming onchain…" : "Preparing…")
-              : `Deploy on ${net.label} →`}
+          style={{ background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E40" }}>
+          {step === "launching" ? "Launching…" : `🚀 Launch $${cleanSymbol || "TOKEN"} on Robinhood Chain`}
         </button>
         <p className="font-mono text-[9px] text-slate-600 mt-1.5 text-center">
-          No factory on Robinhood Chain — signed directly by your own wallet, gas paid in ETH on Robinhood Chain (not Base). No ETH there yet?{" "}
-          <a href="https://portal.arbitrum.io/bridge?destinationChain=robinhood-chain&sourceChain=ethereum"
-            target="_blank" rel="noopener noreferrer" className="underline text-[#22C55E] hover:text-[#22C55E]/80">
-            Bridge via Arbitrum Portal ↗
-          </a>
-          {" "}or{" "}
-          <button type="button" onClick={() => setShowReceive(v => !v)} className="underline text-[#22C55E] hover:text-[#22C55E]/80">
-            receive funds ↓
-          </button>
+          Deploys via <span className="text-[#22C55E]">Bankr</span> on Robinhood Chain (4663) · auto Uniswap pool · 0.7% swap fee, 95% → creator (recurring). Bankr handles gas + wallet.
         </p>
-
-        {showReceive && address && (
-          <div className="mt-2.5 rounded-lg border border-[#1A1A2E] bg-[#050508] p-3 flex flex-col items-center">
-            <div className="font-mono text-[9px] text-slate-500 mb-2 text-center">
-              Scan or copy your wallet address to receive ETH on {net.label}.
-            </div>
-            <div className="bg-white p-2 rounded-lg">
-              <QRCodeSVG value={address} size={128} bgColor="#ffffff" fgColor="#0a0a0f" level="M" />
-            </div>
-            <div className="flex items-center gap-2 mt-2.5 w-full">
-              <div className="flex-1 font-mono text-[10px] text-slate-300 bg-[#0a0a0f] border border-[#1A1A2E] rounded-md px-2 py-1.5 truncate">
-                {address}
-              </div>
-              <button
-                type="button"
-                onClick={() => navigator.clipboard.writeText(address)}
-                className="font-mono text-[9px] px-2 py-1.5 rounded-md border border-[#1A1A2E] text-slate-400 hover:text-slate-200 hover:border-[#22C55E]/40 transition-colors shrink-0">
-                Copy
-              </button>
-            </div>
-            <div className="font-mono text-[9px] text-amber-400/80 mt-2 text-center">
-              ⚠ Only send ETH on {net.label} to this address — same address, but wrong network funds may be unrecoverable.
-            </div>
-          </div>
-        )}
       </div>
     );
   }
