@@ -285,20 +285,46 @@ export async function POST(req: NextRequest) {
  * Sends a fake token name with simulateOnly: true so Bankr predicts the
  * address without broadcasting. No rate-limit check (diagnostic only).
  * Returns the full Bankr response + which auth header was used.
+ *
+ * Query params:
+ * - ?chain=robinhood — simulate a Robinhood-Chain deploy (forces X-API-Key
+ *   since partner keys are Base-only per Bankr docs). Use this to verify
+ *   BANKR_API_KEY is user-level and accepts the chain param before running
+ *   a real launch from the UI. Default (no param) = Base simulation.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   const partnerKey = process.env.BANKR_PARTNER_KEY;
   const apiKey     = process.env.BANKR_API_KEY;
+  const { searchParams } = new URL(req.url);
+  const chain = searchParams.get("chain") === "robinhood" ? "robinhood" : "base";
 
   if (!partnerKey && !apiKey) {
     return NextResponse.json({ error: "No Bankr key configured." }, { status: 500 });
   }
+  if (chain === "robinhood" && !apiKey) {
+    return NextResponse.json(
+      { error: "Robinhood diagnostic requires BANKR_API_KEY (user-level bk_usr_… key). Partner keys are Base-only." },
+      { status: 500 },
+    );
+  }
 
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (partnerKey) headers["X-Partner-Key"] = partnerKey;
-  else            headers["X-API-Key"]     = apiKey!;
+  if (chain === "robinhood") {
+    headers["X-API-Key"] = apiKey!;
+  } else if (partnerKey) {
+    headers["X-Partner-Key"] = partnerKey;
+  } else {
+    headers["X-API-Key"] = apiKey!;
+  }
 
-  const testPayload = { tokenName: "DiagnosticTest", simulateOnly: true };
+  // feeRecipient is required by Bankr's schema. Use a stable, resolvable
+  // handle for the diagnostic — @blueagent_ is our own X account.
+  const testPayload: Record<string, unknown> = {
+    tokenName: "DiagnosticTest",
+    simulateOnly: true,
+    feeRecipient: { type: "x", value: "blueagent_" },
+  };
+  if (chain === "robinhood") testPayload.chain = "robinhood";
 
   let upstream: Response;
   try {
@@ -313,9 +339,18 @@ export async function GET() {
   }
 
   const data = await upstream.json().catch(() => null);
+  // Reflect the ACTUAL header we used (differs by chain, not global partner-key
+  // presence), so the diagnostic tells you exactly which key Bankr saw.
+  const authUsed =
+    chain === "robinhood" ? "X-API-Key" :
+    partnerKey ? "X-Partner-Key" : "X-API-Key";
+  const keyPresent =
+    chain === "robinhood" ? "BANKR_API_KEY" :
+    partnerKey ? "BANKR_PARTNER_KEY" : "BANKR_API_KEY";
   return NextResponse.json({
-    authUsed:    partnerKey ? "X-Partner-Key" : "X-API-Key",
-    keyPresent:  partnerKey ? "BANKR_PARTNER_KEY" : "BANKR_API_KEY",
+    chain,
+    authUsed,
+    keyPresent,
     bankrStatus: upstream.status,
     bankrBody:   data,
     testPayload,

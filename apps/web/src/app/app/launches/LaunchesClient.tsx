@@ -1178,10 +1178,32 @@ function applySearch(launches: Launch[], q: string): Launch[] {
 }
 
 function isTestToken(l: Launch): boolean {
-  return (
-    l.tokenName?.toLowerCase() === "test" ||
-    l.tokenSymbol?.toLowerCase() === "test"
-  );
+  const name = l.tokenName?.toLowerCase() ?? "";
+  const sym = l.tokenSymbol?.toLowerCase() ?? "";
+  // "test", "test 2", "test-abc", "$test" — anything starting with "test".
+  if (name === "test" || name.startsWith("test ") || name.startsWith("test-")) return true;
+  if (sym === "test" || sym.startsWith("test")) return true;
+  return false;
+}
+
+// Direct-deploy Robinhood tokens (raw ERC-20, no factory pool) launched before
+// the Bankr-Robinhood integration are recorded with chain:"robinhood" but no
+// market data (no pool exists, so DexScreener/GeckoTerminal has nothing to
+// index). They clutter the /launches feed with rows of "—" placeholders. Fold
+// them behind the same "Show test tokens" toggle so real Bankr launches
+// (which auto-create a pool → have market data) are what the default view
+// shows. Legacy Base rows with no market data (from stale DexScreener misses)
+// are intentionally NOT hit — Base always has a pool by construction, missing
+// data there is a data-freshness issue, not a "no pool exists" one.
+function isOrphanRobinhoodLaunch(l: Launch): boolean {
+  if (l.chain !== "robinhood") return false;
+  const priceUsd = l.market?.priceUsd;
+  const mcap = l.market?.marketCap;
+  const lp = l.market?.liquidityUsd;
+  // "No pool" = all three are null/0. Any live pool has at least a price.
+  return (priceUsd == null || priceUsd === 0)
+      && (mcap == null || mcap === 0)
+      && (lp == null || lp === 0);
 }
 
 // ── Auto-refresh countdown dot (A7) ───────────────────────────────────────────
@@ -1538,7 +1560,12 @@ export default function LaunchesPage() {
 
   // Derived list: filter test → filter tab → search → sort
   const allLaunches = data?.launches ?? [];
-  const withoutTest = showTest ? allLaunches : allLaunches.filter((l) => !isTestToken(l));
+  // Default view hides both test tokens AND orphan (pool-less) Robinhood
+  // direct-deploys. Toggle "Show test tokens" surfaces both — same drawer,
+  // one control (see the checkbox below).
+  const withoutTest = showTest
+    ? allLaunches
+    : allLaunches.filter((l) => !isTestToken(l) && !isOrphanRobinhoodLaunch(l));
   const chained = applyChainFilter(withoutTest, chainFilter);
   const filtered = applyFilter(chained, filterTab);
   const searched = applySearch(filtered, search);
@@ -1734,7 +1761,7 @@ export default function LaunchesPage() {
               >
                 {showTest && <span style={{ color: ACCENT, fontSize: 8, lineHeight: 1 }}>✓</span>}
               </span>
-              Show test tokens
+              Show test + pool-less tokens
             </button>
           </div>
 
@@ -1853,7 +1880,22 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
         }),
       });
       const d = await res.json();
-      if (!res.ok) { setErr(d?.error ?? `Launch failed (${res.status})`); setStep("error"); return; }
+      if (!res.ok) {
+        // Surface Bankr's actual response so we don't hide "Internal server error"
+        // behind our own sanitized wrapper. `_debug.bankrBody` contains whatever
+        // Bankr returned (status code, message, validation details).
+        const bd = d?._debug?.bankrBody;
+        const bankrDetail =
+          typeof bd === "string" ? bd :
+          bd && typeof bd === "object"
+            ? (bd.error || bd.message || JSON.stringify(bd).slice(0, 300))
+            : null;
+        setErr(bankrDetail
+          ? `${d?.error ?? "Launch failed"} · Bankr: ${bankrDetail}`
+          : (d?.error ?? `Launch failed (${res.status})`));
+        setStep("error");
+        return;
+      }
       setOut({
         tokenAddress: d.tokenAddress ?? null,
         basescan: d.explorer ?? d.basescan ?? null, // chain-agnostic explorer URL
