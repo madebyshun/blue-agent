@@ -4,8 +4,9 @@ import { MCP_TOOLS } from "../_data";
 export const metadata = { title: "MCP Setup — Blue Agent Docs" };
 
 const GROUPS = [
-  { key: "blue_", label: "Console commands", color: "#4FC3F7" },
-  { key: "hub_",  label: "Hub tools",        color: "#A78BFA" },
+  { key: "blue_", label: "Console commands",      color: "#4FC3F7" },
+  { key: "hub_",  label: "Hub tools",             color: "#A78BFA" },
+  { key: "b20_",  label: "B20 token tools",       color: "#22C55E" },
 ];
 
 export default function McpDoc() {

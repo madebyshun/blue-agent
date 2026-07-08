@@ -57,20 +57,32 @@ ActivationRegistry 0x8453000000000000000000000000000000000001`}
 
       <H2 id="deploying">Deploying a B20 Token</H2>
       <P>
-        Tokens are created through the B20Factory. The factory emits a{" "}
-        <code className="text-slate-300">B20Created</code> event for each deploy.
+        Tokens are created through the B20Factory. The factory takes a variant enum, a{" "}
+        <code className="text-slate-300">salt</code>, abi-encoded{" "}
+        <code className="text-slate-300">params</code>, and an array of{" "}
+        <code className="text-slate-300">initCalls</code> that run atomically at deploy (e.g.{" "}
+        <code className="text-slate-300">grantRole</code>, <code className="text-slate-300">updateSupplyCap</code>,
+        seed <code className="text-slate-300">mint</code>).
       </P>
-      <CodeBlock title="Create a B20 token" badge="Solidity">
-{`// ASSET variant (variant = 0)
-IB20Factory factory = IB20Factory(0xB20f000000000000000000000000000000000000);
+      <CodeBlock title="B20Factory.createB20 signature" badge="Solidity">
+{`IB20Factory factory = IB20Factory(0xB20f000000000000000000000000000000000000);
+
+// variant: 0 = ASSET (params encode decimals), 1 = STABLECOIN (params encode currency)
 address token = factory.createB20(
-  "My Token",     // name
-  "MTK",          // symbol
-  18,             // decimals
-  0,              // variant: 0 = ASSET, 1 = STABLECOIN
-  ""              // variantParams (abi-encoded extra data)
+  uint8   variant,     // 0 = ASSET, 1 = STABLECOIN
+  bytes32 salt,        // deterministic deploy salt
+  bytes   params,      // abi-encoded (version, name, symbol, initialAdmin, decimals|currency)
+  bytes[] initCalls    // atomic setup: grantRole, updateSupplyCap, mint...
 );`}
       </CodeBlock>
+      <P>
+        Encoding <code className="text-slate-300">params</code> and{" "}
+        <code className="text-slate-300">initCalls</code> by hand is error-prone. The{" "}
+        <code className="text-slate-300">b20_encode_deploy</code> MCP tool
+        (see <a href="#mcp" className="text-[#4FC3F7] underline">Deploy from Claude / Cursor</a> below)
+        builds the full calldata for you and returns a ready-to-sign{" "}
+        <code className="text-slate-300">{`{ to, data, value }`}</code>.
+      </P>
 
       <H2 id="policies">Policy System</H2>
       <P>
@@ -179,6 +191,68 @@ token.burnBlocked(holderAddress, amount);`}
         In Blue Chat, type{" "}
         <code className="text-slate-300">deploy a B20 asset token named "My Token" symbol "MTK"</code> —
         the agent will generate and sign a createB20 Factory transaction directly.
+      </Callout>
+
+      <H2 id="mcp">Deploy from Claude / Cursor (MCP)</H2>
+      <P>
+        Blue Agent exposes B20 as MCP tools, so you can deploy, mint, grant roles, and take payments
+        straight from Claude Code, Claude Desktop, or Cursor. Point your client at the remote server —
+        nothing to install:
+      </P>
+      <CodeBlock title="Claude Code / Cursor / Desktop config" badge="MCP">
+{`{
+  "mcpServers": {
+    "blue-agent": {
+      "url": "https://blueagent.dev/api/mcp"
+    }
+  }
+}`}
+      </CodeBlock>
+      <P>
+        The B20 tools are <strong>non-custodial</strong> — they never touch your keys and never charge a
+        payment. The encoders return a{" "}
+        <code className="text-slate-300">{`{ to, data, value }`}</code> that you sign in your own wallet
+        (via EIP-5792 <code className="text-slate-300">send_calls</code> or the Base MCP);{" "}
+        <code className="text-slate-300">b20_check_activation</code> and{" "}
+        <code className="text-slate-300">b20_read_token</code> are read-only on-chain queries. Blue Agent
+        goes factory-direct — no platform fee is added.
+      </P>
+
+      <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden divide-y divide-[#1A1A2E] my-5">
+        {[
+          { tool: "b20_check_activation",       desc: "Read live whether ASSET / STABLECOIN are active on mainnet or Sepolia (ActivationRegistry)." },
+          { tool: "b20_read_token",             desc: "Inspect a token live via multicall — isB20, supply, cap, variant, pause + policy gating (zero LLM)." },
+          { tool: "b20_encode_deploy",          desc: "Encode createB20 — name, symbol, variant, admin, optional decimals / supply cap / seed mint." },
+          { tool: "b20_encode_mint",            desc: "Encode mint (or mintWithMemo) on an existing token. Signer must hold MINT_ROLE." },
+          { tool: "b20_encode_burn",            desc: "Encode burnWithMemo — burn from the caller's balance with a memo. Signer must hold BURN_ROLE." },
+          { tool: "b20_encode_grant_mint_role", desc: "Encode grantRole(MINT_ROLE, account). Signer must hold DEFAULT_ADMIN_ROLE." },
+          { tool: "b20_encode_payment",         desc: "Encode transferWithMemo — pay with an on-chain memo / order id for reconciliation." },
+        ].map(({ tool, desc }) => (
+          <div key={tool} className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4 px-5 py-3">
+            <code className="font-mono text-[11px] text-[#22C55E] shrink-0 sm:w-64">{tool}</code>
+            <span className="font-mono text-[11px] text-slate-500">{desc}</span>
+          </div>
+        ))}
+      </div>
+
+      <P>A typical non-custodial deploy flow from your MCP client:</P>
+      <ol className="space-y-2.5 my-5">
+        {[
+          "Ask b20_check_activation for your target chain — createB20 reverts until B20 is active there.",
+          "Ask b20_encode_deploy with name, symbol, variant, and your admin wallet address.",
+          "Sign the returned { to, data, value } in your wallet (EIP-5792 send_calls / Base MCP).",
+          "After deploy, use b20_encode_mint / b20_encode_payment for ongoing operations.",
+        ].map((step, i) => (
+          <li key={i} className="flex gap-3 font-mono text-[12px] text-slate-400 leading-relaxed">
+            <span className="text-[#22C55E] shrink-0">{i + 1}.</span>
+            <span>{step}</span>
+          </li>
+        ))}
+      </ol>
+
+      <Callout color="#4FC3F7" title="More MCP tools">
+        See the <a href="/docs/mcp" className="underline">MCP Setup</a> page for the full tool catalog —
+        console commands, Hub tools, and the B20 builders — plus client-specific setup notes.
       </Callout>
 
       <H2 id="methodology">How the B20 scanner works</H2>
