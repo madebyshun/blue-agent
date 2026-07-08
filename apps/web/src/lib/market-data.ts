@@ -104,7 +104,13 @@ type GtPool = {
   };
 };
 
-function mapGtPool(p: GtPool): Pool {
+// GeckoTerminal network id — "base" for Base, "robinhood" for Robinhood Chain.
+// Confirmed live: api.geckoterminal.com/api/v2/networks/robinhood/trending_pools
+// and /new_pools both return real Robinhood Chain pools (verified via curl),
+// so this is a real second data source, not a guess.
+export type GtChain = "base" | "robinhood";
+
+function mapGtPool(p: GtPool, chain: GtChain): Pool {
   const a = p.attributes ?? {};
   const name = a.name ?? "";
   return {
@@ -120,19 +126,21 @@ function mapGtPool(p: GtPool): Pool {
     volume24h: num(a.volume_usd?.h24),
     liquidityUsd: num(a.reserve_in_usd),
     marketCap: num(a.market_cap_usd) ?? num(a.fdv_usd),
-    url: a.address ? `https://www.geckoterminal.com/base/pools/${a.address}` : "",
+    url: a.address ? `https://www.geckoterminal.com/${chain}/pools/${a.address}` : "",
   };
 }
 
-async function gtPools(path: string, limit: number): Promise<Pool[]> {
+async function gtPools(chain: GtChain, path: string, limit: number): Promise<Pool[]> {
   const d = await getJson<{ data?: GtPool[] }>(
-    `https://api.geckoterminal.com/api/v2/networks/base/${path}?page=1`
+    `https://api.geckoterminal.com/api/v2/networks/${chain}/${path}?page=1`
   );
-  return (d?.data ?? []).slice(0, limit).map(mapGtPool);
+  return (d?.data ?? []).slice(0, limit).map((p) => mapGtPool(p, chain));
 }
 
-export const getBaseTrending = (limit = 10) => gtPools("trending_pools", limit);
-export const getBaseNewPools = (limit = 10) => gtPools("new_pools", limit);
+export const getBaseTrending = (limit = 10) => gtPools("base", "trending_pools", limit);
+export const getBaseNewPools = (limit = 10) => gtPools("base", "new_pools", limit);
+export const getRobinhoodTrending = (limit = 10) => gtPools("robinhood", "trending_pools", limit);
+export const getRobinhoodNewPools = (limit = 10) => gtPools("robinhood", "new_pools", limit);
 
 // ─── GeckoTerminal: a single Base pool by address (for LP analysis) ───────────
 
@@ -209,9 +217,13 @@ export type BaseTvl = {
   source: "defillama";
 };
 
-export async function getBaseTvl(): Promise<BaseTvl | null> {
+// DefiLlama chain-name slug (case-sensitive, matches their /historicalChainTvl
+// path convention) — "Base" and "Robinhood" both confirmed live via curl
+// (Robinhood's history is short, ~7 daily points, since it's a newer chain,
+// but it's real DefiLlama-tracked TVL, not fabricated).
+async function getChainTvl(chainSlug: "Base" | "Robinhood"): Promise<BaseTvl | null> {
   const hist = await getJson<{ date: number; tvl: number }[]>(
-    "https://api.llama.fi/v2/historicalChainTvl/Base"
+    `https://api.llama.fi/v2/historicalChainTvl/${chainSlug}`
   );
   if (!hist?.length) return null;
   const last = hist[hist.length - 1]?.tvl ?? null;
@@ -221,6 +233,9 @@ export async function getBaseTvl(): Promise<BaseTvl | null> {
     now != null && then ? +(((now - then) / then) * 100).toFixed(2) : null;
   return { tvlUsd: last, change1dPct: pct(last, d1), change7dPct: pct(last, d7), source: "defillama" };
 }
+
+export const getBaseTvl = () => getChainTvl("Base");
+export const getRobinhoodTvl = () => getChainTvl("Robinhood");
 
 // ─── DefiLlama: real yield pools on Base ─────────────────────────────────────
 
