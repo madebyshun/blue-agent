@@ -1194,16 +1194,17 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "blue-stream",
     name: "Blue Stream",
-    description: "Live snapshot feed of Base onchain activity — trending & new pools, TVL, real price/volume/liquidity. Pure real data, poll for a near-real-time feed.",
+    description: "Live snapshot feed of onchain activity on Base or Robinhood Chain — trending & new pools, TVL, real price/volume/liquidity. Pure real data, poll for a near-real-time feed.",
     agentHandle: "blue", agentName: "Blue", agentType: "blue",
     category: "on-chain",
     inputs: [
       { key: "feed", label: "Feed", placeholder: "movers | new | all (default: movers)" },
+      { key: "chain", label: "Chain", placeholder: "base | robinhood (default: base)" },
     ],
     isComposite: false,
     price: "$0.05", priceUSDC: 50000,
     x402Url: `${X402_BASE}/blue-stream`,
-    x402Body: (v) => ({ feed: v.feed ?? "movers" }),
+    x402Body: (v) => ({ feed: v.feed ?? "movers", chain: v.chain ?? "base" }),
   },
 
   {

@@ -827,6 +827,76 @@ function YieldCard({ result }: { result: Record<string, unknown> }) {
   );
 }
 
+// ── BlueStreamCard — live trending/new-pool feed (Base or Robinhood Chain) ────
+
+function BlueStreamCard({ result }: { result: Record<string, unknown> }) {
+  const chain = String(result.chain ?? "base");
+  const isRobinhood = chain === "robinhood";
+  const trending = Array.isArray(result.trending) ? (result.trending as Record<string, unknown>[]) : [];
+  const newPools = Array.isArray(result.new_pools) ? (result.new_pools as Record<string, unknown>[]) : [];
+  const tvl = result.base_tvl as Record<string, unknown> | null | undefined;
+  const errorMsg = typeof result.error === "string" ? result.error : "";
+
+  const renderRow = (p: Record<string, unknown>, i: number) => {
+    const change = String(p.change_24h ?? p.change_1h ?? "");
+    const isUp = change.startsWith("+");
+    const isDown = change.startsWith("-");
+    return (
+      <a
+        key={i}
+        href={typeof p.url === "string" ? p.url : undefined}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-between py-1.5 border-b border-slate-800 last:border-0 hover:bg-slate-800/30 -mx-1 px-1 rounded"
+      >
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] text-slate-200 truncate">{String(p.token ?? "")}</p>
+          <p className="font-mono text-[9px] text-slate-600 truncate">{String(p.pool ?? "")}</p>
+        </div>
+        <div className="text-right shrink-0 pl-2">
+          <p className="font-mono text-[11px] text-slate-300">{p.price_usd != null ? `$${p.price_usd}` : ""}</p>
+          <p className={`font-mono text-[10px] ${isUp ? "text-[#34D399]" : isDown ? "text-red-400" : "text-slate-500"}`}>
+            {change || "—"}
+          </p>
+        </div>
+      </a>
+    );
+  };
+
+  return (
+    <Card accentColor={isRobinhood ? "#00C805" : "#4FC3F7"}>
+      <CardHeader accentColor={isRobinhood ? "#00C805" : "#4FC3F7"}>
+        <span className="font-mono text-[11px] font-bold text-slate-300">
+          {isRobinhood ? "🟢 Robinhood Chain Stream" : "🔵 Base Stream"}
+        </span>
+        {tvl?.usd != null && (
+          <span className="font-mono text-[10px] text-slate-500">
+            TVL ${Number(tvl.usd).toLocaleString()} {tvl.change_1d ? `(${tvl.change_1d} 1d)` : ""}
+          </span>
+        )}
+      </CardHeader>
+      <CardBody>
+        {errorMsg && <p className="font-mono text-[11px] text-slate-400">{errorMsg}</p>}
+        {trending.length > 0 && (
+          <div className="mb-2">
+            <p className="font-mono text-[9px] text-slate-600 uppercase mb-1">Trending</p>
+            {trending.slice(0, 5).map(renderRow)}
+          </div>
+        )}
+        {newPools.length > 0 && (
+          <div>
+            <p className="font-mono text-[9px] text-slate-600 uppercase mb-1">New Pools</p>
+            {newPools.slice(0, 5).map(renderRow)}
+          </div>
+        )}
+        {!errorMsg && trending.length === 0 && newPools.length === 0 && (
+          <p className="font-mono text-[11px] text-slate-500">No live data right now.</p>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
 // ── GenericCard — fallback for any tool without a specific card ───────────────
 
 const SKIP_KEYS = new Set(["raw", "prompt", "_meta", "model", "tool", "command"]);
@@ -3029,6 +3099,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_aml":           return <AmlCard         result={r} />;
     case "hub_quantum":       return <QuantumCard      result={r} />;
     case "hub_yield":         return <YieldCard        result={r} />;
+    case "blue_stream":       return <BlueStreamCard   result={r} />;
     case "hub_b20_launch":       return <B20LaunchCard   result={r as B20LaunchResult} />;
     case "hub_robinhood_launch": {
       // Legacy tool schema uses name/symbol/initial_supply (not tokenName/tokenSymbol) —
