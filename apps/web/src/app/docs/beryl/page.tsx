@@ -209,18 +209,22 @@ token.burnBlocked(holderAddress, amount);`}
 }`}
       </CodeBlock>
       <P>
-        The five B20 tools are <strong>non-custodial calldata builders</strong> — they never touch your
-        keys and never charge a payment. Each returns a{" "}
+        The B20 tools are <strong>non-custodial</strong> — they never touch your keys and never charge a
+        payment. The encoders return a{" "}
         <code className="text-slate-300">{`{ to, data, value }`}</code> that you sign in your own wallet
-        (via EIP-5792 <code className="text-slate-300">send_calls</code> or the Base MCP). Blue Agent goes
-        factory-direct — no platform fee is added.
+        (via EIP-5792 <code className="text-slate-300">send_calls</code> or the Base MCP);{" "}
+        <code className="text-slate-300">b20_check_activation</code> and{" "}
+        <code className="text-slate-300">b20_read_token</code> are read-only on-chain queries. Blue Agent
+        goes factory-direct — no platform fee is added.
       </P>
 
       <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden divide-y divide-[#1A1A2E] my-5">
         {[
           { tool: "b20_check_activation",       desc: "Read live whether ASSET / STABLECOIN are active on mainnet or Sepolia (ActivationRegistry)." },
+          { tool: "b20_read_token",             desc: "Inspect a token live via multicall — isB20, supply, cap, variant, pause + policy gating (zero LLM)." },
           { tool: "b20_encode_deploy",          desc: "Encode createB20 — name, symbol, variant, admin, optional decimals / supply cap / seed mint." },
           { tool: "b20_encode_mint",            desc: "Encode mint (or mintWithMemo) on an existing token. Signer must hold MINT_ROLE." },
+          { tool: "b20_encode_burn",            desc: "Encode burnWithMemo — burn from the caller's balance with a memo. Signer must hold BURN_ROLE." },
           { tool: "b20_encode_grant_mint_role", desc: "Encode grantRole(MINT_ROLE, account). Signer must hold DEFAULT_ADMIN_ROLE." },
           { tool: "b20_encode_payment",         desc: "Encode transferWithMemo — pay with an on-chain memo / order id for reconciliation." },
         ].map(({ tool, desc }) => (

@@ -11,10 +11,10 @@
  *   }
  *
  * Protocol: JSON-RPC 2.0 over HTTP POST
- * Tools: 86 — 5 console + 66 hub_* + 8 blue_* first-party + blue_score/blue_new
- *        + 5 b20_* MCP-native calldata builders (deploy/mint/grant/payment/check_activation)
+ * Tools: 88 — 5 console + 66 hub_* + 8 blue_* first-party + blue_score/blue_new
+ *        + 7 b20_* MCP-native tools (deploy/mint/burn/grant/payment/check_activation/read_token)
  *        (78 unique x402 hub tools fully covered; 1 narrative alias; blue_score/blue_new
- *         + the 5 b20_* encoders are MCP-only — pure calldata, no x402 payment)
+ *         + the 7 b20_* tools are MCP-only — pure calldata builders + on-chain reads, no x402 payment)
  * Docs: https://api.blueagent.dev/docs
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -24,11 +24,13 @@ import {
   buildB20Calldata,
   encodeMint,
   encodeMintWithMemo,
+  encodeBurnWithMemo,
   encodeGrantMintRole,
   encodeTransferWithMemo,
   isValidMemo,
 } from "@/lib/b20/encode";
 import { getB20Activation } from "@/lib/b20/activation";
+import { inspectB20 } from "@/lib/b20/inspect";
 
 export const runtime = "nodejs";
 // Console commands (blue_idea/build/audit/ship/raise) wait on Bankr LLM which
@@ -457,6 +459,25 @@ const TOOLS = [
     } },
   },
   {
+    name: "b20_read_token",
+    description: "Inspect a B20 token live from Base RPC via multicall — isB20 check, name/symbol/decimals, total supply, supply cap, variant, per-feature pause status, and per-scope policy gating. Deterministic on-chain read (zero LLM). No wallet, no payment.",
+    inputSchema: { type: "object", properties: {
+      tokenAddress: { type: "string", description: "Token contract 0x..." },
+      chainId: { type: "number", description: "8453 = Base Mainnet (default), 84532 = Base Sepolia" },
+      account: { type: "string", description: "Optional wallet 0x... — checks whether it holds DEFAULT_ADMIN_ROLE" },
+    }, required: ["tokenAddress"] },
+  },
+  {
+    name: "b20_encode_burn",
+    description: "Encode burnWithMemo — burn B20 tokens from the caller's own balance with an on-chain memo. Returns { to, data, value } for a wallet holding BURN_ROLE to sign. Pure calldata builder — no keys, no payment.",
+    inputSchema: { type: "object", properties: {
+      tokenAddress: { type: "string", description: "B20 token contract 0x..." },
+      amount: { type: "string", description: "Amount in whole tokens" },
+      decimals: { type: "number", description: "Token decimals" },
+      memo: { type: "string", description: "On-chain memo, max 31 chars" },
+    }, required: ["tokenAddress", "amount", "decimals", "memo"] },
+  },
+  {
     name: "hub_liquidity_depth",
     description: "Liquidity depth, slippage estimate and exit risk for a Base token.",
     inputSchema: { type: "object", properties: { token: { type: "string", description: "Token contract address 0x... or ticker" } }, required: ["token"] },
@@ -767,9 +788,11 @@ async function callBuilderScore(handle: string): Promise<string> {
 const B20_ENCODE_TOOLS = new Set([
   "b20_encode_deploy",
   "b20_encode_mint",
+  "b20_encode_burn",
   "b20_encode_grant_mint_role",
   "b20_encode_payment",
   "b20_check_activation",
+  "b20_read_token",
 ]);
 
 const ADDR_RE = /^0x[a-fA-F0-9]{40}$/;
@@ -832,6 +855,21 @@ async function callB20Native(name: string, args: Record<string, unknown>): Promi
         note: `Sign with a wallet holding MINT_ROLE.${memo ? " Uses mintWithMemo." : ""}`,
       }, null, 2);
     }
+    case "b20_encode_burn": {
+      const tokenAddress = reqAddr(args.tokenAddress, "tokenAddress");
+      const amount = String(args.amount ?? "").trim();
+      if (!amount) throw new Error("amount is required");
+      const decimals = Number(args.decimals);
+      if (!Number.isFinite(decimals)) throw new Error("decimals is required");
+      const memo = String(args.memo ?? "").trim();
+      if (!isValidMemo(memo)) throw new Error("memo must be non-empty and fit in 32 bytes (≤31 chars)");
+      return JSON.stringify({
+        to: tokenAddress,
+        data: encodeBurnWithMemo({ amount, decimals, memo }),
+        value: "0x0",
+        note: "Sign with a wallet holding BURN_ROLE. Burns from the caller's own balance.",
+      }, null, 2);
+    }
     case "b20_encode_grant_mint_role": {
       const tokenAddress = reqAddr(args.tokenAddress, "tokenAddress");
       const account = reqAddr(args.account, "account");
@@ -877,6 +915,13 @@ async function callB20Native(name: string, args: Record<string, unknown>): Promi
           ? (live ? "B20 is active — deploys will succeed." : "B20 is NOT yet active on this chain — createB20 will revert.")
           : "Could not read the ActivationRegistry right now — status unknown. Retry shortly.",
       }, null, 2);
+    }
+    case "b20_read_token": {
+      const tokenAddress = reqAddr(args.tokenAddress, "tokenAddress");
+      const network = chainIdToNetwork(args.chainId);
+      const account = args.account ? reqAddr(args.account, "account") : undefined;
+      const result = await inspectB20(tokenAddress, network, account);
+      return JSON.stringify(result, null, 2);
     }
     default:
       throw new Error(`Unknown B20 tool: ${name}`);
