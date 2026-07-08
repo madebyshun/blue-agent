@@ -1,24 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, http, defineChain } from "viem";
+import { createPublicClient, http } from "viem";
 import { recordLaunch } from "@/lib/launches";
-
-// Robinhood Chain — EVM chainId 4663 (mainnet) / 46630 (testnet).
-// Source: docs.robinhood.com/chain/connecting/
-const robinhoodMainnet = defineChain({
-  id: 4663,
-  name: "Robinhood Chain",
-  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-  rpcUrls: { default: { http: ["https://rpc.mainnet.chain.robinhood.com"] } },
-  blockExplorers: { default: { name: "Blockscout", url: "https://robinhoodchain.blockscout.com" } },
-});
-
-const robinhoodTestnet = defineChain({
-  id: 46630,
-  name: "Robinhood Chain Testnet",
-  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-  rpcUrls: { default: { http: ["https://rpc.testnet.chain.robinhood.com"] } },
-  blockExplorers: { default: { name: "Explorer", url: "https://explorer.testnet.chain.robinhood.com" } },
-});
+import { robinhoodMainnet, robinhoodTestnet } from "@/lib/robinhood/chains";
 
 const NETWORKS = {
   testnet: { chain: robinhoodTestnet, rpc: "https://rpc.testnet.chain.robinhood.com", explorer: "https://explorer.testnet.chain.robinhood.com" },
