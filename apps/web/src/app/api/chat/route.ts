@@ -677,8 +677,14 @@ Default to "base" for Base-related queries.`,
   },
   {
     name: "blue_stream",
-    description: "Live snapshot feed of Base onchain activity — trending/new pools, TVL, real prices. Use when user asks 'what's happening on Base now', 'live feed', 'what's moving'.",
-    input_schema: { type: "object", properties: { feed: { type: "string", description: "movers | new | all" } } },
+    description: "Live snapshot feed of onchain activity on Base OR Robinhood Chain — trending/new pools, chain TVL, real prices (GeckoTerminal + DefiLlama, both index Robinhood Chain natively as network 'robinhood'). Use when user asks 'what's happening on Base now', 'live feed', 'what's moving', or 'what's trending on Robinhood Chain'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        feed: { type: "string", description: "movers | new | all" },
+        chain: { type: "string", enum: ["base", "robinhood"], description: "Which chain to pull the feed for. Default base." },
+      },
+    },
   },
   {
     name: "hub_b20_analyze",
