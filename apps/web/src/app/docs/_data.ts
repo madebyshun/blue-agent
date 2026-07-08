@@ -230,8 +230,10 @@ export const MCP_TOOLS: { name: string; desc: string }[] = [
   { name: "blue_simulate", desc: "Bull/base/bear scenario modeling for a Base decision — tokenomics, fee model, growth, runway — with assumptions, projections, and sensitivities." },
   { name: "blue_stream", desc: "Live snapshot feed of Base onchain activity — trending & new pools, TVL, real price/volume/liquidity. Pure real data; poll for a near-real-time feed." },
   { name: "b20_check_activation", desc: "Check whether B20 ASSET / STABLECOIN are activated on Base mainnet or Sepolia — read live from the on-chain ActivationRegistry (isActivated). No wallet, no payment." },
+  { name: "b20_read_token", desc: "Inspect a B20 token live via multicall — isB20, name/symbol/decimals, supply, cap, variant, per-feature pause, per-scope policy gating. Deterministic on-chain read (zero LLM). No wallet, no payment." },
   { name: "b20_encode_deploy", desc: "Encode a B20 token deployment (createB20). Returns { to, data, value } for your own wallet to sign via EIP-5792 send_calls / Base MCP. Non-custodial — no keys, no payment." },
   { name: "b20_encode_mint", desc: "Encode a mint on an existing B20 token (mint or mintWithMemo). Returns { to, data, value } for a MINT_ROLE holder to sign. Non-custodial calldata builder." },
+  { name: "b20_encode_burn", desc: "Encode burnWithMemo — burn B20 tokens from the caller's balance with an on-chain memo. Returns { to, data, value } for a BURN_ROLE holder to sign." },
   { name: "b20_encode_grant_mint_role", desc: "Encode grantRole(MINT_ROLE, account) on a B20 token. Returns { to, data, value } for the DEFAULT_ADMIN_ROLE holder to sign." },
   { name: "b20_encode_payment", desc: "Encode transferWithMemo — send B20 tokens with an on-chain memo (order id) for reconciliation. Returns { to, data, value } for the sender to sign." },
 ];
