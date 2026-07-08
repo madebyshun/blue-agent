@@ -3,6 +3,7 @@
 import { createConfig, WagmiProvider } from "wagmi";
 import { base, baseSepolia } from "wagmi/chains";
 import { http } from "viem";
+import { robinhoodMainnet, robinhoodTestnet } from "@/lib/robinhood/chains";
 import { coinbaseWallet } from "wagmi/connectors";
 import { farcasterMiniApp } from "@farcaster/miniapp-wagmi-connector";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -22,7 +23,11 @@ const inMiniAppFrame = typeof window !== "undefined" && window.top !== window.se
 const config = createConfig({
   // base = mainnet (default). baseSepolia = testnet, enabled so the chat
   // Move-to-Yield card can test Aave supply/withdraw safely before mainnet.
-  chains: [base, baseSepolia],
+  // robinhoodMainnet/Testnet registered so `useSwitchChain` can actually
+  // prompt wallets to add/switch to Robinhood Chain (chainId 4663/46630) for
+  // the direct-deploy launch flow — without this, switchChainAsync throws
+  // "chain not configured" for any chain not in this array.
+  chains: [base, baseSepolia, robinhoodMainnet, robinhoodTestnet],
   // We deliberately do NOT register a generic `injected()` connector.
   // wagmi v3 has EIP-6963 multi-injected discovery ON by default, so every
   // installed extension (MetaMask, Rabby, Phantom…) is surfaced as its own
@@ -44,7 +49,12 @@ const config = createConfig({
   ],
   // EIP-6963 discovery (default true in v3) handles MetaMask/Rabby/etc.
   multiInjectedProviderDiscovery: true,
-  transports: { [base.id]: http(), [baseSepolia.id]: http() },
+  transports: {
+    [base.id]: http(),
+    [baseSepolia.id]: http(),
+    [robinhoodMainnet.id]: http(),
+    [robinhoodTestnet.id]: http(),
+  },
   // NOTE: wagmi 3.6 / viem 2.49 have no config-level `dataSuffix` — it was a
   // silent no-op. ERC-8021 builder-code attribution is applied per-transaction
   // instead: the EIP-5792 `dataSuffix` capability in the Smart Wallet send path
