@@ -10,6 +10,7 @@ import { base } from "wagmi/chains";
 import { ERC20_ABI } from "@/lib/yield-execution";
 import { DATA_SUFFIX } from "@/constants/builderCode";
 import { useLang } from "@/lib/i18n/context";
+import { QRCodeSVG } from "qrcode.react";
 
 const ACCENT = "#F59E0B";
 
@@ -1340,6 +1341,7 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
   const [rhNetwork, setRhNetwork] = useState<RobinhoodNet>("mainnet");
   const [rhTxHash, setRhTxHash] = useState("");
   const [rhPolling, setRhPolling] = useState(false);
+  const [showReceive, setShowReceive] = useState(false);
 
   // Fee recipient is left BLANK by default → the 57% creator fee routes to
   // @blueagent_ (see `fee || "blueagent_"` in launch()). The user can opt to
@@ -1571,7 +1573,36 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
                   target="_blank" rel="noopener noreferrer" className="underline text-[#22C55E] hover:text-[#22C55E]/80">
                   Bridge ETH via Arbitrum Portal ↗
                 </a>
+                {" "}or{" "}
+                <button type="button" onClick={() => setShowReceive(v => !v)} className="underline text-[#22C55E] hover:text-[#22C55E]/80">
+                  receive funds ↓
+                </button>
               </p>
+            )}
+
+            {launchChain === "robinhood" && showReceive && address && (
+              <div className="mb-3 rounded-lg border border-[#1A1A2E] bg-[#050508] p-3 flex flex-col items-center">
+                <div className="font-mono text-[9px] text-slate-500 mb-2 text-center">
+                  Scan or copy your wallet address to receive ETH on {ROBINHOOD_NETWORKS.find(x => x.id === rhNetwork)!.label}.
+                </div>
+                <div className="bg-white p-2 rounded-lg">
+                  <QRCodeSVG value={address} size={128} bgColor="#ffffff" fgColor="#0a0a0f" level="M" />
+                </div>
+                <div className="flex items-center gap-2 mt-2.5 w-full">
+                  <div className="flex-1 font-mono text-[10px] text-slate-300 bg-[#0a0a0f] border border-[#1A1A2E] rounded-md px-2 py-1.5 truncate">
+                    {address}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(address)}
+                    className="font-mono text-[9px] px-2 py-1.5 rounded-md border border-[#1A1A2E] text-slate-400 hover:text-slate-200 hover:border-[#22C55E]/40 transition-colors shrink-0">
+                    Copy
+                  </button>
+                </div>
+                <div className="font-mono text-[9px] text-amber-400/80 mt-2 text-center">
+                  ⚠ Only send ETH on {ROBINHOOD_NETWORKS.find(x => x.id === rhNetwork)!.label} to this address — same address, but wrong network funds may be unrecoverable.
+                </div>
+              </div>
             )}
 
             {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
