@@ -18,6 +18,7 @@ import { useLang } from "@/lib/i18n/context";
 import { B20_ENABLED, B20_USDC } from "@/lib/orders";
 import { encodeTransferWithMemo, isValidMemo, MEMO_MAX_CHARS } from "@/lib/b20/encode";
 import { QRCodeSVG } from "qrcode.react";
+import { RobinhoodSwapCard, type RobinhoodSwapResult } from "./RobinhoodSwapCard";
 
 function truncAddr(addr: string, len = 6) {
   if (!addr || addr.length < 12) return addr;
@@ -3101,6 +3102,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_yield":         return <YieldCard        result={r} />;
     case "blue_stream":       return <BlueStreamCard   result={r} />;
     case "hub_b20_launch":       return <B20LaunchCard   result={r as B20LaunchResult} />;
+    case "robinhood_swap":       return <RobinhoodSwapCard result={r as unknown as RobinhoodSwapResult} />;
     case "hub_robinhood_launch": {
       // Legacy tool schema uses name/symbol/initial_supply (not tokenName/tokenSymbol) —
       // remap into TokenLaunchResult's shape so the merged card's fields aren't blank.
