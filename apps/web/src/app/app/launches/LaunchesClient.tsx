@@ -46,6 +46,9 @@ type Launch = {
   /** Which chain this token was deployed on. Absent = "base" (legacy records
    *  predate Robinhood Chain support). */
   chain?: "base" | "robinhood";
+  /** EVM chain id — 4663 (Robinhood mainnet) or 46630 (Robinhood testnet) for
+   *  chain === "robinhood" records; absent/8453 for Base. */
+  chainId?: number;
 };
 type FeedResponse = {
   ok: boolean;
@@ -434,9 +437,119 @@ function TradeModal({ l, onClose }: { l: Launch; onClose: () => void }) {
   );
 }
 
+// ── Explore modal (Robinhood Chain only) ────────────────────────────────────────
+// Read-only — no wallet interaction, no fund risk. Pulls real holders/transfers
+// straight from Blockscout (robinhoodchain.blockscout.com), the same explorer
+// the "Explorer ↗" link points at, so nothing here is fabricated.
+
+type ExploreData = {
+  ok: boolean;
+  error?: string;
+  network?: "mainnet" | "testnet";
+  explorerUrl?: string;
+  info?: { holders_count: string | null; total_supply: string | null; exchange_rate: string | null };
+  holders?: { address: { hash: string; is_contract: boolean }; value: string }[];
+  holdersCount?: number;
+  transfers?: {
+    block_number: number; timestamp: string;
+    from: { hash: string }; to: { hash: string };
+    total?: { value?: string };
+  }[];
+};
+
+function ExploreModal({ l, onClose }: { l: Launch; onClose: () => void }) {
+  const [data, setData] = useState<ExploreData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const tokenSym = (l.tokenSymbol || l.tokenName || "TOKEN").replace(/^\$/, "");
+  const network = l.chainId === 46630 ? "testnet" : "mainnet";
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/robinhood/explore?address=${l.tokenAddress}&network=${network}`)
+      .then((r) => r.json())
+      .then((d: ExploreData) => setData(d))
+      .catch(() => setData({ ok: false, error: "Failed to load explorer data" }))
+      .finally(() => setLoading(false));
+  }, [l.tokenAddress, network]);
+
+  function fmtSupply(raw: string | null | undefined): string {
+    if (!raw) return "—";
+    try { return Number(formatUnits(BigInt(raw), 18)).toLocaleString("en-US", { maximumFractionDigits: 0 }); }
+    catch { return raw; }
+  }
+  function fmtAgo(ts: string): string {
+    const s = Math.max(0, Date.now() - new Date(ts).getTime()) / 1000;
+    if (s < 60) return Math.floor(s) + "s ago";
+    if (s < 3600) return Math.floor(s / 60) + "m ago";
+    if (s < 86400) return Math.floor(s / 3600) + "h ago";
+    return Math.floor(s / 86400) + "d ago";
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-sm rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="min-w-0 flex-1">
+            <div className="font-mono text-sm font-bold text-white truncate">{l.tokenName || tokenSym} <span className="text-slate-600 text-[10px]">· ${tokenSym}</span></div>
+            <div className="font-mono text-[10px] text-slate-500">Live data from Blockscout · {network === "testnet" ? "Robinhood Testnet" : "Robinhood Chain"}</div>
+          </div>
+          <button onClick={onClose} className="font-mono text-slate-600 hover:text-white text-xl leading-none">×</button>
+        </div>
+
+        {loading ? (
+          <div className="font-mono text-[11px] text-slate-600 py-8 text-center">Loading…</div>
+        ) : !data?.ok ? (
+          <div className="font-mono text-[11px] text-amber-400 py-8 text-center">{data?.error || "No data yet — still indexing."}</div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2 font-mono mb-4">
+              <div className="rounded-lg border border-[#1A1A2E] p-2.5">
+                <div className="text-[8px] text-slate-600 tracking-widest mb-0.5">HOLDERS</div>
+                <div className="text-[13px] text-slate-200">{data.holdersCount ?? "—"}</div>
+              </div>
+              <div className="rounded-lg border border-[#1A1A2E] p-2.5">
+                <div className="text-[8px] text-slate-600 tracking-widest mb-0.5">TOTAL SUPPLY</div>
+                <div className="text-[13px] text-slate-200">{fmtSupply(data.info?.total_supply)}</div>
+              </div>
+            </div>
+
+            <div className="font-mono text-[9px] text-slate-600 tracking-widest mb-1.5">TOP HOLDERS</div>
+            <div className="space-y-1 mb-4">
+              {(data.holders ?? []).length === 0 && <div className="font-mono text-[10px] text-slate-700">None yet.</div>}
+              {(data.holders ?? []).map((h, i) => (
+                <div key={h.address.hash + i} className="flex items-center justify-between font-mono text-[10px] text-slate-400">
+                  <span>{truncAddr(h.address.hash)}{h.address.is_contract ? " (contract)" : ""}</span>
+                  <span className="text-slate-300">{fmtSupply(h.value)}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="font-mono text-[9px] text-slate-600 tracking-widest mb-1.5">RECENT TRANSFERS</div>
+            <div className="space-y-1 mb-4">
+              {(data.transfers ?? []).length === 0 && <div className="font-mono text-[10px] text-slate-700">No transfers yet.</div>}
+              {(data.transfers ?? []).map((tr, i) => (
+                <div key={i} className="flex items-center justify-between font-mono text-[10px] text-slate-400">
+                  <span>{truncAddr(tr.from.hash)} → {truncAddr(tr.to.hash)}</span>
+                  <span className="text-slate-600">{fmtAgo(tr.timestamp)}</span>
+                </div>
+              ))}
+            </div>
+
+            <a href={data.explorerUrl} target="_blank" rel="noopener noreferrer"
+              className="block w-full text-center font-mono text-[10px] px-2 py-2 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white transition-colors">
+              View full history on Blockscout ↗
+            </a>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Token card ─────────────────────────────────────────────────────────────────
 
-function LaunchCard({ l, onTrade }: { l: Launch; onTrade: (l: Launch) => void }) {
+function LaunchCard({ l, onTrade, onExplore }: { l: Launch; onTrade: (l: Launch) => void; onExplore: (l: Launch) => void }) {
   const [copied, setCopied] = useState(false);
   const sym = (l.tokenSymbol || l.tokenName || "?").replace(/^\$/, "");
   const change = l.market?.change24h;
@@ -536,9 +649,15 @@ function LaunchCard({ l, onTrade }: { l: Launch; onTrade: (l: Launch) => void })
             Bankr ↗
           </a>
         )}
+        {l.chain === "robinhood" && (
+          <button onClick={() => onExplore(l)}
+            className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] transition-colors">
+            Explore
+          </button>
+        )}
         <a
           href={l.chain === "robinhood"
-            ? `https://robinhoodchain.blockscout.com/token/${l.tokenAddress}`
+            ? `${l.chainId === 46630 ? "https://explorer.testnet.chain.robinhood.com" : "https://robinhoodchain.blockscout.com"}/token/${l.tokenAddress}`
             : `https://basescan.org/token/${l.tokenAddress}`}
           target="_blank" rel="noopener noreferrer"
           className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white transition-colors">
@@ -557,7 +676,7 @@ function LaunchCard({ l, onTrade }: { l: Launch; onTrade: (l: Launch) => void })
 
 // ── List row (A1) ──────────────────────────────────────────────────────────────
 
-function LaunchRow({ l, onTrade }: { l: Launch; onTrade: (l: Launch) => void }) {
+function LaunchRow({ l, onTrade, onExplore }: { l: Launch; onTrade: (l: Launch) => void; onExplore: (l: Launch) => void }) {
   const [copied, setCopied] = useState(false);
   const sym = (l.tokenSymbol || l.tokenName || "?").replace(/^\$/, "");
   const change = l.market?.change24h;
@@ -614,11 +733,17 @@ function LaunchRow({ l, onTrade }: { l: Launch; onTrade: (l: Launch) => void }) 
             Bankr ↗
           </a>
         ) : (
-          <a href={`https://robinhoodchain.blockscout.com/token/${l.tokenAddress}`}
-            target="_blank" rel="noopener noreferrer"
-            className="px-2 py-0.5 rounded border border-[#1A1A2E] text-slate-400 text-[9px] transition-colors">
-            Explorer ↗
-          </a>
+          <>
+            <button onClick={() => onExplore(l)}
+              className="px-2 py-0.5 rounded border border-[#4FC3F730] text-[#4FC3F7] text-[9px] transition-colors">
+              Explore
+            </button>
+            <a href={`${l.chainId === 46630 ? "https://explorer.testnet.chain.robinhood.com" : "https://robinhoodchain.blockscout.com"}/token/${l.tokenAddress}`}
+              target="_blank" rel="noopener noreferrer"
+              className="px-2 py-0.5 rounded border border-[#1A1A2E] text-slate-400 text-[9px] transition-colors">
+              Explorer ↗
+            </a>
+          </>
         )}
         <button onClick={copyAddr}
           className="px-2 py-0.5 rounded border border-[#1A1A2E] text-[9px] text-slate-600 hover:text-slate-300 transition-colors">
@@ -1053,6 +1178,9 @@ export default function LaunchesPage() {
   // In-page swap modal: which token the user is trading (null = closed).
   const [tradeToken, setTradeToken] = useState<Launch | null>(null);
 
+  // Explore modal (Robinhood Chain only) — read-only Blockscout data.
+  const [exploreToken, setExploreToken] = useState<Launch | null>(null);
+
   // A1 — view mode
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
 
@@ -1119,6 +1247,7 @@ export default function LaunchesPage() {
     <div className="flex flex-col h-full bg-[#050508] text-white font-mono overflow-hidden">
       {showLaunch && <LaunchModal onClose={() => setShowLaunch(false)} onLaunched={manualLoad} />}
       {tradeToken && <TradeModal l={tradeToken} onClose={() => setTradeToken(null)} />}
+      {exploreToken && <ExploreModal l={exploreToken} onClose={() => setExploreToken(null)} />}
 
       {/* Header bar */}
       <div className="flex items-center justify-between gap-3 px-4 sm:px-6 h-14 border-b border-[#1A1A2E] shrink-0">
@@ -1278,14 +1407,14 @@ export default function LaunchesPage() {
             </div>
           ) : viewMode === "grid" ? (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {launches.map((l) => <LaunchCard key={l.tokenAddress} l={l} onTrade={setTradeToken} />)}
+              {launches.map((l) => <LaunchCard key={l.tokenAddress} l={l} onTrade={setTradeToken} onExplore={setExploreToken} />)}
             </div>
           ) : (
             /* List view */
             <div className="rounded-xl border border-[#1A1A2E] overflow-hidden">
               <ListHeader sort={sort} onSort={setSort} />
               <div>
-                {launches.map((l) => <LaunchRow key={l.tokenAddress} l={l} onTrade={setTradeToken} />)}
+                {launches.map((l) => <LaunchRow key={l.tokenAddress} l={l} onTrade={setTradeToken} onExplore={setExploreToken} />)}
               </div>
             </div>
           )}
