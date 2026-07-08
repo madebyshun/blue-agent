@@ -1553,6 +1553,212 @@ base-cast call $TOKEN_ADDRESS \\
   );
 }
 
+// ── Robinhood Chain Launch Card ──────────────────────────────────────────────
+// Rendered for hub_robinhood_launch marker. Robinhood Chain (EVM chainId 4663,
+// Arbitrum Orbit, permissionless — docs.robinhood.com/chain) has NO native
+// token-launch factory like Base's B20. This deploys a plain ERC-20 as a raw
+// contract-creation tx: the user's OWN connected wallet signs & broadcasts,
+// Blue Agent never holds keys or funds. On confirmation it's recorded into
+// Blue Agent's own /launches registry (tagged chain:"robinhood"), same as
+// Base launches — NOT pulled from Bankr's feed.
+
+interface RobinhoodLaunchResult {
+  name?: string;
+  symbol?: string;
+  decimals?: number;
+  initial_supply?: string;
+  image?: string;
+  website?: string;
+  description?: string;
+}
+
+const ROBINHOOD_NETWORKS = [
+  { id: "mainnet", label: "Robinhood Chain",         chain: 4663,  rpc: "https://rpc.mainnet.chain.robinhood.com",  explorer: "https://robinhoodchain.blockscout.com" },
+  { id: "testnet", label: "Robinhood Chain Testnet", chain: 46630, rpc: "https://rpc.testnet.chain.robinhood.com",  explorer: "https://explorer.testnet.chain.robinhood.com" },
+] as const;
+type RobinhoodNet = typeof ROBINHOOD_NETWORKS[number]["id"];
+
+function RobinhoodLaunchCard({ result }: { result: RobinhoodLaunchResult }) {
+  const [name,           setName]           = useState(result.name ?? "");
+  const [symbol,         setSymbol]         = useState((result.symbol ?? "").toUpperCase());
+  const [decimals,       setDecimals]       = useState<number>(result.decimals ?? 18);
+  const [initialSupply,  setInitialSupply]  = useState(result.initial_supply ?? "1000000000");
+  const [network,        setNetwork]        = useState<RobinhoodNet>("mainnet");
+
+  const { address, chainId: currentChainId } = useAccount();
+  const { sendTransactionAsync }              = useSendTransaction();
+  const { switchChainAsync }                  = useSwitchChain();
+  const [deploying,     setDeploying]     = useState(false);
+  const [polling,       setPolling]       = useState(false);
+  const [deployErr,     setDeployErr]     = useState("");
+  const [deployTxHash,  setDeployTxHash]  = useState("");
+  const [deployedToken, setDeployedToken] = useState("");
+
+  const n   = name.trim();
+  const s   = symbol.replace(/^\$/, "").trim();
+  const net = ROBINHOOD_NETWORKS.find(x => x.id === network)!;
+  const canDeploy = !!n && !!s;
+
+  async function deployRobinhood() {
+    if (!address) { setDeployErr("Connect your wallet first"); return; }
+    if (!canDeploy) { setDeployErr("Name and symbol required"); return; }
+    setDeploying(true); setDeployErr(""); setDeployTxHash(""); setDeployedToken("");
+    try {
+      // 18 decimals -> base units (a plain integer string, no float math)
+      const supplyBaseUnits = (BigInt(initialSupply || "0") * (10n ** BigInt(decimals))).toString();
+
+      const prepRes = await fetch("/api/robinhood/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: n, symbol: s, decimals,
+          initial_supply: supplyBaseUnits,
+          owner: address,
+          network,
+        }),
+      });
+      const prep = await prepRes.json();
+      if (!prep.ok) throw new Error(prep.error || "Prepare failed");
+
+      if (currentChainId !== net.chain) {
+        try {
+          await switchChainAsync({ chainId: net.chain });
+        } catch {
+          throw new Error(`Switch your wallet to ${net.label} and try again`);
+        }
+      }
+
+      // Contract-creation tx — no `to` field.
+      const hash = await sendTransactionAsync({
+        data:    prep.tx.data as `0x${string}`,
+        value:   0n,
+        chainId: net.chain,
+      });
+      setDeployTxHash(hash);
+      setPolling(true);
+
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 3000));
+        const recRes = await fetch("/api/robinhood/receipt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tx_hash: hash, network,
+            tokenName: n, tokenSymbol: s,
+            image: result.image, website: result.website, description: result.description,
+            owner: address,
+          }),
+        });
+        const rec = await recRes.json();
+        if (rec.ok && rec.status === "success" && rec.tokenAddress) {
+          setDeployedToken(rec.tokenAddress);
+          break;
+        }
+        if (rec.ok && rec.status === "reverted") {
+          throw new Error("Transaction reverted");
+        }
+      }
+      setPolling(false);
+    } catch (e) {
+      setDeployErr((e as Error).message);
+    } finally {
+      setDeploying(false);
+      setPolling(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
+      <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold mb-3">ERC-20 · ROBINHOOD CHAIN</div>
+
+      <div className="flex items-center gap-2.5 mb-3">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center font-mono text-sm font-bold shrink-0"
+             style={{ background: "#22C55E15", border: "1px solid #22C55E30", color: "#22C55E" }}>
+          {(s || n).slice(0, 2).toUpperCase() || "RH"}
+        </div>
+        <div className="min-w-0">
+          <div className="font-mono text-sm font-bold text-white truncate">{n || "Token Name"}</div>
+          <div className="font-mono text-[11px] text-slate-500">${s || "SYMBOL"} · plain ERC-20</div>
+        </div>
+      </div>
+
+      <div className="space-y-2 mb-3">
+        <div className="grid grid-cols-2 gap-2">
+          <B20Field label="TOKEN NAME *" value={name} onChange={setName} placeholder="e.g. Robinhood Games" />
+          <B20Field label="SYMBOL *" value={symbol} onChange={v => setSymbol(v.toUpperCase())} placeholder="e.g. RGME" />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block">
+            <span className="font-mono text-[9px] text-slate-600 block mb-1">DECIMALS</span>
+            <input
+              type="number" min={0} max={18} value={decimals}
+              onChange={e => setDecimals(Number(e.target.value))}
+              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#22C55E]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 outline-none transition-colors"
+            />
+          </label>
+          <B20Field label="INITIAL SUPPLY" value={initialSupply} onChange={setInitialSupply} placeholder="e.g. 1000000000" />
+        </div>
+      </div>
+
+      {/* Network tabs */}
+      <div className="flex gap-1 mb-3">
+        {ROBINHOOD_NETWORKS.map(nx => (
+          <button key={nx.id} onClick={() => setNetwork(nx.id)}
+            className="font-mono text-[9px] px-2 py-0.5 rounded transition-colors"
+            style={network === nx.id
+              ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E30" }
+              : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+            {nx.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="pt-1">
+        {!deployedToken ? (
+          <>
+            <button
+              onClick={deployRobinhood}
+              disabled={deploying || !canDeploy || !address}
+              className="w-full font-mono text-[12px] font-bold py-2.5 rounded-xl disabled:opacity-40 transition-opacity"
+              style={{ background: "#22C55E", color: "#050508" }}>
+              {!address
+                ? "Connect wallet to deploy"
+                : deploying
+                  ? (polling ? "Confirming onchain…" : "Preparing…")
+                  : `Deploy on ${net.label} →`}
+            </button>
+            <p className="font-mono text-[9px] text-slate-600 mt-1.5 text-center">
+              No factory on Robinhood Chain — this deploys a raw ERC-20 contract-creation tx, signed by your own wallet. Gas paid in ETH.
+            </p>
+
+            {deployErr && (
+              <p className="font-mono text-[9px] text-red-400 mt-1.5 text-center">{deployErr}</p>
+            )}
+            {deployTxHash && !deployedToken && (
+              <p className="font-mono text-[9px] text-slate-500 mt-1.5 text-center break-all">
+                tx: {deployTxHash.slice(0, 10)}…{deployTxHash.slice(-8)}
+              </p>
+            )}
+          </>
+        ) : (
+          <div className="rounded-xl border border-[#34D399]/30 bg-[#34D399]/5 p-3">
+            <p className="font-mono text-[10px] text-[#34D399] mb-1">✓ Deployed on {net.label}</p>
+            <p className="font-mono text-[11px] text-white break-all mb-2">{deployedToken}</p>
+            <div className="flex gap-2 flex-wrap">
+              <a
+                href={`${net.explorer}/address/${deployedToken}`}
+                target="_blank" rel="noopener noreferrer"
+                className="font-mono text-[9px] px-2 py-1 rounded border border-[#1A1A2E] text-[#22C55E] hover:border-[#22C55E]/30 transition-colors">
+                View on explorer →
+              </a>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Rendered for the `prepare_yield` marker. NON-custodial move-to-yield: the user
 // signs supply/withdraw on the chosen venue (Aave v3 or Morpho) from their OWN
 // wallet via wagmi. Verified addresses (see lib/yield-execution). Best-rate
@@ -2793,6 +2999,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_quantum":       return <QuantumCard      result={r} />;
     case "hub_yield":         return <YieldCard        result={r} />;
     case "hub_b20_launch":       return <B20LaunchCard   result={r as B20LaunchResult} />;
+    case "hub_robinhood_launch": return <RobinhoodLaunchCard result={r as RobinhoodLaunchResult} />;
     case "hub_b20_manage":       return <B20ManageCard   result={r as B20ManageResult} />;
     case "check_memo":           return <MemoResultCard  result={r as MemoResultData} />;
     case "check_authorization":  return <AuthorizationResultCard result={r as AuthorizationResultData} />;

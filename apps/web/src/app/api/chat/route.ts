@@ -308,6 +308,7 @@ When user asks to send/transfer a B20 token:
 4. Only proceed if simulation succeeds — never bypass
 5. Use hub_b20_analyze for B20 deployment questions / role explanations
 6. Use hub_b20_launch when user asks to deploy/launch/create a B20 token — trigger on ANY of: "launch b20", "b20 launch", "deploy b20", "create b20", "b20 token", or longer phrasings. Call with { name, symbol, variant: "asset"|"stablecoin", optional supply_cap, currency_code }. Opens an interactive card where the PRIMARY action is signing a createB20 Factory transaction to deploy directly on Sepolia/mainnet; Foundry script generation is a SECONDARY manual option.
+6b. Use hub_robinhood_launch when user asks to deploy/launch a token on ROBINHOOD CHAIN specifically — trigger on ANY of: "launch on robinhood", "robinhood chain token", "deploy on robinhood", "robinhood launch", or similar. Robinhood Chain (EVM chainId 4663) has NO B20-style factory — this deploys a plain ERC-20 via a raw contract-creation transaction, signed by the user's own wallet. Call with { name, symbol, optional decimals, initial_supply, image, website, description }. Never confuse this with hub_b20_launch (Base-only) or Bankr's launchpad (also Base-only) — Robinhood Chain launches use a completely separate deploy path and are recorded in Blue Agent's own /launches registry, tagged chain:"robinhood".
 7. Use hub_b20_inspect when user provides a token address and asks: "is this B20?", "inspect this token", "check pause/policy", "B20 details", totalSupply/supplyCap, or variant (Asset/Stablecoin). Reads REAL on-chain state via multicall — zero LLM. Call with { address: "0x…", network: "mainnet" }.
 8. Use hub_b20_manage when the user wants to MINT, BURN, PAUSE/UNPAUSE, set/update a POLICY, GRANT/REVOKE a ROLE, update the SUPPLY CAP, or update METADATA on an EXISTING B20 token. Trigger on ANY of: "mint", "mint X tokens on [addr]", "burn", "pause", "unpause", "grant role", "revoke role", "set policy", "update cap", "update supply cap", "manage b20", "freeze", "seize". Call with { address: "0x…", network: "mainnet"|"sepolia" } (default mainnet unless the user says sepolia). Opens a wallet-signed control panel that loads the token's live roles and shows ONLY the actions the connected wallet is authorized for; the user signs each action in their own wallet.
 9. Use check_authorization when the user asks whether a SPECIFIC account is allowed by a token's policy — "is 0xABC allowed to receive TOKEN?", "can this wallet send/mint this token?", "这个地址能收到代币吗?", "is alice.base.eth on the allowlist?". Call with { token: "0x…", account: "0x… or basename", scope: "sender"|"receiver"|"executor"|"mint_receiver" (default receiver), network }. Reads live policy state (zero LLM); reply with one short line stating authorized / not authorized — never guess.
@@ -707,6 +708,23 @@ Default to "base" for Base-related queries.`,
     },
   },
   {
+    name: "hub_robinhood_launch",
+    description: "Open a Robinhood Chain token launch form. Robinhood Chain (EVM chainId 4663, Arbitrum Orbit, permissionless deploy — docs.robinhood.com/chain) has NO native token-launch factory like Base's B20 — this deploys a plain ERC-20 via a raw contract-creation transaction, signed directly by the user's own connected wallet. Trigger on: 'launch on robinhood', 'deploy on robinhood chain', 'robinhood token', 'create token on robinhood', or any Robinhood Chain launch intent.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name:           { type: "string", description: "Token name" },
+        symbol:         { type: "string", description: "Token symbol" },
+        decimals:       { type: "number", description: "0-18, default 18" },
+        initial_supply: { type: "string", description: "Whole-token amount (not base units), e.g. 1000000000" },
+        image:          { type: "string" },
+        website:        { type: "string" },
+        description:    { type: "string" },
+      },
+      required: [],
+    },
+  },
+  {
     name: "hub_b20_inspect",
     description: "Inspect a B20 token's live on-chain state — reads real data from Base RPC via multicall, zero LLM. Returns: isB20 flag, name/symbol/decimals, totalSupply, supplyCap (uncapped sentinel detected), variant (ASSET/STABLECOIN), pause status per feature (TRANSFER/MINT/BURN), and policy IDs per scope (transferSender/transferReceiver/transferExecutor/mintReceiver). Use when the user provides a token address and asks: 'is this B20?', 'check this token', 'is it paused?', 'what's the supply cap?', 'inspect B20 state', or 'what policy does this have?'.",
     input_schema: {
@@ -1017,6 +1035,15 @@ async function callHubTool(
     return {
       text: "B20 launch form rendered. The card is pre-filled with the token details — the user can edit fields and click Generate Scripts to get the foundry.toml, deploy script, and CLI commands. Do NOT restate the fields as a table. Reply with one short line: tell the user to review the form and click Generate Scripts.",
       result: { kind: "b20_launch", ...args },
+    };
+  }
+  if (toolName === "hub_robinhood_launch") {
+    // Client-rendered marker — RobinhoodLaunchCard handles the deploy entirely
+    // in the browser (raw ERC-20 contract-creation tx, no factory, no B20).
+    // No server execution, no funds moved. Distinct chain from hub_b20_launch.
+    return {
+      text: "Robinhood Chain launch form rendered. The card is pre-filled with the token details — the user can edit fields, then click Deploy to sign a raw ERC-20 contract-creation transaction in their own wallet on Robinhood Chain (chainId 4663). Do NOT restate the fields as a table, do NOT claim the token is deployed yet. Reply with one short line: tell the user to review the form and click Deploy.",
+      result: { kind: "robinhood_launch", ...args },
     };
   }
   if (toolName === "hub_b20_manage") {
