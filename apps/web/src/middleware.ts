@@ -27,6 +27,7 @@ const APP_SEGMENTS = new Set([
   "launches",
   "profile",
   "rewards",
+  "robinhood-router",
   "terminal",
 ]);
 
@@ -81,6 +82,16 @@ export function middleware(request: NextRequest) {
       `https://mbs-001decf1.mintlify.app${path}`,
       { status: 301 }
     );
+  }
+
+  // The main↔app host reshuffle below only makes sense on the real production
+  // hosts. Vercel preview URLs (*.vercel.app), localhost, and any other host
+  // must serve /app/* as-is — otherwise a preview URL like
+  // blueagent-web-new-git-dev-*.vercel.app/app/robinhood-router bounces off to
+  // app.blueagent.dev (prod) which doesn't have the branch's code and 404s.
+  const isProdHost = host === MAIN_HOST || host === APP_HOST;
+  if (!isProdHost) {
+    return NextResponse.next();
   }
 
   const isAppHost = host.startsWith(APP_HOST);
