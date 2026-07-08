@@ -163,16 +163,34 @@ export async function POST(req: NextRequest) {
 
   const data = await upstream.json().catch(() => null) as Record<string, unknown> | null;
 
-  // 429 — Bankr's deploy rate limit. Standard 50/day, Bankr Club 100/day
-  // (gas sponsored within these). High-volume bursts can trip spam protection.
+  // 429 — Bankr's rate limit. Bankr has BOTH a per-minute burst limit AND
+  // daily caps (Standard 50/24h, Bankr Club 100/24h). We can't tell which
+  // fired without reading the retry-after header + Bankr's own body — a short
+  // retry-after (< 5 min) is per-minute burst, a very long one (hours) is
+  // the daily cap. Include _debug.bankrBody so the client can surface the
+  // actual reason instead of a lossy stock message.
   if (upstream.status === 429) {
     const retry = upstream.headers.get("retry-after");
-    const wait  = retry ? `${retry}s` : "a minute";
+    const retrySeconds = retry ? Number(retry) : null;
+    const kind =
+      retrySeconds != null && retrySeconds > 3600 ? "daily cap"
+      : retrySeconds != null ? "per-minute burst"
+      : "rate limit"; // no header → best-effort label
+    const wait = retrySeconds != null
+      ? (retrySeconds >= 3600 ? `${Math.round(retrySeconds / 3600)}h` : `${retrySeconds}s`)
+      : "a minute";
     return NextResponse.json(
       {
-        error: `Bankr deploy limit reached (Bankr Club: 100/day). Wait ${wait} and try again.`,
+        error: `Bankr ${kind} hit — wait ${wait} and try again.`,
         rateLimited: true,
-        retryAfter: retry ? Number(retry) : null,
+        retryAfter: retrySeconds,
+        _debug: {
+          bankrStatus: upstream.status,
+          bankrBody:   data,
+          retryAfterHeader: retry,
+          authUsed:    chain === "robinhood" ? "X-API-Key" : (partnerKey ? "X-Partner-Key" : "X-API-Key"),
+          sentPayload: payload,
+        },
       },
       { status: 429 },
     );
