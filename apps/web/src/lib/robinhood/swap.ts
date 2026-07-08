@@ -39,12 +39,23 @@ export const ROBINHOOD_TESTNET_VERIFIED_FACTORY: `0x${string}` | null = null;
 export const ROBINHOOD_TESTNET_VERIFIED_WETH9: `0x${string}` | null = null;
 
 /**
- * The RobinhoodSwapRouter contract address once deployed on mainnet.
- * Intentionally left null until an actual deployment transaction has been
- * broadcast and independently verified on Blockscout — never fill this in
- * speculatively.
+ * The RobinhoodSwapRouter contract address deployed on Robinhood Chain mainnet
+ * (chainId 4663). Deployed 2026-07-08 by 0xD5C1dFc036F9911348EA8065F73c8123f4013FAB.
+ *
+ * Verified end-to-end with a real tiny swap in the same session:
+ * https://robinhoodchain.blockscout.com/tx/0xa3f8fba0845809cea97bfb86d7bdf863f82d8e130986c646c9be0dafda4013e9
+ *   Method: swapExactInputSingleETH (0x2a5db29a)
+ *   Path: 0.0005 ETH → wrap to WETH → CASHDOG/WETH 0.01% pool
+ *          (0x61969805171fBE4F6Ba2252Fad652A13d9592C8e) → 4485.657 CASHDOG
+ *          received by the caller. All 3 hops (deposit wrap → pool.swap →
+ *          uniswapV3SwapCallback WETH payment → pool CASHDOG payout)
+ *          confirmed by the on-chain token-transfer trace.
+ *
+ * Contract is immutable and non-custodial — no owner, no pause, no upgrade.
+ * Anyone can call it; it holds no funds between transactions.
  */
-export const ROBINHOOD_SWAP_ROUTER_ADDRESS: `0x${string}` | null = null;
+export const ROBINHOOD_SWAP_ROUTER_ADDRESS: `0x${string}` | null =
+  "0x3bb0e9E3dB75faDC5f1f8b7D7B9D761Ef15cd23D";
 
 /** Build the raw contract-creation calldata to deploy RobinhoodSwapRouter. */
 export function buildRouterDeployData(factory: `0x${string}`, weth9: `0x${string}`): `0x${string}` {
