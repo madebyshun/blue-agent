@@ -151,6 +151,23 @@ function HotBadge() {
 // Base mainnet only. Honest: no fake "Limit" orders (no infra) — Buy/Sell only.
 
 function TradeButton({ l, compact, onTrade }: { l: Launch; compact?: boolean; onTrade: (l: Launch) => void }) {
+  // Robinhood direct-deploy tokens are a bare ERC-20 with no Uniswap pool
+  // (unlike Base launches, which always get a Doppler/Uniswap V4 pool via
+  // Bankr) — there is nothing to swap yet, so the in-app 0x-quote Trade
+  // button (Base-only) would just fail. Show a disabled state instead of a
+  // button that silently errors.
+  if (l.chain === "robinhood") {
+    return (
+      <span
+        title="No trading pool yet on Robinhood Chain"
+        className={compact
+          ? "px-2 py-0.5 rounded border text-[9px] text-slate-600 border-[#1A1A2E] cursor-not-allowed"
+          : "font-mono text-[10px] px-2 py-1 rounded-lg border text-slate-600 border-[#1A1A2E] cursor-not-allowed"}
+      >
+        No pool yet
+      </span>
+    );
+  }
   return (
     <button
       onClick={() => onTrade(l)}
@@ -509,15 +526,23 @@ function LaunchCard({ l, onTrade }: { l: Launch; onTrade: (l: Launch) => void })
       {/* Links */}
       <div className="flex flex-wrap gap-1.5 pt-1 border-t border-[#1A1A2E]">
         <TradeButton l={l} onTrade={onTrade} />
-        <a href={`https://bankr.bot/launches/${l.tokenAddress}`}
-          target="_blank" rel="noopener noreferrer"
-          className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] transition-colors">
-          Bankr ↗
-        </a>
-        <a href={`https://basescan.org/token/${l.tokenAddress}`}
+        {/* Bankr only lists/tracks tokens it deployed itself (Base launches
+            via Doppler) — Robinhood direct-deploys never go through Bankr,
+            so a "Bankr ↗" link for them would 404. */}
+        {l.chain !== "robinhood" && (
+          <a href={`https://bankr.bot/launches/${l.tokenAddress}`}
+            target="_blank" rel="noopener noreferrer"
+            className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] transition-colors">
+            Bankr ↗
+          </a>
+        )}
+        <a
+          href={l.chain === "robinhood"
+            ? `https://robinhoodchain.blockscout.com/token/${l.tokenAddress}`
+            : `https://basescan.org/token/${l.tokenAddress}`}
           target="_blank" rel="noopener noreferrer"
           className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white transition-colors">
-          Basescan ↗
+          {l.chain === "robinhood" ? "Explorer ↗" : "Basescan ↗"}
         </a>
         {l.website && (
           <a href={l.website} target="_blank" rel="noopener noreferrer"
@@ -582,11 +607,19 @@ function LaunchRow({ l, onTrade }: { l: Launch; onTrade: (l: Launch) => void }) 
       {/* Actions */}
       <div className="flex items-center gap-1.5 flex-wrap">
         <TradeButton l={l} compact onTrade={onTrade} />
-        <a href={`https://bankr.bot/launches/${l.tokenAddress}`}
-          target="_blank" rel="noopener noreferrer"
-          className="px-2 py-0.5 rounded border border-[#4FC3F730] text-[#4FC3F7] text-[9px] transition-colors">
-          Bankr ↗
-        </a>
+        {l.chain !== "robinhood" ? (
+          <a href={`https://bankr.bot/launches/${l.tokenAddress}`}
+            target="_blank" rel="noopener noreferrer"
+            className="px-2 py-0.5 rounded border border-[#4FC3F730] text-[#4FC3F7] text-[9px] transition-colors">
+            Bankr ↗
+          </a>
+        ) : (
+          <a href={`https://robinhoodchain.blockscout.com/token/${l.tokenAddress}`}
+            target="_blank" rel="noopener noreferrer"
+            className="px-2 py-0.5 rounded border border-[#1A1A2E] text-slate-400 text-[9px] transition-colors">
+            Explorer ↗
+          </a>
+        )}
         <button onClick={copyAddr}
           className="px-2 py-0.5 rounded border border-[#1A1A2E] text-[9px] text-slate-600 hover:text-slate-300 transition-colors">
           {copied ? "✓" : truncAddr(l.tokenAddress)}
