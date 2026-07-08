@@ -1566,7 +1566,11 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
               </p>
             ) : (
               <p className="font-mono text-[9px] text-slate-600 mb-3 leading-relaxed">
-                No factory on Robinhood Chain — deploys a raw ERC-20 contract-creation tx, signed directly by <span className="text-[#22C55E]">your own wallet</span>. Gas paid in ETH on Robinhood Chain (not Base).
+                No factory on Robinhood Chain — deploys a raw ERC-20 contract-creation tx, signed directly by <span className="text-[#22C55E]">your own wallet</span>. Gas paid in ETH on Robinhood Chain (not Base). No ETH there yet?{" "}
+                <a href={`https://portal.arbitrum.io/bridge?destinationChain=robinhood-chain&sourceChain=ethereum`}
+                  target="_blank" rel="noopener noreferrer" className="underline text-[#22C55E] hover:text-[#22C55E]/80">
+                  Bridge ETH via Arbitrum Portal ↗
+                </a>
               </p>
             )}
 

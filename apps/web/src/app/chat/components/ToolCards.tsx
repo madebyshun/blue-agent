@@ -1730,6 +1730,13 @@ function RobinhoodLaunchCard({ result }: { result: RobinhoodLaunchResult }) {
             <p className="font-mono text-[9px] text-slate-600 mt-1.5 text-center">
               No factory on Robinhood Chain — this deploys a raw ERC-20 contract-creation tx, signed by your own wallet. Gas paid in ETH.
             </p>
+            <p className="font-mono text-[9px] text-center mt-1">
+              No ETH on Robinhood Chain yet?{" "}
+              <a href="https://portal.arbitrum.io/bridge?destinationChain=robinhood-chain&sourceChain=ethereum"
+                target="_blank" rel="noopener noreferrer" className="underline text-[#22C55E] hover:text-[#22C55E]/80">
+                Bridge via Arbitrum Portal ↗
+              </a>
+            </p>
 
             {deployErr && (
               <p className="font-mono text-[9px] text-red-400 mt-1.5 text-center">{deployErr}</p>
