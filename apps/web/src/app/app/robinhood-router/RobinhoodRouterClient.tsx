@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAccount, useSendTransaction, useSwitchChain } from "wagmi";
+import { ConnectButton } from "@/components/ConnectModal";
 
 // Internal, unlinked page (robots: noindex) to deploy + smoke-test
 // RobinhoodSwapRouter with a real, tiny amount before wiring buy/sell/swap
@@ -134,7 +135,21 @@ export default function RobinhoodRouterClient() {
         /launch or Blue Chat.
       </p>
 
-      {!isConnected && <p className="text-amber-400 mb-6">Connect your wallet to continue.</p>}
+      {/* Wallet picker — shows Coinbase + any EIP-6963-discovered wallet
+          (MetaMask, Rabby, Phantom, …). Without this the page had no visible
+          connect UI at all on this route, so users only got whatever ambient
+          Coinbase button they'd wired elsewhere. */}
+      <div className="mb-6 flex items-center gap-3">
+        <ConnectButton label="Connect wallet" />
+        {isConnected && address && (
+          <span className="text-slate-500 text-xs">
+            Connected: {address.slice(0, 6)}…{address.slice(-4)}
+            {currentChainId !== CHAIN_ID && (
+              <span className="ml-2 text-amber-400">(will switch to Robinhood Chain 4663 on first tx)</span>
+            )}
+          </span>
+        )}
+      </div>
 
       <section className="border border-slate-800 rounded-lg p-4 mb-6">
         <h2 className="text-white font-bold mb-3">1. Deploy RobinhoodSwapRouter</h2>
