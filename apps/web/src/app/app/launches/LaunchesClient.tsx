@@ -154,27 +154,16 @@ function HotBadge() {
 // Base mainnet only. Honest: no fake "Limit" orders (no infra) — Buy/Sell only.
 
 function TradeButton({ l, compact, onTrade }: { l: Launch; compact?: boolean; onTrade: (l: Launch) => void }) {
-  // Robinhood direct-deploy tokens are a bare ERC-20 with no Uniswap pool
-  // (unlike Base launches, which always get a Doppler/Uniswap V4 pool via
-  // Bankr) — there is nothing to swap yet, so the in-app 0x-quote Trade
-  // button (Base-only) would just fail. Show a disabled state instead of a
-  // button that silently errors.
-  if (l.chain === "robinhood") {
-    return (
-      <span
-        title="No trading pool yet on Robinhood Chain"
-        className={compact
-          ? "px-2 py-0.5 rounded border text-[9px] text-slate-600 border-[#1A1A2E] cursor-not-allowed"
-          : "font-mono text-[10px] px-2 py-1 rounded-lg border text-slate-600 border-[#1A1A2E] cursor-not-allowed"}
-      >
-        No pool yet
-      </span>
-    );
-  }
+  // Both chains route through the same onTrade callback — the modal itself
+  // splits by chain: Base uses the 0x Swap API, Robinhood uses the custom
+  // RobinhoodSwapRouter (see /api/robinhood/swap/quote + swap-prepare). Robinhood
+  // direct-deploy ERC-20s often ship without a pool; the modal detects that
+  // upfront and shows an honest "No pool yet" state instead of pretending.
+  const isRobinhood = l.chain === "robinhood";
   return (
     <button
       onClick={() => onTrade(l)}
-      title="Swap on Base"
+      title={isRobinhood ? "Swap on Robinhood Chain" : "Swap on Base"}
       className={compact
         ? "px-2 py-0.5 rounded border text-[9px] transition-colors hover:opacity-90"
         : "font-mono text-[10px] px-2 py-1 rounded-lg border transition-colors hover:opacity-90"}
@@ -430,6 +419,318 @@ function TradeModal({ l, onClose }: { l: Launch; onClose: () => void }) {
                   : `Sell ${amt > 0 ? fmtNum(amt) : ""} ${tokenSym}`}
             </button>
             <p className="font-mono text-[9px] text-slate-700 mt-1.5 text-center">Best route via 0x · you sign · non-custodial · Base mainnet.</p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Robinhood Chain trade modal ────────────────────────────────────────────────
+// Uses BlueAgent's own RobinhoodSwapRouter (0x3bb0…d23D on chainId 4663). Router
+// is immutable, non-custodial, holds no funds between txs. Every hop goes
+// through the user's own wallet:
+//   1. GET /api/robinhood/swap/quote → detect pool (probe all 4 V3 fee tiers)
+//      + fetch a display-only amountOut estimate from GeckoTerminal.
+//   2. If sell direction, send an ERC-20 approve(router, amountIn) tx.
+//   3. POST /api/robinhood/router/swap-prepare → get calldata for the router.
+//   4. Send the swap tx from the user's wallet, honoring the amountOutMinimum
+//      slippage floor computed from the estimate. On-chain math wins if the
+//      GeckoTerminal estimate was off — the router either fills within the
+//      floor or reverts, never at a bad price.
+//
+// If no pool exists on any tier the modal shows an honest "No trading pool
+// yet" state (no fake numbers, no fallback to a wrong tier). The deployer has
+// to seed a Uniswap V3 pool separately before this token becomes tradeable.
+
+const RH_ROUTER = "0x3bb0e9E3dB75faDC5f1f8b7D7B9D761Ef15cd23D" as const;
+const RH_EXPLORER = "https://robinhoodchain.blockscout.com";
+const RH_CHAIN_ID = 4663;
+
+type RhQuote = {
+  ok?: boolean;
+  hasPool?: boolean;
+  note?: string;
+  pool?: { address: `0x${string}`; fee: 100 | 500 | 3000 | 10000; liquidity: string; token0: `0x${string}`; token1: `0x${string}` };
+  price?: { tokenUsd: number | null; ethUsd: number | null };
+  estimate?: { amountIn: number; direction: "buy" | "sell"; amountOut: number | null };
+  error?: string;
+};
+
+function RobinhoodTradeModal({ l, onClose }: { l: Launch; onClose: () => void }) {
+  const { address, isConnected } = useAccount();
+  const { switchChainAsync } = useSwitchChain();
+  const { sendTransactionAsync } = useSendTransaction();
+  const { data: nativeBal } = useBalance({
+    address, chainId: RH_CHAIN_ID, query: { enabled: !!address },
+  });
+  const { data: tokenBal } = useReadContract({
+    address: l.tokenAddress as `0x${string}`, abi: ERC20_ABI, functionName: "balanceOf",
+    args: address ? [address] : undefined, chainId: RH_CHAIN_ID,
+    query: { enabled: !!address },
+  });
+
+  const tokenSym = (l.tokenSymbol || l.tokenName || "TOKEN").replace(/^\$/, "");
+  const tokenDecimals = 18; // Robinhood direct-deploy launches use 18d ERC-20s.
+
+  const [mode, setMode] = useState<"buy" | "sell">("buy");
+  const [amount, setAmount] = useState("");
+  const [slippagePct, setSlippagePct] = useState(3); // 3% default — honest, editable.
+  const [quote, setQuote] = useState<RhQuote | null>(null);
+  const [loadingQuote, setLoadingQuote] = useState(false);
+  const [step, setStep] = useState<"idle" | "approving" | "swapping" | "done" | "error">("idle");
+  const [err, setErr] = useState("");
+  const [txHash, setTxHash] = useState("");
+
+  const nativeBalance = nativeBal ? Number(formatUnits(nativeBal.value, 18)) : null;
+  const erc20Balance = tokenBal != null ? Number(formatUnits(tokenBal as bigint, tokenDecimals)) : null;
+  const sellBalance = mode === "buy" ? nativeBalance : erc20Balance;
+  const amt = parseFloat(amount);
+  const overBalance = sellBalance != null && amt > sellBalance;
+
+  // Debounced quote fetch (server-side pool discovery + GeckoTerminal price).
+  const reqId = useRef(0);
+  useEffect(() => {
+    if (!amount || !Number.isFinite(amt) || amt <= 0) { setQuote(null); return; }
+    const id = ++reqId.current;
+    setLoadingQuote(true);
+    const t = setTimeout(() => {
+      const qs = new URLSearchParams({ token: l.tokenAddress, direction: mode, amount: String(amt) });
+      fetch(`/api/robinhood/swap/quote?${qs}`)
+        .then(r => r.json())
+        .then((j: RhQuote) => { if (id === reqId.current) { setQuote(j); setLoadingQuote(false); } })
+        .catch(() => { if (id === reqId.current) { setQuote({ error: "quote failed" }); setLoadingQuote(false); } });
+    }, 450);
+    return () => clearTimeout(t);
+  }, [amount, amt, mode, l.tokenAddress]);
+
+  function switchMode(m: "buy" | "sell") { if (m === mode) return; setMode(m); setAmount(""); setQuote(null); setStep("idle"); setErr(""); }
+  function setMax() {
+    if (sellBalance == null) return;
+    // Reserve some gas headroom on native ETH.
+    setAmount(String(mode === "buy" ? Math.max(0, sellBalance - 0.00005) : sellBalance));
+  }
+
+  const hasPool = quote?.ok && quote?.hasPool;
+  const estimatedOut = quote?.estimate?.amountOut ?? null;
+  const inSym = mode === "buy" ? "ETH" : tokenSym;
+  const outSym = mode === "buy" ? tokenSym : "ETH";
+  const rate = estimatedOut != null && amt > 0 ? estimatedOut / amt : null;
+  const minOut = estimatedOut != null ? estimatedOut * (1 - slippagePct / 100) : null;
+
+  const canSwap = !!address && hasPool && amt > 0 && !overBalance && !loadingQuote && step !== "approving" && step !== "swapping";
+  const busy = step === "approving" || step === "swapping";
+
+  async function doSwap() {
+    if (!address) { setErr("Connect your wallet"); setStep("error"); return; }
+    if (!hasPool || !quote?.pool) { setErr("No pool available for this token"); setStep("error"); return; }
+    if (!amt || amt <= 0) { setErr("Enter an amount"); setStep("error"); return; }
+    setErr(""); setTxHash("");
+    try {
+      // Wallet may be on a different chain — prompt to switch.
+      try { await switchChainAsync({ chainId: RH_CHAIN_ID }); } catch {
+        throw new Error("Switch your wallet to Robinhood Chain (4663) and try again");
+      }
+
+      // Compute base-unit amounts + slippage floor.
+      const amountInWei = mode === "buy"
+        ? parseUnits(amount, 18)          // ETH → wei
+        : parseUnits(amount, tokenDecimals); // token → base units
+      const minOutBase = minOut != null
+        ? parseUnits(minOut.toFixed(mode === "buy" ? tokenDecimals : 18), mode === "buy" ? tokenDecimals : 18)
+        : 0n;
+
+      // Ask the server for calldata (also returns approve calldata for sells).
+      const prepRes = await fetch("/api/robinhood/router/swap-prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          router: RH_ROUTER,
+          direction: mode,
+          token: l.tokenAddress,
+          fee: quote.pool.fee,
+          amountIn: amountInWei.toString(),
+          amountOutMinimum: minOutBase.toString(),
+          recipient: address,
+        }),
+      });
+      const prep = await prepRes.json();
+      if (!prep.ok) throw new Error(prep.error || "Prepare failed");
+
+      if (prep.approve) {
+        setStep("approving");
+        await sendTransactionAsync({
+          to: prep.approve.to as `0x${string}`,
+          data: prep.approve.data as `0x${string}`,
+          value: 0n,
+          chainId: RH_CHAIN_ID,
+        });
+      }
+
+      setStep("swapping");
+      const hash = await sendTransactionAsync({
+        to: prep.swap.to as `0x${string}`,
+        data: prep.swap.data as `0x${string}`,
+        value: BigInt(prep.swap.value),
+        chainId: RH_CHAIN_ID,
+      });
+      setTxHash(hash);
+      setStep("done");
+    } catch (e) {
+      const m = (e as Error).message || String(e);
+      const cancelled = /user rejected|denied|cancell?ed/i.test(m);
+      setErr(cancelled ? "Swap cancelled." : m.slice(0, 200));
+      setStep("error");
+    }
+  }
+
+  const tokenLogo = l.image
+    ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={l.image} alt={tokenSym} className="w-8 h-8 rounded-lg object-cover bg-[#0d0d12] shrink-0"
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+      )
+    : (
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center font-mono text-[11px] font-bold shrink-0"
+          style={{ background: `${ACCENT}15`, border: `1px solid ${ACCENT}30`, color: ACCENT }}>
+          {tokenSym.slice(0, 2).toUpperCase()}
+        </div>
+      );
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={busy ? undefined : onClose} />
+      <div className="relative w-full max-w-sm rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center gap-2.5 mb-4">
+          {tokenLogo}
+          <div className="min-w-0 flex-1">
+            <div className="font-mono text-sm font-bold text-white truncate">{l.tokenName || tokenSym}</div>
+            <div className="font-mono text-[11px] text-slate-500">${tokenSym} · Robinhood Chain</div>
+          </div>
+          <button onClick={onClose} disabled={busy}
+            className="font-mono text-slate-600 hover:text-white text-xl leading-none disabled:opacity-40">×</button>
+        </div>
+
+        {step === "done" ? (
+          <div className="rounded-xl border p-4" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
+            <div className="font-mono text-[12px] font-bold mb-1" style={{ color: "#22C55E" }}>
+              ✓ Swap sent to Robinhood Chain
+            </div>
+            {txHash && (
+              <a href={`${RH_EXPLORER}/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
+                className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] inline-block mt-1">View tx ↗</a>
+            )}
+            <button onClick={() => { setStep("idle"); setAmount(""); setQuote(null); setTxHash(""); }}
+              className="font-mono text-[10px] text-slate-500 hover:text-slate-300 ml-3">Swap again</button>
+          </div>
+        ) : (
+          <>
+            {/* Buy / Sell tabs */}
+            <div className="flex items-center rounded-lg border border-[#1A1A2E] overflow-hidden mb-3">
+              {(["buy", "sell"] as const).map((m) => (
+                <button key={m} onClick={() => switchMode(m)}
+                  className="flex-1 font-mono text-[11px] font-bold py-2 transition-colors"
+                  style={{
+                    background: mode === m ? (m === "buy" ? "#22C55E15" : "#EF444415") : "transparent",
+                    color: mode === m ? (m === "buy" ? "#22C55E" : "#EF4444") : "#64748b",
+                  }}>
+                  {m === "buy" ? "Buy" : "Sell"}
+                </button>
+              ))}
+            </div>
+
+            {/* You pay */}
+            <div className="rounded-lg border border-[#1A1A2E] bg-[#050508] p-2.5 mb-1">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-mono text-[9px] text-slate-600">YOU PAY</span>
+                {sellBalance != null && (
+                  <span className="font-mono text-[9px] text-slate-600">
+                    Bal {sellBalance.toFixed(5)}
+                    <button type="button" onClick={setMax} className="text-[#4FC3F7] ml-1">Max</button>
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="number" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.0"
+                  className="flex-1 bg-transparent font-mono text-[16px] text-white outline-none placeholder:text-slate-700 w-0" />
+                <span className="font-mono text-[11px] text-slate-200 px-2 py-1.5 border border-[#1A1A2E] rounded-lg">{inSym}</span>
+              </div>
+              {overBalance && <div className="font-mono text-[9px] text-red-500 mt-1">Exceeds your {inSym} balance</div>}
+            </div>
+
+            <div className="flex justify-center -my-1 relative z-10">
+              <div className="w-7 h-7 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] text-slate-500 font-mono text-[12px] flex items-center justify-center">↓</div>
+            </div>
+
+            {/* You receive */}
+            <div className="rounded-lg border border-[#1A1A2E] bg-[#050508] p-2.5 mt-1 mb-3">
+              <div className="font-mono text-[9px] text-slate-600 mb-1">YOU RECEIVE (est.)</div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 font-mono text-[16px] text-white w-0 truncate">
+                  {loadingQuote ? <span className="text-slate-600">…</span>
+                    : estimatedOut != null ? fmtNum(estimatedOut)
+                    : <span className="text-slate-700">0.0</span>}
+                </div>
+                <span className="font-mono text-[11px] text-slate-200 px-2 py-1.5 border border-[#1A1A2E] rounded-lg">{outSym}</span>
+              </div>
+            </div>
+
+            {/* Rate + slippage */}
+            {rate != null && (
+              <div className="font-mono text-[9px] text-slate-500 mb-1 flex items-center justify-between">
+                <span>1 {inSym} ≈ {fmtNum(rate)} {outSym}</span>
+                {minOut != null && <span className="text-slate-600">min {fmtNum(minOut)} {outSym}</span>}
+              </div>
+            )}
+            <div className="font-mono text-[9px] text-slate-600 mb-2 flex items-center justify-between">
+              <span>Slippage</span>
+              <span>
+                {[1, 3, 5].map((p) => (
+                  <button key={p} onClick={() => setSlippagePct(p)}
+                    className="ml-1 px-1.5 py-0.5 rounded border transition-colors"
+                    style={slippagePct === p
+                      ? { background: `${ACCENT}20`, color: ACCENT, borderColor: `${ACCENT}40` }
+                      : { color: "#64748b", borderColor: "#1A1A2E" }}>
+                    {p}%
+                  </button>
+                ))}
+              </span>
+            </div>
+
+            {/* Pool info */}
+            {quote?.pool && (
+              <div className="font-mono text-[9px] text-slate-600 mb-2">
+                Pool <a href={`${RH_EXPLORER}/address/${quote.pool.address}`} target="_blank" rel="noopener noreferrer"
+                  className="text-slate-400 hover:text-slate-200 underline">{quote.pool.address.slice(0, 6)}…{quote.pool.address.slice(-4)}</a>
+                {" · "}fee {(quote.pool.fee / 10000).toFixed(2)}%
+              </div>
+            )}
+
+            {/* States */}
+            {loadingQuote && <p className="font-mono text-[9px] text-slate-600 mb-2">Checking pools + prices…</p>}
+            {quote?.ok && quote.hasPool === false && (
+              <p className="font-mono text-[10px] text-amber-400 mb-2">
+                No Uniswap V3 pool for {tokenSym}/WETH exists on Robinhood Chain yet. The deployer needs to seed one before it becomes tradeable.
+              </p>
+            )}
+            {quote?.error && <p className="font-mono text-[10px] text-amber-400 mb-2">Quote error: {quote.error}</p>}
+            {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
+
+            <button onClick={doSwap} disabled={!canSwap || busy}
+              className="w-full font-mono text-[12px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
+              style={mode === "buy"
+                ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E40" }
+                : { background: "#EF444415", color: "#EF4444", border: "1px solid #EF444440" }}>
+              {!isConnected ? "Connect your wallet"
+                : busy ? (step === "approving" ? "Approve in wallet…" : "Confirm in wallet…")
+                : quote?.hasPool === false ? "No pool yet"
+                : overBalance ? "Insufficient balance"
+                : mode === "buy"
+                  ? `Buy ${tokenSym}${amt > 0 ? ` with ${fmtNum(amt)} ETH` : ""}`
+                  : `Sell ${amt > 0 ? fmtNum(amt) : ""} ${tokenSym}`}
+            </button>
+            <p className="font-mono text-[9px] text-slate-700 mt-1.5 text-center">Via RobinhoodSwapRouter · you sign · non-custodial · chainId 4663.</p>
           </>
         )}
       </div>
@@ -1246,7 +1547,9 @@ export default function LaunchesPage() {
   return (
     <div className="flex flex-col h-full bg-[#050508] text-white font-mono overflow-hidden">
       {showLaunch && <LaunchModal onClose={() => setShowLaunch(false)} onLaunched={manualLoad} />}
-      {tradeToken && <TradeModal l={tradeToken} onClose={() => setTradeToken(null)} />}
+      {tradeToken && (tradeToken.chain === "robinhood"
+        ? <RobinhoodTradeModal l={tradeToken} onClose={() => setTradeToken(null)} />
+        : <TradeModal l={tradeToken} onClose={() => setTradeToken(null)} />)}
       {exploreToken && <ExploreModal l={exploreToken} onClose={() => setExploreToken(null)} />}
 
       {/* Header bar */}
