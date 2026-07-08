@@ -1307,8 +1307,22 @@ function ModalField({ label, value, onChange, placeholder }: {
   );
 }
 
+const ROBINHOOD_NETWORKS = [
+  { id: "mainnet", label: "Robinhood Chain",         chain: 4663,  explorer: "https://robinhoodchain.blockscout.com" },
+  { id: "testnet", label: "Robinhood Chain Testnet", chain: 46630, explorer: "https://explorer.testnet.chain.robinhood.com" },
+] as const;
+type RobinhoodNet = typeof ROBINHOOD_NETWORKS[number]["id"];
+
 function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched: () => void }) {
-  const { address } = useAccount();
+  const { address, chainId: currentChainId } = useAccount();
+  const { sendTransactionAsync } = useSendTransaction();
+  const { switchChainAsync } = useSwitchChain();
+
+  // Which chain to deploy on. Base uses Bankr's sponsored launchpad (server
+  // holds the wallet). Robinhood Chain has no launchpad — it's a raw ERC-20
+  // contract-creation tx signed directly by the user's own connected wallet.
+  const [launchChain, setLaunchChain] = useState<"base" | "robinhood">("base");
+
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
   const [description, setDescription] = useState("");
@@ -1320,6 +1334,13 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
   const [err, setErr] = useState("");
   const [out, setOut] = useState<{ tokenAddress?: string | null; basescan?: string | null; uniswap?: string | null; bankr?: string | null } | null>(null);
 
+  // Robinhood-only fields.
+  const [rhDecimals, setRhDecimals] = useState<number>(18);
+  const [rhSupply, setRhSupply] = useState("1000000000");
+  const [rhNetwork, setRhNetwork] = useState<RobinhoodNet>("mainnet");
+  const [rhTxHash, setRhTxHash] = useState("");
+  const [rhPolling, setRhPolling] = useState(false);
+
   // Fee recipient is left BLANK by default → the 57% creator fee routes to
   // @blueagent_ (see `fee || "blueagent_"` in launch()). The user can opt to
   // redirect it to their own wallet/handle by filling the field.
@@ -1329,6 +1350,7 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
 
   async function launch() {
     if (!cleanName || step === "launching") return;
+    if (launchChain === "robinhood") return launchRobinhood();
     setStep("launching"); setErr("");
     try {
       const fee = feeRecipient.trim();
@@ -1358,6 +1380,76 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
     }
   }
 
+  async function launchRobinhood() {
+    if (!address) { setErr("Connect your wallet first"); setStep("error"); return; }
+    setStep("launching"); setErr(""); setRhTxHash("");
+    try {
+      const net = ROBINHOOD_NETWORKS.find(x => x.id === rhNetwork)!;
+      const supplyBaseUnits = (BigInt(rhSupply || "0") * (10n ** BigInt(rhDecimals))).toString();
+
+      const prepRes = await fetch("/api/robinhood/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: cleanName, symbol: cleanSymbol, decimals: rhDecimals,
+          initial_supply: supplyBaseUnits,
+          owner: address,
+          network: rhNetwork,
+        }),
+      });
+      const prep = await prepRes.json();
+      if (!prep.ok) throw new Error(prep.error || "Prepare failed");
+
+      if (currentChainId !== net.chain) {
+        try {
+          await switchChainAsync({ chainId: net.chain });
+        } catch {
+          throw new Error(`Switch your wallet to ${net.label} and try again`);
+        }
+      }
+
+      // Contract-creation tx — no `to` field.
+      const hash = await sendTransactionAsync({
+        data:    prep.tx.data as `0x${string}`,
+        value:   0n,
+        chainId: net.chain,
+      });
+      setRhTxHash(hash);
+      setRhPolling(true);
+
+      let landed = false;
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 3000));
+        const recRes = await fetch("/api/robinhood/receipt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tx_hash: hash, network: rhNetwork,
+            tokenName: cleanName, tokenSymbol: cleanSymbol,
+            image: image.trim() || undefined, website: website.trim() || undefined,
+            description: description.trim() || undefined,
+            owner: address,
+          }),
+        });
+        const rec = await recRes.json();
+        if (rec.ok && rec.status === "success" && rec.tokenAddress) {
+          setOut({ tokenAddress: rec.tokenAddress, basescan: rec.tokenUrl ?? null, uniswap: null, bankr: null });
+          landed = true;
+          break;
+        }
+        if (rec.ok && rec.status === "reverted") throw new Error("Transaction reverted");
+      }
+      setRhPolling(false);
+      if (!landed) throw new Error("Timed out waiting for confirmation — check the tx hash on the explorer.");
+      setStep("done");
+      onLaunched();
+    } catch (e) {
+      setErr((e as Error).message); setStep("error");
+    } finally {
+      setRhPolling(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={step === "launching" ? undefined : onClose} />
@@ -1370,19 +1462,42 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
 
         {step === "done" ? (
           <div className="rounded-xl border p-4" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
-            <div className="font-mono text-[12px] font-bold mb-1" style={{ color: "#22C55E" }}>${cleanSymbol || cleanName} launched on Base</div>
+            <div className="font-mono text-[12px] font-bold mb-1" style={{ color: "#22C55E" }}>
+              ${cleanSymbol || cleanName} launched on {launchChain === "robinhood" ? ROBINHOOD_NETWORKS.find(x => x.id === rhNetwork)!.label : "Base"}
+            </div>
             {out?.tokenAddress && <div className="font-mono text-[10px] text-slate-400 mb-3 break-all">{out.tokenAddress}</div>}
             <div className="flex flex-wrap gap-2 mb-3">
               {out?.bankr && <a href={out.bankr} target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7]">Bankr ↗</a>}
-              {out?.basescan && <a href={out.basescan} target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] text-slate-300 hover:text-white">Basescan ↗</a>}
+              {out?.basescan && <a href={out.basescan} target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] text-slate-300 hover:text-white">{launchChain === "robinhood" ? "Explorer ↗" : "Basescan ↗"}</a>}
               {out?.uniswap && <a href={out.uniswap} target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#F59E0B30] text-[#F59E0B]">Trade ↗</a>}
             </div>
             <button onClick={onClose} className="w-full font-mono text-[12px] font-bold py-2 rounded-lg" style={{ background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E40" }}>Done</button>
           </div>
         ) : (
           <>
+            {/* Chain toggle — Base (Bankr, sponsored) vs Robinhood Chain (direct, self-signed) */}
+            <div className="flex gap-1.5 mb-4">
+              <button onClick={() => setLaunchChain("base")}
+                className="flex-1 font-mono text-[10px] font-bold py-1.5 rounded-lg transition-colors"
+                style={launchChain === "base"
+                  ? { background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}40` }
+                  : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+                Base · via Bankr
+              </button>
+              <button onClick={() => setLaunchChain("robinhood")}
+                className="flex-1 font-mono text-[10px] font-bold py-1.5 rounded-lg transition-colors"
+                style={launchChain === "robinhood"
+                  ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E40" }
+                  : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+                Robinhood Chain · direct
+              </button>
+            </div>
+
             <div className="flex items-center gap-2.5 mb-4">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center font-mono text-sm font-bold shrink-0" style={{ background: `${ACCENT}15`, border: `1px solid ${ACCENT}30`, color: ACCENT }}>
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center font-mono text-sm font-bold shrink-0"
+                style={launchChain === "robinhood"
+                  ? { background: "#22C55E15", border: "1px solid #22C55E30", color: "#22C55E" }
+                  : { background: `${ACCENT}15`, border: `1px solid ${ACCENT}30`, color: ACCENT }}>
                 {(cleanSymbol || cleanName).slice(0, 2).toUpperCase() || "?"}
               </div>
               <div className="min-w-0">
@@ -1411,25 +1526,72 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
               </div>
 
               <ModalField label="WEBSITE (optional)" value={website} onChange={setWebsite} placeholder="https://… (optional)" />
-              <ModalField label="TWITTER (optional)" value={twitter} onChange={setTwitter} placeholder="@handle (optional)" />
-              <ModalField label="FEE RECIPIENT · 57% creator fee" value={feeRecipient} onChange={setFeeRecipient}
-                placeholder={address ? "your wallet — or 0x… / blank → @blueagent_" : "0x… — or blank → @blueagent_"} />
+
+              {launchChain === "base" ? (
+                <>
+                  <ModalField label="TWITTER (optional)" value={twitter} onChange={setTwitter} placeholder="@handle (optional)" />
+                  <ModalField label="FEE RECIPIENT · 57% creator fee" value={feeRecipient} onChange={setFeeRecipient}
+                    placeholder={address ? "your wallet — or 0x… / blank → @blueagent_" : "0x… — or blank → @blueagent_"} />
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="font-mono text-[9px] text-slate-600 block mb-1">DECIMALS</span>
+                      <input type="number" min={0} max={18} value={rhDecimals}
+                        onChange={e => setRhDecimals(Number(e.target.value))}
+                        className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#22C55E]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 outline-none transition-colors" />
+                    </label>
+                    <ModalField label="INITIAL SUPPLY" value={rhSupply} onChange={setRhSupply} placeholder="e.g. 1000000000" />
+                  </div>
+                  <div className="flex gap-1">
+                    {ROBINHOOD_NETWORKS.map(nx => (
+                      <button key={nx.id} onClick={() => setRhNetwork(nx.id)}
+                        className="font-mono text-[9px] px-2 py-0.5 rounded transition-colors"
+                        style={rhNetwork === nx.id
+                          ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E30" }
+                          : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+                        {nx.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
 
-            <p className="font-mono text-[9px] text-slate-600 mb-3 leading-relaxed">
-              Deploys a <span className="text-amber-400">real, irreversible</span> token on Base via Bankr · 100B fixed supply · gas sponsored. Leave fee recipient blank to default to @blueagent_.
-            </p>
+            {launchChain === "base" ? (
+              <p className="font-mono text-[9px] text-slate-600 mb-3 leading-relaxed">
+                Deploys a <span className="text-amber-400">real, irreversible</span> token on Base via Bankr · 100B fixed supply · gas sponsored. Leave fee recipient blank to default to @blueagent_.
+              </p>
+            ) : (
+              <p className="font-mono text-[9px] text-slate-600 mb-3 leading-relaxed">
+                No factory on Robinhood Chain — deploys a raw ERC-20 contract-creation tx, signed directly by <span className="text-[#22C55E]">your own wallet</span>. Gas paid in ETH on Robinhood Chain (not Base). No ETH there yet?{" "}
+                <a href={`https://portal.arbitrum.io/bridge?destinationChain=robinhood-chain&sourceChain=ethereum`}
+                  target="_blank" rel="noopener noreferrer" className="underline text-[#22C55E] hover:text-[#22C55E]/80">
+                  Bridge ETH via Arbitrum Portal ↗
+                </a>
+              </p>
+            )}
 
             {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
+            {launchChain === "robinhood" && rhTxHash && (
+              <p className="font-mono text-[9px] text-slate-500 mb-2 break-all">tx: {rhTxHash.slice(0, 10)}…{rhTxHash.slice(-8)}</p>
+            )}
 
-            <button onClick={launch} disabled={step === "launching" || !cleanName}
+            <button onClick={launch} disabled={step === "launching" || !cleanName || (launchChain === "robinhood" && !address)}
               className="w-full font-mono text-[12px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
-              style={{ background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}40` }}>
-              {step === "launching" ? "Launching…" : `🚀 Launch $${cleanSymbol || "TOKEN"} on Base`}
+              style={launchChain === "robinhood"
+                ? { background: "#22C55E", color: "#050508" }
+                : { background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}40` }}>
+              {launchChain === "robinhood"
+                ? (!address ? "Connect wallet to deploy" : step === "launching" ? (rhPolling ? "Confirming onchain…" : "Preparing…") : `Deploy $${cleanSymbol || "TOKEN"} on ${ROBINHOOD_NETWORKS.find(x => x.id === rhNetwork)!.label} →`)
+                : (step === "launching" ? "Launching…" : `🚀 Launch $${cleanSymbol || "TOKEN"} on Base`)}
             </button>
             <p className="font-mono text-[9px] text-slate-700 mt-1.5 text-center">
-              {cleanName ? "Bankr allows 1 launch/min per wallet." : "Enter a token name to launch."}
+              {launchChain === "robinhood"
+                ? "You sign and pay gas — Blue Agent never holds your funds or keys."
+                : cleanName ? "Bankr allows 1 launch/min per wallet." : "Enter a token name to launch."}
             </p>
           </>
         )}
