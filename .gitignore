@@ -17,3 +17,7 @@ coverage/
 
 # Accidental nested repo clone
 /blue-agent/
+
+# Foundry build artifacts
+/contracts/out/
+/contracts/cache/
