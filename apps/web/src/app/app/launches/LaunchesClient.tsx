@@ -42,6 +42,9 @@ type Launch = {
   txHash?: string | null;
   launchedAt: number;
   market: Market | null;
+  /** Which chain this token was deployed on. Absent = "base" (legacy records
+   *  predate Robinhood Chain support). */
+  chain?: "base" | "robinhood";
 };
 type FeedResponse = {
   ok: boolean;
@@ -448,7 +451,10 @@ function LaunchCard({ l, onTrade }: { l: Launch; onTrade: (l: Launch) => void })
         )}
         <div className="min-w-0 flex-1">
           <div className="font-mono text-sm font-bold text-white truncate">{l.tokenName || sym}</div>
-          <div className="font-mono text-[11px] text-slate-500">${sym}</div>
+          <div className="font-mono text-[11px] text-slate-500 flex items-center gap-1.5">
+            <span>${sym}</span>
+            <ChainBadge chain={l.chain} />
+          </div>
         </div>
         <div className="font-mono text-[9px] text-slate-600 shrink-0 pr-1">{fmtAge(l.launchedAt)} ago</div>
       </div>
@@ -626,6 +632,34 @@ function ListHeader({
 type SortKey = "newest" | "volume" | "mcap" | "change" | "price" | "age";
 type FilterTab = "all" | "live" | "new" | "hot" | "mine";
 type ViewMode = "grid" | "list";
+type ChainFilter = "all" | "base" | "robinhood";
+
+const CHAIN_TABS: { label: string; key: ChainFilter }[] = [
+  { label: "All chains", key: "all" },
+  { label: "Base", key: "base" },
+  { label: "Robinhood Chain", key: "robinhood" },
+];
+
+function applyChainFilter(launches: Launch[], chain: ChainFilter): Launch[] {
+  if (chain === "all") return launches;
+  return launches.filter((l) => (l.chain ?? "base") === chain);
+}
+
+function ChainBadge({ chain }: { chain?: "base" | "robinhood" }) {
+  const isRobinhood = chain === "robinhood";
+  return (
+    <span
+      className="font-mono text-[8px] px-1.5 py-0.5 rounded-full border tracking-wide"
+      style={
+        isRobinhood
+          ? { background: "#22C55E15", color: "#22C55E", borderColor: "#22C55E30" }
+          : { background: "#4FC3F715", color: "#4FC3F7", borderColor: "#4FC3F730" }
+      }
+    >
+      {isRobinhood ? "ROBINHOOD" : "BASE"}
+    </span>
+  );
+}
 
 const SORT_OPTIONS: { label: string; key: SortKey }[] = [
   { label: "Newest", key: "newest" },
@@ -994,6 +1028,9 @@ export default function LaunchesPage() {
   // A3 — filter tab
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
 
+  // Chain filter — Base (Bankr launches) vs Robinhood Chain (own registry)
+  const [chainFilter, setChainFilter] = useState<ChainFilter>("all");
+
   // A4 — search
   const [search, setSearch] = useState("");
 
@@ -1039,7 +1076,8 @@ export default function LaunchesPage() {
   // Derived list: filter test → filter tab → search → sort
   const allLaunches = data?.launches ?? [];
   const withoutTest = showTest ? allLaunches : allLaunches.filter((l) => !isTestToken(l));
-  const filtered = applyFilter(withoutTest, filterTab);
+  const chained = applyChainFilter(withoutTest, chainFilter);
+  const filtered = applyFilter(chained, filterTab);
   const searched = applySearch(filtered, search);
   const launches = applySort(searched, sort);
 
@@ -1052,7 +1090,7 @@ export default function LaunchesPage() {
       <div className="flex items-center justify-between gap-3 px-4 sm:px-6 h-14 border-b border-[#1A1A2E] shrink-0">
         <div className="min-w-0">
           <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// LAUNCHES</p>
-          <p className="font-mono text-[10px] text-slate-700 truncate mt-1">Fair launch on Base via Bankr</p>
+          <p className="font-mono text-[10px] text-slate-700 truncate mt-1">Fair launch on Base (via Bankr) + Robinhood Chain</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {/* A7 — refresh dot */}
@@ -1105,6 +1143,24 @@ export default function LaunchesPage() {
             <StatChip label="TOKENS LAUNCHED" value={loading ? "…" : String(data?.count ?? 0)} />
             <StatChip label="TOTAL MCAP" value={loading ? "…" : fmtUsd(data?.stats.totalMarketCap)} />
             <StatChip label="24H VOLUME" value={loading ? "…" : fmtUsd(data?.stats.totalVolume24h)} />
+          </div>
+
+          {/* Chain tabs — Base (Bankr fair-launch) vs Robinhood Chain (own registry) */}
+          <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+            {CHAIN_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setChainFilter(tab.key)}
+                className="font-mono text-[10px] px-3 py-1 rounded-full border transition-colors"
+                style={{
+                  background: chainFilter === tab.key ? "#22C55E15" : "transparent",
+                  color: chainFilter === tab.key ? "#22C55E" : "#64748b",
+                  borderColor: chainFilter === tab.key ? "#22C55E40" : "#1A1A2E",
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
           {/* A3 — Filter tabs */}
