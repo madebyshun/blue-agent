@@ -308,6 +308,7 @@ When user asks to send/transfer a B20 token:
 4. Only proceed if simulation succeeds — never bypass
 5. Use hub_b20_analyze for B20 deployment questions / role explanations
 6. Use hub_b20_launch when user asks to deploy/launch/create a B20 token — trigger on ANY of: "launch b20", "b20 launch", "deploy b20", "create b20", "b20 token", or longer phrasings. Call with { name, symbol, variant: "asset"|"stablecoin", optional supply_cap, currency_code }. Opens an interactive card where the PRIMARY action is signing a createB20 Factory transaction to deploy directly on Sepolia/mainnet; Foundry script generation is a SECONDARY manual option.
+6c. Use robinhood_swap when the user wants to BUY or SELL a token on ROBINHOOD CHAIN — trigger on ANY of: "buy X on robinhood", "sell X on robinhood", "swap 0.001 ETH for CASHDOG on robinhood chain", "trade HOODRAT on robinhood", or similar Robinhood swap intent. Call with { direction: "buy"|"sell", token: contract address 0x… OR a ticker symbol (server resolves via the live GeckoTerminal Robinhood index), optional amount as a decimal string ("0.001", "100") }. Renders an inline swap card that fetches the live Uniswap V3 pool + estimate against the deployed RobinhoodSwapRouter (0x3bb0…d23D on chain 4663); the user signs approve (if selling) + the swap tx in their own wallet — non-custodial, no server keys. If the symbol isn't in the live index the card shows an honest error — never fabricate an address. NEVER use this for Base tokens (use prepare_swap for Base).
 6b. Use hub_robinhood_launch when user asks to deploy/launch a token on ROBINHOOD CHAIN specifically — trigger on ANY of: "launch on robinhood", "robinhood chain token", "deploy on robinhood", "robinhood launch", or similar. Robinhood Chain (EVM chainId 4663) has NO B20-style factory — this deploys a plain ERC-20 via a raw contract-creation transaction, signed by the user's own wallet. Call with { name, symbol, optional decimals, initial_supply, image, website, description }. This renders the SAME unified token-launch card as prepare_token_launch, just pre-set to the Robinhood Chain step (skips the Base-vs-Robinhood picker) — there is no separate Robinhood-only card anymore. If the user hasn't said which chain yet, prefer prepare_token_launch instead (with no chain hint) so the card shows the picker and lets them choose Base vs Robinhood Chain themselves. Never confuse this with hub_b20_launch (Base-only, different token standard) — Robinhood Chain launches use a completely separate deploy path and are recorded in Blue Agent's own /launches registry, tagged chain:"robinhood".
 7. Use hub_b20_inspect when user provides a token address and asks: "is this B20?", "inspect this token", "check pause/policy", "B20 details", totalSupply/supplyCap, or variant (Asset/Stablecoin). Reads REAL on-chain state via multicall — zero LLM. Call with { address: "0x…", network: "mainnet" }.
 8. Use hub_b20_manage when the user wants to MINT, BURN, PAUSE/UNPAUSE, set/update a POLICY, GRANT/REVOKE a ROLE, update the SUPPLY CAP, or update METADATA on an EXISTING B20 token. Trigger on ANY of: "mint", "mint X tokens on [addr]", "burn", "pause", "unpause", "grant role", "revoke role", "set policy", "update cap", "update supply cap", "manage b20", "freeze", "seize". Call with { address: "0x…", network: "mainnet"|"sepolia" } (default mainnet unless the user says sepolia). Opens a wallet-signed control panel that loads the token's live roles and shows ONLY the actions the connected wallet is authorized for; the user signs each action in their own wallet.
@@ -714,6 +715,19 @@ Default to "base" for Base-related queries.`,
     },
   },
   {
+    name: "robinhood_swap",
+    description: "Open a buy/sell swap card for a token on ROBINHOOD CHAIN (chainId 4663) — routes through Blue Agent's own deployed RobinhoodSwapRouter (0x3bb0…d23D) against Uniswap V3 pools. Trigger on: 'buy X on robinhood', 'sell X on robinhood chain', 'swap 0.001 ETH for CASHDOG on robinhood', 'trade HOODRAT on robinhood', or any 'swap/buy/sell on robinhood' intent. Non-custodial: the card computes an estimate + slippage floor, and the user's own wallet signs (approve if selling, then swap). If the token has no Uniswap V3 pool on Robinhood Chain the card shows an honest 'no pool yet' state. NEVER use for Base tokens — use prepare_swap for Base.",
+    input_schema: {
+      type: "object",
+      properties: {
+        direction:     { type: "string", enum: ["buy", "sell"], description: "buy = spend ETH to receive the token; sell = spend the token to receive ETH. Default buy." },
+        token:         { type: "string", description: "Token contract address (0x…) on Robinhood Chain, OR a ticker symbol (e.g. CASHDOG, HOODRAT) — the server resolves symbols via the live Robinhood Chain feed. Never invent addresses." },
+        amount:        { type: "string", description: "Human-readable amount: ETH for buy (e.g. 0.001), token units for sell (e.g. 100). Optional — if omitted, the card renders empty and the user types the amount in." },
+      },
+      required: ["direction", "token"],
+    },
+  },
+  {
     name: "hub_robinhood_launch",
     description: "Open a Robinhood Chain token launch form. Robinhood Chain (EVM chainId 4663, Arbitrum Orbit, permissionless deploy — docs.robinhood.com/chain) has NO native token-launch factory like Base's B20 — this deploys a plain ERC-20 via a raw contract-creation transaction, signed directly by the user's own connected wallet. Trigger on: 'launch on robinhood', 'deploy on robinhood chain', 'robinhood token', 'create token on robinhood', or any Robinhood Chain launch intent.",
     input_schema: {
@@ -1041,6 +1055,92 @@ async function callHubTool(
     return {
       text: "B20 launch form rendered. The card is pre-filled with the token details — the user can edit fields and click Generate Scripts to get the foundry.toml, deploy script, and CLI commands. Do NOT restate the fields as a table. Reply with one short line: tell the user to review the form and click Generate Scripts.",
       result: { kind: "b20_launch", ...args },
+    };
+  }
+  if (toolName === "robinhood_swap") {
+    // Resolve the token — accept either a 0x address or a symbol we look up
+    // against the LIVE Robinhood Chain feed (GeckoTerminal). No LLM fallback,
+    // no fabricated addresses: if the symbol isn't in the live index, we
+    // return an error the card renders inline instead of guessing.
+    const direction = args.direction === "sell" ? "sell" : "buy";
+    const rawToken = typeof args.token === "string" ? args.token.trim() : "";
+    const amount = args.amount != null ? String(args.amount) : "";
+
+    let token_address = "";
+    let token_symbol = "";
+    let token_name = "";
+    let note = "";
+    let error = "";
+
+    if (/^0x[a-fA-F0-9]{40}$/.test(rawToken)) {
+      token_address = rawToken;
+      // Enrich with symbol/name via GeckoTerminal (best-effort, non-fatal).
+      try {
+        const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/robinhood/tokens/${rawToken}`, {
+          headers: { Accept: "application/json" }, cache: "no-store",
+        });
+        if (r.ok) {
+          const j = await r.json();
+          token_symbol = String(j?.data?.attributes?.symbol ?? "").replace(/^\$/, "");
+          token_name = String(j?.data?.attributes?.name ?? "");
+        }
+      } catch { /* leave symbol/name blank; card handles it */ }
+    } else if (rawToken) {
+      // Symbol lookup — search GeckoTerminal's Robinhood token index.
+      try {
+        const q = encodeURIComponent(rawToken);
+        const r = await fetch(
+          `https://api.geckoterminal.com/api/v2/search/pools?query=${q}&network=robinhood&page=1`,
+          { headers: { Accept: "application/json" }, cache: "no-store" },
+        );
+        if (r.ok) {
+          const j = await r.json();
+          const pools = (j?.data ?? []) as Array<{ attributes?: { name?: string }; relationships?: { base_token?: { data?: { id?: string } }; quote_token?: { data?: { id?: string } } } }>;
+          // Pick the first pool whose base token's symbol (from the name "SYMBOL / WETH …")
+          // matches the user's request. GeckoTerminal returns pool ids like "robinhood_0x...".
+          const wanted = rawToken.replace(/^\$/, "").toUpperCase();
+          for (const p of pools) {
+            const name = (p.attributes?.name ?? "").toUpperCase();
+            if (!name.includes(wanted)) continue;
+            const baseId = p.relationships?.base_token?.data?.id ?? "";
+            const quoteId = p.relationships?.quote_token?.data?.id ?? "";
+            const baseAddr = baseId.startsWith("robinhood_") ? baseId.slice("robinhood_".length) : "";
+            const quoteAddr = quoteId.startsWith("robinhood_") ? quoteId.slice("robinhood_".length) : "";
+            // Prefer whichever leg is NOT WETH.
+            const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73";
+            const cand = baseAddr.toLowerCase() === WETH ? quoteAddr : baseAddr;
+            if (/^0x[a-fA-F0-9]{40}$/.test(cand)) {
+              token_address = cand;
+              token_symbol = wanted;
+              note = `Resolved ${wanted} → ${cand} via GeckoTerminal Robinhood index`;
+              break;
+            }
+          }
+          if (!token_address) error = `No live pool for "${rawToken}" found on Robinhood Chain — try the token contract address.`;
+        } else {
+          error = "Couldn't reach the Robinhood token index — try again with the token contract address.";
+        }
+      } catch {
+        error = "Couldn't reach the Robinhood token index — try again with the token contract address.";
+      }
+    } else {
+      error = "Need a token — pass an address or a ticker symbol.";
+    }
+
+    return {
+      text: error
+        ? `Robinhood swap card rendered with an error: ${error}. Reply with one short line telling the user; do NOT invent an address.`
+        : `Robinhood swap card rendered for ${token_symbol || token_address} (${direction}). The card fetches the live Uniswap V3 pool + estimate and shows a slippage picker; the user's own wallet signs approve (if selling) + swap. Do NOT restate the fields as a table, do NOT claim the swap has executed. Reply with one short line telling the user to review the amount + slippage in the card and click the buy/sell button to sign.`,
+      result: {
+        kind: "robinhood_swap",
+        direction,
+        token_address,
+        token_symbol,
+        token_name,
+        amount,
+        note,
+        error,
+      },
     };
   }
   if (toolName === "hub_robinhood_launch") {
