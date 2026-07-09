@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 
 import { Test } from "forge-std/Test.sol";
 import { BlueBuyBack } from "../BlueBuyBack.sol";
+import { PoolKey, Currency } from "../B20HUBHook.sol";
 
 /**
  * BlueBuyBack unit tests — pure logic only, no V4 mainnet fork needed.
@@ -228,6 +229,74 @@ contract BlueBuyBackUnitTest is Test {
         // Just call it and expect ANY revert (from downstream router call).
         vm.expectRevert();
         buyback.distribute(0, block.timestamp + 300);
+    }
+
+    // ─── setBluePoolKey ───────────────────────────────────────────────────────
+
+    function test_setBluePoolKey_setsCorrectKeyAndFlag() public {
+        // WETH < BLUE address on Base → WETH is currency0.
+        PoolKey memory key = PoolKey({
+            currency0: Currency.wrap(BASE_WETH),
+            currency1: Currency.wrap(address(blue)),
+            fee: 10000,
+            tickSpacing: int24(200),
+            hooks: address(0)
+        });
+        // Ensure BLUE address > WETH address for the sort check to pass.
+        // MockERC20 was created via `new` so its address is random; if it
+        // happens to be < WETH, swap them.
+        if (address(blue) < BASE_WETH) {
+            key.currency0 = Currency.wrap(address(blue));
+            key.currency1 = Currency.wrap(BASE_WETH);
+        }
+
+        buyback.setBluePoolKey(key);
+
+        assertTrue(buyback.bluePoolKeySet(), "flag should be true after set");
+        // Read back and compare fields (Solidity can't compare structs directly).
+        (Currency c0, Currency c1, uint24 fee, int24 spacing, address hooks) =
+            buyback.bluePoolKey();
+        assertEq(Currency.unwrap(c0), Currency.unwrap(key.currency0));
+        assertEq(Currency.unwrap(c1), Currency.unwrap(key.currency1));
+        assertEq(uint256(fee), 10000);
+        assertEq(int256(spacing), int256(200));
+        assertEq(hooks, address(0));
+    }
+
+    function test_setBluePoolKey_ownerOnly() public {
+        PoolKey memory key;
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert(BlueBuyBack.NotOwner.selector);
+        buyback.setBluePoolKey(key);
+    }
+
+    function test_setBluePoolKey_rejectsNonBlueWethPair() public {
+        // Key that doesn't include BLUE + WETH → InvalidBluePoolKey.
+        address random = makeAddr("random");
+        PoolKey memory key = PoolKey({
+            currency0: Currency.wrap(random),
+            currency1: Currency.wrap(BASE_WETH),
+            fee: 10000,
+            tickSpacing: int24(200),
+            hooks: address(0)
+        });
+        vm.expectRevert(BlueBuyBack.InvalidBluePoolKey.selector);
+        buyback.setBluePoolKey(key);
+    }
+
+    function test_setBluePoolKey_rejectsMisorderedCurrencies() public {
+        // currency0 must be < currency1 per V4. Force a violation.
+        address higher = address(uint160(BASE_WETH) + 1);
+        vm.etch(higher, hex"00"); // needs code to look like a token
+        PoolKey memory key = PoolKey({
+            currency0: Currency.wrap(higher),
+            currency1: Currency.wrap(BASE_WETH),
+            fee: 10000,
+            tickSpacing: int24(200),
+            hooks: address(0)
+        });
+        vm.expectRevert(BlueBuyBack.InvalidBluePoolKey.selector);
+        buyback.setBluePoolKey(key);
     }
 
     // ─── Permit2 setup ────────────────────────────────────────────────────────
