@@ -145,3 +145,34 @@ export const V4_STATE_VIEW_SEPOLIA = "0x571291b572ed32ce6751a2cb2486ebee8dEFB9b4
  * CREATE2 canonical deploy). Mainnet and Sepolia both use this.
  */
 export const PERMIT2_SEPOLIA = "0x000000000022D473030F116dDEE9F6B43aC78BA3" as const;
+
+// ── B20HUB deployed contracts on Base mainnet (2026-07-09) ────────────────────
+//
+// Deployed via `forge script script/DeployB20HUB.s.sol` at block 48410997.
+// Hook salt mined in-EVM: 0x00…05b6. Hook address low 14 bits = 0x1200
+// (AFTER_INITIALIZE + BEFORE_REMOVE_LIQUIDITY permission flags) — required
+// by Uniswap V4's hook permission encoding.
+
+/**
+ * BlueBuyBack — receives 15% of every B20HUB swap as WETH, then anyone can
+ * call distribute() to swap it into $BLUE and burn (or send to treasury).
+ * Keeper reward: 0.1% of the swap output to the caller.
+ * https://basescan.org/address/0x97A758dbDf013E8C9DB0D0056B28f111c773f9a7
+ */
+export const B20HUB_BUYBACK = "0x97A758dbDf013E8C9DB0D0056B28f111c773f9a7" as const;
+
+/**
+ * B20HUBHook — the Uniswap V4 hook that intercepts every swap on B20HUB pools
+ * and splits fees 80% creator / 15% BlueBuyBack / 5% treasury. Also enforces
+ * LP-permanent-lock via beforeRemoveLiquidity revert.
+ * https://basescan.org/address/0x568e4e59d2CAA6764BA8F9721c8E4e43DF645200
+ */
+export const B20HUB_HOOK = "0x568e4e59d2CAA6764BA8F9721c8E4e43DF645200" as const;
+
+/**
+ * B20HUBLauncher — the entry point every user calls to launch a B20 with an
+ * auto-pool + LP lock. `/api/b20hub/prepare` builds calldata for this
+ * contract's launch() function.
+ * https://basescan.org/address/0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b
+ */
+export const B20HUB_LAUNCHER = "0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b" as const;
