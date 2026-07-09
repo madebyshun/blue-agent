@@ -18,13 +18,17 @@
 // ── Base chain ─────────────────────────────────────────────────────────────────
 
 export const BASE_CHAIN_ID = 8453;
+export const BASE_SEPOLIA_CHAIN_ID = 84532;
 
 /**
  * Wrapped ETH on Base mainnet. Standard cross-chain deployment — the "other
  * leg" of every B20/ETH pool. Predeployed by the OP Stack, no external
  * verification needed (it's a chain built-in).
+ *
+ * Same address on Base mainnet + Base Sepolia (OP Stack convention).
  */
 export const WETH9_BASE = "0x4200000000000000000000000000000000000006" as const;
+export const WETH9_BASE_SEPOLIA = "0x4200000000000000000000000000000000000006" as const;
 
 // ── B20 protocol ───────────────────────────────────────────────────────────────
 
@@ -108,3 +112,36 @@ export const V4_FEE_TIERS = {
 } as const;
 
 export type V4FeeTierName = keyof typeof V4_FEE_TIERS;
+
+// ── Uniswap V4 on Base Sepolia (verified via Uniswap docs 2026-07-09) ─────────
+//
+// Base Sepolia is where we deploy B20HUB first for smoke-testing before
+// promoting to mainnet. B20 factory is at the same 0xB20f… address as mainnet
+// (protocol convention). V4 addresses differ per chain — Uniswap deploys V4
+// separately on each chain; treat these as documentation, not "same as
+// mainnet".
+
+/**
+ * V4 PoolManager on Base Sepolia. Different address from mainnet — each
+ * chain gets a fresh V4 deployment. Source:
+ * https://developers.uniswap.org/contracts/v4/deployments
+ */
+export const V4_POOL_MANAGER_SEPOLIA = "0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408" as const;
+
+/** V4 PositionManager on Base Sepolia. */
+export const V4_POSITION_MANAGER_SEPOLIA = "0x4B2C77d209D3405F41a037Ec6c77F7F5b8e2ca80" as const;
+
+/** V4 UniversalRouter on Base Sepolia. */
+export const UNIVERSAL_ROUTER_V4_SEPOLIA = "0x492E6456D9528771018DeB9E87ef7750eF184104" as const;
+
+/** V4 Quoter on Base Sepolia (read-only quotes). */
+export const V4_QUOTER_SEPOLIA = "0x4A6513c898fe1B2d0E78d3b0e0A4a151589b1CBA" as const;
+
+/** V4 StateView on Base Sepolia (read-only pool state). */
+export const V4_STATE_VIEW_SEPOLIA = "0x571291b572ed32ce6751a2cb2486ebee8dEFB9b4" as const;
+
+/**
+ * Permit2 is deployed at the SAME address on every chain (deterministic
+ * CREATE2 canonical deploy). Mainnet and Sepolia both use this.
+ */
+export const PERMIT2_SEPOLIA = "0x000000000022D473030F116dDEE9F6B43aC78BA3" as const;
