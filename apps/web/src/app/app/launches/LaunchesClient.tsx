@@ -1953,7 +1953,16 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
           totalSupply: "100000000000",
           feeTier: "MEDIUM",     // 0.3% default — matches most launch tokens
           initialSqrtPriceX96: sqrtPriceX96.toString(),
-          creator: address,
+          // Creator address — the wallet that receives 80% of every swap fee
+          // for the lifetime of the pool. If the user pasted a specific address
+          // in the CREATOR ADDRESS field, honor that; otherwise default to the
+          // connected wallet. Reject non-address values (Bankr accepts X/farc
+          // handles, B20HUB does not — the hook stores a raw address).
+          creator: (() => {
+            const raw = feeRecipient.trim();
+            if (/^0x[a-fA-F0-9]{40}$/.test(raw)) return raw;
+            return address;
+          })(),
           chain: "base",
         }),
       });
@@ -2140,11 +2149,21 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
 
               <ModalField label="WEBSITE (optional)" value={website} onChange={setWebsite} placeholder="https://… (optional)" />
 
-              {/* Same form for both chains — Bankr's launchpad handles supply,
-                  decimals, pool, and gas sponsorship on either chain. */}
-              <ModalField label="TWITTER (optional)" value={twitter} onChange={setTwitter} placeholder="@handle (optional)" />
-              <ModalField label="FEE RECIPIENT · 95% creator fee" value={feeRecipient} onChange={setFeeRecipient}
-                placeholder={address ? "your wallet — or 0x… / blank → @blueagent_" : "0x… — or blank → @blueagent_"} />
+              {/* Bankr-specific fields — B20HUB uses the connected wallet as
+                  creator directly, no X/handle resolution, and its 80/15/5
+                  fee split is baked into the hook, not a user input. */}
+              {launchChain !== "b20hub" && (
+                <>
+                  <ModalField label="TWITTER (optional)" value={twitter} onChange={setTwitter} placeholder="@handle (optional)" />
+                  <ModalField label="FEE RECIPIENT · 95% creator fee" value={feeRecipient} onChange={setFeeRecipient}
+                    placeholder={address ? "your wallet — or 0x… / blank → @blueagent_" : "0x… — or blank → @blueagent_"} />
+                </>
+              )}
+              {launchChain === "b20hub" && (
+                <ModalField label="CREATOR ADDRESS · receives 80% swap fees forever"
+                  value={feeRecipient} onChange={setFeeRecipient}
+                  placeholder={address ? `${address.slice(0, 6)}…${address.slice(-4)} (connected wallet — default)` : "0x… (connect wallet)"} />
+              )}
             </div>
 
 
