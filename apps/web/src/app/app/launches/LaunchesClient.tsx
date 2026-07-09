@@ -1820,14 +1820,7 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
   // reachable from the UI — the direct path required Robinhood Chain ETH for
   // gas, no pool at launch time, and no fee share, which was too much friction
   // for a first-time creator. Bankr owns the launch UX end-to-end now.
-  // NB: "b20hub" is the FIRST REAL B20 launchpad — deploys via the 0xB20f
-  // factory (real B20 tokens, isB20()=true, not Doppler/Zora slang) and
-  // auto-creates a Uniswap V4 pool with our own hook attached. 80% of swap
-  // fees go to creator, 15% auto-buyback $BLUEAGENT for stakers, 5% treasury.
-  // Contracts + tests are complete; launcher goes live once operator runs
-  // forge script script/DeployB20HUB.s.sol. Until then the tab shows a
-  // "Coming soon" state via the /api/b20hub/prepare 503 response.
-  const [launchChain, setLaunchChain] = useState<"base" | "robinhood" | "b20hub">("base");
+  const [launchChain, setLaunchChain] = useState<"base" | "robinhood">("base");
 
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
@@ -1851,19 +1844,6 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
   const [rhNetwork] = useState<RobinhoodNet>("mainnet");
   const [rhTxHash, setRhTxHash] = useState("");
   const [, setRhPolling] = useState(false);
-
-  // B20HUB-specific fields — mirror /app/b20's canonical B20 launch form
-  // (variant, decimals, supply cap, initial supply, currency code) plus the
-  // launchpad-only fields (fee tier, opening market cap). This keeps our
-  // schema aligned with Base's official createB20 spec — Bankr's off-chain
-  // metadata (description, image URL, website, twitter) doesn't apply here.
-  const [hubVariant, setHubVariant] = useState<"asset" | "stablecoin">("asset");
-  const [hubDecimals, setHubDecimals] = useState<number>(18);
-  const [hubSupplyCap, setHubSupplyCap] = useState<string>("100000000000"); // 100B default
-  const [hubInitSupply, setHubInitSupply] = useState<string>("100000000000"); // default = full mint
-  const [hubCurrencyCode, setHubCurrencyCode] = useState<string>("USD");
-  const [hubFeeTier, setHubFeeTier] = useState<"MEDIUM" | "HIGH" | "3PCT">("MEDIUM");
-  const [hubMarketCap, setHubMarketCap] = useState<string>("1000"); // $1K opening default
 
   // Fee recipient is left BLANK by default → the 95% creator fee routes to
   // @blueagent_ (see `fee || "blueagent_"` in launch()). The user can opt to
@@ -1922,88 +1902,6 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
         uniswap: d.uniswap ?? null,
         bankr: d.bankr ?? null,
       });
-      setStep("done");
-      onLaunched();
-    } catch (e) {
-      setErr((e as Error).message); setStep("error");
-    }
-  }
-
-  /**
-   * B20HUB launch — real B20 factory + auto V4 pool + fee splitter hook.
-   * Calls /api/b20hub/prepare to build the launcher tx, then user's wallet
-   * signs it. Non-custodial: server never touches a private key.
-   *
-   * Until the launcher contract is deployed on-chain, the API returns 503
-   * { notDeployed: true } and this function surfaces a friendly "Coming
-   * soon" message instead of pretending to launch.
-   */
-  async function launchB20HUB() {
-    if (!address) { setErr("Connect your wallet first"); setStep("error"); return; }
-    if (!cleanName) return;
-    setStep("launching"); setErr("");
-    try {
-      // Parse user-entered B20HUB fields with sensible fallbacks.
-      const supplyWhole = BigInt(hubSupplyCap || "100000000000");
-      const initSupply  = BigInt(hubInitSupply || hubSupplyCap || "100000000000");
-      const marketCapUsd = Number(hubMarketCap) || 1000;
-      const feeTierMap = { MEDIUM: 3000, HIGH: 10000, "3PCT": 30000 } as const;
-      const feeTierNum = feeTierMap[hubFeeTier];
-
-      // Client-side compute sqrtPriceX96 from user's chosen opening market cap.
-      // Uses full BigInt math in lib/b20hub/price.ts to avoid float rounding.
-      const { sqrtPriceX96FromMarketCap } = await import("@/lib/b20hub/price");
-      const sqrtPriceX96 = sqrtPriceX96FromMarketCap({
-        targetMarketCapUsd: marketCapUsd,
-        totalSupplyWhole: supplyWhole,
-        decimals: hubDecimals,
-        ethPriceUsd: 3000, // TODO: fetch live ETH price for accuracy
-      });
-
-      const res = await fetch("/api/b20hub/prepare", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: cleanName,
-          symbol: cleanSymbol || cleanName.slice(0, 4).toUpperCase(),
-          variant: hubVariant,
-          decimals: hubDecimals,
-          totalSupply: initSupply.toString(),
-          feeTier: feeTierNum,
-          initialSqrtPriceX96: sqrtPriceX96.toString(),
-          // Stablecoin variant carries ISO currency code per B20 spec.
-          ...(hubVariant === "stablecoin" ? { currencyCode: hubCurrencyCode } : {}),
-          // Creator address — the wallet that receives 80% of every swap fee
-          // for the lifetime of the pool. Honor user-typed 0x address if valid;
-          // otherwise default to the connected wallet. Reject non-address
-          // values (Bankr accepts X/farc handles; B20HUB stores raw address).
-          creator: (() => {
-            const raw = feeRecipient.trim();
-            if (/^0x[a-fA-F0-9]{40}$/.test(raw)) return raw;
-            return address;
-          })(),
-          chain: "base",
-        }),
-      });
-      const d = await res.json();
-      if (!res.ok) {
-        if (d?.notDeployed) {
-          setErr("B20HUB launcher not deployed yet — coming soon. Contracts + tests are ready; awaiting on-chain deployment.");
-        } else {
-          setErr(d?.error ?? `B20HUB launch failed (${res.status})`);
-        }
-        setStep("error");
-        return;
-      }
-
-      // Broadcast the tx via user's own wallet (non-custodial).
-      const hash = await sendTransactionAsync({
-        to: d.tx.to as `0x${string}`,
-        data: d.tx.data as `0x${string}`,
-        value: 0n,
-        chainId: 8453,
-      });
-      setOut({ tokenAddress: null, basescan: `https://basescan.org/tx/${hash}`, uniswap: null, bankr: null });
       setStep("done");
       onLaunched();
     } catch (e) {
@@ -2124,14 +2022,6 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
                   : { color: "#64748b", border: "1px solid #1A1A2E" }}>
                 Robinhood · via Bankr
               </button>
-              <button onClick={() => setLaunchChain("b20hub")}
-                className="flex-1 font-mono text-[10px] font-bold py-1.5 rounded-lg transition-colors"
-                title="Real B20 launchpad — coming after contract deployment"
-                style={launchChain === "b20hub"
-                  ? { background: "#3B82F615", color: "#3B82F6", border: "1px solid #3B82F640" }
-                  : { color: "#64748b", border: "1px solid #1A1A2E" }}>
-                B20HUB · Base
-              </button>
             </div>
 
             <div className="flex items-center gap-2.5 mb-4">
@@ -2151,135 +2041,27 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
               <ModalField label="TOKEN NAME *" value={name} onChange={setName} placeholder="e.g. Blue Agent" />
               <ModalField label="TICKER" value={symbol} onChange={setSymbol} placeholder="auto from name" />
 
-              {/* B20-native fields (variant/decimals/supplyCap/initSupply/currencyCode)
-                  shown ONLY on B20HUB tab. Mirrors /app/b20's canonical launch form
-                  so B20HUB launches conform to Base's official createB20 spec. */}
-              {launchChain === "b20hub" ? (
-                <>
-                  <div>
-                    <div className="font-mono text-[9px] text-slate-600 mb-1">VARIANT</div>
-                    <div className="flex rounded-lg border border-[#1A1A2E] overflow-hidden">
-                      {(["asset", "stablecoin"] as const).map((v) => (
-                        <button key={v} onClick={() => {
-                          setHubVariant(v);
-                          // Stablecoin B20 is fixed at 6 decimals per Base spec.
-                          if (v === "stablecoin") setHubDecimals(6);
-                          else setHubDecimals(18);
-                        }}
-                          className="flex-1 py-2 font-mono text-[10px] capitalize transition-colors"
-                          style={hubVariant === v
-                            ? { background: "#3B82F615", color: "#3B82F6" }
-                            : { color: "#64748b" }}>
-                          {v}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+              <ModalField label="DESCRIPTION" value={description} onChange={setDescription} placeholder="One-line pitch (optional)" />
 
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <div className="font-mono text-[9px] text-slate-600 mb-1">
-                        DECIMALS <span className="text-slate-700">{hubVariant === "stablecoin" ? "(fixed 6)" : "(6–18)"}</span>
-                      </div>
-                      <input type="number" min={6} max={18} value={hubDecimals}
-                        disabled={hubVariant === "stablecoin"}
-                        onChange={(e) => setHubDecimals(Number(e.target.value))}
-                        className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#3B82F6]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-slate-200 outline-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed" />
-                    </div>
-                    <div>
-                      <div className="font-mono text-[9px] text-slate-600 mb-1">SUPPLY CAP <span className="text-slate-700">(whole tokens)</span></div>
-                      <input value={hubSupplyCap} onChange={(e) => setHubSupplyCap(e.target.value)}
-                        placeholder="100000000000"
-                        className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#3B82F6]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="font-mono text-[9px] text-slate-600 mb-1">
-                      INITIAL SUPPLY <span className="text-slate-700">(minted to creator + pool at deploy)</span>
-                    </div>
-                    <input value={hubInitSupply} onChange={(e) => setHubInitSupply(e.target.value)}
-                      placeholder="100000000000"
-                      className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#3B82F6]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
-                  </div>
-
-                  {hubVariant === "stablecoin" && (
-                    <div>
-                      <div className="font-mono text-[9px] text-slate-600 mb-1">CURRENCY CODE <span className="text-slate-700">(ISO A–Z)</span></div>
-                      <input value={hubCurrencyCode} onChange={(e) => setHubCurrencyCode(e.target.value.toUpperCase().slice(0, 6))}
-                        placeholder="USD"
-                        className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#3B82F6]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
-                    </div>
+              {/* Token image — URL + live preview */}
+              <div>
+                <div className="font-mono text-[9px] text-slate-600 mb-1">TOKEN IMAGE (URL)</div>
+                <div className="flex items-center gap-2">
+                  {image.trim() && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={image.trim()} alt="logo" className="w-9 h-9 rounded-lg object-cover bg-[#0d0d12] shrink-0 border border-[#1A1A2E]"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "0.2"; }} />
                   )}
+                  <input value={image} onChange={e => setImage(e.target.value)} placeholder="https://…/logo.png"
+                    className="flex-1 min-w-0 bg-[#050508] border border-[#1A1A2E] focus:border-[#F59E0B]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+                </div>
+              </div>
 
-                  <div>
-                    <div className="font-mono text-[9px] text-slate-600 mb-1">FEE TIER <span className="text-slate-700">(creator picks)</span></div>
-                    <div className="flex rounded-lg border border-[#1A1A2E] overflow-hidden">
-                      {([
-                        { key: "MEDIUM", label: "0.3%" },
-                        { key: "HIGH",   label: "1%"   },
-                        { key: "3PCT",   label: "3%"   },
-                      ] as const).map((tier) => (
-                        <button key={tier.key} onClick={() => setHubFeeTier(tier.key)}
-                          className="flex-1 py-2 font-mono text-[10px] transition-colors"
-                          style={hubFeeTier === tier.key
-                            ? { background: "#3B82F615", color: "#3B82F6" }
-                            : { color: "#64748b" }}>
-                          {tier.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+              <ModalField label="WEBSITE (optional)" value={website} onChange={setWebsite} placeholder="https://… (optional)" />
 
-                  <div>
-                    <div className="font-mono text-[9px] text-slate-600 mb-1">
-                      OPENING MARKET CAP <span className="text-slate-700">(USD — sets initial swap price)</span>
-                    </div>
-                    <input type="number" min={100} value={hubMarketCap} onChange={(e) => setHubMarketCap(e.target.value)}
-                      placeholder="1000"
-                      className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#3B82F6]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
-                    <p className="font-mono text-[9px] text-slate-700 mt-1">
-                      ${hubMarketCap || "0"} at launch · price per token ≈ ${(Number(hubMarketCap || 0) / Number(hubSupplyCap || 1)).toExponential(2)}
-                    </p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <ModalField label="DESCRIPTION" value={description} onChange={setDescription} placeholder="One-line pitch (optional)" />
-
-                  {/* Token image — URL + live preview */}
-                  <div>
-                    <div className="font-mono text-[9px] text-slate-600 mb-1">TOKEN IMAGE (URL)</div>
-                    <div className="flex items-center gap-2">
-                      {image.trim() && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={image.trim()} alt="logo" className="w-9 h-9 rounded-lg object-cover bg-[#0d0d12] shrink-0 border border-[#1A1A2E]"
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "0.2"; }} />
-                      )}
-                      <input value={image} onChange={e => setImage(e.target.value)} placeholder="https://…/logo.png"
-                        className="flex-1 min-w-0 bg-[#050508] border border-[#1A1A2E] focus:border-[#F59E0B]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
-                    </div>
-                  </div>
-
-                  <ModalField label="WEBSITE (optional)" value={website} onChange={setWebsite} placeholder="https://… (optional)" />
-                </>
-              )}
-
-              {/* Bankr-specific fields — B20HUB uses the connected wallet as
-                  creator directly, no X/handle resolution, and its 80/15/5
-                  fee split is baked into the hook, not a user input. */}
-              {launchChain !== "b20hub" && (
-                <>
-                  <ModalField label="TWITTER (optional)" value={twitter} onChange={setTwitter} placeholder="@handle (optional)" />
-                  <ModalField label="FEE RECIPIENT · 95% creator fee" value={feeRecipient} onChange={setFeeRecipient}
-                    placeholder={address ? "your wallet — or 0x… / blank → @blueagent_" : "0x… — or blank → @blueagent_"} />
-                </>
-              )}
-              {launchChain === "b20hub" && (
-                <ModalField label="CREATOR ADDRESS · receives 80% swap fees forever"
-                  value={feeRecipient} onChange={setFeeRecipient}
-                  placeholder={address ? `${address.slice(0, 6)}…${address.slice(-4)} (connected wallet — default)` : "0x… (connect wallet)"} />
-              )}
+              <ModalField label="TWITTER (optional)" value={twitter} onChange={setTwitter} placeholder="@handle (optional)" />
+              <ModalField label="FEE RECIPIENT · 95% creator fee" value={feeRecipient} onChange={setFeeRecipient}
+                placeholder={address ? "your wallet — or 0x… / blank → @blueagent_" : "0x… — or blank → @blueagent_"} />
             </div>
 
 
@@ -2287,48 +2069,25 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
               <p className="font-mono text-[9px] text-slate-600 mb-3 leading-relaxed">
                 Deploys a <span className="text-amber-400">real, irreversible</span> token on Base via Bankr · 100B fixed supply · Uniswap V4 pool auto-created · gas sponsored. Leave fee recipient blank to default to @blueagent_.
               </p>
-            ) : launchChain === "robinhood" ? (
+            ) : (
               <p className="font-mono text-[9px] text-slate-600 mb-3 leading-relaxed">
                 Deploys a <span className="text-amber-400">real, irreversible</span> token on <span className="text-[#22C55E]">Robinhood Chain (4663)</span> via Bankr · 100B fixed supply · Uniswap pool auto-created · 0.7% swap fee, 95% → creator (recurring). Bankr handles gas + wallet. Leave fee recipient blank to default to @blueagent_.
               </p>
-            ) : (
-              // launchChain === "b20hub"
-              <div className="mb-3 rounded-lg border border-[#3B82F640] bg-[#3B82F608] p-3">
-                <div className="font-mono text-[10px] font-bold text-[#3B82F6] mb-1.5">🔷 The first real B20 launchpad</div>
-                <p className="font-mono text-[9px] text-slate-400 leading-relaxed mb-2">
-                  Deploys via the <span className="text-white">0xB20f…</span> factory — <span className="text-[#3B82F6]">real B20 tokens</span> (isB20()=true, Rust precompile, ~50% cheaper transfers). Auto-creates a Uniswap V4 pool with our own permanent-lock hook.
-                </p>
-                <div className="font-mono text-[9px] text-slate-500 space-y-0.5 mb-1">
-                  <div>· Swap fee: <span className="text-white">0.3% / 1% / 3%</span> (creator picks)</div>
-                  <div>· <span className="text-[#22C55E]">80%</span> creator · <span className="text-amber-400">15%</span> auto-buyback $BLUE for stakers · <span className="text-slate-400">5%</span> treasury</div>
-                  <div>· LP <span className="text-red-400">permanently locked</span> in hook (no rug possible)</div>
-                  <div>· Admin renounced on deploy (trustless)</div>
-                </div>
-              </div>
             )}
 
             {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
 
-            <button onClick={launchChain === "b20hub" ? launchB20HUB : launch}
-              disabled={step === "launching" || !cleanName}
+            <button onClick={launch} disabled={step === "launching" || !cleanName}
               className="w-full font-mono text-[12px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
-              style={launchChain === "b20hub"
-                ? { background: "#3B82F615", color: "#3B82F6", border: "1px solid #3B82F640" }
-                : launchChain === "robinhood"
+              style={launchChain === "robinhood"
                 ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E40" }
                 : { background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}40` }}>
               {step === "launching"
                 ? "Launching…"
-                : `🚀 Launch $${cleanSymbol || "TOKEN"} on ${
-                    launchChain === "robinhood" ? "Robinhood Chain"
-                    : launchChain === "b20hub"    ? "B20HUB"
-                    : "Base"
-                  }`}
+                : `🚀 Launch $${cleanSymbol || "TOKEN"} on ${launchChain === "robinhood" ? "Robinhood Chain" : "Base"}`}
             </button>
             <p className="font-mono text-[9px] text-slate-700 mt-1.5 text-center">
-              {launchChain === "b20hub"
-                ? "You sign · non-custodial · real B20 · 80/15/5 fee split forever"
-                : cleanName ? "Bankr allows 1 launch/min per wallet." : "Enter a token name to launch."}
+              {cleanName ? "Bankr allows 1 launch/min per wallet." : "Enter a token name to launch."}
             </p>
           </>
         )}
