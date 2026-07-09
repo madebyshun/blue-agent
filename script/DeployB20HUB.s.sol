@@ -3,7 +3,7 @@ pragma solidity ^0.8.26;
 
 import { Script, console } from "forge-std/Script.sol";
 import { BlueBuyBack }     from "../contracts/BlueBuyBack.sol";
-import { B20HUBHook }      from "../contracts/B20HUBHook.sol";
+import { B20HUBHook, PoolKey, Currency } from "../contracts/B20HUBHook.sol";
 import { B20HUBLauncher }  from "../contracts/B20HUBLauncher.sol";
 
 /**
@@ -67,6 +67,19 @@ contract DeployB20HUB is Script {
     // permissionless keeper distribute() reverts to avoid wasting gas on
     // dust-sized swaps. Owner can retune post-deploy.
     uint256 constant DEFAULT_BUYBACK_THRESHOLD = 1e15;
+
+    // ─── BLUE/WETH V4 pool key on Base mainnet ───────────────────────────────
+    // Discovered via Initialize event lookup at block 43,350,950
+    // (tx 0x26514d…8725). Set into BlueBuyBack via setBluePoolKey after
+    // construction. See contracts/test/BlueBuyBack.fork.t.sol for the exact
+    // provenance + a passing round-trip test that validates this key works.
+    //
+    // Base Sepolia has no equivalent BLUE/WETH pool yet. On Sepolia this
+    // step gets skipped (via env flag) and BlueBuyBack.distribute() reverts
+    // on the pool-not-set guard until we deploy a Sepolia BLUE analogue.
+    uint24  constant BLUE_POOL_FEE          = 0x800000; // DYNAMIC_FEE_FLAG
+    int24   constant BLUE_POOL_TICK_SPACING = 200;
+    address constant BLUE_POOL_HOOKS        = 0xbB7784A4d481184283Ed89619A3e3ed143e1Adc0;
 
     struct Config {
         address b20Factory;
@@ -142,7 +155,24 @@ contract DeployB20HUB is Script {
         );
         console.log("B20HUBLauncher:   ", address(launcher));
 
-        // ── Step 4: Permit2 approvals so BlueBuyBack can swap on first call ──
+        // ── Step 4: BLUE/WETH pool key + Permit2 approvals ─────────────────────
+        // On Base mainnet the BLUE/WETH V4 pool is live at poolId 0x3245fb…
+        // and its exact key was discovered via Initialize log lookup. On any
+        // other chain (Sepolia, etc.) the pool doesn't exist yet, so we skip
+        // this step and the owner will call setBluePoolKey manually once a
+        // pool is deployed. Skip flag comes from env SKIP_BLUE_POOL_KEY=1.
+        bool skipBluePool = false;
+        try vm.envBool("SKIP_BLUE_POOL_KEY") returns (bool v) { skipBluePool = v; } catch {}
+
+        if (!skipBluePool) {
+            PoolKey memory bluePool = _buildBluePoolKey(cfg.blue, cfg.weth9);
+            buyback.setBluePoolKey(bluePool);
+            console.log("BLUE/WETH pool key set");
+        } else {
+            console.log("BLUE/WETH pool key SKIPPED (SKIP_BLUE_POOL_KEY=1)");
+            console.log("  -> owner must call setBluePoolKey before first distribute()");
+        }
+
         buyback.setupPermit2Approvals();
         console.log("Permit2 approvals set for BlueBuyBack");
 
@@ -191,5 +221,24 @@ contract DeployB20HUB is Script {
         } catch {
             return fallbackAddr;
         }
+    }
+
+    /**
+     * Build the BLUE/WETH V4 pool key with canonical currency ordering.
+     * V4 requires currency0 < currency1. On Base, WETH's 0x4200… is always
+     * numerically less than BLUE's 0xf895…, so WETH is currency0 — but we
+     * still sort dynamically for correctness on any chain.
+     */
+    function _buildBluePoolKey(address blue, address weth) internal pure returns (PoolKey memory key) {
+        if (weth < blue) {
+            key.currency0 = Currency.wrap(weth);
+            key.currency1 = Currency.wrap(blue);
+        } else {
+            key.currency0 = Currency.wrap(blue);
+            key.currency1 = Currency.wrap(weth);
+        }
+        key.fee         = BLUE_POOL_FEE;
+        key.tickSpacing = BLUE_POOL_TICK_SPACING;
+        key.hooks       = BLUE_POOL_HOOKS;
     }
 }
