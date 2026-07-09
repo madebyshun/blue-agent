@@ -39,6 +39,9 @@ pragma solidity ^0.8.20;
  *   V4 Pool  : 0x3245fb…08c8d (BLUE/WETH, $86k liquidity, verified live)
  */
 
+import { V4Actions } from "./lib/V4Actions.sol";
+import { PoolKey, Currency } from "./B20HUBHook.sol";
+
 interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
@@ -78,6 +81,15 @@ contract BlueBuyBack {
     address public immutable UNIVERSAL_ROUTER; // Uniswap V4 UniversalRouter
     address public immutable PERMIT2;          // approval router
     address public immutable payoutRecipient;  // where bought BLUE goes
+
+    /// The BLUE/WETH V4 pool key — set once at deploy so `distribute()` knows
+    /// which pool to swap through. Verified on Base mainnet: BLUE/WETH V4
+    /// pool at 0x3245fb…08c8d has $86k liquidity and $28k daily volume, so
+    /// this route is real and won't be a value-destroying swap.
+    /// currency0 = WETH (address 0x4200… < BLUE address).
+    PoolKey public bluePoolKey;
+    uint24 private constant BLUE_POOL_FEE = 10000; // 1% — matches deployed V4 pool
+    int24  private constant BLUE_POOL_TICK_SPACING = 200;
 
     /// Keeper reward on distribute — 0.1% of bought BLUE (10 bps).
     uint16  public constant KEEPER_BPS = 10;
@@ -136,6 +148,18 @@ contract BlueBuyBack {
         payoutRecipient = payoutRecipient_;
         owner = msg.sender;
         minDistributeThreshold = initialThreshold_;
+
+        // Build the BLUE/WETH V4 pool key. V4 requires ascending address
+        // ordering. WETH's 0x4200… is always numerically less than BLUE's
+        // 0xf895… on Base, so WETH is currency0, BLUE is currency1.
+        (Currency c0, Currency c1) = V4Actions.sortCurrencies(weth_, blue_);
+        bluePoolKey = PoolKey({
+            currency0: c0,
+            currency1: c1,
+            fee: BLUE_POOL_FEE,
+            tickSpacing: BLUE_POOL_TICK_SPACING,
+            hooks: address(0)  // no custom hook on the BLUE/WETH pool
+        });
     }
 
     // ─── Fee receiving ────────────────────────────────────────────────────────
@@ -258,12 +282,61 @@ contract BlueBuyBack {
     }
 
     function _swapV4ExactIn(
-        address /*tokenIn*/,
-        address /*tokenOut*/,
-        uint256 /*amountIn*/,
-        uint256 /*minAmountOut*/,
-        uint256 /*deadline*/
-    ) internal virtual returns (uint256 /*amountOut*/) {
-        revert("BlueBuyBack: swap unimplemented until V4 hook lands (see B20HUBHook.sol)");
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        uint256 deadline
+    ) internal virtual returns (uint256 amountOut) {
+        // Wired route: only the BLUE/WETH V4 pool. Any other tokenIn/tokenOut
+        // pair is rejected — we don't want a captured owner or malformed
+        // caller to route swaps through an unknown pool. Fee-token conversion
+        // (whatever B20HUB fee currency lands here) is done in a separate
+        // step outside this function: caller must convert to WETH first.
+        require(tokenIn == WETH9 && tokenOut == BLUE, "BlueBuyBack: unsupported swap route");
+        require(amountIn <= type(uint128).max, "BlueBuyBack: amountIn overflow");
+        require(minAmountOut <= type(uint128).max, "BlueBuyBack: minAmountOut overflow");
+
+        // Direction: WETH is currency0 → swap zero-for-one (WETH → BLUE).
+        bool zeroForOne = Currency.unwrap(bluePoolKey.currency0) == WETH9;
+
+        // Build V4 swap params and hand to Universal Router. Approvals are
+        // set once at deploy — see setupPermit2Approvals() called by the owner
+        // in the same tx as construction (or later manually if needed).
+        V4Actions.ExactInputSingleParams memory swapParams = V4Actions.ExactInputSingleParams({
+            poolKey: bluePoolKey,
+            zeroForOne: zeroForOne,
+            amountIn: uint128(amountIn),
+            amountOutMinimum: uint128(minAmountOut),
+            hookData: bytes("")
+        });
+
+        (bytes memory commands, bytes[] memory inputs) =
+            V4Actions.encodeUniversalRouterSwapExactInSingle(swapParams);
+
+        uint256 balanceBefore = IERC20(BLUE).balanceOf(address(this));
+
+        // UniversalRouter.execute(commands, inputs, deadline) — the
+        // interface is defined at top of file. The router will pull WETH
+        // via Permit2 (we approved once), execute the V4 swap on the pool,
+        // and settle BLUE back to us via the TAKE_ALL action in the encoded
+        // blob. Value = 0 because we're paying in ERC20, not native ETH.
+        IUniversalRouter(UNIVERSAL_ROUTER).execute(commands, inputs, deadline);
+
+        amountOut = IERC20(BLUE).balanceOf(address(this)) - balanceBefore;
+        require(amountOut >= minAmountOut, "BlueBuyBack: swap slippage exceeded floor");
+    }
+
+    /**
+     * One-time Permit2 setup. Owner calls this after deployment to give
+     * Universal Router permission to pull WETH from BlueBuyBack. Uses
+     * max approvals since the router pulls exactly what it needs per call.
+     * Idempotent — safe to re-call if approvals get somehow invalidated.
+     */
+    function setupPermit2Approvals() external onlyOwner {
+        // WETH → Permit2 direct approval (Permit2 needs raw allowance from us)
+        IERC20(WETH9).approve(PERMIT2, type(uint256).max);
+        // Permit2 → UniversalRouter forward approval (with far-future expiry)
+        IPermit2(PERMIT2).approve(WETH9, UNIVERSAL_ROUTER, type(uint160).max, type(uint48).max);
     }
 }
