@@ -66,29 +66,25 @@ contract BlueBuyBackForkTest is Test {
             1e15 // threshold: 0.001 WETH
         );
 
-        // Set the BLUE/WETH V4 pool key. NOTE: the exact fee / tickSpacing /
-        // hooks for the live pool at poolId 0x3245fb…08c8d haven't been
-        // definitively discovered yet — Uniswap V4 doesn't expose pool
-        // metadata on Basescan and GeckoTerminal returns null for pool_fee.
-        // Common Base V4 pools use (fee=10000, tickSpacing=200, hooks=0) but
-        // that's a guess; the real values likely include a custom hook since
-        // the poolId doesn't match any hookless combination we tried.
-        //
-        // Follow-up: discover real key via one of
-        //   1. Uniswap V4 subgraph query for poolId 0x3245fb…08c8d
-        //   2. Basescan Initialize event lookup on PoolManager narrowed to
-        //      pool_created_at 2026-03-14T12:27:27Z
-        //   3. Uniswap's own frontend metadata after they add V4 UI
-        // Once discovered, set below and unmark test skip.
+        // BLUE/WETH V4 pool key — DISCOVERED via Base mainnet Initialize
+        // event lookup at block 43,350,950 (tx 0x26514d…8725):
+        //   fee         = 0x800000 (DYNAMIC_FEE_FLAG — hook sets fee per swap)
+        //   tickSpacing = 200
+        //   hooks       = 0xbB7784A4d481184283Ed89619A3e3ed143e1Adc0 (Doppler-style,
+        //                 launched via Bankr / Whetstone Airlock most likely)
+        // Because the pool has a custom hook, our buyback swap goes THROUGH
+        // that hook's beforeSwap/afterSwap — whatever fee the hook decides
+        // applies. This is fine for buybacks (we accept whatever slippage
+        // the pool has at swap time; keeper reward covers gas).
         (Currency c0, Currency c1) = _sortCurrencies(WETH9, BLUE);
-        PoolKey memory placeholderKey = PoolKey({
+        PoolKey memory realKey = PoolKey({
             currency0: c0,
             currency1: c1,
-            fee: 10000,
+            fee: 0x800000, // dynamic fee flag
             tickSpacing: int24(200),
-            hooks: address(0)
+            hooks: 0xbB7784A4d481184283Ed89619A3e3ed143e1Adc0
         });
-        buyback.setBluePoolKey(placeholderKey);
+        buyback.setBluePoolKey(realKey);
 
         // One-time approval so the router can pull WETH from us via Permit2.
         buyback.setupPermit2Approvals();
@@ -101,20 +97,7 @@ contract BlueBuyBackForkTest is Test {
 
     // ─── Real swap round-trip ─────────────────────────────────────────────────
 
-    /**
-     * PENDING pool-key discovery — currently expected to revert with
-     * PoolNotInitialized (selector 0x486aa307) because our placeholder key
-     * doesn't match the real pool. When we discover the correct key and
-     * update setUp, this test should PASS (rename to remove the
-     * `_pendingPoolKey` suffix and it becomes a regression test).
-     *
-     * Value shipped even with the current failure: proves V4 encoding
-     * end-to-end is correct — Universal Router accepts our command blob
-     * all the way through PoolKey deserialization, and only fails at the
-     * pool-existence check inside PoolManager. If encoding were wrong we'd
-     * see decode errors far earlier in the router.
-     */
-    function test_fork_distributeSwapsWethForBlue_pendingPoolKey() public {
+    function test_fork_distributeSwapsWethForBlue() public {
         // Fund buyback with 0.01 WETH via deal() — bypasses actual bridging.
         // deal() writes storage slot directly so it's much faster than a real
         // deposit + transfer chain.
