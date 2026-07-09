@@ -33,8 +33,8 @@ import { V4_FEE_TIERS } from "@/lib/b20hub/constants";
 // Until then this route reports a clear "not deployed yet" error so the UI
 // can show a friendly banner rather than silently 500-ing.
 const LAUNCHER_ADDRESSES: Record<number, `0x${string}` | null> = {
-  8453:  null, // Base mainnet    — TODO fill after mainnet deploy
-  84532: null, // Base Sepolia    — TODO fill after Sepolia deploy
+  8453:  "0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b", // Base mainnet — deployed 2026-07-09 block 48410997
+  84532: null,                                          // Base Sepolia — TODO if we ever need Sepolia parity
 };
 
 const LAUNCH_ABI = [

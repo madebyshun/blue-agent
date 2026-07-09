@@ -247,14 +247,16 @@ contract DeployB20HUB is Script {
      * one CREATE2 address computation (keccak of 85 bytes), fast enough to
      * finish in < 8 s inside forge script even on stock hardware.
      */
-    function _mineHookSalt(bytes32 initCodeHash) internal view returns (bytes32) {
+    function _mineHookSalt(bytes32 initCodeHash) internal pure returns (bytes32) {
         // CREATE2 address = keccak256(0xff ++ deployer ++ salt ++ initCodeHash)[12:32].
-        // In a forge script, msg.sender at broadcast time IS the deployer, but
-        // during the mining loop we're inside vm.startBroadcast so the effective
-        // deployer for CREATE2 is `msg.sender` in the broadcast context.
-        // Foundry uses the DEFAULT_SENDER (0x1804…) unless overridden. We mirror
-        // its formula here to match.
-        address deployer = msg.sender;
+        //
+        // When forge script executes `new Foo{salt: s}(...)` during a broadcast,
+        // it does NOT use CREATE2 from the script contract itself — it proxies
+        // the deployment through Foundry's default deterministic CREATE2
+        // Deployer at 0x4e59b44847b379578588920cA78FbF26c0B4956C (the Arachnid
+        // proxy). So the CREATE2 hash preimage uses that proxy's address, not
+        // msg.sender and not address(this). Mirror that exactly here.
+        address deployer = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
         for (uint256 i = 0; i < 1_000_000; i++) {
             bytes32 salt = bytes32(i);
             address predicted = address(uint160(uint256(keccak256(abi.encodePacked(
