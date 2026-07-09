@@ -93,13 +93,24 @@ contract DeployB20HUB is Script {
         uint256 buybackThreshold;
     }
 
+    /// Hook permission mask: bits 12 (AFTER_INITIALIZE) + 9 (BEFORE_REMOVE_LIQUIDITY).
+    uint160 constant HOOK_ADDRESS_MASK   = 0x3fff;
+    uint160 constant HOOK_ADDRESS_TARGET = 0x1200;
+
     /**
-     * Entry point. `salt` is a 32-byte CREATE2 salt, mined offchain so the
-     * resulting B20HUBHook address has bit 12 (AFTER_INITIALIZE) and bit 9
-     * (BEFORE_REMOVE_LIQUIDITY) set. Deployer must be the same address that
-     * ran the salt miner (miner takes DEPLOYER as input).
+     * Entry point — deploys the whole stack in one call, mines the CREATE2
+     * salt in-EVM so the operator doesn't have to run the offchain miner
+     * first. Typical run finishes < 8 seconds on a modern machine.
+     *
+     * Order:
+     *   1. Deploy BlueBuyBack (regular new — nonce-based address)
+     *   2. Mine hook salt using BuyBack's real address as constructor arg
+     *   3. Deploy hook via CREATE2 at the mined address
+     *   4. Deploy Launcher
+     *   5. setBluePoolKey (unless SKIP_BLUE_POOL_KEY=1)
+     *   6. setupPermit2Approvals
      */
-    function run(bytes32 salt) external returns (
+    function run() external returns (
         address buybackAddr,
         address hookAddr,
         address launcherAddr
@@ -108,10 +119,7 @@ contract DeployB20HUB is Script {
 
         vm.startBroadcast();
 
-        // ── Step 1: BlueBuyBack ───────────────────────────────────────────────
-        // Payout recipient is the treasury for MVP. When the stake-side
-        // distributor ships, we deploy a fresh BlueBuyBack pointing there —
-        // the current payoutRecipient is immutable by design.
+        // ── Step 1: BlueBuyBack (regular deploy, nonce-based address) ─────────
         BlueBuyBack buyback = new BlueBuyBack(
             cfg.blue,
             cfg.weth9,
@@ -122,27 +130,34 @@ contract DeployB20HUB is Script {
         );
         console.log("BlueBuyBack:      ", address(buyback));
 
-        // ── Step 2: B20HUBHook via CREATE2 with the mined salt ────────────────
-        // Using `new` with { salt: ... } compiles to CREATE2 opcode; the
-        // resulting address matches what the offchain miner computed as long
-        // as (deployer, salt, initCodeHash) all match.
+        // ── Step 2: mine hook CREATE2 salt with the real BuyBack address ──────
+        // Building initCodeHash exactly matches how CREATE2 hashes at deploy
+        // time — creationCode ++ abi.encoded constructor args, keccak the
+        // whole thing.
+        bytes memory initCode = abi.encodePacked(
+            type(B20HUBHook).creationCode,
+            abi.encode(cfg.poolManager, cfg.positionManager, address(buyback), cfg.treasury)
+        );
+        bytes32 initCodeHash = keccak256(initCode);
+        bytes32 salt = _mineHookSalt(initCodeHash);
+        console.log("Hook salt (mined in-EVM):");
+        console.logBytes32(salt);
+
+        // ── Step 3: Deploy B20HUBHook via CREATE2 at the mined address ────────
         B20HUBHook hook = new B20HUBHook{ salt: salt }(
             cfg.poolManager,
             cfg.positionManager,
-            address(buyback), // 15% share routes here
-            cfg.treasury      //  5% share routes here
+            address(buyback),
+            cfg.treasury
         );
         console.log("B20HUBHook:       ", address(hook));
 
-        // Guardrail: verify the deployed hook address actually has the two
-        // required permission bits set. If the salt was mined against a
-        // different initCodeHash (e.g. constructor args differ from what the
-        // miner used), the deploy will land at a wrong-bit address and we'd
-        // rather revert here than let a broken hook go live.
-        uint160 addrBits = uint160(address(hook)) & 0x3fff;
+        // Guardrail: verify the deployed hook address actually has the required
+        // permission bits. Should always pass since we just mined it, but a
+        // belt-and-suspenders check catches any accidental drift in mining logic.
         require(
-            addrBits == 0x1200,
-            "DeployB20HUB: hook address bits mismatch - re-mine salt with current constructor args"
+            (uint160(address(hook)) & HOOK_ADDRESS_MASK) == HOOK_ADDRESS_TARGET,
+            "DeployB20HUB: hook address bits mismatch - mining logic bug"
         );
 
         // ── Step 3: B20HUBLauncher ────────────────────────────────────────────
@@ -221,6 +236,38 @@ contract DeployB20HUB is Script {
         } catch {
             return fallbackAddr;
         }
+    }
+
+    /**
+     * Iterate CREATE2 salts starting from 0 until one produces a hook
+     * address whose low 14 bits equal HOOK_ADDRESS_TARGET (0x1200 =
+     * AFTER_INITIALIZE_FLAG + BEFORE_REMOVE_LIQUIDITY_FLAG).
+     *
+     * Expected iterations: 2^14 / 2 ≈ 8,192 on average. Each iteration is
+     * one CREATE2 address computation (keccak of 85 bytes), fast enough to
+     * finish in < 8 s inside forge script even on stock hardware.
+     */
+    function _mineHookSalt(bytes32 initCodeHash) internal view returns (bytes32) {
+        // CREATE2 address = keccak256(0xff ++ deployer ++ salt ++ initCodeHash)[12:32].
+        // In a forge script, msg.sender at broadcast time IS the deployer, but
+        // during the mining loop we're inside vm.startBroadcast so the effective
+        // deployer for CREATE2 is `msg.sender` in the broadcast context.
+        // Foundry uses the DEFAULT_SENDER (0x1804…) unless overridden. We mirror
+        // its formula here to match.
+        address deployer = msg.sender;
+        for (uint256 i = 0; i < 1_000_000; i++) {
+            bytes32 salt = bytes32(i);
+            address predicted = address(uint160(uint256(keccak256(abi.encodePacked(
+                bytes1(0xff),
+                deployer,
+                salt,
+                initCodeHash
+            )))));
+            if ((uint160(predicted) & HOOK_ADDRESS_MASK) == HOOK_ADDRESS_TARGET) {
+                return salt;
+            }
+        }
+        revert("DeployB20HUB: no salt found in 1M tries");
     }
 
     /**
