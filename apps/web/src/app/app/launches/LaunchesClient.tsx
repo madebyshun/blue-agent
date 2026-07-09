@@ -1820,14 +1820,7 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
   // reachable from the UI — the direct path required Robinhood Chain ETH for
   // gas, no pool at launch time, and no fee share, which was too much friction
   // for a first-time creator. Bankr owns the launch UX end-to-end now.
-  // NB: "b20hub" is the FIRST REAL B20 launchpad — deploys via the 0xB20f
-  // factory (real B20 tokens, isB20()=true, not Doppler/Zora slang) and
-  // auto-creates a Uniswap V4 pool with our own hook attached. 80% of swap
-  // fees go to creator, 15% auto-buyback $BLUEAGENT for stakers, 5% treasury.
-  // Contracts + tests are complete; launcher goes live once operator runs
-  // forge script script/DeployB20HUB.s.sol. Until then the tab shows a
-  // "Coming soon" state via the /api/b20hub/prepare 503 response.
-  const [launchChain, setLaunchChain] = useState<"base" | "robinhood" | "b20hub">("base");
+  const [launchChain, setLaunchChain] = useState<"base" | "robinhood">("base");
 
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
@@ -1909,73 +1902,6 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
         uniswap: d.uniswap ?? null,
         bankr: d.bankr ?? null,
       });
-      setStep("done");
-      onLaunched();
-    } catch (e) {
-      setErr((e as Error).message); setStep("error");
-    }
-  }
-
-  /**
-   * B20HUB launch — real B20 factory + auto V4 pool + fee splitter hook.
-   * Calls /api/b20hub/prepare to build the launcher tx, then user's wallet
-   * signs it. Non-custodial: server never touches a private key.
-   *
-   * Until the launcher contract is deployed on-chain, the API returns 503
-   * { notDeployed: true } and this function surfaces a friendly "Coming
-   * soon" message instead of pretending to launch.
-   */
-  async function launchB20HUB() {
-    if (!address) { setErr("Connect your wallet first"); setStep("error"); return; }
-    if (!cleanName) return;
-    setStep("launching"); setErr("");
-    try {
-      // Client-side compute sqrtPriceX96 from a modest default opening market
-      // cap ($1,000 with 100B supply gives ~$0.00001/token). Full UI later
-      // exposes this as a picker; for now the sensible default lets the
-      // launch button work end-to-end once the launcher is deployed.
-      const { sqrtPriceX96FromMarketCap } = await import("@/lib/b20hub/price");
-      const sqrtPriceX96 = sqrtPriceX96FromMarketCap({
-        targetMarketCapUsd: 1000,
-        totalSupplyWhole: 100_000_000_000n,
-        decimals: 18,
-        ethPriceUsd: 3000, // TODO: fetch live ETH price for accuracy
-      });
-
-      const res = await fetch("/api/b20hub/prepare", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: cleanName,
-          symbol: cleanSymbol || cleanName.slice(0, 4).toUpperCase(),
-          variant: "asset",
-          decimals: 18,
-          totalSupply: "100000000000",
-          feeTier: "MEDIUM",     // 0.3% default — matches most launch tokens
-          initialSqrtPriceX96: sqrtPriceX96.toString(),
-          creator: address,
-          chain: "base",
-        }),
-      });
-      const d = await res.json();
-      if (!res.ok) {
-        if (d?.notDeployed) {
-          setErr("B20HUB launcher not deployed yet — coming soon. Contracts + tests are ready; awaiting on-chain deployment.");
-        } else {
-          setErr(d?.error ?? `B20HUB launch failed (${res.status})`);
-        }
-        setStep("error");
-        return;
-      }
-
-      // Broadcast the tx via user's own wallet (non-custodial).
-      const hash = await sendTransactionAsync({
-        to: d.tx.to as `0x${string}`,
-        data: d.tx.data as `0x${string}`,
-        value: 0n,
-        chainId: 8453,
-      });
-      setOut({ tokenAddress: null, basescan: `https://basescan.org/tx/${hash}`, uniswap: null, bankr: null });
       setStep("done");
       onLaunched();
     } catch (e) {
@@ -2096,14 +2022,6 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
                   : { color: "#64748b", border: "1px solid #1A1A2E" }}>
                 Robinhood · via Bankr
               </button>
-              <button onClick={() => setLaunchChain("b20hub")}
-                className="flex-1 font-mono text-[10px] font-bold py-1.5 rounded-lg transition-colors"
-                title="Real B20 launchpad — coming after contract deployment"
-                style={launchChain === "b20hub"
-                  ? { background: "#3B82F615", color: "#3B82F6", border: "1px solid #3B82F640" }
-                  : { color: "#64748b", border: "1px solid #1A1A2E" }}>
-                B20HUB · Base
-              </button>
             </div>
 
             <div className="flex items-center gap-2.5 mb-4">
@@ -2122,6 +2040,7 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
             <div className="space-y-2.5 mb-4">
               <ModalField label="TOKEN NAME *" value={name} onChange={setName} placeholder="e.g. Blue Agent" />
               <ModalField label="TICKER" value={symbol} onChange={setSymbol} placeholder="auto from name" />
+
               <ModalField label="DESCRIPTION" value={description} onChange={setDescription} placeholder="One-line pitch (optional)" />
 
               {/* Token image — URL + live preview */}
@@ -2140,8 +2059,6 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
 
               <ModalField label="WEBSITE (optional)" value={website} onChange={setWebsite} placeholder="https://… (optional)" />
 
-              {/* Same form for both chains — Bankr's launchpad handles supply,
-                  decimals, pool, and gas sponsorship on either chain. */}
               <ModalField label="TWITTER (optional)" value={twitter} onChange={setTwitter} placeholder="@handle (optional)" />
               <ModalField label="FEE RECIPIENT · 95% creator fee" value={feeRecipient} onChange={setFeeRecipient}
                 placeholder={address ? "your wallet — or 0x… / blank → @blueagent_" : "0x… — or blank → @blueagent_"} />
@@ -2152,48 +2069,25 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
               <p className="font-mono text-[9px] text-slate-600 mb-3 leading-relaxed">
                 Deploys a <span className="text-amber-400">real, irreversible</span> token on Base via Bankr · 100B fixed supply · Uniswap V4 pool auto-created · gas sponsored. Leave fee recipient blank to default to @blueagent_.
               </p>
-            ) : launchChain === "robinhood" ? (
+            ) : (
               <p className="font-mono text-[9px] text-slate-600 mb-3 leading-relaxed">
                 Deploys a <span className="text-amber-400">real, irreversible</span> token on <span className="text-[#22C55E]">Robinhood Chain (4663)</span> via Bankr · 100B fixed supply · Uniswap pool auto-created · 0.7% swap fee, 95% → creator (recurring). Bankr handles gas + wallet. Leave fee recipient blank to default to @blueagent_.
               </p>
-            ) : (
-              // launchChain === "b20hub"
-              <div className="mb-3 rounded-lg border border-[#3B82F640] bg-[#3B82F608] p-3">
-                <div className="font-mono text-[10px] font-bold text-[#3B82F6] mb-1.5">🔷 The first real B20 launchpad</div>
-                <p className="font-mono text-[9px] text-slate-400 leading-relaxed mb-2">
-                  Deploys via the <span className="text-white">0xB20f…</span> factory — <span className="text-[#3B82F6]">real B20 tokens</span> (isB20()=true, Rust precompile, ~50% cheaper transfers). Auto-creates a Uniswap V4 pool with our own permanent-lock hook.
-                </p>
-                <div className="font-mono text-[9px] text-slate-500 space-y-0.5 mb-1">
-                  <div>· Swap fee: <span className="text-white">0.3% / 1% / 3%</span> (creator picks)</div>
-                  <div>· <span className="text-[#22C55E]">80%</span> creator · <span className="text-amber-400">15%</span> auto-buyback $BLUE for stakers · <span className="text-slate-400">5%</span> treasury</div>
-                  <div>· LP <span className="text-red-400">permanently locked</span> in hook (no rug possible)</div>
-                  <div>· Admin renounced on deploy (trustless)</div>
-                </div>
-              </div>
             )}
 
             {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
 
-            <button onClick={launchChain === "b20hub" ? launchB20HUB : launch}
-              disabled={step === "launching" || !cleanName}
+            <button onClick={launch} disabled={step === "launching" || !cleanName}
               className="w-full font-mono text-[12px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
-              style={launchChain === "b20hub"
-                ? { background: "#3B82F615", color: "#3B82F6", border: "1px solid #3B82F640" }
-                : launchChain === "robinhood"
+              style={launchChain === "robinhood"
                 ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E40" }
                 : { background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}40` }}>
               {step === "launching"
                 ? "Launching…"
-                : `🚀 Launch $${cleanSymbol || "TOKEN"} on ${
-                    launchChain === "robinhood" ? "Robinhood Chain"
-                    : launchChain === "b20hub"    ? "B20HUB"
-                    : "Base"
-                  }`}
+                : `🚀 Launch $${cleanSymbol || "TOKEN"} on ${launchChain === "robinhood" ? "Robinhood Chain" : "Base"}`}
             </button>
             <p className="font-mono text-[9px] text-slate-700 mt-1.5 text-center">
-              {launchChain === "b20hub"
-                ? "You sign · non-custodial · real B20 · 80/15/5 fee split forever"
-                : cleanName ? "Bankr allows 1 launch/min per wallet." : "Enter a token name to launch."}
+              {cleanName ? "Bankr allows 1 launch/min per wallet." : "Enter a token name to launch."}
             </p>
           </>
         )}
