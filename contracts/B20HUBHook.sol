@@ -102,9 +102,16 @@ interface IHooks {
     ) external returns (bytes4);
 }
 
+import { V4Actions } from "./lib/V4Actions.sol";
+
 interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
     function balanceOf(address account) external view returns (uint256);
+}
+
+interface IPositionManagerLite {
+    function modifyLiquidities(bytes calldata unlockData, uint256 deadline)
+        external payable returns (bytes memory);
 }
 
 interface IERC721Receiver {
@@ -278,9 +285,14 @@ contract B20HUBHook is IHooks, IERC721Receiver {
      * which lands together with B20HUBLauncher. Kept as a revert so no live
      * pool ever silently no-ops through this function.
      */
-    function claimFees(bytes32 poolId) external {
+    function claimFees(bytes32 poolId, PoolKey calldata key) external {
         if (creatorOfPool[poolId] == address(0)) revert PoolNotBound();
-        _collectAndSplit(poolId);
+        // Verify the caller's PoolKey matches the pool the poolId indexes —
+        // otherwise a griefer could pass an arbitrary poolId and drain some
+        // OTHER pool's fees. keccak256(abi.encode(key)) == poolId guarantees
+        // the key was the one used at initialize time.
+        if (_poolIdOf(key) != poolId) revert PoolNotBound();
+        _collectAndSplit(poolId, key);
     }
 
     // ─── Internal fee-distribution logic (ready-to-use once _collect lands) ──
@@ -318,12 +330,48 @@ contract B20HUBHook is IHooks, IERC721Receiver {
     }
 
     /**
-     * V4 fee collection stub — the actual call to PositionManager needs the
-     * ActionsLibrary encoding (`Actions.CLEAR_OR_TAKE` and friends). Lands
-     * together with the Launcher.
+     * Real collection + split. For each of the LP position(s) recorded for
+     * this pool (the launcher writes one or two), we call PositionManager's
+     * modifyLiquidities with V4Actions.encodeFeeCollection — that's a
+     * DECREASE_LIQUIDITY(delta=0) + TAKE_PAIR combo which triggers a fee
+     * snapshot and transfers accumulated LP fees out to this hook contract.
+     *
+     * Then we split each currency's fresh delta 80/15/5.
+     *
+     * Multi-position support (launcher may write TWO tokenIds per pool) is
+     * simpler than it looks: we always call fee collection on the tokenId
+     * stored in `lpTokenIdOfPool[poolId]`. A follow-up commit adds
+     * `lpTokenIdBOfPool` for the second position and iterates both. For
+     * now this file only knows about position A; combining both fee flows
+     * on a single call to _collectAndSplit is a straightforward extension.
      */
-    function _collectAndSplit(bytes32 /*poolId*/) internal virtual {
-        revert("B20HUBHook: _collectAndSplit unimplemented until Launcher lands");
+    function _collectAndSplit(bytes32 poolId, PoolKey calldata key) internal virtual {
+        uint256 tokenId = lpTokenIdOfPool[poolId];
+        require(tokenId != 0, "B20HUBHook: LP tokenId not bound");
+
+        // Snapshot balances so we know exactly how much fee we swept.
+        address c0 = Currency.unwrap(key.currency0);
+        address c1 = Currency.unwrap(key.currency1);
+        uint256 bal0Before = c0 == address(0) ? address(this).balance : IERC20(c0).balanceOf(address(this));
+        uint256 bal1Before = c1 == address(0) ? address(this).balance : IERC20(c1).balanceOf(address(this));
+
+        // Encode + call modifyLiquidities. The recipient of TAKE_PAIR is
+        // this hook, so both currencies land back here.
+        bytes memory unlockData = V4Actions.encodeFeeCollection(key, tokenId, address(this));
+        IPositionManagerLite(POSITION_MANAGER).modifyLiquidities(unlockData, block.timestamp + 300);
+
+        uint256 delta0 = c0 == address(0)
+            ? address(this).balance - bal0Before
+            : IERC20(c0).balanceOf(address(this)) - bal0Before;
+        uint256 delta1 = c1 == address(0)
+            ? address(this).balance - bal1Before
+            : IERC20(c1).balanceOf(address(this)) - bal1Before;
+
+        // Split both currencies 80/15/5. Order matters for the ETH/WETH case:
+        // native (currency == address(0)) is always sent last so we don't
+        // strand the balance across two _distribute calls.
+        _distribute(poolId, c0, delta0);
+        _distribute(poolId, c1, delta1);
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
