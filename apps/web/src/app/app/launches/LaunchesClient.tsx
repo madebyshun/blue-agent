@@ -1852,6 +1852,19 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
   const [rhTxHash, setRhTxHash] = useState("");
   const [, setRhPolling] = useState(false);
 
+  // B20HUB-specific fields — mirror /app/b20's canonical B20 launch form
+  // (variant, decimals, supply cap, initial supply, currency code) plus the
+  // launchpad-only fields (fee tier, opening market cap). This keeps our
+  // schema aligned with Base's official createB20 spec — Bankr's off-chain
+  // metadata (description, image URL, website, twitter) doesn't apply here.
+  const [hubVariant, setHubVariant] = useState<"asset" | "stablecoin">("asset");
+  const [hubDecimals, setHubDecimals] = useState<number>(18);
+  const [hubSupplyCap, setHubSupplyCap] = useState<string>("100000000000"); // 100B default
+  const [hubInitSupply, setHubInitSupply] = useState<string>("100000000000"); // default = full mint
+  const [hubCurrencyCode, setHubCurrencyCode] = useState<string>("USD");
+  const [hubFeeTier, setHubFeeTier] = useState<"MEDIUM" | "HIGH" | "3PCT">("MEDIUM");
+  const [hubMarketCap, setHubMarketCap] = useState<string>("1000"); // $1K opening default
+
   // Fee recipient is left BLANK by default → the 95% creator fee routes to
   // @blueagent_ (see `fee || "blueagent_"` in launch()). The user can opt to
   // redirect it to their own wallet/handle by filling the field.
@@ -1930,15 +1943,20 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
     if (!cleanName) return;
     setStep("launching"); setErr("");
     try {
-      // Client-side compute sqrtPriceX96 from a modest default opening market
-      // cap ($1,000 with 100B supply gives ~$0.00001/token). Full UI later
-      // exposes this as a picker; for now the sensible default lets the
-      // launch button work end-to-end once the launcher is deployed.
+      // Parse user-entered B20HUB fields with sensible fallbacks.
+      const supplyWhole = BigInt(hubSupplyCap || "100000000000");
+      const initSupply  = BigInt(hubInitSupply || hubSupplyCap || "100000000000");
+      const marketCapUsd = Number(hubMarketCap) || 1000;
+      const feeTierMap = { MEDIUM: 3000, HIGH: 10000, "3PCT": 30000 } as const;
+      const feeTierNum = feeTierMap[hubFeeTier];
+
+      // Client-side compute sqrtPriceX96 from user's chosen opening market cap.
+      // Uses full BigInt math in lib/b20hub/price.ts to avoid float rounding.
       const { sqrtPriceX96FromMarketCap } = await import("@/lib/b20hub/price");
       const sqrtPriceX96 = sqrtPriceX96FromMarketCap({
-        targetMarketCapUsd: 1000,
-        totalSupplyWhole: 100_000_000_000n,
-        decimals: 18,
+        targetMarketCapUsd: marketCapUsd,
+        totalSupplyWhole: supplyWhole,
+        decimals: hubDecimals,
         ethPriceUsd: 3000, // TODO: fetch live ETH price for accuracy
       });
 
@@ -1948,16 +1966,17 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
         body: JSON.stringify({
           name: cleanName,
           symbol: cleanSymbol || cleanName.slice(0, 4).toUpperCase(),
-          variant: "asset",
-          decimals: 18,
-          totalSupply: "100000000000",
-          feeTier: "MEDIUM",     // 0.3% default — matches most launch tokens
+          variant: hubVariant,
+          decimals: hubDecimals,
+          totalSupply: initSupply.toString(),
+          feeTier: feeTierNum,
           initialSqrtPriceX96: sqrtPriceX96.toString(),
+          // Stablecoin variant carries ISO currency code per B20 spec.
+          ...(hubVariant === "stablecoin" ? { currencyCode: hubCurrencyCode } : {}),
           // Creator address — the wallet that receives 80% of every swap fee
-          // for the lifetime of the pool. If the user pasted a specific address
-          // in the CREATOR ADDRESS field, honor that; otherwise default to the
-          // connected wallet. Reject non-address values (Bankr accepts X/farc
-          // handles, B20HUB does not — the hook stores a raw address).
+          // for the lifetime of the pool. Honor user-typed 0x address if valid;
+          // otherwise default to the connected wallet. Reject non-address
+          // values (Bankr accepts X/farc handles; B20HUB stores raw address).
           creator: (() => {
             const raw = feeRecipient.trim();
             if (/^0x[a-fA-F0-9]{40}$/.test(raw)) return raw;
@@ -2131,23 +2150,120 @@ function LaunchModal({ onClose, onLaunched }: { onClose: () => void; onLaunched:
             <div className="space-y-2.5 mb-4">
               <ModalField label="TOKEN NAME *" value={name} onChange={setName} placeholder="e.g. Blue Agent" />
               <ModalField label="TICKER" value={symbol} onChange={setSymbol} placeholder="auto from name" />
-              <ModalField label="DESCRIPTION" value={description} onChange={setDescription} placeholder="One-line pitch (optional)" />
 
-              {/* Token image — URL + live preview */}
-              <div>
-                <div className="font-mono text-[9px] text-slate-600 mb-1">TOKEN IMAGE (URL)</div>
-                <div className="flex items-center gap-2">
-                  {image.trim() && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={image.trim()} alt="logo" className="w-9 h-9 rounded-lg object-cover bg-[#0d0d12] shrink-0 border border-[#1A1A2E]"
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "0.2"; }} />
+              {/* B20-native fields (variant/decimals/supplyCap/initSupply/currencyCode)
+                  shown ONLY on B20HUB tab. Mirrors /app/b20's canonical launch form
+                  so B20HUB launches conform to Base's official createB20 spec. */}
+              {launchChain === "b20hub" ? (
+                <>
+                  <div>
+                    <div className="font-mono text-[9px] text-slate-600 mb-1">VARIANT</div>
+                    <div className="flex rounded-lg border border-[#1A1A2E] overflow-hidden">
+                      {(["asset", "stablecoin"] as const).map((v) => (
+                        <button key={v} onClick={() => {
+                          setHubVariant(v);
+                          // Stablecoin B20 is fixed at 6 decimals per Base spec.
+                          if (v === "stablecoin") setHubDecimals(6);
+                          else setHubDecimals(18);
+                        }}
+                          className="flex-1 py-2 font-mono text-[10px] capitalize transition-colors"
+                          style={hubVariant === v
+                            ? { background: "#3B82F615", color: "#3B82F6" }
+                            : { color: "#64748b" }}>
+                          {v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <div className="font-mono text-[9px] text-slate-600 mb-1">
+                        DECIMALS <span className="text-slate-700">{hubVariant === "stablecoin" ? "(fixed 6)" : "(6–18)"}</span>
+                      </div>
+                      <input type="number" min={6} max={18} value={hubDecimals}
+                        disabled={hubVariant === "stablecoin"}
+                        onChange={(e) => setHubDecimals(Number(e.target.value))}
+                        className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#3B82F6]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-slate-200 outline-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed" />
+                    </div>
+                    <div>
+                      <div className="font-mono text-[9px] text-slate-600 mb-1">SUPPLY CAP <span className="text-slate-700">(whole tokens)</span></div>
+                      <input value={hubSupplyCap} onChange={(e) => setHubSupplyCap(e.target.value)}
+                        placeholder="100000000000"
+                        className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#3B82F6]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="font-mono text-[9px] text-slate-600 mb-1">
+                      INITIAL SUPPLY <span className="text-slate-700">(minted to creator + pool at deploy)</span>
+                    </div>
+                    <input value={hubInitSupply} onChange={(e) => setHubInitSupply(e.target.value)}
+                      placeholder="100000000000"
+                      className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#3B82F6]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+                  </div>
+
+                  {hubVariant === "stablecoin" && (
+                    <div>
+                      <div className="font-mono text-[9px] text-slate-600 mb-1">CURRENCY CODE <span className="text-slate-700">(ISO A–Z)</span></div>
+                      <input value={hubCurrencyCode} onChange={(e) => setHubCurrencyCode(e.target.value.toUpperCase().slice(0, 6))}
+                        placeholder="USD"
+                        className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#3B82F6]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+                    </div>
                   )}
-                  <input value={image} onChange={e => setImage(e.target.value)} placeholder="https://…/logo.png"
-                    className="flex-1 min-w-0 bg-[#050508] border border-[#1A1A2E] focus:border-[#F59E0B]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
-                </div>
-              </div>
 
-              <ModalField label="WEBSITE (optional)" value={website} onChange={setWebsite} placeholder="https://… (optional)" />
+                  <div>
+                    <div className="font-mono text-[9px] text-slate-600 mb-1">FEE TIER <span className="text-slate-700">(creator picks)</span></div>
+                    <div className="flex rounded-lg border border-[#1A1A2E] overflow-hidden">
+                      {([
+                        { key: "MEDIUM", label: "0.3%" },
+                        { key: "HIGH",   label: "1%"   },
+                        { key: "3PCT",   label: "3%"   },
+                      ] as const).map((tier) => (
+                        <button key={tier.key} onClick={() => setHubFeeTier(tier.key)}
+                          className="flex-1 py-2 font-mono text-[10px] transition-colors"
+                          style={hubFeeTier === tier.key
+                            ? { background: "#3B82F615", color: "#3B82F6" }
+                            : { color: "#64748b" }}>
+                          {tier.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="font-mono text-[9px] text-slate-600 mb-1">
+                      OPENING MARKET CAP <span className="text-slate-700">(USD — sets initial swap price)</span>
+                    </div>
+                    <input type="number" min={100} value={hubMarketCap} onChange={(e) => setHubMarketCap(e.target.value)}
+                      placeholder="1000"
+                      className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#3B82F6]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+                    <p className="font-mono text-[9px] text-slate-700 mt-1">
+                      ${hubMarketCap || "0"} at launch · price per token ≈ ${(Number(hubMarketCap || 0) / Number(hubSupplyCap || 1)).toExponential(2)}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <ModalField label="DESCRIPTION" value={description} onChange={setDescription} placeholder="One-line pitch (optional)" />
+
+                  {/* Token image — URL + live preview */}
+                  <div>
+                    <div className="font-mono text-[9px] text-slate-600 mb-1">TOKEN IMAGE (URL)</div>
+                    <div className="flex items-center gap-2">
+                      {image.trim() && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={image.trim()} alt="logo" className="w-9 h-9 rounded-lg object-cover bg-[#0d0d12] shrink-0 border border-[#1A1A2E]"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "0.2"; }} />
+                      )}
+                      <input value={image} onChange={e => setImage(e.target.value)} placeholder="https://…/logo.png"
+                        className="flex-1 min-w-0 bg-[#050508] border border-[#1A1A2E] focus:border-[#F59E0B]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+                    </div>
+                  </div>
+
+                  <ModalField label="WEBSITE (optional)" value={website} onChange={setWebsite} placeholder="https://… (optional)" />
+                </>
+              )}
 
               {/* Bankr-specific fields — B20HUB uses the connected wallet as
                   creator directly, no X/handle resolution, and its 80/15/5
