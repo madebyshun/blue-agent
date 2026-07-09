@@ -82,14 +82,19 @@ contract BlueBuyBack {
     address public immutable PERMIT2;          // approval router
     address public immutable payoutRecipient;  // where bought BLUE goes
 
-    /// The BLUE/WETH V4 pool key — set once at deploy so `distribute()` knows
-    /// which pool to swap through. Verified on Base mainnet: BLUE/WETH V4
-    /// pool at 0x3245fb…08c8d has $86k liquidity and $28k daily volume, so
-    /// this route is real and won't be a value-destroying swap.
-    /// currency0 = WETH (address 0x4200… < BLUE address).
+    /// The BLUE/WETH V4 pool key — owner sets this AFTER deploy once the
+    /// exact fee/tickSpacing/hooks are discovered offchain (Uniswap V4 pool
+    /// creation doesn't emit human-readable metadata on Basescan, so
+    /// hardcoding at construction time risks a wrong-pool guess that would
+    /// permanently brick distribute()).
+    ///
+    /// Storage layout: currency0 (WETH, 0x4200… < BLUE), currency1 (BLUE),
+    /// fee, tickSpacing, hooks. Owner must set before first distribute() —
+    /// otherwise distribute reverts on the PoolNotInitialized check inside
+    /// PoolManager. Re-settable to allow future re-routing (e.g., if BLUE
+    /// migrates to a BLUE/USDC pool with deeper liquidity).
     PoolKey public bluePoolKey;
-    uint24 private constant BLUE_POOL_FEE = 10000; // 1% — matches deployed V4 pool
-    int24  private constant BLUE_POOL_TICK_SPACING = 200;
+    bool public bluePoolKeySet;
 
     /// Keeper reward on distribute — 0.1% of bought BLUE (10 bps).
     uint16  public constant KEEPER_BPS = 10;
@@ -148,18 +153,40 @@ contract BlueBuyBack {
         payoutRecipient = payoutRecipient_;
         owner = msg.sender;
         minDistributeThreshold = initialThreshold_;
+        // bluePoolKey NOT set at construction — owner sets via setBluePoolKey
+        // after discovering the real key offchain (via Uniswap V4 GUI, an
+        // Initialize event lookup on Basescan, or the pool subgraph). This
+        // prevents shipping a wrong-guess key that would brick distribute()
+        // permanently on a hardcoded value.
+    }
 
-        // Build the BLUE/WETH V4 pool key. V4 requires ascending address
-        // ordering. WETH's 0x4200… is always numerically less than BLUE's
-        // 0xf895… on Base, so WETH is currency0, BLUE is currency1.
-        (Currency c0, Currency c1) = V4Actions.sortCurrencies(weth_, blue_);
-        bluePoolKey = PoolKey({
-            currency0: c0,
-            currency1: c1,
-            fee: BLUE_POOL_FEE,
-            tickSpacing: BLUE_POOL_TICK_SPACING,
-            hooks: address(0)  // no custom hook on the BLUE/WETH pool
-        });
+    /**
+     * Set (or update) the BLUE/WETH V4 pool key that distribute() routes
+     * through. Owner-only. Emits an event so off-chain indexers can pick up
+     * the change without having to re-read storage.
+     *
+     * Validates that one side of the key is BLUE and the other is WETH —
+     * getting this wrong would send buybacks through the wrong pool.
+     * Doesn't validate fee/tickSpacing/hooks: those come from external
+     * discovery and the only real check is that PoolManager accepts a swap
+     * on the resulting PoolKey — which distribute() will fail loudly on if
+     * misconfigured.
+     */
+    event BluePoolKeyUpdated(PoolKey key);
+    error InvalidBluePoolKey();
+
+    function setBluePoolKey(PoolKey calldata key) external onlyOwner {
+        // Must be BLUE + WETH (in either currency slot).
+        address c0 = Currency.unwrap(key.currency0);
+        address c1 = Currency.unwrap(key.currency1);
+        bool okOrder = (c0 == WETH9 && c1 == BLUE) || (c0 == BLUE && c1 == WETH9);
+        if (!okOrder) revert InvalidBluePoolKey();
+        // V4 requires currency0 < currency1 — sanity re-check.
+        if (c0 >= c1) revert InvalidBluePoolKey();
+
+        bluePoolKey = key;
+        bluePoolKeySet = true;
+        emit BluePoolKeyUpdated(key);
     }
 
     // ─── Fee receiving ────────────────────────────────────────────────────────
@@ -296,6 +323,7 @@ contract BlueBuyBack {
         require(tokenIn == WETH9 && tokenOut == BLUE, "BlueBuyBack: unsupported swap route");
         require(amountIn <= type(uint128).max, "BlueBuyBack: amountIn overflow");
         require(minAmountOut <= type(uint128).max, "BlueBuyBack: minAmountOut overflow");
+        require(bluePoolKeySet, "BlueBuyBack: pool key not set - call setBluePoolKey first");
 
         // Direction: WETH is currency0 → swap zero-for-one (WETH → BLUE).
         bool zeroForOne = Currency.unwrap(bluePoolKey.currency0) == WETH9;
