@@ -789,6 +789,19 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
   const [deployTxHash,  setDeployTxHash]  = useState("");
   const [deployedToken, setDeployedToken] = useState("");
 
+  // B20HUB "Auto-pool + $BLUE flywheel" opt-in — when the checkbox is on, the
+  // deploy() function routes through /api/b20hub/prepare which builds a
+  // B20HUBLauncher.launch() tx. That deploys B20 + inits a Uniswap V4 pool +
+  // locks the LP in our hook, all in one signature. The hook then routes
+  // every swap fee 80% creator / 15% $BLUE buyback / 5% treasury forever.
+  //
+  // Until the launcher contract is deployed on-chain, the API returns 503
+  // { notDeployed: true } and we surface a friendly "Coming soon" state
+  // instead of silently 500'ing.
+  const [autoPool,     setAutoPool]     = useState(false);
+  const [hubFeeTier,   setHubFeeTier]   = useState<"MEDIUM" | "HIGH" | "3PCT">("MEDIUM");
+  const [hubMarketCap, setHubMarketCap] = useState<string>("1000");
+
   // ActivationRegistry gate — read on-chain isActivated for this network so we can
   // block Deploy BEFORE the wallet hits a confusing "Unable to estimate fee"
   // (createB20 reverts FeatureNotActivated until the registry enables B20).
@@ -846,6 +859,81 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
     if (!address || !canDeploy) return;
     setDeploying(true); setDeployErr(""); setDeployTxHash(""); setDeployedToken("");
     try {
+      // Auto-pool branch: single-tx deploy via B20HUBLauncher (B20 + V4 pool +
+      // LP lock + fee-splitter hook). Returns 503 { notDeployed: true } until
+      // the launcher contract is on-chain.
+      if (autoPool) {
+        if (network !== "mainnet") {
+          throw new Error("Auto-pool flywheel is mainnet-only for now (Sepolia lacks BLUE/WETH pool)");
+        }
+
+        // Compute sqrtPriceX96 client-side from user's opening market cap
+        // using the same BigInt math the /api/b20hub/prepare route expects.
+        const { sqrtPriceX96FromMarketCap } = await import("@/lib/b20hub/price");
+        const supplyWhole = BigInt(cap || "100000000000");
+        const marketCapUsd = Number(hubMarketCap) || 1000;
+        const sqrtPriceX96 = sqrtPriceX96FromMarketCap({
+          targetMarketCapUsd: marketCapUsd,
+          totalSupplyWhole:   supplyWhole,
+          decimals,
+          ethPriceUsd:        3000, // TODO: fetch live ETH price
+        });
+        const feeTierMap = { MEDIUM: 3000, HIGH: 10000, "3PCT": 30000 } as const;
+
+        const hubRes = await fetch("/api/b20hub/prepare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: n, symbol: s, variant, decimals,
+            totalSupply: (seed || cap || "100000000000"),
+            initialSqrtPriceX96: sqrtPriceX96.toString(),
+            feeTier: feeTierMap[hubFeeTier],
+            ...(variant === "stablecoin" ? { currencyCode: cur } : {}),
+            creator: address,
+            chain: "base",
+          }),
+        });
+        const hubJson = await hubRes.json();
+        if (!hubRes.ok) {
+          if (hubJson?.notDeployed) {
+            throw new Error("Auto-pool launcher not deployed yet — coming soon. Uncheck for a plain B20 launch.");
+          }
+          throw new Error(hubJson?.error || "B20HUB prepare failed");
+        }
+
+        if (currentChainId !== 8453) {
+          try { await switchChainAsync({ chainId: 8453 }); }
+          catch { throw new Error("Switch wallet to Base mainnet and try again"); }
+        }
+        const hubHash = await sendTransactionAsync({
+          to:      hubJson.tx.to as `0x${string}`,
+          data:    hubJson.tx.data as `0x${string}`,
+          value:   0n,
+          chainId: 8453,
+        });
+        setDeployTxHash(hubHash);
+        setPolling(true);
+
+        // Poll receipt via the same /api/b20/receipt route — it handles
+        // both direct-createB20 and launcher-emitted B20 addresses.
+        for (let i = 0; i < 20; i++) {
+          await new Promise((r) => setTimeout(r, 3000));
+          const rec = await fetch("/api/b20/receipt", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tx_hash: hubHash, network: "mainnet" }),
+          }).then((r) => r.json());
+          if (rec.ok && rec.status === "success" && rec.tokenAddress) {
+            setDeployedToken(rec.tokenAddress);
+            break;
+          }
+          if (rec.ok && rec.status === "reverted") throw new Error("Transaction reverted");
+        }
+        setPolling(false);
+        return;
+      }
+
+      // Standard branch: direct createB20 call, no pool.
       const prepRes = await fetch("/api/b20/prepare", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1018,6 +1106,65 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
                 className="w-full bg-[#0a0a12] border border-[#1A1A2E] focus:border-[#22C55E40] rounded-xl px-3 py-2.5 font-mono text-sm text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
             </div>
           )}
+
+          {/* B20HUB Auto-pool + $BLUE flywheel opt-in */}
+          <div className="rounded-xl border border-[#4FC3F7]/20 bg-[#4FC3F7]/[0.03] p-4 space-y-3">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" checked={autoPool}
+                onChange={e => setAutoPool(e.target.checked)}
+                disabled={network !== "mainnet"}
+                className="mt-0.5 w-4 h-4 accent-[#4FC3F7] cursor-pointer disabled:cursor-not-allowed" />
+              <div className="flex-1">
+                <p className="font-mono text-xs text-slate-200 font-bold">
+                  🔷 Auto-pool + $BLUE buyback flywheel
+                </p>
+                <p className="font-mono text-[10px] text-slate-500 mt-1 leading-relaxed">
+                  Deploy + init Uniswap V4 pool + lock LP in one signature. Every
+                  swap routes <span className="text-[#34D399]">80%</span> to you (creator),{" "}
+                  <span className="text-[#4FC3F7]">15%</span> to $BLUE buyback,{" "}
+                  <span className="text-slate-400">5%</span> to treasury — forever.
+                  Admin renounced, LP permanent.
+                </p>
+                {network !== "mainnet" && (
+                  <p className="font-mono text-[9px] text-amber-400/70 mt-1.5">
+                    Mainnet-only (Sepolia lacks BLUE/WETH pool).
+                  </p>
+                )}
+              </div>
+            </label>
+
+            {autoPool && (
+              <div className="space-y-3 pt-2 border-t border-[#4FC3F7]/10">
+                <div>
+                  <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+                    Swap Fee Tier
+                  </label>
+                  <div className="flex rounded-xl border border-[#1A1A2E] overflow-hidden">
+                    {(["MEDIUM", "HIGH", "3PCT"] as const).map((tier, i) => (
+                      <button key={tier} onClick={() => setHubFeeTier(tier)}
+                        className="flex-1 py-2 font-mono text-[10px] transition-all"
+                        style={hubFeeTier === tier
+                          ? { background: "#4FC3F715", color: "#4FC3F7", borderRight: i < 2 ? "1px solid #1A1A2E" : undefined }
+                          : { color: "#475569", borderRight: i < 2 ? "1px solid #1A1A2E" : undefined }}>
+                        {tier === "MEDIUM" ? "0.3%" : tier === "HIGH" ? "1%" : "3%"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+                    Opening Market Cap <span className="text-slate-700 font-normal normal-case">(USD)</span>
+                  </label>
+                  <input value={hubMarketCap} onChange={e => setHubMarketCap(e.target.value)}
+                    placeholder="1000" spellCheck={false} inputMode="decimal"
+                    className={INPUT_CLS} />
+                  <p className="font-mono text-[9px] text-slate-600 mt-1">
+                    Sets the initial sqrtPrice. Lower cap = cheaper first buys.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Deploy section */}
@@ -1035,7 +1182,9 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
                     ? (polling ? "Confirming on-chain…" : "Preparing transaction…")
                     : notActivated
                       ? `B20 not active on ${net.label} yet`
-                      : `Deploy B20 on ${net.label} →`}
+                      : autoPool
+                        ? `Launch B20 + auto-pool + LP lock →`
+                        : `Deploy B20 on ${net.label} →`}
                 </button>
               )}
 
