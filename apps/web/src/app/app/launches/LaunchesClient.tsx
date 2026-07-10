@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   useAccount, useSendTransaction, useSwitchChain, useWriteContract,
   useReadContract, useBalance,
@@ -940,30 +940,25 @@ function LaunchCard({ l, onTrade, onExplore }: { l: Launch; onTrade: (l: Launch)
       {/* Links */}
       <div className="flex flex-wrap gap-1.5 pt-1 border-t border-[#1A1A2E]">
         <TradeButton l={l} onTrade={onTrade} />
-        {/* Bankr only lists/tracks tokens it deployed itself (Base launches
-            via Doppler) — Robinhood direct-deploys never go through Bankr,
-            so a "Bankr ↗" link for them would 404. */}
-        {l.chain !== "robinhood" && (
-          <a href={`https://bankr.bot/launches/${l.tokenAddress}`}
-            target="_blank" rel="noopener noreferrer"
-            className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] transition-colors">
-            Bankr ↗
-          </a>
-        )}
-        {l.chain === "robinhood" && (
-          <button onClick={() => onExplore(l)}
-            className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] transition-colors">
-            Explore
-          </button>
-        )}
+        {/* Bankr URL differs by chain: Base launches (Doppler) live at
+            /launches/<addr>; Robinhood launches (via Bankr's Robinhood
+            integration) live at /terminal/discover/<addr>. Both are
+            Bankr-hosted so the label is the same. */}
         <a
           href={l.chain === "robinhood"
-            ? `${l.chainId === 46630 ? "https://explorer.testnet.chain.robinhood.com" : "https://robinhoodchain.blockscout.com"}/token/${l.tokenAddress}`
-            : `https://basescan.org/token/${l.tokenAddress}`}
+            ? `https://bankr.bot/terminal/discover/${l.tokenAddress}`
+            : `https://bankr.bot/launches/${l.tokenAddress}`}
           target="_blank" rel="noopener noreferrer"
-          className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white transition-colors">
-          {l.chain === "robinhood" ? "Explorer ↗" : "Basescan ↗"}
+          className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] transition-colors">
+          Bankr ↗
         </a>
+        {l.chain !== "robinhood" && (
+          <a href={`https://basescan.org/token/${l.tokenAddress}`}
+            target="_blank" rel="noopener noreferrer"
+            className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white transition-colors">
+            Basescan ↗
+          </a>
+        )}
         {l.website && (
           <a href={l.website} target="_blank" rel="noopener noreferrer"
             className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white transition-colors">
@@ -1027,25 +1022,14 @@ function LaunchRow({ l, onTrade, onExplore }: { l: Launch; onTrade: (l: Launch) 
       {/* Actions */}
       <div className="flex items-center gap-1.5 flex-wrap">
         <TradeButton l={l} compact onTrade={onTrade} />
-        {l.chain !== "robinhood" ? (
-          <a href={`https://bankr.bot/launches/${l.tokenAddress}`}
-            target="_blank" rel="noopener noreferrer"
-            className="px-2 py-0.5 rounded border border-[#4FC3F730] text-[#4FC3F7] text-[9px] transition-colors">
-            Bankr ↗
-          </a>
-        ) : (
-          <>
-            <button onClick={() => onExplore(l)}
-              className="px-2 py-0.5 rounded border border-[#4FC3F730] text-[#4FC3F7] text-[9px] transition-colors">
-              Explore
-            </button>
-            <a href={`${l.chainId === 46630 ? "https://explorer.testnet.chain.robinhood.com" : "https://robinhoodchain.blockscout.com"}/token/${l.tokenAddress}`}
-              target="_blank" rel="noopener noreferrer"
-              className="px-2 py-0.5 rounded border border-[#1A1A2E] text-slate-400 text-[9px] transition-colors">
-              Explorer ↗
-            </a>
-          </>
-        )}
+        <a
+          href={l.chain === "robinhood"
+            ? `https://bankr.bot/terminal/discover/${l.tokenAddress}`
+            : `https://bankr.bot/launches/${l.tokenAddress}`}
+          target="_blank" rel="noopener noreferrer"
+          className="px-2 py-0.5 rounded border border-[#4FC3F730] text-[#4FC3F7] text-[9px] transition-colors">
+          Bankr ↗
+        </a>
         <button onClick={copyAddr}
           className="px-2 py-0.5 rounded border border-[#1A1A2E] text-[9px] text-slate-600 hover:text-slate-300 transition-colors">
           {copied ? "✓" : truncAddr(l.tokenAddress)}
@@ -1177,35 +1161,6 @@ function applySearch(launches: Launch[], q: string): Launch[] {
   );
 }
 
-function isTestToken(l: Launch): boolean {
-  const name = l.tokenName?.toLowerCase() ?? "";
-  const sym = l.tokenSymbol?.toLowerCase() ?? "";
-  // "test", "test 2", "test-abc", "$test" — anything starting with "test".
-  if (name === "test" || name.startsWith("test ") || name.startsWith("test-")) return true;
-  if (sym === "test" || sym.startsWith("test")) return true;
-  return false;
-}
-
-// Direct-deploy Robinhood tokens (raw ERC-20, no factory pool) launched before
-// the Bankr-Robinhood integration are recorded with chain:"robinhood" but no
-// market data (no pool exists, so DexScreener/GeckoTerminal has nothing to
-// index). They clutter the /launches feed with rows of "—" placeholders. Fold
-// them behind the same "Show test tokens" toggle so real Bankr launches
-// (which auto-create a pool → have market data) are what the default view
-// shows. Legacy Base rows with no market data (from stale DexScreener misses)
-// are intentionally NOT hit — Base always has a pool by construction, missing
-// data there is a data-freshness issue, not a "no pool exists" one.
-function isOrphanRobinhoodLaunch(l: Launch): boolean {
-  if (l.chain !== "robinhood") return false;
-  const priceUsd = l.market?.priceUsd;
-  const mcap = l.market?.marketCap;
-  const lp = l.market?.liquidityUsd;
-  // "No pool" = all three are null/0. Any live pool has at least a price.
-  return (priceUsd == null || priceUsd === 0)
-      && (mcap == null || mcap === 0)
-      && (lp == null || lp === 0);
-}
-
 // ── Auto-refresh countdown dot (A7) ───────────────────────────────────────────
 
 function RefreshDot({ countdown }: { countdown: number }) {
@@ -1260,7 +1215,14 @@ function fmtAmt(s: string): string {
   return n.toExponential(2);
 }
 
-function MyTokenCard({ t, owner, onClaimed }: { t: MyToken; owner: string; onClaimed: () => void }) {
+function MyTokenCard({ t, owner, onClaimed, chain, chainId, onExplore }: {
+  t: MyToken;
+  owner: string;
+  onClaimed: () => void;
+  chain?: "base" | "robinhood";
+  chainId?: number;
+  onExplore?: (address: string, chainId: number) => void;
+}) {
   const { sendTransactionAsync } = useSendTransaction();
   const { switchChainAsync } = useSwitchChain();
   const [status, setStatus] = useState<"idle" | "building" | "signing" | "done" | "error">("idle");
@@ -1395,20 +1357,46 @@ function MyTokenCard({ t, owner, onClaimed }: { t: MyToken; owner: string; onCla
           className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white transition-colors">
           Scanner →
         </a>
-        <a href={`https://bankr.bot/launches/${t.tokenAddress}`} target="_blank" rel="noopener noreferrer"
+        <a
+          href={chain === "robinhood"
+            ? `https://bankr.bot/terminal/discover/${t.tokenAddress}`
+            : `https://bankr.bot/launches/${t.tokenAddress}`}
+          target="_blank" rel="noopener noreferrer"
           className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] transition-colors">
           Bankr ↗
         </a>
-        <a href={`https://basescan.org/token/${t.tokenAddress}`} target="_blank" rel="noopener noreferrer"
-          className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white transition-colors">
-          Basescan ↗
-        </a>
+        {chain !== "robinhood" && (
+          <a href={`https://basescan.org/token/${t.tokenAddress}`}
+            target="_blank" rel="noopener noreferrer"
+            className="font-mono text-[10px] px-2 py-1 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-white transition-colors">
+            Basescan ↗
+          </a>
+        )}
       </div>
     </div>
   );
 }
 
-function MyTokensView({ onLaunch }: { onLaunch: () => void }) {
+function MyTokensView({ onLaunch, launches, onExplore }: {
+  onLaunch: () => void;
+  launches: Launch[];
+  onExplore: (address: string, chainId: number) => void;
+}) {
+  // Lookup: tokenAddress (lower) → {chain, chainId}. Bankr's fees endpoint
+  // doesn't tag which chain a token was deployed on, so we cross-reference
+  // against our own /api/launches records to pick the right explorer link.
+  const chainByAddress = useMemo(() => {
+    const map = new Map<string, { chain: "base" | "robinhood"; chainId?: number }>();
+    for (const l of launches) {
+      if (l.tokenAddress) {
+        map.set(l.tokenAddress.toLowerCase(), {
+          chain: l.chain ?? "base",
+          chainId: l.chainId,
+        });
+      }
+    }
+    return map;
+  }, [launches]);
   const { address, isConnected } = useAccount();
   const [tokens, setTokens] = useState<MyToken[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1482,9 +1470,13 @@ function MyTokensView({ onLaunch }: { onLaunch: () => void }) {
 
   return (
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      {(tokens ?? []).map((t) => (
-        <MyTokenCard key={t.tokenAddress} t={t} owner={address} onClaimed={load} />
-      ))}
+      {(tokens ?? []).map((t) => {
+        const meta = chainByAddress.get(t.tokenAddress.toLowerCase());
+        return (
+          <MyTokenCard key={t.tokenAddress} t={t} owner={address} onClaimed={load}
+            chain={meta?.chain} chainId={meta?.chainId} onExplore={onExplore} />
+        );
+      })}
     </div>
   );
 }
@@ -1523,9 +1515,6 @@ export default function LaunchesPage() {
   const [countdown, setCountdown] = useState(30);
   const countdownRef = useRef(30);
 
-  // A9 — show test tokens toggle
-  const [showTest, setShowTest] = useState(false);
-
   const load = useCallback(() => {
     setLoading(true);
     fetch("/api/launches")
@@ -1558,15 +1547,9 @@ export default function LaunchesPage() {
     load();
   }, [load]);
 
-  // Derived list: filter test → filter tab → search → sort
+  // Derived list: filter tab → search → sort
   const allLaunches = data?.launches ?? [];
-  // Default view hides both test tokens AND orphan (pool-less) Robinhood
-  // direct-deploys. Toggle "Show test tokens" surfaces both — same drawer,
-  // one control (see the checkbox below).
-  const withoutTest = showTest
-    ? allLaunches
-    : allLaunches.filter((l) => !isTestToken(l) && !isOrphanRobinhoodLaunch(l));
-  const chained = applyChainFilter(withoutTest, chainFilter);
+  const chained = applyChainFilter(allLaunches, chainFilter);
   const filtered = applyFilter(chained, filterTab);
   const searched = applySearch(filtered, search);
   const launches = applySort(searched, sort);
@@ -1706,7 +1689,27 @@ export default function LaunchesPage() {
           )}
 
           {filterTab === "mine" ? (
-            <MyTokensView onLaunch={() => setShowLaunch(true)} />
+            <MyTokensView
+              onLaunch={() => setShowLaunch(true)}
+              launches={allLaunches}
+              onExplore={(address, chainId) => {
+                // Build a minimal Launch to open the Explore modal for a My-Tokens row.
+                const found = allLaunches.find((l) => l.tokenAddress.toLowerCase() === address.toLowerCase());
+                if (found) {
+                  setExploreToken(found);
+                } else {
+                  setExploreToken({
+                    tokenAddress: address,
+                    tokenSymbol: null,
+                    tokenName: null,
+                    image: null,
+                    launchedAt: 0,
+                    chain: "robinhood",
+                    chainId,
+                  } as unknown as Launch);
+                }
+              }}
+            />
           ) : loading ? (
             <div className="flex items-center gap-2 py-10 justify-center">
               <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: ACCENT }} />
@@ -1749,23 +1752,7 @@ export default function LaunchesPage() {
             </div>
           )}
 
-          {/* A9 — Show test tokens toggle */}
-          <div className="flex justify-center mt-6">
-            <button
-              onClick={() => setShowTest((v) => !v)}
-              className="font-mono text-[9px] text-slate-700 hover:text-slate-500 transition-colors flex items-center gap-1.5"
-            >
-              <span
-                className="inline-block w-3 h-3 rounded border border-[#1A1A2E] flex items-center justify-center"
-                style={{ background: showTest ? `${ACCENT}20` : "transparent" }}
-              >
-                {showTest && <span style={{ color: ACCENT, fontSize: 8, lineHeight: 1 }}>✓</span>}
-              </span>
-              Show test + pool-less tokens
-            </button>
-          </div>
-
-          <p className="font-mono text-[9px] text-slate-700 text-center mt-4">
+          <p className="font-mono text-[9px] text-slate-700 text-center mt-6">
             Market data from DexScreener · 100B fixed supply · Uniswap V4 · gas sponsored by Bankr
           </p>
         </div>
