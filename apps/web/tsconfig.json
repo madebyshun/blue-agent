@@ -39,6 +39,7 @@
     ".next-preview/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "hoodie-forge"
   ]
 }
