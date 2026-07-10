@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-// ── Blue Forge — layout ───────────────────────────────────────────
-// Đặt ở: app/layout.tsx (đè lên file có sẵn)
-
 export const metadata: Metadata = {
   title: "Blue Forge — Hood up. Stay based.",
   description:
@@ -22,13 +19,20 @@ export const metadata: Metadata = {
   },
 };
 
+// Pre-hydration script: reads localStorage before paint so the correct theme
+// is applied on the very first render (no flash from dark → light).
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('blue-forge-theme');if(t==='light'){document.documentElement.classList.add('light');}}catch(e){}})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="antialiased">{children}</body>
     </html>
   );

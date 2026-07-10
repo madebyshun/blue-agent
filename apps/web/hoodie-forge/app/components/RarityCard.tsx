@@ -13,7 +13,7 @@ function rarityFor(serial: string) {
   if (h < 5) return { tier: "MYTHIC", color: "#FF3B7D", score: h / 10 };
   if (h < 50) return { tier: "EPIC", color: "#8B5CF6", score: h / 10 };
   if (h < 200) return { tier: "RARE", color: "#0052FF", score: h / 10 };
-  return { tier: "COMMON", color: "#4A4A55", score: h / 10 };
+  return { tier: "COMMON", color: "var(--mute-3)", score: h / 10 };
 }
 
 export function RarityCard({ item }: { item: Item }) {
@@ -21,7 +21,7 @@ export function RarityCard({ item }: { item: Item }) {
   const mono = "[font-family:'JetBrains_Mono',ui-monospace,monospace]";
   return (
     <div
-      className="w-full border-2 bg-[#0A0A10]"
+      className="w-full border-2 bg-[var(--panel)]"
       style={{
         borderColor: r.color,
         boxShadow: `0 0 60px ${r.color}30, inset 0 0 30px ${r.color}10`,
@@ -32,7 +32,7 @@ export function RarityCard({ item }: { item: Item }) {
         style={{ borderColor: r.color }}
       >
         <span style={{ color: r.color }}>◆ {r.tier}</span>
-        <span className="text-[#4A4A55]">BLUE FORGE</span>
+        <span className="text-[var(--mute-3)]">BLUE FORGE</span>
       </div>
       <img
         src={item.url}
@@ -41,17 +41,17 @@ export function RarityCard({ item }: { item: Item }) {
       />
       <div className={`${mono} p-3 text-[10px] tracking-widest space-y-1`}>
         <div className="flex justify-between">
-          <span className="text-[#4A4A55]">SERIAL</span>
+          <span className="text-[var(--mute-3)]">SERIAL</span>
           <span style={{ color: r.color }}>{item.serial}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-[#4A4A55]">RARITY SCORE</span>
-          <span className="text-[#EDEDF2]">{r.score.toFixed(1)} / 100</span>
+          <span className="text-[var(--mute-3)]">RARITY SCORE</span>
+          <span className="text-[var(--fg)]">{r.score.toFixed(1)} / 100</span>
         </div>
         {item.created_at && (
           <div className="flex justify-between">
-            <span className="text-[#4A4A55]">FORGED</span>
-            <span className="text-[#EDEDF2]">
+            <span className="text-[var(--mute-3)]">FORGED</span>
+            <span className="text-[var(--fg)]">
               {new Date(item.created_at).toISOString().slice(0, 10)}
             </span>
           </div>

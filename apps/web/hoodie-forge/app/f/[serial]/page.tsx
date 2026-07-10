@@ -44,15 +44,15 @@ export default async function SharePage({
   const mono = "[font-family:'JetBrains_Mono',ui-monospace,monospace]";
 
   return (
-    <main className="min-h-screen bg-[#050508] text-[#EDEDF2] flex flex-col items-center px-5 py-6">
+    <main className="min-h-screen bg-[var(--bg)] text-[var(--fg)] flex flex-col items-center px-5 py-6">
       <div className="w-full max-w-md">
         <Link
           href="/"
-          className={`${mono} inline-flex items-center gap-2 text-[10px] text-[#4A4A55] tracking-widest hover:text-[#0052FF] transition-colors`}
+          className={`${mono} inline-flex items-center gap-2 text-[10px] text-[var(--mute-3)] tracking-widest hover:text-[#0052FF] transition-colors`}
         >
           <span className="text-[#0052FF]">■</span> BLUE FORGE
         </Link>
-        <div className="mt-6 border border-[#1A1A22] bg-[#0A0A10]">
+        <div className="mt-6 border border-[var(--line)] bg-[var(--panel)]">
           {forgedUrl ? (
             <img
               src={forgedUrl}
@@ -60,14 +60,14 @@ export default async function SharePage({
               className="w-full aspect-square object-cover"
             />
           ) : (
-            <div className="w-full aspect-square flex items-center justify-center text-[#4A4A55] text-xs tracking-widest">
+            <div className="w-full aspect-square flex items-center justify-center text-[var(--mute-3)] text-xs tracking-widest">
               IMAGE UNAVAILABLE
             </div>
           )}
           <div
-            className={`${mono} flex items-center justify-between px-3 h-9 border-t border-[#1A1A22] text-[10px] tracking-widest`}
+            className={`${mono} flex items-center justify-between px-3 h-9 border-t border-[var(--line)] text-[10px] tracking-widest`}
           >
-            <span className="text-[#4A4A55]">
+            <span className="text-[var(--mute-3)]">
               FORGE ID <span className="text-[#0052FF]">{serial}</span>
             </span>
             <span className="text-[#2ECC71]">✓ FORGED</span>
@@ -80,7 +80,7 @@ export default async function SharePage({
           Forge yours →
         </Link>
         <p
-          className={`${mono} mt-6 text-center text-[10px] text-[#4A4A55] tracking-widest`}
+          className={`${mono} mt-6 text-center text-[10px] text-[var(--mute-3)] tracking-widest`}
         >
           BLUE IMAGE IS COMING · ONCHAIN-NATIVE · PAY-PER-RENDER
         </p>

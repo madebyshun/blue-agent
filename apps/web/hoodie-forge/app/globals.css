@@ -1,28 +1,43 @@
 @import "tailwindcss";
 
+/* Dark is the default. `.light` on <html> flips to light mode. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #050508;
+  --fg: #EDEDF2;
+  --panel: #0A0A10;
+  --panel-glass: rgba(10, 10, 16, 0.7);
+  --line: #1A1A22;
+  --line-2: #2A2A32;
+  --mute-1: #8A8A96;
+  --mute-2: #5A5A66;
+  --mute-3: #4A4A55;
+  --grid-line: rgba(26, 26, 34, 1);
+  --spotlight: rgba(0, 82, 255, 0.07);
+  --hero-glow: rgba(0, 82, 255, 0.08);
+  --scrim: rgba(5, 5, 8, 0.85);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.light {
+  --bg: #F5F5F7;
+  --fg: #0A0A0F;
+  --panel: #FFFFFF;
+  --panel-glass: rgba(255, 255, 255, 0.75);
+  --line: #E0E0E5;
+  --line-2: #C8C8CE;
+  --mute-1: #4A4A50;
+  --mute-2: #7A7A82;
+  --mute-3: #A0A0A8;
+  --grid-line: rgba(0, 0, 8, 0.06);
+  --spotlight: rgba(0, 82, 255, 0.05);
+  --hero-glow: rgba(0, 82, 255, 0.04);
+  --scrim: rgba(230, 230, 234, 0.85);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Inter Tight", system-ui, sans-serif;
+  transition: background-color 220ms ease, color 220ms ease;
 }
 
 @keyframes ticker {
@@ -30,7 +45,28 @@ body {
   100% { transform: translateX(-50%); }
 }
 
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
 @keyframes forge-scale-in {
   0% { opacity: 0; transform: scale(0.94); }
   100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 82, 255, 0.5); }
+  50% { box-shadow: 0 0 24px 4px rgba(0, 82, 255, 0.35); }
+}
+
+.glow-ready {
+  animation: glow-pulse 2.4s ease-in-out infinite;
+}
+
+.tilt-hover {
+  transition: transform 0.25s ease;
+}
+.tilt-hover:hover {
+  transform: perspective(600px) rotateX(2deg) rotateY(-2deg) scale(1.03);
 }

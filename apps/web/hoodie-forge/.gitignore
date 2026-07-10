@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# backup files
+*.bak
+
+# local scratch outputs (model probes, one-off tests)
+/test.png
+/out-*.png

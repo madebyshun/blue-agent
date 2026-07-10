@@ -26,7 +26,7 @@ export function BeforeAfterSlider({ before, after, alt }: Props) {
       <img
         src={after}
         alt={alt}
-        className="w-full aspect-square object-cover border border-[#1A1A22]"
+        className="w-full aspect-square object-cover border border-[var(--line)]"
       />
     );
   }
@@ -43,7 +43,7 @@ export function BeforeAfterSlider({ before, after, alt }: Props) {
       onMouseLeave={() => setDragging(false)}
       onTouchStart={(e) => move(e.touches[0].clientX)}
       onTouchMove={(e) => move(e.touches[0].clientX)}
-      className="relative aspect-square w-full select-none border border-[#1A1A22] overflow-hidden cursor-ew-resize"
+      className="relative aspect-square w-full select-none border border-[var(--line)] overflow-hidden cursor-ew-resize"
     >
       <img
         src={after}

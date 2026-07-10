@@ -10,16 +10,14 @@ const STAGES = [
   "> verify · identity preserved",
 ];
 
-type Props = { active: boolean; done: boolean; serial?: string };
+type Props = { active: boolean };
 
-export function ForgeTerminal({ active, done, serial }: Props) {
+export function ForgeTerminal({ active }: Props) {
   const [lines, setLines] = useState<string[]>([]);
   const [typing, setTyping] = useState<string>("");
 
   useEffect(() => {
-    // Effect drives an async typewriter animation keyed off `active`; the
-    // set-state-in-effect rule doesn't apply to this kind of imperative
-    // animation loop.
+    // Effect drives an async typewriter animation keyed off `active`.
     /* eslint-disable react-hooks/set-state-in-effect */
     if (!active) {
       setLines([]);
@@ -46,22 +44,29 @@ export function ForgeTerminal({ active, done, serial }: Props) {
     };
   }, [active]);
 
+  if (!active) return null;
+
   return (
-    <div className="absolute inset-0 bg-[#050508]/85 backdrop-blur-sm flex flex-col justify-end p-4 gap-0.5 [font-family:'JetBrains_Mono',ui-monospace,monospace] text-[10px] leading-relaxed">
-      {lines.map((l, i) => (
-        <div key={i} className="text-[#2ECC71]/80">
-          {l}
-        </div>
-      ))}
-      {typing && !done && (
-        <div className="text-[#0052FF]">
-          {typing}
-          <span className="animate-pulse">▊</span>
-        </div>
-      )}
-      {done && serial && (
-        <div className="text-[#00E070]">{`> forge complete · ${serial} ✓`}</div>
-      )}
+    <div
+      className="absolute left-0 right-0 bottom-0 pointer-events-none [font-family:'JetBrains_Mono',ui-monospace,monospace] text-[10px] leading-relaxed"
+      style={{
+        background:
+          "linear-gradient(to top, rgba(5,5,8,0.92) 0%, rgba(5,5,8,0.75) 55%, rgba(5,5,8,0) 100%)",
+      }}
+    >
+      <div className="flex flex-col justify-end gap-0.5 p-3 pt-8 min-h-[7.5rem]">
+        {lines.map((l, i) => (
+          <div key={i} className="text-[#2ECC71]/85 drop-shadow-[0_0_6px_rgba(46,204,113,0.35)]">
+            {l}
+          </div>
+        ))}
+        {typing && (
+          <div className="text-[#0052FF] drop-shadow-[0_0_6px_rgba(0,82,255,0.5)]">
+            {typing}
+            <span className="animate-pulse">▊</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

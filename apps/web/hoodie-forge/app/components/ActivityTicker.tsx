@@ -43,7 +43,7 @@ export function ActivityTicker({
 
   return (
     <div
-      className="w-full max-w-md overflow-hidden border border-[#1A1A22] bg-[#0A0A10] mt-2"
+      className="w-full overflow-hidden border border-[var(--line)] bg-[var(--panel-glass)] backdrop-blur-sm"
       style={{
         maskImage:
           "linear-gradient(to right, transparent, black 8%, black 92%, transparent)",
@@ -61,7 +61,7 @@ export function ActivityTicker({
           >
             <span className="w-1.5 h-1.5 rounded-full bg-[#2ECC71]" />
             <span className="text-[#0052FF]">{it.serial}</span>
-            <span className="text-[#4A4A55]">· {agoString(it.created_at)}</span>
+            <span className="text-[var(--mute-3)]">· {agoString(it.created_at)}</span>
           </button>
         ))}
       </div>
