@@ -92,9 +92,16 @@ export function sqrtPriceX96FromMarketCap(params: {
   //   With WETH = currency0, token = currency1:
   //   P = tokenBaseUnits / wei = (baseUnits_per_ETH * ETH_perWEI)
   //     ≈ price of 1 WETH expressed in token base units
-  //     = tokenBaseUnitsPerETH
-  //     = tokenBaseUnitsPerUSD × usdPerETH
-  //     = (totalSupplyBase / marketCapUsd) × ethPriceUsd
+  //     = tokenBaseUnitsPerWeiWETH
+  //     = tokenBaseUnitsPerETH / weiPerETH
+  //     = (totalSupplyBase × ethPriceUsd / marketCapUsd) / 1e18
+  //
+  // The /1e18 conversion is the trap: pool math sees WETH in WEI (base),
+  // not in whole ETH. Skipping it makes sqrtPrice 1e9× too high, which
+  // seeds the pool at a price that translates to "1 wei WETH buys the
+  // entire supply" — no liquidity depth on any real trade. Verified live
+  // by testing token 0xb20000…a024d0: it deployed with the un-corrected
+  // formula and its V4 quoter returned ~99.99B tokens out for 0.001 ETH.
 
   const totalSupplyBase = totalSupplyWhole * 10n ** BigInt(decimals);
 
@@ -102,9 +109,11 @@ export function sqrtPriceX96FromMarketCap(params: {
   const mktCapMilliUsd = BigInt(Math.round(targetMarketCapUsd * 1000));
   const ethPriceMilliUsd = BigInt(Math.round(ethPriceUsd * 1000));
 
-  // P = totalSupplyBase × ethPriceMilliUsd / mktCapMilliUsd
-  // (milli-USD cancels out to give a pure ratio)
-  let P_scaled = (totalSupplyBase * ethPriceMilliUsd * SCALE) / mktCapMilliUsd;
+  // P = (totalSupplyBase × ethPriceMilliUsd) / (mktCapMilliUsd × WEI_PER_ETH)
+  const WEI_PER_ETH = 10n ** 18n;
+  let P_scaled =
+    (totalSupplyBase * ethPriceMilliUsd * SCALE) /
+    (mktCapMilliUsd * WEI_PER_ETH);
 
   // If token is currency0 instead, invert: pool sees amount1/amount0 = WETH/token.
   if (params.tokenIsCurrency0) {
@@ -155,10 +164,13 @@ export function marketCapFromSqrtPriceX96(params: {
   }
 
   const totalSupplyBase = totalSupplyWhole * 10n ** BigInt(decimals);
-  // marketCapMilliUsd = totalSupplyBase * ethPriceMilliUsd * SCALE / P_scaled
+  // marketCapMilliUsd = totalSupplyBase * ethPriceMilliUsd * SCALE /
+  //                     (P_scaled * WEI_PER_ETH)
+  // (WEI_PER_ETH mirrors the /1e18 correction in sqrtPriceX96FromMarketCap.)
+  const WEI_PER_ETH = 10n ** 18n;
   const ethPriceMilliUsd = BigInt(Math.round(ethPriceUsd * 1000));
   const mktCapMilliUsd =
-    (totalSupplyBase * ethPriceMilliUsd * SCALE) / P_scaled;
+    (totalSupplyBase * ethPriceMilliUsd * SCALE) / (P_scaled * WEI_PER_ETH);
 
   return Number(mktCapMilliUsd) / 1000;
 }
