@@ -62,20 +62,32 @@ import { LiquidityAmounts } from "v4-periphery/libraries/LiquidityAmounts.sol";
 
 // ─── Interfaces we call ───────────────────────────────────────────────────────
 
-/// B20Factory precompile at 0xB20f0000…0000. `createB20` takes packed
-/// tokenFactoryData that encodes name/symbol/variant/decimals/etc — exact
-/// encoding lives in B20FactoryLib (base-std library on-chain). Launcher
-/// calls this via a low-level assembly path in _deployB20 to avoid pulling
-/// the whole base-std dep in.
+/// B20Factory precompile at 0xB20f0000…0000. Real signature (verified
+/// against the working /app/b20 direct-deploy path — apps/web/src/lib/b20/
+/// encode.ts — and against base-std StdPrecompiles): variant is the FIRST
+/// argument, then salt, then packed params tuple, then initCalls. Earlier
+/// scaffold had salt/variant swapped, which made every launch() call
+/// revert on the factory-side ABI decoder.
 interface IB20Factory {
     function createB20(
-        bytes32 salt,
         uint8 variant,     // 0 = ASSET, 1 = STABLECOIN
-        bytes calldata createParams,
+        bytes32 salt,
+        bytes calldata params,
         bytes[] calldata initCalls
-    ) external returns (address token);
+    ) external payable returns (address token);
 
     function isB20(address addr) external view returns (bool);
+}
+
+/// Params tuple encoded into B20Factory.createB20's `params` bytes. Kept in
+/// one place so any future field additions stay lock-stepped with the
+/// version byte + the working web encoder.
+struct B20AssetParams {
+    uint8   version;      // must be 1 (current base-std schema)
+    string  name;
+    string  symbol;
+    address initialAdmin; // gets DEFAULT_ADMIN_ROLE at deploy time
+    uint8   decimals;
 }
 
 interface IERC20 {
@@ -224,23 +236,38 @@ contract B20HUBLauncher {
         returns (address token, bytes32 poolId, uint256 lpTokenIdA, uint256 lpTokenIdB)
     {
         // ── Step 1: Deploy real B20 via the 0xB20f factory ────────────────────
-        // B20FactoryLib.encodeAssetCreateParams(name, symbol, admin, decimals)
-        // (or encodeStablecoinCreateParams for stablecoin variant). Full
-        // encoding lives in base-std on-chain; we mirror it here with
-        // abi.encode of the same field order so both toolchains produce the
-        // same tokenFactoryData bytes for the same inputs.
-        bytes memory createParams = abi.encode(p.name, p.symbol, address(this), p.decimals);
-        // initCalls: [mint 100% to this Launcher]. Additional calls (grant
-        // MINT_ROLE, set supply cap, etc.) can be appended in future
-        // versions — for MVP we mint everything up front and renounce admin
-        // in step 8 so no further mint is possible.
-        bytes[] memory initCalls = new bytes[](1);
+        // Encoded to match the working /app/b20 direct-deploy path exactly
+        // (apps/web/src/lib/b20/encode.ts): params is one tuple
+        //   (uint8 version=1, string name, string symbol,
+        //    address initialAdmin, uint8 decimals)
+        // encoded as a single top-level tuple parameter (so viem's
+        //   parseAbiParameters("(uint8,string,string,address,uint8)")
+        // and Solidity's abi.encode(<struct>) produce identical bytes).
+        //
+        // initCalls sequence mirrors the working web encoder (grantRole →
+        // updateSupplyCap? → mint) so the factory sees the same shape
+        // regardless of whether launch is via direct createB20 or via us.
+        bytes memory params = abi.encode(B20AssetParams({
+            version:      1,
+            name:         p.name,
+            symbol:       p.symbol,
+            initialAdmin: address(this),
+            decimals:     p.decimals
+        }));
+        bytes[] memory initCalls = new bytes[](2);
+        // [0] grantRole(MINT_ROLE, address(this)) — MINT_ROLE = keccak("MINT_ROLE")
         initCalls[0] = abi.encodeWithSignature(
+            "grantRole(bytes32,address)",
+            keccak256("MINT_ROLE"),
+            address(this)
+        );
+        // [1] mint(this, totalSupply) — factory bypasses role gate during init.
+        initCalls[1] = abi.encodeWithSignature(
             "mint(address,uint256)",
             address(this),
             p.totalSupply
         );
-        token = IB20Factory(B20_FACTORY).createB20(p.salt, p.variant, createParams, initCalls);
+        token = IB20Factory(B20_FACTORY).createB20(p.variant, p.salt, params, initCalls);
         if (!IB20Factory(B20_FACTORY).isB20(token)) revert NotB20();
 
         // ── Step 2: Approve V4 PositionManager for full supply ────────────────

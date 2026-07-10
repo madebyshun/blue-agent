@@ -146,12 +146,12 @@ export const V4_STATE_VIEW_SEPOLIA = "0x571291b572ed32ce6751a2cb2486ebee8dEFB9b4
  */
 export const PERMIT2_SEPOLIA = "0x000000000022D473030F116dDEE9F6B43aC78BA3" as const;
 
-// ── B20HUB deployed contracts on Base mainnet (2026-07-09) ────────────────────
+// ── B20HUB deployed contracts on Base mainnet ─────────────────────────────────
 //
-// Deployed via `forge script script/DeployB20HUB.s.sol` at block 48410997.
-// Hook salt mined in-EVM: 0x00…05b6. Hook address low 14 bits = 0x1200
-// (AFTER_INITIALIZE + BEFORE_REMOVE_LIQUIDITY permission flags) — required
-// by Uniswap V4's hook permission encoding.
+// v1 (block 48410997, 2026-07-09) had a broken launcher — createB20 interface
+// had wrong argument order and the params tuple was missing version:1. Buyback
+// and Hook are fine and stay in use; launcher is being redeployed with the fix.
+// Wire the new launcher address here after redeploy lands.
 
 /**
  * BlueBuyBack — receives 15% of every B20HUB swap as WETH, then anyone can
@@ -165,14 +165,18 @@ export const B20HUB_BUYBACK = "0x97A758dbDf013E8C9DB0D0056B28f111c773f9a7" as co
  * B20HUBHook — the Uniswap V4 hook that intercepts every swap on B20HUB pools
  * and splits fees 80% creator / 15% BlueBuyBack / 5% treasury. Also enforces
  * LP-permanent-lock via beforeRemoveLiquidity revert.
+ * Address bits mined for AFTER_INITIALIZE + BEFORE_REMOVE_LIQUIDITY (0x1200).
  * https://basescan.org/address/0x568e4e59d2CAA6764BA8F9721c8E4e43DF645200
  */
 export const B20HUB_HOOK = "0x568e4e59d2CAA6764BA8F9721c8E4e43DF645200" as const;
 
 /**
- * B20HUBLauncher — the entry point every user calls to launch a B20 with an
- * auto-pool + LP lock. `/api/b20hub/prepare` builds calldata for this
- * contract's launch() function.
+ * B20HUBLauncher v1 — DEPRECATED. Kept for reference only; do not point new
+ * launches at it. Its createB20 encoding was wrong and every launch() call
+ * reverted on the B20 factory before touching V4. v2 launcher (with the fix
+ * merged in the same PR that added this comment) is redeployed via
+ * `forge script script/DeployB20HUB.s.sol`. Replace this address once the
+ * new launcher is on-chain.
  * https://basescan.org/address/0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b
  */
-export const B20HUB_LAUNCHER = "0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b" as const;
+export const B20HUB_LAUNCHER_V1_BROKEN = "0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b" as const;
