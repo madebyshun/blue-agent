@@ -867,10 +867,15 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
           throw new Error("Auto-pool flywheel is mainnet-only for now (Sepolia lacks BLUE/WETH pool)");
         }
 
-        // Compute sqrtPriceX96 client-side from user's opening market cap
-        // using the same BigInt math the /api/b20hub/prepare route expects.
+        // Auto-pool + $BLUE flywheel is fixed-supply by design (task #78
+        // lock-in — matches Bankr/CC0 100B norms). Ignore Cap / Initial Supply
+        // fields when the checkbox is on: the launcher mints exactly 100B
+        // tokens straight into the V4 pool, no per-user knob. A tiny custom
+        // supply (e.g. 420) starves the pool of liquidity so Uniswap's
+        // frontend fails to route quotes.
+        const AUTO_POOL_SUPPLY_WHOLE = "100000000000"; // 100B
         const { sqrtPriceX96FromMarketCap } = await import("@/lib/b20hub/price");
-        const supplyWhole = BigInt(cap || "100000000000");
+        const supplyWhole = BigInt(AUTO_POOL_SUPPLY_WHOLE);
         const marketCapUsd = Number(hubMarketCap) || 1000;
         const sqrtPriceX96 = sqrtPriceX96FromMarketCap({
           targetMarketCapUsd: marketCapUsd,
@@ -885,7 +890,7 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: n, symbol: s, variant, decimals,
-            totalSupply: (seed || cap || "100000000000"),
+            totalSupply: AUTO_POOL_SUPPLY_WHOLE,
             initialSqrtPriceX96: sqrtPriceX96.toString(),
             feeTier: feeTierMap[hubFeeTier],
             ...(variant === "stablecoin" ? { currencyCode: cur } : {}),
@@ -1062,7 +1067,7 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className={autoPool ? "" : "grid grid-cols-2 gap-3"}>
             <div>
               <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
                 {t("launch.decimals")} <span className="text-slate-700 font-normal normal-case">(6–18)</span>
@@ -1072,29 +1077,37 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
                 onChange={e => { setDecManual(true); setDecimals(Number(e.target.value)); }}
                 className="w-full bg-[#0a0a12] border border-[#1A1A2E] focus:border-[#4FC3F740] rounded-xl px-3 py-2.5 font-mono text-sm text-slate-200 outline-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed" />
             </div>
-            <div>
-              <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
-                Supply Cap <span className="text-slate-700 font-normal normal-case">(optional)</span>
-              </label>
-              <input value={supplyCap} onChange={e => setSupplyCap(e.target.value)}
-                placeholder="e.g. 1000000" spellCheck={false} className={INPUT_CLS} />
-            </div>
+            {/* Auto-pool locks supply at 100B (task #78 spec) so hide the
+                Supply Cap + Initial Supply fields — they'd silently override
+                the launcher's fixed-supply flow and starve the pool of
+                liquidity. */}
+            {!autoPool && (
+              <div>
+                <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+                  Supply Cap <span className="text-slate-700 font-normal normal-case">(optional)</span>
+                </label>
+                <input value={supplyCap} onChange={e => setSupplyCap(e.target.value)}
+                  placeholder="e.g. 1000000" spellCheck={false} className={INPUT_CLS} />
+              </div>
+            )}
           </div>
 
           {/* Initial Supply — optional seed-mint to admin, minted atomically in the
               same createB20 tx (deploy + grant MINT_ROLE + set cap + seed = 1 tx). */}
-          <div>
-            <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
-              Initial Supply <span className="text-slate-700 font-normal normal-case">(optional · minted to you at deploy)</span>
-            </label>
-            <input value={initSupply} onChange={e => setInitSupply(e.target.value)}
-              placeholder="e.g. 1000000" spellCheck={false} className={INPUT_CLS} />
-            {seedOverCap && (
-              <p className="font-mono text-[9px] text-[#EF4444] mt-1.5">
-                Initial supply can&apos;t exceed the supply cap.
-              </p>
-            )}
-          </div>
+          {!autoPool && (
+            <div>
+              <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+                Initial Supply <span className="text-slate-700 font-normal normal-case">(optional · minted to you at deploy)</span>
+              </label>
+              <input value={initSupply} onChange={e => setInitSupply(e.target.value)}
+                placeholder="e.g. 1000000" spellCheck={false} className={INPUT_CLS} />
+              {seedOverCap && (
+                <p className="font-mono text-[9px] text-[#EF4444] mt-1.5">
+                  Initial supply can&apos;t exceed the supply cap.
+                </p>
+              )}
+            </div>
+          )}
 
           {variant === "stablecoin" && (
             <div>
@@ -1119,8 +1132,10 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
                   🔷 Auto-pool + $BLUE buyback flywheel
                 </p>
                 <p className="font-mono text-[10px] text-slate-500 mt-1 leading-relaxed">
-                  Deploy + init Uniswap V4 pool + lock LP in one signature. Every
-                  swap routes <span className="text-[#34D399]">80%</span> to you (creator),{" "}
+                  Deploy + init Uniswap V4 pool + lock LP in one signature.
+                  Fixed <span className="text-slate-300">100B</span> supply,
+                  all seeded into the pool. Every swap routes{" "}
+                  <span className="text-[#34D399]">80%</span> to you (creator),{" "}
                   <span className="text-[#4FC3F7]">15%</span> to $BLUE buyback,{" "}
                   <span className="text-slate-400">5%</span> to treasury — forever.
                   Admin renounced, LP permanent.
