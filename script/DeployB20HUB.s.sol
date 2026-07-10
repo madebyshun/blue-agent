@@ -165,6 +165,7 @@ contract DeployB20HUB is Script {
             cfg.b20Factory,
             cfg.poolManager,
             cfg.positionManager,
+            cfg.permit2,
             cfg.weth9,
             address(hook)
         );

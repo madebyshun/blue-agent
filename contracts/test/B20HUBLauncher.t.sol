@@ -29,12 +29,14 @@ contract B20HUBLauncherUnitTest is Test {
     address internal b20Factory;
     address internal poolManager;
     address internal positionManager;
+    address internal permit2;
     address internal weth9;
 
     function setUp() public {
         b20Factory      = makeAddr("b20Factory");
         poolManager     = makeAddr("poolManager");
         positionManager = makeAddr("positionManager");
+        permit2         = makeAddr("permit2");
         weth9           = makeAddr("weth9");
 
         hook = new B20HUBHook(
@@ -48,6 +50,7 @@ contract B20HUBLauncherUnitTest is Test {
             b20Factory,
             poolManager,
             positionManager,
+            permit2,
             weth9,
             address(hook)
         );
@@ -65,19 +68,19 @@ contract B20HUBLauncherUnitTest is Test {
 
     function test_constructor_revertsOnZeroAddress() public {
         vm.expectRevert(B20HUBLauncher.ZeroAddress.selector);
-        new B20HUBLauncher(address(0), poolManager, positionManager, weth9, address(hook));
+        new B20HUBLauncher(address(0), poolManager, positionManager, permit2, weth9, address(hook));
 
         vm.expectRevert(B20HUBLauncher.ZeroAddress.selector);
-        new B20HUBLauncher(b20Factory, address(0), positionManager, weth9, address(hook));
+        new B20HUBLauncher(b20Factory, address(0), positionManager, permit2, weth9, address(hook));
 
         vm.expectRevert(B20HUBLauncher.ZeroAddress.selector);
-        new B20HUBLauncher(b20Factory, poolManager, address(0), weth9, address(hook));
+        new B20HUBLauncher(b20Factory, poolManager, address(0), permit2, weth9, address(hook));
 
         vm.expectRevert(B20HUBLauncher.ZeroAddress.selector);
-        new B20HUBLauncher(b20Factory, poolManager, positionManager, address(0), address(hook));
+        new B20HUBLauncher(b20Factory, poolManager, positionManager, permit2, address(0), address(hook));
 
         vm.expectRevert(B20HUBLauncher.ZeroAddress.selector);
-        new B20HUBLauncher(b20Factory, poolManager, positionManager, weth9, address(0));
+        new B20HUBLauncher(b20Factory, poolManager, positionManager, permit2, weth9, address(0));
     }
 
     // ─── Fee-tier config ──────────────────────────────────────────────────────
@@ -144,7 +147,7 @@ contract B20HUBLauncherUnitTest is Test {
         // WETH address < token address → WETH = currency0.
         address token = 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF;
         address low   = 0x0100000000000000000000000000000000000000;
-        launcher = new B20HUBLauncher(b20Factory, poolManager, positionManager, low, address(hook));
+        launcher = new B20HUBLauncher(b20Factory, poolManager, positionManager, permit2, low, address(hook));
 
         (Currency c0, Currency c1) = launcher.poolCurrencies(token);
         assertEq(Currency.unwrap(c0), low,    "currency0 should be lower address");
@@ -155,7 +158,7 @@ contract B20HUBLauncherUnitTest is Test {
         // Token address < WETH address → token = currency0.
         address token = 0x0100000000000000000000000000000000000000;
         address hi    = 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF;
-        launcher = new B20HUBLauncher(b20Factory, poolManager, positionManager, hi, address(hook));
+        launcher = new B20HUBLauncher(b20Factory, poolManager, positionManager, permit2, hi, address(hook));
 
         (Currency c0, Currency c1) = launcher.poolCurrencies(token);
         assertEq(Currency.unwrap(c0), token, "currency0 should be lower address");
@@ -168,7 +171,7 @@ contract B20HUBLauncherUnitTest is Test {
         // ordering matches expectations.
         address baseWeth = 0x4200000000000000000000000000000000000006;
         address token    = 0xF895783B2931c919955E18B5e3343e7C7c456bA3; // $BLUEAGENT
-        launcher = new B20HUBLauncher(b20Factory, poolManager, positionManager, baseWeth, address(hook));
+        launcher = new B20HUBLauncher(b20Factory, poolManager, positionManager, permit2, baseWeth, address(hook));
 
         (Currency c0, Currency c1) = launcher.poolCurrencies(token);
         assertEq(Currency.unwrap(c0), baseWeth, "WETH < BLUE, so WETH = currency0");
@@ -180,7 +183,7 @@ contract B20HUBLauncherUnitTest is Test {
     function test_previewPoolKey_returnsExpectedShape() public {
         address token = 0xF895783B2931c919955E18B5e3343e7C7c456bA3;
         address baseWeth = 0x4200000000000000000000000000000000000006;
-        launcher = new B20HUBLauncher(b20Factory, poolManager, positionManager, baseWeth, address(hook));
+        launcher = new B20HUBLauncher(b20Factory, poolManager, positionManager, permit2, baseWeth, address(hook));
 
         PoolKey memory key = launcher.previewPoolKey(token, 10000);
         assertEq(Currency.unwrap(key.currency0), baseWeth);

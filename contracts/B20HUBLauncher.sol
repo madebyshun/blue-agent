@@ -101,12 +101,18 @@ interface IPoolManager {
     function initialize(PoolKey calldata key, uint160 sqrtPriceX96) external returns (int24 tick);
 }
 
+interface IPermit2 {
+    function approve(address token, address spender, uint160 amount, uint48 expiration) external;
+}
+
 interface IPositionManager {
     /// V4 batched action + settlement router. `unlockData` encodes an ordered
-    /// list of actions (Actions.MINT_POSITION, SETTLE_PAIR, etc.). We use
-    /// this to add both LP positions in one call.
+    /// list of actions (Actions.MINT_POSITION, SETTLE_PAIR, etc.). Real V4
+    /// PositionManager returns VOID here — declaring `returns (bytes memory)`
+    /// makes Solidity try to decode the empty return and revert with an
+    /// unattributed EvmError (fork-test-confirmed).
     function modifyLiquidities(bytes calldata unlockData, uint256 deadline)
-        external payable returns (bytes memory);
+        external payable;
 
     function nextTokenId() external view returns (uint256);
     function ownerOf(uint256 tokenId) external view returns (address);
@@ -119,6 +125,7 @@ contract B20HUBLauncher {
     address public immutable B20_FACTORY;
     address public immutable POOL_MANAGER;
     address public immutable POSITION_MANAGER;
+    address public immutable PERMIT2;
     address public immutable WETH9;
     B20HUBHook public immutable HOOK;
 
@@ -163,18 +170,20 @@ contract B20HUBLauncher {
         address b20Factory_,
         address poolManager_,
         address positionManager_,
+        address permit2_,
         address weth9_,
         address hook_
     ) {
         if (
             b20Factory_ == address(0) || poolManager_ == address(0) ||
-            positionManager_ == address(0) || weth9_ == address(0) ||
-            hook_ == address(0)
+            positionManager_ == address(0) || permit2_ == address(0) ||
+            weth9_ == address(0) || hook_ == address(0)
         ) revert ZeroAddress();
 
         B20_FACTORY = b20Factory_;
         POOL_MANAGER = poolManager_;
         POSITION_MANAGER = positionManager_;
+        PERMIT2 = permit2_;
         WETH9 = weth9_;
         HOOK = B20HUBHook(payable(hook_));
 
@@ -270,8 +279,20 @@ contract B20HUBLauncher {
         token = IB20Factory(B20_FACTORY).createB20(p.variant, p.salt, params, initCalls);
         if (!IB20Factory(B20_FACTORY).isB20(token)) revert NotB20();
 
-        // ── Step 2: Approve V4 PositionManager for full supply ────────────────
-        IERC20(token).approve(POSITION_MANAGER, p.totalSupply);
+        // ── Step 2: Approve V4 PositionManager via Permit2 (dual-step) ────────
+        // V4's PositionManager pulls tokens through Permit2, not raw ERC20
+        // allowance. That means we need BOTH:
+        //   token.approve(Permit2, X)                    — ERC20 side
+        //   Permit2.approve(PositionManager, token, X)   — Permit2 side
+        // Skipping either reverts the modifyLiquidities settle step with
+        // 0xd81b2f2e (verified via fork test).
+        IERC20(token).approve(PERMIT2, type(uint256).max);
+        IPermit2(PERMIT2).approve(
+            token,
+            POSITION_MANAGER,
+            uint160(p.totalSupply),
+            type(uint48).max
+        );
 
         // ── Step 3: Build PoolKey with canonical currency ordering ────────────
         (Currency c0, Currency c1) = V4Actions.sortCurrencies(token, WETH9);
@@ -285,40 +306,51 @@ contract B20HUBLauncher {
         poolId = keccak256(abi.encode(key));
 
         // ── Step 4: Compute tick geometry ─────────────────────────────────────
-        // initialTick = the tick at user's chosen opening sqrtPriceX96, aligned
-        // down to the pool's tickSpacing.
+        // Both positions MUST sit STRICTLY BELOW currentTick (when token is
+        // currency1) or STRICTLY ABOVE it (when token is currency0). V4's
+        // convention: LP holds only currency0 when currentTick < tickLower,
+        // and only currency1 when currentTick > tickUpper. The launcher has
+        // just minted B20 tokens and holds ZERO WETH, so any position that
+        // straddles currentTick triggers Permit2.transferFrom(WETH,…) and
+        // reverts with 0xd81b2f2e (fork-test-confirmed).
+        //
+        // token = currency1 (typical: token addr > 0x4200… on Base).
+        //   → tickUpper must be strictly < currentTick, range BELOW.
+        // token = currency0 (unusual: token addr < 0x4200… by CREATE2 salt).
+        //   → tickLower must be strictly > currentTick, range ABOVE.
         int24 initialTick = TickMath.getTickAtSqrtPrice(p.initialSqrtPriceX96);
-        int24 initialTickAligned = _alignTick(initialTick, cfg.tickSpacing);
-
-        // token = currency1 if token address > WETH (typical on Base since
-        // WETH is 0x4200…). token = currency0 if reversed.
         bool tokenIsCurrency1 = Currency.unwrap(c1) == token;
 
-        // Position A (wide): 85% of supply. Single-sided range that has the
-        // token side depleted first as buys come in.
-        //
-        // If token = currency1: LP needs tickLower ≥ currentTick for pure
-        // currency1 deposit. Range = [initialTickAligned, MAX_TICK_ALIGNED].
-        // If token = currency0: LP needs tickUpper ≤ currentTick. Range =
-        // [MIN_TICK_ALIGNED, initialTickAligned].
         int24 tickLowerA;
         int24 tickUpperA;
-        if (tokenIsCurrency1) {
-            tickLowerA = initialTickAligned;
-            tickUpperA = _alignTick(TickMath.MAX_TICK, cfg.tickSpacing);
-        } else {
-            tickLowerA = _alignTick(TickMath.MIN_TICK, cfg.tickSpacing);
-            tickUpperA = initialTickAligned;
-        }
+        int24 tickLowerB;
+        int24 tickUpperB;
 
-        // Position B (narrow): 15% of supply. ±N spacings around initialTick.
-        int24 halfWidth = int24(cfg.positionBWidth) * cfg.tickSpacing;
-        int24 tickLowerB = initialTickAligned - halfWidth;
-        int24 tickUpperB = initialTickAligned + halfWidth;
-        // Both bounds still need spacing-alignment after arithmetic (they are
-        // if initialTickAligned is aligned, but re-align for safety).
-        tickLowerB = _alignTick(tickLowerB, cfg.tickSpacing);
-        tickUpperB = _alignTick(tickUpperB, cfg.tickSpacing);
+        if (tokenIsCurrency1) {
+            // Ceil(initialTick) toward +inf, then -spacing → strictly below.
+            int24 ceilTick = initialTick / cfg.tickSpacing * cfg.tickSpacing;
+            if (initialTick > 0 && initialTick % cfg.tickSpacing != 0) {
+                ceilTick += cfg.tickSpacing;
+            }
+            int24 top = ceilTick - cfg.tickSpacing;
+            // Wide position A: [MIN_TICK aligned inward, top].
+            tickLowerA = TickMath.MIN_TICK / cfg.tickSpacing * cfg.tickSpacing;
+            tickUpperA = top;
+            // Narrow position B: [top - N*spacing, top]. Overlaps A's end.
+            tickLowerB = top - int24(cfg.positionBWidth) * cfg.tickSpacing;
+            tickUpperB = top;
+        } else {
+            // Floor(initialTick) toward -inf, then +spacing → strictly above.
+            int24 floorTick = initialTick / cfg.tickSpacing * cfg.tickSpacing;
+            if (initialTick < 0 && initialTick % cfg.tickSpacing != 0) {
+                floorTick -= cfg.tickSpacing;
+            }
+            int24 bottom = floorTick + cfg.tickSpacing;
+            tickLowerA = bottom;
+            tickUpperA = TickMath.MAX_TICK / cfg.tickSpacing * cfg.tickSpacing;
+            tickLowerB = bottom;
+            tickUpperB = bottom + int24(cfg.positionBWidth) * cfg.tickSpacing;
+        }
 
         // ── Step 5: Compute liquidity for each position ───────────────────────
         // For a single-sided position with just token1 (or token0), V4-periphery's
