@@ -148,35 +148,43 @@ export const PERMIT2_SEPOLIA = "0x000000000022D473030F116dDEE9F6B43aC78BA3" as c
 
 // ── B20HUB deployed contracts on Base mainnet ─────────────────────────────────
 //
-// v1 (block 48410997, 2026-07-09) had a broken launcher — createB20 interface
-// had wrong argument order and the params tuple was missing version:1. Buyback
-// and Hook are fine and stay in use; launcher is being redeployed with the fix.
-// Wire the new launcher address here after redeploy lands.
+// v3 deployment 2026-07-10 at block 48443163. Fresh set — buyback + hook +
+// launcher redeployed together because the launcher fix required a new
+// constructor signature. Full trace validated via mocked-B20 fork test AND
+// cast-call simulation against real Base mainnet.
 
 /**
- * BlueBuyBack — receives 15% of every B20HUB swap as WETH, then anyone can
+ * BlueBuyBack v3 — receives 15% of every B20HUB swap as WETH, then anyone can
  * call distribute() to swap it into $BLUE and burn (or send to treasury).
  * Keeper reward: 0.1% of the swap output to the caller.
- * https://basescan.org/address/0x97A758dbDf013E8C9DB0D0056B28f111c773f9a7
+ * https://basescan.org/address/0xBCF026857cbeF2429bf373Bc5fFFa5f8005175B4
  */
-export const B20HUB_BUYBACK = "0x97A758dbDf013E8C9DB0D0056B28f111c773f9a7" as const;
+export const B20HUB_BUYBACK = "0xBCF026857cbeF2429bf373Bc5fFFa5f8005175B4" as const;
 
 /**
- * B20HUBHook — the Uniswap V4 hook that intercepts every swap on B20HUB pools
- * and splits fees 80% creator / 15% BlueBuyBack / 5% treasury. Also enforces
- * LP-permanent-lock via beforeRemoveLiquidity revert.
- * Address bits mined for AFTER_INITIALIZE + BEFORE_REMOVE_LIQUIDITY (0x1200).
- * https://basescan.org/address/0x568e4e59d2CAA6764BA8F9721c8E4e43DF645200
+ * B20HUBHook v3 — the Uniswap V4 hook that intercepts every swap on B20HUB
+ * pools and splits fees 80% creator / 15% BlueBuyBack / 5% treasury. Also
+ * enforces LP-permanent-lock via beforeRemoveLiquidity revert.
+ * Address low 14 bits = 0x1200 (AFTER_INITIALIZE + BEFORE_REMOVE_LIQUIDITY).
+ * https://basescan.org/address/0xe3B801B6721B0bB77AD43e5F9cAfC02780061200
  */
-export const B20HUB_HOOK = "0x568e4e59d2CAA6764BA8F9721c8E4e43DF645200" as const;
+export const B20HUB_HOOK = "0xe3B801B6721B0bB77AD43e5F9cAfC02780061200" as const;
 
 /**
- * B20HUBLauncher v1 — DEPRECATED. Kept for reference only; do not point new
- * launches at it. Its createB20 encoding was wrong and every launch() call
- * reverted on the B20 factory before touching V4. v2 launcher (with the fix
- * merged in the same PR that added this comment) is redeployed via
- * `forge script script/DeployB20HUB.s.sol`. Replace this address once the
- * new launcher is on-chain.
- * https://basescan.org/address/0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b
+ * B20HUBLauncher v3 — the entry point every user calls to launch a B20 with
+ * an auto-pool + LP lock. `/api/b20hub/prepare` builds calldata for this
+ * contract's launch() function. Simulation confirmed to return the expected
+ * (token, poolId, lpTokenIdA, lpTokenIdB) tuple.
+ * https://basescan.org/address/0xc6e402C0b544Ef4f69cF61AE4eCA114532Fbf466
+ */
+export const B20HUB_LAUNCHER = "0xc6e402C0b544Ef4f69cF61AE4eCA114532Fbf466" as const;
+
+/**
+ * Prior broken launchers — kept for reference only. Immutable, cannot be
+ * reused.
+ *   v1 0x8eEe…Ba4b — createB20 argument order swapped
+ *   v2 0xb681…4A8B — tick range straddled currentTick, missing Permit2
+ *                    dual-approve, wrong modifyLiquidities return type
  */
 export const B20HUB_LAUNCHER_V1_BROKEN = "0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b" as const;
+export const B20HUB_LAUNCHER_V2_BROKEN = "0xb68120DC451CbcB391D4A651c0c1d3dE95744A8B" as const;

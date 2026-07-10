@@ -33,17 +33,16 @@ import { V4_FEE_TIERS } from "@/lib/b20hub/constants";
 // Until then this route reports a clear "not deployed yet" error so the UI
 // can show a friendly banner rather than silently 500-ing.
 const LAUNCHER_ADDRESSES: Record<number, `0x${string}` | null> = {
-  // ⚠️ Old launcher 0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b at block 48410997
-  // reverted onchain because its IB20Factory.createB20 interface had the wrong
-  // argument order (bytes32 salt first instead of uint8 variant first) AND the
-  // params tuple was missing the version:1 header — traced via a fork test that
-  // showed Foundry could not even reach V4 due to the "call to non-contract
-  // address 0xB20f…" trap on the precompile. Root cause diff: see
-  // contracts/B20HUBLauncher.sol createB20 interface + _launch step 1.
+  // v3 launcher deployed 2026-07-10 at block 48443163. Cast-call simulation
+  // against Base mainnet confirmed launch() returns the expected 128-byte
+  // (token, poolId, lpTokenIdA, lpTokenIdB) tuple with the token address
+  // starting with the B20 asset-variant 0xb200 prefix — end-to-end works.
   //
-  // Old launcher stays deployed (immutable) but is no longer wired here.
-  // Wire the freshly-deployed launcher address here after the redeploy.
-  8453:  null,
+  // Prior broken launchers (do not use):
+  //   v1 0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b — createB20 sig swap
+  //   v2 0xb68120DC451CbcB391D4A651c0c1d3dE95744A8B — tick range, Permit2,
+  //      modifyLiquidities return-type mismatch
+  8453:  "0xc6e402C0b544Ef4f69cF61AE4eCA114532Fbf466",
   84532: null,
 };
 
