@@ -33,13 +33,17 @@ import { V4_FEE_TIERS } from "@/lib/b20hub/constants";
 // Until then this route reports a clear "not deployed yet" error so the UI
 // can show a friendly banner rather than silently 500-ing.
 const LAUNCHER_ADDRESSES: Record<number, `0x${string}` | null> = {
-  // Re-wired for onchain diagnostic: simulating via cast call gave revert
-  // selector 0x1a3e4af8 with no source attribution. Getting a real reverted
-  // tx hash lets us `cast run <hash>` to see the full internal call trace
-  // and identify which subcall (B20 factory / V4 PoolManager /
-  // V4 PositionManager / hook) is the origin.
-  // ⚠️ Signing WILL revert and burn ~$0.05 gas. Diagnostic only.
-  8453:  "0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b",
+  // ⚠️ Old launcher 0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b at block 48410997
+  // reverted onchain because its IB20Factory.createB20 interface had the wrong
+  // argument order (bytes32 salt first instead of uint8 variant first) AND the
+  // params tuple was missing the version:1 header — traced via a fork test that
+  // showed Foundry could not even reach V4 due to the "call to non-contract
+  // address 0xB20f…" trap on the precompile. Root cause diff: see
+  // contracts/B20HUBLauncher.sol createB20 interface + _launch step 1.
+  //
+  // Old launcher stays deployed (immutable) but is no longer wired here.
+  // Wire the freshly-deployed launcher address here after the redeploy.
+  8453:  null,
   84532: null,
 };
 
