@@ -33,16 +33,13 @@ import { V4_FEE_TIERS } from "@/lib/b20hub/constants";
 // Until then this route reports a clear "not deployed yet" error so the UI
 // can show a friendly banner rather than silently 500-ing.
 const LAUNCHER_ADDRESSES: Record<number, `0x${string}` | null> = {
-  // Base mainnet launcher IS deployed at 0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b
-  // (block 48410997) but the _launch() flow reverts on-chain with selector
-  // 0x1a3e4af8 (source contract unidentified — likely V4 or B20 factory encoding
-  // mismatch). Launcher was shipped without a fork test against real Base
-  // mainnet; the promised B20HUBLauncher.fork.t.sol was never written.
-  //
-  // Temporarily wire back to null so /app/b20 shows the friendly "coming soon"
-  // banner instead of asking users to sign a tx that would revert (and burn
-  // their gas). Re-wire once the fork test passes end-to-end.
-  8453:  null,
+  // Re-wired for onchain diagnostic: simulating via cast call gave revert
+  // selector 0x1a3e4af8 with no source attribution. Getting a real reverted
+  // tx hash lets us `cast run <hash>` to see the full internal call trace
+  // and identify which subcall (B20 factory / V4 PoolManager /
+  // V4 PositionManager / hook) is the origin.
+  // ⚠️ Signing WILL revert and burn ~$0.05 gas. Diagnostic only.
+  8453:  "0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b",
   84532: null,
 };
 
