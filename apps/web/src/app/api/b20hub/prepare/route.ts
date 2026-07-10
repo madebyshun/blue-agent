@@ -33,16 +33,19 @@ import { V4_FEE_TIERS } from "@/lib/b20hub/constants";
 // Until then this route reports a clear "not deployed yet" error so the UI
 // can show a friendly banner rather than silently 500-ing.
 const LAUNCHER_ADDRESSES: Record<number, `0x${string}` | null> = {
-  // v3 launcher deployed 2026-07-10 at block 48443163. Cast-call simulation
-  // against Base mainnet confirmed launch() returns the expected 128-byte
-  // (token, poolId, lpTokenIdA, lpTokenIdB) tuple with the token address
-  // starting with the B20 asset-variant 0xb200 prefix — end-to-end works.
+  // ⚠️ v3 launcher 0xc6e4…f466 works for LAUNCHING but references broken
+  // hook v3 0xe3B8…1200 whose beforeRemoveLiquidity permanently blocks
+  // hook.claimFees. Any pool launched under it will have its fees stranded
+  // (see 40f4d6c fix commit for the two bugs). Unwiring defensively until
+  // launcher v4 (pointing at hook v4) is deployed.
   //
-  // Prior broken launchers (do not use):
+  // Prior launchers (do not use):
   //   v1 0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b — createB20 sig swap
   //   v2 0xb68120DC451CbcB391D4A651c0c1d3dE95744A8B — tick range, Permit2,
   //      modifyLiquidities return-type mismatch
-  8453:  "0xc6e402C0b544Ef4f69cF61AE4eCA114532Fbf466",
+  //   v3 0xc6e402C0b544Ef4f69cF61AE4eCA114532Fbf466 — launched OK but hook's
+  //      claimFees never worked (see fix in 40f4d6c)
+  8453:  null,
   84532: null,
 };
 
