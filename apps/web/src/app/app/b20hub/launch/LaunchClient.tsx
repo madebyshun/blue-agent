@@ -52,7 +52,6 @@ export default function LaunchClient() {
   const [twitter,     setTwitter]     = useState("");
   const [telegram,    setTelegram]    = useState("");
   const [farcaster,   setFarcaster]   = useState("");
-  const [showMore,    setShowMore]    = useState(false);
 
   const [status,     setStatus]     = useState<"idle"|"preparing"|"signing"|"confirming"|"done"|"error">("idle");
   const [error,      setError]      = useState("");
@@ -209,40 +208,33 @@ export default function LaunchClient() {
             </p>
           </div>
 
-          {/* Optional metadata — collapsed by default. These fields
-              land in the launch registry, not on-chain. Creator can
-              update later; nothing here is baked into contract bytecode.
-              Match o1.exchange / pump.fun set: image, description, and
-              4 social handles. Everything is opt-in. */}
-          <button
-            type="button"
-            onClick={() => setShowMore((v) => !v)}
-            className="w-full flex items-center justify-between text-left font-mono text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
-          >
-            <span className="tracking-widest uppercase">
-              {showMore ? "▾" : "▸"} Optional metadata (image, description, socials)
-            </span>
-            <span className="text-[9px] text-slate-600">
-              {showMore ? "hide" : "show"}
-            </span>
-          </button>
-          {showMore && (
-            <div className="space-y-3 pt-1">
-              <MetaField label="Image / logo URL" placeholder="https://…/logo.png or ipfs://…"
-                value={image} onChange={setImage} />
-              <MetaField label="Description" placeholder="One line about your token"
-                value={description} onChange={setDescription} textarea />
-              <MetaField label="Website"   placeholder="https://mytoken.xyz"     value={website}   onChange={setWebsite} />
-              <MetaField label="Twitter / X"  placeholder="@myhandle"           value={twitter}   onChange={setTwitter} />
-              <MetaField label="Telegram" placeholder="t.me/mygroup"           value={telegram}  onChange={setTelegram} />
-              <MetaField label="Farcaster" placeholder="@myhandle or fid"      value={farcaster} onChange={setFarcaster} />
-              <p className="font-mono text-[9px] text-slate-600 leading-relaxed pt-1">
-                Off-chain. Stored in the B20HUB registry so the feed +
-                token page can render this. Editable later via a signed
-                request from the creator wallet.
-              </p>
-            </div>
-          )}
+          {/* Off-chain metadata — surfaced by default (o1.exchange / pump.fun
+              pattern where creators fill these before signing so their
+              launched token has an image + socials from block 1). None of
+              these fields go on-chain; the launcher's LaunchParams has no
+              slot for them. They land in the B20HUB registry so the feed
+              + token detail pages render them immediately after deploy.
+              All optional — omit any you don't have yet. */}
+          <div className="pt-2 border-t border-[#1A1A2E] space-y-3">
+            <p className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">
+              Token identity <span className="text-slate-700 lowercase font-normal">(off-chain, editable later)</span>
+            </p>
+            <MetaField label="Image / logo URL"
+              placeholder="https://…/logo.png or ipfs://…"
+              value={image} onChange={setImage} />
+            <MetaField label="Description"
+              placeholder="What is this token about?"
+              value={description} onChange={setDescription} textarea maxLen={200} />
+          </div>
+          <div className="pt-2 border-t border-[#1A1A2E] space-y-3">
+            <p className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">
+              Links <span className="text-slate-700 lowercase font-normal">(optional)</span>
+            </p>
+            <MetaField label="Website"      placeholder="https://yourproject.xyz"     value={website}   onChange={setWebsite} />
+            <MetaField label="Twitter / X"  placeholder="https://x.com/yourproject"   value={twitter}   onChange={setTwitter} />
+            <MetaField label="Telegram"     placeholder="https://t.me/yourproject"    value={telegram}  onChange={setTelegram} />
+            <MetaField label="Farcaster"    placeholder="@yourhandle or fid"          value={farcaster} onChange={setFarcaster} />
+          </div>
 
           {/* Read-only summary of contract-level constants. */}
           <ConstantsPanel />
@@ -373,26 +365,36 @@ function PreviewBadge({ label, color }: { label: string; color: string }) {
 }
 
 function MetaField({
-  label, placeholder, value, onChange, textarea,
+  label, placeholder, value, onChange, textarea, maxLen,
 }: {
   label: string;
   placeholder: string;
   value: string;
   onChange: (v: string) => void;
   textarea?: boolean;
+  maxLen?: number;
 }) {
+  const showCount = maxLen != null;
   return (
     <div>
-      <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1">
-        {label}
-      </label>
+      <div className="flex items-baseline justify-between mb-1">
+        <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">
+          {label}
+        </label>
+        {showCount && (
+          <span className={"font-mono text-[9px] " + (value.length > maxLen! ? "text-red-400" : "text-slate-600")}>
+            {value.length}/{maxLen}
+          </span>
+        )}
+      </div>
       {textarea ? (
         <textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          rows={2}
+          rows={3}
           spellCheck={false}
+          maxLength={maxLen}
           className={INPUT_CLS + " resize-none"}
         />
       ) : (
@@ -401,6 +403,7 @@ function MetaField({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           spellCheck={false}
+          maxLength={maxLen}
           className={INPUT_CLS}
         />
       )}

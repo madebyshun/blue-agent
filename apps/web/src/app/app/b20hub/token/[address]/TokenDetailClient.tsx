@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { B20HUB_HOOK, B20HUB_BUYBACK } from "@/lib/b20hub/constants";
+import { fmtPriceUsd, fmtUsdCompact, fmtPct } from "@/lib/b20hub/format";
 
 const POSITION_MANAGER = "0x7C5f5A4bBd8fD63184577525326123B519429bDc" as const;
 
@@ -113,6 +114,8 @@ export default function TokenDetailClient({ address }: { address: `0x${string}` 
         <PoolCard pool={data.pool ?? null} />
       </div>
 
+      <ChartCard address={address} />
+
       <ActionsCard address={address} pool={data.pool ?? null} />
       <ContractCard address={address} pool={data.pool ?? null} />
     </div>
@@ -167,11 +170,11 @@ function MarketCard({ market, pool }: { market: MarketData | null; pool: PoolInf
         </p>
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <Stat label="PRICE"    value={priceUsd == null ? "—" : "$" + priceUsd.toExponential(2)} />
-        <Stat label="MCAP"     value={fmtUsd(mcapUsd)} />
-        <Stat label="24H VOL"  value={fmtUsd(market?.volume24h)} />
+        <Stat label="PRICE"    value={fmtPriceUsd(priceUsd)} />
+        <Stat label="MCAP"     value={fmtUsdCompact(mcapUsd)} />
+        <Stat label="24H VOL"  value={fmtUsdCompact(market?.volume24h)} />
         <Stat label="24H %"    value={fmtPct(market?.change24h)} color={changeColor} />
-        <Stat label="LIQ"      value={fmtUsd(market?.liquidityUsd)} />
+        <Stat label="LIQ"      value={fmtUsdCompact(market?.liquidityUsd)} />
       </div>
       {usingOnchain && (
         <p className="font-mono text-[9px] text-slate-600 mt-3 leading-relaxed">
@@ -212,6 +215,39 @@ function PoolCard({ pool }: { pool: PoolInfo | null }) {
         <Row label="Current tick" value={pool.slot0 ? pool.slot0.tick.toString() : "—"} />
         <Row label="LP status"   value={lpLocked ? "🔒 Locked in hook" : "⚠ NFT not held by hook"} color={lpLocked ? "#22C55E" : "#F59E0B"} />
       </div>
+    </div>
+  );
+}
+
+function ChartCard({ address }: { address: string }) {
+  // DexScreener embed. Auto-shows a placeholder until the pool indexes.
+  // Kept out of the same grid as market/pool cards so it can be full-width.
+  return (
+    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] overflow-hidden">
+      <div className="flex items-center justify-between px-5 pt-4 pb-2">
+        <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">Chart · via DexScreener</p>
+        <a
+          href={`https://dexscreener.com/base/${address}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-mono text-[10px] text-[#4FC3F7] hover:underline"
+        >
+          Open full ↗
+        </a>
+      </div>
+      <div className="relative w-full" style={{ aspectRatio: "16/9", minHeight: 380 }}>
+        <iframe
+          src={`https://dexscreener.com/base/${address}?embed=1&theme=dark&trades=0&info=0`}
+          className="absolute inset-0 w-full h-full"
+          allow="clipboard-write"
+          title="DexScreener chart"
+        />
+      </div>
+      <p className="font-mono text-[9px] text-slate-600 px-5 py-2 leading-relaxed">
+        Chart populates after DexScreener indexes the pool (typically 1-3
+        min after the first swap). Nothing to configure onchain — this is
+        a third-party embed.
+      </p>
     </div>
   );
 }
@@ -304,16 +340,4 @@ function Badge({ label, color }: { label: string; color: string }) {
       {label}
     </span>
   );
-}
-function fmtUsd(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return "—";
-  if (v >= 1_000_000) return "$" + (v / 1_000_000).toFixed(2) + "M";
-  if (v >= 1_000)     return "$" + (v / 1_000).toFixed(1) + "K";
-  if (v >= 1)         return "$" + v.toFixed(2);
-  if (v > 0)          return "$" + v.toExponential(2);
-  return "$0";
-}
-function fmtPct(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return "—";
-  return (v >= 0 ? "+" : "") + v.toFixed(1) + "%";
 }

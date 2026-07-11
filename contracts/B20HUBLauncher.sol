@@ -222,7 +222,13 @@ contract B20HUBLauncher {
     /// → 2× mcap), which is the correct "constant ETH-denominated liquidity
     /// depth" behaviour.
     uint160 public constant OPENING_SQRT_PRICE_X96 =
-        21697525899373897447157608931207664;
+        13722720286502977928233463417143296;
+        // = sqrt(3e10) × 2^96  →  100B tokens per 3.333 ETH  →  ~$6K opening
+        // market cap at ETH=$1800, ~$10K at ETH=$3K, ~$13.3K at ETH=$4K.
+        // Higher opening than pump.fun's ~$4K default: reduces the % of
+        // supply a first-block sniper can grab per dollar. Previous v5
+        // constant (21697…664) opened at 1.333 ETH ≈ $2.4K at ETH=$1800
+        // which felt too generous to early buyers.
 
     function launch(LaunchParams calldata p)
         external
