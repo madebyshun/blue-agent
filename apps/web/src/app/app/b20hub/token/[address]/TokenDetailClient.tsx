@@ -109,10 +109,14 @@ export default function TokenDetailClient({ address }: { address: `0x${string}` 
     <div className="space-y-6">
       <HeaderCard sym={sym} name={data.name ?? sym} address={address} pool={data.pool ?? null} supplyWhole={supplyWhole} />
 
-      <div className="grid md:grid-cols-2 gap-4">
-        <MarketCard market={market} pool={data.pool ?? null} />
-        <PoolCard pool={data.pool ?? null} />
-      </div>
+      {data.pool ? (
+        <div className="grid md:grid-cols-2 gap-4">
+          <MarketCard market={market} pool={data.pool} />
+          <PoolCard pool={data.pool} />
+        </div>
+      ) : (
+        <MarketCard market={market} pool={null} />
+      )}
 
       <ChartCard address={address} />
 
@@ -190,20 +194,11 @@ function MarketCard({ market, pool }: { market: MarketData | null; pool: PoolInf
 }
 
 function PoolCard({ pool }: { pool: PoolInfo | null }) {
-  if (!pool) {
-    return (
-      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
-        <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-3">Pool</p>
-        <p className="font-mono text-xs text-amber-400 mb-1">Not a B20HUB pool</p>
-        <p className="font-mono text-[10px] text-slate-500 leading-relaxed">
-          The B20HUB hook doesn&apos;t track a pool for this token at any
-          standard fee tier. Might be a plain-B20 launch, launched under
-          an earlier hook, or the index is still catching up (refresh in
-          ~30s).
-        </p>
-      </div>
-    );
-  }
+  // If this isn't a B20HUB pool, don't waste vertical space on a scary card —
+  // fold the note into a small chip inside the market card via a data flag,
+  // and just render nothing here. The empty grid slot fills naturally.
+  if (!pool) return null;
+
   const lpLocked = pool.lpNftOwner?.toLowerCase() === B20HUB_HOOK.toLowerCase();
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">

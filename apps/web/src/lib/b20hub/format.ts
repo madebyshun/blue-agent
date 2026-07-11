@@ -20,26 +20,33 @@ const SUB_ZERO = "₀₁₂₃₄₅₆₇₈₉";
 export function fmtPriceUsd(v: number | null | undefined, sigFigs = 4): string {
   if (v == null || !Number.isFinite(v)) return "—";
   if (v === 0) return "$0";
-  if (v >= 1) {
-    // Standard USD with 2-4 decimals + thousands separator.
-    if (v >= 1000) return "$" + v.toLocaleString("en-US", { maximumFractionDigits: 2 });
-    return "$" + v.toLocaleString("en-US", { maximumFractionDigits: sigFigs });
-  }
-  // Compressed leading-zeros form for values < 1.
+  if (v >= 1000) return "$" + v.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  if (v >= 1)    return "$" + v.toLocaleString("en-US", { maximumFractionDigits: sigFigs });
+
+  // v < 1 → compressed leading-zeros form.
   const abs = Math.abs(v);
-  const exp = Math.floor(Math.log10(abs));           // e.g. -8 for 2.23e-8
-  const leadingZeros = -exp - 1;                     // 7 zeros before the "2"
-  if (leadingZeros <= 3) {
-    // Small enough to render normally.
-    return "$" + abs.toPrecision(sigFigs).replace(/0+$/, "");
+  const exp = Math.floor(Math.log10(abs));           // e.g. -8 for 2.43e-8
+  const leadingZeros = -exp - 1;                     // 7 zeros between "." and "2"
+
+  if (leadingZeros <= 2) {
+    // Small enough to show normally without the subscript trick.
+    const rounded = Number(abs.toPrecision(sigFigs));
+    // toFixed to avoid scientific notation, then trim trailing zeros.
+    const s = rounded.toFixed(leadingZeros + sigFigs).replace(/0+$/, "").replace(/\.$/, "");
+    return "$" + s;
   }
-  const digits = abs.toPrecision(sigFigs).replace(/^0\.0+/, "");
+
+  // ≥3 leading zeros → use $0.0₇digits form. Force fixed decimal notation
+  // via toFixed(leadingZeros + sigFigs) so the significant digits come out
+  // as "0.00000002431" not "2.431e-8". Then strip the "0.000…0" prefix.
+  const fixed = abs.toFixed(leadingZeros + sigFigs);
+  const digits = fixed.replace(/^0\.0+/, "").replace(/0+$/, "").replace(/\.$/, "");
   const sub = leadingZeros
     .toString()
     .split("")
     .map((d) => SUB_ZERO[Number(d)])
     .join("");
-  return `$0.0${sub}${digits.replace(/\.?0+$/, "")}`;
+  return `$0.0${sub}${digits}`;
 }
 
 /** Compact USD amount: $4K / $1.2M / $500. Standard everywhere. */

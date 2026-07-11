@@ -5,7 +5,7 @@ import FeedGrid from "./FeedGrid";
 export const metadata: Metadata = {
   title: "B20HUB — Feed",
   description:
-    "Every B20HUB launch: 100B supply, ~$4K opening market cap, LP permanently locked in the fee-splitter hook. 80% creator / 15% $BLUE buyback / 5% treasury forever.",
+    "Every B20HUB launch: 100B supply, ~$6K opening market cap, LP permanently locked in the fee-splitter hook. 80% creator / 15% $BLUE buyback / 5% treasury forever.",
 };
 
 /**
@@ -71,7 +71,7 @@ function StatsPanel() {
         protocol constants
       </p>
       <StatRow label="Supply per launch" value="100,000,000,000 tokens" />
-      <StatRow label="Opening market cap" value="~$4K @ $3K ETH" hint="scales with ETH price" />
+      <StatRow label="Opening market cap" value="~$6K @ $1.8K ETH" hint="scales with ETH price · 3.333 ETH baked-in" />
       <StatRow label="Creator share" value="80% of every swap fee" accent="#34D399" />
       <StatRow label="BLUE buyback" value="15% → swap → burn/hold" accent="#4FC3F7" />
       <StatRow label="Treasury" value="5% → BlueAgent multisig" />

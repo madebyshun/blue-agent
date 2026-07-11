@@ -10,7 +10,7 @@ import { ConnectButton } from "@/components/ConnectModal";
  *
  * Contract-level constants (nothing user-configurable here):
  *  - Supply:        100_000_000_000 × 10¹⁸ (100B tokens)
- *  - OpeningPrice:  OPENING_SQRT_PRICE_X96 constant (~$4K mcap @ $3K ETH)
+ *  - OpeningPrice:  OPENING_SQRT_PRICE_X96 constant (~$6K mcap @ $1.8K ETH)
  *  - Fee split:     80% creator / 15% BuyBack / 5% Treasury
  *  - LP:            permanently locked in hook
  *  - Admin:         renounced in the same tx
@@ -144,20 +144,17 @@ export default function LaunchClient() {
 
   return (
     <div className="max-w-5xl mx-auto">
-      <div className="mb-6">
-        <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-2">
+      <div className="mb-5">
+        <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-1">
           b20hub · launch
         </p>
-        <h1 className="font-mono text-2xl md:text-3xl font-bold mb-3">
-          Launch a B20 with an auto-pool.
-        </h1>
-        <p className="font-mono text-xs text-slate-500 leading-relaxed">
-          Two fields. One signature. Every launch is 100B tokens at{" "}
-          <span className="text-slate-300">~$4K opening market cap</span> — fixed at
-          the contract level. See{" "}
+        <h1 className="font-mono text-2xl md:text-3xl font-bold">Create a token</h1>
+        <p className="font-mono text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+          100B fixed supply · ~$6K opening market cap · 80/15/5 fee split ·
+          LP locked forever. One signature.{" "}
           <Link href="/app/b20hub/docs" className="text-[#4FC3F7] hover:underline">
-            how it works
-          </Link>{" "}for the full breakdown.
+            How it works ↗
+          </Link>
         </p>
       </div>
 
@@ -171,31 +168,33 @@ export default function LaunchClient() {
         </div>
       ) : (
       <div className="grid lg:grid-cols-[1fr_320px] gap-6 items-start">
-        <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 space-y-4">
-          <div>
-            <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
-              Token name *
-            </label>
-            <input value={name} onChange={(e) => setName(e.target.value)}
-              placeholder="My Token" spellCheck={false} className={INPUT_CLS} />
+        <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 space-y-3.5">
+          {/* Compact identity row — name + symbol side by side, saves ~40vh. */}
+          <div className="grid grid-cols-[1fr_140px] gap-2">
+            <div>
+              <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1">
+                Name *
+              </label>
+              <input value={name} onChange={(e) => setName(e.target.value)}
+                placeholder="Cool Token" spellCheck={false} className={INPUT_CLS} maxLength={40} />
+            </div>
+            <div>
+              <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1">
+                Ticker *
+              </label>
+              <input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                placeholder="COOL" spellCheck={false} className={INPUT_CLS} maxLength={10} />
+            </div>
           </div>
 
           <div>
-            <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
-              Symbol *
-            </label>
-            <input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-              placeholder="MTK" spellCheck={false} className={INPUT_CLS} />
-          </div>
-
-          <div>
-            <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+            <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1">
               Fee tier
             </label>
-            <div className="flex rounded-xl border border-[#1A1A2E] overflow-hidden mb-1.5">
+            <div className="flex rounded-xl border border-[#1A1A2E] overflow-hidden">
               {(["MEDIUM", "HIGH", "3PCT"] as const).map((t, i) => (
                 <button key={t} onClick={() => setTier(t)}
-                  className="flex-1 py-2.5 font-mono text-xs transition-all"
+                  className="flex-1 py-2 font-mono text-xs transition-all"
                   style={tier === t
                     ? { background: "#4FC3F715", color: "#4FC3F7", borderRight: i < 2 ? "1px solid #1A1A2E" : undefined }
                     : { color: "#475569", borderRight: i < 2 ? "1px solid #1A1A2E" : undefined }}>
@@ -203,7 +202,7 @@ export default function LaunchClient() {
                 </button>
               ))}
             </div>
-            <p className="font-mono text-[9px] text-slate-600 leading-relaxed">
+            <p className="font-mono text-[9px] text-slate-600 mt-1">
               {TIER_HINT[tier]}
             </p>
           </div>
@@ -215,25 +214,22 @@ export default function LaunchClient() {
               slot for them. They land in the B20HUB registry so the feed
               + token detail pages render them immediately after deploy.
               All optional — omit any you don't have yet. */}
-          <div className="pt-2 border-t border-[#1A1A2E] space-y-3">
-            <p className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">
-              Token identity <span className="text-slate-700 lowercase font-normal">(off-chain, editable later)</span>
+          <div className="pt-3 border-t border-[#1A1A2E] space-y-2.5">
+            <p className="font-mono text-[9px] text-slate-500 tracking-widest uppercase">
+              Metadata <span className="text-slate-700 lowercase font-normal">— off-chain, editable later</span>
             </p>
-            <MetaField label="Image / logo URL"
+            <MetaField label="Image URL"
               placeholder="https://…/logo.png or ipfs://…"
               value={image} onChange={setImage} />
             <MetaField label="Description"
               placeholder="What is this token about?"
               value={description} onChange={setDescription} textarea maxLen={200} />
-          </div>
-          <div className="pt-2 border-t border-[#1A1A2E] space-y-3">
-            <p className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">
-              Links <span className="text-slate-700 lowercase font-normal">(optional)</span>
-            </p>
-            <MetaField label="Website"      placeholder="https://yourproject.xyz"     value={website}   onChange={setWebsite} />
-            <MetaField label="Twitter / X"  placeholder="https://x.com/yourproject"   value={twitter}   onChange={setTwitter} />
-            <MetaField label="Telegram"     placeholder="https://t.me/yourproject"    value={telegram}  onChange={setTelegram} />
-            <MetaField label="Farcaster"    placeholder="@yourhandle or fid"          value={farcaster} onChange={setFarcaster} />
+            <div className="grid grid-cols-2 gap-2">
+              <MetaField label="Website"   placeholder="https://…"        value={website}   onChange={setWebsite}   compact />
+              <MetaField label="Twitter"   placeholder="https://x.com/…" value={twitter}   onChange={setTwitter}   compact />
+              <MetaField label="Telegram"  placeholder="https://t.me/…"  value={telegram}  onChange={setTelegram}  compact />
+              <MetaField label="Farcaster" placeholder="@handle"          value={farcaster} onChange={setFarcaster} compact />
+            </div>
           </div>
 
           {/* Read-only summary of contract-level constants. */}
@@ -337,7 +333,7 @@ function PreviewCard({
       <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
         <div>
           <div className="text-slate-600 tracking-wider uppercase">MARKET CAP</div>
-          <div className="text-slate-200 font-bold">~$4K</div>
+          <div className="text-slate-200 font-bold">~$6K</div>
         </div>
         <div>
           <div className="text-slate-600 tracking-wider uppercase">SUPPLY</div>
@@ -365,7 +361,7 @@ function PreviewBadge({ label, color }: { label: string; color: string }) {
 }
 
 function MetaField({
-  label, placeholder, value, onChange, textarea, maxLen,
+  label, placeholder, value, onChange, textarea, maxLen, compact,
 }: {
   label: string;
   placeholder: string;
@@ -373,11 +369,15 @@ function MetaField({
   onChange: (v: string) => void;
   textarea?: boolean;
   maxLen?: number;
+  compact?: boolean;
 }) {
   const showCount = maxLen != null;
+  const inputCls = compact
+    ? "w-full bg-[#0a0a12] border border-[#1A1A2E] focus:border-[#4FC3F740] rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors"
+    : INPUT_CLS;
   return (
     <div>
-      <div className="flex items-baseline justify-between mb-1">
+      <div className="flex items-baseline justify-between mb-0.5">
         <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">
           {label}
         </label>
@@ -392,7 +392,7 @@ function MetaField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          rows={3}
+          rows={2}
           spellCheck={false}
           maxLength={maxLen}
           className={INPUT_CLS + " resize-none"}
@@ -404,7 +404,7 @@ function MetaField({
           placeholder={placeholder}
           spellCheck={false}
           maxLength={maxLen}
-          className={INPUT_CLS}
+          className={inputCls}
         />
       )}
     </div>
@@ -412,25 +412,27 @@ function MetaField({
 }
 
 function ConstantsPanel() {
-  const rows = [
-    { l: "Supply",           v: "100,000,000,000 tokens" },
-    { l: "Opening mcap",     v: "~$4K @ $3K ETH" },
-    { l: "Creator take",     v: "80% of every swap fee",  c: "#34D399" },
-    { l: "$BLUE buyback",    v: "15% (auto flywheel)",    c: "#4FC3F7" },
-    { l: "Treasury",         v: "5%" },
-    { l: "LP",               v: "Locked forever" },
-    { l: "Admin",            v: "Renounced at deploy" },
+  // Compact chip strip — everything the launcher hardcodes at deploy time.
+  // Kept short so it doesn't visually compete with the metadata form; the
+  // full breakdown lives in /app/b20hub/docs.
+  const chips = [
+    { l: "Supply",  v: "100B" },
+    { l: "Mcap",    v: "~$6K" },
+    { l: "Creator", v: "80%", c: "#34D399" },
+    { l: "BLUE",    v: "15%", c: "#4FC3F7" },
+    { l: "Fund",    v: "5%" },
+    { l: "LP",      v: "🔒" },
   ];
   return (
-    <div className="rounded-xl border border-[#4FC3F7]/20 bg-[#4FC3F7]/[0.03] p-3 space-y-1.5">
-      <p className="font-mono text-[9px] text-slate-500 tracking-widest uppercase mb-1">
-        contract-level constants (not editable)
-      </p>
-      {rows.map(({ l, v, c }) => (
-        <div key={l} className="flex items-center justify-between text-[10px] font-mono">
-          <span className="text-slate-500">{l}</span>
+    <div className="rounded-xl border border-[#4FC3F7]/20 bg-[#4FC3F7]/[0.03] px-3 py-2 flex flex-wrap gap-3 items-center">
+      <span className="font-mono text-[9px] text-slate-500 tracking-widest uppercase">
+        Baked-in
+      </span>
+      {chips.map(({ l, v, c }) => (
+        <span key={l} className="font-mono text-[10px]">
+          <span className="text-slate-500">{l}</span>{" "}
           <span className="font-bold" style={{ color: c ?? "#e2e8f0" }}>{v}</span>
-        </div>
+        </span>
       ))}
     </div>
   );
