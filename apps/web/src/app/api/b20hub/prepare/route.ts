@@ -33,19 +33,19 @@ import { V4_FEE_TIERS } from "@/lib/b20hub/constants";
 // Until then this route reports a clear "not deployed yet" error so the UI
 // can show a friendly banner rather than silently 500-ing.
 const LAUNCHER_ADDRESSES: Record<number, `0x${string}` | null> = {
-  // ⚠️ v3 launcher 0xc6e4…f466 works for LAUNCHING but references broken
-  // hook v3 0xe3B8…1200 whose beforeRemoveLiquidity permanently blocks
-  // hook.claimFees. Any pool launched under it will have its fees stranded
-  // (see 40f4d6c fix commit for the two bugs). Unwiring defensively until
-  // launcher v4 (pointing at hook v4) is deployed.
+  // Launcher v5 (2026-07-11, block 48478468) — pump.fun-style hardcoded
+  // OPENING_SQRT_PRICE_X96, paired with hook v4 (fee-claim fix). Simulated
+  // successfully: launch() returns (token=0xb200…, poolId, lpTokenIdA,
+  // lpTokenIdB). No sqrtPrice in LaunchParams — every launch opens at
+  // ~$4K market cap at $3K ETH.
   //
   // Prior launchers (do not use):
   //   v1 0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b — createB20 sig swap
   //   v2 0xb68120DC451CbcB391D4A651c0c1d3dE95744A8B — tick range, Permit2,
   //      modifyLiquidities return-type mismatch
-  //   v3 0xc6e402C0b544Ef4f69cF61AE4eCA114532Fbf466 — launched OK but hook's
-  //      claimFees never worked (see fix in 40f4d6c)
-  8453:  null,
+  //   v3 0xc6e402C0b544Ef4f69cF61AE4eCA114532Fbf466 — hook v3 claimFees
+  //      permanently broken
+  8453:  "0xdde24849f47B34151132b8C05db3aE505EB17714",
   84532: null,
 };
 
