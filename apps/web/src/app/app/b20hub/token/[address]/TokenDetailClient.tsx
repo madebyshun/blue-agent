@@ -7,13 +7,16 @@ import { B20HUB_HOOK, B20HUB_BUYBACK } from "@/lib/b20hub/constants";
 const POSITION_MANAGER = "0x7C5f5A4bBd8fD63184577525326123B519429bDc" as const;
 
 interface PoolInfo {
-  poolId:      string;
-  feeTier:     number;
-  feeLabel:    string;
-  creator:     string;
-  lpTokenIdA:  string;
-  lpNftOwner?: string | null;
-  slot0?:      { sqrtPriceX96: string; tick: number; protocolFee: number; lpFee: number } | null;
+  poolId:            string;
+  feeTier:           number;
+  feeLabel:          string;
+  creator:           string;
+  lpTokenIdA:        string;
+  lpNftOwner?:       string | null;
+  slot0?:            { sqrtPriceX96: string; tick: number; protocolFee: number; lpFee: number } | null;
+  computedPriceUsd?: number | null;
+  computedMcapUsd?:  number | null;
+  ethPriceUsd?:      number | null;
 }
 interface PoolResponse {
   ok: boolean;
@@ -106,7 +109,7 @@ export default function TokenDetailClient({ address }: { address: `0x${string}` 
       <HeaderCard sym={sym} name={data.name ?? sym} address={address} pool={data.pool ?? null} supplyWhole={supplyWhole} />
 
       <div className="grid md:grid-cols-2 gap-4">
-        <MarketCard market={market} />
+        <MarketCard market={market} pool={data.pool ?? null} />
         <PoolCard pool={data.pool ?? null} />
       </div>
 
@@ -145,20 +148,40 @@ function HeaderCard({ sym, name, address, pool, supplyWhole }: {
   );
 }
 
-function MarketCard({ market }: { market: MarketData | null }) {
+function MarketCard({ market, pool }: { market: MarketData | null; pool: PoolInfo | null }) {
+  // Prefer onchain-native price / mcap (works instantly at launch — pump.fun
+  // / Bankr pattern). DexScreener data adds 24h vol / change / liq, which
+  // are meaningless until real trades happen anyway.
+  const priceUsd = market?.priceUsd ?? pool?.computedPriceUsd ?? null;
+  const mcapUsd  = market?.marketCap ?? pool?.computedMcapUsd  ?? null;
+  const usingOnchain = market?.marketCap == null && pool?.computedMcapUsd != null;
   const changeColor = market?.change24h == null ? "#64748B" : market.change24h >= 0 ? "#22C55E" : "#EF4444";
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
-      <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-3">
-        Market (via DexScreener)
-      </p>
+      <div className="flex items-baseline justify-between mb-3">
+        <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">Market</p>
+        <p className="font-mono text-[9px] text-slate-600">
+          {usingOnchain
+            ? `onchain · ETH=$${pool?.ethPriceUsd?.toFixed(0) ?? "?"}`
+            : market?.marketCap != null ? "via DexScreener" : "—"}
+        </p>
+      </div>
       <div className="grid grid-cols-2 gap-4">
-        <Stat label="PRICE"    value={market?.priceUsd == null ? "—" : "$" + market.priceUsd.toExponential(2)} />
-        <Stat label="MCAP"     value={fmtUsd(market?.marketCap)} />
+        <Stat label="PRICE"    value={priceUsd == null ? "—" : "$" + priceUsd.toExponential(2)} />
+        <Stat label="MCAP"     value={fmtUsd(mcapUsd)} />
         <Stat label="24H VOL"  value={fmtUsd(market?.volume24h)} />
         <Stat label="24H %"    value={fmtPct(market?.change24h)} color={changeColor} />
         <Stat label="LIQ"      value={fmtUsd(market?.liquidityUsd)} />
       </div>
+      {usingOnchain && (
+        <p className="font-mono text-[9px] text-slate-600 mt-3 leading-relaxed">
+          Computed from pool sqrtPrice × CoinGecko ETH spot — this is the
+          real onchain mcap. Third-party wallets (Base App, Coinbase Wallet,
+          DexScreener) may still show $0 until their aggregators finish
+          indexing V4-hook pools — that&apos;s an aggregator limitation,
+          not a contract issue.
+        </p>
+      )}
     </div>
   );
 }

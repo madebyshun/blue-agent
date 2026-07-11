@@ -144,27 +144,34 @@ export default function LaunchClient() {
   }
 
   return (
-    <div className="max-w-xl mx-auto">
-      <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-2">
-        b20hub · launch
-      </p>
-      <h1 className="font-mono text-2xl md:text-3xl font-bold mb-3">
-        Launch a B20 with an auto-pool.
-      </h1>
-      <p className="font-mono text-xs text-slate-500 leading-relaxed mb-6">
-        Two fields. One signature. Every launch is 100B tokens at{" "}
-        <span className="text-slate-300">~$4K opening market cap</span> — fixed at
-        the contract level. See{" "}
-        <Link href="/app/b20hub/docs" className="text-[#4FC3F7] hover:underline">
-          how it works
-        </Link>{" "}for the full breakdown.
-      </p>
+    <div className="max-w-5xl mx-auto">
+      <div className="mb-6">
+        <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-2">
+          b20hub · launch
+        </p>
+        <h1 className="font-mono text-2xl md:text-3xl font-bold mb-3">
+          Launch a B20 with an auto-pool.
+        </h1>
+        <p className="font-mono text-xs text-slate-500 leading-relaxed">
+          Two fields. One signature. Every launch is 100B tokens at{" "}
+          <span className="text-slate-300">~$4K opening market cap</span> — fixed at
+          the contract level. See{" "}
+          <Link href="/app/b20hub/docs" className="text-[#4FC3F7] hover:underline">
+            how it works
+          </Link>{" "}for the full breakdown.
+        </p>
+      </div>
 
       {status === "done" && tokenAddr ? (
-        <SuccessCard tokenAddr={tokenAddr} txHash={txHash} onLaunchAnother={() => {
-          setStatus("idle"); setName(""); setSymbol(""); setTxHash(""); setTokenAddr("");
-        }} />
+        <div className="max-w-xl mx-auto">
+          <SuccessCard tokenAddr={tokenAddr} txHash={txHash} onLaunchAnother={() => {
+            setStatus("idle"); setName(""); setSymbol("");
+            setImage(""); setDescription(""); setWebsite(""); setTwitter(""); setTelegram(""); setFarcaster("");
+            setTxHash(""); setTokenAddr("");
+          }} />
+        </div>
       ) : (
+      <div className="grid lg:grid-cols-[1fr_320px] gap-6 items-start">
         <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 space-y-4">
           <div>
             <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
@@ -268,8 +275,100 @@ export default function LaunchClient() {
             </p>
           )}
         </div>
+
+        {/* Live preview panel — sticky on desktop so users can watch the
+            card update as they type. Mirrors what shows up in /app/b20hub
+            feed grid post-launch. Matches o1.exchange / pump.fun pattern
+            where "what am I about to ship" is always visible. */}
+        <aside className="lg:sticky lg:top-20 space-y-3">
+          <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">
+            live preview
+          </p>
+          <PreviewCard
+            name={name}
+            symbol={symbol}
+            image={image}
+            description={description}
+            tier={tier}
+          />
+          <p className="font-mono text-[9px] text-slate-600 leading-relaxed">
+            How your token will look in the B20HUB feed. Metadata (image,
+            description, socials) can be edited later — only the on-chain
+            fields (name, symbol, fee tier, supply) are permanent.
+          </p>
+        </aside>
+      </div>
       )}
     </div>
+  );
+}
+
+function PreviewCard({
+  name, symbol, image, description, tier,
+}: {
+  name: string; symbol: string; image: string; description: string; tier: FeeTier;
+}) {
+  const sym = (symbol.trim() || "SYM").toUpperCase();
+  const displayName = name.trim() || "Token name";
+  const feeLabel = TIER_LABEL[tier];
+  return (
+    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
+      <div className="flex items-start gap-3 mb-3">
+        {image.trim() ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={image.trim()} alt={sym}
+            className="w-11 h-11 rounded-lg object-cover bg-[#0d0d16] shrink-0"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+        ) : (
+          <div className="w-11 h-11 rounded-lg flex items-center justify-center text-sm font-bold shrink-0"
+            style={{ background: "#4FC3F715", border: "1px solid #4FC3F740", color: "#4FC3F7" }}>
+            {sym.slice(0, 2).toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="font-mono text-sm font-bold truncate">{displayName}</div>
+          <div className="font-mono text-[10px] text-slate-500">${sym}/ETH</div>
+          <div className="flex gap-1 mt-1.5 flex-wrap">
+            <PreviewBadge label="ETH" color="#4FC3F7" />
+            <PreviewBadge label={`V4 ${feeLabel}`} color="#FF007A" />
+            <PreviewBadge label="Immutable" color="#22C55E" />
+          </div>
+        </div>
+      </div>
+
+      {description.trim() && (
+        <p className="font-mono text-[10px] text-slate-400 leading-relaxed mb-3 line-clamp-2">
+          {description.trim()}
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+        <div>
+          <div className="text-slate-600 tracking-wider uppercase">MARKET CAP</div>
+          <div className="text-slate-200 font-bold">~$4K</div>
+        </div>
+        <div>
+          <div className="text-slate-600 tracking-wider uppercase">SUPPLY</div>
+          <div className="text-slate-200 font-bold">100B</div>
+        </div>
+        <div>
+          <div className="text-slate-600 tracking-wider uppercase">FEE</div>
+          <div className="text-slate-200 font-bold">{feeLabel}</div>
+        </div>
+        <div>
+          <div className="text-slate-600 tracking-wider uppercase">LP</div>
+          <div className="text-[#22C55E] font-bold">🔒 Locked</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+function PreviewBadge({ label, color }: { label: string; color: string }) {
+  return (
+    <span className="font-mono text-[8px] tracking-wider uppercase px-1.5 py-0.5 rounded"
+      style={{ background: `${color}15`, color, border: `1px solid ${color}40` }}>
+      {label}
+    </span>
   );
 }
 
