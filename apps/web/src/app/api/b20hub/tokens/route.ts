@@ -3,6 +3,31 @@ import { getLaunches } from "@/lib/launches";
 import { getTokenMarket } from "@/lib/market-data";
 import { B20HUB_HOOK, B20HUB_LAUNCHER } from "@/lib/b20hub/constants";
 
+// In-module cache mirroring the one in /api/b20hub/pool/[address]. Fine for
+// dev + Vercel warm lambdas — a cold lambda just refetches.
+let _ethCache: { at: number; usd: number | null } | null = null;
+async function fetchEthPriceUsd(): Promise<number | null> {
+  const now = Date.now();
+  if (_ethCache && now - _ethCache.at < 5 * 60_000) return _ethCache.usd;
+  try {
+    const r = await fetch(
+      "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
+      { signal: AbortSignal.timeout(4000), headers: { Accept: "application/json" } },
+    );
+    if (!r.ok) throw new Error(`CG ${r.status}`);
+    const j = (await r.json()) as { ethereum?: { usd?: number } };
+    const usd = j?.ethereum?.usd;
+    if (typeof usd !== "number" || !Number.isFinite(usd) || usd <= 0) {
+      throw new Error("bad payload");
+    }
+    _ethCache = { at: now, usd };
+    return usd;
+  } catch {
+    _ethCache = { at: now, usd: 3000 };
+    return 3000;
+  }
+}
+
 export const runtime = "nodejs";
 export const maxDuration = 15;
 
@@ -64,23 +89,49 @@ export async function GET(req: NextRequest) {
     )
     .slice(0, limit);
 
+  // OPENING_SQRT_PRICE_X96 constant → mcap = 1.333 ETH at the launcher's
+  // baked-in price. Every B20HUB launch opens at this until real trades
+  // shift the pool tick. We compute it once per request and use it as a
+  // fallback when DexScreener has no data yet (typical for a token < 1h
+  // old). Tokens with real DEX data still use DexScreener's live figures.
+  const ethSpotUsd = await fetchEthPriceUsd();
+  const OPENING_ETH_PER_100B = 1_333_333_333_333n; // 1.333 ETH in wei-ish precision
+  // 100B tokens = ~1.333 ETH by construction: keep the constant here so
+  // shifting it later only touches this file + the launcher contract.
+  const openingMcapUsd = ethSpotUsd != null
+    ? ethSpotUsd * (Number(OPENING_ETH_PER_100B) / 1e12)  // → USD
+    : null;
+
   // Enrich the newest 40 with DexScreener market data. Fail-soft.
   const ENRICH = 40;
   const enriched = await Promise.all(
     b20hub.map(async (l, i) => {
       if (i >= ENRICH) return { ...l, market: null };
       const m = await getTokenMarket(l.tokenAddress).catch(() => null);
+      if (m) {
+        return {
+          ...l,
+          market: {
+            priceUsd:     m.priceUsd,
+            marketCap:    m.marketCap ?? m.fdv,
+            volume24h:    m.volume24h,
+            liquidityUsd: m.liquidityUsd,
+            change24h:    m.change.h24,
+          },
+        };
+      }
+      // No DexScreener data → fall back to the opening constant so the card
+      // shows something meaningful. Volume/change stay null until a trade
+      // gets indexed.
       return {
         ...l,
-        market: m
-          ? {
-              priceUsd:     m.priceUsd,
-              marketCap:    m.marketCap ?? m.fdv,
-              volume24h:    m.volume24h,
-              liquidityUsd: m.liquidityUsd,
-              change24h:    m.change.h24,
-            }
-          : null,
+        market: openingMcapUsd != null ? {
+          priceUsd:     openingMcapUsd / 100_000_000_000,   // $ / whole token
+          marketCap:    openingMcapUsd,
+          volume24h:    null,
+          liquidityUsd: null,
+          change24h:    null,
+        } : null,
       };
     }),
   );

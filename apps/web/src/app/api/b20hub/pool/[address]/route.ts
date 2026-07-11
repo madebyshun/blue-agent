@@ -60,6 +60,39 @@ const TIERS: Array<{ fee: number; spacing: number; label: string }> = [
 
 const publicClient = createPublicClient({ chain: base, transport: http("https://mainnet.base.org") });
 
+/**
+ * Fetch ETH/USD spot from CoinGecko. Falls back to a hardcoded $3000 if the
+ * upstream is down — we never want the whole detail page to fail on a
+ * transient CG hiccup, and a stale $3000 default at least keeps the mcap
+ * within an order of magnitude of reality.
+ *
+ * Cached in-module for 5 min (per lambda instance) via a tiny memo so a
+ * burst of concurrent detail-page hits doesn't hammer CoinGecko. Vercel
+ * lambdas warm-cache this too.
+ */
+let _ethCache: { at: number; usd: number | null } | null = null;
+async function fetchEthPriceUsd(): Promise<number | null> {
+  const now = Date.now();
+  if (_ethCache && now - _ethCache.at < 5 * 60_000) return _ethCache.usd;
+  try {
+    const r = await fetch(
+      "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
+      { signal: AbortSignal.timeout(4000), headers: { Accept: "application/json" } },
+    );
+    if (!r.ok) throw new Error(`CG ${r.status}`);
+    const j = (await r.json()) as { ethereum?: { usd?: number } };
+    const usd = j?.ethereum?.usd;
+    if (typeof usd !== "number" || !Number.isFinite(usd) || usd <= 0) {
+      throw new Error("bad CG payload");
+    }
+    _ethCache = { at: now, usd };
+    return usd;
+  } catch {
+    _ethCache = { at: now, usd: 3000 };
+    return 3000;
+  }
+}
+
 function buildKey(token: `0x${string}`, fee: number, spacing: number) {
   const wethIsSmaller = WETH9_BASE.toLowerCase() < token.toLowerCase();
   return {
@@ -106,16 +139,26 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ add
       });
     }
 
+    // Fetch ETH/USD spot in parallel with the pool probe so we can compute
+    // an onchain-native market cap (pump.fun / Bankr pattern — every
+    // launchpad displays its own mcap from pool state + ETH price rather
+    // than waiting for DexScreener to index the pool after the first trade).
+    const ethPricePromise = fetchEthPriceUsd();
+
     // Probe fee tiers sequentially so an error on one doesn't kill others.
     // 30s cache absorbs the cost of doing this per request.
     let pool: {
-      poolId:      `0x${string}`;
-      feeTier:     number;
-      feeLabel:    string;
-      creator:     `0x${string}`;
-      lpTokenIdA:  string;
-      lpNftOwner?: `0x${string}` | null;
-      slot0?:      { sqrtPriceX96: string; tick: number; protocolFee: number; lpFee: number } | null;
+      poolId:            `0x${string}`;
+      feeTier:           number;
+      feeLabel:          string;
+      creator:           `0x${string}`;
+      lpTokenIdA:        string;
+      lpNftOwner?:       `0x${string}` | null;
+      slot0?:            { sqrtPriceX96: string; tick: number; protocolFee: number; lpFee: number } | null;
+      // Onchain-computed metrics — independent of DexScreener indexer.
+      computedPriceUsd?: number | null;
+      computedMcapUsd?:  number | null;
+      ethPriceUsd?:      number | null;
     } | null = null;
 
     for (const t of TIERS) {
@@ -146,19 +189,51 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ add
             }).catch(() => null),
           ).catch(() => null),
         ]);
+        // Compute onchain-native price + mcap. Works for any B20HUB pool
+        // (WETH is currency0 since 0x4200… < 0xb200…), no trades required.
+        //
+        //   sqrtP = sqrtPriceX96 / 2^96
+        //   P     = sqrtP^2  (= amount1 / amount0 = base_tokens / wei_WETH)
+        //   1 token_whole = 10^decimals base
+        //   1 ETH        = 10^18 wei
+        //   → token_price_wei_WETH  = 1e_decimals / P
+        //   → token_price_ETH       = token_price_wei_WETH / 1e18
+        //   → mcap_USD              = totalSupply_whole × token_price_ETH × ETH_USD
+        let computedPriceUsd: number | null = null;
+        let computedMcapUsd:  number | null = null;
+        const ethPriceUsd = await ethPricePromise.catch(() => null);
+        if (slot0raw && ethPriceUsd != null) {
+          const sqrtP_X96 = slot0raw[0] as bigint;
+          // Do the math in FP; fine for display since we're aiming at
+          // 4-6 significant digits, not gwei precision.
+          const sqrtP = Number(sqrtP_X96) / Math.pow(2, 96);
+          const P     = sqrtP * sqrtP;               // base_tokens / wei_WETH
+          const dec   = Number(decimals);
+          const supplyWhole = Number(totalSupply as bigint) / Math.pow(10, dec);
+          if (P > 0) {
+            const tokenPriceWETH_wei = Math.pow(10, dec) / P;   // wei_WETH per whole token
+            const tokenPriceETH      = tokenPriceWETH_wei / 1e18;
+            computedPriceUsd = tokenPriceETH * ethPriceUsd;
+            computedMcapUsd  = supplyWhole * computedPriceUsd;
+          }
+        }
+
         pool = {
-          poolId:     id,
-          feeTier:    t.fee,
-          feeLabel:   t.label,
-          creator:    c as `0x${string}`,
-          lpTokenIdA: (lpId as bigint).toString(),
-          lpNftOwner: ownerRaw as `0x${string}` | null,
+          poolId:            id,
+          feeTier:           t.fee,
+          feeLabel:          t.label,
+          creator:           c as `0x${string}`,
+          lpTokenIdA:        (lpId as bigint).toString(),
+          lpNftOwner:        ownerRaw as `0x${string}` | null,
           slot0: slot0raw ? {
             sqrtPriceX96: (slot0raw[0] as bigint).toString(),
             tick:         Number(slot0raw[1]),
             protocolFee:  Number(slot0raw[2]),
             lpFee:        Number(slot0raw[3]),
           } : null,
+          computedPriceUsd,
+          computedMcapUsd,
+          ethPriceUsd,
         };
         break;
       }
