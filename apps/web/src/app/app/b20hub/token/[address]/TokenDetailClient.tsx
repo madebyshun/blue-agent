@@ -2,179 +2,62 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { createPublicClient, http, keccak256, encodeAbiParameters } from "viem";
-import { base } from "wagmi/chains";
-import { B20HUB_HOOK, B20HUB_BUYBACK, WETH9_BASE } from "@/lib/b20hub/constants";
+import { B20HUB_HOOK, B20HUB_BUYBACK } from "@/lib/b20hub/constants";
 
-const B20_FACTORY = "0xB20f000000000000000000000000000000000000" as const;
 const POSITION_MANAGER = "0x7C5f5A4bBd8fD63184577525326123B519429bDc" as const;
-const STATE_VIEW = "0xA3c0c9B65BAd0b08107Aa264b0f3dB444b867A71" as const;
 
-const publicClient = createPublicClient({ chain: base, transport: http("https://mainnet.base.org") });
-
-const HOOK_ABI = [
-  {
-    type: "function", name: "creatorOfPool", stateMutability: "view",
-    inputs: [{ name: "poolId", type: "bytes32" }],
-    outputs: [{ name: "creator", type: "address" }],
-  },
-  {
-    type: "function", name: "lpTokenIdOfPool", stateMutability: "view",
-    inputs: [{ name: "poolId", type: "bytes32" }],
-    outputs: [{ name: "tokenId", type: "uint256" }],
-  },
-] as const;
-const ERC20_ABI = [
-  { type: "function", name: "name",        stateMutability: "view", inputs: [], outputs: [{ type: "string"  }] },
-  { type: "function", name: "symbol",      stateMutability: "view", inputs: [], outputs: [{ type: "string"  }] },
-  { type: "function", name: "totalSupply", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { type: "function", name: "decimals",    stateMutability: "view", inputs: [], outputs: [{ type: "uint8"   }] },
-] as const;
-const B20_ABI = [
-  { type: "function", name: "isB20", stateMutability: "view", inputs: [{ name: "addr", type: "address" }], outputs: [{ type: "bool" }] },
-] as const;
-const STATE_VIEW_ABI = [
-  {
-    type: "function", name: "getSlot0", stateMutability: "view",
-    inputs: [{ name: "poolId", type: "bytes32" }],
-    outputs: [
-      { name: "sqrtPriceX96",  type: "uint160" },
-      { name: "tick",          type: "int24"   },
-      { name: "protocolFee",   type: "uint24"  },
-      { name: "lpFee",         type: "uint24"  },
-    ],
-  },
-] as const;
-
-function buildPoolKey(token: `0x${string}`, feeTier: number, tickSpacing: number) {
-  const weth = WETH9_BASE.toLowerCase();
-  const tok = token.toLowerCase();
-  const wethIsSmaller = weth < tok;
-  return {
-    currency0:    (wethIsSmaller ? WETH9_BASE : token) as `0x${string}`,
-    currency1:    (wethIsSmaller ? token : WETH9_BASE) as `0x${string}`,
-    fee:          feeTier,
-    tickSpacing:  tickSpacing,
-    hooks:        B20HUB_HOOK as `0x${string}`,
-  };
+interface PoolInfo {
+  poolId:      string;
+  feeTier:     number;
+  feeLabel:    string;
+  creator:     string;
+  lpTokenIdA:  string;
+  lpNftOwner?: string | null;
+  slot0?:      { sqrtPriceX96: string; tick: number; protocolFee: number; lpFee: number } | null;
 }
-function computePoolId(key: ReturnType<typeof buildPoolKey>): `0x${string}` {
-  const encoded = encodeAbiParameters(
-    [{
-      type: "tuple",
-      components: [
-        { name: "currency0",   type: "address" },
-        { name: "currency1",   type: "address" },
-        { name: "fee",         type: "uint24"  },
-        { name: "tickSpacing", type: "int24"   },
-        { name: "hooks",       type: "address" },
-      ],
-    }],
-    [key],
-  );
-  return keccak256(encoded);
+interface PoolResponse {
+  ok: boolean;
+  isB20?: boolean;
+  name?: string;
+  symbol?: string;
+  totalSupply?: string;
+  decimals?: number;
+  pool?: PoolInfo | null;
+  error?: string;
 }
-
-// Try 3 fee tiers to find which one this token uses.
-const TIERS: Array<{ fee: number; spacing: number; label: string }> = [
-  { fee: 3000,  spacing: 60,  label: "0.3%" },
-  { fee: 10000, spacing: 200, label: "1%"   },
-  { fee: 30000, spacing: 600, label: "3%"   },
-];
-
-interface Detail {
-  isB20:        boolean;
-  name:         string;
-  symbol:       string;
-  totalSupply:  bigint;
-  decimals:     number;
-  poolFound:    { poolId: `0x${string}`; feeTier: number; label: string } | null;
-  creator:      `0x${string}` | null;
-  lpTokenIdA:   bigint | null;
-  slot0:        readonly [bigint, number, number, number] | null;
-  market:       {
-    priceUsd?:     number | null;
-    marketCap?:    number | null;
-    volume24h?:   number | null;
-    liquidityUsd?: number | null;
-    change24h?:   number | null;
-  } | null;
+interface MarketData {
+  priceUsd?: number | null;
+  marketCap?: number | null;
+  volume24h?: number | null;
+  liquidityUsd?: number | null;
+  change24h?: number | null;
 }
 
 export default function TokenDetailClient({ address }: { address: `0x${string}` }) {
-  const [detail, setDetail] = useState<Detail | null>(null);
+  const [data,   setData]   = useState<PoolResponse | null>(null);
+  const [market, setMarket] = useState<MarketData | null>(null);
   const [error,  setError]  = useState("");
 
   useEffect(() => {
     let alive = true;
-    (async () => {
-      try {
-        const [isB20, name, symbol, totalSupply, decimals] = await Promise.all([
-          publicClient.readContract({ address: B20_FACTORY, abi: B20_ABI, functionName: "isB20", args: [address] }),
-          publicClient.readContract({ address, abi: ERC20_ABI, functionName: "name" }).catch(() => "?"),
-          publicClient.readContract({ address, abi: ERC20_ABI, functionName: "symbol" }).catch(() => "?"),
-          publicClient.readContract({ address, abi: ERC20_ABI, functionName: "totalSupply" }).catch(() => 0n),
-          publicClient.readContract({ address, abi: ERC20_ABI, functionName: "decimals" }).catch(() => 18),
-        ]);
+    // Server-side probe: single JSON round-trip, 30s cache.
+    fetch(`/api/b20hub/pool/${address}`)
+      .then((r) => r.json())
+      .then((d: PoolResponse) => { if (alive) setData(d); })
+      .catch((e) => { if (alive) setError((e as Error).message || "Failed to load"); });
 
-        // Probe pools: find first fee tier whose poolId is bound in our hook.
-        let poolFound: Detail["poolFound"] = null;
-        let creator:   Detail["creator"]   = null;
-        let lpTokenIdA: Detail["lpTokenIdA"] = null;
-        let slot0:     Detail["slot0"]      = null;
-        for (const t of TIERS) {
-          const key = buildPoolKey(address, t.fee, t.spacing);
-          const poolId = computePoolId(key);
-          const c = await publicClient.readContract({
-            address: B20HUB_HOOK as `0x${string}`,
-            abi: HOOK_ABI,
-            functionName: "creatorOfPool",
-            args: [poolId],
-          }).catch(() => "0x0000000000000000000000000000000000000000" as const);
-          if (c !== "0x0000000000000000000000000000000000000000") {
-            poolFound = { poolId, feeTier: t.fee, label: t.label };
-            creator = c as `0x${string}`;
-            lpTokenIdA = await publicClient.readContract({
-              address: B20HUB_HOOK as `0x${string}`,
-              abi: HOOK_ABI,
-              functionName: "lpTokenIdOfPool",
-              args: [poolId],
-            }).catch(() => null) as bigint | null;
-            slot0 = await publicClient.readContract({
-              address: STATE_VIEW,
-              abi: STATE_VIEW_ABI,
-              functionName: "getSlot0",
-              args: [poolId],
-            }).catch(() => null) as Detail["slot0"];
-            break;
-          }
-        }
-
-        // Fetch market via DexScreener proxy through our existing endpoint.
-        const marketRes = await fetch(`/api/b20hub/tokens`).then((r) => r.json()).catch(() => null);
-        const market =
-          (marketRes?.tokens ?? []).find(
-            (t: { tokenAddress: string; market?: unknown }) =>
-              t.tokenAddress.toLowerCase() === address.toLowerCase(),
-          )?.market ?? null;
-
+    // Market data from the feed endpoint (also cached).
+    fetch("/api/b20hub/tokens")
+      .then((r) => r.json())
+      .then((d) => {
         if (!alive) return;
-        setDetail({
-          isB20:       Boolean(isB20),
-          name:        String(name),
-          symbol:      String(symbol),
-          totalSupply: totalSupply as bigint,
-          decimals:    Number(decimals),
-          poolFound,
-          creator,
-          lpTokenIdA,
-          slot0,
-          market,
-        });
-      } catch (e) {
-        if (alive) setError((e as Error).message || "Failed to load token");
-      }
-    })();
+        const t = (d.tokens ?? []).find(
+          (x: { tokenAddress: string; market?: MarketData }) =>
+            x.tokenAddress.toLowerCase() === address.toLowerCase(),
+        );
+        setMarket(t?.market ?? null);
+      })
+      .catch(() => {});
     return () => { alive = false; };
   }, [address]);
 
@@ -185,8 +68,7 @@ export default function TokenDetailClient({ address }: { address: `0x${string}` 
       </div>
     );
   }
-
-  if (!detail) {
+  if (!data) {
     return (
       <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] py-16 text-center">
         <div className="inline-block w-2 h-2 rounded-full bg-[#4FC3F7] animate-pulse" />
@@ -194,41 +76,48 @@ export default function TokenDetailClient({ address }: { address: `0x${string}` 
       </div>
     );
   }
-
-  if (!detail.isB20) {
+  if (data.ok === false) {
+    return (
+      <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-6">
+        <p className="font-mono text-sm text-red-400">{data.error || "Failed to load token"}</p>
+      </div>
+    );
+  }
+  if (!data.isB20) {
     return (
       <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6">
         <p className="font-mono text-sm text-amber-400 mb-1">Not a B20 token</p>
         <p className="font-mono text-[11px] text-slate-500">
           <code className="text-slate-300">isB20({address.slice(0, 8)}…)</code>{" "}
           returned <span className="text-red-400">false</span> at the factory.
-          Only real B20 tokens are indexed here.
         </p>
       </div>
     );
   }
 
-  const supplyWhole = Number(detail.totalSupply) / Math.pow(10, detail.decimals);
-  const sym = detail.symbol.replace(/^\$/, "");
+  const supplyWhole =
+    data.totalSupply != null && data.decimals != null
+      ? Number(BigInt(data.totalSupply)) / Math.pow(10, data.decimals)
+      : 0;
+  const sym = (data.symbol ?? "?").replace(/^\$/, "");
 
   return (
     <div className="space-y-6">
-      <HeaderCard sym={sym} name={detail.name} address={address} detail={detail} supplyWhole={supplyWhole} />
+      <HeaderCard sym={sym} name={data.name ?? sym} address={address} pool={data.pool ?? null} supplyWhole={supplyWhole} />
 
       <div className="grid md:grid-cols-2 gap-4">
-        <MarketCard market={detail.market} />
-        <PoolCard detail={detail} />
+        <MarketCard market={market} />
+        <PoolCard pool={data.pool ?? null} />
       </div>
 
-      <ActionsCard address={address} detail={detail} />
-
-      <ContractCard address={address} detail={detail} />
+      <ActionsCard address={address} pool={data.pool ?? null} />
+      <ContractCard address={address} pool={data.pool ?? null} />
     </div>
   );
 }
 
-function HeaderCard({ sym, name, address, detail, supplyWhole }: {
-  sym: string; name: string; address: string; detail: Detail; supplyWhole: number;
+function HeaderCard({ sym, name, address, pool, supplyWhole }: {
+  sym: string; name: string; address: string; pool: PoolInfo | null; supplyWhole: number;
 }) {
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 flex items-start gap-4">
@@ -241,11 +130,11 @@ function HeaderCard({ sym, name, address, detail, supplyWhole }: {
           <h1 className="font-mono text-xl font-bold">{name || sym}</h1>
           <span className="font-mono text-sm text-slate-500">${sym}</span>
         </div>
-        <div className="flex gap-2 mb-2">
+        <div className="flex gap-2 mb-2 flex-wrap">
           <Badge label="B20 Asset" color="#4FC3F7" />
           <Badge label="Base" color="#0052FF" />
-          {detail.poolFound && <Badge label={`V4 · ${detail.poolFound.label}`} color="#FF007A" />}
-          <Badge label="LP Locked" color="#22C55E" />
+          {pool && <Badge label={`V4 · ${pool.feeLabel}`} color="#FF007A" />}
+          {pool && <Badge label="LP Locked" color="#22C55E" />}
         </div>
         <p className="font-mono text-[10px] text-slate-600 break-all">{address}</p>
         <p className="font-mono text-[11px] text-slate-400 mt-2">
@@ -256,7 +145,7 @@ function HeaderCard({ sym, name, address, detail, supplyWhole }: {
   );
 }
 
-function MarketCard({ market }: { market: Detail["market"] }) {
+function MarketCard({ market }: { market: MarketData | null }) {
   const changeColor = market?.change24h == null ? "#64748B" : market.change24h >= 0 ? "#22C55E" : "#EF4444";
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
@@ -274,75 +163,58 @@ function MarketCard({ market }: { market: Detail["market"] }) {
   );
 }
 
-function PoolCard({ detail }: { detail: Detail }) {
-  if (!detail.poolFound) {
+function PoolCard({ pool }: { pool: PoolInfo | null }) {
+  if (!pool) {
     return (
       <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
-        <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-3">
-          Pool
-        </p>
+        <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-3">Pool</p>
         <p className="font-mono text-xs text-amber-400 mb-1">Not a B20HUB pool</p>
         <p className="font-mono text-[10px] text-slate-500 leading-relaxed">
           The B20HUB hook doesn&apos;t track a pool for this token at any
-          standard fee tier. This might be a plain-B20 launch (deployed
-          via <code className="text-slate-300">/app/b20</code> without
-          auto-pool) or launched under an earlier hook.
+          standard fee tier. Might be a plain-B20 launch, launched under
+          an earlier hook, or the index is still catching up (refresh in
+          ~30s).
         </p>
       </div>
     );
   }
+  const lpLocked = pool.lpNftOwner?.toLowerCase() === B20HUB_HOOK.toLowerCase();
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
-      <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-3">
-        B20HUB Pool
-      </p>
+      <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-3">B20HUB Pool</p>
       <div className="space-y-2 text-[11px] font-mono">
-        <Row label="Fee tier"   value={detail.poolFound.label} />
-        <Row label="Creator"    value={detail.creator ? detail.creator.slice(0, 8) + "…" + detail.creator.slice(-6) : "—"} />
-        <Row label="Position A" value={detail.lpTokenIdA ? "#" + detail.lpTokenIdA.toString() : "—"} />
-        <Row label="Current tick" value={detail.slot0 ? detail.slot0[1].toString() : "—"} />
-        <Row label="LP status"  value="🔒 Locked in hook forever" color="#22C55E" />
+        <Row label="Fee tier"    value={pool.feeLabel} />
+        <Row label="Creator"     value={pool.creator.slice(0, 8) + "…" + pool.creator.slice(-6)} />
+        <Row label="Position A"  value={"#" + pool.lpTokenIdA} />
+        <Row label="Current tick" value={pool.slot0 ? pool.slot0.tick.toString() : "—"} />
+        <Row label="LP status"   value={lpLocked ? "🔒 Locked in hook" : "⚠ NFT not held by hook"} color={lpLocked ? "#22C55E" : "#F59E0B"} />
       </div>
     </div>
   );
 }
 
-function ActionsCard({ address, detail }: { address: string; detail: Detail }) {
+function ActionsCard({ address, pool }: { address: string; pool: PoolInfo | null }) {
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
-      <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-3">
-        Actions
-      </p>
+      <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-3">Actions</p>
       <div className="flex flex-wrap gap-2">
-        <a
-          href={`https://app.uniswap.org/swap?chain=base&outputCurrency=${address}`}
+        <a href={`https://app.uniswap.org/swap?chain=base&outputCurrency=${address}`}
           target="_blank" rel="noopener noreferrer"
-          className="font-mono text-xs font-bold px-4 py-2 rounded-lg"
-          style={{ background: "#FF007A", color: "white" }}
-        >
+          className="font-mono text-xs font-bold px-4 py-2 rounded-lg" style={{ background: "#FF007A", color: "white" }}>
           🦄 Trade on Uniswap
         </a>
-        {detail.poolFound && (
-          <Link
-            href={`/app/b20hub/claim`}
-            className="font-mono text-xs font-bold px-4 py-2 rounded-lg"
-            style={{ background: "#34D399", color: "#050508" }}
-          >
+        {pool && (
+          <Link href={`/app/b20hub/claim?token=${address}`}
+            className="font-mono text-xs font-bold px-4 py-2 rounded-lg" style={{ background: "#34D399", color: "#050508" }}>
             🔷 Claim Creator Fees
           </Link>
         )}
-        <a
-          href={`https://basescan.org/token/${address}`}
-          target="_blank" rel="noopener noreferrer"
-          className="font-mono text-xs px-4 py-2 rounded-lg border border-[#1A1A2E] text-slate-300"
-        >
+        <a href={`https://basescan.org/token/${address}`} target="_blank" rel="noopener noreferrer"
+          className="font-mono text-xs px-4 py-2 rounded-lg border border-[#1A1A2E] text-slate-300">
           Basescan ↗
         </a>
-        <a
-          href={`https://dexscreener.com/base/${address}`}
-          target="_blank" rel="noopener noreferrer"
-          className="font-mono text-xs px-4 py-2 rounded-lg border border-[#1A1A2E] text-slate-300"
-        >
+        <a href={`https://dexscreener.com/base/${address}`} target="_blank" rel="noopener noreferrer"
+          className="font-mono text-xs px-4 py-2 rounded-lg border border-[#1A1A2E] text-slate-300">
           DexScreener ↗
         </a>
       </div>
@@ -350,19 +222,17 @@ function ActionsCard({ address, detail }: { address: string; detail: Detail }) {
   );
 }
 
-function ContractCard({ address, detail }: { address: string; detail: Detail }) {
-  const rows = [
-    { l: "Token",          v: address,                                  href: `https://basescan.org/address/${address}` },
-    { l: "Creator",        v: detail.creator ?? "—",                    href: detail.creator ? `/app/b20hub/creator/${detail.creator}` : undefined, internal: true },
-    { l: "Hook",           v: B20HUB_HOOK,                              href: `https://basescan.org/address/${B20HUB_HOOK}` },
-    { l: "BuyBack",        v: B20HUB_BUYBACK,                           href: `https://basescan.org/address/${B20HUB_BUYBACK}` },
-    { l: "PosMgr LP NFT",  v: detail.lpTokenIdA ? "#" + detail.lpTokenIdA.toString() : "—", href: detail.lpTokenIdA ? `https://basescan.org/token/${POSITION_MANAGER}?a=${detail.lpTokenIdA}` : undefined },
+function ContractCard({ address, pool }: { address: string; pool: PoolInfo | null }) {
+  const rows: Array<{ l: string; v: string; href?: string; internal?: boolean }> = [
+    { l: "Token",         v: address,                           href: `https://basescan.org/address/${address}` },
+    { l: "Creator",       v: pool?.creator ?? "—",              href: pool?.creator ? `/app/b20hub/creator/${pool.creator}` : undefined, internal: true },
+    { l: "Hook",          v: B20HUB_HOOK,                       href: `https://basescan.org/address/${B20HUB_HOOK}` },
+    { l: "BuyBack",       v: B20HUB_BUYBACK,                    href: `https://basescan.org/address/${B20HUB_BUYBACK}` },
+    { l: "PosMgr LP NFT", v: pool?.lpTokenIdA ? "#" + pool.lpTokenIdA : "—", href: pool?.lpTokenIdA ? `https://basescan.org/token/${POSITION_MANAGER}?a=${pool.lpTokenIdA}` : undefined },
   ];
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
-      <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-3">
-        Onchain addresses
-      </p>
+      <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-3">Onchain addresses</p>
       <div className="space-y-1.5">
         {rows.map((r) => (
           <div key={r.l} className="flex items-center justify-between gap-3">
@@ -373,8 +243,7 @@ function ContractCard({ address, detail }: { address: string; detail: Detail }) 
                   {r.v}
                 </Link>
               ) : (
-                <a href={r.href} target="_blank" rel="noopener noreferrer"
-                  className="font-mono text-[10px] text-[#4FC3F7] hover:underline break-all">
+                <a href={r.href} target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] text-[#4FC3F7] hover:underline break-all">
                   {r.v} ↗
                 </a>
               )
