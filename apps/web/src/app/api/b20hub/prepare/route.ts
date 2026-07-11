@@ -49,6 +49,10 @@ const LAUNCHER_ADDRESSES: Record<number, `0x${string}` | null> = {
   84532: null,
 };
 
+// launcher v5+ signature — initialSqrtPriceX96 moved to a protocol-level
+// constant (OPENING_SQRT_PRICE_X96), so every launch opens at the same
+// price on the same tick. Match the pump.fun / o1.exchange pattern: users
+// don't pick an opening market cap, they just pick name + symbol + fee.
 const LAUNCH_ABI = [
   {
     type: "function",
@@ -59,15 +63,14 @@ const LAUNCH_ABI = [
         name: "p",
         type: "tuple",
         components: [
-          { name: "name",                type: "string"  },
-          { name: "symbol",              type: "string"  },
-          { name: "variant",             type: "uint8"   },
-          { name: "decimals",            type: "uint8"   },
-          { name: "totalSupply",         type: "uint256" },
-          { name: "initialSqrtPriceX96", type: "uint160" },
-          { name: "feeTier",             type: "uint24"  },
-          { name: "creator",             type: "address" },
-          { name: "salt",                type: "bytes32" },
+          { name: "name",        type: "string"  },
+          { name: "symbol",      type: "string"  },
+          { name: "variant",     type: "uint8"   },
+          { name: "decimals",    type: "uint8"   },
+          { name: "totalSupply", type: "uint256" },
+          { name: "feeTier",     type: "uint24"  },
+          { name: "creator",     type: "address" },
+          { name: "salt",        type: "bytes32" },
         ],
       },
     ],
@@ -179,32 +182,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // initialSqrtPriceX96: user-supplied opening price in V4's sqrt(P) × 2^96
-    // format. UI should compute this from a human-friendly "opening market
-    // cap" input; here we just accept any positive uint160.
-    if (!body.initialSqrtPriceX96) {
-      return NextResponse.json(
-        { error: "initialSqrtPriceX96 required — compute from opening price" },
-        { status: 400 },
-      );
-    }
-    let initialSqrtPriceX96: bigint;
-    try {
-      initialSqrtPriceX96 = BigInt(body.initialSqrtPriceX96);
-    } catch {
-      return NextResponse.json(
-        { error: "initialSqrtPriceX96 must be a numeric string" },
-        { status: 400 },
-      );
-    }
-    if (
-      initialSqrtPriceX96 <= 0n ||
-      initialSqrtPriceX96 >= BigInt(2) ** BigInt(160)
-    ) {
-      return NextResponse.json(
-        { error: "initialSqrtPriceX96 out of uint160 range" },
-        { status: 400 },
-      );
+    // NOTE: initialSqrtPriceX96 removed from LaunchParams in launcher v5+.
+    // The launcher now uses OPENING_SQRT_PRICE_X96 as a protocol-level
+    // constant (~$4K market cap @ $3000 ETH for 100B supply). Client-side
+    // request body may still pass it — we silently ignore it for backward
+    // compat, log to help debugging in case anyone's still sending it.
+    if (body.initialSqrtPriceX96) {
+      // No-op — launcher ignores it now, but don't break clients that
+      // haven't updated yet.
     }
 
     // CREATE2 salt: user-supplied or deterministic-from-(creator, name, symbol).
@@ -225,7 +210,6 @@ export async function POST(req: NextRequest) {
           variant,
           decimals,
           totalSupply,
-          initialSqrtPriceX96,
           feeTier,
           creator: creator as `0x${string}`,
           salt,

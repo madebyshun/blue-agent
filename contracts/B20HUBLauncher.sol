@@ -204,11 +204,25 @@ contract B20HUBLauncher {
         uint8   variant;       // 0 = ASSET, 1 = STABLECOIN
         uint8   decimals;
         uint256 totalSupply;   // typical 100_000_000_000e18 (100B, 18 decimals)
-        uint160 initialSqrtPriceX96;  // opening B20/WETH price
         uint24  feeTier;       // 3000 / 10000 / 30000
         address creator;       // 80% of swap fees route here forever
         bytes32 salt;          // CREATE2 salt for B20 deploy — client mines
     }
+
+    /// Every B20HUB launch opens at the SAME sqrt price — protocol-level
+    /// guarantee (pump.fun style). Removing the user-picked opening price
+    /// makes launches uniform (matches the "$4K market cap" pattern users
+    /// see on o1.exchange / pump.fun): everyone opens at the same tick,
+    /// USD market cap follows ETH's spot price naturally.
+    ///
+    /// Value = half of the sqrt price that yielded the working BLUE20 pool
+    /// (43395051798747794894315217862415328 → $1000 mcap @ $3000 ETH), so
+    /// at ETH = $3000 this opens ≈ $4000 market cap for a 100B supply.
+    /// At other ETH prices the USD mcap scales linearly with ETH (2× ETH
+    /// → 2× mcap), which is the correct "constant ETH-denominated liquidity
+    /// depth" behaviour.
+    uint160 public constant OPENING_SQRT_PRICE_X96 =
+        21697525899373897447157608931207664;
 
     function launch(LaunchParams calldata p)
         external
@@ -318,7 +332,7 @@ contract B20HUBLauncher {
         //   → tickUpper must be strictly < currentTick, range BELOW.
         // token = currency0 (unusual: token addr < 0x4200… by CREATE2 salt).
         //   → tickLower must be strictly > currentTick, range ABOVE.
-        int24 initialTick = TickMath.getTickAtSqrtPrice(p.initialSqrtPriceX96);
+        int24 initialTick = TickMath.getTickAtSqrtPrice(OPENING_SQRT_PRICE_X96);
         bool tokenIsCurrency1 = Currency.unwrap(c1) == token;
 
         int24 tickLowerA;
@@ -394,7 +408,7 @@ contract B20HUBLauncher {
         HOOK.setPending(p.creator, lpTokenIdA);
 
         // ── Step 7: Initialize pool (fires hook.afterInitialize) ──────────────
-        IPoolManager(POOL_MANAGER).initialize(key, p.initialSqrtPriceX96);
+        IPoolManager(POOL_MANAGER).initialize(key, OPENING_SQRT_PRICE_X96);
 
         // ── Step 8: Add both LP positions in one batched call ─────────────────
         V4Actions.MintPositionParams memory posA = V4Actions.MintPositionParams({
