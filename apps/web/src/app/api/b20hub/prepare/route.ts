@@ -33,11 +33,11 @@ import { V4_FEE_TIERS } from "@/lib/b20hub/constants";
 // Until then this route reports a clear "not deployed yet" error so the UI
 // can show a friendly banner rather than silently 500-ing.
 const LAUNCHER_ADDRESSES: Record<number, `0x${string}` | null> = {
-  // Launcher v5 (2026-07-11, block 48478468) — pump.fun-style hardcoded
-  // OPENING_SQRT_PRICE_X96, paired with hook v4 (fee-claim fix). Simulated
-  // successfully: launch() returns (token=0xb200…, poolId, lpTokenIdA,
-  // lpTokenIdB). No sqrtPrice in LaunchParams — every launch opens at
-  // ~$4K market cap at $3K ETH.
+  // Launcher v6 (2026-07-11, block 48496774) — bumped opening mcap from
+  // ~$2.4K → ~$6K at ETH=$1800 (3.333 ETH per 100B tokens, vs 1.333 in v5).
+  // Simulated successfully: launch() returns (token=0xb200…, poolId,
+  // lpTokenIdA, lpTokenIdB). Verified onchain: OPENING_SQRT_PRICE_X96
+  // matches 13722720286502977928233463417143296.
   //
   // Prior launchers (do not use):
   //   v1 0x8eEe57660b086c31D0ECc98F48A122f829dDBa4b — createB20 sig swap
@@ -45,7 +45,9 @@ const LAUNCHER_ADDRESSES: Record<number, `0x${string}` | null> = {
   //      modifyLiquidities return-type mismatch
   //   v3 0xc6e402C0b544Ef4f69cF61AE4eCA114532Fbf466 — hook v3 claimFees
   //      permanently broken
-  8453:  "0xdde24849f47B34151132b8C05db3aE505EB17714",
+  //   v5 0xdde24849f47B34151132b8C05db3aE505EB17714 — opened at only ~$2.4K
+  //      (1.333 ETH per 100B); still functional but discouraged
+  8453:  "0xb9AA8bCa1eaEb702498DF251380AfD94b8dD8658",
   84532: null,
 };
 
