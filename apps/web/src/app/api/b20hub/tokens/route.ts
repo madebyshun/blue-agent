@@ -89,17 +89,24 @@ export async function GET(req: NextRequest) {
     )
     .slice(0, limit);
 
-  // OPENING_SQRT_PRICE_X96 constant → mcap = 1.333 ETH at the launcher's
-  // baked-in price. Every B20HUB launch opens at this until real trades
-  // shift the pool tick. We compute it once per request and use it as a
-  // fallback when DexScreener has no data yet (typical for a token < 1h
-  // old). Tokens with real DEX data still use DexScreener's live figures.
+  // v6 launcher's OPENING_SQRT_PRICE_X96 constant → 3.333 ETH per 100B.
+  // Used as fallback opening mcap when DexScreener has no data yet
+  // (typical for a token < 1h old). Tokens with real DEX data still use
+  // DexScreener's live figures; tokens launched under v5 (1.333 ETH per
+  // 100B) will read slightly high here until DexScreener catches up,
+  // but that's a corner case since v5 tokens are all >24h old at this
+  // point and DexScreener has them all indexed.
+  //
+  // Real per-token mcap for the token detail page comes from
+  // /api/b20hub/pool/[address] which reads actual slot0 sqrtPrice — that
+  // path is always correct regardless of which launcher deployed the token.
   const ethSpotUsd = await fetchEthPriceUsd();
-  const OPENING_ETH_PER_100B = 1_333_333_333_333n; // 1.333 ETH in wei-ish precision
-  // 100B tokens = ~1.333 ETH by construction: keep the constant here so
-  // shifting it later only touches this file + the launcher contract.
+  // 3.333 ETH in "milli-ETH × 1000" precision (3_333_333 × 1e6). Keeping
+  // this here as a magic number is fine because it's tied 1:1 to the
+  // launcher contract constant — shifting the launcher forces this too.
+  const OPENING_ETH_PER_100B_X1e6 = 3_333_333n;
   const openingMcapUsd = ethSpotUsd != null
-    ? ethSpotUsd * (Number(OPENING_ETH_PER_100B) / 1e12)  // → USD
+    ? ethSpotUsd * (Number(OPENING_ETH_PER_100B_X1e6) / 1e6)  // → USD
     : null;
 
   // Enrich the newest 40 with DexScreener market data. Fail-soft.
