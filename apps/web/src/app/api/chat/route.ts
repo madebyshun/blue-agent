@@ -423,10 +423,19 @@ const HUB_TOOLS = [
   },
   {
     name: "hub_honeypot",
-    description: "Detect honeypot tokens that cannot be sold after purchase. Use when user asks if a token is safe, is a honeypot, or wants to verify a contract before buying.",
+    description: "Detect honeypot tokens that cannot be sold after purchase on BASE. Use when user asks if a Base token is safe, is a honeypot, or wants to verify a Base contract before buying. For Robinhood Chain tokens use hub_robinhood_honeypot instead.",
     input_schema: {
       type: "object",
       properties: { token: { type: "string", description: "Token contract address on Base" } },
+      required: ["token"],
+    },
+  },
+  {
+    name: "hub_robinhood_honeypot",
+    description: "Detect honeypot tokens on ROBINHOOD CHAIN (chainId 4663) — safety scan for RH tokens. Trigger on: 'honeypot on robinhood', 'is [addr] safe on robinhood', 'RH token safety', 'check this token on robinhood'. Reads contract source verification from Blockscout + liquidity signals from GeckoTerminal Robinhood + on-chain identity from RH RPC. NEVER use for Base tokens — use hub_honeypot for Base.",
+    input_schema: {
+      type: "object",
+      properties: { token: { type: "string", description: "Token contract address on Robinhood Chain" } },
       required: ["token"],
     },
   },
@@ -873,6 +882,7 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_whale_signal:     "whale-copy-signal",
   hub_deep_analysis:    "deep-analysis",
   hub_honeypot:         "honeypot-check",
+  hub_robinhood_honeypot: "robinhood-honeypot-check",
   hub_risk_gate:        "risk-gate",
   hub_market_fit:       "market-fit",
   hub_competitor_scan:  "competitor-scan",

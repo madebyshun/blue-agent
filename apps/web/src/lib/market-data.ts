@@ -36,7 +36,7 @@ export type TokenMarket = {
   fdv: number | null;
   dex: string | null;
   url: string | null;
-  source: "dexscreener";
+  source: "dexscreener" | "geckoterminal";
 };
 
 type DsPair = {
@@ -197,6 +197,58 @@ export async function getBasePool(poolAddress: string): Promise<PoolDetail | nul
     reserveUsd: num(a.reserve_in_usd),
     feePct: num(a.pool_fee_percentage),
     url: `https://www.geckoterminal.com/base/pools/${a.address ?? addr}`,
+  };
+}
+
+// ─── GeckoTerminal: Robinhood Chain token market (deepest pool) ──────────────
+// DexScreener does not index Robinhood Chain (chainId 4663), so GeckoTerminal
+// is the substitute. We ask for all pools that hold this token and pick the
+// deepest-liquidity pool as the canonical market read — same shape as
+// getTokenMarket() so callers can treat both identically.
+export async function getRobinhoodTokenMarket(address: string): Promise<TokenMarket | null> {
+  const addr = address.trim().toLowerCase();
+  if (!/^0x[a-f0-9]{40}$/.test(addr)) return null;
+  type GtTokenPool = {
+    attributes?: {
+      name?: string;
+      base_token_price_usd?: string;
+      price_change_percentage?: Record<string, string>;
+      volume_usd?: Record<string, string>;
+      reserve_in_usd?: string;
+      market_cap_usd?: string;
+      fdv_usd?: string;
+      dex_id?: string;
+      address?: string;
+    };
+    relationships?: { dex?: { data?: { id?: string } } };
+  };
+  const d = await getJson<{ data?: GtTokenPool[] }>(
+    `https://api.geckoterminal.com/api/v2/networks/robinhood/tokens/${addr}/pools?page=1`
+  );
+  const pools = d?.data ?? [];
+  if (!pools.length) return null;
+  pools.sort((a, b) => (num(b.attributes?.reserve_in_usd) ?? 0) - (num(a.attributes?.reserve_in_usd) ?? 0));
+  const top = pools[0];
+  const a = top.attributes ?? {};
+  const name = a.name ?? "";
+  const symbol = name.split("/")[0]?.trim() || null;
+  return {
+    address: addr,
+    name: symbol,
+    symbol,
+    priceUsd: num(a.base_token_price_usd),
+    change: {
+      h1: num(a.price_change_percentage?.h1),
+      h6: num(a.price_change_percentage?.h6),
+      h24: num(a.price_change_percentage?.h24),
+    },
+    volume24h: num(a.volume_usd?.h24),
+    liquidityUsd: num(a.reserve_in_usd),
+    marketCap: num(a.market_cap_usd),
+    fdv: num(a.fdv_usd),
+    dex: top.relationships?.dex?.data?.id ?? null,
+    url: a.address ? `https://www.geckoterminal.com/robinhood/pools/${a.address}` : null,
+    source: "geckoterminal",
   };
 }
 

@@ -1027,6 +1027,96 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/key-exposure`,
     x402Body: (v) => ({ address: v.address ?? "" }),
   },
+
+  // ── Robinhood Chain safety-scan (Wave 1 of rh_token_scan skill) ─────────────
+  // Cloned from the Base honeypot/scam/quick-safety/contract-trust/key-exposure
+  // tools above but pointed at RH RPC (chainId 4663) + Blockscout + GeckoTerminal
+  // `robinhood` network. Same prices as the Base originals.
+  {
+    id: "robinhood-honeypot-check",
+    name: "Robinhood Honeypot Check",
+    description: "Detect honeypot tokens on Robinhood Chain (chainId 4663) — transfer tax analysis + rug pattern detection. RH RPC + Blockscout verification + GeckoTerminal liquidity.",
+    agentHandle: "composite",
+    agentName: "Blue + MiroShark",
+    agentType: "composite",
+    category: "security",
+    inputs: [
+      { key: "token", label: "Token contract address", placeholder: "0x...", required: true },
+    ],
+    isComposite: true,
+    compositeSkills: [
+      { agentType: "blue", label: "Honeypot detection (RH)" },
+      { agentType: "miroshark", label: "Community rug signal" },
+    ],
+    price: "$0.10", priceUSDC: 100000,
+    x402Url: `${X402_BASE}/robinhood-honeypot-check`,
+    x402Body: (v) => ({ token: v.token ?? "" }),
+  },
+  {
+    id: "robinhood-quick-safety",
+    name: "Robinhood Quick Safety",
+    description: "Fast safety check on any Robinhood Chain contract — GeckoTerminal liquidity + Blockscout verification + deterministic SAFE/CAUTION/DANGER verdict.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "security",
+    inputs: [
+      { key: "contract", label: "Contract address", placeholder: "0x…", required: true },
+    ],
+    isComposite: true,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/robinhood-quick-safety`,
+    x402Body: (v) => ({ contract: v.contract ?? "" }),
+  },
+  {
+    id: "robinhood-scam-detector",
+    name: "Robinhood Scam Detector",
+    description: "Detect honeypot / rug / fake-token patterns on a Robinhood Chain contract — grounded in real GeckoTerminal liquidity + pool age + Blockscout verification.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "security",
+    inputs: [
+      { key: "contract", label: "Contract address", placeholder: "0x…", required: true },
+    ],
+    isComposite: true,
+    price: "$0.10", priceUSDC: 100000,
+    x402Url: `${X402_BASE}/robinhood-scam-detector`,
+    x402Body: (v) => ({ contract: v.contract ?? "" }),
+  },
+  {
+    id: "robinhood-contract-trust",
+    name: "Robinhood Contract Trust",
+    description: "Audit any Robinhood Chain contract before swapping — Blockscout verification + on-chain identity + Blue security + MiroShark signal. Verdict: SAFE / CAUTION / RED_FLAG.",
+    agentHandle: "composite",
+    agentName: "Blue + MiroShark",
+    agentType: "composite",
+    category: "security",
+    inputs: [
+      { key: "address", label: "Contract address", placeholder: "0x...", required: true },
+      { key: "context", label: "What is this contract? (optional)", placeholder: "USDC token on Robinhood", required: false },
+    ],
+    isComposite: true,
+    compositeSkills: [
+      { agentType: "blue", label: "Security analysis (RH)" },
+      { agentType: "miroshark", label: "Community trust signal" },
+    ],
+    price: "$0.15", priceUSDC: 150000,
+    x402Url: `${X402_BASE}/robinhood-contract-trust`,
+    x402Body: (v) => ({ address: v.address ?? "", context: v.context ?? "" }),
+  },
+  {
+    id: "robinhood-key-exposure",
+    name: "Robinhood Key Exposure",
+    description: "Check if a wallet's public key is exposed on-chain on Robinhood Chain (quantum vulnerability). Verdict computed from the real RH RPC nonce — never fabricated. EXPOSED means the key is visible, not that funds are at immediate risk.",
+    agentHandle: "composite",
+    agentName: "Blue Agent",
+    agentType: "composite",
+    category: "security",
+    inputs: [
+      { key: "address", label: "Wallet address", placeholder: "0x...", required: true },
+    ],
+    isComposite: true,
+    price: "$0.50", priceUSDC: 500000,
+    x402Url: `${X402_BASE}/robinhood-key-exposure`,
+    x402Body: (v) => ({ address: v.address ?? "" }),
+  },
   {
     id: "blue-idea",
     name: "Blue Idea",
