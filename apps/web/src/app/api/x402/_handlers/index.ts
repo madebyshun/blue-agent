@@ -82,16 +82,6 @@ import hBaseTokenScan  from "./base-token-scan";
 import hDefiYieldScan  from "./defi-yield-scan";
 import hNarrativeScan  from "./narrative-scan";
 import hPicksCheck     from "./picks-check";
-// Robinhood Chain safety-scan clones (Wave 1 of rh_token_scan skill).
-// Same handler contract as their Base twins but pointed at RH RPC + Blockscout.
-import hRhHoneypotCheck from "./robinhood-honeypot-check";
-import hRhQuickSafety   from "./robinhood-quick-safety";
-import hRhScamDetector  from "./robinhood-scam-detector";
-import hRhContractTrust from "./robinhood-contract-trust";
-import hRhKeyExposure   from "./robinhood-key-exposure";
-// Robinhood Chain yield surface — Morpho Steakhouse USDG Vault (featured) + DefiLlama RH pools.
-import hRhYield          from "./robinhood-yield";
-
 export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "token-price": hTokenPrice,
   "pool-scan": hPoolScan,
@@ -180,11 +170,4 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "defi-yield-scan":    hDefiYieldScan,
   "narrative-scan":     hNarrativeScan,
   "picks-check":        hPicksCheck,
-  // Robinhood Chain safety-scan (Wave 1). Same contract as Base clones.
-  "robinhood-honeypot-check": hRhHoneypotCheck,
-  "robinhood-quick-safety":   hRhQuickSafety,
-  "robinhood-scam-detector":  hRhScamDetector,
-  "robinhood-contract-trust": hRhContractTrust,
-  "robinhood-key-exposure":   hRhKeyExposure,
-  "robinhood-yield":          hRhYield,
 };
