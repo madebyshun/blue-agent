@@ -440,6 +440,45 @@ const HUB_TOOLS = [
     },
   },
   {
+    name: "hub_robinhood_quick_safety",
+    description: "Fast (2-3s) safety check for a token on ROBINHOOD CHAIN (chainId 4663) — verified source (Blockscout) + on-chain liquidity signal (GeckoTerminal) + risk-score verdict (SAFE/CAUTION/DANGER). Cheaper + faster than hub_robinhood_honeypot; use when the user just wants a quick sniff, not a deep report. Trigger on: 'quick safety check on robinhood', 'is [addr] safe on RH', 'fast safety on robinhood chain'. NEVER for Base tokens — use hub_quick_safety for Base.",
+    input_schema: {
+      type: "object",
+      properties: { token: { type: "string", description: "Token contract address on Robinhood Chain" } },
+      required: ["token"],
+    },
+  },
+  {
+    name: "hub_robinhood_scam_detector",
+    description: "Pattern-based scam detection for a Robinhood Chain (chainId 4663) token — checks for known rug patterns, suspicious contract behavior, and market anomalies. LLM synthesizes from Blockscout source + GeckoTerminal Robinhood market signals. Trigger on: 'is this a scam on robinhood', 'rug check on RH', 'scam detector robinhood'. NEVER for Base — use hub_scam_detector for Base.",
+    input_schema: {
+      type: "object",
+      properties: { token: { type: "string", description: "Token contract address on Robinhood Chain" } },
+      required: ["token"],
+    },
+  },
+  {
+    name: "hub_robinhood_contract_trust",
+    description: "Deep trust analysis for a contract on ROBINHOOD CHAIN (chainId 4663) — Blockscout source verification, ownership pattern, upgradability, function surface. Higher price ($0.15) — use for token-detail deep dives, not casual checks. Trigger on: 'trust score for [addr] on robinhood', 'analyze contract on RH', 'is this contract trustworthy on robinhood'. NEVER for Base — use hub_contract_trust for Base.",
+    input_schema: {
+      type: "object",
+      properties: {
+        address: { type: "string", description: "Contract address on Robinhood Chain" },
+        context: { type: "string", description: "Optional freeform context (project name, user's concern, etc.)" },
+      },
+      required: ["address"],
+    },
+  },
+  {
+    name: "hub_robinhood_key_exposure",
+    description: "Check whether a wallet on ROBINHOOD CHAIN (chainId 4663) has been exposed (has ever sent a tx from that key) — nonce + Blockscout tx history. Useful for cold-wallet verification, checking if a fresh receive-only address has stayed clean. Trigger on: 'key exposure on robinhood', 'has [addr] ever been used on RH', 'is this wallet fresh on robinhood'. NEVER for Base — use hub_key_exposure for Base.",
+    input_schema: {
+      type: "object",
+      properties: { address: { type: "string", description: "Wallet address on Robinhood Chain" } },
+      required: ["address"],
+    },
+  },
+  {
     name: "hub_robinhood_yield",
     description: "Live yield opportunities on ROBINHOOD CHAIN (chainId 4663) — featured Morpho Steakhouse USDG Vault (0xBeEf…09dd, the on-chain primitive behind Robinhood Earn) + top DefiLlama pools filtered chain=Robinhood. Trigger on: 'yield on robinhood', 'best APY on RH', 'morpho robinhood', 'earn on robinhood chain', 'USDG yield', 'staking on robinhood'. Numbers only from Morpho GraphQL, RH RPC (viem readContract), and DefiLlama — never LLM-generated. Note: DefiLlama and Morpho public API don't yet index chainId 4663; on-chain vault TVL is authoritative today, APY populates when indexers backfill. NEVER use for Base yields — use hub_cross_yield or hub_defi_opportunity for Base.",
     input_schema: {
@@ -895,8 +934,12 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_whale_signal:     "whale-copy-signal",
   hub_deep_analysis:    "deep-analysis",
   hub_honeypot:         "honeypot-check",
-  hub_robinhood_honeypot: "robinhood-honeypot-check",
-  hub_robinhood_yield:    "robinhood-yield",
+  hub_robinhood_honeypot:       "robinhood-honeypot-check",
+  hub_robinhood_quick_safety:   "robinhood-quick-safety",
+  hub_robinhood_scam_detector:  "robinhood-scam-detector",
+  hub_robinhood_contract_trust: "robinhood-contract-trust",
+  hub_robinhood_key_exposure:   "robinhood-key-exposure",
+  hub_robinhood_yield:          "robinhood-yield",
   hub_risk_gate:        "risk-gate",
   hub_market_fit:       "market-fit",
   hub_competitor_scan:  "competitor-scan",
