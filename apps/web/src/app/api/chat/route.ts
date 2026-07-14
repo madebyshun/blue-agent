@@ -440,6 +440,19 @@ const HUB_TOOLS = [
     },
   },
   {
+    name: "hub_robinhood_yield",
+    description: "Live yield opportunities on ROBINHOOD CHAIN (chainId 4663) — featured Morpho Steakhouse USDG Vault (0xBeEf…09dd, the on-chain primitive behind Robinhood Earn) + top DefiLlama pools filtered chain=Robinhood. Trigger on: 'yield on robinhood', 'best APY on RH', 'morpho robinhood', 'earn on robinhood chain', 'USDG yield', 'staking on robinhood'. Numbers only from Morpho GraphQL, RH RPC (viem readContract), and DefiLlama — never LLM-generated. Note: DefiLlama and Morpho public API don't yet index chainId 4663; on-chain vault TVL is authoritative today, APY populates when indexers backfill. NEVER use for Base yields — use hub_cross_yield or hub_defi_opportunity for Base.",
+    input_schema: {
+      type: "object",
+      properties: {
+        minTvlUsd: { type: "number", description: "Optional minimum TVL filter (USD)" },
+        limit:     { type: "number", description: "Optional max pools to return (default 8, cap 10)" },
+        asset:     { type: "string", description: "Optional asset symbol filter, e.g. 'USDG'" },
+      },
+      required: [],
+    },
+  },
+  {
     name: "hub_risk_gate",
     description: "Screen any transaction before execution — rug check, AML, malicious contract patterns. Use when user wants to verify a transaction, address, or contract is safe.",
     input_schema: {
@@ -883,6 +896,7 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_deep_analysis:    "deep-analysis",
   hub_honeypot:         "honeypot-check",
   hub_robinhood_honeypot: "robinhood-honeypot-check",
+  hub_robinhood_yield:    "robinhood-yield",
   hub_risk_gate:        "risk-gate",
   hub_market_fit:       "market-fit",
   hub_competitor_scan:  "competitor-scan",

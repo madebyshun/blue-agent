@@ -339,6 +339,36 @@ export async function getBaseYields(
   }));
 }
 
+// Top Robinhood Chain yield pools by TVL from DefiLlama (chain="Robinhood").
+// Companion to getBaseYields — kept as its own function so Base callers stay
+// untouched, and the two evolve independently (RH is thinner + newer, so the
+// caller often wants a smaller minTvl floor and no dedup by project).
+// opts.assetSymbol filters pool.symbol (case-insensitive, e.g. "USDG").
+export async function getRobinhoodYields(
+  limit = 15,
+  opts: { assetSymbol?: string; minTvl?: number } = {}
+): Promise<YieldPool[]> {
+  const d = await getJson<{ data?: LlamaPool[] }>("https://yields.llama.fi/pools");
+  let pools = (d?.data ?? []).filter((p) => p.chain === "Robinhood");
+  if (opts.assetSymbol) {
+    const q = opts.assetSymbol.toLowerCase();
+    pools = pools.filter((p) => (p.symbol ?? "").toLowerCase().includes(q));
+  }
+  if (opts.minTvl) pools = pools.filter((p) => (p.tvlUsd ?? 0) >= opts.minTvl!);
+  pools.sort((a, b) => (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0));
+  return pools.slice(0, limit).map((p) => ({
+    project: p.project ?? "unknown",
+    symbol: p.symbol ?? "?",
+    tvlUsd: p.tvlUsd ?? 0,
+    apy: p.apy ?? null,
+    apyBase: p.apyBase ?? null,
+    apyReward: p.apyReward ?? null,
+    ilRisk: p.ilRisk ?? "unknown",
+    stablecoin: !!p.stablecoin,
+    url: p.pool ? `https://defillama.com/yields/pool/${p.pool}` : "https://defillama.com/yields?chain=Robinhood",
+  }));
+}
+
 // ─── Prompt formatters — compact, real-number context for the LLM ────────────
 
 const fmtUsd = (n: number | null) =>

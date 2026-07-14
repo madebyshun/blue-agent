@@ -1118,6 +1118,26 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => ({ address: v.address ?? "" }),
   },
   {
+    id: "robinhood-yield",
+    name: "Robinhood Yield",
+    description: "Live yield opportunities on Robinhood Chain (chainId 4663) — featured Morpho Steakhouse USDG Vault (0xBeEf…09dd, the primitive behind Robinhood Earn) + top DefiLlama pools filtered chain=Robinhood. Every APY/TVL comes from Morpho GraphQL, RH RPC (viem multicall), or DefiLlama — never LLM-generated. Fail-soft: any source failure degrades to 'unknown' instead of fabricating.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "earn",
+    inputs: [
+      { key: "minTvlUsd", label: "Minimum TVL filter (USD, optional)", placeholder: "100000", required: false },
+      { key: "limit",     label: "Max pools to return (optional, default 8)", placeholder: "8",      required: false },
+      { key: "asset",     label: "Asset symbol filter (optional, e.g. USDG)", placeholder: "USDG",   required: false },
+    ],
+    isComposite: true,
+    price: "$0.10", priceUSDC: 100000,
+    x402Url: `${X402_BASE}/robinhood-yield`,
+    x402Body: (v) => ({
+      minTvlUsd: v.minTvlUsd ? Number(v.minTvlUsd) : undefined,
+      limit:     v.limit     ? Number(v.limit)     : undefined,
+      asset:     v.asset     || undefined,
+    }),
+  },
+  {
     id: "blue-idea",
     name: "Blue Idea",
     description: "Turn a rough concept into a fundable brief — problem, why now, why Base, MVP scope, risks, 24h plan.",

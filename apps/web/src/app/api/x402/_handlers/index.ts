@@ -89,6 +89,8 @@ import hRhQuickSafety   from "./robinhood-quick-safety";
 import hRhScamDetector  from "./robinhood-scam-detector";
 import hRhContractTrust from "./robinhood-contract-trust";
 import hRhKeyExposure   from "./robinhood-key-exposure";
+// Robinhood Chain yield surface — Morpho Steakhouse USDG Vault (featured) + DefiLlama RH pools.
+import hRhYield          from "./robinhood-yield";
 
 export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "token-price": hTokenPrice,
@@ -184,4 +186,5 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "robinhood-scam-detector":  hRhScamDetector,
   "robinhood-contract-trust": hRhContractTrust,
   "robinhood-key-exposure":   hRhKeyExposure,
+  "robinhood-yield":          hRhYield,
 };
