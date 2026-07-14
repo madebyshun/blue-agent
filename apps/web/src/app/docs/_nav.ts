@@ -17,6 +17,9 @@ export const DOC_NAV: DocGroup[] = [
     // Blue Feed hidden while rebuilding — its docs page is parked (404).
     { title: "Blue Bank", href: "/docs/bluebank" },
   ]},
+  { group: "Launches", items: [
+    { title: "$BLUEAGENT on Robinhood", href: "/docs/blueagent-on-robinhood" },
+  ]},
   { group: "Knowledge", items: [
     { title: "Skills",      href: "/docs/skills" },
     { title: "Aeon Skills", href: "/docs/aeon-skills" },
