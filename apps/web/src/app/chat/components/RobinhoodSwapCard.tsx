@@ -8,7 +8,7 @@
 // Non-custodial: server holds no keys, on-chain math bounds the final amount.
 
 import { useEffect, useRef, useState } from "react";
-import { useAccount, useSwitchChain, useSendTransaction, useReadContract, useBalance } from "wagmi";
+import { useAccount, useSwitchChain, useSendTransaction, useReadContract, useBalance, usePublicClient } from "wagmi";
 import { parseUnits, formatUnits } from "viem";
 import { ERC20_ABI } from "@/lib/yield-execution";
 import { ConnectButton } from "@/components/ConnectModal";
@@ -75,6 +75,10 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
   const { address, isConnected } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   const { sendTransactionAsync } = useSendTransaction();
+  // Public client on RH — used to wait for prior tx to mine between calls
+  // (approve → swap). Without this, MetaMask simulates the swap against
+  // pre-approve state, sees allowance = 0, and warns "likely to fail".
+  const rhPublicClient = usePublicClient({ chainId: RH_CHAIN_ID });
 
   const direction = result.direction === "sell" ? "sell" : "buy";
   const token = (result.token_address || "").trim() as `0x${string}` | "";
@@ -253,6 +257,13 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
             chainId: RH_CHAIN_ID,
           });
           if (c.kind === "swap") setTxHash(hash); // last swap tx wins as the "receipt" hash
+          // Wait for THIS tx to mine before signing the next one. Without this
+          // wait the next tx's MetaMask sim runs against pre-mine state (e.g.
+          // approve not yet reflected in allowance() → swap reverts) and MM
+          // shows "likely to fail" scaring the user off a valid flow.
+          if (rhPublicClient && i < calls.length - 1) {
+            await rhPublicClient.waitForTransactionReceipt({ hash, confirmations: 1, timeout: 60_000 });
+          }
         }
         setStep("done");
         return;
@@ -278,12 +289,17 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
 
       if (prep.approve) {
         setStep("approving");
-        await sendTransactionAsync({
+        const approveHash = await sendTransactionAsync({
           to: prep.approve.to as `0x${string}`,
           data: prep.approve.data as `0x${string}`,
           value: 0n,
           chainId: RH_CHAIN_ID,
         });
+        // Wait for approve to mine before submitting the swap — otherwise MM
+        // sims the swap against pre-approve allowance (0) and reverts.
+        if (rhPublicClient) {
+          await rhPublicClient.waitForTransactionReceipt({ hash: approveHash, confirmations: 1, timeout: 60_000 });
+        }
       }
       setStep("swapping");
       const hash = await sendTransactionAsync({
