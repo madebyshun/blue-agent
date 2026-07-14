@@ -23,7 +23,6 @@ import hScamDetector from "./scam-detector";
 import hCrossYield from "./cross-protocol-yield";
 import hAgentReadiness from "./agent-readiness";
 import hBasePulse from "./base-pulse";
-import hBankrPulse from "./bankr-pulse";
 import hBlueIdea      from "./blue-idea";
 import hBlueBuild     from "./blue-build";
 import hBlueAudit     from "./blue-audit";
@@ -108,7 +107,6 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "cross-protocol-yield": hCrossYield,
   "agent-readiness": hAgentReadiness,
   "base-pulse": hBasePulse,
-  "bankr-pulse": hBankrPulse,
   "agent-collab-match": h0,
   "agent-performance": h1,
   "base-grant-finder": h5,
