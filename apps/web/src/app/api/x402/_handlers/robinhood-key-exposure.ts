@@ -64,15 +64,15 @@ You will be given the authoritative verdict and counts. Write ONLY the prose fie
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { address?: string } = {};
+    let body: { address?: string; token?: string; wallet?: string } = {};
     try {
       const text = await req.text();
       if (text?.trim().startsWith("{")) body = JSON.parse(text);
     } catch {}
     const url = new URL(req.url);
-    if (!body.address) body.address = url.searchParams.get("address") || undefined;
-
-    const { address } = body;
+    // Accept address | token | wallet (LLM may pick any of these) —
+    // matches the alias pattern in the other RH safety handlers.
+    const address = (body.address ?? body.token ?? body.wallet ?? url.searchParams.get("address") ?? url.searchParams.get("token") ?? url.searchParams.get("wallet") ?? "").trim();
     if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
       return Response.json({ error: "Provide a valid wallet address (0x...)" }, { status: 400 });
     }

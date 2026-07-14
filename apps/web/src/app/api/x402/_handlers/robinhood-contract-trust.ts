@@ -86,13 +86,14 @@ async function getRhContractSnapshot(address: `0x${string}`): Promise<{
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { address?: string; context?: string } = {};
+    let body: { address?: string; token?: string; contract?: string; context?: string } = {};
     try {
       const t = await req.text();
       if (t?.trim().startsWith("{")) body = JSON.parse(t);
     } catch {}
     const url = new URL(req.url);
-    const address = (body.address ?? url.searchParams.get("address") ?? "").trim();
+    // Accept address | token | contract (see quick-safety for rationale).
+    const address = (body.address ?? body.token ?? body.contract ?? url.searchParams.get("address") ?? url.searchParams.get("token") ?? url.searchParams.get("contract") ?? "").trim();
     const context = body.context ?? url.searchParams.get("context") ?? "";
 
     if (!address) return Response.json({ error: "address is required (Robinhood Chain mainnet contract address)" }, { status: 400 });

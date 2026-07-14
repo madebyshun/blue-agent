@@ -67,15 +67,16 @@ Return ONLY raw JSON:
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { contract?: string } = {};
+    let body: { contract?: string; token?: string; address?: string } = {};
     try {
       const text = await req.text();
       if (text?.trim().startsWith("{")) body = JSON.parse(text);
     } catch {}
     const url = new URL(req.url);
-    if (!body.contract) body.contract = url.searchParams.get("contract") || url.searchParams.get("address") || undefined;
-
-    const contract = body.contract?.trim();
+    // Accept contract | token | address as aliases (see quick-safety for
+    // rationale) — same underlying input, different call sites use
+    // different names.
+    const contract = (body.contract ?? body.token ?? body.address ?? url.searchParams.get("contract") ?? url.searchParams.get("token") ?? url.searchParams.get("address") ?? "").trim();
     if (!contract) return Response.json({ error: "Provide a contract address" }, { status: 400 });
     if (!/^0x[a-fA-F0-9]{40}$/.test(contract)) {
       return Response.json({ error: "Provide a valid 0x contract address" }, { status: 400 });

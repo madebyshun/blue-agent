@@ -14,10 +14,14 @@ import { getBlockscoutContractSource, blockscoutUrl } from "@/lib/blockscout";
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { contract?: string } = {};
+    let body: { contract?: string; token?: string; address?: string } = {};
     try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const url = new URL(req.url);
-    const contract = (body.contract ?? url.searchParams.get("contract") ?? url.searchParams.get("address") ?? "").trim();
+    // Accept contract | token | address as aliases — same underlying input,
+    // different call sites (Hub UI form uses `contract`, chat schema uses
+    // `token`, generic callers use `address`). Normalizing here removes a
+    // whole class of "field mismatch → 400" failures.
+    const contract = (body.contract ?? body.token ?? body.address ?? url.searchParams.get("contract") ?? url.searchParams.get("token") ?? url.searchParams.get("address") ?? "").trim();
     if (!/^0x[a-fA-F0-9]{40}$/.test(contract)) {
       return Response.json({ error: "Provide a contract address (0x…)" }, { status: 400 });
     }
