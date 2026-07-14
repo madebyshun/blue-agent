@@ -51,8 +51,15 @@ function parseJson(t: string): Record<string, unknown> | null {
 const rhClient = createPublicClient({ chain: robinhoodMainnet, transport: http() });
 
 // Lightweight on-chain identity for a Robinhood Chain address: contract? token?
-// Reads name/symbol/decimals via multicall — same shape as onchain.getTokenIdentity
-// but scoped to just what honeypot-check needs, and pointed at RH RPC.
+// Reads name/symbol/decimals — same shape as onchain.getTokenIdentity but
+// scoped to just what honeypot-check needs and pointed at RH RPC.
+//
+// IMPORTANT: Multicall3 is NOT deployed on Robinhood Chain (viem's .multicall()
+// throws "Chain 'Robinhood Chain' does not support contract 'multicall3'").
+// We fan out individual readContract calls via Promise.allSettled so a single
+// failed ERC-20 view can't clobber isContract=true (that was the pre-fix bug:
+// multicall throws → outer catch swallows → isContract falsely reset to false
+// → real ERC-20 tokens misclassified as EOA).
 async function getRhIdentity(address: `0x${string}`): Promise<{
   isContract: boolean;
   isToken: boolean;
@@ -60,26 +67,25 @@ async function getRhIdentity(address: `0x${string}`): Promise<{
   symbol: string | null;
   decimals: number | null;
 }> {
+  let isContract = false;
   try {
     const code = await rhClient.getCode({ address });
-    const isContract = !!code && code !== "0x";
-    if (!isContract) return { isContract: false, isToken: false, name: null, symbol: null, decimals: null };
-    const results = await rhClient.multicall({
-      contracts: [
-        { address, abi: erc20Abi, functionName: "name" },
-        { address, abi: erc20Abi, functionName: "symbol" },
-        { address, abi: erc20Abi, functionName: "decimals" },
-      ],
-      allowFailure: true,
-    });
-    const name = results[0].status === "success" ? String(results[0].result) : null;
-    const symbol = results[1].status === "success" ? String(results[1].result) : null;
-    const decimals = results[2].status === "success" ? Number(results[2].result) : null;
-    const isToken = name !== null && symbol !== null && decimals !== null;
-    return { isContract, isToken, name, symbol, decimals };
+    isContract = !!code && code !== "0x";
   } catch {
+    // RPC failure — can't determine either way. Return unknown; caller degrades.
     return { isContract: false, isToken: false, name: null, symbol: null, decimals: null };
   }
+  if (!isContract) return { isContract: false, isToken: false, name: null, symbol: null, decimals: null };
+  const [nameR, symR, decR] = await Promise.allSettled([
+    rhClient.readContract({ address, abi: erc20Abi, functionName: "name" }),
+    rhClient.readContract({ address, abi: erc20Abi, functionName: "symbol" }),
+    rhClient.readContract({ address, abi: erc20Abi, functionName: "decimals" }),
+  ]);
+  const name = nameR.status === "fulfilled" ? String(nameR.value) : null;
+  const symbol = symR.status === "fulfilled" ? String(symR.value) : null;
+  const decimals = decR.status === "fulfilled" ? Number(decR.value) : null;
+  const isToken = name !== null && symbol !== null && decimals !== null;
+  return { isContract: true, isToken, name, symbol, decimals };
 }
 
 export default async function handler(req: Request): Promise<Response> {

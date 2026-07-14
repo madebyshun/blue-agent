@@ -50,6 +50,10 @@ function parseJson(t: string): Record<string, unknown> | null {
 
 const rhClient = createPublicClient({ chain: robinhoodMainnet, transport: http() });
 
+// IMPORTANT: Multicall3 is NOT deployed on Robinhood Chain. See the note in
+// robinhood-honeypot-check.ts:getRhIdentity — same fix here. Individual
+// readContract calls via Promise.allSettled prevent one failed ERC-20 view
+// from throwing outward and clobbering isContract=true.
 async function getRhContractSnapshot(address: `0x${string}`): Promise<{
   isContract: boolean;
   isToken: boolean;
@@ -58,28 +62,26 @@ async function getRhContractSnapshot(address: `0x${string}`): Promise<{
   decimals: number | null;
   totalSupply: string | null;
 }> {
+  let isContract = false;
   try {
     const code = await rhClient.getCode({ address });
-    const isContract = !!code && code !== "0x";
-    if (!isContract) return { isContract: false, isToken: false, name: null, symbol: null, decimals: null, totalSupply: null };
-    const results = await rhClient.multicall({
-      contracts: [
-        { address, abi: erc20Abi, functionName: "name" },
-        { address, abi: erc20Abi, functionName: "symbol" },
-        { address, abi: erc20Abi, functionName: "decimals" },
-        { address, abi: erc20Abi, functionName: "totalSupply" },
-      ],
-      allowFailure: true,
-    });
-    const name = results[0].status === "success" ? String(results[0].result) : null;
-    const symbol = results[1].status === "success" ? String(results[1].result) : null;
-    const decimals = results[2].status === "success" ? Number(results[2].result) : null;
-    const totalSupply = results[3].status === "success" ? String(results[3].result) : null;
-    const isToken = name !== null && symbol !== null && decimals !== null;
-    return { isContract, isToken, name, symbol, decimals, totalSupply };
+    isContract = !!code && code !== "0x";
   } catch {
     return { isContract: false, isToken: false, name: null, symbol: null, decimals: null, totalSupply: null };
   }
+  if (!isContract) return { isContract: false, isToken: false, name: null, symbol: null, decimals: null, totalSupply: null };
+  const [nameR, symR, decR, tsR] = await Promise.allSettled([
+    rhClient.readContract({ address, abi: erc20Abi, functionName: "name" }),
+    rhClient.readContract({ address, abi: erc20Abi, functionName: "symbol" }),
+    rhClient.readContract({ address, abi: erc20Abi, functionName: "decimals" }),
+    rhClient.readContract({ address, abi: erc20Abi, functionName: "totalSupply" }),
+  ]);
+  const name = nameR.status === "fulfilled" ? String(nameR.value) : null;
+  const symbol = symR.status === "fulfilled" ? String(symR.value) : null;
+  const decimals = decR.status === "fulfilled" ? Number(decR.value) : null;
+  const totalSupply = tsR.status === "fulfilled" ? String(tsR.value) : null;
+  const isToken = name !== null && symbol !== null && decimals !== null;
+  return { isContract: true, isToken, name, symbol, decimals, totalSupply };
 }
 
 export default async function handler(req: Request): Promise<Response> {
