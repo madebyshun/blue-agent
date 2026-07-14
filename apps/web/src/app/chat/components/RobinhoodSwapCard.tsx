@@ -212,8 +212,28 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
       try { await switchChainAsync({ chainId: RH_CHAIN_ID }); } catch {
         throw new Error("Switch to Robinhood Chain (4663) and try again");
       }
-      const amountInWei = parseUnits(amount, 18);
-      const minOutBase = minOut != null ? parseUnits(minOut.toFixed(18), 18) : 0n;
+      // Read on-chain decimals for tokenIn + tokenOut instead of assuming 18.
+      // Hardcoding 18 was a real bug: USDG has 6 decimals, so any USDG side
+      // of a swap got the amount scaled by 10^12 too large — router reverted
+      // amountOutMinimum check and MetaMask showed "likely to fail".
+      // Fail-soft: if the read errors (RPC hiccup), fall back to 18 with a
+      // warning — safer than throwing here mid-flow.
+      const inTokenAddr = isT2T ? tokenInAddr : (direction === "sell" ? token : null);
+      const outTokenAddr = isT2T ? token : (direction === "buy" ? token : null);
+      const ERC20_DEC_ABI = [{ type: "function", name: "decimals", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] }] as const;
+      async function readDecimals(addr: `0x${string}` | null): Promise<number> {
+        if (!addr || !rhPublicClient) return 18;
+        try {
+          const d = await rhPublicClient.readContract({ address: addr, abi: ERC20_DEC_ABI, functionName: "decimals" });
+          return Number(d);
+        } catch { return 18; }
+      }
+      const [inDec, outDec] = await Promise.all([readDecimals(inTokenAddr as `0x${string}` | null), readDecimals(outTokenAddr as `0x${string}` | null)]);
+      const amountInWei = parseUnits(amount, inDec);
+      // Clamp minOut precision to token's decimals (parseUnits throws on more
+      // decimals than the token supports, e.g. parseUnits("0.014925", 6) is
+      // fine but parseUnits("0.0000000000000000149", 6) is not).
+      const minOutBase = minOut != null ? parseUnits(minOut.toFixed(outDec), outDec) : 0n;
 
       // ── Token→token branch ────────────────────────────────────────────────
       if (isT2T) {
