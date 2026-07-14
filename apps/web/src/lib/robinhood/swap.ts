@@ -18,8 +18,9 @@
 //     token API: 16,941 holders, live exchange_rate ~$1770 (matching ETH).
 // Neither address is a guess — both were verified against live on-chain
 // state, not just a Blockscout name search (which is spoofable).
-import { encodeDeployData, encodeFunctionData } from "viem";
+import { encodeDeployData, encodeFunctionData, createPublicClient, http, getAddress } from "viem";
 import artifact from "./RobinhoodSwapRouter.artifact.json";
+import { robinhoodMainnet } from "./chains";
 
 const ABI = artifact.abi;
 const BYTECODE = artifact.bytecode as `0x${string}`;
@@ -120,3 +121,261 @@ export function buildErc20ApproveData(spender: `0x${string}`, amount: bigint): `
 }
 
 export { ABI as ROBINHOOD_SWAP_ROUTER_ABI, BYTECODE as ROBINHOOD_SWAP_ROUTER_BYTECODE };
+
+// ─── Token→token swaps ──────────────────────────────────────────────────────
+//
+// The deployed router only exposes THREE swap primitives (see ABI): the two
+// single-hop native-side helpers (ETH→token, token→ETH) and one generic
+// single-hop ERC20→ERC20 (`swapExactInputSingle`). There is NO `exactInput`
+// with V3 `path` bytes — this router does not support atomic multi-hop.
+//
+// So for token→token we build the route ourselves off-chain:
+//   1. Try a direct ERC20→ERC20 pool via the same 4-fee-tier probe.
+//   2. If none, fall back to a 2-hop route through WETH9: tokenIn → WETH →
+//      tokenOut, one direct pool at each leg. Because the router can't chain
+//      atomically, the two legs are returned as two separate txs — the client
+//      signs them sequentially. The intermediate WETH sits in the user's own
+//      wallet between the two txs (non-custodial: never the server).
+//   3. If neither leg exists, return `{ route: null, reason: "no route" }`
+//      so the API/UI can show a helpful message instead of failing.
+
+const V3_FEE_TIERS_LOCAL = [100, 500, 3000, 10000] as const;
+
+const FACTORY_GET_POOL_ABI = [
+  {
+    type: "function",
+    name: "getPool",
+    stateMutability: "view",
+    inputs: [
+      { name: "tokenA", type: "address" },
+      { name: "tokenB", type: "address" },
+      { name: "fee", type: "uint24" },
+    ],
+    outputs: [{ type: "address" }],
+  },
+] as const;
+
+const POOL_LIQUIDITY_ABI = [
+  {
+    type: "function",
+    name: "liquidity",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint128" }],
+  },
+] as const;
+
+const _client = createPublicClient({
+  chain: robinhoodMainnet,
+  transport: http("https://rpc.mainnet.chain.robinhood.com"),
+});
+
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000" as const;
+
+/** Deepest-liquidity pool for the given ordered token pair, or null. */
+async function bestPoolForPair(
+  tokenA: `0x${string}`,
+  tokenB: `0x${string}`,
+): Promise<{ address: `0x${string}`; fee: number; liquidity: bigint } | null> {
+  const factory = ROBINHOOD_MAINNET_VERIFIED_FACTORY as `0x${string}`;
+
+  const addresses = await Promise.all(
+    V3_FEE_TIERS_LOCAL.map((fee) =>
+      _client
+        .readContract({
+          address: factory,
+          abi: FACTORY_GET_POOL_ABI,
+          functionName: "getPool",
+          args: [tokenA, tokenB, fee],
+        })
+        .catch(() => ZERO_ADDR),
+    ),
+  );
+
+  type LivePool = { address: `0x${string}`; fee: number; liquidity: bigint };
+  const pools: (LivePool | null)[] = await Promise.all(
+    addresses.map(async (addr, i): Promise<LivePool | null> => {
+      if (addr === ZERO_ADDR) return null;
+      try {
+        const liq = await _client.readContract({
+          address: addr as `0x${string}`,
+          abi: POOL_LIQUIDITY_ABI,
+          functionName: "liquidity",
+        });
+        if ((liq as bigint) === 0n) return null;
+        return {
+          address: getAddress(addr as string) as `0x${string}`,
+          fee: V3_FEE_TIERS_LOCAL[i] as number,
+          liquidity: liq as bigint,
+        };
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  const live = pools.filter((p): p is LivePool => !!p);
+  if (!live.length) return null;
+  return live.reduce<LivePool>((best, p) => (p.liquidity > best.liquidity ? p : best), live[0]);
+}
+
+export interface TokenToTokenCalldataResult {
+  /** "direct" = one single-hop tx. "multi-hop" = two sequential single-hop txs via WETH. null = no route. */
+  route: "direct" | "multi-hop" | null;
+  /** Only set when route === null — human-friendly reason for the UI. */
+  reason?: string;
+  /**
+   * Ordered list of calls the client should sign in sequence. Each has:
+   * `to` (contract to call), `data` (calldata hex), `value` (hex wei, "0x0"
+   * for ERC20-only), and `kind` describing which step it is. When
+   * `kind === "approve"` the client is approving the router to spend the
+   * previous step's output — for multi-hop routes there are TWO approves
+   * (one for tokenIn, one for the intermediate WETH after leg 1).
+   */
+  calls?: Array<{
+    kind: "approve" | "swap";
+    to: `0x${string}`;
+    data: `0x${string}`;
+    value: `0x${string}`;
+    /** For "swap" calls: which leg this is when route === "multi-hop" (1 = in→WETH, 2 = WETH→out). */
+    leg?: 1 | 2;
+    /** For "swap" calls: the pool used for this leg. Helps the UI show fee tier. */
+    pool?: { address: `0x${string}`; fee: number };
+  }>;
+}
+
+export interface TokenToTokenParams {
+  router: `0x${string}`;
+  tokenIn: `0x${string}`;
+  tokenOut: `0x${string}`;
+  amountIn: bigint;
+  /**
+   * Minimum out (base units of tokenOut) enforced on the FINAL leg.
+   * For multi-hop we only bound the final leg; the intermediate WETH leg is
+   * left unbounded because the client cannot know the exact amount coming
+   * out of leg 1 at prepare time. This is the same trade-off Uniswap's own
+   * multicall paths make for chained calls.
+   */
+  amountOutMinimum: bigint;
+  recipient: `0x${string}`;
+  deadline: bigint;
+}
+
+/**
+ * Build the calldata for a token→token swap on Robinhood Chain. Non-custodial:
+ * this function only *encodes* the calls; the client signs and sends. Returns
+ * a null-route sentinel when no direct OR WETH-hopped pool exists, so the
+ * API can 200-return with a clear error code instead of throwing.
+ *
+ * ⚠️ WETH9 short-circuit: if `tokenIn` or `tokenOut` is WETH9 itself, we
+ * skip the multi-hop path and just do a single ERC20→ERC20 direct swap
+ * (a WETH↔token pool is the same thing) — no need to hop through WETH twice.
+ */
+export async function buildTokenToTokenSwapCalldata(
+  p: TokenToTokenParams,
+): Promise<TokenToTokenCalldataResult> {
+  const weth = ROBINHOOD_MAINNET_VERIFIED_WETH9 as `0x${string}`;
+  const wethLower = weth.toLowerCase();
+  const inLower = p.tokenIn.toLowerCase();
+  const outLower = p.tokenOut.toLowerCase();
+
+  if (inLower === outLower) {
+    return { route: null, reason: "tokenIn and tokenOut are the same" };
+  }
+
+  // 1) Try a direct pool first.
+  const direct = await bestPoolForPair(p.tokenIn, p.tokenOut);
+  if (direct) {
+    const approveData = buildErc20ApproveData(p.router, p.amountIn);
+    const swapData = buildSwapExactInputSingleData({
+      tokenIn: p.tokenIn,
+      tokenOut: p.tokenOut,
+      fee: direct.fee,
+      amountIn: p.amountIn,
+      amountOutMinimum: p.amountOutMinimum,
+      recipient: p.recipient,
+      deadline: p.deadline,
+    });
+    return {
+      route: "direct",
+      calls: [
+        { kind: "approve", to: p.tokenIn, data: approveData, value: "0x0" },
+        {
+          kind: "swap",
+          to: p.router,
+          data: swapData,
+          value: "0x0",
+          pool: { address: direct.address, fee: direct.fee },
+        },
+      ],
+    };
+  }
+
+  // 2) No direct pool → try WETH-hopped route. But if either side already IS
+  //    WETH, a "hop through WETH" is the same as the direct path we just
+  //    tried, so there's nothing more to find — bail out.
+  if (inLower === wethLower || outLower === wethLower) {
+    return { route: null, reason: "no direct pool for this pair on Robinhood Chain" };
+  }
+
+  const [legIn, legOut] = await Promise.all([
+    bestPoolForPair(p.tokenIn, weth),
+    bestPoolForPair(weth, p.tokenOut),
+  ]);
+  if (!legIn || !legOut) {
+    return { route: null, reason: "no route: neither a direct pool nor a WETH-hopped route exists" };
+  }
+
+  // Leg 1: tokenIn → WETH (bounded by 0 — final slippage guard is on leg 2).
+  const approveInData = buildErc20ApproveData(p.router, p.amountIn);
+  const leg1Data = buildSwapExactInputSingleData({
+    tokenIn: p.tokenIn,
+    tokenOut: weth,
+    fee: legIn.fee,
+    amountIn: p.amountIn,
+    amountOutMinimum: 0n,
+    recipient: p.recipient, // WETH lands in the user's wallet between the two txs
+    deadline: p.deadline,
+  });
+
+  // Leg 2: WETH → tokenOut. We can't know the exact WETH amount at prepare
+  // time (leg 1 hasn't run yet), so we approve MaxUint256 for WETH and set
+  // amountIn to a placeholder marker (uint256 max). The client MUST replace
+  // both after leg 1 lands, using its own on-chain balance read. This is
+  // signaled by the special "amountIn: max" convention in the meta below.
+  const MAX_UINT256 = (1n << 256n) - 1n;
+  const approveOutData = buildErc20ApproveData(p.router, MAX_UINT256);
+  const leg2Data = buildSwapExactInputSingleData({
+    tokenIn: weth,
+    tokenOut: p.tokenOut,
+    fee: legOut.fee,
+    amountIn: MAX_UINT256, // placeholder — client rebuilds with actual balance
+    amountOutMinimum: p.amountOutMinimum,
+    recipient: p.recipient,
+    deadline: p.deadline,
+  });
+
+  return {
+    route: "multi-hop",
+    calls: [
+      { kind: "approve", to: p.tokenIn, data: approveInData, value: "0x0" },
+      {
+        kind: "swap",
+        to: p.router,
+        data: leg1Data,
+        value: "0x0",
+        leg: 1,
+        pool: { address: legIn.address, fee: legIn.fee },
+      },
+      { kind: "approve", to: weth, data: approveOutData, value: "0x0" },
+      {
+        kind: "swap",
+        to: p.router,
+        data: leg2Data,
+        value: "0x0",
+        leg: 2,
+        pool: { address: legOut.address, fee: legOut.fee },
+      },
+    ],
+  };
+}
