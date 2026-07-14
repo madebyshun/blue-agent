@@ -392,18 +392,6 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/base-pulse`,
     x402Body: (v) => ({}),
   },
-  {
-    id: "bankr-pulse",
-    name: "Bankr Trending",
-    description: "Live Bankr ecosystem pulse — trending agent token launches, $BNKR price & 24h change, and ecosystem sentiment.",
-    agentHandle: "consensus", agentName: "Blue Agent", agentType: "composite",
-    category: "on-chain",
-    inputs: [],
-    isComposite: true,
-    price: "$0.05", priceUSDC: 50000,
-    x402Url: `${X402_BASE}/bankr-pulse`,
-    x402Body: () => ({}),
-  },
 
   // ── Intelligence ────────────────────────────────────────────────────────────
 
