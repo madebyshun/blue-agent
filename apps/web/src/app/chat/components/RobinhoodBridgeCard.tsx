@@ -166,7 +166,10 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
   const balance  = isNative
     ? (nativeBal ? Number(formatUnits(nativeBal.value, 18)) : null)
     : (erc20Bal != null ? Number(formatUnits(erc20Bal as bigint, decimals)) : null);
-  const amtNum = parseFloat(initialAmt);
+  // Use the EDITABLE amount, not the LLM's initial value — otherwise a user
+  // who types 0.001 after LLM guessed "1 ETH" still sees "exceeds balance"
+  // even when the new amount is fine.
+  const amtNum = parseFloat(amount);
   const overBalance = balance != null && Number.isFinite(amtNum) && amtNum > balance;
 
   // Watch the primary tx until the SOURCE-chain RPC returns a receipt — that's
