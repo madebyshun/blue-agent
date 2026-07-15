@@ -28,6 +28,7 @@ import {
 } from "viem";
 import { base } from "viem/chains";
 import { deriveKeeperAccount, getKeeperMasterKey } from "./keeper";
+import { ensureKeeperGas } from "./gas-topup";
 import type { DcaSchedule, DcaExecutionLog } from "./types";
 
 const ERC20_ABI = [
@@ -179,6 +180,14 @@ export async function executeDcaRun(
       chain: base,
       transport: http(rpcUrl),
     });
+
+    // 0. Ensure keeper has enough ETH for the ~3-tx sequence below. No-op if
+    //    GAS_TOP_UP_PRIVATE_KEY isn't set — will surface an insufficient-funds
+    //    error at the transferFrom step instead, which is at least visible.
+    const gas = await ensureKeeperGas(keeper.address, { publicClient });
+    if (!gas.ok) {
+      throw new Error(`gas top-up failed: ${gas.error}`);
+    }
 
     const sellAmountPerRun = BigInt(schedule.sellAmountPerRun);
     const { totalPull, swapAmount, feeAmount } = computeRunPull(
