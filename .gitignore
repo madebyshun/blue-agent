@@ -21,3 +21,5 @@ coverage/
 # Foundry build artifacts
 /contracts/out/
 /contracts/cache/
+apps/web/blue-render/
+broadcast/

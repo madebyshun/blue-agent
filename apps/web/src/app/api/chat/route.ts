@@ -14,6 +14,7 @@ import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { checkMemo } from "@/lib/b20/check-memo";
 import { checkAuthorization } from "@/lib/b20/check-authorization";
 import { checkWallet } from "@/lib/wallet/holdings";
+import { getRobinhoodAddressBalances } from "@/lib/robinhood/blockscout";
 import { mcpCallTool } from "@/lib/mcp-client";
 
 export const runtime = "nodejs";
@@ -308,7 +309,9 @@ When user asks to send/transfer a B20 token:
 4. Only proceed if simulation succeeds — never bypass
 5. Use hub_b20_analyze for B20 deployment questions / role explanations
 6. Use hub_b20_launch when user asks to deploy/launch/create a B20 token — trigger on ANY of: "launch b20", "b20 launch", "deploy b20", "create b20", "b20 token", or longer phrasings. Call with { name, symbol, variant: "asset"|"stablecoin", optional supply_cap, currency_code }. Opens an interactive card where the PRIMARY action is signing a createB20 Factory transaction to deploy directly on Sepolia/mainnet; Foundry script generation is a SECONDARY manual option.
-6c. Use robinhood_swap when the user wants to BUY or SELL a token on ROBINHOOD CHAIN — trigger on ANY of: "buy X on robinhood", "sell X on robinhood", "swap 0.001 ETH for CASHDOG on robinhood chain", "trade HOODRAT on robinhood", or similar Robinhood swap intent. Call with { direction: "buy"|"sell", token: contract address 0x… OR a ticker symbol (server resolves via the live GeckoTerminal Robinhood index), optional amount as a decimal string ("0.001", "100") }. Renders an inline swap card that fetches the live Uniswap V3 pool + estimate against the deployed RobinhoodSwapRouter (0x3bb0…d23D on chain 4663); the user signs approve (if selling) + the swap tx in their own wallet — non-custodial, no server keys. If the symbol isn't in the live index the card shows an honest error — never fabricate an address. NEVER use this for Base tokens (use prepare_swap for Base).
+6c. Use robinhood_swap when the user wants to swap, BUY, or SELL a token on ROBINHOOD CHAIN — trigger on ANY of: "buy X on robinhood", "sell X on robinhood", "swap 0.001 ETH for CASHDOG on robinhood chain", "swap 50 USDC for VEX on robinhood", "sell 100 VIRTUAL for CLAWBANK on robinhood", "trade HOODRAT on robinhood", or similar Robinhood swap intent. Two shapes: (a) ETH↔token — { direction: "buy"|"sell", token, optional amount }. (b) token↔token — { token_in: tokenIn contract 0x… OR ticker, token: tokenOut contract OR ticker, optional amount, optional slippage_bps }. Token↔token currently requires a DIRECT Uniswap V3 pool between the two tokens on Robinhood Chain; if none exists the card shows a clear "no route" state (multi-hop via WETH is a follow-up). Symbols are resolved server-side against the live GeckoTerminal Robinhood index; never fabricate an address. Non-custodial: the user's own wallet signs approve(s) + swap(s) against the deployed RobinhoodSwapRouter (0x3bb0…d23D on chain 4663). NEVER use this for Base tokens (use prepare_swap for Base).
+6d. Use robinhood_send when the user wants to SEND or TRANSFER an ERC-20 (or native ETH) on ROBINHOOD CHAIN (chainId 4663) — trigger on ANY of: "send 25 USDC to 0x… on robinhood", "transfer 0.1 ETH to 0x… on RH", "pay 100 HOOD to 0x… on robinhood chain", or similar Robinhood send intent. Call with { toAddress: recipient 0x…, token: ERC-20 contract 0x… OR "ETH"/"NATIVE" for native ETH, amount: decimal string in whole units ("25.5", "0.1"), tokenSymbol: optional display hint }. fromAddress is OPTIONAL — the card automatically uses the user's connected wallet. DO NOT ASK THE USER FOR THEIR WALLET ADDRESS — the browser already has it. The server builds a raw transfer(address,uint256) calldata (or native value tx) and returns { to, data, value, chainId: 4663 } — the user's own wallet signs and broadcasts. Non-custodial: no server keys, no swap logic, no router. NEVER invent a token address — if the user gave only a symbol, ask for the contract. NEVER use for Base sends (use prepare_send for Base).
+6e. Use robinhood_bridge when the user wants to BRIDGE or MOVE a token (or native ETH) BETWEEN Base (chainId 8453) and Robinhood Chain (chainId 4663) — trigger on ANY of: "bridge X TOKEN to robinhood", "bridge from base to rh", "move 100 USDC to robinhood", "bridge back to base", "send 0.1 ETH from base to robinhood", or similar cross-chain intent between these two chains. Call with { fromChain: "base"|"robinhood", toChain: "base"|"robinhood" (must differ), fromAddress: connected wallet 0x…, token: ERC-20 contract 0x… on fromChain OR "ETH"/"NATIVE" for native ETH, amount: decimal string in whole units ("100", "0.1"), optional recipient (defaults to sender), optional tokenSymbol display hint }. The server fetches a live Relay Protocol quote and returns { to, data, value, chainId } for the source chain — the user's own wallet signs the (optional) approve then the deposit tx, and Relay solvers fill the destination chain (delivery tracked on relay.link). Non-custodial: no server keys, no server signing. NEVER invent a token address — if the user gave only a symbol without a contract, ask for it. NEVER use for same-chain swaps (use robinhood_swap or prepare_swap).
 6b. Use hub_robinhood_launch when user asks to deploy/launch a token on ROBINHOOD CHAIN specifically — trigger on ANY of: "launch on robinhood", "robinhood chain token", "deploy on robinhood", "robinhood launch", or similar. Deploys via Bankr's launchpad (chain:'robinhood' on POST /token-launches/deploy) — auto Uniswap pool + 95% creator fee split + gas + wallet handled by Bankr. Call with { name, symbol, optional decimals, initial_supply, image, website, description }. This renders the SAME unified token-launch card as prepare_token_launch, just pre-set to the Robinhood Chain step (skips the Base-vs-Robinhood picker) — there is no separate Robinhood-only card anymore. If the user hasn't said which chain yet, prefer prepare_token_launch instead (with no chain hint) so the card shows the picker and lets them choose Base vs Robinhood Chain themselves. Never confuse this with hub_b20_launch (Base-only, different token standard). The older self-signed direct-deploy path (raw ERC-20 from the user's own wallet, via /api/robinhood/*) still exists in the codebase but is NOT currently the default — always use this Bankr path unless explicitly asked for a direct deploy.
 7. Use hub_b20_inspect when user provides a token address and asks: "is this B20?", "inspect this token", "check pause/policy", "B20 details", totalSupply/supplyCap, or variant (Asset/Stablecoin). Reads REAL on-chain state via multicall — zero LLM. Call with { address: "0x…", network: "mainnet" }.
 8. Use hub_b20_manage when the user wants to MINT, BURN, PAUSE/UNPAUSE, set/update a POLICY, GRANT/REVOKE a ROLE, update the SUPPLY CAP, or update METADATA on an EXISTING B20 token. Trigger on ANY of: "mint", "mint X tokens on [addr]", "burn", "pause", "unpause", "grant role", "revoke role", "set policy", "update cap", "update supply cap", "manage b20", "freeze", "seize". Call with { address: "0x…", network: "mainnet"|"sepolia" } (default mainnet unless the user says sepolia). Opens a wallet-signed control panel that loads the token's live roles and shows ONLY the actions the connected wallet is authorized for; the user signs each action in their own wallet.
@@ -716,15 +719,49 @@ Default to "base" for Base-related queries.`,
   },
   {
     name: "robinhood_swap",
-    description: "Open a buy/sell swap card for a token on ROBINHOOD CHAIN (chainId 4663) — routes through Blue Agent's own deployed RobinhoodSwapRouter (0x3bb0…d23D) against Uniswap V3 pools. Trigger on: 'buy X on robinhood', 'sell X on robinhood chain', 'swap 0.001 ETH for CASHDOG on robinhood', 'trade HOODRAT on robinhood', or any 'swap/buy/sell on robinhood' intent. Non-custodial: the card computes an estimate + slippage floor, and the user's own wallet signs (approve if selling, then swap). If the token has no Uniswap V3 pool on Robinhood Chain the card shows an honest 'no pool yet' state. NEVER use for Base tokens — use prepare_swap for Base.",
+    description: "Open a swap card for a token on ROBINHOOD CHAIN (chainId 4663) — routes through Blue Agent's own deployed RobinhoodSwapRouter (0x3bb0…d23D) against Uniswap V3 pools. Two shapes: (a) ETH↔token via { direction, token } and (b) token↔token via { token_in, token }. Trigger on any Robinhood swap intent including token↔token phrases like 'swap 50 USDC for VEX on robinhood', 'sell 100 VIRTUAL for CLAWBANK on robinhood'. Non-custodial: the card discovers the route (direct pool required for token↔token; multi-hop via WETH is a follow-up), and the user's own wallet signs each step. If no direct route exists the card shows an honest 'no route' state. NEVER use for Base tokens — use prepare_swap for Base.",
     input_schema: {
       type: "object",
       properties: {
-        direction:     { type: "string", enum: ["buy", "sell"], description: "buy = spend ETH to receive the token; sell = spend the token to receive ETH. Default buy." },
-        token:         { type: "string", description: "Token contract address (0x…) on Robinhood Chain, OR a ticker symbol (e.g. CASHDOG, HOODRAT) — the server resolves symbols via the live Robinhood Chain feed. Never invent addresses." },
-        amount:        { type: "string", description: "Human-readable amount: ETH for buy (e.g. 0.001), token units for sell (e.g. 100). Optional — if omitted, the card renders empty and the user types the amount in." },
+        direction:     { type: "string", enum: ["buy", "sell"], description: "buy = spend ETH to receive the token; sell = spend the token to receive ETH. Default buy. Ignored when token_in is set." },
+        token:         { type: "string", description: "Token contract address (0x…) on Robinhood Chain, OR a ticker symbol (e.g. CASHDOG, HOODRAT). For token↔token this is tokenOut. Server resolves symbols via the live Robinhood Chain feed. Never invent addresses." },
+        token_in:      { type: "string", description: "OPTIONAL. When set, switches to token↔token mode. tokenIn contract address (0x…) OR ticker symbol. Never invent addresses." },
+        slippage_bps:  { type: "number", description: "OPTIONAL. Slippage tolerance in basis points (e.g. 50 = 0.5%). Default 50. Only honoured in token↔token mode; ETH↔token uses the card's built-in picker." },
+        amount:        { type: "string", description: "Human-readable amount: ETH for buy, token for sell (or tokenIn for token↔token). Optional." },
       },
-      required: ["direction", "token"],
+      required: ["token"],
+    },
+  },
+  {
+    name: "robinhood_send",
+    description: "Open a NON-CUSTODIAL send/transfer card for ERC-20 or native ETH on ROBINHOOD CHAIN (chainId 4663). The server encodes the transfer calldata and the user's own wallet SIGNS + BROADCASTS — no server keys, no funds movement. Trigger on: 'send X TOKEN to 0x… on robinhood', 'transfer 0.1 ETH to 0x… on RH', 'pay 25 USDC to 0x… on robinhood chain', or any 'send/transfer/pay on robinhood' intent. Call with { toAddress, token, amount } — fromAddress is OPTIONAL; the card falls back to the user's connected wallet by default (do NOT ask the user for their wallet address — the browser already has it). NEVER invent a token address — if the user gave only a symbol (e.g. 'USDC') without a contract, ask them for the contract. NEVER use for Base sends — use prepare_send for Base.",
+    input_schema: {
+      type: "object",
+      properties: {
+        toAddress:   { type: "string", description: "Recipient 0x… address on Robinhood Chain. Never invent one." },
+        token:       { type: "string", description: "ERC-20 contract address (0x…) on Robinhood Chain, OR the string 'ETH' / 'NATIVE' for native ETH. Never invent a contract address." },
+        amount:      { type: "string", description: "Human-readable amount in whole units (e.g. '25.5', '0.1'). The server converts to base units using the token's own decimals." },
+        fromAddress: { type: "string", description: "OPTIONAL hint — the card uses the connected wallet by default. Do not ask the user for this; the browser already has it." },
+        tokenSymbol: { type: "string", description: "Optional display hint — the card prefers the on-chain symbol read from the token contract." },
+      },
+      required: ["toAddress", "token", "amount"],
+    },
+  },
+  {
+    name: "robinhood_bridge",
+    description: "Open a NON-CUSTODIAL BRIDGE card that moves an ERC-20 (or native ETH) between Base (8453) and Robinhood Chain (4663) using Relay Protocol. The server fetches a live quote from Relay's /quote endpoint and returns { to, data, value, chainId } for the source chain; the user's own wallet SIGNS + BROADCASTS. Trigger on: 'bridge X TOKEN to robinhood', 'move 100 USDC from base to robinhood', 'bridge back to base', 'send 0.1 ETH from base to robinhood chain', or any Base↔RH cross-chain intent. NEVER use for same-chain swaps — use robinhood_swap for RH or prepare_swap for Base. NEVER invent a token address — if the user gave only a symbol without a contract, ask for it.",
+    input_schema: {
+      type: "object",
+      properties: {
+        fromChain:   { type: "string", enum: ["base", "robinhood"], description: "Source chain — the chain funds leave from." },
+        toChain:     { type: "string", enum: ["base", "robinhood"], description: "Destination chain — must differ from fromChain." },
+        token:       { type: "string", description: "ERC-20 contract address (0x…) on fromChain, OR the string 'ETH'/'NATIVE' for native ETH. Never invent an address." },
+        amount:      { type: "string", description: "Amount in whole units (e.g. '25.5', '0.1'). Server converts to base units using the token's decimals." },
+        fromAddress: { type: "string", description: "OPTIONAL hint — usually the connected wallet. The card falls back to the connected wallet." },
+        recipient:   { type: "string", description: "OPTIONAL destination address. Defaults to fromAddress." },
+        tokenSymbol: { type: "string", description: "OPTIONAL display hint — card prefers the on-chain symbol read from the token contract." },
+      },
+      required: ["fromChain", "toChain", "token", "amount"],
     },
   },
   {
@@ -1058,87 +1095,185 @@ async function callHubTool(
     };
   }
   if (toolName === "robinhood_swap") {
-    // Resolve the token — accept either a 0x address or a symbol we look up
+    // Resolve tokens — accept either 0x addresses or symbols we look up
     // against the LIVE Robinhood Chain feed (GeckoTerminal). No LLM fallback,
-    // no fabricated addresses: if the symbol isn't in the live index, we
-    // return an error the card renders inline instead of guessing.
+    // no fabricated addresses: if the symbol isn't in the live index, the
+    // card renders an error inline instead of guessing.
+    //
+    // Two modes:
+    //  - ETH↔token: only `token` is set. `direction` chooses buy/sell.
+    //  - token↔token: `token_in` AND `token` both set (tokenIn → tokenOut).
+    //    `direction` ignored. `slippage_bps` optional (card default 50).
     const direction = args.direction === "sell" ? "sell" : "buy";
     const rawToken = typeof args.token === "string" ? args.token.trim() : "";
+    const rawTokenIn = typeof args.token_in === "string" ? args.token_in.trim() : "";
     const amount = args.amount != null ? String(args.amount) : "";
+    const slippage_bps = typeof args.slippage_bps === "number" ? args.slippage_bps : undefined;
 
-    let token_address = "";
-    let token_symbol = "";
-    let token_name = "";
-    let note = "";
-    let error = "";
-
-    if (/^0x[a-fA-F0-9]{40}$/.test(rawToken)) {
-      token_address = rawToken;
-      // Enrich with symbol/name via GeckoTerminal (best-effort, non-fatal).
+    // Local resolver — extracted so token↔token can reuse it for tokenIn.
+    // Returns { address, symbol, name, note, error } — caller decides whether
+    // an empty result is fatal (tokenOut is required) or benign (tokenIn is
+    // optional and only present in token↔token mode).
+    async function resolveRHToken(raw: string): Promise<{
+      address: string; symbol: string; name: string; note: string; error: string;
+    }> {
+      if (!raw) return { address: "", symbol: "", name: "", note: "", error: "" };
+      if (/^0x[a-fA-F0-9]{40}$/.test(raw)) {
+        let symbol = "", name = "";
+        try {
+          const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/robinhood/tokens/${raw}`, {
+            headers: { Accept: "application/json" }, cache: "no-store",
+          });
+          if (r.ok) {
+            const j = await r.json();
+            symbol = String(j?.data?.attributes?.symbol ?? "").replace(/^\$/, "");
+            name = String(j?.data?.attributes?.name ?? "");
+          }
+        } catch { /* leave blank; card handles it */ }
+        return { address: raw, symbol, name, note: "", error: "" };
+      }
+      // Symbol lookup — search GeckoTerminal's Robinhood pool index.
       try {
-        const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/robinhood/tokens/${rawToken}`, {
-          headers: { Accept: "application/json" }, cache: "no-store",
-        });
-        if (r.ok) {
-          const j = await r.json();
-          token_symbol = String(j?.data?.attributes?.symbol ?? "").replace(/^\$/, "");
-          token_name = String(j?.data?.attributes?.name ?? "");
-        }
-      } catch { /* leave symbol/name blank; card handles it */ }
-    } else if (rawToken) {
-      // Symbol lookup — search GeckoTerminal's Robinhood token index.
-      try {
-        const q = encodeURIComponent(rawToken);
+        const q = encodeURIComponent(raw);
         const r = await fetch(
           `https://api.geckoterminal.com/api/v2/search/pools?query=${q}&network=robinhood&page=1`,
           { headers: { Accept: "application/json" }, cache: "no-store" },
         );
-        if (r.ok) {
-          const j = await r.json();
-          const pools = (j?.data ?? []) as Array<{ attributes?: { name?: string }; relationships?: { base_token?: { data?: { id?: string } }; quote_token?: { data?: { id?: string } } } }>;
-          // Pick the first pool whose base token's symbol (from the name "SYMBOL / WETH …")
-          // matches the user's request. GeckoTerminal returns pool ids like "robinhood_0x...".
-          const wanted = rawToken.replace(/^\$/, "").toUpperCase();
-          for (const p of pools) {
-            const name = (p.attributes?.name ?? "").toUpperCase();
-            if (!name.includes(wanted)) continue;
-            const baseId = p.relationships?.base_token?.data?.id ?? "";
-            const quoteId = p.relationships?.quote_token?.data?.id ?? "";
-            const baseAddr = baseId.startsWith("robinhood_") ? baseId.slice("robinhood_".length) : "";
-            const quoteAddr = quoteId.startsWith("robinhood_") ? quoteId.slice("robinhood_".length) : "";
-            // Prefer whichever leg is NOT WETH.
-            const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73";
-            const cand = baseAddr.toLowerCase() === WETH ? quoteAddr : baseAddr;
-            if (/^0x[a-fA-F0-9]{40}$/.test(cand)) {
-              token_address = cand;
-              token_symbol = wanted;
-              note = `Resolved ${wanted} → ${cand} via GeckoTerminal Robinhood index`;
-              break;
-            }
+        if (!r.ok) return { address: "", symbol: "", name: "", note: "", error: "Couldn't reach the Robinhood token index — try again with the token contract address." };
+        const j = await r.json();
+        const pools = (j?.data ?? []) as Array<{ attributes?: { name?: string }; relationships?: { base_token?: { data?: { id?: string } }; quote_token?: { data?: { id?: string } } } }>;
+        // GeckoTerminal returns pool ids like "robinhood_0x…"; base_token is
+        // typically the non-WETH leg but we defensively check both.
+        const wanted = raw.replace(/^\$/, "").toUpperCase();
+        for (const p of pools) {
+          const poolName = (p.attributes?.name ?? "").toUpperCase();
+          if (!poolName.includes(wanted)) continue;
+          const baseId = p.relationships?.base_token?.data?.id ?? "";
+          const quoteId = p.relationships?.quote_token?.data?.id ?? "";
+          const baseAddr = baseId.startsWith("robinhood_") ? baseId.slice("robinhood_".length) : "";
+          const quoteAddr = quoteId.startsWith("robinhood_") ? quoteId.slice("robinhood_".length) : "";
+          const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73";
+          const cand = baseAddr.toLowerCase() === WETH ? quoteAddr : baseAddr;
+          if (/^0x[a-fA-F0-9]{40}$/.test(cand)) {
+            return { address: cand, symbol: wanted, name: "", note: `Resolved ${wanted} → ${cand} via GeckoTerminal Robinhood index`, error: "" };
           }
-          if (!token_address) error = `No live pool for "${rawToken}" found on Robinhood Chain — try the token contract address.`;
-        } else {
-          error = "Couldn't reach the Robinhood token index — try again with the token contract address.";
         }
+        return { address: "", symbol: "", name: "", note: "", error: `No live pool for "${raw}" found on Robinhood Chain — try the token contract address.` };
       } catch {
-        error = "Couldn't reach the Robinhood token index — try again with the token contract address.";
+        return { address: "", symbol: "", name: "", note: "", error: "Couldn't reach the Robinhood token index — try again with the token contract address." };
       }
-    } else {
-      error = "Need a token — pass an address or a ticker symbol.";
     }
+
+    // tokenOut is required. tokenIn is optional (only for token↔token mode).
+    let error = "";
+    let note = "";
+    let token_address = "", token_symbol = "", token_name = "";
+    let token_in_address = "", token_in_symbol = "";
+
+    if (!rawToken) {
+      error = "Need a token — pass an address or a ticker symbol.";
+    } else {
+      const out = await resolveRHToken(rawToken);
+      if (out.error) {
+        error = out.error;
+      } else {
+        token_address = out.address;
+        token_symbol = out.symbol;
+        token_name = out.name;
+        if (out.note) note = out.note;
+      }
+    }
+    if (!error && rawTokenIn) {
+      const inTok = await resolveRHToken(rawTokenIn);
+      if (inTok.error) {
+        error = inTok.error;
+      } else {
+        token_in_address = inTok.address;
+        token_in_symbol = inTok.symbol;
+        if (inTok.note) note = note ? `${note}. ${inTok.note}` : inTok.note;
+      }
+    }
+
+    const modeDesc = token_in_address
+      ? `${token_in_symbol || token_in_address} → ${token_symbol || token_address}`
+      : `${token_symbol || token_address} (${direction})`;
 
     return {
       text: error
         ? `Robinhood swap card rendered with an error: ${error}. Reply with one short line telling the user; do NOT invent an address.`
-        : `Robinhood swap card rendered for ${token_symbol || token_address} (${direction}). The card fetches the live Uniswap V3 pool + estimate and shows a slippage picker; the user's own wallet signs approve (if selling) + swap. Do NOT restate the fields as a table, do NOT claim the swap has executed. Reply with one short line telling the user to review the amount + slippage in the card and click the buy/sell button to sign.`,
+        : `Robinhood swap card rendered for ${modeDesc}. The card fetches the live Uniswap V3 route and shows a slippage picker; the user's own wallet signs approve (if selling or token↔token) + swap. Do NOT restate the fields as a table, do NOT claim the swap has executed. Reply with one short line telling the user to review the amount + slippage in the card and click the swap button to sign.`,
       result: {
         kind: "robinhood_swap",
         direction,
         token_address,
         token_symbol,
         token_name,
+        token_in_address,
+        token_in_symbol,
         amount,
+        slippage_bps,
         note,
+        error,
+      },
+    };
+  }
+  if (toolName === "robinhood_send") {
+    // Client-rendered marker — RobinhoodSendCard fetches send-prepare on mount,
+    // then the user SIGNS the transfer tx in their own wallet. No server keys,
+    // no funds moved from here. We only pass through fields the LLM extracted;
+    // the card validates and calls the prepare endpoint for calldata/decimals.
+    const fromAddress = typeof args.fromAddress === "string" ? args.fromAddress.trim() : "";
+    const toAddress   = typeof args.toAddress   === "string" ? args.toAddress.trim()   : "";
+    const rawToken    = typeof args.token       === "string" ? args.token.trim()       : "";
+    const amount      = args.amount != null ? String(args.amount).trim() : "";
+    const tokenSymbol = typeof args.tokenSymbol === "string" ? args.tokenSymbol.trim() : "";
+    let error = "";
+    // fromAddress is intentionally OPTIONAL here — the card falls back to the
+    // connected wallet client-side. Only fail if the LLM provided a value AND
+    // it's malformed (garbage input, not just empty).
+    if (fromAddress && !/^0x[a-fA-F0-9]{40}$/.test(fromAddress)) error = "fromAddress must be a valid 0x… address (or omit it — the card uses the connected wallet).";
+    else if (!/^0x[a-fA-F0-9]{40}$/.test(toAddress)) error = "Missing recipient — pass a 0x… address.";
+    else if (!rawToken) error = "Missing token — pass an ERC-20 contract address or 'ETH' for native.";
+    else if (!/^(0x[a-fA-F0-9]{40}|ETH|NATIVE)$/i.test(rawToken)) error = "Token must be a 0x… contract or 'ETH'/'NATIVE' — never invent an address.";
+    else if (!amount || !/^\d+(\.\d+)?$/.test(amount)) error = "Missing amount — pass a positive decimal string, e.g. '25.5'.";
+    return {
+      text: error
+        ? `Robinhood send card rendered with an error: ${error}. Reply with one short line telling the user; do NOT invent an address or amount.`
+        : `Robinhood send card rendered — the user reviews the recipient/amount and SIGNS the transfer in their own wallet (non-custodial). Do NOT restate the fields as a table, do NOT claim the send has happened. Reply with one short line telling the user to review and sign in the card.`,
+      result: {
+        kind: "robinhood_send",
+        fromAddress, toAddress, token: rawToken, amount, tokenSymbol,
+        error,
+      },
+    };
+  }
+  if (toolName === "robinhood_bridge") {
+    // Client-rendered marker — RobinhoodBridgeCard fetches bridge-prepare on
+    // mount (Relay quote), then the user signs approve+deposit in their own
+    // wallet on the source chain. Non-custodial; no server keys touch the tx.
+    const fromChain   = typeof args.fromChain === "string" ? args.fromChain.trim().toLowerCase() : "";
+    const toChain     = typeof args.toChain   === "string" ? args.toChain.trim().toLowerCase()   : "";
+    const fromAddress = typeof args.fromAddress === "string" ? args.fromAddress.trim() : "";
+    const recipient   = typeof args.recipient === "string" ? args.recipient.trim() : "";
+    const rawToken    = typeof args.token === "string" ? args.token.trim() : "";
+    const amount      = args.amount != null ? String(args.amount).trim() : "";
+    const tokenSymbol = typeof args.tokenSymbol === "string" ? args.tokenSymbol.trim() : "";
+    let error = "";
+    if (fromChain !== "base" && fromChain !== "robinhood") error = "fromChain must be 'base' or 'robinhood'.";
+    else if (toChain !== "base" && toChain !== "robinhood") error = "toChain must be 'base' or 'robinhood'.";
+    else if (fromChain === toChain) error = "fromChain and toChain must differ — this bridge is Base ↔ Robinhood.";
+    else if (fromAddress && !/^0x[a-fA-F0-9]{40}$/.test(fromAddress)) error = "fromAddress must be a valid 0x… address.";
+    else if (recipient && !/^0x[a-fA-F0-9]{40}$/.test(recipient)) error = "recipient must be a valid 0x… address.";
+    else if (!rawToken) error = "Missing token — pass an ERC-20 contract address or 'ETH' for native.";
+    else if (!/^(0x[a-fA-F0-9]{40}|ETH|NATIVE)$/i.test(rawToken)) error = "Token must be a 0x… contract or 'ETH'/'NATIVE' — never invent an address.";
+    else if (!amount || !/^\d+(\.\d+)?$/.test(amount)) error = "Missing amount — pass a positive decimal string, e.g. '25.5'.";
+    return {
+      text: error
+        ? `Robinhood bridge card rendered with an error: ${error}. Reply with one short line telling the user; do NOT invent an address or amount.`
+        : `Robinhood bridge card rendered — the user reviews the Relay quote in the card and SIGNS the source-chain tx in their own wallet (non-custodial). Do NOT restate the quote as a table, do NOT claim the bridge has completed. Reply with one short line telling the user to review and sign in the card; delivery is tracked on relay.link.`,
+      result: {
+        kind: "robinhood_bridge",
+        fromChain, toChain, fromAddress, recipient, token: rawToken, amount, tokenSymbol,
         error,
       },
     };
@@ -1210,19 +1345,30 @@ async function callHubTool(
       };
     }
     const network = typeof args.network === "string" ? args.network : "base";
-    const r = await checkWallet(userAddress, network);
-    const top = r.holdings.slice(0, 4).map(h => `${h.amount} ${h.symbol}`).join(", ");
-    const text = r.error && r.holdings.length === 0
+    // Fetch Base (Moralis) + Robinhood Chain (Blockscout) in parallel — RH is
+    // additive so the card can show both legs. RH fetch is fail-soft: empty
+    // array on any error, never blocks the Base response.
+    const [r, rhHoldings] = await Promise.all([
+      checkWallet(userAddress, network),
+      getRobinhoodAddressBalances(userAddress).catch(() => []),
+    ]);
+    const totalHoldings = r.holdings.length + rhHoldings.length;
+    const top = r.holdings.slice(0, 3).map(h => `${h.amount} ${h.symbol}`).join(", ");
+    const rhTop = rhHoldings.slice(0, 2).map(h => `${h.amount} ${h.symbol} (RH)`).join(", ");
+    const combinedTop = [top, rhTop].filter(Boolean).join(", ");
+    const text = r.error && totalHoldings === 0
       ? `Wallet lookup failed: ${r.error}. Reply with one short line telling the user it couldn't be read; do NOT invent figures.`
-      : r.holdings.length === 0
-        ? "The connected wallet holds no tokens on this network. Reply with one short line saying so — do NOT invent any token."
-        : `The wallet holds ${r.holdings.length} token(s): ${top}${r.holdings.length > 4 ? ", …" : ""}. The result card lists them all. Reply with ONE short line referencing the holdings — never invent tokens or numbers and never add a USD total of your own.`;
+      : totalHoldings === 0
+        ? "The connected wallet holds no tokens on Base or Robinhood Chain. Reply with one short line saying so — do NOT invent any token."
+        : `The wallet holds ${r.holdings.length} token(s) on Base + ${rhHoldings.length} on Robinhood: ${combinedTop}${totalHoldings > 5 ? ", …" : ""}. The result card lists them all (small dust <$1 hidden by default). Reply with ONE short line referencing the holdings across both chains — never invent tokens or numbers and never add a USD total of your own.`;
     return {
       text,
       result: {
         kind: "wallet_result", connected: true,
         address: r.address, network: r.network, explorer: r.explorer, addressUrl: r.addressUrl,
         source: r.source, partial: r.partial, holdings: r.holdings, error: r.error,
+        // Robinhood Chain leg — separate field so the card can group + label.
+        robinhoodHoldings: rhHoldings,
       },
     };
   }

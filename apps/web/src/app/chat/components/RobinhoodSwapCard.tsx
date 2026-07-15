@@ -8,7 +8,7 @@
 // Non-custodial: server holds no keys, on-chain math bounds the final amount.
 
 import { useEffect, useRef, useState } from "react";
-import { useAccount, useSwitchChain, useSendTransaction, useReadContract, useBalance } from "wagmi";
+import { useAccount, useSwitchChain, useSendTransaction, useReadContract, useBalance, usePublicClient } from "wagmi";
 import { parseUnits, formatUnits } from "viem";
 import { ERC20_ABI } from "@/lib/yield-execution";
 import { ConnectButton } from "@/components/ConnectModal";
@@ -30,6 +30,11 @@ export interface RobinhoodSwapResult {
   note?: string;
   /** Server-side error to display inline (e.g. token not found). */
   error?: string;
+  // ── Optional token→token fields (backwards-compat: absent = ETH↔token) ────
+  /** ERC20 tokenIn address. When set, the card switches to token→token mode
+   *  and treats `token_address` as tokenOut regardless of `direction`. */
+  token_in_address?: string;
+  token_in_symbol?: string;
 }
 
 type Quote = {
@@ -42,47 +47,105 @@ type Quote = {
   error?: string;
 };
 
+/** Token→token quote — priced off both tokens' GeckoTerminal USD prices. */
+type T2TQuote = {
+  ok?: boolean;
+  /** "direct" | "via-weth" | "unknown". Actual on-chain route only decided at
+   *  swap-prepare time; this is a best-guess for the preview label. */
+  routeHint?: "direct" | "via-weth" | "unknown";
+  priceInUsd?: number | null;
+  priceOutUsd?: number | null;
+  amountOut?: number | null;
+  error?: string;
+};
+
 function fmtNum(n: number): string {
   return n.toLocaleString("en-US", { maximumFractionDigits: 6 });
+}
+
+const SLIPPAGE_BPS_KEY = "robinhood-swap-slippage-bps";
+function loadSlippageBps(): number {
+  if (typeof window === "undefined") return 50;
+  const raw = window.localStorage.getItem(SLIPPAGE_BPS_KEY);
+  const n = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) && n > 0 && n <= 5000 ? n : 50;
 }
 
 export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
   const { address, isConnected } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   const { sendTransactionAsync } = useSendTransaction();
+  // Public client on RH — used to wait for prior tx to mine between calls
+  // (approve → swap). Without this, MetaMask simulates the swap against
+  // pre-approve state, sees allowance = 0, and warns "likely to fail".
+  const rhPublicClient = usePublicClient({ chainId: RH_CHAIN_ID });
 
   const direction = result.direction === "sell" ? "sell" : "buy";
   const token = (result.token_address || "").trim() as `0x${string}` | "";
   const tokenSym = (result.token_symbol || "").replace(/^\$/, "") || "TOKEN";
   const initialAmt = result.amount != null ? String(result.amount) : "";
 
+  // Token→token mode: activated when the caller passes a `token_in_address`.
+  // When absent, the card behaves EXACTLY as before (ETH↔token via `direction`).
+  const [tokenInAddrInput, setTokenInAddrInput] = useState(
+    (result.token_in_address || "").trim(),
+  );
+  const tokenInAddr = (tokenInAddrInput || "").trim() as `0x${string}` | "";
+  const isT2T = /^0x[a-fA-F0-9]{40}$/.test(tokenInAddr);
+  const tokenInSym = (result.token_in_symbol || "").replace(/^\$/, "") || "TOKEN_IN";
+
   const [amount, setAmount] = useState(initialAmt);
   const [slippagePct, setSlippagePct] = useState(3);
+  // Slippage BPS is only used in token→token mode. Persist per-user so a
+  // trader who prefers 100 bps doesn't have to reset it every message.
+  const [slippageBps, setSlippageBps] = useState<number>(50);
+  useEffect(() => { setSlippageBps(loadSlippageBps()); }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(SLIPPAGE_BPS_KEY, String(slippageBps));
+  }, [slippageBps]);
+
   const [quote, setQuote] = useState<Quote | null>(null);
   const [loadingQuote, setLoadingQuote] = useState(false);
+  // Separate quote state for token→token: uses GeckoTerminal for both legs'
+  // USD prices, doesn't hit /api/robinhood/swap/quote (which is WETH-only).
+  const [t2tQuote, setT2tQuote] = useState<T2TQuote | null>(null);
+  const [loadingT2T, setLoadingT2T] = useState(false);
+  // Route info from /swap-prepare's `meta.route` — surfaced after prepare runs.
+  const [prepRoute, setPrepRoute] = useState<"direct" | "multi-hop" | "none" | null>(null);
+  const [noRouteMsg, setNoRouteMsg] = useState<string>("");
+
   const [step, setStep] = useState<"idle" | "approving" | "swapping" | "done" | "error">("idle");
   const [err, setErr] = useState("");
   const [txHash, setTxHash] = useState("");
 
-  // Balances (native ETH for buy, ERC-20 for sell).
+  // Balances (native ETH for buy, ERC-20 for sell OR when tokenIn is set).
   const { data: nativeBal } = useBalance({
-    address, chainId: RH_CHAIN_ID, query: { enabled: !!address && direction === "buy" },
+    address, chainId: RH_CHAIN_ID, query: { enabled: !!address && direction === "buy" && !isT2T },
   });
+  // For sell → use the "token_address" balance. For T2T → use the tokenIn balance.
+  const balanceOfAddress: `0x${string}` | undefined = isT2T
+    ? (tokenInAddr || undefined)
+    : (direction === "sell" ? (token || undefined) : undefined);
   const { data: tokenBal } = useReadContract({
-    address: token || undefined, abi: ERC20_ABI, functionName: "balanceOf",
+    address: balanceOfAddress, abi: ERC20_ABI, functionName: "balanceOf",
     args: address ? [address] : undefined, chainId: RH_CHAIN_ID,
-    query: { enabled: !!address && direction === "sell" && !!token },
+    query: { enabled: !!address && !!balanceOfAddress },
   });
-  const balance = direction === "buy"
-    ? (nativeBal ? Number(formatUnits(nativeBal.value, 18)) : null)
-    : (tokenBal != null ? Number(formatUnits(tokenBal as bigint, 18)) : null);
+  const balance = isT2T
+    ? (tokenBal != null ? Number(formatUnits(tokenBal as bigint, 18)) : null)
+    : direction === "buy"
+      ? (nativeBal ? Number(formatUnits(nativeBal.value, 18)) : null)
+      : (tokenBal != null ? Number(formatUnits(tokenBal as bigint, 18)) : null);
 
   const amt = parseFloat(amount);
   const overBalance = balance != null && amt > balance;
 
-  // Debounced quote fetch — same shape as /launches modal.
+  // Debounced quote fetch — /api/robinhood/swap/quote for ETH↔token,
+  // GeckoTerminal-only for token→token (that endpoint doesn't handle it).
   const reqId = useRef(0);
   useEffect(() => {
+    if (isT2T) { setQuote(null); return; }
     if (!token || !amount || !Number.isFinite(amt) || amt <= 0) { setQuote(null); return; }
     const id = ++reqId.current;
     setLoadingQuote(true);
@@ -94,30 +157,139 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
         .catch(() => { if (id === reqId.current) { setQuote({ error: "quote failed" }); setLoadingQuote(false); } });
     }, 400);
     return () => clearTimeout(t);
-  }, [token, direction, amount, amt]);
+  }, [token, direction, amount, amt, isT2T]);
 
-  const hasPool = quote?.ok && quote?.hasPool;
-  const estimatedOut = quote?.estimate?.amountOut ?? null;
-  const inSym = direction === "buy" ? "ETH" : tokenSym;
-  const outSym = direction === "buy" ? tokenSym : "ETH";
+  // Token→token quote — GeckoTerminal USD prices for both tokens.
+  const t2tReqId = useRef(0);
+  useEffect(() => {
+    if (!isT2T) { setT2tQuote(null); return; }
+    if (!token || !tokenInAddr || !Number.isFinite(amt) || amt <= 0) { setT2tQuote(null); return; }
+    const id = ++t2tReqId.current;
+    setLoadingT2T(true);
+    const t = setTimeout(() => {
+      Promise.all([
+        fetch(`https://api.geckoterminal.com/api/v2/networks/robinhood/tokens/${tokenInAddr}`, { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`https://api.geckoterminal.com/api/v2/networks/robinhood/tokens/${token}`, { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null),
+      ]).then(([inJ, outJ]) => {
+        if (id !== t2tReqId.current) return;
+        const pIn = inJ?.data?.attributes?.price_usd ? parseFloat(inJ.data.attributes.price_usd) : null;
+        const pOut = outJ?.data?.attributes?.price_usd ? parseFloat(outJ.data.attributes.price_usd) : null;
+        const amountOut = pIn && pOut ? (amt * pIn) / pOut : null;
+        setT2tQuote({ ok: true, routeHint: "unknown", priceInUsd: pIn, priceOutUsd: pOut, amountOut });
+        setLoadingT2T(false);
+      }).catch(() => {
+        if (id === t2tReqId.current) { setT2tQuote({ error: "quote failed" }); setLoadingT2T(false); }
+      });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [isT2T, token, tokenInAddr, amt]);
+
+  const hasPool = isT2T
+    // For T2T we can't cheaply verify pool existence client-side; the actual
+    // route is decided at prepare-time (server-side, on-chain). Treat "has a
+    // GeckoTerminal price" as a soft signal that a route probably exists.
+    ? (t2tQuote?.ok === true)
+    : (quote?.ok && quote?.hasPool);
+  const estimatedOut = isT2T ? (t2tQuote?.amountOut ?? null) : (quote?.estimate?.amountOut ?? null);
+  const inSym = isT2T ? tokenInSym : (direction === "buy" ? "ETH" : tokenSym);
+  const outSym = isT2T ? tokenSym : (direction === "buy" ? tokenSym : "ETH");
   const rate = estimatedOut != null && amt > 0 ? estimatedOut / amt : null;
-  const minOut = estimatedOut != null ? estimatedOut * (1 - slippagePct / 100) : null;
-  const canSwap = !!address && hasPool && amt > 0 && !overBalance && !loadingQuote && step !== "approving" && step !== "swapping";
+  // For T2T we honour the user's bps setting; for ETH↔token we keep the
+  // existing pct picker (backwards-compat with pinned trader muscle memory).
+  const slippageFrac = isT2T ? slippageBps / 10000 : slippagePct / 100;
+  const minOut = estimatedOut != null ? estimatedOut * (1 - slippageFrac) : null;
+  const anyLoading = isT2T ? loadingT2T : loadingQuote;
+  const canSwap = !!address && hasPool && amt > 0 && !overBalance && !anyLoading && step !== "approving" && step !== "swapping";
   const busy = step === "approving" || step === "swapping";
 
   async function doSwap() {
     if (!address) { setErr("Connect your wallet"); setStep("error"); return; }
     if (!token) { setErr("Missing token address"); setStep("error"); return; }
-    if (!hasPool || !quote?.pool) { setErr("No pool available"); setStep("error"); return; }
+    if (!isT2T && (!hasPool || !quote?.pool)) { setErr("No pool available"); setStep("error"); return; }
     if (!amt || amt <= 0) { setErr("Enter an amount"); setStep("error"); return; }
-    setErr(""); setTxHash("");
+    setErr(""); setTxHash(""); setPrepRoute(null); setNoRouteMsg("");
     try {
       try { await switchChainAsync({ chainId: RH_CHAIN_ID }); } catch {
         throw new Error("Switch to Robinhood Chain (4663) and try again");
       }
-      const amountInWei = parseUnits(amount, 18);
-      const minOutBase = minOut != null ? parseUnits(minOut.toFixed(18), 18) : 0n;
+      // Read on-chain decimals for tokenIn + tokenOut instead of assuming 18.
+      // Hardcoding 18 was a real bug: USDG has 6 decimals, so any USDG side
+      // of a swap got the amount scaled by 10^12 too large — router reverted
+      // amountOutMinimum check and MetaMask showed "likely to fail".
+      // Fail-soft: if the read errors (RPC hiccup), fall back to 18 with a
+      // warning — safer than throwing here mid-flow.
+      const inTokenAddr = isT2T ? tokenInAddr : (direction === "sell" ? token : null);
+      const outTokenAddr = isT2T ? token : (direction === "buy" ? token : null);
+      const ERC20_DEC_ABI = [{ type: "function", name: "decimals", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] }] as const;
+      async function readDecimals(addr: `0x${string}` | null): Promise<number> {
+        if (!addr || !rhPublicClient) return 18;
+        try {
+          const d = await rhPublicClient.readContract({ address: addr, abi: ERC20_DEC_ABI, functionName: "decimals" });
+          return Number(d);
+        } catch { return 18; }
+      }
+      const [inDec, outDec] = await Promise.all([readDecimals(inTokenAddr as `0x${string}` | null), readDecimals(outTokenAddr as `0x${string}` | null)]);
+      const amountInWei = parseUnits(amount, inDec);
+      // Clamp minOut precision to token's decimals (parseUnits throws on more
+      // decimals than the token supports, e.g. parseUnits("0.014925", 6) is
+      // fine but parseUnits("0.0000000000000000149", 6) is not).
+      const minOutBase = minOut != null ? parseUnits(minOut.toFixed(outDec), outDec) : 0n;
 
+      // ── Token→token branch ────────────────────────────────────────────────
+      if (isT2T) {
+        const prepRes = await fetch("/api/robinhood/router/swap-prepare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            router: RH_ROUTER,
+            tokenIn: tokenInAddr,
+            token,                                    // = tokenOut
+            amountIn: amountInWei.toString(),
+            amountOutMinimum: minOutBase.toString(),
+            recipient: address,
+          }),
+        });
+        const prep = await prepRes.json();
+        if (prep?.ok === false && prep?.error?.code === "NO_ROUTE") {
+          setPrepRoute("none");
+          setNoRouteMsg(prep.error.message || "no route on Robinhood Chain");
+          setStep("error");
+          setErr("No route available on Robinhood Chain for this pair.");
+          return;
+        }
+        if (!prep.ok) throw new Error(prep.error?.message || prep.error || "Prepare failed");
+        const route = (prep.meta?.route ?? "direct") as "direct" | "multi-hop";
+        setPrepRoute(route);
+
+        // The API returns a `meta.calls` array we walk in order. For "direct"
+        // that's [approve, swap]; for "multi-hop" it's [approve, swap-leg1,
+        // approve-weth, swap-leg2]. Sign each in sequence.
+        const calls = (prep.meta?.calls ?? []) as Array<{
+          kind: "approve" | "swap"; to: string; data: string; value: string; leg?: 1 | 2;
+        }>;
+        for (let i = 0; i < calls.length; i++) {
+          const c = calls[i];
+          setStep(c.kind === "approve" ? "approving" : "swapping");
+          const hash = await sendTransactionAsync({
+            to: c.to as `0x${string}`,
+            data: c.data as `0x${string}`,
+            value: BigInt(c.value),
+            chainId: RH_CHAIN_ID,
+          });
+          if (c.kind === "swap") setTxHash(hash); // last swap tx wins as the "receipt" hash
+          // Wait for THIS tx to mine before signing the next one. Without this
+          // wait the next tx's MetaMask sim runs against pre-mine state (e.g.
+          // approve not yet reflected in allowance() → swap reverts) and MM
+          // shows "likely to fail" scaring the user off a valid flow.
+          if (rhPublicClient && i < calls.length - 1) {
+            await rhPublicClient.waitForTransactionReceipt({ hash, confirmations: 1, timeout: 60_000 });
+          }
+        }
+        setStep("done");
+        return;
+      }
+
+      // ── Existing ETH↔token branch (unchanged) ─────────────────────────────
       const prepRes = await fetch("/api/robinhood/router/swap-prepare", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -125,23 +297,29 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
           router: RH_ROUTER,
           direction,
           token,
-          fee: quote.pool.fee,
+          fee: quote?.pool?.fee,
           amountIn: amountInWei.toString(),
           amountOutMinimum: minOutBase.toString(),
           recipient: address,
         }),
       });
       const prep = await prepRes.json();
-      if (!prep.ok) throw new Error(prep.error || "Prepare failed");
+      if (!prep.ok) throw new Error(prep.error?.message || prep.error || "Prepare failed");
+      setPrepRoute((prep.meta?.route ?? "direct") as "direct" | "multi-hop");
 
       if (prep.approve) {
         setStep("approving");
-        await sendTransactionAsync({
+        const approveHash = await sendTransactionAsync({
           to: prep.approve.to as `0x${string}`,
           data: prep.approve.data as `0x${string}`,
           value: 0n,
           chainId: RH_CHAIN_ID,
         });
+        // Wait for approve to mine before submitting the swap — otherwise MM
+        // sims the swap against pre-approve allowance (0) and reverts.
+        if (rhPublicClient) {
+          await rhPublicClient.waitForTransactionReceipt({ hash: approveHash, confirmations: 1, timeout: 60_000 });
+        }
       }
       setStep("swapping");
       const hash = await sendTransactionAsync({
@@ -182,7 +360,9 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-white text-[12px] font-bold">
-            {direction === "buy" ? "Buy" : "Sell"} {tokenSym} on Robinhood Chain
+            {isT2T
+              ? `Swap ${tokenInSym} → ${tokenSym} on Robinhood Chain`
+              : `${direction === "buy" ? "Buy" : "Sell"} ${tokenSym} on Robinhood Chain`}
           </div>
           <div className="text-slate-600 text-[10px]">
             via RobinhoodSwapRouter · you sign · non-custodial · chainId 4663
@@ -190,6 +370,19 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
         </div>
         {!isConnected && <ConnectButton label="Connect" />}
       </div>
+
+      {/* TokenIn picker — only shown when the LLM sent a `token_in_address`,
+          OR when the user wants to switch modes. Kept collapsed by default so
+          the classic ETH↔token card looks IDENTICAL for existing call sites. */}
+      {isT2T && step !== "done" && (
+        <div className="rounded-lg border border-[#1A1A2E] bg-[#050508] p-2.5 mb-2">
+          <div className="text-[9px] text-slate-600 mb-1">TOKEN IN (address)</div>
+          <input type="text" value={tokenInAddrInput}
+            onChange={(e) => setTokenInAddrInput(e.target.value)}
+            placeholder="0x…"
+            className="w-full bg-transparent text-[11px] text-white outline-none placeholder:text-slate-700" />
+        </div>
+      )}
 
       {step === "done" ? (
         <div className="rounded-lg border p-3" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
@@ -226,7 +419,7 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
             <div className="text-[9px] text-slate-600 mb-1">YOU RECEIVE (est.)</div>
             <div className="flex items-center gap-2">
               <div className="flex-1 text-[15px] text-white w-0 truncate">
-                {loadingQuote ? <span className="text-slate-600">…</span>
+                {anyLoading ? <span className="text-slate-600">…</span>
                   : estimatedOut != null ? fmtNum(estimatedOut)
                   : <span className="text-slate-700">0.0</span>}
               </div>
@@ -234,26 +427,45 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
             </div>
           </div>
 
-          {rate != null && (
+          {/* Quote line — includes route hint when we know it (post-prepare). */}
+          {(rate != null || prepRoute) && (
             <div className="text-[9px] text-slate-500 mb-1 flex items-center justify-between">
-              <span>1 {inSym} ≈ {fmtNum(rate)} {outSym}</span>
+              <span>
+                {rate != null && <>1 {inSym} ≈ {fmtNum(rate)} {outSym}</>}
+                {prepRoute === "direct" && <span className="ml-2 text-slate-500">route: direct</span>}
+                {prepRoute === "multi-hop" && <span className="ml-2 text-slate-500">route: via WETH</span>}
+              </span>
               {minOut != null && <span className="text-slate-600">min {fmtNum(minOut)} {outSym}</span>}
             </div>
           )}
-          <div className="text-[9px] text-slate-600 mb-2 flex items-center justify-between">
-            <span>Slippage</span>
-            <span>
-              {[1, 3, 5].map((p) => (
-                <button key={p} onClick={() => setSlippagePct(p)}
-                  className="ml-1 px-1.5 py-0.5 rounded border transition-colors"
-                  style={slippagePct === p
-                    ? { background: "#F59E0B20", color: "#F59E0B", borderColor: "#F59E0B40" }
-                    : { color: "#64748b", borderColor: "#1A1A2E" }}>
-                  {p}%
-                </button>
-              ))}
-            </span>
-          </div>
+
+          {/* Slippage: bps input for token→token, pct picker for ETH↔token. */}
+          {isT2T ? (
+            <div className="text-[9px] text-slate-600 mb-2 flex items-center justify-between">
+              <span>Slippage (bps)</span>
+              <input type="number" min={1} max={5000} value={slippageBps}
+                onChange={(e) => {
+                  const n = parseInt(e.target.value, 10);
+                  if (Number.isFinite(n) && n > 0 && n <= 5000) setSlippageBps(n);
+                }}
+                className="w-16 text-right bg-transparent border border-[#1A1A2E] rounded px-1.5 py-0.5 text-slate-200 outline-none" />
+            </div>
+          ) : (
+            <div className="text-[9px] text-slate-600 mb-2 flex items-center justify-between">
+              <span>Slippage</span>
+              <span>
+                {[1, 3, 5].map((p) => (
+                  <button key={p} onClick={() => setSlippagePct(p)}
+                    className="ml-1 px-1.5 py-0.5 rounded border transition-colors"
+                    style={slippagePct === p
+                      ? { background: "#F59E0B20", color: "#F59E0B", borderColor: "#F59E0B40" }
+                      : { color: "#64748b", borderColor: "#1A1A2E" }}>
+                    {p}%
+                  </button>
+                ))}
+              </span>
+            </div>
+          )}
 
           {quote?.pool && (
             <div className="text-[9px] text-slate-600 mb-2">
@@ -263,27 +475,43 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
             </div>
           )}
 
-          {loadingQuote && <p className="text-[9px] text-slate-600 mb-2">Checking pools + prices…</p>}
-          {quote?.ok && quote.hasPool === false && (
+          {anyLoading && <p className="text-[9px] text-slate-600 mb-2">Checking pools + prices…</p>}
+          {!isT2T && quote?.ok && quote.hasPool === false && (
             <p className="text-[10px] text-amber-400 mb-2">
               No Uniswap V3 pool for {tokenSym}/WETH on Robinhood Chain yet. The deployer needs to seed one.
             </p>
           )}
           {quote?.error && <p className="text-[10px] text-amber-400 mb-2">Quote error: {quote.error}</p>}
-          {step === "error" && <p className="text-[10px] text-amber-400 mb-2">{err}</p>}
+          {isT2T && t2tQuote?.error && (
+            <p className="text-[10px] text-amber-400 mb-2">Quote error: {t2tQuote.error}</p>
+          )}
+          {prepRoute === "none" && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 mb-2 text-[10px] text-amber-300">
+              <div className="font-bold mb-1">No route on Robinhood Chain</div>
+              <div className="text-amber-200/80">
+                {noRouteMsg || "no direct pool AND no WETH-hopped route for this pair"}
+                {". "}
+                Try bridging to Base first, or pick a different token.
+              </div>
+            </div>
+          )}
+          {step === "error" && prepRoute !== "none" && <p className="text-[10px] text-amber-400 mb-2">{err}</p>}
 
           <button onClick={doSwap} disabled={!canSwap || busy}
             className="w-full text-[12px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
-            style={direction === "buy"
+            style={(!isT2T && direction === "buy") || isT2T
               ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E40" }
               : { background: "#EF444415", color: "#EF4444", border: "1px solid #EF444440" }}>
             {!isConnected ? "Connect your wallet"
               : busy ? (step === "approving" ? "Approve in wallet…" : "Confirm in wallet…")
-              : quote?.hasPool === false ? "No pool yet"
+              : !isT2T && quote?.hasPool === false ? "No pool yet"
+              : prepRoute === "none" ? "No route"
               : overBalance ? "Insufficient balance"
-              : direction === "buy"
-                ? `Buy ${tokenSym}${amt > 0 ? ` with ${fmtNum(amt)} ETH` : ""}`
-                : `Sell ${amt > 0 ? fmtNum(amt) : ""} ${tokenSym}`}
+              : isT2T
+                ? `Swap${amt > 0 ? ` ${fmtNum(amt)} ${tokenInSym}` : ""} → ${tokenSym}`
+                : direction === "buy"
+                  ? `Buy ${tokenSym}${amt > 0 ? ` with ${fmtNum(amt)} ETH` : ""}`
+                  : `Sell ${amt > 0 ? fmtNum(amt) : ""} ${tokenSym}`}
           </button>
         </>
       )}
