@@ -20,6 +20,7 @@
 import {
   createPublicClient,
   createWalletClient,
+  decodeEventLog,
   http,
   maxUint256,
   parseUnits,
@@ -43,6 +44,53 @@ const ERC20_ABI = [
   { type: "function", name: "transferFrom", stateMutability: "nonpayable",
     inputs: [{ name: "from", type: "address" }, { name: "to", type: "address" }, { name: "amount", type: "uint256" }], outputs: [{ type: "bool" }] },
 ] as const;
+
+/**
+ * ERC-20 Transfer event ABI — used to authoritatively count buyToken received
+ * from the swap receipt logs (rather than re-querying balanceOf, which can
+ * return stale data across RPC nodes right after a fresh tx).
+ */
+const TRANSFER_EVENT_ABI = [
+  {
+    type: "event",
+    name: "Transfer",
+    inputs: [
+      { indexed: true,  name: "from",  type: "address" },
+      { indexed: true,  name: "to",    type: "address" },
+      { indexed: false, name: "value", type: "uint256" },
+    ],
+  },
+] as const;
+
+/**
+ * Sum every Transfer(_, to=recipient) event for `token` in the given logs.
+ * Authoritative for "how much of buyToken did recipient just receive" — the
+ * data lives in the tx receipt itself, so it isn't subject to RPC-node lag
+ * on `balanceOf(recipient)` right after a swap.
+ */
+function sumIncomingTransfers(
+  logs: readonly { address: string; data: `0x${string}`; topics: `0x${string}`[] }[],
+  token: Address,
+  recipient: Address,
+): bigint {
+  const tokenLc     = token.toLowerCase();
+  const recipientLc = recipient.toLowerCase();
+  let sum = 0n;
+  for (const log of logs) {
+    if (log.address.toLowerCase() !== tokenLc) continue;
+    try {
+      const decoded = decodeEventLog({
+        abi: TRANSFER_EVENT_ABI,
+        data: log.data,
+        topics: log.topics as [signature: `0x${string}`, ...args: `0x${string}`[]],
+      });
+      if (decoded.eventName === "Transfer" && decoded.args.to.toLowerCase() === recipientLc) {
+        sum += decoded.args.value as bigint;
+      }
+    } catch { /* not a Transfer event, skip */ }
+  }
+  return sum;
+}
 
 const ZEROX_URL = "https://api.0x.org/swap/allowance-holder/quote";
 
@@ -282,31 +330,47 @@ export async function executeDcaRun(
       throw new Error(`swap tx ${swapHash} reverted`);
     }
 
-    // 6. Read keeper's buyToken balance delta (all of it — 0x sends full output to taker)
-    const keeperBuyBalance = (await publicClient.readContract({
-      address: schedule.buyToken,
-      abi: ERC20_ABI,
-      functionName: "balanceOf",
-      args: [keeper.address],
-    })) as bigint;
+    // 6. Count buyToken this swap credited to keeper by parsing Transfer events
+    //    from the receipt. Reliable — receipt logs are part of the confirmed tx,
+    //    not subject to `balanceOf` RPC staleness that would otherwise misread
+    //    the delta when this run follows another run in the same cron tick.
+    const boughtAmount = sumIncomingTransfers(
+      swapReceipt.logs,
+      schedule.buyToken,
+      keeper.address,
+    );
+
+    if (boughtAmount === 0n) {
+      // Swap tx confirmed but zero buyToken landed at keeper — a broken route
+      // or wrong 0x taker binding. Return failed so cron retries + surfaces
+      // an obvious `lastError`, and DO NOT increment totalSpent/Bought.
+      return {
+        ...baseLog,
+        txHash: swapHash,
+        approveHash,
+        status: "failed",
+        sellAmount: "0",  // don't count spend if we got nothing — 0.5% fee is lost, but that's on us
+        buyAmount:  "0",
+        effectivePrice: null,
+        gasSpentWei: "0",
+        error: `swap tx ${swapHash} confirmed but zero ${schedule.buyTokenSymbol} received (route or taker bug)`,
+      };
+    }
 
     // 7. Forward buyToken to user
-    let transferHash: Hex | null = null;
-    if (keeperBuyBalance > 0n) {
-      transferHash = await walletClient.writeContract({
-        address: schedule.buyToken,
-        abi: ERC20_ABI,
-        functionName: "transfer",
-        args: [schedule.userAddress, keeperBuyBalance],
-        account: keeper,
-        chain: base,
-      });
-      await waitReceipt(publicClient, transferHash);
-    }
+    const transferHash = await walletClient.writeContract({
+      address: schedule.buyToken,
+      abi: ERC20_ABI,
+      functionName: "transfer",
+      args: [schedule.userAddress, boughtAmount],
+      account: keeper,
+      chain: base,
+    });
+    await waitReceipt(publicClient, transferHash);
 
     // 8. Compute effective price (buy per sell, human decimals)
     const sellHuman = Number(swapAmount) / 10 ** schedule.sellTokenDecimals;
-    const buyHuman  = Number(keeperBuyBalance) / 10 ** schedule.buyTokenDecimals;
+    const buyHuman  = Number(boughtAmount) / 10 ** schedule.buyTokenDecimals;
     const price     = sellHuman > 0 ? (buyHuman / sellHuman).toFixed(8) : null;
 
     return {
@@ -315,11 +379,11 @@ export async function executeDcaRun(
       approveHash,
       status: "success",
       sellAmount: swapAmount.toString(),
-      buyAmount:  keeperBuyBalance.toString(),
+      buyAmount:  boughtAmount.toString(),
       effectivePrice: price,
       // gasSpentWei: aggregate would require reading each receipt; skip in v1
       gasSpentWei: "0",
-      error: transferHash ? null : "no buyToken output — dust or swap failed silently",
+      error: null,
     };
   } catch (e) {
     return {
