@@ -162,6 +162,23 @@ export default function DcaCard({ data }: { data: DcaResult }) {
     resetWrite();
 
     try {
+      // SANITY GUARD — recompute expected allowance client-side and refuse to
+      // sign if the server's number is off by an order of magnitude. This
+      // caught a real bug in dev where a silent RPC failure made the server
+      // return decimals=18 for USDC (6-dec), inflating a $2 request into a
+      // $2-trillion spending cap. Wagmi/MetaMask can't catch that themselves.
+      const expected = parseUnits(sellAmountPerRun, created.sellTokenDecimals)
+        * BigInt(10_000 + (created.feeBps ?? 50))
+        / 10_000n
+        * BigInt(totalRuns);
+      const actual = BigInt(created.totalAllowance);
+      if (actual > expected * 10n || actual < expected / 10n) {
+        throw new Error(
+          `Refusing to sign: server allowance (${actual}) differs from client-computed (${expected}) by >10×. ` +
+          `Likely a token-decimals mismatch — do NOT approve.`,
+        );
+      }
+
       if (chainId !== BASE_CHAIN_ID) {
         await switchChainAsync({ chainId: BASE_CHAIN_ID });
       }
@@ -170,7 +187,7 @@ export default function DcaCard({ data }: { data: DcaResult }) {
         address: sellToken as `0x${string}`,
         abi: ERC20_APPROVE_ABI,
         functionName: "approve",
-        args: [created.keeperAddress, BigInt(created.totalAllowance)],
+        args: [created.keeperAddress, actual],
         chainId: BASE_CHAIN_ID,
       });
       // approveHash + receipt-wait handled by the wagmi hooks; useEffect below flips step

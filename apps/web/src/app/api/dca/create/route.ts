@@ -27,6 +27,7 @@ import { base } from "viem/chains";
 import { kvGet, kvSet } from "@/lib/kv";
 import { getKeeperAddress } from "@/lib/dca/keeper";
 import { dcaKeys } from "@/lib/dca/kv-keys";
+import { knownBaseToken } from "@/lib/dca/base-tokens";
 import {
   FREQUENCY_SECONDS,
   type CreateDcaInput,
@@ -49,13 +50,37 @@ const ERC20_META_ABI = [
   { type: "function", name: "decimals", stateMutability: "view", inputs: [], outputs: [{ type: "uint8"   }] },
 ] as const;
 
+/**
+ * Read symbol + decimals for a token.
+ *
+ * IMPORTANT: decimals MUST NOT silently fall back to 18 on RPC failure —
+ * that caused a "$2 request → $2 trillion spending cap" bug during local
+ * test (USDC = 6 decimals, but 18-fallback made the value 10^12 too large).
+ * So this throws on decimals-read failure, and short-circuits well-known
+ * tokens via the KNOWN_BASE_TOKENS map (no RPC needed for USDC / WETH / etc).
+ * Symbol still falls back gracefully — cosmetic only.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function readTokenMeta(pc: any, token: Address) {
-  const [symbol, decimals] = await Promise.all([
-    pc.readContract({ address: token, abi: ERC20_META_ABI, functionName: "symbol"   }).catch(() => "TOKEN"),
-    pc.readContract({ address: token, abi: ERC20_META_ABI, functionName: "decimals" }).catch(() => 18),
-  ]);
-  return { symbol: String(symbol), decimals: Number(decimals) };
+  const known = knownBaseToken(token);
+  if (known) return known;
+
+  let decimalsRaw: unknown;
+  try {
+    decimalsRaw = await pc.readContract({ address: token, abi: ERC20_META_ABI, functionName: "decimals" });
+  } catch (e) {
+    throw new Error(`failed to read decimals for ${token}: ${(e as Error).message}`);
+  }
+  const decimals = Number(decimalsRaw);
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 30) {
+    throw new Error(`invalid decimals returned by ${token}: ${String(decimalsRaw)}`);
+  }
+
+  const symbol = await pc
+    .readContract({ address: token, abi: ERC20_META_ABI, functionName: "symbol" })
+    .then(String)
+    .catch(() => "TOKEN");
+  return { symbol, decimals };
 }
 
 function isFrequency(v: unknown): v is DcaFrequency {
