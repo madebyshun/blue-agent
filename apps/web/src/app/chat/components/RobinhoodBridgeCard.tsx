@@ -130,6 +130,10 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
   const tokenSymHint = (result.tokenSymbol || "").replace(/^\$/, "");
   const initialAmt   = result.amount != null ? String(result.amount) : "";
 
+  // Editable amount — seeded from LLM's initial value but user can override.
+  // The quote fetch effect below re-runs (debounced 250ms) as this changes.
+  const [amount, setAmount] = useState(initialAmt);
+
   const [prep, setPrep]   = useState<PrepareResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [prepErr, setPrepErr] = useState("");
@@ -223,9 +227,16 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
   // two Relay requests for a single click.
   useEffect(() => {
     let cancelled = false;
-    if (!fromAddress || !rawToken || !initialAmt || fromChain === toChain) {
+    if (!fromAddress || !rawToken || !amount || fromChain === toChain) {
       setLoading(false);
-      setPrepErr("Missing required field — need from/to chain, address, token, amount.");
+      setPrepErr(!amount ? "Enter an amount" : "Missing required field — need from/to chain, address, token, amount.");
+      return;
+    }
+    // Reject non-numeric / zero amounts early — no point round-tripping Relay.
+    const amtN = Number(amount);
+    if (!Number.isFinite(amtN) || amtN <= 0) {
+      setLoading(false);
+      setPrepErr("Amount must be a positive number.");
       return;
     }
     setLoading(true); setPrepErr(""); setPrep(null);
@@ -238,7 +249,7 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
             fromChain, toChain, fromAddress,
             recipient: recipient || fromAddress,
             token:  rawToken,
-            amount: initialAmt,
+            amount,
           }),
         });
         const j = (await r.json()) as PrepareResponse;
@@ -253,9 +264,9 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
       } finally {
         if (!cancelled) setLoading(false);
       }
-    }, 250);
+    }, 350);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [fromChain, toChain, fromAddress, recipient, rawToken, initialAmt]);
+  }, [fromChain, toChain, fromAddress, recipient, rawToken, amount]);
 
   const wrongChain = isConnected && walletChainId !== fromCfg.id;
   const needsApprove = !!prep?.approve && !approveHash;
@@ -402,9 +413,31 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
               )}
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex-1 text-[15px] text-white w-0 truncate">
-                {fmtAmount(initialAmt, 18) || <span className="text-slate-700">0.0</span>}
-              </div>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => {
+                  // Allow digits + one decimal point; strip anything else so a
+                  // stray letter can't wedge the quote effect. Empty is fine —
+                  // the effect will show "Enter an amount".
+                  const cleaned = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+                  setAmount(cleaned);
+                }}
+                disabled={busy}
+                placeholder="0.0"
+                className="flex-1 min-w-0 bg-transparent text-[15px] text-white outline-none placeholder:text-slate-700 disabled:opacity-60"
+              />
+              {balance != null && balance > 0 && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setAmount(balance.toString())}
+                  className="px-1.5 py-0.5 text-[9px] rounded border border-[#7ED4C840] text-[#7ED4C8] hover:bg-[#7ED4C812] disabled:opacity-40"
+                >
+                  MAX
+                </button>
+              )}
               <span className="text-[10px] text-slate-200 px-2 py-1 border border-[#1A1A2E] rounded-lg">{symbol}</span>
             </div>
             {overBalance && (
@@ -424,7 +457,18 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
             </div>
             {prep?.meta && (
               <div className="text-[9px] text-slate-500 mt-1.5 flex items-center justify-between">
-                <span>Relayer fee ≈ {prep.meta.feeBps} bps</span>
+                {/* Show the actual relayer fee amount instead of a derived bps
+                    figure — Relay's amountUsd field is often missing/unreliable
+                    for volatile tokens and the bps calc was falling back to raw
+                    ETH ratios (50%+ nonsense). Amount in the token is truthful. */}
+                <span>
+                  Relayer fee
+                  {prep.meta.relayerFeeFormatted
+                    ? <> ≈ {prep.meta.relayerFeeFormatted} {symbol}
+                        {prep.meta.relayerFeeUsd && <span className="text-slate-600"> (${(+prep.meta.relayerFeeUsd).toFixed(2)})</span>}
+                      </>
+                    : <span className="text-slate-600"> — unknown</span>}
+                </span>
                 <span>Est. fill ~{prep.meta.estFillSeconds}s</span>
               </div>
             )}
