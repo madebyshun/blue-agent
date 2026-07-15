@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/b20hub-distribute",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/dca-executor",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
