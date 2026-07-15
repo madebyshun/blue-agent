@@ -77,3 +77,100 @@ export async function getTokenTransfers(network: RobinhoodNetwork, address: stri
 export function explorerBase(network: RobinhoodNetwork): string {
   return EXPLORER_BASE[network];
 }
+
+// ─── Address balances (native ETH + all ERC-20) ─────────────────────────────
+// Powers the check_wallet card's Robinhood Chain leg (Moralis doesn't index
+// RH). All fields come straight from Blockscout — never fabricate.
+
+export interface RhBalance {
+  symbol:    string;
+  name?:     string;
+  address:   string;   // "0xeee…eee" for native ETH; token contract otherwise
+  amount:    string;   // human-readable, decimal
+  raw:       string;   // raw integer balance
+  decimals:  number;
+  isNative?: boolean;
+  usdValue?: number;   // computed from Blockscout exchange_rate when available
+}
+
+function trimDecimal(s: string): string {
+  if (!s.includes(".")) return s;
+  return s.replace(/\.?0+$/, "") || "0";
+}
+
+/**
+ * Live token holdings for an address on Robinhood Chain via Blockscout v2.
+ * Two calls in parallel: `/addresses/{addr}` (native ETH + rate) and
+ * `/addresses/{addr}/tokens?type=ERC-20` (all ERC-20). Fail-soft: any missing
+ * source returns an empty leg — the caller degrades to what it has.
+ */
+export async function getRobinhoodAddressBalances(
+  address: string,
+  network: RobinhoodNetwork = "mainnet",
+): Promise<RhBalance[]> {
+  const [addrInfo, tokenList] = await Promise.all([
+    bsFetch<{ coin_balance?: string; exchange_rate?: string | null }>(network, `/api/v2/addresses/${address}`),
+    bsFetch<{ items?: Array<{
+      token: {
+        address: string;
+        name?: string | null;
+        symbol?: string | null;
+        decimals?: string | null;
+        exchange_rate?: string | null;
+      };
+      value: string;
+    }> }>(network, `/api/v2/addresses/${address}/tokens?type=ERC-20`),
+  ]);
+
+  const out: RhBalance[] = [];
+
+  // Native ETH — only push when non-zero to avoid clutter.
+  if (addrInfo?.coin_balance && addrInfo.coin_balance !== "0") {
+    const wei = BigInt(addrInfo.coin_balance);
+    // Number() may lose precision on wei bigger than 2^53, but for display
+    // that's fine; the raw string is preserved in .raw for exact math.
+    const eth = Number(wei) / 1e18;
+    const rate = addrInfo.exchange_rate ? Number(addrInfo.exchange_rate) : null;
+    out.push({
+      symbol:   "ETH",
+      address:  "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      amount:   trimDecimal(eth.toFixed(18)),
+      raw:      addrInfo.coin_balance,
+      decimals: 18,
+      isNative: true,
+      usdValue: rate && Number.isFinite(rate) ? eth * rate : undefined,
+    });
+  }
+
+  // ERC-20 holdings
+  for (const it of tokenList?.items ?? []) {
+    const dec = it.token.decimals ? parseInt(it.token.decimals, 10) : 18;
+    const raw = it.value;
+    if (!raw || raw === "0") continue;
+    let amount = 0;
+    try {
+      amount = Number(BigInt(raw)) / Math.pow(10, dec);
+    } catch { amount = 0; }
+    const rate = it.token.exchange_rate ? Number(it.token.exchange_rate) : null;
+    out.push({
+      symbol:   it.token.symbol || "?",
+      name:     it.token.name || undefined,
+      address:  it.token.address,
+      amount:   trimDecimal(amount.toFixed(dec)),
+      raw,
+      decimals: dec,
+      usdValue: rate && Number.isFinite(rate) ? amount * rate : undefined,
+    });
+  }
+
+  // Sort: native → stablecoins → highest USD → rest
+  const stables = new Set(["USDC", "USDT", "DAI", "USDG"]);
+  out.sort((a, b) => {
+    const ra = a.isNative ? 0 : stables.has(a.symbol.toUpperCase()) ? 1 : 2;
+    const rb = b.isNative ? 0 : stables.has(b.symbol.toUpperCase()) ? 1 : 2;
+    if (ra !== rb) return ra - rb;
+    return (b.usdValue ?? 0) - (a.usdValue ?? 0);
+  });
+
+  return out;
+}
