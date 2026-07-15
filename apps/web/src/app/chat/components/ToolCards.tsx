@@ -3165,28 +3165,6 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "robinhood_swap":       return <RobinhoodSwapCard result={r as unknown as RobinhoodSwapResult} />;
     case "robinhood_send":       return <RobinhoodSendCard result={r as unknown as RobinhoodSendResult} />;
     case "robinhood_bridge":     return <RobinhoodBridgeCard result={r as unknown as RobinhoodBridgeResult} />;
-    case "hub_robinhood_launch": {
-      // Legacy tool schema uses name/symbol/initial_supply (not tokenName/tokenSymbol) —
-      // remap into TokenLaunchResult's shape so the merged card's fields aren't blank.
-      const rh = r as unknown as {
-        name?: string; symbol?: string; decimals?: number; initial_supply?: string;
-        image?: string; website?: string; description?: string;
-      };
-      return (
-        <TokenLaunchCard
-          result={{
-            tokenName: rh.name,
-            tokenSymbol: rh.symbol,
-            decimals: rh.decimals,
-            initial_supply: rh.initial_supply,
-            image: rh.image,
-            website: rh.website,
-            description: rh.description,
-            chain: "robinhood",
-          }}
-        />
-      );
-    }
     case "hub_b20_manage":       return <B20ManageCard   result={r as B20ManageResult} />;
     case "check_memo":           return <MemoResultCard  result={r as MemoResultData} />;
     case "check_authorization":  return <AuthorizationResultCard result={r as AuthorizationResultData} />;

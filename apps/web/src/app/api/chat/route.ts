@@ -312,7 +312,7 @@ When user asks to send/transfer a B20 token:
 6c. Use robinhood_swap when the user wants to swap, BUY, or SELL a token on ROBINHOOD CHAIN — trigger on ANY of: "buy X on robinhood", "sell X on robinhood", "swap 0.001 ETH for CASHDOG on robinhood chain", "swap 50 USDC for VEX on robinhood", "sell 100 VIRTUAL for CLAWBANK on robinhood", "trade HOODRAT on robinhood", or similar Robinhood swap intent. Two shapes: (a) ETH↔token — { direction: "buy"|"sell", token, optional amount }. (b) token↔token — { token_in: tokenIn contract 0x… OR ticker, token: tokenOut contract OR ticker, optional amount, optional slippage_bps }. Token↔token currently requires a DIRECT Uniswap V3 pool between the two tokens on Robinhood Chain; if none exists the card shows a clear "no route" state (multi-hop via WETH is a follow-up). Symbols are resolved server-side against the live GeckoTerminal Robinhood index; never fabricate an address. Non-custodial: the user's own wallet signs approve(s) + swap(s) against the deployed RobinhoodSwapRouter (0x3bb0…d23D on chain 4663). NEVER use this for Base tokens (use prepare_swap for Base).
 6d. Use robinhood_send when the user wants to SEND or TRANSFER an ERC-20 (or native ETH) on ROBINHOOD CHAIN (chainId 4663) — trigger on ANY of: "send 25 USDC to 0x… on robinhood", "transfer 0.1 ETH to 0x… on RH", "pay 100 HOOD to 0x… on robinhood chain", or similar Robinhood send intent. Call with { toAddress: recipient 0x…, token: ERC-20 contract 0x… OR "ETH"/"NATIVE" for native ETH, amount: decimal string in whole units ("25.5", "0.1"), tokenSymbol: optional display hint }. fromAddress is OPTIONAL — the card automatically uses the user's connected wallet. DO NOT ASK THE USER FOR THEIR WALLET ADDRESS — the browser already has it. The server builds a raw transfer(address,uint256) calldata (or native value tx) and returns { to, data, value, chainId: 4663 } — the user's own wallet signs and broadcasts. Non-custodial: no server keys, no swap logic, no router. NEVER invent a token address — if the user gave only a symbol, ask for the contract. NEVER use for Base sends (use prepare_send for Base).
 6e. Use robinhood_bridge when the user wants to BRIDGE or MOVE a token (or native ETH) BETWEEN Base (chainId 8453) and Robinhood Chain (chainId 4663) — trigger on ANY of: "bridge X TOKEN to robinhood", "bridge from base to rh", "move 100 USDC to robinhood", "bridge back to base", "send 0.1 ETH from base to robinhood", or similar cross-chain intent between these two chains. Call with { fromChain: "base"|"robinhood", toChain: "base"|"robinhood" (must differ), fromAddress: connected wallet 0x…, token: ERC-20 contract 0x… on fromChain OR "ETH"/"NATIVE" for native ETH, amount: decimal string in whole units ("100", "0.1"), optional recipient (defaults to sender), optional tokenSymbol display hint }. The server fetches a live Relay Protocol quote and returns { to, data, value, chainId } for the source chain — the user's own wallet signs the (optional) approve then the deposit tx, and Relay solvers fill the destination chain (delivery tracked on relay.link). Non-custodial: no server keys, no server signing. NEVER invent a token address — if the user gave only a symbol without a contract, ask for it. NEVER use for same-chain swaps (use robinhood_swap or prepare_swap).
-6b. Use hub_robinhood_launch when user asks to deploy/launch a token on ROBINHOOD CHAIN specifically — trigger on ANY of: "launch on robinhood", "robinhood chain token", "deploy on robinhood", "robinhood launch", or similar. Deploys via Bankr's launchpad (chain:'robinhood' on POST /token-launches/deploy) — auto Uniswap pool + 95% creator fee split + gas + wallet handled by Bankr. Call with { name, symbol, optional decimals, initial_supply, image, website, description }. This renders the SAME unified token-launch card as prepare_token_launch, just pre-set to the Robinhood Chain step (skips the Base-vs-Robinhood picker) — there is no separate Robinhood-only card anymore. If the user hasn't said which chain yet, prefer prepare_token_launch instead (with no chain hint) so the card shows the picker and lets them choose Base vs Robinhood Chain themselves. Never confuse this with hub_b20_launch (Base-only, different token standard). The older self-signed direct-deploy path (raw ERC-20 from the user's own wallet, via /api/robinhood/*) still exists in the codebase but is NOT currently the default — always use this Bankr path unless explicitly asked for a direct deploy.
+6b. RESERVED — no launch tool on Robinhood Chain currently. If the user asks to launch/deploy/create a token on Robinhood, reply that the Virtuals-native launch flow is coming soon (rebuild in progress). Do NOT use hub_b20_launch (Base-only). For "give me a token", "show me tokens", "trending on robinhood", or any BROWSE-style RH query, use blue_stream with chain: "robinhood" — it returns live trending pools + TVL. Never confuse browse ("give me a token") with launch ("create a token").
 7. Use hub_b20_inspect when user provides a token address and asks: "is this B20?", "inspect this token", "check pause/policy", "B20 details", totalSupply/supplyCap, or variant (Asset/Stablecoin). Reads REAL on-chain state via multicall — zero LLM. Call with { address: "0x…", network: "mainnet" }.
 8. Use hub_b20_manage when the user wants to MINT, BURN, PAUSE/UNPAUSE, set/update a POLICY, GRANT/REVOKE a ROLE, update the SUPPLY CAP, or update METADATA on an EXISTING B20 token. Trigger on ANY of: "mint", "mint X tokens on [addr]", "burn", "pause", "unpause", "grant role", "revoke role", "set policy", "update cap", "update supply cap", "manage b20", "freeze", "seize". Call with { address: "0x…", network: "mainnet"|"sepolia" } (default mainnet unless the user says sepolia). Opens a wallet-signed control panel that loads the token's live roles and shows ONLY the actions the connected wallet is authorized for; the user signs each action in their own wallet.
 9. Use check_authorization when the user asks whether a SPECIFIC account is allowed by a token's policy — "is 0xABC allowed to receive TOKEN?", "can this wallet send/mint this token?", "这个地址能收到代币吗?", "is alice.base.eth on the allowlist?". Call with { token: "0x…", account: "0x… or basename", scope: "sender"|"receiver"|"executor"|"mint_receiver" (default receiver), network }. Reads live policy state (zero LLM); reply with one short line stating authorized / not authorized — never guess.
@@ -762,23 +762,6 @@ Default to "base" for Base-related queries.`,
         tokenSymbol: { type: "string", description: "OPTIONAL display hint — card prefers the on-chain symbol read from the token contract." },
       },
       required: ["fromChain", "toChain", "token", "amount"],
-    },
-  },
-  {
-    name: "hub_robinhood_launch",
-    description: "Open a Robinhood Chain token launch form. Deploys via Bankr's launchpad (POST /token-launches/deploy with chain:'robinhood') — auto Uniswap pool + 95%/5% fee split, gas + wallet handled by Bankr. Renders the SAME TokenLaunchCard as prepare_token_launch, pre-set to chain='robinhood'. Trigger on: 'launch on robinhood', 'deploy on robinhood chain', 'robinhood token', 'create token on robinhood', or any Robinhood Chain launch intent. NOTE: the older self-signed direct-deploy path (raw ERC-20 contract-creation from the user's own wallet) still exists in the codebase but is not currently wired to any UI — use this Bankr path by default.",
-    input_schema: {
-      type: "object",
-      properties: {
-        name:           { type: "string", description: "Token name" },
-        symbol:         { type: "string", description: "Token symbol" },
-        decimals:       { type: "number", description: "0-18, default 18" },
-        initial_supply: { type: "string", description: "Whole-token amount (not base units), e.g. 1000000000" },
-        image:          { type: "string" },
-        website:        { type: "string" },
-        description:    { type: "string" },
-      },
-      required: [],
     },
   },
   {
@@ -1276,15 +1259,6 @@ async function callHubTool(
         fromChain, toChain, fromAddress, recipient, token: rawToken, amount, tokenSymbol,
         error,
       },
-    };
-  }
-  if (toolName === "hub_robinhood_launch") {
-    // Client-rendered marker — RobinhoodLaunchCard handles the deploy entirely
-    // in the browser (raw ERC-20 contract-creation tx, no factory, no B20).
-    // No server execution, no funds moved. Distinct chain from hub_b20_launch.
-    return {
-      text: "Robinhood Chain launch form rendered. The card is pre-filled with the token details — the user can edit fields, then click Deploy to sign a raw ERC-20 contract-creation transaction in their own wallet on Robinhood Chain (chainId 4663). Do NOT restate the fields as a table, do NOT claim the token is deployed yet. Reply with one short line: tell the user to review the form and click Deploy.",
-      result: { kind: "robinhood_launch", ...args },
     };
   }
   if (toolName === "hub_b20_manage") {
