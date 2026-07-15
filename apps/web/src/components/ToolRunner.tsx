@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useAccount, useSignTypedData } from "wagmi";
+import { useAccount, useSignTypedData, useChainId, useSwitchChain } from "wagmi";
 import { TOOL_SCHEMAS, type Field } from "@/lib/tool-inputs";
 
 const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
@@ -22,6 +22,8 @@ export default function ToolRunner({ toolId, price }: { toolId: string; price: s
   const schema = TOOL_SCHEMAS[toolId];
   const { address, isConnected } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
+  const walletChainId = useChainId();
+  const { switchChainAsync } = useSwitchChain();
 
   const [values, setValues] = useState<Record<string, string>>({});
   const [step, setStep] = useState<Step>("idle");
@@ -61,6 +63,19 @@ export default function ToolRunner({ toolId, price }: { toolId: string; price: s
 
       const { payTo, maxAmountRequired, asset, extra } = accepts;
       setPayAmount(usdcAmount(maxAmountRequired));
+
+      // Hub x402 payments are USDC on Base (chainId 8453). If the connected
+      // wallet is on another chain (e.g. user switched to Robinhood after
+      // bridge/swap testing), signTypedData rejects with "Provided chainId
+      // '8453' must match the active chainId '4663'". Auto-switch before sign.
+      if (walletChainId !== 8453) {
+        try {
+          await switchChainAsync({ chainId: 8453 });
+        } catch (e) {
+          throw new Error(`Switch your wallet to Base (chainId 8453) to sign USDC payment. Currently on chainId ${walletChainId}. (${(e as Error).message})`);
+        }
+      }
+
       setStep("signing");
 
       const nonce = randomNonce();
