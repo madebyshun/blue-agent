@@ -14,6 +14,7 @@ import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { checkMemo } from "@/lib/b20/check-memo";
 import { checkAuthorization } from "@/lib/b20/check-authorization";
 import { checkWallet } from "@/lib/wallet/holdings";
+import { getRobinhoodAddressBalances } from "@/lib/robinhood/blockscout";
 import { mcpCallTool } from "@/lib/mcp-client";
 
 export const runtime = "nodejs";
@@ -1344,19 +1345,30 @@ async function callHubTool(
       };
     }
     const network = typeof args.network === "string" ? args.network : "base";
-    const r = await checkWallet(userAddress, network);
-    const top = r.holdings.slice(0, 4).map(h => `${h.amount} ${h.symbol}`).join(", ");
-    const text = r.error && r.holdings.length === 0
+    // Fetch Base (Moralis) + Robinhood Chain (Blockscout) in parallel — RH is
+    // additive so the card can show both legs. RH fetch is fail-soft: empty
+    // array on any error, never blocks the Base response.
+    const [r, rhHoldings] = await Promise.all([
+      checkWallet(userAddress, network),
+      getRobinhoodAddressBalances(userAddress).catch(() => []),
+    ]);
+    const totalHoldings = r.holdings.length + rhHoldings.length;
+    const top = r.holdings.slice(0, 3).map(h => `${h.amount} ${h.symbol}`).join(", ");
+    const rhTop = rhHoldings.slice(0, 2).map(h => `${h.amount} ${h.symbol} (RH)`).join(", ");
+    const combinedTop = [top, rhTop].filter(Boolean).join(", ");
+    const text = r.error && totalHoldings === 0
       ? `Wallet lookup failed: ${r.error}. Reply with one short line telling the user it couldn't be read; do NOT invent figures.`
-      : r.holdings.length === 0
-        ? "The connected wallet holds no tokens on this network. Reply with one short line saying so — do NOT invent any token."
-        : `The wallet holds ${r.holdings.length} token(s): ${top}${r.holdings.length > 4 ? ", …" : ""}. The result card lists them all. Reply with ONE short line referencing the holdings — never invent tokens or numbers and never add a USD total of your own.`;
+      : totalHoldings === 0
+        ? "The connected wallet holds no tokens on Base or Robinhood Chain. Reply with one short line saying so — do NOT invent any token."
+        : `The wallet holds ${r.holdings.length} token(s) on Base + ${rhHoldings.length} on Robinhood: ${combinedTop}${totalHoldings > 5 ? ", …" : ""}. The result card lists them all (small dust <$1 hidden by default). Reply with ONE short line referencing the holdings across both chains — never invent tokens or numbers and never add a USD total of your own.`;
     return {
       text,
       result: {
         kind: "wallet_result", connected: true,
         address: r.address, network: r.network, explorer: r.explorer, addressUrl: r.addressUrl,
         source: r.source, partial: r.partial, holdings: r.holdings, error: r.error,
+        // Robinhood Chain leg — separate field so the card can group + label.
+        robinhoodHoldings: rhHoldings,
       },
     };
   }

@@ -2015,6 +2015,8 @@ interface WalletResultData {
   source?:     "moralis" | "rpc";
   partial?:    boolean;
   holdings?:   WalletHoldingView[];
+  /** Robinhood Chain holdings — added by the check_wallet handler (Blockscout). */
+  robinhoodHoldings?: WalletHoldingView[];
   error?:      string;
 }
 
@@ -2025,12 +2027,30 @@ function fmtUsdSmall(n?: number): string | null {
   return "$" + n.toFixed(4);
 }
 
-// Connected-wallet portfolio card (check_wallet). Lists EVERY token held
-// (balance > 0) on Base — Moralis primary, RPC fallback. Honest: only real
-// holdings, never zero-balance defaults. B20 tokens get a 🟦 badge + deep-link.
+// Connected-wallet portfolio card (check_wallet). Lists tokens held (balance > 0)
+// on BOTH Base (Moralis) AND Robinhood Chain (Blockscout). Small-dust filter:
+// tokens with usdValue < $1 are hidden by default — user can toggle "show all"
+// to see the long tail (airdrop dust, illiquid tokens, unknown-price tokens).
+// Honest: only real holdings, never fabricates. B20 tokens badged + linked.
+const DUST_USD_THRESHOLD = 1;
+
+/**
+ * Keep the row when EITHER:
+ *  - it's the native chain currency (ETH — always relevant), OR
+ *  - it has a known USD value >= threshold.
+ * Tokens with unknown USD (rate missing) are dust-filtered too — the user's
+ * screenshot showed those as the majority of noise (airdrops without indexed price).
+ */
+function isDust(h: WalletHoldingView): boolean {
+  if (h.isNative) return false;
+  if (typeof h.usdValue === "number" && h.usdValue >= DUST_USD_THRESHOLD) return false;
+  return true;
+}
+
 function WalletCard({ result }: { result: WalletResultData }) {
   const { t } = useLang();
-  const netLabel = result.network === "mainnet" ? "Base Mainnet" : "Base Sepolia";
+  const [showAll, setShowAll] = useState(false);
+  const baseLabel = result.network === "mainnet" ? "Base Mainnet" : "Base Sepolia";
   const addr = (result.address ?? "").trim();
 
   if (result.connected === false) {
@@ -2044,15 +2064,45 @@ function WalletCard({ result }: { result: WalletResultData }) {
     );
   }
 
-  const holdings = result.holdings ?? [];
+  const baseHoldings = result.holdings ?? [];
+  const rhHoldings   = result.robinhoodHoldings ?? [];
+  const totalCount   = baseHoldings.length + rhHoldings.length;
 
-  if (result.error && holdings.length === 0) {
+  if (result.error && totalCount === 0) {
     return (
       <div className="mt-2 rounded-xl border border-[#EF444430] bg-[#0a0a0f] px-3.5 py-3">
         <div className="flex items-center gap-2">
           <span className="text-base leading-none">⚠️</span>
           <span className="font-mono text-xs text-[#EF4444]">{result.error}</span>
         </div>
+      </div>
+    );
+  }
+
+  // Apply dust filter unless user toggled off.
+  const visibleBase = showAll ? baseHoldings : baseHoldings.filter(h => !isDust(h));
+  const visibleRh   = showAll ? rhHoldings   : rhHoldings.filter(h => !isDust(h));
+  const hiddenCount = (baseHoldings.length - visibleBase.length) + (rhHoldings.length - visibleRh.length);
+
+  function renderHolding(h: WalletHoldingView, i: number) {
+    const usd = fmtUsdSmall(h.usdValue);
+    const sym = (
+      <span className="font-mono text-[11px] text-slate-300 flex items-center gap-1">
+        {h.symbol}
+        {h.isB20 && (
+          <span className="text-[9px] px-1 py-px rounded bg-[#4FC3F715] text-[#4FC3F7] border border-[#4FC3F730]">🟦 B20</span>
+        )}
+      </span>
+    );
+    return (
+      <div key={`${h.address}-${i}`} className="flex items-center justify-between">
+        {h.isB20 && h.address ? (
+          <a href={`/app/b20?address=${h.address}`} className="hover:opacity-80">{sym}</a>
+        ) : sym}
+        <span className="font-mono text-[13px] text-slate-200 flex items-baseline gap-2">
+          {usd && <span className="text-[9px] text-slate-600">{usd}</span>}
+          {h.amount}
+        </span>
       </div>
     );
   }
@@ -2064,52 +2114,74 @@ function WalletCard({ result }: { result: WalletResultData }) {
         {addr && (
           <span className="font-mono text-[11px] text-slate-400">{addr.slice(0, 6)}…{addr.slice(-4)}</span>
         )}
-        <span className="font-mono text-[10px] text-slate-600 ml-auto">· {netLabel}</span>
+        {hiddenCount > 0 && (
+          <button
+            onClick={() => setShowAll(v => !v)}
+            className="ml-auto font-mono text-[9px] text-slate-500 hover:text-slate-300 underline decoration-dotted underline-offset-2"
+          >
+            {showAll ? `Hide dust (<$${DUST_USD_THRESHOLD})` : `Show ${hiddenCount} more`}
+          </button>
+        )}
       </div>
 
-      {holdings.length === 0 ? (
-        <div className="font-mono text-[11px] text-slate-500 py-1">No tokens found on {netLabel}.</div>
+      {/* Base chain leg */}
+      <div className="flex items-center gap-1.5 mb-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#0052FF]" />
+        <span className="font-mono text-[10px] text-slate-500">{baseLabel}</span>
+        <span className="font-mono text-[9px] text-slate-700">· {baseHoldings.length} token{baseHoldings.length === 1 ? "" : "s"}</span>
+      </div>
+      {visibleBase.length === 0 ? (
+        <div className="font-mono text-[10px] text-slate-600 py-0.5 mb-2">
+          {baseHoldings.length === 0 ? `No tokens on ${baseLabel}.` : `All ${baseHoldings.length} token(s) filtered as dust.`}
+        </div>
+      ) : (
+        <div className="space-y-1 mb-3">
+          {visibleBase.map(renderHolding)}
+        </div>
+      )}
+
+      {/* Robinhood Chain leg */}
+      <div className="flex items-center gap-1.5 mb-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#00C805]" />
+        <span className="font-mono text-[10px] text-slate-500">Robinhood Chain</span>
+        <span className="font-mono text-[9px] text-slate-700">· {rhHoldings.length} token{rhHoldings.length === 1 ? "" : "s"}</span>
+      </div>
+      {visibleRh.length === 0 ? (
+        <div className="font-mono text-[10px] text-slate-600 py-0.5">
+          {rhHoldings.length === 0 ? "No tokens on Robinhood Chain." : `All ${rhHoldings.length} token(s) filtered as dust.`}
+        </div>
       ) : (
         <div className="space-y-1">
-          {holdings.map((h, i) => {
-            const usd = fmtUsdSmall(h.usdValue);
-            const sym = (
-              <span className="font-mono text-[11px] text-slate-300 flex items-center gap-1">
-                {h.symbol}
-                {h.isB20 && (
-                  <span className="text-[9px] px-1 py-px rounded bg-[#4FC3F715] text-[#4FC3F7] border border-[#4FC3F730]">🟦 B20</span>
-                )}
-              </span>
-            );
-            return (
-              <div key={`${h.address}-${i}`} className="flex items-center justify-between">
-                {h.isB20 && h.address ? (
-                  <a href={`/app/b20?address=${h.address}`} className="hover:opacity-80">{sym}</a>
-                ) : sym}
-                <span className="font-mono text-[13px] text-slate-200 flex items-baseline gap-2">
-                  {usd && <span className="text-[9px] text-slate-600">{usd}</span>}
-                  {h.amount}
-                </span>
-              </div>
-            );
-          })}
+          {visibleRh.map(renderHolding)}
         </div>
       )}
 
       {result.partial && (
         <p className="font-mono text-[9px] text-slate-600 mt-2">
-          Showing major tokens only — connect Moralis for the full portfolio.
+          Showing major tokens only on Base — connect Moralis for the full portfolio.
         </p>
       )}
       {result.addressUrl && (
-        <a
-          href={result.addressUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block font-mono text-[11px] text-slate-500 hover:text-[#4FC3F7] mt-2"
-        >
-          {t("balance_card.view_explorer")}
-        </a>
+        <div className="flex items-center gap-3 mt-2">
+          <a
+            href={result.addressUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block font-mono text-[10px] text-slate-500 hover:text-[#4FC3F7]"
+          >
+            Base ↗
+          </a>
+          {addr && (
+            <a
+              href={`https://robinhoodchain.blockscout.com/address/${addr}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block font-mono text-[10px] text-slate-500 hover:text-[#00C805]"
+            >
+              Robinhood ↗
+            </a>
+          )}
+        </div>
       )}
     </div>
   );
