@@ -107,6 +107,11 @@ import hRhStockFlow          from "./rh-stock-flow";
 import hRhStockNewListings   from "./rh-stock-new-listings";
 import hRhStockBeaconCheck   from "./rh-stock-beacon-check";
 import hRhStockCorrelations  from "./rh-stock-correlations";
+// RH RWA Phase 6 (A1·A2·A3·A4) — agent skills
+import hRhRwaDca             from "./rh-rwa-dca";
+import hRhStockAlert         from "./rh-stock-alert";
+import hRhStockReport        from "./rh-stock-report";
+import hRhStockAgentBrief    from "./rh-stock-agent-brief";
 
 export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "token-price": hTokenPrice,
@@ -221,4 +226,9 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "rh-stock-new-listings":  hRhStockNewListings,
   "rh-stock-beacon-check":  hRhStockBeaconCheck,
   "rh-stock-correlations":  hRhStockCorrelations,
+  // ── RH RWA Phase 6 — Agent Skills ─────────────────────────────────────
+  "rh-rwa-dca":             hRhRwaDca,
+  "rh-stock-alert":         hRhStockAlert,
+  "rh-stock-report":        hRhStockReport,
+  "rh-stock-agent-brief":   hRhStockAgentBrief,
 };
