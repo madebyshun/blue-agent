@@ -22,13 +22,21 @@
 
 import { findByTicker, RH_CHAIN, RH_CHAINLINK_ETH_USD } from "@/lib/robinhood/rwa-registry";
 import { chainlinkLatest } from "@/lib/robinhood/rwa-price";
-import { poolsForToken } from "@/lib/robinhood/rwa-market";
+import { poolsForToken, resolvePrimaryPool } from "@/lib/robinhood/rwa-market";
 import {
   ROBINHOOD_MAINNET_VERIFIED_WETH9,
   ROBINHOOD_MAINNET_VERIFIED_FACTORY,
   ROBINHOOD_SWAP_ROUTER_ADDRESS,
 } from "@/lib/robinhood/swap";
 import { findWethPools, bestPool } from "@/lib/robinhood/pool";
+
+// If the pool spot deviates from the Chainlink oracle by more than this,
+// the tool surfaces a `pool_deviates_from_oracle` warning so a caller can
+// gate execution (or agent can rebalance min_out). Threshold matched to
+// the reviewer's revert-analysis: >1% deviation on a $57k pool means the
+// pool-vs-oracle basis exceeds a 1% user slippage → oracle-based min_out
+// would revert on-chain.
+const POOL_ORACLE_WARN_PCT = 1.0;
 
 const USDG_ADDR = "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168" as const;
 
@@ -83,17 +91,17 @@ export default async function handler(req: Request): Promise<Response> {
     const tokenInDecimals  = (side === "buy") ? quoteDecimals : token.decimals;
     const tokenOutDecimals = (side === "buy") ? token.decimals : quoteDecimals;
 
-    // ── Look up the deepest pool via the RH factory verified in swap.ts. ─
-    // findWethPools handles TOKEN/WETH — but we want TOKEN/USDG when denom is
-    // USDG. Fall back to a WETH-hopped route (multi-hop) if no direct pool.
-    // Existing lib doesn't expose a generic TOKEN/USDG probe, so we use
-    // GeckoTerminal to pick the actual pool address the router will hit.
+    // ── Use SHARED primary pool selector so X1 quotes against exactly the
+    //    same pool X2 will execute against, and so M2/M5/A4/L1 stay
+    //    consistent for the same ticker. ─────────────────────────────────
+    const primary = await resolvePrimaryPool(token.contract, { preferUsdgQuote: denomIn === "USDG" });
+    const primaryPool = primary.pool;
+
+    // Legacy GT probe kept for `directGt` route-hint on the response.
     const gtPools = await poolsForToken(token.contract);
     const denomLower = quoteAddr.toLowerCase();
     const directGt = gtPools.find(
-      (p) =>
-        (p.base_token === denomLower || p.quote_token === denomLower) &&
-        p.reserve_usd > 0,
+      (p) => (p.base_token === denomLower || p.quote_token === denomLower) && p.reserve_usd > 0,
     );
 
     // On-chain WETH pool probe — always accurate.
@@ -103,52 +111,68 @@ export default async function handler(req: Request): Promise<Response> {
       bestWethPool = bestPool(pools) ?? null;
     }
 
-    // Chainlink oracle price for the RWA — trusted anchor.
+    // Chainlink oracle → cross-check ONLY, never the quote spot itself.
     const oracle = token.chainlinkFeed
       ? await chainlinkLatest(token.chainlinkFeed, token.chainlinkHeartbeat ?? 86400)
       : null;
 
-    // Prefer Chainlink price × 1 for spot; fall back to DEX spot if oracle
-    // absent. When denom === USDG, oracle price is directly the USDG price.
-    // When denom === WETH, we need WETH's USD price to convert — pull it from
-    // the same pool GT reported for us (counterparty_usd if RWA is quote, or
-    // via a separate lookup — for now trust GT DEX spot as WETH's USD).
-    let spot_usd: number | null = null;
-    let spot_source: "chainlink" | "dex-spot" | null = null;
-    if (oracle && !oracle.is_stale) { spot_usd = oracle.price_usd; spot_source = "chainlink"; }
-    else if (gtPools[0]) { spot_usd = gtPools[0].price_usd; spot_source = "dex-spot"; }
+    // ── QUOTE spot MUST come from the pool the swap will hit, not the
+    //    Chainlink oracle. Previously we used oracle → min_out based on
+    //    a price the pool doesn't trade at → V3/V4 swap reverts because
+    //    the amountOutMinimum was set against oracle, not pool basis.
+    //    Fix: pool_spot_usd is authoritative. Oracle is a sanity check.
+    const pool_spot_usd: number | null = primaryPool?.price_usd ?? gtPools[0]?.price_usd ?? null;
+    const chainlink_spot_usd: number | null = oracle && !oracle.is_stale ? oracle.price_usd : null;
+    const spot_usd = pool_spot_usd ?? chainlink_spot_usd;
+    const spot_source: "pool" | "chainlink" | null =
+      pool_spot_usd !== null ? "pool" : (chainlink_spot_usd !== null ? "chainlink" : null);
 
-    // ── Compute expected_out ─────────────────────────────────────────────
-    // For USDG (~$1) the math is direct. For WETH we need WETH's USD price to
-    // convert `amount WETH` → USD → RWA units and vice versa.
+    // Cross-check: how far is the pool from the oracle? > threshold ⇒ warn.
+    const pool_oracle_delta_pct = (pool_spot_usd !== null && chainlink_spot_usd !== null && chainlink_spot_usd > 0)
+      ? +(((pool_spot_usd - chainlink_spot_usd) / chainlink_spot_usd) * 100).toFixed(4)
+      : null;
+    const pool_deviates_from_oracle =
+      pool_oracle_delta_pct !== null && Math.abs(pool_oracle_delta_pct) > POOL_ORACLE_WARN_PCT;
+
+    // ── Compute expected_out from POOL spot (not oracle) ─────────────────
     let expected_out: number | null = null;
     let route_kind: "direct" | "multi-hop" | null = null;
     if (spot_usd !== null) {
       if (denomIn === "USDG") {
-        // Assume USDG ≈ $1 (validated by Chainlink USDG/USD feed elsewhere).
-        // For "buy": USDG in → RWA out.  RWA_out = USDG / spot.
-        // For "sell": RWA in → USDG out. USDG_out = RWA × spot.
+        // USDG ~ $1 anchor (Chainlink USDG/USD publishes ~1.0 on RH Chain).
         expected_out = side === "buy" ? amount / spot_usd : amount * spot_usd;
         route_kind = directGt ? "direct" : "multi-hop";
       } else {
-        // WETH denom — need WETH's USD price. Prefer Chainlink ETH/USD on
-        // RH Chain (deterministic); fall back to any WETH-quoted pool from GT.
+        // WETH denom → get WETH USD via Chainlink ETH/USD (deterministic).
         const ethQuote = await chainlinkLatest(RH_CHAINLINK_ETH_USD, 86400);
         let weth_usd: number | null = ethQuote?.price_usd ?? null;
         if (!weth_usd) {
           const wethPool = gtPools.find((p) => p.base_token === ROBINHOOD_MAINNET_VERIFIED_WETH9.toLowerCase() || p.quote_token === ROBINHOOD_MAINNET_VERIFIED_WETH9.toLowerCase());
-          weth_usd = wethPool?.counterparty_usd ?? wethPool?.price_usd ?? null;
+          weth_usd = wethPool?.counterparty_token_price_usd ?? wethPool?.price_usd ?? null;
         }
         if (weth_usd) {
-          expected_out = side === "buy"
-            ? (amount * weth_usd) / spot_usd     // WETH → USD → RWA
-            : (amount * spot_usd) / weth_usd;    // RWA → USD → WETH
+          expected_out = side === "buy" ? (amount * weth_usd) / spot_usd : (amount * spot_usd) / weth_usd;
           route_kind = bestWethPool ? "direct" : "multi-hop";
         }
       }
     }
 
-    const min_out = expected_out !== null ? expected_out * (1 - slippageBps / 10000) : null;
+    // ── Additional slippage from trade impact on the actual pool ─────────
+    // xy=k first-order: fill worsens by ~trade_notional / one_side_usd.
+    // A $93 trade in a $28.7k one-side pool ≈ 0.32% additional impact
+    // beyond the quoted spot. min_out must account for BOTH user slippage
+    // AND the trade-impact term so the on-chain swap doesn't revert.
+    const one_side_usd = primaryPool?.one_side_usd ?? ((gtPools[0]?.reserve_usd ?? 0) / 2);
+    const notional_usd = denomIn === "USDG"
+      ? (side === "buy" ? amount : (expected_out ?? amount))
+      : ((expected_out ?? amount) * (spot_usd ?? 0));
+    const trade_impact_pct = (one_side_usd > 0 && notional_usd > 0)
+      ? +(100 * notional_usd / (one_side_usd + notional_usd)).toFixed(4)
+      : 0;
+
+    // Full min_out = pool_expected × (1 − user_slippage) × (1 − trade_impact)
+    const expected_after_impact = expected_out !== null ? expected_out * (1 - trade_impact_pct / 100) : null;
+    const min_out = expected_after_impact !== null ? expected_after_impact * (1 - slippageBps / 10000) : null;
 
     // ── Base-units (bigint-ish) representation for X2 to consume ─────────
     const amountInBaseUnits = BigInt(Math.round(amount * Math.pow(10, tokenInDecimals))).toString();
@@ -156,12 +180,10 @@ export default async function handler(req: Request): Promise<Response> {
       ? BigInt(Math.max(0, Math.floor(min_out * Math.pow(10, tokenOutDecimals)))).toString()
       : null;
 
-    // Slippage upper bound from pool depth — first-order xy=k.
-    const deepestPoolTvl = gtPools[0]?.reserve_usd ?? 0;
-    const notional_usd = denomIn === "USDG" ? (side === "buy" ? amount : (expected_out ?? amount)) : ((expected_out ?? amount) * (spot_usd ?? 0));
-    const slippage_upper_pct = deepestPoolTvl > 0 && notional_usd > 0
-      ? +(100 * notional_usd / (deepestPoolTvl + notional_usd)).toFixed(4)
-      : null;
+    const warnings: string[] = [];
+    if (pool_deviates_from_oracle) warnings.push(`pool_deviates_from_oracle: pool spot ${pool_oracle_delta_pct}% off Chainlink — quote uses pool basis so on-chain swap won't revert, but oracle-comparing agents should widen slippage tolerance`);
+    if (spot_source === "chainlink") warnings.push("no_pool_price_available: quote fell back to Chainlink oracle; on-chain swap MAY revert if pool has drifted");
+    if (one_side_usd > 0 && notional_usd / one_side_usd > 0.05) warnings.push(`heavy_trade: notional is ${(100 * notional_usd / one_side_usd).toFixed(1)}% of one-side depth — real slip will exceed the first-order xy=k figure`);
 
     return Response.json({
       tool: "rh-stock-swap-quote",
@@ -174,14 +196,22 @@ export default async function handler(req: Request): Promise<Response> {
       amount_in_base_units: amountInBaseUnits,
       spot_usd,
       spot_source,
-      expected_out,
+      pool_spot_usd,
+      chainlink_spot_usd,
+      pool_oracle_delta_pct,
+      pool_deviates_from_oracle,
+      expected_out,                         // pool-based expected, pre-impact
       expected_out_base_units: expected_out !== null
         ? BigInt(Math.max(0, Math.floor(expected_out * Math.pow(10, tokenOutDecimals)))).toString()
         : null,
-      min_out,
+      expected_after_impact,                // pool-based, after trade-impact
+      min_out,                              // pool-based × (1-slippage) × (1-impact)
       min_out_base_units: minOutBaseUnits,
       slippage_bps: slippageBps,
-      slippage_upper_bound_from_liquidity_pct: slippage_upper_pct,
+      trade_impact_pct,                     // additional fill worsening from moving the pool
+      one_side_usd_used: one_side_usd,      // depth used for the impact math
+      pool_selection: primary.selection,
+      warnings,
       route: {
         kind: route_kind,
         note: route_kind === "multi-hop"

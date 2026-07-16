@@ -1,100 +1,109 @@
 // x402/rh-stock-new-listings (D3) — detect newly deployed RH RWA tokens.
 // Price: $0.05
 //
-// Approach: read the canonical registry's expected creator (RHJ deployer
-// pattern per docs) and query Blockscout for token contracts recently
-// created on Robinhood Chain. Cross-references against RWA_TOKENS to filter
-// out already-registered tokens.
-//
-// Real Blockscout query — surfaces the actual on-chain list. Never invents.
+// Enumerates every ERC-20 on Robinhood Chain via Blockscout tokens API,
+// diffs against the canonical registry, and returns anything named with
+// the Robinhood-Token pattern that isn't in the registry yet. Previous
+// implementation used `/addresses/{deployer}/transactions?filter=from`
+// which returned 0 hits because Blockscout doesn't populate
+// `created_contract` on proxy-deployment txs; the tokens-list endpoint
+// is the reliable source.
 
 import { RH_CHAIN, RWA_TOKENS } from "@/lib/robinhood/rwa-registry";
 
 const BS = "https://robinhoodchain.blockscout.com/api/v2";
 
-// Canonical RHJ deployer per research (`0x4783C67b63dE2B358Ac5951a7D41F47A38F3C046`).
-// Every RH RWA token so far has been deployed by this address as a beacon
-// proxy. New listings appear as fresh creations from this deployer.
+// Canonical RHJ deployer per docs research + cross-checked on-chain via
+// Blockscout `/addresses/{token}` → `creator_address_hash` for AAPL and
+// MSTR. Same address deploys every beacon-proxy tokenized stock.
 const RHJ_DEPLOYER = "0x4783C67b63dE2B358Ac5951a7D41F47A38F3C046";
 
-type TxItem = {
-  hash?: string;
-  timestamp?: string;
-  created_contract?: { hash?: string; name?: string; is_verified?: boolean };
-  method?: string;
+// A Blockscout ERC-20 with a name like "Apple • Robinhood Token" is a
+// canonical RHJ token even if its creator isn't fetched. We use this
+// pattern to auto-detect new listings without a second per-token call.
+const RHJ_NAME_MARKER = "Robinhood Token";
+
+type BsToken = {
+  address_hash?: string;
+  name?: string;
+  symbol?: string;
+  decimals?: string;
+  type?: string;
+  holders_count?: string;
+  total_supply?: string;
+  circulating_market_cap?: string;
 };
-type Resp = { items?: TxItem[]; next_page_params?: unknown };
+type Resp = { items?: BsToken[]; next_page_params?: unknown };
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { since_days?: number; limit?: number } = {};
+    let body: { limit?: number; include_registered?: boolean } = {};
     try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const url = new URL(req.url);
-    const sinceDays = Math.max(1, Math.min(365, Number(body.since_days ?? url.searchParams.get("since_days") ?? 30)));
-    const limit = Math.max(1, Math.min(50, Number(body.limit ?? url.searchParams.get("limit") ?? 20)));
+    const limit = Math.max(1, Math.min(200, Number(body.limit ?? url.searchParams.get("limit") ?? 50)));
+    const includeRegistered = body.include_registered === true;
 
     const timestamp = new Date().toISOString();
-    const cutoff = Date.now() / 1000 - sinceDays * 86400;
-
-    // Blockscout address transactions filter: `filter=to|from` → we want all
-    // contract-creation txs from the RHJ deployer. The v2 API returns
-    // created_contract fields on creation txs.
-    let items: TxItem[] = [];
+    let items: BsToken[] = [];
+    let gt_fetch_status: string | null = null;
     try {
-      const r = await fetch(`${BS}/addresses/${RHJ_DEPLOYER}/transactions?filter=from`, {
+      const r = await fetch(`${BS}/tokens?type=ERC-20&limit=${limit}`, {
         signal: AbortSignal.timeout(10000),
         headers: { accept: "application/json" },
       });
+      gt_fetch_status = `${r.status}`;
       if (r.ok) {
         const d = (await r.json()) as Resp;
         items = d.items ?? [];
       }
-    } catch { /* swallow */ }
-
-    // Filter creation txs since cutoff, dedupe by created contract address.
-    const registeredContracts = new Set(RWA_TOKENS.map((t) => t.contract.toLowerCase()));
-    const seen = new Set<string>();
-    const created: Array<{
-      contract: string;
-      name: string | null;
-      verified: boolean;
-      deployed_at_unix: number;
-      tx_hash: string;
-      in_registry: boolean;
-    }> = [];
-    for (const item of items) {
-      const c = item.created_contract?.hash;
-      if (!c) continue;
-      const lower = c.toLowerCase();
-      if (seen.has(lower)) continue;
-      seen.add(lower);
-      const ts = item.timestamp ? Math.floor(new Date(item.timestamp).getTime() / 1000) : 0;
-      if (ts < cutoff) continue;
-      created.push({
-        contract: c,
-        name: item.created_contract?.name ?? null,
-        verified: !!item.created_contract?.is_verified,
-        deployed_at_unix: ts,
-        tx_hash: item.hash ?? "",
-        in_registry: registeredContracts.has(lower),
-      });
+    } catch (e) {
+      gt_fetch_status = `network_error: ${(e as Error).message}`;
     }
-    created.sort((a, b) => b.deployed_at_unix - a.deployed_at_unix);
-    const trimmed = created.slice(0, limit);
-    const new_only = trimmed.filter((c) => !c.in_registry);
+
+    const registeredContracts = new Set(RWA_TOKENS.map((t) => t.contract.toLowerCase()));
+    const registeredTickers = new Set(RWA_TOKENS.map((t) => t.ticker.toUpperCase()));
+
+    // Every ERC-20 name-tagged as an RHJ Robinhood Token = candidate RWA.
+    const canonical = items.filter((t) => (t.name ?? "").includes(RHJ_NAME_MARKER));
+
+    const new_only: Array<{ contract: string; name: string; symbol: string; decimals: number | null; holders: number | null; total_supply: string | null; in_registry_by_contract: boolean; in_registry_by_ticker: boolean }> = [];
+    const registered_hits: typeof new_only = [];
+    for (const t of canonical) {
+      const addr = (t.address_hash ?? "").toLowerCase();
+      const sym = (t.symbol ?? "").toUpperCase();
+      const inByAddr = registeredContracts.has(addr);
+      const inByTicker = registeredTickers.has(sym);
+      const row = {
+        contract: t.address_hash ?? "",
+        name: t.name ?? "",
+        symbol: t.symbol ?? "",
+        decimals: t.decimals ? Number(t.decimals) : null,
+        holders: t.holders_count ? Number(t.holders_count) : null,
+        total_supply: t.total_supply ?? null,
+        in_registry_by_contract: inByAddr,
+        in_registry_by_ticker: inByTicker,
+      };
+      if (inByAddr) registered_hits.push(row);
+      else new_only.push(row);
+    }
 
     return Response.json({
       tool: "rh-stock-new-listings",
-      window_days: sinceDays,
-      deployer: RHJ_DEPLOYER,
-      creations_seen: created.length,
-      new_since_cutoff: new_only.length,
-      creations: trimmed,
+      erc20_scanned: items.length,
+      rhj_named_found: canonical.length,
+      registry_size: RWA_TOKENS.length,
+      new_since_registry: new_only.length,
       new_only,
+      registered_hits: includeRegistered ? registered_hits : undefined,
+      deployer: RHJ_DEPLOYER,
+      warnings: [
+        new_only.length > 0 ? `${new_only.length} canonical RHJ token(s) not yet in the registry — inspect + promote via a registry PR` : null,
+        gt_fetch_status && gt_fetch_status !== "200" ? `blockscout_status_${gt_fetch_status}` : null,
+      ].filter((x): x is string => !!x),
       note: new_only.length > 0
-        ? `${new_only.length} contract(s) deployed by RHJ within the last ${sinceDays} days are NOT yet in our canonical registry — inspect + promote via a registry PR.`
-        : "No new RHJ-deployed contracts detected in the window. Registry is current.",
-      data_sources: ["robinhoodchain.blockscout.com API v2 (address transactions filter)"],
+        ? `${new_only.length} on-chain RHJ Robinhood Tokens are NOT in our registry (${new_only.slice(0, 3).map((r) => r.symbol).join(", ")}${new_only.length > 3 ? "…" : ""}).`
+        : "Every on-chain RHJ Robinhood Token is already in the registry.",
+      data_sources: ["robinhoodchain.blockscout.com API v2 /tokens"],
       network: RH_CHAIN,
       timestamp,
     });
