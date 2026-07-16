@@ -1604,6 +1604,81 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/rh-stock-swap-route`,
     x402Body: (v) => ({ token_in: v.token_in ?? "", token_out: v.token_out ?? "" }),
   },
+
+  // ─── RH RWA Phase 4 — Portfolio ────────────────────────────────────────
+  {
+    id: "rh-stock-holdings",
+    name: "RH Stock Holdings",
+    description: "Full RH RWA portfolio for a wallet: reads balanceOf for all 26 canonical tokenized stocks/ETFs, prices non-zero balances via Chainlink (fallback DEX). Real on-chain reads. Never fabricates. Value_usd is null when no price source exists.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "portfolio",
+    inputs: [
+      { key: "wallet", label: "Wallet address", placeholder: "0x…", required: true },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-stock-holdings`,
+    x402Body: (v) => ({ wallet: v.wallet ?? "" }),
+  },
+  {
+    id: "rh-stock-pnl",
+    name: "RH Stock PnL & Activity",
+    description: "Wallet position + trade activity per RH RWA token from Blockscout Transfer logs: transfer counts, cumulative in/out, first/last activity. Cost-basis PnL requires historical Chainlink reads and is deferred to v2 rather than fabricated.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "portfolio",
+    inputs: [
+      { key: "wallet", label: "Wallet address",           placeholder: "0x…", required: true },
+      { key: "ticker", label: "Focus ticker (optional)",  placeholder: "MSTR (leave blank for full portfolio)" },
+    ],
+    isComposite: false,
+    price: "$0.20", priceUSDC: 200000,
+    x402Url: `${X402_BASE}/rh-stock-pnl`,
+    x402Body: (v) => ({ wallet: v.wallet ?? "", ticker: v.ticker ?? "" }),
+  },
+  {
+    id: "rh-portfolio-rebalance",
+    name: "RH Portfolio Rebalance",
+    description: "Target-allocation rebalance planner. Given a wallet + target weights map (e.g. {AAPL: 0.5, TSLA: 0.5}), returns an ordered swap plan (sell → buy pairs, USD-denominated) to move from current to target. Real math. Feeds into rh-stock-swap-prepare.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "portfolio",
+    inputs: [
+      { key: "wallet",       label: "Wallet address",  placeholder: "0x…", required: true },
+      { key: "targets",      label: "Targets JSON",    placeholder: "{\"AAPL\":0.5,\"TSLA\":0.5}", required: true },
+      { key: "min_swap_usd", label: "Min swap USD",    placeholder: "1 (default)" },
+    ],
+    isComposite: false,
+    price: "$0.20", priceUSDC: 200000,
+    x402Url: `${X402_BASE}/rh-portfolio-rebalance`,
+    x402Body: (v) => ({
+      wallet: v.wallet ?? "",
+      targets: (() => { try { return JSON.parse(v.targets ?? "{}"); } catch { return {}; } })(),
+      min_swap_usd: v.min_swap_usd ? Number(v.min_swap_usd) : 1,
+    }),
+  },
+  {
+    id: "rh-sector-basket",
+    name: "RH Sector Basket",
+    description: "Multi-buy plan for a sector or explicit ticker list. Input total USD + weighting (equal / market-cap-tvl proxy). Returns per-ticker allocation, live spot, expected units. Feeds each leg into rh-stock-swap-prepare for atomic-ish execution.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "portfolio",
+    inputs: [
+      { key: "sector",           label: "Sector",              placeholder: "tech / finance / consumer / etf (or use tickers)" },
+      { key: "tickers",          label: "Tickers (optional)",  placeholder: "AAPL,TSLA,NVDA (bypasses sector)" },
+      { key: "total_usd",        label: "Total USD",           placeholder: "100", required: true },
+      { key: "weighting",        label: "Weighting",           placeholder: "equal (default) or market-cap" },
+      { key: "max_constituents", label: "Max constituents",    placeholder: "10" },
+    ],
+    isComposite: false,
+    price: "$0.10", priceUSDC: 100000,
+    x402Url: `${X402_BASE}/rh-sector-basket`,
+    x402Body: (v) => ({
+      sector: v.sector ?? "",
+      tickers: (v.tickers ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+      total_usd: v.total_usd ? Number(v.total_usd) : 100,
+      weighting: v.weighting ?? "equal",
+      max_constituents: v.max_constituents ? Number(v.max_constituents) : 10,
+    }),
+  },
 ];
 
 // ─── v2 defaults ──────────────────────────────────────────────────────────────
