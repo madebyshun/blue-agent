@@ -73,6 +73,7 @@ Do NOT recommend buy/sell — this is a brief, not a signal.`;
     const userPrompt = `FACTS:\n${JSON.stringify(facts, null, 2)}\n\nProduce the brief.`;
 
     let markdown = "";
+    let llm_error: string | null = null;
     try {
       markdown = await callVeniceLLM({
         system,
@@ -82,7 +83,11 @@ Do NOT recommend buy/sell — this is a brief, not a signal.`;
         webSearch: true,
       });
     } catch (e) {
-      markdown = `# ${token.ticker} — data-only report\n\n_(LLM synthesis unavailable — ${(e as Error).message}. Numbers below are from real on-chain sources.)_`;
+      // Reviewer flag: don't leak upstream 401/500 messages into
+      // client-facing markdown. Log server-side, degrade cleanly.
+      llm_error = (e as Error).message;
+      console.warn("[rh-stock-report] LLM synthesis unavailable:", llm_error);
+      markdown = `# ${token.ticker} — data-only report\n\n_LLM synthesis unavailable this run. Real on-chain numbers are in the \`facts\` object below and are unaffected._`;
     }
 
     return Response.json({

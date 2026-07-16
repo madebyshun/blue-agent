@@ -108,11 +108,20 @@ export default async function handler(req: Request): Promise<Response> {
       for (const r of priced) weights[r.token.ticker] = 1 / priced.length;
     }
 
+    // ── Dust gate: skip legs whose deepest pool would eat a $20 allocation ─
+    // Same threshold as M4 movers. A leg that lands in a $217-TVL pool is
+    // a slippage disaster; we still surface it as `skipped_legs` so the
+    // caller sees WHY, but don't recommend it.
+    const MIN_TVL_USD = 5_000;
+    const MIN_VOLUME_USD = 500;
+
     // ── Build allocation legs ───────────────────────────────────────────
-    const legs = priced.map((r) => {
+    const rawLegs = priced.map((r) => {
       const w = weights[r.token.ticker] ?? 0;
       const amount_usd = +(totalUsd * w).toFixed(4);
       const expected_units = r.price_usd ? amount_usd / r.price_usd : null;
+      const tvl = r.total_tvl_usd;
+      const tradable = tvl >= MIN_TVL_USD;
       return {
         ticker: r.token.ticker,
         name: r.token.name,
@@ -122,9 +131,25 @@ export default async function handler(req: Request): Promise<Response> {
         price_usd: r.price_usd,
         price_source: r.price_source,
         expected_units,
+        liquidity_check: { tvl_usd: tvl, min_tvl_usd: MIN_TVL_USD, tradable },
         hint: { next_tool: "rh-stock-swap-prepare", side: "buy", denom: "USDG" },
       };
     });
+    const legs = rawLegs.filter((l) => l.liquidity_check.tradable);
+    const skipped_legs = rawLegs
+      .filter((l) => !l.liquidity_check.tradable)
+      .map((l) => ({ ticker: l.ticker, reason: `pool TVL $${l.liquidity_check.tvl_usd.toFixed(0)} < min $${MIN_TVL_USD} — buying $${l.amount_usd} here is slippage disaster` }));
+    // Renormalize weights over the tradable legs so total allocation still
+    // sums to `totalUsd` instead of leaving money uninvested silently.
+    const totalTradableWeight = legs.reduce((s, l) => s + l.weight, 0);
+    if (totalTradableWeight > 0 && totalTradableWeight < 1) {
+      for (const l of legs) {
+        l.weight = +(l.weight / totalTradableWeight).toFixed(6);
+        l.amount_usd = +(totalUsd * l.weight).toFixed(4);
+        l.expected_units = l.price_usd ? l.amount_usd / l.price_usd : null;
+      }
+    }
+    void MIN_VOLUME_USD;
 
     return Response.json({
       tool: "rh-sector-basket",
@@ -133,8 +158,14 @@ export default async function handler(req: Request): Promise<Response> {
       total_usd: totalUsd,
       constituent_count: legs.length,
       legs,
+      skipped_legs,
+      warnings: skipped_legs.length > 0
+        ? [`${skipped_legs.length} constituent(s) skipped by dust liquidity gate (min $${MIN_TVL_USD} pool TVL) — weights renormalized over the remaining tradable legs`]
+        : [],
       known_sectors: KNOWN_SECTORS,
-      note: "For each leg, call rh-stock-swap-prepare with { ticker, side: 'buy', amount: amount_usd, denom: 'USDG' } to obtain the unsigned tx sequence.",
+      note: legs.length === 0
+        ? "No constituent has enough pool liquidity to trade cleanly — try a different sector or lower `min_tvl_usd`."
+        : "For each leg, call rh-stock-swap-prepare with { ticker, side: 'buy', amount: amount_usd, denom: 'USDG' } to obtain the unsigned tx sequence.",
       data_sources: ["Chainlink AggregatorV3 on-chain (RH Chain)", "api.geckoterminal.com (RH Chain)"],
       network: RH_CHAIN,
       timestamp,

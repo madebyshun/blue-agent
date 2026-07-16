@@ -13,7 +13,7 @@
 import { getAddress, isAddress } from "viem";
 import { findByTicker, RH_CHAIN, RH_CHAINLINK_ETH_USD } from "@/lib/robinhood/rwa-registry";
 import { chainlinkLatest } from "@/lib/robinhood/rwa-price";
-import { poolsForToken } from "@/lib/robinhood/rwa-market";
+import { poolsForToken, resolvePrimaryPool } from "@/lib/robinhood/rwa-market";
 import {
   buildTokenToTokenSwapCalldata,
   ROBINHOOD_MAINNET_VERIFIED_WETH9,
@@ -74,13 +74,19 @@ export default async function handler(req: Request): Promise<Response> {
     const quoteDecimals = denom === "USDG" ? 6 : 18;
     const tokenIn = quoteAddr;
     const tokenOut = token.contract;
-    const [oracle, gtPools] = await Promise.all([
+    // Pool-based quote (fix: previously used Chainlink → per-period min_out
+    // would revert on-chain whenever pool deviates from oracle > user slippage).
+    const [oracle, gtPools, primary] = await Promise.all([
       token.chainlinkFeed ? chainlinkLatest(token.chainlinkFeed, token.chainlinkHeartbeat ?? 86400) : Promise.resolve(null),
       poolsForToken(token.contract),
+      resolvePrimaryPool(token.contract, { preferUsdgQuote: denom === "USDG" }),
     ]);
-    let spot_usd: number | null = null;
-    if (oracle && !oracle.is_stale) spot_usd = oracle.price_usd;
-    else if (gtPools[0]) spot_usd = gtPools[0].price_usd;
+    const pool_spot_usd = primary.pool?.price_usd ?? gtPools[0]?.price_usd ?? null;
+    const chainlink_spot_usd = oracle && !oracle.is_stale ? oracle.price_usd : null;
+    const spot_usd = pool_spot_usd ?? chainlink_spot_usd;
+    const pool_oracle_delta_pct = (pool_spot_usd !== null && chainlink_spot_usd !== null && chainlink_spot_usd > 0)
+      ? +(((pool_spot_usd - chainlink_spot_usd) / chainlink_spot_usd) * 100).toFixed(4)
+      : null;
 
     let expected_out: number | null = null;
     let amountInHuman = amountUsd; // USDG denom: amountUsd IS the amount
@@ -91,13 +97,17 @@ export default async function handler(req: Request): Promise<Response> {
         const ethQuote = await chainlinkLatest(RH_CHAINLINK_ETH_USD, 86400);
         const weth_usd = ethQuote?.price_usd ?? null;
         if (weth_usd) {
-          amountInHuman = amountUsd / weth_usd;             // WETH amount to spend per period
+          amountInHuman = amountUsd / weth_usd;
           expected_out = (amountInHuman * weth_usd) / spot_usd;
         }
       }
     }
 
-    const min_out = expected_out !== null ? expected_out * (1 - slippageBps / 10000) : null;
+    // Include trade-impact so cron-executed periods don't revert either.
+    const one_side_usd = primary.pool?.one_side_usd ?? ((gtPools[0]?.reserve_usd ?? 0) / 2);
+    const trade_impact_pct = (one_side_usd > 0 && amountUsd > 0) ? (100 * amountUsd / (one_side_usd + amountUsd)) : 0;
+    const expected_after_impact = expected_out !== null ? expected_out * (1 - trade_impact_pct / 100) : null;
+    const min_out = expected_after_impact !== null ? expected_after_impact * (1 - slippageBps / 10000) : null;
     const amountIn = BigInt(Math.round(amountInHuman * Math.pow(10, quoteDecimals)));
     const amountOutMinimum = min_out !== null ? BigInt(Math.max(0, Math.floor(min_out * Math.pow(10, token.decimals)))) : 0n;
     const deadline = BigInt(nowUnix + 300);
@@ -140,16 +150,32 @@ export default async function handler(req: Request): Promise<Response> {
       }
     }
 
+    const warnings: string[] = [];
+    if (pool_oracle_delta_pct !== null && Math.abs(pool_oracle_delta_pct) > 1) {
+      warnings.push(`pool_deviates_from_oracle: ${pool_oracle_delta_pct}% — per-period min_out is set from POOL basis so cron won't revert on that account`);
+    }
+    // Reviewer honesty rule: if persist=false, the response looks like a
+    // "registered schedule" but nothing will run. Label the response so a
+    // downstream agent doesn't tell the user their DCA is active.
+    const mode = persisted ? "registered_kv" : "preview_only";
+
     return Response.json({
       tool: "rh-rwa-dca",
+      mode,
       wallet,
       ticker: token.ticker,
       name: token.name,
       schedule: scheduleConfig,
       quote_preview: {
         spot_usd,
+        pool_spot_usd,
+        chainlink_spot_usd,
+        pool_oracle_delta_pct,
         expected_out_per_period: expected_out,
+        expected_after_impact_per_period: expected_after_impact,
         min_out_per_period: min_out,
+        trade_impact_pct,
+        one_side_usd_used: one_side_usd,
         estimated_total_over_schedule: expected_out !== null ? expected_out * totalPeriods : null,
       },
       first_run: {
@@ -160,10 +186,13 @@ export default async function handler(req: Request): Promise<Response> {
       },
       persisted,
       persist_note: persist && !persisted ? "KV registration failed — schedule returned only, not stored." : null,
-      note: !built.route
-        ? "First-run path unroutable via V3 today (RH RWA liquidity mostly V4). Try `denom: WETH` for a V3 path, or wait for the V4 execution tool (Task #98)."
-        : "First-run calldata attached. To execute automatically, integrate this schedule with the DCA cron (Task #92) — Blue Session key can sign each period without human touch.",
-      data_sources: ["Chainlink AggregatorV3 (RH Chain)", "on-chain RH V3 factory", persist ? "@vercel/kv" : null].filter(Boolean),
+      warnings,
+      note: mode === "preview_only"
+        ? "MODE preview_only: this response is a PLAN, not an active DCA. Nothing will run automatically. Pass `persist: true` to register in KV, and see Task #92 for the cron worker that reads the KV registration."
+        : !built.route
+          ? "First-run path unroutable via V3 today (RH RWA liquidity mostly V4). Try `denom: WETH`, or wait for the V4 execution tool (Task #98)."
+          : "Registered in KV. First-run calldata attached. Task #92's cron will consume the schedule and sign each period via Blue Session key.",
+      data_sources: ["Chainlink AggregatorV3 (RH Chain)", "on-chain RH V3 factory", persisted ? "@vercel/kv" : null].filter(Boolean),
       network: RH_CHAIN,
       timestamp,
     });

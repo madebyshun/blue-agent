@@ -49,16 +49,23 @@ export default async function handler(req: Request): Promise<Response> {
 
     const pool = pools[0];
     let trades: Trade[] = [];
+    let gt_status: string | null = null;
+    let gt_error: string | null = null;
     try {
-      const r = await fetch(`${GT}/pools/${pool.address}/trades`, {
+      const r = await fetch(`${GT}/pools/${pool.pool_ref}/trades`, {
         signal: AbortSignal.timeout(8000),
         headers: { accept: "application/json;version=20230302" },
       });
+      gt_status = `${r.status}`;
       if (r.ok) {
         const d = (await r.json()) as { data?: Trade[] };
         trades = d.data ?? [];
+      } else {
+        gt_error = `blockscout_status_${gt_status}`;
       }
-    } catch { /* swallow */ }
+    } catch (e) {
+      gt_error = `network_error: ${(e as Error).message}`;
+    }
 
     const cutoff = Date.now() / 1000 - 24 * 3600;
     let buyCount = 0, sellCount = 0;
@@ -83,14 +90,36 @@ export default async function handler(req: Request): Promise<Response> {
       else if (pct > 0.10 && netUsd < 0) pressure = "SELL_HEAVY";
     }
 
+    const warnings: string[] = [];
+    if (gt_error) warnings.push(`gt_trades_fetch_failed: ${gt_error}`);
+    // Cross-check: if pool has real 24h volume but trades feed came back
+    // empty, that's an inconsistency worth surfacing (usually rate-limit).
+    const poolVol = pool.volume_24h_usd ?? 0;
+    if (trades.length === 0 && poolVol > 100) {
+      warnings.push(`trades_feed_empty_but_pool_has_volume: pool reports $${poolVol.toFixed(2)} 24h volume; likely a GT rate-limit — retry`);
+    }
+    // If we HAVE trades but our total is way off pool.volume_24h, note it.
+    if (totalVol > 0 && poolVol > 0 && Math.abs(totalVol - poolVol) / poolVol > 0.5) {
+      warnings.push(`volume_mismatch: trades-feed total $${totalVol.toFixed(0)} vs pool.volume_24h $${poolVol.toFixed(0)} — feed is paginated, our 1-page snapshot doesn't cover full 24h`);
+    }
+
     return Response.json({
       tool: "rh-stock-flow",
       ticker: token.ticker,
       name: token.name,
       contract: token.contract,
-      pool: { address: pool.address, name: pool.name, dex: pool.dex, tvl_usd: pool.reserve_usd },
+      pool: {
+        pool_ref: pool.pool_ref,
+        is_v4_pool_id: pool.is_v4_pool_id,
+        address: pool.address,   // back-compat
+        name: pool.name,
+        dex: pool.dex,
+        tvl_usd: pool.reserve_usd,
+        volume_24h_usd_from_pool_meta: pool.volume_24h_usd,
+      },
       window_hours: 24,
       trades_seen: trades.length,
+      gt_trades_endpoint_status: gt_status,
       buy_count: buyCount,
       sell_count: sellCount,
       buy_volume_usd: +buyVolUsd.toFixed(4),
@@ -99,8 +128,9 @@ export default async function handler(req: Request): Promise<Response> {
       total_volume_usd: +totalVol.toFixed(4),
       pressure,
       latest_trade_unix: latestTs || null,
+      warnings,
       note: trades.length === 0
-        ? "GT trades feed returned no data (thin pool or rate-limit)."
+        ? "GT trades feed returned no data — see warnings for likely cause. Do not conclude 'no activity' if pool.volume_24h_usd_from_pool_meta is non-zero."
         : "Pressure verdict is hard-mapped from net/total ratio > 10% — not LLM-generated.",
       data_sources: ["api.geckoterminal.com (RH Chain)"],
       network: RH_CHAIN, timestamp,

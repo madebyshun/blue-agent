@@ -72,7 +72,9 @@ export default async function handler(req: Request): Promise<Response> {
       direction,
       recipient: recipient ? (isAddress(recipient) ? getAddress(recipient) : recipient) : null,
       webhook_url: webhookUrl || null,
-      status: met ? "MET" : "PENDING",
+      // status is snapshot at registration; mode (below) is what tells the
+      // caller whether a poller will actually keep updating this.
+      status: met ? "MET" : "NOT_YET_MET",
       created_at_unix: nowUnix,
       last_polled_unix: nowUnix,
       last_price_usd: currentPrice,
@@ -88,17 +90,27 @@ export default async function handler(req: Request): Promise<Response> {
       }
     }
 
+    // Reviewer honesty rule: if persist=false, nothing will fire. Response
+    // must not read like an active alert. `mode` disambiguates for agents.
+    const mode = persisted ? "armed_kv" : "preview_only";
+
     return Response.json({
       tool: "rh-stock-alert",
+      mode,
       alert: config,
       chainlink: quote,
       met_now: met,
       persisted,
       persist_note: persist && !persisted ? "KV persist failed — config returned only." : null,
-      note: met
-        ? `Threshold already met at registration: current $${currentPrice?.toFixed(4)} ${direction === "above" ? ">=" : "<="} $${threshold}.`
-        : `Threshold not met yet: current $${currentPrice?.toFixed(4)} vs $${threshold} (${direction}).`,
-      data_sources: ["Chainlink AggregatorV3 on-chain (RH Chain)", persist ? "@vercel/kv" : null].filter(Boolean),
+      warnings: mode === "preview_only"
+        ? ["preview_only: no poller is watching this alert — pass `persist: true` (and Task #92 must have the cron wired) to actually arm it"]
+        : [],
+      note: mode === "preview_only"
+        ? "MODE preview_only: this response is an alert PREVIEW, not an armed alert. Nothing will fire. Pass `persist: true` to register in KV."
+        : met
+          ? `Threshold already met at registration: current $${currentPrice?.toFixed(4)} ${direction === "above" ? ">=" : "<="} $${threshold}.`
+          : `Threshold not met yet: current $${currentPrice?.toFixed(4)} vs $${threshold} (${direction}). Poller will notify when it crosses.`,
+      data_sources: ["Chainlink AggregatorV3 on-chain (RH Chain)", persisted ? "@vercel/kv" : null].filter(Boolean),
       network: RH_CHAIN,
       timestamp,
     });

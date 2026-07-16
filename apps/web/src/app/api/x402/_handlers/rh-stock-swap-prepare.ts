@@ -14,7 +14,7 @@
 
 import { findByTicker, RH_CHAIN, RH_CHAINLINK_ETH_USD } from "@/lib/robinhood/rwa-registry";
 import { chainlinkLatest } from "@/lib/robinhood/rwa-price";
-import { poolsForToken } from "@/lib/robinhood/rwa-market";
+import { poolsForToken, resolvePrimaryPool } from "@/lib/robinhood/rwa-market";
 import {
   buildTokenToTokenSwapCalldata,
   ROBINHOOD_MAINNET_VERIFIED_WETH9,
@@ -78,35 +78,41 @@ export default async function handler(req: Request): Promise<Response> {
     const tokenInDecimals = (side === "buy") ? quoteDecimals : token.decimals;
     const tokenOutDecimals= (side === "buy") ? token.decimals : quoteDecimals;
 
-    // Same spot logic as X1 — keep them consistent so quote → prepare returns
-    // identical numbers for the same inputs.
-    const [oracle, gtPools] = await Promise.all([
+    // ── QUOTE MUST come from the pool that will EXECUTE the swap ─────────
+    // Previously used Chainlink oracle → min_out set against a price the
+    // pool doesn't trade at → V3/V4 swap reverts. Fix: pool spot is
+    // authoritative; oracle is a cross-check that emits a warning when it
+    // deviates so callers can widen slippage before signing.
+    const [oracle, gtPools, primary] = await Promise.all([
       token.chainlinkFeed
         ? chainlinkLatest(token.chainlinkFeed, token.chainlinkHeartbeat ?? 86400)
         : Promise.resolve(null),
       poolsForToken(token.contract),
+      resolvePrimaryPool(token.contract, { preferUsdgQuote: denomIn === "USDG" }),
     ]);
-    let spot_usd: number | null = null;
-    if (oracle && !oracle.is_stale) spot_usd = oracle.price_usd;
-    else if (gtPools[0]) spot_usd = gtPools[0].price_usd;
+    const pool_spot_usd = primary.pool?.price_usd ?? gtPools[0]?.price_usd ?? null;
+    const chainlink_spot_usd = oracle && !oracle.is_stale ? oracle.price_usd : null;
+    const spot_usd = pool_spot_usd ?? chainlink_spot_usd;
+    const spot_source: "pool" | "chainlink" | null =
+      pool_spot_usd !== null ? "pool" : (chainlink_spot_usd !== null ? "chainlink" : null);
+    const pool_oracle_delta_pct = (pool_spot_usd !== null && chainlink_spot_usd !== null && chainlink_spot_usd > 0)
+      ? +(((pool_spot_usd - chainlink_spot_usd) / chainlink_spot_usd) * 100).toFixed(4)
+      : null;
+    const pool_deviates_from_oracle = pool_oracle_delta_pct !== null && Math.abs(pool_oracle_delta_pct) > 1;
 
     let expected_out: number | null = null;
     if (spot_usd !== null) {
       if (denomIn === "USDG") {
         expected_out = side === "buy" ? amount / spot_usd : amount * spot_usd;
       } else {
-        // Prefer Chainlink ETH/USD on RH Chain (deterministic). Fall back to
-        // any WETH-quoted RWA pool from GT.
         const ethQuote = await chainlinkLatest(RH_CHAINLINK_ETH_USD, 86400);
         let weth_usd: number | null = ethQuote?.price_usd ?? null;
         if (!weth_usd) {
           const wethPool = gtPools.find((p) => p.base_token === ROBINHOOD_MAINNET_VERIFIED_WETH9.toLowerCase() || p.quote_token === ROBINHOOD_MAINNET_VERIFIED_WETH9.toLowerCase());
-          weth_usd = wethPool?.counterparty_usd ?? wethPool?.price_usd ?? null;
+          weth_usd = wethPool?.counterparty_token_price_usd ?? wethPool?.price_usd ?? null;
         }
         if (weth_usd) {
-          expected_out = side === "buy"
-            ? (amount * weth_usd) / spot_usd
-            : (amount * spot_usd) / weth_usd;
+          expected_out = side === "buy" ? (amount * weth_usd) / spot_usd : (amount * spot_usd) / weth_usd;
         }
       }
     }
@@ -115,16 +121,30 @@ export default async function handler(req: Request): Promise<Response> {
       return Response.json({
         tool: "rh-stock-swap-prepare",
         ticker: token.ticker,
-        error: "Cannot compute an expected_out at this time (no oracle + no DEX spot).",
+        error: "Cannot compute an expected_out at this time (no pool spot + no oracle).",
         network: RH_CHAIN,
         timestamp,
       }, { status: 502 });
     }
 
-    const min_out = expected_out * (1 - slippageBps / 10000);
+    // Additional slip from trade impact on the actual pool (xy=k first-order).
+    const one_side_usd = primary.pool?.one_side_usd ?? ((gtPools[0]?.reserve_usd ?? 0) / 2);
+    const notional_usd = denomIn === "USDG"
+      ? (side === "buy" ? amount : expected_out)
+      : (expected_out * (spot_usd ?? 0));
+    const trade_impact_pct = (one_side_usd > 0 && notional_usd > 0) ? (100 * notional_usd / (one_side_usd + notional_usd)) : 0;
+
+    // min_out = pool_expected × (1 − user_slippage) × (1 − trade_impact)
+    const expected_after_impact = expected_out * (1 - trade_impact_pct / 100);
+    const min_out = expected_after_impact * (1 - slippageBps / 10000);
     const amountIn = BigInt(Math.round(amount * Math.pow(10, tokenInDecimals)));
     const amountOutMinimum = BigInt(Math.max(0, Math.floor(min_out * Math.pow(10, tokenOutDecimals))));
     const deadline = BigInt(Math.floor(Date.now() / 1000) + deadlineMin * 60);
+
+    const warnings: string[] = [];
+    if (pool_deviates_from_oracle) warnings.push(`pool_deviates_from_oracle: pool spot ${pool_oracle_delta_pct}% off Chainlink — min_out is set from the POOL basis so the swap won't revert on that account`);
+    if (spot_source === "chainlink") warnings.push("no_pool_price_available: fell back to oracle for quote — on-chain swap MAY revert if pool has drifted from oracle. Prefer denom: WETH.");
+    if (one_side_usd > 0 && notional_usd / one_side_usd > 0.05) warnings.push(`heavy_trade: notional is ${(100 * notional_usd / one_side_usd).toFixed(1)}% of one-side depth — real slip may exceed the first-order figure`);
 
     const built = await buildTokenToTokenSwapCalldata({
       router: ROBINHOOD_SWAP_ROUTER_ADDRESS,
@@ -174,13 +194,23 @@ export default async function handler(req: Request): Promise<Response> {
       denom_in: denomIn,
       recipient,
       quote: {
-        spot_usd,
-        expected_out,
-        min_out,
+        spot_usd,                    // pool spot when available; oracle only when no pool
+        spot_source,
+        pool_spot_usd,
+        chainlink_spot_usd,
+        pool_oracle_delta_pct,
+        pool_deviates_from_oracle,
+        expected_out,                // pool-basis, pre-impact
+        expected_after_impact,       // after moving the pool
+        min_out,                     // × (1 − slippage) × (1 − impact)
+        trade_impact_pct,
+        one_side_usd_used: one_side_usd,
         slippage_bps: slippageBps,
+        pool_selection: primary.selection,
         amount_in_base_units: amountIn.toString(),
         amount_out_minimum_base_units: amountOutMinimum.toString(),
       },
+      warnings,
       route: {
         kind: built.route,   // "direct" | "multi-hop"
         call_count: built.calls?.length ?? 0,

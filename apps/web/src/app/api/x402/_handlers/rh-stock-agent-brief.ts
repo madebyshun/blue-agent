@@ -71,6 +71,18 @@ export default async function handler(req: Request): Promise<Response> {
       pool_selection: primary.selection,
     };
 
+    // Warnings must mirror M5 so an agent reading A4 sees the same
+    // confidence signals as one reading M5 for the same ticker + moment.
+    const FEED_FRESH_MAX_AGE_INHOURS_SECONDS = 15 * 60;
+    const factWarnings: string[] = [];
+    if (!market.is_open) factWarnings.push(`market_closed_session_${market.session}: Chainlink frozen on last regular print; DEX drifts. Verdict reflects post-close drift, NOT arb.`);
+    if (market.is_open && oracle && oracle.age_seconds > FEED_FRESH_MAX_AGE_INHOURS_SECONDS) {
+      factWarnings.push(`feed_abnormally_stale: Chainlink age ${oracle.age_seconds}s while market OPEN — expected <${FEED_FRESH_MAX_AGE_INHOURS_SECONDS}s. Treat verdict as low-confidence.`);
+    }
+    if (facts.dex_tvl_usd !== null && facts.dex_tvl_usd < 5_000) {
+      factWarnings.push(`thin_dex_pool: only $${facts.dex_tvl_usd.toFixed(0)} TVL — spot may be dominated by a single trade.`);
+    }
+
     // Deterministic verdict — never LLM'd. Now market-hours aware.
     const verdict = verdictFromNumbers({
       ...facts,
@@ -115,7 +127,8 @@ Do NOT invent numbers, headlines, or URLs. Empty arrays are acceptable.`;
       one_line_context: context.one_line_context ?? null,
       web_sources: Array.isArray(context.web_sources) ? context.web_sources : [],
       risk_flags: Array.isArray(context.risk_flags) ? context.risk_flags : [],
-      note: "Verdict is hard-mapped from Chainlink vs DEX deltas (never LLM-picked). Context is Venice-web-search-grounded. All numbers come from on-chain reads.",
+      warnings: factWarnings,
+      note: "Verdict + warnings hard-mapped from Chainlink vs DEX + market-hours + feed age (never LLM-picked). Warnings mirror M5 exactly. Context is Venice-web-search-grounded. All numbers come from on-chain reads.",
       data_sources: ["Chainlink AggregatorV3 (RH Chain)", "api.geckoterminal.com (RH Chain)", "Venice web search"],
       network: RH_CHAIN,
       timestamp,
