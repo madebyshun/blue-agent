@@ -1537,6 +1537,73 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/rh-stock-arb`,
     x402Body: (v) => ({ ticker: v.ticker ?? "" }),
   },
+
+  // ─── RH RWA Phase 3 — Trading Execution ────────────────────────────────
+  {
+    id: "rh-stock-swap-quote",
+    name: "RH Stock Swap Quote",
+    description: "Quote a buy/sell for a Robinhood Chain tokenized stock. Route + best-pool from on-chain V3 factory, spot from Chainlink (fallback DEX), expected & min out at your slippage, plus a first-order liquidity upper bound. Denom USDG (default) or WETH.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "trading",
+    inputs: [
+      { key: "ticker",       label: "Ticker",        placeholder: "MSTR, AAPL, TSLA", required: true },
+      { key: "side",         label: "Side",          placeholder: "buy or sell", required: true },
+      { key: "amount",       label: "Amount",        placeholder: "100 (USDG) or 0.05 (WETH)", required: true },
+      { key: "denom",        label: "Denom",         placeholder: "USDG (default) or WETH" },
+      { key: "slippage_bps", label: "Slippage bps",  placeholder: "100 = 1%" },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-stock-swap-quote`,
+    x402Body: (v) => ({
+      ticker: v.ticker ?? "",
+      side: v.side ?? "buy",
+      amount: v.amount ?? "0",
+      denom: v.denom ?? "USDG",
+      slippage_bps: v.slippage_bps ? Number(v.slippage_bps) : 100,
+    }),
+  },
+  {
+    id: "rh-stock-swap-prepare",
+    name: "RH Stock Swap Prepare",
+    description: "Non-custodial: returns the unsigned tx sequence (approve + swap, or 2 approves + 2 swaps for multi-hop) the caller's wallet must sign to swap a Robinhood Chain tokenized stock. Router = verified RobinhoodSwapRouter. Client signs, tool never holds funds.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "trading",
+    inputs: [
+      { key: "ticker",       label: "Ticker",         placeholder: "MSTR, AAPL, TSLA", required: true },
+      { key: "side",         label: "Side",           placeholder: "buy or sell", required: true },
+      { key: "amount",       label: "Amount",         placeholder: "100 (USDG) or 0.05 (WETH)", required: true },
+      { key: "recipient",    label: "Recipient",      placeholder: "0x…", required: true },
+      { key: "denom",        label: "Denom",          placeholder: "USDG (default) or WETH" },
+      { key: "slippage_bps", label: "Slippage bps",   placeholder: "100 = 1%" },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-stock-swap-prepare`,
+    x402Body: (v) => ({
+      ticker: v.ticker ?? "",
+      side: v.side ?? "buy",
+      amount: v.amount ?? "0",
+      recipient: v.recipient ?? "",
+      denom: v.denom ?? "USDG",
+      slippage_bps: v.slippage_bps ? Number(v.slippage_bps) : 100,
+    }),
+  },
+  {
+    id: "rh-stock-swap-route",
+    name: "RH Swap Route Inspector",
+    description: "Full V3 route map for any Robinhood Chain pair. Probes all 4 fee tiers for a direct pool and both legs of a WETH-hopped route. Returns liquidity per tier so a client can pick / split its own path. Accepts 0x addresses or RWA tickers.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "trading",
+    inputs: [
+      { key: "token_in",  label: "Token in",  placeholder: "MSTR or 0x…", required: true },
+      { key: "token_out", label: "Token out", placeholder: "USDG or 0x…", required: true },
+    ],
+    isComposite: false,
+    price: "$0.10", priceUSDC: 100000,
+    x402Url: `${X402_BASE}/rh-stock-swap-route`,
+    x402Body: (v) => ({ token_in: v.token_in ?? "", token_out: v.token_out ?? "" }),
+  },
 ];
 
 // ─── v2 defaults ──────────────────────────────────────────────────────────────

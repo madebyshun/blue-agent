@@ -40,6 +40,13 @@ export const RH_CHAIN = {
   explorer: "https://robinhoodchain.blockscout.com",
 } as const;
 
+// Chainlink feeds for the two native-side base assets — used by the swap
+// tools to convert WETH-denom amounts to USD without pinging GT for it.
+export const RH_CHAINLINK_ETH_USD =
+  "0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9" as `0x${string}`;
+export const RH_CHAINLINK_USDG_USD =
+  "0x0000000000000000000000000000000000000000" as `0x${string}`; // TODO: populate if RHJ publishes one
+
 // ─── Tokens ────────────────────────────────────────────────────────────────
 //
 // Sources:
