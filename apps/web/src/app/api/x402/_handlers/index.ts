@@ -96,6 +96,11 @@ import hRhStockArb       from "./rh-stock-arb";
 import hRhStockSwapQuote   from "./rh-stock-swap-quote";
 import hRhStockSwapPrepare from "./rh-stock-swap-prepare";
 import hRhStockSwapRoute   from "./rh-stock-swap-route";
+// RH RWA Phase 4 (P1·P2·P3·P4) — portfolio
+import hRhStockHoldings      from "./rh-stock-holdings";
+import hRhStockPnl           from "./rh-stock-pnl";
+import hRhPortfolioRebalance from "./rh-portfolio-rebalance";
+import hRhSectorBasket       from "./rh-sector-basket";
 
 export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "token-price": hTokenPrice,
@@ -199,4 +204,9 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "rh-stock-swap-quote":   hRhStockSwapQuote,
   "rh-stock-swap-prepare": hRhStockSwapPrepare,
   "rh-stock-swap-route":   hRhStockSwapRoute,
+  // ── RH RWA Phase 4 — Portfolio ────────────────────────────────────────
+  "rh-stock-holdings":      hRhStockHoldings,
+  "rh-stock-pnl":           hRhStockPnl,
+  "rh-portfolio-rebalance": hRhPortfolioRebalance,
+  "rh-sector-basket":       hRhSectorBasket,
 };
