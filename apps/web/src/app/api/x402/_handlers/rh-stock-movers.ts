@@ -89,8 +89,18 @@ export default async function handler(req: Request): Promise<Response> {
       pool_url: r.pool.url,
     });
 
-    const gainers = [...rwaPools].sort((a, b) => b.token_change_24h - a.token_change_24h).slice(0, limit).map(asRow);
-    const losers  = [...rwaPools].sort((a, b) => a.token_change_24h - b.token_change_24h).slice(0, limit).map(asRow);
+    // Filter by sign so a token with -1.56% never appears in gainers when
+    // ranking is thin, and vice-versa. Zero-change goes in neither list.
+    const gainers = rwaPools
+      .filter((r) => r.token_change_24h > 0)
+      .sort((a, b) => b.token_change_24h - a.token_change_24h)
+      .slice(0, limit)
+      .map(asRow);
+    const losers = rwaPools
+      .filter((r) => r.token_change_24h < 0)
+      .sort((a, b) => a.token_change_24h - b.token_change_24h)
+      .slice(0, limit)
+      .map(asRow);
 
     return Response.json({
       tool: "rh-stock-movers",
