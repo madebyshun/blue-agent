@@ -33,15 +33,29 @@ async function fetchJson<T>(url: string, timeoutMs = 6000): Promise<T | null> {
 // ─── Pool metadata (used by M3 liquidity + M5 arb) ─────────────────────────
 
 export type PoolMeta = {
+  /** GeckoTerminal-reported identifier. On RH Chain this is a 32-byte
+   *  Uniswap V4 pool ID (in the singleton PoolManager), NOT an EOA-style
+   *  20-byte contract address. `is_v4_pool_id` disambiguates. */
+  pool_ref: string;
+  is_v4_pool_id: boolean;
+  /** Kept as `address` alias for back-compat with early callers. */
   address: string;
   name: string;
   dex: string;
   base_token: string;         // lowercased addr, no chain prefix
   quote_token: string;        // lowercased addr, no chain prefix
   price_usd: number;          // ALWAYS for the token we queried
-  counterparty_usd: number | null;  // the other side's USD price (used by OHLC inversion)
+  /** The counterparty token's USD price (WETH ~$1800, USDG ~$1). Not a
+   *  liquidity value — renamed from `counterparty_usd` for clarity. */
+  counterparty_token_price_usd: number | null;
+  /** @deprecated Use counterparty_token_price_usd. Kept for one release. */
+  counterparty_usd: number | null;
   token_is_base: boolean;     // true if our token is on the base side of the pool
   reserve_usd: number;
+  /** Approximate one-side USD depth used by xy=k first-order slippage.
+   *  For balanced pools this is reserve_usd / 2; the true value can
+   *  deviate if the pool is out-of-range in Uniswap V4. */
+  one_side_usd: number;
   volume_24h_usd: number | null;
   change_1h: number | null;
   change_24h: number | null;
@@ -97,22 +111,85 @@ function poolFromItem(p: PoolItem, forToken?: string): PoolMeta | null {
   const price = parseFloat(priceStr);
   if (!Number.isFinite(price) || price <= 0) return null;
   const cp = counterpartyStr ? parseFloat(counterpartyStr) : NaN;
+  const cpVal = Number.isFinite(cp) && cp > 0 ? cp : null;
+  const poolRef = attr.address.toLowerCase();
+  // RH Chain runs Uniswap V4 in a singleton PoolManager, so GT's "address"
+  // for a pool is a 32-byte pool ID (64 hex chars + 0x). Legacy V3 pools
+  // still use 20-byte contract addresses (40 hex chars).
+  const isV4PoolId = poolRef.length >= 66;
+  const reserve = parseFloat(attr.reserve_in_usd ?? "0");
   return {
-    address: attr.address.toLowerCase(),
+    pool_ref: poolRef,
+    is_v4_pool_id: isV4PoolId,
+    address: poolRef, // back-compat
     name: attr.name ?? "",
     dex: p.relationships?.dex?.data?.id ?? "unknown",
     base_token: baseId,
     quote_token: quoteId,
     price_usd: price,
-    counterparty_usd: Number.isFinite(cp) && cp > 0 ? cp : null,
+    counterparty_token_price_usd: cpVal,
+    counterparty_usd: cpVal, // deprecated alias
     token_is_base: tokenIsBase,
-    reserve_usd: parseFloat(attr.reserve_in_usd ?? "0"),
+    reserve_usd: reserve,
+    one_side_usd: reserve / 2,
     volume_24h_usd: attr.volume_usd?.h24 ? parseFloat(attr.volume_usd.h24) : null,
     change_1h: attr.price_change_percentage?.h1 ? parseFloat(attr.price_change_percentage.h1) : null,
     change_24h: attr.price_change_percentage?.h24 ? parseFloat(attr.price_change_percentage.h24) : null,
     fee_bps: attr.pool_fee_bps ? Number(attr.pool_fee_bps) : null,
-    url: `https://www.geckoterminal.com/robinhood/pools/${attr.address.toLowerCase()}`,
+    url: `https://www.geckoterminal.com/robinhood/pools/${poolRef}`,
   };
+}
+
+// ─── Shared primary-pool selector ──────────────────────────────────────────
+// Rule the whole tool catalog should follow:
+//   1. Prefer a USDG-quoted pool (stable USD frame, no double conversion).
+//   2. Among USDG pools, pick deepest TVL.
+//   3. If no USDG pool, pick the overall deepest pool.
+// This gives M1/M2/M5/L1 the SAME pool for the same ticker so an agent
+// composing tools sees consistent price fields, and so pool_ref itself
+// is a stable identifier across tool calls.
+const USDG_LOWER = "0x5fc5360d0400a0fd4f2af552add042d716f1d168".toLowerCase();
+
+export async function resolvePrimaryPool(
+  contract: string,
+  opts: { preferUsdgQuote?: boolean } = {},
+): Promise<{ pool: PoolMeta | null; selection: string }> {
+  const pools = await poolsForToken(contract);
+  if (!pools.length) return { pool: null, selection: "no_pool_found" };
+  const preferUsdg = opts.preferUsdgQuote !== false;
+  if (preferUsdg) {
+    const usdgPools = pools.filter(
+      (p) => p.base_token === USDG_LOWER || p.quote_token === USDG_LOWER,
+    );
+    if (usdgPools.length) {
+      return { pool: usdgPools[0], selection: "deepest_usdg_pool" };
+    }
+  }
+  return { pool: pools[0], selection: "deepest_pool_no_usdg_available" };
+}
+
+// ─── Market-hours helper (used by M5 arb + A4 brief) ───────────────────────
+// NYSE regular hours: Mon-Fri 09:30-16:00 ET.
+// Rough conversion via fixed UTC-4 offset — ignores DST edges + market
+// holidays. Good enough to distinguish "in-hours drift" from "overnight
+// premarket". Any Chainlink RH stock feed will NOT tick outside these
+// hours, so `age_seconds` > ~15min during hours == abnormal.
+export function nyseMarketStatus(now: Date = new Date()): {
+  is_open: boolean;
+  session: "regular" | "premarket" | "afterhours" | "weekend";
+  ny_time_iso: string;
+  utc_offset_hours: number;
+} {
+  const ny = new Date(now.getTime() - 4 * 3600 * 1000);
+  const day = ny.getUTCDay(); // 0 Sun..6 Sat
+  const minutes = ny.getUTCHours() * 60 + ny.getUTCMinutes();
+  const isWeekend = day === 0 || day === 6;
+  if (isWeekend) return { is_open: false, session: "weekend", ny_time_iso: ny.toISOString(), utc_offset_hours: -4 };
+  const REGULAR_OPEN = 9 * 60 + 30;   // 09:30
+  const REGULAR_CLOSE = 16 * 60;      // 16:00
+  if (minutes < REGULAR_OPEN)  return { is_open: false, session: "premarket",  ny_time_iso: ny.toISOString(), utc_offset_hours: -4 };
+  if (minutes >= REGULAR_CLOSE) return { is_open: false, session: "afterhours", ny_time_iso: ny.toISOString(), utc_offset_hours: -4 };
+  return { is_open: true, session: "regular", ny_time_iso: ny.toISOString(), utc_offset_hours: -4 };
 }
 
 /** All pools for a token, sorted by deepest liquidity. Price is always for

@@ -11,12 +11,21 @@
 import { RWA_TOKENS, RH_CHAIN } from "@/lib/robinhood/rwa-registry";
 import { poolsForToken, type PoolMeta } from "@/lib/robinhood/rwa-market";
 
+// Dust-pool filter — protects the ranking from thin-liquidity noise.
+// A pool with $453 TVL and $0.01 24h volume can quote AAPL at $868 for a
+// single wrong-way trade; that's not a "mover", that's a broken quote. We
+// require a floor of BOTH TVL and 24h volume before a pool can rank.
+const DEFAULT_MIN_TVL_USD    = 5_000;
+const DEFAULT_MIN_VOLUME_USD = 500;
+
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { limit?: number } = {};
+    let body: { limit?: number; min_tvl_usd?: number; min_volume_24h_usd?: number } = {};
     try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const url = new URL(req.url);
     const limit = Math.max(1, Math.min(20, Number(body.limit ?? url.searchParams.get("limit") ?? 5)));
+    const minTvl    = Math.max(0, Number(body.min_tvl_usd    ?? url.searchParams.get("min_tvl_usd")    ?? DEFAULT_MIN_TVL_USD));
+    const minVolume = Math.max(0, Number(body.min_volume_24h_usd ?? url.searchParams.get("min_volume_24h_usd") ?? DEFAULT_MIN_VOLUME_USD));
 
     const timestamp = new Date().toISOString();
 
@@ -47,7 +56,7 @@ export default async function handler(req: Request): Promise<Response> {
       token_change_24h: number;
       token_price_usd: number;
     };
-    const rwaPools: WithToken[] = perToken
+    const raw = perToken
       .filter((r): r is { rwa: (typeof RWA_TOKENS)[number]; pool: PoolMeta } => r !== null)
       .map((r) => ({
         rwa: r.rwa,
@@ -57,6 +66,25 @@ export default async function handler(req: Request): Promise<Response> {
         token_change_24h: r.pool.change_24h!,
         token_price_usd: r.pool.price_usd,
       }));
+    // Dust filter: drop pools that don't clear TVL + volume floors. A pool
+    // showing an absurd -12.75% "move" on $453 TVL and $0.008 24h volume is
+    // noise, not a signal. Filtered pools surface as `filtered_out` for
+    // transparency (so agents can inspect if desired).
+    const rwaPools: WithToken[] = [];
+    const filtered_out: Array<{ ticker: string; tvl_usd: number; volume_24h_usd: number | null; reason: string }> = [];
+    for (const r of raw) {
+      const tvl = r.pool.reserve_usd;
+      const vol = r.pool.volume_24h_usd ?? 0;
+      if (tvl < minTvl) {
+        filtered_out.push({ ticker: r.rwa.ticker, tvl_usd: tvl, volume_24h_usd: r.pool.volume_24h_usd, reason: `TVL $${tvl.toFixed(0)} < min $${minTvl}` });
+        continue;
+      }
+      if (vol < minVolume) {
+        filtered_out.push({ ticker: r.rwa.ticker, tvl_usd: tvl, volume_24h_usd: r.pool.volume_24h_usd, reason: `24h vol $${vol.toFixed(2)} < min $${minVolume}` });
+        continue;
+      }
+      rwaPools.push(r);
+    }
 
     // If zero pools with change, return an empty response honestly. With ≥1
     // real signal we surface it — better honest partial data than nothing.
@@ -109,8 +137,18 @@ export default async function handler(req: Request): Promise<Response> {
       losers,
       universe: {
         registered_tokens: stocks.length,
-        tokens_with_pool_change: rwaPools.length,
+        tokens_with_pool_change: raw.length,
+        tokens_after_dust_filter: rwaPools.length,
       },
+      dust_filter: {
+        min_tvl_usd: minTvl,
+        min_volume_24h_usd: minVolume,
+        filtered_out_count: filtered_out.length,
+        filtered_out,
+      },
+      warnings: rwaPools.length === 0 && raw.length > 0
+        ? ["all tokens_with_pool_change were filtered by the dust threshold — pass lower `min_tvl_usd` / `min_volume_24h_usd` to see the raw universe"]
+        : [],
       data_sources: ["api.geckoterminal.com (RH Chain)", "docs.robinhood.com/chain/contracts"],
       network: RH_CHAIN,
       timestamp,

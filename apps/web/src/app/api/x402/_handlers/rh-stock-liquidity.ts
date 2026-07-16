@@ -49,14 +49,21 @@ export default async function handler(req: Request): Promise<Response> {
 
     // Deepest pool drives the slippage estimate.
     const deepest = pools[0];
+    // xy=k first-order slippage uses ONE-SIDE USD depth (≈ TVL / 2 for a
+    // balanced pool), NOT the total TVL. Using TVL under-estimates by ~2×.
+    // We expose the one-side figure directly and note the assumption.
+    const oneSide = deepest.one_side_usd;
+    const isV4 = deepest.dex.includes("v4");
     const slippage = SLIPPAGE_SIZES_USD.map((size) => ({
       trade_size_usd: size,
-      // First-order xy=k slippage (upper bound). Real V3 slips less.
-      slippage_pct_upper: deepest.reserve_usd > 0
-        ? +(100 * size / (deepest.reserve_usd + size)).toFixed(4)
+      slippage_pct_upper: oneSide > 0
+        ? +(100 * size / (oneSide + size)).toFixed(4)
         : null,
-      exceeds_pool_reserve: size > deepest.reserve_usd,
+      exceeds_pool_one_side: size > oneSide,
     }));
+    const warnings: string[] = [];
+    if (deepest.reserve_usd < 5_000) warnings.push(`thin_pool: deepest TVL is only $${deepest.reserve_usd.toFixed(0)}`);
+    if (isV4) warnings.push("v4_concentrated_liquidity: real slippage can be LOWER (in-range tick) or MUCH HIGHER (out-of-range) than the xy=k estimate; treat as an order-of-magnitude bound only");
 
     return Response.json({
       tool: "rh-stock-liquidity",
@@ -69,10 +76,13 @@ export default async function handler(req: Request): Promise<Response> {
       deepest_pool: deepest,
       pools,
       slippage_upper_bound: {
-        method: "first-order xy=k",
-        note: "Upper bound only — real V3 slippage is typically 30–70% of this figure. Use rh-stock-swap-quote (Phase 3) for a live quote.",
+        method: "first-order xy=k on ONE-side USD depth",
+        one_side_usd: oneSide,
+        pool_dex: deepest.dex,
+        note: "Upper bound only. For Uniswap V4 concentrated liquidity, actual slippage may differ substantially — use rh-stock-swap-quote (X1) for a live quote-time number.",
         estimates: slippage,
       },
+      warnings,
       data_sources: ["api.geckoterminal.com (RH Chain)"],
       network: RH_CHAIN,
       explorer_url: `${RH_CHAIN.explorer}/address/${token.contract}`,

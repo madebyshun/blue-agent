@@ -8,26 +8,34 @@
 
 import { findByTicker, RH_CHAIN } from "@/lib/robinhood/rwa-registry";
 import { chainlinkLatest } from "@/lib/robinhood/rwa-price";
-import { poolsForToken } from "@/lib/robinhood/rwa-market";
+import { resolvePrimaryPool, nyseMarketStatus } from "@/lib/robinhood/rwa-market";
 import { callVeniceLLM, extractJsonObject, NO_FABRICATION_RULE } from "@/app/api/_lib/llm";
 
-type Verdict = "WATCH" | "ARB_LONG_DEX" | "ARB_SHORT_DEX" | "THIN_LIQUIDITY" | "NO_ORACLE" | "INSUFFICIENT_DATA";
+type Verdict =
+  | "WATCH"
+  | "ARB_LONG_DEX" | "ARB_SHORT_DEX"
+  | "PREMARKET_DRIFT" | "AFTERHOURS_DRIFT" | "FROZEN_ALIGNED"
+  | "THIN_LIQUIDITY" | "NO_ORACLE" | "INSUFFICIENT_DATA";
 
 function verdictFromNumbers(args: {
   chainlink_price_usd: number | null;
   dex_price_usd: number | null;
   dex_tvl_usd: number | null;
   dex_change_24h_pct: number | null;
+  market_is_open: boolean;
+  market_session: "regular" | "premarket" | "afterhours" | "weekend";
 }): Verdict {
-  const { chainlink_price_usd, dex_price_usd, dex_tvl_usd } = args;
+  const { chainlink_price_usd, dex_price_usd, dex_tvl_usd, market_is_open, market_session } = args;
   if (chainlink_price_usd === null && dex_price_usd === null) return "INSUFFICIENT_DATA";
   if (chainlink_price_usd === null) return "NO_ORACLE";
   if (dex_tvl_usd !== null && dex_tvl_usd < 5_000) return "THIN_LIQUIDITY";
   if (dex_price_usd === null) return "WATCH";
   const pct = ((dex_price_usd - chainlink_price_usd) / chainlink_price_usd) * 100;
-  if (pct < -0.5) return "ARB_LONG_DEX";   // DEX below oracle
-  if (pct >  0.5) return "ARB_SHORT_DEX";  // DEX above oracle
-  return "WATCH";
+  const threshold = market_is_open ? 0.5 : 1.5;
+  if (Math.abs(pct) < threshold) return market_is_open ? "WATCH" : "FROZEN_ALIGNED";
+  if (market_is_open) return pct < 0 ? "ARB_LONG_DEX" : "ARB_SHORT_DEX";
+  // Market closed → the drift is not arb, it's overnight price discovery.
+  return market_session === "premarket" ? "PREMARKET_DRIFT" : "AFTERHOURS_DRIFT";
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -43,24 +51,32 @@ export default async function handler(req: Request): Promise<Response> {
 
     const timestamp = new Date().toISOString();
 
-    const [oracle, pools] = await Promise.all([
+    const [oracle, primary] = await Promise.all([
       token.chainlinkFeed ? chainlinkLatest(token.chainlinkFeed, token.chainlinkHeartbeat ?? 86400) : Promise.resolve(null),
-      poolsForToken(token.contract),
+      resolvePrimaryPool(token.contract),
     ]);
-    const deepestPool = pools[0] ?? null;
+    const deepestPool = primary.pool;
+    const market = nyseMarketStatus();
     const facts = {
       ticker: token.ticker,
       name: token.name,
       contract: token.contract,
       chainlink_price_usd: oracle?.price_usd ?? null,
+      chainlink_updated_at: oracle?.updated_at ?? null,
+      chainlink_age_seconds: oracle?.age_seconds ?? null,
       dex_price_usd: deepestPool?.price_usd ?? null,
       dex_change_24h_pct: deepestPool?.change_24h ?? null,
       dex_tvl_usd: deepestPool?.reserve_usd ?? null,
       dex_volume_24h_usd: deepestPool?.volume_24h_usd ?? null,
+      pool_selection: primary.selection,
     };
 
-    // Deterministic verdict — never LLM'd.
-    const verdict = verdictFromNumbers(facts);
+    // Deterministic verdict — never LLM'd. Now market-hours aware.
+    const verdict = verdictFromNumbers({
+      ...facts,
+      market_is_open: market.is_open,
+      market_session: market.session,
+    });
 
     // Web-searched context — LLM writes a short JSON summary + citations.
     const system = `You are Blue Agent producing an agent-consumable JSON brief. ${NO_FABRICATION_RULE}
@@ -84,10 +100,14 @@ Do NOT invent numbers, headlines, or URLs. Empty arrays are acceptable.`;
       contract: token.contract,
       facts,
       verdict,
+      market,
       verdict_note: {
-        ARB_LONG_DEX: "DEX price is materially below Chainlink oracle — consider buying DEX (basis narrow).",
-        ARB_SHORT_DEX: "DEX price is materially above Chainlink oracle — consider selling DEX (basis narrow).",
-        WATCH: "DEX/oracle aligned. No immediate directional signal.",
+        ARB_LONG_DEX: "Market OPEN + DEX materially below Chainlink oracle — real arb: consider buying DEX (basis narrow).",
+        ARB_SHORT_DEX: "Market OPEN + DEX materially above Chainlink oracle — real arb: consider selling DEX (basis narrow).",
+        WATCH: "Market OPEN + DEX/oracle aligned. No immediate directional signal.",
+        PREMARKET_DRIFT: "Market CLOSED (premarket). Chainlink is frozen on the last regular-hours print; DEX has drifted — this is on-chain price discovery, NOT arb. Expect a snap toward the feed at 9:30 ET open.",
+        AFTERHOURS_DRIFT: "Market CLOSED (afterhours/weekend). Chainlink frozen; DEX drift reflects overnight sentiment, not arb.",
+        FROZEN_ALIGNED: "Market CLOSED. DEX still hugs the frozen Chainlink print — no notable drift.",
         THIN_LIQUIDITY: "DEX pool TVL below $5k — execution slippage will dominate any thesis.",
         NO_ORACLE: "No Chainlink feed available — cannot triangulate against DEX.",
         INSUFFICIENT_DATA: "Neither a Chainlink feed nor a DEX pool is available for this ticker right now.",
