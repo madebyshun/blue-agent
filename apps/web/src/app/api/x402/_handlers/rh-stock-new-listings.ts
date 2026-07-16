@@ -103,6 +103,10 @@ export default async function handler(req: Request): Promise<Response> {
       note: new_only.length > 0
         ? `${new_only.length} on-chain RHJ Robinhood Tokens are NOT in our registry (${new_only.slice(0, 3).map((r) => r.symbol).join(", ")}${new_only.length > 3 ? "…" : ""}).`
         : "Every on-chain RHJ Robinhood Token is already in the registry.",
+      known_limitations: [
+        `first_page_only: Blockscout /tokens returns up to ${limit} rows sorted by market cap. As RH Chain grows, a fresh RHJ deployment ranked below the cutoff will be missed until it enters the top ${limit}. Pass \`limit\` higher (up to 200) or paginate via next_page_params when this note stops being adequate.`,
+        `name_marker_gate: detection relies on the "${RHJ_NAME_MARKER}" substring in token name. Any future RHJ listing that drops the marker will be missed.`,
+      ],
       data_sources: ["robinhoodchain.blockscout.com API v2 /tokens"],
       network: RH_CHAIN,
       timestamp,
