@@ -1498,7 +1498,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "rh-stock-liquidity",
     name: "RH Stock Liquidity",
-    description: "Live DEX pool + TVL + slippage estimate for a Robinhood Chain tokenized stock. All pools sorted by liquidity + first-order slippage estimates at $100 / $1k / $10k / $100k trade sizes. Real reserves, no LLM.",
+    description: "Live DEX pool + TVL + slippage estimate for a Robinhood Chain tokenized stock. First-order xy=k slippage on ONE-side USD depth (reserve_usd / 2) — the total-TVL version under-estimates by ~2×. V4 concentrated-liquidity caveat included. All pools sorted by depth.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "on-chain",
     inputs: [
@@ -1511,22 +1511,28 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   },
   {
     id: "rh-stock-movers",
-    name: "RH Stock Movers",
-    description: "Top gainers / losers 24h among Robinhood Chain tokenized stocks & ETFs. Cross-references DEX pool data against the canonical RWA registry — no non-RWA pools contaminate the ranking. Returns empty if <3 pools with reported change.",
+    name: "RH Stock Movers (dust-filtered)",
+    description: "Top gainers / losers 24h among Robinhood Chain tokenized stocks & ETFs. Dust-pool filter (default min $5k TVL + $500 24h volume) drops noise pools that would otherwise quote AAPL at $868 via a $453-TVL pool. Sign-filtered so a token with -1.56% never lands in gainers. Filtered pools surface as filtered_out for transparency.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "signal",
     inputs: [
-      { key: "limit", label: "Limit per side (optional)", placeholder: "5" },
+      { key: "limit",              label: "Limit per side (optional)", placeholder: "5" },
+      { key: "min_tvl_usd",        label: "Min TVL USD (dust floor)",  placeholder: "5000" },
+      { key: "min_volume_24h_usd", label: "Min 24h vol USD",           placeholder: "500" },
     ],
     isComposite: false,
     price: "$0.05", priceUSDC: 50000,
     x402Url: `${X402_BASE}/rh-stock-movers`,
-    x402Body: (v) => ({ limit: v.limit ? Number(v.limit) : 5 }),
+    x402Body: (v) => ({
+      limit: v.limit ? Number(v.limit) : 5,
+      min_tvl_usd: v.min_tvl_usd ? Number(v.min_tvl_usd) : 5000,
+      min_volume_24h_usd: v.min_volume_24h_usd ? Number(v.min_volume_24h_usd) : 500,
+    }),
   },
   {
     id: "rh-stock-arb",
-    name: "RH Stock Arb (Chainlink vs DEX)",
-    description: "Deterministic arbitrage delta for a Robinhood Chain tokenized stock: Chainlink oracle vs deepest DEX pool spot. Returns absolute Δ, pct Δ, and a hard-mapped verdict (ALIGNED / LONG_DEX / SHORT_DEX). Real trading signal.",
+    name: "RH Stock Arb (Chainlink vs DEX · market-hours aware)",
+    description: "Chainlink oracle vs deepest DEX pool spot for a Robinhood Chain tokenized stock. Market-hours-aware verdict: OPEN → ALIGNED / LONG_DEX / SHORT_DEX (real arb); CLOSED → FROZEN_ALIGNED / PREMARKET_DRIFT / AFTERHOURS_DRIFT (Chainlink is frozen, DEX drift ≠ arb). Warnings for feed-abnormally-stale + thin pool.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "signal",
     inputs: [
@@ -1837,7 +1843,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "rh-stock-agent-brief",
     name: "RH Stock Agent Brief",
-    description: "Agent-consumable JSON brief for a Robinhood Chain RWA. Deterministic verdict (ARB_LONG_DEX / ARB_SHORT_DEX / WATCH / THIN_LIQUIDITY / NO_ORACLE / INSUFFICIENT_DATA) hard-mapped from Chainlink vs DEX delta. Web-search-grounded context + risk flags.",
+    description: "Agent-consumable JSON brief for a Robinhood Chain RWA. Deterministic market-hours-aware verdict: WATCH / ARB_LONG_DEX / ARB_SHORT_DEX (market OPEN) · FROZEN_ALIGNED / PREMARKET_DRIFT / AFTERHOURS_DRIFT (CLOSED) · THIN_LIQUIDITY / NO_ORACLE / INSUFFICIENT_DATA. Uses shared resolvePrimaryPool for cross-tool consistency. Web-search-grounded context + risk flags.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "signal",
     inputs: [
