@@ -1398,6 +1398,81 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/picks-check`,
     x402Body: () => ({}),
   },
+
+  // ─── RH RWA Phase 1 — Robinhood Chain tokenized-stock primitives ────────
+  // Canonical registry + Chainlink oracle + fuzzy search + anti-scam verify.
+  // Data: docs.robinhood.com/chain/contracts + Chainlink RH mainnet feeds.
+  // Public-good primitive layer for every builder embedding RH stock tokens.
+  {
+    id: "rh-stock-token",
+    name: "RH Stock Token Lookup",
+    description: "Canonical Robinhood Chain (4663) tokenized-stock lookup. Input a ticker (MSTR, AAPL, TSLA) or company name → contract address, decimals, Chainlink oracle price + DEX spot cross-check + Blockscout link. Real data only (docs.robinhood.com + Chainlink AggregatorV3 + GeckoTerminal).",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [
+      { key: "query", label: "Ticker or company name", placeholder: "MSTR, AAPL, Tesla", required: true },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-stock-token`,
+    x402Body: (v) => ({ query: v.query ?? "" }),
+  },
+  {
+    id: "rh-rwa-index",
+    name: "RH RWA Index",
+    description: "Full canonical Robinhood Chain RWA catalog — 20+ tokenized stocks, 5 ETFs, plus Chainlink-only feeds. Zero-input. For portfolio dashboards + sector basket builders.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [],
+    isComposite: false,
+    price: "$0.02", priceUSDC: 20000,
+    x402Url: `${X402_BASE}/rh-rwa-index`,
+    x402Body: () => ({}),
+  },
+  {
+    id: "rh-stock-search",
+    name: "RH Stock Search",
+    description: "Fuzzy search across the canonical Robinhood Chain RWA registry. Typo-tolerant (Levenshtein + prefix). Returns top-N ranked matches. Never fabricates a contract address.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [
+      { key: "query", label: "Partial ticker or name", placeholder: "micro, tesla, appl", required: true },
+      { key: "limit", label: "Max matches (optional)", placeholder: "5" },
+    ],
+    isComposite: false,
+    price: "$0.02", priceUSDC: 20000,
+    x402Url: `${X402_BASE}/rh-stock-search`,
+    x402Body: (v) => ({ query: v.query ?? "", limit: v.limit ? Number(v.limit) : 5 }),
+  },
+  {
+    id: "rh-rwa-verify",
+    name: "RH RWA Verify (Anti-Scam)",
+    description: "Given a contract address on Robinhood Chain, is it a canonical RHJ-issued stock token or an impersonator? Cross-checks registry + live ERC-20 metadata. Surfaces the real contract when a fake claims a matching ticker. Free — safety checks should never be gated.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "security",
+    inputs: [
+      { key: "contract", label: "Contract address", placeholder: "0x…", required: true },
+      { key: "expected_ticker", label: "Expected ticker (optional)", placeholder: "MSTR" },
+    ],
+    isComposite: false,
+    price: "$0.00", priceUSDC: 0,
+    x402Url: `${X402_BASE}/rh-rwa-verify`,
+    x402Body: (v) => ({ contract: v.contract ?? "", expected_ticker: v.expected_ticker ?? "" }),
+  },
+  {
+    id: "rh-stock-quote",
+    name: "RH Stock Quote (Chainlink)",
+    description: "Deterministic live quote for Robinhood Chain tokenized stocks. On-chain Chainlink AggregatorV3 latestRoundData → raw answer + decimals + updatedAt + staleness. Falls back to DEX spot only if no feed exists. The one embed-friendly price tool.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [
+      { key: "ticker", label: "Ticker", placeholder: "MSTR, AAPL, TSLA", required: true },
+    ],
+    isComposite: false,
+    price: "$0.03", priceUSDC: 30000,
+    x402Url: `${X402_BASE}/rh-stock-quote`,
+    x402Body: (v) => ({ ticker: v.ticker ?? "" }),
+  },
 ];
 
 // ─── v2 defaults ──────────────────────────────────────────────────────────────

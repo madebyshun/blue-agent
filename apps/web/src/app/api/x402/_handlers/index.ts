@@ -81,6 +81,12 @@ import hBaseTokenScan  from "./base-token-scan";
 import hDefiYieldScan  from "./defi-yield-scan";
 import hNarrativeScan  from "./narrative-scan";
 import hPicksCheck     from "./picks-check";
+// RH RWA Phase 1 (L1·L2·L3·L4·M1) — Robinhood Chain tokenized-stock skills
+import hRhStockToken   from "./rh-stock-token";
+import hRhRwaIndex     from "./rh-rwa-index";
+import hRhStockSearch  from "./rh-stock-search";
+import hRhRwaVerify    from "./rh-rwa-verify";
+import hRhStockQuote   from "./rh-stock-quote";
 
 export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "token-price": hTokenPrice,
@@ -169,4 +175,10 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "defi-yield-scan":    hDefiYieldScan,
   "narrative-scan":     hNarrativeScan,
   "picks-check":        hPicksCheck,
+  // ── RH RWA Phase 1 ────────────────────────────────────────────────────
+  "rh-stock-token":     hRhStockToken,
+  "rh-rwa-index":       hRhRwaIndex,
+  "rh-stock-search":    hRhStockSearch,
+  "rh-rwa-verify":      hRhRwaVerify,
+  "rh-stock-quote":     hRhStockQuote,
 };
