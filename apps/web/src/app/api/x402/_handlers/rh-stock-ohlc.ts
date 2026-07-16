@@ -44,8 +44,12 @@ export default async function handler(req: Request): Promise<Response> {
         return Response.json({
           tool: "rh-stock-ohlc",
           ticker: token.ticker,
+          contract: token.contract,
+          pool_ref: null, is_v4_pool_id: null, pool_address: null,
+          timeframe, limit,
+          candles_returned: 0,
           candles: [],
-          note: "No DEX pool found for this token on Robinhood Chain — cannot compute OHLC.",
+          warnings: ["no_pool: token has no DEX pool on Robinhood Chain — cannot compute OHLC"],
           data_sources: ["api.geckoterminal.com (RH Chain)"],
           network: RH_CHAIN,
           timestamp,
@@ -73,29 +77,47 @@ export default async function handler(req: Request): Promise<Response> {
       return Response.json({
         tool: "rh-stock-ohlc",
         ticker: token?.ticker ?? null,
+        contract: token?.contract ?? null,
+        pool_ref: poolAddress,
+        is_v4_pool_id: poolAddress.length >= 66,
         pool_address: poolAddress,
+        timeframe, limit,
+        candles_returned: 0,
         candles: [],
-        note: "OHLC data unavailable (rate-limit or empty history).",
+        warnings: ["ohlc_unavailable: GeckoTerminal returned no candles (rate-limit or empty pool history)"],
         data_sources: ["api.geckoterminal.com (RH Chain)"],
         network: RH_CHAIN,
         timestamp,
       });
     }
 
+    const warnings: string[] = [];
+    if (candles.length < limit) warnings.push(`insufficient_history: requested ${limit} candles but pool only has ${candles.length}`);
+    if (candles.length === 1) warnings.push("single_candle: summary.change_pct is derived from ONE candle's open→close and is not a real trend");
+
     return Response.json({
       tool: "rh-stock-ohlc",
       ticker: token?.ticker ?? null,
       name: token?.name ?? null,
       contract: token?.contract ?? null,
-      pool_address: poolAddress,
+      pool_ref: poolAddress,
+      is_v4_pool_id: poolAddress.length >= 66,
+      pool_address: poolAddress,   // back-compat
       pool_url: `https://www.geckoterminal.com/robinhood/pools/${poolAddress}`,
       timeframe,
       limit,
+      candles_returned: candles.length,
       candles,               // oldest first, [{t,o,h,l,c,v}] — always in USD for our token
+      candle_field_meta: {
+        t: "unix seconds",
+        o_h_l_c: "USD per token",
+        v: "base-token units (NOT USD); multiply by ~c for USD volume approx",
+      },
       summary: candleSummary(candles),
       price_derivation: invert
         ? `Pool has token on quote side — candles inverted (1/x) and multiplied by counterparty USD price (${usdMul}) to yield token USD.`
         : "Pool has token on base side — candles are native USD.",
+      warnings,
       data_sources: ["api.geckoterminal.com (RH Chain)"],
       network: RH_CHAIN,
       timestamp,
