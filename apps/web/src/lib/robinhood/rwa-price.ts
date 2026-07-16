@@ -90,7 +90,9 @@ export type DexQuote = {
   pool_url: string | null;
 };
 
-/** GeckoTerminal RH Chain price + pool metadata for a token. Free, no key. */
+/** GeckoTerminal RH Chain price + pool metadata for a token. Free, no key.
+ *  Picks whichever side (base / quote) the queried token sits on, so the
+ *  returned price is always for our token — never the pool's counter-asset. */
 export async function dexPrice(contract: Address): Promise<DexQuote | null> {
   try {
     const r = await fetch(
@@ -104,23 +106,38 @@ export async function dexPrice(contract: Address): Promise<DexQuote | null> {
           address?: string;
           name?: string;
           base_token_price_usd?: string;
+          quote_token_price_usd?: string;
           reserve_in_usd?: string;
           volume_usd?: { h24?: string };
           price_change_percentage?: { h24?: string };
           dex_id?: string;
         };
-        relationships?: { dex?: { data?: { id?: string } } };
+        relationships?: {
+          dex?: { data?: { id?: string } };
+          base_token?: { data?: { id?: string } };
+          quote_token?: { data?: { id?: string } };
+        };
       }>;
     };
-    // Pick pool with deepest liquidity
-    const pools = (d.data ?? []).filter((p) => p.attributes?.base_token_price_usd);
-    if (!pools.length) return null;
-    pools.sort((a, b) => parseFloat(b.attributes?.reserve_in_usd ?? "0") - parseFloat(a.attributes?.reserve_in_usd ?? "0"));
-    const p = pools[0];
-    const attr = p.attributes!;
-    const priceStr = attr.base_token_price_usd ?? "0";
-    const price = parseFloat(priceStr);
-    if (!Number.isFinite(price) || price <= 0) return null;
+    const target = contract.toLowerCase();
+    const strip = (id: string | undefined) =>
+      id ? (id.startsWith("robinhood_") ? id.slice("robinhood_".length).toLowerCase() : id.toLowerCase()) : "";
+    // Materialize each pool with the correct side selected + non-null price.
+    const enriched = (d.data ?? []).flatMap((p) => {
+      const attr = p.attributes;
+      if (!attr?.address) return [];
+      const baseId = strip(p.relationships?.base_token?.data?.id);
+      const quoteId = strip(p.relationships?.quote_token?.data?.id);
+      const isQuoteSide = target === quoteId && target !== baseId;
+      const priceStr = isQuoteSide ? attr.quote_token_price_usd : attr.base_token_price_usd;
+      if (!priceStr) return [];
+      const price = parseFloat(priceStr);
+      if (!Number.isFinite(price) || price <= 0) return [];
+      return [{ p, attr, priceStr, price }];
+    });
+    if (!enriched.length) return null;
+    enriched.sort((a, b) => parseFloat(b.attr.reserve_in_usd ?? "0") - parseFloat(a.attr.reserve_in_usd ?? "0"));
+    const { p, attr, price } = enriched[0];
     const poolAddr = (attr.address ?? "").toLowerCase();
     return {
       source: "dex-spot",
