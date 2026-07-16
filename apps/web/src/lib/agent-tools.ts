@@ -1848,6 +1848,90 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/rh-stock-agent-brief`,
     x402Body: (v) => ({ ticker: v.ticker ?? "" }),
   },
+
+  // ─── RH RWA Phase 7 — Bridge & Builder Kit (FINAL — 30/30) ──────────────
+  {
+    id: "rh-bridge-route",
+    name: "RH Bridge Route",
+    description: "Bridge routes Base ↔ Robinhood Chain: the canonical Orbit bridge plus known third-party aggregators (Across, LI.FI, Squid) with their live-quote endpoints.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [
+      { key: "from_chain", label: "From chain", placeholder: "base (default) / ethereum / arbitrum" },
+      { key: "to_chain",   label: "To chain",   placeholder: "robinhood (default)" },
+      { key: "asset",      label: "Asset",      placeholder: "ETH / USDC / USDG" },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-bridge-route`,
+    x402Body: (v) => ({
+      from_chain: v.from_chain ?? "base",
+      to_chain: v.to_chain ?? "robinhood",
+      asset: v.asset ?? "ETH",
+    }),
+  },
+  {
+    id: "rh-usdg-route",
+    name: "RH USDG Route",
+    description: "Cheapest USDG (Global Dollar) acquisition on Robinhood Chain given a starting asset. Returns WETH-swap path, sell-RWA path, and bridge-first path with real GT + on-chain pool data.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [
+      { key: "from_asset", label: "From asset", placeholder: "WETH / AAPL / TSLA / ..." },
+      { key: "amount",     label: "Amount",     placeholder: "0.05" },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-usdg-route`,
+    x402Body: (v) => ({
+      from_asset: v.from_asset ?? "WETH",
+      amount: v.amount ? Number(v.amount) : 0.05,
+    }),
+  },
+  {
+    id: "rh-rwa-embed-kit",
+    name: "RH RWA Embed Kit",
+    description: "Copy-paste 'Buy $TICKER' button kit: chain config, live-price hook, and wagmi buy button wired to the RH swap prepare endpoint. Non-custodial. The Vlad-Tenev-builder-tweet-answering tool.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "builder",
+    inputs: [
+      { key: "ticker",    label: "Ticker",    placeholder: "AAPL", required: true },
+      { key: "framework", label: "Framework", placeholder: "next-wagmi (default)" },
+      { key: "theme",     label: "Theme",     placeholder: "dark / light" },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-rwa-embed-kit`,
+    x402Body: (v) => ({ ticker: v.ticker ?? "", framework: v.framework ?? "next-wagmi", theme: v.theme ?? "dark" }),
+  },
+  {
+    id: "rh-rwa-readme",
+    name: "RH RWA README",
+    description: "Markdown README section for embedding a Robinhood RWA in another repo. Includes chain config, live oracle usage, buy-button integration, safety notes. Live numbers embedded.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "content",
+    inputs: [
+      { key: "ticker", label: "Ticker", placeholder: "AAPL", required: true },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-rwa-readme`,
+    x402Body: (v) => ({ ticker: v.ticker ?? "" }),
+  },
+  {
+    id: "rh-rwa-pricing-kit",
+    name: "RH RWA Pricing Kit",
+    description: "Standalone read-only React hook for a live Chainlink RH RWA price: ABI + viem client + hook + demo badge component. No wallet required, no cost per read.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "builder",
+    inputs: [
+      { key: "ticker", label: "Ticker", placeholder: "AAPL", required: true },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-rwa-pricing-kit`,
+    x402Body: (v) => ({ ticker: v.ticker ?? "" }),
+  },
 ];
 
 // ─── v2 defaults ──────────────────────────────────────────────────────────────
