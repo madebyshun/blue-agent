@@ -1679,6 +1679,86 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
       max_constituents: v.max_constituents ? Number(v.max_constituents) : 10,
     }),
   },
+
+  // ─── RH RWA Phase 5 — Discovery & Analytics ────────────────────────────
+  {
+    id: "rh-stock-holders",
+    name: "RH Stock Holders",
+    description: "Top holders + concentration score for a RH RWA token. Real Blockscout data. Returns top-N shares + HHI (0 = flat / 10 000 = single holder).",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [
+      { key: "ticker",   label: "Ticker",          placeholder: "MSTR (or use contract)" },
+      { key: "contract", label: "Contract (opt.)", placeholder: "0x…" },
+      { key: "limit",    label: "Limit",           placeholder: "10" },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-stock-holders`,
+    x402Body: (v) => ({ ticker: v.ticker ?? "", contract: v.contract ?? "", limit: v.limit ? Number(v.limit) : 10 }),
+  },
+  {
+    id: "rh-stock-flow",
+    name: "RH Stock Flow (24h)",
+    description: "Buy vs sell pressure over 24h from GeckoTerminal trades feed. Hard-mapped verdict (BUY_HEAVY / SELL_HEAVY / BALANCED) at 10% net-of-total threshold. Never fabricates flow.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "signal",
+    inputs: [
+      { key: "ticker", label: "Ticker", placeholder: "AAPL, TSLA", required: true },
+    ],
+    isComposite: false,
+    price: "$0.10", priceUSDC: 100000,
+    x402Url: `${X402_BASE}/rh-stock-flow`,
+    x402Body: (v) => ({ ticker: v.ticker ?? "" }),
+  },
+  {
+    id: "rh-stock-new-listings",
+    name: "RH New Listings",
+    description: "Detects newly-deployed contracts by the canonical RHJ deployer via Blockscout — anything not in our registry is a candidate for the next RWA listing. Auto-diff vs canonical registry.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [
+      { key: "since_days", label: "Since (days)", placeholder: "30" },
+      { key: "limit",      label: "Limit",        placeholder: "20" },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-stock-new-listings`,
+    x402Body: (v) => ({ since_days: v.since_days ? Number(v.since_days) : 30, limit: v.limit ? Number(v.limit) : 20 }),
+  },
+  {
+    id: "rh-stock-beacon-check",
+    name: "RH Beacon Check",
+    description: "EIP-1967 beacon slot + implementation + admin/owner read for a RWA token proxy. Governance-risk snapshot — compare across runs to detect implementation upgrades. Real on-chain storage reads.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "security",
+    inputs: [
+      { key: "ticker",   label: "Ticker",          placeholder: "MSTR (or use contract)" },
+      { key: "contract", label: "Contract (opt.)", placeholder: "0x…" },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-stock-beacon-check`,
+    x402Body: (v) => ({ ticker: v.ticker ?? "", contract: v.contract ?? "" }),
+  },
+  {
+    id: "rh-stock-correlations",
+    name: "RH Stock Correlations",
+    description: "Pairwise Pearson correlation matrix over daily closes from GT pool OHLC for 2–10 tickers. Correlation null when overlap < 3 candles — honest about nascent history.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [
+      { key: "tickers", label: "Tickers (2–10)", placeholder: "AAPL,TSLA,NVDA", required: true },
+      { key: "days",    label: "Window days",    placeholder: "30" },
+    ],
+    isComposite: false,
+    price: "$0.10", priceUSDC: 100000,
+    x402Url: `${X402_BASE}/rh-stock-correlations`,
+    x402Body: (v) => ({
+      tickers: (v.tickers ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+      days: v.days ? Number(v.days) : 30,
+    }),
+  },
 ];
 
 // ─── v2 defaults ──────────────────────────────────────────────────────────────
