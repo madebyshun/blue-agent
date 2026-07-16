@@ -101,6 +101,12 @@ import hRhStockHoldings      from "./rh-stock-holdings";
 import hRhStockPnl           from "./rh-stock-pnl";
 import hRhPortfolioRebalance from "./rh-portfolio-rebalance";
 import hRhSectorBasket       from "./rh-sector-basket";
+// RH RWA Phase 5 (D1·D2·D3·D4·D5) — discovery & analytics
+import hRhStockHolders       from "./rh-stock-holders";
+import hRhStockFlow          from "./rh-stock-flow";
+import hRhStockNewListings   from "./rh-stock-new-listings";
+import hRhStockBeaconCheck   from "./rh-stock-beacon-check";
+import hRhStockCorrelations  from "./rh-stock-correlations";
 
 export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "token-price": hTokenPrice,
@@ -209,4 +215,10 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "rh-stock-pnl":           hRhStockPnl,
   "rh-portfolio-rebalance": hRhPortfolioRebalance,
   "rh-sector-basket":       hRhSectorBasket,
+  // ── RH RWA Phase 5 — Discovery & Analytics ────────────────────────────
+  "rh-stock-holders":       hRhStockHolders,
+  "rh-stock-flow":          hRhStockFlow,
+  "rh-stock-new-listings":  hRhStockNewListings,
+  "rh-stock-beacon-check":  hRhStockBeaconCheck,
+  "rh-stock-correlations":  hRhStockCorrelations,
 };
