@@ -1473,6 +1473,70 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/rh-stock-quote`,
     x402Body: (v) => ({ ticker: v.ticker ?? "" }),
   },
+
+  // ─── RH RWA Phase 2 — Market Analytics ─────────────────────────────────
+  {
+    id: "rh-stock-ohlc",
+    name: "RH Stock OHLC",
+    description: "OHLC candle history for a Robinhood Chain tokenized stock. Timeframes: minute / hour / day. Backed by GeckoTerminal pool history — deepest-liquidity pool auto-selected. Returns candles + summary (high, low, total volume, % change).",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [
+      { key: "ticker",    label: "Ticker",    placeholder: "MSTR, AAPL, TSLA", required: true },
+      { key: "timeframe", label: "Timeframe", placeholder: "minute / hour / day (default hour)" },
+      { key: "limit",     label: "Limit",     placeholder: "100 (max 500)" },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-stock-ohlc`,
+    x402Body: (v) => ({
+      ticker: v.ticker ?? "",
+      timeframe: v.timeframe ?? "hour",
+      limit: v.limit ? Number(v.limit) : 100,
+    }),
+  },
+  {
+    id: "rh-stock-liquidity",
+    name: "RH Stock Liquidity",
+    description: "Live DEX pool + TVL + slippage estimate for a Robinhood Chain tokenized stock. All pools sorted by liquidity + first-order slippage estimates at $100 / $1k / $10k / $100k trade sizes. Real reserves, no LLM.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [
+      { key: "ticker", label: "Ticker", placeholder: "MSTR, AAPL, TSLA", required: true },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-stock-liquidity`,
+    x402Body: (v) => ({ ticker: v.ticker ?? "" }),
+  },
+  {
+    id: "rh-stock-movers",
+    name: "RH Stock Movers",
+    description: "Top gainers / losers 24h among Robinhood Chain tokenized stocks & ETFs. Cross-references DEX pool data against the canonical RWA registry — no non-RWA pools contaminate the ranking. Returns empty if <3 pools with reported change.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "signal",
+    inputs: [
+      { key: "limit", label: "Limit per side (optional)", placeholder: "5" },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-stock-movers`,
+    x402Body: (v) => ({ limit: v.limit ? Number(v.limit) : 5 }),
+  },
+  {
+    id: "rh-stock-arb",
+    name: "RH Stock Arb (Chainlink vs DEX)",
+    description: "Deterministic arbitrage delta for a Robinhood Chain tokenized stock: Chainlink oracle vs deepest DEX pool spot. Returns absolute Δ, pct Δ, and a hard-mapped verdict (ALIGNED / LONG_DEX / SHORT_DEX). Real trading signal.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "signal",
+    inputs: [
+      { key: "ticker", label: "Ticker", placeholder: "MSTR, AAPL, TSLA", required: true },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-stock-arb`,
+    x402Body: (v) => ({ ticker: v.ticker ?? "" }),
+  },
 ];
 
 // ─── v2 defaults ──────────────────────────────────────────────────────────────
