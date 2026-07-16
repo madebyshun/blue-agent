@@ -92,6 +92,10 @@ import hRhStockOhlc      from "./rh-stock-ohlc";
 import hRhStockLiquidity from "./rh-stock-liquidity";
 import hRhStockMovers    from "./rh-stock-movers";
 import hRhStockArb       from "./rh-stock-arb";
+// RH RWA Phase 3 (X1·X2·X3) — trading execution
+import hRhStockSwapQuote   from "./rh-stock-swap-quote";
+import hRhStockSwapPrepare from "./rh-stock-swap-prepare";
+import hRhStockSwapRoute   from "./rh-stock-swap-route";
 
 export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "token-price": hTokenPrice,
@@ -191,4 +195,8 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "rh-stock-liquidity": hRhStockLiquidity,
   "rh-stock-movers":    hRhStockMovers,
   "rh-stock-arb":       hRhStockArb,
+  // ── RH RWA Phase 3 — Trading Execution ────────────────────────────────
+  "rh-stock-swap-quote":   hRhStockSwapQuote,
+  "rh-stock-swap-prepare": hRhStockSwapPrepare,
+  "rh-stock-swap-route":   hRhStockSwapRoute,
 };
