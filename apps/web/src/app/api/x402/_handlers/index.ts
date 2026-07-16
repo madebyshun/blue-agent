@@ -112,6 +112,12 @@ import hRhRwaDca             from "./rh-rwa-dca";
 import hRhStockAlert         from "./rh-stock-alert";
 import hRhStockReport        from "./rh-stock-report";
 import hRhStockAgentBrief    from "./rh-stock-agent-brief";
+// RH RWA Phase 7 (B1·B2·E1·E2·E3) — bridge & builder kit (final)
+import hRhBridgeRoute        from "./rh-bridge-route";
+import hRhUsdgRoute          from "./rh-usdg-route";
+import hRhRwaEmbedKit        from "./rh-rwa-embed-kit";
+import hRhRwaReadme          from "./rh-rwa-readme";
+import hRhRwaPricingKit      from "./rh-rwa-pricing-kit";
 
 export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "token-price": hTokenPrice,
@@ -231,4 +237,10 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "rh-stock-alert":         hRhStockAlert,
   "rh-stock-report":        hRhStockReport,
   "rh-stock-agent-brief":   hRhStockAgentBrief,
+  // ── RH RWA Phase 7 — Bridge & Builder Kit ─────────────────────────────
+  "rh-bridge-route":        hRhBridgeRoute,
+  "rh-usdg-route":          hRhUsdgRoute,
+  "rh-rwa-embed-kit":       hRhRwaEmbedKit,
+  "rh-rwa-readme":          hRhRwaReadme,
+  "rh-rwa-pricing-kit":     hRhRwaPricingKit,
 };
