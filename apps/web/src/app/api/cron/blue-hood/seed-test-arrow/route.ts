@@ -23,6 +23,10 @@ export async function POST(req: NextRequest) {
   const refPrice = Number(url.searchParams.get("ref") ?? "0") || 100;
   const windowH = Number(url.searchParams.get("window") ?? "0") || (type === "arb" ? 4 : 6);
 
+  // Dev flag `?real=1` fires a NON-test arrow so we can exercise the full
+  // A4 brief path end-to-end in localhost. Also dev-only (endpoint itself
+  // 404s in prod), so no risk of a stray real seed on public.
+  const real = url.searchParams.get("real") === "1";
   const arrow = await fireArrow(
     ticker,
     {
@@ -32,7 +36,7 @@ export async function POST(req: NextRequest) {
       reference_price: refPrice,
     },
     Math.floor(Date.now() / 1000),
-    { test: true }, // BLOCKER 1: never let seeded arrows into the public feed
+    real ? {} : { test: true },
   );
 
   if (!arrow) {

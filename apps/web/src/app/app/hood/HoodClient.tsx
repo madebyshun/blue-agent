@@ -595,6 +595,7 @@ function ArrowsFeed({ data }: { data: Extract<ArrowsRes, { ok: true }> | null })
 }
 
 function ArrowRow({ a }: { a: Arrow }) {
+  const [open, setOpen] = useState(false);
   const signal = (() => {
     if (a.type === "drift") return `DRIFT ${a.expected_direction === "up" ? "↑" : "↓"}`;
     if (a.type === "arb") return `ARB ${a.expected_direction === "up" ? "long dex" : "short dex"}`;
@@ -609,23 +610,88 @@ function ArrowRow({ a }: { a: Arrow }) {
     return { label: "—", color: MUTED };
   })();
 
+  const hasBrief = !!a.brief;
+  const chevron = open ? "▾" : "▸";
+
   return (
-    <tr className="border-b last:border-b-0 hover:bg-black/40" style={{ borderColor: "#0f1218" }}>
-      <td className="px-3 py-2 text-left" style={{ color: RH_GREEN }}>{a.serial}</td>
-      <td className="px-3 py-2 text-left text-white">{a.ticker}</td>
-      <td className="px-3 py-2 text-left" style={{ color: "#9aa1ac" }}>{signal}</td>
-      <td className="px-3 py-2 text-left" style={{ color: MUTED }}>{formatRelTime(a.fired_at)}</td>
-      <td className="px-3 py-2 text-left" style={{ color: "#E7E9EE" }}>${a.reference_price.toFixed(2)}</td>
-      <td className="px-3 py-2 text-left">
-        <span
-          className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider"
-          style={{ color: outcome.color, backgroundColor: `${outcome.color}18` }}
-          title={a.outcome_detail ?? undefined}
+    <>
+      <tr
+        className="border-b last:border-b-0 hover:bg-black/40 cursor-pointer"
+        style={{ borderColor: "#0f1218" }}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <td className="px-3 py-2 text-left" style={{ color: RH_GREEN }}>
+          <span style={{ color: MUTED, marginRight: 4 }}>{chevron}</span>
+          {a.serial}
+        </td>
+        <td className="px-3 py-2 text-left text-white">{a.ticker}</td>
+        <td className="px-3 py-2 text-left" style={{ color: "#9aa1ac" }}>{signal}</td>
+        <td className="px-3 py-2 text-left" style={{ color: MUTED }}>{formatRelTime(a.fired_at)}</td>
+        <td className="px-3 py-2 text-left" style={{ color: "#E7E9EE" }}>${a.reference_price.toFixed(2)}</td>
+        <td className="px-3 py-2 text-left">
+          <span
+            className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider"
+            style={{ color: outcome.color, backgroundColor: `${outcome.color}18` }}
+            title={a.outcome_detail ?? undefined}
+          >
+            {outcome.label}
+          </span>
+        </td>
+      </tr>
+      {open && (
+        <tr style={{ borderBottom: "1px solid #0f1218" }}>
+          <td colSpan={6} className="px-3 py-3" style={{ backgroundColor: "#07090e" }}>
+            <ArrowBriefBlock a={a} hasBrief={hasBrief} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+// T-A — arrow expand block. Shows A4's verdict_note + LLM one-liner +
+// warnings + outcome detail (once graded). Never re-fetches; reads the
+// snapshot the engine attached at fire time.
+function ArrowBriefBlock({ a, hasBrief }: { a: Arrow; hasBrief: boolean }) {
+  return (
+    <div className="flex flex-col gap-2 text-[12px]">
+      {hasBrief ? (
+        <>
+          <div className="font-mono text-white leading-relaxed">
+            {a.brief!.verdict_note}
+          </div>
+          {a.brief!.one_line_context && (
+            <div className="italic" style={{ color: "#cbd5e1" }}>
+              &ldquo;{a.brief!.one_line_context}&rdquo;
+            </div>
+          )}
+          {a.brief!.warnings.length > 0 && (
+            <ul className="mt-1 space-y-1">
+              {a.brief!.warnings.map((w, i) => (
+                <li key={i} className="font-mono text-[11px]" style={{ color: AMBER }}>
+                  ⚠ {w}
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="pt-1 font-mono text-[10px]" style={{ color: MUTED }}>
+            brief · {a.brief!.llm_provider ?? "no LLM"} · {formatRelTime(a.brief!.fetched_at)}
+          </div>
+        </>
+      ) : (
+        <div className="font-mono text-[11px]" style={{ color: MUTED }}>
+          No brief attached — A4 was unavailable when this arrow fired. Numbers still stand on their own.
+        </div>
+      )}
+      {a.outcome_detail && (
+        <div
+          className="mt-2 rounded border px-2 py-1.5 font-mono text-[11px]"
+          style={{ borderColor: BORDER, color: "#E7E9EE" }}
         >
-          {outcome.label}
-        </span>
-      </td>
-    </tr>
+          <span style={{ color: MUTED }}>outcome · </span>{a.outcome_detail}
+        </div>
+      )}
+    </div>
   );
 }
 

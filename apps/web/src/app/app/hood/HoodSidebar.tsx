@@ -186,31 +186,39 @@ export default function HoodSidebar({
             <SidebarEmpty text="No arrows yet." />
           ) : (
             <ul className="pb-3">
-              {arrows.slice(0, 8).map((a) => (
-                <li key={a.id}>
-                  <button
-                    onClick={() => onSelectTicker(a.ticker)}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff08]"
-                  >
-                    <span
-                      className="font-mono text-[11px] tracking-wide shrink-0"
-                      style={{ color: RH_GREEN }}
+              {arrows.slice(0, 8).map((a) => {
+                // T-A — hover tooltip shows brief.verdict_note if attached,
+                // else falls back to outcome_detail (once graded) or type.
+                const tooltip = a.brief?.verdict_note
+                  ?? a.outcome_detail
+                  ?? `${a.type} · ${a.expected_direction ?? ""}`;
+                return (
+                  <li key={a.id}>
+                    <button
+                      onClick={() => onSelectTicker(a.ticker)}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff08]"
+                      title={tooltip}
                     >
-                      {a.serial}
-                    </span>
-                    <span className="font-mono text-[12px] text-slate-200">{a.ticker}</span>
-                    <span className="font-mono text-[10px] uppercase" style={{ color: MUTED }}>
-                      {a.type}
-                    </span>
-                    <span
-                      className="ml-auto font-mono text-[10px] tracking-wider"
-                      style={outcomeStyle(a)}
-                    >
-                      {outcomeLabel(a)}
-                    </span>
-                  </button>
-                </li>
-              ))}
+                      <span
+                        className="font-mono text-[11px] tracking-wide shrink-0"
+                        style={{ color: RH_GREEN }}
+                      >
+                        {a.serial}
+                      </span>
+                      <span className="font-mono text-[12px] text-slate-200">{a.ticker}</span>
+                      <span className="font-mono text-[10px] uppercase" style={{ color: MUTED }}>
+                        {a.type}
+                      </span>
+                      <span
+                        className="ml-auto font-mono text-[10px] tracking-wider"
+                        style={outcomeStyle(a)}
+                      >
+                        {outcomeLabel(a)}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

@@ -19,6 +19,7 @@
 import { kvGet, kvSet } from "@/lib/kv";
 import { KV_ARROW_SERIAL_COUNTER, kvArrow, kvArrowOpenIndex, KV_ARROW_FEED, TTL_ARROW_INDEX } from "./kv-keys";
 import type { Arrow, ArrowType, HoodSnapshot, TickerSnapshot } from "./types";
+import { fetchArrowBrief } from "./brief";
 
 // ── Thresholds (from spec Block 1.2) ─────────────────────────────────────
 const DRIFT_MIN_ABS_PCT = 2.0;   // |drift| ≥ 2% during premarket/afterhours
@@ -134,6 +135,7 @@ export async function fireArrow(
     outcome: null,
     graded_at: null,
     outcome_detail: null,
+    brief: null,
     ...(opts.test ? { test: true } : {}),
   };
 
@@ -145,6 +147,25 @@ export async function fireArrow(
   const feed = (await kvGet<string[]>(KV_ARROW_FEED)) ?? [];
   feed.unshift(id);
   await kvSet(KV_ARROW_FEED, feed);
+
+  // T-A — attach A4 "why" brief. Skip on test arrows (would burn LLM $ for
+  // nothing) and on any failure (arrow already fires; brief stays null).
+  // Called EXACTLY ONCE per arrow at fire time; the UI reads the cached
+  // field forever after.
+  if (!opts.test) {
+    try {
+      const brief = await fetchArrowBrief(ticker);
+      if (brief) {
+        const enriched: Arrow = { ...arrow, brief };
+        await kvSet(kvArrow(id), enriched);
+        console.log(`[brief] attached to ${serial} ${ticker} llm=${brief.llm_provider ?? "null"} note_len=${brief.verdict_note.length}`);
+        return enriched;
+      }
+      console.log(`[brief] no brief for ${serial} ${ticker} (A4 returned null)`);
+    } catch (e) {
+      console.warn(`[brief] fetch crashed for ${serial} ${ticker}: ${(e as Error).message}`);
+    }
+  }
 
   return arrow;
 }

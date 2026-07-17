@@ -136,4 +136,24 @@ export interface Arrow {
    *  UI smoke). Filtered out of the public feed + hit-rate. Absent on real
    *  arrows so the field never accidentally reads as truthy. */
   test?: boolean;
+  /** Human-language "why" attached by A4 (`rh-stock-agent-brief`) at fire
+   *  time. Populated once, cached forever on the arrow record. Null when
+   *  the A4 call failed or was skipped — the arrow still fires either way. */
+  brief?: ArrowBrief | null;
+}
+
+export interface ArrowBrief {
+  /** Deterministic 1-sentence "why" hard-mapped from A4's verdict (never
+   *  LLM-picked). Always populated when the A4 call succeeded. */
+  verdict_note: string;
+  /** LLM-generated 1-liner context. Null if the LLM chain failed;
+   *  `verdict_note` still carries the deterministic why. */
+  one_line_context: string | null;
+  /** Warnings from A4 verbatim — feed_abnormally_stale, thin_dex_pool,
+   *  llm_context_unavailable, etc. Never edited. */
+  warnings: string[];
+  /** Which LLM served the context (virtuals / venice / bankr / null). */
+  llm_provider: string | null;
+  /** ISO timestamp when the brief was fetched. */
+  fetched_at: string;
 }
