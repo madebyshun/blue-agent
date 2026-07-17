@@ -158,12 +158,50 @@ export async function callVirtualsLLM(opts: {
 }
 
 /**
- * Synthesis with fallback chain: **Virtuals → Venice → Bankr**.
- * Tools that need reliable base synthesis (A3 report, A4 agent brief) should
- * prefer this over calling any single provider directly. Virtuals is the
- * default primary because it's sponsored + stable; Venice remains for
- * `webSearch: true` callers (its unique feature); Bankr is the last resort.
+ * Synthesis with fallback chain: **Virtuals → Venice → Bankr**, always.
+ *
+ * Virtuals is PRIMARY on every call regardless of `webSearch` — sponsored
+ * quota + Kimi/DeepSeek quality wins over Venice web-search reliability.
+ * When `webSearch: true` is requested and Virtuals succeeds, the response
+ * still resolves without external search; the returned `web_search_used`
+ * flag lets the caller decide whether to trust "no fresh news" answers.
+ *
+ * Every attempt logs a structured line:
+ *   [llm] provider=<p> status=<s> duration_ms=<ms> web_search=<bool> reason=<...>
+ * — grep-friendly for Vercel log tail during incident response.
  */
+export type LlmProvider = "virtuals" | "venice" | "bankr";
+export interface LlmResult {
+  text: string;
+  provider: LlmProvider;
+  web_search_used: boolean;
+  duration_ms: number;
+  attempts: Array<{
+    provider: LlmProvider;
+    status: "success" | "error";
+    duration_ms: number;
+    error?: string;
+  }>;
+}
+
+function llmLog(entry: {
+  provider: LlmProvider;
+  status: "success" | "error";
+  duration_ms: number;
+  web_search?: boolean;
+  reason?: string;
+}) {
+  const parts = [
+    `[llm]`,
+    `provider=${entry.provider}`,
+    `status=${entry.status}`,
+    `duration_ms=${entry.duration_ms}`,
+    entry.web_search !== undefined ? `web_search=${entry.web_search}` : null,
+    entry.reason ? `reason="${entry.reason.replace(/"/g, "'").slice(0, 200)}"` : null,
+  ].filter(Boolean);
+  console.log(parts.join(" "));
+}
+
 export async function callLLM(opts: {
   system: string;
   user?: string;
@@ -171,39 +209,74 @@ export async function callLLM(opts: {
   model?: string;
   temperature?: number;
   maxTokens?: number;
-  /** When true, prefer Venice (only path that can web-search). */
+  /** Hint that the caller wants fresh web-search grounding. Only Venice
+   *  can search; Virtuals + Bankr return without. Flagged in web_search_used. */
   webSearch?: boolean;
-}): Promise<{ text: string; provider: "virtuals" | "venice" | "bankr" }> {
-  // If caller explicitly asked for web search, Venice first (Virtuals can't search).
-  if (opts.webSearch) {
+}): Promise<LlmResult> {
+  const chainStart = Date.now();
+  const attempts: LlmResult["attempts"] = [];
+
+  // 1) Virtuals — primary, always.
+  {
+    const t0 = Date.now();
     try {
-      const text = await callVeniceLLM({ ...opts, webSearch: true });
-      return { text, provider: "venice" };
+      const text = await callVirtualsLLM(opts);
+      const dur = Date.now() - t0;
+      llmLog({ provider: "virtuals", status: "success", duration_ms: dur, web_search: false });
+      attempts.push({ provider: "virtuals", status: "success", duration_ms: dur });
+      return { text, provider: "virtuals", web_search_used: false, duration_ms: Date.now() - chainStart, attempts };
     } catch (e) {
-      console.warn("[llm] Venice web-search failed, trying Virtuals (no search):", (e as Error).message);
+      const dur = Date.now() - t0;
+      const msg = (e as Error).message;
+      llmLog({ provider: "virtuals", status: "error", duration_ms: dur, reason: msg });
+      attempts.push({ provider: "virtuals", status: "error", duration_ms: dur, error: msg });
     }
   }
-  // Virtuals primary path (fastest + sponsored).
-  try {
-    const text = await callVirtualsLLM(opts);
-    return { text, provider: "virtuals" };
-  } catch (e) {
-    console.warn("[llm] Virtuals failed, trying Venice:", (e as Error).message);
+
+  // 2) Venice — fallback. Honors the caller's webSearch hint here.
+  {
+    const t0 = Date.now();
+    try {
+      const text = await callVeniceLLM({ ...opts, webSearch: opts.webSearch });
+      const dur = Date.now() - t0;
+      const searched = opts.webSearch !== false;
+      llmLog({ provider: "venice", status: "success", duration_ms: dur, web_search: searched });
+      attempts.push({ provider: "venice", status: "success", duration_ms: dur });
+      return { text, provider: "venice", web_search_used: searched, duration_ms: Date.now() - chainStart, attempts };
+    } catch (e) {
+      const dur = Date.now() - t0;
+      const msg = (e as Error).message;
+      llmLog({ provider: "venice", status: "error", duration_ms: dur, reason: msg });
+      attempts.push({ provider: "venice", status: "error", duration_ms: dur, error: msg });
+    }
   }
-  try {
-    const text = await callVeniceLLM({ ...opts, webSearch: false });
-    return { text, provider: "venice" };
-  } catch (e) {
-    console.warn("[llm] Venice failed, trying Bankr:", (e as Error).message);
+
+  // 3) Bankr — last resort.
+  {
+    const t0 = Date.now();
+    try {
+      const text = await callBankrLLM({
+        system: opts.system,
+        messages: opts.messages ?? (opts.user != null ? [{ role: "user", content: opts.user }] : [{ role: "user", content: "" }]),
+        temperature: opts.temperature,
+        maxTokens: opts.maxTokens,
+        _skipEnhance: true,
+      });
+      const dur = Date.now() - t0;
+      llmLog({ provider: "bankr", status: "success", duration_ms: dur, web_search: false });
+      attempts.push({ provider: "bankr", status: "success", duration_ms: dur });
+      return { text, provider: "bankr", web_search_used: false, duration_ms: Date.now() - chainStart, attempts };
+    } catch (e) {
+      const dur = Date.now() - t0;
+      const msg = (e as Error).message;
+      llmLog({ provider: "bankr", status: "error", duration_ms: dur, reason: msg });
+      attempts.push({ provider: "bankr", status: "error", duration_ms: dur, error: msg });
+      // Every provider failed → surface the chain state to the caller.
+      const chainErr = new Error(`all_llm_providers_failed: ${attempts.map((a) => `${a.provider}=${a.error}`).join(" | ")}`);
+      (chainErr as Error & { attempts?: unknown }).attempts = attempts;
+      throw chainErr;
+    }
   }
-  const text = await callBankrLLM({
-    system: opts.system,
-    messages: opts.messages ?? (opts.user != null ? [{ role: "user", content: opts.user }] : [{ role: "user", content: "" }]),
-    temperature: opts.temperature,
-    maxTokens: opts.maxTokens,
-    _skipEnhance: true,
-  });
-  return { text, provider: "bankr" };
 }
 
 export async function callVeniceLLM(opts: {
