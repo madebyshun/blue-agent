@@ -15,7 +15,7 @@
 import { findByTicker, RH_CHAIN } from "@/lib/robinhood/rwa-registry";
 import { chainlinkLatest } from "@/lib/robinhood/rwa-price";
 import { poolsForToken } from "@/lib/robinhood/rwa-market";
-import { callVeniceLLM, NO_FABRICATION_RULE } from "@/app/api/_lib/llm";
+import { callLLM, NO_FABRICATION_RULE } from "@/app/api/_lib/llm";
 
 export default async function handler(req: Request): Promise<Response> {
   try {
@@ -73,21 +73,25 @@ Do NOT recommend buy/sell — this is a brief, not a signal.`;
     const userPrompt = `FACTS:\n${JSON.stringify(facts, null, 2)}\n\nProduce the brief.`;
 
     let markdown = "";
+    let llm_provider: string | null = null;
     let llm_error: string | null = null;
     try {
-      markdown = await callVeniceLLM({
+      // Primary: Virtuals (sponsored compute) → Venice (adds web-search for
+      // recent-news headlines) → Bankr (last resort). Fallback chain hides
+      // provider outages from the caller.
+      const r = await callLLM({
         system,
         user: userPrompt,
         temperature: 0.3,
         maxTokens: 900,
         webSearch: true,
       });
+      markdown = r.text;
+      llm_provider = r.provider;
     } catch (e) {
-      // Reviewer flag: don't leak upstream 401/500 messages into
-      // client-facing markdown. Log server-side, degrade cleanly.
       llm_error = (e as Error).message;
-      console.warn("[rh-stock-report] LLM synthesis unavailable:", llm_error);
-      markdown = `# ${token.ticker} — data-only report\n\n_LLM synthesis unavailable this run. Real on-chain numbers are in the \`facts\` object below and are unaffected._`;
+      console.warn("[rh-stock-report] all LLM providers unavailable:", llm_error);
+      markdown = `# ${token.ticker} — data-only report\n\n_LLM synthesis unavailable this run. Real on-chain numbers below are unaffected._`;
     }
 
     return Response.json({
@@ -97,8 +101,17 @@ Do NOT recommend buy/sell — this is a brief, not a signal.`;
       contract: token.contract,
       facts,
       report_markdown: markdown,
-      note: "Numbers in `facts` are verifiable on-chain (Chainlink + GT). News + interpretation is Venice web-search-grounded — LLM must cite URLs and mark unverified items [estimate].",
-      data_sources: ["Chainlink AggregatorV3 (RH Chain)", "api.geckoterminal.com (RH Chain)", "Venice web search"],
+      llm_provider,
+      warnings: llm_error ? ["llm_synthesis_unavailable: all providers returned error; report degraded to data-only"] : [],
+      note: "Numbers in `facts` are verifiable on-chain (Chainlink + GT). Synthesis routed through Virtuals → Venice (web-search) → Bankr fallback chain. LLM must cite URLs and mark unverified items [estimate].",
+      data_sources: [
+        "Chainlink AggregatorV3 (RH Chain)",
+        "api.geckoterminal.com (RH Chain)",
+        llm_provider === "virtuals" ? "Virtuals Compute (partner-sponsored)"
+        : llm_provider === "venice" ? "Venice AI (web-search)"
+        : llm_provider === "bankr" ? "Bankr LLM (fallback)"
+        : null,
+      ].filter(Boolean),
       network: RH_CHAIN,
       timestamp,
     });
