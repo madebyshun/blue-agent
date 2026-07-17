@@ -28,26 +28,29 @@ const MIN_TVL_USD = 5_000;       // dust floor — same as M4/M5 already enforce
 const DRIFT_GRADING_WINDOW_H = 6;   // grade after next-open + 2h (see grader.ts)
 const ARB_GRADING_WINDOW_H = 4;
 
+// ── Detection ──────────────────────────────────────────────────────────────
+
+interface Candidate {
+  type: ArrowType;
+  expected_direction: "up" | "down";
+  grading_window_h: number;
+  reference_price: number;
+}
+
 /**
- * Given a snapshot row, decide if it should fire an arrow. Returns null if
- * no rule matches; otherwise returns the arrow shape (without id/serial —
- * those are assigned by `fireArrow`).
+ * Given a snapshot row, decide if it's a candidate for firing an arrow
+ * (before dust/dedup gates). Returns null if no rule TYPE matches for this
+ * row. The distinction between "no candidate" and "candidate but dropped"
+ * is what powers the structured `[engine]` log — see `runRuleEngine`.
  */
-export function detectArrow(row: TickerSnapshot):
-  | { type: ArrowType; expected_direction: "up" | "down"; grading_window_h: number; reference_price: number }
-  | null
-{
+export function detectCandidate(row: TickerSnapshot): Candidate | null {
   if (row.verdict === "ERROR" || row.verdict === "INSUFFICIENT_DATA") return null;
-  const tvl = row.tvl_usd ?? 0;
   const drift = row.drift_pct ?? 0;
   const price = row.dex_usd ?? 0;
   if (price <= 0) return null;
 
-  // ── drift: fire only when market is CLOSED and drift is significant ──
-  //   • Positive drift → DEX above oracle → expect DEX to fall back at open
-  //   • Negative drift → expect DEX to rise
+  // ── drift: market CLOSED with a significant drift ─────────────────────
   if (!row.market.is_open && Math.abs(drift) >= DRIFT_MIN_ABS_PCT) {
-    if (tvl < MIN_TVL_USD) return null;
     return {
       type: "drift",
       expected_direction: drift > 0 ? "down" : "up",
@@ -56,13 +59,9 @@ export function detectArrow(row: TickerSnapshot):
     };
   }
 
-  // ── arb: fire only during REGULAR hours on a LONG_DEX / SHORT_DEX verdict ──
-  //   • LONG_DEX (DEX below oracle) → arb long DEX → expect DEX to rise
-  //   • SHORT_DEX (DEX above oracle) → arb short DEX → expect DEX to fall
+  // ── arb: market OPEN with a LONG_DEX / SHORT_DEX verdict + threshold ──
   if (row.market.is_open && (row.verdict === "LONG_DEX" || row.verdict === "SHORT_DEX")) {
     if (Math.abs(drift) < ARB_MIN_ABS_PCT) return null;
-    if (row.warnings.some((w) => w.startsWith("feed_abnormally_stale"))) return null;
-    if (tvl < MIN_TVL_USD) return null;
     return {
       type: "arb",
       expected_direction: row.verdict === "LONG_DEX" ? "up" : "down",
@@ -74,11 +73,18 @@ export function detectArrow(row: TickerSnapshot):
   return null;
 }
 
+/** Back-compat shim for callers that only want the "should fire?" answer
+ *  after all gates. Prefer `detectCandidate` + explicit gate checks in
+ *  new code so the engine can log the reason. */
+export function detectArrow(row: TickerSnapshot): Candidate | null {
+  const c = detectCandidate(row);
+  if (!c) return null;
+  if ((row.tvl_usd ?? 0) < MIN_TVL_USD) return null;
+  if (c.type === "arb" && row.warnings.some((w) => w.startsWith("feed_abnormally_stale"))) return null;
+  return c;
+}
+
 // ── Fire path ──────────────────────────────────────────────────────────────
-//
-// De-dup + serial + persistence. Called by the engine driver (below) or a
-// caller test. Splits from `runRuleEngine` so unit tests can exercise
-// dedup logic without a full snapshot.
 
 async function nextSerial(): Promise<string> {
   const cur = (await kvGet<number>(KV_ARROW_SERIAL_COUNTER)) ?? 0;
@@ -96,11 +102,16 @@ interface OpenIndex {
  * Idempotency: skip if (ticker, type) already has an open arrow. Otherwise
  * mint a serial, persist the arrow record, update the open-index + feed
  * list, and return the fresh arrow. Returns null on skip.
+ *
+ * `opts.test` marks the arrow as a synthetic UI smoke — the public feed
+ * + hit-rate reader filter these out so a seeded HIT never lands in the
+ * "first arrow in Blue Hood history" slot.
  */
 export async function fireArrow(
   ticker: string,
-  detected: NonNullable<ReturnType<typeof detectArrow>>,
+  detected: Candidate,
   snapshot_ref: number,
+  opts: { test?: boolean } = {},
 ): Promise<Arrow | null> {
   const idxKey = kvArrowOpenIndex(ticker, detected.type);
   const existing = await kvGet<OpenIndex>(idxKey);
@@ -123,6 +134,7 @@ export async function fireArrow(
     outcome: null,
     graded_at: null,
     outcome_detail: null,
+    ...(opts.test ? { test: true } : {}),
   };
 
   await kvSet(kvArrow(id), arrow);
@@ -137,11 +149,6 @@ export async function fireArrow(
   return arrow;
 }
 
-/**
- * Small polyfill so this file compiles under Node's default runtime — the
- * upstash serverless runtime may not have `crypto.randomUUID` on all
- * versions of Node. Falls back to a deterministic hex + timestamp id.
- */
 function cryptoUuid(): string {
   try {
     const g = globalThis as { crypto?: { randomUUID?: () => string } };
@@ -151,30 +158,74 @@ function cryptoUuid(): string {
 }
 
 // ── Engine driver ──────────────────────────────────────────────────────────
+//
+// Report shape mirrors the reviewer-mandated log line so the two never
+// drift apart. Sanity property (guaranteed by construction, asserted in
+// tests):
+//   candidates_over_threshold = skipped_dust + skipped_feed_stale + deduped + fired
+//   candidates_over_threshold + below_threshold = tokens_watched
+//                                                 - tokens_errored
+
 export interface RuleEngineReport {
   cycle_id: number;
+  tokens_watched: number;
+  tokens_errored: number;
+  candidates_over_threshold: number;
+  skipped_dust: number;
+  skipped_feed_stale: number;
+  below_threshold: number;
+  deduped: number;
+  fired: number;
   arrows_fired: Arrow[];
-  arrows_skipped_dedup: number;
-  arrows_skipped_no_match: number;
 }
 
 export async function runRuleEngine(snap: HoodSnapshot): Promise<RuleEngineReport> {
-  const fired: Arrow[] = [];
+  let candidates_over_threshold = 0;
+  let skipped_dust = 0;
+  let skipped_feed_stale = 0;
+  let below_threshold = 0;
   let deduped = 0;
-  let no_match = 0;
+  const fired: Arrow[] = [];
 
   for (const row of snap.tickers) {
-    const det = detectArrow(row);
-    if (!det) { no_match++; continue; }
-    const arrow = await fireArrow(row.ticker, det, snap.cycle_id);
+    if (row.verdict === "ERROR") continue; // errored rows are tracked separately in metrics
+    const candidate = detectCandidate(row);
+    if (!candidate) { below_threshold++; continue; }
+    candidates_over_threshold++;
+
+    // Gates, in the order they short-circuit:
+    if ((row.tvl_usd ?? 0) < MIN_TVL_USD) { skipped_dust++; continue; }
+    if (candidate.type === "arb" && row.warnings.some((w) => w.startsWith("feed_abnormally_stale"))) {
+      skipped_feed_stale++; continue;
+    }
+
+    const arrow = await fireArrow(row.ticker, candidate, snap.cycle_id);
     if (arrow) fired.push(arrow);
     else deduped++;
   }
 
+  // Structured log — one line, machine-greppable. `firstError` is soft-off
+  // in prod so a bad row doesn't kill the poll cycle.
+  console.log(
+    `[engine] cycle=${snap.cycle_id}` +
+      ` candidates_over_threshold=${candidates_over_threshold}` +
+      ` skipped_dust=${skipped_dust}` +
+      ` skipped_feed_stale=${skipped_feed_stale}` +
+      ` below_threshold=${below_threshold}` +
+      ` fired=${fired.length}` +
+      ` deduped=${deduped}`,
+  );
+
   return {
     cycle_id: snap.cycle_id,
+    tokens_watched: snap.metrics.tokens_watched,
+    tokens_errored: snap.metrics.tokens_errored,
+    candidates_over_threshold,
+    skipped_dust,
+    skipped_feed_stale,
+    below_threshold,
+    deduped,
+    fired: fired.length,
     arrows_fired: fired,
-    arrows_skipped_dedup: deduped,
-    arrows_skipped_no_match: no_match,
   };
 }

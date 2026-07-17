@@ -1,24 +1,33 @@
 "use client";
 
 /**
- * /hood client — live drift board + arrows feed.
+ * /hood client — live drift board + arrows feed + contextual sidebar.
  *
- * Layout follows the AppShell design language exactly:
+ * Layout mirrors Blue Chat + Blue Hub: three columns on lg+ screens
+ *   [ 72px AppShell rail ][ 288px HoodSidebar ][ flex-1 main content ]
+ * Below lg the sidebar hides (AppShell's mobile drawer already exposes
+ * the primary product nav; per-page context is one tap away via the
+ * hamburger, mirroring Chat's mobile pattern).
+ *
+ * Design tokens follow AppShell:
  *   • bg #050508  · surface #0B0D13 · border #1A1A2E
  *   • font-mono for every number
  *   • section headers `// HOOD · <SECTION>` in slate-500 tracking-widest
- *   • primary interactive accent: Robinhood green #00C805 (per spec —
- *     this is the ONE place blue is not the accent; blue only shows in
- *     the footer "powered by 30 Blue Hub skills" attribution)
+ *   • Robinhood green #00C805 is THIS page's interactive accent (spec:
+ *     "accent riêng của section này"); blue #4FC3F7 shows only in the
+ *     footer "powered by 30 Blue Hub skills" attribution.
  *
  * Two data fetches, both `no-store`:
  *   • /api/hood/snapshot — poller's latest snapshot
- *   • /api/hood/arrows   — fired arrows + graded hit-rate
+ *   • /api/hood/arrows   — fired arrows + graded hit-rate (test arrows
+ *                          are filtered server-side; the UI can trust
+ *                          whatever comes back is the public record)
  * Both refresh every 15s; a single AbortController handles unmount.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HoodSnapshot, TickerSnapshot, M5Verdict, Arrow } from "@/lib/blue-hood/types";
+import HoodSidebar from "./HoodSidebar";
 
 const REFRESH_MS = 15_000;
 const RH_GREEN = "#00C805";
@@ -43,6 +52,7 @@ type ArrowsRes =
       hit_rate:
         | { ready: true; pct: number; sample: number }
         | { ready: false; sample: number; needed: number };
+      test_arrows_hidden: number;
     }
   | { ok: false; error: string };
 
@@ -53,6 +63,7 @@ export default function HoodClient() {
   const [lastFetch, setLastFetch] = useState<number>(0);
   const [sort, setSort] = useState<SortKey>("drift");
   const [filter, setFilter] = useState<Filter>("all");
+  const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -90,56 +101,87 @@ export default function HoodClient() {
     });
   }, [snap, sort, filter]);
 
+  const marketBadge = useMemo(() => {
+    if (!snap) return { label: "…", color: MUTED };
+    const { market_is_open, market_session } = snap.metrics;
+    if (market_is_open) return { label: "NYSE OPEN", color: GREEN_TEXT };
+    if (market_session === "premarket") return { label: "PREMARKET", color: AMBER };
+    if (market_session === "afterhours") return { label: "AFTER HOURS", color: AMBER };
+    if (market_session === "weekend") return { label: "WEEKEND · CLOSED", color: MUTED };
+    if (market_session === "holiday") return { label: "HOLIDAY · CLOSED", color: MUTED };
+    return { label: "MARKET CLOSED", color: MUTED };
+  }, [snap]);
+
+  const scrollToTicker = useCallback((ticker: string) => {
+    // If the current filter is hiding the ticker, drop back to "all" first
+    // so the row is actually in the DOM to scroll to.
+    if (filter !== "all") setFilter("all");
+    // rAF because setFilter's re-render hasn't landed yet on same tick.
+    requestAnimationFrame(() => {
+      const el = rowRefs.current[ticker];
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [filter]);
+
   return (
-    <div className="h-full overflow-y-auto" style={{ backgroundColor: BG }}>
-      <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">
-        <Header snap={snap} lastFetch={lastFetch} />
+    <div className="flex-1 min-h-0 flex flex-row" style={{ backgroundColor: BG }}>
+      <HoodSidebar
+        snap={snap}
+        arrows={arrowsData?.arrows ?? null}
+        marketLabel={marketBadge.label}
+        marketColor={marketBadge.color}
+        onSelectTicker={scrollToTicker}
+      />
 
-        {err && (
-          <div
-            role="alert"
-            className="mb-6 rounded border px-3 py-2 text-sm"
-            style={{ borderColor: "#3b2a15", backgroundColor: "#1a1408", color: "#f6c88f" }}
-          >
-            Poller warming up: {err}. In dev, POST to <code className="font-mono text-white">/api/cron/blue-hood/poll</code> with your <code className="font-mono text-white">CRON_SECRET</code>.
+      <div className="flex-1 min-w-0 overflow-y-auto">
+        <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
+          <Header snap={snap} lastFetch={lastFetch} marketBadge={marketBadge} />
+
+          {err && (
+            <div
+              role="alert"
+              className="mb-6 rounded border px-3 py-2 text-sm"
+              style={{ borderColor: "#3b2a15", backgroundColor: "#1a1408", color: "#f6c88f" }}
+            >
+              Poller warming up: {err}. In dev, POST to <code className="font-mono text-white">/api/cron/blue-hood/poll</code> with your <code className="font-mono text-white">CRON_SECRET</code>.
+            </div>
+          )}
+
+          <MetricStrip snap={snap} arrows={arrowsData} />
+
+          <SectionHeader label="// HOOD · DRIFT BOARD" />
+
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <FilterPills value={filter} onChange={setFilter} />
+            <div className="ml-auto flex items-center gap-2 text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
+              <span>sort</span>
+              <SortToggle value={sort} onChange={setSort} />
+            </div>
           </div>
-        )}
 
-        <MetricStrip snap={snap} arrows={arrowsData} />
+          <DriftBoard rows={rows} rowRefs={rowRefs} />
 
-        <SectionHeader label="// HOOD · DRIFT BOARD" />
+          <div className="h-10" />
+          <SectionHeader label="// HOOD · ARROWS FEED" />
+          <ArrowsFeed data={arrowsData} />
 
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <FilterPills value={filter} onChange={setFilter} />
-          <div className="ml-auto flex items-center gap-2 text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
-            <span>sort</span>
-            <SortToggle value={sort} onChange={setSort} />
-          </div>
+          <Footer />
         </div>
-
-        <DriftBoard rows={rows} />
-
-        <div className="h-10" />
-        <SectionHeader label="// HOOD · ARROWS FEED" />
-        <ArrowsFeed data={arrowsData} />
-
-        <Footer />
       </div>
     </div>
   );
 }
 
 // ── Header ─────────────────────────────────────────────────────────────────
-function Header({ snap, lastFetch }: { snap: HoodSnapshot | null; lastFetch: number }) {
-  const marketBadge = (() => {
-    if (!snap) return { label: "…", color: MUTED };
-    const { market_is_open, market_session } = snap.metrics;
-    if (market_is_open) return { label: "NYSE OPEN", color: GREEN_TEXT };
-    if (market_session === "premarket") return { label: "PREMARKET", color: AMBER };
-    if (market_session === "afterhours") return { label: "AFTER HOURS", color: AMBER };
-    return { label: "MARKET CLOSED", color: MUTED };
-  })();
-
+function Header({
+  snap,
+  lastFetch,
+  marketBadge,
+}: {
+  snap: HoodSnapshot | null;
+  lastFetch: number;
+  marketBadge: { label: string; color: string };
+}) {
   const ago = lastFetch ? Math.max(0, Math.round((Date.now() - lastFetch) / 1000)) : null;
 
   return (
@@ -155,7 +197,7 @@ function Header({ snap, lastFetch }: { snap: HoodSnapshot | null; lastFetch: num
       <div className="ml-auto flex items-center gap-4 font-mono text-xs">
         <span style={{ color: marketBadge.color }}>● {marketBadge.label}</span>
         <span style={{ color: MUTED }}>
-          {ago === null ? "…" : `updated ${ago}s ago`}
+          {ago === null || !snap ? "…" : `updated ${ago}s ago`}
         </span>
       </div>
     </header>
@@ -179,14 +221,23 @@ function MetricStrip({
       : `warming up · ${arrows.hit_rate.sample}/${arrows.hit_rate.needed}`
     : undefined;
 
+  // BLOCKER 2 — honest denominator. Show "watched / registry_total" and
+  // annotate the drops so no one has to guess where the missing 2 went.
+  const watchedValue = snap
+    ? `${snap.metrics.tokens_watched - snap.metrics.tokens_errored}/${snap.metrics.registry_total}`
+    : "…";
+  const watchedSub = snap
+    ? snap.metrics.tokens_errored > 0
+      ? `${snap.metrics.tokens_errored} errored · ${snap.metrics.tokens_no_feed} no feed`
+      : snap.metrics.tokens_no_feed > 0
+        ? `${snap.metrics.tokens_no_feed} no Chainlink feed`
+        : "chainlink-backed"
+    : undefined;
+
   const items: { label: string; value: string; sub?: string }[] = [
     { label: "ARROWS TODAY", value: arrows ? String(arrows.arrows_today) : "…", sub: "fired in last 24h" },
     { label: "HIT RATE 7D", value: hitLabel, sub: hitSub },
-    {
-      label: "TOKENS WATCHED",
-      value: snap ? `${snap.metrics.tokens_watched - snap.metrics.tokens_errored}/${snap.metrics.tokens_watched}` : "…",
-      sub: snap && snap.metrics.tokens_errored > 0 ? `${snap.metrics.tokens_errored} errored` : "chainlink-backed",
-    },
+    { label: "TOKENS WATCHED", value: watchedValue, sub: watchedSub },
     { label: "TVL SCANNED", value: snap ? formatUsd(snap.metrics.tvl_scanned_usd) : "…", sub: "primary pools" },
   ];
 
@@ -268,7 +319,13 @@ function SortToggle({ value, onChange }: { value: SortKey; onChange: (v: SortKey
 }
 
 // ── Drift board ────────────────────────────────────────────────────────────
-function DriftBoard({ rows }: { rows: TickerSnapshot[] }) {
+function DriftBoard({
+  rows,
+  rowRefs,
+}: {
+  rows: TickerSnapshot[];
+  rowRefs: React.MutableRefObject<Record<string, HTMLTableRowElement | null>>;
+}) {
   if (rows.length === 0) {
     return (
       <div
@@ -295,20 +352,30 @@ function DriftBoard({ rows }: { rows: TickerSnapshot[] }) {
           </tr>
         </thead>
         <tbody className="font-mono text-[13px]">
-          {rows.map((r) => (<DriftRow key={r.ticker} r={r} />))}
+          {rows.map((r) => (<DriftRow key={r.ticker} r={r} rowRefs={rowRefs} />))}
         </tbody>
       </table>
     </div>
   );
 }
 
-function DriftRow({ r }: { r: TickerSnapshot }) {
+function DriftRow({
+  r,
+  rowRefs,
+}: {
+  r: TickerSnapshot;
+  rowRefs: React.MutableRefObject<Record<string, HTMLTableRowElement | null>>;
+}) {
   const drift = r.drift_pct ?? 0;
   const driftColor = Math.abs(drift) < 0.5 ? "#9aa1ac" : drift > 0 ? GREEN_TEXT : RED;
   const thin = (r.tvl_usd ?? 0) < 5_000;
 
   return (
-    <tr className="border-b last:border-b-0 hover:bg-black/40" style={{ borderColor: "#0f1218" }}>
+    <tr
+      ref={(el) => { rowRefs.current[r.ticker] = el; }}
+      className="border-b last:border-b-0 hover:bg-black/40"
+      style={{ borderColor: "#0f1218" }}
+    >
       <td className="px-3 py-2 text-left">
         <a
           href={`https://robinhoodchain.blockscout.com/token/${r.contract}`}
@@ -337,7 +404,7 @@ function DriftRow({ r }: { r: TickerSnapshot }) {
       <td
         className="px-3 py-2 text-right"
         style={{ color: thin ? AMBER : "#9aa1ac" }}
-        title={thin ? "Thin pool — spot may be dominated by a single trade" : undefined}
+        title={thin ? "Thin pool — arrows are gated off this row" : undefined}
       >
         {formatUsd(r.tvl_usd)}
       </td>

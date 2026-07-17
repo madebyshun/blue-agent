@@ -51,15 +51,23 @@ async function handle(req: NextRequest) {
       mode: TOOL_CALLER_MODE,
       cycle_id: snap.cycle_id,
       duration_ms: snap.duration_ms,
+      registry_total: snap.metrics.registry_total,
       tokens_watched: snap.metrics.tokens_watched,
+      tokens_no_feed: snap.metrics.tokens_no_feed,
       tokens_errored: snap.metrics.tokens_errored,
       market_is_open: snap.metrics.market_is_open,
       market_session: snap.metrics.market_session,
       tvl_scanned_usd: Math.round(snap.metrics.tvl_scanned_usd),
-      arrows: {
-        fired: engine.arrows_fired.map((a) => ({ serial: a.serial, ticker: a.ticker, type: a.type, expected: a.expected_direction })),
-        skipped_dedup: engine.arrows_skipped_dedup,
-        skipped_no_match: engine.arrows_skipped_no_match,
+      engine: {
+        // Matches the structured `[engine]` log line one-to-one so responses
+        // and logs can never disagree.
+        candidates_over_threshold: engine.candidates_over_threshold,
+        skipped_dust: engine.skipped_dust,
+        skipped_feed_stale: engine.skipped_feed_stale,
+        below_threshold: engine.below_threshold,
+        deduped: engine.deduped,
+        fired: engine.fired,
+        arrows: engine.arrows_fired.map((a) => ({ serial: a.serial, ticker: a.ticker, type: a.type, expected: a.expected_direction })),
       },
       grader: {
         graded: grader.graded.map((a) => ({ serial: a.serial, ticker: a.ticker, type: a.type, outcome: a.outcome, detail: a.outcome_detail })),

@@ -69,9 +69,17 @@ export interface HoodSnapshot {
   duration_ms: number;
   /** One row per token watched this cycle. */
   tickers: TickerSnapshot[];
-  /** Aggregated metrics for the /hood header strip. */
+  /** Aggregated metrics for the /hood header strip. Denominators are HONEST:
+   *  `registry_total` is the RWA candidate set (stocks + ETFs, not the whole
+   *  registry — utility WETH/USDG are plumbing, not positions to watch). */
   metrics: {
+    /** Every stock + ETF in the RWA registry. The UI shows "N/registry_total". */
+    registry_total: number;
+    /** Rows this cycle actually polled (registry_total minus no-Chainlink drops). */
     tokens_watched: number;
+    /** Registry rows dropped this cycle because they lack a Chainlink feed. */
+    tokens_no_feed: number;
+    /** Rows polled but whose M5 call errored. Subset of tokens_watched. */
     tokens_errored: number;
     tvl_scanned_usd: number;
     market_is_open: boolean;
@@ -117,4 +125,8 @@ export interface Arrow {
   graded_at: string | null;
   /** Free-form detail — e.g. "gap closed 62%", "price moved +1.7% opposite in 3h". */
   outcome_detail: string | null;
+  /** True for arrows minted by `/api/cron/blue-hood/seed-test-arrow` (dev
+   *  UI smoke). Filtered out of the public feed + hit-rate. Absent on real
+   *  arrows so the field never accidentally reads as truthy. */
+  test?: boolean;
 }

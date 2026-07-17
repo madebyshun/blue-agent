@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
       reference_price: refPrice,
     },
     Math.floor(Date.now() / 1000),
+    { test: true }, // BLOCKER 1: never let seeded arrows into the public feed
   );
 
   if (!arrow) {

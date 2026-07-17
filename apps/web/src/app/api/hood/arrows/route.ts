@@ -24,10 +24,20 @@ export async function GET(req: NextRequest) {
     Math.max(1, parseInt(url.searchParams.get("limit") ?? String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT),
   );
 
-  const ids = ((await kvGet<string[]>(KV_ARROW_FEED)) ?? []).slice(0, limit);
-  const arrows = (await Promise.all(ids.map((id) => kvGet<Arrow>(kvArrow(id))))).filter(
+  // Read a larger slice than the response `limit` so we can filter out
+  // synthetic `test: true` arrows and still return `limit` real ones.
+  const readSlice = Math.min(MAX_LIMIT * 2, limit * 3);
+  const ids = ((await kvGet<string[]>(KV_ARROW_FEED)) ?? []).slice(0, readSlice);
+  const all = (await Promise.all(ids.map((id) => kvGet<Arrow>(kvArrow(id))))).filter(
     (a): a is Arrow => a !== null,
   );
+
+  // BLOCKER 1 — the public track record must never contain seeded arrows.
+  // Any arrow minted by the dev seed endpoint carries `test: true` and is
+  // filtered out here. `?include_test=1` is honored ONLY in dev to help QA.
+  const includeTest = url.searchParams.get("include_test") === "1"
+    && process.env.NODE_ENV !== "production";
+  const arrows = includeTest ? all : all.filter((a) => !a.test);
 
   // Hit rate — count of graded arrows in the last 7d, split hit/miss.
   const cutoff = Date.now() - HIT_RATE_WINDOW_MS;
@@ -46,7 +56,13 @@ export async function GET(req: NextRequest) {
   ).length;
 
   return NextResponse.json(
-    { ok: true, arrows, arrows_today, hit_rate },
+    {
+      ok: true,
+      arrows: arrows.slice(0, limit),
+      arrows_today,
+      hit_rate,
+      test_arrows_hidden: includeTest ? 0 : all.length - arrows.length,
+    },
     { headers: { "Cache-Control": "no-store, max-age=0" } },
   );
 }

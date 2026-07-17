@@ -19,7 +19,7 @@
  *     preserve slot ordering.
  */
 import { kvSet } from "@/lib/kv";
-import { HOOD_WATCHLIST } from "./registry";
+import { HOOD_WATCHLIST, HOOD_REGISTRY_STATS } from "./registry";
 import { callTool } from "./tool-caller";
 import {
   KV_SNAPSHOT_LATEST,
@@ -128,7 +128,10 @@ export async function runPollCycle(): Promise<HoodSnapshot> {
     duration_ms: finished_at.getTime() - started_at.getTime(),
     tickers: rows,
     metrics: {
+      // Honest denominator — how many stock/ETF rows exist vs how many we poll.
+      registry_total: HOOD_REGISTRY_STATS.rwa_candidates,
       tokens_watched: HOOD_WATCHLIST.length,
+      tokens_no_feed: HOOD_REGISTRY_STATS.no_chainlink_feed,
       tokens_errored,
       tvl_scanned_usd,
       market_is_open: market.is_open,
