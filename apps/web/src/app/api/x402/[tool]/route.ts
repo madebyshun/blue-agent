@@ -98,7 +98,9 @@ export async function GET(
   const handler = HANDLERS[tool];
   const priceUnits = PRICE_UNITS.get(tool);
 
-  if (!handler || !priceUnits) {
+  // priceUnits may be 0 for genuinely-free tools (e.g. rh-rwa-verify @ $0.00).
+  // Use explicit undefined check — `!priceUnits` incorrectly 503s free tools.
+  if (!handler || priceUnits === undefined) {
     return NextResponse.json({ error: "Tool not available", tool }, { status: 503 });
   }
 
@@ -158,8 +160,10 @@ async function handle(
   const handler = HANDLERS[tool];
   const priceUnits = PRICE_UNITS.get(tool);
 
-  // Guard: checked BEFORE internal bypass to prevent calling undefined handler
-  if (!handler || !priceUnits) {
+  // Guard: checked BEFORE internal bypass to prevent calling undefined handler.
+  // priceUnits may be 0 for free tools (e.g. rh-rwa-verify @ $0.00) — must use
+  // explicit undefined check, not `!priceUnits` which would 503 them.
+  if (!handler || priceUnits === undefined) {
     return NextResponse.json(
       { error: "Tool not available", tool },
       { status: 503 }
