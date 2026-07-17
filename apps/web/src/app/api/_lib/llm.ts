@@ -122,6 +122,90 @@ export const WEB_SEARCH_RULE =
 export const NO_FABRICATION_RULE =
   "Do NOT invent specific numbers (market size, TAM, revenue, user counts, valuations, GitHub stars). If you do not have a verified source for a figure, write \"[data unavailable]\" instead of guessing.";
 
+// ─── Virtuals Compute (partner-sponsored, OpenAI-compatible) ────────────────
+// Base URL: https://compute.virtuals.io/v1 · Model examples:
+//   moonshotai-kimi-k2-7-code · deepseek-v3.1 · qwen-2.5-72b
+// No web search, but stable + funded via partnership. Preferred primary
+// synthesis path for RH RWA tools since Virtuals is native to RH Chain.
+
+export async function callVirtualsLLM(opts: {
+  system: string;
+  user?: string;
+  messages?: BankrMessage[];
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+}): Promise<string> {
+  const apiKey = process.env.VIRTUALS_API_KEY ?? "";
+  if (!apiKey) throw new Error("VIRTUALS_API_KEY not set");
+  const msgs = opts.messages ?? (opts.user != null ? [{ role: "user", content: opts.user }] : []);
+  const res = await fetch("https://compute.virtuals.io/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: opts.model ?? "moonshotai-kimi-k2-7-code",
+      messages: [{ role: "system", content: opts.system }, ...msgs],
+      max_tokens: opts.maxTokens ?? 1000,
+      temperature: opts.temperature ?? 0.3,
+    }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!res.ok) throw new Error(`Virtuals ${res.status}: ${(await res.text()).slice(0, 150)}`);
+  const d = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  const text = d.choices?.[0]?.message?.content ?? "";
+  if (!text) throw new Error("Virtuals empty response");
+  return text;
+}
+
+/**
+ * Synthesis with fallback chain: **Virtuals → Venice → Bankr**.
+ * Tools that need reliable base synthesis (A3 report, A4 agent brief) should
+ * prefer this over calling any single provider directly. Virtuals is the
+ * default primary because it's sponsored + stable; Venice remains for
+ * `webSearch: true` callers (its unique feature); Bankr is the last resort.
+ */
+export async function callLLM(opts: {
+  system: string;
+  user?: string;
+  messages?: BankrMessage[];
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  /** When true, prefer Venice (only path that can web-search). */
+  webSearch?: boolean;
+}): Promise<{ text: string; provider: "virtuals" | "venice" | "bankr" }> {
+  // If caller explicitly asked for web search, Venice first (Virtuals can't search).
+  if (opts.webSearch) {
+    try {
+      const text = await callVeniceLLM({ ...opts, webSearch: true });
+      return { text, provider: "venice" };
+    } catch (e) {
+      console.warn("[llm] Venice web-search failed, trying Virtuals (no search):", (e as Error).message);
+    }
+  }
+  // Virtuals primary path (fastest + sponsored).
+  try {
+    const text = await callVirtualsLLM(opts);
+    return { text, provider: "virtuals" };
+  } catch (e) {
+    console.warn("[llm] Virtuals failed, trying Venice:", (e as Error).message);
+  }
+  try {
+    const text = await callVeniceLLM({ ...opts, webSearch: false });
+    return { text, provider: "venice" };
+  } catch (e) {
+    console.warn("[llm] Venice failed, trying Bankr:", (e as Error).message);
+  }
+  const text = await callBankrLLM({
+    system: opts.system,
+    messages: opts.messages ?? (opts.user != null ? [{ role: "user", content: opts.user }] : [{ role: "user", content: "" }]),
+    temperature: opts.temperature,
+    maxTokens: opts.maxTokens,
+    _skipEnhance: true,
+  });
+  return { text, provider: "bankr" };
+}
+
 export async function callVeniceLLM(opts: {
   system: string;
   /** Either a single user string… */

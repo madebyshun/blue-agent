@@ -9,7 +9,7 @@
 import { findByTicker, RH_CHAIN } from "@/lib/robinhood/rwa-registry";
 import { chainlinkLatest } from "@/lib/robinhood/rwa-price";
 import { resolvePrimaryPool, nyseMarketStatus } from "@/lib/robinhood/rwa-market";
-import { callVeniceLLM, extractJsonObject, NO_FABRICATION_RULE } from "@/app/api/_lib/llm";
+import { callLLM, extractJsonObject, NO_FABRICATION_RULE } from "@/app/api/_lib/llm";
 
 type Verdict =
   | "WATCH"
@@ -100,10 +100,14 @@ Do NOT invent numbers, headlines, or URLs. Empty arrays are acceptable.`;
 
     const user = `FACTS:\n${JSON.stringify(facts, null, 2)}\n\nCompute the brief.`;
     let context: Record<string, unknown> = {};
+    let llm_provider: string | null = null;
     try {
-      const raw = await callVeniceLLM({ system, user, temperature: 0, maxTokens: 400, webSearch: true });
-      context = extractJsonObject(raw) ?? {};
-    } catch {}
+      const r = await callLLM({ system, user, temperature: 0, maxTokens: 400, webSearch: true });
+      context = extractJsonObject(r.text) ?? {};
+      llm_provider = r.provider;
+    } catch (e) {
+      console.warn("[rh-stock-agent-brief] LLM chain failed:", (e as Error).message);
+    }
 
     return Response.json({
       tool: "rh-stock-agent-brief",
@@ -127,8 +131,9 @@ Do NOT invent numbers, headlines, or URLs. Empty arrays are acceptable.`;
       one_line_context: context.one_line_context ?? null,
       web_sources: Array.isArray(context.web_sources) ? context.web_sources : [],
       risk_flags: Array.isArray(context.risk_flags) ? context.risk_flags : [],
-      warnings: factWarnings,
-      note: "Verdict + warnings hard-mapped from Chainlink vs DEX + market-hours + feed age (never LLM-picked). Warnings mirror M5 exactly. Context is Venice-web-search-grounded. All numbers come from on-chain reads.",
+      warnings: factWarnings.concat(llm_provider === null ? ["llm_context_unavailable: verdict + warnings are still deterministic on facts; only the natural-language context is missing"] : []),
+      llm_provider,
+      note: "Verdict + warnings hard-mapped from Chainlink vs DEX + market-hours + feed age (never LLM-picked). Warnings mirror M5. Context synthesis routes Virtuals → Venice → Bankr.",
       data_sources: ["Chainlink AggregatorV3 (RH Chain)", "api.geckoterminal.com (RH Chain)", "Venice web search"],
       network: RH_CHAIN,
       timestamp,
