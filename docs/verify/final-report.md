@@ -9,7 +9,7 @@ Program state after this report: **FROZEN — hotfix-only, no feature PRs**.
 | Gate | Status | Notes |
 |---|---|---|
 | 1 — Paid x402 e2e from a fresh wallet | **PARTIAL** | Non-payment steps green. 1.2 + 1.4 (real USDC settle) require the user; scripts + expected fields documented in `gate1.md`. |
-| 2 — Probe → CI semantic smoke | **PASS (local) / CI wired** | 22/22 semantic assertions green on main. Workflow committed; needs `INTERNAL_SERVICE_KEY` GitHub secret + 2 consecutive prod crons to close. |
+| 2 — Probe → CI semantic smoke | **PASS on prod** | 22/22 assertions green via `workflow_dispatch` against prod after PR #205 hotfix. Awaiting 2 consecutive scheduled 6h crons to formally close per reviewer's rule. |
 | 3 — Concurrency / rate-limit | **PASS on first run** | 20/20 M4 concurrent, p95 1502ms, 0 429s. Existing 60s memo cache is sufficient at current traffic. No new cache tier added. |
 | 4 — Agent-consumption UX test | **PASS** | 2 independent sub-agents, 0 field misreads, correct FROZEN_ALIGNED interpretation, 7 tools chained each. |
 
@@ -39,9 +39,14 @@ Semantic assertions (all in `apps/web/scripts/semantic-smoke.ts`):
 - **L4**: MSTR → `CANONICAL`; random address → non-CANONICAL.
 - **A4**: `llm.provider` non-null; if `web_search_used=false`, warning `no_web_search_this_run` required.
 
-Local run: **22/22 pass**. Workflow: `.github/workflows/rh-rwa-semantic-smoke.yml` triggers on PR + 6h cron.
+Local run: **22/22 pass**. Prod dispatch (2026-07-17 10:19 UTC, run 29572993869): **22/22 pass**. Workflow: `.github/workflows/rh-rwa-semantic-smoke.yml` triggers on PR + 6h cron.
 
-**Action item**: repo admin must add `INTERNAL_SERVICE_KEY` GitHub Actions secret with the value from Vercel production env.
+**Post-report hotfix (PR #205)** — two script/handler bugs surfaced when first probing prod with the fresh `INTERNAL_SERVICE_KEY`:
+
+1. CI script only sent `X-Blue-Internal`. Handler bypass also requires `X-Blue-Service: internal` (loophole-close for paid tools when only the key leaks). Added the header.
+2. `if (!handler || !priceUnits)` 503'd free tools (priceUnits === 0). Changed to `priceUnits === undefined`.
+
+Both fixed and deployed 2026-07-17 10:14 UTC; first post-deploy dispatch was 22/22.
 
 ## Gate 3 — details
 
@@ -91,7 +96,7 @@ Two on-chain items remain the user's action. After these, program is fully froze
 
 1. **Gate 1.2**: fund a fresh wallet with ~$1 USDC + gas on Base, run the paid client call from `docs/verify/gate1.md`, paste the settle tx into `gate1.md`.
 2. **Gate 1.4**: same wallet, hit `rh-stock-agent-brief`, confirm `llm.provider === "virtuals"` and `warnings` includes `no_web_search_this_run`. Paste tx.
-3. Add GitHub Actions secret `INTERNAL_SERVICE_KEY` = value from Vercel prod → merge PR → wait for 2 consecutive green 6h crons on `.github/workflows/rh-rwa-semantic-smoke.yml`.
+3. ~~Add GitHub Actions secret `INTERNAL_SERVICE_KEY` = value from Vercel prod~~ ✅ done 2026-07-17. Wait for 2 consecutive green scheduled 6h crons on `.github/workflows/rh-rwa-semantic-smoke.yml` (first prod dispatch already 22/22).
 
 ## Program status after this report
 
