@@ -74,11 +74,14 @@ Do NOT recommend buy/sell — this is a brief, not a signal.`;
 
     let markdown = "";
     let llm_provider: string | null = null;
+    let llm_web_search_used = false;
+    let llm_duration_ms: number | null = null;
+    let llm_attempts: unknown[] = [];
     let llm_error: string | null = null;
     try {
-      // Primary: Virtuals (sponsored compute) → Venice (adds web-search for
-      // recent-news headlines) → Bankr (last resort). Fallback chain hides
-      // provider outages from the caller.
+      // Primary: Virtuals (sponsored, Kimi/DeepSeek) → Venice (may add web
+      // search) → Bankr (last resort). Every attempt is logged with
+      // provider/status/duration for prod tail visibility.
       const r = await callLLM({
         system,
         user: userPrompt,
@@ -88,8 +91,12 @@ Do NOT recommend buy/sell — this is a brief, not a signal.`;
       });
       markdown = r.text;
       llm_provider = r.provider;
+      llm_web_search_used = r.web_search_used;
+      llm_duration_ms = r.duration_ms;
+      llm_attempts = r.attempts;
     } catch (e) {
       llm_error = (e as Error).message;
+      llm_attempts = ((e as Error & { attempts?: unknown[] }).attempts) ?? [];
       console.warn("[rh-stock-report] all LLM providers unavailable:", llm_error);
       markdown = `# ${token.ticker} — data-only report\n\n_LLM synthesis unavailable this run. Real on-chain numbers below are unaffected._`;
     }
@@ -101,14 +108,22 @@ Do NOT recommend buy/sell — this is a brief, not a signal.`;
       contract: token.contract,
       facts,
       report_markdown: markdown,
-      llm_provider,
-      warnings: llm_error ? ["llm_synthesis_unavailable: all providers returned error; report degraded to data-only"] : [],
-      note: "Numbers in `facts` are verifiable on-chain (Chainlink + GT). Synthesis routed through Virtuals → Venice (web-search) → Bankr fallback chain. LLM must cite URLs and mark unverified items [estimate].",
+      llm: {
+        provider: llm_provider,
+        web_search_used: llm_web_search_used,
+        duration_ms: llm_duration_ms,
+        attempts: llm_attempts,
+      },
+      warnings: [
+        llm_error ? "llm_synthesis_unavailable: all providers returned error; report degraded to data-only" : null,
+        llm_provider !== null && !llm_web_search_used ? `no_web_search_this_run: served by ${llm_provider} which does not search; "News" section relies on training-data recall + \"[data unavailable]\" markers` : null,
+      ].filter((x): x is string => !!x),
+      note: "Numbers in `facts` are verifiable on-chain (Chainlink + GT). Synthesis chain: Virtuals (primary, sponsored) → Venice (web-search if reached) → Bankr (fallback). Every attempt logged with provider + status + duration.",
       data_sources: [
         "Chainlink AggregatorV3 (RH Chain)",
         "api.geckoterminal.com (RH Chain)",
         llm_provider === "virtuals" ? "Virtuals Compute (partner-sponsored)"
-        : llm_provider === "venice" ? "Venice AI (web-search)"
+        : llm_provider === "venice" ? (llm_web_search_used ? "Venice AI (web-search)" : "Venice AI")
         : llm_provider === "bankr" ? "Bankr LLM (fallback)"
         : null,
       ].filter(Boolean),

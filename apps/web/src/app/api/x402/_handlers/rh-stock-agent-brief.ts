@@ -101,11 +101,18 @@ Do NOT invent numbers, headlines, or URLs. Empty arrays are acceptable.`;
     const user = `FACTS:\n${JSON.stringify(facts, null, 2)}\n\nCompute the brief.`;
     let context: Record<string, unknown> = {};
     let llm_provider: string | null = null;
+    let llm_web_search_used = false;
+    let llm_duration_ms: number | null = null;
+    let llm_attempts: unknown[] = [];
     try {
       const r = await callLLM({ system, user, temperature: 0, maxTokens: 400, webSearch: true });
       context = extractJsonObject(r.text) ?? {};
       llm_provider = r.provider;
+      llm_web_search_used = r.web_search_used;
+      llm_duration_ms = r.duration_ms;
+      llm_attempts = r.attempts;
     } catch (e) {
+      llm_attempts = ((e as Error & { attempts?: unknown[] }).attempts) ?? [];
       console.warn("[rh-stock-agent-brief] LLM chain failed:", (e as Error).message);
     }
 
@@ -131,9 +138,19 @@ Do NOT invent numbers, headlines, or URLs. Empty arrays are acceptable.`;
       one_line_context: context.one_line_context ?? null,
       web_sources: Array.isArray(context.web_sources) ? context.web_sources : [],
       risk_flags: Array.isArray(context.risk_flags) ? context.risk_flags : [],
-      warnings: factWarnings.concat(llm_provider === null ? ["llm_context_unavailable: verdict + warnings are still deterministic on facts; only the natural-language context is missing"] : []),
-      llm_provider,
-      note: "Verdict + warnings hard-mapped from Chainlink vs DEX + market-hours + feed age (never LLM-picked). Warnings mirror M5. Context synthesis routes Virtuals → Venice → Bankr.",
+      warnings: factWarnings.concat(
+        [
+          llm_provider === null ? "llm_context_unavailable: verdict + warnings are still deterministic on facts; only the natural-language context is missing" : null,
+          llm_provider !== null && !llm_web_search_used ? `no_web_search_this_run: served by ${llm_provider} without external search — web_sources rely on training-data recall` : null,
+        ].filter((x): x is string => !!x),
+      ),
+      llm: {
+        provider: llm_provider,
+        web_search_used: llm_web_search_used,
+        duration_ms: llm_duration_ms,
+        attempts: llm_attempts,
+      },
+      note: "Verdict + warnings hard-mapped from Chainlink vs DEX + market-hours + feed age (never LLM-picked). Warnings mirror M5. Context synthesis: Virtuals (primary) → Venice (fallback, web-search if reached) → Bankr. Every attempt logged.",
       data_sources: ["Chainlink AggregatorV3 (RH Chain)", "api.geckoterminal.com (RH Chain)", "Venice web search"],
       network: RH_CHAIN,
       timestamp,
