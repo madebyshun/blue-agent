@@ -31,11 +31,17 @@ async function getLocalHandlers() {
 
 async function call(tool: string, body: unknown): Promise<{ status: number; data: Record<string, unknown> }> {
   if (MODE === "http") {
+    // NOTE: paid tools require BOTH headers on the internal-bypass path:
+    //   - X-Blue-Internal proves the caller knows the internal secret
+    //   - X-Blue-Service: internal declares intent as a server-to-server job
+    //     (otherwise the handler returns 402 WALLET_REQUIRED to close the
+    //     "guest calls paid tool with just the key" loophole).
     const r = await fetch(`${TARGET}/api/x402/${tool}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-Blue-Internal": INTERNAL_KEY,
+        "X-Blue-Service": "internal",
       },
       body: JSON.stringify(body),
     });
