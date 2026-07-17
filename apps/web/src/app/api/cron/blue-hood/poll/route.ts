@@ -10,6 +10,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { persistSnapshot, runPollCycle } from "@/lib/blue-hood/poller";
+import { runRuleEngine } from "@/lib/blue-hood/rule-engine";
+import { runGrader } from "@/lib/blue-hood/grader";
 import { TOOL_CALLER_MODE } from "@/lib/blue-hood/tool-caller";
 
 export const runtime = "nodejs";
@@ -31,8 +33,19 @@ async function handle(req: NextRequest) {
   }
 
   try {
+    // 1. Fresh snapshot (M5 for the whole watchlist).
     const snap = await runPollCycle();
     await persistSnapshot(snap);
+
+    // 2. Rule engine — fires arrows for any row that matches drift/arb rules.
+    //    Deduped against open arrows via `bh:arrow:open:{ticker}:{type}`.
+    const engine = await runRuleEngine(snap);
+
+    // 3. Grader — closes any arrow whose grading window has elapsed.
+    //    Runs after the engine so a just-fired arrow can't be graded in the
+    //    same cycle (its window hasn't elapsed yet — guaranteed by construction).
+    const grader = await runGrader();
+
     return NextResponse.json({
       ok: true,
       mode: TOOL_CALLER_MODE,
@@ -43,6 +56,16 @@ async function handle(req: NextRequest) {
       market_is_open: snap.metrics.market_is_open,
       market_session: snap.metrics.market_session,
       tvl_scanned_usd: Math.round(snap.metrics.tvl_scanned_usd),
+      arrows: {
+        fired: engine.arrows_fired.map((a) => ({ serial: a.serial, ticker: a.ticker, type: a.type, expected: a.expected_direction })),
+        skipped_dedup: engine.arrows_skipped_dedup,
+        skipped_no_match: engine.arrows_skipped_no_match,
+      },
+      grader: {
+        graded: grader.graded.map((a) => ({ serial: a.serial, ticker: a.ticker, type: a.type, outcome: a.outcome, detail: a.outcome_detail })),
+        still_open: grader.still_open,
+        errored: grader.errored,
+      },
     });
   } catch (e) {
     return NextResponse.json(

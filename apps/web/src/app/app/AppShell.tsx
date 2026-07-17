@@ -57,6 +57,21 @@ const APP_NAV = [
     ),
   },
   {
+    id: "hood",
+    label: "Hood",
+    href: "/hood",
+    icon: (
+      // Arrow-through-hood glyph — Blue Hood is the 24/7 Robinhood Chain
+      // copilot; the arrow motif carries into every serial + inbox card.
+      <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round"
+          d="M3.75 12h16.5m0 0-6-6m6 6-6 6" />
+        <path strokeLinecap="round" strokeLinejoin="round"
+          d="M3.75 4.5v15" />
+      </svg>
+    ),
+  },
+  {
     id: "b20",
     label: "B20 Hub",
     href: "/b20",

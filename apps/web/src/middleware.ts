@@ -23,6 +23,7 @@ const APP_SEGMENTS = new Set([
   "chat",
   "dashboard",
   "feed",
+  "hood",
   "hub",
   "launches",
   "profile",
