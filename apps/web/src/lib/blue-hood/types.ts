@@ -56,6 +56,13 @@ export interface TickerSnapshot {
   warnings: string[];
   /** Error message if `verdict === "ERROR"`. */
   error?: string;
+  /** Wall-clock ms since cycle start when this row was polled. Used by the
+   *  UI to compute per-row freshness (`age_s = now - snap.started_at - polled_at_ms`). */
+  polled_at_ms: number;
+  /** How stale the GT pool response was when reshaped (seconds). Null on
+   *  cold fetch, a number when memo-served. Reviewer T1(d): "token nào
+   *  serve từ cache cũ phải nói". */
+  data_age_s: number | null;
 }
 
 export interface HoodSnapshot {

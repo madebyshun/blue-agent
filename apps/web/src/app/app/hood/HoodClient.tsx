@@ -41,7 +41,25 @@ const BORDER = "#1A1A2E";
 const MUTED = "#6b7280";
 
 type SortKey = "drift" | "volume" | "tvl";
-type Filter = "all" | "drifting" | "flow" | "frozen";
+type Filter = "tradable" | "drifting" | "flow" | "frozen" | "dust" | "no_data" | "all";
+
+// T2 — dust floor matches the engine's arrow gate. Anything under this is
+// treated as untradable at the row level (verdict badged as DUST, drift
+// faded, sorted last, hidden from default filter).
+const DUST_TVL_USD = 5_000;
+
+function isDust(r: TickerSnapshot): boolean {
+  return r.verdict !== "ERROR" && r.dex_usd !== null && (r.tvl_usd ?? 0) < DUST_TVL_USD;
+}
+function isNoData(r: TickerSnapshot): boolean {
+  return r.verdict === "ERROR" || r.verdict === "INSUFFICIENT_DATA" || r.dex_usd === null;
+}
+function isTradable(r: TickerSnapshot): boolean {
+  return !isDust(r) && !isNoData(r);
+}
+function isFrozenLike(v: TickerSnapshot["verdict"]): boolean {
+  return v === "FROZEN_ALIGNED" || v === "PREMARKET_DRIFT" || v === "AFTERHOURS_DRIFT";
+}
 
 type SnapshotRes = { ok: true; snapshot: HoodSnapshot } | { ok: false; error: string };
 type ArrowsRes =
@@ -62,7 +80,9 @@ export default function HoodClient() {
   const [err, setErr] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<number>(0);
   const [sort, setSort] = useState<SortKey>("drift");
-  const [filter, setFilter] = useState<Filter>("all");
+  // T2 — default filter hides dust so the top of the board is tradable
+  // rows, not COIN +132% on a $1k pool.
+  const [filter, setFilter] = useState<Filter>("tradable");
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -86,20 +106,37 @@ export default function HoodClient() {
     return () => { ctl.abort(); clearInterval(t); };
   }, [load]);
 
-  const rows = useMemo<TickerSnapshot[]>(() => {
-    if (!snap) return [];
-    let list = snap.tickers.filter((r) => r.verdict !== "ERROR");
-    if (filter === "drifting") list = list.filter((r) => Math.abs(r.drift_pct ?? 0) >= 1);
-    else if (filter === "flow") list = list.filter((r) => (r.volume_24h_usd ?? 0) >= 5_000);
-    else if (filter === "frozen") list = list.filter((r) =>
-      r.verdict === "FROZEN_ALIGNED" || r.verdict === "PREMARKET_DRIFT" || r.verdict === "AFTERHOURS_DRIFT",
-    );
+  // T2 + T3 — categorize once so filter pill counts + row grouping stay in sync.
+  const buckets = useMemo(() => {
+    if (!snap) return { tradable: [], dust: [], no_data: [] } as Record<"tradable" | "dust" | "no_data", TickerSnapshot[]>;
+    const tradable: TickerSnapshot[] = [];
+    const dust: TickerSnapshot[] = [];
+    const no_data: TickerSnapshot[] = [];
+    for (const r of snap.tickers) {
+      if (isNoData(r)) no_data.push(r);
+      else if (isDust(r)) dust.push(r);
+      else tradable.push(r);
+    }
+    return { tradable, dust, no_data };
+  }, [snap]);
+
+  const filtered = useMemo<TickerSnapshot[]>(() => {
+    let list: TickerSnapshot[];
+    switch (filter) {
+      case "tradable": list = buckets.tradable; break;
+      case "dust":     list = buckets.dust; break;
+      case "no_data":  list = buckets.no_data; break;
+      case "drifting": list = buckets.tradable.filter((r) => Math.abs(r.drift_pct ?? 0) >= 1); break;
+      case "flow":     list = buckets.tradable.filter((r) => (r.volume_24h_usd ?? 0) >= 5_000); break;
+      case "frozen":   list = buckets.tradable.filter((r) => isFrozenLike(r.verdict)); break;
+      case "all":      list = [...buckets.tradable, ...buckets.dust, ...buckets.no_data]; break;
+    }
     return [...list].sort((a, b) => {
       if (sort === "drift") return Math.abs(b.drift_pct ?? 0) - Math.abs(a.drift_pct ?? 0);
       if (sort === "volume") return (b.volume_24h_usd ?? 0) - (a.volume_24h_usd ?? 0);
       return (b.tvl_usd ?? 0) - (a.tvl_usd ?? 0);
     });
-  }, [snap, sort, filter]);
+  }, [buckets, sort, filter]);
 
   const marketBadge = useMemo(() => {
     if (!snap) return { label: "…", color: MUTED };
@@ -152,14 +189,14 @@ export default function HoodClient() {
           <SectionHeader label="// HOOD · DRIFT BOARD" />
 
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            <FilterPills value={filter} onChange={setFilter} />
+            <FilterPills value={filter} onChange={setFilter} buckets={buckets} />
             <div className="ml-auto flex items-center gap-2 text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
               <span>sort</span>
               <SortToggle value={sort} onChange={setSort} />
             </div>
           </div>
 
-          <DriftBoard rows={rows} rowRefs={rowRefs} />
+          <DriftBoard rows={filtered} rowRefs={rowRefs} />
 
           <div className="h-10" />
           <SectionHeader label="// HOOD · ARROWS FEED" />
@@ -263,29 +300,49 @@ function MetricStrip({
 }
 
 // ── Filter + sort ──────────────────────────────────────────────────────────
-function FilterPills({ value, onChange }: { value: Filter; onChange: (v: Filter) => void }) {
-  const opts: { key: Filter; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "drifting", label: "Drifting" },
-    { key: "flow", label: "Flow signals" },
-    { key: "frozen", label: "Frozen" },
+function FilterPills({
+  value,
+  onChange,
+  buckets,
+}: {
+  value: Filter;
+  onChange: (v: Filter) => void;
+  buckets: Record<"tradable" | "dust" | "no_data", TickerSnapshot[]>;
+}) {
+  // T5 — every pill shows its bucket count. Empty buckets get grayed but
+  // stay clickable so the presence of a category is always visible.
+  const driftingN = buckets.tradable.filter((r) => Math.abs(r.drift_pct ?? 0) >= 1).length;
+  const flowN = buckets.tradable.filter((r) => (r.volume_24h_usd ?? 0) >= 5_000).length;
+  const frozenN = buckets.tradable.filter((r) => isFrozenLike(r.verdict)).length;
+
+  const opts: { key: Filter; label: string; count: number }[] = [
+    { key: "tradable", label: "Tradable", count: buckets.tradable.length },
+    { key: "drifting", label: "Drifting", count: driftingN },
+    { key: "flow",     label: "Flow",     count: flowN },
+    { key: "frozen",   label: "Frozen",   count: frozenN },
+    { key: "dust",     label: "Dust",     count: buckets.dust.length },
+    { key: "no_data",  label: "No data",  count: buckets.no_data.length },
   ];
   return (
-    <div className="flex gap-1">
+    <div className="flex flex-wrap gap-1">
       {opts.map((o) => {
         const active = o.key === value;
+        const empty = o.count === 0;
         return (
           <button
             key={o.key}
             onClick={() => onChange(o.key)}
-            className="rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+            disabled={empty && !active}
+            className="rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed"
             style={{
               borderColor: active ? RH_GREEN : BORDER,
               backgroundColor: active ? "rgba(0,200,5,0.10)" : "transparent",
-              color: active ? RH_GREEN : "#9aa1ac",
+              color: active ? RH_GREEN : empty ? "#3f4550" : "#9aa1ac",
+              opacity: empty && !active ? 0.55 : 1,
             }}
           >
-            {o.label}
+            <span>{o.label}</span>
+            <span className="ml-1 font-mono tabular-nums" style={{ opacity: 0.65 }}>({o.count})</span>
           </button>
         );
       })}
@@ -367,14 +424,55 @@ function DriftRow({
   rowRefs: React.MutableRefObject<Record<string, HTMLTableRowElement | null>>;
 }) {
   const drift = r.drift_pct ?? 0;
+  const dust = isDust(r);
+  const noData = isNoData(r);
   const driftColor = Math.abs(drift) < 0.5 ? "#9aa1ac" : drift > 0 ? GREEN_TEXT : RED;
-  const thin = (r.tvl_usd ?? 0) < 5_000;
+
+  // T3 — NO DATA row is a distinct visual state: dim oracle, no DEX, no drift.
+  if (noData) {
+    return (
+      <tr
+        ref={(el) => { rowRefs.current[r.ticker] = el; }}
+        className="border-b last:border-b-0 hover:bg-black/40"
+        style={{ borderColor: "#0f1218" }}
+      >
+        <td className="px-3 py-2 text-left">
+          <a
+            href={`https://robinhoodchain.blockscout.com/token/${r.contract}`}
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-slate-500 hover:text-slate-300"
+          >
+            {r.ticker}
+          </a>
+        </td>
+        <td className="px-3 py-2 text-right text-slate-500">{formatUsd(r.oracle_usd)}</td>
+        <td className="px-3 py-2 text-right text-slate-600">—</td>
+        <td className="px-3 py-2 text-right text-slate-600">—</td>
+        <td className="px-3 py-2 text-right text-slate-600">—</td>
+        <td className="px-3 py-2 text-right text-slate-600">—</td>
+        <td className="px-3 py-2 text-left">
+          <span
+            className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider"
+            style={{ color: "#6b7280", backgroundColor: "#0f1218" }}
+            title={r.error ?? "GT returned no pool data. Retry next cycle."}
+          >
+            NO POOL DATA
+          </span>
+        </td>
+      </tr>
+    );
+  }
+
+  // T2 — dust row: badge = DUST (gray), drift faded, no LONG/SHORT verdict.
+  const rowOpacity = dust ? 0.55 : 1;
+  const driftDisplay = dust ? { color: "#4b5563" } : { color: driftColor };
 
   return (
     <tr
       ref={(el) => { rowRefs.current[r.ticker] = el; }}
       className="border-b last:border-b-0 hover:bg-black/40"
-      style={{ borderColor: "#0f1218" }}
+      style={{ borderColor: "#0f1218", opacity: rowOpacity }}
     >
       <td className="px-3 py-2 text-left">
         <a
@@ -398,32 +496,52 @@ function DriftRow({
           <span className="text-[#E7E9EE]">{formatUsd(r.dex_usd)}</span>
         )}
       </td>
-      <td className="px-3 py-2 text-right" style={{ color: driftColor }}>
+      <td className="px-3 py-2 text-right font-mono" style={driftDisplay}>
         {drift > 0 ? "+" : ""}{drift.toFixed(2)}%
       </td>
       <td
         className="px-3 py-2 text-right"
-        style={{ color: thin ? AMBER : "#9aa1ac" }}
-        title={thin ? "Thin pool — arrows are gated off this row" : undefined}
+        style={{ color: dust ? AMBER : "#9aa1ac" }}
+        title={dust ? `Below $${DUST_TVL_USD.toLocaleString()} — arrows are gated off this row` : undefined}
       >
         {formatUsd(r.tvl_usd)}
       </td>
       <td className="px-3 py-2 text-right" style={{ color: "#9aa1ac" }}>{formatUsd(r.volume_24h_usd)}</td>
-      <td className="px-3 py-2 text-left"><VerdictBadge verdict={r.verdict} /></td>
+      <td className="px-3 py-2 text-left">
+        {dust ? <DustBadge /> : <VerdictBadge verdict={r.verdict} />}
+      </td>
     </tr>
   );
 }
 
+// T2 — separate badge so LONG/SHORT never leaks onto a dust row.
+function DustBadge() {
+  return (
+    <span
+      className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider"
+      style={{ color: "#6b7280", backgroundColor: "#0f1218" }}
+      title="Pool TVL below $5k floor — the engine won't fire arrows off this row"
+    >
+      DUST
+    </span>
+  );
+}
+
 function VerdictBadge({ verdict }: { verdict: M5Verdict | "ERROR" }) {
+  // T4 — semantic colors by direction/state:
+  //   LONG DEX  = green  (DEX cheaper than oracle → buy DEX)
+  //   SHORT DEX = red    (DEX more expensive → sell DEX / short)
+  //   ALIGNED   = gray   (no signal, not a direction)
+  //   FROZEN_*  = amber  (market closed, tool is honest that this isn't arb)
   const map: Record<M5Verdict | "ERROR", { label: string; color: string; bg: string }> = {
-    ALIGNED: { label: "ALIGNED", color: GREEN_TEXT, bg: "rgba(34,197,94,0.10)" },
-    LONG_DEX: { label: "LONG DEX", color: GREEN_TEXT, bg: "rgba(34,197,94,0.10)" },
-    SHORT_DEX: { label: "SHORT DEX", color: RED, bg: "rgba(239,68,68,0.10)" },
-    FROZEN_ALIGNED: { label: "FROZEN", color: "#9aa1ac", bg: "#0f1218" },
-    PREMARKET_DRIFT: { label: "PRE DRIFT", color: AMBER, bg: "rgba(245,179,66,0.10)" },
-    AFTERHOURS_DRIFT: { label: "AH DRIFT", color: AMBER, bg: "rgba(245,179,66,0.10)" },
-    INSUFFICIENT_DATA: { label: "NO DATA", color: MUTED, bg: "#0f1218" },
-    ERROR: { label: "ERR", color: RED, bg: "rgba(239,68,68,0.10)" },
+    ALIGNED:          { label: "ALIGNED",   color: "#94a3b8", bg: "#0f1218" },
+    LONG_DEX:         { label: "LONG DEX",  color: GREEN_TEXT, bg: "rgba(34,197,94,0.10)" },
+    SHORT_DEX:        { label: "SHORT DEX", color: RED,        bg: "rgba(239,68,68,0.10)" },
+    FROZEN_ALIGNED:   { label: "FROZEN",    color: AMBER,      bg: "rgba(245,179,66,0.10)" },
+    PREMARKET_DRIFT:  { label: "PRE DRIFT", color: AMBER,      bg: "rgba(245,179,66,0.10)" },
+    AFTERHOURS_DRIFT: { label: "AH DRIFT",  color: AMBER,      bg: "rgba(245,179,66,0.10)" },
+    INSUFFICIENT_DATA:{ label: "NO DATA",   color: MUTED,      bg: "#0f1218" },
+    ERROR:            { label: "ERR",       color: RED,        bg: "rgba(239,68,68,0.10)" },
   };
   const s = map[verdict];
   return (

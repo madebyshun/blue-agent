@@ -1,22 +1,23 @@
 /**
  * Blue Hood — one poll cycle.
  *
- * Called by the cron route (/api/cron/blue-hood/poll) every 60s. Fans out
- * M5 (`rh-stock-arb`) for the whole watchlist, reshapes each response into
- * a `TickerSnapshot`, writes:
- *   • `bh:snapshot:latest` (the read path for /hood + the rule engine)
- *   • `bh:snapshot:hour:YYYYMMDDHH` (ring buffer for the sparkline / history)
+ * Called by the 60s scheduler (/api/cron/blue-hood/poll). Fans out M5
+ * (`rh-stock-arb`) across the watchlist and reshapes each response into a
+ * `TickerSnapshot`. Writes:
+ *   • `bh:snapshot:latest` — read path for /hood + the rule engine
+ *   • `bh:snapshot:hour:YYYYMMDDHH` — ring buffer for the sparkline / history
  *
- * Design notes:
- *   • Concurrency-capped: 26 tokens × M5 in parallel is fine (Gate 3
- *     showed p95 1502ms for 20× concurrent M5 with zero 429s), but we still
- *     batch in groups of 8 so a burst doesn't spike GeckoTerminal.
- *   • Every field the /hood UI reads comes verbatim from the tool response —
- *     we never re-derive drift or verdict here. The tool is the source of
- *     truth, this file is glue.
- *   • On per-ticker failure we emit a `verdict: "ERROR"` row + `error` field
- *     rather than dropping the ticker; the UI can show "n/26 online" and
- *     preserve slot ordering.
+ * ── Rate-limit strategy (T1) ───────────────────────────────────────────────
+ * GeckoTerminal's free tier caps at ~30 req/min. The earlier "batch 8×"
+ * approach burst all 24 tokens in <2s and got rate-limited from position ~9
+ * onwards ("alphabet cutoff" at INTC). This poller now runs SEQUENTIAL with
+ * a stagger delay so 24 tokens land across ~60s, which sits under GT's
+ * cap and gives the memo layer time to reuse.
+ *
+ * The exact stagger is `BH_POLL_STAGGER_MS` (default 2500ms → 60s cycle).
+ * On a warm handler the 60s memo TTL in `rwa-market.ts` means a same-token
+ * re-poll one cycle later still hits network (memo just expired) — that's
+ * intentional; we want fresh prices, not stale ones.
  */
 import { kvSet } from "@/lib/kv";
 import { HOOD_WATCHLIST, HOOD_REGISTRY_STATS } from "./registry";
@@ -28,6 +29,7 @@ import {
   yyyymmddhh,
 } from "./kv-keys";
 import type { HoodSnapshot, M5Verdict, MarketSession, TickerSnapshot } from "./types";
+import { cacheAgeS } from "@/lib/robinhood/rwa-market";
 
 // M5 response shape (subset we care about — kept in this file so a change in
 // the tool trips a compile error here first).
@@ -49,9 +51,26 @@ interface M5Response {
   warnings: string[];
 }
 
-async function pollOne(ticker: string): Promise<TickerSnapshot> {
+const GT_TOKENS_URL_BASE = "https://api.geckoterminal.com/api/v2/networks/robinhood/tokens";
+// 3s stagger → 24 tokens over ~72s per cycle. GT rate-limit on the RH
+// network endpoint seems to sit around 20 req/min in practice (below the
+// 30/min free-tier claim); 3s stagger stays safely under.
+const DEFAULT_STAGGER_MS = 3000;
+function staggerMs(): number {
+  const raw = process.env.BH_POLL_STAGGER_MS;
+  if (raw === undefined || raw === "") return DEFAULT_STAGGER_MS;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : DEFAULT_STAGGER_MS;
+}
+
+async function pollOne(ticker: string, cycleStart: number): Promise<TickerSnapshot> {
   const entry = HOOD_WATCHLIST.find((t) => t.ticker === ticker)!;
+  const polled_at_ms = Date.now() - cycleStart;
   const r = await callTool<M5Response>("rh-stock-arb", { ticker });
+
+  // Freshness attribution — inspect the memo for the URL M5 hit internally.
+  const gtUrl = `${GT_TOKENS_URL_BASE}/${entry.contract.toLowerCase()}/pools?page=1`;
+  const data_age_s = cacheAgeS(gtUrl);
 
   if (!r.ok) {
     return {
@@ -73,6 +92,8 @@ async function pollOne(ticker: string): Promise<TickerSnapshot> {
       },
       warnings: [],
       error: `${r.status}: ${r.error}`,
+      polled_at_ms,
+      data_age_s,
     };
   }
 
@@ -91,29 +112,38 @@ async function pollOne(ticker: string): Promise<TickerSnapshot> {
     is_v4_pool_id: Boolean(d.dex?.is_v4_pool_id),
     market: d.market,
     warnings: Array.isArray(d.warnings) ? d.warnings : [],
+    polled_at_ms,
+    data_age_s,
   };
 }
 
 /**
- * Fan out M5 across the watchlist in batches. Returns the full snapshot;
- * writing to KV is the caller's job so the cron route can also decide the
- * cycle_id (based on wall-clock hour bucket).
+ * Sequential+staggered poll. Logs one `[poller]` line per token so a
+ * NO_DATA row can be attributed to the exact position in the cycle.
  */
 export async function runPollCycle(): Promise<HoodSnapshot> {
   const started_at = new Date();
-  const BATCH = 8;
   const rows: TickerSnapshot[] = [];
-  for (let i = 0; i < HOOD_WATCHLIST.length; i += BATCH) {
-    const slice = HOOD_WATCHLIST.slice(i, i + BATCH);
-    const results = await Promise.all(slice.map((t) => pollOne(t.ticker)));
-    rows.push(...results);
-  }
-  const finished_at = new Date();
+  const gap = staggerMs();
 
+  console.log(`[poller] cycle=${Math.floor(started_at.getTime() / 1000)} strategy=sequential stagger_ms=${gap} count=${HOOD_WATCHLIST.length}`);
+
+  for (let i = 0; i < HOOD_WATCHLIST.length; i++) {
+    const token = HOOD_WATCHLIST[i];
+    const t0 = Date.now();
+    const row = await pollOne(token.ticker, started_at.getTime());
+    const elapsed_ms = Date.now() - t0;
+    const ageStr = row.data_age_s === null ? "cold" : `age=${row.data_age_s.toFixed(1)}s`;
+    console.log(`[poller] seq=${i + 1}/${HOOD_WATCHLIST.length} ticker=${row.ticker} verdict=${row.verdict} elapsed_ms=${elapsed_ms} ${ageStr}`);
+    rows.push(row);
+    if (gap > 0 && i < HOOD_WATCHLIST.length - 1) {
+      await new Promise((res) => setTimeout(res, gap));
+    }
+  }
+
+  const finished_at = new Date();
   const tokens_errored = rows.filter((r) => r.verdict === "ERROR").length;
   const tvl_scanned_usd = rows.reduce((sum, r) => sum + (r.tvl_usd ?? 0), 0);
-  // Market clock — read from the first successful row. All rows share the
-  // same NY clock so this is safe.
   const first_ok = rows.find((r) => r.verdict !== "ERROR");
   const market = first_ok?.market ?? {
     is_open: false,
@@ -128,7 +158,6 @@ export async function runPollCycle(): Promise<HoodSnapshot> {
     duration_ms: finished_at.getTime() - started_at.getTime(),
     tickers: rows,
     metrics: {
-      // Honest denominator — how many stock/ETF rows exist vs how many we poll.
       registry_total: HOOD_REGISTRY_STATS.rwa_candidates,
       tokens_watched: HOOD_WATCHLIST.length,
       tokens_no_feed: HOOD_REGISTRY_STATS.no_chainlink_feed,

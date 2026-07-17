@@ -15,7 +15,10 @@ import { runGrader } from "@/lib/blue-hood/grader";
 import { TOOL_CALLER_MODE } from "@/lib/blue-hood/tool-caller";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// 24 tokens × 3s stagger + M5 wall time + 429 retry waits ≈ 90-120s per
+// cycle. maxDuration=180 gives 60s buffer for anomalous slow responses.
+// Vercel Pro allows up to 300; we don't need the whole runway.
+export const maxDuration = 180;
 
 const CRON_SECRET = process.env.CRON_SECRET ?? "";
 

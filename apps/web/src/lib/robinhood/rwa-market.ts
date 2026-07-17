@@ -12,20 +12,70 @@ type Cache<T> = { at: number; data: T };
 const MEMO = new Map<string, Cache<unknown>>();
 const TTL_MS = 60_000;
 
+/**
+ * cacheAgeS — public helper so upstream (poller, snapshot) can attribute
+ * freshness to a specific URL. Returns null if the URL was never fetched
+ * or the memo has expired. Never touches network.
+ */
+export function cacheAgeS(url: string): number | null {
+  const c = MEMO.get(url) as Cache<unknown> | undefined;
+  if (!c) return null;
+  const age = (Date.now() - c.at) / 1000;
+  if (age > TTL_MS / 1000) return null;
+  return age;
+}
+
+/**
+ * fetchJson — GT wrapper with:
+ *   • 60s in-memory memo (survives across handler invocations on the same
+ *     warm instance — safely re-served without network)
+ *   • honest null on failure (never fabricate)
+ *   • 429 handling — logs `[gt-fetch]` and honors `Retry-After` (or 5s)
+ *     with a single retry, so the burst-N-then-cool pattern GT free tier
+ *     enforces doesn't silently trash the poller
+ *   • status logging on any non-200 so downstream (Blue Hood poller,
+ *     alerts) can attribute NO_DATA rows to the actual cause
+ */
 async function fetchJson<T>(url: string, timeoutMs = 6000): Promise<T | null> {
   const now = Date.now();
   const cached = MEMO.get(url) as Cache<T> | undefined;
   if (cached && now - cached.at < TTL_MS) return cached.data;
+  // 2 retries — 429 windows tend to reset within 5-10s so two attempts
+  // (5s + 5-15s waits) cover typical bursts without extending too far.
+  return doFetch<T>(url, timeoutMs, 2);
+}
+
+async function doFetch<T>(url: string, timeoutMs: number, retriesLeft: number): Promise<T | null> {
   try {
     const r = await fetch(url, {
       signal: AbortSignal.timeout(timeoutMs),
       headers: { accept: "application/json;version=20230302" },
     });
-    if (!r.ok) return null;
+    if (r.status === 429) {
+      // GT's `retry-after` on the RH endpoint is often "0" or missing — the
+      // rate window resets on a fixed cadence, not per-request. Minimum
+      // wait 5s prevents us from re-hammering an already-cooked window.
+      const retryAfter = Number(r.headers.get("retry-after") ?? "5");
+      const waitMs = Math.min(15_000, Math.max(5_000, retryAfter * 1000));
+      console.warn(`[gt-fetch] 429 rate-limited ${url} retry_after_s=${retryAfter} wait_ms=${waitMs} retrying=${retriesLeft > 0}`);
+      if (retriesLeft > 0) {
+        await new Promise((res) => setTimeout(res, waitMs));
+        return doFetch<T>(url, timeoutMs, retriesLeft - 1);
+      }
+      return null;
+    }
+    if (!r.ok) {
+      console.warn(`[gt-fetch] non-200 status=${r.status} ${url}`);
+      return null;
+    }
     const d = (await r.json()) as T;
-    MEMO.set(url, { at: now, data: d });
+    MEMO.set(url, { at: Date.now(), data: d });
     return d;
-  } catch {
+  } catch (e) {
+    // AbortController timeout / network error. Silent under normal use
+    // (already handled by callers via null return) but logged so a burst
+    // of timeouts is visible.
+    console.warn(`[gt-fetch] error ${url} ${(e as Error).name}: ${(e as Error).message}`);
     return null;
   }
 }

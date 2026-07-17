@@ -110,6 +110,8 @@ async function main() {
       ny_time_iso: new Date().toISOString(),
     },
     warnings,
+    polled_at_ms: 0,
+    data_age_s: null,
   });
 
   const snap: HoodSnapshot = {

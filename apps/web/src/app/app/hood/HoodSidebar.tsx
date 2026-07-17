@@ -16,6 +16,7 @@
  * sync (single source of truth = HoodClient's fetch loop).
  */
 
+import { useState } from "react";
 import type { Arrow, HoodSnapshot, M5Verdict, TickerSnapshot } from "@/lib/blue-hood/types";
 
 const RH_GREEN = "#00C805";
@@ -25,6 +26,14 @@ const RED = "#ef4444";
 const GREEN = "#22c55e";
 const MUTED = "#6b7280";
 const BORDER = "#1A1A2E";
+const DUST_TVL_USD = 5_000;
+
+function isDust(r: TickerSnapshot): boolean {
+  return r.verdict !== "ERROR" && r.dex_usd !== null && (r.tvl_usd ?? 0) < DUST_TVL_USD;
+}
+function isNoData(r: TickerSnapshot): boolean {
+  return r.verdict === "ERROR" || r.verdict === "INSUFFICIENT_DATA" || r.dex_usd === null;
+}
 
 function verdictDotColor(v: M5Verdict | "ERROR"): string {
   switch (v) {
@@ -60,6 +69,16 @@ export default function HoodSidebar({
 }) {
   const rows: TickerSnapshot[] = snap?.tickers ?? [];
 
+  // T2 — collapsible dust group. Tradable rows go up top; dust rows are
+  // grouped, sorted, and hidden by default with a "· N dust pools" toggle.
+  // NO DATA rows also cluster so a rate-limited cycle stays visible but
+  // doesn't mingle with tradable rows.
+  const tradable = rows.filter((r) => !isDust(r) && !isNoData(r));
+  const dust = rows.filter(isDust);
+  const noData = rows.filter(isNoData);
+  const [dustOpen, setDustOpen] = useState(false);
+  const [noDataOpen, setNoDataOpen] = useState(false);
+
   return (
     <aside
       className="hidden lg:flex flex-col w-72 shrink-0 h-full border-r"
@@ -86,54 +105,72 @@ export default function HoodSidebar({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {/* Watchlist */}
+        {/* Watchlist — tradable first, then dust (collapsed by default),
+            then NO DATA (also collapsed). Header stays sortable by |drift|. */}
         <div className="px-2 pt-3">
           <SectionLabel label="WATCHLIST" count={rows.length} />
+
           {rows.length === 0 ? (
             <SidebarEmpty text="Poller warming up…" />
           ) : (
-            <ul className="pb-2">
-              {rows
-                .slice()
-                .sort((a, b) => Math.abs(b.drift_pct ?? 0) - Math.abs(a.drift_pct ?? 0))
-                .map((r) => {
-                  const drift = r.drift_pct ?? 0;
-                  const dotColor = verdictDotColor(r.verdict);
-                  const thin = (r.tvl_usd ?? 0) < 5_000;
-                  return (
-                    <li key={r.ticker}>
-                      <button
-                        onClick={() => onSelectTicker(r.ticker)}
-                        className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff08]"
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full shrink-0"
-                          style={{ backgroundColor: dotColor }}
-                          title={r.verdict}
-                        />
-                        <span className="font-mono text-[12px] text-slate-200 tracking-wide">
-                          {r.ticker}
-                        </span>
-                        {thin && (
-                          <span
-                            className="font-mono text-[9px] uppercase tracking-widest ml-1"
-                            style={{ color: AMBER }}
-                            title="Pool TVL < $5k — arrows are gated off this row"
-                          >
-                            thin
-                          </span>
-                        )}
-                        <span
-                          className="ml-auto font-mono text-[11px] tabular-nums"
-                          style={{ color: driftColor(drift) }}
-                        >
-                          {drift === 0 ? "—" : `${drift > 0 ? "+" : ""}${drift.toFixed(2)}%`}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-            </ul>
+            <>
+              {tradable.length === 0 && (
+                <SidebarEmpty text="No tradable rows this cycle." />
+              )}
+              <ul className="pb-1">
+                {tradable
+                  .slice()
+                  .sort((a, b) => Math.abs(b.drift_pct ?? 0) - Math.abs(a.drift_pct ?? 0))
+                  .map((r) => (
+                    <WatchRow key={r.ticker} r={r} kind="tradable" onSelect={onSelectTicker} />
+                  ))}
+              </ul>
+
+              {dust.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setDustOpen((v) => !v)}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff06]"
+                    style={{ color: MUTED }}
+                  >
+                    <span className="font-mono text-[10px] tracking-widest">
+                      {dustOpen ? "▾" : "▸"} · {dust.length} DUST POOLS
+                    </span>
+                  </button>
+                  {dustOpen && (
+                    <ul className="pb-1">
+                      {dust
+                        .slice()
+                        .sort((a, b) => (b.tvl_usd ?? 0) - (a.tvl_usd ?? 0))
+                        .map((r) => (
+                          <WatchRow key={r.ticker} r={r} kind="dust" onSelect={onSelectTicker} />
+                        ))}
+                    </ul>
+                  )}
+                </>
+              )}
+
+              {noData.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setNoDataOpen((v) => !v)}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff06]"
+                    style={{ color: MUTED }}
+                  >
+                    <span className="font-mono text-[10px] tracking-widest">
+                      {noDataOpen ? "▾" : "▸"} · {noData.length} NO POOL DATA
+                    </span>
+                  </button>
+                  {noDataOpen && (
+                    <ul className="pb-1">
+                      {noData.map((r) => (
+                        <WatchRow key={r.ticker} r={r} kind="no_data" onSelect={onSelectTicker} />
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </>
           )}
         </div>
 
@@ -193,6 +230,66 @@ export default function HoodSidebar({
         </div>
       </div>
     </aside>
+  );
+}
+
+function WatchRow({
+  r,
+  kind,
+  onSelect,
+}: {
+  r: TickerSnapshot;
+  kind: "tradable" | "dust" | "no_data";
+  onSelect: (t: string) => void;
+}) {
+  const drift = r.drift_pct ?? 0;
+  const dotColor =
+    kind === "no_data"
+      ? "#3f4550" // T3 — plain gray dot (we don't know direction/thinness yet)
+      : verdictDotColor(r.verdict);
+  const rowOpacity = kind === "tradable" ? 1 : 0.7;
+
+  return (
+    <li>
+      <button
+        onClick={() => onSelect(r.ticker)}
+        className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff08]"
+        style={{ opacity: rowOpacity }}
+      >
+        <span
+          className={`w-1.5 h-1.5 rounded-full shrink-0 ${kind === "no_data" ? "" : ""}`}
+          style={{ backgroundColor: dotColor }}
+          title={kind === "no_data" ? "No pool data this cycle" : r.verdict}
+        />
+        <span className="font-mono text-[12px] text-slate-200 tracking-wide">
+          {r.ticker}
+        </span>
+        {kind === "dust" && (
+          <span
+            className="font-mono text-[9px] uppercase tracking-widest ml-1"
+            style={{ color: AMBER }}
+            title={`Below $${DUST_TVL_USD.toLocaleString()} pool TVL — engine gate`}
+          >
+            dust
+          </span>
+        )}
+        {kind === "no_data" ? (
+          <span
+            className="ml-auto font-mono text-[11px]"
+            style={{ color: MUTED }}
+          >
+            ·
+          </span>
+        ) : (
+          <span
+            className="ml-auto font-mono text-[11px] tabular-nums"
+            style={{ color: driftColor(drift) }}
+          >
+            {drift === 0 ? "—" : `${drift > 0 ? "+" : ""}${drift.toFixed(2)}%`}
+          </span>
+        )}
+      </button>
+    </li>
   );
 }
 
