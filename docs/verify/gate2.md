@@ -1,6 +1,15 @@
 # Gate 2 — Semantic smoke CI
 
-Status: **PASS (local mode)** · CI wired · Awaiting first two green production cron runs.
+Status: **PASS on prod** (22/22 via `workflow_dispatch` 2026-07-17). Awaiting 2 consecutive green scheduled cron runs to formally close per reviewer's rule.
+
+## Post-report hotfix (2026-07-17, PR #205)
+
+While closing Gate 2 we found the CI script + handler didn't line up on prod — both fixed in PR #205:
+
+1. **CI script was one header short.** Handler bypass requires `X-Blue-Internal` **and** `X-Blue-Service: internal`; script only sent the first, so paid tools returned 402 `WALLET_REQUIRED` even with a correct key. Loophole-close is intentional in `route.ts` (line 225 — closes "guest calls paid tool with just the key"); CI just wasn't following the contract.
+2. **Free tools 503'd.** `if (!handler || !priceUnits)` treated `priceUnits === 0` as falsy → L4 `rh-rwa-verify` (@ $0.00) was unreachable. Changed to `priceUnits === undefined` in both call sites.
+
+Both fixes landed in commit `<merge>` and deployed to prod. First `workflow_dispatch` on the new deploy → **22/22 pass** (run [29572993869](https://github.com/madebyshun/blue-agent/actions/runs/29572993869)).
 
 ## Assertions implemented (`apps/web/scripts/semantic-smoke.ts`)
 
@@ -40,5 +49,6 @@ Output verified on main branch, no code changes needed to reach 22/22.
 ## Gate 2 verdict
 
 - Local: ✅ 22/22 assertions pass
-- CI workflow: ✅ committed and ready
-- Prod cron: ⏸ awaiting secret + 2 consecutive greens
+- CI workflow: ✅ committed + wired to prod
+- Prod dispatch: ✅ 22/22 (2026-07-17 10:19 UTC, run 29572993869)
+- Prod cron: ⏸ awaiting 2 consecutive scheduled greens (next fires at ~12:00 UTC)
