@@ -535,9 +535,11 @@ function DriftRow({
           <span
             className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider"
             style={{ color: "#6b7280", backgroundColor: "#0f1218" }}
-            title={r.error ?? "GT returned no pool data. Retry next cycle."}
+            title={r.error ?? (r.no_data_reason === "fetch_failed"
+              ? "GT fetch failed (rate-limit / timeout). Retry next cycle."
+              : "GT reached, but no valid pool for this token yet.")}
           >
-            NO POOL DATA
+            {r.no_data_reason === "fetch_failed" ? "FETCH FAILED" : "NO POOL"}
           </span>
         </td>
       </tr>

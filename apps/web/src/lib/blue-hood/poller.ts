@@ -79,6 +79,9 @@ async function pollOne(ticker: string, cycleStart: number): Promise<TickerSnapsh
   const sparkline = await readSparkline(ticker);
 
   if (!r.ok) {
+    // T-B.1 #4 — tool call itself failed: fetch_failed. `no_pool` is
+    // reserved for the case where the tool DID reach the upstream but
+    // no pool exists.
     return {
       ticker,
       name: entry.name,
@@ -101,10 +104,21 @@ async function pollOne(ticker: string, cycleStart: number): Promise<TickerSnapsh
       polled_at_ms,
       data_age_s,
       sparkline,
+      no_data_reason: "fetch_failed",
     };
   }
 
   const d = r.data;
+  const hasDex = d.dex?.price_usd !== undefined && d.dex.price_usd !== null;
+  // T-B.1 #4 — for successful responses with no DEX data, infer the
+  // reason from the memo cache. GT hit succeeded (memo populated) but
+  // no valid pool = no_pool. GT hit not memoized (data_age_s === null)
+  // and we still have no DEX = the fetch inside M5 got null (rate-limit
+  // or upstream error) → fetch_failed.
+  const no_data_reason: "no_pool" | "fetch_failed" | null = hasDex
+    ? null
+    : (data_age_s !== null ? "no_pool" : "fetch_failed");
+
   return {
     ticker: d.ticker,
     name: d.name,
@@ -122,6 +136,7 @@ async function pollOne(ticker: string, cycleStart: number): Promise<TickerSnapsh
     polled_at_ms,
     data_age_s,
     sparkline,
+    no_data_reason,
   };
 }
 
@@ -152,6 +167,11 @@ export async function runPollCycle(): Promise<HoodSnapshot> {
   const finished_at = new Date();
   const tokens_errored = rows.filter((r) => r.verdict === "ERROR").length;
   const tvl_scanned_usd = rows.reduce((sum, r) => sum + (r.tvl_usd ?? 0), 0);
+  // T-B.1 #4 — count no-data rows by reason. A `fetch_failed` streak
+  // across cycles is a throttle-tail signal that needs looking at.
+  const no_data_no_pool = rows.filter((r) => r.no_data_reason === "no_pool").length;
+  const no_data_fetch_failed = rows.filter((r) => r.no_data_reason === "fetch_failed").length;
+  console.log(`[poller] cycle-end no_data_by_reason no_pool=${no_data_no_pool} fetch_failed=${no_data_fetch_failed} errored=${tokens_errored}`);
   const first_ok = rows.find((r) => r.verdict !== "ERROR");
   const market = first_ok?.market ?? {
     is_open: false,

@@ -152,15 +152,28 @@ export default function HoodSidebar({
 
               {noData.length > 0 && (
                 <>
-                  <button
-                    onClick={() => setNoDataOpen((v) => !v)}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff06]"
-                    style={{ color: MUTED }}
-                  >
-                    <span className="font-mono text-[10px] tracking-widest">
-                      {noDataOpen ? "▾" : "▸"} · {noData.length} NO POOL DATA
-                    </span>
-                  </button>
+                  {(() => {
+                    // T-B.1 #4 — surface the split so a throttle-tail
+                    // (many fetch_failed) is legible at a glance.
+                    const failed = noData.filter((r) => r.no_data_reason === "fetch_failed").length;
+                    const noPool = noData.filter((r) => r.no_data_reason === "no_pool").length;
+                    const label = failed > 0 && noPool > 0
+                      ? `${noData.length} NO DATA · ${failed} fetch fail · ${noPool} no pool`
+                      : failed > 0
+                        ? `${noData.length} FETCH FAILED`
+                        : `${noData.length} NO POOL`;
+                    return (
+                      <button
+                        onClick={() => setNoDataOpen((v) => !v)}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff06]"
+                        style={{ color: MUTED }}
+                      >
+                        <span className="font-mono text-[10px] tracking-widest">
+                          {noDataOpen ? "▾" : "▸"} · {label}
+                        </span>
+                      </button>
+                    );
+                  })()}
                   {noDataOpen && (
                     <ul className="pb-1">
                       {noData.map((r) => (

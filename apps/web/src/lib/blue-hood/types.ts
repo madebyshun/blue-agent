@@ -68,6 +68,16 @@ export interface TickerSnapshot {
    *  the main 72s poll only reads cache, never fetches. `null` on cold
    *  start; the UI hides the sparkline entirely when < 6 candles. */
   sparkline: number[] | null;
+  /** T-B.1 #4 — when this row has no DEX data, WHY. `null` when we do
+   *  have data (verdict is a real M5 verdict + dex_usd is populated).
+   *  Otherwise:
+   *    • `"no_pool"` — M5 reached GT, GT responded, but no valid RWA
+   *      pool exists for this token. Persistent absence is expected.
+   *    • `"fetch_failed"` — either the tool call itself errored or M5
+   *      couldn't read GT (rate-limit, timeout, upstream error). If we
+   *      see the same ticker `fetch_failed` many cycles in a row, that's
+   *      a throttle-tail signal that needs looking at. */
+  no_data_reason: "no_pool" | "fetch_failed" | null;
 }
 
 export interface HoodSnapshot {

@@ -155,6 +155,7 @@ async function main() {
     polled_at_ms: 0,
     data_age_s: null,
     sparkline: null,
+    no_data_reason: null,
   });
 
   const snap: HoodSnapshot = {
