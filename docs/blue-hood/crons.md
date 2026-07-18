@@ -40,6 +40,24 @@ respect GT rate-limits (see `poller.ts`).
   — LLM chain for A4 brief attachment. `smoke` warns locally when
   these fail; STRICT mode (CI) hard-fails.
 
+## Dev warning — Vercel Cron only fires on production
+
+Localhost + Vercel preview URLs do NOT run the scheduled crons above.
+The `vercel.json` entries only activate on the production deployment
+under `blueagent.dev`. This means:
+
+- A fresh dev server sees empty `bh:snapshot:latest`, empty
+  `bh:spark:*`, empty arrow feed.
+- The drift board renders `— · — · —` in the 24h column forever
+  until you populate the sparkline cache manually.
+
+**Fix**: `npm run hood:kick-crons` (from `apps/web/`) — POSTs both
+`sparkline-refresh` and `poll` with the CRON_SECRET loaded from
+`.env.local`. Takes ~3 min (24 tokens × 3s stagger, twice).
+
+Override target with `BH_KICK_TARGET=https://<preview>.vercel.app npm run hood:kick-crons`
+to warm a preview deploy against real data.
+
 ## Verifying a fresh deploy
 
 1. Push a commit — Vercel picks up `vercel.json` `crons[]` diff on

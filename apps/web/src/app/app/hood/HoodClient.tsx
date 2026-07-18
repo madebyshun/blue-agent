@@ -623,7 +623,7 @@ function DriftRow({
         </td>
         <td className="px-3 py-2 text-right" style={{ color: "#9aa1ac" }}>{formatUsd(r.volume_24h_usd)}</td>
         <td className="px-3 py-2 text-left">
-          {dust ? <DustBadge /> : <VerdictBadge verdict={r.verdict} />}
+          {dust ? <DustBadge /> : <VerdictBadge verdict={r.verdict} session={r.market.session} />}
         </td>
       </tr>
       {expanded && (
@@ -650,21 +650,33 @@ function DustBadge() {
   );
 }
 
-function VerdictBadge({ verdict }: { verdict: M5Verdict | "ERROR" }) {
+function VerdictBadge({
+  verdict,
+  session,
+}: {
+  verdict: M5Verdict | "ERROR";
+  session?: string;
+}) {
   // T4 — semantic colors by direction/state:
   //   LONG DEX  = green  (DEX cheaper than oracle → buy DEX)
   //   SHORT DEX = red    (DEX more expensive → sell DEX / short)
   //   ALIGNED   = gray   (no signal, not a direction)
   //   FROZEN_*  = amber  (market closed, tool is honest that this isn't arb)
+  //
+  // P1.2 — weekend distinction. M5's enum has no weekend value; it
+  // keeps returning AFTERHOURS_DRIFT / FROZEN_ALIGNED on Sat/Sun. When
+  // session === "weekend" we relabel so the badge doesn't lie about
+  // being "AH DRIFT" on a Saturday afternoon. Enum stays untouched.
+  const isWeekend = session === "weekend";
   const map: Record<M5Verdict | "ERROR", { label: string; color: string; bg: string }> = {
     ALIGNED:          { label: "ALIGNED",   color: "#94a3b8", bg: "#0f1218" },
     LONG_DEX:         { label: "LONG DEX",  color: GREEN_TEXT, bg: "rgba(34,197,94,0.10)" },
     SHORT_DEX:        { label: "SHORT DEX", color: RED,        bg: "rgba(239,68,68,0.10)" },
-    FROZEN_ALIGNED:   { label: "FROZEN",    color: AMBER,      bg: "rgba(245,179,66,0.10)" },
-    PREMARKET_DRIFT:  { label: "PRE DRIFT", color: AMBER,      bg: "rgba(245,179,66,0.10)" },
-    AFTERHOURS_DRIFT: { label: "AH DRIFT",  color: AMBER,      bg: "rgba(245,179,66,0.10)" },
-    INSUFFICIENT_DATA:{ label: "NO DATA",   color: MUTED,      bg: "#0f1218" },
-    ERROR:            { label: "ERR",       color: RED,        bg: "rgba(239,68,68,0.10)" },
+    FROZEN_ALIGNED:   { label: isWeekend ? "WKND ALIGN" : "FROZEN",   color: AMBER, bg: "rgba(245,179,66,0.10)" },
+    PREMARKET_DRIFT:  { label: "PRE DRIFT", color: AMBER, bg: "rgba(245,179,66,0.10)" },
+    AFTERHOURS_DRIFT: { label: isWeekend ? "WKND DRIFT" : "AH DRIFT", color: AMBER, bg: "rgba(245,179,66,0.10)" },
+    INSUFFICIENT_DATA:{ label: "NO DATA",   color: MUTED, bg: "#0f1218" },
+    ERROR:            { label: "ERR",       color: RED,   bg: "rgba(239,68,68,0.10)" },
   };
   const s = map[verdict];
   return (
