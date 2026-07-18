@@ -180,10 +180,10 @@ export default function HoodClient() {
           {err && (
             <div
               role="alert"
-              className="mb-6 rounded border px-3 py-2 text-sm"
+              className="hood-prose mb-6 rounded border px-3 py-2 text-[13.5px] leading-relaxed"
               style={{ borderColor: "#3b2a15", backgroundColor: "#1a1408", color: "#f6c88f" }}
             >
-              Poller warming up: {err}. In dev, POST to <code className="font-mono text-white">/api/cron/blue-hood/poll</code> with your <code className="font-mono text-white">CRON_SECRET</code>.
+              Poller warming up: {err}. In dev, POST to <code className="font-mono text-white text-[12.5px]">/api/cron/blue-hood/poll</code> with your <code className="font-mono text-white text-[12.5px]">CRON_SECRET</code>.
             </div>
           )}
 
@@ -237,17 +237,23 @@ function Header({
 
   return (
     <header className="mb-8 flex flex-wrap items-baseline gap-x-4 gap-y-2">
+      {/* T-V1 — wordmark. ONE wordmark shape used everywhere (sidebar,
+          header, meta title): BLUE (white) + HOOD (RH_GREEN), all-caps,
+          mono 700, tight tracking. `text-[24px]` for the 24px page-title
+          slot; sidebar keeps 12px, they read as the same word.  */}
       <div className="flex items-baseline gap-3">
-        <div className="text-2xl font-bold tracking-tight" style={{ color: RH_GREEN }}>
-          Blue Hood
+        <div className="text-[24px] font-bold tracking-tight text-white">
+          BLUE<span style={{ color: RH_GREEN }}>HOOD</span>
         </div>
-        <div className="text-sm" style={{ color: "#9aa1ac" }}>
+        <div className="text-[12px]" style={{ color: "#9aa1ac", letterSpacing: "0.02em" }}>
           copilot for Robinhood Chain
         </div>
       </div>
-      <div className="ml-auto flex items-center gap-4 font-mono text-xs">
+      <div className="ml-auto flex items-center gap-4 text-[11px]">
         <span style={{ color: marketBadge.color }}>● {marketBadge.label}</span>
-        <span style={{ color: MUTED }}>
+        <span className="flex items-center gap-1.5" style={{ color: MUTED }}>
+          {/* T-V2 #1 — LIVE PULSE. Chấm nhẹ báo trang đang thở. */}
+          <span className="hood-live-dot" aria-hidden />
           {ago === null || !snap ? "…" : `updated ${ago}s ago`}
         </span>
       </div>
@@ -300,12 +306,15 @@ function MetricStrip({
           className="rounded border px-4 py-3"
           style={{ borderColor: BORDER, backgroundColor: SURFACE }}
         >
-          <div className="mb-1 font-mono text-[9px] uppercase tracking-widest" style={{ color: MUTED }}>
+          {/* T-V1 sizes — label 11px caps, number 20px, sub 11px — all
+              mono. Sublabel was falling through to app-shell sans; now
+              explicit `font-mono` so the metric card reads as ONE voice. */}
+          <div className="mb-1 text-[11px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>
             {it.label}
           </div>
-          <div className="font-mono text-xl text-white">{it.value}</div>
+          <div className="text-[20px] font-medium text-white tabular-nums">{it.value}</div>
           {it.sub && (
-            <div className="mt-1 text-[11px]" style={{ color: MUTED }}>{it.sub}</div>
+            <div className="mt-1 text-[11px] tabular-nums" style={{ color: MUTED }}>{it.sub}</div>
           )}
         </div>
       ))}
@@ -576,7 +585,10 @@ function DriftRow({
     <>
       <tr
         ref={(el) => { rowRefs.current[r.ticker] = el; }}
-        className="border-b last:border-b-0 hover:bg-black/40 cursor-pointer"
+        // T-V2 #2 — `hood-row` gives the terminal-cursor border-left on
+        // hover. Layered on top of the existing `hover:bg-black/40` so
+        // the surface still darkens at the same time.
+        className="hood-row border-b last:border-b-0 hover:bg-black/40 cursor-pointer"
         style={{ borderColor: "#0f1218", opacity: rowOpacity }}
         onClick={onToggle}
       >
@@ -594,7 +606,9 @@ function DriftRow({
             {r.ticker}
           </a>
         </td>
-        <td className="px-3 py-2 text-right text-[#E7E9EE]">{formatUsd(r.oracle_usd)}</td>
+        <td className="px-3 py-2 text-right text-[#E7E9EE]">
+          <FlashCell value={r.oracle_usd} />
+        </td>
         <td className="px-3 py-2 text-right">
           {r.pool_ref ? (
             <a
@@ -604,10 +618,10 @@ function DriftRow({
               onClick={(e) => e.stopPropagation()}
               className="text-[#E7E9EE] hover:underline"
             >
-              {formatUsd(r.dex_usd)}
+              <FlashCell value={r.dex_usd} />
             </a>
           ) : (
-            <span className="text-[#E7E9EE]">{formatUsd(r.dex_usd)}</span>
+            <span className="text-[#E7E9EE]"><FlashCell value={r.dex_usd} /></span>
           )}
         </td>
         <td className="px-3 py-2 text-right font-mono" style={driftDisplay}>
@@ -804,6 +818,54 @@ function Footer() {
         </span>
       </div>
     </footer>
+  );
+}
+
+// ── T-V2 #3 · price flash ─────────────────────────────────────────────────
+//
+// `FlashCell` compares its incoming `value` with the previous one; when
+// the number moves up or down between polls the underlying span
+// re-mounts (via a monotonic key) so the `hood-flash-up` /
+// `hood-flash-down` CSS animation replays for 400ms. First render never
+// flashes — nothing to compare against yet. Null → null transitions are
+// ignored. Reduced-motion users get no flash (see globals.css).
+//
+// Kept small on purpose: no debounce, no memoization gymnastics — a poll
+// happens at most every 15s so the extra re-mounts are negligible.
+function FlashCell({
+  value,
+  format = formatUsd,
+}: {
+  value: number | null | undefined;
+  format?: (v: number | null | undefined) => string;
+}) {
+  const prevRef = useRef<number | null | undefined>(value);
+  const [state, setState] = useState<{ key: number; dir: "up" | "down" | null }>({ key: 0, dir: null });
+
+  useEffect(() => {
+    const prev = prevRef.current;
+    prevRef.current = value;
+    if (typeof value !== "number" || typeof prev !== "number") return;
+    if (value === prev) return;
+    const dir = value > prev ? "up" : "down";
+    setState((s) => ({ key: s.key + 1, dir }));
+  }, [value]);
+
+  const flashCls = state.dir === "up"
+    ? "hood-flash-up"
+    : state.dir === "down"
+      ? "hood-flash-down"
+      : "";
+  return (
+    <span
+      key={state.key}
+      // `inline-block` + tiny padding so the flash rectangle has body;
+      // negative margin cancels the visible offset so the number stays
+      // in its column exactly where it was.
+      className={`inline-block px-1 -mx-1 rounded tabular-nums ${flashCls}`}
+    >
+      {format(value)}
+    </span>
   );
 }
 

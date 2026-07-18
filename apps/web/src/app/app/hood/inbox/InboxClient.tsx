@@ -120,13 +120,20 @@ export default function InboxClient() {
 function Header({ unread, onMarkAllRead }: { unread: number; onMarkAllRead: () => void }) {
   return (
     <header className="mb-8 flex flex-wrap items-baseline gap-x-4 gap-y-2">
+      {/* T-V1 — same BLUE·HOOD wordmark as /hood + sidebar. The current
+          view is disambiguated by the "· INBOX" suffix rather than
+          changing the wordmark, keeping the brand shape identical
+          everywhere it appears. */}
       <div className="flex items-baseline gap-3">
-        <div className="text-2xl font-bold tracking-tight" style={{ color: RH_GREEN }}>Inbox</div>
-        <div className="text-sm" style={{ color: "#9aa1ac" }}>
+        <div className="text-[24px] font-bold tracking-tight text-white">
+          BLUE<span style={{ color: RH_GREEN }}>HOOD</span>
+          <span className="ml-2 text-[13px] font-normal" style={{ color: MUTED, letterSpacing: "0.08em" }}>· INBOX</span>
+        </div>
+        <div className="text-[11px] tabular-nums" style={{ color: "#9aa1ac" }}>
           {unread === 0 ? "all caught up" : `${unread} unread`}
         </div>
       </div>
-      <div className="ml-auto flex items-center gap-3 font-mono text-xs">
+      <div className="ml-auto flex items-center gap-3 text-[11px]">
         <Link href="/hood" className="hover:text-white" style={{ color: MUTED }}>
           ← Live board
         </Link>
@@ -171,7 +178,11 @@ function InboxCard({ a, isUnread }: { a: Arrow; isUnread: boolean }) {
   return (
     <li>
       <div
-        className="rounded border cursor-pointer transition-colors hover:bg-black/40"
+        // T-V2 #2 — `hood-row` adds the terminal-cursor border-left on
+        // hover. Rounded corners + the surface hover-darken keep the
+        // card feel; the cursor bar just tells the user which row is
+        // about to open.
+        className="hood-row rounded border cursor-pointer transition-colors hover:bg-black/40"
         style={{
           borderColor: isUnread ? "#1f3924" : BORDER,
           backgroundColor: SURFACE,
@@ -222,11 +233,13 @@ function InboxCard({ a, isUnread }: { a: Arrow; isUnread: boolean }) {
 function EmptyState() {
   return (
     <div
-      className="rounded border py-12 text-center text-sm"
+      className="rounded border py-12 text-center"
       style={{ borderColor: BORDER, backgroundColor: SURFACE, color: MUTED }}
     >
-      <div className="font-mono text-white mb-2">Inbox empty.</div>
-      <p className="max-w-md mx-auto">
+      {/* Empty-state title stays mono (short label). The paragraph below
+          is a real ≥2-sentence run and takes the `hood-prose` token. */}
+      <div className="font-mono text-white text-[13px] mb-2">Inbox empty.</div>
+      <p className="hood-prose max-w-md mx-auto text-[13.5px] leading-relaxed">
         Arrows land here the moment the engine fires. First delivery when NYSE opens Monday.
       </p>
     </div>

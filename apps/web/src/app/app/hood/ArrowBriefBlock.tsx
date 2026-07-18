@@ -63,11 +63,11 @@ export default function ArrowBriefBlock({
           brief attaching… (async worker runs every minute — refresh in a moment)
         </div>
       ) : a.brief_status === "failed" ? (
-        <div className="font-mono text-[11px]" style={{ color: MUTED }}>
+        <div className="hood-prose text-[13px] leading-relaxed" style={{ color: MUTED }}>
           Brief unavailable — A4 chain failed for this arrow. Numbers still stand on their own.
         </div>
       ) : (
-        <div className="font-mono text-[11px]" style={{ color: MUTED }}>
+        <div className="hood-prose text-[13px] leading-relaxed" style={{ color: MUTED }}>
           No brief attached — A4 was unavailable when this arrow fired. Numbers still stand on their own.
         </div>
       )}

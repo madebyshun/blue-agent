@@ -195,17 +195,21 @@ export default function TrackRecordClient() {
 function TrackHeader() {
   return (
     <header className="mb-8 flex flex-wrap items-baseline gap-x-4 gap-y-2">
+      {/* T-V1 — same BLUE·HOOD wordmark. The current view is
+          disambiguated by the "· TRACK RECORD" suffix, not by changing
+          the brand shape. */}
       <div className="flex items-baseline gap-3">
-        <div className="text-2xl font-bold tracking-tight" style={{ color: RH_GREEN }}>
-          Track record
+        <div className="text-[24px] font-bold tracking-tight text-white">
+          BLUE<span style={{ color: RH_GREEN }}>HOOD</span>
+          <span className="ml-2 text-[13px] font-normal" style={{ color: MUTED, letterSpacing: "0.08em" }}>· TRACK RECORD</span>
         </div>
-        <div className="text-sm" style={{ color: "#9aa1ac" }}>
+        <div className="text-[11px]" style={{ color: "#9aa1ac" }}>
           every graded arrow, forever
         </div>
       </div>
       <Link
         href="/hood"
-        className="ml-auto font-mono text-xs hover:text-white"
+        className="ml-auto text-[11px] hover:text-white"
         style={{ color: MUTED }}
       >
         ← Live board
@@ -390,7 +394,7 @@ function TrackRow({ a }: { a: Arrow }) {
   return (
     <>
       <tr
-        className="border-b last:border-b-0 hover:bg-black/40 cursor-pointer"
+        className="hood-row border-b last:border-b-0 hover:bg-black/40 cursor-pointer"
         style={{ borderColor: "#0f1218" }}
         onClick={() => setOpen((v) => !v)}
       >
@@ -427,18 +431,20 @@ function TrackRow({ a }: { a: Arrow }) {
 function EmptyState({ allZero }: { allZero: boolean }) {
   return (
     <div
-      className="rounded border py-12 text-center text-sm"
+      className="rounded border py-12 text-center"
       style={{ borderColor: BORDER, backgroundColor: SURFACE, color: MUTED }}
     >
       {allZero ? (
         <>
-          <div className="font-mono text-white mb-2">No graded arrows yet.</div>
-          <p className="max-w-md mx-auto">
+          {/* Short line stays mono; the ≥2-sentence paragraph takes the
+              `hood-prose` token per T-V1. */}
+          <div className="font-mono text-white text-[13px] mb-2">No graded arrows yet.</div>
+          <p className="hood-prose max-w-md mx-auto text-[13.5px] leading-relaxed">
             The engine fires on live setups and grades them automatically — first receipts land when NYSE opens Monday.
           </p>
         </>
       ) : (
-        <>No arrows match this filter.</>
+        <span className="font-mono text-[13px]">No arrows match this filter.</span>
       )}
     </div>
   );
