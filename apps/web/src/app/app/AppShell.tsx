@@ -2,10 +2,43 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AppChromeProvider, useAppChrome } from "./AppChrome";
 import LanguageToggle from "@/components/LanguageToggle";
 import { useLang } from "@/lib/i18n/context";
+
+// T-D D1 — small self-contained client component. Polls
+// `/api/hood/inbox/unread-count` every 30s and shows a red dot with the
+// count on the Hood nav item. Only mounted when the Hood nav item
+// renders, so other nav items don't trigger the fetch.
+function HoodNavBadge() {
+  const [n, setN] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/hood/inbox/unread-count", { cache: "no-store" });
+        if (!r.ok) return;
+        const body = (await r.json()) as { unread?: number };
+        if (alive && typeof body.unread === "number") setN(body.unread);
+      } catch { /* offline is fine */ }
+    };
+    load();
+    const t = setInterval(load, 30_000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+  if (!n) return null;
+  const label = n > 99 ? "99+" : String(n);
+  return (
+    <span
+      className="absolute -top-1 -right-2 min-w-[14px] h-[14px] px-1 rounded-full flex items-center justify-center font-mono text-[9px] font-bold"
+      style={{ backgroundColor: "#ef4444", color: "#fff", boxShadow: "0 0 0 2px #050508" }}
+      aria-label={`${n} unread`}
+    >
+      {label}
+    </span>
+  );
+}
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
@@ -161,8 +194,11 @@ function AppSideNav() {
           const navCls = "group relative flex flex-col items-center justify-center gap-0.5 w-full h-[50px] rounded-xl transition-all";
           const navInner = (
             <>
-              <span className="group-hover:text-slate-300 transition-colors">
+              <span className="group-hover:text-slate-300 transition-colors relative">
                 {item.icon}
+                {/* T-D D1 — unread badge for Blue Hood inbox. Only mounts
+                    for the Hood nav item; other items skip the client fetch. */}
+                {item.id === "hood" && <HoodNavBadge />}
               </span>
               <span
                 className="font-mono text-[7px] tracking-wide transition-colors group-hover:text-slate-400 truncate max-w-[56px] text-center"

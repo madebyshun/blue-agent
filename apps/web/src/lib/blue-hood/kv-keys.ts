@@ -30,10 +30,27 @@ export const KV_ARROW_FEED = "bh:arrow:feed";
  *  time stays flat. See `sparkline-refresh` route + `getSparklineCached`. */
 export const kvSparkline = (ticker: string) => `bh:spark:${ticker.toUpperCase()}`;
 
+/** T-D D1 — per-address inbox "last-read" bookmark. Stores an ISO
+ *  timestamp; UI treats any arrow with `fired_at > last_read` as unread.
+ *  Anonymous callers share the "public" key so a fresh session at least
+ *  sees the badge; connected wallets get their own scoped bookmark. */
+export const kvInboxLastRead = (userId: string) =>
+  `bh:inbox:last_read:${userId.toLowerCase()}`;
+
+/** T-D D3 — a single web-push subscription. Serialized full
+ *  `PushSubscription` JSON (endpoint + keys). Keyed by endpoint hash
+ *  so re-subscribing from the same browser overwrites. */
+export const kvPushSub = (endpointHash: string) => `bh:push:sub:${endpointHash}`;
+
+/** T-D D3 — set of active push endpoint hashes (used by the fan-out
+ *  when an engine arrow fires). Value = string[] of hashes. */
+export const KV_PUSH_SUB_INDEX = "bh:push:index";
+
 /** TTL constants (seconds). */
 export const TTL_SNAPSHOT_HOUR = 60 * 60 * 25; // 25h so we always have a full 24h window
 export const TTL_ARROW_INDEX = 60 * 60 * 24 * 30; // 30d — grading windows are at most 24h
 export const TTL_SPARKLINE = 60 * 20; // 20 min — hourly candles don't need to be fresher than that
+export const TTL_PUSH_SUB = 60 * 60 * 24 * 90; // 90d — browser subs expire on their own well before this
 
 /** Utility: format a Date into `YYYYMMDDHH` for the ring-buffer bucket. */
 export function yyyymmddhh(d: Date): string {
