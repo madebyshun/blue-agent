@@ -11,7 +11,7 @@
  * public caller can never poll our LLM providers on our dime.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { callLLM } from "@/app/api/_lib/llm";
+import { callLLM, VIRTUALS_DEFAULT_MODEL } from "@/app/api/_lib/llm";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -39,13 +39,27 @@ export async function GET(req: NextRequest) {
     // No web-search — cheapest and fastest across providers.
     webSearch: false,
   };
+  // Which models the chain will try. Surfaced so a probe response is
+  // self-diagnosing — removes the "which model was that?" guesswork
+  // that let the Virtuals model-string bug survive 4 CI runs.
+  const models = {
+    virtuals: process.env.VIRTUALS_MODEL ?? VIRTUALS_DEFAULT_MODEL,
+    venice:   process.env.VENICE_MODEL   ?? "llama-3.3-70b",
+    bankr:    "(bankr default)",
+  };
   try {
     const r = await callLLM(opts);
     return NextResponse.json(
       {
         ok: true,
         first_success_provider: r.provider,
+        first_success_model:
+          r.provider === "virtuals" ? models.virtuals :
+          r.provider === "venice"   ? models.venice :
+          r.provider === "bankr"    ? models.bankr :
+          null,
         attempts: r.attempts,
+        models,
         chain_duration_ms: Date.now() - started,
       },
       { headers: { "Cache-Control": "no-store, max-age=0" } },
@@ -57,6 +71,7 @@ export async function GET(req: NextRequest) {
         ok: false,
         first_success_provider: null,
         attempts: Array.isArray(err.attempts) ? err.attempts : [],
+        models,
         error: err.message,
         chain_duration_ms: Date.now() - started,
       },
