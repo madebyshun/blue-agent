@@ -46,10 +46,21 @@ import type { HoodSnapshot, TickerSnapshot } from "../src/lib/blue-hood/types";
 import { detectBriefNumberDrift } from "../src/lib/blue-hood/brief";
 import { callLLM } from "../src/app/api/_lib/llm";
 
+// T-B.1 #1 — strict vs warn mode. Local runs should stay green (WARN prints
+// the same signal but doesn't exit non-zero, so a permanently-red assertion
+// doesn't train the eye to ignore red). CI + prod cron set BH_SMOKE_STRICT=1
+// so a broken chain still fails the build. `must` = hard, `should` = soft.
+const STRICT = process.env.BH_SMOKE_STRICT === "1";
 let failed = 0;
+let warned = 0;
 function must(ok: boolean, label: string, detail?: string) {
   if (ok) console.log(`  ✅ ${label}`);
   else { failed++; console.error(`  ❌ ${label}${detail ? ` — ${detail}` : ""}`); }
+}
+function should(ok: boolean, label: string, detail?: string) {
+  if (ok) { console.log(`  ✅ ${label}`); return; }
+  if (STRICT) { failed++; console.error(`  ❌ ${label}${detail ? ` — ${detail}` : ""}`); }
+  else { warned++; console.warn(`  ⚠  ${label}${detail ? ` — ${detail}` : ""} (WARN — set BH_SMOKE_STRICT=1 to fail)`); }
 }
 
 async function main() {
@@ -219,10 +230,10 @@ async function main() {
   must(closeEnough.length === 0, "within 0.1pp tolerance is silent (1.47 vs 1.42)");
 }
 
-// ── Section 5: LLM chain health (T-A.1 #3) ────────────────────────────────
-// Reviewer: "ít nhất 1 provider success". If this fails locally that's
-// EXACTLY what we want to see — the point is to catch a broken chain
-// before it ships, not to keep dev green with a lying assertion.
+// ── Section 5: LLM chain health (T-A.1 #3, gated per T-B.1 #1) ────────────
+// `should` = warn-by-default. Local dev without keys keeps smoke green (a
+// permanently-red assertion trains the eye to ignore red); CI + prod cron
+// set BH_SMOKE_STRICT=1 to hard-fail on broken chain.
 {
   console.log("\n── LLM chain health ──");
   try {
@@ -233,22 +244,23 @@ async function main() {
       maxTokens: 4,
       webSearch: false,
     });
-    must(!!r.provider, `at least one provider succeeded (${r.provider})`);
-    must(Array.isArray(r.attempts) && r.attempts.length > 0, "attempts trace non-empty");
+    should(!!r.provider, `at least one provider succeeded (${r.provider})`);
+    should(Array.isArray(r.attempts) && r.attempts.length > 0, "attempts trace non-empty");
   } catch (e) {
     const err = e as Error & { attempts?: unknown[] };
     const chain = Array.isArray(err.attempts)
       ? err.attempts.map((a) => `${(a as { provider?: string }).provider}:${(a as { status?: string }).status}`).join("→")
       : "n/a";
-    must(false, "at least one provider succeeded", `all failed — chain: ${chain}`);
+    should(false, "at least one provider succeeded", `all failed — chain: ${chain}`);
   }
 }
 }
 
 main().then(() => {
-  console.log(failed === 0
-    ? `\n── SUMMARY ── all passed ✓`
-    : `\n── SUMMARY ── ${failed} assertion(s) failed`);
+  const status = failed === 0
+    ? (warned === 0 ? "all passed ✓" : `all passed ✓ · ${warned} warning(s) (STRICT=off)`)
+    : `${failed} assertion(s) failed`;
+  console.log(`\n── SUMMARY ── ${status}`);
   process.exit(failed === 0 ? 0 : 1);
 }).catch((e) => {
   console.error("smoke crashed:", e);
