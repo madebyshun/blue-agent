@@ -129,13 +129,22 @@ async function main() {
   const spark = await kick("sparkline-refresh", "/api/cron/blue-hood/sparkline-refresh");
   await pause(gap, "to respect GT rate limit before firing the poll cron");
   const poll = await kick("poll (+ engine + grader)", "/api/cron/blue-hood/poll");
+  // async-brief refactor: the poll cron now only enqueues briefs; we
+  // kick the worker once right after so `npm run dev` shows attached
+  // briefs without waiting up to 60s for Vercel's next minute-tick.
+  // Failure here is a warning, not fatal — the two above are the real
+  // gates for a warm dev deploy.
+  const brief = await kick("brief-worker (drain queue)", "/api/cron/blue-hood/brief-worker");
 
   console.log("");
   if (spark && poll) {
     console.log("Done. /hood should now show sparkline candles + live snapshot.");
+    if (!brief) {
+      console.warn("Note: brief-worker didn't 200 — pending briefs will attach on the next cron tick (1 min).");
+    }
     process.exit(0);
   } else {
-    console.error("At least one cron failed — see above for status.");
+    console.error("At least one required cron failed — see above for status.");
     process.exit(1);
   }
 }

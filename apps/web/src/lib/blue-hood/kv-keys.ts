@@ -58,6 +58,12 @@ export const kvChatCard = (arrowId: string) => `bh:chat:card:${arrowId}`;
  *  matches KV_ARROW_FEED (unbounded for now). */
 export const KV_CHAT_CARD_FEED = "bh:chat:feed";
 
+/** T-D async-brief queue (reviewer's "pre-prod TODO"). List of arrow
+ *  ids whose brief has NOT been attached yet — `fireArrow` appends,
+ *  `/api/cron/blue-hood/brief-worker` pops. Kept FIFO so the oldest
+ *  pending brief attaches first. */
+export const KV_BRIEF_QUEUE = "bh:brief:queue";
+
 /** TTL constants (seconds). */
 export const TTL_SNAPSHOT_HOUR = 60 * 60 * 25; // 25h so we always have a full 24h window
 export const TTL_ARROW_INDEX = 60 * 60 * 24 * 30; // 30d — grading windows are at most 24h

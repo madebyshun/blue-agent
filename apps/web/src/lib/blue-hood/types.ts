@@ -165,6 +165,22 @@ export interface Arrow {
    *  time. Populated once, cached forever on the arrow record. Null when
    *  the A4 call failed or was skipped — the arrow still fires either way. */
   brief?: ArrowBrief | null;
+  /** Async-brief lifecycle (T-D refactor). Older records without this
+   *  field are back-compat treated as `"attached"` when `brief != null`
+   *  or `"skipped"` when both `brief == null` and `origin == "seeded"`.
+   *   - `pending`  — arrow persisted, brief worker hasn't run yet
+   *   - `attached` — brief.verdict_note populated
+   *   - `failed`   — worker gave up (A4 returned null or crashed)
+   *   - `skipped`  — brief intentionally not fetched (test / seeded)
+   *
+   *  Chat card + push fan-out fire from the worker AFTER status flips to
+   *  `attached`/`failed`, never from `fireArrow` directly, so the chat
+   *  headline + notification body always reflect the final state. */
+  brief_status?: "pending" | "attached" | "failed" | "skipped";
+  /** When the worker last touched this arrow (queue attempt or attach).
+   *  Kept so the worker can skip records it just processed if the queue
+   *  is re-enqueued by a bug. */
+  brief_worker_at?: string | null;
 }
 
 export interface ArrowBrief {

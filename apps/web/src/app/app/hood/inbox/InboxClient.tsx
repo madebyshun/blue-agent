@@ -163,7 +163,10 @@ function InboxCard({ a, isUnread }: { a: Arrow; isUnread: boolean }) {
     if (a.type === "flow") return `FLOW ${a.expected_direction === "up" ? "buy" : "sell"}`;
     return "WHALE Δ";
   })();
-  const briefLine = a.brief?.verdict_note ?? "No brief attached at fire time.";
+  const briefLine = a.brief?.verdict_note
+    ?? (a.brief_status === "pending" ? "brief attaching…"
+        : a.brief_status === "failed" ? "Brief unavailable — A4 chain failed."
+        : "No brief attached at fire time.");
 
   return (
     <li>

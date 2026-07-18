@@ -17,11 +17,8 @@
  * land in a follow-up commit so the drift board can ship first.
  */
 import { kvGet, kvSet } from "@/lib/kv";
-import { KV_ARROW_SERIAL_COUNTER, kvArrow, kvArrowOpenIndex, KV_ARROW_FEED, TTL_ARROW_INDEX } from "./kv-keys";
+import { KV_ARROW_SERIAL_COUNTER, kvArrow, kvArrowOpenIndex, KV_ARROW_FEED, KV_BRIEF_QUEUE, TTL_ARROW_INDEX } from "./kv-keys";
 import type { Arrow, ArrowType, HoodSnapshot, TickerSnapshot } from "./types";
-import { fetchArrowBrief } from "./brief";
-import { pushArrowToAll } from "./push";
-import { writeChatCard } from "./chat-card";
 
 // ── Thresholds (from spec Block 1.2) ─────────────────────────────────────
 const DRIFT_MIN_ABS_PCT = 2.0;   // |drift| ≥ 2% during premarket/afterhours
@@ -111,13 +108,22 @@ interface OpenIndex {
  * "first arrow in Blue Hood history" slot.
  */
 /**
- * NOTE (T-A #3, deferred): A4 is currently awaited inline inside fireArrow
- * (~5-15s wall time per arrow). At current fire rates (0-2/cycle) that's
- * fine, but before we run prod 24/7 with expected 3+ arrows/cycle we need
- * to split this into a background job — persist barebones arrow first,
- * queue brief, worker updates `arrow.brief` async, UI shows a
- * `brief: pending…` state and refreshes on the next poll. Tracked as a
- * pre-prod TODO (not blocking T-B).
+ * Async-brief refactor (reviewer's T-A #3 pre-prod TODO):
+ *
+ *   fireArrow now returns after ~50ms KV writes. It persists a barebones
+ *   arrow record with `brief_status: "pending"`, appends the id to
+ *   `bh:brief:queue`, and returns. All expensive work — A4 brief fetch
+ *   (5-15s), Web Push fan-out, Blue Chat card write — runs later in the
+ *   `/api/cron/blue-hood/brief-worker` cron. This keeps poll-cycle wall
+ *   time flat even when 5+ arrows fire in a cycle.
+ *
+ *   Test/seeded arrows short-circuit the queue entirely and land with
+ *   `brief_status: "skipped"` — nothing async happens for them. The chat
+ *   card is written inline for seeded arrows only, so dev QA can still
+ *   validate the chat rendering without waiting on the worker.
+ *
+ *   `opts.test` is the legacy back-compat flag; new seeded arrows carry
+ *   `origin: "seeded"` as the primary signal. Either one skips async work.
  */
 export async function fireArrow(
   ticker: string,
@@ -137,6 +143,7 @@ export async function fireArrow(
   // arrows. Legacy `test: true` is preserved during the migration window
   // for A4-skip purposes; new seeded arrows always carry both.
   const origin: "engine" | "seeded" = opts.origin ?? "engine";
+  const skipAsync = opts.test || origin === "seeded";
   const arrow: Arrow = {
     id,
     serial,
@@ -152,6 +159,8 @@ export async function fireArrow(
     graded_at: null,
     outcome_detail: null,
     brief: null,
+    brief_status: skipAsync ? "skipped" : "pending",
+    brief_worker_at: null,
     origin,
     ...(opts.test ? { test: true } : {}),
   };
@@ -165,53 +174,28 @@ export async function fireArrow(
   feed.unshift(id);
   await kvSet(KV_ARROW_FEED, feed);
 
-  // T-A — attach A4 "why" brief. Skip on test arrows (would burn LLM $ for
-  // nothing) and on any failure (arrow already fires; brief stays null).
-  // Called EXACTLY ONCE per arrow at fire time; the UI reads the cached
-  // field forever after.
-  let finalArrow: Arrow = arrow;
-  if (!opts.test) {
-    try {
-      const brief = await fetchArrowBrief(ticker);
-      if (brief) {
-        const enriched: Arrow = { ...arrow, brief };
-        await kvSet(kvArrow(id), enriched);
-        // Structured chain trace — reviewer T-A #2. Every attempt's
-        // provider+status logged so a broken chain is grep-visible in prod.
-        const chainStr = brief.llm_attempts
-          .map((a) => `${a.provider}:${a.status}`)
-          .join("→") || "n/a";
-        console.log(`[brief] attached to ${serial} ${ticker} llm=${brief.llm_provider ?? "null"} chain=${chainStr} note_len=${brief.verdict_note.length}`);
-        finalArrow = enriched;
-      } else {
-        console.log(`[brief] no brief for ${serial} ${ticker} (A4 returned null)`);
-      }
-    } catch (e) {
-      console.warn(`[brief] fetch crashed for ${serial} ${ticker}: ${(e as Error).message}`);
+  if (skipAsync) {
+    // Seeded/test path — write a chat card inline so QA has one, but
+    // never touch A4 (would burn LLM $) or the push fan-out (would
+    // notify real subscribers with a fake arrow).
+    if (!opts.test) {
+      // A seeded (non-test) arrow — chat card for local dev only.
+      const { writeChatCard } = await import("./chat-card");
+      await writeChatCard(arrow);
     }
+    console.log(`[fire] ${serial} ${ticker} type=${detected.type} origin=${origin} async=skipped`);
+    return arrow;
   }
 
-  // T-D D2 — Blue Chat card. Written for EVERY non-test arrow (both
-  // engine + future seeded flows might want a chat card for QA), so a
-  // chat consumer can render even before push infra is wired. Best-
-  // effort — swallow any KV blip inside `writeChatCard` itself.
-  if (!opts.test) {
-    await writeChatCard(finalArrow);
+  // Engine path — enqueue for the async worker. Queue is FIFO (append,
+  // shift at worker time) so the OLDEST pending brief attaches first.
+  const queue = (await kvGet<string[]>(KV_BRIEF_QUEUE)) ?? [];
+  if (!queue.includes(id)) {
+    queue.push(id);
+    await kvSet(KV_BRIEF_QUEUE, queue);
   }
-
-  // T-D D3 — fan-out web push. Only engine origin, non-test arrows push
-  // (guard also inside pushArrowToAll for defense-in-depth). Runs
-  // synchronously inside the poll cycle; VAPID keys missing → silent
-  // no-op so cron never turns red because of push infra alone.
-  if (origin === "engine" && !opts.test) {
-    try {
-      await pushArrowToAll(finalArrow);
-    } catch (e) {
-      console.warn(`[push] fan-out crashed for ${serial} ${ticker}: ${(e as Error).message}`);
-    }
-  }
-
-  return finalArrow;
+  console.log(`[fire] ${serial} ${ticker} type=${detected.type} origin=${origin} enqueued queue_len=${queue.length}`);
+  return arrow;
 }
 
 function cryptoUuid(): string {

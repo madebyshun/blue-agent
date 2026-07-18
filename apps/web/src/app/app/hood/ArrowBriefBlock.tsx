@@ -53,6 +53,19 @@ export default function ArrowBriefBlock({
             {" "}· {formatRelTime(a.brief!.fetched_at)}
           </div>
         </>
+      ) : a.brief_status === "pending" ? (
+        <div className="font-mono text-[11px] flex items-center gap-2" style={{ color: MUTED }}>
+          <span
+            className="w-1.5 h-1.5 rounded-full animate-pulse"
+            style={{ backgroundColor: AMBER, boxShadow: `0 0 6px ${AMBER}80` }}
+            aria-hidden
+          />
+          brief attaching… (async worker runs every minute — refresh in a moment)
+        </div>
+      ) : a.brief_status === "failed" ? (
+        <div className="font-mono text-[11px]" style={{ color: MUTED }}>
+          Brief unavailable — A4 chain failed for this arrow. Numbers still stand on their own.
+        </div>
       ) : (
         <div className="font-mono text-[11px]" style={{ color: MUTED }}>
           No brief attached — A4 was unavailable when this arrow fired. Numbers still stand on their own.
