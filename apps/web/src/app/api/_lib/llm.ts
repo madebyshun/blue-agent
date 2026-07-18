@@ -88,7 +88,8 @@ export async function callBankrLLM(opts: {
       system,
       messages,
       temperature: opts.temperature ?? 0.5,
-      max_tokens: opts.maxTokens ?? 1000,
+      // Same floor as Virtuals + Venice — <400 causes JSON truncation.
+      max_tokens: Math.max(400, opts.maxTokens ?? 1000),
     }),
     signal: AbortSignal.timeout(55_000),
   });
@@ -154,6 +155,28 @@ export const NO_FABRICATION_RULE =
 
 export const VIRTUALS_DEFAULT_MODEL = "deepseek-deepseek-v4-flash";
 
+/** Floor on `max_tokens` (all providers). Below ~400 tokens the model
+ *  frequently truncates a JSON object mid-key, which — combined with
+ *  reasoning models spending tokens inside `<think>…</think>` — is the
+ *  #1 cause of "empty response" and "unparseable JSON" failures. */
+const MIN_MAX_TOKENS = 400;
+
+/** Strip a leading `<think>…</think>` block. Deepseek-R1 and derivatives
+ *  emit reasoning wrapped in this tag; when the model burns most of the
+ *  budget inside it, the visible `content` is either empty or contains
+ *  ONLY the reasoning (no real answer).
+ *   - Closed `<think>…</think>` → return the text after the closing tag.
+ *   - Unclosed `<think>…` (reasoning ate the whole budget) → return "" so
+ *     the caller falls back to `reasoning_content` (some gateways surface
+ *     it as a separate field) or throws "empty response". */
+function stripThinkBlock(text: string): string {
+  const closed = /^\s*<think>[\s\S]*?<\/think>\s*/i.exec(text);
+  if (closed) return text.slice(closed[0].length).trim();
+  const openOnly = /^\s*<think>[\s\S]*/i.exec(text);
+  if (openOnly) return "";
+  return text;
+}
+
 export async function callVirtualsLLM(opts: {
   system: string;
   user?: string;
@@ -166,14 +189,23 @@ export async function callVirtualsLLM(opts: {
   if (!apiKey) throw new Error("VIRTUALS_API_KEY not set");
   const model = opts.model ?? process.env.VIRTUALS_MODEL ?? VIRTUALS_DEFAULT_MODEL;
   const msgs = opts.messages ?? (opts.user != null ? [{ role: "user", content: opts.user }] : []);
+  const maxTokens = Math.max(MIN_MAX_TOKENS, opts.maxTokens ?? 1000);
   const res = await fetch("https://compute.virtuals.io/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
       messages: [{ role: "system", content: opts.system }, ...msgs],
-      max_tokens: opts.maxTokens ?? 1000,
+      max_tokens: maxTokens,
       temperature: opts.temperature ?? 0.3,
+      // Deepseek-R1 style models ship reasoning inside `<think>…</think>`
+      // — that eats the token budget and leaves `content` empty. We send
+      // BOTH the OpenAI-compat `reasoning_effort: "none"` hint AND the
+      // vendor-specific `disable_thinking: true` flag; whichever the
+      // upstream honours wins. A model that ignores both still returns
+      // reasoning inline, which `stripThinkBlock` handles below.
+      reasoning_effort: "none",
+      disable_thinking: true,
     }),
     signal: AbortSignal.timeout(60_000),
   });
@@ -186,9 +218,13 @@ export async function callVirtualsLLM(opts: {
     // survived 4 CI runs.
     throw new Error(`Virtuals ${res.status} model=${model}: ${(await res.text()).slice(0, 400)}`);
   }
-  const d = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const text = d.choices?.[0]?.message?.content ?? "";
-  if (!text) throw new Error("Virtuals empty response");
+  const d = (await res.json()) as { choices?: { message?: { content?: string; reasoning_content?: string } }[] };
+  const rawContent = d.choices?.[0]?.message?.content ?? "";
+  // Fallback: if content is empty but the upstream surfaced a separate
+  // `reasoning_content` field (some deepseek gateways split them), use
+  // it. Otherwise strip a leading think block from `content`.
+  const text = stripThinkBlock(rawContent) || d.choices?.[0]?.message?.reasoning_content?.trim() || "";
+  if (!text) throw new Error(`Virtuals empty response (content_len=${rawContent.length} model=${model})`);
   return text;
 }
 
@@ -336,7 +372,7 @@ export async function callVeniceLLM(opts: {
       body: JSON.stringify({
         model: opts.model ?? "llama-3.3-70b",
         messages: [{ role: "system", content: system }, ...msgs],
-        max_tokens: opts.maxTokens ?? 1000,
+        max_tokens: Math.max(MIN_MAX_TOKENS, opts.maxTokens ?? 1000),
         temperature: opts.temperature ?? 0.3,
         venice_parameters: {
           include_venice_system_prompt: false,
