@@ -123,10 +123,23 @@ export const NO_FABRICATION_RULE =
   "Do NOT invent specific numbers (market size, TAM, revenue, user counts, valuations, GitHub stars). If you do not have a verified source for a figure, write \"[data unavailable]\" instead of guessing.";
 
 // ─── Virtuals Compute (partner-sponsored, OpenAI-compatible) ────────────────
-// Base URL: https://compute.virtuals.io/v1 · Model examples:
-//   moonshotai-kimi-k2-7-code · deepseek-v3.1 · qwen-2.5-72b
-// No web search, but stable + funded via partnership. Preferred primary
-// synthesis path for RH RWA tools since Virtuals is native to RH Chain.
+// Base URL: https://compute.virtuals.io/v1
+//
+// Model is read from `VIRTUALS_MODEL` env with a verified default
+// (`deepseek-deepseek-v4-flash` — confirmed present in the live
+// /v1/models catalog on 2026-07-18, $0.138 in / $0.275 out per 1M).
+// A brief run is ~600in/80out → <$0.0001 per call.
+//
+// History: the previous default was `moonshotai-kimi-k2-7-code`, which
+// Virtuals de-listed at some point; that dropped `provider: virtuals`
+// to null on prod for 4 straight CI runs (#11–#14) with error text
+// silently truncated in the attempts trace. Both defaults are now
+// env-controlled and the retry logic below preserves the full upstream
+// response body so this class of regression is grep-visible.
+//
+// No web search on Virtuals; Venice remains the fallback for that.
+
+export const VIRTUALS_DEFAULT_MODEL = "deepseek-deepseek-v4-flash";
 
 export async function callVirtualsLLM(opts: {
   system: string;
@@ -138,19 +151,28 @@ export async function callVirtualsLLM(opts: {
 }): Promise<string> {
   const apiKey = process.env.VIRTUALS_API_KEY ?? "";
   if (!apiKey) throw new Error("VIRTUALS_API_KEY not set");
+  const model = opts.model ?? process.env.VIRTUALS_MODEL ?? VIRTUALS_DEFAULT_MODEL;
   const msgs = opts.messages ?? (opts.user != null ? [{ role: "user", content: opts.user }] : []);
   const res = await fetch("https://compute.virtuals.io/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: opts.model ?? "moonshotai-kimi-k2-7-code",
+      model,
       messages: [{ role: "system", content: opts.system }, ...msgs],
       max_tokens: opts.maxTokens ?? 1000,
       temperature: opts.temperature ?? 0.3,
     }),
     signal: AbortSignal.timeout(60_000),
   });
-  if (!res.ok) throw new Error(`Virtuals ${res.status}: ${(await res.text()).slice(0, 150)}`);
+  if (!res.ok) {
+    // Verbatim upstream response (up to 400 chars — enough for a full
+    // Virtuals error object like {"error":{"message":"Invalid model
+    // provided","type":"invalid_request_error"}}). The chain layer above
+    // stores this string on `attempts[i].error`; do NOT truncate to a
+    // generic "Virtuals 4xx" because that's how the model-string bug
+    // survived 4 CI runs.
+    throw new Error(`Virtuals ${res.status} model=${model}: ${(await res.text()).slice(0, 400)}`);
+  }
   const d = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   const text = d.choices?.[0]?.message?.content ?? "";
   if (!text) throw new Error("Virtuals empty response");
@@ -310,7 +332,7 @@ export async function callVeniceLLM(opts: {
       }),
       signal: AbortSignal.timeout(90_000), // web search adds latency; route maxDuration is 120s
     });
-    if (!res.ok) throw new Error(`Venice ${res.status}: ${(await res.text()).slice(0, 150)}`);
+    if (!res.ok) throw new Error(`Venice ${res.status} model=${opts.model ?? "llama-3.3-70b"}: ${(await res.text()).slice(0, 400)}`);
     const d = await res.json() as { choices?: { message?: { content?: string } }[] };
     const text = d.choices?.[0]?.message?.content ?? "";
     if (!text) throw new Error("Venice empty response");
