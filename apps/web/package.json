@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "hood:smoke": "tsx scripts/blue-hood-smoke.ts",
-    "hood:kick-crons": "tsx scripts/hood-kick-crons.ts"
+    "hood:kick-crons": "tsx scripts/hood-kick-crons.ts",
+    "verify:build": "NEXT_DIST_DIR=.next-verify next build"
   },
   "dependencies": {
     "@coinbase/onchainkit": "^1.1.2",

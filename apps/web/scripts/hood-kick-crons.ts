@@ -102,11 +102,34 @@ async function kick(name: string, path: string) {
   }
 }
 
+// P1.2 #3 — `--gap=<seconds>` (default 90) between sparkline-refresh and
+// poll. GT's rate-limit window resets every ~60s; firing both crons
+// back-to-back inside that window means the second one starts on an
+// already-cooked GT and half its calls come back empty (14 fetch_failed
+// on the previous kick). 90s gives the window a full cycle to reset.
+function parseGap(): number {
+  const arg = process.argv.find((a) => a.startsWith("--gap="));
+  const fromArg = arg ? Number(arg.split("=")[1]) : NaN;
+  const raw = Number.isFinite(fromArg) ? fromArg : 90;
+  return Math.max(0, Math.min(600, Math.round(raw)));
+}
+
+async function pause(sec: number, why: string) {
+  if (sec <= 0) return;
+  console.log(`… waiting ${sec}s ${why}`);
+  await new Promise((r) => setTimeout(r, sec * 1000));
+}
+
 async function main() {
+  const gap = parseGap();
   console.log(`Target: ${TARGET}`);
+  console.log(`Gap between crons: ${gap}s (override with --gap=<sec>)`);
   console.log(`(each cron staggers ~72s over 24 tokens — be patient)\n`);
+
   const spark = await kick("sparkline-refresh", "/api/cron/blue-hood/sparkline-refresh");
+  await pause(gap, "to respect GT rate limit before firing the poll cron");
   const poll = await kick("poll (+ engine + grader)", "/api/cron/blue-hood/poll");
+
   console.log("");
   if (spark && poll) {
     console.log("Done. /hood should now show sparkline candles + live snapshot.");

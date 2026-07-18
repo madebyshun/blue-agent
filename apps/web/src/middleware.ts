@@ -92,6 +92,15 @@ export function middleware(request: NextRequest) {
   // app.blueagent.dev (prod) which doesn't have the branch's code and 404s.
   const isProdHost = host === MAIN_HOST || host === APP_HOST;
   if (!isProdHost) {
+    // Exception: Blue Hood's /hood + /hood/arrows share URLs need to work on
+    // localhost + preview so the reviewer can verify the same URL that ships
+    // to prod. Same rewrite rule as `app.blueagent.dev` — see APP_SEGMENTS
+    // block below. Everything else on non-prod hosts still passes through.
+    if (pathname === "/hood" || pathname.startsWith("/hood/")) {
+      const url = request.nextUrl.clone();
+      url.pathname = `/app${pathname}`;
+      return NextResponse.rewrite(url);
+    }
     return NextResponse.next();
   }
 
@@ -169,6 +178,18 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(
       `https://${APP_HOST}/hub${request.nextUrl.search}`,
       { status: 301 }
+    );
+  }
+
+  // Blue Hood public share URLs — main host redirects EVERY /hood[/…] path
+  // to the app subdomain. Unlike /hub above (exact match only), Blue Hood
+  // has share-able sub-paths like /hood/arrows, /hood/arrows/<serial>, so
+  // we honor the whole sub-tree. The app-host rewrite in APP_SEGMENTS
+  // above finishes the job.
+  if (pathname === "/hood" || pathname.startsWith("/hood/")) {
+    return NextResponse.redirect(
+      `https://${APP_HOST}${pathname}${request.nextUrl.search}`,
+      { status: 301 },
     );
   }
 
