@@ -20,6 +20,7 @@ import { kvGet, kvSet } from "@/lib/kv";
 import { KV_ARROW_SERIAL_COUNTER, kvArrow, kvArrowOpenIndex, KV_ARROW_FEED, TTL_ARROW_INDEX } from "./kv-keys";
 import type { Arrow, ArrowType, HoodSnapshot, TickerSnapshot } from "./types";
 import { fetchArrowBrief } from "./brief";
+import { pushArrowToAll } from "./push";
 
 // ── Thresholds (from spec Block 1.2) ─────────────────────────────────────
 const DRIFT_MIN_ABS_PCT = 2.0;   // |drift| ≥ 2% during premarket/afterhours
@@ -167,6 +168,7 @@ export async function fireArrow(
   // nothing) and on any failure (arrow already fires; brief stays null).
   // Called EXACTLY ONCE per arrow at fire time; the UI reads the cached
   // field forever after.
+  let finalArrow: Arrow = arrow;
   if (!opts.test) {
     try {
       const brief = await fetchArrowBrief(ticker);
@@ -179,15 +181,28 @@ export async function fireArrow(
           .map((a) => `${a.provider}:${a.status}`)
           .join("→") || "n/a";
         console.log(`[brief] attached to ${serial} ${ticker} llm=${brief.llm_provider ?? "null"} chain=${chainStr} note_len=${brief.verdict_note.length}`);
-        return enriched;
+        finalArrow = enriched;
+      } else {
+        console.log(`[brief] no brief for ${serial} ${ticker} (A4 returned null)`);
       }
-      console.log(`[brief] no brief for ${serial} ${ticker} (A4 returned null)`);
     } catch (e) {
       console.warn(`[brief] fetch crashed for ${serial} ${ticker}: ${(e as Error).message}`);
     }
   }
 
-  return arrow;
+  // T-D D3 — fan-out web push. Only engine origin, non-test arrows push
+  // (guard also inside pushArrowToAll for defense-in-depth). Runs
+  // synchronously inside the poll cycle; VAPID keys missing → silent
+  // no-op so cron never turns red because of push infra alone.
+  if (origin === "engine" && !opts.test) {
+    try {
+      await pushArrowToAll(finalArrow);
+    } catch (e) {
+      console.warn(`[push] fan-out crashed for ${serial} ${ticker}: ${(e as Error).message}`);
+    }
+  }
+
+  return finalArrow;
 }
 
 function cryptoUuid(): string {

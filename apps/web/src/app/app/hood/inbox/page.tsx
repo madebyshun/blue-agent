@@ -11,6 +11,10 @@ import InboxClient from "./InboxClient";
 export const metadata: Metadata = {
   title: "Blue Hood · Inbox",
   description: "Every arrow Blue Hood has fired for you. Read/unread.",
+  // PWA hook — Blue Hood has its own manifest so a user can Add-to-Home-Screen
+  // and receive push notifications on iOS without any of the wider app coming
+  // along. See public/hood-manifest.json.
+  manifest: "/hood-manifest.json",
 };
 
 export const revalidate = 0;

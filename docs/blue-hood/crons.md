@@ -39,6 +39,15 @@ respect GT rate-limits (see `poller.ts`).
 - `VIRTUALS_API_KEY` (primary), `VENICE_INFERENCE_KEY`, `BANKR_API_KEY`
   — LLM chain for A4 brief attachment. `smoke` warns locally when
   these fail; STRICT mode (CI) hard-fails.
+- `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` — Web Push
+  fan-out (T-D D3). Generated once with
+  `npx web-push generate-vapid-keys` (both keys are base64-url strings;
+  `VAPID_SUBJECT` is a `mailto:` URL, e.g. `mailto:blueagent@blueagent.dev`).
+  Missing → `pushArrowToAll` logs `[push] VAPID keys missing — skipping
+  fan-out` and no-ops; the arrow still fires and the inbox still lists
+  it, only the browser notification is suppressed. Rotate by generating a
+  new pair, updating Vercel env, and redeploying — existing subscribed
+  browsers will silently drop until they re-`Enable alerts`.
 
 ## Dev warning — Vercel Cron only fires on production
 

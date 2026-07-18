@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Arrow } from "@/lib/blue-hood/types";
 import ArrowBriefBlock from "../ArrowBriefBlock";
+import EnableAlertsButton from "./EnableAlertsButton";
 
 const REFRESH_MS = 15_000;
 const RH_GREEN = "#00C805";
@@ -132,6 +133,7 @@ function Header({ unread, onMarkAllRead }: { unread: number; onMarkAllRead: () =
         <Link href="/hood/arrows" className="hover:text-white" style={{ color: MUTED }}>
           Track record →
         </Link>
+        <EnableAlertsButton />
         {unread > 0 && (
           <button
             onClick={onMarkAllRead}
