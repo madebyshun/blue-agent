@@ -193,6 +193,17 @@ async function a4Brief() {
       : llm.provider === "venice"   ? "llama-3.3-70b (Venice default)"
       : "(bankr default)";
     console.log(`  [a4-evidence] provider=${llm.provider} model=${modelHint} duration_ms=${llm.duration_ms ?? attempt?.duration_ms ?? "n/a"}`);
+  } else {
+    // Failure evidence — prints the full chain trace so the next CI log
+    // says exactly which provider(s) failed and why. Log-only, no new
+    // assertion. Grep target: `[a4-fail-chain]`.
+    const attemptsStr = (llm?.attempts ?? [])
+      .map((a) => {
+        const err = (a as { error?: string }).error ?? "";
+        return `${a.provider ?? "?"}:${a.status ?? "?"}${a.duration_ms != null ? `:${a.duration_ms}ms` : ""}${err ? ` err="${err.slice(0, 120)}"` : ""}`;
+      })
+      .join(" | ") || "no_attempts_array";
+    console.log(`  [a4-fail-chain] attempts=[${attemptsStr}] warnings=${JSON.stringify(((r.data.warnings ?? []) as string[]).slice(0, 6))}`);
   }
 
   const warnings = (r.data.warnings ?? []) as string[];
