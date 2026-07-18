@@ -108,11 +108,20 @@ interface OpenIndex {
  * + hit-rate reader filter these out so a seeded HIT never lands in the
  * "first arrow in Blue Hood history" slot.
  */
+/**
+ * NOTE (T-A #3, deferred): A4 is currently awaited inline inside fireArrow
+ * (~5-15s wall time per arrow). At current fire rates (0-2/cycle) that's
+ * fine, but before we run prod 24/7 with expected 3+ arrows/cycle we need
+ * to split this into a background job — persist barebones arrow first,
+ * queue brief, worker updates `arrow.brief` async, UI shows a
+ * `brief: pending…` state and refreshes on the next poll. Tracked as a
+ * pre-prod TODO (not blocking T-B).
+ */
 export async function fireArrow(
   ticker: string,
   detected: Candidate,
   snapshot_ref: number,
-  opts: { test?: boolean } = {},
+  opts: { test?: boolean; origin?: "engine" | "seeded" } = {},
 ): Promise<Arrow | null> {
   const idxKey = kvArrowOpenIndex(ticker, detected.type);
   const existing = await kvGet<OpenIndex>(idxKey);
@@ -121,6 +130,11 @@ export async function fireArrow(
   const serial = await nextSerial();
   const id = cryptoUuid();
   const now = new Date().toISOString();
+  // Reviewer T-A #1: `origin` is the primary "public feed eligibility"
+  // flag. Default is "engine" — the only path that ever writes public
+  // arrows. Legacy `test: true` is preserved during the migration window
+  // for A4-skip purposes; new seeded arrows always carry both.
+  const origin: "engine" | "seeded" = opts.origin ?? "engine";
   const arrow: Arrow = {
     id,
     serial,
@@ -136,6 +150,7 @@ export async function fireArrow(
     graded_at: null,
     outcome_detail: null,
     brief: null,
+    origin,
     ...(opts.test ? { test: true } : {}),
   };
 
@@ -158,7 +173,12 @@ export async function fireArrow(
       if (brief) {
         const enriched: Arrow = { ...arrow, brief };
         await kvSet(kvArrow(id), enriched);
-        console.log(`[brief] attached to ${serial} ${ticker} llm=${brief.llm_provider ?? "null"} note_len=${brief.verdict_note.length}`);
+        // Structured chain trace — reviewer T-A #2. Every attempt's
+        // provider+status logged so a broken chain is grep-visible in prod.
+        const chainStr = brief.llm_attempts
+          .map((a) => `${a.provider}:${a.status}`)
+          .join("→") || "n/a";
+        console.log(`[brief] attached to ${serial} ${ticker} llm=${brief.llm_provider ?? "null"} chain=${chainStr} note_len=${brief.verdict_note.length}`);
         return enriched;
       }
       console.log(`[brief] no brief for ${serial} ${ticker} (A4 returned null)`);

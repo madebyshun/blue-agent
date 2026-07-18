@@ -674,8 +674,11 @@ function ArrowBriefBlock({ a, hasBrief }: { a: Arrow; hasBrief: boolean }) {
               ))}
             </ul>
           )}
+          <FactsAtFire brief={a.brief!} />
           <div className="pt-1 font-mono text-[10px]" style={{ color: MUTED }}>
-            brief · {a.brief!.llm_provider ?? "no LLM"} · {formatRelTime(a.brief!.fetched_at)}
+            brief · {a.brief!.llm_provider ?? "no LLM"} · chain{" "}
+            {a.brief!.llm_attempts.map((att) => `${att.provider}:${att.status}`).join("→") || "n/a"}
+            {" "}· {formatRelTime(a.brief!.fetched_at)}
           </div>
         </>
       ) : (
@@ -691,6 +694,39 @@ function ArrowBriefBlock({ a, hasBrief }: { a: Arrow; hasBrief: boolean }) {
           <span style={{ color: MUTED }}>outcome · </span>{a.outcome_detail}
         </div>
       )}
+    </div>
+  );
+}
+
+// T-A verify — the numeric facts A4 saw when it wrote the brief. Any
+// number the LLM cites (e.g. "1.57% 24h decline") should be traceable
+// back to one of these values; otherwise the LLM is confabulating.
+function FactsAtFire({ brief }: { brief: import("@/lib/blue-hood/types").ArrowBrief }) {
+  const f = brief.facts_at_fire;
+  if (!f) return null;
+  const pairs: [string, string][] = [
+    ["dex", f.dex_price_usd !== null ? `$${f.dex_price_usd.toFixed(4)}` : "—"],
+    ["oracle", f.oracle_price_usd !== null ? `$${f.oracle_price_usd.toFixed(4)}` : "—"],
+    ["tvl", f.dex_tvl_usd !== null ? formatUsd(f.dex_tvl_usd) : "—"],
+    ["vol 24h", f.dex_volume_24h_usd !== null ? formatUsd(f.dex_volume_24h_usd) : "—"],
+    ["chg 24h", f.dex_change_24h_pct !== null ? `${f.dex_change_24h_pct.toFixed(2)}%` : "—"],
+    ["feed age", f.chainlink_age_seconds !== null ? `${f.chainlink_age_seconds}s` : "—"],
+  ];
+  return (
+    <div
+      className="mt-2 rounded border px-2 py-1.5 font-mono text-[11px]"
+      style={{ borderColor: BORDER, backgroundColor: "#0a0c11", color: "#9aa1ac" }}
+    >
+      <div className="mb-1 font-mono text-[9px] uppercase tracking-widest" style={{ color: MUTED }}>
+        facts at fire · anything in the brief above should reconcile against these
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+        {pairs.map(([k, v]) => (
+          <span key={k}>
+            <span style={{ color: MUTED }}>{k}</span> {v}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

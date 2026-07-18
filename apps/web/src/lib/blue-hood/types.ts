@@ -132,9 +132,19 @@ export interface Arrow {
   graded_at: string | null;
   /** Free-form detail — e.g. "gap closed 62%", "price moved +1.7% opposite in 3h". */
   outcome_detail: string | null;
-  /** True for arrows minted by `/api/cron/blue-hood/seed-test-arrow` (dev
-   *  UI smoke). Filtered out of the public feed + hit-rate. Absent on real
-   *  arrows so the field never accidentally reads as truthy. */
+  /** Where the arrow was born. Only `"engine"` arrows are eligible for the
+   *  public feed + hit-rate + arrows_today counters — a `"seeded"` arrow
+   *  is a hand-crafted dev/QA fixture and can never taint the track
+   *  record. Older records without this field are back-compat treated as
+   *  `"engine"` (see `/api/hood/arrows`), but every arrow written going
+   *  forward carries an explicit tag.
+   *
+   *  Reviewer T-A #1: "seed-test-arrow LUÔN set origin='seeded', kể cả khi
+   *  real=1". Guaranteed by construction — the seed route hard-codes it. */
+  origin: "engine" | "seeded";
+  /** DEPRECATED. Kept for legacy read of arrows persisted before `origin`
+   *  landed. New writers use `origin: "seeded"` instead. Filter treats
+   *  `test === true` as "hide" identically. */
   test?: boolean;
   /** Human-language "why" attached by A4 (`rh-stock-agent-brief`) at fire
    *  time. Populated once, cached forever on the arrow record. Null when
@@ -154,6 +164,31 @@ export interface ArrowBrief {
   warnings: string[];
   /** Which LLM served the context (virtuals / venice / bankr / null). */
   llm_provider: string | null;
+  /** Full attempts trace — verifiable proof the Virtuals→Venice→Bankr
+   *  chain played correctly. Reviewer T-A #2: on prod attempts[0] must
+   *  show `provider: virtuals status: success`; local it's fine to see
+   *  attempts[0]={virtuals, error, "VIRTUALS_API_KEY not set"} because
+   *  the key is intentionally absent in .env.local. Stored on the arrow
+   *  so a track-record reader can audit the chain later. */
+  llm_attempts: Array<{
+    provider: string;
+    status: "success" | "error";
+    duration_ms: number;
+    error?: string;
+  }>;
+  /** Snapshot of the numeric facts A4 was given at fire time. Reviewer
+   *  T-A verify concern: brief claimed "1.57% 24h decline" but the
+   *  current snapshot showed -1.42% — was it legit drift or an LLM
+   *  fabrication? With `facts_at_fire` a reader can settle it in one
+   *  glance. Populated verbatim from A4's `facts` block. */
+  facts_at_fire: {
+    dex_price_usd: number | null;
+    oracle_price_usd: number | null;
+    dex_tvl_usd: number | null;
+    dex_volume_24h_usd: number | null;
+    dex_change_24h_pct: number | null;
+    chainlink_age_seconds: number | null;
+  };
   /** ISO timestamp when the brief was fetched. */
   fetched_at: string;
 }

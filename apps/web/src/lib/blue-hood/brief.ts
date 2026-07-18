@@ -23,7 +23,23 @@ interface A4Response {
   verdict_note?: string;
   one_line_context?: string | null;
   warnings?: string[];
-  llm?: { provider?: string | null };
+  facts?: {
+    dex_price_usd?: number | null;
+    oracle_price_usd?: number | null;
+    dex_tvl_usd?: number | null;
+    dex_volume_24h_usd?: number | null;
+    dex_change_24h_pct?: number | null;
+    chainlink_age_seconds?: number | null;
+  };
+  llm?: {
+    provider?: string | null;
+    attempts?: Array<{
+      provider?: string;
+      status?: "success" | "error";
+      duration_ms?: number;
+      error?: string;
+    }>;
+  };
 }
 
 /**
@@ -44,11 +60,30 @@ export async function fetchArrowBrief(ticker: string): Promise<ArrowBrief | null
     // verdict_note — treat that as "no brief" rather than an empty shell.
     return null;
   }
+  const attempts = Array.isArray(d.llm?.attempts) ? d.llm!.attempts : [];
+  const normalized = attempts
+    .map((a) => ({
+      provider: String(a?.provider ?? ""),
+      status: a?.status === "success" ? "success" : "error" as const,
+      duration_ms: typeof a?.duration_ms === "number" ? a.duration_ms : 0,
+      ...(a?.error ? { error: String(a.error) } : {}),
+    }))
+    .filter((a): a is { provider: string; status: "success" | "error"; duration_ms: number; error?: string } => Boolean(a.provider));
+  const facts = d.facts ?? {};
   return {
     verdict_note: d.verdict_note,
     one_line_context: (typeof d.one_line_context === "string" ? d.one_line_context : null),
     warnings: Array.isArray(d.warnings) ? d.warnings : [],
     llm_provider: d.llm?.provider ?? null,
+    llm_attempts: normalized,
+    facts_at_fire: {
+      dex_price_usd: facts.dex_price_usd ?? null,
+      oracle_price_usd: facts.oracle_price_usd ?? null,
+      dex_tvl_usd: facts.dex_tvl_usd ?? null,
+      dex_volume_24h_usd: facts.dex_volume_24h_usd ?? null,
+      dex_change_24h_pct: facts.dex_change_24h_pct ?? null,
+      chainlink_age_seconds: facts.chainlink_age_seconds ?? null,
+    },
     fetched_at: new Date().toISOString(),
   };
 }

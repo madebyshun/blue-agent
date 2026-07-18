@@ -23,10 +23,13 @@ export async function POST(req: NextRequest) {
   const refPrice = Number(url.searchParams.get("ref") ?? "0") || 100;
   const windowH = Number(url.searchParams.get("window") ?? "0") || (type === "arb" ? 4 : 6);
 
-  // Dev flag `?real=1` fires a NON-test arrow so we can exercise the full
-  // A4 brief path end-to-end in localhost. Also dev-only (endpoint itself
-  // 404s in prod), so no risk of a stray real seed on public.
-  const real = url.searchParams.get("real") === "1";
+  // Reviewer T-A #1: seed arrows ALWAYS carry origin="seeded", even when
+  // `?with_brief=1` is set. That flag only controls whether A4 gets called
+  // (useful for exercising the brief pipeline in localhost). Origin stays
+  // seeded so the arrow is never eligible for the public feed/hit-rate,
+  // regardless of what UI plumbing the caller is exercising.
+  const withBrief = url.searchParams.get("with_brief") === "1"
+    || url.searchParams.get("real") === "1"; // legacy alias — remove after v1
   const arrow = await fireArrow(
     ticker,
     {
@@ -36,7 +39,9 @@ export async function POST(req: NextRequest) {
       reference_price: refPrice,
     },
     Math.floor(Date.now() / 1000),
-    real ? {} : { test: true },
+    withBrief
+      ? { origin: "seeded" }
+      : { origin: "seeded", test: true }, // `test` still gates A4 call
   );
 
   if (!arrow) {
