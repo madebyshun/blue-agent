@@ -46,11 +46,24 @@ export const kvPushSub = (endpointHash: string) => `bh:push:sub:${endpointHash}`
  *  when an engine arrow fires). Value = string[] of hashes. */
 export const KV_PUSH_SUB_INDEX = "bh:push:index";
 
+/** T-D D2 — Blue Chat card payload for one arrow. Written at fire time
+ *  by the engine; Blue Chat pulls by arrow id when the LLM (or a chat
+ *  hood tool) references it. Kept separate from the raw `bh:arrow:{id}`
+ *  record so the chat consumer only touches a pre-shaped, chat-safe
+ *  subset (never the raw brief chain of thought). */
+export const kvChatCard = (arrowId: string) => `bh:chat:card:${arrowId}`;
+
+/** T-D D2 — rolling list of chat-card ids (newest first) so the chat
+ *  can page/enumerate without walking the whole arrow feed. Trim policy
+ *  matches KV_ARROW_FEED (unbounded for now). */
+export const KV_CHAT_CARD_FEED = "bh:chat:feed";
+
 /** TTL constants (seconds). */
 export const TTL_SNAPSHOT_HOUR = 60 * 60 * 25; // 25h so we always have a full 24h window
 export const TTL_ARROW_INDEX = 60 * 60 * 24 * 30; // 30d — grading windows are at most 24h
 export const TTL_SPARKLINE = 60 * 20; // 20 min — hourly candles don't need to be fresher than that
 export const TTL_PUSH_SUB = 60 * 60 * 24 * 90; // 90d — browser subs expire on their own well before this
+export const TTL_CHAT_CARD = 60 * 60 * 24 * 30; // 30d — matches TTL_ARROW_INDEX so cards don't outlive arrows
 
 /** Utility: format a Date into `YYYYMMDDHH` for the ring-buffer bucket. */
 export function yyyymmddhh(d: Date): string {

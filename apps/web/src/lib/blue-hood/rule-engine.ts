@@ -21,6 +21,7 @@ import { KV_ARROW_SERIAL_COUNTER, kvArrow, kvArrowOpenIndex, KV_ARROW_FEED, TTL_
 import type { Arrow, ArrowType, HoodSnapshot, TickerSnapshot } from "./types";
 import { fetchArrowBrief } from "./brief";
 import { pushArrowToAll } from "./push";
+import { writeChatCard } from "./chat-card";
 
 // ── Thresholds (from spec Block 1.2) ─────────────────────────────────────
 const DRIFT_MIN_ABS_PCT = 2.0;   // |drift| ≥ 2% during premarket/afterhours
@@ -188,6 +189,14 @@ export async function fireArrow(
     } catch (e) {
       console.warn(`[brief] fetch crashed for ${serial} ${ticker}: ${(e as Error).message}`);
     }
+  }
+
+  // T-D D2 — Blue Chat card. Written for EVERY non-test arrow (both
+  // engine + future seeded flows might want a chat card for QA), so a
+  // chat consumer can render even before push infra is wired. Best-
+  // effort — swallow any KV blip inside `writeChatCard` itself.
+  if (!opts.test) {
+    await writeChatCard(finalArrow);
   }
 
   // T-D D3 — fan-out web push. Only engine origin, non-test arrows push
