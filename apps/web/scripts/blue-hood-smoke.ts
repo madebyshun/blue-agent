@@ -1,8 +1,31 @@
 // Load .env.local so the LLM health assertion (T-A.1 #3) sees the same
-// keys `next dev` would. tsx doesn't auto-load; Next does.
-import { config as loadEnv } from "dotenv";
+// keys `next dev` would. tsx doesn't auto-load; Next does. We hand-roll
+// a minimal parser instead of pulling `dotenv` into apps/web just for a
+// smoke script (dotenv lives at the repo root, not in apps/web/node_modules,
+// so a direct import breaks `next build` typechecking on Vercel).
+import fs from "fs";
 import path from "path";
-loadEnv({ path: path.resolve(__dirname, "../.env.local") });
+(function loadEnvLocal() {
+  try {
+    const p = path.resolve(__dirname, "../.env.local");
+    if (!fs.existsSync(p)) return;
+    const raw = fs.readFileSync(p, "utf8");
+    for (const line of raw.split(/\r?\n/)) {
+      const s = line.trim();
+      if (!s || s.startsWith("#")) continue;
+      const eq = s.indexOf("=");
+      if (eq < 0) continue;
+      const key = s.slice(0, eq).trim();
+      let value = s.slice(eq + 1).trim();
+      // Strip matched surrounding quotes.
+      if ((value.startsWith("\"") && value.endsWith("\"")) ||
+          (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      if (!(key in process.env)) process.env[key] = value;
+    }
+  } catch { /* smoke keeps running even if env load fails */ }
+})();
 
 /**
  * Blue Hood — semantic smoke.
