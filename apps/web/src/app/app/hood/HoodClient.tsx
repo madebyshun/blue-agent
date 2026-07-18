@@ -26,9 +26,11 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import type { HoodSnapshot, TickerSnapshot, M5Verdict, Arrow } from "@/lib/blue-hood/types";
 import HoodSidebar from "./HoodSidebar";
 import TickerDetailPanel from "./TickerDetailPanel";
+import ArrowBriefBlock from "./ArrowBriefBlock";
 
 const REFRESH_MS = 15_000;
 const RH_GREEN = "#00C805";
@@ -200,7 +202,18 @@ export default function HoodClient() {
           <DriftBoard rows={filtered} rowRefs={rowRefs} arrows={arrowsData?.arrows ?? null} />
 
           <div className="h-10" />
-          <SectionHeader label="// HOOD · ARROWS FEED" />
+          <div className="mb-3 flex items-center justify-between">
+            <div className="font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
+              // HOOD · ARROWS FEED
+            </div>
+            <Link
+              href="/hood/arrows"
+              className="font-mono text-[11px] hover:text-white"
+              style={{ color: RH_GREEN }}
+            >
+              Track record →
+            </Link>
+          </div>
           <ArrowsFeed data={arrowsData} />
 
           <Footer />
@@ -756,88 +769,6 @@ function ArrowRow({ a }: { a: Arrow }) {
         </tr>
       )}
     </>
-  );
-}
-
-// T-A — arrow expand block. Shows A4's verdict_note + LLM one-liner +
-// warnings + outcome detail (once graded). Never re-fetches; reads the
-// snapshot the engine attached at fire time.
-function ArrowBriefBlock({ a, hasBrief }: { a: Arrow; hasBrief: boolean }) {
-  return (
-    <div className="flex flex-col gap-2 text-[12px]">
-      {hasBrief ? (
-        <>
-          <div className="font-mono text-white leading-relaxed">
-            {a.brief!.verdict_note}
-          </div>
-          {a.brief!.one_line_context && (
-            <div className="italic" style={{ color: "#cbd5e1" }}>
-              &ldquo;{a.brief!.one_line_context}&rdquo;
-            </div>
-          )}
-          {a.brief!.warnings.length > 0 && (
-            <ul className="mt-1 space-y-1">
-              {a.brief!.warnings.map((w, i) => (
-                <li key={i} className="font-mono text-[11px]" style={{ color: AMBER }}>
-                  ⚠ {w}
-                </li>
-              ))}
-            </ul>
-          )}
-          <FactsAtFire brief={a.brief!} />
-          <div className="pt-1 font-mono text-[10px]" style={{ color: MUTED }}>
-            brief · {a.brief!.llm_provider ?? "no LLM"} · chain{" "}
-            {a.brief!.llm_attempts.map((att) => `${att.provider}:${att.status}`).join("→") || "n/a"}
-            {" "}· {formatRelTime(a.brief!.fetched_at)}
-          </div>
-        </>
-      ) : (
-        <div className="font-mono text-[11px]" style={{ color: MUTED }}>
-          No brief attached — A4 was unavailable when this arrow fired. Numbers still stand on their own.
-        </div>
-      )}
-      {a.outcome_detail && (
-        <div
-          className="mt-2 rounded border px-2 py-1.5 font-mono text-[11px]"
-          style={{ borderColor: BORDER, color: "#E7E9EE" }}
-        >
-          <span style={{ color: MUTED }}>outcome · </span>{a.outcome_detail}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// T-A verify — the numeric facts A4 saw when it wrote the brief. Any
-// number the LLM cites (e.g. "1.57% 24h decline") should be traceable
-// back to one of these values; otherwise the LLM is confabulating.
-function FactsAtFire({ brief }: { brief: import("@/lib/blue-hood/types").ArrowBrief }) {
-  const f = brief.facts_at_fire;
-  if (!f) return null;
-  const pairs: [string, string][] = [
-    ["dex", f.dex_price_usd !== null ? `$${f.dex_price_usd.toFixed(4)}` : "—"],
-    ["oracle", f.oracle_price_usd !== null ? `$${f.oracle_price_usd.toFixed(4)}` : "—"],
-    ["tvl", f.dex_tvl_usd !== null ? formatUsd(f.dex_tvl_usd) : "—"],
-    ["vol 24h", f.dex_volume_24h_usd !== null ? formatUsd(f.dex_volume_24h_usd) : "—"],
-    ["chg 24h", f.dex_change_24h_pct !== null ? `${f.dex_change_24h_pct.toFixed(2)}%` : "—"],
-    ["feed age", f.chainlink_age_seconds !== null ? `${f.chainlink_age_seconds}s` : "—"],
-  ];
-  return (
-    <div
-      className="mt-2 rounded border px-2 py-1.5 font-mono text-[11px]"
-      style={{ borderColor: BORDER, backgroundColor: "#0a0c11", color: "#9aa1ac" }}
-    >
-      <div className="mb-1 font-mono text-[9px] uppercase tracking-widest" style={{ color: MUTED }}>
-        facts at fire · anything in the brief above should reconcile against these
-      </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-        {pairs.map(([k, v]) => (
-          <span key={k}>
-            <span style={{ color: MUTED }}>{k}</span> {v}
-          </span>
-        ))}
-      </div>
-    </div>
   );
 }
 
