@@ -13,8 +13,12 @@
  * a secret set falls open so `npm run dev` just works.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { kvGet } from "@/lib/kv";
 import { HOOD_WATCHLIST } from "@/lib/blue-hood/registry";
 import { refreshSparkline } from "@/lib/blue-hood/sparkline";
+import { fetchAndCacheDetail } from "@/lib/blue-hood/ticker-detail";
+import { KV_SNAPSHOT_LATEST } from "@/lib/blue-hood/kv-keys";
+import type { HoodSnapshot } from "@/lib/blue-hood/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -46,14 +50,47 @@ async function handle(req: NextRequest) {
       await new Promise((res) => setTimeout(res, STAGGER_MS));
     }
   }
-  const ok_count = results.filter((r) => r.ok).length;
+  const spark_ok = results.filter((r) => r.ok).length;
+
+  // T-B.1 #3 — detail-warm piggyback. After the sparkline pass finishes,
+  // read the latest snapshot, pick out Tradable tickers (has dex_usd +
+  // TVL ≥ $5k dust floor), and pre-fill `bh:detail:{TICKER}` for each.
+  // Same 3s stagger. Click-through from the drift board now lands on a
+  // cache hit ~99% of the time.
+  const snap = await kvGet<HoodSnapshot>(KV_SNAPSHOT_LATEST);
+  const tradable = (snap?.tickers ?? []).filter(
+    (r) => r.verdict !== "ERROR" && r.verdict !== "INSUFFICIENT_DATA"
+      && r.dex_usd !== null && (r.tvl_usd ?? 0) >= 5_000,
+  );
+  const warm: Array<{ ticker: string; ok: boolean; error?: string }> = [];
+  console.log(`[detail-warm] tradable=${tradable.length} stagger_ms=${STAGGER_MS}`);
+  for (let i = 0; i < tradable.length; i++) {
+    const t = tradable[i];
+    const t0 = Date.now();
+    try {
+      await fetchAndCacheDetail(t.ticker);
+      warm.push({ ticker: t.ticker, ok: true });
+      console.log(`[detail-warm] seq=${i + 1}/${tradable.length} ticker=${t.ticker} ok elapsed_ms=${Date.now() - t0}`);
+    } catch (e) {
+      const msg = (e as Error).message;
+      warm.push({ ticker: t.ticker, ok: false, error: msg });
+      console.warn(`[detail-warm] seq=${i + 1}/${tradable.length} ticker=${t.ticker} error="${msg}"`);
+    }
+    if (STAGGER_MS > 0 && i < tradable.length - 1) {
+      await new Promise((res) => setTimeout(res, STAGGER_MS));
+    }
+  }
+  const warm_ok = warm.filter((w) => w.ok).length;
+
   return NextResponse.json({
     ok: true,
     duration_ms: Date.now() - started,
     watched: HOOD_WATCHLIST.length,
-    refreshed: ok_count,
-    errored: results.length - ok_count,
+    refreshed: spark_ok,
+    errored: results.length - spark_ok,
+    detail_warm: { tradable: tradable.length, refreshed: warm_ok, errored: warm.length - warm_ok },
     per_ticker: results,
+    per_detail: warm,
   });
 }
 
