@@ -70,20 +70,74 @@ export async function fetchArrowBrief(ticker: string): Promise<ArrowBrief | null
     }))
     .filter((a): a is { provider: string; status: "success" | "error"; duration_ms: number; error?: string } => Boolean(a.provider));
   const facts = d.facts ?? {};
+  const facts_at_fire = {
+    dex_price_usd: facts.dex_price_usd ?? null,
+    oracle_price_usd: facts.oracle_price_usd ?? null,
+    dex_tvl_usd: facts.dex_tvl_usd ?? null,
+    dex_volume_24h_usd: facts.dex_volume_24h_usd ?? null,
+    dex_change_24h_pct: facts.dex_change_24h_pct ?? null,
+    chainlink_age_seconds: facts.chainlink_age_seconds ?? null,
+  };
+
+  // T-A.1 #2 — brief_number_drift guard. Extract every "X%" the LLM
+  // one-liner cites and reconcile against facts_at_fire percentage
+  // fields. Anything drifting > 0.1 pp gets a warning appended so a
+  // viewer + prod alerting can catch confabulation without needing a
+  // human eyeball. Silent on numbers that don't map to a known fact
+  // (e.g. "50%" as a colloquial phrase) — better to under-flag than
+  // false-positive.
+  const driftWarnings = detectBriefNumberDrift(d.one_line_context ?? null, facts_at_fire);
+
   return {
     verdict_note: d.verdict_note,
     one_line_context: (typeof d.one_line_context === "string" ? d.one_line_context : null),
-    warnings: Array.isArray(d.warnings) ? d.warnings : [],
+    warnings: [...(Array.isArray(d.warnings) ? d.warnings : []), ...driftWarnings],
     llm_provider: d.llm?.provider ?? null,
     llm_attempts: normalized,
-    facts_at_fire: {
-      dex_price_usd: facts.dex_price_usd ?? null,
-      oracle_price_usd: facts.oracle_price_usd ?? null,
-      dex_tvl_usd: facts.dex_tvl_usd ?? null,
-      dex_volume_24h_usd: facts.dex_volume_24h_usd ?? null,
-      dex_change_24h_pct: facts.dex_change_24h_pct ?? null,
-      chainlink_age_seconds: facts.chainlink_age_seconds ?? null,
-    },
+    facts_at_fire,
     fetched_at: new Date().toISOString(),
   };
+}
+
+// ── brief_number_drift detector ────────────────────────────────────────────
+// Regex captures signed percentage tokens: "+1.57%", "-1.42%", "1.57%".
+// For every hit we search facts_at_fire.*_pct and warn when NONE lie
+// within 0.1 pp. We do NOT try to match multiple pct fields (e.g. price
+// change vs slippage); if the closest fact is within tolerance we're
+// good, otherwise we flag.
+export function detectBriefNumberDrift(
+  text: string | null,
+  facts: {
+    dex_change_24h_pct: number | null;
+    // Extend as we add more pct fields to the snapshot.
+  },
+): string[] {
+  if (!text) return [];
+  const factValues = Object.entries(facts)
+    .filter(([, v]) => typeof v === "number")
+    .map(([k, v]) => ({ key: k, value: v as number }));
+  if (factValues.length === 0) return [];
+
+  const warnings: string[] = [];
+  const re = /([+-]?\d+(?:\.\d+)?)\s*%/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const cited = Number(m[1]);
+    if (!Number.isFinite(cited)) continue;
+    // Absolute-value comparison — LLM may drop the sign ("1.57% decline"
+    // instead of "-1.57%"). We compare |cited| vs |fact| within tolerance.
+    const closest = factValues.reduce<{ key: string; value: number; d: number }>(
+      (best, f) => {
+        const d = Math.abs(Math.abs(cited) - Math.abs(f.value));
+        return d < best.d ? { key: f.key, value: f.value, d } : best;
+      },
+      { key: "", value: 0, d: Number.POSITIVE_INFINITY },
+    );
+    if (closest.d > 0.1) {
+      warnings.push(
+        `brief_number_drift: LLM cited ${cited}% but closest fact ${closest.key}=${closest.value.toFixed(2)}% (drift ${closest.d.toFixed(2)}pp > 0.1pp)`,
+      );
+    }
+  }
+  return warnings;
 }

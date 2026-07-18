@@ -114,6 +114,19 @@ export async function callBankrLLM(opts: {
 // guessing. Drop-in: accepts the same {system, messages|user, temperature,
 // maxTokens} shape as callBankrLLM, and auto-prepends WEB_SEARCH_RULE.
 
+// TODO (Blue Hood backlog, T-A.1 #4): callVeniceLLM below has an internal
+// fallback to callBankrLLM (line ~319). When Venice itself fails, that
+// fallback fires — so a Bankr error surfaces on the "venice" attempt entry
+// in `callLLM`'s trace, then a SECOND Bankr call happens as the outer
+// chain's own Bankr step. Two side effects:
+//   (a) attempts[venice].error can literally say "Bankr LLM 403 …"
+//       which reads misleadingly.
+//   (b) Bankr may get double-hit per call.
+// Flatten: strip Venice's internal Bankr fallback and let the outer
+// `callLLM` chain be the only place fallback lives. Not urgent (attempts
+// trace is still accurate about "did any provider give us text?"), but
+// worth doing before we harden the health endpoint for public metrics.
+
 /** Prepended to every Venice (web-search) tool. Tells the model to search, not invent. */
 export const WEB_SEARCH_RULE =
   "You have web search available. For any specific numbers (market size, TAM, revenue, user counts, APY, GitHub stars, valuations, projections) ALWAYS search for real data first and cite the source. If search returns no result, write \"[data unavailable]\" — NEVER generate numbers without a verified source.";

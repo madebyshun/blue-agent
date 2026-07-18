@@ -1,3 +1,9 @@
+// Load .env.local so the LLM health assertion (T-A.1 #3) sees the same
+// keys `next dev` would. tsx doesn't auto-load; Next does.
+import { config as loadEnv } from "dotenv";
+import path from "path";
+loadEnv({ path: path.resolve(__dirname, "../.env.local") });
+
 /**
  * Blue Hood — semantic smoke.
  *
@@ -14,6 +20,8 @@ import { nyseMarketStatus } from "../src/lib/robinhood/rwa-market";
 import { detectCandidate, runRuleEngine } from "../src/lib/blue-hood/rule-engine";
 import { HOOD_REGISTRY_STATS } from "../src/lib/blue-hood/registry";
 import type { HoodSnapshot, TickerSnapshot } from "../src/lib/blue-hood/types";
+import { detectBriefNumberDrift } from "../src/lib/blue-hood/brief";
+import { callLLM } from "../src/app/api/_lib/llm";
 
 let failed = 0;
 function must(ok: boolean, label: string, detail?: string) {
@@ -171,6 +179,46 @@ async function main() {
   must(rep2.fired === 0, "second run fired = 0");
 }
 
+
+// ── Section 4: brief_number_drift guard (T-A.1 #2) ────────────────────────
+{
+  console.log("\n── brief_number_drift guard ──");
+  const facts = { dex_change_24h_pct: -1.42 };
+  const clean = detectBriefNumberDrift("Apple decline ~1.42% today", facts);
+  must(clean.length === 0, "reconciling number is silent", `warnings=${clean.length}`);
+  const drift = detectBriefNumberDrift("Apple 1.57% 24h decline", facts);
+  must(drift.length === 1, "drift > 0.1pp raises exactly one warning", `warnings=${drift.length}`);
+  must(drift[0]?.startsWith("brief_number_drift:"), "warning uses standard prefix");
+  const noPct = detectBriefNumberDrift("no percentages here", facts);
+  must(noPct.length === 0, "text without % never triggers");
+  const closeEnough = detectBriefNumberDrift("~1.47% decline", facts);
+  must(closeEnough.length === 0, "within 0.1pp tolerance is silent (1.47 vs 1.42)");
+}
+
+// ── Section 5: LLM chain health (T-A.1 #3) ────────────────────────────────
+// Reviewer: "ít nhất 1 provider success". If this fails locally that's
+// EXACTLY what we want to see — the point is to catch a broken chain
+// before it ships, not to keep dev green with a lying assertion.
+{
+  console.log("\n── LLM chain health ──");
+  try {
+    const r = await callLLM({
+      system: "Reply with one word: ok.",
+      user: "ping",
+      temperature: 0,
+      maxTokens: 4,
+      webSearch: false,
+    });
+    must(!!r.provider, `at least one provider succeeded (${r.provider})`);
+    must(Array.isArray(r.attempts) && r.attempts.length > 0, "attempts trace non-empty");
+  } catch (e) {
+    const err = e as Error & { attempts?: unknown[] };
+    const chain = Array.isArray(err.attempts)
+      ? err.attempts.map((a) => `${(a as { provider?: string }).provider}:${(a as { status?: string }).status}`).join("→")
+      : "n/a";
+    must(false, "at least one provider succeeded", `all failed — chain: ${chain}`);
+  }
+}
 }
 
 main().then(() => {
