@@ -7,6 +7,15 @@
     {
       "path": "/api/cron/research-loop",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/blue-hood/poll",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/blue-hood/sparkline-refresh",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
+
