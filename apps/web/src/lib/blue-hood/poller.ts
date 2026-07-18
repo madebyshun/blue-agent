@@ -30,6 +30,7 @@ import {
 } from "./kv-keys";
 import type { HoodSnapshot, M5Verdict, MarketSession, TickerSnapshot } from "./types";
 import { cacheAgeS } from "@/lib/robinhood/rwa-market";
+import { readSparkline } from "./sparkline";
 
 // M5 response shape (subset we care about — kept in this file so a change in
 // the tool trips a compile error here first).
@@ -72,6 +73,11 @@ async function pollOne(ticker: string, cycleStart: number): Promise<TickerSnapsh
   const gtUrl = `${GT_TOKENS_URL_BASE}/${entry.contract.toLowerCase()}/pools?page=1`;
   const data_age_s = cacheAgeS(gtUrl);
 
+  // T-B1 — read cached sparkline (no network here; the refresh cron owns
+  // populating the cache). Null when cold; the UI hides the column when
+  // it's null or below 6 candles.
+  const sparkline = await readSparkline(ticker);
+
   if (!r.ok) {
     return {
       ticker,
@@ -94,6 +100,7 @@ async function pollOne(ticker: string, cycleStart: number): Promise<TickerSnapsh
       error: `${r.status}: ${r.error}`,
       polled_at_ms,
       data_age_s,
+      sparkline,
     };
   }
 
@@ -114,6 +121,7 @@ async function pollOne(ticker: string, cycleStart: number): Promise<TickerSnapsh
     warnings: Array.isArray(d.warnings) ? d.warnings : [],
     polled_at_ms,
     data_age_s,
+    sparkline,
   };
 }
 

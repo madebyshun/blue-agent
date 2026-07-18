@@ -63,6 +63,11 @@ export interface TickerSnapshot {
    *  cold fetch, a number when memo-served. Reviewer T1(d): "token nào
    *  serve từ cache cũ phải nói". */
   data_age_s: number | null;
+  /** T-B1 — hourly close prices (up to 24 points, oldest first) served
+   *  from `bh:spark:{ticker}`. Populated by the `sparkline-refresh` cron;
+   *  the main 72s poll only reads cache, never fetches. `null` on cold
+   *  start; the UI hides the sparkline entirely when < 6 candles. */
+  sparkline: number[] | null;
 }
 
 export interface HoodSnapshot {

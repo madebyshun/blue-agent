@@ -28,6 +28,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HoodSnapshot, TickerSnapshot, M5Verdict, Arrow } from "@/lib/blue-hood/types";
 import HoodSidebar from "./HoodSidebar";
+import TickerDetailPanel from "./TickerDetailPanel";
 
 const REFRESH_MS = 15_000;
 const RH_GREEN = "#00C805";
@@ -196,7 +197,7 @@ export default function HoodClient() {
             </div>
           </div>
 
-          <DriftBoard rows={filtered} rowRefs={rowRefs} />
+          <DriftBoard rows={filtered} rowRefs={rowRefs} arrows={arrowsData?.arrows ?? null} />
 
           <div className="h-10" />
           <SectionHeader label="// HOOD · ARROWS FEED" />
@@ -379,10 +380,18 @@ function SortToggle({ value, onChange }: { value: SortKey; onChange: (v: SortKey
 function DriftBoard({
   rows,
   rowRefs,
+  arrows,
 }: {
   rows: TickerSnapshot[];
   rowRefs: React.MutableRefObject<Record<string, HTMLTableRowElement | null>>;
+  arrows: Arrow[] | null;
 }) {
+  // T-B2 — accordion: at most one row expanded at a time.
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const toggle = useCallback((ticker: string) => {
+    setExpanded((cur) => (cur === ticker ? null : ticker));
+  }, []);
+
   if (rows.length === 0) {
     return (
       <div
@@ -403,25 +412,94 @@ function DriftBoard({
             <th className="px-3 py-2 text-right">Oracle</th>
             <th className="px-3 py-2 text-right">DEX</th>
             <th className="px-3 py-2 text-right">Drift</th>
+            <th className="px-3 py-2 text-left">24h</th>
             <th className="px-3 py-2 text-right">TVL</th>
             <th className="px-3 py-2 text-right">Vol 24h</th>
             <th className="px-3 py-2 text-left">Verdict</th>
           </tr>
         </thead>
         <tbody className="font-mono text-[13px]">
-          {rows.map((r) => (<DriftRow key={r.ticker} r={r} rowRefs={rowRefs} />))}
+          {rows.map((r) => {
+            const openArrow = arrows?.find((a) => a.ticker === r.ticker && a.status === "open") ?? null;
+            return (
+              <DriftRow
+                key={r.ticker}
+                r={r}
+                rowRefs={rowRefs}
+                expanded={expanded === r.ticker}
+                onToggle={() => toggle(r.ticker)}
+                openArrow={openArrow}
+              />
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
 
+// T-B1 — sparkline SVG. 1-stroke polyline, no axis, colored by current
+// drift sign. Faded horizontal rule = current oracle price. Hidden
+// entirely when < 6 candles (never draw a stub line).
+function Sparkline({
+  points,
+  oracle,
+  driftPct,
+}: {
+  points: number[] | null;
+  oracle: number | null;
+  driftPct: number | null;
+}) {
+  if (!points || points.length < 6) return <span style={{ color: "#334155" }}>—</span>;
+
+  const w = 60;
+  const h = 20;
+  const pad = 1;
+  const min = Math.min(...points, oracle ?? points[0]);
+  const max = Math.max(...points, oracle ?? points[0]);
+  const range = max - min || 1;
+  const yFor = (v: number) => pad + (1 - (v - min) / range) * (h - pad * 2);
+  const step = (w - pad * 2) / (points.length - 1);
+  const d = points
+    .map((v, i) => `${i === 0 ? "M" : "L"}${(pad + i * step).toFixed(2)},${yFor(v).toFixed(2)}`)
+    .join(" ");
+
+  const drift = driftPct ?? 0;
+  const strokeColor =
+    Math.abs(drift) < 0.5 ? "#64748b" : drift > 0 ? GREEN_TEXT : RED;
+  const oracleY = oracle !== null && Number.isFinite(oracle) ? yFor(oracle) : null;
+
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+      {oracleY !== null && (
+        <line
+          x1={0}
+          x2={w}
+          y1={oracleY}
+          y2={oracleY}
+          stroke="#3f4550"
+          strokeWidth={0.5}
+          strokeDasharray="2 2"
+          opacity={0.7}
+        />
+      )}
+      <path d={d} fill="none" stroke={strokeColor} strokeWidth={1.2} strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function DriftRow({
   r,
   rowRefs,
+  expanded,
+  onToggle,
+  openArrow,
 }: {
   r: TickerSnapshot;
   rowRefs: React.MutableRefObject<Record<string, HTMLTableRowElement | null>>;
+  expanded: boolean;
+  onToggle: () => void;
+  openArrow: Arrow | null;
 }) {
   const drift = r.drift_pct ?? 0;
   const dust = isDust(r);
@@ -449,6 +527,8 @@ function DriftRow({
         <td className="px-3 py-2 text-right text-slate-500">{formatUsd(r.oracle_usd)}</td>
         <td className="px-3 py-2 text-right text-slate-600">—</td>
         <td className="px-3 py-2 text-right text-slate-600">—</td>
+        {/* T-B1 — NO POOL DATA gets an em-dash placeholder in the sparkline column. */}
+        <td className="px-3 py-2 text-left text-slate-600">—</td>
         <td className="px-3 py-2 text-right text-slate-600">—</td>
         <td className="px-3 py-2 text-right text-slate-600">—</td>
         <td className="px-3 py-2 text-left">
@@ -467,50 +547,78 @@ function DriftRow({
   // T2 — dust row: badge = DUST (gray), drift faded, no LONG/SHORT verdict.
   const rowOpacity = dust ? 0.55 : 1;
   const driftDisplay = dust ? { color: "#4b5563" } : { color: driftColor };
+  // T-B1 — sparkline cell content: only shown for tradable rows. Dust
+  // rows fall through to the same em-dash placeholder as the header row.
+  const sparklineCell = dust ? (
+    <span style={{ color: "#334155" }}>—</span>
+  ) : (
+    <Sparkline points={r.sparkline} oracle={r.oracle_usd} driftPct={r.drift_pct ?? null} />
+  );
+
+  const chevron = expanded ? "▾" : "▸";
 
   return (
-    <tr
-      ref={(el) => { rowRefs.current[r.ticker] = el; }}
-      className="border-b last:border-b-0 hover:bg-black/40"
-      style={{ borderColor: "#0f1218", opacity: rowOpacity }}
-    >
-      <td className="px-3 py-2 text-left">
-        <a
-          href={`https://robinhoodchain.blockscout.com/token/${r.contract}`}
-          target="_blank"
-          rel="noreferrer"
-          className="font-medium text-white transition-colors"
-          onMouseEnter={(e) => (e.currentTarget.style.color = RH_GREEN)}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "#ffffff")}
-        >
-          {r.ticker}
-        </a>
-      </td>
-      <td className="px-3 py-2 text-right text-[#E7E9EE]">{formatUsd(r.oracle_usd)}</td>
-      <td className="px-3 py-2 text-right">
-        {r.pool_ref ? (
-          <a href={poolUrl(r.pool_ref)} target="_blank" rel="noreferrer" className="text-[#E7E9EE] hover:underline">
-            {formatUsd(r.dex_usd)}
-          </a>
-        ) : (
-          <span className="text-[#E7E9EE]">{formatUsd(r.dex_usd)}</span>
-        )}
-      </td>
-      <td className="px-3 py-2 text-right font-mono" style={driftDisplay}>
-        {drift > 0 ? "+" : ""}{drift.toFixed(2)}%
-      </td>
-      <td
-        className="px-3 py-2 text-right"
-        style={{ color: dust ? AMBER : "#9aa1ac" }}
-        title={dust ? `Below $${DUST_TVL_USD.toLocaleString()} — arrows are gated off this row` : undefined}
+    <>
+      <tr
+        ref={(el) => { rowRefs.current[r.ticker] = el; }}
+        className="border-b last:border-b-0 hover:bg-black/40 cursor-pointer"
+        style={{ borderColor: "#0f1218", opacity: rowOpacity }}
+        onClick={onToggle}
       >
-        {formatUsd(r.tvl_usd)}
-      </td>
-      <td className="px-3 py-2 text-right" style={{ color: "#9aa1ac" }}>{formatUsd(r.volume_24h_usd)}</td>
-      <td className="px-3 py-2 text-left">
-        {dust ? <DustBadge /> : <VerdictBadge verdict={r.verdict} />}
-      </td>
-    </tr>
+        <td className="px-3 py-2 text-left">
+          <span style={{ color: MUTED, marginRight: 4 }}>{chevron}</span>
+          <a
+            href={`https://robinhoodchain.blockscout.com/token/${r.contract}`}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="font-medium text-white transition-colors"
+            onMouseEnter={(e) => (e.currentTarget.style.color = RH_GREEN)}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "#ffffff")}
+          >
+            {r.ticker}
+          </a>
+        </td>
+        <td className="px-3 py-2 text-right text-[#E7E9EE]">{formatUsd(r.oracle_usd)}</td>
+        <td className="px-3 py-2 text-right">
+          {r.pool_ref ? (
+            <a
+              href={poolUrl(r.pool_ref)}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-[#E7E9EE] hover:underline"
+            >
+              {formatUsd(r.dex_usd)}
+            </a>
+          ) : (
+            <span className="text-[#E7E9EE]">{formatUsd(r.dex_usd)}</span>
+          )}
+        </td>
+        <td className="px-3 py-2 text-right font-mono" style={driftDisplay}>
+          {drift > 0 ? "+" : ""}{drift.toFixed(2)}%
+        </td>
+        <td className="px-3 py-2 text-left align-middle">{sparklineCell}</td>
+        <td
+          className="px-3 py-2 text-right"
+          style={{ color: dust ? AMBER : "#9aa1ac" }}
+          title={dust ? `Below $${DUST_TVL_USD.toLocaleString()} — arrows are gated off this row` : undefined}
+        >
+          {formatUsd(r.tvl_usd)}
+        </td>
+        <td className="px-3 py-2 text-right" style={{ color: "#9aa1ac" }}>{formatUsd(r.volume_24h_usd)}</td>
+        <td className="px-3 py-2 text-left">
+          {dust ? <DustBadge /> : <VerdictBadge verdict={r.verdict} />}
+        </td>
+      </tr>
+      {expanded && (
+        <tr style={{ borderBottom: "1px solid #0f1218" }}>
+          <td colSpan={8} className="px-4 py-3" style={{ backgroundColor: "#07090e" }}>
+            <TickerDetailPanel ticker={r.ticker} contract={r.contract} openArrow={openArrow} />
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 

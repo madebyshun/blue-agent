@@ -120,6 +120,7 @@ async function main() {
     warnings,
     polled_at_ms: 0,
     data_age_s: null,
+    sparkline: null,
   });
 
   const snap: HoodSnapshot = {

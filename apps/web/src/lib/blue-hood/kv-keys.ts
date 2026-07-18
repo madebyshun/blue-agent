@@ -25,9 +25,15 @@ export const kvArrowOpenIndex = (ticker: string, type: string) =>
 /** Rolling list of all arrow ids (newest first) — used by /hood feed + hit-rate math. */
 export const KV_ARROW_FEED = "bh:arrow:feed";
 
+/** T-B1 — hourly sparkline series per ticker. 24 close prices from M2.
+ *  Refreshed by a separate cron (not the hot 72s poll cycle) so cycle
+ *  time stays flat. See `sparkline-refresh` route + `getSparklineCached`. */
+export const kvSparkline = (ticker: string) => `bh:spark:${ticker.toUpperCase()}`;
+
 /** TTL constants (seconds). */
 export const TTL_SNAPSHOT_HOUR = 60 * 60 * 25; // 25h so we always have a full 24h window
 export const TTL_ARROW_INDEX = 60 * 60 * 24 * 30; // 30d — grading windows are at most 24h
+export const TTL_SPARKLINE = 60 * 20; // 20 min — hourly candles don't need to be fresher than that
 
 /** Utility: format a Date into `YYYYMMDDHH` for the ring-buffer bucket. */
 export function yyyymmddhh(d: Date): string {
