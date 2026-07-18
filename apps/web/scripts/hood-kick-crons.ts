@@ -52,10 +52,16 @@ async function kick(name: string, path: string) {
   const t0 = Date.now();
   console.log(`▸ ${name} · POST ${url}`);
   try {
+    // Each cron takes 24 tokens × 3s stagger ≈ 72s baseline. Add worst-case
+    // 429 retry waits (up to 15s × 24 tokens = 6 min) and Vercel's own
+    // maxDuration=180s cap and we're looking at a 6-min tail. Give it 8
+    // to leave headroom — the server-side cron will still stream KV
+    // writes even if the fetch aborts before it finishes, so ideally we
+    // wait for the JSON summary.
     const r = await fetch(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${SECRET}` },
-      signal: AbortSignal.timeout(240_000),
+      signal: AbortSignal.timeout(480_000),
     });
     const elapsed = Math.round((Date.now() - t0) / 1000);
     const body = await r.text();
@@ -83,7 +89,15 @@ async function kick(name: string, path: string) {
     return true;
   } catch (e) {
     const elapsed = Math.round((Date.now() - t0) / 1000);
-    console.error(`  ✗ ${elapsed}s · ${(e as Error).message}`);
+    const err = (e as Error).message;
+    // A client-side timeout is NOT a hard failure — the server-side cron
+    // may still be writing KV entries after we abort. Downgrade to warn,
+    // and let the caller inspect the snapshot directly to confirm.
+    if (err.includes("aborted") || err.includes("timeout")) {
+      console.warn(`  ⚠  ${elapsed}s · client timeout; server may still be writing KV. Check /api/hood/snapshot.`);
+      return true;
+    }
+    console.error(`  ✗ ${elapsed}s · ${err}`);
     return false;
   }
 }
