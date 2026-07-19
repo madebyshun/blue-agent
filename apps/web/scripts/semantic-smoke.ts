@@ -171,8 +171,41 @@ async function a4Brief() {
   console.log("\n── A4 rh-stock-agent-brief AAPL ──");
   const r = await call("rh-stock-agent-brief", { ticker: "AAPL" });
   must(r.status === 200, "A4 status 200");
-  const llm = r.data.llm as { provider?: string | null; web_search_used?: boolean } | undefined;
+  const llm = r.data.llm as {
+    provider?: string | null;
+    web_search_used?: boolean;
+    duration_ms?: number | null;
+    attempts?: Array<{ provider?: string; status?: string; duration_ms?: number }>;
+  } | undefined;
   must(llm?.provider != null, "A4 llm.provider non-null", `got provider=${llm?.provider}`);
+
+  // Log-only evidence (no assertion change). Grep target for launch
+  // content — the first line here becomes "provider=virtuals model=X
+  // duration_ms=Y" once the chain is healthy.
+  if (llm?.provider) {
+    const attempt = llm.attempts?.find((a) => a.provider === llm.provider && a.status === "success");
+    // A4's response doesn't currently surface the model that succeeded, so
+    // we derive it from what the deployed llm.ts would pick: env override
+    // → VIRTUALS_DEFAULT_MODEL for the virtuals path; llama-3.3-70b for
+    // venice. We prefix the log line so a `grep '\[a4-evidence\]'` in the
+    // CI log pulls it out cleanly.
+    const modelHint = llm.provider === "virtuals" ? "deepseek-deepseek-v4-flash (default; env VIRTUALS_MODEL overrides)"
+      : llm.provider === "venice"   ? "llama-3.3-70b (Venice default)"
+      : "(bankr default)";
+    console.log(`  [a4-evidence] provider=${llm.provider} model=${modelHint} duration_ms=${llm.duration_ms ?? attempt?.duration_ms ?? "n/a"}`);
+  } else {
+    // Failure evidence — prints the full chain trace so the next CI log
+    // says exactly which provider(s) failed and why. Log-only, no new
+    // assertion. Grep target: `[a4-fail-chain]`.
+    const attemptsStr = (llm?.attempts ?? [])
+      .map((a) => {
+        const err = (a as { error?: string }).error ?? "";
+        return `${a.provider ?? "?"}:${a.status ?? "?"}${a.duration_ms != null ? `:${a.duration_ms}ms` : ""}${err ? ` err="${err.slice(0, 120)}"` : ""}`;
+      })
+      .join(" | ") || "no_attempts_array";
+    console.log(`  [a4-fail-chain] attempts=[${attemptsStr}] warnings=${JSON.stringify(((r.data.warnings ?? []) as string[]).slice(0, 6))}`);
+  }
+
   const warnings = (r.data.warnings ?? []) as string[];
   if (llm?.web_search_used === false) {
     const has = warnings.some((w) => w.includes("no_web_search_this_run"));
