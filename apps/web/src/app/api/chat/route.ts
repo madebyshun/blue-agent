@@ -316,6 +316,7 @@ When user asks to send/transfer a B20 token:
 7. Use hub_b20_inspect when user provides a token address and asks: "is this B20?", "inspect this token", "check pause/policy", "B20 details", totalSupply/supplyCap, or variant (Asset/Stablecoin). Reads REAL on-chain state via multicall — zero LLM. Call with { address: "0x…", network: "mainnet" }.
 8. Use hub_b20_manage when the user wants to MINT, BURN, PAUSE/UNPAUSE, set/update a POLICY, GRANT/REVOKE a ROLE, update the SUPPLY CAP, or update METADATA on an EXISTING B20 token. Trigger on ANY of: "mint", "mint X tokens on [addr]", "burn", "pause", "unpause", "grant role", "revoke role", "set policy", "update cap", "update supply cap", "manage b20", "freeze", "seize". Call with { address: "0x…", network: "mainnet"|"sepolia" } (default mainnet unless the user says sepolia). Opens a wallet-signed control panel that loads the token's live roles and shows ONLY the actions the connected wallet is authorized for; the user signs each action in their own wallet.
 9. Use check_authorization when the user asks whether a SPECIFIC account is allowed by a token's policy — "is 0xABC allowed to receive TOKEN?", "can this wallet send/mint this token?", "这个地址能收到代币吗?", "is alice.base.eth on the allowlist?". Call with { token: "0x…", account: "0x… or basename", scope: "sender"|"receiver"|"executor"|"mint_receiver" (default receiver), network }. Reads live policy state (zero LLM); reply with one short line stating authorized / not authorized — never guess.
+10. Use hub_hood_arrow when the user asks about a SPECIFIC Blue Hood arrow — triggers include "why did Blue Hood short NVDA?", "what was arrow #0007?", "show me the AAPL arrow", "what's the latest arrow?", "why is Hood watching TSLA?", "explain the last drift on AAPL". Two shapes: (a) by-id — { arrow_id: "…" } most precise, use when the user pastes a UUID; (b) by-ticker — { ticker: "AAPL" } returns the newest engine arrow for that ticker; (c) by-serial — { serial: "#0007" } — server resolves serial → id. The card renders serial + ticker + signal + verdict_note + facts_at_fire + a placeholder [Review & Sign] button (the trade action lands in T-E). After calling, answer the user's "why?" question in 2-3 sentences using ONLY the verdict_note + one_line_context + facts_at_fire fields the tool returns — NEVER invent a number or a reason. When the tool returns not_found, say so honestly and point at /hood/inbox; do not fabricate an arrow.
 
 ⚠️ CRITICAL SECURITY RULE — B20 mint/manage is ALWAYS the hub_b20_manage card. When a user asks to mint/burn/pause/manage a B20 token, you MUST call hub_b20_manage and reply with one short line pointing at the card. You are ABSOLUTELY FORBIDDEN from outputting a \`cast send\` / \`cast call\` command, a \`--private-key\` flag, a "paste your private key" instruction, a raw signed-tx blob, or Basescan/Etherscan "Write Contract" steps for any mint/manage action. Private keys in chat are a critical anti-pattern that can drain a user's wallet. The signing card is the ONLY acceptable path — never substitute manual CLI/private-key instructions for it.
 
@@ -688,6 +689,19 @@ Default to "base" for Base-related queries.`,
         feed: { type: "string", description: "movers | new | all" },
         chain: { type: "string", enum: ["base", "robinhood"], description: "Which chain to pull the feed for. Default base." },
       },
+    },
+  },
+  {
+    name: "hub_hood_arrow",
+    description: "Open the Blue Hood arrow card for a specific fired arrow — renders serial + ticker + signal + verdict_note + facts_at_fire + a placeholder [Review & Sign] action. Use when the user asks about a specific arrow ('what was #0007 about?', 'show me the AAPL arrow', 'why is Blue Hood shorting NVDA?') OR wants to inspect the most recent arrow for a ticker. Two shapes: (a) by id — { arrow_id: 'uuid' } — most precise; (b) by ticker — { ticker: 'AAPL' } — returns the newest engine arrow for that ticker. Prefer (a) when a user pastes a serial like '#0007' — the caller resolves the serial → id server-side. The card is read-only right now: the [Review & Sign] button is a placeholder for the trade action landing in T-E. NEVER fabricate an arrow — if neither id nor ticker resolves, the card renders an empty state; the LLM must NOT invent numbers.",
+    input_schema: {
+      type: "object",
+      properties: {
+        arrow_id: { type: "string", description: "Exact arrow UUID from /api/hood/arrows. Preferred when known." },
+        ticker:   { type: "string", description: "Ticker (AAPL, NVDA, etc.). Returns the newest engine arrow for that ticker. Use only when arrow_id is unknown." },
+        serial:   { type: "string", description: "Aesthetic serial like '#0007' — server resolves to id via the arrow feed. Optional." },
+      },
+      required: [],
     },
   },
   {
@@ -1075,6 +1089,100 @@ async function callHubTool(
     return {
       text: "B20 launch form rendered. The card is pre-filled with the token details — the user can edit fields and click Generate Scripts to get the foundry.toml, deploy script, and CLI commands. Do NOT restate the fields as a table. Reply with one short line: tell the user to review the form and click Generate Scripts.",
       result: { kind: "b20_launch", ...args },
+    };
+  }
+  if (toolName === "hub_hood_arrow") {
+    // T-D D2 chat consumer.
+    // Resolves an arrow by (in order): arrow_id → serial → newest engine
+    // arrow for the given ticker. Server-side ONLY — the LLM is never
+    // given raw KV access; it only sees the resolved arrow + card
+    // payload. The result carries facts_at_fire so the LLM can honestly
+    // answer "why short X?" from the deterministic engine numbers +
+    // brief's one_line_context, not from training-knowledge guesses.
+    const { kvGet } = await import("@/lib/kv");
+    const { kvArrow, KV_ARROW_FEED } = await import("@/lib/blue-hood/kv-keys");
+    const { readChatCard } = await import("@/lib/blue-hood/chat-card");
+    const arrowIdArg = typeof args.arrow_id === "string" ? args.arrow_id.trim() : "";
+    const serialArg = typeof args.serial === "string" ? args.serial.trim().replace(/^#/, "").padStart(4, "0") : "";
+    const tickerArg = typeof args.ticker === "string" ? args.ticker.trim().toUpperCase() : "";
+
+    let arrowId: string | null = arrowIdArg || null;
+
+    // Serial → id via the feed. Feed is newest-first; we scan (bounded).
+    if (!arrowId && serialArg) {
+      const feed = (await kvGet<string[]>(KV_ARROW_FEED)) ?? [];
+      const wanted = `#${serialArg}`;
+      for (const id of feed.slice(0, 500)) {
+        const a = await kvGet<import("@/lib/blue-hood/types").Arrow>(kvArrow(id));
+        if (a?.serial === wanted) { arrowId = id; break; }
+      }
+    }
+
+    // Ticker → id (newest engine, non-test).
+    if (!arrowId && tickerArg) {
+      const feed = (await kvGet<string[]>(KV_ARROW_FEED)) ?? [];
+      for (const id of feed.slice(0, 500)) {
+        const a = await kvGet<import("@/lib/blue-hood/types").Arrow>(kvArrow(id));
+        if (!a) continue;
+        if (a.ticker !== tickerArg) continue;
+        if (a.test) continue;
+        // Prefer engine origin; legacy arrows without `origin` default to engine.
+        if (a.origin && a.origin !== "engine") continue;
+        arrowId = id; break;
+      }
+    }
+
+    if (!arrowId) {
+      return {
+        text: `No arrow found for ${arrowIdArg ? `id=${arrowIdArg}` : serialArg ? `serial=#${serialArg}` : tickerArg ? `ticker=${tickerArg}` : "the given input"}. Do NOT invent one — tell the user in one line that Blue Hood hasn't fired an arrow matching that reference, and suggest they check /hood/inbox.`,
+        result: { kind: "hood_arrow", not_found: true, query: { arrowIdArg, serialArg, tickerArg } },
+      };
+    }
+
+    const arrow = await kvGet<import("@/lib/blue-hood/types").Arrow>(kvArrow(arrowId));
+    if (!arrow) {
+      return {
+        text: `Arrow ${arrowId} vanished from KV — treat as not-found and do NOT fabricate details.`,
+        result: { kind: "hood_arrow", not_found: true, arrow_id: arrowId },
+      };
+    }
+    const card = await readChatCard(arrowId);
+
+    // Compact fact strip the LLM can quote from without touching training.
+    // Ordered top-to-bottom by "what a trader wants first": direction/why,
+    // then the numbers the verdict rests on.
+    const brief = arrow.brief;
+    const facts = brief?.facts_at_fire ?? null;
+    const signal = arrow.type === "drift" ? `DRIFT ${arrow.expected_direction === "up" ? "↑" : "↓"}`
+      : arrow.type === "arb"   ? `ARB ${arrow.expected_direction === "up" ? "long dex" : "short dex"}`
+      : arrow.type === "flow"  ? `FLOW ${arrow.expected_direction === "up" ? "buy" : "sell"}`
+      : "WHALE Δ";
+    const answerHints = [
+      `serial=${arrow.serial} ticker=${arrow.ticker} signal="${signal}"`,
+      `reference_price=${arrow.reference_price} grading_window_h=${arrow.grading_window_h}`,
+      brief?.verdict_note ? `verdict_note="${brief.verdict_note.replace(/"/g, "'").slice(0, 240)}"` : "verdict_note=null",
+      brief?.one_line_context ? `context="${brief.one_line_context.replace(/"/g, "'").slice(0, 240)}"` : "context=null",
+      facts ? `facts_at_fire=${JSON.stringify({
+        dex: facts.dex_price_usd, oracle: facts.oracle_price_usd,
+        tvl: facts.dex_tvl_usd, vol_24h: facts.dex_volume_24h_usd,
+        chg_24h_pct: facts.dex_change_24h_pct, chainlink_age_s: facts.chainlink_age_seconds,
+      })}` : "facts_at_fire=null",
+      brief?.warnings?.length ? `warnings=${JSON.stringify(brief.warnings.slice(0, 6))}` : "",
+    ].filter(Boolean).join(" | ");
+
+    return {
+      text: `Blue Hood arrow rendered. Facts you may quote verbatim (do NOT invent numbers beyond these): ${answerHints}. When the user asks "why short/long X?", answer from verdict_note + context; when they ask "what were the numbers?", quote facts_at_fire. Keep the reply to 2-3 sentences and end with "Signals fire from oracle-vs-DEX drift; grading is deterministic (see /hood/arrows)."`,
+      result: {
+        kind: "hood_arrow",
+        arrow,
+        card,
+        signal,
+        deep_link: {
+          inbox: `/hood/inbox#${arrow.id}`,
+          board: `/hood`,
+          track: `/hood/arrows`,
+        },
+      },
     };
   }
   if (toolName === "robinhood_swap") {

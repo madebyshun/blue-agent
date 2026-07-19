@@ -5,10 +5,23 @@
  * Refuses to run outside NODE_ENV=development. In prod this endpoint
  * always 404s — the file is left in the tree because the poll cron
  * relies on the same rule-engine primitives it exercises.
+ *
+ * `?push=1` (T-D demo only, non-prod): after firing the seeded arrow,
+ * additionally run a REAL push fan-out through the real VAPID sign +
+ * real push service. Bypasses the three engine/seeded guards on
+ * purpose so the demo gif shows tab-closed → notification → click, but
+ * ONLY when NODE_ENV !== "production" AND the seed route is reachable
+ * (i.e. this door itself is closed in prod, which shuts both bypasses
+ * simultaneously). Reviewer's DoD: "seed test được, miễn là qua đường
+ * push thật".
  */
 import { NextRequest, NextResponse } from "next/server";
 import { fireArrow } from "@/lib/blue-hood/rule-engine";
-import type { ArrowType } from "@/lib/blue-hood/types";
+import { pushArrowToAll, ensureVapidConfigured } from "@/lib/blue-hood/push";
+import { writeChatCard } from "@/lib/blue-hood/chat-card";
+import { kvGet, kvSet } from "@/lib/kv";
+import { kvArrow } from "@/lib/blue-hood/kv-keys";
+import type { ArrowType, Arrow } from "@/lib/blue-hood/types";
 
 export const runtime = "nodejs";
 
@@ -30,6 +43,7 @@ export async function POST(req: NextRequest) {
   // regardless of what UI plumbing the caller is exercising.
   const withBrief = url.searchParams.get("with_brief") === "1"
     || url.searchParams.get("real") === "1"; // legacy alias — remove after v1
+  const demoPush = url.searchParams.get("push") === "1";
   const arrow = await fireArrow(
     ticker,
     {
@@ -51,5 +65,40 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  return NextResponse.json({ ok: true, arrow });
+  // ── T-D demo path ─────────────────────────────────────────────────────
+  // The three prod guards (fireArrow skipAsync, pushArrowToAll self-check,
+  // brief-worker origin check) all short-circuited above. `?push=1`
+  // reaches AROUND those, but only after we've explicitly relabelled the
+  // arrow with `origin: "engine"` LOCALLY (never persisted) so
+  // pushArrowToAll's internal check accepts it. Guard is still tight:
+  // this route 404s in prod, so the demo can only run in dev. Nothing
+  // prunes prod push subs.
+  let demo:
+    | { attempted: false; reason: string }
+    | { attempted: true; delivered: number; gone: number; errored: number }
+    | undefined;
+  if (demoPush) {
+    if (!ensureVapidConfigured()) {
+      demo = { attempted: false, reason: "vapid_keys_missing" };
+    } else {
+      // Also write a chat card here so #5 (Blue Chat consumer) can render
+      // it immediately — normal seeded path already writes one, but ?push=1
+      // implies "run the whole real path"; this makes it explicit.
+      await writeChatCard(arrow);
+      // Relabel LOCAL COPY only; the persisted arrow stays `origin: "seeded"`
+      // so no downstream metric can be tainted. This is the ONLY moment in
+      // the codebase where a seeded arrow reaches pushArrowToAll.
+      const demoArrow: Arrow = { ...arrow, origin: "engine", test: false };
+      // Clear `test` from the persisted record too? No — the persisted
+      // record stays seeded, we only mask the fields the fan-out reads.
+      console.log(`[demo-push] seeded arrow ${arrow.serial} ${arrow.ticker} — forcing real push (dev only)`);
+      const stats = await pushArrowToAll(demoArrow);
+      demo = { attempted: true, delivered: stats.delivered, gone: stats.gone, errored: stats.errored };
+      // Persist `brief_worker_at` so the UI shows the demo actually fired.
+      const stored = await kvGet<Arrow>(kvArrow(arrow.id));
+      if (stored) await kvSet(kvArrow(arrow.id), { ...stored, brief_worker_at: new Date().toISOString() });
+    }
+  }
+
+  return NextResponse.json({ ok: true, arrow, demo });
 }
