@@ -199,13 +199,17 @@ export async function callVirtualsLLM(opts: {
       max_tokens: maxTokens,
       temperature: opts.temperature ?? 0.3,
       // Deepseek-R1 style models ship reasoning inside `<think>…</think>`
-      // — that eats the token budget and leaves `content` empty. We send
-      // BOTH the OpenAI-compat `reasoning_effort: "none"` hint AND the
-      // vendor-specific `disable_thinking: true` flag; whichever the
-      // upstream honours wins. A model that ignores both still returns
-      // reasoning inline, which `stripThinkBlock` handles below.
+      // — that eats the token budget and leaves `content` empty. History:
+      //   - PR #211 sent BOTH `reasoning_effort: "none"` AND
+      //     `disable_thinking: true` (vendor-specific).
+      //   - Prod 2026-07-19: Virtuals's schema validator rejected the
+      //     payload with `400: "Unrecognized key(s): 'disable_thinking'"`.
+      //     Endpoint uses STRICT key validation, not ignore-unknowns.
+      //   - PR #212 drops `disable_thinking`; keeps `reasoning_effort`
+      //     since the 400 only flagged the first unknown key.
+      // `stripThinkBlock` remains as the response-layer defence for
+      // models that ignore the hint and inline reasoning anyway.
       reasoning_effort: "none",
-      disable_thinking: true,
     }),
     signal: AbortSignal.timeout(60_000),
   });
