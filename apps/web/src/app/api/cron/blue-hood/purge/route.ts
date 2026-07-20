@@ -14,7 +14,11 @@ import { kvDel, kvGet, kvScan, kvSet } from "@/lib/kv";
 import {
   KV_ARROW_FEED,
   KV_ARROW_SERIAL_COUNTER,
+  KV_BRIEF_QUEUE,
+  KV_CHAT_CARD_FEED,
+  KV_POLL_LOCK,
   kvArrow,
+  kvChatCard,
 } from "@/lib/blue-hood/kv-keys";
 import type { Arrow } from "@/lib/blue-hood/types";
 
@@ -62,6 +66,24 @@ export async function POST(req: NextRequest) {
 
   for (const k of openIdxKeys) { await kvDel(k); open_indexes_cleared++; }
 
+  // Pre-merge task #5(a) — also purge the derivatives so the KV is a
+  // clean slate. Otherwise a fresh prod has stale chat cards + a brief
+  // queue pointing at ids we just deleted.
+  //   - `bh:chat:card:{id}` for every id in the feed we walked
+  //   - `bh:chat:feed` list
+  //   - `bh:brief:queue` list
+  //   - `bh:poll:lock` (TTL would clear anyway, but resetting here means
+  //     the first post-launch poll cycle isn't blocked by a stale lock
+  //     if we just fired the current one).
+  let chat_cards_cleared = 0;
+  for (const id of ids) {
+    await kvDel(kvChatCard(id));
+    chat_cards_cleared++;
+  }
+  await kvSet(KV_CHAT_CARD_FEED, []);
+  await kvSet(KV_BRIEF_QUEUE, []);
+  await kvDel(KV_POLL_LOCK);
+
   await kvSet(KV_ARROW_FEED, []);
   await kvSet(KV_ARROW_SERIAL_COUNTER, 0);
 
@@ -69,6 +91,10 @@ export async function POST(req: NextRequest) {
     ok: true,
     arrows_deleted: deleted,
     open_indexes_cleared,
+    chat_cards_cleared,
+    chat_feed_reset: true,
+    brief_queue_reset: true,
+    poll_lock_cleared: true,
     feed_reset: true,
     serial_reset_to: 0,
     note: "The next real arrow will fire as #0001.",
