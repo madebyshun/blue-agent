@@ -94,11 +94,34 @@ export default function EnableAlertsButton() {
       // ends with `/hood/` (matches the buggy scope exactly). Left in
       // place, that SW's `.ready` promise for `/hood/*` would keep
       // resolving and confuse debugging next time we go there.
+      //
+      // v2 (task-A followup, screenshot "push setup failed ·
+      // subscribing"): the browser's push service caches the
+      // subscription tied to the OLD SW's applicationServerKey. Just
+      // unregistering the SW invalidates the registration but the
+      // push service may still see a "live" subscription for this
+      // origin — the next `subscribe()` on the NEW /-scoped SW
+      // throws because a subscription already exists with a different
+      // key. Fix: for every old registration we're about to nuke,
+      // first `unsubscribe()` its pushManager subscription too, then
+      // unregister.
       try {
         const regs = await navigator.serviceWorker.getRegistrations();
         for (const r of regs) {
           if (r.scope.endsWith("/hood/") || r.scope.endsWith("/hood")) {
             plog("migration-unregister", { scope: r.scope });
+            try {
+              const oldSub = await r.pushManager.getSubscription();
+              if (oldSub) {
+                plog("migration-unsubscribe", { endpoint_len: oldSub.endpoint.length });
+                await oldSub.unsubscribe();
+              }
+            } catch (e) {
+              // Non-fatal — proceed to unregister anyway; the ghost
+              // sub either doesn't exist or wasn't accessible from
+              // here, and unregister() will invalidate it either way.
+              perr("migration-unsubscribe", e);
+            }
             await r.unregister().catch((e) => perr("migration-unregister", e));
           }
         }
@@ -183,6 +206,30 @@ export default function EnableAlertsButton() {
         step,
       );
       plog("sw-registered", { scope: reg.scope });
+
+      // v2 (task-A followup): before subscribing, force-unsubscribe any
+      // existing subscription on THIS registration. Reason: if the user
+      // already enabled alerts once with a different `applicationServerKey`
+      // (e.g. we rotated VAPID keys, or the migration above left a stale
+      // sub in the browser's push service), `subscribe()` throws
+      // `DOMException: A subscription with a different application server
+      // key already exists`. Cheap to always run — a no-op when no sub.
+      step = "pre-subscribe-cleanup";
+      setState({ kind: "busy", step });
+      try {
+        const existing = await withTimeout(reg.pushManager.getSubscription(), step);
+        if (existing) {
+          plog("pre-subscribe-cleanup", { unsubscribing_endpoint_len: existing.endpoint.length });
+          await withTimeout(existing.unsubscribe(), step);
+        } else {
+          plog("pre-subscribe-cleanup", { existing: "none" });
+        }
+      } catch (e) {
+        // Non-fatal — surface via perr but continue. The `subscribe()`
+        // call below will throw a cleaner error if the ghost sub is
+        // actually the problem.
+        perr("pre-subscribe-cleanup", e);
+      }
 
       step = "subscribing";
       setState({ kind: "busy", step });
@@ -277,22 +324,39 @@ export default function EnableAlertsButton() {
 
   if (state.kind === "error") {
     // A5 · error branch is visible: reason + Retry. Never "…" forever.
+    // v2 (task-A followup): also render the error MESSAGE inline so
+    // the user + reviewer can see the root cause without opening
+    // DevTools. Screenshot review of "push setup failed · subscribing"
+    // showed only the step, not the actual DOMException — which was
+    // the whole point of task A4 (nothing câm).
+    const shortMsg = state.message.length > 140
+      ? state.message.slice(0, 137) + "…"
+      : state.message;
     return (
-      <span className="inline-flex items-center gap-1">
+      <span className="inline-flex flex-col items-start gap-1 max-w-md">
+        <span className="inline-flex items-center gap-1">
+          <span
+            className="rounded border px-2 py-1 font-mono text-[11px]"
+            style={{ borderColor: RED, color: AMBER }}
+            title={state.message}
+          >
+            push setup failed · {state.step}
+          </span>
+          <button
+            onClick={enable}
+            className="rounded border px-2 py-1 font-mono text-[11px] hover:text-white"
+            style={{ borderColor: BORDER, color: "#9aa1ac" }}
+          >
+            Retry
+          </button>
+        </span>
         <span
-          className="rounded border px-2 py-1 font-mono text-[11px]"
-          style={{ borderColor: RED, color: AMBER }}
+          className="font-mono text-[10px] leading-tight px-1"
+          style={{ color: MUTED }}
           title={state.message}
         >
-          push setup failed · {state.step}
+          {shortMsg}
         </span>
-        <button
-          onClick={enable}
-          className="rounded border px-2 py-1 font-mono text-[11px] hover:text-white"
-          style={{ borderColor: BORDER, color: "#9aa1ac" }}
-        >
-          Retry
-        </button>
       </span>
     );
   }
