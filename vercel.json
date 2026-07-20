@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/blue-hood/poll",
-      "schedule": "*/2 * * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/blue-hood/sparkline-refresh",

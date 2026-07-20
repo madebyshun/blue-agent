@@ -41,6 +41,14 @@ export async function POST(req: NextRequest) {
   // (useful for exercising the brief pipeline in localhost). Origin stays
   // seeded so the arrow is never eligible for the public feed/hit-rate,
   // regardless of what UI plumbing the caller is exercising.
+  //
+  // Bug fix (2026-07-21, pre-merge task #1): `withBrief` only removed the
+  // `test:true` flag but the fireArrow guard `skipAsync = test || origin
+  // === "seeded"` still short-circuited on the seeded origin — so the A4
+  // brief was NEVER attached for `?with_brief=1`. Fix: also pass
+  // `forceBrief: true` when withBrief is set, which explicitly lifts the
+  // guard for THIS one seeded arrow. Push fan-out stays hard-gated on
+  // origin === "engine" — the demo can't cross that.
   const withBrief = url.searchParams.get("with_brief") === "1"
     || url.searchParams.get("real") === "1"; // legacy alias — remove after v1
   const demoPush = url.searchParams.get("push") === "1";
@@ -54,7 +62,7 @@ export async function POST(req: NextRequest) {
     },
     Math.floor(Date.now() / 1000),
     withBrief
-      ? { origin: "seeded" }
+      ? { origin: "seeded", forceBrief: true }
       : { origin: "seeded", test: true }, // `test` still gates A4 call
   );
 

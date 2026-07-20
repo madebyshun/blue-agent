@@ -355,9 +355,20 @@ export function MarkdownRenderer({ content }: { content: string }) {
 
 // ── Model label / color maps ───────────────────────────────────────────────────
 
+// Pre-merge task #4 — label bug. Bankr was banned 2026-07-18; every
+// non-venice tier now routes to Virtuals with model
+// `anthropic-claude-sonnet-5` (server-side `VIRTUALS_CHAT_DEFAULT_MODEL`
+// env, default sonnet-5). The old map showed "Claude Haiku 4.5" for
+// `fast` tier while the request was actually served by Sonnet 5 via
+// Virtuals — pure lie. Every non-venice tier now points at the ACTUAL
+// runtime label so the footer + system-prompt `modelLine` agree.
+// When Virtuals tiers diverge (fast → haiku on Virtuals, etc.) update
+// this map to match — or better, drive it from an SSE `model_used`
+// event the server emits per-message (follow-up).
+const NON_VENICE_LABEL = "Sonnet 5 · Virtuals";
 const MODEL_LABELS: Record<string, string> = {
-  fast: "Claude Haiku 4.5", pro: "Claude Sonnet 4.6", max: "Claude Opus 4.7",
-  deepseek: "DeepSeek V4",
+  fast: NON_VENICE_LABEL, pro: NON_VENICE_LABEL, max: NON_VENICE_LABEL,
+  deepseek: NON_VENICE_LABEL,
   "venice-deepseek": "DeepSeek V4 Flash", "venice-deepseek-pro": "DeepSeek V4 Pro",
   "venice-kimi": "Kimi K2", "venice-claude": "Claude Opus 4",
   "venice-grok": "Grok 4", "venice-qwen": "Qwen3 235B",

@@ -13,12 +13,19 @@ import { persistSnapshot, runPollCycle } from "@/lib/blue-hood/poller";
 import { runRuleEngine } from "@/lib/blue-hood/rule-engine";
 import { runGrader } from "@/lib/blue-hood/grader";
 import { TOOL_CALLER_MODE } from "@/lib/blue-hood/tool-caller";
+import { kvDel, kvGet, kvSetNX } from "@/lib/kv";
+import { KV_POLL_LOCK, TTL_POLL_LOCK } from "@/lib/blue-hood/kv-keys";
 
 export const runtime = "nodejs";
-// 24 tokens × 3s stagger + M5 wall time + 429 retry waits ≈ 90-120s per
-// cycle. maxDuration=180 gives 60s buffer for anomalous slow responses.
-// Vercel Pro allows up to 300; we don't need the whole runway.
-export const maxDuration = 180;
+// Prod cycle observation (2026-07-21): with market open + 24 tokens ×
+// (M5 read + Chainlink + DEX), real duration is ~246s — higher than the
+// naive `24 × 3s stagger = 72s` estimate because per-token M5 work
+// itself is 5-8s when the market is open (Chainlink round + GT fetch).
+// vercel.json now runs poll every 5 min (not */2) AND we take a KV
+// lock on entry — if a cycle is still running when the next tick
+// fires, we no-op with a `[poller] skipped` log. Two-layer defence
+// against overlap → GT burst → cascade of fetch_failed.
+export const maxDuration = 300;
 
 const CRON_SECRET = process.env.CRON_SECRET ?? "";
 
@@ -33,6 +40,27 @@ function isAuthorized(req: NextRequest): boolean {
 async function handle(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Pre-merge task #3 — overlap guard. `kvSetNX(...true, TTL_POLL_LOCK)`
+  // is atomic: only the first caller in a 5-min window takes the lock;
+  // every subsequent tick short-circuits with a log. Failure inside
+  // runPollCycle still releases the lock in the finally block so a
+  // crashed cycle never wedges the schedule.
+  const lockStart = Date.now();
+  const gotLock = await kvSetNX(KV_POLL_LOCK, { started_at: new Date().toISOString() }, TTL_POLL_LOCK);
+  if (!gotLock) {
+    const held = await kvGet<{ started_at?: string }>(KV_POLL_LOCK);
+    const heldStart = held?.started_at ? new Date(held.started_at).getTime() : 0;
+    const heldFor = heldStart ? Math.round((Date.now() - heldStart) / 1000) : -1;
+    console.log(`[poller] skipped, previous cycle still running (${heldFor}s)`);
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: "cycle_in_progress",
+      previous_cycle_started_at: held?.started_at ?? null,
+      previous_cycle_age_s: heldFor,
+    }, { status: 202 });
   }
 
   try {
@@ -83,6 +111,12 @@ async function handle(req: NextRequest) {
       { ok: false, error: (e as Error).message, stack: (e as Error).stack?.slice(0, 400) },
       { status: 500 },
     );
+  } finally {
+    // Always release the lock — even on crash — so a broken cycle
+    // never wedges the schedule for TTL_POLL_LOCK minutes.
+    await kvDel(KV_POLL_LOCK).catch(() => { /* swallow; TTL will expire it */ });
+    const held = Math.round((Date.now() - lockStart) / 1000);
+    console.log(`[poller] lock released after ${held}s`);
   }
 }
 

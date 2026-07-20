@@ -64,6 +64,15 @@ export const KV_CHAT_CARD_FEED = "bh:chat:feed";
  *  pending brief attaches first. */
 export const KV_BRIEF_QUEUE = "bh:brief:queue";
 
+/** Pre-merge task #3 — cycle overlap guard. When a poll cycle starts
+ *  it takes this lock (TTL 5 min via kvSetNX). Next-tick cron calls
+ *  see the lock and no-op with a `[poller] skipped, previous cycle
+ *  still running (Xs)` log. Prevents the 246s prod cycle overlapping
+ *  the 5-minute schedule (see vercel.json crons; poll runs once every
+ *  5 minutes) and bursting GT rate limits. */
+export const KV_POLL_LOCK = "bh:poll:lock";
+export const TTL_POLL_LOCK = 60 * 5; // 5 min — matches the cron cadence
+
 /** TTL constants (seconds). */
 export const TTL_SNAPSHOT_HOUR = 60 * 60 * 25; // 25h so we always have a full 24h window
 export const TTL_ARROW_INDEX = 60 * 60 * 24 * 30; // 30d — grading windows are at most 24h

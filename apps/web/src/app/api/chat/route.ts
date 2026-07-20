@@ -172,20 +172,25 @@ const VENICE_DISPLAY: Record<string, string> = {
   "claude-opus-4-7":                    "Claude Opus 4 (Venice)",
 };
 
-const BANKR_DISPLAY: Record<string, string> = {
-  fast:     "Haiku 4.5 · Fast",
-  pro:      "Sonnet 4.6 · Chat",
-  max:      "Opus 4.7 · Deep Think",
-  deepseek: "DeepSeek V4 · 1M ctx",
-  gemini:   "Gemini 2.5 Flash · Google",
-  kimi:     "Kimi K2 · Long Context",
-};
-
+// Pre-merge task #4 — label bug. Bankr was banned 2026-07-18; Blue
+// Chat now routes every non-venice tier to `VIRTUALS_CHAT_DEFAULT_MODEL`
+// via Virtuals (see task-B commit cfaf061). The old BANKR_DISPLAY map
+// was a LIE — it kept showing "Haiku 4.5 · Fast" while every request
+// was actually hitting Sonnet 5 via Virtuals. Kept as the map's shape
+// (tier → label) but every entry now points at the ACTUAL routing so
+// UI + system-prompt `modelLine` never disagree with what ran.
+//
+// When we later split Virtuals tiers (e.g. `fast → haiku, pro →
+// sonnet, max → opus` on Virtuals), swap this for a per-tier map and
+// mirror it on the client side. Better still: pipe the real model via
+// an SSE `model_used` event so the client renders response-metadata
+// truth instead of a shared hardcoded map. Follow-up task.
 function getModelLabel(tier: string, modelId?: string, provider?: string): string {
+  void tier;
   if (provider === "venice" && modelId) {
     return VENICE_DISPLAY[modelId] ?? `${modelId} (Venice)`;
   }
-  return BANKR_DISPLAY[tier] ?? `${tier}`;
+  return `${VIRTUALS_CHAT_DEFAULT_MODEL} · Virtuals`;
 }
 
 // ─── Per-model max_tokens ─────────────────────────────────────────────────────

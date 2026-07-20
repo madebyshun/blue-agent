@@ -129,7 +129,7 @@ export async function fireArrow(
   ticker: string,
   detected: Candidate,
   snapshot_ref: number,
-  opts: { test?: boolean; origin?: "engine" | "seeded" } = {},
+  opts: { test?: boolean; origin?: "engine" | "seeded"; forceBrief?: boolean } = {},
 ): Promise<Arrow | null> {
   const idxKey = kvArrowOpenIndex(ticker, detected.type);
   const existing = await kvGet<OpenIndex>(idxKey);
@@ -143,7 +143,14 @@ export async function fireArrow(
   // arrows. Legacy `test: true` is preserved during the migration window
   // for A4-skip purposes; new seeded arrows always carry both.
   const origin: "engine" | "seeded" = opts.origin ?? "engine";
-  const skipAsync = opts.test || origin === "seeded";
+  // `forceBrief` (dev-only, set by seed-test-arrow?with_brief=1) overrides
+  // the seeded/test skip so a seeded arrow can exercise the A4 brief
+  // pipeline end-to-end. The arrow STILL carries origin="seeded" — every
+  // downstream filter (public feed, hit-rate, sidebar, push fan-out,
+  // grader) treats it exactly like a normal seeded arrow. Only the
+  // async-brief guard is lifted. Push stays hard-gated on origin==="engine"
+  // inside `pushArrowToAll` + brief-worker; forceBrief cannot cross that.
+  const skipAsync = (opts.test || origin === "seeded") && !opts.forceBrief;
   const arrow: Arrow = {
     id,
     serial,

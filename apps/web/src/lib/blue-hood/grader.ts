@@ -45,12 +45,25 @@ export async function runGrader(): Promise<GraderReport> {
   const graded: Arrow[] = [];
   const errored: string[] = [];
   let still_open = 0;
+  let skipped_seeded = 0;
 
   // Cap this pass at 200 arrows — grading is fast but we don't want a
   // 60s cron cycle to time out on an unbounded backlog.
   for (const id of feed.slice(0, 200)) {
     const arrow = await kvGet<Arrow>(kvArrow(id));
     if (!arrow || arrow.status !== "open") continue;
+
+    // Bug fix (2026-07-21, pre-merge task #2): the poller was grading
+    // seeded arrows (dummy `reference_price=100`) as HIT because
+    // `gap closed 99%` was computed against fake input — e.g. #0006 SPY
+    // "gap closed 99% (86.62% → 0.57%)" was purely `|100 - real_spy_price|`.
+    // Public feed already filters origin !== "engine" so no user saw the
+    // fake HITs, but the KV was polluted. Skip at the top of the loop so
+    // seeded arrows never touch grader math again.
+    //
+    // Back-compat: legacy arrows without `origin` field are treated as
+    // engine (per T-A #1) — the guard only skips EXPLICIT non-engine.
+    if (arrow.origin && arrow.origin !== "engine") { skipped_seeded++; continue; }
 
     const readyAt = new Date(arrow.fired_at).getTime() + arrow.grading_window_h * 3_600_000;
     if (Date.now() < readyAt) { still_open++; continue; }
@@ -68,6 +81,8 @@ export async function runGrader(): Promise<GraderReport> {
       errored.push(`${id}: ${(e as Error).message}`);
     }
   }
+
+  console.log(`[grader] graded=${graded.length} still_open=${still_open} skipped_seeded=${skipped_seeded} errored=${errored.length}`);
 
   return { graded, still_open, errored };
 }
