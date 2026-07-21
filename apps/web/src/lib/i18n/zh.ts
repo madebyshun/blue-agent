@@ -116,6 +116,7 @@ export const zh: Dict = {
     feed: "动态",
     bank: "银行",
     launches: "发行",
+    hood: "Hood",
     b20: "B20",
     dashboard: "账户",
     profile: "个人资料",

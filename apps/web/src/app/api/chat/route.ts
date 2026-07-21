@@ -11,6 +11,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
+import { absoluteUrl } from "@/lib/site-url";
 import { checkMemo } from "@/lib/b20/check-memo";
 import { checkAuthorization } from "@/lib/b20/check-authorization";
 import { checkWallet } from "@/lib/wallet/holdings";
@@ -22,8 +23,40 @@ export const runtime = "nodejs";
 // it fails loudly instead of silently 504-ing.
 export const maxDuration = 120;
 
-const BANKR_LLM       = "https://llm.bankr.bot/v1/messages";
+// BANKR_LLM removed 2026-07-20 — account banned, replaced by Virtuals
+// (see the Virtuals path at the bottom of POST). The two chat endpoints
+// are now Venice and Virtuals only.
 const VENICE_API      = "https://api.venice.ai/api/v1/chat/completions";
+// ─── Virtuals Chat (task B) ───────────────────────────────────────────────────
+// OpenAI-compat `/v1/chat/completions` on compute.virtuals.io. Reviewer's
+// spec: Bankr account is banned → all default chat inference moves to
+// Virtuals. Same request shape as Venice (both are OpenAI-format), just:
+//   - endpoint URL
+//   - auth: Bearer VIRTUALS_API_KEY
+//   - drop `venice_parameters` (Virtuals's validator strict-rejected
+//     `disable_thinking` in the A4 fix; safer to omit unknown blocks)
+// Model default `anthropic-claude-sonnet-5` per spec — reviewer's
+// choice for chat quality; overridable via env.
+const VIRTUALS_CHAT_API = "https://compute.virtuals.io/v1/chat/completions";
+const VIRTUALS_CHAT_DEFAULT_MODEL = process.env.VIRTUALS_CHAT_MODEL ?? "anthropic-claude-sonnet-5";
+// Shared shape for the two OpenAI-format chat providers so the same
+// callers work with either upstream. When `venice_parameters` is
+// null we omit that block entirely from the request body.
+interface OpenAIChatCfg {
+  endpoint: string;
+  apiKey: string;
+  provider: "venice" | "virtuals";
+  /** null → don't send a venice_parameters block. */
+  veniceExtras: { include_venice_system_prompt: false } | null;
+}
+function veniceCfg(apiKey: string): OpenAIChatCfg {
+  return { endpoint: VENICE_API, apiKey, provider: "venice",
+    veniceExtras: { include_venice_system_prompt: false } };
+}
+function virtualsCfg(apiKey: string): OpenAIChatCfg {
+  return { endpoint: VIRTUALS_CHAT_API, apiKey, provider: "virtuals",
+    veniceExtras: null };
+}
 const BASE_URL        = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
 const INTERNAL_KEY    = process.env.INTERNAL_SERVICE_KEY ?? "";
 
@@ -140,20 +173,25 @@ const VENICE_DISPLAY: Record<string, string> = {
   "claude-opus-4-7":                    "Claude Opus 4 (Venice)",
 };
 
-const BANKR_DISPLAY: Record<string, string> = {
-  fast:     "Haiku 4.5 · Fast",
-  pro:      "Sonnet 4.6 · Chat",
-  max:      "Opus 4.7 · Deep Think",
-  deepseek: "DeepSeek V4 · 1M ctx",
-  gemini:   "Gemini 2.5 Flash · Google",
-  kimi:     "Kimi K2 · Long Context",
-};
-
+// Pre-merge task #4 — label bug. Bankr was banned 2026-07-18; Blue
+// Chat now routes every non-venice tier to `VIRTUALS_CHAT_DEFAULT_MODEL`
+// via Virtuals (see task-B commit cfaf061). The old BANKR_DISPLAY map
+// was a LIE — it kept showing "Haiku 4.5 · Fast" while every request
+// was actually hitting Sonnet 5 via Virtuals. Kept as the map's shape
+// (tier → label) but every entry now points at the ACTUAL routing so
+// UI + system-prompt `modelLine` never disagree with what ran.
+//
+// When we later split Virtuals tiers (e.g. `fast → haiku, pro →
+// sonnet, max → opus` on Virtuals), swap this for a per-tier map and
+// mirror it on the client side. Better still: pipe the real model via
+// an SSE `model_used` event so the client renders response-metadata
+// truth instead of a shared hardcoded map. Follow-up task.
 function getModelLabel(tier: string, modelId?: string, provider?: string): string {
+  void tier;
   if (provider === "venice" && modelId) {
     return VENICE_DISPLAY[modelId] ?? `${modelId} (Venice)`;
   }
-  return BANKR_DISPLAY[tier] ?? `${tier}`;
+  return `${VIRTUALS_CHAT_DEFAULT_MODEL} · Virtuals`;
 }
 
 // ─── Per-model max_tokens ─────────────────────────────────────────────────────
@@ -316,6 +354,7 @@ When user asks to send/transfer a B20 token:
 7. Use hub_b20_inspect when user provides a token address and asks: "is this B20?", "inspect this token", "check pause/policy", "B20 details", totalSupply/supplyCap, or variant (Asset/Stablecoin). Reads REAL on-chain state via multicall — zero LLM. Call with { address: "0x…", network: "mainnet" }.
 8. Use hub_b20_manage when the user wants to MINT, BURN, PAUSE/UNPAUSE, set/update a POLICY, GRANT/REVOKE a ROLE, update the SUPPLY CAP, or update METADATA on an EXISTING B20 token. Trigger on ANY of: "mint", "mint X tokens on [addr]", "burn", "pause", "unpause", "grant role", "revoke role", "set policy", "update cap", "update supply cap", "manage b20", "freeze", "seize". Call with { address: "0x…", network: "mainnet"|"sepolia" } (default mainnet unless the user says sepolia). Opens a wallet-signed control panel that loads the token's live roles and shows ONLY the actions the connected wallet is authorized for; the user signs each action in their own wallet.
 9. Use check_authorization when the user asks whether a SPECIFIC account is allowed by a token's policy — "is 0xABC allowed to receive TOKEN?", "can this wallet send/mint this token?", "这个地址能收到代币吗?", "is alice.base.eth on the allowlist?". Call with { token: "0x…", account: "0x… or basename", scope: "sender"|"receiver"|"executor"|"mint_receiver" (default receiver), network }. Reads live policy state (zero LLM); reply with one short line stating authorized / not authorized — never guess.
+10. Use hub_hood_arrow when the user asks about a SPECIFIC Blue Hood arrow — triggers include "why did Blue Hood short NVDA?", "what was arrow #0007?", "show me the AAPL arrow", "what's the latest arrow?", "why is Hood watching TSLA?", "explain the last drift on AAPL". Two shapes: (a) by-id — { arrow_id: "…" } most precise, use when the user pastes a UUID; (b) by-ticker — { ticker: "AAPL" } returns the newest engine arrow for that ticker; (c) by-serial — { serial: "#0007" } — server resolves serial → id. The card renders serial + ticker + signal + verdict_note + facts_at_fire + a placeholder [Review & Sign] button (the trade action lands in T-E). After calling, answer the user's "why?" question in 2-3 sentences using ONLY the verdict_note + one_line_context + facts_at_fire fields the tool returns — NEVER invent a number or a reason. When the tool returns not_found, say so honestly and point at /hood/inbox; do not fabricate an arrow.
 
 ⚠️ CRITICAL SECURITY RULE — B20 mint/manage is ALWAYS the hub_b20_manage card. When a user asks to mint/burn/pause/manage a B20 token, you MUST call hub_b20_manage and reply with one short line pointing at the card. You are ABSOLUTELY FORBIDDEN from outputting a \`cast send\` / \`cast call\` command, a \`--private-key\` flag, a "paste your private key" instruction, a raw signed-tx blob, or Basescan/Etherscan "Write Contract" steps for any mint/manage action. Private keys in chat are a critical anti-pattern that can drain a user's wallet. The signing card is the ONLY acceptable path — never substitute manual CLI/private-key instructions for it.
 
@@ -688,6 +727,19 @@ Default to "base" for Base-related queries.`,
         feed: { type: "string", description: "movers | new | all" },
         chain: { type: "string", enum: ["base", "robinhood"], description: "Which chain to pull the feed for. Default base." },
       },
+    },
+  },
+  {
+    name: "hub_hood_arrow",
+    description: "Open the Blue Hood arrow card for a specific fired arrow — renders serial + ticker + signal + verdict_note + facts_at_fire + a placeholder [Review & Sign] action. Use when the user asks about a specific arrow ('what was #0007 about?', 'show me the AAPL arrow', 'why is Blue Hood shorting NVDA?') OR wants to inspect the most recent arrow for a ticker. Two shapes: (a) by id — { arrow_id: 'uuid' } — most precise; (b) by ticker — { ticker: 'AAPL' } — returns the newest engine arrow for that ticker. Prefer (a) when a user pastes a serial like '#0007' — the caller resolves the serial → id server-side. The card is read-only right now: the [Review & Sign] button is a placeholder for the trade action landing in T-E. NEVER fabricate an arrow — if neither id nor ticker resolves, the card renders an empty state; the LLM must NOT invent numbers.",
+    input_schema: {
+      type: "object",
+      properties: {
+        arrow_id: { type: "string", description: "Exact arrow UUID from /api/hood/arrows. Preferred when known." },
+        ticker:   { type: "string", description: "Ticker (AAPL, NVDA, etc.). Returns the newest engine arrow for that ticker. Use only when arrow_id is unknown." },
+        serial:   { type: "string", description: "Aesthetic serial like '#0007' — server resolves to id via the arrow feed. Optional." },
+      },
+      required: [],
     },
   },
   {
@@ -1077,6 +1129,105 @@ async function callHubTool(
       result: { kind: "b20_launch", ...args },
     };
   }
+  if (toolName === "hub_hood_arrow") {
+    // T-D D2 chat consumer.
+    // Resolves an arrow by (in order): arrow_id → serial → newest engine
+    // arrow for the given ticker. Server-side ONLY — the LLM is never
+    // given raw KV access; it only sees the resolved arrow + card
+    // payload. The result carries facts_at_fire so the LLM can honestly
+    // answer "why short X?" from the deterministic engine numbers +
+    // brief's one_line_context, not from training-knowledge guesses.
+    const { kvGet } = await import("@/lib/kv");
+    const { kvArrow, KV_ARROW_FEED } = await import("@/lib/blue-hood/kv-keys");
+    const { readChatCard } = await import("@/lib/blue-hood/chat-card");
+    const arrowIdArg = typeof args.arrow_id === "string" ? args.arrow_id.trim() : "";
+    const serialArg = typeof args.serial === "string" ? args.serial.trim().replace(/^#/, "").padStart(4, "0") : "";
+    const tickerArg = typeof args.ticker === "string" ? args.ticker.trim().toUpperCase() : "";
+
+    let arrowId: string | null = arrowIdArg || null;
+
+    // Serial → id via the feed. Feed is newest-first; we scan (bounded).
+    if (!arrowId && serialArg) {
+      const feed = (await kvGet<string[]>(KV_ARROW_FEED)) ?? [];
+      const wanted = `#${serialArg}`;
+      for (const id of feed.slice(0, 500)) {
+        const a = await kvGet<import("@/lib/blue-hood/types").Arrow>(kvArrow(id));
+        if (a?.serial === wanted) { arrowId = id; break; }
+      }
+    }
+
+    // Ticker → id (newest engine, non-test).
+    if (!arrowId && tickerArg) {
+      const feed = (await kvGet<string[]>(KV_ARROW_FEED)) ?? [];
+      for (const id of feed.slice(0, 500)) {
+        const a = await kvGet<import("@/lib/blue-hood/types").Arrow>(kvArrow(id));
+        if (!a) continue;
+        if (a.ticker !== tickerArg) continue;
+        if (a.test) continue;
+        // Prefer engine origin; legacy arrows without `origin` default to engine.
+        if (a.origin && a.origin !== "engine") continue;
+        arrowId = id; break;
+      }
+    }
+
+    if (!arrowId) {
+      return {
+        text: `No arrow found for ${arrowIdArg ? `id=${arrowIdArg}` : serialArg ? `serial=#${serialArg}` : tickerArg ? `ticker=${tickerArg}` : "the given input"}. Do NOT invent one — tell the user in one line that Blue Hood hasn't fired an arrow matching that reference, and suggest they check /hood/inbox.`,
+        result: { kind: "hood_arrow", not_found: true, query: { arrowIdArg, serialArg, tickerArg } },
+      };
+    }
+
+    const arrow = await kvGet<import("@/lib/blue-hood/types").Arrow>(kvArrow(arrowId));
+    if (!arrow) {
+      return {
+        text: `Arrow ${arrowId} vanished from KV — treat as not-found and do NOT fabricate details.`,
+        result: { kind: "hood_arrow", not_found: true, arrow_id: arrowId },
+      };
+    }
+    const card = await readChatCard(arrowId);
+
+    // Compact fact strip the LLM can quote from without touching training.
+    // Ordered top-to-bottom by "what a trader wants first": direction/why,
+    // then the numbers the verdict rests on.
+    const brief = arrow.brief;
+    const facts = brief?.facts_at_fire ?? null;
+    const signal = arrow.type === "drift" ? `DRIFT ${arrow.expected_direction === "up" ? "↑" : "↓"}`
+      : arrow.type === "arb"   ? `ARB ${arrow.expected_direction === "up" ? "long dex" : "short dex"}`
+      : arrow.type === "flow"  ? `FLOW ${arrow.expected_direction === "up" ? "buy" : "sell"}`
+      : "WHALE Δ";
+    const answerHints = [
+      `serial=${arrow.serial} ticker=${arrow.ticker} signal="${signal}"`,
+      `reference_price=${arrow.reference_price} grading_window_h=${arrow.grading_window_h}`,
+      brief?.verdict_note ? `verdict_note="${brief.verdict_note.replace(/"/g, "'").slice(0, 240)}"` : "verdict_note=null",
+      brief?.one_line_context ? `context="${brief.one_line_context.replace(/"/g, "'").slice(0, 240)}"` : "context=null",
+      facts ? `facts_at_fire=${JSON.stringify({
+        dex: facts.dex_price_usd, oracle: facts.oracle_price_usd,
+        tvl: facts.dex_tvl_usd, vol_24h: facts.dex_volume_24h_usd,
+        chg_24h_pct: facts.dex_change_24h_pct, chainlink_age_s: facts.chainlink_age_seconds,
+      })}` : "facts_at_fire=null",
+      brief?.warnings?.length ? `warnings=${JSON.stringify(brief.warnings.slice(0, 6))}` : "",
+    ].filter(Boolean).join(" | ");
+
+    return {
+      text: `Blue Hood arrow rendered. Facts you may quote verbatim (do NOT invent numbers beyond these): ${answerHints}. When the user asks "why short/long X?", answer from verdict_note + context; when they ask "what were the numbers?", quote facts_at_fire. Keep the reply to 2-3 sentences and end with "Signals fire from oracle-vs-DEX drift; grading is deterministic (see /hood/arrows)."`,
+      result: {
+        kind: "hood_arrow",
+        arrow,
+        card,
+        signal,
+        deep_link: {
+          // Absolute (canonical) URLs — same reasoning as chat-card.ts:
+          // the chat message may be persisted/shared, so the link must
+          // survive origin drift. `absoluteUrl` pins to
+          // `NEXT_PUBLIC_SITE_URL` on prod; relative fallback on
+          // preview/localhost.
+          inbox: absoluteUrl(`/hood/inbox#${arrow.id}`),
+          board: absoluteUrl(`/hood`),
+          track: absoluteUrl(`/hood/arrows`),
+        },
+      },
+    };
+  }
   if (toolName === "robinhood_swap") {
     // Resolve tokens — accept either 0x addresses or symbols we look up
     // against the LIVE Robinhood Chain feed (GeckoTerminal). No LLM fallback,
@@ -1438,11 +1589,16 @@ async function callVenicePhase1(
   maxTokens:       number,
   enableWebSearch: boolean,
   forceTool?:      string,
+  cfgOverride?:    OpenAIChatCfg,
 ): Promise<VenicePhase1Resp | null> {
+  const cfg = cfgOverride ?? veniceCfg(apiKey);
   try {
-    const res = await fetch(VENICE_API, {
+    const veniceParams = cfg.veniceExtras
+      ? { venice_parameters: { ...cfg.veniceExtras, ...(enableWebSearch ? { enable_web_search: "on" } : {}) } }
+      : {};
+    const res = await fetch(cfg.endpoint, {
       method:  "POST",
-      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model:       modelId,
         messages:    openaiMsgs,
@@ -1452,16 +1608,20 @@ async function callVenicePhase1(
           : "auto",
         stream:      false,
         max_tokens:  Math.min(maxTokens, 1024), // intent only — keep short
-        venice_parameters: {
-          include_venice_system_prompt: false,
-          ...(enableWebSearch ? { enable_web_search: "on" } : {}),
-        },
+        ...veniceParams,
       }),
       signal: AbortSignal.timeout(30_000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      console.warn(`[chat] ${cfg.provider} phase1 ${res.status}: ${errText.slice(0, 160)}`);
+      return null;
+    }
     return await res.json() as VenicePhase1Resp;
-  } catch { return null; }
+  } catch (e) {
+    console.warn(`[chat] ${cfg.provider} phase1 crashed: ${(e as Error).message}`);
+    return null;
+  }
 }
 
 // ─── Venice Phase 2: tool synthesis stream ────────────────────────────────────
@@ -1476,7 +1636,9 @@ async function veniceToolStream(
   // Connected wallet — forwarded to callHubTool so each tool invocation
   // debits credits from the user's ledger rather than free-bypassing.
   userAddress?:    string,
+  cfgOverride?:    OpenAIChatCfg,
 ): Promise<Response> {
+  const cfg = cfgOverride ?? veniceCfg(apiKey);
   const enc = new TextEncoder();
 
   // Shared <think> parser (same logic as callVeniceStream)
@@ -1580,23 +1742,27 @@ async function veniceToolStream(
 
         let streamRes: Response;
         try {
-          streamRes = await fetch(VENICE_API, {
+          const veniceParams = cfg.veniceExtras
+            ? { venice_parameters: { ...cfg.veniceExtras, ...(enableWebSearch ? { enable_web_search: "on" } : {}) } }
+            : {};
+          streamRes = await fetch(cfg.endpoint, {
             method:  "POST",
-            headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+            headers: { "Authorization": `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
             body: JSON.stringify({
               model: modelId, messages: phase2Msgs, stream: true, max_tokens: maxTokens,
-              venice_parameters: { include_venice_system_prompt: false,
-                ...(enableWebSearch ? { enable_web_search: "on" } : {}) },
+              ...veniceParams,
             }),
             signal: AbortSignal.timeout(60_000),
           });
         } catch (e) {
+          console.warn(`[chat] ${cfg.provider} tool-stream crashed: ${(e as Error).message}`);
           emit({ delta: { text: "Tool temporarily unavailable. Please try again." } });
           controller.enqueue(enc.encode("data: [DONE]\n\n")); controller.close(); return;
         }
         if (!streamRes.ok) {
           const err = await streamRes.text();
-          emit({ delta: { text: `[Venice error ${streamRes.status}: ${err.slice(0, 100)}]` } });
+          const label = cfg.provider === "venice" ? "Venice" : "Virtuals";
+          emit({ delta: { text: `[${label} error ${streamRes.status}: ${err.slice(0, 100)}]` } });
           controller.enqueue(enc.encode("data: [DONE]\n\n")); controller.close(); return;
         }
 
@@ -1736,35 +1902,39 @@ async function callVeniceStream(
   openaiMsgs:      object[],
   maxTokens:       number,
   enableWebSearch: boolean = false,
+  cfgOverride?:    OpenAIChatCfg,
 ): Promise<Response> {
+  const cfg = cfgOverride ?? veniceCfg(apiKey);
   let veniceRes: Response;
   try {
-    veniceRes = await fetch(VENICE_API, {
+    const veniceParams = cfg.veniceExtras
+      ? { venice_parameters: { ...cfg.veniceExtras, ...(enableWebSearch ? { enable_web_search: "on" } : {}) } }
+      : {};
+    veniceRes = await fetch(cfg.endpoint, {
       method:  "POST",
-      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model:      modelId,
         messages:   openaiMsgs,
         stream:     true,
         max_tokens: maxTokens,
-        venice_parameters: {
-          include_venice_system_prompt: false,
-          ...(enableWebSearch ? { enable_web_search: "on" } : {}),
-        },
+        ...veniceParams,
       }),
       signal: AbortSignal.timeout(60_000),
     });
   } catch (e) {
+    console.warn(`[chat] ${cfg.provider} stream fetch crashed: ${(e as Error).message}`);
     return textToSSE("AI service temporarily unavailable. Try a different model.");
   }
 
   if (!veniceRes.ok) {
     const err = await veniceRes.text();
+    const label = cfg.provider === "venice" ? "Venice" : "Virtuals";
     const hint = veniceRes.status === 401
-      ? "Venice API key is invalid or expired — please contact support."
+      ? `${label} API key is invalid or expired — please contact support.`
       : veniceRes.status === 429
-      ? "Venice rate limit hit. Try again in a moment."
-      : `Venice error ${veniceRes.status}: ${err.slice(0, 120)}`;
+      ? `${label} rate limit hit. Try again in a moment.`
+      : `${label} error ${veniceRes.status}: ${err.slice(0, 120)}`;
     return textToSSE(`[${hint}]`);
   }
 
@@ -2161,269 +2331,73 @@ export async function POST(req: NextRequest) {
     return callVeniceStream(apiKey, modelId, openaiMsgs, maxTok, autoSearch);
   }
 
-  // ── Inject attachments for Bankr (Anthropic) ──────────────────────────────
-  cleanMessages = injectAttachments(cleanMessages, attachments, "bankr") as LLMMessage[];
 
-  const model  = MODELS[tier as string] ?? MODELS.pro;
+  // ── Virtuals path (task B — replaces the removed Bankr block) ─────────────
+  // The v1 chat had a Bankr Anthropic-format branch here (~265 lines). The
+  // Bankr account was banned on 2026-07-18 (verified via prod smoke:
+  // `Bankr LLM 403: "This account has been banned"`), and per reviewer
+  // decision Blue Chat moves to Virtuals as the single default provider
+  // for every non-venice preset. NO fallback to Bankr — spec B2:
+  // "xóa/deprecate đường Bankr trong chat route, không giữ fallback sang
+  // account banned".
+  //
+  // The Virtuals /v1/chat/completions endpoint is OpenAI-format, same as
+  // Venice — so we reuse `callVenicePhase1`, `veniceToolStream`, and
+  // `callVeniceStream` with a `virtualsCfg` override that swaps
+  // endpoint + auth + drops the `venice_parameters` block (Virtuals's
+  // schema validator rejects unknown keys — same class as the
+  // `disable_thinking` 400 from PR #211).
+  //
+  // Model: `VIRTUALS_CHAT_MODEL` env, default `anthropic-claude-sonnet-5`.
+  // No web-search here — Virtuals doesn't expose it. When the user needs
+  // web-search, they pick a `venice-*` preset which still hits the
+  // Venice branch above. Attachments use the "venice" injectAttachments
+  // variant (same OpenAI multimodal format Virtuals speaks).
+  //
+  // Failure mode is loud: no VIRTUALS_API_KEY → single SSE line telling
+  // the operator to configure it (do NOT hang, do NOT fall through to
+  // a dead provider).
 
-  const lmHeaders = {
-    "x-api-key":           apiKey,
-    "Content-Type":        "application/json",
-    "anthropic-version":   "2023-06-01",
-  };
-
-  // ── Phase 1: intent detection (non-streaming + tools) ─────────────────────
-  let firstData: LLMResponse;
-  // Anthropic server-tool: web_search. Already wired up as the "Search on"
-  // toggle in the chat composer (frontend sends `webSearch: true` in body).
-  // When toggled, the tool is appended to the tool list so the model can
-  // call it; toggle off keeps the tools array Hub-only. Anthropic bills
-  // per-search; reconciliation against our credit ledger lands later.
-  // Pure-knowledge commands get NO Hub tools (prevents accidental paid-tool
-  // calls). web_search is still honored when the user explicitly toggled it.
-  const webSearchTool = { type: "web_search_20250305", name: "web_search", max_uses: 3 };
-  const ANTHROPIC_TOOLS: unknown[] = knowledgeOnly
-    ? (webSearch ? [webSearchTool] : [])
-    : (webSearch ? [...HUB_TOOLS, ...mcpTools, webSearchTool] : [...HUB_TOOLS, ...mcpTools]);
-
-  // When the user clearly asks for their wallet balance AND a wallet is
-  // connected, force the check_wallet tool so a real tool_use block (and thus
-  // the wallet card) is guaranteed — instead of relying on the model to pick
-  // it under tool_choice:auto, which it sometimes narrates as text instead.
-  const forceBalance =
-    !knowledgeOnly &&
-    !!address &&
-    /^0x[a-fA-F0-9]{40}$/.test(address) &&
-    wantsWalletBalance(cleanMessages);
-
-  try {
-    const firstRes = await fetch(BANKR_LLM, {
-      method:  "POST",
-      headers: lmHeaders,
-      body: JSON.stringify({
-        model:      model.id,
-        system,
-        messages:   cleanMessages,
-        tools:      ANTHROPIC_TOOLS,
-        max_tokens: model.maxTokens,
-        ...(forceBalance ? { tool_choice: { type: "tool", name: "check_wallet" } } : {}),
-      }),
-    });
-
-    if (!firstRes.ok) {
-      const err = await firstRes.text();
-      return NextResponse.json(
-        { error: `Bankr LLM error: ${firstRes.status}`, detail: err },
-        { status: firstRes.status }
-      );
-    }
-
-    firstData = await firstRes.json() as LLMResponse;
-  } catch (e) {
-    return NextResponse.json(
-      { error: `LLM request failed: ${(e as Error).message}` },
-      { status: 502 }
+  const virtualsKey = process.env.VIRTUALS_API_KEY ?? "";
+  if (!virtualsKey) {
+    return textToSSE(
+      "[Chat unavailable: VIRTUALS_API_KEY not set on the server. " +
+      "Ask an operator to configure it. Bankr provider has been " +
+      "permanently removed from Blue Chat.]",
     );
   }
+  const cfg = virtualsCfg(virtualsKey);
+  const virtualsMessages = injectAttachments(cleanMessages, attachments, "venice");
+  const virtualsModel = VIRTUALS_CHAT_DEFAULT_MODEL;
+  const virtualsMax = (MODELS[tier as string] ?? MODELS.pro).maxTokens;
+  // No auto-web-search on Virtuals — hard-off regardless of the user's
+  // toggle; the toggle only matters on the Venice branch above.
+  const virtualsAutoSearch = false;
 
-  // ── Web search trust signal: extract sources Anthropic baked in ─────────
-  // Done before either branch so a no-tool response still shows the chip
-  // when the model used web_search but didn't trigger any hub_* tool.
-  const webSearchSourceList = extractWebSearchSources(firstData);
-  const webSearchSources    = webSearchSourceList.length;
+  const openaiMsgs = [
+    { role: "system", content: system },
+    ...virtualsMessages.map((m) => ({
+      role: m.role as string,
+      content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+    })),
+  ];
 
-  // ── No tool use: return text as SSE directly ───────────────────────────────
-  if (firstData.stop_reason !== "tool_use") {
-    const text = firstData.content.find((b) => b.type === "text")?.text ?? "";
-    // Prefix the search-used event onto the SSE stream so the UI renders the
-    // trust chip even when the message has no hub_* tool calls.
-    const prefix = webSearchSources > 0
-      ? [{ type: "web_search_used", provider: "anthropic", sources: webSearchSources, urls: webSearchSourceList }]
-      : [];
-    return textToSSE(text, prefix);
+  if (!knowledgeOnly) {
+    const forceTool =
+      address && /^0x[a-fA-F0-9]{40}$/.test(address) && wantsWalletBalance(cleanMessages)
+        ? "check_wallet"
+        : undefined;
+    const phase1 = await callVenicePhase1(
+      virtualsKey, virtualsModel, openaiMsgs, virtualsMax, virtualsAutoSearch, forceTool, cfg,
+    );
+    const toolCalls = phase1?.choices?.[0]?.message?.tool_calls;
+    if (toolCalls?.length) {
+      return veniceToolStream(
+        virtualsKey, virtualsModel, openaiMsgs, toolCalls, virtualsMax, virtualsAutoSearch, address, cfg,
+      );
+    }
   }
-
-  // ── Tool use: merged stream (tool events → Phase 2 stream) ───────────────
-  const toolUseBlocks = firstData.content.filter((b) => b.type === "tool_use");
-  const enc = new TextEncoder();
-
-  const mergedStream = new ReadableStream({
-    async start(controller) {
-      try {
-        // 0. web_search_used trust chip — emit first so it lands above the
-        //    tool chips in the UI when the model chained web_search + hub_*.
-        if (webSearchSources > 0) {
-          controller.enqueue(enc.encode(
-            `data: ${JSON.stringify({
-              type:     "web_search_used",
-              provider: "anthropic",
-              sources:  webSearchSources,
-              urls:     webSearchSourceList,
-            })}\n\n`,
-          ));
-        }
-        // 1. tool_start events
-        for (const block of toolUseBlocks) {
-          controller.enqueue(enc.encode(
-            `data: ${JSON.stringify({ type: "tool_start", tool: block.name })}\n\n`
-          ));
-        }
-
-        // 2. Execute tools in parallel
-        const t0 = Date.now();
-        const toolOutputs = await Promise.all(
-          toolUseBlocks.map(async (block) => {
-            const mcpEntry = mcpMap.get(block.name!);
-            const out = mcpEntry
-              ? await callMcpConnectorTool(mcpEntry, (block.input ?? {}) as Record<string, unknown>)
-              : await callHubTool(block.name!, block.input ?? {}, address, isInternalCaller);
-            return { block, out };
-          })
-        );
-        const elapsed = Date.now() - t0;
-
-        // Guest hit a paid tool → emit the fixed connect-wallet message and stop,
-        // so the model never fabricates a result from training data.
-        if (toolOutputs.some(({ out }) => out.walletRequired)) {
-          for (const { block } of toolOutputs)
-            controller.enqueue(enc.encode(
-              `data: ${JSON.stringify({ type: "tool_done", tool: block.name, ms: elapsed, result: null, credits: 0 })}\n\n`,
-            ));
-          // Signal the block so the client refunds the message cost — the guest
-          // got no answer, just the connect-wallet wall, so they shouldn't pay.
-          controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: "wallet_required" })}\n\n`));
-          controller.enqueue(enc.encode(`data: ${JSON.stringify({ delta: { text: WALLET_REQUIRED_MSG } })}\n\n`));
-          controller.enqueue(enc.encode("data: [DONE]\n\n"));
-          controller.close();
-          return;
-        }
-
-        const toolResults = toolOutputs.map(({ block, out }) => ({
-          type:        "tool_result" as const,
-          tool_use_id: block.id!,
-          content:     out.text,
-        }));
-
-        // 3. tool_done events (include raw result for card rendering).
-        //    Insufficient-credits emits a sibling SSE event so the chat
-        //    UI can pop a top-up CTA without disrupting the tool stream.
-        for (const { block, out } of toolOutputs) {
-          controller.enqueue(enc.encode(
-            `data: ${JSON.stringify({
-              type:    "tool_done",
-              tool:    block.name,
-              ms:      elapsed,
-              result:  out.result,
-              credits: out.credits ?? 0,
-            })}\n\n`,
-          ));
-          if (out.insufficient) {
-            controller.enqueue(enc.encode(
-              `data: ${JSON.stringify({
-                type:    "insufficient_credits",
-                kind:    "tool",
-                tool:    out.insufficient.tool,
-                needed:  out.insufficient.needed,
-                balance: out.insufficient.balance,
-              })}\n\n`,
-            ));
-          }
-        }
-
-        // 4. Phase 2 — streaming synthesis
-        const secondMessages: LLMMessage[] = [
-          ...cleanMessages,
-          { role: "assistant", content: firstData.content },
-          { role: "user",      content: toolResults },
-        ];
-
-        let streamRes: Response;
-        try {
-          streamRes = await fetch(BANKR_LLM, {
-            method:  "POST",
-            headers: lmHeaders,
-            body: JSON.stringify({
-              model:      model.id,
-              system,
-              messages:   secondMessages,
-              max_tokens: model.maxTokens,
-              stream:     true,
-            }),
-          });
-        } catch (e) {
-          const msg = `[LLM stream failed: ${(e as Error).message}]`;
-          controller.enqueue(enc.encode(`data: ${JSON.stringify({ delta: { text: msg } })}\n\n`));
-          controller.enqueue(enc.encode("data: [DONE]\n\n"));
-          controller.close();
-          return;
-        }
-
-        if (!streamRes.ok) {
-          const err = await streamRes.text();
-          const msg = `[Stream error ${streamRes.status}: ${err.slice(0, 120)}]`;
-          controller.enqueue(enc.encode(`data: ${JSON.stringify({ delta: { text: msg } })}\n\n`));
-          controller.enqueue(enc.encode("data: [DONE]\n\n"));
-          controller.close();
-          return;
-        }
-
-        // Pipe Phase 2 into merged stream. We also decode chunks in flight
-        // to count how many text deltas actually reached the client — if
-        // Anthropic returned only more tool_use blocks (chained tools we
-        // don't loop yet) or any other zero-text outcome, the message would
-        // otherwise render as an indefinite "thinking" state with empty
-        // content. The fallback line below tells the user something useful
-        // instead of stranding them.
-        const reader = streamRes.body!.getReader();
-        const dec = new TextDecoder();
-        let sawText = false;
-        let lineBuf = "";
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            controller.enqueue(value);
-            if (sawText) continue; // skip scan once we've confirmed text
-            lineBuf += dec.decode(value, { stream: true });
-            // Anthropic SSE: lines like  data: {...}\n
-            let idx: number;
-            while ((idx = lineBuf.indexOf("\n")) !== -1) {
-              const line = lineBuf.slice(0, idx);
-              lineBuf = lineBuf.slice(idx + 1);
-              if (!line.startsWith("data: ")) continue;
-              try {
-                const ev = JSON.parse(line.slice(6)) as {
-                  type?: string;
-                  delta?: { type?: string; text?: string };
-                };
-                if (
-                  ev.type === "content_block_delta" &&
-                  ev.delta?.type === "text_delta" &&
-                  ev.delta.text
-                ) {
-                  sawText = true;
-                  break;
-                }
-              } catch { /* ignore parse errors */ }
-            }
-          }
-          if (!sawText) {
-            const msg =
-              "I ran the tool but the model returned no text response. " +
-              "This usually means it wanted to chain another tool call — " +
-              "rephrase your question or try the same prompt again.";
-            controller.enqueue(enc.encode(
-              `data: ${JSON.stringify({ delta: { text: msg } })}\n\n`,
-            ));
-          }
-        } finally {
-          controller.close();
-        }
-      } catch (e) {
-        controller.error(e);
-      }
-    },
-  });
-
-  return new Response(mergedStream, { headers: SSE_HEADERS });
+  return callVeniceStream(
+    virtualsKey, virtualsModel, openaiMsgs, virtualsMax, virtualsAutoSearch, cfg,
+  );
 }

@@ -115,6 +115,19 @@ export async function callBankrLLM(opts: {
 // guessing. Drop-in: accepts the same {system, messages|user, temperature,
 // maxTokens} shape as callBankrLLM, and auto-prepends WEB_SEARCH_RULE.
 
+// TODO (Blue Hood backlog, T-A.1 #4): callVeniceLLM below has an internal
+// fallback to callBankrLLM (line ~319). When Venice itself fails, that
+// fallback fires — so a Bankr error surfaces on the "venice" attempt entry
+// in `callLLM`'s trace, then a SECOND Bankr call happens as the outer
+// chain's own Bankr step. Two side effects:
+//   (a) attempts[venice].error can literally say "Bankr LLM 403 …"
+//       which reads misleadingly.
+//   (b) Bankr may get double-hit per call.
+// Flatten: strip Venice's internal Bankr fallback and let the outer
+// `callLLM` chain be the only place fallback lives. Not urgent (attempts
+// trace is still accurate about "did any provider give us text?"), but
+// worth doing before we harden the health endpoint for public metrics.
+
 /** Prepended to every Venice (web-search) tool. Tells the model to search, not invent. */
 export const WEB_SEARCH_RULE =
   "You have web search available. For any specific numbers (market size, TAM, revenue, user counts, APY, GitHub stars, valuations, projections) ALWAYS search for real data first and cite the source. If search returns no result, write \"[data unavailable]\" — NEVER generate numbers without a verified source.";
@@ -181,25 +194,29 @@ export async function callVirtualsLLM(opts: {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
+      // Pre-merge task #7 — minimal payload. History of the "empty
+      // response" saga:
+      //   - PR #211 sent `disable_thinking: true` + `reasoning_effort:
+      //     "none"` hoping strict schemas would ignore unknowns.
+      //   - PR #212 dropped `disable_thinking` after Virtuals returned
+      //     `400: "Unrecognized key(s): 'disable_thinking'"`, kept
+      //     `reasoning_effort` since the validator only flagged the
+      //     first unknown key.
+      //   - 2026-07-21 brief #0008: same virtuals chain error — the
+      //     validator's next unknown-key flag was almost certainly
+      //     `reasoning_effort`. Only way to be sure: minimal payload.
+      // So this call now sends ONLY what OpenAI-compat mandates:
+      //   { model, messages, max_tokens, temperature }
+      // Every hint that could trip the schema is gone. The
+      // `stripThinkBlock` post-processor on the response side is the
+      // only defence against `<think>` blocks eating the token budget —
+      // and the `MIN_MAX_TOKENS = 400` floor gives the model enough
+      // budget that even a thinking model has room for real content
+      // after the `</think>` tag.
       model,
       messages: [{ role: "system", content: opts.system }, ...msgs],
       max_tokens: maxTokens,
       temperature: opts.temperature ?? 0.3,
-      // Deepseek-R1 style models ship reasoning inside `<think>…</think>`
-      // — that eats the token budget and leaves `content` empty. History:
-      //   - PR #211 sent BOTH `reasoning_effort: "none"` (OpenAI-compat)
-      //     AND `disable_thinking: true` (vendor-specific).
-      //   - Prod 2026-07-19: Virtuals's schema validator rejected the
-      //     payload with `Virtuals 400: "Unrecognized key(s) in object:
-      //     'disable_thinking'"` — the endpoint uses strict key
-      //     validation, not the ignore-unknowns behaviour we assumed.
-      //   - `reasoning_effort` alone was NOT flagged in the error (the
-      //     validator seems to stop at the first unknown key), so it's
-      //     ambiguous whether it's accepted or would be flagged next.
-      //     Keeping it — worst case it's rejected and the error text
-      //     will tell us, and stripThinkBlock still catches inline
-      //     `<think>` blocks at the response layer regardless.
-      reasoning_effort: "none",
     }),
     signal: AbortSignal.timeout(60_000),
   });

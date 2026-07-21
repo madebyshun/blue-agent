@@ -117,6 +117,7 @@ export const en = {
     feed: "Feed",
     bank: "Bank",
     launches: "Launches",
+    hood: "Hood",
     b20: "B20",
     dashboard: "Account",
     profile: "Profile",

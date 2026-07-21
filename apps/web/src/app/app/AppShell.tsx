@@ -2,10 +2,43 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AppChromeProvider, useAppChrome } from "./AppChrome";
 import LanguageToggle from "@/components/LanguageToggle";
 import { useLang } from "@/lib/i18n/context";
+
+// T-D D1 — small self-contained client component. Polls
+// `/api/hood/inbox/unread-count` every 30s and shows a red dot with the
+// count on the Hood nav item. Only mounted when the Hood nav item
+// renders, so other nav items don't trigger the fetch.
+function HoodNavBadge() {
+  const [n, setN] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/hood/inbox/unread-count", { cache: "no-store" });
+        if (!r.ok) return;
+        const body = (await r.json()) as { unread?: number };
+        if (alive && typeof body.unread === "number") setN(body.unread);
+      } catch { /* offline is fine */ }
+    };
+    load();
+    const t = setInterval(load, 30_000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+  if (!n) return null;
+  const label = n > 99 ? "99+" : String(n);
+  return (
+    <span
+      className="absolute -top-1 -right-2 min-w-[14px] h-[14px] px-1 rounded-full flex items-center justify-center font-mono text-[9px] font-bold"
+      style={{ backgroundColor: "#ef4444", color: "#fff", boxShadow: "0 0 0 2px #050508" }}
+      aria-label={`${n} unread`}
+    >
+      {label}
+    </span>
+  );
+}
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
@@ -53,6 +86,21 @@ const APP_NAV = [
       <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round"
           d="M15.59 14.37a6 6 0 0 1-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 0 0 6.16-12.12A14.98 14.98 0 0 0 9.631 8.41m5.96 5.96a14.926 14.926 0 0 1-5.841 2.58m-.119-8.54a6 6 0 0 0-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 0 0-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 0 1-2.448-2.448 14.9 14.9 0 0 1 .06-.312m-2.24 2.39a4.493 4.493 0 0 0-1.757 4.306 4.493 4.493 0 0 0 4.306-1.758M16.5 9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
+      </svg>
+    ),
+  },
+  {
+    id: "hood",
+    label: "Hood",
+    href: "/hood",
+    icon: (
+      // Arrow-through-hood glyph — Blue Hood is the 24/7 Robinhood Chain
+      // copilot; the arrow motif carries into every serial + inbox card.
+      <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round"
+          d="M3.75 12h16.5m0 0-6-6m6 6-6 6" />
+        <path strokeLinecap="round" strokeLinejoin="round"
+          d="M3.75 4.5v15" />
       </svg>
     ),
   },
@@ -146,8 +194,11 @@ function AppSideNav() {
           const navCls = "group relative flex flex-col items-center justify-center gap-0.5 w-full h-[50px] rounded-xl transition-all";
           const navInner = (
             <>
-              <span className="group-hover:text-slate-300 transition-colors">
+              <span className="group-hover:text-slate-300 transition-colors relative">
                 {item.icon}
+                {/* T-D D1 — unread badge for Blue Hood inbox. Only mounts
+                    for the Hood nav item; other items skip the client fetch. */}
+                {item.id === "hood" && <HoodNavBadge />}
               </span>
               <span
                 className="font-mono text-[7px] tracking-wide transition-colors group-hover:text-slate-400 truncate max-w-[56px] text-center"
