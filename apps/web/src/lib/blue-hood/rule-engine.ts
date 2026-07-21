@@ -129,7 +129,16 @@ export async function fireArrow(
   ticker: string,
   detected: Candidate,
   snapshot_ref: number,
-  opts: { test?: boolean; origin?: "engine" | "seeded"; forceBrief?: boolean } = {},
+  opts: {
+    test?: boolean;
+    origin?: "engine" | "seeded";
+    forceBrief?: boolean;
+    /** Pre-merge task #8 — the poll row that triggered this arrow. When
+     *  present, its numeric fields + market clock are captured on the
+     *  persisted arrow so the (later) brief-worker can build a brief
+     *  from FIRE-time state instead of re-reading M5 at attach time. */
+    row?: TickerSnapshot;
+  } = {},
 ): Promise<Arrow | null> {
   const idxKey = kvArrowOpenIndex(ticker, detected.type);
   const existing = await kvGet<OpenIndex>(idxKey);
@@ -151,6 +160,7 @@ export async function fireArrow(
   // async-brief guard is lifted. Push stays hard-gated on origin==="engine"
   // inside `pushArrowToAll` + brief-worker; forceBrief cannot cross that.
   const skipAsync = (opts.test || origin === "seeded") && !opts.forceBrief;
+  const row = opts.row;
   const arrow: Arrow = {
     id,
     serial,
@@ -168,6 +178,23 @@ export async function fireArrow(
     brief: null,
     brief_status: skipAsync ? "skipped" : "pending",
     brief_worker_at: null,
+    // Pre-merge task #8 — capture fire-time facts + market clock so
+    // brief-worker has an authoritative snapshot instead of re-reading
+    // M5 at attach time (which lied for arrow #0008 PLTR — said
+    // "market closed" for an arrow that fired during regular session).
+    snapshot_at_fire: row ? {
+      dex_price_usd: row.dex_usd,
+      oracle_price_usd: row.oracle_usd,
+      dex_tvl_usd: row.tvl_usd,
+      dex_volume_24h_usd: row.volume_24h_usd,
+      dex_change_24h_pct: null, // not carried on poll row today
+      chainlink_age_seconds: null, // not carried on poll row today
+    } : null,
+    market_at_fire: row ? {
+      is_open: row.market.is_open,
+      session: row.market.session,
+      ny_time_iso: row.market.ny_time_iso,
+    } : null,
     origin,
     ...(opts.test ? { test: true } : {}),
   };
@@ -255,7 +282,10 @@ export async function runRuleEngine(snap: HoodSnapshot): Promise<RuleEngineRepor
       skipped_feed_stale++; continue;
     }
 
-    const arrow = await fireArrow(row.ticker, candidate, snap.cycle_id);
+    // Pass `row` so fire-time facts + market clock get captured on the
+    // persisted arrow (task #8). brief-worker uses these to author a
+    // brief from FIRE-time state, not attach-time state.
+    const arrow = await fireArrow(row.ticker, candidate, snap.cycle_id, { row });
     if (arrow) fired.push(arrow);
     else deduped++;
   }

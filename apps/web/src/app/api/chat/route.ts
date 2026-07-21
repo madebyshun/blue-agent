@@ -11,6 +11,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
+import { absoluteUrl } from "@/lib/site-url";
 import { checkMemo } from "@/lib/b20/check-memo";
 import { checkAuthorization } from "@/lib/b20/check-authorization";
 import { checkWallet } from "@/lib/wallet/holdings";
@@ -1215,9 +1216,14 @@ async function callHubTool(
         card,
         signal,
         deep_link: {
-          inbox: `/hood/inbox#${arrow.id}`,
-          board: `/hood`,
-          track: `/hood/arrows`,
+          // Absolute (canonical) URLs — same reasoning as chat-card.ts:
+          // the chat message may be persisted/shared, so the link must
+          // survive origin drift. `absoluteUrl` pins to
+          // `NEXT_PUBLIC_SITE_URL` on prod; relative fallback on
+          // preview/localhost.
+          inbox: absoluteUrl(`/hood/inbox#${arrow.id}`),
+          board: absoluteUrl(`/hood`),
+          track: absoluteUrl(`/hood/arrows`),
         },
       },
     };

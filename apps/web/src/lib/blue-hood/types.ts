@@ -165,6 +165,40 @@ export interface Arrow {
    *  time. Populated once, cached forever on the arrow record. Null when
    *  the A4 call failed or was skipped — the arrow still fires either way. */
   brief?: ArrowBrief | null;
+  /** Pre-merge task #8 — snapshot of the exact numeric facts at fire
+   *  time. In the old sync flow A4 was called AT fire time so its
+   *  `facts_at_fire` block genuinely captured fire-time state. In the
+   *  new async flow the brief attaches ~1-2 minutes later, and A4
+   *  re-reads M5 at THAT time — so the persisted `brief.facts_at_fire`
+   *  was really `facts_at_attach`. Bug caught with arrow #0008 PLTR
+   *  (fired session=regular but brief claimed "Market CLOSED
+   *  premarket"). Fix: capture the row's numeric fields on the arrow
+   *  itself when fireArrow runs. brief-worker overrides the persisted
+   *  brief's facts_at_fire with this so the UI's facts strip is
+   *  always accurate to fire time. */
+  snapshot_at_fire?: {
+    dex_price_usd: number | null;
+    oracle_price_usd: number | null;
+    dex_tvl_usd: number | null;
+    dex_volume_24h_usd: number | null;
+    /** Reserved — poll rows don't currently carry 24h change; kept null
+     *  for schema parity with `ArrowBrief.facts_at_fire`. */
+    dex_change_24h_pct: number | null;
+    /** Chainlink oracle age in seconds at fire time. Reserved — poll
+     *  rows don't currently expose this cleanly. Null for now; brief
+     *  worker falls back to A4's read if this is null. */
+    chainlink_age_seconds: number | null;
+  } | null;
+  /** Pre-merge task #8 — market clock captured at fire time. Same
+   *  motive as `snapshot_at_fire`: brief-worker uses this to detect
+   *  when A4's one_line_context contradicts the fire-time state (e.g.
+   *  "market closed" said for an arrow that fired during regular
+   *  session). Populated verbatim from the poll cycle's row. */
+  market_at_fire?: {
+    is_open: boolean;
+    session: MarketSession;
+    ny_time_iso: string;
+  } | null;
   /** Async-brief lifecycle (T-D refactor). Older records without this
    *  field are back-compat treated as `"attached"` when `brief != null`
    *  or `"skipped"` when both `brief == null` and `origin == "seeded"`.

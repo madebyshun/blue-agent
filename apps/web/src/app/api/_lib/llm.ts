@@ -194,22 +194,29 @@ export async function callVirtualsLLM(opts: {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
+      // Pre-merge task #7 — minimal payload. History of the "empty
+      // response" saga:
+      //   - PR #211 sent `disable_thinking: true` + `reasoning_effort:
+      //     "none"` hoping strict schemas would ignore unknowns.
+      //   - PR #212 dropped `disable_thinking` after Virtuals returned
+      //     `400: "Unrecognized key(s): 'disable_thinking'"`, kept
+      //     `reasoning_effort` since the validator only flagged the
+      //     first unknown key.
+      //   - 2026-07-21 brief #0008: same virtuals chain error — the
+      //     validator's next unknown-key flag was almost certainly
+      //     `reasoning_effort`. Only way to be sure: minimal payload.
+      // So this call now sends ONLY what OpenAI-compat mandates:
+      //   { model, messages, max_tokens, temperature }
+      // Every hint that could trip the schema is gone. The
+      // `stripThinkBlock` post-processor on the response side is the
+      // only defence against `<think>` blocks eating the token budget —
+      // and the `MIN_MAX_TOKENS = 400` floor gives the model enough
+      // budget that even a thinking model has room for real content
+      // after the `</think>` tag.
       model,
       messages: [{ role: "system", content: opts.system }, ...msgs],
       max_tokens: maxTokens,
       temperature: opts.temperature ?? 0.3,
-      // Deepseek-R1 style models ship reasoning inside `<think>…</think>`
-      // — that eats the token budget and leaves `content` empty. History:
-      //   - PR #211 sent BOTH `reasoning_effort: "none"` AND
-      //     `disable_thinking: true` (vendor-specific).
-      //   - Prod 2026-07-19: Virtuals's schema validator rejected the
-      //     payload with `400: "Unrecognized key(s): 'disable_thinking'"`.
-      //     Endpoint uses STRICT key validation, not ignore-unknowns.
-      //   - PR #212 drops `disable_thinking`; keeps `reasoning_effort`
-      //     since the 400 only flagged the first unknown key.
-      // `stripThinkBlock` remains as the response-layer defence for
-      // models that ignore the hint and inline reasoning anyway.
-      reasoning_effort: "none",
     }),
     signal: AbortSignal.timeout(60_000),
   });

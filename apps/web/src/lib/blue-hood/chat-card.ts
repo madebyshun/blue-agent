@@ -23,6 +23,7 @@
  * or the LLM tool can fetch by id without importing internal libs.
  */
 import { kvGet, kvSet } from "@/lib/kv";
+import { absoluteUrl } from "@/lib/site-url";
 import { kvChatCard, KV_CHAT_CARD_FEED, TTL_CHAT_CARD } from "./kv-keys";
 import type { Arrow } from "./types";
 
@@ -70,8 +71,13 @@ export function buildChatCard(a: Arrow): ChatCard {
     context: (a.brief?.one_line_context ?? "").trim(),
     fired_at: a.fired_at,
     href: {
-      inbox: `/hood/inbox#${a.id}`,
-      board: `/hood`,
+      // Absolute URLs — the card is persisted in KV and may be
+      // rendered from any origin (chat is same-origin today, but the
+      // reviewer is planning cross-context surfaces). `absoluteUrl`
+      // pins to `NEXT_PUBLIC_SITE_URL` on prod; falls back to a
+      // relative path on preview/localhost.
+      inbox: absoluteUrl(`/hood/inbox#${a.id}`),
+      board: absoluteUrl(`/hood`),
     },
   };
 }

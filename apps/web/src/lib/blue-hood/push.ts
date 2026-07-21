@@ -19,6 +19,7 @@
 import crypto from "crypto";
 import webpush from "web-push";
 import { kvDel, kvGet, kvSet } from "@/lib/kv";
+import { absoluteUrl } from "@/lib/site-url";
 import { KV_PUSH_SUB_INDEX, kvPushSub, TTL_PUSH_SUB } from "./kv-keys";
 import type { Arrow } from "./types";
 
@@ -104,7 +105,11 @@ function payloadFor(a: Arrow): string {
     ticker: a.ticker,
     signal,
     brief: briefLine.slice(0, 240),
-    url: `/hood/inbox#${a.id}`,
+    // Absolute (canonical) URL — see `src/lib/site-url.ts`. On prod
+    // this points at blueagent.dev/hood/inbox#<id>; on preview /
+    // localhost it degrades to a relative path so the SW's
+    // notificationclick opens correctly regardless of origin.
+    url: absoluteUrl(`/hood/inbox#${a.id}`),
   });
 }
 

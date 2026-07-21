@@ -78,6 +78,52 @@ async function processOne(id: string): Promise<WorkerRowResult> {
     console.warn(`[brief-worker] fetch crashed for ${arrow.serial} ${arrow.ticker}: ${(e as Error).message}`);
   }
 
+  // Pre-merge task #8 — reconcile A4's attach-time reads with the arrow's
+  // FIRE-time snapshot. Two moves:
+  //
+  // 1. `facts_at_fire`: swap A4's `facts.dex/oracle/tvl/vol` (read at
+  //    attach time, ~1-2 min after fire → possibly stale) for the
+  //    arrow's `snapshot_at_fire` captured verbatim from the poll row
+  //    that fired the arrow. This is what the UI's facts strip renders.
+  //
+  // 2. `one_line_context` contradiction detection: if A4's context talks
+  //    about "market closed" / "premarket" / "afterhours" / "NOT arb"
+  //    but the arrow was fired during regular session with type=arb,
+  //    that context is DEMONSTRABLY wrong (attach-time market != fire-
+  //    time market). Null the context out and mark
+  //    `brief.warnings += ["context_stale_at_attach: A4 read attach-
+  //     time market, arrow fired at <fire-time>"]` so the reader sees
+  //    exactly what happened. The verdict_note (deterministic hard-map)
+  //    stays — it was built from the arrow's own signal, not from A4's
+  //    attach read.
+  if (brief) {
+    if (arrow.snapshot_at_fire) {
+      brief = { ...brief, facts_at_fire: {
+        dex_price_usd: arrow.snapshot_at_fire.dex_price_usd,
+        oracle_price_usd: arrow.snapshot_at_fire.oracle_price_usd,
+        dex_tvl_usd: arrow.snapshot_at_fire.dex_tvl_usd,
+        dex_volume_24h_usd: arrow.snapshot_at_fire.dex_volume_24h_usd,
+        // Keep A4's values here — the poll row doesn't currently
+        // carry these two and A4's attach-time read is the best
+        // available signal for them.
+        dex_change_24h_pct: brief.facts_at_fire.dex_change_24h_pct,
+        chainlink_age_seconds: brief.facts_at_fire.chainlink_age_seconds,
+      }};
+    }
+    if (arrow.market_at_fire && brief.one_line_context) {
+      const contradicted = detectMarketContradiction(brief.one_line_context, arrow);
+      if (contradicted) {
+        const warn = `context_stale_at_attach: ${contradicted} — arrow fired at ${arrow.fired_at} during session=${arrow.market_at_fire.session} (is_open=${arrow.market_at_fire.is_open})`;
+        brief = {
+          ...brief,
+          one_line_context: null,
+          warnings: [...brief.warnings, warn],
+        };
+        console.warn(`[brief-worker] contradiction on ${arrow.serial} ${arrow.ticker}: ${contradicted}`);
+      }
+    }
+  }
+
   const finalStatus: Arrow["brief_status"] = brief ? "attached" : "failed";
   const enriched: Arrow = {
     ...arrow,
@@ -189,3 +235,37 @@ async function handle(req: NextRequest) {
 
 export const POST = handle;
 export const GET = handle;
+
+/**
+ * Return the specific contradiction string when A4's `one_line_context`
+ * describes a market state that disagrees with the arrow's fire-time
+ * `market_at_fire` — or null when the text is compatible with fire-time
+ * state. Deliberately narrow: only flags phrases we KNOW map to a
+ * specific market state, so a benign mention of "closed" (e.g. "closed
+ * gap") doesn't false-fire.
+ *
+ * Cases handled:
+ *   - "market closed" / "market is closed"     → contradicts is_open=true
+ *   - "premarket" / "pre-market"                → contradicts session=regular/afterhours
+ *   - "afterhours" / "after-hours" / "after hours" → contradicts session=regular/premarket
+ *   - "NOT arb" / "not arb"                    → contradicts arrow.type="arb"
+ */
+function detectMarketContradiction(context: string, arrow: Arrow): string | null {
+  if (!arrow.market_at_fire) return null;
+  const lower = context.toLowerCase();
+  const { is_open, session } = arrow.market_at_fire;
+
+  if (/(market\s+(is\s+)?closed|market\s+closed)/i.test(lower) && is_open) {
+    return `context says "market closed" but arrow fired with market open`;
+  }
+  if (/pre[-\s]?market/.test(lower) && session !== "premarket") {
+    return `context says "premarket" but arrow fired in session=${session}`;
+  }
+  if (/after[-\s]?hours/.test(lower) && session !== "afterhours") {
+    return `context says "afterhours" but arrow fired in session=${session}`;
+  }
+  if (/\bnot\s+arb\b/i.test(lower) && arrow.type === "arb") {
+    return `context says "NOT arb" but arrow type is arb`;
+  }
+  return null;
+}
