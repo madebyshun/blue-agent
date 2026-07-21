@@ -97,17 +97,23 @@ async function processOne(id: string): Promise<WorkerRowResult> {
   //    stays — it was built from the arrow's own signal, not from A4's
   //    attach read.
   if (brief) {
-    if (arrow.snapshot_at_fire) {
+    // Null-guard every field on `snapshot_at_fire`. Legacy arrows fired
+    // before commit 7774f44 don't have this object; new arrows always
+    // do but the sub-fields can still be null on partial-data rows.
+    // `??` falls through to A4's attach-time value when the fire-time
+    // value isn't available.
+    const snap = arrow.snapshot_at_fire;
+    if (snap) {
       brief = { ...brief, facts_at_fire: {
-        dex_price_usd: arrow.snapshot_at_fire.dex_price_usd,
-        oracle_price_usd: arrow.snapshot_at_fire.oracle_price_usd,
-        dex_tvl_usd: arrow.snapshot_at_fire.dex_tvl_usd,
-        dex_volume_24h_usd: arrow.snapshot_at_fire.dex_volume_24h_usd,
-        // Keep A4's values here — the poll row doesn't currently
-        // carry these two and A4's attach-time read is the best
-        // available signal for them.
-        dex_change_24h_pct: brief.facts_at_fire.dex_change_24h_pct,
-        chainlink_age_seconds: brief.facts_at_fire.chainlink_age_seconds,
+        dex_price_usd: snap.dex_price_usd ?? brief.facts_at_fire.dex_price_usd,
+        oracle_price_usd: snap.oracle_price_usd ?? brief.facts_at_fire.oracle_price_usd,
+        dex_tvl_usd: snap.dex_tvl_usd ?? brief.facts_at_fire.dex_tvl_usd,
+        dex_volume_24h_usd: snap.dex_volume_24h_usd ?? brief.facts_at_fire.dex_volume_24h_usd,
+        // Poll row doesn't currently carry these two; A4's attach-time
+        // read is the best available signal. `??` in case A4 also
+        // omitted them.
+        dex_change_24h_pct: brief.facts_at_fire.dex_change_24h_pct ?? snap.dex_change_24h_pct ?? null,
+        chainlink_age_seconds: brief.facts_at_fire.chainlink_age_seconds ?? snap.chainlink_age_seconds ?? null,
       }};
     }
     if (arrow.market_at_fire && brief.one_line_context) {

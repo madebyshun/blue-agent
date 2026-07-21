@@ -21,13 +21,18 @@ import { callTool } from "./tool-caller";
 import { kvArrow, kvArrowOpenIndex, KV_ARROW_FEED } from "./kv-keys";
 import type { Arrow, ArrowOutcome, M5Verdict } from "./types";
 
+// Nullable everywhere — M5 can return a shape with `verdict: "ERROR"` or
+// `INSUFFICIENT_DATA` where these nested objects are missing/undefined.
+// gradeOne must not assume any field is present; the pre-merge blocker
+// (grader crashed on #0008 PLTR "Cannot read properties of null") was
+// caused by treating these as guaranteed.
 interface M5Response {
-  verdict: M5Verdict;
-  ticker: string;
-  market: { is_open: boolean; session: string };
-  delta: { pct: number };
-  chainlink: { price_usd: number };
-  dex: { price_usd: number };
+  verdict?: M5Verdict;
+  ticker?: string;
+  market?: { is_open?: boolean; session?: string };
+  delta?: { pct?: number };
+  chainlink?: { price_usd?: number };
+  dex?: { price_usd?: number };
 }
 
 const ARB_HIT_SPREAD_PCT = 0.5;
@@ -90,15 +95,30 @@ export async function runGrader(): Promise<GraderReport> {
 // ── Per-arrow grading ──────────────────────────────────────────────────────
 async function gradeOne(arrow: Arrow): Promise<{ outcome: ArrowOutcome; detail: string } | null> {
   const r = await callTool<M5Response>("rh-stock-arb", { ticker: arrow.ticker });
-  if (!r.ok) throw new Error(`M5 read failed: ${r.error}`);
+  // Downgraded to a soft skip: throwing here dumped the arrow into
+  // `errored[]` every cycle forever, and one bad ticker's rate-limit
+  // could parade through the log endlessly. Return null → try again on
+  // the next grader pass. `errored[]` is reserved for true crashes.
+  if (!r.ok) return null;
   const now = r.data;
 
-  const dex = now.dex.price_usd;
-  const oracle = now.chainlink.price_usd;
-  if (!(dex > 0) || !(oracle > 0)) return null;
+  // Pre-merge blocker fix — M5 sometimes returns partial data (missing
+  // chainlink or dex object, or missing delta). The grader crashed on
+  // #0008 PLTR with "Cannot read properties of null (reading
+  // 'price_usd')" — one bad row must NEVER throw and break the whole
+  // grader pass. Every M5 field is optional-chained; when we can't get
+  // a usable read we return null (skip = try again next cycle) instead
+  // of throwing.
+  if (!now || typeof now !== "object") return null;
+  const dex = now.dex?.price_usd ?? null;
+  const oracle = now.chainlink?.price_usd ?? null;
+  const deltaPct = typeof now.delta?.pct === "number" ? now.delta.pct : null;
+  if (typeof dex !== "number" || dex <= 0) return null;
+  if (typeof oracle !== "number" || oracle <= 0) return null;
+  if (deltaPct === null) return null;
 
   if (arrow.type === "arb") {
-    const spreadPct = Math.abs(now.delta.pct);
+    const spreadPct = Math.abs(deltaPct);
     if (spreadPct < ARB_HIT_SPREAD_PCT) {
       return { outcome: "hit", detail: `spread narrowed to ${spreadPct.toFixed(3)}% (< ${ARB_HIT_SPREAD_PCT}%)` };
     }
@@ -111,7 +131,7 @@ async function gradeOne(arrow: Arrow): Promise<{ outcome: ArrowOutcome; detail: 
     // We don't store fire_pct explicitly (spec says "reference_price" is the
     // DEX price at fire), so approximate: we treat the current M5 spread as
     // the residual and compare to the reference_price / oracle ratio.
-    const nowGapPct = Math.abs(now.delta.pct);
+    const nowGapPct = Math.abs(deltaPct);
     const refPrice = arrow.reference_price;
     const fireGapPct = refPrice > 0 ? Math.abs((refPrice - oracle) / oracle) * 100 : 0;
     if (fireGapPct <= 0) return { outcome: "miss", detail: "no measurable fire-time gap" };

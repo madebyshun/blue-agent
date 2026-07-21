@@ -27,7 +27,11 @@ const SLASH_COMMANDS: SlashCommand[] = [
 export interface ModelTier {
   id: string; label: string; model: string;
   color: string; badge: string; note: string;
-  group: "bankr" | "venice" | "privacy";
+  // Pre-merge task #4 followup — Bankr got banned; the non-venice group
+  // is now "virtuals" (routes through Virtuals server-side). Kept
+  // "bankr" as a legacy alias so localStorage state written by older
+  // clients still round-trips without a runtime error.
+  group: "bankr" | "venice" | "privacy" | "virtuals";
   credits: number; // cost per msg
 }
 
@@ -39,13 +43,21 @@ export interface ModelTier {
 // remaps any unknown ID back to "pro" so the picker never lands on a
 // model that doesn't exist in the UI any more.
 
+// Pre-merge task #4 followup — every non-venice tier now routes to
+// Virtuals with `anthropic-claude-sonnet-5` (see task-B commit cfaf061
+// + label truthing commit 5cded17). The tier IDs stay (they still
+// differentiate credit cost + are read by the server prompt for the
+// system-line), but the picker LABEL now reflects what actually runs.
+// When Virtuals tiers diverge (fast → haiku on Virtuals, etc.), swap
+// each entry back to a distinct label. Group is renamed `virtuals` so
+// the picker header says "Virtuals" instead of "Bankr" (Bankr = dead).
 export const BANKR_TIERS: ModelTier[] = [
-  { id: "fast",     label: "Haiku 4.5",    model: "Haiku 4.5",        color: "#34D399", badge: "", note: "Fastest · cheap", group: "bankr", credits: 10  },
-  { id: "pro",      label: "Sonnet 4.6",   model: "Sonnet 4.6",       color: "#4FC3F7", badge: "", note: "Balanced",        group: "bankr", credits: 50  },
-  { id: "max",      label: "Opus 4.7",     model: "Opus 4.7",         color: "#A78BFA", badge: "", note: "Smartest",        group: "bankr", credits: 200 },
-  { id: "deepseek", label: "DeepSeek V4",  model: "DeepSeek V4",      color: "#F59E0B", badge: "", note: "1M ctx · cheap",  group: "bankr", credits: 10  },
-  { id: "gemini",   label: "Gemini 2.5",   model: "Gemini 2.5 Flash", color: "#4285F4", badge: "", note: "Google · fast",   group: "bankr", credits: 20  },
-  { id: "kimi",     label: "Kimi K2",      model: "Kimi K2",          color: "#06B6D4", badge: "", note: "Long context",    group: "bankr", credits: 20  },
+  { id: "fast",     label: "Sonnet 5 · Fast",   model: "anthropic-claude-sonnet-5", color: "#34D399", badge: "", note: "Sonnet 5 via Virtuals",         group: "virtuals", credits: 10  },
+  { id: "pro",      label: "Sonnet 5 · Chat",   model: "anthropic-claude-sonnet-5", color: "#4FC3F7", badge: "", note: "Sonnet 5 via Virtuals",         group: "virtuals", credits: 50  },
+  { id: "max",      label: "Sonnet 5 · Deep",   model: "anthropic-claude-sonnet-5", color: "#A78BFA", badge: "", note: "Sonnet 5 via Virtuals (deep)",  group: "virtuals", credits: 200 },
+  { id: "deepseek", label: "Sonnet 5 · Long",   model: "anthropic-claude-sonnet-5", color: "#F59E0B", badge: "", note: "Sonnet 5 via Virtuals (long)",  group: "virtuals", credits: 10  },
+  { id: "gemini",   label: "Sonnet 5 · Google", model: "anthropic-claude-sonnet-5", color: "#4285F4", badge: "", note: "Sonnet 5 via Virtuals",         group: "virtuals", credits: 20  },
+  { id: "kimi",     label: "Sonnet 5 · Kimi",   model: "anthropic-claude-sonnet-5", color: "#06B6D4", badge: "", note: "Sonnet 5 via Virtuals",         group: "virtuals", credits: 20  },
 ];
 
 export const VENICE_TIERS: ModelTier[] = [
@@ -98,9 +110,11 @@ export interface ModelPreset {
 // separate tool (Anthropic web_search server-tool) toggled with 🔍 in the
 // composer, so it works on any of these models — no Venice model in the picker.
 export const MODEL_PRESETS: ModelPreset[] = [
-  { id: "chat",       label: "Sonnet 4.6", desc: "Claude Sonnet 4.6 · balanced",      icon: "💬", tier: "pro",      webSearch: false },
-  { id: "fast",       label: "Haiku 4.5",  desc: "Claude Haiku 4.5 · cheapest",       icon: "⚡", tier: "fast",     webSearch: false },
-  { id: "deep-think", label: "Opus 4.7",   desc: "Claude Opus 4.7 · heavy reasoning", icon: "🔬", tier: "max",      webSearch: false },
+  // Post task-B: every non-venice tier routes to Virtuals + Sonnet 5.
+  // Label + desc rewritten to match — see BANKR_TIERS above.
+  { id: "chat",       label: "Sonnet 5 · Chat", desc: "Sonnet 5 via Virtuals · balanced",     icon: "💬", tier: "pro",      webSearch: false },
+  { id: "fast",       label: "Sonnet 5 · Fast", desc: "Sonnet 5 via Virtuals · cheapest",     icon: "⚡", tier: "fast",     webSearch: false },
+  { id: "deep-think", label: "Sonnet 5 · Deep", desc: "Sonnet 5 via Virtuals · heavy reason", icon: "🔬", tier: "max",      webSearch: false },
   { id: "deepseek",   label: "DeepSeek V4",desc: "DeepSeek V4 · 1M context",          icon: "✦",  tier: "deepseek", webSearch: false },
   { id: "gemini",     label: "Gemini 2.5", desc: "Gemini 2.5 Flash · Google",         icon: "🔮", tier: "gemini",   webSearch: false },
   { id: "kimi",       label: "Kimi K2",    desc: "Kimi K2 · long context",            icon: "🌊", tier: "kimi",     webSearch: false },

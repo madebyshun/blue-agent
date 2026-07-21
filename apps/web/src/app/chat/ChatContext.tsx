@@ -391,7 +391,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const outOfCredits = walletReady && !isUnlimited && credits < cost;
 
   // ── Tier config ────────────────────────────────────────────────────────────
-  const activeTierProvider = chatTier.startsWith("venice") ? "venice" : "bankr";
+  // Pre-merge task #4 followup — Bankr got banned; every non-venice
+  // tier now routes through Virtuals server-side (task B). Send the
+  // truthful provider name over the wire so server logs / label pipes
+  // don't have to invert a stale value.
+  const activeTierProvider = chatTier.startsWith("venice") ? "venice" : "virtuals";
   const VENICE_MODEL_IDS: Record<string, string> = {
     // Venice — standard
     "venice-deepseek":      "deepseek-v4-flash",
