@@ -54,36 +54,51 @@ export async function runGrader(): Promise<GraderReport> {
 
   // Cap this pass at 200 arrows — grading is fast but we don't want a
   // 60s cron cycle to time out on an unbounded backlog.
+  //
+  // Widen try/catch scope: covers KV reads + Date parsing + gradeOne
+  // + KV writes. Reviewer's rule: "grader chạy 24/7, một record lỗi
+  // không được làm gãy cả lượt." A single crashed arrow lands in
+  // `errored[]`; the loop continues.
   for (const id of feed.slice(0, 200)) {
-    const arrow = await kvGet<Arrow>(kvArrow(id));
-    if (!arrow || arrow.status !== "open") continue;
-
-    // Bug fix (2026-07-21, pre-merge task #2): the poller was grading
-    // seeded arrows (dummy `reference_price=100`) as HIT because
-    // `gap closed 99%` was computed against fake input — e.g. #0006 SPY
-    // "gap closed 99% (86.62% → 0.57%)" was purely `|100 - real_spy_price|`.
-    // Public feed already filters origin !== "engine" so no user saw the
-    // fake HITs, but the KV was polluted. Skip at the top of the loop so
-    // seeded arrows never touch grader math again.
-    //
-    // Back-compat: legacy arrows without `origin` field are treated as
-    // engine (per T-A #1) — the guard only skips EXPLICIT non-engine.
-    if (arrow.origin && arrow.origin !== "engine") { skipped_seeded++; continue; }
-
-    const readyAt = new Date(arrow.fired_at).getTime() + arrow.grading_window_h * 3_600_000;
-    if (Date.now() < readyAt) { still_open++; continue; }
-
     try {
+      const arrow = await kvGet<Arrow>(kvArrow(id));
+      if (!arrow || arrow.status !== "open") continue;
+
+      // Bug fix (2026-07-21, pre-merge task #2): the poller was grading
+      // seeded arrows (dummy `reference_price=100`) as HIT because
+      // `gap closed 99%` was computed against fake input — e.g. #0006 SPY
+      // "gap closed 99% (86.62% → 0.57%)" was purely `|100 - real_spy_price|`.
+      // Public feed already filters origin !== "engine" so no user saw the
+      // fake HITs, but the KV was polluted. Skip at the top of the loop so
+      // seeded arrows never touch grader math again.
+      //
+      // Back-compat: legacy arrows without `origin` field are treated as
+      // engine (per T-A #1) — the guard only skips EXPLICIT non-engine.
+      if (arrow.origin && arrow.origin !== "engine") { skipped_seeded++; continue; }
+
+      const readyAt = new Date(arrow.fired_at).getTime() + arrow.grading_window_h * 3_600_000;
+      if (!Number.isFinite(readyAt)) {
+        // Malformed `fired_at` — log + skip; never crash. Grader must
+        // stay green for legit arrows.
+        console.warn(`[grader] arrow ${id} has malformed fired_at="${arrow.fired_at}" — skipping`);
+        continue;
+      }
+      if (Date.now() < readyAt) { still_open++; continue; }
+
       const outcome = await gradeOne(arrow);
       if (!outcome) { still_open++; continue; }
-      const now = new Date().toISOString();
-      const closed: Arrow = { ...arrow, status: "graded", outcome: outcome.outcome, graded_at: now, outcome_detail: outcome.detail };
+      const nowIso = new Date().toISOString();
+      const closed: Arrow = { ...arrow, status: "graded", outcome: outcome.outcome, graded_at: nowIso, outcome_detail: outcome.detail };
       await kvSet(kvArrow(id), closed);
       // Clear the open-index so a new arrow of same (ticker, type) can fire.
       await kvSet(kvArrowOpenIndex(arrow.ticker, arrow.type), null, 1);
       graded.push(closed);
     } catch (e) {
+      // Any unexpected exception per-arrow — record and move on. The
+      // outer runPollCycle wrapper is the last safety net but we should
+      // never reach it for grader work.
       errored.push(`${id}: ${(e as Error).message}`);
+      console.warn(`[grader] crash on ${id}: ${(e as Error).message}`);
     }
   }
 
