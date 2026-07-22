@@ -18,6 +18,7 @@ import Link from "next/link";
 import type { Arrow } from "@/lib/blue-hood/types";
 import ArrowBriefBlock from "../ArrowBriefBlock";
 import EnableAlertsButton from "./EnableAlertsButton";
+import ReviewSignPanel from "@/components/blue-hood/ReviewSignPanel";
 
 const REFRESH_MS = 15_000;
 const RH_GREEN = "#00C805";
@@ -221,12 +222,44 @@ function InboxCard({ a, isUnread }: { a: Arrow; isUnread: boolean }) {
           <span className="font-mono text-[10px]" style={{ color: MUTED }}>{open ? "▾" : "▸"}</span>
         </div>
         {open && (
-          <div className="border-t px-3 py-3" style={{ borderColor: "#0f1218" }}>
+          <div className="border-t px-3 py-3 space-y-3" style={{ borderColor: "#0f1218" }}>
             <ArrowBriefBlock a={a} hasBrief={!!a.brief} />
+            <InboxCardTradeRow arrow={a} />
           </div>
         )}
       </div>
     </li>
+  );
+}
+
+/**
+ * T-E entry point for the inbox row-expand. Same pattern as the chat
+ * card's ActionsRow: opens ReviewSignPanel modal. Disabled when the
+ * arrow is graded/informational.
+ */
+function InboxCardTradeRow({ arrow }: { arrow: Arrow }) {
+  const [open, setOpen] = useState(false);
+  const arrowOpen = arrow.status === "open";
+  const tradedCount = (arrow.user_actions ?? []).length;
+  return (
+    <div className="flex flex-wrap items-center gap-2 pt-1">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        disabled={!arrowOpen}
+        className="rounded border px-3 py-1.5 font-mono text-[11px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{ borderColor: RH_GREEN, color: RH_GREEN }}
+        title={arrowOpen ? "Open the trade panel" : "Signal closed — read-only"}
+      >
+        {arrowOpen ? "[Review & Sign]" : "[Signal closed]"}
+      </button>
+      {tradedCount > 0 && (
+        <span className="font-mono text-[10px]" style={{ color: RH_GREEN }} title="A trade has been recorded on this arrow">
+          ● traded ({tradedCount})
+        </span>
+      )}
+      {open && <ReviewSignPanel arrow={arrow} onClose={() => setOpen(false)} />}
+    </div>
   );
 }
 

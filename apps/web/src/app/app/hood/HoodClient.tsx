@@ -31,6 +31,7 @@ import type { HoodSnapshot, TickerSnapshot, M5Verdict, Arrow } from "@/lib/blue-
 import HoodSidebar from "./HoodSidebar";
 import TickerDetailPanel from "./TickerDetailPanel";
 import ArrowBriefBlock from "./ArrowBriefBlock";
+import ReviewSignPanel from "@/components/blue-hood/ReviewSignPanel";
 
 const REFRESH_MS = 15_000;
 const RH_GREEN = "#00C805";
@@ -854,12 +855,44 @@ function ArrowRow({ a }: { a: Arrow }) {
       </tr>
       {open && (
         <tr style={{ borderBottom: "1px solid #0f1218" }}>
-          <td colSpan={6} className="px-3 py-3" style={{ backgroundColor: "#07090e" }}>
+          <td colSpan={6} className="px-3 py-3 space-y-3" style={{ backgroundColor: "#07090e" }}>
             <ArrowBriefBlock a={a} hasBrief={hasBrief} />
+            <ArrowFeedTradeRow arrow={a} />
           </td>
         </tr>
       )}
     </>
+  );
+}
+
+/**
+ * T-E entry point in the drift-board arrows-feed row-expand. Same
+ * pattern as the chat card + inbox: opens ReviewSignPanel modal.
+ * Disabled when arrow is graded.
+ */
+function ArrowFeedTradeRow({ arrow }: { arrow: Arrow }) {
+  const [open, setOpen] = useState(false);
+  const arrowOpen = arrow.status === "open";
+  const tradedCount = (arrow.user_actions ?? []).length;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        disabled={!arrowOpen}
+        className="rounded border px-3 py-1.5 font-mono text-[11px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{ borderColor: RH_GREEN, color: RH_GREEN }}
+        title={arrowOpen ? "Open the trade panel" : "Signal closed — read-only"}
+      >
+        {arrowOpen ? "[Review & Sign]" : "[Signal closed]"}
+      </button>
+      {tradedCount > 0 && (
+        <span className="font-mono text-[10px]" style={{ color: RH_GREEN }} title="A trade has been recorded on this arrow">
+          ● traded ({tradedCount})
+        </span>
+      )}
+      {open && <ReviewSignPanel arrow={arrow} onClose={() => setOpen(false)} />}
+    </div>
   );
 }
 
