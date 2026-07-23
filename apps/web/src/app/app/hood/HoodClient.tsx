@@ -214,7 +214,11 @@ export default function HoodClient() {
       />
 
       <div className="flex-1 min-w-0 overflow-y-auto">
-        <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
+        {/* Full-width main — max-w-7xl (was 5xl). Matches the Virtuals
+            reference (screenshot 34) so the drift board's 8 columns and
+            the ArrowsFeed have real estate to breathe. Same width across
+            all three /hood pages via HoodShellFrame. */}
+        <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
           <Header snap={snap} lastFetch={lastFetch} marketBadge={marketBadge} inboxUnread={inboxUnread} />
           <StaleBanner snap={snap} />
 

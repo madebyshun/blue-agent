@@ -15,10 +15,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Arrow } from "@/lib/blue-hood/types";
 import ArrowBriefBlock from "../ArrowBriefBlock";
 import EnableAlertsButton from "./EnableAlertsButton";
 import ReviewSignPanel from "@/components/blue-hood/ReviewSignPanel";
+import HoodShellFrame from "../HoodShellFrame";
+import { useHoodShellData } from "../useHoodShellData";
 
 const REFRESH_MS = 15_000;
 const RH_GREEN = "#00C805";
@@ -108,9 +111,27 @@ export default function InboxClient() {
     }
   }, []);
 
+  // Sidebar data — separate fetch from the inbox's own arrows (which
+  // uses limit=200 for the full list). Sidebar-hook is cheap and gives
+  // us marketBadge + unread badge consistent with /hood.
+  const shell = useHoodShellData();
+  const router = useRouter();
+  // Watchlist row click on /hood/inbox → navigate to /hood#<TICKER> so
+  // the drift board expands and scrolls to that ticker. Same behavior
+  // as intra-page scroll on /hood, just cross-page.
+  const onSidebarSelect = useCallback((ticker: string) => {
+    router.push(`/hood#${ticker.toUpperCase()}`);
+  }, [router]);
+
   return (
-    <div className="h-full overflow-y-auto" style={{ backgroundColor: BG }}>
-      <div className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-8">
+    <HoodShellFrame
+      snap={shell.snap}
+      arrows={shell.arrows}
+      marketLabel={shell.marketLabel}
+      marketColor={shell.marketColor}
+      onSelectTicker={onSidebarSelect}
+      inboxUnread={unread}
+    >
         <Header unread={unread} onMarkAllRead={markAllRead} />
         {err && (
           <div
@@ -139,8 +160,7 @@ export default function InboxClient() {
         )}
 
         <Footer />
-      </div>
-    </div>
+    </HoodShellFrame>
   );
 }
 
