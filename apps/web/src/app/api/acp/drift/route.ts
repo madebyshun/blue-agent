@@ -69,10 +69,20 @@ export async function GET(req: Request) {
     market_session: r.market.session,
   }));
 
+  // Data freshness — surface staleness explicitly so downstream ACP
+  // consumers don't have to derive it. If the poll cron has died the
+  // envelope now says `is_stale: true` + a specific age, matching the
+  // /hood UI header banner. Threshold matches the UI: 15 min.
+  const ageMs = Date.now() - new Date(snap.finished_at).getTime();
+  const data_age_seconds = Math.max(0, Math.round(ageMs / 1000));
+  const is_stale = data_age_seconds > 15 * 60;
+
   return Response.json(
     acpEnvelope(
       {
         as_of: snap.finished_at,
+        data_age_seconds,
+        is_stale,
         market: {
           is_open: snap.metrics.market_is_open,
           session: snap.metrics.market_session,
@@ -90,7 +100,12 @@ export async function GET(req: Request) {
     ),
     {
       status: 200,
-      headers: { ...corsHeaders(), "Cache-Control": "public, max-age=60, s-maxage=60" },
+      headers: {
+        ...corsHeaders(),
+        // If stale, don't let CDNs pin it for 60s — force short cache
+        // so a recovered poll cycle propagates fast.
+        "Cache-Control": is_stale ? "public, max-age=15, s-maxage=15" : "public, max-age=60, s-maxage=60",
+      },
     },
   );
 }

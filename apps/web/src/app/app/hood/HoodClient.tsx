@@ -176,6 +176,7 @@ export default function HoodClient() {
       <div className="flex-1 min-w-0 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
           <Header snap={snap} lastFetch={lastFetch} marketBadge={marketBadge} />
+          <StaleBanner snap={snap} />
 
           {err && (
             <div
@@ -224,16 +225,24 @@ export default function HoodClient() {
 }
 
 // ── Header ─────────────────────────────────────────────────────────────────
+// "updated Xs ago" now sources from `snap.finished_at` (the moment the
+// poll cycle wrote the snapshot), NOT `Date.now() - lastFetch`. The old
+// logic showed "updated 0s ago" over 2-day-old data because it measured
+// browser fetch latency, not data age. With the fix a stale snapshot
+// (e.g. cron black-hole from vercel.json in the wrong monorepo location)
+// surfaces immediately in the header + banner. `lastFetch` prop is kept
+// for compat with any future "refresh in-flight" indicator.
+const STALE_THRESHOLD_S = 15 * 60; // 15 min — amber banner threshold
+
 function Header({
   snap,
-  lastFetch,
   marketBadge,
 }: {
   snap: HoodSnapshot | null;
   lastFetch: number;
   marketBadge: { label: string; color: string };
 }) {
-  const ago = lastFetch ? Math.max(0, Math.round((Date.now() - lastFetch) / 1000)) : null;
+  const dataAgeS = snap ? Math.max(0, Math.round((Date.now() - new Date(snap.finished_at).getTime()) / 1000)) : null;
 
   return (
     <header className="mb-8 flex flex-wrap items-baseline gap-x-4 gap-y-2">
@@ -252,12 +261,42 @@ function Header({
       <div className="ml-auto flex items-center gap-4 text-[11px]">
         <span style={{ color: marketBadge.color }}>● {marketBadge.label}</span>
         <span className="flex items-center gap-1.5" style={{ color: MUTED }}>
-          {/* T-V2 #1 — LIVE PULSE. Chấm nhẹ báo trang đang thở. */}
+          {/* T-V2 #1 — LIVE PULSE. Chấm nhẹ báo trang đang thở.
+              (Semantics unchanged; the number next to it now reflects
+              REAL snapshot age, not fetch latency.) */}
           <span className="hood-live-dot" aria-hidden />
-          {ago === null || !snap ? "…" : `updated ${ago}s ago`}
+          {dataAgeS === null || !snap ? "…" : `updated ${formatAgeShort(dataAgeS)} ago`}
         </span>
       </div>
     </header>
+  );
+}
+
+/**
+ * Amber banner when snapshot is older than STALE_THRESHOLD_S (15 min).
+ * Triggers on:
+ *   - Vercel cron black-hole (vercel.json in wrong monorepo location)
+ *   - GT rate-limit forcing the poller to skip
+ *   - Prod deploy that broke the cron auth (401 Bearer)
+ * A user MUST see this. Silent stale data violates "hiển thị số verify
+ * được" — the header claimed "updated 0s ago" over 2-day-old snapshots
+ * before the fix.
+ */
+function StaleBanner({ snap }: { snap: HoodSnapshot | null }) {
+  if (!snap) return null;
+  const ageS = Math.round((Date.now() - new Date(snap.finished_at).getTime()) / 1000);
+  if (ageS < STALE_THRESHOLD_S) return null;
+  return (
+    <div
+      role="alert"
+      className="mb-6 rounded border px-3 py-2 text-[12px] hood-prose leading-relaxed"
+      style={{ borderColor: "#3b2a15", backgroundColor: "#1a1408", color: "#f6c88f" }}
+    >
+      ⚠ data stale · last poll {formatAgeShort(ageS)} ago (expected every 5 min).
+      Engine may be stuck — check{" "}
+      <code className="font-mono text-white text-[11px]">/api/cron/blue-hood/poll</code>{" "}
+      cron / GitHub Actions logs.
+    </div>
   );
 }
 
@@ -892,4 +931,16 @@ function formatRelTime(iso: string): string {
   if (h < 24) return `${h}h ago`;
   const d = Math.round(h / 24);
   return `${d}d ago`;
+}
+
+/** Compact age formatter for the header + stale banner. Takes seconds
+ *  since the event. Always returns a short two- or three-char string:
+ *  "9s", "45m", "3h", "2d". Never returns a decimal. */
+function formatAgeShort(sec: number): string {
+  if (sec < 60) return `${sec}s`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.round(h / 24)}d`;
 }
