@@ -65,7 +65,11 @@ export default function HoodShellFrame({
         inboxUnread={inboxUnread}
       />
       <div className="flex-1 min-w-0 overflow-y-auto">
-        <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
+        {/* Full-width — no max-w cap. The drift board's 8-col table +
+            Virtuals-style track record table are dense and want the
+            full viewport width. Padding is generous on lg+ so it
+            doesn't feel edge-to-edge on ultra-wide monitors. */}
+        <div className="w-full px-4 py-6 md:px-8 md:py-8 xl:px-12">
           {children}
         </div>
       </div>

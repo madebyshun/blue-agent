@@ -214,11 +214,12 @@ export default function HoodClient() {
       />
 
       <div className="flex-1 min-w-0 overflow-y-auto">
-        {/* Full-width main — max-w-7xl (was 5xl). Matches the Virtuals
-            reference (screenshot 34) so the drift board's 8 columns and
-            the ArrowsFeed have real estate to breathe. Same width across
-            all three /hood pages via HoodShellFrame. */}
-        <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
+        {/* Full-width main — no max-w cap (matches Virtuals reference:
+            drift board's 8-col table wants the full viewport width).
+            Generous padding on lg+ so it doesn't feel edge-to-edge on
+            ultra-wide monitors. Same shape used by /hood/inbox and
+            /hood/arrows via HoodShellFrame. */}
+        <div className="w-full px-4 py-6 md:px-8 md:py-8 xl:px-12">
           <Header snap={snap} lastFetch={lastFetch} marketBadge={marketBadge} inboxUnread={inboxUnread} />
           <StaleBanner snap={snap} />
 

@@ -30,7 +30,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAccount, useSwitchChain, useSendTransaction, useReadContract, usePublicClient } from "wagmi";
+import { useAccount, useSwitchChain, useSendTransaction, useReadContract, usePublicClient, useBalance } from "wagmi";
 import { erc20Abi, formatUnits, parseUnits } from "viem";
 import Link from "next/link";
 import type { Arrow, UserAction } from "@/lib/blue-hood/types";
@@ -178,6 +178,16 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
     if (typeof rawBalance !== "bigint") return null;
     return parseFloat(formatUnits(rawBalance, payDecimals));
   }, [rawBalance, payDecimals]);
+
+  // Native ETH on Robinhood Chain — gas token. The raw viem/MetaMask
+  // "insufficient funds for gas" dump is unreadable (screenshot 3+4),
+  // and users have no visible signal that they might be under-funded
+  // on gas. Show it inline so the panel is honest about pre-conditions.
+  const { data: rhEthBalance } = useBalance({
+    address,
+    chainId: RH_CHAIN_ID,
+    query: { enabled: !!address, refetchInterval: 15_000 },
+  });
 
   // ── Quote fetcher (debounced on input change) ───────────────────────
   const fetchQuote = useCallback(async () => {
@@ -340,10 +350,7 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
         await signFlow(body);
       } catch (e) {
         const msg = (e as Error).message;
-        // Wallet-rejection detection — different providers word it
-        // differently; grep loosely for known strings.
-        const rejected = /reject|denied|user\s+cancel/i.test(msg);
-        setPhase({ kind: "sign_error", msg: rejected ? "cancelled — you rejected the signature" : msg });
+        setPhase({ kind: "sign_error", msg: humanizeSignError(msg) });
       }
     }
   }, [action.kind, switchChainAsync, fetchQuote, address, arrow.ticker, side, amountNum, denom, slippageBps, signFlow]);
@@ -456,10 +463,27 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
             <span className="text-[10px]" style={{ color: MUTED }}>bps</span>
           </div>
 
-          {isConnected && walletBalance !== null && (
-            <div className="text-[10px]" style={{ color: MUTED }}>
-              balance: <span className="tabular-nums">{formatNum(walletBalance)}</span> {denom}
-              {insufficient && <span className="ml-2" style={{ color: RED }}>insufficient</span>}
+          {isConnected && (
+            <div className="text-[10px] flex flex-wrap gap-x-4" style={{ color: MUTED }}>
+              {walletBalance !== null && (
+                <span>
+                  balance: <span className="tabular-nums">{formatNum(walletBalance)}</span> {denom}
+                  {insufficient && <span className="ml-2" style={{ color: RED }}>insufficient</span>}
+                </span>
+              )}
+              {rhEthBalance && (() => {
+                const eth = parseFloat(formatUnits(rhEthBalance.value, rhEthBalance.decimals));
+                return (
+                  <span>
+                    gas: <span className="tabular-nums">{formatNum(eth)}</span> ETH
+                    {eth < 0.01 && (
+                      <span className="ml-2" style={{ color: RED }} title="Low RH ETH — swap will fail with insufficient funds for gas">
+                        low
+                      </span>
+                    )}
+                  </span>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -790,6 +814,51 @@ function formatNum(n: number): string {
   if (Math.abs(n) >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
   if (Math.abs(n) >= 1) return n.toFixed(4);
   return n.toFixed(6);
+}
+
+/**
+ * Turn viem/MetaMask raw error dumps into one honest sentence. Before
+ * this the error box showed hundreds of characters of viem stack + RPC
+ * details that no user could parse (screenshots 3 + 4 on 2026-07-23).
+ *
+ * We look at KNOWN failure modes (rejected, out of gas ETH, deadline,
+ * slippage, revert, chain switch refused) and pick a short human line.
+ * If nothing matches we fall back to the first line of the raw message
+ * — better than dumping the whole thing.
+ */
+function humanizeSignError(raw: string): string {
+  const s = raw || "";
+  const low = s.toLowerCase();
+
+  if (/reject|denied|user\s+cancel/i.test(s)) {
+    return "cancelled — you rejected the signature";
+  }
+  // The "insufficient funds for gas * price + value" case. Applies to
+  // both the approve step and the swap step. Direct users to top up ETH
+  // on Robinhood Chain — that's the actionable fix.
+  if (low.includes("insufficient funds") || low.includes("exceeds the balance")) {
+    return "not enough ETH on Robinhood Chain to pay gas — top up native ETH on RH before retrying";
+  }
+  if (low.includes("nonce too low") || low.includes("nonce is too low")) {
+    return "wallet nonce mismatch — refresh the page and try again";
+  }
+  if (low.includes("chain") && low.includes("mismatch")) {
+    return "wallet on the wrong chain — switch to Robinhood Chain (4663)";
+  }
+  if (low.includes("deadline") && low.includes("exceeded")) {
+    return "swap deadline passed — hit re-quote to pull a fresh quote";
+  }
+  if (low.includes("execution reverted")) {
+    // Pool likely moved / allowance wrong. Callers should re-quote and
+    // widen slippage. Skip the raw revert reason — it's usually opaque.
+    return "on-chain transaction reverted — pool state changed, widen slippage or re-quote";
+  }
+  if (low.includes("gas required exceeds allowance")) {
+    return "wallet blocked the gas estimate — top up native ETH on RH";
+  }
+  // Fall back to the first line only.
+  const first = s.split(/\n|Details:|Request Arguments:|Version:/)[0]?.trim() ?? "sign failed";
+  return first.length > 200 ? first.slice(0, 200) + "…" : first;
 }
 function shorten(h: string): string { return `${h.slice(0, 6)}…${h.slice(-4)}`; }
 function formatRelTime(iso: string): string {
