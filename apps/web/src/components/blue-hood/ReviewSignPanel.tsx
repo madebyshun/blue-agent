@@ -72,6 +72,11 @@ interface QuoteResponse {
   warnings: string[];
   route: {
     kind: "direct" | "multi-hop" | null;
+    /** Honest V3 executability. If false, the on-chain V3 factory has
+     *  no pool for this pair — GT may show a V4 pool but our router
+     *  can't touch it. Panel must disable Sign when this is false. */
+    executable?: boolean;
+    unavailable_reason?: string | null;
     note: string;
     direct_pool_gt: { address: string; tvl_usd: number } | null;
     direct_pool_on_chain_weth: { address: string } | null;
@@ -739,6 +744,20 @@ function pickAction(o: {
   }
   if (o.poolTooThin) {
     return { kind: "noop", label: "Pool too thin", disabled: true, color: RED, reason: `TVL below dust floor` };
+  }
+  // V3 executability — quote's honest "can prepare build calldata" flag.
+  // Was silently absent before the SNDK bug fix: quote said "direct"
+  // based on GT (which includes V4), user clicked Sign, prepare failed
+  // with "no route". Now the panel disables Sign at quote time.
+  if (o.quote.route.executable === false) {
+    const reason = o.quote.route.unavailable_reason ?? "No V3 pool for this pair";
+    return {
+      kind: "noop",
+      label: "Not executable · V3 router",
+      disabled: true,
+      color: AMBER,
+      reason: `${reason}. V4 support: Task #75.`,
+    };
   }
   if (o.multiHop) {
     return { kind: "noop", label: "Multi-hop not in v1", disabled: true, color: AMBER, reason: "try the other denom for a direct route" };
