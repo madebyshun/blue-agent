@@ -28,8 +28,15 @@ const MUTED = "#6b7280";
 const BORDER = "#1A1A2E";
 const DUST_TVL_USD = 5_000;
 
+// Dust check matches the rule-engine gate: TOTAL token liquidity, not
+// primary pool. Otherwise NVDA (bankr-robinhood WETH $21M + USDG $850k
+// primary) would incorrectly badge dust in the sidebar picker.
+function rowTotalTvlUi(r: TickerSnapshot): number {
+  return r.total_tvl_usd ?? r.tvl_usd ?? 0;
+}
+
 function isDust(r: TickerSnapshot): boolean {
-  return r.verdict !== "ERROR" && r.dex_usd !== null && (r.tvl_usd ?? 0) < DUST_TVL_USD;
+  return r.verdict !== "ERROR" && r.dex_usd !== null && rowTotalTvlUi(r) < DUST_TVL_USD;
 }
 function isNoData(r: TickerSnapshot): boolean {
   return r.verdict === "ERROR" || r.verdict === "INSUFFICIENT_DATA" || r.dex_usd === null;
@@ -141,7 +148,7 @@ export default function HoodSidebar({
                     <ul className="pb-1">
                       {dust
                         .slice()
-                        .sort((a, b) => (b.tvl_usd ?? 0) - (a.tvl_usd ?? 0))
+                        .sort((a, b) => rowTotalTvlUi(b) - rowTotalTvlUi(a))
                         .map((r) => (
                           <WatchRow key={r.ticker} r={r} kind="dust" onSelect={onSelectTicker} />
                         ))}

@@ -57,10 +57,15 @@ async function handle(req: NextRequest) {
   // TVL ≥ $5k dust floor), and pre-fill `bh:detail:{TICKER}` for each.
   // Same 3s stagger. Click-through from the drift board now lands on a
   // cache hit ~99% of the time.
+  //
+  // Dust check uses TOTAL token liquidity (matches rule-engine gate) so
+  // tokens like NVDA — deep on the WETH pool but thin on the USDG
+  // primary — still get warmed. Falls back to `tvl_usd` on snapshots
+  // that predate `total_tvl_usd`.
   const snap = await kvGet<HoodSnapshot>(KV_SNAPSHOT_LATEST);
   const tradable = (snap?.tickers ?? []).filter(
     (r) => r.verdict !== "ERROR" && r.verdict !== "INSUFFICIENT_DATA"
-      && r.dex_usd !== null && (r.tvl_usd ?? 0) >= 5_000,
+      && r.dex_usd !== null && ((r.total_tvl_usd ?? r.tvl_usd ?? 0) >= 5_000),
   );
   const warm: Array<{ ticker: string; ok: boolean; error?: string }> = [];
   console.log(`[detail-warm] tradable=${tradable.length} stagger_ms=${STAGGER_MS}`);

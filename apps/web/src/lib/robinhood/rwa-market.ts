@@ -203,19 +203,31 @@ const USDG_LOWER = "0x5fc5360d0400a0fd4f2af552add042d716f1d168".toLowerCase();
 export async function resolvePrimaryPool(
   contract: string,
   opts: { preferUsdgQuote?: boolean } = {},
-): Promise<{ pool: PoolMeta | null; selection: string }> {
+): Promise<{
+  pool: PoolMeta | null;
+  selection: string;
+  /** Number of RH-Chain pools discovered for this token (all quote sides). */
+  pool_count: number;
+  /** SUM of reserve_usd across every pool for this token. This is the
+   *  honest "how deep is the token in aggregate" — critical for the dust
+   *  gate, because a $21M bankr-robinhood WETH pool + a $850k USDG pool
+   *  should NOT be gated as dust just because the primary (USDG-quoted)
+   *  pool is thin. */
+  total_tvl_usd: number;
+}> {
   const pools = await poolsForToken(contract);
-  if (!pools.length) return { pool: null, selection: "no_pool_found" };
+  const total_tvl_usd = pools.reduce((sum, p) => sum + (p.reserve_usd || 0), 0);
+  if (!pools.length) return { pool: null, selection: "no_pool_found", pool_count: 0, total_tvl_usd: 0 };
   const preferUsdg = opts.preferUsdgQuote !== false;
   if (preferUsdg) {
     const usdgPools = pools.filter(
       (p) => p.base_token === USDG_LOWER || p.quote_token === USDG_LOWER,
     );
     if (usdgPools.length) {
-      return { pool: usdgPools[0], selection: "deepest_usdg_pool" };
+      return { pool: usdgPools[0], selection: "deepest_usdg_pool", pool_count: pools.length, total_tvl_usd };
     }
   }
-  return { pool: pools[0], selection: "deepest_pool_no_usdg_available" };
+  return { pool: pools[0], selection: "deepest_pool_no_usdg_available", pool_count: pools.length, total_tvl_usd };
 }
 
 // ─── Market-hours helper (used by M5 arb + A4 brief) ───────────────────────
