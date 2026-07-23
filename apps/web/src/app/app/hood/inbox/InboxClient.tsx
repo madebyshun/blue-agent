@@ -241,11 +241,20 @@ function InboxCardTradeRow({ arrow }: { arrow: Arrow }) {
   const [open, setOpen] = useState(false);
   const arrowOpen = arrow.status === "open";
   const tradedCount = (arrow.user_actions ?? []).length;
+  // stopPropagation on the wrapper — the parent InboxCard has an
+  // outer `onClick={() => setOpen((v) => !v)}` that TOGGLES the row
+  // expansion. Without this, clicking [Review & Sign] fires setOpen(true)
+  // for the panel AND bubbles up to collapse the row, which unmounts
+  // this component in the same tick → panel state destroyed, modal
+  // never renders. Real bug found in preview 2026-07-23.
   return (
-    <div className="flex flex-wrap items-center gap-2 pt-1">
+    <div
+      className="flex flex-wrap items-center gap-2 pt-1"
+      onClick={(e) => e.stopPropagation()}
+    >
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
         disabled={!arrowOpen}
         className="rounded border px-3 py-1.5 font-mono text-[11px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
         style={{ borderColor: RH_GREEN, color: RH_GREEN }}

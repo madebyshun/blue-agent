@@ -874,11 +874,20 @@ function ArrowFeedTradeRow({ arrow }: { arrow: Arrow }) {
   const [open, setOpen] = useState(false);
   const arrowOpen = arrow.status === "open";
   const tradedCount = (arrow.user_actions ?? []).length;
+  // stopPropagation on wrapper + button — the parent `<tr>` in the
+  // arrows feed has `onClick={() => setOpen((v) => !v)}` that toggles
+  // the row expansion. Without this, clicking [Review & Sign] fires
+  // setOpen(true) for the panel AND bubbles up to collapse the row,
+  // unmounting this component in the same tick → modal never renders.
+  // Real bug found in preview 2026-07-23; same bite as inbox.
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div
+      className="flex flex-wrap items-center gap-2"
+      onClick={(e) => e.stopPropagation()}
+    >
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
         disabled={!arrowOpen}
         className="rounded border px-3 py-1.5 font-mono text-[11px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
         style={{ borderColor: RH_GREEN, color: RH_GREEN }}
