@@ -207,13 +207,18 @@ function TrackHeader() {
           every graded arrow, forever
         </div>
       </div>
-      <Link
-        href="/hood"
-        className="ml-auto text-[11px] hover:text-white"
-        style={{ color: MUTED }}
-      >
-        ← Live board
-      </Link>
+      {/* Symmetric nav — before this, /hood/arrows only had a back-link
+          to /hood, so a reader on the track record had no path to the
+          alert inbox (where /Review & Sign lives) without typing the
+          URL. Now consistent with /hood + /hood/inbox headers. */}
+      <div className="ml-auto flex items-center gap-4 text-[11px]">
+        <Link href="/hood" className="hover:text-white" style={{ color: MUTED }}>
+          ← Live board
+        </Link>
+        <Link href="/hood/inbox" className="hover:text-white" style={{ color: MUTED }}>
+          Inbox →
+        </Link>
+      </div>
     </header>
   );
 }

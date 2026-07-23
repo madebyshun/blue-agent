@@ -32,6 +32,7 @@ import HoodSidebar from "./HoodSidebar";
 import TickerDetailPanel from "./TickerDetailPanel";
 import ArrowBriefBlock from "./ArrowBriefBlock";
 import ReviewSignPanel from "@/components/blue-hood/ReviewSignPanel";
+import EnableAlertsButton from "./inbox/EnableAlertsButton";
 
 const REFRESH_MS = 15_000;
 const RH_GREEN = "#00C805";
@@ -94,6 +95,9 @@ export default function HoodClient() {
   const [arrowsData, setArrowsData] = useState<Extract<ArrowsRes, { ok: true }> | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<number>(0);
+  // Inbox last-read bookmark — mirrored from /hood/inbox so we can badge
+  // the "Inbox" nav link with an unread count. Same source, same math.
+  const [inboxLastRead, setInboxLastRead] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("drift");
   // T2 — default filter hides dust so the top of the board is tradable
   // rows, not COIN +132% on a $1k pool.
@@ -102,17 +106,38 @@ export default function HoodClient() {
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
-      const [s, a] = await Promise.all([
+      const [s, a, lr] = await Promise.all([
         fetch("/api/hood/snapshot", { cache: "no-store", signal }).then((r) => r.json() as Promise<SnapshotRes>),
         fetch("/api/hood/arrows", { cache: "no-store", signal }).then((r) => r.json() as Promise<ArrowsRes>),
+        // Inbox unread count needs the read bookmark. Cheap GET, one KV
+        // read; noop if the endpoint errors (nav still works, just no
+        // badge). Never throws upward.
+        (async (): Promise<{ ok: true; last_read_at: string | null } | { ok: false }> => {
+          try {
+            const r = await fetch("/api/hood/inbox/last-read", { cache: "no-store", signal });
+            if (!r.ok) return { ok: false };
+            return await r.json() as { ok: true; last_read_at: string | null };
+          } catch {
+            return { ok: false };
+          }
+        })(),
       ]);
       if (s.ok) { setSnap(s.snapshot); setErr(null); } else { setErr(s.error); }
       if (a.ok) setArrowsData(a);
+      if (lr.ok) setInboxLastRead(lr.last_read_at);
       setLastFetch(Date.now());
     } catch (e) {
       if ((e as Error).name !== "AbortError") setErr((e as Error).message);
     }
   }, []);
+
+  // Unread = arrows fired after the read bookmark. If no bookmark yet
+  // (fresh user), everything is unread — matches /hood/inbox behaviour.
+  const inboxUnread = useMemo(() => {
+    const arrows = arrowsData?.arrows ?? [];
+    const cutoff = inboxLastRead ? new Date(inboxLastRead).getTime() : 0;
+    return arrows.filter((a) => new Date(a.fired_at).getTime() > cutoff).length;
+  }, [arrowsData, inboxLastRead]);
 
   useEffect(() => {
     const ctl = new AbortController();
@@ -185,11 +210,12 @@ export default function HoodClient() {
         marketLabel={marketBadge.label}
         marketColor={marketBadge.color}
         onSelectTicker={scrollToTicker}
+        inboxUnread={inboxUnread}
       />
 
       <div className="flex-1 min-w-0 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
-          <Header snap={snap} lastFetch={lastFetch} marketBadge={marketBadge} />
+          <Header snap={snap} lastFetch={lastFetch} marketBadge={marketBadge} inboxUnread={inboxUnread} />
           <StaleBanner snap={snap} />
 
           {err && (
@@ -251,10 +277,12 @@ const STALE_THRESHOLD_S = 15 * 60; // 15 min — amber banner threshold
 function Header({
   snap,
   marketBadge,
+  inboxUnread,
 }: {
   snap: HoodSnapshot | null;
   lastFetch: number;
   marketBadge: { label: string; color: string };
+  inboxUnread: number;
 }) {
   const dataAgeS = snap ? Math.max(0, Math.round((Date.now() - new Date(snap.finished_at).getTime()) / 1000)) : null;
 
@@ -272,7 +300,23 @@ function Header({
           copilot for Robinhood Chain
         </div>
       </div>
-      <div className="ml-auto flex items-center gap-4 text-[11px]">
+      {/* Nav: DRIFT (current) · INBOX (n unread) · TRACK RECORD + push
+          alerts. Mirrors the InboxClient + TrackRecordClient headers so
+          the three views have symmetric nav — before this, /hood had no
+          link to /hood/inbox, so a user who fires an arrow had no path
+          to Review & Sign except by typing the URL. Real bug 2026-07-23. */}
+      <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
+        <Link
+          href="/hood/inbox"
+          className="hover:text-white"
+          style={{ color: inboxUnread > 0 ? RH_GREEN : MUTED }}
+        >
+          Inbox{inboxUnread > 0 ? ` (${inboxUnread})` : ""} →
+        </Link>
+        <Link href="/hood/arrows" className="hover:text-white" style={{ color: MUTED }}>
+          Track record →
+        </Link>
+        <EnableAlertsButton />
         <span style={{ color: marketBadge.color }}>● {marketBadge.label}</span>
         <span className="flex items-center gap-1.5" style={{ color: MUTED }}>
           {/* T-V2 #1 — LIVE PULSE. Chấm nhẹ báo trang đang thở.
