@@ -34,6 +34,7 @@ import { useAccount, useSwitchChain, useSendTransaction, useReadContract, usePub
 import { erc20Abi, formatUnits, parseUnits } from "viem";
 import Link from "next/link";
 import type { Arrow, UserAction } from "@/lib/blue-hood/types";
+import { ConnectButton } from "@/components/ConnectModal";
 
 const RH_CHAIN_ID = 4663;
 const RH_EXPLORER = "https://robinhoodchain.blockscout.com";
@@ -541,20 +542,37 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
 
         {/* Action bar */}
         <div className="border-t px-4 py-3 flex items-center gap-3" style={{ borderColor: "#0f1218" }}>
-          <button
-            type="button"
-            onClick={onSmartClick}
-            disabled={action.disabled || phase.kind === "signing" || phase.kind === "preparing"}
-            className="flex-1 rounded border px-4 py-2 text-[13px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{
-              borderColor: action.color,
-              color: action.color,
-              backgroundColor: action.color === RH_GREEN ? "rgba(0,200,5,0.10)" : "transparent",
-            }}
-            title={action.reason ?? undefined}
-          >
-            {phase.kind === "preparing" ? "preparing…" : action.label}
-          </button>
+          {action.kind === "connect" ? (
+            // Author's original comment on onSmartClick said "rendered as
+            // ConnectButton child" but the ConnectButton was never wired up
+            // → the plain <button> below just rendered `disabled: true` and
+            // clicking did nothing. Real bug found in preview 2026-07-23.
+            // Use the shared <ConnectButton> so users get the wallet-picker
+            // modal (Coinbase / MetaMask / injected / WalletConnect) —
+            // same UI as everywhere else in the app for consistency.
+            <div className="flex-1">
+              <ConnectButton
+                label="Connect wallet to trade"
+                className="w-full rounded border px-4 py-2 text-[13px] font-semibold"
+                style={{ borderColor: RH_GREEN, color: RH_GREEN, backgroundColor: "rgba(0,200,5,0.10)" }}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={onSmartClick}
+              disabled={action.disabled || phase.kind === "signing" || phase.kind === "preparing"}
+              className="flex-1 rounded border px-4 py-2 text-[13px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                borderColor: action.color,
+                color: action.color,
+                backgroundColor: action.color === RH_GREEN ? "rgba(0,200,5,0.10)" : "transparent",
+              }}
+              title={action.reason ?? undefined}
+            >
+              {phase.kind === "preparing" ? "preparing…" : action.label}
+            </button>
+          )}
           {action.reason && (
             <span className="text-[10px] max-w-[240px]" style={{ color: MUTED }} title={action.reason}>
               {action.reason}
