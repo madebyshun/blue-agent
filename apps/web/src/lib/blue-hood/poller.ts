@@ -44,7 +44,14 @@ interface M5Response {
   chainlink: { price_usd: number };
   dex: {
     price_usd: number;
+    /** Deprecated alias for `primary_pool_tvl_usd`; kept for older M5 outputs. */
     tvl_usd: number;
+    /** Primary pool TVL — the pool the swap path uses. */
+    primary_pool_tvl_usd?: number;
+    /** SUM across every RH-Chain pool for this token. Feeds the dust gate. */
+    total_tvl_usd?: number;
+    /** Number of pools discovered for this token. */
+    pool_count?: number;
     volume_24h_usd: number;
     pool_ref: string;
     is_v4_pool_id: boolean;
@@ -90,6 +97,7 @@ async function pollOne(ticker: string, cycleStart: number): Promise<TickerSnapsh
       oracle_usd: null,
       dex_usd: null,
       tvl_usd: null,
+      total_tvl_usd: null,
       volume_24h_usd: null,
       drift_pct: null,
       pool_ref: null,
@@ -126,7 +134,12 @@ async function pollOne(ticker: string, cycleStart: number): Promise<TickerSnapsh
     verdict: d.verdict,
     oracle_usd: d.chainlink?.price_usd ?? null,
     dex_usd: d.dex?.price_usd ?? null,
-    tvl_usd: d.dex?.tvl_usd ?? null,
+    // `tvl_usd` = primary-pool TVL (unchanged shape). `total_tvl_usd`
+    // (T-B fix — dust-gate correctness): SUM across all pools; falls
+    // back to primary if M5 predates the field so mid-deploy cycles are
+    // safe. Rule engine reads `total_tvl_usd ?? tvl_usd` for the gate.
+    tvl_usd: d.dex?.primary_pool_tvl_usd ?? d.dex?.tvl_usd ?? null,
+    total_tvl_usd: d.dex?.total_tvl_usd ?? d.dex?.tvl_usd ?? null,
     volume_24h_usd: d.dex?.volume_24h_usd ?? null,
     drift_pct: typeof d.delta?.pct === "number" ? d.delta.pct : null,
     pool_ref: d.dex?.pool_ref ?? null,
@@ -166,7 +179,12 @@ export async function runPollCycle(): Promise<HoodSnapshot> {
 
   const finished_at = new Date();
   const tokens_errored = rows.filter((r) => r.verdict === "ERROR").length;
-  const tvl_scanned_usd = rows.reduce((sum, r) => sum + (r.tvl_usd ?? 0), 0);
+  // `tvl_scanned_usd` used to sum only primary-pool TVL (missed the
+  // bankr-robinhood WETH depth). Now sums TOTAL liquidity per token —
+  // matches what the dust gate sees and what a user would call "total
+  // depth we're watching". Falls back to primary if `total_tvl_usd` is
+  // null (M5 predates the field).
+  const tvl_scanned_usd = rows.reduce((sum, r) => sum + (r.total_tvl_usd ?? r.tvl_usd ?? 0), 0);
   // T-B.1 #4 — count no-data rows by reason. A `fetch_failed` streak
   // across cycles is a throttle-tail signal that needs looking at.
   const no_data_no_pool = rows.filter((r) => r.no_data_reason === "no_pool").length;

@@ -36,8 +36,18 @@ export interface TickerSnapshot {
   oracle_usd: number | null;
   /** Deepest DEX pool spot price, USD. Null on error. */
   dex_usd: number | null;
-  /** Pool TVL (USD) — used for dust-floor gating in the rule engine. */
+  /** Primary pool TVL (USD) — the pool selected by `resolvePrimaryPool`
+   *  (USDG-quoted preferred, then deepest). This is the pool the swap
+   *  path uses, so it's the honest "how much liquidity is at the price
+   *  frame you'll actually trade at" number. NOT for dust gating —
+   *  bankr-robinhood WETH pools regularly dwarf this. See `total_tvl_usd`. */
   tvl_usd: number | null;
+  /** Sum of `reserve_usd` across EVERY pool for this token on RH Chain.
+   *  This is the number the dust gate must use — a token with a $21M
+   *  WETH pool but a $850k USDG pool is objectively deep even if its
+   *  primary pool is thin. The old dust check on `tvl_usd` would
+   *  blackhole those tokens. See `rule-engine.ts` MIN_TVL_USD. */
+  total_tvl_usd: number | null;
   /** 24h volume in the primary pool — same dust-floor gate. */
   volume_24h_usd: number | null;
   /** dex/oracle drift as a percentage. Positive = DEX above oracle. */
@@ -179,7 +189,17 @@ export interface Arrow {
   snapshot_at_fire?: {
     dex_price_usd: number | null;
     oracle_price_usd: number | null;
+    /** Primary pool TVL at fire time — this is the pool the swap route
+     *  uses. Kept because the brief writer references "pool depth"
+     *  meaning the swap-side pool. See `dex_total_tvl_usd` for the honest
+     *  cross-pool number. */
     dex_tvl_usd: number | null;
+    /** SUM across every pool for this token at fire time. Populated
+     *  alongside `dex_tvl_usd` so the brief can say "token has $X in
+     *  aggregate across N pools" without re-hitting M5. Null on rows
+     *  that predate this field (safe to omit — brief falls back to
+     *  `dex_tvl_usd`). */
+    dex_total_tvl_usd?: number | null;
     dex_volume_24h_usd: number | null;
     /** Reserved — poll rows don't currently carry 24h change; kept null
      *  for schema parity with `ArrowBrief.facts_at_fire`. */

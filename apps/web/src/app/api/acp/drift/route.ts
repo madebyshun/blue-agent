@@ -29,7 +29,20 @@ interface ACPRow {
   oracle_usd: number | null;
   dex_usd: number | null;
   drift_pct: number | null;
+  /** Deprecated alias for `primary_pool_tvl_usd`. Kept for downstream
+   *  ACP consumers that already read `tvl_usd`. New consumers should
+   *  read `primary_pool_tvl_usd` + `total_tvl_usd` and pick whichever
+   *  matches their semantic. */
   tvl_usd: number | null;
+  /** TVL of the pool the swap route uses (USDG-quoted preferred, then
+   *  deepest). This is the honest "how deep is the executable price
+   *  frame" number — matches the tvl_usd column in the /hood UI. */
+  primary_pool_tvl_usd: number | null;
+  /** SUM across every pool for this token on RH Chain. Blue Hood's dust
+   *  gate reads this — a token with a $21M bankr-robinhood WETH pool +
+   *  a $850k USDG pool is objectively deep even if its primary pool is
+   *  thin, and downstream agents should see the same. */
+  total_tvl_usd: number | null;
   volume_24h_usd: number | null;
   pool_ref: string | null;
   market_session: string;
@@ -63,7 +76,12 @@ export async function GET(req: Request) {
     oracle_usd: r.oracle_usd,
     dex_usd: r.dex_usd,
     drift_pct: r.drift_pct,
+    // `tvl_usd` = deprecated alias for primary. Populated verbatim to
+    // avoid breaking existing ACP consumers. New fields spell out the
+    // semantics unambiguously so downstream agents don't guess.
     tvl_usd: r.tvl_usd,
+    primary_pool_tvl_usd: r.tvl_usd,
+    total_tvl_usd: r.total_tvl_usd,
     volume_24h_usd: r.volume_24h_usd,
     pool_ref: r.pool_ref,
     market_session: r.market.session,

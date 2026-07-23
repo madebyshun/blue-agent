@@ -23,7 +23,17 @@ import type { Arrow, ArrowType, HoodSnapshot, TickerSnapshot } from "./types";
 // ── Thresholds (from spec Block 1.2) ─────────────────────────────────────
 const DRIFT_MIN_ABS_PCT = 2.0;   // |drift| ≥ 2% during premarket/afterhours
 const ARB_MIN_ABS_PCT = 1.0;     // |delta| ≥ 1% during regular hours
-const MIN_TVL_USD = 5_000;       // dust floor — same as M4/M5 already enforce
+// Dust floor — same as M4/M5 already enforce. Reads TOTAL token
+// liquidity (`row.total_tvl_usd`), NOT `row.tvl_usd` (which is only
+// primary-pool depth). Old check on primary-pool-only was blackholing
+// tokens like NVDA whose bankr-robinhood WETH pool ($21M) dwarfs the
+// USDG pool ($850k) — the engine was blind to the deepest pools on
+// chain. Fallback to `tvl_usd` for rows that predate `total_tvl_usd`
+// (mid-deploy cycles) so we don't accidentally fire on stale rows.
+const MIN_TVL_USD = 5_000;
+function rowTotalTvl(row: TickerSnapshot): number {
+  return row.total_tvl_usd ?? row.tvl_usd ?? 0;
+}
 
 const DRIFT_GRADING_WINDOW_H = 6;   // grade after next-open + 2h (see grader.ts)
 const ARB_GRADING_WINDOW_H = 4;
@@ -79,7 +89,7 @@ export function detectCandidate(row: TickerSnapshot): Candidate | null {
 export function detectArrow(row: TickerSnapshot): Candidate | null {
   const c = detectCandidate(row);
   if (!c) return null;
-  if ((row.tvl_usd ?? 0) < MIN_TVL_USD) return null;
+  if (rowTotalTvl(row) < MIN_TVL_USD) return null;
   if (c.type === "arb" && row.warnings.some((w) => w.startsWith("feed_abnormally_stale"))) return null;
   return c;
 }
@@ -186,6 +196,7 @@ export async function fireArrow(
       dex_price_usd: row.dex_usd,
       oracle_price_usd: row.oracle_usd,
       dex_tvl_usd: row.tvl_usd,
+      dex_total_tvl_usd: row.total_tvl_usd,
       dex_volume_24h_usd: row.volume_24h_usd,
       dex_change_24h_pct: null, // not carried on poll row today
       chainlink_age_seconds: null, // not carried on poll row today
@@ -277,7 +288,8 @@ export async function runRuleEngine(snap: HoodSnapshot): Promise<RuleEngineRepor
     candidates_over_threshold++;
 
     // Gates, in the order they short-circuit:
-    if ((row.tvl_usd ?? 0) < MIN_TVL_USD) { skipped_dust++; continue; }
+    // Dust gate uses TOTAL token liquidity — see `rowTotalTvl` note.
+    if (rowTotalTvl(row) < MIN_TVL_USD) { skipped_dust++; continue; }
     if (candidate.type === "arb" && row.warnings.some((w) => w.startsWith("feed_abnormally_stale"))) {
       skipped_feed_stale++; continue;
     }

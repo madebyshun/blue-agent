@@ -49,10 +49,21 @@ type Filter = "tradable" | "drifting" | "flow" | "frozen" | "dust" | "no_data" |
 // T2 — dust floor matches the engine's arrow gate. Anything under this is
 // treated as untradable at the row level (verdict badged as DUST, drift
 // faded, sorted last, hidden from default filter).
+//
+// Reads TOTAL token liquidity (sum across every pool), matching the
+// rule-engine dust gate. Old check on `tvl_usd` (primary pool only)
+// would badge NVDA as DUST because its USDG-quoted pool is thin — even
+// though the bankr-robinhood WETH pool holds $21M. That was blinding
+// the board to the deepest tokens on chain. Fallback to `tvl_usd` for
+// rows served from mid-deploy cycles that predate `total_tvl_usd`.
 const DUST_TVL_USD = 5_000;
 
+function rowTotalTvlUi(r: TickerSnapshot): number {
+  return r.total_tvl_usd ?? r.tvl_usd ?? 0;
+}
+
 function isDust(r: TickerSnapshot): boolean {
-  return r.verdict !== "ERROR" && r.dex_usd !== null && (r.tvl_usd ?? 0) < DUST_TVL_USD;
+  return r.verdict !== "ERROR" && r.dex_usd !== null && rowTotalTvlUi(r) < DUST_TVL_USD;
 }
 function isNoData(r: TickerSnapshot): boolean {
   return r.verdict === "ERROR" || r.verdict === "INSUFFICIENT_DATA" || r.dex_usd === null;
@@ -137,7 +148,9 @@ export default function HoodClient() {
     return [...list].sort((a, b) => {
       if (sort === "drift") return Math.abs(b.drift_pct ?? 0) - Math.abs(a.drift_pct ?? 0);
       if (sort === "volume") return (b.volume_24h_usd ?? 0) - (a.volume_24h_usd ?? 0);
-      return (b.tvl_usd ?? 0) - (a.tvl_usd ?? 0);
+      // TVL sort — rank by TOTAL depth (matches dust gate + the honest
+      // "which token has the deepest liquidity on chain" answer).
+      return rowTotalTvlUi(b) - rowTotalTvlUi(a);
     });
   }, [buckets, sort, filter]);
 
@@ -334,7 +347,7 @@ function MetricStrip({
     { label: "ARROWS TODAY", value: arrows ? String(arrows.arrows_today) : "…", sub: "fired in last 24h" },
     { label: "HIT RATE 7D", value: hitLabel, sub: hitSub },
     { label: "TOKENS WATCHED", value: watchedValue, sub: watchedSub },
-    { label: "TVL SCANNED", value: snap ? formatUsd(snap.metrics.tvl_scanned_usd) : "…", sub: "primary pools" },
+    { label: "TVL SCANNED", value: snap ? formatUsd(snap.metrics.tvl_scanned_usd) : "…", sub: "all pools, sum" },
   ];
 
   return (
@@ -670,9 +683,22 @@ function DriftRow({
         <td
           className="px-3 py-2 text-right"
           style={{ color: dust ? AMBER : "#9aa1ac" }}
-          title={dust ? `Below $${DUST_TVL_USD.toLocaleString()} — arrows are gated off this row` : undefined}
+          title={
+            dust
+              ? `Total token liquidity across all pools is below $${DUST_TVL_USD.toLocaleString()} — arrows are gated off this row`
+              : (r.total_tvl_usd !== null && r.tvl_usd !== null && r.total_tvl_usd !== r.tvl_usd)
+                ? `Total across all pools: ${formatUsd(r.total_tvl_usd)} · primary (swap route): ${formatUsd(r.tvl_usd)}`
+                : undefined
+          }
         >
-          {formatUsd(r.tvl_usd)}
+          <div className="leading-tight">
+            <div>{formatUsd(rowTotalTvlUi(r))}</div>
+            {r.total_tvl_usd !== null && r.tvl_usd !== null && r.total_tvl_usd !== r.tvl_usd ? (
+              <div className="text-[10px] font-mono" style={{ color: MUTED }}>
+                {formatUsd(r.tvl_usd)} pri
+              </div>
+            ) : null}
+          </div>
         </td>
         <td className="px-3 py-2 text-right" style={{ color: "#9aa1ac" }}>{formatUsd(r.volume_24h_usd)}</td>
         <td className="px-3 py-2 text-left">

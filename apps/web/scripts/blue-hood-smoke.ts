@@ -141,7 +141,13 @@ async function main() {
     verdict,
     oracle_usd: 100,
     dex_usd: 100 * (1 + driftPct / 100),
+    // Test rows: primary + total set equal so smoke fixtures match
+    // pre-existing dust-gate semantics. NVDA row @ tvl $2k still fires
+    // skipped_dust because total_tvl_usd (= tvl) < $5k. Real prod rows
+    // will have primary != total; this fixture is only exercising the
+    // rule-engine gate logic.
     tvl_usd: tvl,
+    total_tvl_usd: tvl,
     volume_24h_usd: 1_000,
     drift_pct: driftPct,
     pool_ref: "0xpool",
