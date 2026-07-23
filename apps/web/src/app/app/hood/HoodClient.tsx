@@ -203,7 +203,7 @@ export default function HoodClient() {
   }, [filter]);
 
   return (
-    <div className="flex-1 min-h-0 flex flex-row" style={{ backgroundColor: BG }}>
+    <div className="h-full flex flex-row" style={{ backgroundColor: BG }}>
       <HoodSidebar
         snap={snap}
         arrows={arrowsData?.arrows ?? null}
@@ -213,7 +213,7 @@ export default function HoodClient() {
         inboxUnread={inboxUnread}
       />
 
-      <div className="flex-1 min-w-0 overflow-y-auto">
+      <div className="flex-1 min-w-0 overflow-y-auto hood-scroll">
         {/* Full-width main — no max-w cap (matches Virtuals reference:
             drift board's 8-col table wants the full viewport width).
             Generous padding on lg+ so it doesn't feel edge-to-edge on
@@ -532,14 +532,19 @@ function DriftBoard({
       <table className="w-full text-sm">
         <thead className="font-mono text-[9px] uppercase tracking-widest" style={{ color: MUTED }}>
           <tr className="border-b" style={{ borderColor: BORDER }}>
-            <th className="px-3 py-2 text-left">Ticker</th>
-            <th className="px-3 py-2 text-right">Oracle</th>
-            <th className="px-3 py-2 text-right">DEX</th>
-            <th className="px-3 py-2 text-right">Drift</th>
-            <th className="px-3 py-2 text-left">24h</th>
-            <th className="px-3 py-2 text-right">TVL</th>
-            <th className="px-3 py-2 text-right">Vol 24h</th>
-            <th className="px-3 py-2 text-left">Verdict</th>
+            {/* T-V4 — column widths explicit so 24H sparkline gets a
+                proper 200px cell (was cramped in a 100px auto slot),
+                and every numeric column is right-aligned consistently.
+                User feedback 2026-07-23: "chart 24 có thể hiển thị dài
+                hơn ... nhiều nội dung căn trái, nhiều nội dung căn phải" */}
+            <th className="px-3 py-2 text-left w-[96px]">Ticker</th>
+            <th className="px-3 py-2 text-right w-[120px]">Oracle</th>
+            <th className="px-3 py-2 text-right w-[120px]">DEX</th>
+            <th className="px-3 py-2 text-right w-[96px]">Drift</th>
+            <th className="px-3 py-2 text-left w-[220px]">24h</th>
+            <th className="px-3 py-2 text-right w-[140px]">TVL</th>
+            <th className="px-3 py-2 text-right w-[120px]">Vol 24h</th>
+            <th className="px-3 py-2 text-right w-[120px]">Verdict</th>
           </tr>
         </thead>
         <tbody className="font-mono text-[13px]">
@@ -576,8 +581,11 @@ function Sparkline({
 }) {
   if (!points || points.length < 6) return <span style={{ color: "#334155" }}>—</span>;
 
-  const w = 60;
-  const h = 20;
+  // T-V4 — widened sparkline SVG (was 60×20, now 200×32) so the 24h
+  // shape is actually readable. Matches Virtuals reference where the
+  // sparkline is a real visual, not a dot.
+  const w = 200;
+  const h = 32;
   const pad = 1;
   const min = Math.min(...points, oracle ?? points[0]);
   const max = Math.max(...points, oracle ?? points[0]);
@@ -751,7 +759,10 @@ function DriftRow({
           </div>
         </td>
         <td className="px-3 py-2 text-right" style={{ color: "#9aa1ac" }}>{formatUsd(r.volume_24h_usd)}</td>
-        <td className="px-3 py-2 text-left">
+        <td className="px-3 py-2 text-right">
+          {/* T-V4 — right-align verdict badge so it hangs off the same
+              edge as every numeric column above. Consistent alignment
+              per user feedback 2026-07-23. */}
           {dust ? <DustBadge /> : <VerdictBadge verdict={r.verdict} session={r.market.session} />}
         </td>
       </tr>

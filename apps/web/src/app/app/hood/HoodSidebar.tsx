@@ -292,19 +292,33 @@ export default function HoodSidebar({
         </div>
       </div>
 
-      {/* Footer attribution — matches the main pane's footer language */}
-      <div
-        className="px-4 py-3 border-t text-[10px] font-mono"
-        style={{ borderColor: BORDER, color: MUTED }}
+      {/* Footer — mirrors Blue Chat's sidebar credit-bar (px-5 py-3.5,
+          border-t, shrink-0 to stay glued to the bottom). Live-cycle
+          indicator dot on the left; tokens-tracked count in the middle;
+          gear-icon docs link on the right. Same visual weight as the
+          Chat surface for consistency. */}
+      <Link
+        href="/docs/blue-hood"
+        className="px-5 py-3.5 border-t shrink-0 flex items-center gap-2.5 hover:bg-[#ffffff05] transition-colors group"
+        style={{ borderColor: BORDER }}
+        title="Docs — Blue Hood"
       >
-        <div className="flex items-center gap-2">
-          <span
-            className="w-1 h-1 rounded-full"
-            style={{ backgroundColor: BLUE }}
-          />
-          <span>Powered by 30 Blue Hub skills</span>
-        </div>
-      </div>
+        <span
+          className="w-2 h-2 rounded-full shrink-0 transition-all animate-pulse"
+          style={{
+            backgroundColor: snap ? RH_GREEN : "#334155",
+            boxShadow: snap ? `0 0 6px ${RH_GREEN}80` : undefined,
+          }}
+        />
+        <span className="font-mono text-[11px] flex-1 text-left" style={{ color: "#64748b" }}>
+          {snap
+            ? `${snap.metrics.tokens_watched}/${snap.metrics.registry_total} tokens · 30 Hub skills`
+            : "warming up…"}
+        </span>
+        <span className="font-mono text-[9px] text-slate-700 group-hover:text-slate-500 transition-colors">
+          docs
+        </span>
+      </Link>
     </aside>
   );
 }

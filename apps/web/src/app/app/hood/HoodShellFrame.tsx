@@ -53,7 +53,13 @@ export default function HoodShellFrame({
 }: HoodShellProps) {
   return (
     <div
-      className="flex-1 min-h-0 flex flex-row"
+      // `h-full flex flex-row` — was `flex-1 min-h-0 flex flex-row` which
+      // didn't fill height because the parent `.hood-section h-full` is
+      // NOT a flex container. Effect: content overflowing the viewport
+      // was clipped, not scrollable — user said "hood chưa có roll,
+      // nhiều thông tin dưới chưa đọc được" (2026-07-23). Now the shell
+      // fills the AppShell main region and inner overflow-y-auto works.
+      className="h-full flex flex-row"
       style={{ backgroundColor: BG, color: "#E7E9EE" }}
     >
       <HoodSidebar
@@ -64,7 +70,7 @@ export default function HoodShellFrame({
         onSelectTicker={onSelectTicker}
         inboxUnread={inboxUnread}
       />
-      <div className="flex-1 min-w-0 overflow-y-auto">
+      <div className="flex-1 min-w-0 overflow-y-auto hood-scroll">
         {/* Full-width — no max-w cap. The drift board's 8-col table +
             Virtuals-style track record table are dense and want the
             full viewport width. Padding is generous on lg+ so it

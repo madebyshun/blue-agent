@@ -175,6 +175,39 @@ code, pre, .font-mono {
   background-color: rgba(255, 255, 255, 0.02);
 }
 
+/* T-V4 — SCROLLBAR VISIBILITY. Firefox/WebKit both hide scrollbars on
+ * dark scrollable regions by default; user reported "hood chưa có
+ * roll, nhiều thông tin dưới chưa đọc được" (2026-07-23). A subtle
+ * always-on rail + a thicker track on hover tells the reader there IS
+ * scroll available. */
+.hood-section .hood-scroll { scrollbar-width: thin; scrollbar-color: #1A1A2E transparent; }
+.hood-section .hood-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.hood-section .hood-scroll::-webkit-scrollbar-track { background: transparent; }
+.hood-section .hood-scroll::-webkit-scrollbar-thumb {
+  background: #1A1A2E;
+  border-radius: 6px;
+  border: 2px solid #050508;
+  transition: background 160ms linear;
+}
+.hood-section .hood-scroll::-webkit-scrollbar-thumb:hover { background: #2a2f4a; }
+
+/* T-V4 — MODAL enter animation. ReviewSignPanel dùng để mở panel;
+ * fade + slight scale-up 180ms cho cảm giác native, không jarring. */
+@keyframes hood-modal-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to   { opacity: 1; transform: scale(1);    }
+}
+.hood-section .hood-modal-in { animation: hood-modal-in 180ms ease-out; }
+@keyframes hood-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.hood-section .hood-fade-in { animation: hood-fade-in 180ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .hood-section .hood-modal-in,
+  .hood-section .hood-fade-in { animation: none; }
+}
+
 /* T-V2 #3 — PRICE FLASH. Bg flash green/red for 400ms then off. Attach
  * on the number cell whenever `prev !== curr`. Compositor-only props
  * (background-color) so no layout jank. Reduced motion → no flash. */

@@ -360,12 +360,12 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
     <div
       role="dialog"
       aria-label="Review & Sign"
-      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-4 md:items-center"
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-4 md:items-center hood-fade-in"
       onClick={onClose}
       style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}
     >
       <div
-        className="w-full max-w-lg rounded-lg border overflow-hidden"
+        className="w-full max-w-lg rounded-lg border overflow-hidden hood-modal-in max-h-[90vh] overflow-y-auto hood-scroll"
         style={{ borderColor: BORDER, backgroundColor: SURFACE }}
         onClick={(e) => e.stopPropagation()}
       >
