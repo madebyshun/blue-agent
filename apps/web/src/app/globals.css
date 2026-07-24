@@ -203,9 +203,19 @@ code, pre, .font-mono {
   to   { opacity: 1; }
 }
 .hood-section .hood-fade-in { animation: hood-fade-in 180ms ease-out; }
+/* P2.4 flash — used when the PositionsStrip's [Sell] button scrolls
+ * the drift-board row into view; briefly highlights the row so the
+ * user's eye lands on it. Non-destructive: applied via a class the
+ * strip toggles on/off in JS after 1.6s. */
+@keyframes hood-row-flash {
+  0%   { background-color: rgba(245, 179, 66, 0.16); }
+  100% { background-color: transparent; }
+}
+.hood-row-flash { animation: hood-row-flash 1600ms ease-out; }
 @media (prefers-reduced-motion: reduce) {
   .hood-section .hood-modal-in,
-  .hood-section .hood-fade-in { animation: none; }
+  .hood-section .hood-fade-in,
+  .hood-row-flash { animation: none; }
 }
 
 /* T-V2 #3 — PRICE FLASH. Bg flash green/red for 400ms then off. Attach
