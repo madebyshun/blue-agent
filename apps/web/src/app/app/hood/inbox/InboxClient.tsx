@@ -16,12 +16,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useAccount } from "wagmi";
 import type { Arrow } from "@/lib/blue-hood/types";
 import ArrowBriefBlock from "../ArrowBriefBlock";
 import EnableAlertsButton from "./EnableAlertsButton";
 import ReviewSignPanel from "@/components/blue-hood/ReviewSignPanel";
 import HoodShellFrame from "../HoodShellFrame";
 import { useHoodShellData } from "../useHoodShellData";
+
+const RH_EXPLORER = "https://robinhoodchain.blockscout.com";
 
 const REFRESH_MS = 15_000;
 const RH_GREEN = "#00C805";
@@ -288,8 +291,15 @@ function InboxCard({ a, isUnread, initialOpen = false }: { a: Arrow; isUnread: b
  */
 function InboxCardTradeRow({ arrow }: { arrow: Arrow }) {
   const [open, setOpen] = useState(false);
+  const { address } = useAccount();
   const arrowOpen = arrow.status === "open";
-  const actions = arrow.user_actions ?? [];
+  // P2.1 — connected-wallet-only. See ArrowFeedTradeRow (HoodClient.tsx)
+  // for the parallel filter; both surfaces read the same shape.
+  const actions = useMemo(() => {
+    if (!address) return [];
+    const lower = address.toLowerCase();
+    return (arrow.user_actions ?? []).filter((a) => a.wallet.toLowerCase() === lower);
+  }, [arrow.user_actions, address]);
   const tradedCount = actions.length;
   const successCount  = actions.filter((a) => a.status === "success").length;
   const revertedCount = actions.filter((a) => a.status === "reverted").length;
@@ -316,14 +326,40 @@ function InboxCardTradeRow({ arrow }: { arrow: Arrow }) {
         {arrowOpen ? "[Review & Sign]" : "[Signal closed]"}
       </button>
       {tradedCount > 0 && (
-        <span
-          className="flex items-center gap-1 font-mono text-[10px]"
-          title={`traded: ${successCount} success · ${revertedCount} reverted · ${pendingCount} broadcast/unknown`}
-        >
-          {successCount > 0 && <span style={{ color: RH_GREEN }}>● {successCount} success</span>}
-          {revertedCount > 0 && <span style={{ color: "#f87171" }}>● {revertedCount} reverted</span>}
-          {pendingCount > 0 && <span style={{ color: "#facc15" }}>● {pendingCount} broadcast</span>}
-        </span>
+        actions.length === 1 ? (
+          (() => {
+            const a = actions[0];
+            const color =
+              a.status === "success"  ? RH_GREEN
+              : a.status === "reverted" ? "#f87171"
+              : "#facc15";
+            return (
+              <span className="flex items-center gap-1 font-mono text-[10px]" style={{ color }}>
+                <span style={{ color: MUTED }}>you traded ·</span>
+                <a
+                  href={`${RH_EXPLORER}/tx/${a.tx_hash}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline hover:brightness-125"
+                  onClick={(e) => e.stopPropagation()}
+                  title={`${a.status} · ${a.ts}`}
+                >
+                  {`${a.tx_hash.slice(0, 6)}…${a.tx_hash.slice(-4)}`} ↗
+                </a>
+              </span>
+            );
+          })()
+        ) : (
+          <span
+            className="flex items-center gap-1 font-mono text-[10px]"
+            title={`you traded ${tradedCount} times: ${successCount} success · ${revertedCount} reverted · ${pendingCount} broadcast/unknown`}
+          >
+            <span style={{ color: MUTED }}>you traded ·</span>
+            {successCount  > 0 && <span style={{ color: RH_GREEN  }}>{successCount} ✓</span>}
+            {revertedCount > 0 && <span style={{ color: "#f87171" }}>{revertedCount} ✗</span>}
+            {pendingCount  > 0 && <span style={{ color: "#facc15" }}>{pendingCount} ●</span>}
+          </span>
+        )
       )}
       {open && <ReviewSignPanel arrow={arrow} onClose={() => setOpen(false)} />}
     </div>
