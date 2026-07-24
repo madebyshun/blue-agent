@@ -35,6 +35,7 @@ import { erc20Abi, formatUnits, parseUnits } from "viem";
 import Link from "next/link";
 import type { Arrow, UserAction } from "@/lib/blue-hood/types";
 import { ConnectButton } from "@/components/ConnectModal";
+import { ROBINHOOD_SWAP_ROUTER_ADDRESS } from "@/lib/robinhood/swap";
 
 const RH_CHAIN_ID = 4663;
 const RH_EXPLORER = "https://robinhoodchain.blockscout.com";
@@ -199,6 +200,34 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
   // the denom (USDG / WETH). On SELL it's the ticker being sold.
   const payUnitSymbol = side === "sell" ? arrow.ticker : denom;
 
+  // ── Live allowance readout (2026-07-25, "diagnose reverts" PR) ─────
+  // Prior UI showed nothing about allowance state until the sign flow
+  // ran, so a user with a stale/mismatched allowance thought the
+  // panel was broken. Read it live and render the resolution above
+  // the sign button: "will skip approve · existing allowance covers"
+  // vs "will request approve for X". Same read as signFlow — kept
+  // in sync so what the panel says is what will happen.
+  // Router address is a constant on RH Chain — read it up front so the
+  // allowance state is visible BEFORE the user clicks Sign (previously
+  // we only knew the spender after prepare returned, so the "will skip
+  // approve" hint fired too late).
+  const swapRouter = (ROBINHOOD_SWAP_ROUTER_ADDRESS ?? undefined) as `0x${string}` | undefined;
+  const { data: rawAllowance } = useReadContract({
+    address: payToken,
+    abi: erc20Abi,
+    functionName: "allowance",
+    args: address && swapRouter ? [address, swapRouter] : undefined,
+    chainId: RH_CHAIN_ID,
+    query: { enabled: !!payToken && !!address && !!swapRouter, refetchInterval: 15_000 },
+  });
+  const currentAllowance = useMemo(() => {
+    if (typeof rawAllowance !== "bigint") return null;
+    return parseFloat(formatUnits(rawAllowance, payDecimals));
+  }, [rawAllowance, payDecimals]);
+  // `willSkipApprove` uses amountNum which is defined further down; the
+  // definition happens after this block. See its computation near the
+  // sign-flow guards where amountNum lives.
+
   // Native ETH on Robinhood Chain — gas token. The raw viem/MetaMask
   // "insufficient funds for gas" dump is unreadable (screenshot 3+4),
   // and users have no visible signal that they might be under-funded
@@ -258,6 +287,11 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
   // wallet balance was clearly less than the requested amount. Widened
   // to both sides — walletBalance is now populated on both.
   const insufficient = walletBalance !== null && validAmount && amountNum > walletBalance;
+  // Allowance plan resolves here now that both `currentAllowance` and
+  // `amountNum` are in scope. `willSkipApprove` drives the pre-flight
+  // banner + the "sign 1 tx / sign 2 txs" hint. Ties directly to what
+  // signFlow does — if this says "skip", signFlow will skip.
+  const willSkipApprove = currentAllowance !== null && currentAllowance >= amountNum && amountNum > 0;
   const multiHop = quote?.route?.kind === "multi-hop";
 
   // Reset the impact ack when the impact-blocked state clears.
@@ -300,6 +334,24 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
         `insufficient_balance: requested ${amountNum} but balance is ${walletBalance}. ` +
         `Use the 100% preset to sell everything or lower the amount.`,
       );
+    }
+    // ── Pre-sign ETH gas budget (2026-07-25 fix for "every BUY reverted"
+    //    diagnostic split). Rough sizing: approve = ~50k gas, swap = ~200k
+    //    gas with our 30% buffer from #226 → worst-case ~250k gas total.
+    //    At even 1 gwei on RH that's <$0.001, but wallets refuse a tx if
+    //    the ETH balance can't cover `gas × gasPrice + value`. Say so
+    //    plainly instead of letting the wallet return a cryptic error.
+    //    Threshold 0.0005 ETH is generous — the first real swap used
+    //    166k gas at effectively ~0 fee, so anyone with < 0.0005 ETH is
+    //    going to hit trouble no matter the price.
+    if (rhEthBalance !== undefined && rhEthBalance !== null) {
+      const eth = Number(rhEthBalance.value) / 10 ** rhEthBalance.decimals;
+      if (eth < 0.0005) {
+        throw new Error(
+          `insufficient_gas_eth: have ${eth.toFixed(6)} ETH on RH Chain, ` +
+          `need at least 0.0005 ETH to cover approve + swap gas`,
+        );
+      }
     }
     const [approveCall, swapCall] = prep.calls;
 
@@ -526,7 +578,7 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
     }
 
     setPhase({ kind: "done", swap_hash: swapHash, approve_hash: approveHash });
-  }, [address, arrow.id, arrow.serial, arrow.ticker, sendTransactionAsync, pubClient, side, amountNum, denom, quote?.min_out, onActionPending, walletBalance]);
+  }, [address, arrow.id, arrow.serial, arrow.ticker, sendTransactionAsync, pubClient, side, amountNum, denom, quote?.min_out, onActionPending, walletBalance, rhEthBalance]);
 
   const onSmartClick = useCallback(async () => {
     if (action.kind === "connect") return; // rendered as ConnectButton child
@@ -769,6 +821,44 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
             </div>
           )}
         </div>
+
+        {/* Pre-flight state (allowance + step plan) — visible BEFORE
+            the sign click. If the panel already sees enough allowance,
+            it says so. If not, it says exactly how much approve will
+            be requested. Kills the "why did approve pop up again?"
+            confusion + gives the user a heads-up on the # of signatures
+            they're about to be asked for. */}
+        {isConnected && amountNum > 0 && payToken && (
+          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[11px] space-y-1" style={{ borderColor: BORDER, backgroundColor: "#080a0f", color: "#9aa1ac" }}>
+            <div className="flex items-center gap-2">
+              <span style={{ color: MUTED }}>allowance:</span>
+              <span className="tabular-nums text-white">
+                {currentAllowance !== null ? formatNum(currentAllowance) : "…"} {payUnitSymbol}
+              </span>
+              <span style={{ color: MUTED }}>· required:</span>
+              <span className="tabular-nums text-white">
+                {formatNum(amountNum)} {payUnitSymbol}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span style={{ color: MUTED }}>plan:</span>
+              {willSkipApprove ? (
+                <span style={{ color: RH_GREEN }}>
+                  skip approve · sign 1 tx (swap only)
+                </span>
+              ) : (
+                <span style={{ color: AMBER }}>
+                  sign 2 txs · approve {formatNum(amountNum)} {payUnitSymbol} → then swap
+                </span>
+              )}
+            </div>
+            {currentAllowance !== null && currentAllowance > 0 && !willSkipApprove && amountNum > 0 && (
+              <div className="text-[10px]" style={{ color: MUTED }}>
+                existing allowance {formatNum(currentAllowance)} {payUnitSymbol} is under the required {formatNum(amountNum)} — approve tx will overwrite it (safe on standard ERC-20).
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Quote block */}
         <QuoteView phase={phase} quote={quote} denom={denom} onRequote={fetchQuote} />
@@ -1236,14 +1326,67 @@ function humanizeSignError(raw: string): string {
   const s = raw || "";
   const low = s.toLowerCase();
 
+  // ── User-initiated cancel — highest priority ────────────────────────
   if (/reject|denied|user\s+cancel/i.test(s)) {
     return "cancelled — you rejected the signature";
   }
-  // The "insufficient funds for gas * price + value" case. Applies to
-  // both the approve step and the swap step. Direct users to top up ETH
-  // on Robinhood Chain — that's the actionable fix.
+
+  // ── ORDER MATTERS (2026-07-25 fix): specific typed categories must
+  //    be checked BEFORE the generic `execution reverted` fallback.
+  //    Prior version had the generic branch first, which caught the raw
+  //    "execution reverted" fragment inside the sim's throw and served
+  //    the generic "reason unavailable" message. Result: every BUY on
+  //    prod showed "reverted, check balance+allowance" no matter the
+  //    real cause. Any change here MUST keep the specific-first order.
+
+  // Client-side asserts thrown by signFlow itself:
+  if (low.startsWith("insufficient_balance:")) {
+    // Format: `insufficient_balance: requested X but balance is Y. ...`
+    const detail = s.replace(/^insufficient_balance:\s*/i, "").split(/\n/)[0]?.trim() ?? "";
+    return `insufficient balance — ${detail || "amount exceeds wallet balance"}`;
+  }
+  if (low.startsWith("insufficient_gas_eth:")) {
+    // Format: `insufficient_gas_eth: have X ETH, need at least Y`
+    const detail = s.replace(/^insufficient_gas_eth:\s*/i, "").split(/\n/)[0]?.trim() ?? "";
+    return `insufficient ETH for gas on Robinhood Chain — ${detail || "top up native ETH before retrying"}`;
+  }
+  if (low.startsWith("swap_would_revert:")) {
+    // Pre-flight sim (see signFlow step d). The decoded reason is
+    // whatever the RPC returned — never editorialize. Recognize the
+    // common ERC-20 balance error shape and give the user a specific
+    // fix hint; otherwise surface verbatim.
+    const decoded = s.replace(/^swap_would_revert:\s*/i, "").split(/\n/)[0]?.trim() ?? "";
+    if (/transfer_?(from)?_failed|erc20:.*balance|exceeds allowance|exceeds balance/i.test(decoded)) {
+      return `swap sim would fail with "${decoded}" — the router can't move the requested amount. Verify balance + existing allowance for the correct token.`;
+    }
+    if (/too_?little_?received|slippage/i.test(decoded)) {
+      return `swap sim: quote drifted (${decoded}) — hit Re-quote or widen slippage.`;
+    }
+    if (/stf\b/i.test(decoded)) {
+      // Uniswap V3 "STF" = SafeTransferFrom failure — usually allowance
+      // OR the token has a transfer restriction.
+      return `swap sim: router SafeTransferFrom failed ("${decoded}") — allowance may be under-set OR the token has a transfer restriction.`;
+    }
+    return decoded ? `swap sim reverted: ${decoded}` : "swap sim would revert (no decoded reason from RPC)";
+  }
+  if (low.startsWith("approve_reverted:") || /^approve_reverted\b/.test(low)) {
+    return "approve transaction reverted on-chain — nothing was granted. Retry the flow.";
+  }
+  if (low.startsWith("approve_state_not_propagated:") || low.startsWith("swap_state_not_propagated:")) {
+    return "approve landed on-chain but the RPC still reports the old allowance — wait a block and retry.";
+  }
+  if (low.startsWith("recipient mismatch:") || low.startsWith("unsupported_route:")) {
+    // Bare-metal client errors — no humanization needed, they carry
+    // the debug info devs want.
+    return s.split(/\n/)[0]?.trim() ?? s.slice(0, 200);
+  }
+
+  // ── Wallet + RPC-layer errors (before generic revert) ───────────────
+  // "insufficient funds for gas * price + value" — this is the wallet
+  // rejecting a tx it can't afford. Different from insufficient_gas_eth
+  // (which is our pre-check).
   if (low.includes("insufficient funds") || low.includes("exceeds the balance")) {
-    return "not enough ETH on Robinhood Chain to pay gas — top up native ETH on RH before retrying";
+    return "wallet rejected the tx: not enough ETH on Robinhood Chain to pay gas — top up native ETH on RH.";
   }
   if (low.includes("nonce too low") || low.includes("nonce is too low")) {
     return "wallet nonce mismatch — refresh the page and try again";
@@ -1254,42 +1397,18 @@ function humanizeSignError(raw: string): string {
   if (low.includes("deadline") && low.includes("exceeded")) {
     return "swap deadline passed — hit re-quote to pull a fresh quote";
   }
-  if (low.includes("execution reverted")) {
-    // Bug fix #3 (2026-07-24, arrow #0071 NVDA sell): the previous
-    // message ("pool state changed, widen slippage or re-quote") was
-    // a guess. On the NVDA case it was WRONG — the real cause was
-    // insufficient token balance (approve > balance is on-chain valid,
-    // so the approve went through, but the swap tried to move more
-    // tokens than the user held → revert). Following the "widen
-    // slippage" advice on that path just burns another swap.
-    //
-    // The pre-flight sim from #227 should have caught this. If we
-    // reach the revert branch anyway, we do NOT know why — so we
-    // say that plainly and point the user at the real inputs.
-    return "on-chain transaction reverted — reason unavailable from the RPC. Check token balance + allowance; do NOT re-sign until you know why.";
-  }
-  if (low.includes("swap_would_revert")) {
-    // From the pre-flight sim inside signFlow — decoded reason is in
-    // the raw message after the colon. Surface it verbatim so the
-    // user sees "STF" / "TOO_LITTLE_RECEIVED" / "TRANSFER_FROM_FAILED"
-    // instead of a made-up cause. TRANSFER_FROM_FAILED specifically
-    // means the balance-vs-amount check on the router side blocked
-    // the swap.
-    const decoded = s.replace(/^.*?swap_would_revert:\s*/i, "").split(/\n/)[0]?.trim() ?? "";
-    if (/transfer(_from)?_failed|erc20:.*balance/i.test(decoded)) {
-      return `swap sim: token transfer would fail — check that your ${decoded.match(/[A-Z]{2,6}/)?.[0] ?? "token"} balance covers the amount before signing`;
-    }
-    return decoded ? `swap sim: ${decoded}` : "swap sim: would revert, reason unavailable";
-  }
-  if (low.includes("swap_state_not_propagated") || low.includes("approve_state_not_propagated")) {
-    return "approve landed on-chain but RH RPC still reports the old allowance — wait a block and retry.";
-  }
-  if (low.includes("approve_reverted")) {
-    return "approve transaction reverted on-chain — nothing was granted. Retry the flow.";
-  }
   if (low.includes("gas required exceeds allowance")) {
     return "wallet blocked the gas estimate — top up native ETH on RH";
   }
+
+  // ── Generic "execution reverted" — ONLY reached if none of the
+  //    specific branches above matched. This means the revert didn't
+  //    come from our pre-flight sim or a labeled client throw — it's
+  //    a viem/wallet layer message we don't recognize. Say so.
+  if (low.includes("execution reverted")) {
+    return "on-chain transaction reverted — reason unavailable from the RPC. Check token balance + allowance; do NOT re-sign until you know why.";
+  }
+
   // Fall back to the first line only.
   const first = s.split(/\n|Details:|Request Arguments:|Version:/)[0]?.trim() ?? "sign failed";
   return first.length > 200 ? first.slice(0, 200) + "…" : first;
