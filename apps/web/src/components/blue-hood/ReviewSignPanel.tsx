@@ -582,6 +582,7 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
 
   const onSmartClick = useCallback(async () => {
     if (action.kind === "connect") return; // rendered as ConnectButton child
+    if (action.kind === "close") { onClose(); return; }
     if (action.kind === "switch") {
       try { await switchChainAsync({ chainId: RH_CHAIN_ID }); }
       catch (e) { console.warn("[review-sign] switch failed:", (e as Error).message); }
@@ -630,7 +631,7 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
         });
       }
     }
-  }, [action.kind, switchChainAsync, fetchQuote, address, arrow.ticker, side, amountNum, denom, slippageBps, signFlow]);
+  }, [action.kind, switchChainAsync, fetchQuote, address, arrow.ticker, side, amountNum, denom, slippageBps, signFlow, onClose]);
 
   // ── Revoke handler (P0 allowance-race, step d) ───────────────────────
   // Sends approve(spender, 0) for the token whose allowance was armed
@@ -755,6 +756,8 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
             <AmountPresetRow
               side={side}
               walletBalance={walletBalance}
+              rawBalance={typeof rawBalance === "bigint" ? rawBalance : undefined}
+              payDecimals={payDecimals}
               onSet={(v) => setAmount(v)}
               currentAmount={amount}
               payUnitSymbol={payUnitSymbol}
@@ -1035,27 +1038,42 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
 function AmountPresetRow({
   side,
   walletBalance,
+  rawBalance,
+  payDecimals,
   onSet,
   currentAmount,
   payUnitSymbol,
 }: {
   side: "buy" | "sell";
   walletBalance: number | null;
+  /** Live on-chain balance in base-units (bigint). SELL percents are
+   *  computed off THIS, never off the lossy `walletBalance` float. */
+  rawBalance: bigint | undefined;
+  payDecimals: number;
   onSet: (v: string) => void;
   currentAmount: string;
   payUnitSymbol: string;
 }) {
   const BUY_PRESETS = [1, 5, 10, 25, 50, 100];
-  const SELL_PERCENTS: Array<{ label: string; frac: number }> = [
-    { label: "25%",  frac: 0.25 },
-    { label: "50%",  frac: 0.50 },
-    { label: "100%", frac: 1.00 },
+  // ── SELL percents computed on RAW base-units (v1.1 polish, 2026-07-25).
+  //    The prior float path did `Number((balance*frac).toFixed(6))`, and
+  //    `.toFixed` ROUNDS UP the last digit. Real bug: balance
+  //    0.001612535…, click 100% → "0.001613" > balance → the
+  //    insufficient-balance guard self-triggered and the user could never
+  //    sell 100%. Integer math fixes it exactly:
+  //      100% = the entire raw balance (pct=100 → raw*100/100 = raw),
+  //      25/50% = floor(raw*pct/100) (integer division floors, never up).
+  //    We set + display the exact floored value from `formatUnits` so what
+  //    the user sees is what gets signed. `rawBalance` is the live
+  //    on-chain read (refetched every 15s on the balanceOf query), so the
+  //    percent is always taken against the true current balance.
+  const SELL_PERCENTS: Array<{ label: string; pct: bigint }> = [
+    { label: "25%",  pct: 25n },
+    { label: "50%",  pct: 50n },
+    { label: "100%", pct: 100n },
   ];
   const current = Number(currentAmount);
-  // Round to 6 decimals — matches USDG's native decimals + is plenty of
-  // precision for stock-token quantity. Avoids sending "0.0095396712345"
-  // to the quote endpoint which trips its parser occasionally.
-  const round = (n: number) => Math.max(0, Number(n.toFixed(6)));
+  const noBalance = rawBalance === undefined || rawBalance === 0n;
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <label className="text-[10px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>preset</label>
@@ -1083,15 +1101,19 @@ function AmountPresetRow({
               </button>
             );
           })
-        : SELL_PERCENTS.map(({ label, frac }) => {
-            const value = walletBalance !== null ? round(walletBalance * frac) : 0;
-            const disabled = walletBalance === null || walletBalance === 0;
-            const active = walletBalance !== null && Math.abs(current - value) < 1e-9 && current > 0;
+        : SELL_PERCENTS.map(({ label, pct }) => {
+            // floor(raw * pct / 100). BigInt division truncates toward
+            // zero, so this never rounds above the real balance.
+            const rawValue = rawBalance !== undefined ? (rawBalance * pct) / 100n : 0n;
+            const valueStr = rawBalance !== undefined ? formatUnits(rawValue, payDecimals) : "0";
+            const valueNum = Number(valueStr);
+            const disabled = noBalance;
+            const active = !disabled && Math.abs(current - valueNum) < 1e-12 && current > 0;
             return (
               <button
                 key={label}
                 type="button"
-                onClick={() => onSet(String(value))}
+                onClick={() => onSet(valueStr)}
                 disabled={disabled}
                 className="rounded border px-2 py-0.5 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{
@@ -1101,13 +1123,13 @@ function AmountPresetRow({
                 }}
                 title={disabled
                   ? `no ${payUnitSymbol} balance to sell`
-                  : `Sell ${label} of your ${payUnitSymbol} balance (${value})`}
+                  : `Sell ${label} of your ${payUnitSymbol} balance (${valueStr})`}
               >
                 {label}
               </button>
             );
           })}
-      {side === "sell" && walletBalance === 0 && (
+      {side === "sell" && rawBalance === 0n && (
         <span className="text-[10px]" style={{ color: RED }}>
           no {payUnitSymbol} to sell
         </span>
@@ -1218,7 +1240,7 @@ function FactsAtFire({ snap }: { snap: NonNullable<Arrow["snapshot_at_fire"]> })
 // ── Smart action button ───────────────────────────────────────────────
 
 interface ActionState {
-  kind: "connect" | "switch" | "requote" | "sign" | "noop";
+  kind: "connect" | "switch" | "requote" | "sign" | "noop" | "close";
   label: string;
   disabled: boolean;
   color: string;
@@ -1242,7 +1264,11 @@ function pickAction(o: {
   quote: QuoteResponse | null;
 }): ActionState {
   if (o.phase.kind === "done") {
-    return { kind: "noop", label: "done", disabled: true, color: RH_GREEN, reason: null };
+    // v1.1 polish (2026-07-25): this used to be a DISABLED noop, so after
+    // a swap the primary button did nothing and the user had to hunt for
+    // the ✕ in the header to dismiss. Make it an enabled Close action that
+    // actually calls `onClose` (handled in onSmartClick). Green = success.
+    return { kind: "close", label: "Done · close", disabled: false, color: RH_GREEN, reason: null };
   }
   if (!o.arrowIsOpen) {
     return { kind: "noop", label: "signal closed · read-only", disabled: true, color: MUTED, reason: null };
