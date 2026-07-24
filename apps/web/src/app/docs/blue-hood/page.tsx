@@ -9,7 +9,7 @@ export const metadata = {
 
 const PILLARS = [
   {
-    name: "THẤY (See)",
+    name: "See",
     accent: "#4FC3F7",
     items: [
       { k: "Hood", d: "Live drift board — 24 tokens, Chainlink oracle vs DEX pool spot, verdict every 5 min." },
@@ -18,7 +18,7 @@ const PILLARS = [
     ],
   },
   {
-    name: "HÀNH ĐỘNG (Act)",
+    name: "Act",
     accent: "#00C805",
     items: [
       { k: "Trade", d: "Standalone quote → prepare → sign panel. Non-custodial. Coming in Stage 2." },
@@ -26,7 +26,7 @@ const PILLARS = [
     ],
   },
   {
-    name: "TỰ ĐỘNG (Auto)",
+    name: "Automate",
     accent: "#A78BFA",
     items: [
       { k: "Tasks", d: "Scheduled agent jobs from 4 templates. Runs via cron + ERC-4337 session keys. Coming in Stage 3." },
@@ -34,7 +34,7 @@ const PILLARS = [
     ],
   },
   {
-    name: "BUILD",
+    name: "Build",
     accent: "#FBBF24",
     items: [
       { k: "Hub", d: "74 x402 skills — call any tool for $0.05, no auth. B2B routing endpoints available for indexes." },
@@ -80,22 +80,22 @@ export default function BlueHoodDoc() {
         skill that produced it.
       </P>
       <CardGrid cols={4}>
-        <Card title="T-A · THẤY">
+        <Card title="T-A · See">
           Poller measures drift between Chainlink oracle and DEX pool.
           Runs every 5 min via <code>/api/cron/blue-hood/poll</code>.
           Writes <code>bh:snapshot:latest</code> to KV.
         </Card>
-        <Card title="T-B · GIẢI THÍCH">
+        <Card title="T-B · Explain">
           A4 rh-stock-agent-brief LLM chain (Virtuals → Venice → Bankr)
           writes a 1-line context for each fired arrow. Runs every 1 min
           via <code>/api/cron/blue-hood/brief-worker</code>.
         </Card>
-        <Card title="T-C/D · BÁO">
+        <Card title="T-C/D · Alert">
           Drift board (<Link href="/hood" className="underline">/hood</Link>),
           inbox (<Link href="/hood/inbox" className="underline">/hood/inbox</Link>),
           + Web Push fan-out. Every arrow gets a serial <code>#0001…</code>.
         </Card>
-        <Card title="T-E · HÀNH ĐỘNG">
+        <Card title="T-E · Act">
           ReviewSignPanel — non-custodial, wagmi <code>useSendTransaction</code>,
           recipient = <code>useAccount().address</code> verbatim. Two
           signs: approve → swap.
@@ -119,7 +119,7 @@ export default function BlueHoodDoc() {
       </CardGrid>
 
       <H2>Product roadmap (4 groups, 9 nav items)</H2>
-      <P>Blue Hood is the first pillar of the "Builder OS for Robinhood Chain" relaunch. All new features are surfaces on top of skills that already exist in <Link href="/hub" className="underline">/hub</Link> — no new engines.</P>
+      <P>Blue Hood is the first pillar of the &quot;Builder OS for Robinhood Chain&quot; relaunch. All new features are surfaces on top of skills that already exist in <Link href="/hub" className="underline">/hub</Link> — no new engines.</P>
       {PILLARS.map((p) => (
         <div key={p.name} className="mt-8">
           <div className="font-mono text-[11px] tracking-widest uppercase mb-3" style={{ color: p.accent }}>
@@ -140,7 +140,7 @@ export default function BlueHoodDoc() {
         <li>2. Recipient = <code className="text-white">useAccount().address</code> VERBATIM. No default, no env fallback, no server-supplied recipient.</li>
         <li>3. No auto-execute. Every transaction is a deliberate user click.</li>
         <li>4. Warnings from tools display VERBATIM. The panel never edits warning text.</li>
-        <li>5. Thà chặn nhầm còn hơn cho ký nhầm. When in doubt, disable Sign.</li>
+        <li>5. When in doubt, disable Sign. Blocking a legitimate trade is cheaper than letting a bad one through.</li>
       </ul>
 
       <PrevNext current="/docs/blue-hood" />
