@@ -34,6 +34,17 @@ const MIN_TVL_USD = 5_000;
 function rowTotalTvl(row: TickerSnapshot): number {
   return row.total_tvl_usd ?? row.tvl_usd ?? 0;
 }
+// P0.2 (2026-07-24) — executable-pool floor. The dust gate above uses
+// TOTAL liquidity across all pools, which is correct for "is the token
+// alive on chain". BUT the swap path (`ReviewSignPanel` → `X2 prepare`
+// → V3 router) hits the PRIMARY pool only (USDG-quoted or deepest V3).
+// If total = $20k but primary = $978, the engine fires and the panel
+// then refuses "Pool too thin" — copilot contradicts itself. Fix:
+// require BOTH total ≥ MIN_TVL AND primary ≥ MIN_TVL before firing.
+// Verdict on the drift board still renders; only the arrow is skipped.
+function rowPrimaryPoolTvl(row: TickerSnapshot): number {
+  return row.tvl_usd ?? 0;
+}
 
 const DRIFT_GRADING_WINDOW_H = 6;   // grade after next-open + 2h (see grader.ts)
 const ARB_GRADING_WINDOW_H = 4;
@@ -90,6 +101,9 @@ export function detectArrow(row: TickerSnapshot): Candidate | null {
   const c = detectCandidate(row);
   if (!c) return null;
   if (rowTotalTvl(row) < MIN_TVL_USD) return null;
+  // P0.2 — mirror the runRuleEngine executable-floor gate here so callers
+  // of this shim get the same behavior.
+  if (rowPrimaryPoolTvl(row) < MIN_TVL_USD) return null;
   if (c.type === "arb" && row.warnings.some((w) => w.startsWith("feed_abnormally_stale"))) return null;
   return c;
 }
@@ -266,6 +280,10 @@ export interface RuleEngineReport {
   tokens_errored: number;
   candidates_over_threshold: number;
   skipped_dust: number;
+  /** P0.2 — dust check passed (total ≥ $5k) but the primary swap pool
+   *  is below $5k, so the panel would refuse "Pool too thin". Engine
+   *  skips to prevent the self-contradiction. */
+  skipped_no_executable_pool: number;
   skipped_feed_stale: number;
   below_threshold: number;
   deduped: number;
@@ -276,6 +294,7 @@ export interface RuleEngineReport {
 export async function runRuleEngine(snap: HoodSnapshot): Promise<RuleEngineReport> {
   let candidates_over_threshold = 0;
   let skipped_dust = 0;
+  let skipped_no_executable_pool = 0;
   let skipped_feed_stale = 0;
   let below_threshold = 0;
   let deduped = 0;
@@ -290,6 +309,18 @@ export async function runRuleEngine(snap: HoodSnapshot): Promise<RuleEngineRepor
     // Gates, in the order they short-circuit:
     // Dust gate uses TOTAL token liquidity — see `rowTotalTvl` note.
     if (rowTotalTvl(row) < MIN_TVL_USD) { skipped_dust++; continue; }
+    // P0.2 — primary pool executable floor. Total passes but primary
+    // sub-dust means the swap panel would refuse "Pool too thin".
+    const primaryTvl = rowPrimaryPoolTvl(row);
+    if (primaryTvl < MIN_TVL_USD) {
+      console.log(
+        `[engine] skipped_no_executable_pool ticker=${row.ticker}` +
+        ` primary_tvl=${primaryTvl.toFixed(0)}` +
+        ` total_tvl=${rowTotalTvl(row).toFixed(0)}`,
+      );
+      skipped_no_executable_pool++;
+      continue;
+    }
     if (candidate.type === "arb" && row.warnings.some((w) => w.startsWith("feed_abnormally_stale"))) {
       skipped_feed_stale++; continue;
     }
@@ -308,6 +339,7 @@ export async function runRuleEngine(snap: HoodSnapshot): Promise<RuleEngineRepor
     `[engine] cycle=${snap.cycle_id}` +
       ` candidates_over_threshold=${candidates_over_threshold}` +
       ` skipped_dust=${skipped_dust}` +
+      ` skipped_no_executable_pool=${skipped_no_executable_pool}` +
       ` skipped_feed_stale=${skipped_feed_stale}` +
       ` below_threshold=${below_threshold}` +
       ` fired=${fired.length}` +
@@ -320,6 +352,7 @@ export async function runRuleEngine(snap: HoodSnapshot): Promise<RuleEngineRepor
     tokens_errored: snap.metrics.tokens_errored,
     candidates_over_threshold,
     skipped_dust,
+    skipped_no_executable_pool,
     skipped_feed_stale,
     below_threshold,
     deduped,
