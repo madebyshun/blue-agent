@@ -33,8 +33,10 @@ export const zh: Dict = {
     stack_mcp_desc: "在 Claude Code、Cursor 和 Claude Desktop 中运行整套工具。",
     stack_conn_label: "Blue Connector",
     stack_conn_desc: "接入任意外部 MCP 服务器，在对话中直接使用它的工具。",
-    stack_bank_label: "BlueBank",
-    stack_bank_desc: "Base 上的非托管支付 —— 扫码即付。",
+    stack_hood_label: "Blue Hood",
+    stack_hood_desc: "Robinhood Chain 的 24/7 非托管副驾 —— Chainlink 对比 DEX 价差、箭头信号、审核-签名交易。",
+    // stack_bank_* removed 2026-07-24 (Blue Bank archived; middleware
+    // redirects /bank + /pay → /chat).
     stack_image_label: "Blue Image",
     stack_image_desc: "在对话中生成图像 —— 链上原生，按次付费。",
     stack_video_label: "Blue Video",
