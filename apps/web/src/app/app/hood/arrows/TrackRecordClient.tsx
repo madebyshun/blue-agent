@@ -465,19 +465,19 @@ function GradingRulesModal({ onClose }: { onClose: () => void }) {
         <ul className="space-y-3 text-sm font-mono">
           <li>
             <span style={{ color: RH_GREEN }}>drift</span>{" "}
-            <span style={{ color: "#9aa1ac" }}>= gap DEX↔oracle đóng ≥ 50% trong 2h đầu của phiên kế</span>
+            <span style={{ color: "#9aa1ac" }}>= DEX↔oracle gap closes ≥ 50% in the first 2h of the next session</span>
           </li>
           <li>
             <span style={{ color: RH_GREEN }}>arb</span>{" "}
-            <span style={{ color: "#9aa1ac" }}>= spread thu về &lt; 0.5% trong 4h</span>
+            <span style={{ color: "#9aa1ac" }}>= spread returns to &lt; 0.5% within 4h</span>
           </li>
           <li>
             <span style={{ color: RH_GREEN }}>flow</span>{" "}
-            <span style={{ color: "#9aa1ac" }}>= giá DEX đi ≥ 1% ĐÚNG hướng dòng tiền trong 24h, trước khi đi 1% ngược hướng</span>
+            <span style={{ color: "#9aa1ac" }}>= DEX price moves ≥ 1% in the CORRECT direction within 24h, before moving 1% against it</span>
           </li>
           <li>
             <span style={{ color: MUTED }}>whale</span>{" "}
-            <span style={{ color: "#9aa1ac" }}>= informational, KHÔNG tính hit rate</span>
+            <span style={{ color: "#9aa1ac" }}>= informational, does NOT count toward hit rate</span>
           </li>
         </ul>
         <p className="mt-4 text-[11px] font-mono" style={{ color: MUTED }}>
