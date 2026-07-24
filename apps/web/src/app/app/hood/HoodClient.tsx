@@ -32,6 +32,7 @@ import HoodSidebar from "./HoodSidebar";
 import TickerDetailPanel from "./TickerDetailPanel";
 import ArrowBriefBlock from "./ArrowBriefBlock";
 import ReviewSignPanel from "@/components/blue-hood/ReviewSignPanel";
+import PositionsStrip, { usePositions, positionsHeldMap } from "@/components/blue-hood/PositionsStrip";
 import EnableAlertsButton from "./inbox/EnableAlertsButton";
 
 const REFRESH_MS = 15_000;
@@ -93,6 +94,10 @@ type ArrowsRes =
 export default function HoodClient() {
   const [snap, setSnap] = useState<HoodSnapshot | null>(null);
   const [arrowsData, setArrowsData] = useState<Extract<ArrowsRes, { ok: true }> | null>(null);
+  // P2.4 (2026-07-24): positions read at the top-level so BOTH the
+  // PositionsStrip and the drift-board rows can see the "held" set.
+  const { positions: userPositions } = usePositions(snap?.tickers ?? []);
+  const heldTickers = useMemo(() => positionsHeldMap(userPositions), [userPositions]);
   const [err, setErr] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<number>(0);
   // Inbox last-read bookmark — mirrored from /hood/inbox so we can badge
@@ -235,6 +240,29 @@ export default function HoodClient() {
 
           <MetricStrip snap={snap} arrows={arrowsData} />
 
+          {/* P2.4 YOUR POSITIONS strip (v3, 2026-07-24). Mounts only when
+              the user is connected + holds anything; renders nothing for
+              guests. Balances live-read via wagmi multicall against RH
+              Chain, prices from the snapshot the drift board already has.
+              [Sell] scrolls to the ticker row where the existing per-row
+              trade flow (with the P0 allowance-race guards) can run. */}
+          <PositionsStrip
+            tickers={snap?.tickers ?? []}
+            tickersWithOpenArrow={useMemo(() => {
+              const s = new Set<string>();
+              for (const a of arrowsData?.arrows ?? []) if (a.status === "open") s.add(a.ticker);
+              return s;
+            }, [arrowsData?.arrows])}
+            onOpenTrade={(ticker) => {
+              const row = rowRefs.current[ticker];
+              if (!row) return;
+              row.scrollIntoView({ behavior: "smooth", block: "center" });
+              // Flash the row briefly so the user's eye lands on it.
+              row.classList.add("hood-row-flash");
+              setTimeout(() => row.classList.remove("hood-row-flash"), 1600);
+            }}
+          />
+
           <SectionHeader label="// HOOD · DRIFT BOARD" />
 
           <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -245,7 +273,7 @@ export default function HoodClient() {
             </div>
           </div>
 
-          <DriftBoard rows={filtered} rowRefs={rowRefs} arrows={arrowsData?.arrows ?? null} />
+          <DriftBoard rows={filtered} rowRefs={rowRefs} arrows={arrowsData?.arrows ?? null} heldTickers={heldTickers} />
 
           <div className="h-10" />
           <div className="mb-3 flex items-center justify-between">
@@ -505,10 +533,12 @@ function DriftBoard({
   rows,
   rowRefs,
   arrows,
+  heldTickers,
 }: {
   rows: TickerSnapshot[];
   rowRefs: React.MutableRefObject<Record<string, HTMLTableRowElement | null>>;
   arrows: Arrow[] | null;
+  heldTickers: Set<string>;
 }) {
   // T-B2 — accordion: at most one row expanded at a time.
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -558,6 +588,7 @@ function DriftBoard({
                 expanded={expanded === r.ticker}
                 onToggle={() => toggle(r.ticker)}
                 openArrow={openArrow}
+                isHeld={heldTickers.has(r.ticker)}
               />
             );
           })}
@@ -626,12 +657,14 @@ function DriftRow({
   expanded,
   onToggle,
   openArrow,
+  isHeld,
 }: {
   r: TickerSnapshot;
   rowRefs: React.MutableRefObject<Record<string, HTMLTableRowElement | null>>;
   expanded: boolean;
   onToggle: () => void;
   openArrow: Arrow | null;
+  isHeld: boolean;
 }) {
   const drift = r.drift_pct ?? 0;
   const dust = isDust(r);
@@ -655,6 +688,15 @@ function DriftRow({
           >
             {r.ticker}
           </a>
+          {isHeld && (
+            <span
+              className="ml-2 font-mono text-[9px] uppercase tracking-widest"
+              style={{ color: RH_GREEN }}
+              title="You hold this token"
+            >
+              · held
+            </span>
+          )}
         </td>
         <td className="px-3 py-2 text-right text-slate-500">{formatUsd(r.oracle_usd)}</td>
         <td className="px-3 py-2 text-right text-slate-600">—</td>
@@ -715,6 +757,15 @@ function DriftRow({
           >
             {r.ticker}
           </a>
+          {isHeld && (
+            <span
+              className="ml-2 font-mono text-[9px] uppercase tracking-widest"
+              style={{ color: RH_GREEN }}
+              title="You hold this token"
+            >
+              · held
+            </span>
+          )}
         </td>
         <td className="px-3 py-2 text-right text-[#E7E9EE]">
           <FlashCell value={r.oracle_usd} />
