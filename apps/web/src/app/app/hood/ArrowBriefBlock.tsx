@@ -86,9 +86,14 @@ export default function ArrowBriefBlock({
 function FactsAtFire({ brief }: { brief: ArrowBrief }) {
   const f = brief.facts_at_fire;
   if (!f) return null;
+  // Use formatUsd for DEX + oracle so RWA stock prices (SNDK $54.78, INTC
+  // $23.12, etc.) render with 2 decimals instead of 4. The helper still
+  // falls back to 4 decimals for sub-$1 tokens, so degen coins keep their
+  // precision. Was: `.toFixed(4)` unconditional — read as "$54.7830" for
+  // stocks, which looked broken.
   const pairs: [string, string][] = [
-    ["dex", f.dex_price_usd !== null ? `$${f.dex_price_usd.toFixed(4)}` : "—"],
-    ["oracle", f.oracle_price_usd !== null ? `$${f.oracle_price_usd.toFixed(4)}` : "—"],
+    ["dex", formatUsd(f.dex_price_usd)],
+    ["oracle", formatUsd(f.oracle_price_usd)],
     ["tvl", f.dex_tvl_usd !== null ? formatUsd(f.dex_tvl_usd) : "—"],
     ["vol 24h", f.dex_volume_24h_usd !== null ? formatUsd(f.dex_volume_24h_usd) : "—"],
     ["chg 24h", f.dex_change_24h_pct !== null ? `${f.dex_change_24h_pct.toFixed(2)}%` : "—"],
