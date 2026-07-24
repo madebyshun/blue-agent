@@ -289,7 +289,11 @@ function InboxCard({ a, isUnread, initialOpen = false }: { a: Arrow; isUnread: b
 function InboxCardTradeRow({ arrow }: { arrow: Arrow }) {
   const [open, setOpen] = useState(false);
   const arrowOpen = arrow.status === "open";
-  const tradedCount = (arrow.user_actions ?? []).length;
+  const actions = arrow.user_actions ?? [];
+  const tradedCount = actions.length;
+  const successCount  = actions.filter((a) => a.status === "success").length;
+  const revertedCount = actions.filter((a) => a.status === "reverted").length;
+  const pendingCount  = actions.filter((a) => a.status === "broadcast" || a.status === "pending" || a.status === "unknown").length;
   // stopPropagation on the wrapper — the parent InboxCard has an
   // outer `onClick={() => setOpen((v) => !v)}` that TOGGLES the row
   // expansion. Without this, clicking [Review & Sign] fires setOpen(true)
@@ -312,8 +316,13 @@ function InboxCardTradeRow({ arrow }: { arrow: Arrow }) {
         {arrowOpen ? "[Review & Sign]" : "[Signal closed]"}
       </button>
       {tradedCount > 0 && (
-        <span className="font-mono text-[10px]" style={{ color: RH_GREEN }} title="A trade has been recorded on this arrow">
-          ● traded ({tradedCount})
+        <span
+          className="flex items-center gap-1 font-mono text-[10px]"
+          title={`traded: ${successCount} success · ${revertedCount} reverted · ${pendingCount} broadcast/unknown`}
+        >
+          {successCount > 0 && <span style={{ color: RH_GREEN }}>● {successCount} success</span>}
+          {revertedCount > 0 && <span style={{ color: "#f87171" }}>● {revertedCount} reverted</span>}
+          {pendingCount > 0 && <span style={{ color: "#facc15" }}>● {pendingCount} broadcast</span>}
         </span>
       )}
       {open && <ReviewSignPanel arrow={arrow} onClose={() => setOpen(false)} />}

@@ -933,7 +933,14 @@ function ArrowRow({ a }: { a: Arrow }) {
 function ArrowFeedTradeRow({ arrow }: { arrow: Arrow }) {
   const [open, setOpen] = useState(false);
   const arrowOpen = arrow.status === "open";
-  const tradedCount = (arrow.user_actions ?? []).length;
+  const actions = arrow.user_actions ?? [];
+  const tradedCount = actions.length;
+  // Status split (v3, 2026-07-24) — the badge splits into 3 buckets so a
+  // broadcast-but-not-yet-confirmed swap doesn't look identical to a
+  // real success. `pending` (legacy) is bucketed with broadcast.
+  const successCount  = actions.filter((a) => a.status === "success").length;
+  const revertedCount = actions.filter((a) => a.status === "reverted").length;
+  const pendingCount  = actions.filter((a) => a.status === "broadcast" || a.status === "pending" || a.status === "unknown").length;
   // stopPropagation on wrapper + button — the parent `<tr>` in the
   // arrows feed has `onClick={() => setOpen((v) => !v)}` that toggles
   // the row expansion. Without this, clicking [Review & Sign] fires
@@ -956,8 +963,19 @@ function ArrowFeedTradeRow({ arrow }: { arrow: Arrow }) {
         {arrowOpen ? "[Review & Sign]" : "[Signal closed]"}
       </button>
       {tradedCount > 0 && (
-        <span className="font-mono text-[10px]" style={{ color: RH_GREEN }} title="A trade has been recorded on this arrow">
-          ● traded ({tradedCount})
+        <span
+          className="flex items-center gap-1 font-mono text-[10px]"
+          title={`traded: ${successCount} success · ${revertedCount} reverted · ${pendingCount} broadcast/unknown`}
+        >
+          {successCount > 0 && (
+            <span style={{ color: RH_GREEN }}>● {successCount} success</span>
+          )}
+          {revertedCount > 0 && (
+            <span style={{ color: "#f87171" }}>● {revertedCount} reverted</span>
+          )}
+          {pendingCount > 0 && (
+            <span style={{ color: "#facc15" }}>● {pendingCount} broadcast</span>
+          )}
         </span>
       )}
       {open && <ReviewSignPanel arrow={arrow} onClose={() => setOpen(false)} />}

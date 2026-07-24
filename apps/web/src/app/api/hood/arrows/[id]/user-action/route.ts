@@ -9,14 +9,23 @@
  *     amount: number,
  *     denom: "USDG" | "WETH",
  *     min_out: number | null,
- *     status?: "pending" | "success" | "reverted"  (default "pending")
+ *     status?: "broadcast" | "success" | "reverted" | "unknown" | "pending"  (default "broadcast")
+ *     revert_reason?: string | null,
+ *     block_number?: number | null,
  *   }
  *
- * The panel calls this TWICE per swap:
- *   1. Right after the swap tx submits (status: "pending") — so the
- *      receipt shows up immediately, even if the tab closes.
- *   2. After `waitForTransactionReceipt` returns (status: "success"
- *      or "reverted") — upgrades the same entry (keyed on tx_hash).
+ * The panel calls this at least TWICE per swap (v3, 2026-07-24):
+ *   1. Right after the swap tx submits (status: "broadcast") — so the
+ *      receipt shows up immediately, even if the tab closes. Prior code
+ *      used "pending" here and let it decay into "success" by omission,
+ *      making revert-rate structurally always 0.
+ *   2. After `waitForTransactionReceipt` returns (status: "success" if
+ *      receipt.status === "success", else "reverted") — upgrades the
+ *      same entry (keyed on tx_hash). Optionally includes `revert_reason`
+ *      when we could decode one (Uniswap "STF", "TOO_LITTLE_RECEIVED", etc.)
+ *      and `block_number` from the receipt.
+ *   3. Timeout / receipt fetch crash → status stays "broadcast" or gets
+ *      posted as "unknown" — never silently upgraded.
  *
  * NO ownership verification: the wallet is a self-report. This is a
  * DISPLAY receipt, not an audit. A bad actor could spam other users'
@@ -48,8 +57,12 @@ type Body = {
   amount?: number;
   denom?: "USDG" | "WETH";
   min_out?: number | null;
-  status?: "pending" | "success" | "reverted";
+  status?: "broadcast" | "success" | "reverted" | "unknown" | "pending";
+  revert_reason?: string | null;
+  block_number?: number | null;
 };
+
+const VALID_STATUSES = new Set(["broadcast", "success", "reverted", "unknown", "pending"]);
 
 export async function POST(
   req: NextRequest,
@@ -72,8 +85,13 @@ export async function POST(
   const amount = Number(body.amount);
   const denom: "USDG" | "WETH" = body.denom === "WETH" ? "WETH" : "USDG";
   const min_out = body.min_out !== undefined && body.min_out !== null ? Number(body.min_out) : null;
-  const status: UserAction["status"] =
-    body.status === "success" || body.status === "reverted" ? body.status : "pending";
+  const status: UserAction["status"] = body.status && VALID_STATUSES.has(body.status)
+    ? body.status
+    // Default flipped from "pending" → "broadcast" (v3). Old clients still
+    // sending "pending" are accepted verbatim above.
+    : "broadcast";
+  const revert_reason = typeof body.revert_reason === "string" ? body.revert_reason.slice(0, 200) : null;
+  const block_number = typeof body.block_number === "number" && Number.isFinite(body.block_number) ? Math.floor(body.block_number) : null;
 
   if (!ADDR_RE.test(wallet)) return NextResponse.json({ error: "bad_wallet" }, { status: 400 });
   if (!TX_HASH_RE.test(tx_hash)) return NextResponse.json({ error: "bad_tx_hash" }, { status: 400 });
@@ -88,10 +106,19 @@ export async function POST(
   const next: UserAction = {
     ts: new Date().toISOString(),
     wallet, tx_hash, side, amount, denom, min_out, status,
+    revert_reason, block_number,
   };
   let updated: UserAction[];
   if (match >= 0) {
-    updated = existing.map((a, i) => i === match ? { ...a, status: next.status, ts: next.ts } : a);
+    // Upgrading an existing entry — preserve the ORIGINAL broadcast ts
+    // so the "signed at" timestamp remains truthful; only the status /
+    // revert_reason / block_number roll forward.
+    updated = existing.map((a, i) => i === match ? {
+      ...a,
+      status: next.status,
+      revert_reason: next.revert_reason ?? a.revert_reason ?? null,
+      block_number: next.block_number ?? a.block_number ?? null,
+    } : a);
   } else {
     if (existing.length >= MAX_ACTIONS_PER_ARROW) {
       return NextResponse.json({ error: "arrow_at_action_cap", cap: MAX_ACTIONS_PER_ARROW }, { status: 429 });
