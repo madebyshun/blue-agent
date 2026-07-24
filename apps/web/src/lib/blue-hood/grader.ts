@@ -29,7 +29,14 @@
  */
 import { kvGet, kvSet } from "@/lib/kv";
 import { callTool } from "./tool-caller";
-import { kvArrow, kvArrowOpenIndex, KV_ARROW_FEED } from "./kv-keys";
+import {
+  kvArrow,
+  kvArrowOpenIndex,
+  kvArrowOpenByTicker,
+  kvArrowTickerCooldown,
+  KV_ARROW_FEED,
+  TTL_TICKER_COOLDOWN,
+} from "./kv-keys";
 import type { Arrow, ArrowOutcome, M5Verdict, ArrowType } from "./types";
 
 // Nullable everywhere — M5 can return a shape with `verdict: "ERROR"` or
@@ -151,8 +158,17 @@ export async function runGrader(): Promise<GraderReport> {
       const nowIso = new Date().toISOString();
       const closed: Arrow = { ...arrow, status: "graded", outcome: outcome.outcome, graded_at: nowIso, outcome_detail: outcome.detail };
       await kvSet(kvArrow(id), closed);
-      // Clear the open-index so a new arrow of same (ticker, type) can fire.
+      // Clear both open indexes so a new arrow can fire on this ticker.
       await kvSet(kvArrowOpenIndex(arrow.ticker, arrow.type), null, 1);
+      await kvSet(kvArrowOpenByTicker(arrow.ticker),         null, 1);
+      // P3.1 — start the 4h cooldown on this ticker so we don't fire a
+      // drift right after grading an arb (or vice versa) on the same
+      // symbol. Downstream engine reads this key + refuses.
+      await kvSet(
+        kvArrowTickerCooldown(arrow.ticker),
+        { arrow_id: id, closed_at: nowIso },
+        TTL_TICKER_COOLDOWN,
+      );
       graded.push(closed);
     } catch (e) {
       // Any unexpected exception per-arrow — record and move on. The

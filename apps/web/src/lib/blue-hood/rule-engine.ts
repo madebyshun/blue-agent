@@ -17,7 +17,16 @@
  * land in a follow-up commit so the drift board can ship first.
  */
 import { kvGet, kvSet } from "@/lib/kv";
-import { KV_ARROW_SERIAL_COUNTER, kvArrow, kvArrowOpenIndex, KV_ARROW_FEED, KV_BRIEF_QUEUE, TTL_ARROW_INDEX } from "./kv-keys";
+import {
+  KV_ARROW_SERIAL_COUNTER,
+  kvArrow,
+  kvArrowOpenIndex,
+  kvArrowOpenByTicker,
+  kvArrowTickerCooldown,
+  KV_ARROW_FEED,
+  KV_BRIEF_QUEUE,
+  TTL_ARROW_INDEX,
+} from "./kv-keys";
 import type { Arrow, ArrowType, HoodSnapshot, TickerSnapshot } from "./types";
 
 // ── Thresholds (from spec Block 1.2) ─────────────────────────────────────
@@ -163,10 +172,27 @@ export async function fireArrow(
      *  from FIRE-time state instead of re-reading M5 at attach time. */
     row?: TickerSnapshot;
   } = {},
-): Promise<Arrow | null> {
+): Promise<{ arrow: Arrow | null; skipReason?: "dedup_ticker" | "dedup_type" | "cooldown" }> {
+  // P3.1 (v3, 2026-07-24): dedup escalated from (ticker, type) to
+  // (ticker) — one arrow per ticker at a time, regardless of type.
+  // The 15-minute drift→arb cascade on COIN (#0061→#0062) and the
+  // single-cycle burst #0062–#0065 were the exact patterns to kill.
+  const tickerIdxKey = kvArrowOpenByTicker(ticker);
+  const existingByTicker = await kvGet<OpenIndex>(tickerIdxKey);
+  if (existingByTicker) return { arrow: null, skipReason: "dedup_ticker" };
+
+  // Cooldown check — set by the grader when an arrow closes (any
+  // outcome). 4h TTL. Prevents a fresh signal immediately after a
+  // close on the same ticker.
+  const cooldownKey = kvArrowTickerCooldown(ticker);
+  const cooldownActive = await kvGet<{ ts: string }>(cooldownKey);
+  if (cooldownActive) return { arrow: null, skipReason: "cooldown" };
+
+  // Legacy (ticker, type) index stays for back-compat + as a defensive
+  // second guard — grader.ts still writes to this key when arrows close.
   const idxKey = kvArrowOpenIndex(ticker, detected.type);
   const existing = await kvGet<OpenIndex>(idxKey);
-  if (existing) return null; // dedup — an open arrow already covers this pair
+  if (existing) return { arrow: null, skipReason: "dedup_type" };
 
   const serial = await nextSerial();
   const id = cryptoUuid();
@@ -225,7 +251,10 @@ export async function fireArrow(
   };
 
   await kvSet(kvArrow(id), arrow);
-  await kvSet(idxKey, { arrow_id: id, fired_at: now } satisfies OpenIndex, TTL_ARROW_INDEX);
+  await kvSet(idxKey,       { arrow_id: id, fired_at: now } satisfies OpenIndex, TTL_ARROW_INDEX);
+  // P3.1: also write the ticker-level open index so a follow-up firing of
+  // a different type on the same ticker within the same cycle sees it.
+  await kvSet(tickerIdxKey, { arrow_id: id, fired_at: now } satisfies OpenIndex, TTL_ARROW_INDEX);
 
   // Push id onto the feed list (newest-first). We keep the feed unbounded
   // for now; when it grows past ~500 we can trim in a follow-up.
@@ -243,7 +272,7 @@ export async function fireArrow(
       await writeChatCard(arrow);
     }
     console.log(`[fire] ${serial} ${ticker} type=${detected.type} origin=${origin} async=skipped`);
-    return arrow;
+    return { arrow };
   }
 
   // Engine path — enqueue for the async worker. Queue is FIFO (append,
@@ -254,7 +283,7 @@ export async function fireArrow(
     await kvSet(KV_BRIEF_QUEUE, queue);
   }
   console.log(`[fire] ${serial} ${ticker} type=${detected.type} origin=${origin} enqueued queue_len=${queue.length}`);
-  return arrow;
+  return { arrow };
 }
 
 function cryptoUuid(): string {
@@ -287,6 +316,11 @@ export interface RuleEngineReport {
   skipped_feed_stale: number;
   below_threshold: number;
   deduped: number;
+  /** P3.1 — dedup broken out by cause so the impact of the ticker rule
+   *  vs the cooldown rule is measurable in logs + response. */
+  skipped_dedup_ticker: number;
+  skipped_cooldown: number;
+  skipped_dedup_type: number;
   fired: number;
   arrows_fired: Arrow[];
 }
@@ -298,6 +332,9 @@ export async function runRuleEngine(snap: HoodSnapshot): Promise<RuleEngineRepor
   let skipped_feed_stale = 0;
   let below_threshold = 0;
   let deduped = 0;
+  let skipped_dedup_ticker = 0;
+  let skipped_cooldown = 0;
+  let skipped_dedup_type = 0;
   const fired: Arrow[] = [];
 
   for (const row of snap.tickers) {
@@ -328,9 +365,29 @@ export async function runRuleEngine(snap: HoodSnapshot): Promise<RuleEngineRepor
     // Pass `row` so fire-time facts + market clock get captured on the
     // persisted arrow (task #8). brief-worker uses these to author a
     // brief from FIRE-time state, not attach-time state.
-    const arrow = await fireArrow(row.ticker, candidate, snap.cycle_id, { row });
-    if (arrow) fired.push(arrow);
-    else deduped++;
+    const result = await fireArrow(row.ticker, candidate, snap.cycle_id, { row });
+    if (result.arrow) {
+      fired.push(result.arrow);
+    } else {
+      deduped++;
+      // P3.1 — attribute the skip so we can see WHICH rule kept arrow
+      // volume down. `[engine] skipped_dedup / skipped_cooldown` lines
+      // are what the DoD (<20 arrows/day) will be measured against.
+      switch (result.skipReason) {
+        case "dedup_ticker":
+          skipped_dedup_ticker++;
+          console.log(`[engine] skipped_dedup_ticker ticker=${row.ticker} type=${candidate.type}`);
+          break;
+        case "cooldown":
+          skipped_cooldown++;
+          console.log(`[engine] skipped_cooldown ticker=${row.ticker} type=${candidate.type}`);
+          break;
+        case "dedup_type":
+          skipped_dedup_type++;
+          console.log(`[engine] skipped_dedup_type ticker=${row.ticker} type=${candidate.type}`);
+          break;
+      }
+    }
   }
 
   // Structured log — one line, machine-greppable. `firstError` is soft-off
@@ -343,7 +400,10 @@ export async function runRuleEngine(snap: HoodSnapshot): Promise<RuleEngineRepor
       ` skipped_feed_stale=${skipped_feed_stale}` +
       ` below_threshold=${below_threshold}` +
       ` fired=${fired.length}` +
-      ` deduped=${deduped}`,
+      ` deduped=${deduped}` +
+      ` skipped_dedup_ticker=${skipped_dedup_ticker}` +
+      ` skipped_cooldown=${skipped_cooldown}` +
+      ` skipped_dedup_type=${skipped_dedup_type}`,
   );
 
   return {
@@ -356,6 +416,9 @@ export async function runRuleEngine(snap: HoodSnapshot): Promise<RuleEngineRepor
     skipped_feed_stale,
     below_threshold,
     deduped,
+    skipped_dedup_ticker,
+    skipped_cooldown,
+    skipped_dedup_type,
     fired: fired.length,
     arrows_fired: fired,
   };
