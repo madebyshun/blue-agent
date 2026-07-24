@@ -176,15 +176,26 @@ export interface BackfillReport {
 }
 
 /**
- * One-shot backfill for arrows graded while the market was closed
- * (Chainlink frozen → gap can't close → guaranteed MISS). Marks them
- * outcome="void" with a specific reason. Idempotent — safe to run every
- * cron tick; only touches arrows that are:
+ * Backfill for drift/arb arrows graded before their FULL regular-session
+ * window elapsed. The narrow criterion (`reg_hrs < 0.5`) only caught
+ * arrows graded entirely during closed market, but plenty of arrows fire
+ * near the close, accumulate 0.5–3.5h regular hours before the grader's
+ * wall-clock window pops, and get MISS/HIT verdicts that are still
+ * artifacts of an under-elapsed clock. Example: #0039 INTC (arb, fired
+ * 15:34 ET, graded 19:34 ET) had 0.43h regular vs 4h required — HIT
+ * verdict was a coin-flip, not a signal.
+ *
+ * New rule (2026-07-24): void every drift/arb arrow where
+ *   reg_hrs_at_grade < arrow.grading_window_h
+ * regardless of outcome (both HIT and MISS become VOID). We accept the
+ * hit-rate may drop — a small number measuring one standard is better
+ * than a bigger one that mixes two.
+ *
+ * Idempotent — safe to run every cron tick; only touches arrows that are:
  *   - status: "graded"
- *   - type: "drift" or "arb"
- *   - outcome: "miss"
- *   - graded_at within a closed-market window that also had ≤ 0.5h of
- *     regular session hours between fire and grade
+ *   - outcome: "hit" or "miss" (already-void arrows are left alone)
+ *   - type: "drift" or "arb" (flow/whale use wall-clock — not affected)
+ *   - graded_at with reg_hrs elapsed < grading_window_h
  */
 export async function backfillVoidGrades(): Promise<BackfillReport> {
   const feed = (await kvGet<string[]>(KV_ARROW_FEED)) ?? [];
@@ -196,20 +207,20 @@ export async function backfillVoidGrades(): Promise<BackfillReport> {
       if (!arrow) continue;
       scanned++;
       if (arrow.status !== "graded") continue;
-      if (arrow.outcome !== "miss") continue;
+      if (arrow.outcome !== "miss" && arrow.outcome !== "hit") continue;
       if (arrow.type !== "drift" && arrow.type !== "arb") continue;
       if (!arrow.graded_at) continue;
       const gradedMs = new Date(arrow.graded_at).getTime();
       if (!Number.isFinite(gradedMs)) continue;
-      const gradedDuringClosed = !nyseOpenAt(gradedMs);
       const regularHrs = regularHoursElapsed(arrow.fired_at, gradedMs);
-      // The arrow was graded during a closed market AND had almost no
-      // regular-hour time to accumulate → outcome is an artifact, void it.
-      if (gradedDuringClosed && regularHrs < 0.5) {
+      // Under-cooked: the arrow was graded before its regular-session
+      // window fully elapsed. Verdict is an artifact, void it.
+      if (regularHrs < arrow.grading_window_h) {
+        const priorOutcome = arrow.outcome;
         const voided: Arrow = {
           ...arrow,
           outcome: "void",
-          outcome_detail: `graded_during_closed_market · regular_hours_elapsed=${regularHrs.toFixed(2)}h (P0.1 backfill 2026-07-24)`,
+          outcome_detail: `graded_before_window_elapsed · prior_outcome=${priorOutcome} · regular_hours=${regularHrs.toFixed(2)}h < ${arrow.grading_window_h}h (P0.1 backfill 2026-07-24)`,
         };
         await kvSet(kvArrow(id), voided);
         voided_ids.push(id);

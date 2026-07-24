@@ -1,12 +1,20 @@
 /**
- * P0 dry-run — proves PR #220 is safe to merge.
+ * P0.1 dry-run — proves the void criterion tightening (2026-07-24 follow-up).
  *
- * 1. VOID backfill preview: fetches prod arrows and applies the exact
- *    same logic as `backfillVoidGrades()`. Prints hit rate before + after.
- * 2. OPEN arrows preview: for every currently-open drift/arb arrow,
- *    shows wall-clock hours elapsed vs the new REGULAR-SESSION hours
- *    elapsed so a reader can see how the market-aware clock changes
- *    each arrow's next grade-attempt time.
+ * Original PR #220 criterion (voided): reg_hrs < 0.5h AND graded during
+ * closed market. Miss-only. This catches ~16 arrows but leaves plenty of
+ * "chấm non" (undercooked) grades — e.g. #0039 INTC (arb, fired 15:34 ET,
+ * graded 19:34 ET) had 0.43h regular of the 4h window and got a HIT verdict.
+ *
+ * New criterion: reg_hrs < arrow.grading_window_h. Applies to BOTH hit
+ * AND miss. Drop the "graded during closed" gate — the window-elapsed
+ * check subsumes it.
+ *
+ * 1. VOID backfill preview: fetches prod arrows and applies the NEW
+ *    logic. Prints hit rate before + after, plus the breakdown of
+ *    HITs-becoming-void vs MISSes-becoming-void.
+ * 2. OPEN arrows preview: unchanged — shows wall-clock vs regular-session
+ *    hours for currently-open drift/arb.
  *
  * Read-only. Does NOT hit KV. Uses public /api/hood/arrows on prod.
  *
@@ -63,58 +71,65 @@ async function main() {
   const arrows = j.arrows;
   const now = Date.now();
 
-  // ── 1. VOID BACKFILL PREVIEW ───────────────────────────────────────────
+  // ── 1. VOID BACKFILL PREVIEW (new criterion) ───────────────────────────
   const graded = arrows.filter((a) => a.status === "graded");
   const oldMisses = graded.filter((a) => a.outcome === "miss");
   const oldHits = graded.filter((a) => a.outcome === "hit");
   const oldInfo = graded.filter((a) => a.outcome === "informational");
-  const wouldVoid: Arrow[] = [];
+  const alreadyVoid = graded.filter((a) => a.outcome === "void");
+  const wouldVoidHit: Arrow[] = [];
+  const wouldVoidMiss: Arrow[] = [];
 
   for (const a of graded) {
-    if (a.outcome !== "miss") continue;
+    if (a.outcome !== "miss" && a.outcome !== "hit") continue;
     if (a.type !== "drift" && a.type !== "arb") continue;
     if (!a.graded_at) continue;
     const gradedMs = new Date(a.graded_at).getTime();
     if (!Number.isFinite(gradedMs)) continue;
-    const gradedDuringClosed = !nyseOpenAt(gradedMs);
     const regHrs = regularHoursElapsed(a.fired_at, gradedMs);
-    if (gradedDuringClosed && regHrs < 0.5) {
-      wouldVoid.push(a);
+    if (regHrs < a.grading_window_h) {
+      if (a.outcome === "hit") wouldVoidHit.push(a);
+      else wouldVoidMiss.push(a);
     }
   }
 
-  const newMissCount = oldMisses.length - wouldVoid.length;
+  const newHitCount = oldHits.length - wouldVoidHit.length;
+  const newMissCount = oldMisses.length - wouldVoidMiss.length;
   const oldDenom = oldHits.length + oldMisses.length;
-  const newDenom = oldHits.length + newMissCount;
+  const newDenom = newHitCount + newMissCount;
   const oldHitPct = oldDenom > 0 ? Math.round((oldHits.length / oldDenom) * 100) : 0;
-  const newHitPct = newDenom > 0 ? Math.round((oldHits.length / newDenom) * 100) : 0;
+  const newHitPct = newDenom > 0 ? Math.round((newHitCount / newDenom) * 100) : 0;
 
-  console.log("═══ VOID BACKFILL PREVIEW ═══");
+  console.log("═══ VOID BACKFILL PREVIEW (reg_hrs < required_window) ═══");
   console.log(`total arrows fetched:        ${arrows.length}`);
   console.log(`graded arrows:               ${graded.length}`);
   console.log(`  hits:                      ${oldHits.length}`);
   console.log(`  misses:                    ${oldMisses.length}`);
   console.log(`  informational:             ${oldInfo.length}`);
-  console.log(`  already void:              ${graded.filter((a) => a.outcome === "void").length}`);
+  console.log(`  already void (prior PR):   ${alreadyVoid.length}`);
   console.log();
-  console.log(`WOULD be VOIDED by this PR:  ${wouldVoid.length}`);
-  console.log(`  → misses after backfill:   ${newMissCount}`);
+  console.log(`WOULD be VOIDED (new PR):    ${wouldVoidHit.length + wouldVoidMiss.length}`);
+  console.log(`  from HIT → void:           ${wouldVoidHit.length}`);
+  console.log(`  from MISS → void:          ${wouldVoidMiss.length}`);
   console.log();
-  console.log(`Hit rate BEFORE (all misses count):   ${oldHits.length}/${oldDenom} = ${oldHitPct}%`);
-  console.log(`Hit rate AFTER  (voids excluded):     ${oldHits.length}/${newDenom} = ${newHitPct}%`);
+  console.log(`Hit rate BEFORE:   ${oldHits.length}/${oldDenom} = ${oldHitPct}%`);
+  console.log(`Hit rate AFTER:    ${newHitCount}/${newDenom} = ${newHitPct}%`);
   console.log();
 
-  if (wouldVoid.length > 0) {
-    console.log("Voided arrows (up to 20):");
-    console.log(`${"serial".padEnd(8)} ${"ticker".padEnd(7)} ${"type".padEnd(6)} ${"fired (ET-ish)".padEnd(20)} ${"graded (ET-ish)".padEnd(20)} reg_hrs`);
-    for (const a of wouldVoid.slice(0, 20)) {
+  const printVoidRow = (label: string, list: Arrow[]) => {
+    if (list.length === 0) return;
+    console.log(`\n${label} (up to 25):`);
+    console.log(`${"serial".padEnd(8)} ${"ticker".padEnd(7)} ${"type".padEnd(6)} ${"win".padEnd(4)} ${"fired (ET-ish)".padEnd(20)} ${"graded (ET-ish)".padEnd(20)} reg_hrs`);
+    for (const a of list.slice(0, 25)) {
       const fireLocal = new Date(new Date(a.fired_at).getTime() - 4 * 3600 * 1000).toISOString().slice(0, 16).replace("T", " ");
       const gradeLocal = a.graded_at ? new Date(new Date(a.graded_at).getTime() - 4 * 3600 * 1000).toISOString().slice(0, 16).replace("T", " ") : "—";
       const regHrs = a.graded_at ? regularHoursElapsed(a.fired_at, new Date(a.graded_at).getTime()).toFixed(2) : "?";
-      console.log(`${a.serial.padEnd(8)} ${a.ticker.padEnd(7)} ${a.type.padEnd(6)} ${fireLocal.padEnd(20)} ${gradeLocal.padEnd(20)} ${regHrs}`);
+      console.log(`${a.serial.padEnd(8)} ${a.ticker.padEnd(7)} ${a.type.padEnd(6)} ${(a.grading_window_h + "h").padEnd(4)} ${fireLocal.padEnd(20)} ${gradeLocal.padEnd(20)} ${regHrs}`);
     }
-    if (wouldVoid.length > 20) console.log(`  … and ${wouldVoid.length - 20} more`);
-  }
+    if (list.length > 25) console.log(`  … and ${list.length - 25} more`);
+  };
+  printVoidRow("Prior HIT → VOID", wouldVoidHit);
+  printVoidRow("Prior MISS → VOID", wouldVoidMiss);
 
   // ── 2. OPEN ARROWS UNDER NEW CLOCK ─────────────────────────────────────
   const openArrows = arrows.filter((a) => a.status === "open");
