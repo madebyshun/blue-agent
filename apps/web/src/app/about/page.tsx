@@ -7,10 +7,20 @@ import Navbar from "@/components/Navbar";
 
 const SURFACES = [
   {
+    icon: "🎯",
+    name: "Blue Hood",
+    handle: "blueagent.dev/app/hood",
+    desc: "The flagship copilot for Robinhood Chain. 24/7 non-custodial arbitrage between Chainlink oracles and DEX pools. Review-and-sign trading — every arrow is user-signed, no session keys.",
+    link: "/app/hood",
+    linkLabel: "Open Hood →",
+    color: "#22C55E",
+    stats: [{ label: "Chain", value: "RH 4663" }, { label: "Signing", value: "Non-custodial" }],
+  },
+  {
     icon: "💬",
     name: "Blue Chat",
     handle: "blueagent.dev/app/chat",
-    desc: "Multi-model AI chat with live Base intelligence, tool execution, artifacts, and share links. Stake BLUE → earn credits → unlock tools.",
+    desc: "Multi-model AI chat wired to live Base + RH Chain intelligence, tool execution, artifacts, and share links. Stake BLUE → earn credits → unlock tools.",
     link: "/app/chat",
     linkLabel: "Open Chat →",
     color: "#4FC3F7",
@@ -20,21 +30,21 @@ const SURFACES = [
     icon: "🛠️",
     name: "Blue Hub",
     handle: "blueagent.dev/app/hub",
-    desc: "70+ pay-per-use AI tools for Base builders and agents. idea → build → audit → ship → raise. Pay per call in USDC via x402.",
+    desc: "74 pay-per-use AI tools for Base + RH Chain builders and agents. idea → build → audit → ship → raise. Pay per call in USDC (Base) or USDG (Robinhood Chain) via x402.",
     link: "/app/hub",
     linkLabel: "Open Hub →",
     color: "#A78BFA",
-    stats: [{ label: "Tools", value: "70+" }, { label: "Commands", value: "5 core" }],
+    stats: [{ label: "Tools", value: "74" }, { label: "Commands", value: "5 core" }],
   },
   {
     icon: "⚡",
     name: "MCP Server",
     handle: "blueagent.dev/api/mcp",
-    desc: "70+ tools via MCP — plug into Claude Desktop, Cursor, or any MCP client. No API key needed. Tools run free via internal bypass.",
+    desc: "57 tools via MCP (15 blue_ + 42 hub_) — plug into Claude Desktop, Cursor, or any MCP client. No API key needed. Tools run free via internal bypass.",
     link: "https://blueagent.dev/api/mcp",
     linkLabel: "Connect MCP →",
     color: "#F59E0B",
-    stats: [{ label: "Tools", value: "70+" }, { label: "Clients", value: "Cursor · Claude" }],
+    stats: [{ label: "Tools", value: "57" }, { label: "Clients", value: "Cursor · Claude" }],
   },
 ];
 
@@ -44,48 +54,48 @@ const ROADMAP = [
     status: "done",
     items: [
       { done: true, text: "$BLUEAGENT — Base, Uniswap v4, stake → credits + USDC yield" },
-      { done: true, text: "Bankr integration — LLM + agent execution layer" },
-      { done: true, text: "Blue Hub — 78 x402 tools, pay-per-call in USDC" },
+      { done: true, text: "Blue Hub — 74 x402 tools, pay-per-call in USDC/USDG" },
       { done: true, text: "Blue Chat — multi-model AI, artifacts, public share links" },
-      { done: true, text: "Blue Feed — live Base intelligence, hourly + daily" },
-      { done: true, text: "Blue Bank — send, swap, yield, invoices, QR pay" },
-      { done: true, text: "MCP Server — 81 tools, full x402 catalog parity" },
+      { done: true, text: "Blue Bank — send, swap, yield, invoices, QR pay (archived 2026-07)" },
+      { done: true, text: "MCP Server — 57 tools, full x402 catalog parity" },
       { done: true, text: "Agent SDK — @blueagent/x402, agents pay + call tools onchain" },
       { done: true, text: "B20 — deploy from chat, plus tracker, check, analyze, launch" },
       { done: true, text: "x402 Builder Codes — every paid call attributed onchain" },
     ],
   },
   {
-    period: "Q3 2026 — Marketplace",
+    period: "Q3 2026 — Robinhood Chain",
     status: "building",
     items: [
-      { done: false, text: "Builder Registry — submit your tool, earn 95% in USDC" },
+      { done: true,  text: "Blue Hood — See · Explain · Alert · Act on RH Chain (chainId 4663)" },
+      { done: true,  text: "Market-aware grader — arrows scored in NYSE regular hours only" },
+      { done: true,  text: "RH RWA Phases 1–7 — registry, market analytics, trading, portfolio, discovery, agent skills, bridge/builder kit" },
+      { done: true,  text: "USDG-native pricing — pay-per-call in USDG on RH · USDC on Base" },
+      { done: false, text: "Blue Hood reputation — arrow track record → public builder scores" },
+      { done: false, text: "Builder Registry — submit your tool, earn 95% in USDC/USDG" },
       { done: false, text: "Tool discovery — search, rank by calls/revenue, verified badges" },
-      { done: false, text: "B20 — mainnet deploy at Beryl, payment rails, issuer tracking" },
       { done: false, text: "Tool chains — compose multiple tools, one payment" },
-      { done: false, text: "Feed track record — signal → outcome → win rate" },
       { done: false, text: "Real yield — 20% Hub fees auto-route to staking pool" },
-      { done: false, text: "Distribution — listed on Smithery, MCP.SO, CDP Bazaar" },
-      { done: false, text: "Blue Bank — scan-to-pay USDC, pay links, B20 holdings + PnL" },
+      { done: false, text: "Distribution — listed on Smithery, MCP.SO, CDP Bazaar, RH Agentic Directory" },
     ],
   },
   {
     period: "Q4 2026 — Network",
     status: "planned",
     items: [
-      { done: false, text: "Public API — api.blueagent.dev, the Stripe of AI tools on Base" },
+      { done: false, text: "Public API — api.blueagent.dev, the Stripe of AI tools on Base + RH" },
       { done: false, text: "Cross-agent routing — best agent + tool per intent" },
       { done: false, text: "Agent registry — directory of active buyer agents" },
-      { done: false, text: "Tool creator rewards — top tools earn weekly" },
+      { done: false, text: "Tool creator rewards — top tools earn weekly in USDC/USDG" },
       { done: false, text: "Cobalt-ready — gas in B20, account abstraction support" },
     ],
   },
 ];
 
 const STATS = [
-  { value: "78+",    label: "AI Tools",       color: "#4FC3F7" },
-  { value: "78+",    label: "API Endpoints",  color: "#A78BFA" },
-  { value: "Base",   label: "Network",        color: "#2563EB" },
+  { value: "74",     label: "AI Tools",       color: "#4FC3F7" },
+  { value: "74",     label: "API Endpoints",  color: "#A78BFA" },
+  { value: "RH+Base", label: "Chains",        color: "#22C55E" },
   { value: "x402",   label: "Payment rail",   color: "#F59E0B" },
 ];
 
@@ -119,18 +129,19 @@ export default function AboutPage() {
         <section className="max-w-5xl mx-auto px-6 pt-32 pb-24 text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#4FC3F730] bg-[#4FC3F708] mb-8">
             <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-            <span className="font-mono text-[11px] text-[#4FC3F7] tracking-widest">BUILT ON BASE</span>
+            <span className="font-mono text-[11px] text-[#4FC3F7] tracking-widest">BUILT FOR ROBINHOOD CHAIN + BASE</span>
           </div>
 
           <h1 className="text-5xl sm:text-6xl font-bold tracking-tight mb-6 leading-tight">
-            AI agent layer<br />
-            <span className="text-[#4FC3F7]">built for Base builders</span>
+            The Builder OS<br />
+            <span className="text-[#4FC3F7]">for Robinhood Chain</span>
           </h1>
 
           <p className="text-slate-400 text-lg max-w-2xl mx-auto leading-relaxed mb-12">
             Not a generic AI assistant. Not a Telegram bot with a GPT wrapper.
-            A full economic actor — holds a wallet, executes onchain, earns and distributes tokens,
-            and powers a growing ecosystem of tools on Base.
+            A full economic actor — holds a wallet, reads Chainlink oracles vs DEX pools,
+            surfaces asymmetric arbitrage on Robinhood Chain, and settles every trade
+            with your own signature. Non-custodial by default.
           </p>
 
           {/* Stats row */}
@@ -360,9 +371,9 @@ export default function AboutPage() {
         <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
           <div className="rounded-2xl border border-[#4FC3F720] bg-[#4FC3F705] p-12 text-center"
             style={{ boxShadow: "0 0 60px #4FC3F708" }}>
-            <h2 className="text-3xl font-bold mb-4">Ready to build on Base?</h2>
+            <h2 className="text-3xl font-bold mb-4">Ready to trade Robinhood Chain?</h2>
             <p className="text-slate-500 mb-8 max-w-md mx-auto">
-              64 AI tools. 5 core commands. Stake to earn. All on Base.
+              74 AI tools. 5 core commands. Blue Hood copilot 24/7. Non-custodial. RH + Base.
             </p>
             <div className="flex items-center justify-center gap-4 flex-wrap">
               <Link href="/app/chat"

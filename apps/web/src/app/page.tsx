@@ -23,13 +23,14 @@ const CHAT_COMMANDS = ["/idea", "/build", "/audit", "/ship", "/raise", "/pick", 
 // Models available in Blue Chat — names verified against ChatMessages MODEL_LABELS.
 // Switchable mid-conversation; frontier + open + private (E2EE).
 const MODELS: { name: string; color: string }[] = [
-  { name: "Kimi K2",         color: "#818CF8" },
-  { name: "DeepSeek V4",     color: "#34D399" },
-  { name: "Claude Opus 4.7", color: "#4FC3F7" },
-  { name: "Grok 4",          color: "#E879F9" },
-  { name: "Qwen3 235B",      color: "#FB923C" },
-  { name: "Mistral Small",   color: "#60A5FA" },
-  { name: "Private (E2EE)",  color: "#6EE7B7" },
+  { name: "Kimi K2",              color: "#818CF8" },
+  { name: "DeepSeek V4",          color: "#34D399" },
+  { name: "Claude Opus 4.7",      color: "#4FC3F7" },
+  { name: "Grok 4",               color: "#E879F9" },
+  { name: "Virtuals (RH-native)", color: "#22C55E" },
+  { name: "Qwen3 235B",           color: "#FB923C" },
+  { name: "Mistral Small",        color: "#60A5FA" },
+  { name: "Private (E2EE)",       color: "#6EE7B7" },
 ];
 
 // BlueAgent Relaunch 2026-07-24 — product suite lead with Blue Hood
