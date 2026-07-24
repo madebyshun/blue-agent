@@ -44,8 +44,8 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
 }
 
 // ── Quality thresholds (FIX 1) ───────────────────────────────────────────────
-const MIN_LIQ = 50_000; // loại thanh khoản mỏng
-const MIN_VOL = 20_000; // loại token chết
+const MIN_LIQ = 50_000; // filter out thin liquidity
+const MIN_VOL = 20_000; // filter out dead tokens
 
 // Denominator / blue-chip assets are NOT "picks" — they appear as the base
 // symbol of quote pairs (e.g. WETH/USDC) and would always top a liquidity-

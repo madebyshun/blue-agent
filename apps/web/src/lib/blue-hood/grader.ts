@@ -56,8 +56,8 @@ export async function runGrader(): Promise<GraderReport> {
   // 60s cron cycle to time out on an unbounded backlog.
   //
   // Widen try/catch scope: covers KV reads + Date parsing + gradeOne
-  // + KV writes. Reviewer's rule: "grader chạy 24/7, một record lỗi
-  // không được làm gãy cả lượt." A single crashed arrow lands in
+  // + KV writes. Reviewer's rule: "grader runs 24/7 — one bad record
+  // must not break the whole pass." A single crashed arrow lands in
   // `errored[]`; the loop continues.
   for (const id of feed.slice(0, 200)) {
     try {

@@ -109,7 +109,7 @@ Schema: {
       `Target: ${target}\nType: ${type}\nProject: ${projectResearch ?? target}\nAudit: ${JSON.stringify(audit)}\nAnalyst: ${JSON.stringify(analyst)}`,  0, 1500, "claude-sonnet-4-5");
 
     let result = parseJson(resultRaw);
-    // HARDMAP verdict từ dd_score (tất định, hết LLM lật)
+    // HARDMAP verdict from dd_score (deterministic, no LLM flip)
     if (result && typeof result.dd_score === "number") {
       const v = result.dd_score;
       result.verdict = v >= 80 ? "STRONG_BUY" : v >= 60 ? "BUY" : v >= 40 ? "WATCH" : v >= 20 ? "PASS" : "RED_FLAG";

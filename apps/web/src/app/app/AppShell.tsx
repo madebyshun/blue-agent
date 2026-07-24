@@ -74,7 +74,7 @@ const APP_NAV = [
   //     (see middleware.ts). All /bank + /pay/[address] routes redirect to /app.
   //   - Launches + B20: moved conceptually under Hub (task #78 B20HUB still
   //     WIP). Direct URL access preserved for dev, but hidden from sidebar
-  //     to keep nav to the 9-item blueprint (THẤY · HÀNH ĐỘNG · TỰ ĐỘNG · BUILD).
+  //     to keep nav to the 9-item blueprint (See · Act · Automate · Build).
   //   Restore any of them by re-adding the object below the "id: hood" entry.
   {
     id: "hood",

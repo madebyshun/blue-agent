@@ -137,8 +137,8 @@ code, pre, .font-mono {
   font-feature-settings: normal;
 }
 
-/* T-V2 #4 — selection color for terminal green. Whoever bôi đen copy
- * a number gets a distinct affordance. */
+/* T-V2 #4 — selection color for terminal green. Whoever highlights
+ * a number to copy gets a distinct affordance. */
 .hood-section ::selection { background: rgba(0, 200, 5, 0.28); color: #ffffff; }
 
 /* T-V2 #1 — LIVE PULSE. 2s ease-in-out, subtle so it doesn't distract
@@ -176,10 +176,10 @@ code, pre, .font-mono {
 }
 
 /* T-V4 — SCROLLBAR VISIBILITY. Firefox/WebKit both hide scrollbars on
- * dark scrollable regions by default; user reported "hood chưa có
- * roll, nhiều thông tin dưới chưa đọc được" (2026-07-23). A subtle
- * always-on rail + a thicker track on hover tells the reader there IS
- * scroll available. */
+ * dark scrollable regions by default; user reported "no scroll on hood,
+ * content below the fold unreadable" (2026-07-23). A subtle always-on
+ * rail + a thicker track on hover tells the reader there IS scroll
+ * available. */
 .hood-section .hood-scroll { scrollbar-width: thin; scrollbar-color: #1A1A2E transparent; }
 .hood-section .hood-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
 .hood-section .hood-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -191,8 +191,8 @@ code, pre, .font-mono {
 }
 .hood-section .hood-scroll::-webkit-scrollbar-thumb:hover { background: #2a2f4a; }
 
-/* T-V4 — MODAL enter animation. ReviewSignPanel dùng để mở panel;
- * fade + slight scale-up 180ms cho cảm giác native, không jarring. */
+/* T-V4 — MODAL enter animation. Used by ReviewSignPanel to open;
+ * fade + slight scale-up 180ms for a native, non-jarring feel. */
 @keyframes hood-modal-in {
   from { opacity: 0; transform: scale(0.98); }
   to   { opacity: 1; transform: scale(1);    }
