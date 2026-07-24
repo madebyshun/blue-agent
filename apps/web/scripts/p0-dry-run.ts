@@ -13,6 +13,12 @@
  * Run: cd apps/web && npx tsx scripts/p0-dry-run.ts
  */
 
+// Force this file to be treated as a module (not a global script), so its
+// top-level `main()` doesn't collide with other scripts under `apps/web/scripts/`
+// when Next's typecheck scans the tree. Without this, the build fails with
+// "Duplicate function implementation" against semantic-smoke.ts.
+export {};
+
 // ── COPY of PR #220 helpers, verbatim, so the script IS the code ─────────
 const REGULAR_OPEN_MIN = 9 * 60 + 30;
 const REGULAR_CLOSE_MIN = 16 * 60;
