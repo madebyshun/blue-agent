@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   const withBrief = url.searchParams.get("with_brief") === "1"
     || url.searchParams.get("real") === "1"; // legacy alias — remove after v1
   const demoPush = url.searchParams.get("push") === "1";
-  const arrow = await fireArrow(
+  const result = await fireArrow(
     ticker,
     {
       type,
@@ -66,12 +66,13 @@ export async function POST(req: NextRequest) {
       : { origin: "seeded", test: true }, // `test` still gates A4 call
   );
 
-  if (!arrow) {
+  if (!result.arrow) {
     return NextResponse.json({
       ok: false,
-      message: `Deduped — an open ${type} arrow already exists for ${ticker}`,
+      message: `Deduped (${result.skipReason ?? "unknown"}) — an open arrow or cooldown blocks ${ticker}`,
     });
   }
+  const arrow = result.arrow;
 
   // ── T-D demo path ─────────────────────────────────────────────────────
   // The three prod guards (fireArrow skipAsync, pushArrowToAll self-check,

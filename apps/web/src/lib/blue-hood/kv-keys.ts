@@ -22,6 +22,27 @@ export const kvArrow = (id: string) => `bh:arrow:${id}`;
 export const kvArrowOpenIndex = (ticker: string, type: string) =>
   `bh:arrow:open:${ticker.toLowerCase()}:${type}`;
 
+/**
+ * P3.1 (v3 spec, 2026-07-24): index of currently-open arrows keyed by
+ * TICKER (any type). A ticker can have at most ONE open arrow at a
+ * time so we don't fire drift + arb + flow simultaneously on the same
+ * ticker — the feed was doing exactly that (#0062-#0065 all one cycle,
+ * COIN drift + COIN arb 42min apart) and it looked spammy.
+ *
+ * Same 30d TTL as the typed key so we're consistent.
+ */
+export const kvArrowOpenByTicker = (ticker: string) =>
+  `bh:arrow:open_ticker:${ticker.toLowerCase()}`;
+
+/**
+ * P3.1: per-ticker cooldown key. Set when an arrow closes (graded),
+ * TTL = 4h. `fireArrow` refuses if this key exists — no follow-up
+ * arrow on the same ticker until the cooldown expires. Prevents the
+ * "one ticker fires arb 15min after drift grade" pattern.
+ */
+export const kvArrowTickerCooldown = (ticker: string) =>
+  `bh:arrow:cooldown:${ticker.toLowerCase()}`;
+
 /** Rolling list of all arrow ids (newest first) — used by /hood feed + hit-rate math. */
 export const KV_ARROW_FEED = "bh:arrow:feed";
 
@@ -76,6 +97,9 @@ export const TTL_POLL_LOCK = 60 * 5; // 5 min — matches the cron cadence
 /** TTL constants (seconds). */
 export const TTL_SNAPSHOT_HOUR = 60 * 60 * 25; // 25h so we always have a full 24h window
 export const TTL_ARROW_INDEX = 60 * 60 * 24 * 30; // 30d — grading windows are at most 24h
+/** P3.1 — 4h ticker cooldown after grading. Reasonable balance between
+ *  "one open arrow at a time" and "let the next real setup fire soon". */
+export const TTL_TICKER_COOLDOWN = 60 * 60 * 4; // 4h
 export const TTL_SPARKLINE = 60 * 20; // 20 min — hourly candles don't need to be fresher than that
 export const TTL_PUSH_SUB = 60 * 60 * 24 * 90; // 90d — browser subs expire on their own well before this
 export const TTL_CHAT_CARD = 60 * 60 * 24 * 30; // 30d — matches TTL_ARROW_INDEX so cards don't outlive arrows
