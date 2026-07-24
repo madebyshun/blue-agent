@@ -213,6 +213,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [chatTier,     setChatTier]    = useState("pro");
 
+  // Landing → chat deep-link: `/app/chat?preset=<id>` selects a V1 preset
+  // (fast · balanced · deep · private · grok). Guarded to the 5 known
+  // ids so nothing else in the query string can wedge the picker.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const p = new URLSearchParams(window.location.search).get("preset");
+    if (p && ["fast", "balanced", "deep", "private", "grok"].includes(p)) {
+      setChatTier(p);
+    }
+  }, []);
+
   // Load tasks on wallet change, migrate old chat, then ALWAYS open on a fresh
   // New Chat draft (ChatGPT / Claude behaviour). Prior sessions stay available
   // in the sidebar history; we never auto-restore the most recent one.

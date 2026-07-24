@@ -22,7 +22,7 @@ const CHAT_COMMANDS = ["/idea", "/build", "/audit", "/ship", "/raise", "/pick", 
 
 // Models available in Blue Chat — names verified against ChatMessages MODEL_LABELS.
 // Switchable mid-conversation; frontier + open + private (E2EE).
-const MODELS: { name: string; color: string }[] = [
+const MODELS: { name: string; color: string; href?: string }[] = [
   { name: "Kimi K2",              color: "#818CF8" },
   { name: "DeepSeek V4",          color: "#34D399" },
   { name: "Claude Opus 4.7",      color: "#4FC3F7" },
@@ -30,7 +30,10 @@ const MODELS: { name: string; color: string }[] = [
   { name: "Virtuals (RH-native)", color: "#22C55E" },
   { name: "Qwen3 235B",           color: "#FB923C" },
   { name: "Mistral Small",        color: "#60A5FA" },
-  { name: "Private (E2EE)",       color: "#6EE7B7" },
+  // Backed by `e2ee-deepseek-v4-flash` in the Virtuals catalog — the
+  // claim is real. Link to the Private preset in Blue Chat so the
+  // user can pick it in one click.
+  { name: "Private (E2EE)",       color: "#6EE7B7", href: "/app/chat?preset=private" },
 ];
 
 // BlueAgent Relaunch 2026-07-24 — product suite lead with Blue Hood
@@ -442,14 +445,19 @@ export default function Home() {
           </Reveal>
           <Reveal delay={80}>
             <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3">
-              {MODELS.map((m) => (
-                <span key={m.name}
-                  className="flex items-center gap-2 font-mono text-[12px] sm:text-[13px] rounded-full border px-3.5 py-1.5"
-                  style={{ borderColor: `${m.color}33`, background: `${m.color}0d`, color: m.color }}>
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: m.color, boxShadow: `0 0 6px ${m.color}` }} />
-                  {m.name}
-                </span>
-              ))}
+              {MODELS.map((m) => {
+                const chip = (
+                  <span key={m.name}
+                    className={"flex items-center gap-2 font-mono text-[12px] sm:text-[13px] rounded-full border px-3.5 py-1.5 " + (m.href ? "hover:brightness-125 transition-all cursor-pointer" : "")}
+                    style={{ borderColor: `${m.color}33`, background: `${m.color}0d`, color: m.color }}>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: m.color, boxShadow: `0 0 6px ${m.color}` }} />
+                    {m.name}
+                  </span>
+                );
+                return m.href
+                  ? <a key={m.name} href={m.href} aria-label={`Open ${m.name} preset in Blue Chat`}>{chip}</a>
+                  : chip;
+              })}
             </div>
           </Reveal>
         </section>

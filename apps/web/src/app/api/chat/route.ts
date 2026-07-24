@@ -17,6 +17,7 @@ import { checkAuthorization } from "@/lib/b20/check-authorization";
 import { checkWallet } from "@/lib/wallet/holdings";
 import { getRobinhoodAddressBalances } from "@/lib/robinhood/blockscout";
 import { mcpCallTool } from "@/lib/mcp-client";
+import { VIRTUALS_PRESETS } from "@/app/api/_lib/llm";
 
 export const runtime = "nodejs";
 // Vercel kills serverless functions at 60s by default — explicit budget so
@@ -2368,7 +2369,14 @@ export async function POST(req: NextRequest) {
   }
   const cfg = virtualsCfg(virtualsKey);
   const virtualsMessages = injectAttachments(cleanMessages, attachments, "venice");
-  const virtualsModel = VIRTUALS_CHAT_DEFAULT_MODEL;
+  // Resolve the client's `tier` to a Virtuals model id via the V1 catalog-
+  // driven preset spec. Falls back to `VIRTUALS_CHAT_DEFAULT_MODEL` for
+  // legacy tier ids (`pro`, `max`, `deepseek`, `gemini`, `kimi`, etc.)
+  // that don't correspond to a V1 preset. `callVirtualsLLM`'s catalog
+  // guard is the ultimate safety net — if a model id disappears from
+  // /v1/models mid-day, we surface a typed error instead of a mystery 400.
+  const presetForTier = VIRTUALS_PRESETS.find((p) => p.id === tier);
+  const virtualsModel = presetForTier?.model ?? VIRTUALS_CHAT_DEFAULT_MODEL;
   const virtualsMax = (MODELS[tier as string] ?? MODELS.pro).maxTokens;
   // No auto-web-search on Virtuals — hard-off regardless of the user's
   // toggle; the toggle only matters on the Venice branch above.

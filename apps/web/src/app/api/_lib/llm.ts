@@ -155,6 +155,122 @@ export const NO_FABRICATION_RULE =
 
 export const VIRTUALS_DEFAULT_MODEL = "deepseek-deepseek-v4-flash";
 
+// ─── Virtuals catalog (kill the "id-doesn't-exist → 400" bug family) ──────
+//
+// Root cause of the same bug family, 3rd time (2026-07-24):
+//   "Claude Haiku 4.5" preset → id `anthropic-claude-haiku-4-5` — NOT in
+//   the Virtuals /v1/models catalog. Every call became a 400. The preset
+//   list was hardcoded, so no CI signal fired.
+//
+// Fix: single source of truth is Virtuals' own catalog. Both server
+// (before dispatching a call) and client (when rendering the picker)
+// validate against it. If an id disappears from the catalog, it
+// disappears from the picker on the next 6h refresh — no code change
+// required.
+//
+// The 4 preset ids below were verified live against the catalog on
+// 2026-07-24 (see the "chốt preset" spec). The `-fast` variants are
+// deliberately absent: 6× the price for the same capability.
+export interface VirtualsPreset {
+  /** Stable UI id — never a Virtuals model id. */
+  id: "fast" | "balanced" | "deep" | "private" | "grok";
+  /** The Virtuals /v1/models `id`. Validated against the catalog. */
+  model: string;
+  /** Short user-facing name shown on the picker card. */
+  label: string;
+  /** 1-line description. */
+  desc: string;
+  /** Cost dot rendering — ●=cheap, ●●=mid, ●●●=expensive. */
+  cost: "●" | "●●" | "●●●";
+  /** Context window in tokens (used in the picker subtitle). */
+  contextTokens: number;
+  /** Credit price used by /lib/credits.ts. */
+  credits: number;
+  /** Show a lock icon (Private tier). */
+  privacy?: boolean;
+  /** Whether this preset is optional (hidden by default in the primary picker). */
+  optional?: boolean;
+}
+
+export const VIRTUALS_PRESETS: VirtualsPreset[] = [
+  { id: "fast",     model: "deepseek-deepseek-v4-flash", label: "Fast",     desc: "DeepSeek V4 Flash · cheapest, snappy",   cost: "●",   contextTokens: 1_000_000, credits: 10 },
+  { id: "balanced", model: "anthropic-claude-sonnet-5",  label: "Balanced", desc: "Claude Sonnet 5 · default for most work", cost: "●●",  contextTokens: 200_000,   credits: 50 },
+  { id: "deep",     model: "anthropic-claude-opus-4-8",  label: "Deep",     desc: "Claude Opus 4.8 · heavy reasoning",       cost: "●●●", contextTokens: 200_000,   credits: 200 },
+  { id: "private",  model: "e2ee-deepseek-v4-flash",     label: "Private",  desc: "E2EE · no logs · DeepSeek V4",            cost: "●",   contextTokens: 1_000_000, credits: 30,  privacy: true },
+  { id: "grok",     model: "x-ai-grok-4-20",             label: "Grok",     desc: "Grok 4 · 2M context window",              cost: "●●",  contextTokens: 2_000_000, credits: 60,  optional: true },
+];
+
+const CATALOG_CACHE_MS = 6 * 60 * 60 * 1000; // 6h — matches the "chốt preset" spec
+let _virtualsCatalogCache: { ids: Set<string>; fetchedAt: number } | null = null;
+
+/**
+ * Fetches the current Virtuals /v1/models catalog and returns the set of
+ * available model ids. Cached in-process for 6h; a failed fetch returns
+ * the previous cache if we have one, else `null` (so callers can decide
+ * whether to fail-open or fail-closed).
+ *
+ * Call sites:
+ *   - `/api/chat/preset-catalog` — client picker fetches this to hide
+ *     presets whose id is missing from the catalog.
+ *   - `callVirtualsLLM` (below) — validates the model id before
+ *     dispatching, so a stale preset in localStorage doesn't turn into a
+ *     mysterious 400 in the wild.
+ */
+export async function getVirtualsCatalog(): Promise<Set<string> | null> {
+  const now = Date.now();
+  if (_virtualsCatalogCache && now - _virtualsCatalogCache.fetchedAt < CATALOG_CACHE_MS) {
+    return _virtualsCatalogCache.ids;
+  }
+  const apiKey = process.env.VIRTUALS_API_KEY ?? "";
+  if (!apiKey) {
+    console.warn("[virtuals-catalog] VIRTUALS_API_KEY not set — cannot validate");
+    return _virtualsCatalogCache?.ids ?? null;
+  }
+  try {
+    const res = await fetch("https://compute.virtuals.io/v1/models", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      console.warn(`[virtuals-catalog] /v1/models ${res.status} — using stale cache=${_virtualsCatalogCache?.ids.size ?? 0}`);
+      return _virtualsCatalogCache?.ids ?? null;
+    }
+    const d = (await res.json()) as { data?: { id?: string }[] };
+    const ids = new Set<string>();
+    for (const row of d.data ?? []) {
+      if (typeof row.id === "string" && row.id.length > 0) ids.add(row.id);
+    }
+    if (ids.size === 0) {
+      console.warn("[virtuals-catalog] empty catalog — using stale cache");
+      return _virtualsCatalogCache?.ids ?? null;
+    }
+    _virtualsCatalogCache = { ids, fetchedAt: now };
+    console.log(`[virtuals-catalog] refreshed size=${ids.size}`);
+    return ids;
+  } catch (e) {
+    console.warn(`[virtuals-catalog] fetch failed: ${(e as Error).message} — using stale cache`);
+    return _virtualsCatalogCache?.ids ?? null;
+  }
+}
+
+/**
+ * Returns the presets whose model id is currently in the Virtuals
+ * catalog. If the catalog fetch fails and we have no cache, returns the
+ * full preset list (fail-open — the picker still works, and a bad id
+ * will surface as a typed 4xx from the chat route rather than a
+ * mysterious 400).
+ */
+export async function getAvailableVirtualsPresets(): Promise<VirtualsPreset[]> {
+  const catalog = await getVirtualsCatalog();
+  if (catalog === null) return VIRTUALS_PRESETS;
+  const available = VIRTUALS_PRESETS.filter((p) => catalog.has(p.model));
+  const missing = VIRTUALS_PRESETS.filter((p) => !catalog.has(p.model));
+  if (missing.length > 0) {
+    console.warn(`[virtuals-catalog] hiding presets missing from catalog: ${missing.map((p) => `${p.id}=${p.model}`).join(", ")}`);
+  }
+  return available;
+}
+
 /** Floor on `max_tokens` (all providers). Below ~400 tokens the model
  *  frequently truncates a JSON object mid-key, which — combined with
  *  reasoning models spending tokens inside `<think>…</think>` — is the
@@ -188,6 +304,16 @@ export async function callVirtualsLLM(opts: {
   const apiKey = process.env.VIRTUALS_API_KEY ?? "";
   if (!apiKey) throw new Error("VIRTUALS_API_KEY not set");
   const model = opts.model ?? process.env.VIRTUALS_MODEL ?? VIRTUALS_DEFAULT_MODEL;
+  // Pre-flight: validate the model id against the catalog. If the
+  // catalog has never been fetched (or the fetch is currently down), we
+  // still dispatch — the upstream 400 is the last line of defence and
+  // the throw path preserves the full response body. This just gives us
+  // a *loud, typed* error a whole class of stale-preset regressions
+  // instead of a mystery 400 that took 4 CI runs to trace.
+  const catalog = await getVirtualsCatalog();
+  if (catalog !== null && !catalog.has(model)) {
+    throw new Error(`Virtuals model "${model}" not in catalog (catalog_size=${catalog.size}). Check the preset spec — this class of bug fired 3 times before catalog-driven validation landed.`);
+  }
   const msgs = opts.messages ?? (opts.user != null ? [{ role: "user", content: opts.user }] : []);
   const maxTokens = Math.max(MIN_MAX_TOKENS, opts.maxTokens ?? 1000);
   const res = await fetch("https://compute.virtuals.io/v1/chat/completions", {
