@@ -170,9 +170,16 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
   // signFlow entry; the ref survives the throw so the outer catch sees it.
   const lastApproveRef = useRef<{ hash: string; spender: string; token: string } | null>(null);
 
-  // ── Wallet balance (of the denom the user pays with) ────────────────
+  // ── Wallet balance (of the token the user pays with) ────────────────
+  // Bug fix #2 (2026-07-24, arrow #0071 NVDA sell): the previous guard
+  // was `side === "buy"`, so on SELL the balance query never fired and
+  // `walletBalance` stayed null → the insufficient-balance gate below
+  // was a no-op. Result: user typed 1 NVDA while holding 0.0095, panel
+  // let them sign approve for 1, swap reverted, dangling approval.
+  // `quote.execution.token_in` IS the pay-side token regardless of side
+  // (USDG on buy, the RWA token on sell) — drop the side filter.
   const payToken: `0x${string}` | undefined =
-    quote?.execution?.token_in && side === "buy"
+    quote?.execution?.token_in
       ? (quote.execution.token_in as `0x${string}`)
       : undefined;
   const payDecimals = quote?.execution?.token_in_decimals ?? 6;
@@ -188,6 +195,9 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
     if (typeof rawBalance !== "bigint") return null;
     return parseFloat(formatUnits(rawBalance, payDecimals));
   }, [rawBalance, payDecimals]);
+  // Symbol shown next to the amount input + balance line. On BUY it's
+  // the denom (USDG / WETH). On SELL it's the ticker being sold.
+  const payUnitSymbol = side === "sell" ? arrow.ticker : denom;
 
   // Native ETH on Robinhood Chain — gas token. The raw viem/MetaMask
   // "insufficient funds for gas" dump is unreadable (screenshot 3+4),
@@ -243,7 +253,11 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
   const heavyImpact = (quote?.trade_impact_pct ?? 0) > HEAVY_IMPACT_PCT;
   const amountNum = Number(amount);
   const validAmount = Number.isFinite(amountNum) && amountNum > 0;
-  const insufficient = walletBalance !== null && side === "buy" && validAmount && amountNum > walletBalance;
+  // Bug fix #2 (2026-07-24, arrow #0071): the insufficient guard was
+  // scoped to `side === "buy"`, so on SELL it never fired even when the
+  // wallet balance was clearly less than the requested amount. Widened
+  // to both sides — walletBalance is now populated on both.
+  const insufficient = walletBalance !== null && validAmount && amountNum > walletBalance;
   const multiHop = quote?.route?.kind === "multi-hop";
 
   // Reset the impact ack when the impact-blocked state clears.
@@ -269,6 +283,23 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
     // Direct route only in v1 (spec E3): approve → swap.
     if (prep.route.kind !== "direct" || prep.calls.length !== 2) {
       throw new Error(`unsupported_route: expected direct 2-call, got ${prep.route.kind} ${prep.calls.length}-call. Try the other denom.`);
+    }
+    // Bug fix #4 audit (2026-07-24, arrow #0071 post-mortem): the pre-flight
+    // eth_call sim from #227 should have caught the NVDA sell revert
+    // (transferFrom would fail because balance < amount) but the swap sign
+    // was requested anyway. Root cause unclear — possibly viem `call`
+    // returning "success" on this specific router path, possibly RPC
+    // caching. Rather than trust the sim as the only guard, add a hard
+    // client-side balance assert before ANY signature. `walletBalance`
+    // is now read for both sides (bug #2 fix above), so this covers SELL
+    // regardless of the sim's behavior. Uses the LOOSE 0.999999 factor
+    // because rounding of `walletBalance` from formatUnits can be off in
+    // the last decimal; treat "sell 100%" as valid even if it's 0.9999999x.
+    if (walletBalance !== null && amountNum > walletBalance * 1.0000001) {
+      throw new Error(
+        `insufficient_balance: requested ${amountNum} but balance is ${walletBalance}. ` +
+        `Use the 100% preset to sell everything or lower the amount.`,
+      );
     }
     const [approveCall, swapCall] = prep.calls;
 
@@ -495,7 +526,7 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
     }
 
     setPhase({ kind: "done", swap_hash: swapHash, approve_hash: approveHash });
-  }, [address, arrow.id, arrow.serial, arrow.ticker, sendTransactionAsync, pubClient, side, amountNum, denom, quote?.min_out, onActionPending]);
+  }, [address, arrow.id, arrow.serial, arrow.ticker, sendTransactionAsync, pubClient, side, amountNum, denom, quote?.min_out, onActionPending, walletBalance]);
 
   const onSmartClick = useCallback(async () => {
     if (action.kind === "connect") return; // rendered as ConnectButton child
@@ -654,8 +685,29 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
               className="flex-1 rounded border px-2 py-1 text-[13px] bg-black/40 text-white tabular-nums"
               style={{ borderColor: BORDER }}
             />
-            <span className="text-[11px]" style={{ color: MUTED }}>{denom}</span>
+            {/* Bug fix #1 (2026-07-24, arrow #0071): the unit label was
+                hardcoded to `denom`, so SELL 1 NVDA read "1 USDG" — misleading
+                enough that a user could type 1 while holding 0.0095 and think
+                they were selling ~$0.10 of NVDA. `payUnitSymbol` resolves to
+                the actual token being paid (arrow.ticker on SELL, denom on BUY). */}
+            <span className="text-[11px]" style={{ color: MUTED }}>{payUnitSymbol}</span>
           </div>
+
+          {/* P2.2 amount presets (2026-07-24). BUY: fixed USDG amounts.
+              SELL: percentage of REAL balance, computed live from the
+              on-chain read. If the user has zero of the pay token, the
+              presets are disabled. Bug #0071 root cause: no SELL balance
+              → no percent-based presets → user typed 1 by hand. This
+              row makes that path structurally impossible. */}
+          {isConnected && arrowIsOpen && (
+            <AmountPresetRow
+              side={side}
+              walletBalance={walletBalance}
+              onSet={(v) => setAmount(v)}
+              currentAmount={amount}
+              payUnitSymbol={payUnitSymbol}
+            />
+          )}
 
           <div className="flex items-center gap-2">
             <label className="text-[10px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>slippage</label>
@@ -693,8 +745,12 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
             <div className="text-[10px] flex flex-wrap gap-x-4" style={{ color: MUTED }}>
               {walletBalance !== null && (
                 <span>
-                  balance: <span className="tabular-nums">{formatNum(walletBalance)}</span> {denom}
-                  {insufficient && <span className="ml-2" style={{ color: RED }}>insufficient</span>}
+                  balance: <span className="tabular-nums">{formatNum(walletBalance)}</span> {payUnitSymbol}
+                  {insufficient && (
+                    <span className="ml-2" style={{ color: RED }}>
+                      insufficient {payUnitSymbol}
+                    </span>
+                  )}
                 </span>
               )}
               {rhEthBalance && (() => {
@@ -871,6 +927,104 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
 }
 
 // ── Sub-components ────────────────────────────────────────────────────
+
+/**
+ * P2.2 amount presets (v3 spec, 2026-07-24).
+ *
+ *   BUY  → 1 / 5 / 10 / 25 / 50 / 100 USDG (fixed amounts in the pay denom)
+ *   SELL → 25% / 50% / 100% of REAL on-chain balance
+ *
+ * The percentage presets are the load-bearing part of the fix: on SELL,
+ * the exact-balance-max preset makes it structurally impossible to type
+ * a size > balance. Arrow #0071 NVDA (1 typed, 0.0095 held → swap
+ * revert + dangling approval) was the tipping point.
+ *
+ * A preset that would exceed the current balance is dimmed + disabled
+ * with a tooltip showing the real balance.
+ */
+function AmountPresetRow({
+  side,
+  walletBalance,
+  onSet,
+  currentAmount,
+  payUnitSymbol,
+}: {
+  side: "buy" | "sell";
+  walletBalance: number | null;
+  onSet: (v: string) => void;
+  currentAmount: string;
+  payUnitSymbol: string;
+}) {
+  const BUY_PRESETS = [1, 5, 10, 25, 50, 100];
+  const SELL_PERCENTS: Array<{ label: string; frac: number }> = [
+    { label: "25%",  frac: 0.25 },
+    { label: "50%",  frac: 0.50 },
+    { label: "100%", frac: 1.00 },
+  ];
+  const current = Number(currentAmount);
+  // Round to 6 decimals — matches USDG's native decimals + is plenty of
+  // precision for stock-token quantity. Avoids sending "0.0095396712345"
+  // to the quote endpoint which trips its parser occasionally.
+  const round = (n: number) => Math.max(0, Number(n.toFixed(6)));
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <label className="text-[10px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>preset</label>
+      {side === "buy"
+        ? BUY_PRESETS.map((v) => {
+            const insufficient = walletBalance !== null && walletBalance < v;
+            const active = current === v;
+            return (
+              <button
+                key={v}
+                type="button"
+                onClick={() => onSet(String(v))}
+                disabled={insufficient}
+                className="rounded border px-2 py-0.5 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{
+                  borderColor: active ? RH_GREEN : BORDER,
+                  color: active ? RH_GREEN : "#9aa1ac",
+                  backgroundColor: active ? "rgba(0,200,5,0.10)" : "transparent",
+                }}
+                title={insufficient
+                  ? `balance ${walletBalance?.toFixed(2)} ${payUnitSymbol} < ${v}`
+                  : `Set to ${v} ${payUnitSymbol}`}
+              >
+                {v}
+              </button>
+            );
+          })
+        : SELL_PERCENTS.map(({ label, frac }) => {
+            const value = walletBalance !== null ? round(walletBalance * frac) : 0;
+            const disabled = walletBalance === null || walletBalance === 0;
+            const active = walletBalance !== null && Math.abs(current - value) < 1e-9 && current > 0;
+            return (
+              <button
+                key={label}
+                type="button"
+                onClick={() => onSet(String(value))}
+                disabled={disabled}
+                className="rounded border px-2 py-0.5 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{
+                  borderColor: active ? RH_GREEN : BORDER,
+                  color: active ? RH_GREEN : "#9aa1ac",
+                  backgroundColor: active ? "rgba(0,200,5,0.10)" : "transparent",
+                }}
+                title={disabled
+                  ? `no ${payUnitSymbol} balance to sell`
+                  : `Sell ${label} of your ${payUnitSymbol} balance (${value})`}
+              >
+                {label}
+              </button>
+            );
+          })}
+      {side === "sell" && walletBalance === 0 && (
+        <span className="text-[10px]" style={{ color: RED }}>
+          no {payUnitSymbol} to sell
+        </span>
+      )}
+    </div>
+  );
+}
 
 function SideToggle({ value, onChange, disabled }: { value: "buy" | "sell"; onChange: (v: "buy" | "sell") => void; disabled?: boolean }) {
   return (
@@ -1101,9 +1255,37 @@ function humanizeSignError(raw: string): string {
     return "swap deadline passed — hit re-quote to pull a fresh quote";
   }
   if (low.includes("execution reverted")) {
-    // Pool likely moved / allowance wrong. Callers should re-quote and
-    // widen slippage. Skip the raw revert reason — it's usually opaque.
-    return "on-chain transaction reverted — pool state changed, widen slippage or re-quote";
+    // Bug fix #3 (2026-07-24, arrow #0071 NVDA sell): the previous
+    // message ("pool state changed, widen slippage or re-quote") was
+    // a guess. On the NVDA case it was WRONG — the real cause was
+    // insufficient token balance (approve > balance is on-chain valid,
+    // so the approve went through, but the swap tried to move more
+    // tokens than the user held → revert). Following the "widen
+    // slippage" advice on that path just burns another swap.
+    //
+    // The pre-flight sim from #227 should have caught this. If we
+    // reach the revert branch anyway, we do NOT know why — so we
+    // say that plainly and point the user at the real inputs.
+    return "on-chain transaction reverted — reason unavailable from the RPC. Check token balance + allowance; do NOT re-sign until you know why.";
+  }
+  if (low.includes("swap_would_revert")) {
+    // From the pre-flight sim inside signFlow — decoded reason is in
+    // the raw message after the colon. Surface it verbatim so the
+    // user sees "STF" / "TOO_LITTLE_RECEIVED" / "TRANSFER_FROM_FAILED"
+    // instead of a made-up cause. TRANSFER_FROM_FAILED specifically
+    // means the balance-vs-amount check on the router side blocked
+    // the swap.
+    const decoded = s.replace(/^.*?swap_would_revert:\s*/i, "").split(/\n/)[0]?.trim() ?? "";
+    if (/transfer(_from)?_failed|erc20:.*balance/i.test(decoded)) {
+      return `swap sim: token transfer would fail — check that your ${decoded.match(/[A-Z]{2,6}/)?.[0] ?? "token"} balance covers the amount before signing`;
+    }
+    return decoded ? `swap sim: ${decoded}` : "swap sim: would revert, reason unavailable";
+  }
+  if (low.includes("swap_state_not_propagated") || low.includes("approve_state_not_propagated")) {
+    return "approve landed on-chain but RH RPC still reports the old allowance — wait a block and retry.";
+  }
+  if (low.includes("approve_reverted")) {
+    return "approve transaction reverted on-chain — nothing was granted. Retry the flow.";
   }
   if (low.includes("gas required exceeds allowance")) {
     return "wallet blocked the gas estimate — top up native ETH on RH";
