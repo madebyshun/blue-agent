@@ -27,6 +27,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useAccount } from "wagmi";
 import type { HoodSnapshot, TickerSnapshot, M5Verdict, Arrow } from "@/lib/blue-hood/types";
 import HoodSidebar from "./HoodSidebar";
 import TickerDetailPanel from "./TickerDetailPanel";
@@ -983,12 +984,17 @@ function ArrowRow({ a }: { a: Arrow }) {
  */
 function ArrowFeedTradeRow({ arrow }: { arrow: Arrow }) {
   const [open, setOpen] = useState(false);
+  const { address } = useAccount();
   const arrowOpen = arrow.status === "open";
-  const actions = arrow.user_actions ?? [];
+  // P2.1 (v3, 2026-07-24): filter user_actions to the CONNECTED wallet
+  // only — no public counter. Guests see no badge; other wallets' trades
+  // are their business.
+  const actions = useMemo(() => {
+    if (!address) return [];
+    const lower = address.toLowerCase();
+    return (arrow.user_actions ?? []).filter((a) => a.wallet.toLowerCase() === lower);
+  }, [arrow.user_actions, address]);
   const tradedCount = actions.length;
-  // Status split (v3, 2026-07-24) — the badge splits into 3 buckets so a
-  // broadcast-but-not-yet-confirmed swap doesn't look identical to a
-  // real success. `pending` (legacy) is bucketed with broadcast.
   const successCount  = actions.filter((a) => a.status === "success").length;
   const revertedCount = actions.filter((a) => a.status === "reverted").length;
   const pendingCount  = actions.filter((a) => a.status === "broadcast" || a.status === "pending" || a.status === "unknown").length;
@@ -1014,20 +1020,12 @@ function ArrowFeedTradeRow({ arrow }: { arrow: Arrow }) {
         {arrowOpen ? "[Review & Sign]" : "[Signal closed]"}
       </button>
       {tradedCount > 0 && (
-        <span
-          className="flex items-center gap-1 font-mono text-[10px]"
-          title={`traded: ${successCount} success · ${revertedCount} reverted · ${pendingCount} broadcast/unknown`}
-        >
-          {successCount > 0 && (
-            <span style={{ color: RH_GREEN }}>● {successCount} success</span>
-          )}
-          {revertedCount > 0 && (
-            <span style={{ color: "#f87171" }}>● {revertedCount} reverted</span>
-          )}
-          {pendingCount > 0 && (
-            <span style={{ color: "#facc15" }}>● {pendingCount} broadcast</span>
-          )}
-        </span>
+        <YouTradedBadge
+          actions={actions}
+          successCount={successCount}
+          revertedCount={revertedCount}
+          pendingCount={pendingCount}
+        />
       )}
       {open && <ReviewSignPanel arrow={arrow} onClose={() => setOpen(false)} />}
     </div>
@@ -1035,6 +1033,75 @@ function ArrowFeedTradeRow({ arrow }: { arrow: Arrow }) {
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
+
+/**
+ * P2.1 "you traded this" badge (v3, 2026-07-24). Only mounted when the
+ * caller has already filtered `actions` to the connected wallet — never
+ * shows aggregate/public counts. Single action → inline tx link. More
+ * than one → summary chip with per-bucket counts + tooltip listing
+ * the most recent 3 tx hashes.
+ */
+function YouTradedBadge({
+  actions,
+  successCount,
+  revertedCount,
+  pendingCount,
+}: {
+  actions: { tx_hash: string; status: string; ts: string }[];
+  successCount: number;
+  revertedCount: number;
+  pendingCount: number;
+}) {
+  const RH_EXPLORER = "https://robinhoodchain.blockscout.com";
+  // Newest first — the arrow feed reads chronologically top-down.
+  const sorted = useMemo(
+    () => [...actions].sort((a, b) => (b.ts ?? "").localeCompare(a.ts ?? "")),
+    [actions],
+  );
+  const shorten = (h: string) => `${h.slice(0, 6)}…${h.slice(-4)}`;
+
+  // Single action → inline link with status color. This is what the
+  // user asked for verbatim: "you traded this · 0xa9bc…↗".
+  if (actions.length === 1) {
+    const a = sorted[0];
+    const color =
+      a.status === "success"  ? RH_GREEN
+      : a.status === "reverted" ? "#f87171"
+      : "#facc15";
+    return (
+      <span className="flex items-center gap-1 font-mono text-[10px]" style={{ color }}>
+        <span style={{ color: MUTED }}>you traded ·</span>
+        <a
+          href={`${RH_EXPLORER}/tx/${a.tx_hash}`}
+          target="_blank"
+          rel="noreferrer"
+          className="underline hover:brightness-125"
+          onClick={(e) => e.stopPropagation()}
+          title={`${a.status} · ${a.ts}`}
+        >
+          {shorten(a.tx_hash)} ↗
+        </a>
+      </span>
+    );
+  }
+
+  // Multiple actions → bucket summary + tooltip with most recent hashes.
+  const tooltip = `you traded ${actions.length} times · ` +
+    sorted.slice(0, 3).map((a) => `${shorten(a.tx_hash)} (${a.status})`).join(", ") +
+    (sorted.length > 3 ? `, +${sorted.length - 3} more` : "");
+  return (
+    <span
+      className="flex items-center gap-1 font-mono text-[10px]"
+      title={tooltip}
+    >
+      <span style={{ color: MUTED }}>you traded ·</span>
+      {successCount  > 0 && <span style={{ color: RH_GREEN     }}>{successCount} ✓</span>}
+      {revertedCount > 0 && <span style={{ color: "#f87171"    }}>{revertedCount} ✗</span>}
+      {pendingCount  > 0 && <span style={{ color: "#facc15"    }}>{pendingCount} ●</span>}
+    </span>
+  );
+}
+
 function SectionHeader({ label }: { label: string }) {
   return (
     <div className="mb-3 font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
