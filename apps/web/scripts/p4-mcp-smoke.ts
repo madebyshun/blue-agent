@@ -73,16 +73,25 @@ const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 function synthArg(name: string, prop: { type?: string; description?: string } | undefined): unknown {
   const k = name.toLowerCase();
   const desc = (prop?.description ?? "").toLowerCase();
+
+  // b20_encode_* tools expect string decimal amounts (parsed via viem parseUnits)
+  if (k === "amount") return "1";
+  if (k === "supply_cap") return "1000000";
+
   if (prop?.type === "number" || /^\d/.test(desc)) {
     if (k.includes("hours")) return 24;
     if (k.includes("limit") || k === "count") return 10;
     if (k === "decimals") return 18;
-    if (k === "supply_cap" || k === "amount") return 1000;
     return 10;
   }
   if (prop?.type === "boolean") return false;
 
-  if (k === "address" || k === "wallet" || k === "token" || k === "contract" || k === "recipient" || k === "spender" || k === "to")
+  if (
+    k === "address" || k === "wallet" || k === "token" || k === "contract" ||
+    k === "recipient" || k === "spender" || k === "to" || k === "admin" ||
+    k === "tokenaddress" || k === "from" || k === "signer" || k === "user" ||
+    k === "owner" || k === "account" || k === "payer" || k === "payee"
+  )
     return USDC_BASE;
   if (k === "ticker" || k === "symbol") return "AAPL";
   if (k === "handle" || k === "agent") return "blueagent_";
@@ -115,10 +124,17 @@ type Result = {
   status: number;
   latency_ms: number;
   ok: boolean;
-  bucket: "alive" | "dead-rpc" | "dead-inner" | "dead-timeout";
+  bucket: "alive" | "dead-rpc" | "dead-inner" | "dead-timeout" | "dead-payment-stub";
   error: string;
   preview: string;
 };
+
+// MCP surface returns HTTP 200 with a text stub when prod's INTERNAL_SERVICE_KEY
+// env var is missing — the free-tier bypass header can't be attached, so /api/x402
+// answers 402 and MCP wraps it as "requires payment but MCP free-tier bypass is
+// not configured". Agents get zero real output. Treat as dead so the alive count
+// reflects real tool availability, not just "the surface responded".
+const PAYMENT_STUB_MARKER = "requires payment but MCP free-tier bypass";
 
 async function callTool(tool: ToolDef): Promise<Result> {
   const args = buildArgs(tool);
@@ -169,16 +185,22 @@ async function callTool(tool: ToolDef): Promise<Result> {
         error = j.result.content?.[0]?.text ?? "inner error";
       } else {
         const t = j.result?.content?.[0]?.text ?? "";
-        // Some handlers return valid RPC but the inner tool payload has {error:"..."}
-        try {
-          const inner = JSON.parse(t);
-          if (inner && typeof inner.error === "string") {
-            ok = false;
-            bucket = "dead-inner";
-            error = String(inner.error).slice(0, 300);
-          }
-        } catch { /* not JSON, treat as free-text success */ }
         preview = t.slice(0, 300).replace(/\s+/g, " ");
+        if (t.includes(PAYMENT_STUB_MARKER)) {
+          ok = false;
+          bucket = "dead-payment-stub";
+          error = "MCP returned payment-stub — prod INTERNAL_SERVICE_KEY missing";
+        } else {
+          // Some handlers return valid RPC but the inner tool payload has {error:"..."}
+          try {
+            const inner = JSON.parse(t);
+            if (inner && typeof inner.error === "string") {
+              ok = false;
+              bucket = "dead-inner";
+              error = String(inner.error).slice(0, 300);
+            }
+          } catch { /* not JSON, treat as free-text success */ }
+        }
       }
     } catch {
       ok = false;
@@ -253,6 +275,7 @@ async function main() {
   lines.push(`## Headline — ${alive.length} alive / ${tools.length} total`);
   lines.push(`- alive: ${alive.length}`);
   lines.push(`- dead-rpc (transport / method / RPC error): ${(byBucket["dead-rpc"] ?? []).length}`);
+  lines.push(`- dead-payment-stub (prod INTERNAL_SERVICE_KEY missing): ${(byBucket["dead-payment-stub"] ?? []).length}`);
   lines.push(`- dead-inner (tool payload contained error): ${(byBucket["dead-inner"] ?? []).length}`);
   lines.push(`- dead-timeout: ${(byBucket["dead-timeout"] ?? []).length}`);
   lines.push("");
