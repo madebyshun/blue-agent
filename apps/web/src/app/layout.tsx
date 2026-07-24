@@ -4,9 +4,14 @@ import "./globals.css";
 import Providers from "@/components/Providers";
 
 const SITE = "https://blueagent.dev";
-const TITLE = "BlueAgent — The Builder OS for Base";
+// P1 (2026-07-24) — identity sweep Base → Robinhood Chain. Title +
+// description are what Twitter / X / Farcaster / Google surface when
+// blueagent.dev is shared — critical to match the on-page H1 so a
+// visitor doesn't land on "Robinhood Chain" content after clicking a
+// "Base" card.
+const TITLE = "BlueAgent — The Builder OS for Robinhood Chain";
 const DESCRIPTION =
-  "74 AI tools. Build, launch, and scale on Base. AI agent chat, x402 tools, and live Base intelligence.";
+  "24/7 non-custodial copilot for tokenized-stock trading on Robinhood Chain. Oracle vs DEX drift monitoring, arrow signals with a public track record, 74 x402 skills.";
 
 // Farcaster v2 mini-app embed — what Base App reads when blueagent.dev is
 // shared in a feed. Tap the button → launches /app/chat inside the wallet's
@@ -37,7 +42,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
-  keywords: ["Blue Agent", "Base", "Blue Hub", "AI tools", "x402", "founder console", "Base builders", "BLUEAGENT", "Farcaster", "Base App"],
+  keywords: ["Blue Agent", "Robinhood Chain", "Blue Hood", "Blue Hub", "tokenized stocks", "drift monitoring", "arb signals", "x402", "AI copilot", "BLUEAGENT", "Chainlink oracle"],
   metadataBase: new URL(SITE),
   applicationName: "Blue Agent",
   appleWebApp: {

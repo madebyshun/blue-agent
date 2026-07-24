@@ -5,12 +5,25 @@ import Navbar from "@/components/Navbar";
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
+// P1 (2026-07-24) — SURFACES lead with Blue Hood (flagship, RH Chain).
+// Chat/Hub retain their Base tool count for now — batch-2 tool migration
+// is tracked separately.
 const SURFACES = [
+  {
+    icon: "🎯",
+    name: "Blue Hood",
+    handle: "blueagent.dev/app/hood",
+    desc: "24/7 non-custodial copilot for tokenized-stock trading on Robinhood Chain. Chainlink oracle vs DEX drift monitoring, arrow signals with a public track record, review-and-sign panel.",
+    link: "/app/hood",
+    linkLabel: "Open Hood →",
+    color: "#00C805",
+    stats: [{ label: "Tokens", value: "24 RWA" }, { label: "Chain", value: "RH · 4663" }],
+  },
   {
     icon: "💬",
     name: "Blue Chat",
     handle: "blueagent.dev/app/chat",
-    desc: "Multi-model AI chat with live Base intelligence, tool execution, artifacts, and share links. Stake BLUE → earn credits → unlock tools.",
+    desc: "Multi-model AI chat with live on-chain intelligence, tool execution, artifacts, and share links. Stake BLUE → earn credits → unlock tools.",
     link: "/app/chat",
     linkLabel: "Open Chat →",
     color: "#4FC3F7",
@@ -20,11 +33,11 @@ const SURFACES = [
     icon: "🛠️",
     name: "Blue Hub",
     handle: "blueagent.dev/app/hub",
-    desc: "70+ pay-per-use AI tools for Base builders and agents. idea → build → audit → ship → raise. Pay per call in USDC via x402.",
+    desc: "74 pay-per-use AI skills for builders and agents. Pay per call in USDC (Base) or USDG (RH) via x402.",
     link: "/app/hub",
     linkLabel: "Open Hub →",
     color: "#A78BFA",
-    stats: [{ label: "Tools", value: "70+" }, { label: "Commands", value: "5 core" }],
+    stats: [{ label: "Skills", value: "74" }, { label: "Rails", value: "x402" }],
   },
   {
     icon: "⚡",
@@ -44,7 +57,7 @@ const ROADMAP = [
     status: "done",
     items: [
       { done: true, text: "$BLUEAGENT — Base, Uniswap v4, stake → credits + USDC yield" },
-      { done: true, text: "Bankr integration — LLM + agent execution layer" },
+      { done: true, text: "Virtuals + Venice LLM chain — agent execution layer (Bankr deprecated)" },
       { done: true, text: "Blue Hub — 78 x402 tools, pay-per-call in USDC" },
       { done: true, text: "Blue Chat — multi-model AI, artifacts, public share links" },
       { done: true, text: "Blue Feed — live Base intelligence, hourly + daily" },
@@ -82,11 +95,14 @@ const ROADMAP = [
   },
 ];
 
+// P1 (2026-07-24) — Network primary is Robinhood Chain now; Base
+// still hosts the legacy $BLUEAGENT + a subset of Hub skills, listed
+// as "settled on" secondary.
 const STATS = [
-  { value: "78+",    label: "AI Tools",       color: "#4FC3F7" },
-  { value: "78+",    label: "API Endpoints",  color: "#A78BFA" },
-  { value: "Base",   label: "Network",        color: "#2563EB" },
-  { value: "x402",   label: "Payment rail",   color: "#F59E0B" },
+  { value: "74",             label: "AI Skills",     color: "#4FC3F7" },
+  { value: "24",             label: "RWA Tokens",    color: "#00C805" },
+  { value: "Robinhood",      label: "Network",       color: "#00C805" },
+  { value: "x402",           label: "Payment rail",  color: "#F59E0B" },
 ];
 
 // ── Components ────────────────────────────────────────────────────────────────
@@ -123,14 +139,14 @@ export default function AboutPage() {
           </div>
 
           <h1 className="text-5xl sm:text-6xl font-bold tracking-tight mb-6 leading-tight">
-            AI agent layer<br />
-            <span className="text-[#4FC3F7]">built for Base builders</span>
+            The onchain copilot<br />
+            <span className="text-[#00C805]">for Robinhood Chain</span>
           </h1>
 
           <p className="text-slate-400 text-lg max-w-2xl mx-auto leading-relaxed mb-12">
             Not a generic AI assistant. Not a Telegram bot with a GPT wrapper.
             A full economic actor — holds a wallet, executes onchain, earns and distributes tokens,
-            and powers a growing ecosystem of tools on Base.
+            and powers the intelligence layer nobody else on Robinhood Chain is building.
           </p>
 
           {/* Stats row */}
@@ -167,8 +183,10 @@ export default function AboutPage() {
             <p>
               Blue Agent started as a Telegram bot — a simple idea to bring AI
               and onchain actions together on Base. It outgrew the chat window.
-              So we rebuilt it from scratch, web-native, on Base. Since March 2026,
-              it&apos;s grown into the Builder OS for Base.
+              So we rebuilt it from scratch, web-native. Since March 2026,
+              it has pivoted to Robinhood Chain — the intelligence layer for
+              tokenized-stock trading. Blue Hood is the flagship: 24/7 drift
+              monitoring, arrow signals, non-custodial review-and-sign.
             </p>
             <p>
               AI tools should work like onchain transactions — instant, composable, paid exactly for what you use.
@@ -360,9 +378,9 @@ export default function AboutPage() {
         <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
           <div className="rounded-2xl border border-[#4FC3F720] bg-[#4FC3F705] p-12 text-center"
             style={{ boxShadow: "0 0 60px #4FC3F708" }}>
-            <h2 className="text-3xl font-bold mb-4">Ready to build on Base?</h2>
+            <h2 className="text-3xl font-bold mb-4">Ready to build on Robinhood Chain?</h2>
             <p className="text-slate-500 mb-8 max-w-md mx-auto">
-              64 AI tools. 5 core commands. Stake to earn. All on Base.
+              Blue Hood live · 74 x402 skills · non-custodial · verifiable track record.
             </p>
             <div className="flex items-center justify-center gap-4 flex-wrap">
               <Link href="/app/chat"

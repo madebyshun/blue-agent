@@ -100,8 +100,8 @@ export const zh: Dict = {
     final_install_mcp: "安装 MCP →",
     final_read_docs: "阅读文档 →",
 
-    footer_tagline: "Base 上的链上智能体",
-    footer_powered: "由 Bankr · Venice AI 提供支持 · x402 原生 · Base",
+    footer_tagline: "Robinhood Chain 上的链上副驾",
+    footer_powered: "由 Virtuals · Venice AI 提供支持 · x402 原生 · Robinhood Chain",
   },
   nav_marketing: {
     about: "关于",

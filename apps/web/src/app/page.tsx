@@ -72,7 +72,12 @@ const PRICING = [
   { tier: "Max",     hold: "10M BLUEAGENT",   credits: "10,000 cr/day", note: "40% discount",  highlight: true  },
 ];
 
-const BUY_URL = "https://bankr.bot/agents/blue-agent";
+// P1 (2026-07-24) — Bankr is banned. Legacy Base $BLUEAGENT still
+// trades on DexScreener (Base, Uniswap v4). Point the button there
+// until the RH Chain Virtuals launch ships. When $BLUEAGENT is
+// bonding-curve live on Virtuals RH Chain, replace with the Virtuals
+// deep link.
+const BUY_URL = "https://dexscreener.com/base/0xf895783b2931c919955e18b5e3343e7c7c456ba3";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -152,7 +157,7 @@ const CHAT_SEGMENTS: { t: string; cls: string }[] = [
   { t: ", ", cls: "text-slate-500" },
   { t: '"source"', cls: "text-slate-400" },
   { t: ': "live DexScreener + 50 transfers" }', cls: "text-slate-500" },
-  { t: "\n\n$0.20 USDC · 2.1s · Base ", cls: "text-slate-500" },
+  { t: "\n\n$0.05 USDG · 2.1s · Robinhood Chain ", cls: "text-slate-500" },
   { t: "✓", cls: "text-[#34D399]" },
 ];
 
@@ -219,10 +224,10 @@ function UsePreview({ tab }: { tab: string }) {
           <span className="ml-auto font-mono text-[10px] text-slate-600">$0.50 · USDC</span>
         </div>
         <pre className="flex-1 p-4 sm:p-5 whitespace-pre-wrap break-words font-mono text-[12px] sm:text-[13px] leading-relaxed m-0">
-<span className="text-[#818CF8]">/build</span><span className="text-slate-400"> a Base points program</span>
-{"\n\n"}<span className="text-[#34D399]">▸ stack</span><span className="text-slate-400">   Next.js · viem · Base 8453</span>
-{"\n"}<span className="text-[#34D399]">▸ contracts</span><span className="text-slate-400"> Points.sol · Distributor.sol</span>
-{"\n"}<span className="text-[#34D399]">▸ tests</span><span className="text-slate-400">   claim · rate-limit · reentrancy</span>
+<span className="text-[#818CF8]">/build</span><span className="text-slate-400"> a stock-drift alert bot for Robinhood Chain</span>
+{"\n\n"}<span className="text-[#34D399]">▸ stack</span><span className="text-slate-400">   Next.js · viem · RH Chain 4663</span>
+{"\n"}<span className="text-[#34D399]">▸ skills</span><span className="text-slate-400">  rh-stock-arb · rh-stock-agent-brief · rh-usdg-route</span>
+{"\n"}<span className="text-[#34D399]">▸ tests</span><span className="text-slate-400">   drift-fire · quote-parity · gate-refuse</span>
 {"\n\n"}<span className="text-slate-500">→ next: </span><span className="text-[#FBBF24]">/audit</span>
         </pre>
       </div>
@@ -232,7 +237,7 @@ function UsePreview({ tab }: { tab: string }) {
   if (tab === "connect") {
     const conns = [
       { icon: "🐙", name: "GitHub",    tools: "repos · PRs · code search" },
-      { icon: "🔵", name: "Base Docs", tools: "contracts · RPC · deploy" },
+      { icon: "🟢", name: "RH Docs",   tools: "contracts · Chainlink · deploy" },
       { icon: "📝", name: "Notion",    tools: "pages · search · update" },
       { icon: "📖", name: "DeepWiki",  tools: "any public repo Q&A" },
     ];
@@ -458,7 +463,7 @@ export default function Home() {
           <SectionHead
             num="1.0" kicker={t("home.s_stack_kicker")}
             title={lang === "zh" ? t("home.s_stack_title")
-              : <>One agent runtime on Base. <span className="text-[#4FC3F7]">Every surface shares it.</span></>}
+              : <>One agent runtime on Robinhood Chain. <span className="text-[#00C805]">Every surface shares it.</span></>}
             sub={t("home.s_stack_sub")}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
@@ -639,7 +644,7 @@ export default function Home() {
             <div className="rounded-3xl border border-[#4FC3F7]/20 p-8 sm:p-14 text-center" style={{ background: "radial-gradient(ellipse 80% 70% at 50% 40%, #4FC3F710 0%, transparent 70%)" }}>
               <h2 className="text-3xl sm:text-5xl font-bold tracking-tight mb-8">
                 {lang === "zh" ? t("home.final_title")
-                  : <>Start building on <span className="text-[#4FC3F7]">Base</span> today</>}
+                  : <>Start building on <span className="text-[#00C805]">Robinhood Chain</span> today</>}
               </h2>
               <div className="flex flex-wrap justify-center gap-3">
                 <Link href="/app/chat" className="text-sm font-semibold px-7 py-3 rounded-xl transition-all hover:opacity-90 active:scale-[0.98]"

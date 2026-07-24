@@ -102,8 +102,12 @@ export const en = {
     final_install_mcp: "Install MCP →",
     final_read_docs: "Read Docs →",
 
-    footer_tagline: "The onchain agent for Base",
-    footer_powered: "Powered by Bankr · Venice AI · x402 native · Base",
+    // P1 (2026-07-24) — footer identity + provider sweep. "Powered by
+    // Bankr" was WRONG (Bankr banned; Virtuals is now the LLM path) AND
+    // dangerous (Virtuals is advising the relaunch — they mustn't land
+    // on a page that credits a competitor).
+    footer_tagline: "The onchain copilot for Robinhood Chain",
+    footer_powered: "Powered by Virtuals · Venice AI · x402 native · Robinhood Chain",
   },
   nav_marketing: {
     about: "About",
