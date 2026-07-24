@@ -102,7 +102,17 @@ export function getDailyCr(tier: TierInfo, hasWallet: boolean): number {
 // ── Credit costs ──────────────────────────────────────────────────────────────
 
 export const BASE_COST: Record<string, number> = {
-  // Bankr (Anthropic + DeepSeek via Bankr gateway)
+  // V1 Virtuals catalog-driven presets (2026-07-24 spec). These are the
+  // stable ids saved to localStorage; server resolves them → Virtuals
+  // model ids via `VIRTUALS_PRESETS` in `_lib/llm.ts`. Cost per preset
+  // matches the "chốt preset" chart shared in chat.
+  balanced:               50,  // anthropic-claude-sonnet-5 · 200k ctx
+  deep:                  200,  // anthropic-claude-opus-4-8 · 200k ctx · heavy reason
+  private:                30,  // e2ee-deepseek-v4-flash · E2EE, no logs
+  grok:                   60,  // x-ai-grok-4-20 · 2M ctx · optional
+  // Bankr-legacy tier ids kept for localStorage compatibility. `fast`
+  // in the V1 spec (deepseek-flash) shares an id with the legacy fast
+  // tier — happy coincidence, no rename needed.
   fast:                   10,
   pro:                    50,
   max:                   200,

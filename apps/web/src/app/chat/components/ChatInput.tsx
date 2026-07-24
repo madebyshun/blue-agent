@@ -1,10 +1,42 @@
 "use client";
-import { useRef, useCallback, useState } from "react";
+import { useRef, useCallback, useState, useEffect } from "react";
 import { useChat } from "../ChatContext";
 import { PERSONAS } from "../personas";
 import { creditCost } from "@/lib/credits";
 import { useLang } from "@/lib/i18n/context";
 import type { Attachment } from "../types";
+
+// ── V1 catalog-driven Virtuals presets ────────────────────────────────────
+// Shape mirrors `VirtualsPreset` in `/api/_lib/llm.ts`. The list served
+// here is the STATIC fallback used until `/api/chat/presets` responds; the
+// server may filter this down based on the live Virtuals /v1/models
+// catalog (missing id → hidden). Never hardcode the model id anywhere
+// else — this file + the server-side spec are the two authoritative sites.
+export interface VirtualsPresetV1 {
+  id: "fast" | "balanced" | "deep" | "private" | "grok";
+  model: string;
+  label: string;
+  desc: string;
+  cost: "●" | "●●" | "●●●";
+  contextTokens: number;
+  credits: number;
+  privacy?: boolean;
+  optional?: boolean;
+}
+export const VIRTUALS_PRESETS_V1: VirtualsPresetV1[] = [
+  { id: "fast",     model: "deepseek-deepseek-v4-flash", label: "Fast",     desc: "DeepSeek V4 Flash · cheapest, snappy",   cost: "●",   contextTokens: 1_000_000, credits: 10 },
+  { id: "balanced", model: "anthropic-claude-sonnet-5",  label: "Balanced", desc: "Claude Sonnet 5 · default for most work", cost: "●●",  contextTokens: 200_000,   credits: 50 },
+  { id: "deep",     model: "anthropic-claude-opus-4-8",  label: "Deep",     desc: "Claude Opus 4.8 · heavy reasoning",       cost: "●●●", contextTokens: 200_000,   credits: 200 },
+  { id: "private",  model: "e2ee-deepseek-v4-flash",     label: "Private",  desc: "E2EE · no logs · DeepSeek V4",            cost: "●",   contextTokens: 1_000_000, credits: 30,  privacy: true },
+  { id: "grok",     model: "x-ai-grok-4-20",             label: "Grok",     desc: "Grok 4 · 2M context window",              cost: "●●",  contextTokens: 2_000_000, credits: 60,  optional: true },
+];
+
+/** "1M" / "200k" — human-readable context size for the preset subtitle. */
+export function formatContextTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
+  return `${n}`;
+}
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -109,15 +141,16 @@ export interface ModelPreset {
 // All-Bankr lineup (funded by the $BLUEAGENT × Bankr loop). Web search is a
 // separate tool (Anthropic web_search server-tool) toggled with 🔍 in the
 // composer, so it works on any of these models — no Venice model in the picker.
+// Deprecated. The V1 preset spec (`VIRTUALS_PRESETS_V1` above) is the
+// source of truth. This array is kept only as a static fallback for
+// `activePreset`/label lookups until the catalog fetch resolves — every
+// entry maps 1:1 to a V1 preset id so the picker highlight stays sane.
 export const MODEL_PRESETS: ModelPreset[] = [
-  // Post task-B: every non-venice tier routes to Virtuals + Sonnet 5.
-  // Label + desc rewritten to match — see BANKR_TIERS above.
-  { id: "chat",       label: "Sonnet 5 · Chat", desc: "Sonnet 5 via Virtuals · balanced",     icon: "💬", tier: "pro",      webSearch: false },
-  { id: "fast",       label: "Sonnet 5 · Fast", desc: "Sonnet 5 via Virtuals · cheapest",     icon: "⚡", tier: "fast",     webSearch: false },
-  { id: "deep-think", label: "Sonnet 5 · Deep", desc: "Sonnet 5 via Virtuals · heavy reason", icon: "🔬", tier: "max",      webSearch: false },
-  { id: "deepseek",   label: "DeepSeek V4",desc: "DeepSeek V4 · 1M context",          icon: "✦",  tier: "deepseek", webSearch: false },
-  { id: "gemini",     label: "Gemini 2.5", desc: "Gemini 2.5 Flash · Google",         icon: "🔮", tier: "gemini",   webSearch: false },
-  { id: "kimi",       label: "Kimi K2",    desc: "Kimi K2 · long context",            icon: "🌊", tier: "kimi",     webSearch: false },
+  { id: "fast",     label: "Fast",     desc: "DeepSeek V4 Flash · cheapest, snappy",   icon: "⚡", tier: "fast",     webSearch: false },
+  { id: "balanced", label: "Balanced", desc: "Claude Sonnet 5 · default for most work", icon: "💬", tier: "balanced", webSearch: false },
+  { id: "deep",     label: "Deep",     desc: "Claude Opus 4.8 · heavy reasoning",       icon: "🔬", tier: "deep",     webSearch: false },
+  { id: "private",  label: "Private",  desc: "E2EE · no logs · DeepSeek V4",            icon: "🔒", tier: "private",  webSearch: false },
+  { id: "grok",     label: "Grok",     desc: "Grok 4 · 2M context window",              icon: "🧠", tier: "grok",     webSearch: false },
 ];
 
 export default function ChatInput() {
@@ -136,11 +169,33 @@ export default function ChatInput() {
   const [cmdOpen,     setCmdOpen]     = useState(false);
   const [personaOpen, setPersonaOpen] = useState(false);
 
+  // Catalog-driven V1 preset list. Starts as the static fallback so the
+  // picker renders instantly; the /api/chat/presets fetch then trims
+  // anything whose Virtuals model id has disappeared from /v1/models.
+  // See `_lib/llm.ts` `getVirtualsCatalog` for the 6h cache + fail-open
+  // semantics.
+  const [virtualsPresets, setVirtualsPresets] = useState<VirtualsPresetV1[]>(VIRTUALS_PRESETS_V1);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/chat/presets")
+      .then((r) => r.ok ? r.json() : null)
+      .then((body: { ok?: boolean; presets?: VirtualsPresetV1[] } | null) => {
+        if (cancelled) return;
+        if (body && body.ok && Array.isArray(body.presets) && body.presets.length > 0) {
+          setVirtualsPresets(body.presets);
+        }
+      })
+      .catch(() => { /* fail-open — keep the static fallback */ });
+    return () => { cancelled = true; };
+  }, []);
+
   const activePersona = PERSONAS.find(p => p.id === personaId) ?? PERSONAS[0];
 
-  // Active preset (if the current tier matches a preset's underlying tier).
-  // Used to highlight the right card when the popover opens.
-  const activePreset = MODEL_PRESETS.find(p => p.tier === chatTier);
+  // Active preset — highlighted in the picker when chatTier === preset.id.
+  // V1 preset ids ARE the chatTier values (fast, balanced, deep, private,
+  // grok), so the lookup is 1:1.
+  const activeVirtualsPreset = virtualsPresets.find(p => p.id === chatTier) ?? virtualsPresets[0];
+  const activePreset = MODEL_PRESETS.find(p => p.id === chatTier);
 
   const activeTier = ALL_TIERS.find(t => t.id === chatTier) ?? BANKR_TIERS[1];
 
@@ -304,76 +359,79 @@ export default function ChatInput() {
               <span className="font-mono text-[10px] text-slate-600 tracking-widest">CHOOSE A MODE</span>
             </div>
 
-            {/* Use-case presets — single-column row list. Each preset is one
-                line: icon + label on the left, terse description and credit
-                cost on the right. Tier accent shows as a 2px left bar on the
-                active row instead of a full card outline; way less ink than
-                the previous 2×3 card grid + the whole popover collapses to
-                about half the height. The Code placeholder still appears as
-                a muted row so the roadmap stays visible. */}
+            {/* V1 catalog-driven Virtuals presets. The list is filtered
+                server-side against /v1/models — anything whose model id
+                disappeared from the catalog never renders here. Each row
+                shows: icon · label · cost dots (●/●●/●●●) · context size · credits.
+                The 5th preset (Grok) is `optional` — shown after a subtle
+                divider so the primary 4 stay uncluttered. */}
             <div className="py-1.5">
-              {MODEL_PRESETS.map(p => {
-                const isActive = activePreset?.id === p.id;
-                const tierMeta = ALL_TIERS.find(t => t.id === p.tier);
-                const accent   = tierMeta?.color ?? "#4FC3F7";
+              {virtualsPresets.map((p, idx) => {
+                const isActive = chatTier === p.id;
+                // Primary presets get an accent color; Grok (optional) stays muted.
+                const accentByCost: Record<"●" | "●●" | "●●●", string> = {
+                  "●":   "#34D399", // green — cheap
+                  "●●":  "#4FC3F7", // blue — mid
+                  "●●●": "#A78BFA", // purple — expensive
+                };
+                const accent = p.privacy ? "#6EE7B7" : accentByCost[p.cost];
+                const prevOptional = virtualsPresets[idx - 1]?.optional === true;
+                const showDividerBefore = p.optional && !prevOptional;
+                const iconMap: Record<VirtualsPresetV1["id"], string> = {
+                  fast: "⚡", balanced: "💬", deep: "🔬", private: "🔒", grok: "🧠",
+                };
                 return (
-                  <button key={p.id}
-                    onClick={() => {
-                      setChatTier(p.tier);
-                      if (typeof p.webSearch === "boolean") setWebSearch(p.webSearch);
-                      setModelOpen(false);
-                      textareaRef.current?.focus();
-                    }}
-                    className="w-full text-left flex items-center gap-2.5 px-3 py-2 hover:bg-white/[0.02] transition-colors relative"
-                    style={isActive ? { background: `${accent}0a` } : undefined}>
-                    {/* Active indicator bar */}
-                    {isActive && (
-                      <span aria-hidden className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r"
-                            style={{ background: accent, boxShadow: `0 0 8px ${accent}80` }} />
-                    )}
-                    <span className="text-base shrink-0 w-5 text-center">{p.icon}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-mono text-[12px] font-bold" style={{ color: isActive ? accent : "#e2e8f0" }}>
-                          {p.label}
-                        </span>
-                        {isActive && (
-                          <span className="font-mono text-[9px]" style={{ color: accent }}>✓</span>
-                        )}
+                  <div key={p.id}>
+                    {showDividerBefore && (
+                      <div className="px-3 py-1">
+                        <div className="border-t border-[#1A1A2E]" />
+                        <p className="font-mono text-[9px] text-slate-700 pt-1">Optional</p>
                       </div>
-                      <p className="font-mono text-[10px] text-slate-500 leading-snug truncate">{p.desc}</p>
-                    </div>
-                    {tierMeta && (
-                      <span className="font-mono text-[10px] shrink-0" style={{ color: accent }}>
-                        {tierMeta.credits}<span className="text-slate-700"> cr</span>
-                      </span>
                     )}
-                  </button>
+                    <button
+                      onClick={() => {
+                        setChatTier(p.id);
+                        setModelOpen(false);
+                        textareaRef.current?.focus();
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-3 py-2 hover:bg-white/[0.02] transition-colors relative"
+                      style={isActive ? { background: `${accent}0a` } : undefined}
+                    >
+                      {isActive && (
+                        <span aria-hidden className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r"
+                              style={{ background: accent, boxShadow: `0 0 8px ${accent}80` }} />
+                      )}
+                      <span className="text-base shrink-0 w-5 text-center">{iconMap[p.id]}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-mono text-[12px] font-bold" style={{ color: isActive ? accent : "#e2e8f0" }}>
+                            {p.label}
+                          </span>
+                          <span className="font-mono text-[10px] tracking-tighter" style={{ color: accent }}>{p.cost}</span>
+                          <span className="font-mono text-[9px] text-slate-600">{formatContextTokens(p.contextTokens)} ctx</span>
+                          {isActive && (
+                            <span className="font-mono text-[9px]" style={{ color: accent }}>✓</span>
+                          )}
+                        </div>
+                        <p className="font-mono text-[10px] text-slate-500 leading-snug truncate">{p.desc}</p>
+                      </div>
+                      <span className="font-mono text-[10px] shrink-0" style={{ color: accent }}>
+                        {p.credits}<span className="text-slate-700"> cr</span>
+                      </span>
+                    </button>
+                  </div>
                 );
               })}
-
-              {/* Roadmap placeholder — Code preset coming when a code-tuned
-                  model lands. Non-interactive row, muted styling. */}
-              <div className="w-full text-left flex items-center gap-2.5 px-3 py-2 opacity-50 cursor-default select-none">
-                <span className="text-base shrink-0 w-5 text-center">🛠️</span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-mono text-[12px] font-bold text-slate-500">Code</span>
-                    <span className="font-mono text-[9px] text-slate-700">coming soon</span>
-                  </div>
-                  <p className="font-mono text-[10px] text-slate-600 leading-snug truncate">Solidity · viem · Foundry</p>
-                </div>
-                <span className="font-mono text-[10px] text-slate-700 shrink-0">tbd</span>
-              </div>
             </div>
 
-            {/* Tiny footnote — the raw model list used to live behind an
-                "Advanced" toggle here; the presets now cover every active
-                model 1:1 so the toggle was pure noise. Bankr / Venice
-                badges are still surfaced inside each preset card. */}
+            {/* Footnote — catalog is the single source of truth. If a
+                preset ever disappears from this picker, it's because
+                Virtuals delisted the underlying model id (see
+                `getVirtualsCatalog` in `_lib/llm.ts`). No hardcoded
+                lists downstream. */}
             <div className="px-3 py-1.5 border-t border-[#1A1A2E]">
               <p className="font-mono text-[9px] text-slate-700 leading-relaxed">
-                Bankr {BANKR_TIERS.length} · Venice {VENICE_TIERS.length} · Privacy {PRIVACY_TIERS.length} · Each preset maps to one model.
+                {virtualsPresets.length}/{VIRTUALS_PRESETS_V1.length} presets live · Virtuals catalog-driven · ●=cheap ●●=mid ●●●=deep
               </p>
             </div>
           </div>
@@ -548,10 +606,12 @@ export default function ChatInput() {
               style={{ color: activeTier.color, background: `${activeTier.color}10`, borderColor: `${activeTier.color}30` }}
             >
               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: activeTier.color }} />
-              {/* Show the PRESET label (Chat · Fast · Web Search · …) — same name
-                  shown in the picker — not the tier label, which read "Pro/Max"
-                  and collided with the credit tiers. */}
-              {activePreset?.label ?? activeTier.label}
+              {/* Show the V1 preset label (Fast / Balanced / Deep / Private / Grok)
+                  with its cost dots. Fall back to the legacy static preset
+                  or tier label so the collapsed button never shows raw ids. */}
+              {activeVirtualsPreset
+                ? <>{activeVirtualsPreset.label} <span className="opacity-70">{activeVirtualsPreset.cost}</span></>
+                : (activePreset?.label ?? activeTier.label)}
               {activeTier.badge && <span className="text-[8px] opacity-60">{activeTier.badge}</span>}
               <svg className="w-2.5 h-2.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
