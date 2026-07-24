@@ -323,8 +323,25 @@ export interface UserAction {
   /** min_out shown at sign time — snapshotted so the receipt stays
    *  honest even if the pool moves. */
   min_out: number | null;
-  /** `pending` on submit; upgraded to `success` / `reverted` if the
-   *  client posts back after confirmation, otherwise stays `pending`
-   *  forever (fine — the tx_hash + explorer link tells the truth). */
-  status: "pending" | "success" | "reverted";
+  /**
+   * v3 (2026-07-24): decoupled from broadcast — status ONLY becomes
+   * `success` when a receipt with `status: "success"` (blockchain status
+   * = 1) is observed. Otherwise:
+   *   - `broadcast` — tx submitted, receipt not yet observed
+   *   - `success`   — receipt confirmed with success bit
+   *   - `reverted`  — receipt confirmed with revert bit (0)
+   *   - `unknown`   — waited past timeout, receipt never observed
+   *
+   * Prior code used `pending` for the pre-receipt phase and let it
+   * decay into `success` by omission, which meant "revert rate" was
+   * structurally always 0. Renamed + new `unknown` bucket so the
+   * indicator is honest. Legacy `pending` still accepted on the API
+   * for backwards compat with in-flight client sessions.
+   */
+  status: "broadcast" | "success" | "reverted" | "unknown" | "pending";
+  /** Revert reason if `status === "reverted"` and we could decode it.
+   *  Free-form string (e.g. "STF" for Uniswap slippage). Nullable. */
+  revert_reason?: string | null;
+  /** Block number of the confirmed receipt if we have one. */
+  block_number?: number | null;
 }

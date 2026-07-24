@@ -276,6 +276,29 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
       });
     }
 
+    // P0.2 (2026-07-24): estimate gas + 30% buffer. First real swap ate
+    // 93.73% of the wallet-default limit (166,068 / 177,174) — V3 concentrated-
+    // liquidity swaps traversing multiple ticks can spike well past a naive
+    // estimate. Fee on RH is ~$0.03 so overshooting costs nothing (unused gas
+    // refunded). Log gas_est / limit_set / used so we can tune buffer over time.
+    // Multi-pool (route.kind !== "direct") would use 1.5×, but v1 is direct-only.
+    let gasLimit: bigint | undefined;
+    let gasEst: bigint | undefined;
+    if (pubClient) {
+      try {
+        gasEst = await pubClient.estimateGas({
+          account: address as `0x${string}`,
+          to: swapCall.to as `0x${string}`,
+          data: swapCall.data as `0x${string}`,
+          value: BigInt(swapCall.value || "0x0"),
+        });
+        gasLimit = (gasEst * 130n) / 100n;
+        console.log(`[trade] gas_est=${gasEst} limit_set=${gasLimit} buffer=1.30x arrow=${arrow.serial} ticker=${arrow.ticker}`);
+      } catch (e) {
+        console.warn(`[trade] gas estimate failed — falling back to wallet default: ${(e as Error).message}`);
+      }
+    }
+
     // Sign #2 — swap
     setPhase({ kind: "signing", step: 2, total: 2, label: "Sign swap in wallet…" });
     const swapHash = await sendTransactionAsync({
@@ -283,36 +306,71 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
       data: swapCall.data as `0x${string}`,
       value: BigInt(swapCall.value || "0x0"),
       chainId: RH_CHAIN_ID,
+      ...(gasLimit !== undefined ? { gas: gasLimit } : {}),
     });
 
-    // Record "pending" — server writes even before we wait for receipt so
-    // the receipt shows up in the feed immediately.
-    const pending: UserAction = {
+    // P0.1 (2026-07-24): status flow reworked. Post `broadcast` — NOT
+    // `pending` — so the record cannot silently upgrade to success by
+    // omission. `success` is only written when a receipt with status
+    // === "success" is observed; timeout / receipt fetch crash lands
+    // as `broadcast` (still visible on Blockscout) and never rots into
+    // a fake success. Prior code allowed structural revert-rate = 0.
+    const broadcastAction: UserAction = {
       ts: new Date().toISOString(),
       wallet: address.toLowerCase(),
       tx_hash: swapHash.toLowerCase(),
       side, amount: amountNum, denom,
       min_out: quote?.min_out ?? null,
-      status: "pending",
+      status: "broadcast",
     };
-    onActionPending?.(pending);
-    void postUserAction(arrow.id, pending);
+    onActionPending?.(broadcastAction);
+    void postUserAction(arrow.id, broadcastAction);
 
-    // Wait + upgrade
+    // Wait for receipt, then post the terminal status.
     if (pubClient) {
       try {
         const receipt = await pubClient.waitForTransactionReceipt({
-          hash: swapHash, confirmations: 1, timeout: 120_000,
+          hash: swapHash, confirmations: 1, timeout: 60_000,
         });
-        const status: UserAction["status"] = receipt.status === "success" ? "success" : "reverted";
-        void postUserAction(arrow.id, { ...pending, status });
+        const isSuccess = receipt.status === "success";
+        const status: UserAction["status"] = isSuccess ? "success" : "reverted";
+        let revertReason: string | null = null;
+        if (!isSuccess) {
+          // Try to fish a Uniswap-style short reason ("STF", "TOO_LITTLE_RECEIVED")
+          // out of the tx. viem exposes the revert selector via a failed
+          // simulate; wrap tightly so we never trade the terminal status.
+          try {
+            await pubClient.simulateContract({
+              account: address as `0x${string}`,
+              address: swapCall.to as `0x${string}`,
+              abi: [{ type: "function", name: "multicall", inputs: [{ name: "data", type: "bytes[]" }], outputs: [], stateMutability: "payable" }] as const,
+              functionName: "multicall",
+              args: [[swapCall.data as `0x${string}`]],
+              blockNumber: receipt.blockNumber,
+            });
+          } catch (simErr) {
+            const raw = (simErr as Error).message;
+            const m = /reverted with the following reason:\s*([^\n]+)/i.exec(raw);
+            revertReason = (m?.[1] ?? raw).slice(0, 160).trim();
+          }
+        }
+        console.log(`[trade] arrow=${arrow.serial} tx=${swapHash.slice(0, 10)}… status=${status} block=${receipt.blockNumber} gas_used=${receipt.gasUsed}${gasLimit !== undefined ? ` limit_set=${gasLimit}` : ""}${revertReason ? ` reason="${revertReason}"` : ""}`);
+        void postUserAction(arrow.id, {
+          ...broadcastAction,
+          status,
+          revert_reason: revertReason,
+          block_number: Number(receipt.blockNumber),
+        });
       } catch (e) {
-        console.warn("[review-sign] receipt wait crashed:", (e as Error).message);
+        // Timeout / RPC error — DO NOT upgrade to "success". Post
+        // `unknown` so the UI is honest ("we couldn't confirm").
+        console.warn(`[trade] receipt wait crashed arrow=${arrow.serial} tx=${swapHash.slice(0, 10)}… err="${(e as Error).message}"`);
+        void postUserAction(arrow.id, { ...broadcastAction, status: "unknown" });
       }
     }
 
     setPhase({ kind: "done", swap_hash: swapHash, approve_hash: approveHash });
-  }, [address, arrow.id, sendTransactionAsync, pubClient, side, amountNum, denom, quote?.min_out, onActionPending]);
+  }, [address, arrow.id, arrow.serial, arrow.ticker, sendTransactionAsync, pubClient, side, amountNum, denom, quote?.min_out, onActionPending]);
 
   const onSmartClick = useCallback(async () => {
     if (action.kind === "connect") return; // rendered as ConnectButton child
