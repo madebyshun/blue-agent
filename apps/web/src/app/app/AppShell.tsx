@@ -67,28 +67,15 @@ const APP_NAV = [
   },
   // Feed nav item removed — Blue Feed is hidden while it's rebuilt (route /feed
   // returns 404 + noindex). Restore this entry when the feed relaunches.
-  {
-    id: "bank",
-    label: "Bank",
-    href: "/bank",
-    icon: (
-      <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round"
-          d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0 0 12 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75Z" />
-      </svg>
-    ),
-  },
-  {
-    id: "launches",
-    label: "Launches",
-    href: "/launches",
-    icon: (
-      <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round"
-          d="M15.59 14.37a6 6 0 0 1-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 0 0 6.16-12.12A14.98 14.98 0 0 0 9.631 8.41m5.96 5.96a14.926 14.926 0 0 1-5.841 2.58m-.119-8.54a6 6 0 0 0-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 0 0-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 0 1-2.448-2.448 14.9 14.9 0 0 1 .06-.312m-2.24 2.39a4.493 4.493 0 0 0-1.757 4.306 4.493 4.493 0 0 0 4.306-1.758M16.5 9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
-      </svg>
-    ),
-  },
+  //
+  // BlueAgent Relaunch (Robinhood Chain "Builder OS" positioning, 2026-07-24):
+  //   HIDDEN from primary nav: `bank`, `launches`, `b20`. Reasons:
+  //   - Blue Bank: underdeveloped, no immediate roadmap → archive + redirect
+  //     (see middleware.ts). All /bank + /pay/[address] routes redirect to /app.
+  //   - Launches + B20: moved conceptually under Hub (task #78 B20HUB still
+  //     WIP). Direct URL access preserved for dev, but hidden from sidebar
+  //     to keep nav to the 9-item blueprint (THẤY · HÀNH ĐỘNG · TỰ ĐỘNG · BUILD).
+  //   Restore any of them by re-adding the object below the "id: hood" entry.
   {
     id: "hood",
     label: "Hood",
@@ -101,17 +88,6 @@ const APP_NAV = [
           d="M3.75 12h16.5m0 0-6-6m6 6-6 6" />
         <path strokeLinecap="round" strokeLinejoin="round"
           d="M3.75 4.5v15" />
-      </svg>
-    ),
-  },
-  {
-    id: "b20",
-    label: "B20 Hub",
-    href: "/b20",
-    icon: (
-      <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round"
-          d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
       </svg>
     ),
   },

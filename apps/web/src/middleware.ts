@@ -19,7 +19,11 @@ const APP_PUBLIC = new Set(["pay", "share", "badge"]);
 const APP_SEGMENTS = new Set([
   "alerts",
   "b20",
-  "bank",
+  // `bank` removed 2026-07-24 — BlueAgent Relaunch "Builder OS for Robinhood
+  // Chain" hides Blue Bank. Bank + /pay/[address] now hard-redirect to /chat
+  // via ARCHIVED_REDIRECTS below (b20 and launches stay accessible via
+  // direct URL because task #78 B20HUB is still WIP; only their nav entry
+  // was removed in AppShell.tsx).
   "chat",
   "dashboard",
   "feed",
@@ -31,6 +35,29 @@ const APP_SEGMENTS = new Set([
   "robinhood-router",
   "terminal",
 ]);
+
+/**
+ * BlueAgent Relaunch archived routes. On EITHER host these 301 to the app
+ * home so:
+ *   - Sidebar nav entry stays consistent with the redirect (no way to arrive
+ *     at Bank UI accidentally).
+ *   - Any external share link (/pay/<address> QR codes generated earlier)
+ *     lands the visitor at Blue Chat instead of a 404.
+ * Runs BEFORE host-specific rewrites so the semantic is identical on
+ * blueagent.dev and app.blueagent.dev.
+ */
+function archivedRedirect(pathname: string, search: string): NextResponse | null {
+  const isBank =
+    pathname === "/bank" || pathname.startsWith("/bank/") ||
+    pathname === "/app/bank" || pathname.startsWith("/app/bank/");
+  const isPay =
+    pathname === "/pay" || pathname.startsWith("/pay/");
+  if (!isBank && !isPay) return null;
+  return NextResponse.redirect(
+    `https://${APP_HOST}/chat${search}`,
+    { status: 301 },
+  );
+}
 
 // BlueBank private preview gate. BlueBank and its public /pay payment surface
 // aren't GA yet — on production they stay blocked EXCEPT for someone holding the
@@ -74,6 +101,13 @@ function bankGate(
 export function middleware(request: NextRequest) {
   const host = request.headers.get("host") || "";
   const { pathname } = request.nextUrl;
+
+  // BlueAgent Relaunch: archived routes (Blue Bank + /pay) → /chat, same
+  // semantic on both hosts. Runs first so bankGate (below) is dead code —
+  // kept for now to avoid a bigger diff, will remove in the About/Docs
+  // follow-up PR.
+  const archived = archivedRedirect(pathname, request.nextUrl.search);
+  if (archived) return archived;
 
   // Redirect docs subdomain → Mintlify
   if (host.startsWith("docs.blueagent.dev")) {

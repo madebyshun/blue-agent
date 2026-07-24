@@ -11,11 +11,14 @@ export const DOC_NAV: DocGroup[] = [
     { title: "Workflow",   href: "/docs/workflow" },
   ]},
   { group: "Products", items: [
+    // BlueAgent Relaunch order — Blue Hood first (flagship copilot for
+    // Robinhood Chain). Blue Bank removed (archived, /docs/bluebank
+    // parked; middleware redirects /bank + /pay to /chat).
+    { title: "Blue Hood", href: "/docs/blue-hood" },
     { title: "Blue Chat", href: "/docs/blue-chat" },
     { title: "Blue Hub",  href: "/docs/blue-hub" },
     { title: "List a Tool", href: "/docs/list-a-tool" },
     // Blue Feed hidden while rebuilding — its docs page is parked (404).
-    { title: "Blue Bank", href: "/docs/bluebank" },
   ]},
   { group: "Knowledge", items: [
     { title: "Skills",      href: "/docs/skills" },
