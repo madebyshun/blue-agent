@@ -8,7 +8,7 @@
  *
  * Contract: whatever X1 returns, we return verbatim — including its
  * `warnings` array. NO filtering, NO editorializing (E-rule #4:
- * "Hiển thị NGUYÊN VĂN mọi warning từ tool"). If the tool errors,
+ * "display tool warnings VERBATIM"). If the tool errors,
  * we surface the status + message so the panel can render "quote
  * failed · <reason>" instead of hanging.
  *

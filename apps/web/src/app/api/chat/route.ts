@@ -2338,8 +2338,8 @@ export async function POST(req: NextRequest) {
   // `Bankr LLM 403: "This account has been banned"`), and per reviewer
   // decision Blue Chat moves to Virtuals as the single default provider
   // for every non-venice preset. NO fallback to Bankr — spec B2:
-  // "xóa/deprecate đường Bankr trong chat route, không giữ fallback sang
-  // account banned".
+  // "remove/deprecate the Bankr path from the chat route, no fallback
+  // to a banned account".
   //
   // The Virtuals /v1/chat/completions endpoint is OpenAI-format, same as
   // Venice — so we reuse `callVenicePhase1`, `veniceToolStream`, and

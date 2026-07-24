@@ -14,7 +14,7 @@
  *   • font-mono for every number
  *   • section headers `// HOOD · <SECTION>` in slate-500 tracking-widest
  *   • Robinhood green #00C805 is THIS page's interactive accent (spec:
- *     "accent riêng của section này"); blue #4FC3F7 shows only in the
+ *     "this section's own accent"); blue #4FC3F7 shows only in the
  *     footer "powered by 30 Blue Hub skills" attribution.
  *
  * Two data fetches, both `no-store`:
@@ -324,7 +324,7 @@ function Header({
         <EnableAlertsButton />
         <span style={{ color: marketBadge.color }}>● {marketBadge.label}</span>
         <span className="flex items-center gap-1.5" style={{ color: MUTED }}>
-          {/* T-V2 #1 — LIVE PULSE. Chấm nhẹ báo trang đang thở.
+          {/* T-V2 #1 — LIVE PULSE. Gentle dot signals the page is alive.
               (Semantics unchanged; the number next to it now reflects
               REAL snapshot age, not fetch latency.) */}
           <span className="hood-live-dot" aria-hidden />
@@ -341,8 +341,8 @@ function Header({
  *   - Vercel cron black-hole (vercel.json in wrong monorepo location)
  *   - GT rate-limit forcing the poller to skip
  *   - Prod deploy that broke the cron auth (401 Bearer)
- * A user MUST see this. Silent stale data violates "hiển thị số verify
- * được" — the header claimed "updated 0s ago" over 2-day-old snapshots
+ * A user MUST see this. Silent stale data violates "show only numbers
+ * you can verify" — the header claimed "updated 0s ago" over 2-day-old snapshots
  * before the fix.
  */
 function StaleBanner({ snap }: { snap: HoodSnapshot | null }) {
@@ -535,8 +535,8 @@ function DriftBoard({
             {/* T-V4 — column widths explicit so 24H sparkline gets a
                 proper 200px cell (was cramped in a 100px auto slot),
                 and every numeric column is right-aligned consistently.
-                User feedback 2026-07-23: "chart 24 có thể hiển thị dài
-                hơn ... nhiều nội dung căn trái, nhiều nội dung căn phải" */}
+                User feedback 2026-07-23: "24h chart could be wider,
+                inconsistent left/right alignment across columns" */}
             <th className="px-3 py-2 text-left w-[96px]">Ticker</th>
             <th className="px-3 py-2 text-right w-[120px]">Oracle</th>
             <th className="px-3 py-2 text-right w-[120px]">DEX</th>

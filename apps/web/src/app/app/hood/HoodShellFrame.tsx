@@ -56,8 +56,8 @@ export default function HoodShellFrame({
       // `h-full flex flex-row` — was `flex-1 min-h-0 flex flex-row` which
       // didn't fill height because the parent `.hood-section h-full` is
       // NOT a flex container. Effect: content overflowing the viewport
-      // was clipped, not scrollable — user said "hood chưa có roll,
-      // nhiều thông tin dưới chưa đọc được" (2026-07-23). Now the shell
+      // was clipped, not scrollable — user reported "no scroll on hood,
+      // content below the fold unreadable" (2026-07-23). Now the shell
       // fills the AppShell main region and inner overflow-y-auto works.
       className="h-full flex flex-row"
       style={{ backgroundColor: BG, color: "#E7E9EE" }}

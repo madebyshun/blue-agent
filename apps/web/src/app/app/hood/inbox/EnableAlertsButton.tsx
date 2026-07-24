@@ -328,7 +328,7 @@ export default function EnableAlertsButton() {
     // the user + reviewer can see the root cause without opening
     // DevTools. Screenshot review of "push setup failed · subscribing"
     // showed only the step, not the actual DOMException — which was
-    // the whole point of task A4 (nothing câm).
+    // the whole point of task A4 (no silent failures).
     const shortMsg = state.message.length > 140
       ? state.message.slice(0, 137) + "…"
       : state.message;

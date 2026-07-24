@@ -4,7 +4,7 @@
  * Public receipt book. Every engine-fired, graded arrow lives here
  * forever with its brief + outcome detail + facts_at_fire strip. This
  * page WILL BE EMPTY at ship — that's the point. Reviewer explicitly
- * called out: "KHÔNG seed data cho có cái xem". First real graded
+ * called out: "DO NOT seed data just for show". First real graded
  * arrow will show up here automatically when Monday's NYSE session
  * closes the first arb window.
  */

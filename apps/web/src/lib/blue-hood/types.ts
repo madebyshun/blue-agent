@@ -70,8 +70,8 @@ export interface TickerSnapshot {
    *  UI to compute per-row freshness (`age_s = now - snap.started_at - polled_at_ms`). */
   polled_at_ms: number;
   /** How stale the GT pool response was when reshaped (seconds). Null on
-   *  cold fetch, a number when memo-served. Reviewer T1(d): "token nào
-   *  serve từ cache cũ phải nói". */
+   *  cold fetch, a number when memo-served. Reviewer T1(d): "any token
+   *  served from stale cache MUST be surfaced". */
   data_age_s: number | null;
   /** T-B1 — hourly close prices (up to 24 points, oldest first) served
    *  from `bh:spark:{ticker}`. Populated by the `sparkline-refresh` cron;
@@ -164,8 +164,9 @@ export interface Arrow {
    *  `"engine"` (see `/api/hood/arrows`), but every arrow written going
    *  forward carries an explicit tag.
    *
-   *  Reviewer T-A #1: "seed-test-arrow LUÔN set origin='seeded', kể cả khi
-   *  real=1". Guaranteed by construction — the seed route hard-codes it. */
+   *  Reviewer T-A #1: "seed-test-arrow MUST set origin='seeded' every
+   *  time, even when real=1". Guaranteed by construction — the seed
+   *  route hard-codes it. */
   origin: "engine" | "seeded";
   /** DEPRECATED. Kept for legacy read of arrows persisted before `origin`
    *  landed. New writers use `origin: "seeded"` instead. Filter treats

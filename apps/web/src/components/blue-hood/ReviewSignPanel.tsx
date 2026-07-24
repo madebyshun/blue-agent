@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * Blue Hood — Review & Sign panel (T-E, tầng HÀNH ĐỘNG).
+ * Blue Hood — Review & Sign panel (T-E, the Action layer).
  *
  * Opens over an arrow card. Fetches a live quote, lets the user pick
  * amount + slippage, then walks the user through the sign flow via
  * their connected wallet on Robinhood Chain (4663).
  *
- * NGUYÊN TẮC BẤT DI BẤT DỊCH — enforced in this file:
+ * NON-NEGOTIABLE RULES — enforced in this file:
  *   1. NON-CUSTODIAL — every signature comes from `useSendTransaction`
  *      on the user's connected wallet. Server never gets a private key.
  *   2. `recipient` = `useAccount().address` VERBATIM. There is NO
