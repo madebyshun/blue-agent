@@ -11,10 +11,12 @@
  *   }
  *
  * Protocol: JSON-RPC 2.0 over HTTP POST
- * Tools: 88 — 5 console + 66 hub_* + 8 blue_* first-party + blue_score/blue_new
+ * Tools: 87 — 5 console + 65 hub_* + 8 blue_* first-party + blue_score/blue_new
  *        + 7 b20_* MCP-native tools (deploy/mint/burn/grant/payment/check_activation/read_token)
- *        (78 unique x402 hub tools fully covered; 1 narrative alias; blue_score/blue_new
+ *        (77 unique x402 hub tools fully covered; 1 narrative alias; blue_score/blue_new
  *         + the 7 b20_* tools are MCP-only — pure calldata builders + on-chain reads, no x402 payment)
+ *        NOTE: verified via scripts/p4-mcp-smoke.ts. Do NOT change this count
+ *        without re-running the smoke — landing copy and docs quote it.
  * Docs: https://api.blueagent.dev/docs
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -537,11 +539,6 @@ const TOOLS = [
     description: "Base chain market pulse — TVL, DEX volume, sentiment, pulse score. No inputs needed.",
     inputSchema: { type: "object", properties: {} },
   },
-  {
-    name: "hub_bankr_pulse",
-    description: "Live Bankr ecosystem pulse — trending agent token launches, $BNKR price and 24h change, ecosystem sentiment.",
-    inputSchema: { type: "object", properties: {} },
-  },
   // ── Utility ───────────────────────────────────────────────────────────────
   {
     name: "blue_score",
@@ -688,7 +685,6 @@ const HUB_MAP: Record<string, string> = {
   hub_cross_yield:          "cross-protocol-yield",
   hub_agent_readiness:      "agent-readiness",
   hub_base_pulse:           "base-pulse",
-  hub_bankr_pulse:          "bankr-pulse",
 };
 
 const CONSOLE_MAP: Record<string, string> = {
@@ -733,7 +729,6 @@ const ARG_REMAP: Record<string, (a: Record<string, unknown>) => Record<string, u
   "narrative-pulse":         (a) => ({ ...a, focus: a.focus ?? "" }),
   "base-alpha":              (a) => a,
   "base-pulse":              (a) => a,
-  "bankr-pulse":             (a) => a,
 };
 
 async function callHubTool(toolId: string, rawArgs: Record<string, unknown>): Promise<string> {
