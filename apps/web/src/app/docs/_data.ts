@@ -9,27 +9,28 @@ export const STATS = [
 ];
 
 export const PRODUCTS = [
-  { name: "Blue Chat", color: "#A78BFA", desc: "AI agent chat · multi-model · skill-based · Built for Base builders",     link: "/app/chat", label: "Open Chat →" },
+  { name: "Blue Hood", color: "#22C55E", desc: "RH Chain copilot · Chainlink vs DEX drift · non-custodial trading",       link: "/app/hood", label: "Open Hood →" },
+  { name: "Blue Chat", color: "#A78BFA", desc: "AI agent chat · multi-model · skill-based · Built for RH + Base",         link: "/app/chat", label: "Open Chat →" },
   { name: "Blue Hub",  color: "#4FC3F7", desc: "74 AI tools · 3-agent consensus · x402 pay-per-call · no API key",        link: "/app/hub",  label: "Open Hub →" },
-  // Blue Feed hidden while rebuilding — restore this product card when /feed relaunches.
-  { name: "Blue Code", color: "#34D399", desc: "Describe an app → Blue builds and deploys it on Base",                    link: "/app/chat", label: "Coming Soon" },
 ];
 
 export const FOUNDATION = [
-  { label: "Venice AI", desc: "Primary LLM for x402 handlers + web search",    color: "#4FC3F7" },
-  { label: "Bankr",     desc: "x402 Cloud distribution + skill ecosystem",      color: "#A78BFA" },
-  { label: "x402",      desc: "Pay per call in USDC or $BLUEAGENT — no signup", color: "#34D399" },
-  { label: "Base",      desc: "All onchain actions on Base (chain ID 8453)",    color: "#2563EB" },
-  { label: "Moralis",   desc: "Wallet data, token holdings, tx history",        color: "#fbbf24" },
+  { label: "Venice AI",  desc: "Primary LLM for x402 handlers + web search",       color: "#4FC3F7" },
+  { label: "Virtuals",   desc: "RH-native inference for Blue Hood arrow briefs",   color: "#22C55E" },
+  { label: "x402",       desc: "Pay per call in USDC (Base) / USDG (RH Chain)",    color: "#34D399" },
+  { label: "RH Chain",   desc: "Robinhood Chain (chain ID 4663) — RWA trading",    color: "#22C55E" },
+  { label: "Base",       desc: "Base (chain ID 8453) — builder + token surface",   color: "#2563EB" },
+  { label: "Moralis",    desc: "Wallet data, token holdings, tx history",          color: "#fbbf24" },
 ];
 
 export const CHAT_MODELS = [
-  { icon: "💬", label: "Chat",       model: "Sonnet",       note: "Balanced default · 200K ctx", cr: "50 cr",  color: "#4FC3F7" },
-  { icon: "⚡", label: "Fast",        model: "DeepSeek V4",  note: "Cheapest · 1M ctx",           cr: "10 cr",  color: "#34D399" },
-  { icon: "🔍", label: "Web Search",  model: "Grok 4",       note: "Live multi-source web",       cr: "60 cr",  color: "#E879F9" },
-  { icon: "🔬", label: "Deep Think",  model: "Opus",         note: "Heavy reasoning + web",       cr: "200 cr", color: "#A78BFA" },
-  { icon: "✍️", label: "Fable 5",     model: "Claude Fable", note: "Creative · 1M ctx",           cr: "120 cr", color: "#F472B6" },
-  { icon: "🔒", label: "Private",     model: "Gemma 27B",    note: "E2EE · no logs",              cr: "30 cr",  color: "#6EE7B7" },
+  { icon: "💬", label: "Chat",       model: "Sonnet",       note: "Balanced default · 200K ctx",  cr: "50 cr",  color: "#4FC3F7" },
+  { icon: "⚡", label: "Fast",        model: "DeepSeek V4",  note: "Cheapest · 1M ctx",            cr: "10 cr",  color: "#34D399" },
+  { icon: "🎯", label: "RH Native",   model: "Virtuals",     note: "Robinhood Chain inference",    cr: "40 cr",  color: "#22C55E" },
+  { icon: "🔍", label: "Web Search",  model: "Grok 4",       note: "Live multi-source web",        cr: "60 cr",  color: "#E879F9" },
+  { icon: "🔬", label: "Deep Think",  model: "Opus",         note: "Heavy reasoning + web",        cr: "200 cr", color: "#A78BFA" },
+  { icon: "✍️", label: "Fable 5",     model: "Claude Fable", note: "Creative · 1M ctx",            cr: "120 cr", color: "#F472B6" },
+  { icon: "🔒", label: "Private",     model: "Gemma 27B",    note: "E2EE · no logs",               cr: "30 cr",  color: "#6EE7B7" },
 ];
 
 export const CHAT_CAPABILITIES = [
@@ -70,7 +71,7 @@ export const COMMANDS_DOCS = [
     { cmd: "blue validate [dir]", desc: "Validate project structure — package.json, tsconfig, env, src/, git", example: "blue validate ./my-project" },
   ]},
   { group: "CHAT", items: [
-    { cmd: "blue chat [prompt]",  desc: "Interactive chat with Bankr LLM in the terminal",                     example: 'blue chat "how do I add x402 to my API?"' },
+    { cmd: "blue chat [prompt]",  desc: "Interactive chat with the Blue Agent LLM (Venice) in the terminal",  example: 'blue chat "how do I add x402 to my API?"' },
   ]},
   { group: "REPUTATION", items: [
     { cmd: "blue score [handle]",       desc: "Builder Score for a wallet or X handle",                        example: "blue score @blueagent_" },
@@ -105,7 +106,7 @@ export const SKILLS_DOCS = [
   { file: "base-ecosystem.md",                desc: "Base ecosystem overview — key protocols, teams, infrastructure." },
   { file: "base-account-integration.md",      desc: "Coinbase Smart Wallet — ERC-4337, passkeys, sponsored txs." },
   { file: "account-abstraction-deep-dive.md", desc: "ERC-4337 deep dive — UserOps, bundlers, paymasters, EntryPoint." },
-  { file: "bankr-tools.md",                   desc: "Bankr LLM capabilities and the full x402 tool suite." },
+  { file: "x402-tools.md",                    desc: "The full 74-tool x402 hub — pricing, inputs, and how agents call each one." },
   { file: "blue-agent-identity.md",           desc: "Blue Agent mission, product voice, do/don't rules." },
   { file: "design-system.md",                 desc: "Visual language, colors, card patterns, spacing." },
   { file: "x402-patterns.md",                 desc: "x402 payment patterns — pay-per-call APIs, pricing, flow." },
@@ -161,7 +162,7 @@ export const PACKAGES = [
     { pkg: "@blueagent/x402", desc: "x402 client SDK · auto payment · createX402Client()" },
   ]},
   { label: "CORE — runtime & data", color: "#A78BFA", items: [
-    { pkg: "@blueagent/core",       desc: "Runtime · skill loading · Bankr LLM · schemas" },
+    { pkg: "@blueagent/core",       desc: "Runtime · skill loading · Venice LLM gateway · schemas" },
     { pkg: "@blueagent/reputation", desc: "Builder Score · Agent Score · Work Hub reputation" },
   ]},
   { label: "INTEGRATIONS", color: "#34D399", items: [

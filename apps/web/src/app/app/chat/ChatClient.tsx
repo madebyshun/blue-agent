@@ -22,7 +22,7 @@ import type { ActiveTab } from "@/app/chat/types";
 // not as a content tab.
 const TAB_META: Record<Exclude<ActiveTab, "chat" | "settings">, { title: string; subtitle: string }> = {
   models:     { title: "Models",     subtitle: "AI engines behind Blue Chat · pick by use-case" },
-  skills:     { title: "Skills",     subtitle: "Agent capabilities · Blue Agent · Bankr · Base MCP" },
+  skills:     { title: "Skills",     subtitle: "Agent capabilities · Blue Hood · Blue Chat · Base + RH Chain MCP" },
   connectors: { title: "Connectors", subtitle: "Attach external MCP servers · GitHub · custom HTTP" },
 };
 

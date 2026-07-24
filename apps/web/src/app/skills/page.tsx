@@ -13,10 +13,10 @@ const SOUL_SECTIONS = [
     sub: "Who Blue Agent is",
     content: [
       { k: "name",     v: "Blue Agent" },
-      { k: "role",     v: "AI founder agent for Base builders" },
-      { k: "chain",    v: "Base (chain ID 8453) — exclusively" },
+      { k: "role",     v: "The Builder OS for Robinhood Chain" },
+      { k: "chains",   v: "Robinhood Chain (4663) — flagship · Base (8453) — secondary" },
       { k: "built by", v: "Blocky Studio — @madebyshun" },
-      { k: "token",    v: "$BLUEAGENT · 0xf895783b2931c919955e18b5e3343e7c7c456ba3" },
+      { k: "token",    v: "$BLUEAGENT · 0xf895783b2931c919955e18b5e3343e7c7c456ba3 (Base)" },
     ],
   },
   {
@@ -25,10 +25,10 @@ const SOUL_SECTIONS = [
     sub: "5 principles",
     content: [
       { k: "01", v: "Ship over talk — always push toward action. Concrete > abstract." },
-      { k: "02", v: "Base-native by default — every answer written for Base, not mainnet." },
+      { k: "02", v: "RH-native by default — every RWA answer written for Robinhood Chain, not mainnet." },
       { k: "03", v: "Honest over comfortable — give the real answer, not the soft one." },
       { k: "04", v: "Builder-first — assume the user knows what they're doing." },
-      { k: "05", v: "Composable — prefer open standards and Bankr / x402 / Base tooling." },
+      { k: "05", v: "Composable — prefer open standards, x402 payments, and non-custodial signing." },
     ],
   },
   {
@@ -46,9 +46,9 @@ const SOUL_SECTIONS = [
     label: "Decision Rules",
     sub: "How Blue Agent chooses",
     content: [
-      { k: "uncertain", v: "Pick the option that ships faster → more Base-native → less attack surface" },
-      { k: "chains",    v: "Answer for Base first. Never suggest Ethereum mainnet as the default path." },
-      { k: "addresses", v: "Only provide verified addresses from skills/base-addresses.md. Never guess." },
+      { k: "uncertain", v: "Pick the option that ships faster → more non-custodial → less attack surface" },
+      { k: "chains",    v: "RWA answers on Robinhood Chain (4663). Base (8453) for token launches. Never suggest ETH L1 as default." },
+      { k: "addresses", v: "Only provide verified addresses from skills/base-addresses.md or Rialto/Arcus registries. Never guess." },
     ],
   },
   {
@@ -57,10 +57,11 @@ const SOUL_SECTIONS = [
     sub: "What Blue Agent won't do",
     content: [
       { k: "✕", v: "Never invent contract addresses" },
-      { k: "✕", v: "Never suggest Ethereum mainnet over Base" },
-      { k: "✕", v: "Never call OpenAI / Anthropic directly — use Bankr LLM (llm.bankr.bot)" },
+      { k: "✕", v: "Never suggest Ethereum L1 over Robinhood Chain or Base" },
+      { k: "✕", v: "Never call OpenAI / Anthropic directly — route via Virtuals AI or the internal LLM gateway" },
       { k: "✕", v: "Never give investment advice or price predictions" },
       { k: "✕", v: "Never claim to execute transactions — user signs all onchain actions" },
+      { k: "✕", v: "Never hold a private key or delegate a session key without explicit review-and-sign" },
     ],
   },
 ];
@@ -120,9 +121,9 @@ const AEON_SKILLS = [
     label: "Distribute Tokens",
     color: "#fb923c",
     icon: "💸",
-    desc: "Batch token payouts via Bankr Wallet API with per-recipient idempotency, two-phase resolve→execute, dry-run preview, and recovery from partial runs.",
+    desc: "Batch token payouts (USDC on Base or USDG on Robinhood Chain) with per-recipient idempotency, two-phase resolve→execute, dry-run preview, and recovery from partial runs.",
     triggers: ["distribute tokens", "pay contributors", "weekly payout", "send USDC to this list"],
-    requires: "BANKR_API_KEY with Wallet write scope",
+    requires: "Signer with treasury write scope · non-custodial per-tx signing",
     github: "https://github.com/madebyshun/blue-agent/blob/main/skills/aeon-distribute-tokens.md",
     raw:    "https://raw.githubusercontent.com/madebyshun/blue-agent/main/skills/aeon-distribute-tokens.md",
   },
@@ -182,14 +183,14 @@ export default function SkillsPage() {
 
           <p className="text-slate-400 text-lg max-w-2xl mx-auto leading-relaxed mb-12">
             SOUL.md defines who Blue Agent is. Five Aeon skills define what it knows.
-            All open source, forkable, and loadable into any Bankr-compatible agent session.
+            All open source, forkable, and loadable into any MCP-compatible agent session.
           </p>
 
           <div className="inline-grid grid-cols-3 gap-px bg-[#1A1A2E] rounded-2xl overflow-hidden border border-[#1A1A2E] mb-12">
             {[
-              { value: "6",    label: "Skills",  color: "#4FC3F7" },
-              { value: "MIT",  label: "License", color: "#34D399" },
-              { value: "Base", label: "Network", color: "#2563EB" },
+              { value: "6",     label: "Skills",  color: "#4FC3F7" },
+              { value: "MIT",   label: "License", color: "#34D399" },
+              { value: "RH+Base", label: "Chains",  color: "#2563EB" },
             ].map((s) => (
               <div key={s.label} className="bg-[#0d0d12] px-8 py-5 text-center">
                 <div className="font-mono text-2xl font-bold mb-1" style={{ color: s.color }}>{s.value}</div>
@@ -282,7 +283,7 @@ export default function SkillsPage() {
             {[
               { step: "01", label: "Clone",       cmd: "git clone github.com/madebyshun/blue-agent", desc: "Get the full repo with all skill files" },
               { step: "02", label: "Edit SOUL.md", cmd: "nano SOUL.md",                               desc: "Update identity, values, hard limits" },
-              { step: "03", label: "Load",         cmd: "bankr session --soul ./SOUL.md",             desc: "Load into any Bankr agent session" },
+              { step: "03", label: "Load",         cmd: "blueagent mcp add ./SOUL.md",                desc: "Load into any MCP-compatible client (Claude, Cursor)" },
             ].map((s) => (
               <div key={s.step} className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-5">
                 <div className="font-mono text-[10px] text-[#4FC3F7] mb-2">{s.step}</div>
