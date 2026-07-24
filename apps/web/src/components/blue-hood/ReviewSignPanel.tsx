@@ -133,7 +133,12 @@ type Phase =
   | { kind: "prepare_error"; msg: string }
   | { kind: "review" }
   | { kind: "signing"; step: number; total: number; label: string }
-  | { kind: "sign_error"; msg: string }
+  // P0 allowance-race (2026-07-24): sign_error can now carry a live
+  // approve_hash so the panel can offer a one-click revoke button
+  // (approve(spender, 0)) when the swap sign failed AFTER approve
+  // confirmed — the 7-dangling-approvals scenario from ví test 23/7.
+  | { kind: "sign_error"; msg: string; approve_hash?: string | null; spender?: string | null; token?: string | null }
+  | { kind: "revoking" }
   | { kind: "done"; swap_hash: string; approve_hash: string | null };
 
 export default function ReviewSignPanel({ arrow, onClose, onActionPending }: ReviewSignPanelProps) {
@@ -159,6 +164,11 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
   const [quoteFetchedAt, setQuoteFetchedAt] = useState<number>(0);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // P0 allowance-race: signFlow stores the LAST completed approve here
+  // so the outer sign_error catch can offer a Revoke button when the
+  // swap sign fails after approve confirmed. Cleared at every fresh
+  // signFlow entry; the ref survives the throw so the outer catch sees it.
+  const lastApproveRef = useRef<{ hash: string; spender: string; token: string } | null>(null);
 
   // ── Wallet balance (of the denom the user pays with) ────────────────
   const payToken: `0x${string}` | undefined =
@@ -262,18 +272,133 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
     }
     const [approveCall, swapCall] = prep.calls;
 
-    // Sign #1 — approve
-    setPhase({ kind: "signing", step: 1, total: 2, label: "Sign approve in wallet…" });
-    const approveHash = await sendTransactionAsync({
-      to: approveCall.to as `0x${string}`,
-      data: approveCall.data as `0x${string}`,
-      value: BigInt(approveCall.value || "0x0"),
-      chainId: RH_CHAIN_ID,
-    });
+    // ── P0 allowance-race fix (2026-07-24) ────────────────────────────
+    // SLV #0073 evidence: MetaMask showed "This transaction is likely to
+    // fail" + "Network fee: Unavailable" on the SWAP sign. Root cause:
+    // we asked for the swap sign before the approve tx confirmed
+    // on-chain → allowance still 0 → simulation revert. The wallet was
+    // right; the user cancelled BECAUSE the wallet warned.
+    //
+    // Fix pipeline:
+    //   (a) Decode approve amount + spender from calldata.
+    //   (b) Read current allowance. If ≥ approve amount → skip approve.
+    //   (c) Otherwise sign approve, then waitForTransactionReceipt AND
+    //       verify receipt.status === "success". Re-read allowance to
+    //       confirm state propagated.
+    //   (d) BEFORE the swap sign, eth_call the swap. If it reverts,
+    //       throw with the reason. Never ask the wallet for a
+    //       likely-to-fail sign.
+    //   (e) sign_error after a completed approve carries approve_hash +
+    //       spender + token so the user can one-click Revoke.
+    const tokenIn = approveCall.to as `0x${string}`;
+    const router  = swapCall.to    as `0x${string}`;
+
+    // Decode approve(spender, amount) — selector(4) + spender(32) + amount(32).
+    const approveData = approveCall.data as `0x${string}`;
+    let approveAmount = 0n;
+    let approveSpender: `0x${string}` = router;
+    try {
+      if (approveData.length >= 2 + 8 + 64 + 64) {
+        approveSpender = ("0x" + approveData.slice(2 + 8 + 24, 2 + 8 + 64)) as `0x${string}`;
+        approveAmount  = BigInt("0x" + approveData.slice(2 + 8 + 64));
+      }
+    } catch {
+      // Fall through with defaults — approveAmount=0 will force the
+      // "no allowance to compare" branch, which is safe.
+    }
+
+    const ERC20_ALLOWANCE_ABI = [{
+      name: "allowance", type: "function", stateMutability: "view",
+      inputs: [{ name: "owner", type: "address" }, { name: "spender", type: "address" }],
+      outputs: [{ name: "", type: "uint256" }],
+    }] as const;
+
+    let approveHash: `0x${string}` | null = null;
+    lastApproveRef.current = null; // reset before each attempt
+
     if (pubClient) {
-      await pubClient.waitForTransactionReceipt({
-        hash: approveHash, confirmations: 1, timeout: 90_000,
-      });
+      let currentAllowance = 0n;
+      try {
+        currentAllowance = await pubClient.readContract({
+          address: tokenIn, abi: ERC20_ALLOWANCE_ABI,
+          functionName: "allowance",
+          args: [address as `0x${string}`, approveSpender],
+        }) as bigint;
+      } catch (e) {
+        console.warn(`[trade] allowance read failed: ${(e as Error).message} — proceeding with approve`);
+      }
+      console.log(`[trade] pre-flight allowance=${currentAllowance} required=${approveAmount} arrow=${arrow.serial} ticker=${arrow.ticker}`);
+
+      if (approveAmount > 0n && currentAllowance < approveAmount) {
+        // Sign approve — user's ONLY approve for this swap
+        setPhase({ kind: "signing", step: 1, total: 2, label: "Sign approve in wallet…" });
+        const signedApproveHash = await sendTransactionAsync({
+          to: approveCall.to as `0x${string}`,
+          data: approveCall.data as `0x${string}`,
+          value: BigInt(approveCall.value || "0x0"),
+          chainId: RH_CHAIN_ID,
+        });
+        approveHash = signedApproveHash;
+
+        // Explicit intermediate phase so the panel shows progress while
+        // we wait for RH Chain to include the approve tx.
+        setPhase({ kind: "signing", step: 1, total: 2, label: "Approve confirming on-chain…" });
+        const approveReceipt = await pubClient.waitForTransactionReceipt({
+          hash: signedApproveHash, confirmations: 1, timeout: 90_000,
+        });
+        if (approveReceipt.status !== "success") {
+          throw new Error(`approve_reverted: on-chain status=${approveReceipt.status}. Swap aborted — no allowance was granted.`);
+        }
+
+        // Re-read allowance to confirm the state propagated. RH RPC
+        // occasionally serves the pre-tx state on the read-your-writes
+        // path; a brief retry loop covers that.
+        let confirmed = 0n;
+        for (let i = 0; i < 3; i++) {
+          try {
+            confirmed = await pubClient.readContract({
+              address: tokenIn, abi: ERC20_ALLOWANCE_ABI,
+              functionName: "allowance",
+              args: [address as `0x${string}`, approveSpender],
+            }) as bigint;
+            if (confirmed >= approveAmount) break;
+          } catch (e) {
+            console.warn(`[trade] post-approve allowance re-read ${i} failed: ${(e as Error).message}`);
+          }
+          await new Promise((r) => setTimeout(r, 400));
+        }
+        console.log(`[trade] post-approve allowance=${confirmed} required=${approveAmount} ok=${confirmed >= approveAmount}`);
+        if (confirmed < approveAmount) {
+          throw new Error(`approve_state_not_propagated: allowance=${confirmed} < required=${approveAmount} after 3 re-reads. Wait a block and retry.`);
+        }
+        // Approve succeeded — arm the revoke context so a downstream
+        // failure (swap sim revert, user cancel on swap sign, …) can
+        // offer a one-click revoke instead of leaving the allowance
+        // hanging like the 7-cap scenario from ví test 23/7.
+        lastApproveRef.current = { hash: signedApproveHash, spender: approveSpender, token: tokenIn };
+      } else if (approveAmount > 0n) {
+        console.log(`[trade] approve skipped — existing allowance sufficient arrow=${arrow.serial} ticker=${arrow.ticker}`);
+      }
+
+      // (d) Pre-flight the swap via eth_call. If it reverts, DON'T ask
+      // the wallet — we already burned an approve, no point burning a
+      // guaranteed-fail swap sign on top.
+      try {
+        await pubClient.call({
+          account: address as `0x${string}`,
+          to: swapCall.to as `0x${string}`,
+          data: swapCall.data as `0x${string}`,
+          value: BigInt(swapCall.value || "0x0"),
+        });
+        console.log(`[trade] swap pre-flight sim OK arrow=${arrow.serial}`);
+      } catch (simErr) {
+        const raw = (simErr as Error).message;
+        const m = /reverted with the following reason:\s*([^\n]+)/i.exec(raw)
+              ?? /reverted with reason string\s*['"]([^'"]+)['"]/i.exec(raw)
+              ?? /execution reverted:\s*([^\n]+)/i.exec(raw);
+        const reason = (m?.[1] ?? raw).slice(0, 240).trim();
+        throw new Error(`swap_would_revert: ${reason}`);
+      }
     }
 
     // P0.2 (2026-07-24): estimate gas + 30% buffer. First real swap ate
@@ -408,10 +533,53 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
         await signFlow(body);
       } catch (e) {
         const msg = (e as Error).message;
-        setPhase({ kind: "sign_error", msg: humanizeSignError(msg) });
+        // Enrich sign_error with the last completed approve so the panel
+        // can offer a one-click Revoke button — matches P0 (d): after
+        // approve succeeded, if anything downstream failed, don't leave
+        // the allowance hanging.
+        const revoke = lastApproveRef.current;
+        setPhase({
+          kind: "sign_error",
+          msg: humanizeSignError(msg),
+          approve_hash: revoke?.hash ?? null,
+          spender: revoke?.spender ?? null,
+          token: revoke?.token ?? null,
+        });
       }
     }
   }, [action.kind, switchChainAsync, fetchQuote, address, arrow.ticker, side, amountNum, denom, slippageBps, signFlow]);
+
+  // ── Revoke handler (P0 allowance-race, step d) ───────────────────────
+  // Sends approve(spender, 0) for the token whose allowance was armed
+  // during the failed sign flow. UI is only rendered when phase is
+  // sign_error AND lastApproveRef fields are all present.
+  const onRevoke = useCallback(async () => {
+    if (phase.kind !== "sign_error" || !phase.approve_hash || !phase.spender || !phase.token) return;
+    try {
+      setPhase({ kind: "revoking" });
+      // approve(address,uint256) selector = 0x095ea7b3
+      const spenderPadded = phase.spender.slice(2).toLowerCase().padStart(64, "0");
+      const zeroPadded    = "".padStart(64, "0");
+      const revokeData = `0x095ea7b3${spenderPadded}${zeroPadded}` as `0x${string}`;
+      await sendTransactionAsync({
+        to: phase.token as `0x${string}`,
+        data: revokeData,
+        value: 0n,
+        chainId: RH_CHAIN_ID,
+      });
+      // Reset the panel to a clean state so the user can requote if they want.
+      lastApproveRef.current = null;
+      setPhase({ kind: "ready" });
+    } catch (e) {
+      setPhase({
+        kind: "sign_error",
+        msg: `Revoke failed: ${(e as Error).message}`,
+        approve_hash: phase.approve_hash,
+        spender: phase.spender,
+        token: phase.token,
+      });
+    }
+  }, [phase, sendTransactionAsync]);
 
   // ── Render ────────────────────────────────────────────────────────
   return (
@@ -597,8 +765,34 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
           </div>
         )}
         {phase.kind === "sign_error" && (
-          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[11px]" style={{ borderColor: RED, color: "#f8b6b6", backgroundColor: "#160b0b" }}>
-            sign failed · {phase.msg}
+          <div className="mx-4 mb-3 rounded border px-3 py-2 space-y-2" style={{ borderColor: RED, color: "#f8b6b6", backgroundColor: "#160b0b" }}>
+            <div className="text-[11px]">sign failed · {phase.msg}</div>
+            {phase.approve_hash && phase.spender && phase.token && (
+              <div className="border-t pt-2 space-y-1.5" style={{ borderColor: "#3a1010" }}>
+                <div className="text-[10px]" style={{ color: "#f8b6b6" }}>
+                  ⚠ approve tx already confirmed — allowance dangling.{" "}
+                  <a href={`${RH_EXPLORER}/tx/${phase.approve_hash}`} target="_blank" rel="noreferrer" className="underline">
+                    {shorten(phase.approve_hash)}
+                  </a>
+                </div>
+                <button
+                  type="button"
+                  onClick={onRevoke}
+                  className="w-full rounded border px-3 py-1.5 text-[11px] font-mono hover:bg-black/40 transition-colors"
+                  style={{ borderColor: RED, color: RED }}
+                >
+                  [Revoke approval] · approve(spender, 0)
+                </button>
+                <div className="text-[9px]" style={{ color: MUTED }}>
+                  Sends approve({shorten(phase.spender)}, 0) on the token contract — one wallet signature. Frees the allowance so no future call can spend it.
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {phase.kind === "revoking" && (
+          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[11px]" style={{ borderColor: AMBER, color: "#e0ba7c", backgroundColor: "rgba(245,179,66,0.04)" }}>
+            revoking approval — sign in wallet…
           </div>
         )}
         {phase.kind === "prepare_error" && (
