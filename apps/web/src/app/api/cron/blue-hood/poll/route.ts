@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { persistSnapshot, runPollCycle } from "@/lib/blue-hood/poller";
 import { runRuleEngine } from "@/lib/blue-hood/rule-engine";
-import { runGrader } from "@/lib/blue-hood/grader";
+import { runGrader, backfillVoidGrades } from "@/lib/blue-hood/grader";
 import { TOOL_CALLER_MODE } from "@/lib/blue-hood/tool-caller";
 import { kvDel, kvGet, kvSetNX } from "@/lib/kv";
 import { KV_POLL_LOCK, TTL_POLL_LOCK } from "@/lib/blue-hood/kv-keys";
@@ -77,6 +77,12 @@ async function handle(req: NextRequest) {
     //    same cycle (its window hasn't elapsed yet — guaranteed by construction).
     const grader = await runGrader();
 
+    // 3b. P0.1 (2026-07-24) — one-shot idempotent backfill: any drift/arb
+    //     graded MISS during a closed market becomes VOID (Chainlink was
+    //     frozen so the gap literally could not close). Cheap KV pass;
+    //     skips arrows already at outcome != "miss". Safe to run every cycle.
+    const backfill = await backfillVoidGrades();
+
     return NextResponse.json({
       ok: true,
       mode: TOOL_CALLER_MODE,
@@ -94,6 +100,7 @@ async function handle(req: NextRequest) {
         // and logs can never disagree.
         candidates_over_threshold: engine.candidates_over_threshold,
         skipped_dust: engine.skipped_dust,
+        skipped_no_executable_pool: engine.skipped_no_executable_pool,
         skipped_feed_stale: engine.skipped_feed_stale,
         below_threshold: engine.below_threshold,
         deduped: engine.deduped,
@@ -104,6 +111,11 @@ async function handle(req: NextRequest) {
         graded: grader.graded.map((a) => ({ serial: a.serial, ticker: a.ticker, type: a.type, outcome: a.outcome, detail: a.outcome_detail })),
         still_open: grader.still_open,
         errored: grader.errored,
+      },
+      backfill: {
+        scanned: backfill.scanned,
+        voided: backfill.voided,
+        voided_ids: backfill.voided_ids,
       },
     });
   } catch (e) {

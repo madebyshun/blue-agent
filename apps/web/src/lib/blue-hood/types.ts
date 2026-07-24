@@ -128,7 +128,13 @@ export type ArrowType = "drift" | "arb" | "flow" | "whale";
 
 export type ArrowStatus = "open" | "graded" | "informational";
 
-export type ArrowOutcome = "hit" | "miss" | "informational" | null;
+/**
+ * P0.1 (2026-07-24) — added `"void"`. Arrows graded during a closed
+ * market cycle produce fake MISSes because the DEX↔oracle gap CANNOT
+ * close while Chainlink is frozen. Those arrows are marked VOID and
+ * excluded from hit rate. See grader.ts backfillVoidGrades().
+ */
+export type ArrowOutcome = "hit" | "miss" | "void" | "informational" | null;
 
 export interface Arrow {
   /** UUID or ULID for uniqueness. */

@@ -28,7 +28,7 @@ const BG = "#050508";
 const SURFACE = "#0B0D13";
 const BORDER = "#1A1A2E";
 
-type OutcomeFilter = "all" | "hit" | "miss" | "open";
+type OutcomeFilter = "all" | "hit" | "miss" | "void" | "open";
 type TypeFilter = "all" | "arb" | "drift" | "flow";
 type SortKey = "newest" | "oldest" | "duration";
 
@@ -78,6 +78,7 @@ export default function TrackRecordClient() {
     let list = data.arrows;
     if (outcome === "hit") list = list.filter((a) => a.outcome === "hit");
     else if (outcome === "miss") list = list.filter((a) => a.outcome === "miss");
+    else if (outcome === "void") list = list.filter((a) => a.outcome === "void");
     else if (outcome === "open") list = list.filter((a) => a.status === "open");
     if (ttype !== "all") list = list.filter((a) => a.type === ttype);
     return [...list].sort((a, b) => {
@@ -97,11 +98,12 @@ export default function TrackRecordClient() {
 
   // Bucket counts for filter pills.
   const buckets = useMemo(() => {
-    if (!data) return { all: 0, hit: 0, miss: 0, open: 0, arb: 0, drift: 0, flow: 0 };
+    if (!data) return { all: 0, hit: 0, miss: 0, void: 0, open: 0, arb: 0, drift: 0, flow: 0 };
     return {
       all: data.arrows.length,
       hit: data.arrows.filter((a) => a.outcome === "hit").length,
       miss: data.arrows.filter((a) => a.outcome === "miss").length,
+      void: data.arrows.filter((a) => a.outcome === "void").length,
       open: data.arrows.filter((a) => a.status === "open").length,
       arb: data.arrows.filter((a) => a.type === "arb").length,
       drift: data.arrows.filter((a) => a.type === "drift").length,
@@ -139,6 +141,7 @@ export default function TrackRecordClient() {
               { key: "all", label: "All", count: buckets.all },
               { key: "hit", label: "Hit", count: buckets.hit },
               { key: "miss", label: "Miss", count: buckets.miss },
+              { key: "void", label: "Void", count: buckets.void },
               { key: "open", label: "Open", count: buckets.open },
             ]}
           />
@@ -404,6 +407,7 @@ function TrackRow({ a }: { a: Arrow }) {
     if (a.status === "open") return { label: "OPEN", color: BLUE };
     if (a.outcome === "hit") return { label: "HIT", color: GREEN };
     if (a.outcome === "miss") return { label: "MISS", color: RED };
+    if (a.outcome === "void") return { label: "VOID", color: AMBER };
     if (a.outcome === "informational") return { label: "INFO", color: MUTED };
     return { label: "—", color: MUTED };
   })();
@@ -485,15 +489,19 @@ function GradingRulesModal({ onClose }: { onClose: () => void }) {
         <ul className="space-y-3 text-sm font-mono">
           <li>
             <span style={{ color: RH_GREEN }}>drift</span>{" "}
-            <span style={{ color: "#9aa1ac" }}>= DEX↔oracle gap closes ≥ 50% in the first 2h of the next session</span>
+            <span style={{ color: "#9aa1ac" }}>= DEX↔oracle gap closes ≥ 50% within the first 2h of NYSE regular session (clock pauses at close, resumes next open — Chainlink freezes off-hours so the gap literally can&apos;t close)</span>
           </li>
           <li>
             <span style={{ color: RH_GREEN }}>arb</span>{" "}
-            <span style={{ color: "#9aa1ac" }}>= spread returns to &lt; 0.5% within 4h</span>
+            <span style={{ color: "#9aa1ac" }}>= spread returns to &lt; 0.5% within 4h of NYSE regular-session time (same market-aware clock as drift)</span>
           </li>
           <li>
             <span style={{ color: RH_GREEN }}>flow</span>{" "}
-            <span style={{ color: "#9aa1ac" }}>= DEX price moves ≥ 1% in the CORRECT direction within 24h, before moving 1% against it</span>
+            <span style={{ color: "#9aa1ac" }}>= DEX price moves ≥ 1% in the CORRECT direction within 24 wall-clock hours (flow does NOT freeze at close — it&apos;s a pool-flow signal, not oracle-relative)</span>
+          </li>
+          <li>
+            <span style={{ color: "#f5b342" }}>void</span>{" "}
+            <span style={{ color: "#9aa1ac" }}>= graded during closed market by the old wall-clock grader → outcome is an artifact, excluded from hit rate (P0.1 backfill 2026-07-24)</span>
           </li>
           <li>
             <span style={{ color: MUTED }}>whale</span>{" "}

@@ -46,12 +46,19 @@ export async function GET(req: NextRequest) {
   });
 
   // Hit rate — count of graded arrows in the last 7d, split hit/miss.
+  // P0.1 — VOID arrows (graded during closed market, artifact of the
+  // old wall-clock window) are EXCLUDED from the denominator so the
+  // headline number reflects real signal quality, not clock bugs.
+  // `voided` is surfaced separately so a reader can audit the exclusion.
   const cutoff = Date.now() - HIT_RATE_WINDOW_MS;
   const graded7d = arrows.filter(
     (a) => a.status === "graded" && a.graded_at && new Date(a.graded_at).getTime() >= cutoff,
   );
   const hits = graded7d.filter((a) => a.outcome === "hit").length;
-  const total = graded7d.length;
+  const misses = graded7d.filter((a) => a.outcome === "miss").length;
+  const voided = graded7d.filter((a) => a.outcome === "void").length;
+  const informational = graded7d.filter((a) => a.outcome === "informational").length;
+  const total = hits + misses; // hit rate denominator excludes void + informational
 
   const hit_rate = total >= HIT_RATE_MIN_SAMPLE
     ? { ready: true as const, pct: Math.round((hits / total) * 100), sample: total }
@@ -67,6 +74,13 @@ export async function GET(req: NextRequest) {
       arrows: arrows.slice(0, limit),
       arrows_today,
       hit_rate,
+      graded_breakdown: {
+        hits,
+        misses,
+        voided,
+        informational,
+        total_graded: graded7d.length,
+      },
       test_arrows_hidden: includeTest ? 0 : all.length - arrows.length,
     },
     { headers: { "Cache-Control": "no-store, max-age=0" } },
