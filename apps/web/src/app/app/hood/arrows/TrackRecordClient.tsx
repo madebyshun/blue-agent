@@ -10,8 +10,11 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Arrow } from "@/lib/blue-hood/types";
 import ArrowBriefBlock from "../ArrowBriefBlock";
+import HoodShellFrame from "../HoodShellFrame";
+import { useHoodShellData } from "../useHoodShellData";
 
 const REFRESH_MS = 15_000;
 const PAGE_SIZE = 50;
@@ -106,9 +109,22 @@ export default function TrackRecordClient() {
     };
   }, [data]);
 
+  // Shared sidebar shell — was previously missing on /hood/arrows.
+  const shell = useHoodShellData();
+  const router = useRouter();
+  const onSidebarSelect = useCallback((ticker: string) => {
+    router.push(`/hood#${ticker.toUpperCase()}`);
+  }, [router]);
+
   return (
-    <div className="h-full overflow-y-auto" style={{ backgroundColor: BG }}>
-      <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">
+    <HoodShellFrame
+      snap={shell.snap}
+      arrows={shell.arrows}
+      marketLabel={shell.marketLabel}
+      marketColor={shell.marketColor}
+      onSelectTicker={onSidebarSelect}
+      inboxUnread={shell.inboxUnread}
+    >
         <TrackHeader />
         <MetricStrip data={data} filtered={filtered} />
 
@@ -184,10 +200,9 @@ export default function TrackRecordClient() {
         )}
 
         <Footer />
-      </div>
 
       {rulesOpen && <GradingRulesModal onClose={() => setRulesOpen(false)} />}
-    </div>
+    </HoodShellFrame>
   );
 }
 
@@ -207,13 +222,18 @@ function TrackHeader() {
           every graded arrow, forever
         </div>
       </div>
-      <Link
-        href="/hood"
-        className="ml-auto text-[11px] hover:text-white"
-        style={{ color: MUTED }}
-      >
-        ← Live board
-      </Link>
+      {/* Symmetric nav — before this, /hood/arrows only had a back-link
+          to /hood, so a reader on the track record had no path to the
+          alert inbox (where /Review & Sign lives) without typing the
+          URL. Now consistent with /hood + /hood/inbox headers. */}
+      <div className="ml-auto flex items-center gap-4 text-[11px]">
+        <Link href="/hood" className="hover:text-white" style={{ color: MUTED }}>
+          ← Live board
+        </Link>
+        <Link href="/hood/inbox" className="hover:text-white" style={{ color: MUTED }}>
+          Inbox →
+        </Link>
+      </div>
     </header>
   );
 }

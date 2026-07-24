@@ -17,6 +17,7 @@
  */
 
 import { useState } from "react";
+import Link from "next/link";
 import type { Arrow, HoodSnapshot, M5Verdict, TickerSnapshot } from "@/lib/blue-hood/types";
 
 const RH_GREEN = "#00C805";
@@ -26,6 +27,7 @@ const RED = "#ef4444";
 const GREEN = "#22c55e";
 const MUTED = "#6b7280";
 const BORDER = "#1A1A2E";
+const BG = "#050508";
 const DUST_TVL_USD = 5_000;
 
 // Dust check matches the rule-engine gate: TOTAL token liquidity, not
@@ -67,12 +69,15 @@ export default function HoodSidebar({
   marketLabel,
   marketColor,
   onSelectTicker,
+  inboxUnread = 0,
 }: {
   snap: HoodSnapshot | null;
   arrows: Arrow[] | null;
   marketLabel: string;
   marketColor: string;
   onSelectTicker: (ticker: string) => void;
+  /** Unread arrow count for the Inbox nav badge. Optional; 0 = no badge. */
+  inboxUnread?: number;
 }) {
   const rows: TickerSnapshot[] = snap?.tickers ?? [];
 
@@ -110,6 +115,43 @@ export default function HoodSidebar({
           {marketLabel}
         </span>
       </div>
+
+      {/* Nav strip — Drift (current) · Inbox (n) · Track record.
+          Before this the sidebar had no path to /hood/inbox or
+          /hood/arrows; RECENT ARROWS below was the only clue that
+          another view existed, and its click just scrolled the board.
+          Real bug 2026-07-23. */}
+      <nav
+        className="px-3 pt-3 pb-2 flex flex-col gap-1 border-b"
+        style={{ borderColor: BORDER }}
+        aria-label="Blue Hood sections"
+      >
+        <span className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg font-mono text-[11px] tracking-wide" style={{ color: RH_GREEN, backgroundColor: "#0a1a0e" }}>
+          <span>▸</span> Drift board
+        </span>
+        <Link
+          href="/hood/inbox"
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff08] font-mono text-[11px] tracking-wide"
+          style={{ color: inboxUnread > 0 ? RH_GREEN : "#9aa1ac" }}
+        >
+          <span>▸</span> Inbox
+          {inboxUnread > 0 && (
+            <span
+              className="ml-auto rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold"
+              style={{ color: BG, backgroundColor: RH_GREEN }}
+            >
+              {inboxUnread}
+            </span>
+          )}
+        </Link>
+        <Link
+          href="/hood/arrows"
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff08] font-mono text-[11px] tracking-wide"
+          style={{ color: "#9aa1ac" }}
+        >
+          <span>▸</span> Track record
+        </Link>
+      </nav>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         {/* Watchlist — tradable first, then dust (collapsed by default),
@@ -212,10 +254,16 @@ export default function HoodSidebar({
                 const tooltip = a.brief?.verdict_note
                   ?? a.outcome_detail
                   ?? `${a.type} · ${a.expected_direction ?? ""}`;
+                // Deep-link to the inbox card for this arrow. Before this,
+                // the row was `<button onClick={onSelectTicker(a.ticker)}>`
+                // which just scrolled the board to the ticker — you lost
+                // the arrow context and had no path to Review & Sign.
+                // The `#${a.id}` anchor is respected by InboxClient (see
+                // its `rowRefs` scroll-to-hash logic). 2026-07-23 fix.
                 return (
                   <li key={a.id}>
-                    <button
-                      onClick={() => onSelectTicker(a.ticker)}
+                    <Link
+                      href={`/hood/inbox#${a.id}`}
                       className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff08]"
                       title={tooltip}
                     >
@@ -235,7 +283,7 @@ export default function HoodSidebar({
                       >
                         {outcomeLabel(a)}
                       </span>
-                    </button>
+                    </Link>
                   </li>
                 );
               })}
@@ -244,19 +292,33 @@ export default function HoodSidebar({
         </div>
       </div>
 
-      {/* Footer attribution — matches the main pane's footer language */}
-      <div
-        className="px-4 py-3 border-t text-[10px] font-mono"
-        style={{ borderColor: BORDER, color: MUTED }}
+      {/* Footer — mirrors Blue Chat's sidebar credit-bar (px-5 py-3.5,
+          border-t, shrink-0 to stay glued to the bottom). Live-cycle
+          indicator dot on the left; tokens-tracked count in the middle;
+          gear-icon docs link on the right. Same visual weight as the
+          Chat surface for consistency. */}
+      <Link
+        href="/docs/blue-hood"
+        className="px-5 py-3.5 border-t shrink-0 flex items-center gap-2.5 hover:bg-[#ffffff05] transition-colors group"
+        style={{ borderColor: BORDER }}
+        title="Docs — Blue Hood"
       >
-        <div className="flex items-center gap-2">
-          <span
-            className="w-1 h-1 rounded-full"
-            style={{ backgroundColor: BLUE }}
-          />
-          <span>Powered by 30 Blue Hub skills</span>
-        </div>
-      </div>
+        <span
+          className="w-2 h-2 rounded-full shrink-0 transition-all animate-pulse"
+          style={{
+            backgroundColor: snap ? RH_GREEN : "#334155",
+            boxShadow: snap ? `0 0 6px ${RH_GREEN}80` : undefined,
+          }}
+        />
+        <span className="font-mono text-[11px] flex-1 text-left" style={{ color: "#64748b" }}>
+          {snap
+            ? `${snap.metrics.tokens_watched}/${snap.metrics.registry_total} tokens · 30 Hub skills`
+            : "warming up…"}
+        </span>
+        <span className="font-mono text-[9px] text-slate-700 group-hover:text-slate-500 transition-colors">
+          docs
+        </span>
+      </Link>
     </aside>
   );
 }

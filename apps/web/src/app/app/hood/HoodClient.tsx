@@ -31,6 +31,8 @@ import type { HoodSnapshot, TickerSnapshot, M5Verdict, Arrow } from "@/lib/blue-
 import HoodSidebar from "./HoodSidebar";
 import TickerDetailPanel from "./TickerDetailPanel";
 import ArrowBriefBlock from "./ArrowBriefBlock";
+import ReviewSignPanel from "@/components/blue-hood/ReviewSignPanel";
+import EnableAlertsButton from "./inbox/EnableAlertsButton";
 
 const REFRESH_MS = 15_000;
 const RH_GREEN = "#00C805";
@@ -93,6 +95,9 @@ export default function HoodClient() {
   const [arrowsData, setArrowsData] = useState<Extract<ArrowsRes, { ok: true }> | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<number>(0);
+  // Inbox last-read bookmark — mirrored from /hood/inbox so we can badge
+  // the "Inbox" nav link with an unread count. Same source, same math.
+  const [inboxLastRead, setInboxLastRead] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("drift");
   // T2 — default filter hides dust so the top of the board is tradable
   // rows, not COIN +132% on a $1k pool.
@@ -101,17 +106,38 @@ export default function HoodClient() {
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
-      const [s, a] = await Promise.all([
+      const [s, a, lr] = await Promise.all([
         fetch("/api/hood/snapshot", { cache: "no-store", signal }).then((r) => r.json() as Promise<SnapshotRes>),
         fetch("/api/hood/arrows", { cache: "no-store", signal }).then((r) => r.json() as Promise<ArrowsRes>),
+        // Inbox unread count needs the read bookmark. Cheap GET, one KV
+        // read; noop if the endpoint errors (nav still works, just no
+        // badge). Never throws upward.
+        (async (): Promise<{ ok: true; last_read_at: string | null } | { ok: false }> => {
+          try {
+            const r = await fetch("/api/hood/inbox/last-read", { cache: "no-store", signal });
+            if (!r.ok) return { ok: false };
+            return await r.json() as { ok: true; last_read_at: string | null };
+          } catch {
+            return { ok: false };
+          }
+        })(),
       ]);
       if (s.ok) { setSnap(s.snapshot); setErr(null); } else { setErr(s.error); }
       if (a.ok) setArrowsData(a);
+      if (lr.ok) setInboxLastRead(lr.last_read_at);
       setLastFetch(Date.now());
     } catch (e) {
       if ((e as Error).name !== "AbortError") setErr((e as Error).message);
     }
   }, []);
+
+  // Unread = arrows fired after the read bookmark. If no bookmark yet
+  // (fresh user), everything is unread — matches /hood/inbox behaviour.
+  const inboxUnread = useMemo(() => {
+    const arrows = arrowsData?.arrows ?? [];
+    const cutoff = inboxLastRead ? new Date(inboxLastRead).getTime() : 0;
+    return arrows.filter((a) => new Date(a.fired_at).getTime() > cutoff).length;
+  }, [arrowsData, inboxLastRead]);
 
   useEffect(() => {
     const ctl = new AbortController();
@@ -177,18 +203,24 @@ export default function HoodClient() {
   }, [filter]);
 
   return (
-    <div className="flex-1 min-h-0 flex flex-row" style={{ backgroundColor: BG }}>
+    <div className="h-full flex flex-row" style={{ backgroundColor: BG }}>
       <HoodSidebar
         snap={snap}
         arrows={arrowsData?.arrows ?? null}
         marketLabel={marketBadge.label}
         marketColor={marketBadge.color}
         onSelectTicker={scrollToTicker}
+        inboxUnread={inboxUnread}
       />
 
-      <div className="flex-1 min-w-0 overflow-y-auto">
-        <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
-          <Header snap={snap} lastFetch={lastFetch} marketBadge={marketBadge} />
+      <div className="flex-1 min-w-0 overflow-y-auto hood-scroll">
+        {/* Full-width main — no max-w cap (matches Virtuals reference:
+            drift board's 8-col table wants the full viewport width).
+            Generous padding on lg+ so it doesn't feel edge-to-edge on
+            ultra-wide monitors. Same shape used by /hood/inbox and
+            /hood/arrows via HoodShellFrame. */}
+        <div className="w-full px-4 py-6 md:px-8 md:py-8 xl:px-12">
+          <Header snap={snap} lastFetch={lastFetch} marketBadge={marketBadge} inboxUnread={inboxUnread} />
           <StaleBanner snap={snap} />
 
           {err && (
@@ -250,10 +282,12 @@ const STALE_THRESHOLD_S = 15 * 60; // 15 min — amber banner threshold
 function Header({
   snap,
   marketBadge,
+  inboxUnread,
 }: {
   snap: HoodSnapshot | null;
   lastFetch: number;
   marketBadge: { label: string; color: string };
+  inboxUnread: number;
 }) {
   const dataAgeS = snap ? Math.max(0, Math.round((Date.now() - new Date(snap.finished_at).getTime()) / 1000)) : null;
 
@@ -271,7 +305,23 @@ function Header({
           copilot for Robinhood Chain
         </div>
       </div>
-      <div className="ml-auto flex items-center gap-4 text-[11px]">
+      {/* Nav: DRIFT (current) · INBOX (n unread) · TRACK RECORD + push
+          alerts. Mirrors the InboxClient + TrackRecordClient headers so
+          the three views have symmetric nav — before this, /hood had no
+          link to /hood/inbox, so a user who fires an arrow had no path
+          to Review & Sign except by typing the URL. Real bug 2026-07-23. */}
+      <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
+        <Link
+          href="/hood/inbox"
+          className="hover:text-white"
+          style={{ color: inboxUnread > 0 ? RH_GREEN : MUTED }}
+        >
+          Inbox{inboxUnread > 0 ? ` (${inboxUnread})` : ""} →
+        </Link>
+        <Link href="/hood/arrows" className="hover:text-white" style={{ color: MUTED }}>
+          Track record →
+        </Link>
+        <EnableAlertsButton />
         <span style={{ color: marketBadge.color }}>● {marketBadge.label}</span>
         <span className="flex items-center gap-1.5" style={{ color: MUTED }}>
           {/* T-V2 #1 — LIVE PULSE. Chấm nhẹ báo trang đang thở.
@@ -482,14 +532,19 @@ function DriftBoard({
       <table className="w-full text-sm">
         <thead className="font-mono text-[9px] uppercase tracking-widest" style={{ color: MUTED }}>
           <tr className="border-b" style={{ borderColor: BORDER }}>
-            <th className="px-3 py-2 text-left">Ticker</th>
-            <th className="px-3 py-2 text-right">Oracle</th>
-            <th className="px-3 py-2 text-right">DEX</th>
-            <th className="px-3 py-2 text-right">Drift</th>
-            <th className="px-3 py-2 text-left">24h</th>
-            <th className="px-3 py-2 text-right">TVL</th>
-            <th className="px-3 py-2 text-right">Vol 24h</th>
-            <th className="px-3 py-2 text-left">Verdict</th>
+            {/* T-V4 — column widths explicit so 24H sparkline gets a
+                proper 200px cell (was cramped in a 100px auto slot),
+                and every numeric column is right-aligned consistently.
+                User feedback 2026-07-23: "chart 24 có thể hiển thị dài
+                hơn ... nhiều nội dung căn trái, nhiều nội dung căn phải" */}
+            <th className="px-3 py-2 text-left w-[96px]">Ticker</th>
+            <th className="px-3 py-2 text-right w-[120px]">Oracle</th>
+            <th className="px-3 py-2 text-right w-[120px]">DEX</th>
+            <th className="px-3 py-2 text-right w-[96px]">Drift</th>
+            <th className="px-3 py-2 text-left w-[220px]">24h</th>
+            <th className="px-3 py-2 text-right w-[140px]">TVL</th>
+            <th className="px-3 py-2 text-right w-[120px]">Vol 24h</th>
+            <th className="px-3 py-2 text-right w-[120px]">Verdict</th>
           </tr>
         </thead>
         <tbody className="font-mono text-[13px]">
@@ -526,8 +581,11 @@ function Sparkline({
 }) {
   if (!points || points.length < 6) return <span style={{ color: "#334155" }}>—</span>;
 
-  const w = 60;
-  const h = 20;
+  // T-V4 — widened sparkline SVG (was 60×20, now 200×32) so the 24h
+  // shape is actually readable. Matches Virtuals reference where the
+  // sparkline is a real visual, not a dot.
+  const w = 200;
+  const h = 32;
   const pad = 1;
   const min = Math.min(...points, oracle ?? points[0]);
   const max = Math.max(...points, oracle ?? points[0]);
@@ -701,7 +759,10 @@ function DriftRow({
           </div>
         </td>
         <td className="px-3 py-2 text-right" style={{ color: "#9aa1ac" }}>{formatUsd(r.volume_24h_usd)}</td>
-        <td className="px-3 py-2 text-left">
+        <td className="px-3 py-2 text-right">
+          {/* T-V4 — right-align verdict badge so it hangs off the same
+              edge as every numeric column above. Consistent alignment
+              per user feedback 2026-07-23. */}
           {dust ? <DustBadge /> : <VerdictBadge verdict={r.verdict} session={r.market.session} />}
         </td>
       </tr>
@@ -854,12 +915,53 @@ function ArrowRow({ a }: { a: Arrow }) {
       </tr>
       {open && (
         <tr style={{ borderBottom: "1px solid #0f1218" }}>
-          <td colSpan={6} className="px-3 py-3" style={{ backgroundColor: "#07090e" }}>
+          <td colSpan={6} className="px-3 py-3 space-y-3" style={{ backgroundColor: "#07090e" }}>
             <ArrowBriefBlock a={a} hasBrief={hasBrief} />
+            <ArrowFeedTradeRow arrow={a} />
           </td>
         </tr>
       )}
     </>
+  );
+}
+
+/**
+ * T-E entry point in the drift-board arrows-feed row-expand. Same
+ * pattern as the chat card + inbox: opens ReviewSignPanel modal.
+ * Disabled when arrow is graded.
+ */
+function ArrowFeedTradeRow({ arrow }: { arrow: Arrow }) {
+  const [open, setOpen] = useState(false);
+  const arrowOpen = arrow.status === "open";
+  const tradedCount = (arrow.user_actions ?? []).length;
+  // stopPropagation on wrapper + button — the parent `<tr>` in the
+  // arrows feed has `onClick={() => setOpen((v) => !v)}` that toggles
+  // the row expansion. Without this, clicking [Review & Sign] fires
+  // setOpen(true) for the panel AND bubbles up to collapse the row,
+  // unmounting this component in the same tick → modal never renders.
+  // Real bug found in preview 2026-07-23; same bite as inbox.
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+        disabled={!arrowOpen}
+        className="rounded border px-3 py-1.5 font-mono text-[11px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{ borderColor: RH_GREEN, color: RH_GREEN }}
+        title={arrowOpen ? "Open the trade panel" : "Signal closed — read-only"}
+      >
+        {arrowOpen ? "[Review & Sign]" : "[Signal closed]"}
+      </button>
+      {tradedCount > 0 && (
+        <span className="font-mono text-[10px]" style={{ color: RH_GREEN }} title="A trade has been recorded on this arrow">
+          ● traded ({tradedCount})
+        </span>
+      )}
+      {open && <ReviewSignPanel arrow={arrow} onClose={() => setOpen(false)} />}
+    </div>
   );
 }
 

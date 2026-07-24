@@ -27,6 +27,7 @@ import {
   ROBINHOOD_MAINNET_VERIFIED_WETH9,
   ROBINHOOD_MAINNET_VERIFIED_FACTORY,
   ROBINHOOD_SWAP_ROUTER_ADDRESS,
+  checkTokenToTokenRoute,
 } from "@/lib/robinhood/swap";
 import { findWethPools, bestPool } from "@/lib/robinhood/pool";
 
@@ -157,6 +158,35 @@ export default async function handler(req: Request): Promise<Response> {
       }
     }
 
+    // ── V3 EXECUTABILITY CHECK ─────────────────────────────────────────
+    // Directly probe on-chain V3 factory (same probe prepare uses). If GT
+    // says "direct pool exists" but that pool is Uniswap V4, our router
+    // will fail at prepare-time — the user sees a valid quote and then
+    // "prepare failed · no route". Real bug found on SNDK 2026-07-23.
+    // Now we downgrade the route to null with an honest warning so the
+    // panel disables the Sign button BEFORE the user tries to sign.
+    let route_executable = false;
+    let route_unavailable_reason: string | null = null;
+    if (route_kind !== null) {
+      const probe = await checkTokenToTokenRoute(
+        tokenIn as `0x${string}`,
+        tokenOut as `0x${string}`,
+      );
+      if (probe.route === null) {
+        route_kind = null;
+        route_executable = false;
+        route_unavailable_reason = probe.reason;
+      } else {
+        route_executable = true;
+        // Reconcile: if GT's directGt said "direct" but V3 probe found
+        // only a WETH-hopped path, honestly say "multi-hop". Multi-hop
+        // is v1-blocked (panel disables Sign for it), but at least the
+        // reason is truthful and the token can be traded in a future
+        // multicall version.
+        if (probe.route === "weth-hopped") route_kind = "multi-hop";
+      }
+    }
+
     // ── Additional slippage from trade impact on the actual pool ─────────
     // xy=k first-order: fill worsens by ~trade_notional / one_side_usd.
     // A $93 trade in a $28.7k one-side pool ≈ 0.32% additional impact
@@ -184,6 +214,11 @@ export default async function handler(req: Request): Promise<Response> {
     if (pool_deviates_from_oracle) warnings.push(`pool_deviates_from_oracle: pool spot ${pool_oracle_delta_pct}% off Chainlink — quote uses pool basis so on-chain swap won't revert, but oracle-comparing agents should widen slippage tolerance`);
     if (spot_source === "chainlink") warnings.push("no_pool_price_available: quote fell back to Chainlink oracle; on-chain swap MAY revert if pool has drifted");
     if (one_side_usd > 0 && notional_usd / one_side_usd > 0.05) warnings.push(`heavy_trade: notional is ${(100 * notional_usd / one_side_usd).toFixed(1)}% of one-side depth — real slip will exceed the first-order xy=k figure`);
+    // Surface V3 executability honestly — the user must not sign a swap
+    // that will fail at prepare-time because the pool is V4.
+    if (!route_executable && route_unavailable_reason) {
+      warnings.push(`no_executable_route_v3_only: ${route_unavailable_reason}. Router runs Uniswap V3 only; if this token's liquidity is on a V4 pool, the swap cannot execute until Task #75 (V4 router) ships. Quote is spot-only.`);
+    }
 
     return Response.json({
       tool: "rh-stock-swap-quote",
@@ -214,11 +249,20 @@ export default async function handler(req: Request): Promise<Response> {
       warnings,
       route: {
         kind: route_kind,
-        note: route_kind === "multi-hop"
-          ? "No direct pool at the requested denom — X2 will build a WETH-hopped path (2 approves + 2 swaps)."
-          : route_kind === "direct"
-            ? "Direct pool available at the requested denom."
-            : "Cannot resolve a route at spot pricing — try WETH denom or verify token liquidity.",
+        // `executable` is the honest "can prepare build V3 calldata" flag.
+        // The panel should ONLY enable Sign when this is true. Before
+        // the SNDK fix, kind === "direct" was based on GT (V3+V4); a V4
+        // pool would show green quote → red prepare. Now: quote refuses
+        // to say "direct" unless V3 factory actually returns a pool.
+        executable: route_executable,
+        unavailable_reason: route_unavailable_reason,
+        note: !route_executable
+          ? "Not executable: no V3 pool for this pair. Router runs V3 only — a V4 pool may exist but cannot be used yet (see Task #75)."
+          : route_kind === "multi-hop"
+            ? "No direct pool at the requested denom — X2 will build a WETH-hopped path (2 approves + 2 swaps)."
+            : route_kind === "direct"
+              ? "Direct V3 pool available at the requested denom."
+              : "Cannot resolve a route at spot pricing — try WETH denom or verify token liquidity.",
         direct_pool_gt: directGt
           ? { address: directGt.address, name: directGt.name, dex: directGt.dex, fee_bps: directGt.fee_bps, tvl_usd: directGt.reserve_usd }
           : null,

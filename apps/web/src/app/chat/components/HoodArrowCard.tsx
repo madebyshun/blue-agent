@@ -19,6 +19,8 @@
 import type { Arrow } from "@/lib/blue-hood/types";
 import type { ChatCard } from "@/lib/blue-hood/chat-card";
 import Link from "next/link";
+import { useState } from "react";
+import ReviewSignPanel from "@/components/blue-hood/ReviewSignPanel";
 
 const RH_GREEN = "#00C805";
 const BLUE = "#4FC3F7";
@@ -147,35 +149,7 @@ export function HoodArrowCard({ result }: { result: HoodArrowResult }) {
       )}
 
       {/* ── Actions ─────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2 px-3 pb-3">
-        {/* Placeholder — the trade action lands in T-E. Left visible so
-            the DoD gif shows the button. */}
-        <button
-          type="button"
-          onClick={() => {
-            console.warn("[hood-arrow-card] Review & Sign is a T-E placeholder — no trade action wired yet.");
-          }}
-          className="rounded border px-3 py-1.5 text-[11px] font-semibold hover:bg-black/40"
-          style={{ borderColor: RH_GREEN, color: RH_GREEN }}
-          title="Trade action lands in T-E — this button is intentionally inert."
-        >
-          [Review &amp; Sign]
-        </button>
-        <Link
-          href={result.deep_link?.inbox ?? `/hood/inbox#${a.id}`}
-          className="rounded border px-3 py-1.5 text-[11px] hover:text-white"
-          style={{ borderColor: BORDER, color: MUTED }}
-        >
-          Open in inbox →
-        </Link>
-        <Link
-          href={result.deep_link?.track ?? "/hood/arrows"}
-          className="ml-auto text-[10px] hover:text-white"
-          style={{ color: MUTED }}
-        >
-          track record
-        </Link>
-      </div>
+      <ActionsRow arrow={a} deepLink={result.deep_link} />
     </div>
   );
 }
@@ -185,6 +159,59 @@ function FactPair({ k, v }: { k: string; v: string }) {
     <span>
       <span style={{ color: MUTED }}>{k}</span> {v}
     </span>
+  );
+}
+
+/**
+ * T-E entry point in the chat card. Opens the ReviewSignPanel modal
+ * when clicked. The panel does its own guard-railing; the card just
+ * disables the button when the arrow is graded (informational).
+ * "you traded this arrow" line only renders when we know a wallet-
+ * matching action is present — kept simple in v1 (all actions shown,
+ * not filtered by connected wallet; connected wallet visibility is
+ * handled inside ReviewSignPanel).
+ */
+function ActionsRow({ arrow, deepLink }: { arrow: Arrow; deepLink?: { inbox: string; board: string; track: string } }) {
+  const [open, setOpen] = useState(false);
+  const arrowOpen = arrow.status === "open";
+  const traded = (arrow.user_actions ?? []).length > 0;
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2 px-3 pb-3">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          disabled={!arrowOpen}
+          className="rounded border px-3 py-1.5 text-[11px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ borderColor: RH_GREEN, color: RH_GREEN }}
+          title={arrowOpen ? "Open the trade panel" : "Signal closed — read-only"}
+        >
+          {arrowOpen ? "[Review & Sign]" : "[Signal closed]"}
+        </button>
+        <Link
+          href={deepLink?.inbox ?? `/hood/inbox#${arrow.id}`}
+          className="rounded border px-3 py-1.5 text-[11px] hover:text-white"
+          style={{ borderColor: BORDER, color: MUTED }}
+        >
+          Open in inbox →
+        </Link>
+        {traded && (
+          <span className="text-[10px]" style={{ color: RH_GREEN }} title="A trade has been recorded on this arrow">
+            ● traded ({(arrow.user_actions ?? []).length})
+          </span>
+        )}
+        <Link
+          href={deepLink?.track ?? "/hood/arrows"}
+          className="ml-auto text-[10px] hover:text-white"
+          style={{ color: MUTED }}
+        >
+          track record
+        </Link>
+      </div>
+      {open && (
+        <ReviewSignPanel arrow={arrow} onClose={() => setOpen(false)} />
+      )}
+    </>
   );
 }
 

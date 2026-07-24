@@ -15,9 +15,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Arrow } from "@/lib/blue-hood/types";
 import ArrowBriefBlock from "../ArrowBriefBlock";
 import EnableAlertsButton from "./EnableAlertsButton";
+import ReviewSignPanel from "@/components/blue-hood/ReviewSignPanel";
+import HoodShellFrame from "../HoodShellFrame";
+import { useHoodShellData } from "../useHoodShellData";
 
 const REFRESH_MS = 15_000;
 const RH_GREEN = "#00C805";
@@ -43,6 +47,31 @@ export default function InboxClient() {
   const [arrows, setArrows] = useState<Arrow[]>([]);
   const [lastRead, setLastRead] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Deep-link support — `/hood/inbox#<arrow.id>` auto-expands + scrolls
+  // to that card. Sidebar's RECENT ARROWS + Web Push notifications both
+  // point here; before this the hash was ignored → clicked notifications
+  // dumped you at the top of the inbox with no visible focus. 2026-07-23.
+  const [openArrowId, setOpenArrowId] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const readHash = () => {
+      const h = window.location.hash.replace(/^#/, "");
+      setOpenArrowId(h || null);
+    };
+    readHash();
+    window.addEventListener("hashchange", readHash);
+    return () => window.removeEventListener("hashchange", readHash);
+  }, []);
+  // Scroll to the target arrow after it renders. requestAnimationFrame
+  // waits for one paint so the <li id={a.id}> is in the DOM.
+  useEffect(() => {
+    if (!openArrowId || arrows.length === 0 || typeof window === "undefined") return;
+    const raf = requestAnimationFrame(() => {
+      const el = document.getElementById(openArrowId);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [openArrowId, arrows.length]);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -82,9 +111,27 @@ export default function InboxClient() {
     }
   }, []);
 
+  // Sidebar data — separate fetch from the inbox's own arrows (which
+  // uses limit=200 for the full list). Sidebar-hook is cheap and gives
+  // us marketBadge + unread badge consistent with /hood.
+  const shell = useHoodShellData();
+  const router = useRouter();
+  // Watchlist row click on /hood/inbox → navigate to /hood#<TICKER> so
+  // the drift board expands and scrolls to that ticker. Same behavior
+  // as intra-page scroll on /hood, just cross-page.
+  const onSidebarSelect = useCallback((ticker: string) => {
+    router.push(`/hood#${ticker.toUpperCase()}`);
+  }, [router]);
+
   return (
-    <div className="h-full overflow-y-auto" style={{ backgroundColor: BG }}>
-      <div className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-8">
+    <HoodShellFrame
+      snap={shell.snap}
+      arrows={shell.arrows}
+      marketLabel={shell.marketLabel}
+      marketColor={shell.marketColor}
+      onSelectTicker={onSidebarSelect}
+      inboxUnread={unread}
+    >
         <Header unread={unread} onMarkAllRead={markAllRead} />
         {err && (
           <div
@@ -106,14 +153,14 @@ export default function InboxClient() {
                 key={a.id}
                 a={a}
                 isUnread={new Date(a.fired_at).getTime() > cutoff}
+                initialOpen={openArrowId === a.id}
               />
             ))}
           </ul>
         )}
 
         <Footer />
-      </div>
-    </div>
+    </HoodShellFrame>
   );
 }
 
@@ -155,8 +202,11 @@ function Header({ unread, onMarkAllRead }: { unread: number; onMarkAllRead: () =
   );
 }
 
-function InboxCard({ a, isUnread }: { a: Arrow; isUnread: boolean }) {
-  const [open, setOpen] = useState(false);
+function InboxCard({ a, isUnread, initialOpen = false }: { a: Arrow; isUnread: boolean; initialOpen?: boolean }) {
+  const [open, setOpen] = useState(initialOpen);
+  // Re-sync `open` when initialOpen flips true (deep-link arrives after
+  // arrows fetch resolves).
+  useEffect(() => { if (initialOpen) setOpen(true); }, [initialOpen]);
   const outcome = (() => {
     if (a.status === "open") return { label: "WATCHING", color: BLUE };
     if (a.outcome === "hit") return { label: "HIT", color: GREEN };
@@ -176,7 +226,7 @@ function InboxCard({ a, isUnread }: { a: Arrow; isUnread: boolean }) {
         : "No brief attached at fire time.");
 
   return (
-    <li>
+    <li id={a.id}>
       <div
         // T-V2 #2 — `hood-row` adds the terminal-cursor border-left on
         // hover. Rounded corners + the surface hover-darken keep the
@@ -221,12 +271,53 @@ function InboxCard({ a, isUnread }: { a: Arrow; isUnread: boolean }) {
           <span className="font-mono text-[10px]" style={{ color: MUTED }}>{open ? "▾" : "▸"}</span>
         </div>
         {open && (
-          <div className="border-t px-3 py-3" style={{ borderColor: "#0f1218" }}>
+          <div className="border-t px-3 py-3 space-y-3" style={{ borderColor: "#0f1218" }}>
             <ArrowBriefBlock a={a} hasBrief={!!a.brief} />
+            <InboxCardTradeRow arrow={a} />
           </div>
         )}
       </div>
     </li>
+  );
+}
+
+/**
+ * T-E entry point for the inbox row-expand. Same pattern as the chat
+ * card's ActionsRow: opens ReviewSignPanel modal. Disabled when the
+ * arrow is graded/informational.
+ */
+function InboxCardTradeRow({ arrow }: { arrow: Arrow }) {
+  const [open, setOpen] = useState(false);
+  const arrowOpen = arrow.status === "open";
+  const tradedCount = (arrow.user_actions ?? []).length;
+  // stopPropagation on the wrapper — the parent InboxCard has an
+  // outer `onClick={() => setOpen((v) => !v)}` that TOGGLES the row
+  // expansion. Without this, clicking [Review & Sign] fires setOpen(true)
+  // for the panel AND bubbles up to collapse the row, which unmounts
+  // this component in the same tick → panel state destroyed, modal
+  // never renders. Real bug found in preview 2026-07-23.
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2 pt-1"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+        disabled={!arrowOpen}
+        className="rounded border px-3 py-1.5 font-mono text-[11px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{ borderColor: RH_GREEN, color: RH_GREEN }}
+        title={arrowOpen ? "Open the trade panel" : "Signal closed — read-only"}
+      >
+        {arrowOpen ? "[Review & Sign]" : "[Signal closed]"}
+      </button>
+      {tradedCount > 0 && (
+        <span className="font-mono text-[10px]" style={{ color: RH_GREEN }} title="A trade has been recorded on this arrow">
+          ● traded ({tradedCount})
+        </span>
+      )}
+      {open && <ReviewSignPanel arrow={arrow} onClose={() => setOpen(false)} />}
+    </div>
   );
 }
 

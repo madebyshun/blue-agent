@@ -175,6 +175,13 @@ export interface Arrow {
    *  time. Populated once, cached forever on the arrow record. Null when
    *  the A4 call failed or was skipped — the arrow still fires either way. */
   brief?: ArrowBrief | null;
+  /** T-E — user actions taken against this arrow. Every time a user
+   *  signs a swap from the Review & Sign panel, we append an entry
+   *  here. Purely a display / receipt-tracking field; DELIBERATELY
+   *  excluded from hit-rate math (hit-rate is the SIGNAL's track
+   *  record, not "did anyone trade this"). Multiple users can trade
+   *  the same arrow — every action appends. */
+  user_actions?: UserAction[];
   /** Pre-merge task #8 — snapshot of the exact numeric facts at fire
    *  time. In the old sync flow A4 was called AT fire time so its
    *  `facts_at_fire` block genuinely captured fire-time state. In the
@@ -276,4 +283,41 @@ export interface ArrowBrief {
   };
   /** ISO timestamp when the brief was fetched. */
   fetched_at: string;
+}
+
+/**
+ * T-E — a single user's trade against an arrow, recorded for display
+ * only. This is a RECEIPT, not an audit: `wallet` is what the client
+ * self-reported at the moment of the successful sign, and we ONLY
+ * accept it after the tx hash lands on-chain. Kept anonymous — no
+ * balances, no strategy signal.
+ *
+ * DELIBERATELY excluded from hit-rate: the signal is the arrow, not
+ * "did anyone trade this". `/api/hood/arrows` reports these fields
+ * verbatim so a viewer sees "you traded this arrow · 0x1234…↗" but
+ * the hit_rate math never touches user_actions.
+ */
+export interface UserAction {
+  /** ISO timestamp we accepted the action. */
+  ts: string;
+  /** 0x-prefixed connected wallet at sign time. Lowercased. */
+  wallet: string;
+  /** 0x-prefixed swap tx hash (approve is not recorded — only the
+   *  final swap). Lowercased. */
+  tx_hash: string;
+  /** Side chosen — matches the arrow's expected direction most of the
+   *  time; recorded verbatim so contrarian trades ("this signal is
+   *  wrong, going the other way") stay honest. */
+  side: "buy" | "sell";
+  /** Human amount the user typed in. */
+  amount: number;
+  /** Quote denom at sign time (USDG or WETH). */
+  denom: "USDG" | "WETH";
+  /** min_out shown at sign time — snapshotted so the receipt stays
+   *  honest even if the pool moves. */
+  min_out: number | null;
+  /** `pending` on submit; upgraded to `success` / `reverted` if the
+   *  client posts back after confirmation, otherwise stays `pending`
+   *  forever (fine — the tx_hash + explorer link tells the truth). */
+  status: "pending" | "success" | "reverted";
 }
