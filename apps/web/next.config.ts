@@ -9,6 +9,13 @@ const nextConfig: NextConfig = {
   // Defaults to `.next` → production and the primary dev server are unaffected.
   // Start the secondary server with: NEXT_DIST_DIR=.next-dev3004 PORT=3004 …
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
+  // The Virtuals ACP v2 seller SDK (@virtuals-protocol/acp-node-v2) is a heavy,
+  // server-only Node package — it pulls socket.io-client, eventsource, @privy-io/node,
+  // @account-kit/infra and @solana/kit. It is ONLY reached from the acp-poll cron via
+  // a runtime dynamic import gated on env config (see lib/blue-hood/acp-seller.ts), so
+  // it must never be traced/bundled by webpack. Mark it external → Node require()s it
+  // from node_modules at runtime, and an unconfigured deploy never loads it at all.
+  serverExternalPackages: ["@virtuals-protocol/acp-node-v2"],
   async redirects() {
     return [
       // BlueBank's production gate (/app/bank + /pay) now lives in
