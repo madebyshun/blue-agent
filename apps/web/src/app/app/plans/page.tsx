@@ -1,72 +1,68 @@
 "use client";
 
-// /app/plans — pricing. This is a PRICING PAGE ONLY: it introduces no new
-// billing mechanism. Every "Get credits" button opens the existing TopUpModal,
-// which runs the same non-custodial USDC → credits flow (CREDIT_PACKS) used
-// everywhere else.
+// /app/plans — the top-up screen. This is a PRICING PAGE ONLY: it introduces no
+// new billing mechanism. Every "Pay $N in USDC" button (and the header chip)
+// opens the existing TopUpModal, which runs the same non-custodial USDC → credits
+// flow (CREDIT_PACKS) used everywhere else — and TopUpModal routes through the
+// wallet picker itself when nothing is connected, so this page needs no connect
+// card of its own.
 //
 // Every number on this page is imported, never typed out:
-//   GUEST_DAILY / WALLET_DAILY   — lib/credits, the real daily allowances
-//   preset.credits               — the per-message cost the ledger actually debits
-//   CREDITS_PER_USDC             — the one anchor rate (1 cr = $0.0005)
-// "How many messages does a day buy" is arithmetic on those, computed below.
-// A hardcoded example here would drift the moment a preset is repriced, and a
-// pricing page that disagrees with the ledger is worse than no pricing page.
+//   CREDIT_PACKS / CREDITS_PER_USDC  — lib/payments, the real packs + anchor rate
+//   cheapestPaid.credits             — per-message cost of the cheapest paid model
+//   GUEST_DAILY / WALLET_DAILY       — lib/credits, the real free allowances
+// The per-card "≈ N messages · or N tool runs" is arithmetic on those; a hardcoded
+// figure would drift the moment a pack is repriced or a model recosted.
 //
-// What this page must NOT imply: that a credit pack unlocks anything. It does
-// not. Guest and Member reach the identical model list and the identical Hub
-// catalog — the only differences are the size of the daily allowance and
-// whether you can top up. Selling "tiers" that gate nothing would be the same
-// class of defect as advertising a tool the model cannot call.
+// Honesty invariant carried over from the previous build: a credit pack unlocks
+// NOTHING. Guest and Member reach the identical model list and Hub catalog — packs
+// differ in SIZE only. That is why every card's middle feature row is the literal
+// "Spends on any model or Hub tool" (identical on all four), and why the footer
+// states the free daily allowance instead of implying you must pay to use the
+// product. Selling a "tier" that gated a feature would be the same class of defect
+// as advertising a tool the model cannot call.
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useWallet } from "@/hooks/useWallet";
-import { WalletPickerModal } from "@/components/WalletPicker";
 import TopUpModal from "@/components/TopUpModal";
 import { CREDIT_PACKS, CREDITS_PER_USDC } from "@/lib/payments";
 import { WALLET_DAILY, GUEST_DAILY } from "@/lib/credits";
 import {
   VIRTUALS_PRESETS_V1,
-  formatContextTokens,
   type VirtualsPresetV1,
 } from "@/app/chat/components/presets";
 
 const ACCENT = "#4FC3F7";
 
-/** Messages a `daily` allowance buys at `perMsg` credits. `null` = free model. */
-function msgsPerDay(daily: number, perMsg: number): number | null {
-  if (perMsg <= 0) return null;
-  return Math.floor(daily / perMsg);
-}
+// The "≈ N tool runs" reference price. $0.05 is the catalog floor (the cheapest
+// Hub tools), so this reads as an upper bound — hence the "≈". Live per-tool
+// prices live on /hub; anchoring to one number here beats mirroring a 100-row
+// table that would rot the day a tool is repriced.
+const TOOL_RUN_ANCHOR_USD = 0.05;
 
-/** `null` → the model is free. `0` is a real answer: that tier cannot afford one. */
-function msgsLabel(n: number | null): string {
-  if (n == null) return "unlimited";
-  return `${n.toLocaleString()} ${n === 1 ? "msg" : "msgs"}`;
-}
+// Advisory framing per tier, keyed by the pack's own label — editorial "who is
+// this size for", never a capability the smaller tiers lack. The two rows above
+// it on every card are identical on purpose. Unknown labels get a size-neutral
+// line so a repriced CREDIT_PACKS never renders an empty row.
+const TIER_FLAVOR: Record<string, string> = {
+  Starter: "Good for a first project",
+  Plus:    "Enough for a full month of building",
+  Pro:     "Volume for agents and cron jobs",
+  Scale:   "Volume for agents and cron jobs",
+};
 
 /** USDC list price → credits, at the one anchor rate. */
 function usdToCredits(usd: number): number {
   return Math.round(usd * CREDITS_PER_USDC);
 }
 
-// Worked examples of the tool-pricing RULE, not a claim about which prices are
-// in the catalog. The rule (list price × CREDITS_PER_USDC) is exact and holds
-// for any price; these three are just round numbers to read it against. The
-// live per-tool prices live on /hub, which is why this links there instead of
-// mirroring a 112-row table that would rot the day a tool is repriced.
-const TOOL_PRICE_EXAMPLES = [0.05, 0.1, 0.25];
-
 export default function PlansPage() {
-  const { isConnected } = useWallet();
-  const [picker, setPicker] = useState(false);
-  const [topup, setTopup]   = useState(false);
+  const [topup, setTopup] = useState(false);
 
-  // Same catalog-trim the ChatInput picker does: the server filters the static
-  // spec against the live Virtuals/Venice catalogs, so a de-listed model hides
-  // its row instead of being quoted a price it can no longer be charged at.
-  // Static list until it answers; static list again if it fails.
+  // Same catalog-trim the chat picker does: the server filters the static spec
+  // against the live Virtuals/Venice catalogs, so a de-listed model can't anchor
+  // a message count it can no longer be charged at. Static list until it answers,
+  // static list again if it fails.
   const [presets, setPresets] = useState<VirtualsPresetV1[]>(VIRTUALS_PRESETS_V1);
   useEffect(() => {
     let off = false;
@@ -82,260 +78,149 @@ export default function PlansPage() {
     return () => { off = true; };
   }, []);
 
-  const rows = [...presets].sort((a, b) => a.credits - b.credits);
-
-  // The pack cards answer "what does $20 actually buy" in messages, not just in
-  // credits. Anchored to the cheapest PAID preset, because the free one costs
-  // nothing and would make every pack read as infinite.
-  const cheapestPaid = rows.find(p => p.credits > 0) ?? null;
+  // Anchor the "≈ N messages" figure to the cheapest PAID model — the free one
+  // costs nothing and would make every pack read as infinite.
+  const cheapestPaid =
+    [...presets].filter(p => p.credits > 0).sort((a, b) => a.credits - b.credits)[0] ?? null;
 
   return (
     <div className="flex flex-col h-full bg-[#050508] overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center px-5 sm:px-6 h-14 border-b border-[#1A1A2E] flex-shrink-0">
-        <div className="min-w-0">
-          <p className="font-mono text-xs tracking-widest truncate" style={{ color: ACCENT }}>// PLANS</p>
-          <p className="font-mono text-[10px] text-slate-700 mt-1 truncate">
-            Credits pay for chat messages and tool runs · 1 USDC = {CREDITS_PER_USDC.toLocaleString()} credits
-          </p>
-        </div>
+      {/* Desktop header — on mobile the AppShell top bar prints the title */}
+      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[48px] px-5 py-2 border-b border-[#1A1A2E]">
+        <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// PLANS</span>
+        <span className="font-mono text-[10.5px] text-[#64748B]">
+          1 USDC = {CREDITS_PER_USDC.toLocaleString()} credits · Coinbase x402 · non-custodial
+        </span>
+        <button
+          onClick={() => setTopup(true)}
+          className="ml-auto font-mono text-[10.5px] font-semibold rounded-[7px] px-2.5 py-[5px] transition-opacity hover:opacity-90"
+          style={{ color: "#050508", background: ACCENT }}
+        >
+          Top up with USDC
+        </button>
       </div>
 
       {/* Body */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-6 py-6">
-        <div className="max-w-3xl mx-auto space-y-8">
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[980px] px-6 pt-[34px] pb-10">
 
-          {/* ── 1. Access levels ───────────────────────────────────────────── */}
-          <section>
-            <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-3">
-              Access · there are two, and both are free
+          {/* Hero */}
+          <div className="text-center">
+            <div className="font-mono text-[9.5px] font-medium tracking-[0.2em]" style={{ color: ACCENT }}>
+              TOP UP
+            </div>
+            <h1 className="font-mono font-bold text-[30px] leading-[1.28] tracking-[-0.02em] text-[#E2E8F0] mt-3.5">
+              Buy credits once.<br />Spend them on anything.
+            </h1>
+            <p className="font-prose text-[12px] leading-[1.75] text-[#94A3B8] max-w-[520px] mx-auto mt-3.5">
+              1 USDC = {CREDITS_PER_USDC.toLocaleString()} credits. Credits pay for chat messages and Hub tool
+              runs at the same anchor rate. No subscription, nothing recurring — you sign the transfer yourself.
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <AccessCard
-                name="Guest"
-                daily={GUEST_DAILY}
-                sub="No wallet, no signup."
-                lines={[
-                  "Every model in the picker",
-                  "Every tool in the Hub",
-                  "Allowance resets at 00:00 UTC",
-                ]}
-              />
-              <AccessCard
-                name="Member"
-                daily={WALLET_DAILY}
-                sub="Connect any wallet. No token to hold, nothing to lock."
-                lines={[
-                  "Every model in the picker",
-                  "Every tool in the Hub",
-                  "Allowance resets at 00:00 UTC",
-                  "Can top up with USDC",
-                ]}
-                highlight
-                action={
-                  isConnected ? (
-                    <span className="font-mono text-[10px] text-[#34D399] font-bold px-2.5 py-1 rounded-md border border-[#34D399]/25">
-                      ACTIVE
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => setPicker(true)}
-                      className="font-mono text-[11px] font-bold px-3.5 py-1.5 rounded-lg transition-colors"
-                      style={{ background: `${ACCENT}12`, color: ACCENT, border: `1px solid ${ACCENT}40` }}
+            <div className="flex justify-center gap-2 mt-5 flex-wrap">
+              <Pill dot="#34D399" color="#34D399" border="rgba(52,211,153,.32)">no subscription</Pill>
+              <Pill dot={ACCENT} color={ACCENT} border="rgba(79,195,247,.32)">credits never expire</Pill>
+              <Pill dot={ACCENT} color={ACCENT} border="rgba(79,195,247,.32)">you sign the transfer</Pill>
+              <Pill color="#94A3B8" border="#1A1A2E">USDC · Base 8453</Pill>
+            </div>
+          </div>
+
+          {/* Tier grid — driven entirely by CREDIT_PACKS */}
+          <div
+            className="grid gap-3.5 mt-[30px]"
+            style={{ gridTemplateColumns: "repeat(auto-fit,minmax(215px,1fr))" }}
+          >
+            {CREDIT_PACKS.map(pack => {
+              const popular  = !!pack.popular;
+              const msgs     = cheapestPaid ? Math.floor(pack.credits / cheapestPaid.credits) : null;
+              const toolRuns = Math.floor(pack.credits / usdToCredits(TOOL_RUN_ANCHOR_USD));
+              const capacity =
+                "≈ " +
+                [
+                  cheapestPaid && msgs != null ? `${msgs.toLocaleString()} ${cheapestPaid.label} messages` : null,
+                  `${toolRuns.toLocaleString()} tool runs`,
+                ]
+                  .filter(Boolean)
+                  .join(" · or ");
+              return (
+                <button
+                  key={pack.usdc}
+                  onClick={() => setTopup(true)}
+                  className="relative text-left rounded-[18px] px-5 pt-6 pb-5 transition-colors"
+                  style={{
+                    border: popular ? "1px solid rgba(79,195,247,.4)" : "1px solid #1A1A2E",
+                    background: popular ? "rgba(79,195,247,.05)" : "#0D0D14",
+                    boxShadow: popular ? "inset 0 0 44px rgba(79,195,247,.06)" : undefined,
+                  }}
+                >
+                  {popular && (
+                    <span
+                      className="absolute -top-2.5 left-5 font-mono text-[8.5px] font-semibold tracking-[0.12em] rounded-full px-2.5 py-1"
+                      style={{ color: "#050508", background: ACCENT }}
                     >
-                      Connect wallet
-                    </button>
-                  )
-                }
-              />
-            </div>
-            <p className="font-mono text-[10px] text-slate-600 mt-3 leading-relaxed">
-              Connecting a wallet does not unlock features — the model list and the tool catalog are
-              identical either way. It multiplies the daily allowance by{" "}
-              <span className="text-slate-300">{Math.round(WALLET_DAILY / GUEST_DAILY)}×</span> and lets you
-              buy credits when the allowance runs out.
-            </p>
-          </section>
-
-          {/* ── 2. What a day of credits buys ──────────────────────────────── */}
-          <section>
-            <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-1">
-              What the allowance buys
-            </p>
-            <p className="font-mono text-[10px] text-slate-600 mb-3 leading-relaxed">
-              A credit is worth nothing on its own — this is the table that says what it does.
-              Message counts are one full day&apos;s allowance divided by the model&apos;s cost.
-            </p>
-
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0A0A12] overflow-hidden">
-              {/* Column headers — hidden on mobile, where each row stacks */}
-              <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto] gap-4 px-4 py-2.5 border-b border-[#1A1A2E]">
-                <span className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">Model</span>
-                <span className="font-mono text-[9px] text-slate-600 tracking-widest uppercase text-right w-16">Per msg</span>
-                <span className="font-mono text-[9px] text-slate-600 tracking-widest uppercase text-right w-20">Guest/day</span>
-                <span className="font-mono text-[9px] text-slate-600 tracking-widest uppercase text-right w-20">Member/day</span>
-              </div>
-
-              {rows.map(p => {
-                const guest  = msgsPerDay(GUEST_DAILY, p.credits);
-                const member = msgsPerDay(WALLET_DAILY, p.credits);
-                const isFree = p.credits <= 0;
-                return (
+                      MOST POPULAR
+                    </span>
+                  )}
+                  <div className="font-mono text-[13px] font-semibold text-[#E2E8F0]">{pack.label}</div>
+                  <div className="flex items-baseline gap-1.5 mt-3.5">
+                    <span
+                      className="font-mono font-bold text-[40px] tracking-[-0.03em]"
+                      style={{ color: popular ? ACCENT : "#E2E8F0" }}
+                    >
+                      ${pack.usdc}
+                    </span>
+                    <span className="font-mono text-[10px] text-[#64748B]">one-off</span>
+                  </div>
+                  <div className="font-mono text-[15px] font-semibold text-[#E2E8F0] mt-3">
+                    {pack.credits.toLocaleString()}{" "}
+                    <span className="font-mono text-[10.5px] font-normal text-[#64748B]">credits</span>
+                  </div>
+                  <div className="font-prose text-[10.5px] leading-[1.6] text-[#94A3B8] mt-1.5">{capacity}</div>
                   <div
-                    key={p.id}
-                    className="grid grid-cols-2 sm:grid-cols-[1fr_auto_auto_auto] gap-x-4 gap-y-1 px-4 py-3 border-b border-[#13131f] last:border-0"
+                    className="font-mono text-[11px] font-semibold rounded-full py-[11px] text-center mt-5"
+                    style={
+                      popular
+                        ? {
+                            color: "#050508",
+                            background: ACCENT,
+                            border: `1px solid ${ACCENT}`,
+                            boxShadow: "0 0 20px rgba(79,195,247,.26)",
+                          }
+                        : { color: "#E2E8F0", background: "transparent", border: "1px solid #1A1A2E" }
+                    }
                   >
-                    {/* Name + what it's for */}
-                    <div className="col-span-2 sm:col-span-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-[12px] text-slate-200">{p.label}</span>
-                        <span className="font-mono text-[9px] text-slate-700">
-                          {formatContextTokens(p.contextTokens)} ctx
-                        </span>
-                        {isFree && (
-                          <span
-                            className="font-mono text-[8px] font-bold px-1.5 py-0.5 rounded"
-                            style={{ background: `${ACCENT}12`, color: ACCENT }}
-                          >
-                            CHAT ONLY
-                          </span>
-                        )}
-                        {p.webSearch && (
-                          <span className="font-mono text-[8px] font-bold px-1.5 py-0.5 rounded bg-[#1A1A2E] text-slate-400">
-                            WEB SEARCH
-                          </span>
-                        )}
-                        {p.privacy && (
-                          <span className="font-mono text-[8px] font-bold px-1.5 py-0.5 rounded bg-[#1A1A2E] text-slate-400">
-                            E2EE
-                          </span>
-                        )}
-                      </div>
-                      <p className="font-mono text-[10px] text-slate-600 mt-0.5 truncate">{p.desc}</p>
-                    </div>
-
-                    <Cell label="Per msg"    w="sm:w-16" value={isFree ? "0 cr" : `${p.credits} cr`} accent={isFree} />
-                    <Cell label="Guest/day"  w="sm:w-20" value={msgsLabel(guest)}  muted={guest === 0} />
-                    <Cell label="Member/day" w="sm:w-20" value={msgsLabel(member)} muted={member === 0} />
+                    Pay ${pack.usdc} in USDC
                   </div>
-                );
-              })}
-            </div>
-
-            <p className="font-mono text-[10px] text-slate-600 mt-3 leading-relaxed">
-              · The free model costs no credits, so the allowance never runs down on it — but it is
-              chat only: it cannot call a Hub tool or read the live web. Every other model can.
-            </p>
-            <p className="font-mono text-[10px] text-slate-600 mt-1 leading-relaxed">
-              · A shared ceiling of 30 messages per minute applies to every tier, free or paid.
-            </p>
-            {/* Points at /chat, NOT /app/models: on this branch the model
-                catalog is still a tab inside Blue Chat and no /app/models route
-                exists, so linking there would ship a 404. Repoint it when the
-                Models page lands. */}
-            <p className="font-mono text-[10px] text-slate-600 mt-1 leading-relaxed">
-              · Pick a model from the picker in{" "}
-              <Link href="/chat" className="hover:underline" style={{ color: ACCENT }}>Blue Chat</Link>.
-            </p>
-          </section>
-
-          {/* ── 3. Hub tools ───────────────────────────────────────────────── */}
-          <section>
-            <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-1">
-              Hub tools
-            </p>
-            <p className="font-mono text-[10px] text-slate-600 mb-3 leading-relaxed">
-              Tools are priced individually in USDC. Running one from chat spends credits at the same
-              anchor rate, so a credit and a direct x402 payment settle the same value.
-            </p>
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0A0A12] p-4">
-              <p className="font-mono text-[11px] text-slate-300">
-                tool list price × {CREDITS_PER_USDC.toLocaleString()} = credits per run
-              </p>
-              <div className="flex flex-wrap gap-x-5 gap-y-1.5 mt-3">
-                {TOOL_PRICE_EXAMPLES.map(usd => (
-                  <div key={usd} className="font-mono text-[10px] text-slate-600">
-                    ${usd.toFixed(2)} tool <span className="text-slate-700">→</span>{" "}
-                    <span style={{ color: ACCENT }}>{usdToCredits(usd).toLocaleString()} cr</span>
-                  </div>
-                ))}
-              </div>
-              <p className="font-mono text-[10px] text-slate-600 mt-3 leading-relaxed">
-                Each tool lists its own price in the{" "}
-                <Link href="/hub" className="hover:underline" style={{ color: ACCENT }}>Hub</Link>. You can
-                also pay a tool directly in USDC over x402 and skip credits entirely.
-              </p>
-            </div>
-          </section>
-
-          {/* ── 4. Top up ──────────────────────────────────────────────────── */}
-          <section>
-            <p className="font-mono text-[10px] text-slate-600 tracking-widest uppercase mb-1">
-              Top up with USDC on Base · non-custodial
-            </p>
-            <p className="font-mono text-[10px] text-slate-600 mb-3 leading-relaxed">
-              Credits are spent only after the daily allowance runs out, and they never expire.
-              Packs differ in size only — none of them unlocks a model or a tool the free allowance
-              cannot already reach.
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {CREDIT_PACKS.map(pack => {
-                const msgs = cheapestPaid ? msgsPerDay(pack.credits, cheapestPaid.credits) : null;
-                return (
-                  <button
-                    key={pack.usdc}
-                    onClick={() => setTopup(true)}
-                    className="relative text-left rounded-xl border border-[#1A1A2E] bg-[#0A0A12] p-4 transition-colors hover:border-[#4FC3F7]/50"
+                  <div
+                    className="mt-4 pt-3.5"
+                    style={{ borderTop: popular ? "1px solid rgba(79,195,247,.18)" : "1px solid #1A1A2E" }}
                   >
-                    {pack.popular && (
-                      <span
-                        className="absolute -top-2 right-3 font-mono text-[8px] font-bold px-1.5 py-0.5 rounded"
-                        style={{ background: ACCENT, color: "#050508" }}
-                      >
-                        POPULAR
-                      </span>
-                    )}
-                    <p className="font-mono text-[10px] text-slate-500">{pack.label}</p>
-                    <p className="font-mono text-2xl font-bold text-white mt-1">${pack.usdc}</p>
-                    <p className="font-mono text-[11px] mt-1" style={{ color: ACCENT }}>
-                      {pack.credits.toLocaleString()} cr
-                    </p>
-                    {msgs != null && cheapestPaid && (
-                      <p className="font-mono text-[9px] text-slate-600 mt-1.5 leading-snug">
-                        ≈ {msgs.toLocaleString()} {cheapestPaid.label} messages
-                      </p>
-                    )}
-                    <p className="font-mono text-[9px] text-slate-700 mt-2">Get credits →</p>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+                    <Feature>Never expires</Feature>
+                    <Feature>Spends on any model or Hub tool</Feature>
+                    <Feature>{TIER_FLAVOR[pack.label] ?? "Scales with your usage"}</Feature>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
 
-          {/* ── 5. Notes ───────────────────────────────────────────────────── */}
-          <div className="rounded-xl border border-[#1A1A2E] bg-[#0A0A12] p-4 space-y-1.5">
-            {/* The ledger keys the daily bucket on the UTC calendar day
-                (`utcDay()` in lib/credit-ledger), not on a rolling 24h window
-                from your last message — so say the boundary, not "every 24h".
-                A user who spends their allowance at 23:00 UTC gets a fresh one
-                an hour later, and that is worth knowing before you top up. */}
-            <p className="font-mono text-[10px] text-slate-500 leading-relaxed">
-              · The daily allowance is use-it-or-lose-it and refreshes at 00:00 UTC.
-              Top-up credits go into a separate pool that carries over and never expires.
-            </p>
-            <p className="font-mono text-[10px] text-slate-500 leading-relaxed">
-              · You sign every transfer from your own wallet. Blue Agent never holds your keys and
-              cannot move your funds.
-            </p>
-            <p className="font-mono text-[10px] text-slate-500 leading-relaxed">
-              · Track your balance and per-tool spend on the{" "}
-              <Link href="/usage" className="hover:underline" style={{ color: ACCENT }}>Usage</Link> page.
-            </p>
+          {/* Free-allowance footer — the honesty note that you never have to pay */}
+          <div className="flex items-center gap-2.5 mt-[26px] rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3.5 flex-wrap">
+            <span className="font-prose text-[10.5px] leading-[1.7] text-[#94A3B8] flex-1 min-w-[240px]">
+              Every wallet already gets a free daily allowance — {GUEST_DAILY.toLocaleString()} credits as a
+              guest, {WALLET_DAILY.toLocaleString()} with a wallet connected. Top-ups sit in a separate pool
+              that never resets.
+            </span>
+            <Link
+              href="/usage"
+              className="font-mono text-[10.5px] font-medium rounded-[9px] px-3 py-2.5 whitespace-nowrap"
+              style={{ color: ACCENT, border: "1px solid rgba(79,195,247,.3)" }}
+            >
+              See your usage →
+            </Link>
           </div>
         </div>
       </div>
 
-      <WalletPickerModal open={picker} onClose={() => setPicker(false)} />
       <TopUpModal open={topup} onClose={() => setTopup(false)} />
     </div>
   );
@@ -343,59 +228,28 @@ export default function PlansPage() {
 
 // ── Bits ──────────────────────────────────────────────────────────────────────
 
-/** One number in the model table. Carries its own label so the mobile stack
- *  stays readable once the shared column headers are hidden. `w` must match the
- *  width on the matching header cell, or the column drifts out of alignment. */
-function Cell({ label, value, w, accent, muted }: {
-  label: string; value: string; w: string; accent?: boolean; muted?: boolean;
+/** A guarantee pill in the hero. `dot` is optional — the "USDC · Base 8453"
+ *  pill is a plain slate chip with no leading dot. */
+function Pill({ children, dot, color, border }: {
+  children: React.ReactNode; dot?: string; color: string; border: string;
 }) {
   return (
-    <div className={`sm:text-right ${w}`}>
-      <span className="font-mono text-[9px] text-slate-700 sm:hidden block">{label}</span>
-      <span
-        className="font-mono text-[11px]"
-        style={{ color: accent ? ACCENT : muted ? "#475569" : "#cbd5e1" }}
-      >
-        {value}
-      </span>
-    </div>
+    <span
+      className="inline-flex items-center gap-1.5 font-mono text-[10px] font-medium rounded-full px-2.5 py-[5px]"
+      style={{ color, border: `1px solid ${border}` }}
+    >
+      {dot && <span className="w-[5px] h-[5px] rounded-full" style={{ background: dot }} />}
+      {children}
+    </span>
   );
 }
 
-function AccessCard({ name, daily, sub, lines, action, highlight }: {
-  name: string;
-  daily: number;
-  sub: string;
-  lines: string[];
-  action?: React.ReactNode;
-  highlight?: boolean;
-}) {
+/** One green-check row inside a tier card. */
+function Feature({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="rounded-2xl border bg-[#0A0A12] p-5 flex flex-col"
-      style={{ borderColor: highlight ? `${ACCENT}30` : "#1A1A2E" }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-mono text-[13px] font-bold text-white">{name}</p>
-          <p className="font-mono text-[10px] text-slate-600 mt-1 leading-relaxed">{sub}</p>
-        </div>
-        <div className="text-right flex-shrink-0">
-          <p className="font-mono text-2xl font-bold" style={{ color: ACCENT }}>
-            {daily.toLocaleString()}
-          </p>
-          <p className="font-mono text-[10px] text-slate-600">credits / day</p>
-        </div>
-      </div>
-      <ul className="mt-4 space-y-1 flex-1">
-        {lines.map(l => (
-          <li key={l} className="font-mono text-[10px] text-slate-500 flex gap-2">
-            <span className="text-slate-700">·</span>
-            <span>{l}</span>
-          </li>
-        ))}
-      </ul>
-      {action && <div className="mt-4 flex justify-end">{action}</div>}
+    <div className="flex gap-2 py-[5px]">
+      <span className="font-mono text-[10px] font-semibold" style={{ color: "#34D399" }}>✓</span>
+      <span className="flex-1 font-prose text-[10.5px] leading-[1.6] text-[#94A3B8]">{children}</span>
     </div>
   );
 }
