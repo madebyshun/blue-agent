@@ -185,13 +185,22 @@ export function emptyState(d: SpendSummaryDTO): "none" | "unreadable" | "rows" {
  * never made. /app/usage gates on connection too, but only outside this panel —
  * the branch stays load-bearing.
  */
-type Load =
+export type Load =
   | { s: "disconnected" }
   | { s: "loading" }
   | { s: "ok"; d: SpendSummaryDTO }
   | { s: "failed" };
 
-function useSpendSummary(address?: string): Load {
+/**
+ * The fetch, lifted so ONE caller can feed two placements.
+ *
+ * /app/usage renders the console's two halves in separate columns — the
+ * calls-per-day chart on the left, the by-tool rails on the right — and both
+ * read the same `SpendSummaryDTO`. Mounting <SpendConsole> twice would fire the
+ * expensive two-rail aggregation twice; instead the page calls this hook once
+ * and passes the resulting `Load` to each half via the `summary` prop below.
+ */
+export function useSpendSummary(address?: string): Load {
   // Seeded from the address, not hard-coded to "loading" — the first paint of a
   // disconnected mount must already say so rather than flash a spinner.
   const [state, setState] = useState<Load>(address ? { s: "loading" } : { s: "disconnected" });
@@ -251,14 +260,72 @@ function Rail({ label, value, unit, sub, accent, unavailable }: {
   );
 }
 
-export default function SpendConsole({ address }: { address?: string }) {
-  const load = useSpendSummary(address);
+export default function SpendConsole({
+  address,
+  summary,
+  only,
+  bare,
+}: {
+  address?: string;
+  /**
+   * Pre-fetched summary. When set, this mount does NOT fetch — the host page
+   * has already called useSpendSummary() and is placing the two halves itself.
+   * Passing it keeps the internal hook dormant (undefined address → early
+   * return), so no second request fires. Omitted → self-fetch (the Hub mount).
+   */
+  summary?: Load;
+  /**
+   * Render just one half of the body. `"chart"` = the calls-per-day hero;
+   * `"rails"` = the two spend rails + per-tool table + caveats. Omitted → both,
+   * stacked, exactly as the Hub home has always rendered it.
+   */
+  only?: "chart" | "rails";
+  /**
+   * Drop the outer card + the "AGENT SPEND" title/description so a host page
+   * can wrap the body in its own chrome (the /app/usage two-column layout).
+   */
+  bare?: boolean;
+}) {
+  // A pre-fetched summary wins; otherwise fetch our own. `summary ? undefined`
+  // parks the hook so a page that already has the data never doubles the read.
+  const internal = useSpendSummary(summary ? undefined : address);
+  const load = summary ?? internal;
 
   // Two gates, because there are two ways to have nothing worth saying. The
   // transport one (`s === "ok"`) rules out a spinner, an error and a wallet we
   // never asked about; `scopeLabel` returning null rules out a 200 whose rails
   // came back dead. Only the first was here, and the outage found the gap.
   const scope = load.s === "ok" ? scopeLabel(load.d) : null;
+
+  // The chart-only placement is terse on non-ok states: its rails-only sibling
+  // carries the load-bearing "read failure, not zero" copy, so an empty chart
+  // must not repeat the same caveat a column away.
+  const chartOnly = only === "chart";
+
+  const inner =
+    load.s === "disconnected" ? (
+      chartOnly ? null : (
+        <div className="font-mono text-[10px] text-slate-600 py-8 text-center leading-relaxed">
+          Connect a wallet to see what it has spent.<br />
+          <span className="text-slate-700">Receipts are per address — there is nothing to look up yet.</span>
+        </div>
+      )
+    ) : load.s === "loading" ? (
+      <div className="font-mono text-[10px] text-slate-600 py-8 text-center">Loading…</div>
+    ) : load.s === "failed" ? (
+      <div className="font-mono text-[10px] text-[#F59E0B] py-8 text-center leading-relaxed">
+        {chartOnly
+          ? "Couldn't load activity — a read failure, not a zero."
+          : "Couldn't load spending. This is a read failure, not a zero — your history is intact."}
+      </div>
+    ) : (
+      <Body d={load.d} only={only} />
+    );
+
+  // Bare: the host page owns the chrome and the title. Used by /app/usage, which
+  // renders "AGENT SPEND · BY TOOL" and "CALLS PER DAY" headers around the two
+  // halves itself.
+  if (bare) return <>{inner}</>;
 
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0A0A12] p-4 sm:p-5">
@@ -269,31 +336,54 @@ export default function SpendConsole({ address }: { address?: string }) {
       <p className="font-mono text-[9px] text-slate-600 mb-4 leading-relaxed">
         What your payments actually bought — the part no block explorer can see.
       </p>
-
-      {/* No address means no question was asked — say that, don't spin. */}
-      {load.s === "disconnected" && (
-        <div className="font-mono text-[10px] text-slate-600 py-8 text-center leading-relaxed">
-          Connect a wallet to see what it has spent.<br />
-          <span className="text-slate-700">Receipts are per address — there is nothing to look up yet.</span>
-        </div>
-      )}
-
-      {load.s === "loading" && (
-        <div className="font-mono text-[10px] text-slate-600 py-8 text-center">Loading…</div>
-      )}
-
-      {load.s === "failed" && (
-        <div className="font-mono text-[10px] text-[#F59E0B] py-8 text-center">
-          Couldn&apos;t load spending. This is a read failure, not a zero — your history is intact.
-        </div>
-      )}
-
-      {load.s === "ok" && <Body d={load.d} />}
+      {inner}
     </div>
   );
 }
 
-function Body({ d }: { d: SpendSummaryDTO }) {
+/**
+ * Calls-per-day, the one unit both rails share (a stacked money bar would need
+ * the credits+USDC addition this whole surface refuses — see the header).
+ *
+ * Its own span is stated on the chart: `d.days` is DAY_WINDOW long while the
+ * rails beside it sum the whole recorded window, which is why the label reads
+ * the array length rather than a hard-coded "30". Zero-days draw a 2px floor so
+ * a gap can never imply activity it did not have.
+ */
+function CallsChart({ d, maxCalls }: { d: SpendSummaryDTO; maxCalls: number }) {
+  return (
+    <>
+      <div className="flex items-baseline justify-between mb-3">
+        <span className="font-mono text-[9.5px] text-slate-500 tracking-[0.14em] uppercase">
+          Calls per day · last {d.days.length} days
+        </span>
+        <span className="font-mono text-[10px] text-slate-600">peak {maxCalls}/day</span>
+      </div>
+      <div className="flex items-end gap-[3px] h-[88px]">
+        {d.days.map(day => (
+          <div
+            key={day.day}
+            className="flex-1 rounded-sm transition-colors"
+            title={`${day.day} — ${day.calls} call${day.calls === 1 ? "" : "s"}${
+              day.usdcUnits ? ` · ${usdc(day.usdcUnits)}` : ""
+            }${day.credits ? ` · ${nf(day.credits)} cr` : ""}`}
+            style={{
+              height: day.calls ? `${Math.max(8, (day.calls / maxCalls) * 100)}%` : "2px",
+              background: day.calls ? "#4FC3F7" : "#1A1A2E",
+              opacity: day.calls ? 0.35 + 0.65 * (day.calls / maxCalls) : 1,
+            }}
+          />
+        ))}
+      </div>
+      <div className="flex justify-between font-mono text-[9.5px] text-slate-600 mt-2">
+        <span>{relDay(d.days[0].day)}</span>
+        <span>{relDay(d.days[d.days.length - 1].day)}</span>
+      </div>
+    </>
+  );
+}
+
+function Body({ d, only }: { d: SpendSummaryDTO; only?: "chart" | "rails" }) {
   const usdcDown = d.usdc.status === "unavailable";
   const crDown   = d.credits.status === "unavailable";
   const bothDown = usdcDown && crDown;
@@ -309,6 +399,29 @@ function Body({ d }: { d: SpendSummaryDTO }) {
   const maxCalls = Math.max(1, ...d.days.map(x => x.calls));
   const anyActivity = d.days.some(x => x.calls > 0);
   const empty = emptyState(d);
+
+  // When the host page asked for just one half, honour it. `"rails"` drops the
+  // chart from the stack below; `"chart"` short-circuits to the hero on its own.
+  const showChart = only !== "rails";
+
+  if (only === "chart") {
+    // The chart cannot say "no calls" while a rail is unreadable — that is the
+    // rails sibling's story to tell. Here, stay honest and brief.
+    if (bothDown) {
+      return (
+        <p className="font-mono text-[10px] text-[#F59E0B] py-6 text-center leading-relaxed">
+          Activity is unreadable right now — that is not the same as zero.
+        </p>
+      );
+    }
+    return anyActivity ? (
+      <CallsChart d={d} maxCalls={maxCalls} />
+    ) : (
+      <p className="font-mono text-[10px] text-slate-600 py-6 text-center">
+        No calls recorded in the last {d.days.length} days.
+      </p>
+    );
+  }
 
   if (bothDown) {
     return (
@@ -365,36 +478,9 @@ function Body({ d }: { d: SpendSummaryDTO }) {
       ) : (
         <>
           {/* ── Activity, measured in calls — the one shared unit ──────────── */}
-          {anyActivity && (
+          {showChart && anyActivity && (
             <div className="mt-5">
-              {/* The chart's own span, stated on the chart. It is DAY_WINDOW
-                  long and the rails above are not — that difference is the
-                  whole reason the header stopped hard-coding "30". */}
-              <div className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-2">
-                Calls per day
-                <span className="text-slate-700 normal-case tracking-normal"> · last {d.days.length} days</span>
-              </div>
-              <div className="flex items-end gap-[2px] h-14">
-                {d.days.map(day => (
-                  <div
-                    key={day.day}
-                    className="flex-1 rounded-sm transition-colors"
-                    title={`${day.day} — ${day.calls} call${day.calls === 1 ? "" : "s"}${
-                      day.usdcUnits ? ` · ${usdc(day.usdcUnits)}` : ""
-                    }${day.credits ? ` · ${nf(day.credits)} cr` : ""}`}
-                    style={{
-                      height: day.calls ? `${Math.max(8, (day.calls / maxCalls) * 100)}%` : "2px",
-                      background: day.calls ? "#4FC3F7" : "#1A1A2E",
-                      opacity: day.calls ? 0.35 + 0.65 * (day.calls / maxCalls) : 1,
-                    }}
-                  />
-                ))}
-              </div>
-              <div className="flex justify-between font-mono text-[8px] text-slate-700 mt-1">
-                <span>{relDay(d.days[0].day)}</span>
-                <span>peak {maxCalls}/day</span>
-                <span>{relDay(d.days[d.days.length - 1].day)}</span>
-              </div>
+              <CallsChart d={d} maxCalls={maxCalls} />
             </div>
           )}
 
