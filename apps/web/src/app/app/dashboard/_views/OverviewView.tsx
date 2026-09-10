@@ -234,7 +234,7 @@ export default function OverviewView() {
       {/* `// OVERVIEW` header — desktop only. Below lg the global MobileTopBar
           (see AppShell) already prints the surface title ("Overview"), so
           rendering this too would duplicate it. */}
-      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[48px] px-5 py-2 border-b border-[#1A1A2E]">
+      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
         <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// OVERVIEW</span>
         <span className="font-mono text-[10.5px] text-[#64748B]">wallet · balances · agent activity</span>
         {isConnected && address && (

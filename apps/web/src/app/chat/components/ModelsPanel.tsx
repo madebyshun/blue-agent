@@ -181,7 +181,7 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
              Search moved into the filter pane (handoff). The toggle is the same
              load-bearing Presets↔All switch, restyled to the handoff pill; its
              counts are live (`data`), never the prototype's hardcoded 8 / 312. ── */}
-      <div className="flex items-center gap-3.5 flex-wrap shrink-0 min-h-[48px] px-5 py-2 border-b border-[#1A1A2E]">
+      <div className="flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
         <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// MODELS</span>
         <span className="font-mono text-[10.5px] text-[#64748B]">
           {presetCount} presets · {modelCount ?? "…"} models · routed through Virtuals + Venice · credits per message

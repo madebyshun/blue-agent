@@ -126,7 +126,7 @@ export default function HoodSidebar({
           session (marketLabel/marketColor), so it reads OPEN/PREMARKET/
           CLOSED honestly instead of a fixed label. */}
       <div
-        className="flex items-center justify-between flex-wrap gap-2 min-h-[48px] px-3.5 py-2 border-b shrink-0"
+        className="flex items-center justify-between flex-wrap gap-2 min-h-[56px] px-3.5 py-2 border-b shrink-0"
         style={{ borderColor: BORDER }}
       >
         <span
