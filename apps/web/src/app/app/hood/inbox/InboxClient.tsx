@@ -169,33 +169,44 @@ export default function InboxClient() {
 
 function Header({ unread, onMarkAllRead }: { unread: number; onMarkAllRead: () => void }) {
   return (
-    <header className="mb-8 flex flex-wrap items-baseline gap-x-4 gap-y-2">
-      {/* T-V1 — same BLUE·HOOD wordmark as /hood + sidebar. The current
-          view is disambiguated by the "· INBOX" suffix rather than
-          changing the wordmark, keeping the brand shape identical
-          everywhere it appears. */}
-      <div className="flex items-baseline gap-3">
-        <div className="text-[24px] font-bold tracking-tight text-white">
-          BLUE<span style={{ color: RH_GREEN }}>HOOD</span>
-          <span className="ml-2 text-[13px] font-normal" style={{ color: MUTED, letterSpacing: "0.08em" }}>· INBOX</span>
-        </div>
-        <div className="text-[11px] tabular-nums" style={{ color: "#9aa1ac" }}>
-          {unread === 0 ? "all caught up" : `${unread} unread`}
-        </div>
-      </div>
-      <div className="ml-auto flex items-center gap-3 text-[11px]">
-        <Link href="/hood" className="hover:text-white" style={{ color: MUTED }}>
+    <header
+      className="-mx-4 md:-mx-8 xl:-mx-12 -mt-6 md:-mt-8 mb-6 flex flex-wrap items-center gap-x-3.5 gap-y-2 min-h-[48px] px-5 py-2.5 border-b"
+      style={{ borderColor: BORDER }}
+    >
+      {/* T-V1 — the app-wide `// SCREEN` header-bar convention (Models /
+          Overview / Usage / … / Hood board). The BLUEHOOD wordmark lives
+          once, in the sidebar; the view here is named `// INBOX`.
+          Desktop-only (`hidden lg:inline`): below lg the MobileTopBar already
+          prints the title, so the label + unread count hide here to avoid a
+          doubled title; the chip group below stays visible as mobile nav. */}
+      <span
+        className="hidden lg:inline font-mono font-semibold text-[11px] tracking-[0.16em]"
+        style={{ color: "#E2E8F0" }}
+      >
+        // INBOX
+      </span>
+      <span
+        className="hidden lg:inline font-mono text-[10.5px] tabular-nums"
+        style={{ color: unread > 0 ? RH_GREEN : "#64748B" }}
+      >
+        {unread === 0 ? "all caught up" : `${unread} unread`}
+      </span>
+      {/* Right chip group — the Live board / Track record links double as
+          mobile nav (the BLUEHOOD sidebar is lg-only), plus the alert
+          opt-in and the mark-all-read action. */}
+      <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[11px]">
+        <Link href="/hood" className="hover:text-white" style={{ color: "#64748B" }}>
           ← Live board
         </Link>
-        <Link href="/hood/arrows" className="hover:text-white" style={{ color: MUTED }}>
+        <Link href="/hood/arrows" className="hover:text-white" style={{ color: "#64748B" }}>
           Track record →
         </Link>
         <EnableAlertsButton />
         {unread > 0 && (
           <button
             onClick={onMarkAllRead}
-            className="rounded border px-2 py-1 hover:text-white"
-            style={{ borderColor: BORDER, color: "#9aa1ac" }}
+            className="rounded border px-2 py-0.5 hover:text-white"
+            style={{ borderColor: BORDER, color: "#94A3B8" }}
           >
             Mark all read
           </button>

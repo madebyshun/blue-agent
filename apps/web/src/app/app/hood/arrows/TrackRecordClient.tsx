@@ -222,28 +222,34 @@ export default function TrackRecordClient() {
 // ── Sub-components ─────────────────────────────────────────────────────────
 function TrackHeader() {
   return (
-    <header className="mb-8 flex flex-wrap items-baseline gap-x-4 gap-y-2">
-      {/* T-V1 — same BLUE·HOOD wordmark. The current view is
-          disambiguated by the "· TRACK RECORD" suffix, not by changing
-          the brand shape. */}
-      <div className="flex items-baseline gap-3">
-        <div className="text-[24px] font-bold tracking-tight text-white">
-          BLUE<span style={{ color: RH_GREEN }}>HOOD</span>
-          <span className="ml-2 text-[13px] font-normal" style={{ color: MUTED, letterSpacing: "0.08em" }}>· TRACK RECORD</span>
-        </div>
-        <div className="text-[11px]" style={{ color: "#9aa1ac" }}>
-          every graded arrow, forever
-        </div>
-      </div>
-      {/* Symmetric nav — before this, /hood/arrows only had a back-link
-          to /hood, so a reader on the track record had no path to the
-          alert inbox (where /Review & Sign lives) without typing the
-          URL. Now consistent with /hood + /hood/inbox headers. */}
-      <div className="ml-auto flex items-center gap-4 text-[11px]">
-        <Link href="/hood" className="hover:text-white" style={{ color: MUTED }}>
+    <header
+      className="-mx-4 md:-mx-8 xl:-mx-12 -mt-6 md:-mt-8 mb-6 flex flex-wrap items-center gap-x-3.5 gap-y-2 min-h-[48px] px-5 py-2.5 border-b"
+      style={{ borderColor: BORDER }}
+    >
+      {/* T-V1 — the app-wide `// SCREEN` header-bar convention. The
+          BLUEHOOD wordmark lives once, in the sidebar; the view here is
+          named `// TRACK RECORD`.
+          Desktop-only (`hidden lg:inline`): below lg the MobileTopBar already
+          prints the title, so the label + sub-line hide here to avoid a
+          doubled title; the chip group below stays visible as mobile nav. */}
+      <span
+        className="hidden lg:inline font-mono font-semibold text-[11px] tracking-[0.16em]"
+        style={{ color: "#E2E8F0" }}
+      >
+        // TRACK RECORD
+      </span>
+      <span className="hidden lg:inline font-mono text-[10.5px]" style={{ color: "#64748B" }}>
+        every graded arrow, forever
+      </span>
+      {/* Right chip group — Live board / Inbox links double as mobile nav
+          (the BLUEHOOD sidebar is lg-only); before this /hood/arrows had
+          only a back-link, stranding a reader from the alert inbox where
+          Review & Sign lives. Consistent with /hood + /hood/inbox now. */}
+      <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[11px]">
+        <Link href="/hood" className="hover:text-white" style={{ color: "#64748B" }}>
           ← Live board
         </Link>
-        <Link href="/hood/inbox" className="hover:text-white" style={{ color: MUTED }}>
+        <Link href="/hood/inbox" className="hover:text-white" style={{ color: "#64748B" }}>
           Inbox →
         </Link>
       </div>
