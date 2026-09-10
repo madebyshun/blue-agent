@@ -35,6 +35,15 @@ import { useBasename, shortAddr } from "@/lib/useBasename";
 import Avatar from "@/components/Avatar";
 import QrScanner from "./QrScanner";
 import SwapCard, { type SellPreset } from "./SwapCard";
+// Robinhood Chain (4663) equivalents of Send/Swap. The Base SendCard/SwapCard
+// above cannot represent 4663 — SendCard is YieldNetwork-typed (base|baseSepolia)
+// and SwapCard is 0x/Base-pinned (force-switches to Base mainnet before signing)
+// — so these are chain-native cards that speak the RH router + send-prepare
+// endpoints directly. They mount ONLY when `network === "robinhood"`, branched
+// before the `can`-based Base mount so a Base card can never render under an RH
+// heading. See the `can.send`/`can.swap` note in lib/wallet/chains.ts.
+import RhSendCard from "./RhSendCard";
+import RhSwapCard from "./RhSwapCard";
 import { parsePaymentQr, buildPaymentUri, type ParsedPayment } from "@/lib/payment-qr";
 // `B20_ENABLED` was imported alongside this, purely to hide the Orders tab.
 // OrdersPanel reads the same flag itself and renders its own degraded-mode
@@ -1892,18 +1901,22 @@ export default function BankPage() {
                   ? <MoveToYieldCard result={{ network: earnKey, action: "withdraw" }} account={acct} withdrawOnly />
                   : <p className="font-mono text-[11px] text-slate-500">Earn positions are on Base. Switch to Base to withdraw.</p>
                 )}
-                {/* Convert is a 0x-API flow that exists on Base mainnet only, and
-                    SwapCard force-switches the wallet to mainnet before signing.
-                    Rendering it while the dashboard is on testnet would move REAL
-                    funds under a page captioned "no real value" — exactly the
-                    class of mismatch this PR removes. Refuse instead.
+                {/* Three chains, three answers — branched by chain, NOT collapsed
+                    into one predicate:
 
-                    The guard asks `can.swap`, not `network === "base"`. Those
-                    were the same predicate while the switcher offered two
-                    chains and were about to stop being the same: Robinhood is
-                    not a testnet, so an `isTestnet`-shaped test would have
-                    waved it through to a router that is not deployed on 4663. */}
-                {panel === "convert" && (!can.swap
+                    robinhood → its OWN card. RhSwapCard speaks the deployed
+                      RobinhoodSwapRouter on 4663 directly. It must be checked
+                      FIRST: the Base SwapCard below force-switches the wallet to
+                      Base mainnet before signing, so letting `can.swap` (now true
+                      on RH) fall through to it would sign a Base swap under a
+                      Robinhood heading — the wrong funds on the wrong chain.
+                    base → the 0x-API SwapCard, real funds, real mainnet.
+                    baseSepolia → refused. `can.swap` is false there because
+                      SwapCard force-switches to Base MAINNET, so rendering it on
+                      testnet would move REAL funds under a "no real value" page. */}
+                {panel === "convert" && (network === "robinhood"
+                  ? <RhSwapCard account={acct} />
+                  : !can.swap
                   ? <div className="rounded-lg px-3.5 py-3" style={{ background: "#F59E0B10", border: "1px solid #F59E0B40" }}>
                       <div className="font-mono text-[11px] font-bold" style={{ color: "#F59E0B" }}>Convert is Base mainnet only</div>
                       <div className="font-mono text-[9px] text-slate-400 mt-1 leading-relaxed">
@@ -1916,19 +1929,29 @@ export default function BankPage() {
                       </button>
                     </div>
                   : <SwapCard account={acct} preset={sellPreset} />)}
-                {/* SendCard cannot REPRESENT a chain outside {base, baseSepolia}:
-                    it types its own network as `YieldNetwork` and initialises it
-                    with `result.network === "base" ? "base" : "baseSepolia"`, so
-                    handing it "robinhood" does not degrade — it renders a BASE
-                    SEPOLIA send form under a Robinhood heading. That is the
-                    fail-open shape again, one component down, and it is why
-                    `can.send` is false on 4663.
+                {/* Branched by chain, like Convert above:
 
-                    The scan path is inside this guard on purpose. A QR can carry
-                    its own `network`, and `scanPrefill.network` is passed straight
-                    through, so leaving the scanner reachable here would let a
-                    scanned code re-open the very door the flag closes. */}
-                {panel === "send" && (!can.send
+                    robinhood → RhSendCard, which speaks /api/robinhood/router/
+                      send-prepare on 4663 directly. Checked FIRST because the Base
+                      SendCard below cannot REPRESENT 4663: it types its own network
+                      as `YieldNetwork` and initialises it with `result.network ===
+                      "base" ? "base" : "baseSepolia"`, so handing it "robinhood"
+                      renders a BASE SEPOLIA send form under a Robinhood heading —
+                      the fail-open shape, one component down. RhSendCard also takes
+                      a raw 0x recipient only (no scan): a QR carries its own
+                      `network`, and there is no RH-side prefill path, so the
+                      scanner stays a Base-only affordance below.
+                    base → the scan + SendCard flow.
+                    baseSepolia → `can.send` is true (testnet send is safe), so it
+                      falls through to the same SendCard, which handles it natively.
+
+                    The scan path is inside the Base branch on purpose. A QR can
+                    carry its own `network`, and `scanPrefill.network` is passed
+                    straight through, so keeping the scanner off the RH card means a
+                    scanned code cannot smuggle a Base-shaped send onto 4663. */}
+                {panel === "send" && (network === "robinhood"
+                  ? <RhSendCard account={acct} />
+                  : !can.send
                   ? <div className="rounded-lg px-3.5 py-3" style={{ background: "#F59E0B10", border: "1px solid #F59E0B40" }}>
                       <div className="font-mono text-[11px] font-bold" style={{ color: "#F59E0B" }}>Send is not available on {net.short} yet</div>
                       <div className="font-mono text-[9px] text-slate-400 mt-1 leading-relaxed">
