@@ -394,42 +394,50 @@ function Header({
   const dataAgeS = snap ? Math.max(0, Math.round((Date.now() - new Date(snap.finished_at).getTime()) / 1000)) : null;
 
   return (
-    <header className="mb-8 flex flex-wrap items-baseline gap-x-4 gap-y-2">
-      {/* T-V1 — wordmark. ONE wordmark shape used everywhere (sidebar,
-          header, meta title): BLUE (white) + HOOD (RH_GREEN), all-caps,
-          mono 700, tight tracking. `text-[24px]` for the 24px page-title
-          slot; sidebar keeps 12px, they read as the same word.  */}
-      <div className="flex items-baseline gap-3">
-        <div className="text-[24px] font-bold tracking-tight text-white">
-          BLUE<span style={{ color: RH_GREEN }}>HOOD</span>
-        </div>
-        <div className="text-[12px]" style={{ color: "#9aa1ac", letterSpacing: "0.02em" }}>
-          oracle-vs-DEX drift, graded in public
-        </div>
-      </div>
-      {/* Nav: DRIFT (current) · INBOX (n unread) · TRACK RECORD + push
-          alerts. Mirrors the InboxClient + TrackRecordClient headers so
-          the three views have symmetric nav — before this, /hood had no
-          link to /hood/inbox, so a user who fires an arrow had no path
-          to Review & Sign except by typing the URL. Real bug 2026-07-23. */}
-      <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
+    <header
+      className="-mx-4 md:-mx-8 xl:-mx-12 -mt-6 md:-mt-8 mb-6 flex flex-wrap items-center gap-x-3.5 gap-y-2 min-h-[48px] px-5 py-2.5 border-b"
+      style={{ borderColor: BORDER }}
+    >
+      {/* T-V1 — the page-title slot follows the app-wide `// SCREEN`
+          header-bar convention (Models/Overview/Usage/…). The BLUEHOOD
+          wordmark still lives once, in the sidebar; repeating it here as a
+          24px title read as a doubled wordmark on desktop.
+          Desktop-only (`hidden lg:inline`): below lg the global MobileTopBar
+          already prints `// HOOD`, so hiding the label + sub-line here avoids
+          a doubled title. The chip group below stays visible on mobile — it
+          is the only nav to Inbox/Track/alerts while the BLUEHOOD sidebar is
+          lg-only. */}
+      <span
+        className="hidden lg:inline font-mono font-semibold text-[11px] tracking-[0.16em]"
+        style={{ color: "#E2E8F0" }}
+      >
+        // HOOD
+      </span>
+      <span className="hidden lg:inline font-mono text-[10.5px]" style={{ color: "#64748B" }}>
+        oracle-vs-DEX drift, graded in public
+      </span>
+      {/* Right chip group — Inbox/Track links (they double as mobile nav,
+          since the BLUEHOOD sidebar is lg-only), alerts, the Telegram
+          deep-link, the live market badge, and the real snapshot-age
+          pulse. Mirrors the InboxClient + TrackRecordClient headers. */}
+      <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[11px]">
         <Link
           href="/hood/inbox"
           className="hover:text-white"
-          style={{ color: inboxUnread > 0 ? RH_GREEN : MUTED }}
+          style={{ color: inboxUnread > 0 ? RH_GREEN : "#64748B" }}
         >
           Inbox{inboxUnread > 0 ? ` (${inboxUnread})` : ""} →
         </Link>
-        <Link href="/hood/arrows" className="hover:text-white" style={{ color: MUTED }}>
+        <Link href="/hood/arrows" className="hover:text-white" style={{ color: "#64748B" }}>
           Track record →
         </Link>
         <EnableAlertsButton />
         <TelegramLinkButton />
         <span style={{ color: marketBadge.color }}>● {marketBadge.label}</span>
-        <span className="flex items-center gap-1.5" style={{ color: MUTED }}>
+        <span className="flex items-center gap-1.5" style={{ color: "#64748B" }}>
           {/* T-V2 #1 — LIVE PULSE. Gentle dot signals the page is alive.
-              (Semantics unchanged; the number next to it now reflects
-              REAL snapshot age, not fetch latency.) */}
+              (Semantics unchanged; the number next to it reflects REAL
+              snapshot age, not fetch latency.) */}
           <span className="hood-live-dot" aria-hidden />
           {dataAgeS === null || !snap ? "…" : `updated ${formatAgeShort(dataAgeS)} ago`}
         </span>

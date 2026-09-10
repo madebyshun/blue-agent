@@ -18,18 +18,31 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { Arrow, HoodSnapshot, M5Verdict, TickerSnapshot } from "@/lib/blue-hood/types";
-import { rowKey } from "@/lib/blue-hood/types";
+import { rowKey, chainOf } from "@/lib/blue-hood/types";
 
 const RH_GREEN = "#34D399";
 const BLUE = "#4FC3F7";
 const AMBER = "#f5b342";
-const RED = "#ef4444";
-const GREEN = "#22c55e";
-const MUTED = "#6b7280";
+const RED = "#F87171";
+const GREEN = "#34D399";
+const MUTED = "#475569";
+const INK2 = "#94A3B8";
+const INK1 = "#E2E8F0";
 const BORDER = "#1A1A2E";
 const BG = "#050508";
 const DUST_TVL_USD = 5_000;
+
+// #RRGGBB → rgba() at a given alpha — for the tinted pill border derived from
+// the dynamic market-status color. Falls back to the raw string for any
+// non-6-digit-hex input so a named color can never crash the inline style.
+function alpha(hex: string, a: number): string {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
 
 // Dust check matches the rule-engine gate: TOTAL token liquidity, not
 // primary pool. Otherwise NVDA (bankr-robinhood WETH $21M + USDG $850k
@@ -80,6 +93,16 @@ export default function HoodSidebar({
   /** Unread arrow count for the Inbox nav badge. Optional; 0 = no badge. */
   inboxUnread?: number;
 }) {
+  // The sidebar is shared across /hood, /hood/inbox and /hood/arrows (via
+  // HoodShellFrame), so the active nav pill has to follow the route, not sit
+  // hard-coded on "Drift board" the way it used to on the two sub-pages.
+  const pathname = usePathname();
+  const section = pathname?.startsWith("/hood/inbox")
+    ? "inbox"
+    : pathname?.startsWith("/hood/arrows")
+      ? "record"
+      : "board";
+
   const rows: TickerSnapshot[] = snap?.tickers ?? [];
 
   // T2 — collapsible dust group. Tradable rows go up top; dust rows are
@@ -94,64 +117,43 @@ export default function HoodSidebar({
 
   return (
     <aside
-      className="hidden lg:flex flex-col w-72 shrink-0 h-full border-r"
-      style={{ backgroundColor: "#050508", borderColor: BORDER }}
+      className="hidden lg:flex flex-col w-[236px] shrink-0 h-full border-r"
+      style={{ backgroundColor: BG, borderColor: BORDER }}
     >
-      {/* Header row — mirrors Chat sidebar's pulse-dot header */}
+      {/* Header — BLUEHOOD wordmark (HOOD in Blue-Agent primary) + live
+          market-status pill. The pill is styled like the handoff's amber
+          "AFTER HOURS" chip but colored dynamically by the real market
+          session (marketLabel/marketColor), so it reads OPEN/PREMARKET/
+          CLOSED honestly instead of a fixed label. */}
       <div
-        className="px-5 h-14 flex items-center border-b shrink-0"
+        className="flex items-center justify-between flex-wrap gap-2 min-h-[48px] px-3.5 py-2 border-b shrink-0"
         style={{ borderColor: BORDER }}
       >
         <span
-          className="w-1.5 h-1.5 rounded-full shrink-0 mr-2 animate-pulse"
-          style={{ backgroundColor: RH_GREEN }}
-        />
-        <span className="font-mono text-[12px] text-white tracking-wide">
-          BLUE<span style={{ color: RH_GREEN }}>HOOD</span>
+          className="font-mono font-semibold text-[10.5px] tracking-[0.14em]"
+          style={{ color: INK1 }}
+        >
+          BLUE<span style={{ color: BLUE }}>HOOD</span>
         </span>
         <span
-          className="ml-auto font-mono text-[9px] tracking-widest"
-          style={{ color: marketColor }}
+          className="font-mono font-medium text-[8.5px] rounded-full px-[7px] py-0.5 whitespace-nowrap"
+          style={{ color: marketColor, border: `1px solid ${alpha(marketColor, 0.3)}` }}
         >
           {marketLabel}
         </span>
       </div>
 
-      {/* Nav strip — Drift (current) · Inbox (n) · Track record.
-          Before this the sidebar had no path to /hood/inbox or
-          /hood/arrows; RECENT ARROWS below was the only clue that
-          another view existed, and its click just scrolled the board.
-          Real bug 2026-07-23. */}
+      {/* Nav strip — Drift board · Inbox (n) · Track record. Active pill
+          follows the route (see `section` above). Before the sidebar had
+          no path to /hood/inbox or /hood/arrows at all; RECENT ARROWS was
+          the only clue another view existed (real bug 2026-07-23). */}
       <nav
-        className="px-3 pt-3 pb-2 flex flex-col gap-1 border-b"
-        style={{ borderColor: BORDER }}
+        className="px-3 pt-3 flex flex-col gap-0.5"
         aria-label="Blue Hood sections"
       >
-        <span className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg font-mono text-[11px] tracking-wide" style={{ color: RH_GREEN, backgroundColor: "#0a1a0e" }}>
-          <span>▸</span> Drift board
-        </span>
-        <Link
-          href="/hood/inbox"
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff08] font-mono text-[11px] tracking-wide"
-          style={{ color: inboxUnread > 0 ? RH_GREEN : "#9aa1ac" }}
-        >
-          <span>▸</span> Inbox
-          {inboxUnread > 0 && (
-            <span
-              className="ml-auto rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold"
-              style={{ color: BG, backgroundColor: RH_GREEN }}
-            >
-              {inboxUnread}
-            </span>
-          )}
-        </Link>
-        <Link
-          href="/hood/arrows"
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff08] font-mono text-[11px] tracking-wide"
-          style={{ color: "#9aa1ac" }}
-        >
-          <span>▸</span> Track record
-        </Link>
+        <HoodNavItem href="/hood" label="Drift board" active={section === "board"} />
+        <HoodNavItem href="/hood/inbox" label="Inbox" active={section === "inbox"} badge={inboxUnread} />
+        <HoodNavItem href="/hood/arrows" label="Track record" active={section === "record"} />
       </nav>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -269,12 +271,12 @@ export default function HoodSidebar({
                       title={tooltip}
                     >
                       <span
-                        className="font-mono text-[11px] tracking-wide shrink-0"
-                        style={{ color: RH_GREEN }}
+                        className="font-mono text-[10px] tracking-wide shrink-0"
+                        style={{ color: INK2 }}
                       >
                         {a.serial}
                       </span>
-                      <span className="font-mono text-[12px] text-slate-200">{a.ticker}</span>
+                      <span className="font-mono text-[10px]" style={{ color: INK2 }}>{a.ticker}</span>
                       <span className="font-mono text-[10px] uppercase" style={{ color: MUTED }}>
                         {a.type}
                       </span>
@@ -300,18 +302,18 @@ export default function HoodSidebar({
           Chat surface for consistency. */}
       <Link
         href="/docs/blue-hood"
-        className="px-5 py-3.5 border-t shrink-0 flex items-center gap-2.5 hover:bg-[#ffffff05] transition-colors group"
+        className="px-3.5 py-3 border-t shrink-0 flex items-center gap-2.5 hover:bg-[#ffffff05] transition-colors group"
         style={{ borderColor: BORDER }}
         title="Docs — Blue Hood"
       >
         <span
-          className="w-2 h-2 rounded-full shrink-0 transition-all animate-pulse"
+          className="w-1.5 h-1.5 rounded-full shrink-0 transition-all animate-pulse"
           style={{
             backgroundColor: snap ? RH_GREEN : "#334155",
             boxShadow: snap ? `0 0 6px ${RH_GREEN}80` : undefined,
           }}
         />
-        <span className="font-mono text-[11px] flex-1 text-left" style={{ color: "#64748b" }}>
+        <span className="font-mono text-[9.5px] flex-1 text-left" style={{ color: MUTED }}>
           {/* Denominator is the feed-eligible pool, not the whole registry —
               the poller can't watch a row with no Chainlink feed. Matches the
               "TOKENS WATCHED" card in HoodClient; keep the two in step. */}
@@ -327,6 +329,43 @@ export default function HoodSidebar({
   );
 }
 
+function HoodNavItem({
+  href,
+  label,
+  active,
+  badge = 0,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+  badge?: number;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className="relative flex items-center rounded-lg px-2.5 py-2 transition-colors hover:bg-[#ffffff08]"
+      style={
+        active
+          ? { background: "rgba(79,195,247,.10)", boxShadow: "inset 0 0 0 1px rgba(79,195,247,.22)" }
+          : undefined
+      }
+    >
+      <span className="font-mono font-medium text-[11px]" style={{ color: INK1 }}>
+        {label}
+      </span>
+      {badge > 0 && (
+        <span
+          className="ml-auto rounded-full px-1.5 py-0.5 font-mono text-[9px] font-semibold"
+          style={{ color: BG, backgroundColor: BLUE }}
+        >
+          {badge}
+        </span>
+      )}
+    </Link>
+  );
+}
+
 function WatchRow({
   r,
   kind,
@@ -336,6 +375,7 @@ function WatchRow({
   kind: "tradable" | "dust" | "no_data";
   onSelect: (t: string) => void;
 }) {
+  const chain = chainOf(r) === "base" ? "BASE" : "RH";
   const drift = r.drift_pct ?? 0;
   const dotColor =
     kind === "no_data"
@@ -359,8 +399,15 @@ function WatchRow({
           style={{ backgroundColor: dotColor }}
           title={kind === "no_data" ? "No pool data this cycle" : r.verdict}
         />
-        <span className="font-mono text-[12px] text-slate-200 tracking-wide">
+        <span className="font-mono text-[10.5px] tracking-wide" style={{ color: INK1 }}>
           {r.ticker}
+        </span>
+        <span
+          className="font-mono text-[8.5px] font-medium tracking-wide"
+          style={{ color: chain === "BASE" ? BLUE : MUTED }}
+          title={chain === "BASE" ? "Coinbase B20 · Base 8453" : "Robinhood Chain 4663"}
+        >
+          {chain}
         </span>
         {kind === "dust" && (
           <span
@@ -373,14 +420,14 @@ function WatchRow({
         )}
         {kind === "no_data" ? (
           <span
-            className="ml-auto font-mono text-[11px]"
+            className="ml-auto font-mono text-[10.5px]"
             style={{ color: MUTED }}
           >
             ·
           </span>
         ) : (
           <span
-            className="ml-auto font-mono text-[11px] tabular-nums"
+            className="ml-auto font-mono text-[10.5px] tabular-nums"
             style={{ color: driftColor(drift) }}
           >
             {drift === 0 ? "—" : `${drift > 0 ? "+" : ""}${drift.toFixed(2)}%`}
@@ -394,7 +441,7 @@ function WatchRow({
 function SectionLabel({ label, count }: { label: string; count: number }) {
   return (
     <div
-      className="flex items-center justify-between px-3 pt-1 pb-1.5 font-mono text-[9px] tracking-widest"
+      className="flex items-center justify-between px-3 pt-1 pb-1.5 font-mono font-medium text-[9px] tracking-[0.16em]"
       style={{ color: MUTED }}
     >
       <span>{label}</span>

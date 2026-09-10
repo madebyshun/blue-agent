@@ -6,7 +6,6 @@ import Navbar from "@/components/Navbar";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { useAccount, useSignTypedData, useReadContract, useChainId, useSwitchChain } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
-import AppPageHeader from "@/components/app/AppPageHeader";
 import HubHome from "./_components/HubHome";
 import SubmitTool from "./_components/SubmitTool";
 import DashboardView from "./_components/DashboardView";
@@ -1682,25 +1681,32 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
       {!inShell && <Navbar />}
       <div className={`flex flex-col bg-[#050508] font-mono ${inShell ? "h-full overflow-hidden" : "pt-14"}`}>
 
-        {/* ── Shell header ── */}
+        {/* ── Shell header — DESKTOP-ONLY inline bar (matches the OverviewView
+            `// SCREEN` convention). On mobile the AppShell MobileTopBar prints
+            `// HUB`, so this is gated `hidden lg:flex` to avoid a double title. ── */}
         {inShell && (
-          <AppPageHeader
-            label="HUB"
-            subtitle="AI tools · multi-agent · x402 · Base"
-            accent="#4FC3F7"
-            right={<span style={{ color: "#4FC3F7" }}>{allTools.length} tools</span>}
-          />
+          <div className="hidden lg:flex items-center gap-3.5 min-h-[48px] px-5 py-2 border-b border-[#1A1A2E] shrink-0 flex-wrap">
+            <span className="font-mono font-semibold text-[11px] tracking-[0.16em]" style={{ color: "#E2E8F0" }}>
+              // HUB
+            </span>
+            <span className="font-mono text-[10.5px]" style={{ color: "#64748B" }}>
+              AI tools · multi-agent · x402 · Base
+            </span>
+            <span className="ml-auto font-mono text-[10.5px]" style={{ color: "#94A3B8" }}>
+              {allTools.length} tools
+            </span>
+          </div>
         )}
 
         <div className={`flex ${inShell ? "flex-1 overflow-hidden" : ""}`}>
 
         {/* ── Sidebar ──────────────────────────────────── */}
-        <aside className={`hidden lg:flex flex-col w-72 shrink-0 border-r border-[#1A1A2E] ${inShell ? "h-full" : "sticky top-14 h-[calc(100vh-3.5rem)]"}`}>
+        <aside className={`hidden lg:flex flex-col w-[236px] shrink-0 border-r border-[#1A1A2E] ${inShell ? "h-full" : "sticky top-14 h-[calc(100vh-3.5rem)]"}`}>
 
           {/* Header */}
-          <div className="px-5 h-14 flex items-center gap-3 border-b border-[#1A1A2E] shrink-0">
-            <p className="font-mono text-xs text-[#4FC3F7] tracking-widest">// MARKETPLACE</p>
-            <span className="font-mono text-[10px] text-slate-700">{filtered.length} of {allTools.length}</span>
+          <div className="px-4 min-h-[48px] py-2 flex items-center gap-3 border-b border-[#1A1A2E] shrink-0">
+            <p className="font-mono font-semibold text-[10.5px] tracking-[0.14em]" style={{ color: "#E2E8F0" }}>// MARKETPLACE</p>
+            <span className="font-mono text-[9.5px]" style={{ color: "#64748B" }}>{filtered.length} of {allTools.length}</span>
           </div>
 
           {/* Filters — scrollable so the List / Creator actions stay pinned below */}
@@ -1719,17 +1725,17 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
 
             {/* Source filter */}
             <div className="px-4 pt-3 pb-3">
-              <p className="font-mono text-[9px] text-slate-700 tracking-widest mb-2">SOURCE</p>
+              <p className="font-mono text-[9px] tracking-[0.16em] mb-2" style={{ color: "#475569" }}>SOURCE</p>
               <div className="flex flex-wrap gap-1.5">
                 {SOURCE_CHIPS.map(s => {
                   const active = source === s.key;
                   const count = sourceCounts[s.key];
                   return (
                     <button key={s.key} onClick={() => { setSource(s.key); ensureBrowse(); }}
-                      className="font-mono text-[10px] px-2 py-1 rounded border transition-colors"
+                      className="font-mono text-[9.5px] px-2.5 py-1 rounded-[7px] border transition-colors"
                       style={active
-                        ? { color: s.color, borderColor: `${s.color}55`, background: `${s.color}12` }
-                        : { color: "#64748b", borderColor: "#1A1A2E" }}>
+                        ? { color: "#050508", background: "#4FC3F7", borderColor: "#4FC3F7", fontWeight: 600 }
+                        : { color: "#94A3B8", borderColor: "#1A1A2E", background: "transparent" }}>
                       {s.label} <span className="opacity-60">{count}</span>
                     </button>
                   );
@@ -1739,21 +1745,21 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
 
             {/* Category filter */}
             <div className="px-4 pt-2 pb-3 border-t border-[#1A1A2E]">
-              <p className="font-mono text-[9px] text-slate-700 tracking-widest mb-2">CATEGORY</p>
+              <p className="font-mono text-[9px] tracking-[0.16em] mb-2" style={{ color: "#475569" }}>CATEGORY</p>
               <div className="flex flex-wrap gap-1.5">
                 <button onClick={() => { setCat("all"); ensureBrowse(); }}
-                  className={`font-mono text-[10px] px-2 py-1 rounded border transition-colors ${cat === "all" ? "bg-[#4FC3F7]/15 text-[#4FC3F7] border-[#4FC3F7]/40" : "text-slate-600 border-[#1A1A2E] hover:text-slate-300"}`}>
+                  className="font-mono text-[9.5px] px-2.5 py-1 rounded-[7px] border transition-colors"
+                  style={cat === "all"
+                    ? { color: "#050508", background: "#4FC3F7", borderColor: "#4FC3F7", fontWeight: 600 }
+                    : { color: "#94A3B8", borderColor: "#1A1A2E", background: "transparent" }}>
                   All
                 </button>
                 {TOOL_GROUPS.map(g => (
                   <button key={g.id} onClick={() => { setCat(g.id as Category); ensureBrowse(); }}
-                    className="font-mono text-[10px] px-2 py-1 rounded border transition-colors"
+                    className="font-mono text-[9.5px] px-2.5 py-1 rounded-[7px] border transition-colors"
                     style={cat === g.id
-                      ? { background: g.color + "18", color: g.color, borderColor: g.color + "40" }
-                      : { color: "#475569", borderColor: "#1A1A2E" }}
-                    onMouseEnter={e => { if (cat !== g.id) (e.currentTarget as HTMLElement).style.color = g.color; }}
-                    onMouseLeave={e => { if (cat !== g.id) (e.currentTarget as HTMLElement).style.color = "#475569"; }}
-                  >
+                      ? { color: "#050508", background: "#4FC3F7", borderColor: "#4FC3F7", fontWeight: 600 }
+                      : { color: "#94A3B8", borderColor: "#1A1A2E", background: "transparent" }}>
                     {g.label}
                   </button>
                 ))}
@@ -1762,13 +1768,16 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
 
             {/* Price filter */}
             <div className="px-4 pt-2 pb-4 border-t border-[#1A1A2E]">
-              <p className="font-mono text-[9px] text-slate-700 tracking-widest mb-2">PRICE</p>
+              <p className="font-mono text-[9px] tracking-[0.16em] mb-2" style={{ color: "#475569" }}>PRICE</p>
               <div className="flex flex-wrap gap-1.5">
                 {PRICE_CHIPS.map(p => {
                   const active = price === p.key;
                   return (
                     <button key={p.key} onClick={() => { setPrice(p.key); ensureBrowse(); }}
-                      className={`font-mono text-[10px] px-2 py-1 rounded border transition-colors ${active ? "bg-[#34D399]/15 text-[#34D399] border-[#34D399]/40" : "text-slate-600 border-[#1A1A2E] hover:text-slate-300"}`}>
+                      className="font-mono text-[9.5px] px-2.5 py-1 rounded-[7px] border transition-colors"
+                      style={active
+                        ? { color: "#050508", background: "#4FC3F7", borderColor: "#4FC3F7", fontWeight: 600 }
+                        : { color: "#94A3B8", borderColor: "#1A1A2E", background: "transparent" }}>
                       {p.label}
                     </button>
                   );
@@ -1788,30 +1797,30 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
           </div>
 
           {/* Builder actions (v2) */}
-          <div className="px-4 pb-2 border-t border-[#1A1A2E] pt-3 space-y-1">
+          <div className="px-4 pb-3 border-t border-[#1A1A2E] pt-3.5">
             <button
               type="button"
               onClick={view === "submit" ? backToBrowse : openSubmit}
-              className={`flex items-center gap-2 w-full px-2 py-2 rounded-lg transition-colors group ${view === "submit" ? "bg-[#A78BFA]/10" : "hover:bg-[#A78BFA]/5"}`}
+              className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-lg transition-colors group ${view === "submit" ? "bg-[#A78BFA]/10" : "hover:bg-[#A78BFA]/5"}`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#A78BFA] animate-pulse shrink-0" />
-              <span className={`font-mono text-[11px] transition-colors ${view === "submit" ? "text-[#A78BFA]" : "text-slate-500 group-hover:text-[#A78BFA]"}`}>
+              <span className={`font-mono text-[10.5px] font-medium transition-colors ${view === "submit" ? "text-[#A78BFA]" : "text-[#4FC3F7] group-hover:text-[#A78BFA]"}`}>
                 {view === "submit" ? "← Browse tools" : "+ List your tool"}
               </span>
-              {view !== "submit" && (
-                <span className="ml-auto font-mono text-[9px] text-slate-700 group-hover:text-[#A78BFA]">
-                  95/5
-                </span>
-              )}
             </button>
+            {view !== "submit" && (
+              <p className="pl-4 mt-1 font-mono text-[9.5px] leading-[1.6]" style={{ color: "#64748B" }}>
+                95% self-hosted<br />90% hosted on Blue Hub
+              </p>
+            )}
             <button
               type="button"
               onClick={view === "dashboard" ? backToBrowse : openDashboard}
-              className={`flex items-center gap-2 w-full px-2 py-2 rounded-lg transition-colors group ${view === "dashboard" ? "bg-[#34D399]/10" : "hover:bg-[#34D399]/5"}`}
+              className={`mt-2.5 flex items-center gap-2 w-full px-2 py-1.5 rounded-lg transition-colors group ${view === "dashboard" ? "bg-[#34D399]/10" : "hover:bg-[#34D399]/5"}`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] shrink-0" />
-              <span className={`font-mono text-[11px] transition-colors ${view === "dashboard" ? "text-[#34D399]" : "text-slate-500 group-hover:text-[#34D399]"}`}>
-                {view === "dashboard" ? "← Browse tools" : "Creator dashboard"}
+              <span className={`font-mono text-[10.5px] font-medium transition-colors ${view === "dashboard" ? "text-[#34D399]" : "text-[#94A3B8] group-hover:text-[#34D399]"}`}>
+                {view === "dashboard" ? "← Browse tools" : "Creator dashboard →"}
               </span>
             </button>
           </div>

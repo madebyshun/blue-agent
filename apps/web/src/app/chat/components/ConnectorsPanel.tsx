@@ -18,12 +18,14 @@ import {
 //   bearer → open the slim add modal prefilled, user pastes a token
 //   oauth  → surfaced for discovery, not attachable yet (tagged "soon")
 
-const ACCENT = "#A78BFA"; // purple — the "connect / integrate" accent
+const ACCENT = "#4FC3F7"; // blue-primary — the "connect / integrate" accent
 
+// Badge colours per the design handoff: purple is reserved for the OAuth "SOON"
+// state ONLY (soon = not attachable yet); ready/needs-key stay green/amber.
 const AUTH_BADGE: Record<ConnectorAuth, { label: string; color: string }> = {
-  none:   { label: "READY",       color: "#34D399" },
-  bearer: { label: "NEEDS KEY",   color: "#FBBF24" },
-  oauth:  { label: "OAUTH · SOON", color: "#64748B" },
+  none:   { label: "READY",     color: "#34D399" },
+  bearer: { label: "NEEDS KEY", color: "#F59E0B" },
+  oauth:  { label: "SOON",      color: "#A78BFA" },
 };
 
 type Filter = "all" | ConnectorAuth;
@@ -37,6 +39,7 @@ const FILTERS: { id: Filter; label: string }[] = [
 export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
   void onPick;
   const connectors = useConnectors();
+  const toolCount = connectors.reduce((n, c) => n + c.tools.length, 0);
 
   // Gallery state
   const [query,  setQuery]  = useState("");
@@ -117,155 +120,180 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
 
   return (
     <div className="flex flex-col h-full bg-[#050508] overflow-hidden">
-      {/* Header */}
-      <div className="px-5 py-4 border-b border-[#1A1A2E] flex-shrink-0">
-        <div className="flex items-center justify-between mb-2">
-          <p className="font-mono text-[10px] text-slate-500 tracking-widest">CONNECTORS</p>
-          <span className="font-mono text-[10px] text-slate-600">{connectors.length} attached</span>
+      {/* `// CONNECTORS` header — desktop only. Below lg the global MobileTopBar
+          prints the surface title, so rendering this too would duplicate it.
+          The "N attached · M tools" chip + "+ Custom MCP" live here on desktop;
+          the mobile "+ Custom" affordance rides in the gallery toolbar below. */}
+      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[48px] px-5 py-2 border-b border-[#1A1A2E]">
+        <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// CONNECTORS</span>
+        <span className="font-mono text-[10.5px] text-[#64748B]">MCP servers · output is treated as untrusted third-party data</span>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="font-mono text-[10px] text-[#94A3B8] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">
+            {connectors.length} attached · {toolCount} tools
+          </span>
+          <button
+            onClick={openCustom}
+            className="font-mono text-[10.5px] font-semibold text-[#050508] bg-[#4FC3F7] hover:bg-[#29ABE2] rounded-[7px] px-2.5 py-[5px] transition-colors"
+          >
+            + Custom MCP
+          </button>
         </div>
-        <p className="font-mono text-[10px] text-slate-700 leading-relaxed">
-          One-click <span style={{ color: ACCENT }}>MCP servers</span> — enable a preset or attach your own.
-          Their tools become callable in chat; output is treated as untrusted third-party data.
-        </p>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="px-6 py-4 space-y-6">
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="px-5 py-[18px] space-y-6 max-w-5xl">
 
           {/* Attached connectors */}
           {connectors.length > 0 && (
             <section>
-              <p className="font-mono text-[9px] tracking-widest flex items-center gap-2 mb-3" style={{ color: ACCENT }}>
-                <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: ACCENT }} />
+              <p className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">
                 ATTACHED · {connectors.length}
               </p>
-              <div className="space-y-1.5">
-                {connectors.map(c => (
-                  <div key={c.id} className="px-4 py-3 rounded-xl border border-[#1A1A2E] bg-[#0A0A12]">
-                    <div className="flex items-center gap-3">
-                      <BrandMark brand={brandForUrl(c.url)} size={28} />
-                      <div className="flex-1 min-w-0">
-                        <span className="font-mono text-[13px] text-slate-200 truncate block">{c.name}</span>
-                        <p className="font-mono text-[10px] text-slate-600 truncate">{c.url}</p>
-                      </div>
-                      <span className="font-mono text-[9px] px-1.5 py-0.5 rounded border shrink-0"
-                        style={{ color: ACCENT, borderColor: `${ACCENT}30`, background: `${ACCENT}10` }}>
-                        {c.tools.length} tools
-                      </span>
-                      <button
-                        onClick={() => setConnectorEnabled(c.id, !c.enabled)}
-                        title={c.enabled ? "Disable" : "Enable"}
-                        className="relative w-9 h-5 rounded-full transition-colors shrink-0"
-                        style={{ background: c.enabled ? "#34D39955" : "#1A1A2E" }}
-                      >
-                        <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: c.enabled ? 18 : 2 }} />
-                      </button>
-                      <button
-                        onClick={() => removeConnector(c.id)}
-                        title="Remove"
-                        className="font-mono text-[12px] text-slate-600 hover:text-red-400 transition-colors shrink-0"
-                      >✕</button>
-                    </div>
-                    {c.tools.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {c.tools.slice(0, 8).map(t => (
-                          <span key={t.name} className="font-mono text-[8px] px-1.5 py-0.5 rounded"
-                            style={{ background: `${ACCENT}0A`, color: `${ACCENT}B0`, border: `1px solid ${ACCENT}20` }}>
-                            {t.name}
+              <div className="mt-3 space-y-[9px]">
+                {connectors.map(c => {
+                  // Blue Hub — Blue Agent's own MCP — gets the accent-tinted card
+                  // per the handoff, matched by endpoint (survives a re-add under
+                  // a de-duped id). brandForUrl keys off the preset catalog.
+                  const isBlueHub = brandForUrl(c.url) === "blue-agent";
+                  return (
+                    <div key={c.id}
+                      className="rounded-[14px] border px-4 py-3.5"
+                      style={{
+                        borderColor: isBlueHub ? "rgba(79,195,247,.28)" : "#1A1A2E",
+                        background:  isBlueHub ? "rgba(79,195,247,.04)" : "#0D0D14",
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <BrandMark brand={brandForUrl(c.url)} size={26} />
+                        <div className="min-w-0">
+                          <span className="block font-mono text-[12.5px] font-semibold text-[#E2E8F0] truncate">{c.name}</span>
+                          <span className="block font-mono text-[9.5px] text-[#64748B] truncate mt-0.5">{c.url}</span>
+                        </div>
+                        <div className="ml-auto flex items-center gap-2.5 shrink-0">
+                          <span
+                            className="font-mono text-[9.5px] font-medium rounded-[5px] px-2 py-[3px]"
+                            style={{ color: ACCENT, background: "rgba(79,195,247,.12)" }}
+                          >
+                            {c.tools.length} tools
                           </span>
-                        ))}
-                        {c.tools.length > 8 && (
-                          <span className="font-mono text-[8px] px-1.5 py-0.5 text-slate-600">+{c.tools.length - 8}</span>
-                        )}
+                          <button
+                            onClick={() => setConnectorEnabled(c.id, !c.enabled)}
+                            title={c.enabled ? "Disable" : "Enable"}
+                            className="relative rounded-full transition-colors"
+                            style={{ width: 34, height: 19, background: c.enabled ? "#34D399" : "#1A1A2E" }}
+                          >
+                            <span
+                              className="absolute rounded-full transition-all"
+                              style={{ width: 15, height: 15, top: 2, left: c.enabled ? 17 : 2, background: c.enabled ? "#050508" : "#475569" }}
+                            />
+                          </button>
+                          <button
+                            onClick={() => removeConnector(c.id)}
+                            title="Remove"
+                            className="font-mono text-[12px] text-[#475569] hover:text-red-400 transition-colors"
+                          >✕</button>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                ))}
+                      {c.tools.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2.5">
+                          {c.tools.slice(0, 6).map(t => (
+                            <span key={t.name} className="font-mono text-[9.5px] text-[#94A3B8] border border-[#1A1A2E] rounded-[6px] px-2 py-[3px]">
+                              {t.name}
+                            </span>
+                          ))}
+                          {c.tools.length > 6 && (
+                            <span className="font-mono text-[9.5px] text-[#475569] border border-[#1A1A2E] rounded-[6px] px-2 py-[3px]">
+                              +{c.tools.length - 6}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </section>
           )}
 
           {/* Gallery */}
-          <section className={connectors.length > 0 ? "border-t border-[#1A1A2E] pt-5" : ""}>
-            <div className="flex items-center justify-between mb-3">
-              <p className="font-mono text-[9px] text-slate-600 tracking-widest">// GALLERY</p>
+          <section>
+            {/* Toolbar — label · search · (mobile "+ Custom") · filter pills */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">GALLERY</span>
+              <input
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search connectors…"
+                className="flex-1 min-w-[160px] max-w-[420px] bg-[#0D0D14] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-[8px] px-2.5 py-[7px] font-mono text-[10.5px] text-white placeholder:text-[#64748B] outline-none"
+              />
               <button
                 onClick={openCustom}
-                className="font-mono text-[10px] px-2.5 py-1 rounded-lg border transition-colors"
-                style={{ borderColor: `${ACCENT}30`, color: ACCENT }}
+                className="lg:hidden font-mono text-[10px] font-semibold text-[#050508] bg-[#4FC3F7] hover:bg-[#29ABE2] rounded-[8px] px-3 py-[7px] transition-colors shrink-0"
               >
-                + Custom MCP
+                + Custom
               </button>
+              <div className="flex gap-1.5 flex-wrap">
+                {FILTERS.map(f => (
+                  <button key={f.id} onClick={() => setFilter(f.id)}
+                    className="font-mono text-[9.5px] rounded-full px-2.5 py-1 border transition-colors"
+                    style={filter === f.id
+                      ? { color: "#050508", background: ACCENT, borderColor: ACCENT, fontWeight: 600 }
+                      : { color: "#94A3B8", borderColor: "#1A1A2E" }}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Search + filter */}
-            <input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Search connectors…"
-              className="w-full bg-[#0A0A12] border border-[#1A1A2E] focus:border-[#A78BFA]/40 rounded-lg px-3 py-2 font-mono text-[11px] text-white placeholder:text-slate-700 outline-none mb-2"
-            />
-            <div className="flex gap-1.5 flex-wrap mb-4">
-              {FILTERS.map(f => (
-                <button key={f.id} onClick={() => setFilter(f.id)}
-                  className="font-mono text-[9px] px-2.5 py-1 rounded-lg border transition-colors"
-                  style={filter === f.id
-                    ? { color: ACCENT, background: `${ACCENT}15`, borderColor: `${ACCENT}35` }
-                    : { color: "#475569", borderColor: "#1A1A2E" }}>
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Card grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {/* Card grid — auto-fit tracks per the handoff (min 200px). */}
+            <div className="mt-3 grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
               {visible.map(p => {
                 const added   = isPresetAdded(connectors, p);
                 const badge   = AUTH_BADGE[p.auth];
                 const adding  = addingId === p.id;
-                const disabled = p.auth === "oauth" || added || adding;
+                const isSoon  = p.auth === "oauth";
+                const disabled = isSoon || added || adding;
                 return (
                   <div key={p.id}
-                    className="px-4 py-3 rounded-xl border bg-[#0A0A12] flex flex-col"
-                    style={{ borderColor: added ? "#34D39930" : "#1A1A2E", opacity: p.auth === "oauth" ? 0.6 : 1 }}
+                    className="rounded-[14px] border border-[#1A1A2E] p-[14px] flex flex-col"
+                    style={{ background: isSoon ? "transparent" : "#0D0D14", opacity: isSoon ? 0.55 : 1 }}
                   >
-                    <div className="flex items-start gap-2.5 mb-2">
-                      <BrandMark brand={p.brand} size={32} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-[12px] font-semibold text-slate-200 truncate">{p.name}</span>
-                          <span className="font-mono text-[8px] px-1 py-0.5 rounded border shrink-0"
-                            style={{ color: badge.color, borderColor: `${badge.color}30`, background: `${badge.color}10` }}>
-                            {badge.label}
-                          </span>
-                        </div>
-                        <span className="font-mono text-[8px] text-slate-600 tracking-widest">{p.category.toUpperCase()}</span>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <BrandMark brand={p.brand} size={22} />
+                      <span className="font-mono text-[11.5px] font-semibold text-[#E2E8F0] truncate">{p.name}</span>
+                      <span
+                        className="ml-auto font-mono text-[8.5px] font-medium rounded-full px-[7px] py-[2px] shrink-0"
+                        style={{ color: badge.color, border: `1px solid ${badge.color}4D` }}
+                      >
+                        {badge.label}
+                      </span>
                     </div>
-                    <p className="font-mono text-[9px] text-slate-500 leading-relaxed mb-3 flex-1">{p.description}</p>
+                    <p className="font-prose text-[10px] leading-[1.6] text-[#94A3B8] mt-2.5 flex-1">{p.description}</p>
                     {flash?.id === p.id && (
-                      <p className="font-mono text-[8px] text-red-400 mb-2 leading-relaxed">{flash.msg}</p>
+                      <p className="font-mono text-[8.5px] text-red-400 mt-2 leading-relaxed">{flash.msg}</p>
                     )}
                     <button
                       onClick={() => onPresetClick(p, added)}
                       disabled={disabled}
-                      className="w-full font-mono text-[10px] font-bold py-1.5 rounded-lg border transition-colors disabled:cursor-default"
+                      className="mt-3 w-full font-mono text-[10px] font-medium rounded-[8px] py-[7px] border text-center transition-colors disabled:cursor-default"
                       style={
                         added
-                          ? { color: "#34D399", borderColor: "#34D39930", background: "#34D39910" }
-                          : p.auth === "oauth"
+                          ? { color: "#34D399", borderColor: "rgba(52,211,153,.28)" }
+                          : isSoon
                           ? { color: "#475569", borderColor: "#1A1A2E" }
-                          : { color: ACCENT, borderColor: `${ACCENT}40`, background: `${ACCENT}08` }
+                          : p.auth === "bearer"
+                          ? { color: "#F59E0B", borderColor: "rgba(245,158,11,.3)" }
+                          : { color: ACCENT, borderColor: "rgba(79,195,247,.3)" }
                       }
                     >
-                      {added ? "✓ Added" : adding ? "Adding…" : p.auth === "oauth" ? "OAuth · soon" : p.auth === "bearer" ? "+ Add key" : "+ Add"}
+                      {added ? "✓ Added" : adding ? "Adding…" : isSoon ? "OAuth · soon" : p.auth === "bearer" ? "+ Add key" : "+ Add"}
                     </button>
                   </div>
                 );
               })}
               {visible.length === 0 && (
-                <p className="font-mono text-[10px] text-slate-700 col-span-full">No connectors match “{query}”.</p>
+                <p className="font-mono text-[10px] text-[#475569] col-span-full">No connectors match “{query}”.</p>
               )}
             </div>
           </section>
@@ -276,7 +304,7 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setOpen(false); reset(); }} />
-          <div className="relative z-10 w-full max-w-sm rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 max-h-[85vh] overflow-y-auto">
+          <div className="relative z-10 w-full max-w-sm rounded-2xl border border-[#1A1A2E] bg-[#0D0D14] p-5 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 {preset && <BrandMark brand={preset.brand} size={26} />}
@@ -296,19 +324,19 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
 
             <label className="font-mono text-[9px] text-slate-600 tracking-widest">NAME</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="My MCP server"
-              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#A78BFA]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-white placeholder:text-slate-700 outline-none mb-3 mt-1" />
+              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-white placeholder:text-slate-700 outline-none mb-3 mt-1" />
 
             <label className="font-mono text-[9px] text-slate-600 tracking-widest">MCP ENDPOINT URL</label>
             <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://example.com/mcp/"
-              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#A78BFA]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-white placeholder:text-slate-700 outline-none mb-3 mt-1" />
+              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-white placeholder:text-slate-700 outline-none mb-3 mt-1" />
 
             <label className="font-mono text-[9px] text-slate-600 tracking-widest">AUTH (optional)</label>
             <div className="flex gap-2 mt-1 mb-1">
               <input value={authHeader} onChange={e => setAuthHeader(e.target.value)} placeholder="Authorization"
-                className="w-1/3 bg-[#050508] border border-[#1A1A2E] focus:border-[#A78BFA]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-white placeholder:text-slate-700 outline-none" />
+                className="w-1/3 bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-white placeholder:text-slate-700 outline-none" />
               <input value={authValue} onChange={e => setAuthValue(e.target.value)} type="password"
                 placeholder={preset?.authPlaceholder ?? "Bearer token…"}
-                className="flex-1 bg-[#050508] border border-[#1A1A2E] focus:border-[#A78BFA]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-white placeholder:text-slate-700 outline-none" />
+                className="flex-1 bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-white placeholder:text-slate-700 outline-none" />
             </div>
             <p className="font-mono text-[9px] text-slate-700 mb-3">Token is stored locally in your browser and only sent to Blue Chat when a connector tool runs.</p>
 

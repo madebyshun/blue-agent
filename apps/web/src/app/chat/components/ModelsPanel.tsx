@@ -80,7 +80,7 @@ type Load =
 // different instance, so the caller routes to /chat?preset=<id> to make the
 // choice actually land.
 export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void }) {
-  const { chatTier, setChatTier } = useChat();
+  const { chatTier, setChatTier, credits, walletReady } = useChat();
 
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [tab, setTab] = useState<Tab>("presets");
@@ -118,6 +118,33 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
   const shown = useMemo(() => sortRows(applyFilters(allRows, filters), sortKey, sortDir), [allRows, filters, sortKey, sortDir]);
   const unknownModality = useMemo(() => unknownModalityCount(allRows, filters), [allRows, filters]);
 
+  // TODAY'S BUDGET's second line, derived from the live balance and each
+  // preset's REAL credit cost — never a hardcoded "50 Fast / 10 Balanced".
+  // Omitted until the catalog loads or before a wallet resolves, so it can't
+  // assert a spend rate from numbers it doesn't have.
+  const budgetLine = useMemo(() => {
+    if (!data || !walletReady) return null;
+    const rows = presetRows(data.presets);
+    const costOf = (id: string) => rows.find(r => r.presetId === id)?.credits ?? 0;
+    const parts: string[] = [];
+    const push = (id: string, label: string) => {
+      const c = costOf(id);
+      // Only surface a tier the balance can actually cover at least one of —
+      // "0 Deep" is noise, and the table already shows Deep's price for anyone
+      // who wants to know why it's absent.
+      const n = c > 0 ? Math.floor(credits / c) : 0;
+      if (n >= 1) parts.push(`${n.toLocaleString()} ${label}`);
+    };
+    push("fast", "Fast messages");
+    push("balanced", "Balanced");
+    push("deep", "Deep");
+    if (parts.length === 0) return "Free stays free.";
+    const joined = parts.length > 1
+      ? `${parts.slice(0, -1).join(", ")}, or ${parts[parts.length - 1]}`
+      : parts[0];
+    return `That is ${joined}. Free stays free.`;
+  }, [data, credits, walletReady]);
+
   function switchTab(next: Tab) {
     setTab(next);
     setFilters(EMPTY_FILTERS);
@@ -141,6 +168,8 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
   }
 
   const isPresets = tab === "presets";
+  const presetCount = data?.presets.length ?? 8;
+  const modelCount = data?.models.length ?? null;
   const degraded = data
     ? (["virtuals", "venice"] as const).filter(g => data.catalogs[g].status !== "ok")
     : [];
@@ -148,44 +177,41 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
   return (
     <div className="flex flex-col h-full bg-[#050508] overflow-hidden">
 
-      {/* ── Tabs + search ── */}
-      <div className="px-5 py-3 border-b border-[#1A1A2E] shrink-0 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1 rounded-xl border border-[#1A1A2E] bg-[#0A0A12] p-0.5">
-          {([
-            { id: "presets" as const, label: "Presets", n: data?.presets.length ?? 8 },
-            { id: "all"     as const, label: "All models", n: data?.models.length ?? null },
-          ]).map(t => (
-            <button
-              key={t.id}
-              onClick={() => switchTab(t.id)}
-              className="font-mono text-[11px] px-3 py-1.5 rounded-lg transition-colors"
-              style={tab === t.id
-                ? { background: "#4FC3F714", color: "#4FC3F7" }
-                : { color: "#64748b" }}
-            >
-              {t.label}
-              {t.n != null && <span className="ml-1.5 text-[10px] opacity-60">{t.n}</span>}
-            </button>
-          ))}
-        </div>
-
-        <input
-          value={filters.query}
-          onChange={e => setFilters(f => ({ ...f, query: e.target.value }))}
-          placeholder="Search model or publisher..."
-          className="flex-1 min-w-[10rem] max-w-sm font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] bg-[#0A0A12] text-slate-200 placeholder:text-slate-700 focus:outline-none focus:border-[#4FC3F733]"
-        />
+      {/* ── Header bar — // MODELS, live counts, Presets/All toggle.
+             Search moved into the filter pane (handoff). The toggle is the same
+             load-bearing Presets↔All switch, restyled to the handoff pill; its
+             counts are live (`data`), never the prototype's hardcoded 8 / 312. ── */}
+      <div className="flex items-center gap-3.5 flex-wrap shrink-0 min-h-[48px] px-5 py-2 border-b border-[#1A1A2E]">
+        <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// MODELS</span>
+        <span className="font-mono text-[10.5px] text-[#64748B]">
+          {presetCount} presets · {modelCount ?? "…"} models · routed through Virtuals + Venice · credits per message
+        </span>
 
         <button
           onClick={() => setShowFilters(v => !v)}
-          className="lg:hidden font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] bg-[#0A0A12] text-slate-400"
+          className="lg:hidden font-mono text-[10.5px] px-2.5 py-1 rounded-md border border-[#1A1A2E] bg-[#0A0A12] text-slate-400"
         >
           {showFilters ? "Hide filters" : "Filters"}
         </button>
 
-        <span className="font-mono text-[10px] text-slate-600 ml-auto">
-          {shown.length}{shown.length !== allRows.length && ` of ${allRows.length}`}
-        </span>
+        <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-[#1A1A2E] p-0.5">
+          {([
+            { id: "presets" as const, label: "Presets", n: presetCount },
+            { id: "all"     as const, label: "All",     n: modelCount },
+          ]).map(t => (
+            <button
+              key={t.id}
+              onClick={() => switchTab(t.id)}
+              className="font-mono text-[10.5px] px-2.5 py-1 rounded-md transition-colors"
+              style={tab === t.id
+                ? { background: "#4FC3F7", color: "#050508", fontWeight: 600 }
+                : { color: "#94A3B8" }}
+            >
+              {t.label}
+              {t.n != null && <span className={`ml-1 ${tab === t.id ? "" : "text-slate-600"}`}>{t.n}</span>}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── Catalog-health banner. A gateway being down means the list below is
@@ -202,8 +228,20 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
 
       <div className="flex-1 min-h-0 flex">
 
-        {/* ── Filter sidebar ── */}
-        <aside className={`${showFilters ? "flex" : "hidden"} lg:flex flex-col w-full lg:w-52 shrink-0 border-r border-[#1A1A2E] overflow-y-auto px-4 py-4 gap-5`}>
+        {/* ── Filter pane (handoff 232px) — search + facets + today's budget ── */}
+        <aside className={`${showFilters ? "flex" : "hidden"} lg:flex flex-col w-full lg:w-[232px] shrink-0 border-r border-[#1A1A2E] overflow-y-auto px-3.5 py-4 gap-4`}>
+
+          <div>
+            <input
+              value={filters.query}
+              onChange={e => setFilters(f => ({ ...f, query: e.target.value }))}
+              placeholder="Search model or publisher…"
+              className="w-full font-mono text-[10.5px] px-2.5 py-2 rounded-lg border border-[#1A1A2E] bg-[#0D0D14] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-[#4FC3F733]"
+            />
+            <p className="font-mono text-[9px] text-slate-600 mt-1.5 px-0.5">
+              {shown.length}{shown.length !== allRows.length && ` of ${allRows.length}`} shown
+            </p>
+          </div>
 
           <FilterGroup title="Gateway">
             {(["virtuals", "venice"] as const).map(g => (
@@ -229,6 +267,23 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
             ))}
           </FilterGroup>
 
+          <FilterGroup title="Context window">
+            <div className="flex flex-wrap gap-1">
+              {CTX_STEPS.map(s => (
+                <button
+                  key={s.value}
+                  onClick={() => setFilters(f => ({ ...f, minContext: s.value }))}
+                  className="font-mono text-[10px] px-2 py-1 rounded-md border transition-colors"
+                  style={filters.minContext === s.value
+                    ? { borderColor: "#4FC3F744", color: "#4FC3F7", background: "#4FC3F70d" }
+                    : { borderColor: "#1A1A2E", color: "#64748b" }}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </FilterGroup>
+
           <FilterGroup title="Accepts input">
             {MODALITY_FILTERS.map(m => (
               <FilterRow
@@ -250,23 +305,6 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
             )}
           </FilterGroup>
 
-          <FilterGroup title="Context window">
-            <div className="flex flex-wrap gap-1">
-              {CTX_STEPS.map(s => (
-                <button
-                  key={s.value}
-                  onClick={() => setFilters(f => ({ ...f, minContext: s.value }))}
-                  className="font-mono text-[10px] px-2 py-1 rounded-md border transition-colors"
-                  style={filters.minContext === s.value
-                    ? { borderColor: "#4FC3F744", color: "#4FC3F7", background: "#4FC3F70d" }
-                    : { borderColor: "#1A1A2E", color: "#64748b" }}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </FilterGroup>
-
           {isFiltered(filters) && (
             <button
               onClick={() => setFilters(EMPTY_FILTERS)}
@@ -275,6 +313,19 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
               ← Reset filters
             </button>
           )}
+
+          {/* TODAY'S BUDGET — the real balance, plus a spend rate derived from
+              each preset's live credit cost (see `budgetLine`). Shows "…" until
+              a wallet resolves rather than a placeholder number. */}
+          <div className="mt-1 p-3 rounded-xl border border-[#1A1A2E] bg-[#0D0D14]">
+            <p className="font-mono text-[9.5px] tracking-[0.14em] text-[#64748B]">TODAY&apos;S BUDGET</p>
+            <p className="font-mono text-[20px] font-bold text-[#E2E8F0] mt-1.5 leading-none">
+              {walletReady ? `${credits.toLocaleString()} cr` : "…"}
+            </p>
+            {budgetLine && (
+              <p className="font-prose text-[10px] leading-relaxed text-[#94A3B8] mt-2">{budgetLine}</p>
+            )}
+          </div>
         </aside>
 
         {/* ── Table ── */}
@@ -348,7 +399,7 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
                       key={row.key}
                       onClick={() => pick(row)}
                       className={`border-b border-[#1A1A2E] transition-colors ${selectable ? "cursor-pointer hover:bg-[#ffffff05]" : ""}`}
-                      style={isActive ? { background: `${accent}0d` } : undefined}
+                      style={isActive ? { background: "rgba(79,195,247,0.05)", boxShadow: "inset 0 0 0 1px rgba(79,195,247,0.18)" } : undefined}
                     >
                       {/* Model */}
                       <td className="pl-5 py-2.5 pr-3">
