@@ -947,281 +947,136 @@ export default function BankPage() {
   ];
 
   return (
-    <div className="flex h-full w-full bg-[#050508] text-slate-200 overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-[#050508] text-slate-200 overflow-hidden">
 
-      {/* ── SIDEBAR ─────────────────────────────────────────────────────── */}
-      <aside className="hidden md:flex flex-col shrink-0 h-full border-r border-[#1A1A2E] bg-[#050508] overflow-y-auto w-56 lg:w-60 xl:w-64 2xl:w-72 3xl:w-80">
-        {/* 1. Header */}
-        <div className="px-4 h-14 flex items-center gap-2 border-b border-[#1A1A2E] shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0" />
-          <p className="font-mono text-[11px] text-[#4FC3F7] tracking-widest">// WALLET</p>
+      {/* ── 2b COMMAND-BAR HEADER ───────────────────────────────────────────
+          The wallet used to carry its OWN wide <aside> — a WALLET header, an
+          ASK input, a CHAINS switcher and an account footer. That aside was
+          wallet-specific chrome sitting next to the app shell's real nav rail,
+          so it was a second sidebar. Layout 2b folds all four of its live
+          pieces into one command bar and lets the shell rail be the only rail:
+
+            // WALLET            ← the header label (was the aside's header)
+            chain toggle         ← the CHAINS switcher, names only. NOT a
+                                   per-chain dollar total: the wallet reads the
+                                   ACTIVE chain alone, so a "Base $X / RH $Y"
+                                   toggle would print a number for a chain we
+                                   did not read. Active chain filled, that's all.
+            command bar          ← the ASK BLUEAGENT input, same wiring
+            identity + Disconnect← the account footer, folded to the right
+
+          Desktop only (`hidden lg:flex`), matching every other rebuilt screen;
+          below lg the AppShell MobileTopBar prints "// WALLET" and the control
+          row just under this bar carries the chain toggle + Ask. */}
+      <div className="hidden lg:flex items-center gap-3 shrink-0 min-h-[48px] px-5 py-2 border-b border-[#1A1A2E]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0" />
+        <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0] shrink-0">// WALLET</span>
+
+        {/* Chain toggle — the same switcher the aside carried, reduced to the
+            chain short-name. Reads `WALLET_CHAIN_ORDER`, filters Sepolia unless
+            unlocked, `setNetwork(nk)` on click, amber when the active chain is
+            a testnet. Deliberately no dollar figure per chain (see note above). */}
+        <div className="flex items-center gap-1 shrink-0">
+          {WALLET_CHAIN_ORDER.filter(nk => testnetUnlocked || !WALLET_CHAINS[nk].testnet).map(nk => {
+            const c = WALLET_CHAINS[nk];
+            const on = network === nk;
+            return (
+              <button key={nk} onClick={() => setNetwork(nk)}
+                className="font-mono text-[10px] px-2.5 py-1 rounded-md transition-colors"
+                style={on
+                  ? c.testnet
+                    ? { background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B30" }
+                    : { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                  : { color: "#64748B", border: "1px solid #1A1A2E" }}>
+                {c.short}
+              </button>
+            );
+          })}
         </div>
 
-        {/* 2 + 3. The USDC widget and the SUPPLIED card were here.
-            ─────────────────────────────────────────────────────────────────
-            Both rendered numbers the Section-1 balance card renders again, on
-            the same screen at the same moment: `walletState.balance` at 22px
-            here and 28px there, `walletState.inYield` in this caption, in the
-            SUPPLIED card, AND as the aUSDC/Morpho rows there. One derivation,
-            four renderings, two of which were inside this aside.
+        {/* Command bar — the relocated ASK BLUEAGENT input, same handlers. */}
+        <div className="flex-1 min-w-0 max-w-[520px]">
+          <input
+            value={chatInput}
+            onChange={e => setChatInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter" && chatInput.trim()) {
+                sendChat(chatInput);
+                setChatOpen(true);
+              }
+            }}
+            onClick={() => setChatOpen(true)}
+            placeholder="› Ask BlueAgent or type a command…"
+            className="w-full bg-[#0D0D14] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-[8px] px-3 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-600 outline-none"
+          />
+        </div>
 
-            KEPT: the balance card (Section 1). Three reasons, in order of
-            weight —
-              1. It is the only copy with the BREAKDOWN. The itemised USDC /
-                 aUSDC / Morpho / ETH rows and the low-gas warning live there
-                 because a previous release deliberately merged them in when it
-                 deleted the Section-2 WALLET card (see the note above Section
-                 2). Keeping this widget instead would re-open that.
-              2. This aside is `hidden md:flex` — it does not exist below `md`,
-                 so it can never be the canonical answer for a phone. The card
-                 renders at every breakpoint.
-              3. The card sits beside ACTIONS, so the number and the buttons
-                 that change it are adjacent.
+        {/* Right: trust strip + Beryl + identity + Disconnect — the account
+            footer folded into the header. `trustChips`, the Beryl date gate and
+            the account triple are all unchanged; they simply moved out of the
+            aside. */}
+        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+          {trustChips.map(c => (
+            <span key={c.label} className="font-mono text-[9px] px-2 py-1 rounded-md"
+              style={c.warn
+                ? { color: "#F59E0B", border: "1px solid #F59E0B40", background: "#F59E0B10" }
+                : { color: "#94A3B8", border: "1px solid #1A1A2E", background: "#0d0d12" }}>{c.label}</span>
+          ))}
+          {new Date() >= new Date("2026-06-25") && (
+            <span className="font-mono text-[9px] px-2 py-1 rounded-md font-bold"
+              style={{ color: "#4FC3F7", border: "1px solid #4FC3F730", background: "#4FC3F710" }}>⚡ Beryl</span>
+          )}
+          {isNamed && <span className="hidden xl:inline font-mono text-[10px] text-slate-500">Good {greeting}</span>}
+          <Avatar
+            photoUrl={identityCard.photoUrl}
+            initials={identityCard.initials}
+            colorSeed={identityCard.colorSeed}
+            size={22}
+          />
+          <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer"
+            className="font-mono text-[10px] text-slate-300 hover:text-[#4FC3F7] max-w-[150px] truncate">{displayName}</a>
+          <button onClick={() => disconnect()}
+            className="font-mono text-[9px] text-slate-600 hover:text-red-400 transition-colors">Disconnect</button>
+        </div>
+      </div>
 
-            DELETED: these two. The reason is written here rather than only in
-            the commit because the Section-2 delete recorded its reasoning and
-            still left this copy standing — the survivor bred. Anyone tempted
-            to put a balance back in the sidebar has to delete this paragraph
-            first.
-
-            The Withdraw exit is NOT lost with the SUPPLIED card — it was a
-            shortcut, not the path. Verified before deleting: `TABS` still
-            carries the Withdraw tab whenever `noPositions` is false, the
-            Positions panel's PositionRow rows both `setPanel("withdraw")`, and
-            the `inYield > 0` mission keeps a one-click "Withdraw" that is
-            always inside `topMissions` (its branch pushes at most three). */}
-
-        {/* 4. BlueAgent mini chat — `mt-3` because the deleted widget above
-            carried the top margin for everything under the header. */}
-        <div className="mx-3 mt-3 mb-3">
-          <div className="font-mono text-[9px] text-slate-600 mb-1.5">ASK BLUEAGENT</div>
-          <div className="flex gap-1.5">
-            <input
-              value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "Enter" && chatInput.trim()) {
-                  sendChat(chatInput);
-                  setChatOpen(true);
-                }
-              }}
-              onClick={() => setChatOpen(true)}
-              placeholder="Ask anything…"
-              className="flex-1 min-w-0 bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[10px] text-slate-200 placeholder:text-slate-700 outline-none"
-            />
-            <button
-              onClick={() => { if (chatInput.trim()) { sendChat(chatInput); } setChatOpen(true); }}
-              className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center transition-colors"
-              style={{ background: "#4FC3F720", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
-              →
+      {/* Mobile control row — below lg the header above is hidden and the
+          MobileTopBar carries only the title, so the chain toggle + Ask live
+          here. Complementary by breakpoint with the desktop bar, so no control
+          is ever on screen twice. */}
+      <div className="lg:hidden flex items-center gap-1.5 shrink-0 px-3 py-2 border-b border-[#1A1A2E] overflow-x-auto">
+        {WALLET_CHAIN_ORDER.filter(nk => testnetUnlocked || !WALLET_CHAINS[nk].testnet).map(nk => {
+          const c = WALLET_CHAINS[nk];
+          const on = network === nk;
+          return (
+            <button key={nk} onClick={() => setNetwork(nk)}
+              className="font-mono text-[10px] px-2.5 py-1 rounded-md shrink-0 transition-colors"
+              style={on
+                ? c.testnet
+                  ? { background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B30" }
+                  : { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                : { color: "#64748B", border: "1px solid #1A1A2E" }}>
+              {c.short}
             </button>
-          </div>
-        </div>
+          );
+        })}
+        <button onClick={() => setChatOpen(true)}
+          className="ml-auto shrink-0 font-mono text-[10px] font-semibold px-3 py-1 rounded-md"
+          style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+          Ask BlueAgent
+        </button>
+      </div>
 
-        {/* 5. ⚡ BASE APPS was here — a six-tile grid of outbound links to
-            Aerodrome, Moonwell, Morpho, Uniswap, Aave and Compound, in six
-            different brand colours, pinned above the network switcher.
 
-            Three separate reasons it goes, any one of which is sufficient:
-            it is a lending/yield shop window in a wallet that no longer sells
-            yield; it is the only block on the page whose every control leaves
-            the product; and its six brand colours were the single largest
-            source of decorative colour in the app (see the palette pass). */}
+      {/* The wallet's own <main> + the h-14 identity header were removed here.
+          The app shell already renders the page <main>, so a wallet <main> was
+          a nested-main (invalid), and layout 2b folds the identity, greeting
+          and trust chips into the command bar above — so this sub-header would
+          have printed all of them a second time. The scroll region below is now
+          a direct child of the page flex-col. */}
 
-        {/* 6. The spacer was HERE, above CHAINS.
-            ─────────────────────────────────────────────────────────────────
-            It earned its place when there were four blocks above it — the USDC
-            widget, the SUPPLIED card, and the ⚡ BASE APPS grid. Three deletes
-            later (two in the dedupe pass, one in the palette pass) the only
-            thing left above it was a one-line chat input, so a `flex-1` here
-            pushed a 90px CHAINS block and a 55px account chip to the floor and
-            left ~two thirds of a 224–320px column blank in the MIDDLE. The
-            sidebar read as broken rather than as sparse.
-
-            It is moved, not deleted, and that distinction is the whole fix: a
-            bottom-pinned account footer is correct and deliberate, so the gap
-            belongs BELOW the content and above that footer, not between two
-            pieces of content. Nothing was invented to fill it — a column padded
-            with something for the sake of not being empty is the decorative
-            colour problem in another medium. CHAINS simply rises to sit under
-            the input, where it reads as content instead of as a second footer.
-
-            (Explicitly NOT the fix: putting a balance back up here. See the
-            note at the top of this aside — the survivor bred once already.) */}
-
-        {/* 7. Chains — a real switcher over every chain this wallet reads.
-            Robinhood used to be a ROW here, not a button: an outbound link to
-            Blockscout, captioned "tokens · tokenized stocks · read-only ↗". The
-            argument was that making it selectable would repoint `chainId` at
-            4663 while five things downstream kept answering in Base. Three of
-            those five have since been fixed or were never true of the current
-            code, and the remaining two are now DECLARED rather than avoided:
-
-              transactions   fixed — the route refuses an unindexed chain
-                             instead of `CHAIN[network] ?? "base"`.
-              holdings       moot — TokenTable and RhTokenTable now mount by
-                             chain, so the Base reader is never on screen under
-                             an RH heading.
-              addCash/cashOut, SwapCard, SendCard
-                             still Base-only, and each one is gated on
-                             `net.can.*` with a message naming the chain.
-
-            The link was the worse option all along, and not because it was
-            conservative: it sent the user OFF the product to see holdings this
-            page had already fetched. RhTokenTable and StockTable's RH leg were
-            both mounted three sections below it, so the wallet was reading the
-            chain and then advertising an external explorer for the same data.
-            A switcher shows what we already have. */}
-        <div className="px-3 pb-3">
-          <div className="font-mono text-[9px] text-slate-600 mb-1.5">CHAINS</div>
-          {/* Sepolia is filtered rather than the whole switcher being hidden.
-              Before, `testnetUnlocked ? buttons : static-label` meant a normal
-              user got NO switcher at all — fine when the only mainnet was Base,
-              and wrong the moment a second one is listed, because it would have
-              hidden Robinhood behind a developer escape hatch. */}
-          <div className="flex flex-col gap-1">
-            {WALLET_CHAIN_ORDER.filter(nk => testnetUnlocked || !WALLET_CHAINS[nk].testnet).map(nk => {
-              const c = WALLET_CHAINS[nk];
-              const on = network === nk;
-              // What this chain is FOR, from `can` — not a hand-written caption
-              // per chain, which is how the old one ended up promising "cash ·
-              // send · swap" on whichever network happened to be selected.
-              const caps = [c.can.fiat && "cash", c.can.send && "send", c.can.swap && "swap"].filter(Boolean);
-              return (
-                <button key={nk} onClick={() => setNetwork(nk)}
-                  className="text-left font-mono text-[10px] py-1.5 px-2 rounded-md transition-colors"
-                  style={on
-                    ? c.testnet
-                      ? { background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B30" }
-                      : { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
-                    : { color: "#94a3b8", border: "1px solid #1A1A2E" }}>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0"
-                      style={on
-                        ? { background: c.testnet ? "#F59E0B" : "#4FC3F7" }
-                        : { border: "1px solid #475569" }} />
-                    {c.label}
-                  </div>
-                  <div className="font-mono text-[9px] text-slate-600 mt-0.5 pl-3">
-                    {caps.length ? `${caps.join(" · ")} · ` : ""}holdings
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* 8. Account chip — `mt-auto` is the moved spacer. Same pin, one
-            block lower, so the blank space falls above the footer instead of
-            through the middle of the column. */}
-        <div className="mt-auto px-4 py-3 border-t border-[#1A1A2E]">
-          <div className="font-mono text-[11px] text-slate-300 truncate">{displayName}</div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer"
-              className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7]">{net.explorerName} ↗</a>
-            <span className="text-slate-700 text-[9px]">·</span>
-            <button onClick={() => disconnect()}
-              className="font-mono text-[9px] text-slate-600 hover:text-red-400 transition-colors">Disconnect</button>
-          </div>
-        </div>
-      </aside>
-
-      {/* ── MAIN ────────────────────────────────────────────────────────── */}
-      <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
-
-        {/* Header h-14: identity + trust chips.
-            The greeting is CONDITIONAL, which is the whole fix. It used to read
-            `Good {greeting}, {name ?? fname ?? shortAddr(acct)}` unconditionally,
-            so a wallet with no Basename — the common case, and the ONLY case for
-            anyone who signed in with Google/GitHub/Discord/email — got
-            "Good evening, 0x9f3a…c41d": a time-of-day pleasantry aimed at a hex
-            string. Two separate defects were stacked there:
-
-              1. the name lookup skipped `social` entirely (see identityCard
-                 above), so the app knew the person's name and didn't ask; and
-              2. the personal register was used even when nothing personal was
-                 known, which no fallback string can repair.
-
-            Named  → greet them, and say what the address is underneath.
-            Unnamed → no greeting. The address is the heading, because that IS
-            the identity, and the second line offers the way to get a name. */}
-        <div className="px-4 sm:px-5 h-14 flex items-center justify-between gap-3 border-b border-[#1A1A2E] shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            {/* Same <Avatar> as the shell account menu, from the same seed, so
-                one person is one colour everywhere. It falls back to the address
-                gradient — pixel-for-pixel what the local `Identicon` drew, since
-                avatarHues() keeps that component's exact hex slices for anything
-                shaped like an address — when there are no initials. So the
-                unnamed case is visually unchanged and only the named case gains
-                anything. `Identicon` itself is gone; see the note by AssetPill. */}
-            <Avatar
-              photoUrl={identityCard.photoUrl}
-              initials={identityCard.initials}
-              colorSeed={identityCard.colorSeed}
-              size={32}
-            />
-            <div className="min-w-0">
-              {/* CONDITIONAL, which is what the note above describes. An
-                  unconditional greeting under that note would be a comment
-                  documenting behaviour the code does not have — and the
-                  behaviour it documents is the correct one. Unnamed, the
-                  address IS the heading, which is also why the second line
-                  below does not repeat it. */}
-              {isNamed ? (
-                <p className="font-mono text-[13px] text-white truncate">
-                  Good {greeting}, <span className="text-[#4FC3F7]">{identityCard.displayName}</span>
-                </p>
-              ) : (
-                <p className="font-mono text-[13px] text-white truncate">{displayName}</p>
-              )}
-              {/* Second line — TWO jobs, and they do not share a width rule:
-
-                  · the ADDRESS, but only when the heading is a name. That is
-                    the "say what the address is underneath" half of the note
-                    above; unnamed it would print the heading twice.
-                  · the `trustChips`, but only below `sm`, against the row's
-                    `hidden sm:flex` — complementary, so each chip is on screen
-                    exactly once. This was the literal string
-                    "{net.short} · Non-custodial · You hold the keys", which put
-                    BOTH of those claims twice inside one 56px bar at `sm` and
-                    up. Worse, that copy was always plain grey while the chip
-                    beside it turns amber on testnet: the header said "Sepolia"
-                    calmly and "Sepolia" alarmingly, 200px apart, and the calm
-                    one was wrong. It carries the warn colour now, because below
-                    `sm` it is the only carrier.
-
-                    "You hold the keys" went with it. It is not a fourth claim —
-                    it is "Non-custodial" restated in plain English, and a
-                    synonym is still a copy.
-
-                  Two <p> at every width, never three: the address rides WITH the
-                  chips below `sm` and stands alone above it. `h-14` does not fit
-                  a third line, and the earlier draft of this block emitted one. */}
-              <p className="font-mono text-[9px] truncate sm:hidden"
-                style={{ color: trustChips.some(c => c.warn) ? "#F59E0B" : "#475569" }}>
-                {[...(isNamed ? [shortAddr(acct)] : []), ...trustChips.map(c => c.label)].join(" · ")}
-              </p>
-              {isNamed && (
-                <p className="font-mono text-[9px] text-slate-600 truncate hidden sm:block">{shortAddr(acct)}</p>
-              )}
-            </div>
-          </div>
-          <div className="hidden sm:flex items-center gap-1.5 shrink-0">
-            {trustChips.map(c => (
-              <span key={c.label} className="font-mono text-[9px] px-2 py-1 rounded-md"
-                style={c.warn
-                  ? { color: "#F59E0B", border: "1px solid #F59E0B40", background: "#F59E0B10" }
-                  : { color: "#94A3B8", border: "1px solid #1A1A2E", background: "#0d0d12" }}>{c.label}</span>
-            ))}
-            {new Date() >= new Date("2026-06-25") && (
-              <span className="font-mono text-[9px] px-2 py-1 rounded-md font-bold"
-                style={{ color: "#4FC3F7", border: "1px solid #4FC3F730", background: "#4FC3F710" }}>⚡ Beryl</span>
-            )}
-          </div>
-        </div>
-
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-4 xl:p-5 2xl:p-6 3xl:p-8">
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 xl:p-5 2xl:p-6 3xl:p-8">
 
           {/* Testnet banner — the whole point of the opt-in. If a page can show
               testnet balances and hand out a testnet receive QR, it has to say
@@ -1519,29 +1374,18 @@ export default function BankPage() {
 
           </div>
 
-          {/* ── Section 1.5: a link where the AGENT SPEND panel used to be ──
-              The full <SpendConsole> lived here. It answers "what did I spend
-              on BlueAgent", which is the same question /app/usage exists to
-              answer with credits — two pages, one subject, and the numbers came
-              from the same ledger, so they could disagree without either being
-              wrong. The panel moved to /app/usage; this page keeps the money
-              you hold and move, that page keeps what you consumed.
+          {/* ── Two-pane 2b body: portfolio (wide) + agent context rail ──────
+              Below the full-width Section 1 KPI strip the body splits. The RAIL
+              (Section 2 — AI Mission Control + Allocation) is declared FIRST, so
+              that below xl it stacks right under the balance/health where "what
+              should I do next" belongs; `xl:flex-row-reverse` then floats it to
+              the RIGHT at desktop while the portfolio tables take the wide left
+              column. This is the handoff's right column, folded in — the wallet
+              no longer carries its own second sidebar to hold it. */}
+          <div className="flex flex-col xl:flex-row-reverse gap-3 mb-3 items-start">
 
-              A link, not a silent removal: the console is still the one thing
-              here no generic Base wallet can show, and dropping the entrance to
-              it would lose the feature rather than relocate it. */}
-          <Link
-            href="/app/usage"
-            className="flex items-center justify-between mb-3 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3 hover:border-[#4FC3F730] transition-colors"
-          >
-            <div className="min-w-0">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest">AGENT SPEND</div>
-              <div className="font-mono text-[10px] text-slate-600 mt-0.5">
-                What your payments bought, per tool — with your credit balance.
-              </div>
-            </div>
-            <span className="font-mono text-[10px] text-[#4FC3F7] flex-shrink-0 ml-3">Usage →</span>
-          </Link>
+            {/* RIGHT rail (pane A) — 340px at xl, full-width stacked below it. */}
+            <div className="w-full xl:w-[340px] xl:shrink-0 space-y-3">
 
           {/* ── Section 2: AI Mission Control | Portfolio Allocation ────────
               A "WALLET" card led the left column here, listing USDC, aUSDC,
@@ -1565,9 +1409,10 @@ export default function BankPage() {
               somewhere else. Context you can't act on is an advert with a
               smaller audience.
 
-              With both gone the left column held nothing, so the two surviving
-              cards are direct grid children rather than one-item stacks. */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3 items-start">
+              With both gone the left column held nothing; the two surviving
+              cards now stack in the 2b right rail (Mission Control over
+              Allocation) instead of sitting side by side. */}
+          <div className="space-y-3">
 
               {/* AI Mission Control */}
               <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
@@ -1771,6 +1616,33 @@ export default function BankPage() {
               </div>
 
           </div>
+            {/* end RIGHT rail (pane A) */}
+            </div>
+
+            {/* LEFT main (pane B) — the wide column: the AGENT SPEND link at its
+                head (relocated from above Section 2 so the split can put the
+                tables here and Mission Control in the rail), then the tables. */}
+            <div className="flex-1 min-w-0 w-full space-y-3">
+
+          {/* ── Section 1.5: a link where the AGENT SPEND panel used to be ──
+              The full <SpendConsole> lived here. It answers "what did I spend on
+              BlueAgent", the same question /app/usage answers with credits — two
+              pages, one subject, one ledger, so they could disagree without
+              either being wrong. The panel moved to /app/usage; this page keeps
+              the money you hold and move. A link, not a silent removal: the
+              console is still the one thing here no generic Base wallet shows. */}
+          <Link
+            href="/app/usage"
+            className="flex items-center justify-between mb-3 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3 hover:border-[#4FC3F730] transition-colors"
+          >
+            <div className="min-w-0">
+              <div className="font-mono text-[9px] text-slate-500 tracking-widest">AGENT SPEND</div>
+              <div className="font-mono text-[10px] text-slate-600 mt-0.5">
+                What your payments bought, per tool — with your credit balance.
+              </div>
+            </div>
+            <span className="font-mono text-[10px] text-[#4FC3F7] flex-shrink-0 ml-3">Usage →</span>
+          </Link>
 
           {/* ── Section 3: the long tail, behind tabs ───────────────────────
               Three full-width sections used to stack here — the token table,
@@ -1885,9 +1757,14 @@ export default function BankPage() {
 
           {view === "orders" && <OrdersPanel />}
 
+            {/* end LEFT main (pane B) */}
+            </div>
+          {/* end two-pane 2b body */}
+          </div>
+
         </div>
 
-        {/* Action modal — fixed, inside main */}
+        {/* Action modal — fixed overlay (was inside the removed <main>) */}
         {actionOpen && (
           <div className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] p-4">
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setActionOpen(false)} />
@@ -2122,8 +1999,6 @@ export default function BankPage() {
         )}
 
         {scanOpen && <QrScanner onResult={handleScan} onClose={() => setScanOpen(false)} />}
-
-      </main>
 
       {/* ── Chat popup: fixed bottom-4 right-4 ─────────────────────────── */}
       {chatOpen && (
