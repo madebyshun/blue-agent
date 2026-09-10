@@ -409,6 +409,26 @@ if (existsSync(CHART_TSX) && existsSync(ROUTE_TS)) {
     "the flat array exists for axis scaling; a polyline built from it joins 03:00 to 09:00",
   );
 
+  // THE SAME BUG ONE GRAIN DOWN. A `run` is a stretch of on-record HOURS, but
+  // an on-record hour can still carry a null on one side — the Base desk writes
+  // `dex_usd: null` when the pool read fails (#140) while the oracle is fine.
+  // Building a polyline by filtering those nulls out of the run joins the
+  // points either side of them, which is `bridgesFlat` committed at a scale
+  // small enough to pass review: the line looks continuous and no gap rect is
+  // drawn under it, because the archive never called that hour a gap.
+  //
+  // MEASURED: this pattern was live in the pre-restyle component, where all
+  // three polylines were built with `.flatMap(p => p.X === null ? [] : […])`
+  // directly inside `points={…}`. The regex matches that source and names the
+  // site; it stops matching once the split is hoisted into a helper that emits
+  // one polyline per non-null stretch.
+  const bridgesNullsInline = /points=\{[\s\S]{0,240}?===\s*null\s*\?\s*\[\]/.test(tsx);
+  check(
+    "no polyline built by filtering nulls out of a run — split, don't skip",
+    !bridgesNullsInline,
+    "an on-record hour with a null price is not a gap the archive drew; skipping it inside one polyline bridges it invisibly",
+  );
+
   check(
     "the component does not recompute drift from the two prices",
     !/dex_usd\s*\/\s*.*oracle_usd|oracle_usd\s*\)\s*\/\s*.*oracle_usd/.test(tsx),

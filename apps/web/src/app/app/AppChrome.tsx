@@ -9,7 +9,7 @@
  * the shell renders it without knowing anything about chat internals.
  *
  * This drives BOTH the mobile drawer and the desktop sidebar. Blue Chat used to
- * own a second 288px aside of its own next to the shell's 212px one; folding it
+ * own a second 288px aside of its own next to the shell's 218px one; folding it
  * in here is what let that go (see AppSideNav).
  */
 import { createContext, useContext, useState, type ReactNode } from "react";

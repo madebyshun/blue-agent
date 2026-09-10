@@ -27,7 +27,7 @@ function relativeTime(ms: number): string {
 // Settings is a modal from the account chip, never a tab.
 //
 // This page has no sidebar of its own either. It used to render a second 288px
-// aside beside the shell's 212px one — 500px of chrome to hold New chat, the
+// aside beside the shell's 218px one — 500px of chrome to hold New chat, the
 // recents list and a credit chip. All three now go to the shell through
 // `setContextual`, which already fed the mobile drawer, so one registration
 // drives both breakpoints.
