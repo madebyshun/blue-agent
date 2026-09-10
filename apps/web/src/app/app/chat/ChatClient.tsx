@@ -138,6 +138,14 @@ function ChatShell() {
           <div className="flex-1 flex min-h-0 overflow-hidden">
 
             <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+              {/* `// CHAT` header — desktop only. Below lg the global MobileTopBar
+                  (see AppShell) already prints the surface title, so rendering
+                  this too would duplicate it. Carries the brand line that used to
+                  sit under the empty-state heading. */}
+              <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[48px] px-5 py-2 border-b border-[#1A1A2E]">
+                <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// CHAT</span>
+                <span className="font-mono text-[10.5px] text-[#64748B]">Build anything on Base</span>
+              </div>
               <ClaimBanner />
               <ChatMessages />
               <ChatInput />
