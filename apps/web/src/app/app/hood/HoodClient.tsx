@@ -146,9 +146,10 @@ export default function HoodClient() {
   // T2 — default filter hides dust so the top of the board is tradable
   // rows, not COIN +132% on a $1k pool.
   const [filter, setFilter] = useState<Filter>("tradable");
-  // Base P — venue axis. Defaults to "all" so the board shows both desks
-  // (Coinbase B20 on Base + Robinhood Chain) until the reader narrows it.
-  const [chainFilter, setChainFilter] = useState<ChainFilter>("all");
+  // Base P — venue axis. Defaults to "base": Base (Coinbase B20) is the
+  // primary tokenized-stock venue, so the board opens on the Base desk and
+  // the reader can widen to "all" or narrow to Robinhood Chain from there.
+  const [chainFilter, setChainFilter] = useState<ChainFilter>("base");
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -395,7 +396,7 @@ function Header({
 
   return (
     <header
-      className="-mx-4 md:-mx-8 xl:-mx-12 -mt-6 md:-mt-8 mb-6 flex flex-wrap items-center gap-x-3.5 gap-y-2 min-h-[48px] px-5 py-2.5 border-b"
+      className="-mx-4 md:-mx-8 xl:-mx-12 -mt-6 md:-mt-8 mb-6 flex flex-wrap items-center gap-x-3.5 gap-y-2 min-h-[56px] px-5 py-2.5 border-b"
       style={{ borderColor: BORDER }}
     >
       {/* T-V1 — the page-title slot follows the app-wide `// SCREEN`

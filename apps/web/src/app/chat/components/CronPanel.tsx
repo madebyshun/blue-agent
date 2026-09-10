@@ -163,7 +163,7 @@ export default function CronPanel() {
 
       {/* ── Header — desktop only. Below lg the app shell's MobileTopBar already
            prints "// SCHEDULED", so rendering this too would duplicate it. ─── */}
-      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[48px] px-5 py-2 border-b border-[#1A1A2E]">
+      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
         <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// SCHEDULED</span>
         <span className="font-mono text-[10.5px] text-[#64748B]">recurring agent runs · background tasks fire with the tab closed</span>
         <button
@@ -280,7 +280,7 @@ export default function CronPanel() {
       )}
 
       {/* ── Body ─── */}
-      <div className="px-5 py-[18px] max-w-5xl">
+      <div className="px-5 py-[18px] mx-auto w-full max-w-6xl">
         {crons.length > 0 ? (
           <>
             {/* ── NEXT 24 HOURS ─── */}

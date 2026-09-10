@@ -124,7 +124,7 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
           prints the surface title, so rendering this too would duplicate it.
           The "N attached · M tools" chip + "+ Custom MCP" live here on desktop;
           the mobile "+ Custom" affordance rides in the gallery toolbar below. */}
-      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[48px] px-5 py-2 border-b border-[#1A1A2E]">
+      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
         <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// CONNECTORS</span>
         <span className="font-mono text-[10.5px] text-[#64748B]">MCP servers · output is treated as untrusted third-party data</span>
         <div className="ml-auto flex items-center gap-2">
@@ -142,7 +142,7 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
 
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] space-y-6 max-w-5xl">
+        <div className="px-5 py-[18px] space-y-6 mx-auto w-full max-w-6xl">
 
           {/* Attached connectors */}
           {connectors.length > 0 && (

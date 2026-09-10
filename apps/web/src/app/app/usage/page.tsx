@@ -146,7 +146,7 @@ export default function UsagePage() {
   return (
     <div className="flex flex-col h-full bg-[#050508] text-white overflow-hidden">
       {/* Header — desktop only; MobileTopBar prints "// USAGE" below lg. */}
-      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[48px] px-5 py-2 border-b border-[#1A1A2E]">
+      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
         <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// USAGE</span>
         <span className="font-mono text-[10.5px] text-[#64748B]">
           credits &amp; agent spend · Coinbase x402{address ? ` · ${shortAddr(address)}` : ""}

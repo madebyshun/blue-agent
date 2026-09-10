@@ -1685,7 +1685,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
             `// SCREEN` convention). On mobile the AppShell MobileTopBar prints
             `// HUB`, so this is gated `hidden lg:flex` to avoid a double title. ── */}
         {inShell && (
-          <div className="hidden lg:flex items-center gap-3.5 min-h-[48px] px-5 py-2 border-b border-[#1A1A2E] shrink-0 flex-wrap">
+          <div className="hidden lg:flex items-center gap-3.5 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E] shrink-0 flex-wrap">
             <span className="font-mono font-semibold text-[11px] tracking-[0.16em]" style={{ color: "#E2E8F0" }}>
               // HUB
             </span>
@@ -1704,7 +1704,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
         <aside className={`hidden lg:flex flex-col w-[236px] shrink-0 border-r border-[#1A1A2E] ${inShell ? "h-full" : "sticky top-14 h-[calc(100vh-3.5rem)]"}`}>
 
           {/* Header */}
-          <div className="px-4 min-h-[48px] py-2 flex items-center gap-3 border-b border-[#1A1A2E] shrink-0">
+          <div className="px-4 min-h-[56px] py-2 flex items-center gap-3 border-b border-[#1A1A2E] shrink-0">
             <p className="font-mono font-semibold text-[10.5px] tracking-[0.14em]" style={{ color: "#E2E8F0" }}>// MARKETPLACE</p>
             <span className="font-mono text-[9.5px]" style={{ color: "#64748B" }}>{filtered.length} of {allTools.length}</span>
           </div>

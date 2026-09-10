@@ -947,96 +947,162 @@ export default function BankPage() {
   ];
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#050508] text-slate-200 overflow-hidden">
+    <div className="flex flex-row h-full w-full bg-[#050508] text-slate-200 overflow-hidden">
 
-      {/* ── 2b COMMAND-BAR HEADER ───────────────────────────────────────────
-          The wallet used to carry its OWN wide <aside> — a WALLET header, an
-          ASK input, a CHAINS switcher and an account footer. That aside was
-          wallet-specific chrome sitting next to the app shell's real nav rail,
-          so it was a second sidebar. Layout 2b folds all four of its live
-          pieces into one command bar and lets the shell rail be the only rail:
+      {/* ── PANE 2 · WALLET CONTEXT (272px) ─────────────────────────────────
+          Layout "2a" (design image 7): the app-shell nav rail is pane 1, THIS
+          is pane 2 — a wallet-context sidebar — and the scroll region is pane
+          3. Mirrors the Hood three-pane (shell nav + HoodSidebar + board).
 
-            // WALLET            ← the header label (was the aside's header)
-            chain toggle         ← the CHAINS switcher, names only. NOT a
-                                   per-chain dollar total: the wallet reads the
-                                   ACTIVE chain alone, so a "Base $X / RH $Y"
-                                   toggle would print a number for a chain we
-                                   did not read. Active chain filled, that's all.
-            command bar          ← the ASK BLUEAGENT input, same wiring
-            identity + Disconnect← the account footer, folded to the right
+          What the design draws here vs. what we honestly render:
+            ● // WALLET header   → kept
+            ASK BLUEAGENT        → kept, wired to the real chat (chatInput/…)
+            CHAINS cards         → kept AND made the chain switcher (setNetwork).
+                                   Design prints a per-chain $ total; DROPPED —
+                                   the wallet reads the ACTIVE chain only, so a
+                                   "Base $X / RH $Y" figure would assert a number
+                                   for a chain we never read. Name + capability
+                                   caption (from lib/wallet/chains.ts `can`) only.
+            CREDIT · x402        → design shows "$41.85 · 62% left" off no real
+                                   source; credits are not dollar-denominated and
+                                   this component reads none, so it is a link to
+                                   /app/usage (#199), never a fabricated figure.
+            RECENT feed          → DROPPED, a fabricated tx list with no source.
+            footer               → displayName + explorer ↗ + Disconnect (real).
 
-          Desktop only (`hidden lg:flex`), matching every other rebuilt screen;
-          below lg the AppShell MobileTopBar prints "// WALLET" and the control
-          row just under this bar carries the chain toggle + Ask. */}
-      <div className="hidden lg:flex items-center gap-3 shrink-0 min-h-[48px] px-5 py-2 border-b border-[#1A1A2E]">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0" />
-        <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0] shrink-0">// WALLET</span>
+          Desktop only (`hidden lg:flex`); below lg the sidebar is hidden, the
+          AppShell MobileTopBar prints "// WALLET", and the mobile control row
+          inside pane 3 carries the chain toggle + Ask. */}
+      <aside className="hidden lg:flex flex-col w-[272px] shrink-0 border-r border-[#1A1A2E] bg-[#07070c]">
+        <div className="flex items-center gap-2 min-h-[56px] px-4 border-b border-[#1A1A2E] shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] shrink-0" style={{ boxShadow: "0 0 8px #4FC3F7" }} />
+          <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// WALLET</span>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
 
-        {/* Chain toggle — the same switcher the aside carried, reduced to the
-            chain short-name. Reads `WALLET_CHAIN_ORDER`, filters Sepolia unless
-            unlocked, `setNetwork(nk)` on click, amber when the active chain is
-            a testnet. Deliberately no dollar figure per chain (see note above). */}
-        <div className="flex items-center gap-1 shrink-0">
-          {WALLET_CHAIN_ORDER.filter(nk => testnetUnlocked || !WALLET_CHAINS[nk].testnet).map(nk => {
-            const c = WALLET_CHAINS[nk];
-            const on = network === nk;
-            return (
-              <button key={nk} onClick={() => setNetwork(nk)}
-                className="font-mono text-[10px] px-2.5 py-1 rounded-md transition-colors"
-                style={on
-                  ? c.testnet
-                    ? { background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B30" }
-                    : { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
-                  : { color: "#64748B", border: "1px solid #1A1A2E" }}>
-                {c.short}
-              </button>
-            );
-          })}
+          {/* ASK BLUEAGENT — the relocated command input, same handlers */}
+          <div>
+            <div className="font-mono text-[9px] font-medium tracking-[0.16em] text-[#64748B] mb-2">ASK BLUEAGENT</div>
+            <div className="flex gap-1.5">
+              <input
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && chatInput.trim()) {
+                    sendChat(chatInput);
+                    setChatOpen(true);
+                  }
+                }}
+                onClick={() => setChatOpen(true)}
+                placeholder="Ask anything…"
+                className="flex-1 min-w-0 bg-[#0D0D14] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-[8px] px-2.5 py-2 font-mono text-[11px] text-slate-200 placeholder:text-slate-600 outline-none"
+              />
+              <button
+                onClick={() => { if (chatInput.trim()) sendChat(chatInput); setChatOpen(true); }}
+                aria-label="Ask BlueAgent"
+                className="w-[34px] shrink-0 rounded-[8px] bg-[#4FC3F7] text-[#050508] flex items-center justify-center font-mono text-[13px] font-semibold hover:bg-[#29ABE2] transition-colors"
+              >→</button>
+            </div>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {["what changed today", "top up gas"].map(q => (
+                <button key={q} onClick={() => { setChatInput(q); setChatOpen(true); }}
+                  className="font-mono text-[9.5px] text-[#94A3B8] border border-[#1A1A2E] rounded-full px-2 py-[3px] hover:border-[#4FC3F7]/40 hover:text-[#E2E8F0] transition-colors">{q}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* CHAINS — the chain switcher. Name + capabilities only, NO per-chain
+              $ (the wallet reads the active chain alone; a per-chain total would
+              be a number for a chain we never read). Active chain gets the cyan
+              card, amber if it is a testnet; click switches network. */}
+          <div>
+            <div className="font-mono text-[9px] font-medium tracking-[0.16em] text-[#64748B] mb-2">CHAINS</div>
+            <div className="flex flex-col gap-[7px]">
+              {WALLET_CHAIN_ORDER.filter(nk => testnetUnlocked || !WALLET_CHAINS[nk].testnet).map(nk => {
+                const c = WALLET_CHAINS[nk];
+                const on = network === nk;
+                const caps = [c.can.fiat && "cash", c.can.send && "send", c.can.swap && "swap", "holdings"].filter(Boolean).join(" · ");
+                return (
+                  <button key={nk} onClick={() => setNetwork(nk)}
+                    className="text-left rounded-[10px] p-2.5 border transition-colors"
+                    style={on
+                      ? c.testnet
+                        ? { borderColor: "#F59E0B52", background: "#F59E0B0f" }
+                        : { borderColor: "#4FC3F752", background: "#4FC3F70f" }
+                      : { borderColor: "#1A1A2E", background: "transparent" }}>
+                    <span className="font-mono text-[11px] font-medium"
+                      style={{ color: on ? (c.testnet ? "#F59E0B" : "#4FC3F7") : "#94A3B8" }}>
+                      {on ? "● " : "○ "}{c.label}
+                    </span>
+                    <div className="font-mono text-[9.5px] text-[#64748B] mt-1">{caps}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* CREDIT · x402 — a link to the Usage page, NOT a fabricated balance.
+              Credits are not dollar-denominated and this component reads none. */}
+          <div>
+            <div className="font-mono text-[9px] font-medium tracking-[0.16em] text-[#64748B] mb-2">CREDIT · x402</div>
+            <a href="/app/usage"
+              className="group block rounded-[10px] border border-[#1A1A2E] bg-[#0D0D14] p-3 hover:border-[#4FC3F7]/40 transition-colors">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[11px] text-[#E2E8F0]">Usage &amp; spend</span>
+                <span className="font-mono text-[11px] text-[#4FC3F7] group-hover:translate-x-0.5 transition-transform">→</span>
+              </div>
+              <div className="font-mono text-[9.5px] text-[#64748B] mt-1.5">Per-tool x402 spend on the Usage page</div>
+            </a>
+          </div>
         </div>
 
-        {/* Command bar — the relocated ASK BLUEAGENT input, same handlers. */}
-        <div className="flex-1 min-w-0 max-w-[520px]">
-          <input
-            value={chatInput}
-            onChange={e => setChatInput(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === "Enter" && chatInput.trim()) {
-                sendChat(chatInput);
-                setChatOpen(true);
-              }
-            }}
-            onClick={() => setChatOpen(true)}
-            placeholder="› Ask BlueAgent or type a command…"
-            className="w-full bg-[#0D0D14] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-[8px] px-3 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-600 outline-none"
-          />
+        {/* footer — the account triple: identity, explorer, disconnect */}
+        <div className="border-t border-[#1A1A2E] px-4 py-3 shrink-0">
+          <div className="font-mono text-[11px] font-medium text-[#E2E8F0] truncate">{displayName}</div>
+          <div className="font-mono text-[9.5px] text-[#64748B] mt-[3px] flex items-center gap-1.5">
+            <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer"
+              className="hover:text-[#4FC3F7] transition-colors">{net.explorerName} ↗</a>
+            <span>·</span>
+            <button onClick={() => disconnect()} className="hover:text-red-400 transition-colors">Disconnect</button>
+          </div>
         </div>
+      </aside>
 
-        {/* Right: trust strip + Beryl + identity + Disconnect — the account
-            footer folded into the header. `trustChips`, the Beryl date gate and
-            the account triple are all unchanged; they simply moved out of the
-            aside. */}
-        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-          {trustChips.map(c => (
-            <span key={c.label} className="font-mono text-[9px] px-2 py-1 rounded-md"
-              style={c.warn
-                ? { color: "#F59E0B", border: "1px solid #F59E0B40", background: "#F59E0B10" }
-                : { color: "#94A3B8", border: "1px solid #1A1A2E", background: "#0d0d12" }}>{c.label}</span>
-          ))}
-          {new Date() >= new Date("2026-06-25") && (
-            <span className="font-mono text-[9px] px-2 py-1 rounded-md font-bold"
-              style={{ color: "#4FC3F7", border: "1px solid #4FC3F730", background: "#4FC3F710" }}>⚡ Beryl</span>
-          )}
-          {isNamed && <span className="hidden xl:inline font-mono text-[10px] text-slate-500">Good {greeting}</span>}
+      {/* ── PANE 3 · content column (nav rail is pane 1, sidebar above is pane 2) */}
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+
+      {/* ── PANE 3 header · greeting + trust chips (2a) ────────────────────
+          Design "2a" content header: greeting on the left, trust chips right.
+          The identity + Disconnect the 2b bar carried here have moved to the
+          pane-2 footer, so they are not printed twice. The greeting uses the
+          personal register ONLY when we know the person (`isNamed`); otherwise
+          it greets no one rather than addressing a hex string in the second
+          person. Desktop only — below lg the MobileTopBar prints "// WALLET". */}
+      <div className="hidden lg:flex items-center justify-between shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
+        <div className="flex items-center gap-2.5 min-w-0">
           <Avatar
             photoUrl={identityCard.photoUrl}
             initials={identityCard.initials}
             colorSeed={identityCard.colorSeed}
             size={22}
           />
-          <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer"
-            className="font-mono text-[10px] text-slate-300 hover:text-[#4FC3F7] max-w-[150px] truncate">{displayName}</a>
-          <button onClick={() => disconnect()}
-            className="font-mono text-[9px] text-slate-600 hover:text-red-400 transition-colors">Disconnect</button>
+          <span className="font-mono text-[13px] text-[#E2E8F0] truncate">
+            {isNamed
+              ? <>Good {greeting}, <span className="text-[#4FC3F7]">{displayName}</span></>
+              : <>Good {greeting}</>}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {trustChips.map(c => (
+            <span key={c.label} className="font-mono text-[10px] px-2 py-1 rounded-md"
+              style={c.warn
+                ? { color: "#F59E0B", border: "1px solid #F59E0B40", background: "#F59E0B10" }
+                : { color: "#94A3B8", border: "1px solid #1A1A2E", background: "#0d0d12" }}>{c.label}</span>
+          ))}
+          {new Date() >= new Date("2026-06-25") && (
+            <span className="font-mono text-[10px] px-2 py-1 rounded-md font-medium"
+              style={{ color: "#4FC3F7", border: "1px solid #4FC3F730", background: "#4FC3F710" }}>⌁ Beryl</span>
+          )}
         </div>
       </div>
 
@@ -2110,6 +2176,7 @@ export default function BankPage() {
         }
       </button>
 
+      </div>{/* ── end PANE 3 content column ── */}
     </div>
   );
 }

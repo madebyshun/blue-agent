@@ -223,7 +223,7 @@ export default function TrackRecordClient() {
 function TrackHeader() {
   return (
     <header
-      className="-mx-4 md:-mx-8 xl:-mx-12 -mt-6 md:-mt-8 mb-6 flex flex-wrap items-center gap-x-3.5 gap-y-2 min-h-[48px] px-5 py-2.5 border-b"
+      className="-mx-4 md:-mx-8 xl:-mx-12 -mt-6 md:-mt-8 mb-6 flex flex-wrap items-center gap-x-3.5 gap-y-2 min-h-[56px] px-5 py-2.5 border-b"
       style={{ borderColor: BORDER }}
     >
       {/* T-V1 — the app-wide `// SCREEN` header-bar convention. The

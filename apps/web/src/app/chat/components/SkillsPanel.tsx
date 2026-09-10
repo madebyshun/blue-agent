@@ -86,7 +86,7 @@ export default function SkillsPanel({ onPick, onUse }: {
 
       {/* `// SKILLS` header — desktop only. Below lg the global MobileTopBar
           prints the surface title, so rendering this too would duplicate it. */}
-      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[48px] px-5 py-2 border-b border-[#1A1A2E]">
+      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
         <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// SKILLS</span>
         <span className="font-mono text-[10.5px] text-[#64748B]">agent capabilities · Blue Agent · Base MCP · bundled tool packs</span>
         <div className="ml-auto flex items-center gap-2">
@@ -104,7 +104,7 @@ export default function SkillsPanel({ onPick, onUse }: {
 
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] max-w-5xl">
+        <div className="px-5 py-[18px] mx-auto w-full max-w-6xl">
 
           {/* Search + provider filter */}
           <div className="flex items-center gap-2.5 flex-wrap">
