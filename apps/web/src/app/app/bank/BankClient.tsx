@@ -30,19 +30,23 @@ import { WALLET_CHAINS, WALLET_CHAIN_ORDER, type WalletChain } from "@/lib/walle
 // `AAVE_POOL_ABI` + `supplyApyPct` were dropped with the rate boards: an APY is
 // only actionable if you can supply more, and you can't.
 import { YIELD_NETWORKS, ERC20_ABI, ERC4626_ABI, VENUES } from "@/lib/yield-execution";
-import { MoveToYieldCard, SendCard } from "@/app/chat/components/ToolCards";
+import { MoveToYieldCard } from "@/app/chat/components/ToolCards";
 import { useBasename, shortAddr } from "@/lib/useBasename";
 import Avatar from "@/components/Avatar";
 import QrScanner from "./QrScanner";
 import SwapCard, { type SellPreset } from "./SwapCard";
-// Robinhood Chain (4663) equivalents of Send/Swap. The Base SendCard/SwapCard
-// above cannot represent 4663 — SendCard is YieldNetwork-typed (base|baseSepolia)
-// and SwapCard is 0x/Base-pinned (force-switches to Base mainnet before signing)
-// — so these are chain-native cards that speak the RH router + send-prepare
-// endpoints directly. They mount ONLY when `network === "robinhood"`, branched
-// before the `can`-based Base mount so a Base card can never render under an RH
-// heading. See the `can.send`/`can.swap` note in lib/wallet/chains.ts.
-import RhSendCard from "./RhSendCard";
+// SEND is one unified, chain-in-card component now (WalletSendCard): it carries
+// its OWN Base/Robinhood selector and ports both proven money paths — a plain
+// transfer on Base, /api/robinhood/router/send-prepare on 4663 — so the wallet no
+// longer needs a top switcher to reach an RH send. It replaces the old
+// `network === "robinhood" ? <RhSendCard> : <SendCard>` split (RhSendCard.tsx is
+// now unused by this page). CONVERT is still split by chain: RhSwapCard speaks
+// the deployed RobinhoodSwapRouter on 4663 directly, and must mount BEFORE any
+// `can.swap`-based Base mount because the Base SwapCard force-switches the wallet
+// to Base mainnet before signing — letting a true `can.swap` fall through to it
+// on 4663 would sign a Base swap under a Robinhood heading. See the
+// `can.send`/`can.swap` note in lib/wallet/chains.ts.
+import WalletSendCard from "./WalletSendCard";
 import RhSwapCard from "./RhSwapCard";
 import { parsePaymentQr, buildPaymentUri, type ParsedPayment } from "@/lib/payment-qr";
 // `B20_ENABLED` was imported alongside this, purely to hide the Orders tab.
@@ -1929,45 +1933,20 @@ export default function BankPage() {
                       </button>
                     </div>
                   : <SwapCard account={acct} preset={sellPreset} />)}
-                {/* Branched by chain, like Convert above:
+                {/* SEND — one card, chain chosen in-card (WalletSendCard). It
+                    carries its OWN Base/Robinhood selector and both money paths,
+                    so there is no chain branch here and no `can.send` gate: the
+                    card supports Base and Robinhood natively, and Base Sepolia is
+                    deliberately not offered as a send target (real-money card).
 
-                    robinhood → RhSendCard, which speaks /api/robinhood/router/
-                      send-prepare on 4663 directly. Checked FIRST because the Base
-                      SendCard below cannot REPRESENT 4663: it types its own network
-                      as `YieldNetwork` and initialises it with `result.network ===
-                      "base" ? "base" : "baseSepolia"`, so handing it "robinhood"
-                      renders a BASE SEPOLIA send form under a Robinhood heading —
-                      the fail-open shape, one component down. RhSendCard also takes
-                      a raw 0x recipient only (no scan): a QR carries its own
-                      `network`, and there is no RH-side prefill path, so the
-                      scanner stays a Base-only affordance below.
-                    base → the scan + SendCard flow.
-                    baseSepolia → `can.send` is true (testnet send is safe), so it
-                      falls through to the same SendCard, which handles it natively.
-
-                    The scan path is inside the Base branch on purpose. A QR can
-                    carry its own `network`, and `scanPrefill.network` is passed
-                    straight through, so keeping the scanner off the RH card means a
-                    scanned code cannot smuggle a Base-shaped send onto 4663. */}
-                {panel === "send" && (network === "robinhood"
-                  ? <RhSendCard account={acct} />
-                  : !can.send
-                  ? <div className="rounded-lg px-3.5 py-3" style={{ background: "#F59E0B10", border: "1px solid #F59E0B40" }}>
-                      <div className="font-mono text-[11px] font-bold" style={{ color: "#F59E0B" }}>Send is not available on {net.short} yet</div>
-                      <div className="font-mono text-[9px] text-slate-400 mt-1 leading-relaxed">
-                        This wallet can read your {net.short} balances and holdings, but the send form only
-                        supports Base. Switch to Base to send, or move {net.stableSymbol} from your{" "}
-                        <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer"
-                          className="text-[#4FC3F7] underline underline-offset-2">{net.explorerName}</a>{" "}
-                        account directly.
-                      </div>
-                      <button onClick={() => setNetwork("base")}
-                        className="font-mono text-[10px] font-bold px-3 py-1.5 rounded-lg mt-2.5 transition-opacity hover:opacity-80"
-                        style={{ background: "#F59E0B", color: "#050508" }}>
-                        Switch to Base
-                      </button>
-                    </div>
-                  : <div>
+                    The scanner stays here, above the card. A QR carries its own
+                    `network` and `asset`; both are passed as the card's INITIAL
+                    values (remounted by `scanKey`), so a scanned Robinhood code
+                    opens the card on Robinhood rather than smuggling a Base-shaped
+                    send onto 4663. `scanPrefill.network` maps baseSepolia → base
+                    because the card is mainnet-Base + Robinhood only. */}
+                {panel === "send" && (
+                  <div>
                     <button onClick={() => setScanOpen(true)}
                       className="w-full font-mono text-[11px] font-bold py-2 rounded-xl mb-3 flex items-center justify-center gap-2"
                       style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
@@ -1978,14 +1957,12 @@ export default function BankPage() {
                         ✓ scanned{scanPrefill.amount ? ` · request ${scanPrefill.amount} ${scanPrefill.asset ?? "USDC"}` : ""} — confirm + sign below
                       </div>
                     )}
-                    <SendCard key={scanKey}
-                      result={{
-                        network: scanPrefill?.network ?? network,
-                        to: scanPrefill?.to,
-                        amount: scanPrefill?.amount,
-                        asset: scanPrefill?.asset,
-                      }}
-                      account={acct} />
+                    <WalletSendCard key={scanKey}
+                      account={acct}
+                      initialNetwork={(scanPrefill?.network ?? network) === "robinhood" ? "robinhood" : "base"}
+                      initialTo={scanPrefill?.to}
+                      initialAmount={scanPrefill?.amount}
+                      initialAsset={scanPrefill?.asset === "ETH" ? "native" : "cash"} />
                   </div>
                 )}
                 {panel === "receive" && (
