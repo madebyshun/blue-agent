@@ -60,6 +60,7 @@ import RhTokenTable from "./RhTokenTable";
 import StockTable from "./StockTable";
 import type { WalletHolding } from "@/lib/wallet/holdings";
 import { useWalletIdentity } from "@/lib/wallet/identity";
+import { useNetWorth } from "@/lib/wallet/useNetWorth";
 // WHO is signed in, as opposed to WHAT wallet is attached — see the note at the
 // `identityCard` derivation below for why this page needs both and why they are
 // not the same import.
@@ -99,6 +100,13 @@ const TESTNET_KEY = "bluebank:testnet";
 export default function BankPage() {
   const { address, isConnected, chainId: walletChainId, chain: walletChain } = useAccount();
   const acct = address as `0x${string}` | undefined;
+
+  // Cross-chain net worth — tokens + tokenized stocks on BOTH live chains, from
+  // /api/wallet/net-worth. Called unconditionally at the top (React hook rules)
+  // and no-ops when `acct` is undefined. It is READ-ONLY and ADDITIVE: it feeds
+  // the NET WORTH figure and the per-chain $ on the sidebar, and never touches
+  // the vetted single-chain `walletState.balance` / `balanceRead` derivation.
+  const netWorth = useNetWorth(acct);
   const { name } = useBasename(acct);
   const [fname, setFname] = useState<string | null>(null);
   useEffect(() => {
@@ -1024,10 +1032,15 @@ export default function BankPage() {
             </div>
           </div>
 
-          {/* CHAINS — the chain switcher. Name + capabilities only, NO per-chain
-              $ (the wallet reads the active chain alone; a per-chain total would
-              be a number for a chain we never read). Active chain gets the cyan
-              card, amber if it is a testnet; click switches network. */}
+          {/* CHAINS — the chain switcher, now with each chain's $ worth. The old
+              rule here ("name + capabilities only, NO per-chain $") held while the
+              wallet only ever read the ACTIVE chain; /api/wallet/net-worth now
+              reads BOTH real-money chains at once, so a per-chain figure is a
+              number we actually measured, not one for a chain we never read. It
+              carries the same honesty as everything else: "≥" when a row was
+              unpriced, "unread" when a chain would not answer (never $0), and no
+              figure at all for Base Sepolia (testnet — no real $ to show). Active
+              chain gets the cyan card, amber if it is a testnet; click switches. */}
           <div>
             <div className="font-mono text-[9px] font-medium tracking-[0.16em] text-[#64748B] mb-2">CHAINS</div>
             <div className="flex flex-col gap-[7px]">
@@ -1035,6 +1048,18 @@ export default function BankPage() {
                 const c = WALLET_CHAINS[nk];
                 const on = network === nk;
                 const caps = [c.can.fiat && "cash", c.can.send && "send", c.can.swap && "swap", "holdings"].filter(Boolean).join(" · ");
+                // Per-chain $ — only for the two real-money chains net-worth
+                // covers. An `undefined` lookup means still reading (show "…")
+                // or a failed read (show nothing); an "unavailable" status means
+                // the chain would not answer (show "unread", amber) — never $0.
+                // Base Sepolia is a testnet and is absent from the sum → no
+                // figure at all, because a "$" over play money would be exactly
+                // the fabrication this wallet refuses.
+                const cw = c.testnet ? undefined : netWorth.chain(nk as "base" | "robinhood");
+                const worth = c.testnet ? null
+                  : cw ? (cw.status === "unavailable" ? "unread" : `${cw.isFloor ? "≥ " : ""}$${usd(cw.usd)}`)
+                  : (acct && !netWorth.received) ? "…"
+                  : null;
                 return (
                   <button key={nk} onClick={() => setNetwork(nk)}
                     className="text-left rounded-[10px] p-2.5 border transition-colors"
@@ -1043,10 +1068,18 @@ export default function BankPage() {
                         ? { borderColor: "#F59E0B52", background: "#F59E0B0f" }
                         : { borderColor: "#4FC3F752", background: "#4FC3F70f" }
                       : { borderColor: "#1A1A2E", background: "transparent" }}>
-                    <span className="font-mono text-[11px] font-medium"
-                      style={{ color: on ? (c.testnet ? "#F59E0B" : "#4FC3F7") : "#94A3B8" }}>
-                      {on ? "● " : "○ "}{c.label}
-                    </span>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-[11px] font-medium"
+                        style={{ color: on ? (c.testnet ? "#F59E0B" : "#4FC3F7") : "#94A3B8" }}>
+                        {on ? "● " : "○ "}{c.label}
+                      </span>
+                      {worth != null && (
+                        <span className="font-mono text-[10px] shrink-0"
+                          style={{ color: worth === "unread" ? "#F59E0B99" : worth === "…" ? "#64748B" : on ? "#E2E8F0" : "#94A3B8" }}>
+                          {worth}
+                        </span>
+                      )}
+                    </div>
                     <div className="font-mono text-[9.5px] text-[#64748B] mt-1">{caps}</div>
                   </button>
                 );
@@ -1272,6 +1305,39 @@ export default function BankPage() {
                   <RetryRead onRetry={retryBalance} busy={rereading} />
                 </div>
               ) : null}
+
+              {/* NET WORTH — the cross-chain aggregate: tokens + tokenized stocks
+                  on BOTH live chains, from /api/wallet/net-worth. ADDITIVE and
+                  separate from the figure above — that one is the SELECTED
+                  chain's cash (`walletState.balance`); this is everything the
+                  wallet holds. The "≥" is the SERVER'S verdict: it means a row
+                  was unpriced or a chain went unread, so the true total is at
+                  least this. We render that verdict; we never fabricate a fill.
+                  (`netWorth.failed` is checked before `.data` because a failed
+                  read still carries a `data` object — one with an `error`.) */}
+              {acct && (
+                <div className="mt-3 pt-3 border-t border-[#1A1A2E]">
+                  <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-1">NET WORTH · ALL CHAINS</div>
+                  {netWorth.failed ? (
+                    <div className="font-mono text-[10px] text-amber-500/80 leading-relaxed">
+                      Couldn&apos;t read across chains — unknown, not zero.
+                    </div>
+                  ) : netWorth.data ? (
+                    <>
+                      <div className="font-mono text-[18px] font-bold text-[#E2E8F0]">
+                        {netWorth.data.total.isFloor ? "≥ " : ""}${usd(netWorth.data.total.usd)}
+                      </div>
+                      {netWorth.data.total.isFloor && (
+                        <div className="font-mono text-[9px] text-slate-600 mt-0.5 leading-relaxed">
+                          Some holdings are unpriced or a chain went unread — it holds at least this much.
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="font-mono text-[15px] text-slate-600">reading both chains…</div>
+                  )}
+                </div>
+              )}
               </div>
 
               {/* Actions — the same three controls, now inside the card whose
