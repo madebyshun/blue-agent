@@ -29,7 +29,7 @@
  * write a reader that assumes every record has a live writer behind it, and do
  * not "clean up" rows you cannot attribute.
  */
-import { kvGet, kvMutate } from "./kv";
+import { kvGetProbe, kvMutate } from "./kv";
 
 const LAUNCHES_KEY = "bluechat:launches";
 const MAX_LAUNCHES = 500;
@@ -52,11 +52,33 @@ export type LaunchRecord = {
   chainId?: number;
 };
 
-/** Read the full launch list (newest first). Legacy records with no `chain`
- *  field are all Base launches (Robinhood support didn't exist yet). */
+/**
+ * Read the full launch list (newest first), distinguishing "no launches" from
+ * "could not read". Legacy records with no `chain` field are all Base launches
+ * (Robinhood support didn't exist yet).
+ *
+ * #150 read side. `getLaunches()` below keeps the `[]`-on-failure shape because
+ * its other caller (/api/b20hub/tokens) renders a grid where an empty list and
+ * a failed read look the same on screen anyway. `/stats` is different: it
+ * publishes `launches.total` as a headline traction number, and a 0 there is a
+ * claim ("nobody has ever launched a token") we cannot make from a throttled
+ * read. That surface gets this function.
+ */
+export async function getLaunchesProbe(
+  limit = MAX_LAUNCHES,
+): Promise<{ ok: true; launches: LaunchRecord[] } | { ok: false; launches: [] }> {
+  const probe = await kvGetProbe<LaunchRecord[]>(LAUNCHES_KEY);
+  if (probe.status === "error") {
+    console.error(`[launches] registry unreadable: ${probe.message}`);
+    return { ok: false, launches: [] };
+  }
+  const all = probe.status === "hit" ? probe.value : [];
+  return { ok: true, launches: all.slice(0, limit).map((l) => ({ chain: "base" as const, ...l })) };
+}
+
+/** Read the full launch list (newest first); `[]` if empty OR unreadable. */
 export async function getLaunches(limit = MAX_LAUNCHES): Promise<LaunchRecord[]> {
-  const all = (await kvGet<LaunchRecord[]>(LAUNCHES_KEY)) ?? [];
-  return all.slice(0, limit).map((l) => ({ chain: "base" as const, ...l }));
+  return (await getLaunchesProbe(limit)).launches;
 }
 
 function dedupeKey(rec: Pick<LaunchRecord, "tokenAddress" | "chain">): string {

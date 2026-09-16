@@ -6,11 +6,18 @@
  * balances/spend, no launcher handles/identities. `uniqueCreators` is a COUNT
  * derived from launch records; the underlying identity values are never emitted.
  *
- * Every field is fault-tolerant: a data-source failure degrades to a safe zero /
- * null (rendered as "—"), never a thrown error and never a fabricated number.
+ * Every field is fault-tolerant: a data-source failure never throws and never
+ * fabricates. #150 sharpened what that means — a zero is NOT a safe default on
+ * this page, because every number here is a public traction claim and a zero
+ * reads as a measurement ("nobody launched", "nobody signed up", "no runs").
+ * So each block carries an `ok` flag (`launches.ok`, `usage.ok`,
+ * `users.claimsOk`, `settlement.ok`); false ⟹ the value is a placeholder the
+ * view must render as "—" or as a "≥" lower bound, never as a total.
  *
  * Sources:
- *   - Launches:  KV `bluechat:launches` (real on-chain deploys via Bankr).
+ *   - Launches:  KV `bluechat:launches` (real on-chain deploys — see lib/launches.ts
+ *                for who writes it; the Bankr-era writer was deleted 2026-09-06,
+ *                the ROWS it wrote are deliberately kept).
  *   - Usage:     KV `usage:<toolId>` counters — lifetime paid tool runs (aggregate
  *                sum; no wallet is ever part of the key).
  *   - Users:     KV `claim:count` — # wallets that claimed the free-credit airdrop
@@ -34,7 +41,7 @@
  * number is honest, a zero would be a false measurement.
  */
 
-import { getLaunches } from "./launches";
+import { getLaunchesProbe } from "./launches";
 import { AGENT_TOOLS } from "./agent-tools";
 import { kvGet, kvGetCounter } from "./kv";
 import { getLedgerActivity } from "./credit-ledger";
@@ -56,6 +63,13 @@ export interface PublicStats {
     peakPerDay:     number;
     byDay:          { date: string; count: number }[]; // chronological, launch days only
     recent:         PublicLaunchLite[];                 // newest first, creator stripped
+    /** #150 — false ⟹ the `bluechat:launches` registry could not be READ. Every
+     *  number in this block is then 0 as a placeholder and must render as "—".
+     *  A 0 here would state "no token has ever been launched through Blue Agent",
+     *  which is the single strongest claim on the page and the one we are least
+     *  entitled to make from a throttled read. Same convention as `usage.ok`,
+     *  `users.claimsOk` and `settlement.ok`. */
+    ok:             boolean;
   };
   product: {
     tools:    number;
@@ -105,11 +119,19 @@ function priceNum(price?: string): number {
 
 export async function buildPublicStats(): Promise<PublicStats> {
   // ── Launches (KV) ──
+  //
+  // #150. `total` is the headline "Tokens Launched" number. Reading an outage as
+  // an empty registry publishes "0 tokens have ever been launched" — a claim
+  // about the whole history of the product, made from a read that failed. The
+  // probe keeps "empty" and "unreadable" apart so the page can render "—".
   let total = 0, uniqueCreators = 0, peakPerDay = 0;
   let byDay: { date: string; count: number }[] = [];
   let recent: PublicLaunchLite[] = [];
+  let launchesOk = true;
   try {
-    const launches = await getLaunches();
+    const probe = await getLaunchesProbe();
+    launchesOk = probe.ok;
+    const launches = probe.launches;
     total = launches.length;
 
     // Unique creators: COUNT only — identity values are never surfaced.
@@ -142,7 +164,11 @@ export async function buildPublicStats(): Promise<PublicStats> {
         launchedAt: l.launchedAt ?? 0,
       }));
   } catch {
-    /* degrade to zeros */
+    // Thrown rather than probed — same conclusion: we did not read the registry.
+    launchesOk = false;
+  }
+  if (!launchesOk) {
+    console.error(`[public-stats] launch registry unreadable — launches.* published as unknown, not as 0`);
   }
 
   // ── Product breadth (static) ──
@@ -215,7 +241,7 @@ export async function buildPublicStats(): Promise<PublicStats> {
 
   return {
     updatedAt: Date.now(),
-    launches: { total, uniqueCreators, peakPerDay, byDay, recent },
+    launches: { total, uniqueCreators, peakPerDay, byDay, recent, ok: launchesOk },
     product: { tools, commands: CORE_COMMANDS },
     usage: { totalRuns, revenueEst: `$${revenueEstNum.toFixed(2)}`, topTools, ok: usageOk, unreadable: usageUnreadable },
     users: { claims, claimCap: CLAIM_CAP, total: totalUsers, claimsOk },
