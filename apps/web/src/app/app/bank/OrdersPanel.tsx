@@ -208,8 +208,17 @@ export default function OrdersPanel() {
 
       {B20_ENABLED && !address && (
         <div className="rounded-lg px-2.5 py-2 mb-3" style={{ border: "1px solid #4FC3F730", background: "#4FC3F70d" }}>
+          {/* Said "new payment links settle B20 USDC to you" until #254 — the
+              same rot as the box above, and it survived for the same reason
+              the June 25 string did: B20_ENABLED is off, so nobody ever
+              rendered it. Unreachable copy goes stale just as silently as
+              copy nobody reads. There are no links here any more; what the
+              connected wallet actually does is get stamped onto the order as
+              `payTo` at creation, and without it `copyRequest` omits the
+              "Pay to:" line entirely and the payer gets no address at all. */}
           <p className="font-mono text-[9px] text-[#4FC3F7] leading-relaxed">
-            Connect your wallet so new payment links settle B20 USDC to you.
+            Connect your wallet so new requests carry a payout address —
+            without one there is nothing for a payer to send to.
           </p>
         </div>
       )}

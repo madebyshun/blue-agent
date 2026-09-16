@@ -2088,9 +2088,14 @@ export default function BankPage() {
                   local reading, not a record — every input is re-computed on
                   each render from the live balance/gas/activity reads, so there
                   is no artifact here that only this button could have gotten
-                  out. The wallet's one genuinely shareable object, the pay link,
-                  keeps its own button in the Deposit panel, where the thing
-                  being shared actually lives. */}
+                  out. The wallet's one genuinely shareable object lives in the
+                  Deposit panel, where the thing being shared actually is.
+
+                  That used to read "the pay link, keeps its own button" — and
+                  #254 deleted that button, which would have left this note
+                  pointing a reader at something that isn't there. The
+                  shareable object is the EIP-681 QR; the link was never one,
+                  because middleware 301s it away. */}
             </div>
 
           </div>
