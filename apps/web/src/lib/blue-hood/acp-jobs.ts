@@ -32,6 +32,7 @@ import {
   kvSetNX,
   kvSAdd,
   kvSMembers,
+  kvMutate,
 } from "@/lib/kv";
 import {
   kvAcpJob,
@@ -272,11 +273,28 @@ export async function expireStreak(): Promise<number> {
 
 // ── internals ────────────────────────────────────────────────────────────────
 
-/** Prepend a terminal outcome, keeping the log capped + newest-first. */
+/**
+ * Prepend a terminal outcome, keeping the log capped + newest-first.
+ *
+ * ⚠ #150. The old body was `(await kvGet(...)) ?? []` → prepend → `kvSet` on the
+ * SAME key, and `kvGet` turns a KV throw into null. So a throttled read did not
+ * lose one outcome — it replaced the whole log with `[outcome]`, and this log
+ * has exactly one consumer: `expireStreak()`, the leading run of "expired" that
+ * this module's own header calls "the EARLY WARNING that fires before ACP's
+ * 10-in-a-row auto-ungraduation". Wiping it resets the streak to ≤1, so the one
+ * failure mode the counter exists to catch is the one that silences it.
+ *
+ * `kvMutate` skips the write when the read failed: we lose this outcome from
+ * the streak rather than losing the nine before it.
+ */
 async function pushTerminalOutcome(outcome: AcpJobStatus): Promise<void> {
-  const log = (await kvGet<AcpJobStatus[]>(KV_ACP_TERMINAL_LOG)) ?? [];
-  const next = [outcome, ...log].slice(0, ACP_TERMINAL_LOG_MAX);
-  await kvSet(KV_ACP_TERMINAL_LOG, next);
+  const res = await kvMutate<AcpJobStatus[]>(
+    KV_ACP_TERMINAL_LOG, [],
+    (log) => [outcome, ...log].slice(0, ACP_TERMINAL_LOG_MAX),
+  );
+  if (res !== "ok") {
+    console.error(`[acp] terminal outcome "${outcome}" NOT recorded (${res}) — expire streak may under-count; prior log left intact`);
+  }
 }
 
 /** Drop undefined keys so a partial patch never clobbers a known value with undefined. */

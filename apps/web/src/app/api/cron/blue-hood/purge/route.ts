@@ -10,7 +10,7 @@
  * fat-fingered curl can't wipe prod by accident.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { kvDel, kvGet, kvScan, kvSet } from "@/lib/kv";
+import { kvDel, kvGet, kvGetProbe, kvScan, kvSet } from "@/lib/kv";
 import {
   KV_ARROW_FEED,
   KV_ARROW_SERIAL_COUNTER,
@@ -44,7 +44,26 @@ export async function POST(req: NextRequest) {
     }, { status: 400 });
   }
 
-  const ids = (await kvGet<string[]>(KV_ARROW_FEED)) ?? [];
+  // ⚠ #150, and the sharpest case in the family: this route is DESTRUCTIVE BY
+  // DESIGN, so an unreadable index does not degrade — it mutilates. With the
+  // old `?? []` a throttled read walked zero arrows (deleting none of the
+  // `bh:arrow:{id}` blobs) and then still ran `kvSet(KV_ARROW_FEED, [])` below,
+  // destroying the ONLY index that can reach them. The track record disappears
+  // from every surface while the rows sit in KV forever, unreachable and
+  // unrebuildable — the worst of both outcomes, from the one operation whose
+  // entire contract is "reset cleanly to zero".
+  //
+  // You cannot purge what you could not enumerate. Refuse the whole run.
+  const feed = await kvGetProbe<string[]>(KV_ARROW_FEED);
+  if (feed.status === "error") {
+    console.error(`[hood:purge] ABORTED — arrow feed unreadable: ${feed.message}`);
+    return NextResponse.json({
+      error: "arrow feed unreadable — purge aborted, nothing was deleted",
+      hint: "Retry when KV is healthy. Proceeding would have cleared the index while leaving every bh:arrow:* blob orphaned.",
+    }, { status: 503 });
+  }
+  const ids = feed.status === "hit" ? feed.value : [];
+
   let deleted = 0;
   let open_indexes_cleared = 0;
 

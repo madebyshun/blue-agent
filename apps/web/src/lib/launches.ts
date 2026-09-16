@@ -29,7 +29,7 @@
  * write a reader that assumes every record has a live writer behind it, and do
  * not "clean up" rows you cannot attribute.
  */
-import { kvGet, kvSet } from "./kv";
+import { kvGet, kvMutate } from "./kv";
 
 const LAUNCHES_KEY = "bluechat:launches";
 const MAX_LAUNCHES = 500;
@@ -68,16 +68,26 @@ function dedupeKey(rec: Pick<LaunchRecord, "tokenAddress" | "chain">): string {
  * place — keeps the list newest-first, and caps it at MAX_LAUNCHES.
  * Best-effort: never throws — the deploy already succeeded, bookkeeping must
  * not break the flow.
+ *
+ * ⚠ #150. "Best-effort" used to mean something much worse than it sounds. The
+ * old body was `(await kvGet(...)) ?? []` → filter → unshift → `kvSet` on the
+ * SAME key, and `kvGet` swallows a KV throw into null — so one throttled read
+ * during an Upstash blip replaced the ENTIRE registry with `[rec]`. Every other
+ * row is gone, and these rows cannot be regenerated: they are the record that a
+ * token really was deployed, which the header above is explicit about keeping
+ * ("retiring a route does not entitle anyone to delete the data behind it").
+ *
+ * `kvMutate` refuses to write when the read failed. Failing to record ONE
+ * launch is a gap in the registry; the old shape was the registry.
  */
 export async function recordLaunch(rec: LaunchRecord): Promise<void> {
   if (!rec.tokenAddress) return;
-  try {
-    const key = dedupeKey(rec);
-    const all = (await kvGet<LaunchRecord[]>(LAUNCHES_KEY)) ?? [];
-    const deduped = all.filter((l) => dedupeKey(l) !== key);
-    deduped.unshift(rec);
-    await kvSet(LAUNCHES_KEY, deduped.slice(0, MAX_LAUNCHES));
-  } catch {
-    /* best-effort */
+  const key = dedupeKey(rec);
+  const res = await kvMutate<LaunchRecord[]>(
+    LAUNCHES_KEY, [],
+    (all) => [rec, ...all.filter((l) => dedupeKey(l) !== key)].slice(0, MAX_LAUNCHES),
+  );
+  if (res !== "ok") {
+    console.error(`[launches] ${key} NOT recorded (${res}) — the token IS deployed on-chain; the registry row is missing, existing rows untouched`);
   }
 }
