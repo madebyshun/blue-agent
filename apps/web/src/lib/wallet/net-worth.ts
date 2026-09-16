@@ -118,7 +118,13 @@ export async function readNetWorth(address: string): Promise<NetWorth> {
   const baseStockUsd = sumDefined((baseLeg?.holdings ?? []).map((h) => h.valueUsd));
 
   const baseReasons: string[] = [];
-  if (tokens.partial) baseReasons.push("token list limited to majors (Moralis unavailable)");
+  // The reason comes FROM the reader, which is the only thing that knows which
+  // of three sources answered. This line used to hardcode "token list limited to
+  // majors (Moralis unavailable)" — correct while `partial` had one cause, and a
+  // confident lie the moment on-chain discovery became the second: that list is
+  // neither majors-only nor waiting on Moralis. `partialReason` is non-empty
+  // wherever `partial` is true, so the fallback below is belt-and-braces.
+  if (tokens.partial) baseReasons.push(tokens.partialReason ?? "token list may be incomplete");
   if (tokens.error) baseReasons.push("token read did not complete");
   // A vouched, non-stock token we hold but Moralis had no price for.
   if (baseTokenRows.some((h) => typeof h.usdValue !== "number"))

@@ -36,10 +36,12 @@ export interface WalletState {
     stablecoin: number | null;   // % of priced value held in stablecoins
     other: number | null;        // % held in everything else (currently ETH)
   };
-  netFlowMonth: number;
-  transferCountMonth: number;
+  /** `null` when the history read did not land — see the snapshot below. */
+  netFlowMonth: number | null;
+  transferCountMonth: number | null;
   gasSavedUsd: number | null; // null when no real tx data
-  healthScore: number;         // 0-100
+  /** `null` when an input was unread — a grade needs a complete picture. */
+  healthScore: number | null;  // 0-100
   updatedAt: string;
 }
 
@@ -60,8 +62,18 @@ export interface WalletSnapshot {
   aavePos: number;
   morphoPos: number;
   ethBal: number;
-  netFlowMonth: number;
-  transferCountMonth: number;
+  /**
+   * This month's figures from the wallet history read — and `null` when that
+   * read did NOT land (in flight, failed, no Moralis key, or a chain Moralis
+   * does not index). They were plain `number`, which forced every caller to
+   * pass `?? 0`, and a zero here is indistinguishable from the measurement
+   * "this wallet made no transfers" — so an outage became a fact about the
+   * user. That is the same substitution this type's own docstring above rules
+   * out ("Every field is something we MEASURED"), and `healthScore` below was
+   * spending 33 points on it.
+   */
+  netFlowMonth: number | null;
+  transferCountMonth: number | null;
   /** Live ETH/USD from /api/wallet/transactions; `null` when the feed failed. */
   ethUsdPrice: number | null;
   /** Already derived server-side against the SAME live price — passed through,

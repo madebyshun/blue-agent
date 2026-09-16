@@ -71,7 +71,14 @@ export interface WalletChainCfg {
    *            it has RhSwapCard against the deployed RobinhoodSwapRouter on 4663.
    *            Base Sepolia has NEITHER: the 0x router would spend real mainnet
    *            funds under a page captioned "no real value".
-   *   txHistory  /api/wallet/transactions is Moralis, which does not index 4663.
+   *   txHistory  Base + Base Sepolia are read by /api/wallet/transactions
+   *            (Moralis). Robinhood is read by /api/wallet/rh-transactions
+   *            (that chain's own Blockscout), because Moralis does not index
+   *            4663 — same split, and for the same reason, as the two holdings
+   *            readers. The flag means "some reader can answer for this chain",
+   *            NOT "the Moralis route can": the Activity tab merges whichever
+   *            readers say yes into one timeline and labels every row with the
+   *            chain it came from.
    *
    * A false flag means the UI must SAY the path is unavailable here. It must
    * never mean the UI quietly does the Base thing under another chain's label —
@@ -146,10 +153,20 @@ export const WALLET_CHAINS: Record<WalletChain, WalletChainCfg> = {
     // that mounts the RH card BEFORE any `can`-based Base mount, so a true flag
     // can never route 4663 through a Base card.
     //
-    // `fiat` and `txHistory` stay false and remain real dependencies, not
-    // caution: Coinbase's onramp does not list 4663 and Moralis does not index
-    // it. Balances, holdings and the explorer all work too.
-    can: { fiat: false, send: true, swap: true, txHistory: false },
+    // `txHistory` is TRUE and it does NOT mean Moralis learned to index 4663 —
+    // it never will, and /api/wallet/transactions still refuses this chain by
+    // name. It means a reader exists: /api/wallet/rh-transactions reads this
+    // chain's own Blockscout, and the Activity tab merges its rows with the
+    // Moralis rows into one timeline, each row stamped with the chain it came
+    // from. Same shape as the holdings split, for the same reason. Flipping
+    // this flag without that second reader would have pointed the Activity tab
+    // at the Moralis route under a Robinhood label, which is the exact failure
+    // the `can` block exists to prevent.
+    //
+    // `fiat` stays false and remains a real dependency, not caution: Coinbase's
+    // onramp does not list 4663, and no second onramp exists to stand in for it
+    // the way Blockscout stands in for Moralis here.
+    can: { fiat: false, send: true, swap: true, txHistory: true },
   },
 };
 
@@ -170,10 +187,10 @@ export const WALLET_CHAINS: Record<WalletChain, WalletChainCfg> = {
  * holdings behind an external link.
  *
  * What is STILL Base-only is now captured by `can` above, per chain, instead of
- * an all-or-nothing absence from this list: `fiat` (the Coinbase onramp does
- * not list 4663) and `txHistory` (Moralis does not index it). Being listed
- * means "you can look at this chain here"; `can` decides what you may DO once
- * you are looking.
+ * an all-or-nothing absence from this list — and after the Blockscout history
+ * reader shipped, that is down to `fiat` alone (the Coinbase onramp does not
+ * list 4663). Being listed means "you can look at this chain here"; `can`
+ * decides what you may DO once you are looking.
  */
 export const WALLET_CHAIN_ORDER: readonly WalletChain[] = ["base", "robinhood", "baseSepolia"];
 
