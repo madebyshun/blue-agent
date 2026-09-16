@@ -36,7 +36,7 @@
 
 import { getLaunches } from "./launches";
 import { AGENT_TOOLS } from "./agent-tools";
-import { kvGet } from "./kv";
+import { kvGet, kvGetCounter } from "./kv";
 import { getLedgerActivity } from "./credit-ledger";
 import { getX402Settlements } from "./x402-settlements";
 
@@ -65,11 +65,20 @@ export interface PublicStats {
     totalRuns:  number;                          // Σ usage:<id> across the catalog
     revenueEst: string;                          // "$X.XX" — Σ(runs × price)
     topTools:   { name: string; runs: number }[]; // top 5 by runs (names only, aggregate)
+    /** #150 — false ⟹ at least one `usage:<id>` counter could not be READ and was
+     *  left out of the sums above, making them a LOWER BOUND rather than a
+     *  measurement. Same convention as `settlement.ok`: an unreadable source is
+     *  declared, never folded into the number as a zero. */
+    ok:         boolean;
+    unreadable: number;                          // how many counters were dropped
   };
   users: {
     claims:   number;  // wallets that claimed the free-credit airdrop (count only)
     claimCap: number;  // airdrop cap (300)
     total:    number;  // distinct wallets that ever spent credits (count only)
+    /** #150 — false ⟹ `claim:count` was unreadable; `claims` above is 0 as a
+     *  placeholder and must render as "—", not as "nobody signed up". */
+    claimsOk: boolean;
   };
   credits: {
     spent:    number;  // Σ credits debited across all wallets (chat + tool)
@@ -140,28 +149,51 @@ export async function buildPublicStats(): Promise<PublicStats> {
   const tools = Array.isArray(AGENT_TOOLS) ? AGENT_TOOLS.length : 0;
 
   // ── Usage (KV usage:<id> counters — aggregate, no wallet in key) ──
-  let totalRuns = 0, revenueEstNum = 0;
+  //
+  // #150. `?? 0` put an unreadable counter into a SUM, which is the one place a
+  // fabricated zero leaves no trace: a throttled read did not surface as an
+  // error or a gap, it surfaced as a smaller traction number on the public
+  // page, indistinguishable from a quiet week. An unreadable counter is now
+  // dropped from the sum and COUNTED, so the page can say "≥" instead of
+  // publishing a floor as if it were the total.
+  let totalRuns = 0, revenueEstNum = 0, usageUnreadable = 0;
   let topTools: { name: string; runs: number }[] = [];
+  let usageOk = true;
   try {
     const rows = await Promise.all(
       AGENT_TOOLS.map(async (tl) => {
-        const runs = (await kvGet<number>(`usage:${tl.id}`)) ?? 0;
-        return { name: tl.name, runs, rev: runs * priceNum(tl.price) };
+        const runs = await kvGetCounter(`usage:${tl.id}`); // null ⟹ read failed
+        return { name: tl.name, runs, rev: runs === null ? 0 : runs * priceNum(tl.price) };
       }),
     );
-    for (const r of rows) { totalRuns += r.runs; revenueEstNum += r.rev; }
+    for (const r of rows) {
+      if (r.runs === null) { usageUnreadable++; continue; }
+      totalRuns += r.runs; revenueEstNum += r.rev;
+    }
+    usageOk = usageUnreadable === 0;
     topTools = rows
-      .filter((r) => r.runs > 0)
+      .filter((r): r is typeof r & { runs: number } => r.runs !== null && r.runs > 0)
       .sort((a, b) => b.runs - a.runs)
       .slice(0, 5)
       .map((r) => ({ name: r.name, runs: r.runs }));
   } catch {
-    /* degrade to zeros */
+    // Whole batch failed — publish nothing rather than a zeroed traction claim.
+    usageOk = false;
+    usageUnreadable = AGENT_TOOLS.length;
+    totalRuns = 0; revenueEstNum = 0; topTools = [];
+  }
+  if (!usageOk) {
+    console.error(`[public-stats] ${usageUnreadable}/${AGENT_TOOLS.length} usage counters unreadable — totals published as a lower bound`);
   }
 
   // ── Users onboarded (airdrop claim count — a count, never an address) ──
-  let claims = 0;
-  try { claims = (await kvGet<number>("claim:count")) ?? 0; } catch { /* leave 0 */ }
+  // Unreadable ⟹ claimsOk:false so the page renders "—". A 0 here would read as
+  // "nobody has ever signed up", which is a much stronger claim than we can make.
+  let claims = 0, claimsOk = true;
+  try {
+    const c = await kvGetCounter("claim:count");
+    if (c === null) claimsOk = false; else claims = c;
+  } catch { claimsOk = false; }
 
   // ── Active users + credits spent + chat messages ──
   // Derived live from the existing per-wallet ledgers (aggregate counts/sums only,
@@ -185,8 +217,8 @@ export async function buildPublicStats(): Promise<PublicStats> {
     updatedAt: Date.now(),
     launches: { total, uniqueCreators, peakPerDay, byDay, recent },
     product: { tools, commands: CORE_COMMANDS },
-    usage: { totalRuns, revenueEst: `$${revenueEstNum.toFixed(2)}`, topTools },
-    users: { claims, claimCap: CLAIM_CAP, total: totalUsers },
+    usage: { totalRuns, revenueEst: `$${revenueEstNum.toFixed(2)}`, topTools, ok: usageOk, unreadable: usageUnreadable },
+    users: { claims, claimCap: CLAIM_CAP, total: totalUsers, claimsOk },
     credits: { spent: creditsSpent, messages: chatMessages },
     settlement,
   };
