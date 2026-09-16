@@ -24,7 +24,18 @@ const MORALIS = "https://deep-index.moralis.io/api/v2.2";
 // had selected. Wrong rows are worse than no rows: an empty list invites a
 // retry, a Base list invites the user to believe they moved money on a chain
 // they have never touched.
-const CHAIN: Record<string, string> = { base: "base", baseSepolia: "0x14a34" };
+// Typed over `TxChain` rather than `string`, so the map and the chain a row is
+// stamped with cannot drift apart: adding a slug here without widening `TxChain`
+// (below) fails to compile, which is the only version of "keep these two in
+// sync" that survives a later edit.
+const CHAIN: Record<TxChain, string> = { base: "base", baseSepolia: "0x14a34" };
+
+/** The requested network, or null when it is not one this index covers. Narrowed
+ *  here — once, at the edge — so `normalize` receives a real chain rather than
+ *  an unvalidated query-string echo. */
+function asTxChain(network: string): TxChain | null {
+  return network === "base" || network === "baseSepolia" ? network : null;
+}
 
 interface Transfer {
   direction?: string;
@@ -47,7 +58,21 @@ interface MoralisTx {
 }
 
 type Kind = "received" | "sent" | "swap" | "contract";
+/**
+ * `chain` is stamped by the reader that KNOWS which index it queried, and it is
+ * not optional.
+ *
+ * The wallet's Activity tab merges these rows with Robinhood rows from
+ * /api/wallet/rh-transactions into one timeline. In a merged list a row without
+ * its chain is a row the renderer has to guess about, and the guess is drawn as
+ * an explorer link — a Basescan href for a 4663 hash resolves to nothing, and a
+ * Blockscout href for a Base hash resolves to nothing. That is the #219/#230
+ * family (a fact from one chain rendered under another's identity), and the
+ * only structural fix is to carry the chain WITH the fact.
+ */
+type TxChain = "base" | "baseSepolia";
 interface Tx {
+  chain: TxChain;
   hash: string;
   ts: number;
   category: string;
@@ -67,7 +92,7 @@ const num = (s?: string): number | null => {
 // Map a Moralis history row → our compact tx. The per-transfer `direction`
 // ("send" / "receive") is relative to the queried wallet, so we trust it for
 // the icon + amount sign instead of re-deriving from raw addresses.
-function normalize(t: MoralisTx): Tx {
+function normalize(t: MoralisTx, chain: TxChain): Tx {
   const ts = t.block_timestamp ? Date.parse(t.block_timestamp) : 0;
   const category = String(t.category ?? "");
   const status: Tx["status"] = t.receipt_status === "0" ? "failed" : "complete";
@@ -81,24 +106,24 @@ function normalize(t: MoralisTx): Tx {
   if (/swap/i.test(category)) {
     const got = incoming ?? outgoing;
     return {
-      hash: t.hash, ts, category, kind: "swap", dir: "none",
+      chain, hash: t.hash, ts, category, kind: "swap", dir: "none",
       counterparty: t.to_address, amount: num(got?.value_formatted), asset: got?.token_symbol, status,
     };
   }
   if (incoming) {
     return {
-      hash: t.hash, ts, category, kind: "received", dir: "in",
+      chain, hash: t.hash, ts, category, kind: "received", dir: "in",
       counterparty: incoming.from_address, amount: num(incoming.value_formatted), asset: incoming.token_symbol, status,
     };
   }
   if (outgoing) {
     return {
-      hash: t.hash, ts, category, kind: "sent", dir: "out",
+      chain, hash: t.hash, ts, category, kind: "sent", dir: "out",
       counterparty: outgoing.to_address, amount: num(outgoing.value_formatted), asset: outgoing.token_symbol, status,
     };
   }
   return {
-    hash: t.hash, ts, category, kind: "contract", dir: "none",
+    chain, hash: t.hash, ts, category, kind: "contract", dir: "none",
     counterparty: t.to_address, amount: null, status,
   };
 }
@@ -128,7 +153,8 @@ export async function GET(req: Request) {
   const u = new URL(req.url);
   const address = u.searchParams.get("address") ?? "";
   const network = u.searchParams.get("network") ?? "base";
-  const chain = CHAIN[network];
+  const chainKey = asTxChain(network);
+  const chain = chainKey ? CHAIN[chainKey] : undefined;
   const key = process.env.MORALIS_API_KEY ?? "";
 
   if (!/^0x[a-fA-F0-9]{40}$/.test(address))
@@ -137,7 +163,7 @@ export async function GET(req: Request) {
   // is a separate flag from `error` because it is not a failure the user can
   // retry away — it is a permanent gap in this data source, and the UI should
   // offer the block explorer rather than a Retry button.
-  if (!chain)
+  if (!chain || !chainKey)
     return NextResponse.json({
       transactions: [], stats: emptyStats(), unsupported: true,
       error: `transaction history is not available for ${network}`,
@@ -155,7 +181,7 @@ export async function GET(req: Request) {
 
     const data = (await res.json()) as { result?: MoralisTx[] };
     const rows = (Array.isArray(data.result) ? data.result : []).filter((t) => !t.possible_spam);
-    const transactions = rows.map(normalize).filter((t) => t.ts > 0);
+    const transactions = rows.map((t) => normalize(t, chainKey)).filter((t) => t.ts > 0);
 
     // ── Derived stats for the current calendar month (computed in code) ───────
     const now = new Date();

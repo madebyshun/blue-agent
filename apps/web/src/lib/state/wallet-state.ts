@@ -88,7 +88,13 @@ export function buildWalletState(snapshot: WalletSnapshot): WalletState {
   // `inYield > 0` went with it, for a different reason: with the Earn entrance
   // closed, supplying into Aave is not something a user can choose to do, and a
   // score must only measure things its subject can act on.
-  const healthScore = Math.min(
+  // And `null` when the activity leg was never read, which is the same lesson
+  // one paragraph later: `snapshot.transferCountMonth > 0 ? 33 : 0` ran against
+  // a field every caller had to pass as `?? 0`, so a Moralis outage deducted 33
+  // points from every wallet on the app — the identical failure the `bestApy`
+  // term was deleted for, surviving in the term right beside it. A score with an
+  // unread input is not a low score, it is not a score.
+  const healthScore = snapshot.transferCountMonth == null ? null : Math.min(
     100,
     Math.round(
       (snapshot.ethBal > 0.005 ? 34 : 0) +
@@ -107,8 +113,11 @@ export function buildWalletState(snapshot: WalletSnapshot): WalletState {
     ethUnpriced,
     holdsAssets,
     allocation:          { stablecoin: allocStablecoin, other: allocOther },
-    netFlowMonth:        snapshot.netFlowMonth ?? 0,
-    transferCountMonth:  snapshot.transferCountMonth ?? 0,
+    // Passed THROUGH, not defaulted. `?? 0` here would re-introduce exactly the
+    // substitution the nullable type was widened to prevent, one line after
+    // `healthScore` learned to respect it.
+    netFlowMonth:        snapshot.netFlowMonth,
+    transferCountMonth:  snapshot.transferCountMonth,
     gasSavedUsd,
     healthScore,
     updatedAt:           new Date().toISOString(),

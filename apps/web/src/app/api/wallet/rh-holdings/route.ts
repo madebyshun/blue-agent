@@ -26,8 +26,14 @@ import { RH_CHAIN } from "@/lib/robinhood/rwa-registry";
 export const dynamic = "force-dynamic";
 // Up to five Blockscout round-trips with one retry each — the native balance,
 // then the ERC-20 list, which is 50 rows per page and walked up to 4 pages
-// (cursor-based, so pages 2-4 are sequential). Against an explorer measured at
-// 2.4-8.8s on its slow path. Comfortably under this; not under the default.
+// (cursor-based, so pages 2-4 are sequential).
+//
+// Since 2026-09-13 the read is BOUNDED rather than merely expected to be quick:
+// each leg carries its own timeout and the sequential walk carries a wall-clock
+// budget (see `blockscout.ts`, which has the measurements that set them). Worst
+// case is ~45s — every page timing out on both attempts — and the response is
+// still a real, correctly-flagged partial read rather than a hung request. That
+// is what this ceiling has to clear; the default 10s would not.
 export const maxDuration = 60;
 
 /** Shape-compatible failure: the UI branches on `status`, so it must always exist. */

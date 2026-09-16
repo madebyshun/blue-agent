@@ -1,14 +1,19 @@
 "use client";
 
-// Blue Bank — Orders & Invoices. Create a payment request (USDC), share a
-// /pay/<id> link, and track pending → paid. Settlement runs in B20 USDC via
-// transferWithMemo once B20 mainnet is live (NEXT_PUBLIC_B20_ENABLED).
+// Blue Bank — Orders & Invoices. Create a payment request (USDC), copy it out to
+// the person who owes it, and track pending → paid. Settlement runs in B20 USDC
+// via transferWithMemo once B20 mainnet is live (NEXT_PUBLIC_B20_ENABLED).
+//
+// It used to say "share a /pay/<id> link". It no longer shares a link at all —
+// `/pay[/…]` is archived in middleware and 301s to /chat, so every link this
+// panel handed a merchant was undeliverable (#254). What it shares now is the
+// request's own text, which this deployment can actually produce.
 import { useEffect, useRef, useState } from "react";
 import { useAccount, usePublicClient } from "wagmi";
 import { isAddress, type Hex } from "viem";
 import {
-  B20_ENABLED, B20_USDC, type OrderKind,
-  loadOrders, createOrder, removeOrder, markPaid, payLink, ordersToCsv,
+  B20_ENABLED, B20_USDC, type Order, type OrderKind,
+  loadOrders, createOrder, removeOrder, markPaid, ordersToCsv,
 } from "@/lib/orders";
 import { MEMO_EVENT_ABI, orderMemo, memoToOrderId } from "@/lib/b20/encode";
 
@@ -93,9 +98,28 @@ export default function OrdersPanel() {
     setAmount(""); setDesc(""); setClient(""); setDue("");
     refresh();
   }
-  function copy(id: string) {
-    navigator.clipboard?.writeText(payLink(id)).then(() => {
-      setCopied(id); setTimeout(() => setCopied((c) => (c === id ? null : c)), 1500);
+  // "copy pay link" stood here until #254. It copied `payLink(id)` — a
+  // /pay/<id> URL that middleware 301s to /chat with the id stripped — so every
+  // request a merchant sent a customer was dead on arrival. `payLink()` had no
+  // other caller and is deleted in the same commit.
+  //
+  // REPLACED, not merely dropped: this was the panel's only way to get a request
+  // out of the dashboard and to the person who owes it, and removing that would
+  // leave a create-orders screen with no way to deliver one. What gets copied now
+  // is the request itself — id, amount, reference, payout address — all of it
+  // real local record, none of it a promise about a page that isn't there. The
+  // address is chain-qualified because a bare 0x… is not an instruction.
+  function copyRequest(o: Order) {
+    const lines = [
+      `${o.kind === "invoice" ? "Invoice" : "Order"} #${o.id}`,
+      `Amount: ${o.amount.toLocaleString()} USDC`,
+      ...(o.description ? [`For: ${o.description}`] : []),
+      ...(o.client ? [`Billed to: ${o.client}`] : []),
+      ...(o.dueDate ? [`Due: ${o.dueDate}`] : []),
+      ...(o.payTo ? [`Pay to: ${o.payTo} — USDC on Base`] : []),
+    ];
+    navigator.clipboard?.writeText(lines.join("\n")).then(() => {
+      setCopied(o.id); setTimeout(() => setCopied((c) => (c === o.id ? null : c)), 1500);
     });
   }
   function exportCsv() {
@@ -159,21 +183,42 @@ export default function OrdersPanel() {
           this commit: the wallet's mission list asserted the mirror image
           ("B20 payments live", date-gated, contradicting this very box), and
           the PUBLIC /pay/[address] button — the one a merchant sends to a
-          customer — showed a disabled "go live June 25". */}
+          customer — showed a disabled "go live June 25".
+
+          #254 UPDATE (2026-09-16): of markPaid's two call sites, the second one
+          — the payer's button on /pay/[address] — is not merely flag-gated, it
+          is UNREACHABLE: middleware archives /pay and 301s it to /chat. So the
+          Memo watcher above is the only remaining path, and it returns early on
+          !B20_ENABLED. With the flag off there is now genuinely nothing, on any
+          device, that can move an order out of Pending.
+
+          This box said "Links still record and share the amount" — which was
+          the same species of rot as the June 25 string, just slower: a true
+          sentence about a feature that was later archived out from under it. It
+          does not name a mechanism any more. */}
       {!B20_ENABLED && (
         <div className="rounded-lg px-2.5 py-2 mb-3" style={{ border: "1px solid #F59E0B30", background: "#F59E0B0d" }}>
           <p className="font-mono text-[9px] text-[#F59E0B] leading-relaxed">
             B20 USDC settlement is not enabled on this deployment, so orders
-            stay Pending — nothing can mark one Paid. Links still record and
-            share the amount; collect payment another way for now.
+            stay Pending — nothing can mark one Paid. The request itself is
+            still recorded — copy it and collect payment another way for now.
           </p>
         </div>
       )}
 
       {B20_ENABLED && !address && (
         <div className="rounded-lg px-2.5 py-2 mb-3" style={{ border: "1px solid #4FC3F730", background: "#4FC3F70d" }}>
+          {/* Said "new payment links settle B20 USDC to you" until #254 — the
+              same rot as the box above, and it survived for the same reason
+              the June 25 string did: B20_ENABLED is off, so nobody ever
+              rendered it. Unreachable copy goes stale just as silently as
+              copy nobody reads. There are no links here any more; what the
+              connected wallet actually does is get stamped onto the order as
+              `payTo` at creation, and without it `copyRequest` omits the
+              "Pay to:" line entirely and the payer gets no address at all. */}
           <p className="font-mono text-[9px] text-[#4FC3F7] leading-relaxed">
-            Connect your wallet so new payment links settle B20 USDC to you.
+            Connect your wallet so new requests carry a payout address —
+            without one there is nothing for a payer to send to.
           </p>
         </div>
       )}
@@ -197,7 +242,7 @@ export default function OrdersPanel() {
             </div>
             {o.description && <div className="font-mono text-[10px] text-slate-600 mt-0.5 truncate">{o.description}</div>}
             <div className="flex items-center gap-3 mt-1">
-              <button onClick={() => copy(o.id)} className="font-mono text-[9px] text-[#4FC3F7]">{copied === o.id ? "link copied ✓" : "copy pay link"}</button>
+              <button onClick={() => copyRequest(o)} className="font-mono text-[9px] text-[#4FC3F7]">{copied === o.id ? "request copied ✓" : "copy request"}</button>
               {o.txHash && <a href={`https://basescan.org/tx/${o.txHash}`} target="_blank" rel="noopener noreferrer" className="font-mono text-[9px] text-slate-500 hover:text-[#4FC3F7]">tx ↗</a>}
               <button onClick={() => { removeOrder(o.id); refresh(); }} className="font-mono text-[9px] text-slate-700 hover:text-red-400 ml-auto">remove</button>
             </div>

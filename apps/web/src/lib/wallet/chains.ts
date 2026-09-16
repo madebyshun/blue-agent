@@ -53,18 +53,37 @@ export interface WalletChainCfg {
    * these four questions, which is the only version of that list that cannot
    * drift away from the code it describes.
    *
-   * Each flag is about a DEPENDENCY that is chain-pinned, not about taste:
+   * Each flag means "a WORKING card exists for this path on this chain". Which
+   * card serves it is chosen by chain in BankClient — a true flag never implies
+   * one shared component, because two of these paths are satisfied by different
+   * cards on different chains:
    *   fiat     Coinbase Onramp/Offramp pin `defaultNetwork=base` in the URL and
-   *            `blockchains: ["base"]` in the session.
-   *   send     SendCard types its network as `YieldNetwork` and reads anything
-   *            that is not "base" as baseSepolia — so a third chain does not
-   *            degrade, it silently retargets to a testnet.
-   *   swap     SwapCard routes through the 0x API on Base mainnet and
-   *            force-switches the wallet there before signing.
-   *   txHistory  /api/wallet/transactions is Moralis, which does not index 4663.
+   *            `blockchains: ["base"]` in the session — Base-only, no per-chain
+   *            card exists, so this is false everywhere but Base.
+   *   send     Base + Base Sepolia use SendCard, whose network type is
+   *            `YieldNetwork` (base|baseSepolia) — it reads any other value as
+   *            baseSepolia, so it CANNOT represent 4663. Robinhood therefore has
+   *            its own RhSendCard, which speaks /api/robinhood/router/send-prepare
+   *            on 4663 directly. The flag says a send path exists; the chain
+   *            switch in BankClient picks the card that can actually serve it.
+   *   swap     Base uses SwapCard (0x API, force-switches to Base mainnet before
+   *            signing). Robinhood cannot use it — wrong chain, wrong router — so
+   *            it has RhSwapCard against the deployed RobinhoodSwapRouter on 4663.
+   *            Base Sepolia has NEITHER: the 0x router would spend real mainnet
+   *            funds under a page captioned "no real value".
+   *   txHistory  Base + Base Sepolia are read by /api/wallet/transactions
+   *            (Moralis). Robinhood is read by /api/wallet/rh-transactions
+   *            (that chain's own Blockscout), because Moralis does not index
+   *            4663 — same split, and for the same reason, as the two holdings
+   *            readers. The flag means "some reader can answer for this chain",
+   *            NOT "the Moralis route can": the Activity tab merges whichever
+   *            readers say yes into one timeline and labels every row with the
+   *            chain it came from.
    *
    * A false flag means the UI must SAY the path is unavailable here. It must
-   * never mean the UI quietly does the Base thing under another chain's label.
+   * never mean the UI quietly does the Base thing under another chain's label —
+   * which is exactly why RH gets its OWN cards instead of a true flag pointing
+   * the Base cards at 4663.
    */
   can: {
     fiat: boolean;
@@ -124,13 +143,30 @@ export const WALLET_CHAINS: Record<WalletChain, WalletChainCfg> = {
     stable: getAddress("0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"),
     stableSymbol: "USDG",
     stableDecimals: 6,
-    // Read-only for now, and every one of these is a real dependency rather
-    // than caution: Moralis does not index 4663, the 0x router is not deployed
-    // there, Coinbase's onramp does not list it, and SendCard cannot even
-    // REPRESENT it — its network type is `YieldNetwork`, so being handed
-    // "robinhood" makes it render a Base Sepolia form. Balances, holdings and
-    // the explorer all work, which is why the chain is selectable at all.
-    can: { fiat: false, send: false, swap: false, txHistory: false },
+    // Send + swap now WORK on 4663 — through chain-native cards (RhSendCard,
+    // RhSwapCard in app/bank/) that speak /api/robinhood/router/send-prepare and
+    // the deployed RobinhoodSwapRouter directly. They exist as separate cards
+    // precisely because the Base ones cannot represent 4663: SendCard is
+    // `YieldNetwork`-typed (renders a Base Sepolia form when handed "robinhood")
+    // and SwapCard force-switches the wallet to Base mainnet before signing. The
+    // flag flip is paired with a `network === "robinhood"` branch in BankClient
+    // that mounts the RH card BEFORE any `can`-based Base mount, so a true flag
+    // can never route 4663 through a Base card.
+    //
+    // `txHistory` is TRUE and it does NOT mean Moralis learned to index 4663 —
+    // it never will, and /api/wallet/transactions still refuses this chain by
+    // name. It means a reader exists: /api/wallet/rh-transactions reads this
+    // chain's own Blockscout, and the Activity tab merges its rows with the
+    // Moralis rows into one timeline, each row stamped with the chain it came
+    // from. Same shape as the holdings split, for the same reason. Flipping
+    // this flag without that second reader would have pointed the Activity tab
+    // at the Moralis route under a Robinhood label, which is the exact failure
+    // the `can` block exists to prevent.
+    //
+    // `fiat` stays false and remains a real dependency, not caution: Coinbase's
+    // onramp does not list 4663, and no second onramp exists to stand in for it
+    // the way Blockscout stands in for Moralis here.
+    can: { fiat: false, send: true, swap: true, txHistory: true },
   },
 };
 
@@ -140,17 +176,21 @@ export const WALLET_CHAINS: Record<WalletChain, WalletChainCfg> = {
  * three are listed now.
  *
  * Robinhood used to be excluded on the grounds that "the wallet's balance
- * reads, send and swap paths are still Base-shaped". Half of that stopped
- * being true: balances read fine (wagmi has a 4663 transport, and `stable`
- * above is the real USDG address), /api/wallet/rh-holdings reads the chain
- * through Blockscout, and StockTable has been returning an RH leg on every
- * call since it shipped. So the wallet was already SHOWING two chains while
- * offering to switch between one — the omission had stopped protecting anyone
- * and had started hiding a whole chain's holdings behind an external link.
+ * reads, send and swap paths are still Base-shaped". None of that holds now:
+ * balances read fine (wagmi has a 4663 transport, and `stable` above is the
+ * real USDG address), /api/wallet/rh-holdings reads the chain through
+ * Blockscout, StockTable has returned an RH leg on every call since it shipped,
+ * and send + swap now have chain-native cards (RhSendCard, RhSwapCard) that
+ * speak 4663 directly instead of borrowing the Base-shaped ones. So the wallet
+ * was already SHOWING two chains while offering to switch between one — the
+ * omission had stopped protecting anyone and had started hiding a whole chain's
+ * holdings behind an external link.
  *
- * The half that IS still true is now `can` above, per chain, instead of an
- * all-or-nothing absence from this list. Being listed means "you can look at
- * this chain here"; `can` decides what you may DO once you are looking.
+ * What is STILL Base-only is now captured by `can` above, per chain, instead of
+ * an all-or-nothing absence from this list — and after the Blockscout history
+ * reader shipped, that is down to `fiat` alone (the Coinbase onramp does not
+ * list 4663). Being listed means "you can look at this chain here"; `can`
+ * decides what you may DO once you are looking.
  */
 export const WALLET_CHAIN_ORDER: readonly WalletChain[] = ["base", "robinhood", "baseSepolia"];
 

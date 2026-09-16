@@ -392,27 +392,24 @@ const MODEL_COLORS: Record<string, string> = {
   "venice-e2ee-qwen": "#6EE7B7",
 };
 
-// ── Starters ──────────────────────────────────────────────────────────────────
-// `label` = compact display; `text` = the natural language prompt sent on click.
-// Cards send immediately — they are plain English questions, not slash commands.
-interface Starter { icon: string; label: string; text: string; color: string; }
-interface EmptyState { heading: string; sub: string; starters: Starter[]; examples: string[]; }
-
-const EMPTY_STATE: EmptyState = {
-  heading: "What are you building?",
-  sub:     "Build anything on Base",
-  examples: [
-    "build me a DeFi app on Base",
-    "launch a token called BlueBot",
-    "what's trending on Base today?",
-  ],
-  starters: [
-    { icon: "💡", label: "Idea",   text: "idea brief: USDC payroll app for freelancers on Base", color: "#4FC3F7" },
-    { icon: "🛠️", label: "Build",  text: "build an ERC-4337 agent wallet on Base",               color: "#A78BFA" },
-    { icon: "🛡️", label: "Audit",  text: "audit my token launch plan for risks",                 color: "#F87171" },
-    { icon: "🚀", label: "Launch", text: "launch a token called BlueBot on Base",                color: "#34D399" },
-  ],
-};
+// ── Empty-state hero ────────────────────────────────────────────────────────
+// Onchain quick-starts. Each chip PREFILLS the composer (never auto-sends): the
+// first four seed a natural-language prompt the router turns into a signable
+// card (prepare_swap / prepare_send / robinhood_bridge / prepare_yield); the
+// last seeds the `blue audit ` agent-skill trigger. The user reviews, then sends
+// — same seed-not-send philosophy as ChatClient's ?prefill deep-link.
+//
+// Not sends: earlier this was four "starter" cards that fired `send(text)` on
+// click. Four of the five now open a wallet-signable flow, so auto-sending would
+// have raced the user to a transaction card they never asked to see.
+const EMPTY_HEADING = "What are you building?";
+const ONCHAIN_CHIPS: { label: string; prefill: string }[] = [
+  { label: "Swap a token",        prefill: "Swap 0.1 ETH to USDC on Base" },             // prepare_swap
+  { label: "Send USDC",           prefill: "Send USDC on Base" },                        // prepare_send
+  { label: "Bridge to Robinhood", prefill: "Bridge USDC from Base to Robinhood Chain" }, // robinhood_bridge
+  { label: "Find yield",          prefill: "Earn yield on my idle USDC on Base" },       // prepare_yield
+  { label: "Audit a contract",    prefill: "blue audit " },                              // blue-audit skill
+];
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -431,7 +428,6 @@ export default function ChatMessages() {
   const messages   = activeTask?.messages ?? [];
   const isEmpty    = messages.length === 0;
   const tierColor  = MODEL_COLORS[chatTier] ?? "#4FC3F7";
-  const empty      = EMPTY_STATE;
   const { lang }   = useLang();
 
   // ── Share conversation ────────────────────────────────────────────────────
@@ -486,63 +482,87 @@ export default function ChatMessages() {
     <div className="flex-1 overflow-y-auto flex flex-col">
       {isEmpty ? (
         /* ── Empty state ─────────────────────────────────────────────────── */
-        <div className="flex-1 flex flex-col items-center justify-center px-6 py-6 sm:py-10 text-center">
+        <div
+          className="flex-1 flex flex-col items-center justify-center px-6 py-6 sm:py-10 text-center"
+          style={{
+            backgroundImage:
+              "radial-gradient(ellipse 50% 40% at 50% 34%, rgba(79,195,247,0.06) 0%, rgba(79,195,247,0) 66%)",
+          }}
+        >
+          <div className="w-full max-w-[640px] flex flex-col items-center">
 
-          {/* Logo + wordmark */}
-          <div className="flex items-center gap-3 mb-6">
-            <img src="/logomark.svg" alt="Blue Agent" width={48} height={48} className="rounded-2xl shrink-0" />
-            <span className="font-mono text-2xl font-bold tracking-widest">
-              BLUE<span style={{ color: "#4FC3F7" }}>AGENT</span>
-            </span>
-          </div>
+            {/* Logomark tile — the wordmark and brand line moved to the `// CHAT`
+                header bar (desktop) and MobileTopBar (mobile), so the hero is the
+                mark + question, not a second lockup of the logo. */}
+            <img
+              src="/logomark.svg"
+              alt="Blue Agent"
+              width={32}
+              height={32}
+              className="rounded-[10px] shrink-0"
+              style={{ background: "#0D0D14" }}
+            />
 
-          {/* Heading */}
-          <h2 className="font-mono text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2">
-            {empty.heading}
-          </h2>
-          <p className="font-mono text-sm text-slate-600 mb-8">
-            {empty.sub}
-          </p>
+            {/* Heading */}
+            <h2 className="font-mono font-bold text-[28px] leading-[1.25] tracking-[-0.02em] text-[#E2E8F0] mt-5">
+              {EMPTY_HEADING}
+            </h2>
 
-          {/* NL example starters */}
-          <div className="w-full max-w-sm space-y-2 mb-6">
-            {empty.examples.map(q => (
-              <div
-                key={q}
-                className="w-full text-left font-mono text-[11px] px-3 py-2 rounded-xl text-slate-500 cursor-default select-none"
-                style={{ background: "#0d0d12", border: "1px solid #1A1A2E" }}
-              >
-                {q}
-              </div>
-            ))}
-          </div>
-
-          {/* B20 education prompts — Chinese builders only. Clickable → sends the
-              question, answered in 简体中文 by B20 Education Mode. */}
-          {lang === "zh" && (
-            <div className="w-full max-w-sm mb-6">
-              <p className="font-mono text-[10px] text-slate-600 mb-2 tracking-widest uppercase">
-                B20 学习
-              </p>
-              <div className="grid grid-cols-1 gap-2">
-                {ZH_B20_PROMPTS.map(q => (
-                  <button
-                    key={q}
-                    onClick={() => !streaming && send(q)}
-                    disabled={streaming || outOfCredits}
-                    className="w-full text-left font-mono text-[11px] px-3 py-2 rounded-xl text-slate-300 transition-colors disabled:opacity-40 hover:border-[#4FC3F7]/40"
-                    style={{ background: "#0d0d12", border: "1px solid #1A1A2E" }}
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
+            {/* Onchain quick-start chips — PREFILL the composer, never auto-send
+                (see ONCHAIN_CHIPS). Disabled when out of credits: prefilling a
+                composer that can't send is a dead end, not a helpful hint. */}
+            <div className="flex flex-wrap justify-center gap-1.5 mt-[18px]">
+              {ONCHAIN_CHIPS.map(c => (
+                <button
+                  key={c.label}
+                  disabled={outOfCredits}
+                  onClick={() => {
+                    setInput(c.prefill);
+                    // Focus + caret-to-end after React flushes the new value.
+                    // Use c.prefill.length, not el.value.length, so the caret is
+                    // right regardless of flush timing.
+                    requestAnimationFrame(() => {
+                      const el = document.getElementById("chat-composer") as HTMLTextAreaElement | null;
+                      if (!el) return;
+                      el.focus();
+                      const len = c.prefill.length;
+                      el.setSelectionRange(len, len);
+                    });
+                  }}
+                  className="font-mono text-[11px] font-medium text-[#94A3B8] border border-[#1A1A2E] rounded-[20px] px-[13px] py-1.5 transition-colors hover:border-[#4FC3F7]/40 hover:text-[#E2E8F0] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {c.label}
+                </button>
+              ))}
             </div>
-          )}
 
-          {outOfCredits && (
-            <p className="font-mono text-[10px] text-red-400 mt-2">Out of credits — resets daily · connect a wallet for 500/day</p>
-          )}
+            {/* B20 education prompts — Chinese builders only. Clickable → sends the
+                question, answered in 简体中文 by B20 Education Mode. */}
+            {lang === "zh" && (
+              <div className="w-full max-w-sm mt-8">
+                <p className="font-mono text-[10px] text-slate-600 mb-2 tracking-widest uppercase">
+                  B20 学习
+                </p>
+                <div className="grid grid-cols-1 gap-2">
+                  {ZH_B20_PROMPTS.map(q => (
+                    <button
+                      key={q}
+                      onClick={() => !streaming && send(q)}
+                      disabled={streaming || outOfCredits}
+                      className="w-full text-left font-mono text-[11px] px-3 py-2 rounded-xl text-slate-300 transition-colors disabled:opacity-40 hover:border-[#4FC3F7]/40"
+                      style={{ background: "#0d0d12", border: "1px solid #1A1A2E" }}
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {outOfCredits && (
+              <p className="font-mono text-[10px] text-red-400 mt-6">Out of credits — resets daily · connect a wallet for 500/day</p>
+            )}
+          </div>
         </div>
       ) : (
         /* ── Message list ────────────────────────────────────────────────── */

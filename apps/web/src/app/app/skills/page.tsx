@@ -2,28 +2,28 @@
 
 // /app/skills — the Skills catalog promoted to a first-class Control page.
 //
-// Reuses the very same <SkillsPanel> that renders as a tab inside Blue Chat, so
-// the installed-skill list is identical (no fork, no mock). The only difference:
-// a standalone page has no local chat composer to seed, so we pass onUse to
-// route a pick to /chat?prefill=<trigger> — ChatClient reads that param and
-// drops the trigger into the composer on the Chat surface.
+// Reuses the very same <SkillsPanel> the chat surface exposes. SkillsPanel now
+// renders the handoff's own `// SKILLS` header bar, so this page does NOT wrap it
+// in PanelHost — a PanelHost header would print a second title above it. We still
+// mount a ChatProvider directly (the pattern /app/cron uses): SkillsPanel calls
+// useChat() for setInput, so it must live inside the chat tree even though a
+// standalone page routes picks to /chat via onUse instead of seeding a local
+// composer. SkillsPanel's root is `flex flex-col h-full`, which fills the /app
+// <main> flex column directly.
 
 import { useRouter } from "next/navigation";
-import PanelHost from "../_PanelHost";
+import { ChatProvider } from "@/app/chat/ChatContext";
 import SkillsPanel from "@/app/chat/components/SkillsPanel";
 
 export default function SkillsPage() {
   const router = useRouter();
   return (
-    <PanelHost
-      title="Skills"
-      subtitle="Agent capabilities · Blue Agent · Base MCP · bundled tool packs"
-    >
+    <ChatProvider>
       <SkillsPanel
         onUse={(trigger) =>
           router.push("/chat" + (trigger ? "?prefill=" + encodeURIComponent(trigger) : ""))
         }
       />
-    </PanelHost>
+    </ChatProvider>
   );
 }
