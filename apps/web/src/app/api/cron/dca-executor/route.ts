@@ -20,7 +20,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { kvGet, kvSet, kvSetNX } from "@/lib/kv";
+import { kvGet, kvSet, kvSetNX, kvGetProbe, kvMutate } from "@/lib/kv";
 import { dcaKeys, DCA_LOG_MAX, DCA_LOCK_TTL_SEC } from "@/lib/dca/kv-keys";
 import { executeDcaRun } from "@/lib/dca/execution";
 import type { DcaSchedule, DcaExecutionLog } from "@/lib/dca/types";
@@ -37,10 +37,24 @@ function isAuthorized(req: NextRequest): boolean {
   return isVercelCron || (cronSecret !== "" && authHeader === `Bearer ${cronSecret}`);
 }
 
+/**
+ * Prepend one run to the schedule's log ring buffer.
+ *
+ * ⚠ #150. This used to be `(await kvGet(...)) ?? []` → unshift → `kvSet` on the
+ * SAME key, so a throttled read replaced the entire execution history with a
+ * single entry. These logs are the only receipt a user has that their USDC was
+ * spent and what they got for it — losing them is losing the evidence, not a
+ * cache. `kvMutate` refuses to write when the read failed, which drops ONE
+ * entry instead of all of them.
+ */
 async function appendLog(scheduleId: string, entry: DcaExecutionLog): Promise<void> {
-  const logs = (await kvGet<DcaExecutionLog[]>(dcaKeys.logs(scheduleId))) ?? [];
-  logs.unshift(entry);
-  await kvSet(dcaKeys.logs(scheduleId), logs.slice(0, DCA_LOG_MAX));
+  const res = await kvMutate<DcaExecutionLog[]>(
+    dcaKeys.logs(scheduleId), [],
+    (logs) => [entry, ...logs].slice(0, DCA_LOG_MAX),
+  );
+  if (res !== "ok") {
+    console.error(`[dca:log] ${scheduleId} run NOT logged (${res}) — prior history left intact rather than overwritten`);
+  }
 }
 
 async function processSchedule(id: string, now: number): Promise<{
@@ -99,10 +113,16 @@ async function processSchedule(id: string, now: number): Promise<{
 
   await kvSet(dcaKeys.schedule(id), updated);
 
-  // If we ended terminal (cancelled/paused/expired), drop from active set
+  // If we ended terminal (cancelled/paused/expired), drop from active set.
+  // ⚠ #150: same wipe as /api/dca/cancel — `?? []` then `kvSet` back to the same
+  // key meant one throttled read de-queued every OTHER user's schedule too.
+  // Skipping is safe here for the same reason: the blob above is authoritative,
+  // and a stale id just costs one read per tick.
   if (updated.status !== "active") {
-    const active = (await kvGet<string[]>(dcaKeys.activeSet())) ?? [];
-    await kvSet(dcaKeys.activeSet(), active.filter((x) => x !== id));
+    await kvMutate<string[]>(
+      dcaKeys.activeSet(), [],
+      (active) => (active.includes(id) ? active.filter((x) => x !== id) : null),
+    );
   }
 
   return { id, action: "executed", log };
@@ -113,8 +133,25 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  const now  = Math.floor(Date.now() / 1000);
-  const ids  = (await kvGet<string[]>(dcaKeys.activeSet())) ?? [];
+  const now = Math.floor(Date.now() / 1000);
+
+  // #150 read side. `?? []` here reported a KV outage as `{action:"no-op",
+  // activeCount:0}` — indistinguishable from "nobody has a schedule", on the
+  // one surface where nobody is watching. A tick that could not read its own
+  // work queue has to fail loudly so it shows up as a failed cron run, because
+  // every minute it silently no-ops is a run the user paid an approval for and
+  // did not get.
+  const queue = await kvGetProbe<string[]>(dcaKeys.activeSet());
+  if (queue.status === "error") {
+    console.error(`[dca:cron] active set unreadable — skipping tick: ${queue.message}`);
+    return NextResponse.json({
+      ok: false,
+      action: "unavailable",
+      error: "could not read the active set — this tick executed nothing. Schedules are NOT known to be empty.",
+      now,
+    }, { status: 503 });
+  }
+  const ids = queue.status === "hit" ? queue.value : [];
   if (ids.length === 0) {
     return NextResponse.json({ ok: true, action: "no-op", activeCount: 0, now });
   }
