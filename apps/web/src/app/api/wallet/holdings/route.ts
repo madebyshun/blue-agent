@@ -1,13 +1,14 @@
 // GET /api/wallet/holdings?address=0x…&network=base|baseSepolia
 //
-// Full live token holdings for the Wallet portfolio table, via checkWallet()
-// (Moralis `/wallets/{address}/tokens` — every non-zero, non-spam token, with
-// usd_value already priced by Moralis; B20 tokens confirmed on-chain via the
-// Factory.isB20() read). Falls back to a curated-majors RPC read (flagged
-// `partial`) when MORALIS_API_KEY is absent.
+// Full live token holdings for the Wallet portfolio table, via checkWallet().
+// THREE sources in descending order of what they establish — Moralis, then
+// keyless on-chain discovery (explorer names the candidates, Multicall3 reads
+// every balance), then the curated-majors RPC read. The latter two are flagged
+// `partial` and carry `partialReason`, which the client renders verbatim rather
+// than guessing why from `source`.
 //
-// ZERO fabrication: usdValue is whatever Moralis returns (or omitted), never a
-// guessed number. The client renders "—" for any token without a price.
+// ZERO fabrication: usdValue is whatever a vetted pricer returned (or omitted),
+// never a guessed number. The client renders "—" for any token without a price.
 
 import { NextResponse } from "next/server";
 import { checkWallet } from "@/lib/wallet/holdings";
@@ -26,9 +27,10 @@ export async function GET(req: Request) {
   try {
     const r = await checkWallet(address, network);
     return NextResponse.json({
-      holdings:   r.holdings,
-      source:     r.source,
-      partial:    r.partial,
+      holdings:      r.holdings,
+      source:        r.source,
+      partial:       r.partial,
+      partialReason: r.partialReason,
       explorer:   r.explorer,
       addressUrl: r.addressUrl,
       network:    r.network,

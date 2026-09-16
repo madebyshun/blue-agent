@@ -297,6 +297,46 @@ type RhTokenPage = {
   next_page_params?: Record<string, string | number | null> | null;
 };
 
+/**
+ * Per-leg timeouts + a walk deadline. Added 2026-09-13 after the wallet's
+ * Base→Robinhood switch was reported as slow; the cause was NOT the page walk.
+ *
+ * MEASURED 2026-09-13, `0xb058…3b5f`, 9 runs of each endpoint, same minute:
+ *
+ *   /addresses/{a}          16.4s·200  11.0s·500  1.0s·500  2.0s·500  6.0s·500
+ *                            1.4s·200   0.9s·200  0.8s·200  0.8s·200
+ *   /addresses/{a}/tokens    0.79s      2.20s     2.23s     2.33s     1.98s
+ *                            2.96s      2.87s     0.70s     0.66s   — all 200
+ *
+ * Two things fall out of that table. The token list — the thing the user opened
+ * the tab to see — is consistently sub-3s and answered 9/9. The NATIVE balance
+ * is the unreliable leg: a 16-second tail and 5 of 9 non-ok. And because the
+ * two ran under one `Promise.all` with NO timeout on either, the fast, reliable
+ * call was held hostage by the slow, flaky one on every single load. A user
+ * switching to Robinhood waited 16s for one ETH row while their tokens had been
+ * sitting in memory for fifteen of those seconds.
+ *
+ * So the native leg gets a SHORT deadline and the token legs a longer one. This
+ * costs nothing in honesty because both failure modes already have names here:
+ * a native leg that misses sets `nativeUnread` (the list is short by at most one
+ * row — never "holds no ETH"), and a page that misses sets `truncated` (the list
+ * is short by an unknown amount and the caller has to say so). A timeout is just
+ * one more way to not get an answer, and "we did not get an answer" was already
+ * sayable. Nothing here invents a balance to fill the gap.
+ *
+ * The cursor walk is NOT parallelised, and cannot be: page N+1's query string is
+ * page N's `next_page_params`. That is why the walk gets a wall-clock BUDGET
+ * instead — it bounds the total the way parallelism would have, and it degrades
+ * into the flag that already exists rather than into a shorter list told as a
+ * whole one.
+ */
+const NATIVE_TIMEOUT_MS = 5_000;
+const PAGE_TIMEOUT_MS   = 8_000;
+/** Wall-clock budget for pages 2..N. Page 1 is exempt — there is nothing to
+ *  show without it, so it is worth waiting for; every page after it is an
+ *  improvement to a list the user can already read. */
+const WALK_BUDGET_MS    = 12_000;
+
 export async function readRobinhoodAddressBalances(
   address: string,
   network: RobinhoodNetwork = "mainnet",
@@ -306,22 +346,30 @@ export async function readRobinhoodAddressBalances(
   const tokenPath = `/api/v2/addresses/${address}/tokens?type=ERC-20`;
 
   // Page 1 runs alongside the native-balance call; later pages are cursor-based
-  // and therefore strictly sequential.
+  // and therefore strictly sequential. The two timeouts differ on purpose — see
+  // the measurement above: these legs have very different reliability, and one
+  // shared deadline would either strand the good leg or excuse the bad one.
   const [addrInfo, firstPage] = await Promise.all([
     bsFetch<{ coin_balance?: string; exchange_rate?: string | null }>(
-      network, `/api/v2/addresses/${address}`, undefined, retries),
-    bsFetch<RhTokenPage>(network, tokenPath, undefined, retries),
+      network, `/api/v2/addresses/${address}`, NATIVE_TIMEOUT_MS, retries),
+    bsFetch<RhTokenPage>(network, tokenPath, PAGE_TIMEOUT_MS, retries),
   ]);
 
   const pages: RhTokenPage[] = firstPage ? [firstPage] : [];
   let cursor = firstPage?.next_page_params ?? null;
   let truncated = false;
+  const walkDeadline = Date.now() + WALK_BUDGET_MS;
 
   while (cursor && Object.keys(cursor).length > 0) {
     if (pages.length >= maxPages) { truncated = true; break; }
+    // Out of budget is the same FACT as out of pages: the list we return is
+    // real and short, and `truncated` is how the caller is told. Checked before
+    // the request rather than after, so the budget bounds what we WAIT, not
+    // just what we count.
+    if (Date.now() >= walkDeadline) { truncated = true; break; }
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(cursor)) if (v != null) qs.set(k, String(v));
-    const next = await bsFetch<RhTokenPage>(network, `${tokenPath}&${qs}`, undefined, retries);
+    const next = await bsFetch<RhTokenPage>(network, `${tokenPath}&${qs}`, PAGE_TIMEOUT_MS, retries);
     // A mid-walk failure is a short list, not an empty one — the pages already
     // read are real, so keep them and mark the remainder unknown.
     if (!next) { truncated = true; break; }
@@ -403,4 +451,251 @@ export async function getRobinhoodAddressBalances(
   network: RobinhoodNetwork = "mainnet",
 ): Promise<RhBalance[]> {
   return (await readRobinhoodAddressBalances(address, network)).balances;
+}
+
+// ─── Address transaction history (native txs + ERC-20 transfers) ────────────
+//
+// Why this exists: the wallet's Activity tab was Base-only, because its one
+// source is `/api/wallet/transactions` → Moralis, and Moralis does not index
+// 4663. The tab therefore rendered "ONCHAIN TIMELINE · BASE" beside a
+// cross-chain total, and a Robinhood send that really happened looked like a
+// send that never did. `WALLET_CHAINS.robinhood.can.txHistory` was the flag
+// standing in for that gap; this reader is what lets it flip to true.
+//
+// MEASURED 2026-09-13 against robinhoodchain.blockscout.com, address
+// `0xb058…3b5f` — both legs answer with real, populated `items`:
+//   /api/v2/addresses/{a}/transactions      → 200, 50 items, next_page_params
+//   /api/v2/addresses/{a}/token-transfers   → 200, 50 items, next_page_params
+// The field names below are transcribed from those responses, not from the
+// Blockscout docs: `token-transfers` carries `transaction_hash` (not `tx_hash`,
+// which is what the token-scoped endpoint above uses) and nests the amount
+// under `total.value`/`total.decimals`.
+//
+// ⚠️ The same endpoint family as `readRobinhoodAddressBalances` — so the same
+// flakiness applies (that function's header has the 9-run table: the address
+// legs 500 intermittently while the list legs do not). Both legs here get an
+// explicit timeout and one retry for that reason, and a leg that still does not
+// answer degrades into `partial`, never into a shorter list presented as whole.
+
+/** One row of wallet activity, in the SAME shape the Moralis-backed Base reader
+ *  emits — `Tx` in `/api/wallet/transactions`. Deliberately identical so the
+ *  timeline can concatenate the two chains without a translation layer that
+ *  could drift; the chain itself is stamped by the route, not here, because
+ *  this module only ever reads one. */
+export type RhHistoryRow = {
+  hash: string;
+  ts: number;
+  category: string;
+  kind: "received" | "sent" | "swap" | "contract";
+  dir: "in" | "out" | "none";
+  counterparty?: string;
+  amount: number | null;
+  asset?: string;
+  status: "complete" | "pending" | "failed";
+};
+
+/**
+ * `partial` and `capped` are two DIFFERENT kinds of short, and the caller has
+ * to be able to say which:
+ *   partial  one of the two legs did not answer, so rows are missing from
+ *            inside the window — an outage, retryable, and the list must not be
+ *            presented as complete.
+ *   capped   both legs answered and there is simply more history than one page
+ *            — expected, not a failure, and the honest exit is the explorer.
+ * Collapsing them would make a Blockscout 500 look like "you've reached the
+ * end", which is the absence-as-fact family this wallet work keeps closing.
+ */
+export type RhAddressHistoryRead =
+  | { status: "ok";          rows: RhHistoryRow[]; partial: boolean; capped: boolean }
+  | { status: "unavailable"; rows: [];             partial: false;   capped: false };
+
+type BsAddrRef = { hash?: string; name?: string | null; is_scam?: boolean };
+
+type BsTxItem = {
+  hash?: string;
+  timestamp?: string;
+  /** Native value in wei, as a decimal string. "0" for a pure contract call. */
+  value?: string;
+  from?: BsAddrRef | null;
+  to?: BsAddrRef | null;
+  /** Decoded method name ("transfer", "create") or a raw 4-byte selector. */
+  method?: string | null;
+  status?: string | null;
+  transaction_types?: string[] | null;
+};
+
+type BsTransferItem = {
+  transaction_hash?: string;
+  timestamp?: string;
+  from?: BsAddrRef | null;
+  to?: BsAddrRef | null;
+  method?: string | null;
+  token?: {
+    symbol?: string | null;
+    decimals?: string | null;
+    /** Blockscout's own label — "ok" | "neutral" | "scam". */
+    reputation?: string | null;
+  } | null;
+  total?: { value?: string; decimals?: string } | null;
+};
+
+/** Per-leg ceiling. Both legs run in parallel, so this is also the wall-clock
+ *  cost of the read: ~8s per attempt, ~16s worst case with the one retry. */
+const HISTORY_TIMEOUT_MS = 8_000;
+/** One page each. A wallet timeline is a recent-activity view, not an archive —
+ *  the explorer link is the honest path to older rows, and it is already on the
+ *  card. Deeper paging would multiply the flaky-leg exposure above for history
+ *  nobody scrolled to. */
+const HISTORY_MAX_ROWS = 50;
+
+/** Raw integer string → human amount, or null when it cannot be read. Never 0:
+ *  an unreadable amount is unknown, and a zero would be a number we invented. */
+function toAmount(raw: string | null | undefined, decimals: number): number | null {
+  if (!raw) return null;
+  try {
+    const n = Number(BigInt(raw)) / Math.pow(10, decimals);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+const hasCursor = (p: { next_page_params?: unknown } | null): boolean => {
+  const c = p?.next_page_params;
+  return !!c && typeof c === "object" && Object.keys(c as object).length > 0;
+};
+
+/**
+ * Recent wallet activity on Robinhood Chain, merged into one row per tx.
+ *
+ * Two legs, in parallel, because Blockscout splits what Moralis returns joined:
+ * `/transactions` is every tx the address sent or received AT THE TX LEVEL, and
+ * `/token-transfers` is every ERC-20 movement touching it — including transfers
+ * inside a tx somebody else submitted, which the first leg does not list at all.
+ * Neither alone is the wallet's activity; the union is.
+ *
+ * The merge is by tx hash and mirrors the Moralis normalizer exactly: a tx that
+ * moved the user's tokens BOTH ways is a swap, one way in is a receive, one way
+ * out is a send, and a tx that moved nothing of theirs is a contract call.
+ */
+export async function readRhAddressHistory(
+  address: string,
+  network: RobinhoodNetwork = "mainnet",
+  retries = 1,
+): Promise<RhAddressHistoryRead> {
+  const me = address.toLowerCase();
+
+  const [txPage, tfPage] = await Promise.all([
+    bsFetch<{ items?: BsTxItem[]; next_page_params?: unknown }>(
+      network, `/api/v2/addresses/${address}/transactions`, HISTORY_TIMEOUT_MS, retries),
+    bsFetch<{ items?: BsTransferItem[]; next_page_params?: unknown }>(
+      network, `/api/v2/addresses/${address}/token-transfers?type=ERC-20`, HISTORY_TIMEOUT_MS, retries),
+  ]);
+
+  // Neither leg answered: we know nothing, and "nothing" is not "no activity".
+  if (!txPage && !tfPage) return { status: "unavailable", rows: [], partial: false, capped: false };
+
+  // ── Leg 2: the user's token movements, grouped by the tx that caused them ──
+  type Move = { dir: "in" | "out"; amount: number | null; asset: string; other?: string };
+  const byHash = new Map<string, { ts: number; moves: Move[] }>();
+
+  for (const t of tfPage?.items ?? []) {
+    const hash = t.transaction_hash?.toLowerCase();
+    if (!hash) continue;
+    // Blockscout's own scam labels. Filtered for the same reason the Base route
+    // filters Moralis's `possible_spam`: an airdropped fake in the timeline is
+    // an invitation to interact with it. Only an EXPLICIT "scam" is dropped —
+    // an absent label is not evidence of anything.
+    if (t.token?.reputation === "scam" || t.from?.is_scam || t.to?.is_scam) continue;
+
+    const from = t.from?.hash?.toLowerCase();
+    const to   = t.to?.hash?.toLowerCase();
+    const dir: "in" | "out" | null = to === me ? "in" : from === me ? "out" : null;
+    // A transfer that moved somebody else's tokens inside a tx we touched is
+    // not this wallet's activity. It stays out rather than being counted.
+    if (!dir) continue;
+
+    const decimals = parseInt(t.total?.decimals ?? t.token?.decimals ?? "18", 10);
+    const move: Move = {
+      dir,
+      amount: toAmount(t.total?.value, Number.isFinite(decimals) ? decimals : 18),
+      asset: t.token?.symbol || "?",
+      other: dir === "in" ? t.from?.hash : t.to?.hash,
+    };
+
+    const ts = t.timestamp ? Date.parse(t.timestamp) : 0;
+    const cur = byHash.get(hash);
+    if (cur) { cur.moves.push(move); if (!cur.ts) cur.ts = ts; }
+    else byHash.set(hash, { ts, moves: [move] });
+  }
+
+  // ── Leg 1: tx-level facts (status, method, native value, counterparty) ─────
+  const txByHash = new Map<string, BsTxItem>();
+  for (const t of txPage?.items ?? []) if (t.hash) txByHash.set(t.hash.toLowerCase(), t);
+
+  // A leg that did not answer means rows are missing from inside the window.
+  let partial = !txPage || !tfPage;
+
+  const rows: RhHistoryRow[] = [];
+  const hashes = new Set<string>([...byHash.keys(), ...txByHash.keys()]);
+
+  for (const hash of hashes) {
+    const tx = txByHash.get(hash);
+    const moves = byHash.get(hash)?.moves ?? [];
+    const ts = byHash.get(hash)?.ts || (tx?.timestamp ? Date.parse(tx.timestamp) : 0);
+    if (!ts) continue;
+
+    const status: RhHistoryRow["status"] = tx?.status === "error" ? "failed" : "complete";
+    const category = tx?.method || tx?.transaction_types?.join("/") || "";
+    const base = { hash, ts, category, status };
+
+    const incoming = moves.find(m => m.dir === "in");
+    const outgoing = moves.find(m => m.dir === "out");
+
+    if (incoming && outgoing) {
+      // Tokens both ways in one tx — a swap. The counterparty is the contract
+      // that did it, which is what the Base reader reports too.
+      rows.push({ ...base, kind: "swap", dir: "none", counterparty: tx?.to?.hash,
+                  amount: incoming.amount, asset: incoming.asset });
+      continue;
+    }
+    if (incoming) {
+      rows.push({ ...base, kind: "received", dir: "in", counterparty: incoming.other,
+                  amount: incoming.amount, asset: incoming.asset });
+      continue;
+    }
+    if (outgoing) {
+      rows.push({ ...base, kind: "sent", dir: "out", counterparty: outgoing.other,
+                  amount: outgoing.amount, asset: outgoing.asset });
+      continue;
+    }
+
+    // No token movement of theirs in this tx. Either native ETH moved, or it is
+    // a contract call — UNLESS the transfers leg is the one that failed, in
+    // which case we KNOW a token moved and cannot say what: dropping the row is
+    // honest, captioning it "Contract call" would be a wrong row, and a wrong
+    // row is worse than a missing one (the same rule the Base route's header
+    // states about refusing an unlisted chain).
+    if (!tfPage && tx?.transaction_types?.includes("token_transfer")) { partial = true; continue; }
+
+    const native = toAmount(tx?.value, 18);
+    if (native && native > 0) {
+      const from = tx?.from?.hash?.toLowerCase();
+      const to   = tx?.to?.hash?.toLowerCase();
+      if (to === me)        rows.push({ ...base, kind: "received", dir: "in",  counterparty: tx?.from?.hash, amount: native, asset: "ETH" });
+      else if (from === me) rows.push({ ...base, kind: "sent",     dir: "out", counterparty: tx?.to?.hash,   amount: native, asset: "ETH" });
+      else                  rows.push({ ...base, kind: "contract", dir: "none", counterparty: tx?.to?.hash,  amount: null });
+      continue;
+    }
+
+    rows.push({ ...base, kind: "contract", dir: "none", counterparty: tx?.to?.hash, amount: null });
+  }
+
+  rows.sort((a, b) => b.ts - a.ts);
+
+  // More history exists than we fetched — either leg still had a cursor, or the
+  // merge itself overflowed the row cap.
+  const capped = hasCursor(txPage) || hasCursor(tfPage) || rows.length > HISTORY_MAX_ROWS;
+
+  return { status: "ok", rows: rows.slice(0, HISTORY_MAX_ROWS), partial, capped };
 }

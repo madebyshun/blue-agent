@@ -136,7 +136,17 @@ export async function getHoldings(rawAddr: string, contracts: string[], priceTop
     const dec = results[i * 3 + 1];
     const sym = results[i * 3 + 2];
     if (bal?.status !== "success") continue;
-    const decimals = dec?.status === "success" ? Number(dec.result as number) : 18;
+    // A balance is a raw integer and MEANS NOTHING without its scale, so an
+    // unread `decimals` is a row we cannot report — not a row that is 18 (#259).
+    // Guessing 18 against a 6-decimal stablecoin understates the holding by
+    // 10^12, and against an 8-decimal B20 share token by 10^10; both land well
+    // under the `balance <= 0` line below and get dropped silently, so the wrong
+    // guess doesn't even surface as a wrong number — it surfaces as an absent
+    // position. Skipping says "we could not read this" by omission too, but it
+    // omits only the rows we actually failed on instead of corrupting them.
+    if (dec?.status !== "success") continue;
+    const decimals = Number(dec.result as number);
+    if (!Number.isFinite(decimals) || decimals < 0 || decimals > 36) continue;
     const balance = +(+formatUnits(bal.result as bigint, decimals)).toFixed(6);
     if (balance <= 0) continue;
     raw.push({ contractAddress: tokens[i].toLowerCase(), symbol: sym?.status === "success" ? (sym.result as string) : "?", balance });

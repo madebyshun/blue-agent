@@ -24,6 +24,31 @@ import { UnverifiedBalance } from "@/components/wallet/UnverifiedBalance";
 import { RobinhoodSwapCard, type RobinhoodSwapResult } from "./RobinhoodSwapCard";
 import { RobinhoodSendCard, type RobinhoodSendResult } from "./RobinhoodSendCard";
 import { RobinhoodBridgeCard, type RobinhoodBridgeResult } from "./RobinhoodBridgeCard";
+// ─── The wallet's own money cards, mounted in chat (#256/#257, 2026-09-12) ────
+//
+// "tính năng ở wallet, đều sử dụng được ở chat" — whatever the wallet can do,
+// chat can do. These four are the SAME components /app/wallet mounts, not chat
+// copies of them, and that is the whole point: two implementations of "send" is
+// two places a chain default, a decimals scale or a balance gate can drift, and
+// the drift only shows up as money in the wrong place.
+//
+// It inverts the #107 split (chat cards confirm, wallet cards edit) for exactly
+// these four, deliberately. The confirm-only shape assumed the sentence the user
+// typed was the whole intent; in practice the model gets the chain or the token
+// wrong and the only repair was to retype the sentence and hope. An editor with
+// a chain dropdown and a token dropdown is the repair.
+//
+// What did NOT move: the seeds arm by ADDRESS or by a curated row, never by a
+// bare ticker — a ticker names a different token on each chain (CLAUDE.md rule
+// 2), so a miss raises a banner and arms NOTHING rather than guessing.
+// Aliased because this file still declares its own `SwapCard` — the marker card
+// these replace. It is now reachable only through /pay/[address] (SendCard) and
+// nothing at all (SwapCard); both come out in the retirement commit that follows
+// this one, together with RobinhoodSendCard and bank/RhSendCard.
+import WalletSendCard from "@/app/app/bank/WalletSendCard";
+import BankSwapCard from "@/app/app/bank/SwapCard";
+import BankRhSwapCard from "@/app/app/bank/RhSwapCard";
+import BankBridgeCard from "@/app/app/bank/BridgeCard";
 import DcaCard, { type DcaResult } from "./DcaCard";
 import { HoodArrowCard, type HoodArrowResult } from "./HoodArrowCard";
 
@@ -1295,8 +1320,12 @@ interface WalletResultData {
   network?:    "mainnet" | "sepolia";
   explorer?:   string;
   addressUrl?: string;
-  source?:     "moralis" | "rpc";
+  source?:     "moralis" | "discovery" | "rpc";
   partial?:    boolean;
+  /** Why the list may be short, in the reader's own words. Rendered verbatim —
+   *  the card cannot tell which of three sources answered, and only one of them
+   *  is "majors only" or has anything to do with Moralis. */
+  partialReason?: string;
   holdings?:   WalletHoldingView[];
   /** Robinhood Chain holdings — added by the check_wallet handler (Blockscout). */
   robinhoodHoldings?: WalletHoldingView[];
@@ -1441,7 +1470,7 @@ function WalletCard({ result }: { result: WalletResultData }) {
 
       {result.partial && (
         <p className="font-mono text-[9px] text-slate-600 mt-2">
-          Showing major tokens only on Base — connect Moralis for the full portfolio.
+          Base: {result.partialReason ?? "this list may be incomplete — other tokens may be held here."}
         </p>
       )}
       {result.addressUrl && (
@@ -1962,8 +1991,15 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
     result.asset === "ETH" ? "ETH" : (result.asset === "B20" && b20Available) ? "B20" : "USDC";
 
   const [asset,     setAsset]     = useState<"USDC" | "ETH" | "B20">(initialAsset);
+  // Mainnet unless a caller ASKS for Sepolia by name (#256/#257). This used to
+  // read `result.network === "base" ? "base" : "baseSepolia"` — anything the
+  // caller left out landed on a TESTNET, so the same sentence that armed Base
+  // mainnet in the wallet armed Sepolia here, and the card said "Base Sepolia"
+  // in small grey type under a green Send button. Chat no longer reaches this
+  // card at all; /pay/[address] does, and it always passes an explicit value, so
+  // this flip is belt-and-braces rather than the fix. The fix was the dispatch.
   const [network,   setNetwork]   = useState<YieldNetwork>(
-    initialAsset === "B20" ? "base" : (result.network === "base" ? "base" : "baseSepolia"));
+    initialAsset === "B20" ? "base" : (result.network === "baseSepolia" ? "baseSepolia" : "base"));
   const [recipient, setRecipient] = useState<string>(typeof result.to === "string" ? result.to : "");
   const [amount,    setAmount]    = useState<string>(
     result.amount != null && (typeof result.amount === "number" || typeof result.amount === "string") ? String(result.amount) : "");
@@ -2525,6 +2561,82 @@ export function SwapCard({ result, account }: { result: SwapResult; account?: `0
   );
 }
 
+// ── CONVERT in chat — the venue switch the two swap cards cannot make alone ───
+//
+// Neither swap card can host the other's chain, by construction: the Base card
+// force-switches the wallet to 8453 before it signs, and the RH card speaks 4663
+// and nothing else. So each exposes its chain dropdown as a CALLBACK (`onChain`)
+// rather than a value — "choose Robinhood" does not reconfigure the Base card,
+// it REPLACES it. Something has to own that state. In the wallet it is
+// BankClient's `convertChain`; in chat it is this.
+//
+// It is a wrapper and not a third swap implementation on purpose. The moment
+// chat gets its own quote fetch or its own decimals read, the two surfaces can
+// disagree about the same swap, and the disagreement is denominated in the
+// user's money.
+//
+// ─── Why the seed dies on the first chain change ─────────────────────────────
+//
+// `armed` is the load-bearing part, not bookkeeping. The seeds are ADDRESSES,
+// and an address is only meaningful with its chain (CLAUDE.md rule 2): the RH
+// address the model resolved for "$VEX" names some unrelated contract on Base,
+// or nothing at all. Letting a seed survive the switch would arm the other
+// chain's card with a token from this one — the exact shape of #219/#280, but
+// pointed at a swap the user is about to sign.
+//
+// So: the seed applies to the chain it came from, once. Any real change of
+// venue spends it permanently, and the replacement card opens on its own
+// defaults, which are honest about knowing nothing.
+function ConvertPanel({
+  account, seedChain,
+  initialSell, initialBuy, initialAmount,
+  rhDirection, rhToken, rhSymbol, rhNote,
+}: {
+  account?: `0x${string}`;
+  /** The venue the tool call named — where the seeds below are valid. */
+  seedChain: "base" | "robinhood";
+  /** Base-side seeds (prepare_swap): 0x addresses or a curated major's symbol. */
+  initialSell?: string;
+  initialBuy?: string;
+  initialAmount?: string | number;
+  /** RH-side seeds (robinhood_swap). `rhToken` is an address; `rhSymbol` is
+   *  display only and never used to find a token. */
+  rhDirection?: "buy" | "sell";
+  rhToken?: string;
+  rhSymbol?: string;
+  rhNote?: string;
+}) {
+  const [chain, setChain] = useState<"base" | "robinhood">(seedChain);
+  const [armed, setArmed] = useState(true);
+
+  // `NetworkPicker` fires `onChange` even when the row clicked is the row already
+  // selected, so re-picking the current venue must NOT count as a change — it
+  // would disarm a seed the user never moved away from.
+  const pick = (c: string) => {
+    const next = c === "robinhood" ? "robinhood" : "base";
+    if (next === chain) return;
+    setArmed(false);
+    setChain(next);
+  };
+
+  if (chain === "robinhood") {
+    return (
+      <BankRhSwapCard account={account} onChain={pick}
+        initialDirection={armed ? rhDirection : undefined}
+        initialToken={armed ? rhToken : undefined}
+        initialSymbol={armed ? rhSymbol : undefined}
+        initialAmount={armed ? initialAmount : undefined}
+        initialNote={armed ? rhNote : undefined} />
+    );
+  }
+  return (
+    <BankSwapCard account={account} onChain={pick}
+      initialSell={armed ? initialSell : undefined}
+      initialBuy={armed ? initialBuy : undefined}
+      initialAmount={armed ? initialAmount : undefined} />
+  );
+}
+
 export function ToolResultCard({ tool, result }: { tool: string; result: Record<string, unknown> }) {
   // Always called inside the chat (ChatMessages) — read the canonical wallet
   // here and hand it to the action cards as a prop so they don't depend on chat.
@@ -2547,17 +2659,110 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     // No "hub_b20_launch" case — the tool was retired 2026-09-08 along with its
     // card. Chat has no token-deploy path; /app/b20 is the one that exists.
     case "hub_hood_arrow":       return <HoodArrowCard   result={r as unknown as HoodArrowResult} />;
-    case "robinhood_swap":       return <RobinhoodSwapCard result={r as unknown as RobinhoodSwapResult} />;
-    case "robinhood_send":       return <RobinhoodSendCard result={r as unknown as RobinhoodSendResult} />;
-    case "robinhood_bridge":     return <RobinhoodBridgeCard result={r as unknown as RobinhoodBridgeResult} />;
+
+    // ── The four money cards: chat mounts the WALLET's own editors ───────────
+    //
+    // Read together, because the rule behind them is one rule. Each case's only
+    // job is to translate a marker's fields into the editor's `initial*` props —
+    // no defaulting, no ticker resolution, no chain guessing happens here. The
+    // cards own all of that, and they own it in one place so the wallet and chat
+    // cannot drift apart on a decimals scale or a chain id.
+    //
+    // Two cases deliberately do NOT get an editor, because the editor cannot do
+    // what the marker asked for and pretending otherwise would move money
+    // somewhere the user did not name. Both are called out below.
+
+    case "robinhood_swap": {
+      const s = r as unknown as RobinhoodSwapResult;
+      // token→token stays on the confirm card. RhSwapCard is ETH↔token only, so
+      // mounting it for a token→token intent would silently drop `token_in` and
+      // quote a DIFFERENT trade — the user asked to spend token A and would be
+      // shown a card spending ETH. Porting token→token into RhSwapCard is the
+      // follow-up that retires this branch.
+      if (s.token_in_address) return <RobinhoodSwapCard result={s} />;
+      return (
+        <ConvertPanel account={account} seedChain="robinhood"
+          rhDirection={s.direction === "sell" ? "sell" : s.direction === "buy" ? "buy" : undefined}
+          rhToken={s.token_address}
+          rhSymbol={s.token_symbol}
+          rhNote={s.note}
+          initialAmount={s.amount} />
+      );
+    }
+
+    case "robinhood_send": {
+      const s = r as unknown as RobinhoodSendResult;
+      // `fromAddress` is dropped on purpose and nothing is lost: no card can sign
+      // from an address the connected wallet does not control, so it was only ever
+      // a hint. WalletSendCard uses the connected wallet, which is the only
+      // address that can actually produce a signature.
+      return (
+        <WalletSendCard account={account} initialNetwork="robinhood"
+          initialTo={s.toAddress}
+          initialAmount={s.amount}
+          initialAsset={s.token || undefined} />
+      );
+    }
+
+    case "robinhood_bridge": {
+      const s = r as unknown as RobinhoodBridgeResult;
+      // A bridge to SOMEONE ELSE keeps the confirm card. The wallet's BridgeCard
+      // has no recipient field — Relay delivers to the sender — while the confirm
+      // card plumbs `recipient` all the way to bridge-prepare and prints it when
+      // it differs. Mounting the editor here would quietly redirect the delivery
+      // to the connected wallet: same amount, same token, wrong person.
+      if (s.recipient) return <RobinhoodBridgeCard result={s} />;
+      return (
+        <BankBridgeCard account={account}
+          initialFromChain={s.fromChain}
+          initialToken={s.token}
+          initialSymbol={s.tokenSymbol}
+          initialAmount={s.amount}
+          // Straight to the quote when the server accepted the whole intent —
+          // that is the old confirm-card behaviour, preserved. On an error the
+          // fields are incomplete by definition, so the editor opens instead of
+          // auto-advancing into a quote it cannot build. "← Change" reopens the
+          // editor either way.
+          autoReview={!s.error} />
+      );
+    }
+
     case "blue_dca":             return <DcaCard          data={r as unknown as DcaResult} />;
     case "hub_b20_manage":       return <B20ManageCard   result={r as B20ManageResult} />;
     case "check_memo":           return <MemoResultCard  result={r as MemoResultData} />;
     case "check_authorization":  return <AuthorizationResultCard result={r as AuthorizationResultData} />;
     case "check_wallet":         return <WalletCard      result={r as WalletResultData} />;
+    // prepare_yield is deliberately untouched — it is not public yet, so its card
+    // and its testnet option are being rebuilt later, not now.
     case "prepare_yield":     return <MoveToYieldCard  result={r as YieldMoveResult} account={account} />;
-    case "prepare_send":      return <SendCard         result={r as SendResult} account={account} />;
-    case "prepare_swap":      return <SwapCard         result={r as SwapResult} account={account} />;
+
+    case "prepare_send": {
+      const s = r as SendResult;
+      // `network` is "base" | "robinhood" from the schema — both MAINNET. The old
+      // marker card read anything-but-"base" as Base Sepolia, so an omitted
+      // network armed a TESTNET send while the wallet armed mainnet from the same
+      // words (#256). There is no testnet branch left to fall into.
+      return (
+        <WalletSendCard account={account}
+          initialNetwork={s.network === "robinhood" ? "robinhood" : "base"}
+          initialTo={s.to}
+          initialAmount={s.amount}
+          initialAsset={s.asset || undefined} />
+      );
+    }
+
+    case "prepare_swap": {
+      const s = r as SwapResult;
+      // Prefer the resolved ADDRESS; fall back to the raw string the user said so
+      // the card can name it in its "couldn't arm this" banner. `resolveSwapToken`
+      // returns "" for anything it cannot verify, and "" must not become a token.
+      return (
+        <ConvertPanel account={account} seedChain="base"
+          initialSell={s.tokenInAddress || s.tokenIn}
+          initialBuy={s.tokenOutAddress || s.tokenOut}
+          initialAmount={s.amountIn} />
+      );
+    }
 
     // A tool WITHOUT a case above renders NO card, deliberately.
     //

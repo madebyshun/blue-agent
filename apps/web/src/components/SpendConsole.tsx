@@ -88,6 +88,15 @@ export interface SpendSummaryDTO {
   partial: boolean;
   creditsPerUsdc: number;
   ts: number;
+  /**
+   * Set when the route REFUSED the request — today, only an unparseable address.
+   *
+   * It travels beside a shape-compatible all-zero body (route.ts `EMPTY`), and
+   * that combination is the whole hazard: every rail says `ok`, every figure is
+   * 0, so a rejected request is byte-for-byte a wallet that has never spent
+   * anything. See `useSpendSummary` for why the hook must branch on it.
+   */
+  error?: string;
 }
 
 /**
@@ -173,6 +182,63 @@ export function emptyState(d: SpendSummaryDTO): "none" | "unreadable" | "rows" {
     : "none";
 }
 
+/** Where one wallet's credits went. The three buckets, and nothing else. */
+export interface CreditSplit {
+  /** Σ over `tools` — Hub tool calls paid in credits rather than USDC. */
+  tools: { credits: number; calls: number; rows: number };
+  /** Blue Chat messages. Real spending, deliberately NOT a tool. */
+  chat: { credits: number; calls: number };
+  /** Debits whose `reason` named nothing. Counted, never attributed. */
+  other: { credits: number; calls: number };
+  /** Σ of the three. */
+  total: number;
+  /**
+   * Does the split add up to the rail it sits under? True by construction in
+   * `spend-summary.ts` — every accumulate that touches `creditsInWindow` also
+   * touches exactly one bucket — so a `false` here is a data defect upstream,
+   * not a rounding artefact. The caller that shows a split owes the user a
+   * caveat when the parts do not make the whole.
+   */
+  balances: boolean;
+}
+
+/**
+ * Split the credit rail into what it was actually spent on.
+ *
+ * ⚠ This exists because the wallet's headline card was deriving the same answer
+ * from `tools.length` ALONE, and that is wrong on the most common wallet we
+ * have. MEASURED 2026-09-13 against a real ledger row (22 debits, 1,100
+ * credits): `tools` was `[]` and `chat` was `{credits: 1100, calls: 22}` — so
+ * the card printed "1,100 cr · 22 calls" and, under it, "Per-tool breakdown and
+ * calls-per-day on Usage", pointing at a table with no rows in it. A second
+ * wallet spent 608 credits of which 288 were chat, and the card called that
+ * "Across 1 tool".
+ *
+ * `spend-summary.ts` keeps chat out of `tools` on purpose ("Real, but not a
+ * tool — kept out of `tools` so it can't pose as one"), and that decision is
+ * correct; what was missing is that a reader of `tools` is then reading a
+ * PROPER SUBSET of the spending and must not describe the whole from it. Hence
+ * one exported derivation instead of two files each counting differently —
+ * the same argument as `read-state.ts`, one surface over.
+ */
+export function creditSplit(d: SpendSummaryDTO): CreditSplit {
+  const chat  = d.chat ?? { credits: 0, calls: 0 };
+  const other = d.other ?? { credits: 0, calls: 0 };
+  const tools = (d.tools ?? []).reduce(
+    (a, t) => ({
+      credits: a.credits + t.credits,
+      calls:   a.calls + t.creditCalls,
+      // Rows with a credit debit — NOT `tools.length`. A tool paid for purely
+      // in USDC is a real row in the by-tool table and contributes zero to this
+      // rail, so counting it here would put a name on credits it never spent.
+      rows:    a.rows + (t.credits > 0 ? 1 : 0),
+    }),
+    { credits: 0, calls: 0, rows: 0 },
+  );
+  const total = tools.credits + chat.credits + other.credits;
+  return { tools, chat, other, total, balances: total === d.credits.spentInWindow };
+}
+
 /**
  * Four states — and the fourth is the one that was wrong.
  *
@@ -210,7 +276,20 @@ export function useSpendSummary(address?: string): Load {
     setState({ s: "loading" });
     fetch(`/api/wallet/spend-summary?address=${address}`)
       .then(r => r.json())
-      .then((d: SpendSummaryDTO) => { if (alive) setState({ s: "ok", d }); })
+      // A 200 that CARRIES an error is a failed read, not an empty ledger.
+      //
+      // The route answers a bad address with `{ error, ...EMPTY }` — HTTP 200,
+      // both rails `"ok"`, every figure 0 — so the only thing distinguishing a
+      // refusal from a wallet that has never spent a cent is the field this
+      // line now reads. Without it the card renders "Nothing spent yet", which
+      // is a claim about the USER made from a request we declined to serve.
+      //
+      // Same shape as the ONCHAIN TIMELINE fix one card down (`d.error` from
+      // /api/wallet/transactions, discarded because the fetch didn't throw) and
+      // as #211/#212/#213 before it: an absence produced by our own reader,
+      // rendered as a fact about the wallet. `failed` is the honest state — the
+      // component already has the wording for it.
+      .then((d: SpendSummaryDTO) => { if (alive) setState(d?.error ? { s: "failed" } : { s: "ok", d }); })
       .catch(() => { if (alive) setState({ s: "failed" }); });
     return () => { alive = false; };
   }, [address]);
@@ -221,8 +300,14 @@ export function useSpendSummary(address?: string): Load {
  * Micro-units → dollars. Sub-cent amounts keep four decimals rather than
  * rounding to `$0.01`: at x402 prices a rounded-up cent is a visible
  * overstatement of what the user actually paid.
+ *
+ * EXPORTED because the wallet page prints this same rail. The rounding rule is
+ * part of the claim, not styling — a host that re-implemented it with
+ * `toFixed(2)` would show a different number for the same ledger, which is the
+ * #199 failure (two renderings of one ledger disagreeing) reappearing one layer
+ * down in the formatter.
  */
-function usdc(units: number): string {
+export function usdc(units: number): string {
   const v = units / 1_000_000;
   if (v === 0) return "$0";
   return v < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(2)}`;

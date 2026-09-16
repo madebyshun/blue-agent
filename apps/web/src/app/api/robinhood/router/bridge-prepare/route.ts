@@ -5,6 +5,11 @@ import {
 import { base } from "viem/chains";
 import { robinhoodMainnet } from "@/lib/robinhood/chains";
 import { MAINNET_RELAY_API } from "@reservoir0x/relay-sdk";
+import {
+  type ChainCurrencies, isNativeAddress, parseChainCurrencies,
+  resolveBridgePair,
+} from "@/lib/wallet/bridge-pairs";
+import { WALLET_CHAINS } from "@/lib/wallet/chains";
 
 // Non-custodial GENERIC bridge between Base (8453) and Robinhood Chain (4663),
 // backed by the Relay Protocol HTTP API. Same shape as swap-prepare / send-prepare:
@@ -28,8 +33,12 @@ export const maxDuration = 15;
 // Small allow-list. Relay supports many chains, but the chat tool only speaks
 // Base ↔ RH — anything else is a caller mistake. Extend here if we ever wire a
 // third chain into the chat surface.
+// `BASE_RPC_URL` first, matching dca/create and dca/whoami. viem's bundled
+// default for Base is the public mainnet.base.org endpoint, which rate-limits
+// hard enough that a token read fails on a busy minute — measured here as a
+// bogus "token contract read failed" on a perfectly normal ERC-20.
 const SUPPORTED = {
-  base:      { id: base.id,             rpc: base.rpcUrls.default.http[0], explorer: "https://basescan.org" },
+  base:      { id: base.id,             rpc: process.env.BASE_RPC_URL ?? base.rpcUrls.default.http[0], explorer: "https://basescan.org" },
   robinhood: { id: robinhoodMainnet.id, rpc: "https://rpc.mainnet.chain.robinhood.com", explorer: "https://robinhoodchain.blockscout.com" },
 } as const;
 type ChainKey = keyof typeof SUPPORTED;
@@ -85,6 +94,66 @@ function isNativeToken(t: string): boolean {
   return u === "ETH" || u === "NATIVE" || t.trim().toLowerCase() === NATIVE_SENTINEL;
 }
 
+// ── Relay's bridgeable allow-list ───────────────────────────────────────────
+//
+// `/chains` is a CONFIG endpoint — it changes when Relay onboards a token, not
+// per request — so it is cached. There is deliberately no hardcoded fallback:
+// if we cannot read which tokens Relay will move, we do not know, and a stale
+// local copy asserting "USDG is bridgeable" is the kind of confident-wrong that
+// this route already shipped once.
+const CHAINS_TTL_MS = 10 * 60 * 1000;
+let chainsCache: { at: number; byId: Map<number, ChainCurrencies> } | null = null;
+
+async function loadRelayChains(): Promise<Map<number, ChainCurrencies>> {
+  if (chainsCache && Date.now() - chainsCache.at < CHAINS_TTL_MS) return chainsCache.byId;
+  const r = await fetch(`${MAINNET_RELAY_API}/chains`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`Relay /chains returned ${r.status}`);
+  const j = (await r.json()) as { chains?: unknown[] };
+  const byId = new Map<number, ChainCurrencies>();
+  for (const raw of Array.isArray(j?.chains) ? j.chains : []) {
+    const parsed = parseChainCurrencies(raw as Parameters<typeof parseChainCurrencies>[0]);
+    if (parsed) byId.set(parsed.chainId, parsed);
+  }
+  if (byId.size === 0) throw new Error("Relay /chains returned no parseable chains");
+  chainsCache = { at: Date.now(), byId };
+  return byId;
+}
+
+/**
+ * Who is at fault for an upstream failure.
+ *
+ * The old route answered "NO_ROUTE" to everything, so a 401 throttle and an
+ * unsupported pair were the same sentence on screen — and the sentence blamed
+ * the user's token for our request shape. That is what made the ERC-20 bug
+ * survive: the error message pointed away from the cause. Classification here
+ * is by HTTP STATUS, which we can actually read, rather than by guessing at
+ * Relay's error-code vocabulary.
+ *
+ * `INVALID_INPUT_CURRENCY` is the one code named explicitly, because it is the
+ * one we MEASURED and the one that must never be silent again: after the
+ * pre-validation above it is unreachable, so seeing it means OUR mapping is
+ * wrong — a bug report, not a routing answer.
+ */
+function classifyRelayFailure(status: number, errorCode?: string): { code: string; hint: string } {
+  if (errorCode === "INVALID_INPUT_CURRENCY") {
+    return {
+      code: "BRIDGE_MAPPING_BUG",
+      hint:  "Relay rejected a currency this route had already validated — please report this.",
+    };
+  }
+  if (status === 401 || status === 403) {
+    return { code: "UPSTREAM_AUTH",       hint: "Relay declined the request (auth). Not a problem with your token — try again." };
+  }
+  if (status === 429) {
+    return { code: "UPSTREAM_RATE_LIMIT", hint: "Relay is rate-limiting us. Try again in a moment." };
+  }
+  if (status >= 500 || status === 0) {
+    return { code: "UPSTREAM_ERROR",      hint: "Relay is unavailable right now. Try again shortly." };
+  }
+  // A 4xx Relay understood and refused: this really is a routing verdict.
+  return { code: "NO_ROUTE", hint: "" };
+}
+
 // Extract the primary tx (deposit / send) and any prior approve tx from a Relay
 // quote response. Relay's step ids follow a fixed vocabulary — we look them up
 // by id rather than by array position so a future step re-ordering (e.g. a new
@@ -103,14 +172,24 @@ type RelayQuoteResponse = {
   details?: {
     operation?:    string;
     timeEstimate?: number;
-    currencyIn?:   { amount?: string; amountFormatted?: string; currency?: { symbol?: string; decimals?: number } };
-    currencyOut?:  { amount?: string; amountFormatted?: string; currency?: { symbol?: string; decimals?: number } };
+    currencyIn?:   { amount?: string; amountFormatted?: string; amountUsd?: string; minimumAmount?: string; currency?: RelayCurrency };
+    // `minimumAmount` is the FLOOR, not a detail: on a cross-asset trip Relay
+    // quotes a 2% destination slippage tolerance, so the "≈" figure and the
+    // worst case are two different numbers and only one of them is a promise.
+    currencyOut?:  { amount?: string; amountFormatted?: string; amountUsd?: string; minimumAmount?: string; currency?: RelayCurrency };
     totalImpact?:  { usd?: string; percent?: string };
     rate?:         string;
   };
   errors?: { message?: string }[];
   message?: string;
+  errorCode?: string;
 };
+
+// Relay echoes the full destination currency back in the quote — chainId,
+// address, symbol, decimals. That echo is the authority for what LANDS, because
+// it arrives in the SAME payload as `amountOut`: label and number can never
+// disagree about which token they describe.
+type RelayCurrency = { chainId?: number; address?: string; symbol?: string; decimals?: number };
 
 function pickStepTx(steps: RelayStep[] | undefined, ids: string[]): RelayTx | null {
   if (!steps) return null;
@@ -129,18 +208,22 @@ function pickStepTx(steps: RelayStep[] | undefined, ids: string[]): RelayTx | nu
   return null;
 }
 
-// Estimate the relayer fee in bps of the input amount. Not part of Relay's
-// response — computed here so the UI can display "≈ N bps" without inventing
-// its own math. Only used when both amounts + fee are present.
-function computeFeeBps(amountInBase: string, feeUsdStr?: string, inUsdPer?: number): number {
-  if (!feeUsdStr || !inUsdPer || !amountInBase) return 0;
-  const feeUsd = Number(feeUsdStr);
-  const inAmt  = Number(amountInBase);
-  if (!Number.isFinite(feeUsd) || !Number.isFinite(inAmt) || inAmt <= 0) return 0;
-  const inUsd = inAmt * inUsdPer;
-  if (inUsd <= 0) return 0;
-  return Math.round((feeUsd / inUsd) * 10000);
-}
+// `computeFeeBps` stood here. Its docstring claimed "the relayer fee in bps of
+// the input amount"; what it computed was the fee divided by
+// `totalImpact.usd` — the fee over the COST, not over the INPUT. MEASURED
+// against live quotes: it returned 4007 bps for a trip that really cost 8.38%,
+// 3649 for one that cost 0.14%, and 3095 for one that cost 0.07% — so it was
+// not merely wrong by a scale factor, it barely moved while the real number
+// changed by two orders of magnitude.
+//
+// Deleting it rather than leaving it uncalled is the point. It survived the
+// removal of its own call site because it was spelled `computeFeeBps` while the
+// guard in bridge-pairs-test.ts matched `/feeBps/` — a capital letter was the
+// whole of its camouflage. An uncalled fee derivation in a fund-touching route
+// is one `{meta.feeBps}` away from being a live lie, and the next person to
+// need a fee figure would have found this one sitting here looking official.
+// Relay's own `totalImpact.usd` / `.percent` is the number, and it is already
+// both-sides priced.
 
 export async function POST(req: NextRequest) {
   try {
@@ -150,6 +233,13 @@ export async function POST(req: NextRequest) {
       fromAddress?: string;
       recipient?:   string;
       token?:       string;
+      /**
+       * OPTIONAL destination token, as an address on `toChain`. Omit it and the
+       * route auto-resolves — conservatively, refusing anything that would turn
+       * one asset into another. Pass it to opt IN to a cross-asset move; that is
+       * a choice only the user gets to make, never a default.
+       */
+      toToken?:     string;
       amount?:      string | number;
     };
 
@@ -202,6 +292,16 @@ export async function POST(req: NextRequest) {
 
     const rawToken  = typeof body.token === "string" ? body.token.trim() : "";
     const amountStr = body.amount != null ? String(body.amount).trim() : "";
+    // Destination token, if the caller named one. Validated as an address here
+    // and against Relay's allow-list below — an unvalidated passthrough would
+    // let a caller aim the delivery at any contract at all.
+    const toTokenRaw = typeof body.toToken === "string" ? body.toToken.trim() : "";
+    if (toTokenRaw && !isNativeToken(toTokenRaw) && !isAddress(toTokenRaw)) {
+      return NextResponse.json(
+        { ok: false, error: { code: "BAD_INPUT", message: "toToken must be a 0x… address or 'ETH'/'NATIVE'" } },
+        { status: 400 },
+      );
+    }
     if (!rawToken) {
       return NextResponse.json(
         { ok: false, error: { code: "BAD_INPUT", message: "token required (0x… or 'ETH'/'NATIVE')" } },
@@ -215,11 +315,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Resolve currency address + decimals on the ORIGIN chain. Relay treats
-    // native ETH as the zero address; ERC-20 = the contract address on origin.
+    // The token address on the ORIGIN chain. Relay treats native ETH as the
+    // zero address; an ERC-20 is its contract address on origin.
     let originCurrency: `0x${string}`;
-    let decimals = 18;
-    let symbol   = "ETH";
     if (isNativeToken(rawToken)) {
       originCurrency = NATIVE_SENTINEL as `0x${string}`;
     } else {
@@ -230,13 +328,114 @@ export async function POST(req: NextRequest) {
         );
       }
       originCurrency = getAddress(rawToken);
+    }
+
+    // ── Which token lands on the other side ──────────────────────────────────
+    //
+    // This used to be `destinationCurrency: originCurrency` — "same token,
+    // other chain" — which is only true for native ETH, where the zero address
+    // means "the gas token" everywhere. A contract address is chain-local, so
+    // every ERC-20 bridge asked Relay for an address that does not exist on the
+    // destination and was refused. See lib/wallet/bridge-pairs.ts.
+    //
+    // ORDER MATTERS: this runs BEFORE the on-chain token read below. The
+    // allow-list check is a Map lookup against a cached list and the refusals it
+    // produces ("Base DEGEN is listed but not bridgeable") do not depend on
+    // anything the chain can tell us. Reading `decimals()` first meant paying an
+    // RPC round-trip to describe a token we were about to refuse — and when the
+    // public RPC was rate-limited, that read failed and answered a bridgeability
+    // question with "token contract read failed", which is not an answer to it.
+    let relayChains: Map<number, ChainCurrencies>;
+    try {
+      relayChains = await loadRelayChains();
+    } catch (e) {
+      return NextResponse.json(
+        {
+          ok:    false,
+          error: { code: "UPSTREAM_ERROR", message: `Can't read Relay's supported-token list: ${(e as Error).message}` },
+          meta:  { fromChain, toChain },
+        },
+        { status: 200 },
+      );
+    }
+    const fromCurrencies = relayChains.get(fromCfg.id);
+    const toCurrencies   = relayChains.get(toCfg.id);
+    if (!fromCurrencies || !toCurrencies) {
+      return NextResponse.json(
+        {
+          ok:    false,
+          error: { code: "UPSTREAM_ERROR", message: `Relay does not currently list ${!fromCurrencies ? fromChain : toChain}.` },
+          meta:  { fromChain, toChain },
+        },
+        { status: 200 },
+      );
+    }
+
+    // "ETH"/"NATIVE" is the caller's word for the zero address on either chain.
+    const explicitTo = toTokenRaw
+      ? (isNativeToken(toTokenRaw) ? NATIVE_SENTINEL : toTokenRaw)
+      : undefined;
+    const pair = resolveBridgePair(fromCurrencies, toCurrencies, originCurrency, {
+      explicitTo,
+      // The destination chain's canonical dollar, per the wallet's own config —
+      // the tie-break when the far side bridges more than one stablecoin and the
+      // user named none. Base lists both USDC and USDT, so without this the
+      // commonest return trip in the app (USDG → Base) refuses itself.
+      preferredStable: WALLET_CHAINS[toKey].stable,
+    });
+    if (!pair.ok) {
+      return NextResponse.json(
+        {
+          ok:    false,
+          error: { code: pair.code, message: pair.message },
+          meta:  { fromChain, toChain, token: originCurrency, amount: amountStr },
+        },
+        { status: 200 },
+      );
+    }
+
+    // ── How big is one token ─────────────────────────────────────────────────
+    //
+    // Decimals size the transfer, so getting them wrong moves the decimal point
+    // on someone's money. Two sources agree or we don't proceed:
+    //
+    //   · Relay's `/chains` entry — PRIMARY. It is the same record that supplied
+    //     the address we're about to send to, and Relay is the party that will
+    //     interpret our `amount`. Using their number for their field is the one
+    //     choice that cannot desync from the counterparty.
+    //   · The token contract — VETO ONLY. Read as an independent check, and it
+    //     can refuse the bridge but never supply the figure. If the RPC is down
+    //     or throttled we lose the check, not the trip; `decimalsChecked` says
+    //     which of those happened rather than papering over it.
+    //
+    // A disagreement is not a rounding difference — it is 10^n on the amount —
+    // so it stops here rather than being resolved by preferring either side.
+    const decimals = pair.from.decimals;
+    let symbol = pair.from.symbol;
+    let decimalsChecked = false;
+    if (!isNativeAddress(originCurrency)) {
       try {
-        ({ decimals, symbol } = await readTokenMeta(fromKey, originCurrency));
-      } catch (e) {
-        return NextResponse.json(
-          { ok: false, error: { code: "BAD_INPUT", message: `token contract read failed on ${fromChain}: ${(e as Error).message}` } },
-          { status: 200 },
-        );
+        const onchain = await readTokenMeta(fromKey, originCurrency);
+        if (onchain.decimals !== decimals) {
+          return NextResponse.json(
+            {
+              ok:    false,
+              error: {
+                code:    "DECIMALS_MISMATCH",
+                message: `Relay lists ${pair.from.symbol} at ${decimals} decimals but the contract on ${fromChain} reports ${onchain.decimals}. Not sizing a transfer against a disagreement.`,
+              },
+              meta: { fromChain, toChain, token: originCurrency, amount: amountStr },
+            },
+            { status: 200 },
+          );
+        }
+        decimalsChecked = true;
+        if (onchain.symbol) symbol = onchain.symbol;
+      } catch {
+        // Check unavailable. Relay's declared decimals still stand on their own
+        // — the token is on a curated ≤7-entry bridging allow-list, not a symbol
+        // we matched — so the bridge proceeds and the response says the
+        // second opinion is missing.
       }
     }
 
@@ -250,21 +449,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Ask Relay for a quote. We request the SAME currency address on the
-    // destination chain — Relay maps it to the canonical equivalent (or fails
-    // with NO_ROUTE if the pair is unsupported, which we surface cleanly).
-    // tradeType EXACT_INPUT locks the input amount; the user knows how much
-    // they're paying, and any output-side swap slippage is absorbed by Relay.
+    // Ask Relay for a quote. tradeType EXACT_INPUT locks the input amount; the
+    // user knows how much they're paying, and any output-side slippage is
+    // absorbed by Relay.
+    //
+    // ⚠️ DO NOT ADD `referrer` BACK WITHOUT A RELAY API KEY.
+    // MEASURED 2026-09-11, 5 runs × 2 variants, native ETH Base→Robinhood:
+    //   no referrer  → 200, every run
+    //   referrer:"blueagent.dev" → 401 UNAUTHORIZED_QUOTE ("Please provide an
+    //   api key"), every run
+    // Relay treats `referrer` as an attribution claim and requires a registered
+    // key to honour it, so sending one unauthenticated rejects the whole quote.
+    // This single field is why the bridge returned nothing for EVERY token in
+    // EVERY direction — native ETH included. It was never a token-support
+    // problem, and the "NO_ROUTE" the card used to print blamed the user's
+    // token for a header of our own making. If attribution is wanted later, get
+    // a key first and send both, or neither.
     const quoteBody = {
       user:                 from,
       recipient,
       originChainId:        fromCfg.id,
       destinationChainId:   toCfg.id,
       originCurrency,
-      destinationCurrency:  originCurrency,           // "same token, other chain"
+      destinationCurrency:  pair.to.address,
       amount:               amountBase.toString(),
       tradeType:            "EXACT_INPUT" as const,
-      referrer:             "blueagent.dev",
     };
 
     let quoteJson: RelayQuoteResponse;
@@ -279,24 +488,29 @@ export async function POST(req: NextRequest) {
       try { quoteJson = JSON.parse(text) as RelayQuoteResponse; }
       catch { quoteJson = { message: text.slice(0, 200) }; }
       if (!qr.ok) {
-        // Relay 4xx with a body usually means "no route" or "unsupported pair"
-        // — surface it as 200 + ok:false so the card can render honestly.
-        const msg = quoteJson?.errors?.[0]?.message || quoteJson?.message || `Relay ${qr.status}`;
+        // Surfaced as 200 + ok:false so the card can render honestly — but the
+        // CODE now distinguishes "Relay refused this route" from "Relay was
+        // unreachable / rate-limited / rejected us". Both used to read as
+        // NO_ROUTE, which told the user to go find a different token for a
+        // problem their token had nothing to do with.
+        const { code, hint } = classifyRelayFailure(qr.status, quoteJson?.errorCode);
+        const upstream = quoteJson?.errors?.[0]?.message || quoteJson?.message || `Relay ${qr.status}`;
         return NextResponse.json(
           {
             ok:    false,
-            error: { code: "NO_ROUTE", message: msg },
-            meta:  { fromChain, toChain, token: originCurrency, amountIn: amountBase.toString() },
+            error: { code, message: hint || upstream, upstream, upstreamCode: quoteJson?.errorCode ?? "", status: qr.status },
+            meta:  { fromChain, toChain, token: originCurrency, toToken: pair.to.address, amountIn: amountBase.toString() },
           },
           { status: 200 },
         );
       }
     } catch (e) {
+      // Never reached Relay at all — a network fault, not a routing verdict.
       return NextResponse.json(
         {
           ok:    false,
-          error: { code: "NO_ROUTE", message: `Relay request failed: ${(e as Error).message}` },
-          meta:  { fromChain, toChain, token: originCurrency, amountIn: amountBase.toString() },
+          error: { code: "UPSTREAM_ERROR", message: `Couldn't reach Relay: ${(e as Error).message}` },
+          meta:  { fromChain, toChain, token: originCurrency, toToken: pair.to.address, amountIn: amountBase.toString() },
         },
         { status: 200 },
       );
@@ -328,29 +542,78 @@ export async function POST(req: NextRequest) {
     const amountIn  = details.currencyIn?.amount  ?? amountBase.toString();
     const amountOut = details.currencyOut?.amount ?? "0";
 
-    // Fee bps display — Relay only gives absolute USD/amount figures. We derive
-    // bps from the USD strings when both sides are priced; if not, fall back to
-    // 0 so the UI can suppress the line rather than lie.
-    const inUsdPerUnit = details.currencyIn?.amountFormatted && details.currencyIn?.amount
-      ? Number(details.currencyIn.amountFormatted) > 0
-        ? Number(details.totalImpact?.usd ?? "0") / Number(details.currencyIn.amountFormatted || "1")
-        : 0
-      : 0;
-    void inUsdPerUnit; // not currently displayed — kept for future extension
-    const feeBps = (() => {
-      const relayerUsd = quoteJson.fees?.relayer?.amountUsd || quoteJson.fees?.relayerService?.amountUsd;
-      const inUsdStr   = details.totalImpact?.usd; // negative-ish; not a direct USD in
-      const inAmtStr   = details.currencyIn?.amountFormatted;
-      if (!relayerUsd || !inAmtStr) return 0;
-      const feeUsdN  = Number(relayerUsd);
-      const inAmtN   = Number(inAmtStr);
-      const inUsdN   = inUsdStr ? Math.abs(Number(inUsdStr)) : 0;
-      // If we have a totalImpact USD figure, use `feeUsd / (feeUsd + inUsd)` as
-      // a proxy — otherwise, when inAmt is USD-stable (USDC 6dp), assume 1:1.
-      const inUsdSafe = inUsdN > 0 ? inUsdN + Math.abs(feeUsdN) : inAmtN;
-      if (!Number.isFinite(feeUsdN) || !Number.isFinite(inUsdSafe) || inUsdSafe <= 0) return 0;
-      return Math.max(0, Math.round((feeUsdN / inUsdSafe) * 10000));
-    })();
+    // ── Did Relay quote the token we asked for? ─────────────────────────────
+    //
+    // We picked the destination from Relay's own allow-list, so a mismatch here
+    // means the request was re-routed somewhere we did not choose. Refuse it.
+    // The whole point of the fix is that the user is told what arrives; a quote
+    // for an unexpected asset is the original bug wearing a better disguise.
+    const echoed = details.currencyOut?.currency;
+    const echoedAddr = typeof echoed?.address === "string" ? echoed.address.toLowerCase() : "";
+    if (echoed && echoedAddr && echoedAddr !== pair.to.address) {
+      return NextResponse.json(
+        {
+          ok:    false,
+          error: {
+            code:    "DESTINATION_MISMATCH",
+            message: `Relay quoted ${echoed.symbol || "a different token"} on ${toChain}, not the ${pair.to.symbol} this bridge asked for. Not signing that.`,
+          },
+          meta: { fromChain, toChain, token: originCurrency, toToken: pair.to.address, quotedToken: echoedAddr },
+        },
+        { status: 200 },
+      );
+    }
+    if (echoed && typeof echoed.chainId === "number" && echoed.chainId !== toCfg.id) {
+      return NextResponse.json(
+        {
+          ok:    false,
+          error: { code: "DESTINATION_MISMATCH", message: `Relay quoted delivery on chain ${echoed.chainId}, not ${toChain} (${toCfg.id}).` },
+          meta:  { fromChain, toChain, token: originCurrency, toToken: pair.to.address },
+        },
+        { status: 200 },
+      );
+    }
+
+    // Decimals for the OUTPUT amount come from the output token — not the input.
+    // USDC and USDG are both 6 so the old shared-decimals shortcut looked fine
+    // on the only pair anyone tested; ETH (18) → USDG (6) would have rendered
+    // the received amount a trillion times too large.
+    const outDecimals = Number.isInteger(echoed?.decimals) ? (echoed!.decimals as number) : pair.to.decimals;
+    const outSymbol   = (echoed?.symbol || pair.to.symbol || "").trim();
+
+    // ── What the trip actually costs ─────────────────────────────────────────
+    //
+    // Relay prices BOTH sides in USD in this same payload and states the
+    // round-trip cost itself as `totalImpact`. Take its figure rather than
+    // computing one: it is produced by the party holding the prices, it covers
+    // the swap leg as well as the relayer fee, and it is quoted against the very
+    // numbers that produced `amountOut`.
+    //
+    // What was here divided the relayer fee by `totalImpact.usd` — fee over
+    // COST instead of fee over INPUT. MEASURED 2026-09-11, Base USDC → RH USDG:
+    //     $1 → 4007 bps claimed / 8.38% real
+    //   $100 → 3649 bps claimed / 0.14% real
+    //  $1000 → 3095 bps claimed / 0.07% real
+    // i.e. it read ~36% for a trip that cost 0.14%, and moved the WRONG WAY as
+    // the real cost fell. It was never rendered — the card's own comment says
+    // "we never derive a bps" — so this was a loaded gun in the payload rather
+    // than a live lie. A field named `feeBps` sitting in a fund-touching
+    // response is one `{meta.feeBps}` away from being one.
+    //
+    // Absolute values: Relay signs these negative (a cost to the user). The sign
+    // is carried by the label on screen, not by the number.
+    const impactUsd = Math.abs(Number(details.totalImpact?.usd ?? ""));
+    const impactPct = Math.abs(Number(details.totalImpact?.percent ?? ""));
+    const totalCostUsd     = Number.isFinite(impactUsd) ? impactUsd : null;
+    const totalCostPercent = Number.isFinite(impactPct) ? impactPct : null;
+
+    // The guaranteed floor, in base units of the OUTPUT token. `amountOut` is an
+    // estimate with ~2% of destination slippage tolerance behind it; this is the
+    // number the user is actually promised. Null when Relay omits it — an
+    // unknown floor is not a floor of zero, and it is not `amountOut` either.
+    const amountOutMin = typeof details.currencyOut?.minimumAmount === "string"
+      ? details.currencyOut.minimumAmount
+      : null;
 
     const estFillSeconds = typeof details.timeEstimate === "number" ? details.timeEstimate : 30;
 
@@ -374,9 +637,30 @@ export async function POST(req: NextRequest) {
           symbol:   details.currencyIn?.currency?.symbol || symbol || (isNativeToken(rawToken) ? "ETH" : ""),
           decimals: details.currencyIn?.currency?.decimals ?? decimals,
         },
+        // Did the contract get to second-guess Relay's decimals, or was the RPC
+        // unavailable? The amount is correct either way — but "we checked" and
+        // "we couldn't check" are different facts and only one of them is worth
+        // reporting as a check.
+        decimalsChecked,
+        // What actually LANDS. A separate field, not a reuse of `token`, because
+        // they are genuinely different on the pair people will use most: send
+        // USDC from Base, receive USDG on Robinhood. The card must render this
+        // one on the destination side — labelling the output with the input's
+        // symbol is a false statement about what the user is about to receive.
+        tokenOut: {
+          address:  pair.to.address,
+          symbol:   outSymbol,
+          decimals: outDecimals,
+        },
+        assetChanged: pair.assetChanged,
+        assetNote:    pair.note,
         amountIn,
         amountOut,
-        feeBps,
+        // The floor and the cost, both from Relay's own both-sides-USD figures.
+        // `amountOut` is an estimate; `amountOutMin` is the promise.
+        amountOutMin,
+        totalCostUsd,
+        totalCostPercent,
         estFillSeconds,
         trackerUrl,
         requestId,
@@ -391,6 +675,57 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { ok: false, error: { code: "BAD_INPUT", message: (e as Error).message } },
       { status: 500 },
+    );
+  }
+}
+
+/**
+ * What can this wallet actually bridge? — the token picker's only source.
+ *
+ * It lives in THIS file, beside the POST, on purpose. The picker and the
+ * validator must read the same list or the UI can offer something the server
+ * then refuses: exactly the shape of #143/#166/#196, where a surface advertised
+ * a capability the app could not run. Sharing `loadRelayChains()` makes that
+ * divergence impossible rather than unlikely — one fetch, one cache.
+ *
+ * ── Why the RAW `ChainCurrencies`, and not a tidy flat token list ────────────
+ * An earlier draft returned `tokens: bridgeableOf(parsed).map(…)` — already
+ * filtered, already flattened. It was smaller and it was wrong in a way that
+ * only shows up later: the client could then no longer run `resolveBridgePair`,
+ * so it had to re-implement the rules (what counts as a dollar, when a
+ * substitution is allowed, when to refuse) to say anything useful before the
+ * quote. Two copies of a fund-touching rule is the bug, and it drifts silently —
+ * add a stablecoin to `STABLE_SYMBOLS` and the picker starts refusing pairs the
+ * server would have happily resolved, in a red banner, with total confidence.
+ *
+ * Handing back the parsed shape verbatim lets the picker call the SAME resolver
+ * with the SAME `preferredStable` and render the SAME sentence the POST would
+ * have returned. `supportsBridging: false` entries (Base DEGEN today) are
+ * included deliberately — `bridgeableOf` is what drops them, on both sides.
+ *
+ * There is NO fallback list, and that is the design. If Relay's `/chains` can't
+ * be read we do not know what is bridgeable, and a stale hardcoded copy that
+ * still says "DEGEN moves" is worse than an empty picker: the user picks it,
+ * signs an approve, and finds out at the quote. `ok: false` here makes the
+ * picker say "couldn't load the list" — an outage the user can see and retry,
+ * not a wrong answer they can act on.
+ *
+ * `null` per chain means Relay does not list that chain at all, which is a
+ * different fact from "listed, but nothing is movable" and must not collapse
+ * into it.
+ */
+export async function GET() {
+  try {
+    const byId = await loadRelayChains();
+    const chains: Record<string, ChainCurrencies | null> = {};
+    for (const key of Object.keys(SUPPORTED) as ChainKey[]) {
+      chains[key] = byId.get(SUPPORTED[key].id) ?? null;
+    }
+    return NextResponse.json({ ok: true, chains });
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: { code: "UPSTREAM_ERROR", message: (e as Error).message } },
+      { status: 200 },
     );
   }
 }
