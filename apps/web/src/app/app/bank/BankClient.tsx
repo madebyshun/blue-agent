@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
-import { useAccount, useReadContract, useBalance, useSwitchChain } from "wagmi";
+import { useAccount, useReadContract, useBalance } from "wagmi";
 import { resolveRead } from "@/lib/wallet/read-state";
 import { useWalletDisconnect } from "@/lib/walletSession";
 import { useWallet } from "@/hooks/useWallet";
@@ -22,6 +22,11 @@ import { formatUnits } from "viem";
 import { QRCodeSVG } from "qrcode.react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { WALLET_CHAINS, WALLET_CHAIN_ORDER, type WalletChain } from "@/lib/wallet/chains";
+// The two view-only switches, defined once for the card and all three tables.
+// Read `lib/wallet/display.ts` before changing either — both are display-only by
+// contract: a hidden row is still counted, and unpriced is never dust.
+import { DUST_USD, maskFigure } from "@/lib/wallet/display";
+import { warmRhHoldings } from "@/lib/wallet/rh-holdings-cache";
 // ⚠️ EARN-ONLY import, and now WITHDRAW-only: the contract addresses needed to
 // read a position the user already holds and hand them back out of it. The
 // wallet's identity (chain, explorer, what counts as cash) comes from
@@ -33,6 +38,7 @@ import { YIELD_NETWORKS, ERC20_ABI, ERC4626_ABI, VENUES } from "@/lib/yield-exec
 import { MoveToYieldCard } from "@/app/chat/components/ToolCards";
 import { useBasename, shortAddr } from "@/lib/useBasename";
 import Avatar from "@/components/Avatar";
+import { useSpendSummary, scopeLabel, emptyState, creditSplit, usdc as fmtUsdcUnits, type Load as SpendLoad, type SpendSummaryDTO } from "@/components/SpendConsole";
 import QrScanner from "./QrScanner";
 import SwapCard, { type SellPreset } from "./SwapCard";
 // SEND is one unified, chain-in-card component now (WalletSendCard): it carries
@@ -48,13 +54,21 @@ import SwapCard, { type SellPreset } from "./SwapCard";
 // `can.send`/`can.swap` note in lib/wallet/chains.ts.
 import WalletSendCard from "./WalletSendCard";
 import RhSwapCard from "./RhSwapCard";
+// BRIDGE is the third money path and the only one that spans both chains at
+// once. Like SEND it carries its own direction picker in-card, so there is no
+// chain branch here either; unlike SEND and CONVERT it does not ask `can.*`,
+// because the question "can this wallet bridge?" is answered by Relay's live
+// list, not by the chain the wallet happens to be connected to.
+import BridgeCard from "./BridgeCard";
+import { Picker, PickerRow } from "@/components/wallet/Picker";
+import { WalletCard, Field, NetworkPicker, CardNote } from "@/components/wallet/CardShell";
 import { parsePaymentQr, buildPaymentUri, type ParsedPayment } from "@/lib/payment-qr";
 // `B20_ENABLED` was imported alongside this, purely to hide the Orders tab.
 // OrdersPanel reads the same flag itself and renders its own degraded-mode
 // banner from it, so gating the entrance here only ever meant the user could
 // not reach the explanation. See the VIEWS list below.
 import OrdersPanel from "./OrdersPanel";
-import TransactionHistory, { type WalletTx } from "./TransactionHistory";
+import TransactionHistory, { type WalletTx, type TxSource } from "./TransactionHistory";
 import TokenTable from "./TokenTable";
 import RhTokenTable from "./RhTokenTable";
 import StockTable from "./StockTable";
@@ -86,27 +100,123 @@ const usd = (n: number | null | undefined) =>
 // requests are a list you keep, come back to, and reconcile against — and it
 // was gated on B20_ENABLED, which is off, so the panel had NO entrance at all
 // while its own copy said "payment links work now". A feature with no door.
-type Panel = "positions" | "withdraw" | "send" | "receive" | "convert";
+//
+// `positions` left it too (not public yet). It was a READ — two rows restating
+// the Aave/Morpho figures the account card already breaks out — parked in the
+// modal you open to DO something, and it was the default tab, so every action
+// click landed on a read-only screen first. The numbers stay where they were
+// always visible; what went is the duplicate. The `withdraw` EXIT is untouched
+// and still has its own tab: closing an entrance must never close an exit.
+//
+// `bridge` joined it 2026-09-11, once the bridge was PROVEN to work end to end
+// (#253: our own `referrer` field was 401-ing every Relay quote, so the feature
+// had an entrance in chat and no working path behind it). The order of those two
+// facts is the rule — a button that opens a dead path is #143/#166/#196 again,
+// and this one would have been dead in every direction for every token.
+type Panel = "withdraw" | "send" | "receive" | "convert" | "bridge";
 
 // The page's own long-tail sections, one at a time. Distinct from `Panel`:
 // a Panel is a thing you DO (and it lives in a modal you dismiss), a View is a
 // record you READ. Conflating them is what put Orders in a modal.
-type View = "portfolio" | "activity" | "orders";
+//
+// `portfolio` SPLIT into `tokens` + `stocks` — the MetaMask tab shape the design
+// asked for. It was one tab stacking six tables (three chains × crypto + equity),
+// and with both real chains shown at once (the switcher is gone) the answer to
+// "do I still hold NVDA?" was four scroll-screens below the fold. Tokens and
+// stocks are different asset classes read from different sources, so they were
+// already two questions sharing one tab.
+//
+// They stay SIBLINGS of activity/orders rather than nesting under a parent
+// "Portfolio": a second tab row inside a tab is a place for state to hide. Both
+// honour the same chain filter and the same dust toggle, so switching between
+// them changes the asset class and nothing else.
+type View = "tokens" | "stocks" | "activity" | "orders";
+
+/** The two views that answer "what do I hold?" — the filter + dust controls
+ *  belong to both of them and to neither of the other two. */
+const isHoldingsView = (v: View) => v === "tokens" || v === "stocks";
 
 // Sticky testnet unlock. Deliberately NOT the same key family as `bluebank:*`
 // user settings — this is a developer escape hatch, not a preference.
 const TESTNET_KEY = "bluebank:testnet";
 
+// Hide-balances (the eye toggle, as in MetaMask). A DISPLAY preference and
+// nothing else: it masks rendered figures, it cancels no read and changes no
+// derivation, so a masked wallet behaves exactly like an unmasked one. Sticky
+// because the reason to hide — someone can see your screen — outlives a reload.
+const HIDE_BAL_KEY = "bluebank:hide-balances";
+// Sticky dust filter, same reasoning: "stop showing me sub-dollar rows" is a
+// standing preference, not a per-visit one.
+const HIDE_DUST_KEY = "bluebank:hide-dust";
+
 export default function BankPage() {
-  const { address, isConnected, chainId: walletChainId, chain: walletChain } = useAccount();
+  // `chainId`/`chain` are deliberately NOT read here. The wallet's own chain is
+  // a per-SIGNATURE concern now, owned by whichever action card is about to
+  // sign (see the note where the mismatch banner used to live). Reading it at
+  // page level only ever produced a comparison against a "current network" this
+  // two-chain page no longer has.
+  const { address, isConnected } = useAccount();
   const acct = address as `0x${string}` | undefined;
 
-  // Cross-chain net worth — tokens + tokenized stocks on BOTH live chains, from
+  // Cross-chain net worth — tokens + tokenized stocks on EVERY live chain, from
   // /api/wallet/net-worth. Called unconditionally at the top (React hook rules)
-  // and no-ops when `acct` is undefined. It is READ-ONLY and ADDITIVE: it feeds
-  // the NET WORTH figure and the per-chain $ on the sidebar, and never touches
-  // the vetted single-chain `walletState.balance` / `balanceRead` derivation.
+  // and no-ops when `acct` is undefined. It is READ-ONLY: it feeds the headline
+  // figure, the per-chain $ on the sidebar, and nothing else. It never touches
+  // the vetted single-chain `walletState.balance` / `balanceRead` derivation,
+  // which still drives the health score, the missions, and the Base breakdown.
   const netWorth = useNetWorth(acct);
+
+  // AGENT SPEND — the SAME hook /app/usage calls, against the same endpoint.
+  //
+  // This card used to be a bare link with no figures on it, which is why it read
+  // as "not working": it named a number and then showed a chevron. #199 moved
+  // the full <SpendConsole> to /app/usage for a good reason — two pages deriving
+  // one ledger can disagree — and that reason is preserved here by REUSING the
+  // derivation rather than copying it. `useSpendSummary` is the only fetch,
+  // `scopeLabel` and `emptyState` are the only readings of it, so the wallet
+  // literally cannot print a different number from the console it links to.
+  const spend = useSpendSummary(acct);
+
+  // Warm the Robinhood holdings read as soon as we know the address.
+  //
+  // `RhTokenTable` lives behind `showsChain("robinhood")`, so it does not exist
+  // — and cannot start reading — until the user switches the chain filter to it.
+  // That made the FIRST switch the slowest thing on this page: mount, fetch,
+  // spinner, against an explorer measured at up to 16s on its tail (see
+  // `blockscout.ts`). The read does not depend on the filter, only on the
+  // address, so there is no reason to wait for the click.
+  //
+  // This is a prefetch, not a second reader: it goes through the same cache
+  // entry the table uses, so warming can never produce a duplicate request or a
+  // second answer that disagrees with the first. Nothing renders from it here.
+  useEffect(() => {
+    if (acct) warmRhHoldings(acct);
+  }, [acct]);
+
+  // Why the headline is a floor, in the SERVER's words — never ours. Each chain
+  // ships its own `reasons`, and the same reason is usually true on more than
+  // one chain ("some stocks have no price" holds on both today), so they are
+  // de-duped; a chain that answered nothing at all contributes a reason of its
+  // own, because `usd: 0` from an unreachable chain is ignorance, not an empty
+  // wallet. This is the difference between "≥ $5.48" and "≥ $5.48 because the
+  // token list fell back to majors" — the second is auditable, the first asks
+  // the user to trust a symbol.
+  const floorReasons = useMemo(() => {
+    const out = new Set<string>();
+    for (const c of netWorth.data?.chains ?? []) {
+      const label = WALLET_CHAINS[c.chain]?.short ?? c.chain;
+      if (c.status === "unavailable") out.add(`${label} could not be read`);
+      for (const r of c.reasons) out.add(r);
+    }
+    return [...out];
+  }, [netWorth.data]);
+
+  // The same verdict as a boolean, because two places in the JSX below need it
+  // and a statement cannot go there. `failed` is checked FIRST and separately:
+  // a failed read still carries a `data` object, so `data.total.isFloor` on its
+  // own would call a read that produced nothing "a floor" — a floor is a claim
+  // about a measured amount, and there isn't one.
+  const totalIsFloor = !netWorth.failed && !!netWorth.data && netWorth.data.total.isFloor;
   const { name } = useBasename(acct);
   const [fname, setFname] = useState<string | null>(null);
   useEffect(() => {
@@ -192,18 +302,60 @@ export default function BankPage() {
   // an effect — reading localStorage/searchParams during the first render would
   // hydration-mismatch, and the safe value (mainnet, locked) is the right first
   // paint anyway.
-  const [network, setNetwork] = useState<WalletChain>("base");
+  // The wallet's home chain is Base, and it NO LONGER SWITCHES. The global
+  // chain switcher (the sidebar CHAINS buttons + the mobile toggle) was removed:
+  // it changed a heading and a balance figure and little else, while the actions
+  // that genuinely differ per chain — Convert, Receive, Send — each now carry
+  // their OWN chain selector. `network` is therefore a constant. It is typed as
+  // the WIDE `WalletChain`, not the literal `"base"`, so the per-chain reads
+  // below (`net.can`, `earnKey`, the tx-history fetch) keep type-checking against
+  // Robinhood and Sepolia without TS collapsing them to dead branches.
+  const network: WalletChain = "base";
+  // Testnet stays OPT-IN (`?testnet=1`, sticky) but is no longer a global MODE —
+  // nothing flips the whole page to Sepolia. All the flag does now is reveal a
+  // testnet SECTION in the portfolio and a testnet OPTION in Receive, each of
+  // which labels itself "test-only" locally. So this reads the flag and stops.
   const [testnetUnlocked, setTestnetUnlocked] = useState(false);
   useEffect(() => {
     try {
       const q = new URLSearchParams(window.location.search).get("testnet");
       if (q === "1")      localStorage.setItem(TESTNET_KEY, "1");
       else if (q === "0") localStorage.removeItem(TESTNET_KEY);
-      const on = localStorage.getItem(TESTNET_KEY) === "1";
-      setTestnetUnlocked(on);
-      if (!on) setNetwork("base"); // locking testnet must also leave it
+      setTestnetUnlocked(localStorage.getItem(TESTNET_KEY) === "1");
     } catch { /* private mode — stay locked on mainnet */ }
   }, []);
+
+  // Eye toggle. Starts SHOWN and is read from storage in an effect rather than
+  // in the initialiser — `localStorage` does not exist during the server render,
+  // and a lazy initialiser that touched it would hydrate-mismatch.
+  const [hideBal, setHideBal] = useState(false);
+  useEffect(() => {
+    try { setHideBal(localStorage.getItem(HIDE_BAL_KEY) === "1"); } catch { /* private mode */ }
+  }, []);
+  const toggleHideBal = () => {
+    setHideBal(h => {
+      const next = !h;
+      try { next ? localStorage.setItem(HIDE_BAL_KEY, "1") : localStorage.removeItem(HIDE_BAL_KEY); }
+      catch { /* private mode — the toggle still works for this session */ }
+      return next;
+    });
+  };
+  /** Wrap a figure we WOULD have rendered. Never wraps a dash or an "unread". */
+  const priv = (s: string) => maskFigure(s, hideBal);
+
+  // Dust filter — the second half of "để không phải cuộn nhiều". Owned here and
+  // pushed DOWN into the three tables rather than kept inside each of them, so
+  // one control governs Base tokens, RH tokens and both stock venues at once and
+  // they cannot disagree about what a small row is.
+  const [hideDust, setHideDust] = useState(false);
+  useEffect(() => {
+    try { setHideDust(localStorage.getItem(HIDE_DUST_KEY) === "1"); } catch { /* private mode */ }
+  }, []);
+  const setDust = (next: boolean) => {
+    setHideDust(next);
+    try { next ? localStorage.setItem(HIDE_DUST_KEY, "1") : localStorage.removeItem(HIDE_DUST_KEY); }
+    catch { /* private mode — the toggle still works for this session */ }
+  };
 
   // Hoisted above the onramp handlers on purpose: `addCash` / `cashOut` read
   // `isTestnet` to refuse a mainnet-only flow, so it has to be initialised
@@ -229,28 +381,71 @@ export default function BankPage() {
   const earnNet     = earnKey ? YIELD_NETWORKS[earnKey] : undefined;
   const morphoVnet  = earnKey ? VENUES.morpho.nets[earnKey] : undefined;
 
-  // The wallet's OWN chain, which is not the same thing as the network this
-  // dashboard is reading. Balances are read with an explicit `chainId`, so they
-  // are right either way — but every write (send, swap, supply) goes through the
-  // wallet, so a mismatch here is the difference between a transaction and a
-  // rejection. Surfacing it beats letting the user find out at signing time.
-  const { switchChainAsync } = useSwitchChain();
-  const [switchBusy, setSwitchBusy] = useState(false);
-  const chainMismatch = isConnected && walletChainId != null && walletChainId !== chainId;
-  async function switchToAppChain() {
-    setSwitchBusy(true);
-    try { await switchChainAsync({ chainId }); } catch { /* user declined */ }
-    finally { setSwitchBusy(false); }
-  }
+  // The page-level chain-mismatch state (`chainMismatch`, `switchBusy`,
+  // `switchToAppChain`, `useSwitchChain`) was REMOVED with the banner it fed —
+  // see the note at its old render site below. It is deleted rather than left
+  // unused because a mismatch derivation sitting in scope is an invitation to
+  // render it again, and this page can no longer say anything true with it: it
+  // shows two chains at once, so "the network this dashboard is reading" is not
+  // a single value to compare the wallet against.
+  //
+  // The switching itself did NOT go away, it moved to where it can be correct.
+  // Each action card calls `switchChainAsync` for the chain it is about to sign
+  // on, immediately before signing — `RhSwapCard.doSwap` → 4663, the Base cards
+  // → 8453 — so the prompt appears when the user has already chosen a chain and
+  // an amount, and names the chain that transaction actually needs.
 
-  const [panel, setPanel]     = useState<Panel>("positions");
-  const [view, setView]       = useState<View>("portfolio");
+  // Default panel = `send`. Not a style pick: every entrance into this drawer
+  // (`openAction`) names its own panel, so this value is only ever seen when the
+  // drawer is opened without one. `positions` used to hold that slot and made
+  // the FIRST screen of an action drawer a read-only list; `send` is the thing
+  // the drawer exists to do.
+  const [panel, setPanel]     = useState<Panel>("send");
+  const [view, setView]       = useState<View>("tokens");
   const [actionOpen, setActionOpen] = useState(false);
   const [copied, setCopied]   = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const openAction = (p: Panel) => {
     if (p === "send") { setScanPrefill(null); setScanKey(k => k + 1); }
     setPanel(p); setActionOpen(true);
+  };
+
+  // Which chain the Convert panel is acting on. With the global switcher gone the
+  // Convert card carries its own Base | Robinhood selector; this holds the choice.
+  // Base is the default (0x-API swaps, the deep-liquidity venue); Robinhood routes
+  // through its own RhSwapCard. Base Sepolia is deliberately NOT an option — 0x has
+  // no testnet liquidity and SwapCard force-switches to Base mainnet.
+  const [convertChain, setConvertChain] = useState<"base" | "robinhood">("base");
+
+  // Which chain the PORTFOLIO tab is SHOWING. This narrows the ANSWER to "what do
+  // I hold?", it does not change what the wallet acts on: Send, Convert and
+  // Receive each pick their own chain and none of them reads this. Filtering a
+  // read-only list moves no money, which is exactly why it is safe to offer here
+  // and why the old global switcher — which silently re-aimed the spend paths
+  // too — is not coming back.
+  //
+  // "all" is the default and stays the honest default: a wallet that shows every
+  // chain unless asked otherwise can never quietly omit one. When a single chain
+  // IS picked the view says so out loud (see the note beside the control), so a
+  // filtered list is never mistaken for the whole portfolio.
+  const [portfolioChain, setPortfolioChain] = useState<"all" | WalletChain>("all");
+  const showsChain = (c: WalletChain) => portfolioChain === "all" || portfolioChain === c;
+
+  // The Portfolio tab strip, so a click in the LEFT sidebar can scroll the RIGHT
+  // pane to the table it just filtered. Without it the sidebar cards read as dead
+  // buttons: they sit above the fold, the tables sit below it, and a state change
+  // the user cannot see is indistinguishable from nothing happening.
+  const portfolioRef = useRef<HTMLDivElement | null>(null);
+  const showChain = (c: WalletChain) => {
+    setPortfolioChain(c);
+    // Filtering a tab that isn't open is a no-op to the user, so open one — but
+    // NOT always `tokens`. A user reading Stocks who picks a chain is narrowing
+    // the equities in front of them; snapping to Tokens would answer a question
+    // they did not ask. Only jump when the open tab cannot show the filter.
+    setView(v => (isHoldingsView(v) ? v : "tokens"));
+    requestAnimationFrame(() =>
+      portfolioRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
   };
 
   // Quick-sell from the token table → pre-fill + open the Convert panel. Amount
@@ -264,6 +459,39 @@ export default function BankPage() {
       if (h.isNative && pct === 100) { const buf = 50_000_000_000_000n; sellRaw = sellRaw > buf ? sellRaw - buf : 0n; } // ~0.00005 ETH
       if (sellRaw <= 0n) return;
       setSellPreset({ addr: h.address, sym: h.symbol, decimals: h.decimals, amount: formatUnits(sellRaw, h.decimals), nonce: Date.now() });
+      setConvertChain("base"); // the quick-sell tokens are read from the Base table
+      openAction("convert");
+    } catch { /* malformed raw — ignore */ }
+  };
+
+  // The same affordance on Robinhood Chain, for both RH tables (crypto tokens
+  // and tokenized equities).
+  //
+  // ── Why this is a SECOND preset and not the one above ────────────────────────
+  //
+  // Convert is two different components on two different chains — `SwapCard`
+  // signs on Base, `RhSwapCard` signs on 4663 — and a preset is an ADDRESS. One
+  // shared preset would let a Base row arm the RH card, which is #219's
+  // "the chain must travel with the fact" in the one place it costs money.
+  //
+  // No gas buffer, and none is missing: ETH is the OUT side of every sell on
+  // 4663, so a native row is never sellable and `RhTokenTable` refuses to draw a
+  // control on one. There is no 100%-of-native case for a buffer to protect.
+  //
+  // Both tables only call this on a row whose pool was MEASURED (see
+  // lib/wallet/rh-sellable.ts) — this function does not re-check that, and must
+  // not be wired to anything that has not.
+  const [rhSellPreset, setRhSellPreset] =
+    useState<{ addr: string; sym: string; amount: string; nonce: number } | null>(null);
+  const rhQuickSell = (
+    t: { addr: string; sym: string; decimals: number; raw: string },
+    pct: number,
+  ) => {
+    try {
+      const sellRaw = (BigInt(t.raw) * BigInt(pct)) / 100n;
+      if (sellRaw <= 0n) return;
+      setRhSellPreset({ addr: t.addr, sym: t.sym, amount: formatUnits(sellRaw, t.decimals), nonce: Date.now() });
+      setConvertChain("robinhood");
       openAction("convert");
     } catch { /* malformed raw — ignore */ }
   };
@@ -291,7 +519,20 @@ export default function BankPage() {
   // the same config, so the two can no longer disagree.
   const [reqAmount, setReqAmount] = useState("");
   const [reqAsset, setReqAsset] = useState<"USDC" | "ETH">("USDC");
-  const reqSymbol = reqAsset === "USDC" ? net.stableSymbol : "ETH";
+  // Which chain the Deposit/Receive QR is for. Component-level (not panel-local)
+  // because `sharePayLink` below also needs it to stamp the right chain + symbol
+  // into the shared link. Base default; Robinhood always offered; Base Sepolia
+  // only when testnet is unlocked. The display symbol (`reqSymbol`) is derived
+  // from THIS chain's config inside the panel, so USDC/USDG can no longer disagree
+  // with the QR.
+  const [receiveChain, setReceiveChain] = useState<WalletChain>("base");
+  // Config + display symbol for the Receive QR, derived from `receiveChain` (NOT
+  // the page's home `network`): the Deposit panel is the one surface that still
+  // picks a chain, so its dollar label has to follow that pick. `reqAsset` stays
+  // the EIP-681 key ("USDC" = "this chain's dollar"); `reqSymbol` is what the
+  // human reads — USDC on Base, USDG on Robinhood — so the two never disagree.
+  const rcv       = WALLET_CHAINS[receiveChain];
+  const reqSymbol = reqAsset === "USDC" ? rcv.stableSymbol : "ETH";
 
   // Coinbase Onramp — add cash.
   //
@@ -383,16 +624,21 @@ export default function BankPage() {
   // has had to retire late. `/api/yield/rates` STAYS — the chat tool cards
   // (`chat/components/ToolCards.tsx`) still call it, so it is not orphaned.
   //
-  // ── Real wallet history (Moralis) ────────────────────────────────────────
+  // ── Real wallet history, leg 1 of 2: BASE, via Moralis ───────────────────
   type TxStats = { transferCountMonth: number; netFlowUsdcMonth: number; gasSavedUsd: number | null; ethUsdPrice: number | null };
   // `unsupported` is a THIRD outcome alongside data and error, and it is the
   // route telling us it refused rather than failed. Moralis does not index
-  // Robinhood 4663, so there is no history to fetch and no amount of retrying
-  // will produce one. Keeping it distinct from `error` is what stops the
-  // Activity tab offering a Retry button for a permanent gap — see the
-  // `can.txHistory` flag and the route's own header comment, which explains why
-  // it now REFUSES an unlisted chain instead of defaulting to `"base"` and
-  // handing back a Base transaction list under a Robinhood heading.
+  // Robinhood 4663, so there is no history HERE to fetch and no amount of
+  // retrying will produce one — see that route's header, which explains why it
+  // REFUSES an unlisted chain instead of defaulting to `"base"` and handing
+  // back a Base transaction list under a Robinhood heading.
+  //
+  // Keeping it distinct from `error` is what stops the Activity tab offering a
+  // Retry for a permanent gap: `activitySources` below folds it in with
+  // `needsKey`, the not-retryable bucket. It is no longer `can.txHistory` that
+  // carries that job — 4663 now HAS a reader (the Blockscout leg below), so the
+  // flag is true for every chain the wallet lists and `unsupported` can only
+  // fire if some future chain reaches this route without a Moralis slug.
   const [txData, setTxData] = useState<{ transactions: WalletTx[]; stats?: TxStats; needsKey?: boolean; unsupported?: boolean; error?: string } | null>(null);
   const [txLoading, setTxLoading] = useState(false);
   const [txError, setTxError]     = useState(false);
@@ -401,17 +647,117 @@ export default function BankPage() {
     if (!acct) { setTxData(null); return; }
     // Do not even ask for a chain the route cannot answer for. The fetch would
     // succeed and come back `unsupported`, which renders the same — but this
-    // way the network switcher does not fire a request per chain flip that is
-    // known in advance to return nothing.
+    // guard skips a request known in advance to return nothing. (Activity pins
+    // Base, whose `can.txHistory` is true, so it runs; the guard stays as the
+    // honest gate should a no-history chain ever become the home chain.)
     if (!can.txHistory) { setTxData(null); setTxLoading(false); setTxError(false); return; }
     let off = false;
     setTxLoading(true); setTxError(false);
     fetch(`/api/wallet/transactions?address=${acct}&network=${network}`)
       .then(r => r.json())
-      .then(d => { if (!off) { setTxData(d); setTxLoading(false); } })
+      .then(d => {
+        if (off) return;
+        setTxData(d);
+        // A 200 that CARRIES an error is a failed read, not an empty history.
+        //
+        // This line used to be `setTxData(d)` and nothing else, so `txError`
+        // could only ever be set by a fetch that THREW. The route does not
+        // throw: on a dead upstream it answers 200 with
+        // `{ transactions: [], error: "moralis 401" }` — deliberately, so the
+        // caller can say which source failed. Dropping that field handed the
+        // empty array to the timeline as data, and the timeline printed
+        // "No transactions yet" over a wallet with years of history.
+        //
+        // MEASURED 2026-09-12 against the live route, with Moralis on its
+        // current 401 pause (#258): HTTP 200, `transactions: []`,
+        // `error: "moralis 401"`, `txError` false. Every wallet on the app was
+        // being told its on-chain history was empty.
+        //
+        // This is #211/#212/#213 for the fifth time — an absence produced by a
+        // broken reader, rendered as a fact about the user. `unsupported` is
+        // excluded because it is not a failure: it is the route refusing a
+        // chain its index does not cover, which has its own branch and its own
+        // explorer link, and must not be offered a Retry that cannot work.
+        setTxError(!!d.error && !d.unsupported);
+        setTxLoading(false);
+      })
       .catch(() => { if (!off) { setTxError(true); setTxLoading(false); } });
     return () => { off = true; };
   }, [acct, network, txReload, can.txHistory]);
+
+  // ── Robinhood history (that chain's own Blockscout) ──────────────────────
+  //
+  // A SECOND reader, not a second call to the one above — the same split as the
+  // holdings tables, for the same reason: Moralis does not index 4663, so the
+  // route above refuses that chain by name rather than defaulting to Base.
+  //
+  // This is the fix for "Activity là hiển thị hoạt động cả của ví, chứ không
+  // phải của only base": the rest of this page is cross-chain — the total, the
+  // Tokens tab, the Stocks tab — while the timeline covered Base alone. A
+  // Robinhood send that was simply not indexed looked like a send that never
+  // happened.
+  //
+  // Deliberately NOT folded into `txData`: two indexers with two trust models
+  // and two failure modes cannot share one state object without losing which
+  // chain failed, and "which chain failed" is the whole content of the footnote
+  // the timeline draws.
+  type RhTxRead = { transactions?: WalletTx[]; partial?: boolean; capped?: boolean; status?: string };
+  const [rhTx, setRhTx] = useState<RhTxRead | null>(null);
+  const [rhTxLoading, setRhTxLoading] = useState(false);
+  const [rhTxError, setRhTxError]     = useState(false);
+  useEffect(() => {
+    if (!acct) { setRhTx(null); setRhTxLoading(false); setRhTxError(false); return; }
+    if (!WALLET_CHAINS.robinhood.can.txHistory) { setRhTx(null); setRhTxLoading(false); setRhTxError(false); return; }
+    let off = false;
+    setRhTxLoading(true); setRhTxError(false);
+    fetch(`/api/wallet/rh-transactions?address=${acct}`)
+      .then(r => r.json())
+      .then((d: RhTxRead) => {
+        if (off) return;
+        // `status` is the route's own word for "did the explorer answer", and it
+        // is checked for exactly the reason the Base leg checks `error` above: a
+        // 200 carrying `status:"unavailable"` is a FAILED read whose
+        // `transactions: []` would otherwise be merged in as data and rendered
+        // as a chain the user has never transacted on. Same family, sixth time.
+        if (d?.status !== "ok") { setRhTx(null); setRhTxError(true); setRhTxLoading(false); return; }
+        setRhTx(d); setRhTxLoading(false);
+      })
+      .catch(() => { if (!off) { setRhTxError(true); setRhTxLoading(false); } });
+    return () => { off = true; };
+  }, [acct, txReload]);
+
+  // One timeline, two readers — merged here, ordered by time, and NEVER
+  // flattened into a single loading/error pair. Each source reports its own
+  // state so the card can render Base's rows while Robinhood is still in
+  // flight, and name whichever chain went unread instead of implying the list
+  // is complete. Both `can.txHistory` flags are load-bearing: they gate the
+  // fetch AND the source entry, so a chain we cannot read is absent from the
+  // scope line rather than stuck on a spinner.
+  const activitySources: TxSource[] = useMemo(() => {
+    const out: TxSource[] = [];
+    if (can.txHistory) out.push({
+      chain: network,
+      // `unsupported` joins `needsKey` rather than `error`: both are permanent
+      // gaps in a data source, and neither is fixed by pressing Retry.
+      status: txLoading                              ? "loading"
+            : txData?.needsKey || txData?.unsupported ? "needsKey"
+            : txError                                 ? "error"
+            : txData                                  ? "ok"
+            : "loading",
+    });
+    if (WALLET_CHAINS.robinhood.can.txHistory) out.push({
+      chain: "robinhood",
+      status: rhTxLoading ? "loading" : rhTxError ? "error" : rhTx ? "ok" : "loading",
+      partial: rhTx?.partial,
+      capped:  rhTx?.capped,
+    });
+    return out;
+  }, [can.txHistory, network, txLoading, txError, txData, rhTxLoading, rhTxError, rhTx]);
+
+  const activityRows: WalletTx[] = useMemo(
+    () => [...(txData?.transactions ?? []), ...(rhTx?.transactions ?? [])].sort((a, b) => b.ts - a.ts),
+    [txData, rhTx],
+  );
 
   // ── How much of the balance did we actually READ? ────────────────────────
   //
@@ -493,9 +839,26 @@ export default function BankPage() {
   // reads it renders only in a non-pending branch.
   const rereading = legs.some(l => l.q.isFetching) || (!!acct && ethQ.isFetching);
 
-  // Stats from real wallet history (this calendar month)
-  const netFlowMonth      = txData?.stats?.netFlowUsdcMonth ?? 0;
-  const transferCountMonth = txData?.stats?.transferCountMonth ?? 0;
+  // ── Did the history read actually LAND? ──────────────────────────────────
+  //
+  // Derived once and read by everything downstream, for the same reason
+  // `balanceRead` is: the score's activity leg and the timeline card must not
+  // answer "do we know this wallet's activity?" with two separate `if`s.
+  //
+  // Four ways to not know it, and none of them is "zero transfers": still in
+  // flight, the fetch failed, no Moralis key configured, or the chain is not in
+  // Moralis's index at all. Only the last branch below is a measurement.
+  const historyRead: "pending" | "unread" | "ok" =
+    txLoading                                                     ? "pending"
+    : txError || txData?.needsKey || txData?.unsupported          ? "unread"
+    : txData                                                      ? "ok"
+    : "pending";
+
+  // Stats from real wallet history (this calendar month). `null`, not 0, when
+  // the read did not land — a failed Moralis call must not be able to assert
+  // "you made no transfers this month", which is what `?? 0` said.
+  const netFlowMonth       = historyRead === "ok" ? txData?.stats?.netFlowUsdcMonth  ?? 0 : null;
+  const transferCountMonth = historyRead === "ok" ? txData?.stats?.transferCountMonth ?? 0 : null;
   // Live ETH/USD (CoinGecko, via the transactions route). `null` = the feed did
   // not answer — kept null all the way to the render so nothing downstream can
   // quietly substitute a constant, which is what `ethBal * 2500` used to be.
@@ -555,22 +918,76 @@ export default function BankPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: historySnapshot,
-          // The prompt states balances and no rate. It used to end
-          // "In yield: $X at Y%", where Y was `bestApy` — DefiLlama's top USDC
-          // pool, a market-wide figure, not this user's position. The assistant
-          // read it as the user's own rate and quoted it back. With the yield
-          // entrance closed there is no rate to state at all, and the old
-          // "Focus on Base DeFi" steer pointed answers at a product this page
-          // no longer sells.
-          // Same `displayName` the header greets with — this was a FOURTH copy of
-          // the ladder and the most degraded of them (it omitted even `fname`),
-          // so the assistant addressed by hex a user the page had just greeted by
-          // name. One derivation, every consumer.
-          // `balanceForPrompt` carries the READ STATE, not just the numbers —
-          // see its definition. This interpolated `$${usd(total)}` directly,
-          // which is "$0.00" for any read that had not landed or had failed.
-          system: `You are BlueAgent Wallet assistant. User: ${displayName}. ${balanceForPrompt} Answer concisely in 2-3 sentences. Help with balances, sending and receiving on Base, and withdrawing supplied funds. Never state a balance that is marked UNKNOWN or NOT YET READ above, and never describe an unread balance as zero or empty. Do not recommend yield strategies or quote APYs — this wallet no longer offers them.`,
-          model: "fast",
+          // ── `address` — the fix for "No wallet is connected" (2026-09-13) ──
+          //
+          // This was MISSING, and its absence was the whole bug. `/api/chat`
+          // reads the connected wallet from `body.address` and nowhere else;
+          // `check_wallet` (the tool behind "show my balance breakdown") has no
+          // address ARGUMENT by design — the schema says "it auto-uses the
+          // connected address". So with no `address` on the body the tool took
+          // its not-connected branch and returned the static line
+          //
+          //     "No wallet is connected — connect one to see your holdings."
+          //
+          // …to a user sitting on the wallet page, looking at their own
+          // holdings, with `acct` in scope three lines from this fetch. That is
+          // the #211/#212/#213 shape again: an absence produced by a broken
+          // READER, rendered as a fact about the USER. The page never doubted
+          // the connection; it simply never mentioned it.
+          //
+          // Sent only when truthy, matching ChatContext: a guest asking here
+          // must still reach the guest path, not a malformed "" address.
+          ...(acct ? { address: acct } : {}),
+          // `tier`, not `model`. The body below used to carry `model: "fast"`,
+          // which `/api/chat` does not destructure — so this assistant silently
+          // ran (and BILLED) at the route's default `tier = "pro"`. The name of
+          // the field is the whole fix; "fast" was never wrong, it was never
+          // read. Kept cheap on purpose: this is a 2–3 sentence balance helper.
+          tier: "fast",
+          // ── `pageContext`, not `system` (2026-09-13) ───────────────────────
+          //
+          // This block used to be sent as `system`, and `/api/chat` does not
+          // destructure `system` — so every word of it, including
+          // `balanceForPrompt`, has been dropped on the floor on every message
+          // this assistant has ever sent. The honesty engineering below was
+          // real and the model never saw one line of it. Same shape as the
+          // `address` bug above: written, never read.
+          //
+          // It moved to `pageContext` rather than teaching the route to accept
+          // `system`, because a client-settable `system` REPLACES SOUL.md, the
+          // B20 prohibitions and the tool dispatch table. This page wants to
+          // add a paragraph, not to become the prompt.
+          //
+          // The label matters as much as the content. The model now also has
+          // `check_wallet` — a live server read of this same wallet across both
+          // chains — so these numbers are no longer its only source. They are a
+          // SNAPSHOT OF THE SCREEN, and saying so is what stops the model
+          // treating a stale figure as a second oracle and picking whichever it
+          // likes. Anything the tool returns is fresher; this block's job is to
+          // describe what the user is looking at, and to carry the READ STATE
+          // the tool has no way to know.
+          //
+          // `balanceForPrompt` is that read state — see its definition. The old
+          // string interpolated `$${usd(total)}` directly, which renders
+          // "$0.00" for a read that had not landed or had failed: the page told
+          // the assistant the wallet was empty while the page itself was still
+          // showing dashes. `displayName` is the same derivation the header
+          // greets with; this was a FOURTH copy of that ladder, and the most
+          // degraded of them (it omitted even `fname`), so the assistant
+          // addressed by hex a user the page had just greeted by name.
+          //
+          // No APY/yield steer: the yield entrance is closed, so there is no
+          // rate to state. The old copy ended "In yield: $X at Y%", where Y was
+          // `bestApy` — DefiLlama's best USDC pool, a market-wide figure the
+          // assistant read back as this user's own rate.
+          pageContext:
+            `[Wallet page — what is on the user's screen right now]\n` +
+            `The user is on their BlueAgent wallet page, not the general chat. User: ${displayName}.\n` +
+            `${balanceForPrompt}\n` +
+            `These figures are a snapshot of the page as rendered; check_wallet is a live read and wins on any disagreement. ` +
+            `Never state a balance marked UNKNOWN or NOT YET READ, and never describe an unread balance as zero or empty. ` +
+            `Help with balances, sending and receiving, and withdrawing supplied funds. ` +
+            `Do not recommend yield strategies or quote APYs — this wallet no longer offers them.`,
         }),
       });
       if (!res.ok || !res.body) throw new Error("no body");
@@ -624,13 +1041,16 @@ export default function BankPage() {
 
   function sharePayLink() {
     if (!acct) return;
+    // The link carries the RECEIVE chain the user picked in the panel, not the
+    // page's home chain — a request made on Robinhood must share as Robinhood.
+    // `rcv` is the component-level derivation of that same pick.
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const qs = new URLSearchParams({ asset: reqAsset, network });
+    const qs = new URLSearchParams({ asset: reqAsset, network: receiveChain });
     if (parseFloat(reqAmount) > 0) qs.set("amount", reqAmount);
     const url = `${origin}/pay/${acct}?${qs.toString()}`;
-    // `network` is already in the query string — the human title has to agree
+    // `receiveChain` is already in the query string — the human title has to agree
     // with it, or a Sepolia link gets shared reading "Pay me on Base".
-    const title = parseFloat(reqAmount) > 0 ? `Pay me ${reqAmount} ${reqAsset} on ${net.short}` : `Pay me on ${net.short}`;
+    const title = parseFloat(reqAmount) > 0 ? `Pay me ${reqAmount} ${reqAsset} on ${rcv.short}` : `Pay me on ${rcv.short}`;
     if (typeof navigator !== "undefined" && navigator.share) {
       navigator.share({ title, url }).catch(() => {});
     } else {
@@ -694,6 +1114,11 @@ export default function BankPage() {
   // written. So it is written. The instruction is explicit rather than implied
   // by an em-dash, since the model is the one thing here that will happily
   // interpolate around a missing value.
+  //
+  // `priv` deliberately does NOT reach this string. The eye toggle hides
+  // figures from whoever is looking at the screen; it is not a data policy, and
+  // masking here would hand the assistant "••••" as an amount — the one reader
+  // that would try to reason with it.
   const balanceForPrompt =
     balanceRead.body === "pending"
       ? "Balance: NOT YET READ (request still in flight)."
@@ -720,7 +1145,6 @@ export default function BankPage() {
   // would strand a depositor's funds; showing it on an empty wallet costs a
   // tab that reports "no positions".
   const TABS: { id: Panel; label: string; icon: string; desc: string }[] = [
-    { id: "positions", label: "Positions", icon: "📊", desc: "Your yield" },
     ...(noPositions ? [] : [{ id: "withdraw" as Panel, label: "Withdraw", icon: "↩︎", desc: "Exit yield" }]),
     // `receive` is labelled "Deposit" so the tab matches the ACTIONS button
     // that opens it, and its `desc` names all three things the panel now
@@ -729,6 +1153,13 @@ export default function BankPage() {
     { id: "send",      label: "Send",      icon: "➡",  desc: "Pay anyone" },
     { id: "receive",   label: "Deposit",   icon: "⬇",  desc: "QR · card · bank" },
     { id: "convert",   label: "Convert",   icon: "⇅",  desc: "Swap tokens" },
+    // Bridge is NOT gated on `can.*`, unlike Send and Convert. Those two ask
+    // "does the chain the wallet is CONNECTED to support this?"; a bridge always
+    // spans two chains and picks its own origin in-card, so the connected chain
+    // is not the question. What it CAN do is answered by Relay's live list,
+    // fetched by the panel itself, and an outage there renders "couldn't load"
+    // rather than a tab that lies in either direction.
+    { id: "bridge",    label: "Bridge",    icon: "⇄",  desc: "Base ↔ Robinhood" },
   ];
 
   // Orders is NOT gated on B20_ENABLED, unlike the modal tab it replaces.
@@ -739,9 +1170,10 @@ export default function BankPage() {
   // the modal onto a tab that did not exist: an empty box. OrdersPanel already
   // states its own degraded mode; the tab lets a user reach it to read that.
   const VIEWS: { id: View; label: string }[] = [
-    { id: "portfolio", label: "Portfolio" },
-    { id: "activity",  label: "Activity" },
-    { id: "orders",    label: "Payment requests" },
+    { id: "tokens",   label: "Tokens" },
+    { id: "stocks",   label: "Stocks" },
+    { id: "activity", label: "Activity" },
+    { id: "orders",   label: "Payment requests" },
   ];
 
   // ── Portfolio allocation (for pie chart) ─────────────────────────────────
@@ -818,13 +1250,30 @@ export default function BankPage() {
   // CLAUDE.md: missing data is "unknown", never an inferred value.
   const gasScore: number | null =
     ethBal == null ? null : ethBal > 0.05 ? 95 : ethBal > 0.01 ? 80 : ethBal > 0.005 ? 60 : 20;
-  const actScore       = transferCountMonth > 10 ? 90 : transferCountMonth > 5 ? 75 : transferCountMonth > 1 ? 55 : 20;
+  // `null` when the history never landed — the third leg to learn the lesson
+  // the two above it already carry, and the one that was still getting it wrong.
+  //
+  // It read `transferCountMonth > 10 ? 90 : … : 20` against a count that was
+  // `?? 0` on a FAILED read, so a dead Moralis scored every wallet at the 20/100
+  // floor for a quarter of the grade — a fabricated negative worth 17.5 points,
+  // invented out of an outage. That is the exact defect the comment above
+  // `gasScore` describes ("a middling grade invented out of an absent
+  // measurement"), and the one `wallet-state.ts` removed a whole term for
+  // ("the same wallet scored 25 lower during an API outage"). Live right now:
+  // Moralis is 401-paused (#258), so this leg is currently floored for everyone.
+  const actScore: number | null =
+    transferCountMonth == null ? null
+    : transferCountMonth > 10 ? 90 : transferCountMonth > 5 ? 75 : transferCountMonth > 1 ? 55 : 20;
   // COMPLETE, not merely "known" — see the note above. `gasScore != null` folds
   // in the ETH leg, which is not part of `total` and so is deliberately not one
   // of `balanceRead`'s legs, but which three quarters of this grade rests on.
-  const scoreReady     = balanceRead.state === "complete" && total > 0 && gasScore != null;
+  // `actScore != null` folds in the fourth: a grade is a claim about the whole
+  // position, and it must not be published while one of its inputs is unread —
+  // publishing it anyway is how the outage became a letter grade.
+  const scoreReady     = balanceRead.state === "complete" && total > 0 && gasScore != null && actScore != null;
   const portfolioScore: number | null =
-    scoreReady && gasScore != null ? Math.round(divScore * 0.4 + gasScore * 0.35 + actScore * 0.25) : null;
+    scoreReady && gasScore != null && actScore != null
+      ? Math.round(divScore * 0.4 + gasScore * 0.35 + actScore * 0.25) : null;
   const scoreGrade     = portfolioScore == null ? null : portfolioScore >= 85 ? "A" : portfolioScore >= 70 ? "B" : portfolioScore >= 55 ? "C" : "D";
   // Slate, not red, when there is no score — colour is a claim too.
   const scoreColor     = portfolioScore == null ? "#475569"
@@ -858,9 +1307,7 @@ export default function BankPage() {
     // balance multiplied by someone else's yield. The balance is measured; the
     // return on it was never something this page could read.
     if (inYield > 0)
-      allMissions.push({ priority: "good", icon: "✅", text: `$${usd(inYield)} supplied — withdrawable any time`, action: "Withdraw", onAction: () => openAction("withdraw"), color: "#34D399" });
-    if (ethBal != null && ethBal < 0.005)
-      allMissions.push({ priority: "warn", icon: "⛽", text: "ETH too low for gas fees", action: "Get ETH", onAction: () => openAction("convert"), color: "#F59E0B" });
+      allMissions.push({ priority: "good", icon: "✅", text: `${priv(`$${usd(inYield)}`)} supplied — withdrawable any time`, action: "Withdraw", onAction: () => openAction("withdraw"), color: "#34D399" });
     // A fourth mission used to sit here:
     //
     //   if (new Date() >= new Date("2026-06-25"))
@@ -896,6 +1343,23 @@ export default function BankPage() {
     // When B20 actually ships, the place to say so is OrdersPanel, gated on
     // B20_ENABLED, where the feature lives.
   }
+
+  // ── Gas, OUTSIDE the balance-read branch above ────────────────────────────
+  // Every other mission reasons about `total`, so it needs the USDC read to
+  // have landed. This one does not: it reasons about `ethBal`, which is its own
+  // read (`ethQ`), and `ethBal != null` is already proof that read came back.
+  // Gating it on the USDC read was an over-gate that silently cost coverage —
+  // a wallet whose USDC read failed, or which read as empty, has a MEASURED
+  // empty gas tank and was told nothing about it.
+  //
+  // It also has to live here rather than up there because the ON BASE
+  // itemisation that carried a second copy of this warning is gone (see the
+  // account card): this is now the only place the user is told they cannot
+  // sign. Losing that was the one real risk in deleting those rows, so the
+  // warning was moved BEFORE they were removed, not after.
+  if (ethBal != null && ethBal < 0.005)
+    allMissions.push({ priority: "warn", icon: "⛽", text: "ETH too low for gas fees", action: "Get ETH", onAction: () => openAction("convert"), color: "#F59E0B" });
+
   const topMissions = allMissions.slice(0, 3);
   // Gated on the BALANCE READ, not on `total`.
   //
@@ -925,9 +1389,15 @@ export default function BankPage() {
     // errored and a supplied position still read — hence the liquid figure is
     // named only when it is known, rather than rendering "$—" as if that were
     // an amount. `floor` marks the total as a lower bound either way.
-    walletUsdc == null ? `${floor}$${usd(inYield)} supplied · liquid balance unread` :
-    inYield > 0 ? `${floor}$${usd(walletUsdc)} liquid · $${usd(inYield)} supplied` :
-    `${floor}$${usd(walletUsdc)} USDC on ${net.short}`;
+    //
+    // `priv` wraps the AMOUNTS only, never the sentence around them: with the
+    // eye toggle on this still reads "•••• liquid", so the user keeps the shape
+    // of their situation without the figure. The four branches above carry no
+    // amount at all and are left exactly as they are — a masked balance must
+    // not look like an unread one.
+    walletUsdc == null ? `${floor}${priv(`$${usd(inYield)}`)} supplied · liquid balance unread` :
+    inYield > 0 ? `${floor}${priv(`$${usd(walletUsdc)}`)} liquid · ${priv(`$${usd(inYield)}`)} supplied` :
+    `${floor}${priv(`$${usd(walletUsdc)}`)} USDC on ${net.short}`;
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
@@ -978,12 +1448,18 @@ export default function BankPage() {
           What the design draws here vs. what we honestly render:
             ● // WALLET header   → kept
             ASK BLUEAGENT        → kept, wired to the real chat (chatInput/…)
-            CHAINS cards         → kept AND made the chain switcher (setNetwork).
-                                   Design prints a per-chain $ total; DROPPED —
-                                   the wallet reads the ACTIVE chain only, so a
-                                   "Base $X / RH $Y" figure would assert a number
-                                   for a chain we never read. Name + capability
-                                   caption (from lib/wallet/chains.ts `can`) only.
+            CHAINS cards         → a READOUT that also FILTERS, never a switcher.
+                                   Each shows the chain's name, its per-chain $
+                                   (from /api/wallet/net-worth, which reads BOTH
+                                   real-money chains — measured, not asserted) and
+                                   its capability caption. Clicking one points the
+                                   holdings tabs at that chain and nothing else:
+                                   no balance headline, no Activity, and above all
+                                   no spend path is re-aimed. That is the whole
+                                   difference from the switcher this replaced —
+                                   filtering a read-only list cannot mis-send
+                                   money, whereas a control that silently re-aimed
+                                   Send/Convert/Receive could.
             CREDIT · x402        → design shows "$41.85 · 62% left" off no real
                                    source; credits are not dollar-denominated and
                                    this component reads none, so it is a link to
@@ -1032,21 +1508,24 @@ export default function BankPage() {
             </div>
           </div>
 
-          {/* CHAINS — the chain switcher, now with each chain's $ worth. The old
-              rule here ("name + capabilities only, NO per-chain $") held while the
-              wallet only ever read the ACTIVE chain; /api/wallet/net-worth now
-              reads BOTH real-money chains at once, so a per-chain figure is a
-              number we actually measured, not one for a chain we never read. It
-              carries the same honesty as everything else: "≥" when a row was
+          {/* CHAINS — a readout that FILTERS the holdings tabs. It used to flip
+              the whole page's `network`; that control is gone (it changed a heading
+              and a balance and little else, while the per-action cards —
+              Convert/Receive/Send — are what actually differ per chain). Clicking a
+              card now sets `portfolioChain` and scrolls to the tables: it narrows
+              what you are LOOKING at, it re-aims nothing you can SPEND from. What
+              survives is the honest part: each chain's name, its measured per-chain $ (from
+              /api/wallet/net-worth, which reads BOTH real-money chains), and its
+              capability caption. Same honesty as before — "≥" when a row was
               unpriced, "unread" when a chain would not answer (never $0), and no
-              figure at all for Base Sepolia (testnet — no real $ to show). Active
-              chain gets the cyan card, amber if it is a testnet; click switches. */}
+              figure at all for Base Sepolia (testnet, no real $). Base carries a
+              "home" tag because the balance headline + Activity read from it. */}
           <div>
             <div className="font-mono text-[9px] font-medium tracking-[0.16em] text-[#64748B] mb-2">CHAINS</div>
             <div className="flex flex-col gap-[7px]">
               {WALLET_CHAIN_ORDER.filter(nk => testnetUnlocked || !WALLET_CHAINS[nk].testnet).map(nk => {
                 const c = WALLET_CHAINS[nk];
-                const on = network === nk;
+                const home = nk === "base"; // the wallet's home chain (headline + Activity)
                 const caps = [c.can.fiat && "cash", c.can.send && "send", c.can.swap && "swap", "holdings"].filter(Boolean).join(" · ");
                 // Per-chain $ — only for the two real-money chains net-worth
                 // covers. An `undefined` lookup means still reading (show "…")
@@ -1056,39 +1535,63 @@ export default function BankPage() {
                 // figure at all, because a "$" over play money would be exactly
                 // the fabrication this wallet refuses.
                 const cw = c.testnet ? undefined : netWorth.chain(nk as "base" | "robinhood");
+                // `priv` wraps ONLY the branch that is a real figure — "unread"
+                // and "…" pass through, because the eye toggle hides what the
+                // wallet knows, never what it failed to learn.
                 const worth = c.testnet ? null
-                  : cw ? (cw.status === "unavailable" ? "unread" : `${cw.isFloor ? "≥ " : ""}$${usd(cw.usd)}`)
+                  : cw ? (cw.status === "unavailable" ? "unread" : priv(`${cw.isFloor ? "≥ " : ""}$${usd(cw.usd)}`))
                   : (acct && !netWorth.received) ? "…"
                   : null;
+                // Selected = this chain is the one the holdings tabs are filtered
+                // to. Distinct from `home`, which is a permanent fact about the
+                // chain (headline + Activity read from Base); the two can both be
+                // true and they mean different things, so they never share a style.
+                const sel = portfolioChain === nk;
                 return (
-                  <button key={nk} onClick={() => setNetwork(nk)}
-                    className="text-left rounded-[10px] p-2.5 border transition-colors"
-                    style={on
-                      ? c.testnet
-                        ? { borderColor: "#F59E0B52", background: "#F59E0B0f" }
-                        : { borderColor: "#4FC3F752", background: "#4FC3F70f" }
-                      : { borderColor: "#1A1A2E", background: "transparent" }}>
+                  <button key={nk} type="button" onClick={() => showChain(nk)}
+                    aria-pressed={sel}
+                    aria-label={`Show ${c.label} holdings in the Tokens and Stocks tabs`}
+                    className={`w-full text-left rounded-[10px] p-2.5 border transition-colors ${
+                      sel   ? "border-[#4FC3F7]/60"
+                      : home ? "border-[#4FC3F7]/20 hover:border-[#4FC3F7]/45"
+                      :        "border-[#1A1A2E] hover:border-[#4FC3F7]/35"}`}
+                    style={{ background: home ? "#4FC3F708" : "transparent" }}>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[11px] font-medium"
-                        style={{ color: on ? (c.testnet ? "#F59E0B" : "#4FC3F7") : "#94A3B8" }}>
-                        {on ? "● " : "○ "}{c.label}
+                      <span className="font-mono text-[11px] font-medium flex items-center gap-1.5"
+                        style={{ color: home ? "#4FC3F7" : c.testnet ? "#F59E0B" : "#94A3B8" }}>
+                        {c.label}
+                        {home && <span className="font-mono text-[8px] text-[#4FC3F7]/70 border border-[#4FC3F7]/25 rounded px-1 py-px">home</span>}
                       </span>
                       {worth != null && (
                         <span className="font-mono text-[10px] shrink-0"
-                          style={{ color: worth === "unread" ? "#F59E0B99" : worth === "…" ? "#64748B" : on ? "#E2E8F0" : "#94A3B8" }}>
+                          style={{ color: worth === "unread" ? "#F59E0B99" : worth === "…" ? "#64748B" : "#E2E8F0" }}>
                           {worth}
                         </span>
                       )}
                     </div>
-                    <div className="font-mono text-[9.5px] text-[#64748B] mt-1">{caps}</div>
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <span className="font-mono text-[9.5px] text-[#64748B]">{caps}</span>
+                      <span className="font-mono text-[9px] shrink-0"
+                        style={{ color: sel ? "#4FC3F7" : "#334155" }}>
+                        {sel ? "showing" : "show →"}
+                      </span>
+                    </div>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* CREDIT · x402 — a link to the Usage page, NOT a fabricated balance.
-              Credits are not dollar-denominated and this component reads none. */}
+          {/* CREDIT · x402 — a link, and staying a link.
+              It used to be justified as "this component reads no credit data",
+              which stopped being true in this change: the AGENT SPEND card in
+              the main column now reads the real ledger. The justification is
+              therefore replaced rather than left to rot — this card stays a
+              link because the figures are ALREADY on screen a column away, and
+              printing them twice on one viewport is how two copies of a number
+              start drifting. What it must never become is the design's
+              "$41.85 · 62% left": credits are not dollar-denominated, and no
+              credit BALANCE is read anywhere on this page. */}
           <div>
             <div className="font-mono text-[9px] font-medium tracking-[0.16em] text-[#64748B] mb-2">CREDIT · x402</div>
             <a href="/app/usage"
@@ -1153,25 +1656,16 @@ export default function BankPage() {
       </div>
 
       {/* Mobile control row — below lg the header above is hidden and the
-          MobileTopBar carries only the title, so the chain toggle + Ask live
-          here. Complementary by breakpoint with the desktop bar, so no control
-          is ever on screen twice. */}
-      <div className="lg:hidden flex items-center gap-1.5 shrink-0 px-3 py-2 border-b border-[#1A1A2E] overflow-x-auto">
-        {WALLET_CHAIN_ORDER.filter(nk => testnetUnlocked || !WALLET_CHAINS[nk].testnet).map(nk => {
-          const c = WALLET_CHAINS[nk];
-          const on = network === nk;
-          return (
-            <button key={nk} onClick={() => setNetwork(nk)}
-              className="font-mono text-[10px] px-2.5 py-1 rounded-md shrink-0 transition-colors"
-              style={on
-                ? c.testnet
-                  ? { background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B30" }
-                  : { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
-                : { color: "#64748B", border: "1px solid #1A1A2E" }}>
-              {c.short}
-            </button>
-          );
-        })}
+          MobileTopBar carries only the title, so the Ask entry lives here. The
+          chain toggle that used to sit here is gone with the global switcher;
+          the home chain is named on the left instead, and the per-action cards
+          carry their own chain choice. Complementary by breakpoint with the
+          desktop bar, so no control is ever on screen twice. */}
+      <div className="lg:hidden flex items-center gap-1.5 shrink-0 px-3 py-2 border-b border-[#1A1A2E]">
+        <span className="font-mono text-[10px] flex items-center gap-1.5" style={{ color: "#4FC3F7" }}>
+          <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] shrink-0" /> {net.short}
+          <span className="font-mono text-[8px] text-[#4FC3F7]/70 border border-[#4FC3F7]/25 rounded px-1 py-px">home</span>
+        </span>
         <button onClick={() => setChatOpen(true)}
           className="ml-auto shrink-0 font-mono text-[10px] font-semibold px-3 py-1 rounded-md"
           style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
@@ -1190,49 +1684,37 @@ export default function BankPage() {
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 xl:p-5 2xl:p-6 3xl:p-8">
 
-          {/* Testnet banner — the whole point of the opt-in. If a page can show
-              testnet balances and hand out a testnet receive QR, it has to say
-              so louder than the chip in the header does. */}
-          {isTestnet && (
-            <div className="mb-3 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3"
-              style={{ background: "#F59E0B10", border: "1px solid #F59E0B40" }}>
-              <div className="min-w-0">
-                <div className="font-mono text-[11px] font-bold" style={{ color: "#F59E0B" }}>
-                  ⚠ Testnet — {net.label}
-                </div>
-                <div className="font-mono text-[9px] text-slate-400 mt-0.5">
-                  Balances, QR codes and payment links on this page are test-only and hold no real value.
-                </div>
-              </div>
-              <button onClick={() => setNetwork("base")}
-                className="shrink-0 font-mono text-[10px] font-bold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80"
-                style={{ background: "#F59E0B", color: "#050508" }}>
-                Switch to Base
-              </button>
-            </div>
-          )}
+          {/* The global testnet banner was removed with the switcher. Testnet is
+              no longer a page MODE, so there is no whole-page state to warn about
+              here — the home chain is always Base mainnet. Base Sepolia now
+              appears only as an opt-in portfolio SECTION and a Receive OPTION,
+              each of which carries its own "test-only" caption locally. */}
 
-          {/* Wallet-vs-app chain mismatch. Reads are pinned to `chainId` so the
-              numbers above stay correct, but every signature would be rejected —
-              better to say it here than at the wallet prompt. */}
-          {chainMismatch && (
-            <div className="mb-3 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3"
-              style={{ background: "#4FC3F70d", border: "1px solid #4FC3F740" }}>
-              <div className="min-w-0">
-                <div className="font-mono text-[11px] font-bold" style={{ color: "#4FC3F7" }}>
-                  Wallet is on {walletChain?.name ?? `chain ${walletChainId}`}
-                </div>
-                <div className="font-mono text-[9px] text-slate-400 mt-0.5">
-                  Balances below are read from {net.label}. Send and swap need your wallet on the same network.
-                </div>
-              </div>
-              <button onClick={switchToAppChain} disabled={switchBusy}
-                className="shrink-0 font-mono text-[10px] font-bold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80 disabled:opacity-50"
-                style={{ background: "#4FC3F7", color: "#050508" }}>
-                {switchBusy ? "…" : `Switch to ${net.short}`}
-              </button>
-            </div>
-          )}
+          {/* ── The "Switch to Base" banner was REMOVED here (ShunTr, 2026-09-13) ──
+              It said "Wallet is on X / Balances below are read from Base mainnet"
+              with a Switch button, gated on `chainMismatch`. It was correct when
+              this page was single-chain and `network` was a MODE: one chain was
+              read, one chain was signed on, and a mismatch between them was a
+              real thing to warn about.
+
+              Both halves of that premise are gone. `network` is a hard-pinned
+              const (see its definition) and the Portfolio below renders BOTH
+              Base and Robinhood at once, so:
+
+                · "Balances below are read from Base mainnet" is FALSE as written
+                  — a user scrolled to their Robinhood holdings was being told
+                  the numbers in front of them came from the other chain.
+                · "Switch to Base" pointed AWAY from whichever chain the user was
+                  actually reading. On the RH section it offered to move them off
+                  4663 — the one action guaranteed to be wrong there.
+
+              Nothing is lost by deleting it, because the warning it was trying
+              to give now lives where it can be accurate: each action card owns
+              an in-card network selector (#246) and switches the wallet itself
+              at sign time — `RhSwapCard` does `switchChainAsync({ chainId })`
+              inside `doSwap`, and the Base cards do the same for 8453. A card
+              that knows which chain it will sign on can state the mismatch
+              precisely; a page-level banner over a two-chain page cannot. */}
 
           {/* ── Section 1: Account (balance + actions) | Health ─────────────
               This was three equal columns: Balance | Actions | Health. The
@@ -1245,97 +1727,146 @@ export default function BankPage() {
               figure and Deposit/Send/Swap share a header, they are not
               neighbouring widgets), so they now share a card, side by side on
               desktop and stacked on a phone. The card spans two columns and
-              Health keeps the third. Nothing is stretched to fill; there is
-              simply one less box that had to be as tall as its tallest
-              neighbour. */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3 items-start">
+              Health keeps the third.
+
+              `items-stretch` (2026-09-13), replacing `items-start`. The row now
+              holds exactly TWO boxes, and with `items-start` their heights were
+              whatever their contents happened to come to — which is how the
+              Share button, one wrapped row inside a `flex-wrap` chip list, made
+              Health visibly taller than the card beside it. Deleting Share fixed
+              THAT instance and fixed nothing structural: the next chip to wrap,
+              on the next narrow viewport, reopens the same gap. Stretching makes
+              the two equal by construction, so a ragged row stops being a thing
+              the layout can express. This is not the "filler" the paragraph
+              above argued against — that was about a THIRD box with nothing in
+              it, and the argument was for deleting the box, which we did. */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3 items-stretch">
 
             {/* Account card — balance, breakdown, and the three controls */}
             <div className="md:col-span-2 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
              <div className="flex flex-col sm:flex-row sm:justify-between gap-4">
               <div className="min-w-0 flex-1">
-              {/* Was "TOTAL BALANCE" — over a stablecoins-only figure, with an
-                  "ETH (gas)" row listed underneath it that the total excludes.
-                  A heading is a claim about what was summed. Then "USDC + YIELD"
-                  while the wallet sold yield; the rows below still itemise a
-                  supplied position when there is one, so "USDC" covers it.
+              {/* ── THE HEADLINE ────────────────────────────────────────────
+                  The 28px figure is the WHOLE wallet, every chain, tokens and
+                  tokenized stocks — the question a wallet's biggest number is
+                  assumed to be answering.
 
-                  It reads `net.stableSymbol`, not the literal "USDC", because
-                  Robinhood Chain settles in USDG — and the figure underneath is
-                  read from `net.stable`, which IS the USDG contract there. The
-                  number was already right; only the heading over it was lying. */}
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">{net.stableSymbol}</div>
-              {/* White, not the accent — colour is decoration on a figure the
-                  eye already finds; the three semantic colours are reserved
-                  for claims. (This used to read "same reason as the sidebar
-                  figure above"; that figure was the duplicate deleted in the
-                  dedupe pass, and this is now the only balance on the page.)
-                  ── and the single most important consumer of `balanceRead`.
-                  `walletState.balance` is `(walletUsdc ?? 0) + inYield`, so a
-                  read still in flight — or one that FAILED — arrives here as
-                  the number 0 and used to render "$0.00" at 28px: the largest,
-                  most confident thing on the page, asserting a balance nobody
-                  had measured. A dash is not a worse number, it is the absence
-                  of a claim; "$0.00" is a claim, and `canAssertEmpty` is the
-                  only thing that licenses it. Between them sits the floor: a
-                  read that covered part of the wallet knows a LOWER BOUND, and
-                  says so with "≥" rather than passing it off as the total. */}
-              <div className="font-mono text-[28px] font-bold text-white">
-                {balanceRead.body === "rows"  ? `${floor}$${usd(walletState.balance)}`
-                  : balanceRead.body === "empty" ? `$${usd(0)}`
-                  : "—"}
+                  It used to be one chain's cash (`walletState.balance`, headed
+                  `net.stableSymbol`). That was honest when a switcher sat on top
+                  of it and the heading changed with it. The switcher is gone —
+                  `network` is a const now — so the same figure had become a
+                  fixed Base-USDC number wearing the position of a total: it did
+                  not move when the user looked at Robinhood, and a number that
+                  ignores half the wallet while occupying the headline is read as
+                  the wallet. That Base figure is not deleted; it lives in the
+                  Tokens tab below, per chain and per token, where it is one row
+                  among all of them instead of a second scope competing with the
+                  headline. (It spent one release directly under this figure, in
+                  an "ON BASE" block — near enough to read as a breakdown of a
+                  number it did not break down. Removed 2026-09-12.)
+
+                  The "≥" is the SERVER'S verdict (net-worth.ts), not a guess
+                  made here: it means a row was unpriced, a chain went unread, or
+                  a list was truncated, so the true total is at least this. We
+                  render that verdict and the reasons behind it; we never
+                  fabricate a fill — and we never merge it with a single-chain
+                  figure read elsewhere, because "the bigger of the two" is a
+                  number no reader produced.
+
+                  A dash is not a worse number, it is the absence of a claim. A
+                  read in flight and a read that failed both get one; only a
+                  landed read may print a figure. */}
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="font-mono text-[9px] text-slate-500 tracking-widest">TOTAL · ALL CHAINS</span>
+                {/* Display-only, and deliberately reversible in one click. It
+                    masks figures the page has ALREADY read — it never suppresses
+                    an "unread" or a warning, because a hidden balance and an
+                    unknown balance must stay distinguishable. */}
+                <button type="button" onClick={toggleHideBal}
+                  aria-pressed={hideBal}
+                  aria-label={hideBal ? "Show balance amounts" : "Hide balance amounts"}
+                  title={hideBal ? "Show amounts" : "Hide amounts"}
+                  className="font-mono text-[9px] px-1.5 py-0.5 rounded-md text-slate-600 hover:text-slate-300 hover:bg-[#13131f] transition-colors">
+                  {hideBal ? "👁 show" : "👁 hide"}
+                </button>
               </div>
-              {/* Why the figure above is a dash, or carries a "≥". Never both
-                  with the rows below — this is a caption on the total, and the
-                  rows are individually gated on their own positive balances. */}
-              {balanceRead.body === "pending" ? (
-                <div className="font-mono text-[9px] text-slate-600 mt-1">reading {net.short}…</div>
-              ) : balanceRead.body === "failed" ? (
-                <div className="flex items-start justify-between gap-2 mt-1">
-                  <span className="font-mono text-[9px] text-amber-500/80 leading-relaxed">
-                    Couldn&apos;t read your {net.stableSymbol} balance on {net.short}. Unknown — not zero.
-                  </span>
-                  <RetryRead onRetry={retryBalance} busy={rereading} />
+              {/* The "≥" stays. The paragraph that used to explain it does not.
+                  ShunTr, 2026-09-16, looking at his own connected wallet: under
+                  a headline balance, two lines of indexer plumbing — "Found
+                  on-chain without Moralis — a token the explorer has not indexed
+                  would not appear here. · some tokens have no price" — read as a
+                  malfunction rather than as a caveat. It is the right fact in
+                  the wrong register: a wallet's first line is a balance.
+
+                  What is removed is the PROSE, not the verdict. The claim the
+                  server makes is "at least", and that claim is still rendered,
+                  at 28px, in the figure itself — the "≥" is not a decoration we
+                  may drop for tidiness. The reasons move into `title`, so "at
+                  least according to what?" is one hover away instead of being
+                  shouted permanently.
+
+                  Deliberate and known: `title` does not exist on touch. That
+                  costs the EXPLANATION, never the claim — a phone still sees the
+                  "≥", and the per-chain rows below still name any chain that
+                  went unread, which is the reason that matters most. Flagged to
+                  ShunTr so he can say whether he wants the reasons gone
+                  outright; removing them silently is his call to make, not
+                  ours. */}
+              <div
+                className={`font-mono text-[28px] font-bold text-white leading-none${totalIsFloor ? " cursor-help" : ""}`}
+                title={totalIsFloor && floorReasons.length > 0
+                  ? `Holds at least this much — ${floorReasons.join(" · ")}`
+                  : undefined}>
+                {netWorth.failed || !netWorth.data
+                  ? "—"
+                  : priv(`${netWorth.data.total.isFloor ? "≥ " : ""}$${usd(netWorth.data.total.usd)}`)}
+              </div>
+              {/* Why the figure is a dash. `netWorth.failed` is checked before
+                  `.data` because a failed read still carries a `data` object —
+                  one with an `error`. Both of these are states where there is NO
+                  figure, so they keep their line; the floor case has one and
+                  explains itself through the `title` above. */}
+              {netWorth.failed ? (
+                <div className="font-mono text-[9px] text-amber-500/80 mt-1.5 leading-relaxed">
+                  Couldn&apos;t read across chains — unknown, not zero.
                 </div>
-              ) : balanceRead.totalIsFloor ? (
-                <div className="flex items-start justify-between gap-2 mt-1">
-                  <span className="font-mono text-[9px] text-amber-500/80 leading-relaxed">
-                    Part of this wallet could not be read — it holds at least this much.
-                  </span>
-                  <RetryRead onRetry={retryBalance} busy={rereading} />
-                </div>
+              ) : !netWorth.data ? (
+                <div className="font-mono text-[9px] text-slate-600 mt-1.5">reading every chain…</div>
               ) : null}
 
-              {/* NET WORTH — the cross-chain aggregate: tokens + tokenized stocks
-                  on BOTH live chains, from /api/wallet/net-worth. ADDITIVE and
-                  separate from the figure above — that one is the SELECTED
-                  chain's cash (`walletState.balance`); this is everything the
-                  wallet holds. The "≥" is the SERVER'S verdict: it means a row
-                  was unpriced or a chain went unread, so the true total is at
-                  least this. We render that verdict; we never fabricate a fill.
-                  (`netWorth.failed` is checked before `.data` because a failed
-                  read still carries a `data` object — one with an `error`.) */}
-              {acct && (
-                <div className="mt-3 pt-3 border-t border-[#1A1A2E]">
-                  <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-1">NET WORTH · ALL CHAINS</div>
-                  {netWorth.failed ? (
-                    <div className="font-mono text-[10px] text-amber-500/80 leading-relaxed">
-                      Couldn&apos;t read across chains — unknown, not zero.
-                    </div>
-                  ) : netWorth.data ? (
-                    <>
-                      <div className="font-mono text-[18px] font-bold text-[#E2E8F0]">
-                        {netWorth.data.total.isFloor ? "≥ " : ""}${usd(netWorth.data.total.usd)}
-                      </div>
-                      {netWorth.data.total.isFloor && (
-                        <div className="font-mono text-[9px] text-slate-600 mt-0.5 leading-relaxed">
-                          Some holdings are unpriced or a chain went unread — it holds at least this much.
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="font-mono text-[15px] text-slate-600">reading both chains…</div>
-                  )}
+              {/* Per-chain, `lg:hidden` — the sidebar carries these same figures
+                  and is itself `hidden lg:flex`, so the two never show at once:
+                  below `lg` this IS the per-chain breakdown, above it the card
+                  stays clean. Driven off WALLET_CHAIN_ORDER, so a third chain
+                  appears here by being added to the config. Tapping one filters
+                  the holdings tabs, exactly as the sidebar card does. */}
+              {acct && netWorth.data && !netWorth.failed && (
+                <div className="flex flex-wrap gap-1.5 mt-3 lg:hidden">
+                  {WALLET_CHAIN_ORDER.filter(nk => testnetUnlocked || !WALLET_CHAINS[nk].testnet).map(nk => {
+                    // Same guard as the sidebar: a testnet is absent from the
+                    // cross-chain sum by design, so it is never asked for a
+                    // figure — play money with a "$" on it is a fabrication.
+                    const cw = WALLET_CHAINS[nk].testnet
+                      ? undefined : netWorth.chain(nk as "base" | "robinhood");
+                    const on = portfolioChain === nk;
+                    return (
+                      <button key={nk} type="button" onClick={() => showChain(nk)}
+                        aria-pressed={on}
+                        aria-label={`Show ${WALLET_CHAINS[nk].label} holdings in the Tokens and Stocks tabs`}
+                        className="font-mono text-[9.5px] px-2 py-1 rounded-md transition-colors"
+                        style={on
+                          ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                          : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+                        {WALLET_CHAINS[nk].short}{" "}
+                        <span className="text-slate-400">
+                          {WALLET_CHAINS[nk].testnet ? "test"
+                            : !cw ? "…"
+                            : cw.status === "unavailable" ? "unread"
+                            : priv(`${cw.isFloor ? "≥" : ""}$${usd(cw.usd)}`)}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
               </div>
@@ -1359,68 +1890,80 @@ export default function BankPage() {
                   that cannot say why reads as a bug; one that says "Swaps route
                   through Base mainnet" reads as a fact about the chain the user
                   just picked. */}
-              <div className="sm:w-[13.5rem] sm:shrink-0">
+              <div className="sm:w-[17.5rem] sm:shrink-0">
                 <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">ACTIONS</div>
-                <div className="grid grid-cols-3 gap-2">
+                {/* 1×4, not 2×2 (reversed 2026-09-11). The old comment here
+                    argued four buttons "do not fit legibly across a 13.5rem
+                    column" — true of that column, which is why the column moved
+                    instead of the layout: 17.5rem with a smaller label gives
+                    each button ~65px, and the headline beside it is `min-w-0
+                    flex-1` so it yields the space rather than overflowing.
+
+                    One row also stops implying a ranking the app does not have.
+                    A 2×2 grid reads as two tiers — Deposit/Send on top, the
+                    lesser two below — when all four are peers: four ways money
+                    moves.
+
+                    Bridge carries NO `disabledReason` on purpose —
+                    `can.send`/`can.swap` answer "does the CONNECTED chain
+                    support this?", and a bridge names its own origin in-card,
+                    so the connected chain is not what decides. The panel asks
+                    Relay what is actually movable and says so there. */}
+                <div className="grid grid-cols-4 gap-1.5">
                   <ActionButton icon="⬇" label="Deposit" onClick={() => openAction("receive")} />
                   <ActionButton icon="➡" label="Send" primary onClick={() => openAction("send")}
                     disabledReason={can.send ? null : `Not on ${net.short}`} />
                   <ActionButton icon="⇅" label="Swap" onClick={() => openAction("convert")}
                     disabledReason={can.swap ? null : `Base only`} />
+                  <ActionButton icon="⇄" label="Bridge" onClick={() => openAction("bridge")} />
                 </div>
                 {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-2">{onrampMsg}</div>}
               </div>
              </div>
 
-              {/* The breakdown spans the full card width, under both columns —
-                  it itemises the figure above it, so it belongs to neither the
-                  number nor the buttons alone. */}
-              <div className="flex flex-col gap-1.5 mt-3 pt-3 border-t border-[#13131f]">
-                {(walletUsdc ?? 0) > 0 && (
-                  <div className="flex justify-between font-mono text-[10px]">
-                    <span className="text-slate-500">{net.stableSymbol}</span>
-                    <span className="text-slate-300">${usd(walletUsdc)}</span>
-                  </div>
-                )}
-                {/* Both rows stay — they are the user's money, and a supplied
-                    position that stops being shown is a position the user
-                    cannot find. Already correctly gated on a POSITIVE balance,
-                    so a wallet that never touched Earn sees neither. */}
-                {(aavePos ?? 0) > 0 && (
-                  <div className="flex justify-between font-mono text-[10px]">
-                    <span className="text-slate-500">aUSDC (Aave)</span>
-                    <span className="text-slate-300">${usd(aavePos)}</span>
-                  </div>
-                )}
-                {(morphoPos ?? 0) > 0 && (
-                  <div className="flex justify-between font-mono text-[10px]">
-                    <span className="text-slate-500">Morpho</span>
-                    <span className="text-slate-300">${usd(morphoPos)}</span>
-                  </div>
-                )}
-                {/* `!= null`, not `> 0`. This row used to hide itself on a
-                    wallet holding zero ETH — the one wallet that most needs to
-                    be told, because zero ETH means it cannot sign anything at
-                    all. It stayed hidden because the low-gas warning lived on a
-                    SECOND card further down that rendered the same four rows
-                    again; that card is gone (see Section 2) and the warning
-                    lands here, on the only balance breakdown left.
+              {/* ── What used to be here: the ON BASE itemisation ───────────
+                  Four rows — USDC, aUSDC (Aave), Morpho, ETH (gas) — plus a
+                  low-gas warning, under an "ON BASE" heading.
 
-                    It reads `ethBal`, not `walletState.gasReserveEth`: the
-                    latter is `ethBal ?? 0`, so a read that never came back
-                    would be warned about as if it had returned zero. */}
-                {ethBal != null && (
-                  <div className="flex justify-between font-mono text-[10px]">
-                    <span className="text-slate-500">ETH (gas)</span>
-                    <span className={ethBal < 0.005 ? "text-amber-400" : "text-slate-400"}>
-                      {ethBal.toFixed(4)}
-                    </span>
-                  </div>
-                )}
-                {ethBal != null && ethBal < 0.005 && (
-                  <div className="font-mono text-[9px] text-amber-400">⚠ Low — get ETH for gas</div>
-                )}
-              </div>
+                  REMOVED 2026-09-12. This card's whole job is one number that
+                  covers every chain; the rows under it listed ONE chain and did
+                  not sum to the figure above them, so the card was answering two
+                  questions in two scopes and the smaller answer sat directly
+                  beneath the bigger one. "$1.28 USDC" under "≥ $5.88" reads as a
+                  breakdown no matter how the heading is worded — and the earlier
+                  comment here was already arguing against exactly that
+                  misreading, which is a sign the layout, not the wording, was
+                  the problem.
+
+                  Nothing was deleted, only de-duplicated. Every row still has a
+                  home that is BETTER than this one:
+                    · USDC + ETH → the Tokens tab below, per chain, with prices
+                      and a Sell control. It lists every token, not four.
+                    · aUSDC / Morpho → the same tab; the Withdraw exit is its own
+                      mission ("supplied — withdrawable any time").
+                    · Low gas → AI Mission Control, which says the same thing AND
+                      carries a `Get ETH` button. That warning was moved up there
+                      (and un-gated from the USDC read) in this same change,
+                      BEFORE these rows came out — losing the "you cannot sign"
+                      signal was the one real risk here.
+
+                  What does NOT leave with them is the way out of a failed read.
+                  A read that broke with no Retry beside it is #214, and it is
+                  not re-introduced: the caption below keeps the escape hatch,
+                  and only renders when something is actually wrong. The
+                  "reading…" and "no USDC yet" branches are gone with the rows —
+                  they were commentary on an itemisation that no longer exists,
+                  and the tables carry their own read-state banners. */}
+              {(balanceRead.body === "failed" || balanceRead.totalIsFloor) && (
+                <div className="mt-3 pt-3 border-t border-[#13131f] flex items-start justify-between gap-2">
+                  <span className="font-mono text-[9px] text-amber-500/80 leading-relaxed">
+                    {balanceRead.body === "failed"
+                      ? `Couldn't read your balance on ${net.short}. Unknown — not zero.`
+                      : `Part of your ${net.short} position could not be read — it holds at least this much.`}
+                  </span>
+                  <RetryRead onRetry={retryBalance} busy={rereading} />
+                </div>
+              )}
             </div>
 
             {/* Health card */}
@@ -1446,9 +1989,15 @@ export default function BankPage() {
                        `isPending`, so an unguarded read of it would pin this to
                        "Reading…" rather than describe anything. */
                     : balanceRead.body === "pending" || (!!acct && ethQ.isPending) ? "Reading…"
+                    : historyRead === "pending"       ? "Reading…"
                     : balanceRead.body === "failed"   ? "Balance unread"
                     : balanceRead.state === "partial" ? "Partial read"
                     : ethBal == null                  ? "Gas balance unread"
+                    /* The fourth input, named like the other three. Without this
+                       rung the score simply vanished when the history read
+                       failed, which is an absence with no attribution — the
+                       thing this ladder exists to prevent. */
+                    : actScore == null                ? "Activity unread"
                     : "No data yet"}
                 </div>
               </div>
@@ -1500,21 +2049,26 @@ export default function BankPage() {
                     in the header trust strip, where it sits beside the address
                     and answers the question a stranger asks first. */}
               </div>
-              {/* Share is hidden, not disabled, while there is no score.
-                  Sharing a fabricated grade propagates the fabrication OUTSIDE
-                  the app, where no later fix can reach it — the same reason a
-                  testnet QR labelled "Base" was the dangerous part of PR 1. */}
-              {portfolioScore != null && (
-                <button
-                  onClick={() => {
-                    const text = `My ${net.short} wallet health: ${portfolioScore}/100 @blueagent_`;
-                    navigator.clipboard?.writeText(text).catch(() => {});
-                  }}
-                  className="font-mono text-[9px] px-2.5 py-1 rounded-full transition-colors hover:opacity-80"
-                  style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                  Share
-                </button>
-              )}
+              {/* ── What used to be here: a "Share" button ───────────────────
+                  It copied `My <chain> wallet health: <score>/100 @blueagent_`
+                  to the clipboard, and it rendered only when `portfolioScore !=
+                  null` — the guard that kept an empty wallet's absent grade from
+                  being broadcast as a real one.
+
+                  REMOVED 2026-09-12, for LAYOUT, and nothing about the guard
+                  above changed: it sat below a `flex-wrap` chip row, so it was
+                  always a row of its own, and that extra row made this card
+                  taller than the TOTAL · ALL CHAINS card it sits beside in the
+                  same `items-start` grid. Two cards in one row at two different
+                  heights reads as one of them being broken.
+
+                  Nothing is stranded by its absence. The score is a DERIVED
+                  local reading, not a record — every input is re-computed on
+                  each render from the live balance/gas/activity reads, so there
+                  is no artifact here that only this button could have gotten
+                  out. The wallet's one genuinely shareable object, the pay link,
+                  keeps its own button in the Deposit panel, where the thing
+                  being shared actually lives. */}
             </div>
 
           </div>
@@ -1676,7 +2230,7 @@ export default function BankPage() {
                               <Cell key={i} fill={entry.color} />
                             ))}
                           </Pie>
-                          <Tooltip formatter={(v: unknown) => `$${usd(v as number)}`}
+                          <Tooltip formatter={(v: unknown) => priv(`$${usd(v as number)}`)}
                             contentStyle={{ background: "#0a0a0f", border: "1px solid #1A1A2E", fontSize: 10 }} />
                         </PieChart>
                       </ResponsiveContainer>
@@ -1688,7 +2242,7 @@ export default function BankPage() {
                             <div className="w-2 h-2 rounded-full" style={{ background: d.color }} />
                             <span className="font-mono text-[10px] text-slate-400">{d.name}</span>
                           </div>
-                          <span className="font-mono text-[10px] text-slate-300">${usd(d.value)}</span>
+                          <span className="font-mono text-[10px] text-slate-300">{priv(`$${usd(d.value)}`)}</span>
                         </div>
                       ))}
                       {/* Say so when the ETH leg is missing, rather than letting
@@ -1769,25 +2323,24 @@ export default function BankPage() {
                 tables here and Mission Control in the rail), then the tables. */}
             <div className="flex-1 min-w-0 w-full space-y-3">
 
-          {/* ── Section 1.5: a link where the AGENT SPEND panel used to be ──
-              The full <SpendConsole> lived here. It answers "what did I spend on
-              BlueAgent", the same question /app/usage answers with credits — two
-              pages, one subject, one ledger, so they could disagree without
-              either being wrong. The panel moved to /app/usage; this page keeps
-              the money you hold and move. A link, not a silent removal: the
-              console is still the one thing here no generic Base wallet shows. */}
-          <Link
-            href="/app/usage"
-            className="flex items-center justify-between mb-3 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3 hover:border-[#4FC3F730] transition-colors"
-          >
-            <div className="min-w-0">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest">AGENT SPEND</div>
-              <div className="font-mono text-[10px] text-slate-600 mt-0.5">
-                What your payments bought, per tool — with your credit balance.
-              </div>
-            </div>
-            <span className="font-mono text-[10px] text-[#4FC3F7] flex-shrink-0 ml-3">Usage →</span>
-          </Link>
+          {/* ── Section 1.5: AGENT SPEND — two figures, then the link ────────
+              This was a bare <Link>: an "AGENT SPEND" heading, one line of
+              description, and a `Usage →` chevron. No number anywhere on it. It
+              named a quantity and then showed none, which is indistinguishable
+              from a panel that failed to load — reported as "chưa hiển thị".
+
+              #199 moved the full <SpendConsole> to /app/usage for a real reason:
+              two pages answering "what did I spend on BlueAgent" off one ledger
+              can disagree without either being wrong. That reason is honoured by
+              REUSING the derivation, not by withholding the number — the fetch
+              is `useSpendSummary`, the window caption is `scopeLabel`, the
+              nothing-here wording is `emptyState`, and the dollar formatting is
+              SpendConsole's own `usdc()`. There is no second derivation here to
+              drift, so this card cannot print a figure the console contradicts.
+
+              What stays behind on /app/usage: the per-tool table and the
+              calls-per-day chart. This is the headline only. */}
+          <AgentSpendCard spend={spend} priv={priv} />
 
           {/* ── Section 3: the long tail, behind tabs ───────────────────────
               Three full-width sections used to stack here — the token table,
@@ -1796,18 +2349,23 @@ export default function BankPage() {
               transaction history somewhere between two and five screens down,
               and nothing above it told you it was there.
 
-              Tabs, not an accordion or a "show more": these are three answers to
-              three different questions ("what do I hold", "what did I do"), only
-              one of which is being asked at a time, and a tab bar is the only
-              form that states the other options exist while showing one.
+              Tabs, not an accordion or a "show more": these are answers to
+              different questions ("what do I hold", "what did I do"), only one
+              of which is being asked at a time, and a tab bar is the only form
+              that states the other options exist while showing one.
 
-              Stocks sit WITH tokens rather than in a tab of their own. They are
-              the same question — what this wallet holds — asked of a second
-              venue, and StockTable already reads both chains itself. */}
-          <div className="flex items-center gap-1 mb-3 border-b border-[#1A1A2E]">
+              Stocks used to sit WITH tokens under one "Portfolio" tab, on the
+              argument that they are the same question asked of a second venue.
+              True, and still not enough: with both chains rendered at once that
+              tab stacked up to six tables, so the equity leg — the thing the
+              stock desk exists for — was consistently below the fold. They are
+              now siblings, sharing one chain filter and one dust toggle so that
+              switching asset class changes nothing else. */}
+          <div ref={portfolioRef} className="flex items-center gap-1 mb-3 border-b border-[#1A1A2E] scroll-mt-4 overflow-x-auto">
             {VIEWS.map(v => (
               <button key={v.id} onClick={() => setView(v.id)}
-                className="font-mono text-[11px] px-3 py-2 -mb-px border-b-2 transition-colors"
+                aria-current={view === v.id ? "page" : undefined}
+                className="font-mono text-[11px] px-3 py-2 -mb-px border-b-2 transition-colors whitespace-nowrap"
                 style={view === v.id
                   ? { color: "#4FC3F7", borderColor: "#4FC3F7" }
                   : { color: "#64748b", borderColor: "transparent" }}>
@@ -1816,86 +2374,183 @@ export default function BankPage() {
             ))}
           </div>
 
-          {/* TOKENS + STOCKS for the chain the switcher is pointing at — and
-              ONLY that chain.
+          {/* TOKENS + STOCKS — BOTH real-money chains, stacked, each under a
+              clear chain header.
 
-              This used to stack all three tables unconditionally: Base tokens,
-              then RH tokens, then a stock table showing both venues at once.
-              Two chains' holdings were on screen simultaneously while the
-              sidebar claimed one was selected, so the network switcher changed
-              a heading and nothing underneath it. Picking Robinhood is now a
-              question ("what do I hold on 4663?") that the page answers with
-              4663 data alone.
+              This is the switcher's replacement. The page used to show ONE
+              chain's tables, gated on the global `network`, and picking Robinhood
+              swapped the whole view. With the switcher gone there is nothing to
+              swap TO, so the honest answer to "what do I hold?" is: everything, on
+              every chain, labelled by chain. Base first (the home chain), then
+              Robinhood Chain, then Base Sepolia ONLY when testnet is unlocked.
 
-              Each branch is written out rather than derived from a map, because
-              the three tables are NOT interchangeable — they have different data
-              sources (Moralis / Blockscout / registry+RPC), different trust
-              models, and different reasons to be absent. `network` is switched
-              exhaustively so a fourth chain fails to compile here too. */}
-          {view === "portfolio" && network === "base" && (
-            <>
-              <TokenTable address={acct} network="base" onQuickSell={quickSell} />
-              <StockTable address={acct} venue="base" />
-            </>
-          )}
-          {view === "portfolio" && network === "robinhood" && (
-            <>
-              <RhTokenTable address={acct} />
-              <StockTable address={acct} venue="robinhood" />
-            </>
-          )}
-          {view === "portfolio" && network === "baseSepolia" && (
-            <>
-              <TokenTable address={acct} network="baseSepolia" />
-              {/* No stock table, and this is a fact rather than caution: B20
-                  shares live on Base 8453 and the RWA registry on RH 4663, and
-                  neither venue has a testnet deployment. Mounting it here would
-                  render MAINNET positions under a page captioned "no real
-                  value". `quickSell` is dropped for the same reason it is
-                  disabled inside TokenTable — 0x has no testnet liquidity. */}
-              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mt-4">
-                <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-1.5">STOCKS</div>
-                <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
-                  Tokenized shares are issued on Base mainnet and Robinhood Chain only — there is no
-                  testnet deployment to read. Switch to Base or Robinhood to see equity holdings.
-                </p>
+              The tables are still written out, not mapped — they are NOT
+              interchangeable: different data sources (Moralis / Blockscout /
+              registry+RPC), different trust models, different reasons to be
+              absent. Each renders its OWN read-state honesty (partial/failed/
+              empty), so a dead source on one chain never speaks for the other. */}
+          {isHoldingsView(view) && (
+            <div className="space-y-5">
+              {/* THE HOLDINGS CONTROL ROW — shared by Tokens and Stocks, which is
+                  the whole reason the two are siblings and not nested tabs. Both
+                  switches are VIEW-ONLY (lib/wallet/display.ts): neither cancels a
+                  read, neither moves a total, and both say out loud when they are
+                  hiding something.
+
+                  CHAIN FILTER — the sidebar cards' other half. "All chains" is the
+                  default and the honest default: everything, labelled. Picking one
+                  chain hides the others' TABLES and nothing else — no read is
+                  cancelled, no figure is recomputed, and the account card's
+                  TOTAL · ALL CHAINS line keeps covering every chain, so the total
+                  never silently follows the filter.
+
+                  The amber note is the point. A one-chain view looks exactly like a
+                  wallet that holds one chain, and "hidden" reading as "empty" is the
+                  same failure as an unread balance reading as $0 — so the view says
+                  which one it is instead of leaving the user to infer it. */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex gap-1">
+                  {(["all", ...WALLET_CHAIN_ORDER.filter(nk => testnetUnlocked || !WALLET_CHAINS[nk].testnet)] as Array<"all" | WalletChain>).map(f => {
+                    const on = portfolioChain === f;
+                    return (
+                      <button key={f} type="button" onClick={() => setPortfolioChain(f)}
+                        aria-pressed={on}
+                        className="font-mono text-[10px] px-3 py-1.5 rounded-lg transition-colors"
+                        style={on
+                          ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                          : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+                        {f === "all" ? "All chains" : WALLET_CHAINS[f].short}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* NOISE TOGGLE. Removes two different kinds of row and says so:
+                    priced under $DUST_USD, and priced at nothing at all because
+                    no feed would quote them. The threshold is printed from
+                    DUST_USD rather than typed in, so the control can never
+                    advertise a cutoff the filter does not use.
+
+                    The label deliberately does NOT read "Hide < $1". It used to,
+                    while the filter really did only remove sub-dollar rows — and
+                    a label naming a threshold over a filter that also drops
+                    UNPRICED rows would be claiming a price for rows we failed to
+                    price. MEASURED on a real Base wallet: 41 rows, 29 of them
+                    unpriced airdrop spam, none of which "< $1" describes. Each
+                    table restates below how many of EACH it hid, worded apart,
+                    with `show all` beside it. */}
+                <button type="button" onClick={() => setDust(!hideDust)}
+                  aria-pressed={hideDust}
+                  title={hideDust
+                    ? `Showing everything, including rows under $${DUST_USD} and rows with no price`
+                    : `Hide rows priced under $${DUST_USD}, and rows with no price at all. Neither moves a total: a small row is already in it, an unpriced row never could be.`}
+                  className="font-mono text-[10px] px-3 py-1.5 rounded-lg transition-colors ml-auto"
+                  style={hideDust
+                    ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
+                    : { color: "#64748b", border: "1px solid #1A1A2E" }}>
+                  {hideDust ? "✓ " : ""}Hide small &amp; unpriced
+                </button>
+
+                {portfolioChain !== "all" && (
+                  <span className="font-mono text-[9.5px] w-full" style={{ color: "#F59E0B99" }}>
+                    filtered — other chains hidden, not empty
+                  </span>
+                )}
               </div>
-            </>
-          )}
 
-          {/* A chain with no history INDEX is not a chain with no history. This
-              branch says which is which, and offers the explorer instead of a
-              Retry — retrying a source that structurally cannot answer is a
-              button that wastes the user's time and implies the gap is
-              temporary. The link is the honest exit: the transactions exist,
-              just not in anything we can query. */}
-          {view === "activity" && !can.txHistory && (
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">ACTIVITY · {net.short}</div>
-              <p className="font-mono text-[11px] text-slate-300 mb-1.5">
-                Transaction history is not available for {net.label}.
-              </p>
-              <p className="font-mono text-[10px] text-slate-500 leading-relaxed mb-3">
-                Our history index (Moralis) does not cover chain {net.chainId}. This is a gap in the data
-                source, not in your wallet — your transactions are on-chain and readable on the explorer.
-              </p>
-              {acct && (
-                <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer"
-                  className="inline-block font-mono text-[10px] font-bold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80"
-                  style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
-                  View on {net.explorerName} ↗
-                </a>
+              {/* Base — the home chain. Crypto via Moralis, B20 shares via the
+                  registry: two sources, so two tabs, one chain heading each. */}
+              {showsChain("base") && (
+                <section>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#4FC3F7" }} />
+                    <span className="font-mono text-[11px] font-medium text-[#E2E8F0]">Base</span>
+                    <span className="font-mono text-[9px] text-slate-600">
+                      {view === "tokens" ? "crypto tokens" : "tokenized stocks"}
+                    </span>
+                  </div>
+                  {view === "tokens"
+                    ? <TokenTable address={acct} network="base" onQuickSell={quickSell}
+                        hideDust={hideDust} hideAmounts={hideBal} onShowDust={() => setDust(false)} />
+                    : <StockTable address={acct} venue="base"
+                        hideDust={hideDust} hideAmounts={hideBal} onShowDust={() => setDust(false)} />}
+                </section>
+              )}
+
+              {/* Robinhood Chain — its own tokens (Blockscout) + RWA equities */}
+              {showsChain("robinhood") && (
+                <section>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#94A3B8" }} />
+                    <span className="font-mono text-[11px] font-medium text-[#E2E8F0]">Robinhood Chain</span>
+                    <span className="font-mono text-[9px] text-slate-600">
+                      {view === "tokens" ? "crypto tokens" : "RWA equities"}
+                    </span>
+                  </div>
+                  {/* Both tables take a seller now. Passing it does NOT put a
+                      control on every row — each table probes for a live
+                      token/WETH V3 pool per row and draws Sell only where one
+                      was measured (lib/wallet/rh-sellable.ts). That is the whole
+                      gate: `swap-prepare`'s sell mode builds ONE single-hop
+                      swapExactInputSingleForETH, so a pool is not evidence of a
+                      route, it IS the route. */}
+                  {view === "tokens"
+                    ? <RhTokenTable address={acct}
+                        onQuickSell={(h, pct) => rhQuickSell(
+                          { addr: h.address, sym: h.symbol, decimals: h.decimals, raw: h.raw }, pct)}
+                        hideDust={hideDust} hideAmounts={hideBal} onShowDust={() => setDust(false)} />
+                    : <StockTable address={acct} venue="robinhood"
+                        onQuickSell={(h, pct) => rhQuickSell(
+                          { addr: h.contract, sym: h.symbol, decimals: h.decimals, raw: h.raw }, pct)}
+                        hideDust={hideDust} hideAmounts={hideBal} onShowDust={() => setDust(false)} />}
+                </section>
+              )}
+
+              {/* Base Sepolia — testnet, opt-in only. No stock table: B20 shares
+                  live on Base 8453 and the RWA registry on RH 4663, and neither
+                  venue has a testnet deployment, so mounting one here would render
+                  MAINNET positions under a "no real value" heading. That absence
+                  is SAID on the Stocks tab rather than left as a missing section —
+                  a chain that silently drops off a tab is the same defect as a
+                  chain that reads as empty. `quickSell` is dropped for the reason
+                  it is disabled inside TokenTable — 0x has no testnet liquidity. */}
+              {testnetUnlocked && showsChain("baseSepolia") && (
+                <section>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#F59E0B" }} />
+                    <span className="font-mono text-[11px] font-medium" style={{ color: "#F59E0B" }}>Base Sepolia</span>
+                    <span className="font-mono text-[9px] text-slate-600">testnet · no real value</span>
+                  </div>
+                  {view === "tokens" ? (
+                    <TokenTable address={acct} network="baseSepolia"
+                      hideDust={hideDust} hideAmounts={hideBal} onShowDust={() => setDust(false)} />
+                  ) : (
+                    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
+                      <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-1.5">STOCKS</div>
+                      <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
+                        Tokenized shares are issued on Base mainnet and Robinhood Chain only — there is no
+                        testnet deployment to read.
+                      </p>
+                    </div>
+                  )}
+                </section>
               )}
             </div>
           )}
-          {view === "activity" && can.txHistory && (
+
+          {/* The "this chain has no history index" card that used to sit here is
+              GONE, and not because the problem was ignored — because a second
+              reader answered it. It existed for the case `can.txHistory ===
+              false`, which after /api/wallet/rh-transactions shipped is true of
+              no chain the wallet lists, so the card was a whole branch that
+              could not render. The honest exit it offered (the explorer, never
+              a Retry) survives INSIDE TransactionHistory, per source, where it
+              can still fire for a chain that genuinely goes unread. */}
+          {view === "activity" && (
             <TransactionHistory
-              transactions={txData?.transactions ?? []}
-              loading={txLoading}
-              error={txError}
-              needsKey={txData?.needsKey}
+              transactions={activityRows}
+              sources={activitySources}
               onRetry={() => setTxReload(k => k + 1)}
-              explorer={net.explorer}
               address={acct}
             />
           )}
@@ -1928,35 +2583,12 @@ export default function BankPage() {
               </div>
 
               <div className="overflow-y-auto p-4 min-h-0">
-                {panel === "positions" && (
-                  <div>
-                    {/* A "BEST SAFE RATE · BASE" leaderboard used to follow these
-                        two rows, inside the panel a user opens to LEAVE. */}
-                    <PositionRow label="Aave v3" pos={aavePos} onManage={() => setPanel("withdraw")} />
-                    <PositionRow label="Morpho · Gauntlet USDC Prime" pos={morphoPos}
-                      disabled={!morphoVnet} disabledNote="mainnet only" onManage={() => setPanel("withdraw")} />
-                    {/* The button said "Start earning" to anyone with no
-                        position — the last remaining control that could open a
-                        new deposit. It is now the exit only, and it stays put
-                        unless the reads came back and said zero. */}
-                    {!noPositions ? (
-                      <>
-                        <button onClick={() => setPanel("withdraw")}
-                          className="w-full font-mono text-[12px] font-bold py-2.5 rounded-xl mt-3"
-                          style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                          ↩︎ Withdraw
-                        </button>
-                        <p className="font-mono text-[9px] text-slate-600 mt-2 leading-relaxed px-0.5">
-                          Pulls USDC back out of Aave or Morpho to your wallet — non-custodial, you sign every transaction.
-                        </p>
-                      </>
-                    ) : (
-                      <p className="font-mono text-[9px] text-slate-600 mt-3 leading-relaxed px-0.5">
-                        New yield deposits are paused. Existing positions stay withdrawable at any time.
-                      </p>
-                    )}
-                  </div>
-                )}
+                {/* The Positions panel stood here: two rows restating the Aave and
+                    Morpho figures, plus a Withdraw button. Both figures still show
+                    in the account card's breakdown, and Withdraw kept its own tab
+                    above — so this removed a duplicate READ, not the EXIT. The
+                    distinction is the whole rule: the yield ENTRANCE is closed, and
+                    an entrance being closed is never a reason to hide the way out. */}
                 {/* `withdrawOnly` is what actually closes the entrance. Hiding
                     the buttons above is not enough on its own — the card ships
                     a Supply/Withdraw toggle, so without this prop a user who
@@ -1971,34 +2603,74 @@ export default function BankPage() {
                   ? <MoveToYieldCard result={{ network: earnKey, action: "withdraw" }} account={acct} withdrawOnly />
                   : <p className="font-mono text-[11px] text-slate-500">Earn positions are on Base. Switch to Base to withdraw.</p>
                 )}
-                {/* Three chains, three answers — branched by chain, NOT collapsed
-                    into one predicate:
+                {/* CONVERT — chain chosen HERE, in the panel, on its own selector.
+                    The two venues are NOT interchangeable and the branch order is
+                    fund-safety, not style:
 
-                    robinhood → its OWN card. RhSwapCard speaks the deployed
-                      RobinhoodSwapRouter on 4663 directly. It must be checked
-                      FIRST: the Base SwapCard below force-switches the wallet to
-                      Base mainnet before signing, so letting `can.swap` (now true
-                      on RH) fall through to it would sign a Base swap under a
-                      Robinhood heading — the wrong funds on the wrong chain.
+                    robinhood → RhSwapCard, which speaks the deployed
+                      RobinhoodSwapRouter on 4663 directly. Checked FIRST because
+                      the Base SwapCard force-switches the wallet to Base mainnet
+                      before signing — routing a Robinhood intent through it would
+                      sign a Base swap under a Robinhood heading, the wrong funds
+                      on the wrong chain.
                     base → the 0x-API SwapCard, real funds, real mainnet.
-                    baseSepolia → refused. `can.swap` is false there because
-                      SwapCard force-switches to Base MAINNET, so rendering it on
-                      testnet would move REAL funds under a "no real value" page. */}
-                {panel === "convert" && (network === "robinhood"
-                  ? <RhSwapCard account={acct} />
-                  : !can.swap
-                  ? <div className="rounded-lg px-3.5 py-3" style={{ background: "#F59E0B10", border: "1px solid #F59E0B40" }}>
-                      <div className="font-mono text-[11px] font-bold" style={{ color: "#F59E0B" }}>Convert is Base mainnet only</div>
-                      <div className="font-mono text-[9px] text-slate-400 mt-1 leading-relaxed">
-                        Swaps route through the 0x API on Base mainnet and would spend real funds. You are on {net.short} — switch to Base to convert.
-                      </div>
-                      <button onClick={() => setNetwork("base")}
-                        className="font-mono text-[10px] font-bold px-3 py-1.5 rounded-lg mt-2.5 transition-opacity hover:opacity-80"
-                        style={{ background: "#F59E0B", color: "#050508" }}>
-                        Switch to Base
-                      </button>
-                    </div>
-                  : <SwapCard account={acct} preset={sellPreset} />)}
+
+                    Base Sepolia is deliberately NOT offered: 0x has no testnet
+                    liquidity and SwapCard force-switches to Base MAINNET, so a
+                    testnet convert would move REAL funds under a "no value" label.
+                    `convertChain` is typed `"base" | "robinhood"`, so that third
+                    case cannot even be selected — the old refusal is unreachable
+                    by construction and is gone. */}
+                {/* The chain row that used to sit ABOVE the card is gone: the
+                    card now carries its own NETWORK dropdown, the same control
+                    Send and Bridge use, so the choice is inside the thing it
+                    configures instead of floating over it.
+
+                    `onChain` — a callback, never a `chain` value. Each card
+                    hardcodes what it displays (see their headers), so choosing
+                    the other venue does not reconfigure a card, it swaps which
+                    card is mounted. That is what keeps the branch below the only
+                    thing that decides which chain gets signed on.
+
+                    The cast narrows `WalletChain` back to the two `convertChain`
+                    accepts. Safe because each card's `chains` list is exactly
+                    those two — Sepolia is never offered, so it can never arrive. */}
+                {/* `key` is load-bearing, not cosmetic. RhSwapCard seeds from its
+                    `initial*` props ONCE, in a lazy useState initialiser — a
+                    deliberate choice there, so that a later prop change cannot
+                    stomp a token the user had since edited by hand. The cost is
+                    that a SECOND quick-sell would land on an already-seeded card
+                    and silently do nothing. Keying on the preset's nonce remounts
+                    it, which is the only way to re-seed without breaking the rule
+                    that makes the card safe to type into. */}
+                {panel === "convert" && (convertChain === "robinhood"
+                  ? <RhSwapCard
+                      key={rhSellPreset?.nonce ?? "rh"}
+                      account={acct}
+                      initialDirection={rhSellPreset ? "sell" : undefined}
+                      /* An ADDRESS, never the ticker — RhSwapCard ignores a symbol
+                         on purpose, and on a chain where two tokens can share a
+                         name that is the difference between selling the user's
+                         asset and selling an impostor's. */
+                      initialToken={rhSellPreset?.addr}
+                      initialSymbol={rhSellPreset?.sym}
+                      initialAmount={rhSellPreset?.amount}
+                      initialNote={rhSellPreset ? `Pre-filled from your Robinhood Chain holdings — ${rhSellPreset.sym}. Review before signing.` : undefined}
+                      onChain={c => setConvertChain(c as "base" | "robinhood")} />
+                  : <SwapCard account={acct} preset={sellPreset} onChain={c => setConvertChain(c as "base" | "robinhood")} />
+                )}
+                {/* BRIDGE — Base ↔ Robinhood over Relay. Like SEND, the chain is
+                    chosen IN the card, so there is no branch here and no
+                    `can.*` gate; unlike SEND, the card is an EDITOR wrapped
+                    around the same confirm-only component chat uses
+                    (RobinhoodBridgeCard), so the quote, the delivered token, the
+                    total cost, the guaranteed floor and the fail-closed balance
+                    gate all live in exactly ONE place for both surfaces.
+
+                    `account={acct}` and nothing else: the panel fetches its own
+                    token list from the route that also validates the bridge, so
+                    it cannot advertise a pair the server would refuse. */}
+                {panel === "bridge" && <BridgeCard account={acct} />}
                 {/* SEND — one card, chain chosen in-card (WalletSendCard). It
                     carries its OWN Base/Robinhood selector and both money paths,
                     so there is no chain branch here and no `can.send` gate: the
@@ -2025,57 +2697,82 @@ export default function BankPage() {
                     )}
                     <WalletSendCard key={scanKey}
                       account={acct}
-                      initialNetwork={(scanPrefill?.network ?? network) === "robinhood" ? "robinhood" : "base"}
+                      initialNetwork={scanPrefill?.network === "robinhood" ? "robinhood" : "base"}
                       initialTo={scanPrefill?.to}
                       initialAmount={scanPrefill?.amount}
                       initialAsset={scanPrefill?.asset === "ETH" ? "native" : "cash"} />
                   </div>
                 )}
                 {panel === "receive" && (
-                  <div>
-                    <div className="font-mono text-[10px] text-slate-500 tracking-widest mb-3">DEPOSIT · {net.short}</div>
+                  <WalletCard title="DEPOSIT" chain={receiveChain}>
+                    {/* Receive is the one action that still picks a chain. The
+                        deposit ADDRESS is identical on all of them (same EOA), but
+                        the QR's dollar (USDC vs USDG), the pay-link, and the fiat
+                        rails all key off `receiveChain`, so the pick has to be
+                        local and explicit rather than inherited from a page mode
+                        that no longer exists. Base + Robinhood always; Base
+                        Sepolia only when testnet is unlocked (test-only deposits,
+                        never a real-money default) — and it is the ONE card whose
+                        list can include a testnet, which is why `NetworkPicker`
+                        takes its chains as a parameter instead of defaulting. */}
+                    <NetworkPicker label="NETWORK" value={receiveChain} onChange={setReceiveChain}
+                      chains={["base", "robinhood", ...(testnetUnlocked ? ["baseSepolia"] : [])] as WalletChain[]} />
+
                     {/* The picker's two options are "the chain's dollar" and
                         "the chain's gas token", NOT two fixed tickers. The
                         state key stays `"USDC"` because that is the contract
                         `buildPaymentUri` reads (and it already resolves it to
                         `cfg.stable`, so the QR was right on Robinhood while the
-                        BUTTON said USDC) — but the label is `net.stableSymbol`,
-                        so on 4663 it reads USDG, which is what a payer would
-                        actually be sending. ETH needs no such treatment: RH's
-                        nativeCurrency is Ether too. */}
-                    <div className="flex items-center gap-1.5 mb-3">
-                      <div className="flex gap-1">
-                        {(["USDC", "ETH"] as const).map(a => (
-                          <button key={a} onClick={() => setReqAsset(a)}
-                            className="font-mono text-[10px] px-2.5 py-1.5 rounded-lg transition-colors"
-                            style={reqAsset === a
-                              ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
-                              : { color: "#64748b", border: "1px solid #1A1A2E" }}>
-                            {a === "USDC" ? net.stableSymbol : a}
-                          </button>
-                        ))}
+                        BUTTON said USDC) — but the label is `rcv.stableSymbol`
+                        (from `receiveChain`), so on 4663 it reads USDG, which is
+                        what a payer would actually be sending. ETH needs no such
+                        treatment: RH's nativeCurrency is Ether too. */}
+                    <Picker label="ASSET"
+                      summary={
+                        <span className="flex items-center gap-2 min-w-0">
+                          <span className="text-[12px] text-white truncate">{reqSymbol}</span>
+                          <span className="text-[9px] text-slate-600 shrink-0">
+                            {reqAsset === "USDC" ? `${rcv.short} cash` : "gas token"}
+                          </span>
+                        </span>
+                      }>
+                      {close => (["USDC", "ETH"] as const).map(a => (
+                        <PickerRow key={a} selected={reqAsset === a} onClick={() => { setReqAsset(a); close(); }}>
+                          <span className="text-[12px] text-white flex-1">{a === "USDC" ? rcv.stableSymbol : a}</span>
+                          <span className="text-[9px] text-slate-600">
+                            {a === "USDC" ? `${rcv.short} cash` : "gas token"}
+                          </span>
+                        </PickerRow>
+                      ))}
+                    </Picker>
+
+                    <Field label="AMOUNT — OPTIONAL"
+                      right={reqAmount ? (
+                        <button onClick={() => setReqAmount("")}
+                          className="text-[9px] text-slate-500 hover:text-white">clear</button>
+                      ) : undefined}>
+                      <div className="flex items-center gap-2">
+                        <input value={reqAmount} onChange={e => setReqAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                          inputMode="decimal" placeholder="0.0"
+                          className="flex-1 w-0 bg-transparent text-[16px] text-white outline-none placeholder:text-slate-700" />
+                        <span className="text-[11px] text-slate-300 px-2 py-1.5 rounded-lg border border-[#1A1A2E] shrink-0">{reqSymbol}</span>
                       </div>
-                      <input value={reqAmount} onChange={e => setReqAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-                        inputMode="decimal" placeholder="amount (optional)"
-                        className="flex-1 bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[10px] text-slate-200 placeholder:text-slate-700 outline-none" />
-                      {reqAmount && (
-                        <button onClick={() => setReqAmount("")} className="font-mono text-[10px] px-2 py-1.5 rounded-lg text-slate-500 hover:text-white border border-[#1A1A2E]">✕</button>
-                      )}
-                    </div>
+                    </Field>
+
                     <div className="flex flex-col items-center text-center">
                       <div className="bg-white p-2.5 rounded-xl">
-                        <QRCodeSVG value={acct ? buildPaymentUri({ to: acct, amount: reqAmount, asset: reqAsset, network }) : ""} size={180} bgColor="#ffffff" fgColor="#0a0a0f" level="M" />
+                        <QRCodeSVG value={acct ? buildPaymentUri({ to: acct, amount: reqAmount, asset: reqAsset, network: receiveChain }) : ""} size={180} bgColor="#ffffff" fgColor="#0a0a0f" level="M" />
                       </div>
                       {parseFloat(reqAmount) > 0 && (
-                        <div className="font-mono text-[12px] text-[#34D399] mt-3 font-bold">requesting {reqAmount} {reqSymbol}</div>
+                        <div className="text-[12px] text-[#34D399] mt-3 font-bold">requesting {reqAmount} {reqSymbol}</div>
                       )}
-                      {name && <div className="font-mono text-[13px] text-[#4FC3F7] mt-2">{name}</div>}
-                      <div className="font-mono text-[9px] text-slate-400 mt-1.5 break-all px-2">{acct}</div>
+                      {name && <div className="text-[13px] text-[#4FC3F7] mt-2">{name}</div>}
+                      <div className="text-[9px] text-slate-400 mt-1.5 break-all px-2">{acct}</div>
                       <div className="flex items-center gap-2 mt-3">
-                        <button onClick={copyAddr} className="font-mono text-[11px] px-4 py-2 rounded-lg" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                        <button onClick={copyAddr} className="text-[11px] px-4 py-2 rounded-lg" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
                           {copied ? "✓ Copied" : "Copy address"}
                         </button>
-                        <button onClick={sharePayLink} className="font-mono text-[11px] px-4 py-2 rounded-lg" style={{ background: "#34D39910", color: "#34D399", border: "1px solid #34D39930" }}>
+                        <button onClick={sharePayLink} className="text-[11px] px-4 py-2 rounded-lg" style={{ background: "#34D39910", color: "#34D399", border: "1px solid #34D39930" }}>
                           {linkCopied ? "✓ Link copied" : "🔗 Share pay link"}
                         </button>
                       </div>
@@ -2096,34 +2793,32 @@ export default function BankPage() {
                         only" — invisible on touch, on a wallet whose wedge is a
                         phone. */}
                     <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-3 mt-4">
-                      <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">CASH · CARD ↔ BANK</div>
+                      <div className="text-[9px] text-slate-500 tracking-widest mb-2">CASH · CARD ↔ BANK</div>
                       <div className="flex gap-2">
-                        <button onClick={addCash} disabled={onrampBusy || !isConnected || !can.fiat}
-                          className="flex-1 font-mono text-[11px] font-bold py-2.5 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-opacity hover:opacity-80"
+                        <button onClick={addCash} disabled={onrampBusy || !isConnected || !rcv.can.fiat}
+                          className="flex-1 text-[11px] font-bold py-2.5 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-opacity hover:opacity-80"
                           style={{ background: "#34D39910", color: "#34D399", border: "1px solid #34D39930" }}>
-                          {onrampBusy ? "opening…" : `💵 Buy ${net.stableSymbol}`}
+                          {onrampBusy ? "opening…" : `💵 Buy ${rcv.stableSymbol}`}
                         </button>
-                        <button onClick={cashOut} disabled={cashOutBusy || !isConnected || !can.fiat}
-                          className="flex-1 font-mono text-[11px] py-2.5 rounded-xl text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity hover:text-white"
+                        <button onClick={cashOut} disabled={cashOutBusy || !isConnected || !rcv.can.fiat}
+                          className="flex-1 text-[11px] py-2.5 rounded-xl text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity hover:text-white"
                           style={{ border: "1px solid #1A1A2E" }}>
                           {cashOutBusy ? "opening…" : "🏦 Cash out"}
                         </button>
                       </div>
-                      {!can.fiat && (
-                        <div className="font-mono text-[9px] text-slate-600 mt-2 leading-relaxed">
-                          Coinbase Onramp and Offramp settle on Base mainnet only — not {net.short}. Switch to
-                          Base to move cash in or out.
+                      {!rcv.can.fiat && (
+                        <div className="text-[9px] text-slate-600 mt-2 leading-relaxed">
+                          Coinbase Onramp and Offramp settle on Base mainnet only — not {rcv.short}. Pick
+                          Base above to move cash in or out.
                         </div>
                       )}
                     </div>
-                    <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-2.5 mt-3">
-                      <p className="font-mono text-[9px] text-slate-500 leading-relaxed">
-                        {parseFloat(reqAmount) > 0
-                          ? <>Payment-request QR — a payer scanning it (Wallet <b className="text-slate-300">Scan to pay</b>, or any EIP-681 wallet) gets <b className="text-slate-300">{reqAmount} {reqSymbol}</b> prefilled.</>
-                          : <>Scan the QR with any wallet, or set an amount above to make a payment request. <b className="text-slate-300">{net.stableSymbol} / ETH on {net.label}</b> only.</>}
-                      </p>
-                    </div>
-                  </div>
+                    <CardNote>
+                      {parseFloat(reqAmount) > 0
+                        ? <>Payment-request QR — a payer scanning it (Wallet <b className="text-slate-300">Scan to pay</b>, or any EIP-681 wallet) gets <b className="text-slate-300">{reqAmount} {reqSymbol}</b> prefilled.</>
+                        : <>Scan the QR with any wallet, or set an amount above to make a payment request. <b className="text-slate-300">{rcv.stableSymbol} / ETH on {rcv.label}</b> only.</>}
+                    </CardNote>
+                  </WalletCard>
                 )}
               </div>
             </div>
@@ -2325,7 +3020,7 @@ function IdentityChip({ label, active, color }: { label: string; active: boolean
   );
 }
 
-// One of the three top-level money controls (Deposit / Send / Swap).
+// One of the four top-level money controls (Deposit / Send / Swap / Bridge).
 //
 // It takes `disabledReason: string | null` rather than `disabled: boolean`
 // because of what the wallet learned from the network switcher: a control that
@@ -2344,14 +3039,19 @@ function ActionButton({ icon, label, onClick, primary, disabledReason }: {
   const off = !!disabledReason;
   return (
     <div className="flex flex-col">
+      {/* Sized for FOUR across, not two: label at 10px and horizontal padding at
+          1 unit so "Deposit" — the longest of the four — still sits on one line
+          in a ~65px cell. It is a single button per column, so a label that
+          wrapped would make one control two lines tall and break the row's
+          baseline. */}
       <button onClick={onClick} disabled={off} title={disabledReason ?? undefined}
-        className="font-mono text-[11px] font-bold py-3 px-2 rounded-xl flex flex-col items-center gap-1 transition-opacity hover:opacity-90 disabled:opacity-35 disabled:cursor-not-allowed"
+        className="font-mono text-[10px] font-bold py-2.5 px-1 rounded-xl flex flex-col items-center gap-1 transition-opacity hover:opacity-90 disabled:opacity-35 disabled:cursor-not-allowed"
         style={off
           ? { background: "#0d0d12", color: "#475569", border: "1px solid #1A1A2E" }
           : primary
             ? { background: "#4FC3F7", color: "#050508" }
             : { background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
-        <span className="text-[15px] leading-none">{icon}</span>
+        <span className="text-[14px] leading-none">{icon}</span>
         {label}
       </button>
       {off && (
@@ -2378,6 +3078,212 @@ function RetryRead({ onRetry, busy }: { onRetry: () => void; busy: boolean }) {
   );
 }
 
+/** One AGENT SPEND figure. `unavailable` is a THIRD state, not a styled zero. */
+function SpendRail({ label, value, sub, accent, unavailable }: {
+  label: string; value: string; sub: string; accent: string; unavailable: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-[#1A1A2E] bg-[#0d0d12] px-3 py-2.5">
+      <div className="font-mono text-[8.5px] text-slate-600 tracking-widest uppercase">{label}</div>
+      {unavailable ? (
+        <>
+          <div className="font-mono text-[14px] font-bold text-slate-600 mt-1">—</div>
+          <div className="font-mono text-[8.5px] text-[#F59E0B] mt-0.5">store unreachable</div>
+        </>
+      ) : (
+        <>
+          <div className="font-mono text-[15px] font-bold mt-1 truncate" style={{ color: accent }}>{value}</div>
+          <div className="font-mono text-[8.5px] text-slate-600 mt-0.5 truncate">{sub}</div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * What the credits on the rail above were actually SPENT ON.
+ *
+ * This replaced one sentence that read the whole from a proper subset:
+ *
+ *     spend.d.tools.length > 0
+ *       ? `Across ${n} tools — per-tool breakdown on Usage.`
+ *       : "Per-tool breakdown and calls-per-day on Usage."
+ *
+ * `spend-summary.ts` keeps Blue Chat OUT of `tools` deliberately ("Real, but
+ * not a tool — kept out of `tools` so it can't pose as one"), so `tools` is a
+ * SUBSET of the spending and `tools.length` is not a fact about the total
+ * beside it. MEASURED 2026-09-13 on a live ledger: a wallet with 22 debits and
+ * 1,100 credits had `tools: []` and `chat: {credits: 1100}` — the rail printed
+ * "1,100 cr · 22 calls" and this line printed "Per-tool breakdown … on Usage",
+ * pointing at a table with no rows in it. A second wallet spent 608 credits of
+ * which 288 were chat, and the card called that "Across 1 tool".
+ *
+ * The split itself lives in SpendConsole (`creditSplit`) for the same reason
+ * `read-state.ts` exists: /app/usage answers this off the same ledger, and two
+ * independent arithmetics over one ledger can disagree while both look right.
+ *
+ * Two things it refuses to do:
+ *   · Sum credits with USDC, or price a credit that drained the free daily
+ *     allowance. The ONE credits→dollars figure is `paidAllTime`, a lifetime
+ *     aggregate the route publishes with its own divisor.
+ *   · Point at /app/usage unconditionally. When every receipt predates the
+ *     30-day chart, both surfaces there are empty and the pointer would be
+ *     advertising a screen that cannot answer (#143/#166/#196).
+ */
+function SpendSplit({ d }: { d: SpendSummaryDTO }) {
+  const s = creditSplit(d);
+  const crDown  = d.credits.status === "unavailable";
+  const paidUsd = d.credits.paidAllTime / d.creditsPerUsdc;
+
+  // Only buckets that actually carry credits get a chip. A zero bucket is not
+  // a category the user spent in, and naming it would pad the split with rows
+  // that mean "no".
+  const parts: { k: string; label: string; value: string }[] = [];
+  if (s.tools.credits > 0) parts.push({ k: "tools", label: `${s.tools.rows} Hub tool${s.tools.rows === 1 ? "" : "s"}`, value: `${s.tools.credits.toLocaleString()} cr` });
+  if (s.chat.credits  > 0) parts.push({ k: "chat",  label: "Blue Chat",    value: `${s.chat.credits.toLocaleString()} cr` });
+  if (s.other.credits > 0) parts.push({ k: "other", label: "Unattributed", value: `${s.other.credits.toLocaleString()} cr` });
+
+  // The pointer, derived from what /app/usage can actually show for THIS wallet:
+  // its by-tool table reads `tools`, its chart reads the 30-day `days`.
+  const hasTools = d.tools.length > 0;
+  const inWindow = d.days.some(x => x.calls > 0);
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      {!crDown && parts.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {parts.map(p => (
+            <span key={p.k} className="font-mono text-[9px] text-slate-500">
+              {p.label} <span className="text-slate-300 font-bold">{p.value}</span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* A split that does not add up to the rail above it is a data defect,
+          not a rounding artefact — `spend-summary.ts` touches exactly one
+          bucket per debit. Say so rather than letting the parts quietly
+          disagree with the whole. */}
+      {!crDown && parts.length > 0 && !s.balances && (
+        <p className="font-mono text-[9px] text-[#F59E0B]">
+          These parts don&apos;t add up to the rail above — some debits went uncategorised.
+        </p>
+      )}
+
+      {!crDown && d.credits.paidAllTime > 0 && (
+        <p className="font-mono text-[9px] text-slate-600">
+          {d.credits.paidAllTime.toLocaleString()} cr bought all-time ≈ ${paidUsd.toFixed(2)}
+          <span className="text-slate-700"> — the rest came from the free daily allowance.</span>
+        </p>
+      )}
+
+      <p className="font-mono text-[9px] text-slate-600">
+        {hasTools || inWindow ? (
+          <>
+            {hasTools ? "Per-tool breakdown" : "Calls per day"}{hasTools && inWindow ? " and calls per day" : ""} on{" "}
+            <Link href="/app/usage" className="text-[#4FC3F7] hover:underline">Usage</Link>.
+          </>
+        ) : (
+          <>Nothing falls inside the {d.days.length}-day chart on Usage — these totals reach further back than it does.</>
+        )}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * AGENT SPEND, in the wallet — the headline only, linking to the full console.
+ *
+ * Every number here comes from the `SpendSummaryDTO` the caller already fetched
+ * with `useSpendSummary`, and every judgement ABOUT those numbers is delegated
+ * to SpendConsole's own exported helpers (`scopeLabel`, `emptyState`, `usdc`).
+ * That is deliberate and it is the whole design: /app/usage answers the same
+ * question off the same ledger, and #199 exists because two independent
+ * renderings of one ledger can disagree while both look right. Reusing the
+ * derivation makes disagreement impossible rather than unlikely.
+ *
+ * The three rules this card inherits from that console, all load-bearing:
+ *   · USDC and credits are NEVER summed and never share a unit. A credit debit
+ *     drains the free daily allowance first, so a 50-credit call may have cost
+ *     nothing; converting it to dollars here would invent a charge.
+ *   · `status === "unavailable"` renders "—", never 0. Both rails down prints a
+ *     sentence saying so — an unreadable store is not an unspent wallet.
+ *   · "loading", "failed" and "disconnected" are each distinct from zero and
+ *     from each other (SpendConsole's `Load`), so each gets its own line.
+ */
+function AgentSpendCard({ spend, priv }: { spend: SpendLoad; priv: (s: string) => string }) {
+  // Two gates, same as the console: `s === "ok"` rules out spinner/error/no
+  // address; `scopeLabel` returning null rules out a 200 whose rails came back
+  // dead. A window caption over dead rails is the adjacency lie from #322.
+  const scope = spend.s === "ok" ? scopeLabel(spend.d) : null;
+
+  return (
+    <div className="mb-3 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="font-mono text-[9px] text-slate-500 tracking-widest">AGENT SPEND</div>
+        <div className="flex items-baseline gap-2 shrink-0">
+          {scope && <span className="font-mono text-[9px] text-slate-700">{scope}</span>}
+          <Link href="/app/usage" className="font-mono text-[10px] text-[#4FC3F7] hover:underline">Usage →</Link>
+        </div>
+      </div>
+
+      {spend.s === "disconnected" ? (
+        <p className="font-mono text-[10px] text-slate-600 mt-2">
+          Connect a wallet to see what it has spent — receipts are per address.
+        </p>
+      ) : spend.s === "loading" ? (
+        <p className="font-mono text-[10px] text-slate-600 mt-2">Reading spend…</p>
+      ) : spend.s === "failed" ? (
+        <p className="font-mono text-[10px] text-[#F59E0B] mt-2 leading-relaxed">
+          Couldn&apos;t load spending. A read failure, not a zero — your history is intact.
+        </p>
+      ) : spend.d.usdc.status === "unavailable" && spend.d.credits.status === "unavailable" ? (
+        <p className="font-mono text-[10px] text-[#F59E0B] mt-2 leading-relaxed">
+          Both spend stores are unreachable right now.{" "}
+          <span className="text-slate-600">That is not the same as zero.</span>
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <SpendRail
+              label="USDC · x402"
+              value={priv(fmtUsdcUnits(spend.d.usdc.units))}
+              accent="#4FC3F7"
+              unavailable={spend.d.usdc.status === "unavailable"}
+              sub={`${spend.d.usdc.calls.toLocaleString()} paid call${spend.d.usdc.calls === 1 ? "" : "s"} · on Base`}
+            />
+            <SpendRail
+              label="Credits"
+              // Deliberately NOT priced. The hide-balance mask covers dollars,
+              // and this is not one: credits are metered units drawn against a
+              // free daily allowance before anything is charged.
+              value={`${spend.d.credits.spentInWindow.toLocaleString()} cr`}
+              accent="#A78BFA"
+              unavailable={spend.d.credits.status === "unavailable"}
+              sub={`${spend.d.credits.callsInWindow.toLocaleString()} call${spend.d.credits.callsInWindow === 1 ? "" : "s"} · metered, not USDC`}
+            />
+          </div>
+
+          {/* The nothing-here line, and WHICH nothing it is. "unreadable" must
+              never be worded as an empty wallet — one rail answered and was
+              empty, the other never answered at all. */}
+          {emptyState(spend.d) === "none" ? (
+            <p className="font-mono text-[9px] text-slate-600 mt-2">
+              Nothing spent yet — Hub tool calls and chat runs show up here.
+            </p>
+          ) : emptyState(spend.d) === "unreadable" ? (
+            <p className="font-mono text-[9px] text-[#F59E0B] mt-2">
+              Nothing on the rail we can read, and the other is unreachable — half the picture.
+            </p>
+          ) : (
+            <SpendSplit d={spend.d} />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // Dependency-free area sparkline for the sidebar
 // A local `Spark` SVG line-chart component lived here. Its ONE call site was
 // the Morpho APY sparkline in the sidebar, so it goes with it. (BaseTokensCard
@@ -2387,26 +3293,10 @@ function RetryRead({ onRetry, busy }: { onRetry: () => void; busy: boolean }) {
 // the rest of the rate surface: it came from the Aave reserve read for one row
 // and from DefiLlama's top pool for the other, so two rows in the same list
 // quoted rates measured two different ways and only one of them was this user's.
-function PositionRow({ label, pos, onManage, disabled, disabledNote }: {
-  label: string; pos: number | null; onManage: () => void; disabled?: boolean; disabledNote?: string;
-}) {
-  return (
-    <div className="flex items-center justify-between py-2 border-b border-[#13131f] last:border-0">
-      <div>
-        <div className="font-mono text-[12px] text-slate-200">{label}</div>
-        <div className="font-mono text-[10px] text-slate-600">
-          {disabled ? <span className="text-slate-700">{disabledNote}</span>
-            : pos != null ? `${pos.toFixed(2)} USDC` : "—"}
-        </div>
-      </div>
-      {!disabled && (
-        <button onClick={onManage} className="font-mono text-[10px] px-2.5 py-1 rounded-md text-[#4FC3F7]" style={{ border: "1px solid #4FC3F730" }}>
-          Manage
-        </button>
-      )}
-    </div>
-  );
-}
+// `PositionRow` lived here and rendered the Positions panel's two rows. It went
+// with that panel rather than being left behind: a component with no call site
+// is the thing that quietly comes back, and the Aave/Morpho figures it showed
+// are still on screen in the account card's breakdown.
 
 // ── Landing hero (shown until the wallet connects) ───────────────────────────
 function BankLanding() {

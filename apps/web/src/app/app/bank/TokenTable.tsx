@@ -41,11 +41,16 @@ import { useEffect, useState } from "react";
 import type { WalletHolding } from "@/lib/wallet/holdings";
 import { canQuickSell, countsTowardTotal, TRUST_BADGE } from "@/lib/wallet/token-trust";
 import { resolveRead } from "@/lib/wallet/read-state";
+import { DUST_USD, maskFigure, splitByValue, hiddenNote, sumIsFloor } from "@/lib/wallet/display";
 
 interface HoldingsResp {
   holdings:   WalletHolding[];
-  source:     "moralis" | "rpc";
+  source:     "moralis" | "discovery" | "rpc";
   partial:    boolean;
+  /** Why the list may be short, written by the reader that knows which of three
+   *  sources answered. Rendered verbatim — see the footnote below for why this
+   *  table no longer composes that sentence itself. */
+  partialReason?: string;
   explorer?:  string;
   addressUrl?: string;
   network?:   string;
@@ -90,10 +95,18 @@ function SellControl({ h, onQuickSell }: { h: WalletHolding; onQuickSell: (h: Wa
 // index 4663, RhTokenTable reads it through Blockscout instead, and a type that
 // could accept "robinhood" would let a caller re-create the bug in the header
 // by passing it here and receiving Base rows.
-export default function TokenTable({ address, network, onQuickSell }: {
+export default function TokenTable({ address, network, onQuickSell, hideDust, hideAmounts, onShowDust }: {
   address?: `0x${string}`;
   network: "base" | "baseSepolia";
   onQuickSell?: (h: WalletHolding, pct: number) => void;
+  /** View-only. Hides rows priced under $1 AND rows with no price at all. The
+   *  two are counted and worded separately below, and neither changes the total
+   *  above — see lib/wallet/display.ts. */
+  hideDust?: boolean;
+  /** View-only. Masks figures the eye toggle has hidden. */
+  hideAmounts?: boolean;
+  /** Turn the dust filter off from inside the table, where the user notices it. */
+  onShowDust?: () => void;
 }) {
   const [data, setData] = useState<HoldingsResp | null>(null);
   const [loading, setLoading] = useState(false);
@@ -127,8 +140,24 @@ export default function TokenTable({ address, network, onQuickSell }: {
   // Impostors are excluded from the headline total. A scam token can quote any
   // price it likes through a pool it controls, so counting it would let the
   // impostor set the number this card presents as the user's portfolio value.
+  //
+  // Summed over `holdings`, NOT over `shown`. The dust filter is a view, and a
+  // view must not be able to move a total — if hiding rows lowered this figure,
+  // a user who flipped the switch would watch their portfolio shrink.
   const totalUsd  = holdings.reduce((a, h) => a + (countsTowardTotal(h.trust) ? (h.usdValue ?? 0) : 0), 0);
   const nFlagged  = holdings.filter(h => h.trust === "impostor").length;
+  // What actually gets rows. The switch removes two DIFFERENT things — rows we
+  // priced under $1, and rows we could not price at all — and `splitByValue`
+  // returns them as separate counts because they license opposite sentences
+  // about the total (see `hiddenNote`). They are never merged into one number.
+  const hid   = splitByValue(holdings, h => h.usdValue, !!hideDust);
+  const shown = hid.shown;
+  const note  = hiddenNote(hid);
+  // Rows that count toward the total but carry no price. They add 0 to the sum,
+  // so their existence alone makes the header figure a LOWER BOUND. Computed
+  // over `holdings`, never `shown` — hiding the unpriced rows must not also
+  // hide the fact that the sum omits them.
+  const unpricedInTotal = sumIsFloor(holdings, h => h.usdValue, h => countsTowardTotal(h.trust));
   const explorer  = data?.explorer ?? "https://basescan.org";
   const addressUrl = data?.addressUrl ?? `${explorer}/address/${address}`;
 
@@ -188,9 +217,21 @@ export default function TokenTable({ address, network, onQuickSell }: {
           // cannot produce an uncaveated total. "≥" is the entire claim being
           // made: the true figure cannot be lower than this, and we do not know
           // how much higher.
+          //
+          // TWO reasons it can be short, either sufficient, and the second was
+          // missing until 2026-09-13: an incomplete LIST (`read.totalIsFloor`,
+          // from read-state.ts) and rows in a complete list that we could not
+          // PRICE. MEASURED on 0xb058…3b5f/base — 41 rows, 29 unpriced — this
+          // header printed a flat, confident "$8.24" summed over the 12 it could
+          // price. `net-worth.ts:129` already made "some tokens have no price"
+          // a floor for the headline figure; the per-table totals did not.
           <span className="font-mono text-[10px] text-slate-400 tabular-nums"
-            title={read.totalIsFloor ? "Partial read — at least this much; the full token list was not available" : undefined}>
-            {read.totalIsFloor ? "≥ " : ""}{fmtUsd(totalUsd)}
+            title={
+              read.totalIsFloor && unpricedInTotal ? "At least this much — the token list is incomplete AND some tokens have no price"
+              : read.totalIsFloor ? "Partial read — at least this much; the full token list was not available"
+              : unpricedInTotal ? "At least this much — some tokens here have no price, so they add nothing to this figure"
+              : undefined}>
+            {read.totalIsFloor || unpricedInTotal ? "≥ " : ""}{maskFigure(fmtUsd(totalUsd), hideAmounts)}
           </span>
         )}
       </div>
@@ -230,13 +271,17 @@ export default function TokenTable({ address, network, onQuickSell }: {
             className="underline hover:text-amber-400">check on the explorer ↗</a>
         </div>
       ) : read.body === "partial" ? (
-        // The measured production case (see the note above): Moralis was
-        // unavailable, so only the curated majors list was probed. Finding
-        // nothing in a list of majors is not the same as holding nothing.
+        // A degraded read that found nothing. This is the banner form of the
+        // footnote below, and the SAME sentence from the SAME writer — finding
+        // nothing in a list you already know is short is not the same as holding
+        // nothing, whichever source cut the list short. The trailing clause is
+        // this table's, because it is the part that is about the branch rather
+        // than about the read.
         <div className="mt-2 rounded-lg px-3 py-2.5 font-mono text-[9px] leading-relaxed text-amber-500/80"
           style={{ border: "1px solid #F59E0B30", background: "#F59E0B08" }}>
-          Only major tokens could be checked — the full token list needs Moralis, which did not
-          answer. Anything else in this wallet is unknown, not absent.{" "}
+          {data?.partialReason ?? "This read is known to be incomplete."}{" "}
+          Nothing was found in what could be checked — so anything else in this wallet is
+          unknown, not absent.{" "}
           <a href={addressUrl} target="_blank" rel="noopener noreferrer"
             className="underline hover:text-amber-400">full list on the explorer ↗</a>
         </div>
@@ -246,9 +291,29 @@ export default function TokenTable({ address, network, onQuickSell }: {
         // ternaries above it. This is the one branch entitled to speak about
         // the wallet itself.
         <div className="py-6 text-center font-mono text-[10px] text-slate-600">No tokens on {chainLabel} yet</div>
+      ) : shown.length === 0 ? (
+        // Rows exist, the filter hid every one of them. NOT the "empty" branch —
+        // that branch is a statement about the wallet ("No tokens on Base yet")
+        // and this one is a statement about the filter. Rendering an empty
+        // <div> here would have been the worst of both: a table that looks
+        // broken, next to a total that still shows money.
+        // The reason is composed from the two counts rather than asserted: this
+        // line used to read "All N tokens here are under $1", which on the
+        // measured wallet would have been false for 29 of the 41 rows it was
+        // describing — they are not under a dollar, they have no price at all.
+        <div className="py-6 text-center font-mono text-[10px] text-slate-600">
+          All {holdings.length} token{holdings.length > 1 ? "s" : ""} here are{" "}
+          {hid.dust > 0 && hid.unpriced > 0
+            ? `under $${DUST_USD} or unpriced`
+            : hid.unpriced > 0 ? "unpriced" : `under $${DUST_USD}`}.{" "}
+          {onShowDust && (
+            <button type="button" onClick={onShowDust}
+              className="underline text-slate-400 hover:text-[#4FC3F7] transition-colors">show them</button>
+          )}
+        </div>
       ) : (
         <div className="divide-y divide-[#1A1A2E]">
-          {holdings.map(h => {
+          {shown.map(h => {
             const badge    = TRUST_BADGE[h.trust];
             const impostor = h.trust === "impostor";
             return (
@@ -278,12 +343,19 @@ export default function TokenTable({ address, network, onQuickSell }: {
                   {h.name && <div className="font-mono text-[9px] text-slate-600 truncate">{h.name}</div>}
                 </div>
               </a>
-              {/* Balance */}
-              <span className="font-mono text-[10px] text-slate-300 text-right tabular-nums">{fmtAmount(h.amount)}</span>
-              {/* Value — an impostor's price is its own claim, so it isn't shown */}
+              {/* Balance — masked too. A token quantity beside a public market
+                  price is the same disclosure with one extra step, so hiding
+                  only the dollar column would not hide anything. */}
+              <span className="font-mono text-[10px] text-slate-300 text-right tabular-nums">
+                {maskFigure(fmtAmount(h.amount), hideAmounts)}
+              </span>
+              {/* Value — an impostor's price is its own claim, so it isn't shown.
+                  The mask wraps only the branch that prints a figure: "—" means
+                  "we have no price", and a masked "—" would turn that absence
+                  into a secret the user thinks they are keeping. */}
               <span className="font-mono text-[10px] text-right tabular-nums"
                 style={{ color: impostor ? "#64748b" : h.usdValue != null ? "#34D399" : "#64748b" }}>
-                {impostor ? "—" : fmtUsd(h.usdValue)}
+                {impostor || h.usdValue == null ? "—" : maskFigure(fmtUsd(h.usdValue), hideAmounts)}
               </span>
               {/* Sell — pre-fills the Convert panel; user reviews + signs there.
                   Withheld on an impostor: being mistaken for another token is the
@@ -313,11 +385,39 @@ export default function TokenTable({ address, network, onQuickSell }: {
           read with rows always carries the footnote". */}
       {read.footnote && (
         <div className="mt-2 font-mono text-[9px] text-amber-500/80 leading-relaxed">
+          {/* The caveat is the READER's sentence, not this table's. It used to be
+              the literal string "Showing majors only — the full token list needs
+              Moralis", which was true while `partial` had exactly one cause and
+              became a confident, specific lie the moment on-chain discovery
+              became the second source: a list built from an explorer index plus
+              Multicall3 is neither majors-only nor waiting on Moralis. The UI
+              cannot tell these apart — only the reader knows which source
+              answered and what it could not cover — so the reader says it and
+              this renders it. The fallback is for older payloads only. */}
           {read.state === "failed"
             ? "This list is incomplete — part of the read failed. Other tokens may be held here."
-            : "Showing majors only — the full token list needs Moralis. Other tokens may be held here."}{" "}
+            : data?.partialReason ?? "This list may be incomplete. Other tokens may be held here."}{" "}
           <a href={addressUrl} target="_blank" rel="noopener noreferrer"
             className="underline hover:text-amber-400">full list on the explorer ↗</a>
+        </div>
+      )}
+
+      {/* Hidden-rows note. A filter the user cannot SEE is a filter that makes
+          the app look wrong — "my token is missing" is the same experience as a
+          bug. So the count of what is hidden is always visible, with the way out
+          next to it, and the sentence comes from `hiddenNote` so all three
+          tables word it identically and the two clauses cannot be collapsed
+          into one: a dust row is still inside the total, an unpriced row never
+          was. `shown.length > 0` because the all-hidden branch above already
+          says this in full; two copies of the same sentence is not twice the
+          honesty. */}
+      {note && shown.length > 0 && (
+        <div className="mt-2 font-mono text-[9px] text-slate-600 leading-relaxed">
+          {note}{" "}
+          {onShowDust && (
+            <button type="button" onClick={onShowDust}
+              className="underline text-slate-500 hover:text-[#4FC3F7] transition-colors">show all</button>
+          )}
         </div>
       )}
 

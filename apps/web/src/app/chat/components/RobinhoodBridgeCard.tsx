@@ -72,9 +72,26 @@ type PrepareResponse = {
     fromChain:  "base" | "robinhood";
     toChain:    "base" | "robinhood";
     token:      { address: `0x${string}`; symbol: string; decimals: number };
+    /**
+     * What LANDS. A separate token from `token`, because on the pair people use
+     * most they genuinely differ: send USDC from Base, receive USDG on
+     * Robinhood. Every destination-side figure and label on this card reads from
+     * HERE. Reusing `token` on the right-hand side — which this card did — put
+     * the input's symbol on the output's number, so the card said "USDC on
+     * Robinhood" for a token that does not exist on Robinhood.
+     */
+    tokenOut:   { address: `0x${string}`; symbol: string; decimals: number };
+    /** TRUE when the delivered token is not the one sent. Must be said out loud. */
+    assetChanged: boolean;
+    /** One sentence from the server, safe to render verbatim. "" when unchanged. */
+    assetNote:    string;
     amountIn:   string;
     amountOut:  string;
-    feeBps:     number;
+    /** Guaranteed floor in base units of `tokenOut`, or null if Relay omitted it. */
+    amountOutMin: string | null;
+    /** Total cost of the trip per Relay, both sides priced. Null = unknown. */
+    totalCostUsd:     number | null;
+    totalCostPercent: number | null;
     estFillSeconds: number;
     trackerUrl: string;
     requestId:  string;
@@ -391,14 +408,34 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
     );
   }
 
-  // The server states the token's decimals in the SAME payload as `amountOut`,
-  // so that is the authority for scaling it — and the only one. If the field is
-  // absent we don't know the scale, and fmtAmount renders "" instead of the
-  // `?? 18` that used to sit here.
-  const amountOutDisplay = prep?.meta
-    ? fmtAmount(prep.meta.amountOut,
-        Number.isFinite(prep.meta.token?.decimals) ? prep.meta.token.decimals : null)
+  // ── The destination side ───────────────────────────────────────────────────
+  //
+  // Everything below reads `tokenOut`, never `token`. They are different tokens
+  // on the commonest pair in the app, and each of these used the input's:
+  //
+  //   · the symbol under the received amount — printed "USDC on Robinhood", a
+  //     token that does not exist on Robinhood, for a bridge delivering USDG;
+  //   · the SCALE of the received amount — survivable only while every pair
+  //     anyone tested was 6→6. ETH (18) → USDG (6) would have rendered the
+  //     amount received a trillion times too large, directly above a Confirm
+  //     button.
+  //
+  // Absent scale renders "" (see fmtAmount), never a guessed 18.
+  const outSymbol = (prep?.meta?.tokenOut?.symbol || "").replace(/^\$/, "");
+  const outDecimals = Number.isFinite(prep?.meta?.tokenOut?.decimals)
+    ? prep!.meta!.tokenOut.decimals
+    : null;
+  const amountOutDisplay = prep?.meta ? fmtAmount(prep.meta.amountOut, outDecimals) : "";
+  // The floor, not the estimate. Relay quotes ~2% destination slippage on a
+  // cross-asset trip, so "≈" and "at worst" are two different numbers — and the
+  // second is the only one the user is promised.
+  const amountOutMinDisplay = prep?.meta?.amountOutMin
+    ? fmtAmount(prep.meta.amountOutMin, outDecimals)
     : "";
+  // Fall back to the input symbol ONLY for the pre-quote skeleton, where there
+  // is no server answer yet and both sides are placeholders anyway.
+  const recvSymbol = outSymbol || symbol;
+  const assetChanged = !!prep?.meta?.assetChanged;
   const shortRecipient = (recipient || fromAddress) ? shortAddr(recipient || fromAddress) : "";
 
   return (
@@ -422,7 +459,9 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
       {step === "filled" ? (
         <div className="rounded-lg border p-3" style={{ borderColor: "#34D39940", background: "#34D39908" }}>
           <div className="font-bold mb-1" style={{ color: "#34D399" }}>
-            Bridged {amtLabel} {symbol} to {toCfg.label}
+            {/* Both sides named. "Bridged 10 USDC to Robinhood" is false when
+                USDG is what arrived, and this is the line the user screenshots. */}
+            Bridged {amtLabel} {symbol} → {amountOutDisplay || "…"} {recvSymbol} on {toCfg.label}
           </div>
           <div className="flex gap-2 flex-wrap mt-1">
             {txHash && (
@@ -449,11 +488,21 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
               bottom: `${symbol} on ${fromCfg.label}`,
             }}
             right={{
-              glyph: <TokenGlyph symbol={symbol} />,
+              glyph: <TokenGlyph symbol={recvSymbol} />,
               top: loading ? "…" : (amountOutDisplay ? `≈ ${amountOutDisplay}` : "0.0"),
-              bottom: `${symbol} on ${toCfg.label}`,
+              bottom: `${recvSymbol} on ${toCfg.label}`,
             }}
           />
+
+          {/* The delivered token is not the token sent. This is Relay acting as
+              a router, not a bridge — legitimate, quoted, and the whole reason
+              the server refuses to auto-resolve anything but dollar-for-dollar.
+              It still has to be said BEFORE the button, not discovered after. */}
+          {assetChanged && prep?.meta?.assetNote && (
+            <div className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[9px] text-amber-300">
+              {prep.meta.assetNote}
+            </div>
+          )}
 
           {/* Quantity-word hint — shows what "all"/"max"/"half"/"N%" resolved to.
               Suppressed once the read has failed: "Resolving your balance…" is a
@@ -472,21 +521,41 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
             <UnverifiedBalance symbol={symbol} onRetry={() => { void bal.refetch(); }} busy={bal.refetching} />
           )}
 
-          {/* Small meta text: relayer fee · est fill · recipient · balance.
-              Fee amount in the token is truthful; Relay's amountUsd is often
-              missing/unreliable for volatile tokens, so we never derive a bps. */}
+          {/* Small meta text: total cost · floor · est fill · recipient · balance.
+              The line that used to sit here read "Relayer fee ≈ 0.056 USDC" —
+              true, and not the cost. The relayer leg is one of three (relayer,
+              gas, swap impact), so on a $1 trip it reported $0.06 against a real
+              $0.08, and the fraction it omits GROWS as the amount shrinks.
+              `totalCostUsd/Percent` is Relay's own both-sides-priced figure for
+              the whole trip. Null means Relay didn't price it — which prints
+              "unknown", never a zero. */}
           <div className="text-[9px] text-slate-500 mb-2 space-y-1">
             <div className="flex items-center justify-between gap-2">
               <span className="truncate">
-                Relayer fee{" "}
-                {prep?.meta?.relayerFeeFormatted
-                  ? <>≈ {prep.meta.relayerFeeFormatted} {symbol}
-                      {prep.meta.relayerFeeUsd && <span className="text-slate-600"> (${(+prep.meta.relayerFeeUsd).toFixed(2)})</span>}
+                Cost{" "}
+                {prep?.meta && prep.meta.totalCostUsd != null
+                  ? <>≈ ${prep.meta.totalCostUsd.toFixed(prep.meta.totalCostUsd < 0.1 ? 4 : 2)}
+                      {prep.meta.totalCostPercent != null && (
+                        // Percentage-of-notional. On a small bridge the fixed
+                        // legs dominate — MEASURED 8.4% on $1, 0.07% on $1,000 —
+                        // so this is the number that decides whether the trip is
+                        // worth taking, and it is worth colouring.
+                        <span className={prep.meta.totalCostPercent >= 1 ? "text-amber-400" : "text-slate-600"}>
+                          {" "}({prep.meta.totalCostPercent.toFixed(2)}%)
+                        </span>
+                      )}
                     </>
                   : <span className="text-slate-600">— unknown</span>}
               </span>
               {prep?.meta && <span className="shrink-0">Est. fill ~{prep.meta.estFillSeconds}s</span>}
             </div>
+            {/* The promise, under the estimate. Suppressed when Relay gives no
+                floor — an unknown minimum is not a minimum of `amountOut`. */}
+            {amountOutMinDisplay && (
+              <div className="truncate">
+                You receive at least {amountOutMinDisplay} {recvSymbol}
+              </div>
+            )}
             <div className="flex items-center justify-between gap-2">
               {shortRecipient && recipient && recipient.toLowerCase() !== fromAddress.toLowerCase()
                 ? <span className="truncate">To {shortRecipient} on {toCfg.label}</span>
@@ -540,6 +609,10 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
               : wrongChain    ? `Switch to ${fromCfg.label}`
               : overBalance   ? "Insufficient balance"
               : needsApprove  ? `Approve ${symbol}`
+              // When the delivered token differs, the button names it. A user
+              // who clicks "Bridge 10 USDC → Robinhood" and receives USDG was
+              // told something false by the last thing they read.
+              : assetChanged  ? `Confirm · ${amtLabel} ${symbol} → ${recvSymbol} on ${toCfg.label}`
               : `Confirm · Bridge ${amtLabel} ${symbol} → ${toCfg.label}`}
           </button>
 

@@ -17,6 +17,10 @@ import { absoluteUrl } from "@/lib/site-url";
 import { checkMemo } from "@/lib/b20/check-memo";
 import { checkAuthorization } from "@/lib/b20/check-authorization";
 import { checkWallet } from "@/lib/wallet/holdings";
+// The shape an amount field accepts, shared with the cards this route renders.
+// Dependency-free on purpose, so a server route and a client card can hold the
+// same rule without either dragging the other's imports along.
+import { isAmountLike } from "@/lib/wallet/amount";
 import { getRobinhoodAddressBalances } from "@/lib/robinhood/blockscout";
 import { mcpCallTool } from "@/lib/mcp-client";
 import { SOUL_MD } from "@/lib/soul";
@@ -357,14 +361,14 @@ const HUB_TOOLS = [
   },
   {
     name: "prepare_send",
-    description: "Open the SEND / PAY card so the user can send USDC (or ETH) to an address or a Basename (e.g. alice.base) on Base — NON-custodial, the user SIGNS the transfer in their own wallet; Blue Agent never touches the funds. Use when the user wants to: 'send X USDC to …', 'pay …', 'transfer to …', 'send ETH to …'. The CARD collects/edits recipient, amount, asset (USDC default), and network (Base Sepolia testnet by DEFAULT, or Base mainnet) and resolves the Basename → address; the user reviews and signs.\n\nCRITICAL — never invent a recipient or amount: pass `to` and `amount` ONLY if the user explicitly stated them in THIS request; otherwise omit and let the card collect them. Pass asset='ETH' only if the user explicitly said ETH. Network defaults to testnet; pass network='base' ONLY if the user explicitly asked for mainnet / real funds.\n\nThis NEVER moves funds by itself — only the user's signature executes. After calling, reply with ONE short line telling the user to review the recipient + amount and sign in the card; never claim funds were sent.",
+    description: "Open the SEND card — the wallet's own send panel, mounted in chat — so the user can transfer a token to an address or a Basename (e.g. alice.base) on Base (8453) or Robinhood Chain (4663). NON-custodial: the user SIGNS in their own wallet; Blue Agent never touches the funds. Use when the user wants to: 'send X USDC to …', 'pay …', 'transfer to …', 'send ETH to …', 'send USDG to … on robinhood'.\n\nBOTH NETWORKS ARE MAINNET — real funds, real money. There is NO testnet option and no test mode: never tell the user this is safe to test.\n\nThe CARD owns every choice and can change all of them: a network dropdown, an asset dropdown over the tokens the wallet actually HOLDS (plus a paste-an-address field), the recipient, the amount, and an optional on-chain memo. It resolves the Basename → address and reads the token's decimals itself.\n\nCRITICAL — never invent a recipient, an amount, or a token address: pass `to`, `amount` and `asset` ONLY if the user explicitly stated them in THIS request; otherwise omit and let the card collect them. If the user said a QUANTITY WORD ('all', 'max', 'half', '50%'), pass that word through VERBATIM as `amount` — the card resolves it against the live on-chain balance; never compute the number yourself, you do not have the balance.\n\nThis NEVER moves funds by itself — only the user's signature executes. After calling, reply with ONE short line telling the user to review the recipient + amount and sign in the card; never claim funds were sent.",
     input_schema: {
       type: "object",
       properties: {
         to:      { type: "string", description: "OPTIONAL — recipient 0x… address or Basename/ENS (e.g. alice.base). Pass ONLY if the user explicitly gave one; never invent one." },
-        amount:  { type: "number", description: "OPTIONAL — amount to send. Pass ONLY if the user explicitly stated one; otherwise omit and the card collects it. Never invent one." },
-        asset:   { type: "string", enum: ["USDC", "ETH"], description: "OPTIONAL — defaults to USDC. Pass 'ETH' only if the user explicitly said ETH." },
-        network: { type: "string", enum: ["base", "baseSepolia"], description: "OPTIONAL — defaults to baseSepolia (testnet). Pass 'base' ONLY if the user explicitly asked for mainnet / real funds." },
+        amount:  { type: "string", description: "OPTIONAL — amount in whole units ('25.5'), OR a quantity word — 'all', 'max', 'half', '50%' — passed through verbatim for the card to resolve against the live balance. Pass ONLY if the user stated one; never invent one and never turn a word into a number yourself." },
+        asset:   { type: "string", description: "OPTIONAL — defaults to the chain's stablecoin (USDC on Base, USDG on Robinhood). Accepts a 0x CONTRACT ADDRESS on the chosen network, or the words 'native'/'ETH' (the gas token) and 'cash' (the chain's stable). Any OTHER bare ticker is not an identity — many addresses wear the same symbol — so the card will refuse to arm it and say so. When the user names a token by symbol, pass its contract address if you have one from this conversation; otherwise omit this and let the user pick it in the card's asset dropdown." },
+        network: { type: "string", enum: ["base", "robinhood"], description: "OPTIONAL — defaults to 'base' (Base mainnet, 8453). Pass 'robinhood' for Robinhood Chain (4663) when the user says so. Both are MAINNET; there is no testnet." },
       },
       required: [],
     },
@@ -862,7 +866,7 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
       type: "object",
       properties: {
         txHash:  { type: "string", description: "0x-prefixed transaction hash (66 chars) to read the Memo event from" },
-        network: { type: "string", enum: ["base", "baseSepolia"], description: "base (mainnet) or baseSepolia (default)" },
+        network: { type: "string", enum: ["base", "baseSepolia"], description: "base (mainnet, DEFAULT) or baseSepolia. Pass 'baseSepolia' only if the user explicitly says testnet — a mainnet hash does not exist on Sepolia, so the wrong default answers 'not found' about a transaction that is real." },
       },
       required: ["txHash"],
     },
@@ -876,7 +880,7 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
         token:   { type: "string", description: "0x-prefixed B20 token address (40 hex chars)" },
         account: { type: "string", description: "Address (0x…) or basename (e.g. alice.base.eth) to check" },
         scope:   { type: "string", enum: ["sender", "receiver", "executor", "mint_receiver"], description: "Which policy scope to check — receiver (default), sender, executor, or mint_receiver" },
-        network: { type: "string", enum: ["base", "baseSepolia"], description: "base (mainnet) or baseSepolia (default)" },
+        network: { type: "string", enum: ["base", "baseSepolia"], description: "base (mainnet, DEFAULT) or baseSepolia. Pass 'baseSepolia' only if the user explicitly says testnet — a mainnet token has no policy on Sepolia, so the wrong default reports 'not authorized' for an address that is." },
       },
       required: ["token", "account"],
     },
@@ -894,14 +898,13 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
   },
   {
     name: "prepare_swap",
-    description: "Prepare a token swap on Base and render an interactive swap card. The card fetches a LIVE quote from the 0x Swap API and lets the user review and SIGN the swap in their own wallet (non-custodial) — nothing is swapped server-side. ZERO fabrication: NEVER invent a quote, rate, output amount, or price. Only call when the user gives an explicit tokenIn, tokenOut, AND amount — e.g. 'swap 0.1 ETH to USDC', 'trade 100 USDC for WETH', '兑换 50 USDC 到 ETH'. Tokens may be a known symbol (ETH, WETH, USDC, cbBTC) or a 0x… contract address; if a symbol is unknown, pass it through and the card asks the user for the address.",
+    description: "Open the CONVERT card — the wallet's own swap panel, mounted in chat — for a swap on BASE MAINNET (8453), routed through the 0x Swap API. The card fetches a LIVE quote and the user reviews it and SIGNS in their own wallet; nothing is swapped server-side. Use for: 'swap 0.1 ETH to USDC', 'trade 100 USDC for WETH', '兑换 50 USDC 到 ETH'.\n\nBASE MAINNET ONLY — real funds. There is no testnet: 0x routes against real liquidity, so a 'test' swap would spend real money under a false label. For a swap on ROBINHOOD CHAIN use robinhood_swap instead; the card itself also carries a network dropdown, so the user can move a Base swap to Robinhood without you calling again.\n\nZERO fabrication: NEVER invent a quote, rate, output amount, or price — only the card's live quote may be shown, and only by the card. Sell and buy tokens may each be a MAJOR symbol (ETH, WETH, USDC, cbBTC — these four are verified constants) or a 0x… contract address. Any other bare ticker does not identify a token on Base; pass the contract address if you have one from this conversation, otherwise pass the symbol through and the card will say it could not arm it and let the user paste the address.",
     input_schema: {
       type: "object",
       properties: {
-        tokenIn:  { type: "string", description: "Token to sell — symbol (ETH/WETH/USDC/cbBTC) or 0x… address" },
-        tokenOut: { type: "string", description: "Token to receive — symbol (ETH/WETH/USDC/cbBTC) or 0x… address" },
-        amountIn: { type: "string", description: "Amount of tokenIn to swap, as a decimal string (e.g. '0.1')" },
-        network:  { type: "string", enum: ["base", "baseSepolia"], description: "base (mainnet, default) or baseSepolia" },
+        tokenIn:  { type: "string", description: "Token to SELL — one of the majors ETH/WETH/USDC/cbBTC, or a 0x… contract address on Base. Never invent an address." },
+        tokenOut: { type: "string", description: "Token to RECEIVE — one of the majors ETH/WETH/USDC/cbBTC, or a 0x… contract address on Base. Never invent an address." },
+        amountIn: { type: "string", description: "Amount of tokenIn as a decimal string ('0.1'), OR a quantity word — 'all', 'max', 'half', '50%' — passed through verbatim for the card to resolve against the live balance. Never turn a word into a number yourself." },
       },
       required: ["tokenIn", "tokenOut", "amountIn"],
     },
@@ -1116,30 +1119,37 @@ async function callMcpConnectorTool(
   }
 }
 
-// Known Base token symbols → contract address for prepare_swap. Symbols are the
-// only thing we resolve server-side; an unknown symbol passes through verbatim so
-// the SwapCard can ask for the contract address (never fabricated). A 0x… address
-// is returned as-is. ETH uses the 0x Swap API native sentinel.
-const SWAP_TOKENS: Record<"base" | "baseSepolia", Record<string, string>> = {
-  base: {
-    ETH:   "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
-    WETH:  "0x4200000000000000000000000000000000000006",
-    USDC:  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-    CBBTC: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
-  },
-  baseSepolia: {
-    ETH:  "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
-    WETH: "0x4200000000000000000000000000000000000006",
-    USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-  },
+/**
+ * The four Base symbols we are willing to resolve server-side, and their
+ * addresses.
+ *
+ * This is NOT ticker-matching. It is a hand-written table of four verified
+ * mainnet constants, identical to the majors the Convert card itself pins
+ * (`BASE_MAJORS` in lib/wallet/token-trust), so a symbol that hits this map
+ * names exactly one address and always the same one. Every OTHER symbol
+ * resolves to "" on purpose — the card then says it could not arm the token and
+ * offers a paste field, which is the only honest answer, because a ticker is
+ * worn by whichever contract chose to wear it (#145, #280).
+ *
+ * The baseSepolia column is GONE (#256/#257, 2026-09-12). It was never
+ * reachable in any way that meant what it said: the card signs through the 0x
+ * Swap API, which quotes against real mainnet liquidity, so a swap labelled
+ * "testnet" would have spent real funds. A testnet row in a table feeding a
+ * mainnet router is a label that lies about whose money is moving.
+ */
+const SWAP_TOKENS: Record<string, string> = {
+  ETH:   "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", // 0x Swap API native sentinel
+  WETH:  "0x4200000000000000000000000000000000000006",
+  USDC:  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  CBBTC: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
 };
 
-/** Resolve a swap token: 0x… address → as-is; known symbol → its Base address;
- *  unknown symbol → "" so the card prompts for the contract address. */
-function resolveSwapToken(token: string, network: "base" | "baseSepolia"): string {
+/** Resolve a Base swap token: 0x… address → as-is; one of the four majors →
+ *  its verified address; anything else → "" so the card asks the user. */
+function resolveSwapToken(token: string): string {
   const t = (token || "").trim();
   if (/^0x[a-fA-F0-9]{40}$/.test(t)) return t;
-  return SWAP_TOKENS[network][t.toUpperCase().replace(/^\$/, "")] ?? "";
+  return SWAP_TOKENS[t.toUpperCase().replace(/^\$/, "")] ?? "";
 }
 
 /**
@@ -1190,32 +1200,45 @@ async function callHubTool(
     };
   }
   if (toolName === "prepare_send") {
-    // Marker only — the SendCard resolves the recipient/Basename and the user
-    // SIGNS the USDC/ETH transfer in their own wallet. We never move funds.
+    // Marker only — the wallet's own send card mounts in chat, resolves the
+    // recipient/Basename, reads the token's decimals and balance, and the user
+    // SIGNS in their own wallet. We never move funds.
+    //
+    // `network` is pinned to a MAINNET key here rather than trusted. The old
+    // schema offered baseSepolia and defaulted to it, so an unrecognised or
+    // absent value used to mean "testnet"; anything that still arrives saying
+    // so now falls to Base mainnet, which is what the card was signing all
+    // along (#256). The card's own dropdown is what changes the chain.
+    const network = args.network === "robinhood" ? "robinhood" : "base";
     return {
-      text: "Send/Pay card rendered. The card shows recipient, amount and asset — the user reviews and SIGNS the transfer in their own wallet (non-custodial). Do NOT claim funds were sent and do NOT restate the recipient as if confirmed. Reply with one short line: tell the user to review the recipient + amount and sign in the card.",
-      staticReply: "Your send card is above — double-check the recipient and amount, then sign the transfer in your own wallet.",
-      result: { kind: "send", ...args },
+      text: "Send card rendered on MAINNET (Base 8453 or Robinhood Chain 4663 — never a testnet). The card shows the network, recipient, asset and amount, and the user reviews and SIGNS the transfer in their own wallet (non-custodial). Do NOT claim funds were sent, do NOT restate the recipient as if confirmed, and do NOT describe this as a test. Reply with one short line: tell the user to review the recipient + amount and sign in the card.",
+      staticReply: "Your send card is above — double-check the network, recipient and amount, then sign the transfer in your own wallet.",
+      result: { kind: "send", ...args, network },
     };
   }
   if (toolName === "prepare_swap") {
-    // Marker only — the SwapCard fetches a LIVE 0x quote and the user SIGNS the
-    // swap in their own wallet (non-custodial). No quote is computed here, no
-    // funds move. Resolve known symbols → Base addresses; unknown symbols pass
-    // through so the card can ask the user for the contract address.
-    const network = args.network === "baseSepolia" ? "baseSepolia" : "base";
+    // Marker only — the wallet's own Convert card mounts in chat, fetches a LIVE
+    // 0x quote and the user SIGNS in their own wallet (non-custodial). No quote
+    // is computed here, no funds move.
+    //
+    // No `network` any more (#257). It was inert: the card has always signed
+    // Base mainnet because 0x quotes mainnet liquidity, while the schema
+    // advertised baseSepolia and the description called it the default — a
+    // testnet label over a real-funds path. The card carries the chain picker
+    // now, so the chain is the user's choice on screen instead of a parameter
+    // the model guesses and nothing honours.
     const tokenIn  = typeof args.tokenIn  === "string" ? args.tokenIn.trim()  : "";
     const tokenOut = typeof args.tokenOut === "string" ? args.tokenOut.trim() : "";
     const amountIn = typeof args.amountIn === "string" ? args.amountIn.trim()
       : typeof args.amountIn === "number" ? String(args.amountIn) : "";
     return {
-      text: "Swap card rendered. The card fetches a live 0x quote and the user reviews the rate and SIGNS the swap in their own wallet (non-custodial). Do NOT quote a rate or output amount yourself, do NOT claim the swap happened. Reply with one short line: tell the user to review the quote in the card and sign.",
-      staticReply: "Your swap card is above — review the live quote, then sign the swap in your own wallet.",
+      text: "Convert card rendered on BASE MAINNET (8453) — real funds, not a testnet. The card fetches a live 0x quote and the user reviews the rate and SIGNS in their own wallet (non-custodial). Do NOT quote a rate or output amount yourself, do NOT claim the swap happened, and do NOT describe this as a test. Reply with one short line: tell the user to review the quote in the card and sign.",
+      staticReply: "Your convert card is above — review the live quote, then sign the swap in your own wallet.",
       result: {
         kind: "swap",
-        tokenIn, tokenOut, amountIn, network,
-        tokenInAddress:  resolveSwapToken(tokenIn,  network),
-        tokenOutAddress: resolveSwapToken(tokenOut, network),
+        tokenIn, tokenOut, amountIn, network: "base",
+        tokenInAddress:  resolveSwapToken(tokenIn),
+        tokenOutAddress: resolveSwapToken(tokenOut),
       },
     };
   }
@@ -1581,7 +1604,11 @@ async function callHubTool(
     // resolves the word against the live balance it already reads, so the number
     // is derived from the user's own chain state, never typed — confirm-only
     // stays intact (#138). Anything else is malformed.
-    else if (!amount || !/^(\d+(\.\d+)?|all|max|half|\d+(\.\d+)?%)$/i.test(amount)) error = "Missing amount — pass a positive decimal (e.g. '25.5') or a quantity word (all, max, half, 50%).";
+    //
+    // `isAmountLike`, not an inline regex: this rule is shared with the card
+    // that has to accept whatever passes here, and the copy that drifted was
+    // the one nobody was looking at. See `lib/wallet/amount.ts`.
+    else if (!amount || !isAmountLike(amount)) error = "Missing amount — pass a positive decimal (e.g. '25.5') or a quantity word (all, max, half, 50%).";
     return {
       text: error
         ? `Robinhood send card rendered with an error: ${error}. Reply with one short line telling the user; do NOT invent an address or amount.`
@@ -1618,7 +1645,8 @@ async function callHubTool(
     // Accept a positive decimal OR a quantity word (all|max|half|N%) — the card
     // resolves it against the live source-chain balance (#137/#138). Confirm-only
     // holds: the number is derived from the user's own balance, never typed.
-    else if (!amount || !/^(\d+(\.\d+)?|all|max|half|\d+(\.\d+)?%)$/i.test(amount)) error = "Missing amount — pass a positive decimal (e.g. '25.5') or a quantity word (all, max, half, 50%).";
+    // Shared rule, not a second regex — see the send branch above.
+    else if (!amount || !isAmountLike(amount)) error = "Missing amount — pass a positive decimal (e.g. '25.5') or a quantity word (all, max, half, 50%).";
     return {
       text: error
         ? `Robinhood bridge card rendered with an error: ${error}. Reply with one short line telling the user; do NOT invent an address or amount.`
@@ -1648,7 +1676,11 @@ async function callHubTool(
     // Server-executed read: look up the B20 Memo event on a tx hash. No payment,
     // no signing — just an RPC read. Returns a memo_result the UI renders inline.
     const txHash  = typeof args.txHash === "string" ? args.txHash.trim() : "";
-    const network = typeof args.network === "string" ? args.network : "baseSepolia";
+    // Mainnet unless asked (#257). A read costs nothing on either chain, but it
+    // does not ANSWER on either: a real mainnet hash looked up on Sepolia comes
+    // back "not found", which reads as a fact about the transaction rather than
+    // about the chain we chose without being told.
+    const network = typeof args.network === "string" ? args.network : "base";
     const r = await checkMemo(txHash, network);
     const text = r.found
       ? `Memo found: "${r.memo}". Reply with one short line stating the memo string. The result card shows the tx link.`
@@ -1669,7 +1701,10 @@ async function callHubTool(
     const token   = typeof args.token === "string" ? args.token.trim() : "";
     const account = typeof args.account === "string" ? args.account.trim() : "";
     const scope   = typeof args.scope === "string" ? args.scope : "receiver";
-    const network = typeof args.network === "string" ? args.network : "baseSepolia";
+    // Mainnet unless asked (#257) — same reason as check_memo above, with a
+    // sharper edge: a mainnet token has no policy registry entry on Sepolia, so
+    // the wrong chain returns "not authorized" for an address that IS.
+    const network = typeof args.network === "string" ? args.network : "base";
     const r = await checkAuthorization({ token, account, scope, network });
     const text =
       r.status === "authorized"
@@ -1730,7 +1765,8 @@ async function callHubTool(
       result: {
         kind: "wallet_result", connected: true,
         address: r.address, network: r.network, explorer: r.explorer, addressUrl: r.addressUrl,
-        source: r.source, partial: r.partial, holdings: r.holdings, error: r.error,
+        source: r.source, partial: r.partial, partialReason: r.partialReason,
+        holdings: r.holdings, error: r.error,
         // Robinhood Chain leg — separate field so the card can group + label.
         robinhoodHoldings: rhHoldings,
       },
@@ -2572,6 +2608,26 @@ export async function POST(req: NextRequest) {
     messages?:    LLMMessage[];
     tier?:        string;
     memoryContext?: string;
+    // What the SCREEN the user is chatting from currently shows — appended to
+    // the system prompt, never replacing it.
+    //
+    // Added 2026-09-13 for the wallet page's assistant, which had been sending
+    // a `system` field this route does not destructure. Its whole prompt —
+    // including `balanceForPrompt`, the string engineered so the model can
+    // never call an unread balance zero — was silently dropped on every
+    // message. The field is NOT called `system` on purpose: a client-settable
+    // `system` would REPLACE SOUL.md, the B20 prohibitions and the tool
+    // dispatch table, which is a much larger thing than "tell the model what
+    // the page shows". This appends, exactly like `memoryContext`, and carries
+    // the same trust level (client-supplied, already possible via that field —
+    // no new injection surface).
+    //
+    // Callers must label the block for what it is (page state, one moment in
+    // time), because the model ALSO has `check_wallet` — a live server read of
+    // the same wallet. Two readers of one fact is fine only while each says
+    // which one it is; unlabeled, a stale screen figure reads as a second
+    // oracle and the model gets to pick.
+    pageContext?: string;
     provider?:    string;
     modelId?:     string;
     webSearch?:   boolean;
@@ -2599,7 +2655,7 @@ export async function POST(req: NextRequest) {
   // `baseMcp` is intentionally NOT destructured — the toggle is inert (see the
   // Base MCP note above the section consts). It stays on the body type so old
   // clients still send it without a 400, but nothing reads it.
-  const { messages, tier = "pro", memoryContext, provider, modelId, webSearch = false, attachments = [], address, coinbase = false, skills } = body;
+  const { messages, tier = "pro", memoryContext, pageContext, provider, modelId, webSearch = false, attachments = [], address, coinbase = false, skills } = body;
   const mcpConnectors = Array.isArray(body.mcpConnectors) ? body.mcpConnectors : [];
   // Pre-build connector tools + dispatch map once per request.
   const { tools: mcpTools, map: mcpMap } = buildMcpTools(mcpConnectors);
@@ -2745,6 +2801,11 @@ export async function POST(req: NextRequest) {
     modelLine,
     langLine,
     memoryContext ?? "",
+    // Below memory, above the command prompt: page state is context, not
+    // identity and not the task. It is also the ONLY block here the user can
+    // see with their own eyes, which is why it must never contradict the
+    // screen — see the caller's label.
+    pageContext ?? "",
     cmdPrompt ?? "",
   ].filter(Boolean).join("\n\n");
 
