@@ -9,6 +9,7 @@
 // so "design once, apply to all 3" holds without abstracting the money path.
 
 import React from "react";
+import { QUANTITY_WORD_RE } from "@/lib/wallet/amount";
 
 // Recognisable accents for well-known tickers; everything else hashes into a
 // stable palette so the same symbol always gets the same colour.
@@ -76,8 +77,11 @@ export function ChainDot({ color }: { color: string }) {
 // DERIVED from the user's own balance + the word they said, never typed, so
 // there's still no drift from the chat context (Issue 1 stays fixed).
 
-/** Words the card accepts in place of a number: all | max | half | "50%". */
-export const SYMBOLIC_AMOUNT_RE = /^(all|max|half|\d+(?:\.\d+)?%)$/i;
+// The set of words is NOT redefined here. It was, character-for-character, and
+// the copy that mattered — the bridge editor's — had drifted; see `amount.ts`.
+// Imported rather than re-exported under the old name, because a rule reachable
+// by two names is a rule that gets half-fixed (the same reason `clampDecimals`
+// left this file and did not leave a re-export behind).
 
 // Native-gas reserve kept back when resolving all/max/100% on NATIVE ETH, so the
 // wallet still has enough to pay for the tx it's about to sign. Base + RH are
@@ -108,7 +112,7 @@ export function resolveQuantity(
   opts?: { isNative?: boolean },
 ): ResolvedQuantity {
   const s = String(raw ?? "").trim();
-  if (!SYMBOLIC_AMOUNT_RE.test(s)) {
+  if (!QUANTITY_WORD_RE.test(s)) {
     const n = parseFloat(s);
     return { value: Number.isFinite(n) ? n : null, symbolic: false };
   }

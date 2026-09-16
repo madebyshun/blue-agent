@@ -13,19 +13,23 @@
 // and validates against the live preset ids — the same shape as /app/skills
 // routing its pick to /chat?prefill=<trigger> because a standalone page has no
 // local chat session to configure.
+//
+// This page does NOT use PanelHost. ModelsPanel renders the handoff's own
+// `// MODELS` header bar (title + live sub-line + Presets/All toggle), so a
+// PanelHost header would print a second title above it. We still need the
+// ChatProvider PanelHost used to supply (ModelsPanel calls useChat() for the
+// tier and the live credit balance), so we mount one directly. ModelsPanel's
+// root is `flex flex-col h-full`, which fills the /app <main> flex column.
 
 import { useRouter } from "next/navigation";
-import PanelHost from "../_PanelHost";
+import { ChatProvider } from "@/app/chat/ChatContext";
 import ModelsPanel from "@/app/chat/components/ModelsPanel";
 
 export default function ModelsPage() {
   const router = useRouter();
   return (
-    <PanelHost
-      title="Models"
-      subtitle="Every model Blue Chat can run · publisher · context window · credits per message"
-    >
+    <ChatProvider>
       <ModelsPanel onPick={(id) => router.push("/chat?preset=" + encodeURIComponent(id))} />
-    </PanelHost>
+    </ChatProvider>
   );
 }

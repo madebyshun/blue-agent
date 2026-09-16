@@ -29,6 +29,22 @@ const ERC20_BAL_ABI = [
     inputs: [{ name: "a", type: "address" }], outputs: [{ type: "uint256" }] },
 ] as const;
 
+/**
+ * A refused RPC read is NOT a zero balance (#259).
+ *
+ * This route's entire job is to answer "is the keeper funded?" during setup, so
+ * an unread balance rendered as `"0"` is the most expensive lie available here:
+ * step 3 of the checklist at the bottom of this file tells the reader to go
+ * send ETH to the gas tank, and a rate limit on `getBalance` would tell them to
+ * send it a second time. Worse, `thresholds.minKeeperBalanceEth` is returned
+ * right beside these numbers, so a fabricated 0 reads as "below the top-up
+ * threshold" — a conclusion nothing measured.
+ *
+ * Each leg is therefore reported independently, and a failed one is `null` with
+ * a reason, never a number. `null` deliberately is not `"0"` and not `"—"`: a
+ * consumer that does arithmetic on it gets `NaN` and stops, instead of quietly
+ * treating an outage as an empty wallet.
+ */
 async function balances(pc: unknown, addr: Address) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = pc as any;
@@ -36,13 +52,21 @@ async function balances(pc: unknown, addr: Address) {
     client.getBalance({ address: addr }),
     client.readContract({ address: USDC_BASE, abi: ERC20_BAL_ABI, functionName: "balanceOf", args: [addr] }),
   ]);
-  const ethWei  = eth.status  === "fulfilled" ? (eth.value  as bigint) : 0n;
-  const usdcRaw = usdc.status === "fulfilled" ? (usdc.value as bigint) : 0n;
+  const ethWei  = eth.status  === "fulfilled" ? (eth.value  as bigint) : null;
+  const usdcRaw = usdc.status === "fulfilled" ? (usdc.value as bigint) : null;
+  const why = (r: PromiseSettledResult<unknown>, what: string) =>
+    r.status === "rejected"
+      ? ((r.reason as Error)?.message || `Base RPC did not answer for the ${what} balance`)
+      : `Base RPC did not answer for the ${what} balance`;
   return {
-    eth:      formatEther(ethWei),
-    ethWei:   ethWei.toString(),
-    usdc:     formatUnits(usdcRaw, 6),
-    usdcRaw:  usdcRaw.toString(),
+    eth:      ethWei  === null ? null : formatEther(ethWei),
+    ethWei:   ethWei  === null ? null : ethWei.toString(),
+    usdc:     usdcRaw === null ? null : formatUnits(usdcRaw, 6),
+    usdcRaw:  usdcRaw === null ? null : usdcRaw.toString(),
+    // Present ONLY when something went wrong, so a healthy response keeps the
+    // shape it has always had and a broken one cannot be read as a healthy zero.
+    ...(ethWei  === null ? { ethError:  why(eth,  "native ETH") } : {}),
+    ...(usdcRaw === null ? { usdcError: why(usdc, "USDC") }       : {}),
   };
 }
 

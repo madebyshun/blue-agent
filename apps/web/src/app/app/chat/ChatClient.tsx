@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import WalletBar     from "@/components/WalletBar";
 import { ChatProvider, useChat } from "@/app/chat/ChatContext";
 import { useAppChrome, type DrawerNavItem, type DrawerRecent } from "@/app/app/AppChrome";
 
@@ -28,14 +27,13 @@ function relativeTime(ms: number): string {
 // Settings is a modal from the account chip, never a tab.
 //
 // This page has no sidebar of its own either. It used to render a second 288px
-// aside beside the shell's 212px one — 500px of chrome to hold New chat, the
+// aside beside the shell's 218px one — 500px of chrome to hold New chat, the
 // recents list and a credit chip. All three now go to the shell through
 // `setContextual`, which already fed the mobile drawer, so one registration
 // drives both breakpoints.
 function ChatShell() {
   const {
     artifactsPanelOpen,
-    onWalletChange, walletRefresh,
     createNewTask, tasks, selectTask, deleteTask, activeTaskId,
     setInput,
     credits, isUnlimited, holderTier, walletReady,
@@ -43,8 +41,8 @@ function ChatShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { setContextual } = useAppChrome();
 
-  // Deep-link prefill: other surfaces (e.g. the /app/launches "Trade" button)
-  // route here as /app/chat?prefill=<message> to seed — NOT auto-send — the
+  // Deep-link prefill: other surfaces route here as
+  // /app/chat?prefill=<message> to seed — NOT auto-send — the
   // composer with a token-trade prompt. The user reviews/edits, then sends.
   // Runs once on mount; we strip the param afterwards so a refresh won't re-seed.
   useEffect(() => {
@@ -122,10 +120,11 @@ function ChatShell() {
 
   return (
     <>
-      {/* Hidden wallet detector — always mounted so onWalletChange fires on load */}
-      <div className="hidden">
-        <WalletBar onWalletChange={onWalletChange} refreshTrigger={walletRefresh} />
-      </div>
+      {/* No hidden wallet detector. A <WalletBar> used to be mounted here
+          off-screen for the sole purpose of firing `onWalletChange` into
+          ChatContext on load; the provider reads `useWallet()` itself now, so
+          the connected wallet no longer depends on an invisible component
+          being rendered. */}
 
       {/* No <Navbar /> — /app/layout.tsx provides the side navigation */}
 
@@ -139,6 +138,14 @@ function ChatShell() {
           <div className="flex-1 flex min-h-0 overflow-hidden">
 
             <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+              {/* `// CHAT` header — desktop only. Below lg the global MobileTopBar
+                  (see AppShell) already prints the surface title, so rendering
+                  this too would duplicate it. Carries the brand line that used to
+                  sit under the empty-state heading. */}
+              <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
+                <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// CHAT</span>
+                <span className="font-mono text-[10.5px] text-[#64748B]">Build anything on Base</span>
+              </div>
               <ClaimBanner />
               <ChatMessages />
               <ChatInput />

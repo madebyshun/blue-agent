@@ -170,23 +170,25 @@ function HomeView(props: HubHomeProps) {
 
         {/* ── HERO — marketplace thesis + dual CTA + big search ── */}
         <section className="mb-8">
-          <h1 className="font-mono text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2 leading-tight">
-            The x402 tool marketplace <span className="text-[#4FC3F7]">on Base</span>.
+          <h1 className="font-mono text-2xl sm:text-3xl font-bold tracking-[-0.02em] mb-2.5 leading-[1.2]" style={{ color: "#E2E8F0" }}>
+            The x402 tool marketplace <span className="text-[#4FC3F7]">on Base.</span>
           </h1>
-          <p className="font-mono text-sm sm:text-base text-slate-400 mb-5 max-w-xl">
-            Agents call. Creators earn <span className="text-[#A78BFA] font-semibold">95%</span>.
-            <span className="text-slate-600"> No signup, no API key — USDC per call.</span>
+          <p className="font-mono text-[12.5px] sm:text-sm leading-[1.6] mb-5 max-w-2xl" style={{ color: "#94A3B8" }}>
+            Agents call. Creators keep <span style={{ color: "#E2E8F0" }}>95%</span> self-hosted,{" "}
+            <span style={{ color: "#E2E8F0" }}>90%</span> hosted on Blue Hub — paid per call in USDC over{" "}
+            <span style={{ color: "#E2E8F0" }}>Coinbase x402</span> on Base.
           </p>
           <div className="flex flex-wrap gap-2 mb-5">
             <button
               type="button"
               onClick={() => { const el = document.getElementById("hub-featured"); el?.scrollIntoView({ behavior: "smooth" }); }}
-              className="font-mono text-xs font-semibold px-4 py-2.5 rounded-xl border border-[#4FC3F7]/40 bg-[#4FC3F7]/10 text-[#4FC3F7] hover:bg-[#4FC3F7]/20 transition-colors">
+              className="font-mono text-[11px] font-semibold px-4 py-2.5 rounded-[9px] text-[#050508] bg-[#4FC3F7] hover:bg-[#29ABE2] transition-colors"
+              style={{ boxShadow: "0 0 18px rgba(79,195,247,.28)" }}>
               Browse {tools.length} tools →
             </button>
             {(() => {
-              const cls = "font-mono text-xs font-semibold px-4 py-2.5 rounded-xl border border-[#A78BFA]/40 bg-[#A78BFA]/10 text-[#A78BFA] hover:bg-[#A78BFA]/20 transition-colors";
-              const inner = <>List your tool · earn 95% →</>;
+              const cls = "font-mono text-[11px] font-medium px-4 py-2.5 rounded-[9px] border border-[#A78BFA]/35 text-[#A78BFA] hover:bg-[#A78BFA]/10 transition-colors";
+              const inner = <>List your tool · keep up to 95% →</>;
               return onListTool
                 ? <button type="button" onClick={onListTool} className={cls}>{inner}</button>
                 : <Link href="/hub/submit" className={cls}>{inner}</Link>;
@@ -232,15 +234,13 @@ function HomeView(props: HubHomeProps) {
         {/* ── INTENT CARDS — 4 entry points ── */}
         <section className="mb-9">
           <SectionHeader emoji="🎯" label="What do you want to do?" accent="#4FC3F7" />
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {INTENTS.map(intent => (
               <button key={intent.label} onClick={() => onPickCat(intent.categoryId)}
-                className="text-left rounded-2xl border p-4 transition-all hover:scale-[1.02] group"
-                style={{ borderColor: `${intent.color}25`, background: `${intent.color}06` }}>
-                <div className="text-2xl mb-2">{intent.emoji}</div>
-                <p className="font-mono text-sm font-bold mb-0.5" style={{ color: intent.color }}>{intent.label}</p>
-                <p className="font-mono text-[10px] text-slate-600 leading-relaxed">{intent.sub}</p>
-                <p className="mt-2 font-mono text-[10px] opacity-70 group-hover:opacity-100 transition-opacity" style={{ color: intent.color }}>
+                className="text-left rounded-2xl border border-[#1A1A2E] bg-[#0D0D14] p-4 transition-colors hover:border-[#4FC3F7]/40 group">
+                <p className="font-mono text-[13px] font-semibold text-[#4FC3F7]">{intent.label}</p>
+                <p className="font-prose text-[10.5px] leading-[1.6] mt-1.5" style={{ color: "#94A3B8" }}>{intent.sub}</p>
+                <p className="mt-3 font-mono text-[10px] font-medium opacity-70 group-hover:opacity-100 transition-opacity" style={{ color: "#E2E8F0" }}>
                   Explore →
                 </p>
               </button>
@@ -410,12 +410,14 @@ function BrowseView(props: HubHomeProps) {
 
 // ─── Building blocks ──────────────────────────────────────────────────────────
 
-function SectionHeader({ emoji, label, accent, sub }: { emoji: string; label: string; accent: string; sub?: string }) {
+// Section label — handoff style: small uppercase mono in muted slate, optional
+// sub caption. `emoji`/`accent` stay in the type so existing call sites compile
+// unchanged, but the handoff header carries neither, so they're not rendered.
+function SectionHeader({ label, sub }: { emoji?: string; label: string; accent?: string; sub?: string }) {
   return (
-    <div className="flex items-baseline gap-3 mb-3">
-      <span className="text-base leading-none">{emoji}</span>
-      <h2 className="font-mono text-sm font-bold tracking-tight" style={{ color: accent }}>{label}</h2>
-      {sub && <p className="font-mono text-[10px] text-slate-700">{sub}</p>}
+    <div className="flex items-baseline gap-2.5 mb-3 flex-wrap">
+      <h2 className="font-mono text-[9.5px] font-medium uppercase tracking-[0.14em]" style={{ color: "#64748B" }}>{label}</h2>
+      {sub && <p className="font-mono text-[10px]" style={{ color: "#475569" }}>{sub}</p>}
     </div>
   );
 }
@@ -428,9 +430,9 @@ function SearchHero({ value, onChange, totalTools }: { value: string; onChange: 
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={`Search ${totalTools} tools by name or use case…`}
-        className="w-full bg-[#0D0D1A] border border-[#1A1A2E] rounded-2xl px-5 py-3 pr-24 font-mono text-sm sm:text-base text-white placeholder-slate-700 focus:outline-none focus:border-[#4FC3F7]/40 transition-colors"
+        className="w-full bg-[#0D0D14] border border-[#1A1A2E] rounded-xl px-4 py-3 pr-24 font-mono text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-[#4FC3F7]/40 transition-colors"
       />
-      <kbd className="absolute right-4 top-1/2 -translate-y-1/2 font-mono text-[10px] text-slate-700 border border-[#1A1A2E] rounded px-1.5 py-0.5">⌘ K</kbd>
+      <kbd className="absolute right-4 top-1/2 -translate-y-1/2 font-mono text-[9.5px] text-[#475569] border border-[#1A1A2E] rounded px-1.5 py-0.5">⌘K</kbd>
     </div>
   );
 }
@@ -452,7 +454,7 @@ function PickCard({ tool, runs, onSelect }: { tool: HubTool; runs: number; onSel
   const isCommunity = tool.source === "external" || tool.source === "hosted";
   return (
     <button onClick={() => onSelect(tool)}
-      className="text-left rounded-2xl border border-[#1A1A2E] hover:border-[#A78BFA]/40 bg-[#0d0d12] p-4 transition-all flex flex-col group">
+      className="text-left rounded-2xl border border-[#1A1A2E] hover:border-[#4FC3F7]/40 bg-[#0d0d12] p-4 transition-all flex flex-col group">
       <div className="flex items-center gap-1.5 mb-2.5">
         {tool.logoUrl && (
           // Creator logo — hides itself on load error so the badge/dots remain.
@@ -466,7 +468,7 @@ function PickCard({ tool, runs, onSelect }: { tool: HubTool; runs: number; onSel
         <SourceBadge source={tool.source} />
         <span className="font-mono text-[9px] text-slate-700 ml-auto">{tool.price}</span>
       </div>
-      <p className="font-mono text-sm font-bold text-white mb-1 leading-snug group-hover:text-[#A78BFA] transition-colors">{tool.name}</p>
+      <p className="font-mono text-sm font-bold text-white mb-1 leading-snug group-hover:text-[#4FC3F7] transition-colors">{tool.name}</p>
       {isCommunity && tool.creatorHandle && (
         <p className="font-mono text-[9px] text-slate-600 mb-1">by {tool.creatorHandle}</p>
       )}
@@ -474,7 +476,7 @@ function PickCard({ tool, runs, onSelect }: { tool: HubTool; runs: number; onSel
       <VerifiedAiBadges tool={tool} />
       <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[#1A1A2E]">
         <span className="font-mono text-[10px] text-slate-600">{runs > 0 ? <><span className="text-white font-semibold">{runs}</span> runs</> : "new"}</span>
-        <span className="font-mono text-[10px] font-semibold text-[#A78BFA] opacity-70 group-hover:opacity-100 transition-opacity">Use →</span>
+        <span className="font-mono text-[10px] font-semibold text-[#4FC3F7] opacity-70 group-hover:opacity-100 transition-opacity">Run →</span>
       </div>
     </button>
   );

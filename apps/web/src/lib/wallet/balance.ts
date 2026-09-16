@@ -74,6 +74,16 @@ export interface BalanceLookup {
   explorer:   string;
   addressUrl: string;
   balances:   WalletBalance[];
+  /**
+   * Reads that did not come back. Their rows are DROPPED, never emitted as `0n`,
+   * so any total derived from `balances` is a LOWER BOUND whenever this is > 0.
+   *
+   * This used to be `: 0n` on both branches below, which is the bug that made
+   * 158,707,811 USDC disappear from a portfolio that rendered as complete — see
+   * the note on the read itself. A caller cannot distinguish "not held" from
+   * "not read" unless the reader tells it, so the reader tells it.
+   */
+  unread:     number;
   error?:     string;
 }
 
@@ -96,7 +106,10 @@ export async function checkBalance(address: string, network: string): Promise<Ba
   const addressUrl = `${cfg.explorer}/address/${address}`;
 
   if (!isAddress(address)) {
-    return { address, network: net, explorer: cfg.explorer, addressUrl, balances: [], error: "Invalid wallet address." };
+    // Nothing was ATTEMPTED, so nothing is unread — the input was rejected, and
+    // blaming the chain for a bad address is how "unavailable" stops meaning
+    // anything. Same distinction `base-token-discovery.ts` draws.
+    return { address, network: net, explorer: cfg.explorer, addressUrl, balances: [], unread: 0, error: "Invalid wallet address." };
   }
 
   const tokens = TOKENS[net];
@@ -118,29 +131,53 @@ export async function checkBalance(address: string, network: string): Promise<Ba
     })) as unknown as MCResult[];
 
     const balances: WalletBalance[] = [];
+    let unread = 0;
+
+    /**
+     * A read that did not answer is DROPPED and counted, never coerced to `0n`.
+     *
+     * Both branches below used to end in `: 0n`, and `allowFailure: true` makes
+     * that silent — a per-call failure is a `status: "failure"` entry, not a
+     * thrown error, so nothing downstream could tell "holds nothing" from
+     * "didn't come back". MEASURED 2026-09-12 on the public Base RPC: individual
+     * reads answer `{"code":-32016,"message":"over rate limit"}` under load, and
+     * a reader that zeroes those emits a complete-LOOKING portfolio missing its
+     * entire position. Multicall3 makes it one call so this is now rare — but
+     * "rare" is exactly when a silent wrong number does the most damage, because
+     * nobody is watching for it.
+     *
+     * Dropping rather than emitting a null row also keeps the existing contract:
+     * `holdings.ts` already discards `raw === "0"`, so an unread major is absent
+     * either way. The difference is that `unread` now travels with it.
+     */
+    const raw = (r: MCResult | undefined): bigint | null =>
+      r?.status === "success" ? (r.result as bigint) : null;
 
     // [0] = native ETH
-    const ethRes = results[0];
-    const ethRaw = ethRes.status === "success" ? (ethRes.result as bigint) : 0n;
-    balances.push({
+    const ethRaw = raw(results[0]);
+    if (ethRaw === null) unread++;
+    else balances.push({
       symbol: "ETH", amount: trimAmount(formatUnits(ethRaw, 18)), raw: ethRaw.toString(),
       address: NATIVE_SENTINEL as `0x${string}`, decimals: 18, isNative: true,
     });
 
     // [1..] = ERC-20 tokens (same order as `tokens`)
     tokens.forEach((t, i) => {
-      const res = results[i + 1];
-      const raw = res?.status === "success" ? (res.result as bigint) : 0n;
+      const bal = raw(results[i + 1]);
+      if (bal === null) { unread++; return; }
       balances.push({
-        symbol: t.symbol, amount: trimAmount(formatUnits(raw, t.decimals)), raw: raw.toString(),
+        symbol: t.symbol, amount: trimAmount(formatUnits(bal, t.decimals)), raw: bal.toString(),
         address: t.address, decimals: t.decimals,
       });
     });
 
-    return { address, network: net, explorer: cfg.explorer, addressUrl, balances };
+    return { address, network: net, explorer: cfg.explorer, addressUrl, balances, unread };
   } catch (e) {
+    // The whole batch failed, so NOTHING was read — every token is unread, and
+    // saying so keeps `unread: 0` meaning "the list is complete" in every branch.
     return {
       address, network: net, explorer: cfg.explorer, addressUrl, balances: [],
+      unread: tokens.length + 1,
       error: (e as Error)?.message ?? "Balance lookup failed.",
     };
   }
