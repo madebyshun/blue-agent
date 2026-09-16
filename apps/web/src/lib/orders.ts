@@ -16,6 +16,12 @@
 // early on !B20_ENABLED. Orders can be created and shared; nothing can move one
 // out of Pending. Say that in any copy you write about this — do not describe it
 // as settlement that is merely "coming".
+//
+// #254 (2026-09-16) makes the second of those call sites worse than gated: it is
+// UNREACHABLE. `/pay[/…]` is archived in middleware and 301s to /chat, so the
+// payer's button cannot be rendered at all, flag or no flag. The Memo watcher is
+// the only path left. And "shared" above no longer means a link — see the note
+// where `payLink()` used to be, below.
 
 export const B20_ENABLED = process.env.NEXT_PUBLIC_B20_ENABLED === "true";
 
@@ -82,19 +88,22 @@ export function markPaid(id: string, txHash?: string): void {
   saveOrders(loadOrders().map((o) => (o.id === id ? { ...o, status: "paid", txHash, paidAt: Date.now() } : o)));
 }
 
-/** Shareable public payment link, e.g. blueagent.dev/pay/order-1719…
- *  Carries recipient + amount + label in the query so a payer on a different
- *  device (no localStorage copy of the order) can still settle it. */
-export function payLink(id: string, order?: Order): string {
-  const origin = isClient ? window.location.origin : "https://blueagent.dev";
-  const o = order ?? findOrder(id) ?? undefined;
-  const qs = new URLSearchParams();
-  if (o?.payTo) qs.set("to", o.payTo);
-  if (o?.amount) qs.set("amount", String(o.amount));
-  if (o?.description) qs.set("for", o.description);
-  const q = qs.toString();
-  return `${origin}/pay/${id}${q ? `?${q}` : ""}`;
-}
+// `payLink()` stood here and is GONE (#254, 2026-09-16). It returned
+// `${origin}/pay/${id}?to=…&amount=…&for=…` — and middleware 301s that to /chat
+// with the id stripped, so the self-contained query string it went to such
+// trouble to build arrived at a page with no idea what to do with it. Its one
+// caller (OrdersPanel's "copy pay link") copies the request as TEXT now.
+//
+// Deleted rather than left unused, deliberately. A dead-link builder that still
+// compiles is an invitation: the next person who needs a share affordance finds
+// a function named `payLink`, wires it up, and the bug returns wearing its old
+// name. `scripts/archived-routes-check.ts` now fails the build if any source
+// file mints a `/pay/` URL while middleware still archives that prefix.
+//
+// If BlueBank's public payment surface is un-archived, this is NOT the first
+// thing to restore — see the note in `app/app/bank/BankClient.tsx` where
+// `sharePayLink()` was (it records why a straight repoint would have been a
+// chain-confusion bug), and the recipe AND ORDER in `src/middleware.ts`.
 
 /** Order/invoice ids are slugs; addresses are 0x… — lets /pay/[address] branch. */
 export function isOrderId(s: string): boolean {

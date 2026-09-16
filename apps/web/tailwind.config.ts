@@ -22,6 +22,40 @@ const config: Config = {
         },
         surface: "#0D0D14",
         border: "#1A1A2E",
+
+        // App palette (design handoff). Mirrors the :root custom properties in
+        // globals.css — same values, so a class and an inline var() cannot
+        // drift. All new keys; nothing above is redefined.
+        nav: "#07070c",
+        hairline: "rgba(26,26,46,0.5)",
+
+        // Chain identity. `rh` is the Robinhood-chain green and must never be
+        // swapped for `purple` (purple is secondary/coming-soon only). It
+        // equals `success` today but is a separate key on purpose: the two
+        // mean different things and should be free to diverge.
+        rh: "#34D399",
+
+        success: "#34D399",
+        warning: "#F59E0B",
+        error: "#F87171",
+
+        // The handoff calls this "neutral bar" — the fill for a bar/meter
+        // segment carrying no status. NOT named `neutral`: Tailwind ships a
+        // built-in `neutral-50..950` scale, and a flat string here would
+        // shadow all of it, so a later `bg-neutral-700` would silently emit
+        // nothing. Nothing uses that scale today (measured: 0 hits), which is
+        // exactly why the collision would go unnoticed until it bit someone.
+        bar: "#334155",
+
+        // Text ramp, brightest → dimmest. `ink` rather than `text` so the
+        // generated classes read `text-ink-2` / `border-ink-3` instead of
+        // `text-text-2`.
+        ink: {
+          1: "#E2E8F0",
+          2: "#94A3B8",
+          3: "#64748B",
+          4: "#475569",
+        },
       },
       screens: {
         "3xl": "1920px",
@@ -30,6 +64,16 @@ const config: Config = {
       fontFamily: {
         mono: ["'JetBrains Mono'", "monospace"],
         sans: ["Inter", "system-ui", "sans-serif"],
+        // Running sentences only. Chrome, numbers and labels stay mono.
+        prose: ["Inter", "system-ui", "sans-serif"],
+      },
+      boxShadow: {
+        // Glow is rationed: primary CTAs only. Status dots use
+        // `0 0 8px currentColor` inline so the dot's own color drives it.
+        cta: "0 0 16px rgba(79,195,247,0.28)",
+        "cta-lg": "0 0 18px rgba(79,195,247,0.28)",
+        // The active nav item's inset ring.
+        "nav-active": "inset 0 0 0 1px rgba(79,195,247,0.22)",
       },
       backgroundImage: {
         "grid-pattern":

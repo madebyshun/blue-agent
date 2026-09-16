@@ -27,5 +27,8 @@ export const metadata: Metadata = {
 };
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return <AppShell>{children}</AppShell>;
+  // TOOL_COUNT is already imported above for the metadata block, so the nav's
+  // Hub count costs nothing extra — and crossing the server/client boundary as
+  // a number keeps the catalog itself server-side. See AppShell's note.
+  return <AppShell toolCount={TOOL_COUNT}>{children}</AppShell>;
 }

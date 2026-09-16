@@ -11,12 +11,58 @@
   --surface: #0D0D14;
   --border: #1A1A2E;
 
+  /* ── App palette (design handoff, 2026-09-09) ──────────────────────────────
+     Additive only: the five tokens above were already exactly the handoff
+     values, so nothing here overrides anything. These name the colors that
+     were previously inline hex literals scattered across the app shell.
+
+     --nav is DARKER than --bg on purpose (#07070c vs #050508). The sidebar
+     reads as a separate plane; equalising them collapses the shell into one
+     flat sheet and the 1px --border seam stops doing any work.
+
+     --rh is the Robinhood-chain green and is NOT interchangeable with
+     --purple. Chain identity is load-bearing on the Hood board: a ticker can
+     exist on BOTH Base and RH (NVDA/META/GOOGL currently do), so the chain
+     color is the only thing distinguishing two rows with the same ticker
+     string. It happens to equal --success; keep both names so a future
+     success-green tweak cannot silently repaint a chain. */
+  --nav: #07070c;
+  --blue-hover: #29ABE2;
+  --secondary: #29ABE2;
+  --rh: #34D399;
+  --success: #34D399;
+  --warning: #F59E0B;
+  --error: #F87171;
+  /* "Neutral bar" — a bar/meter segment carrying no status. Named --bar to
+     match the Tailwind key, which avoids shadowing Tailwind's built-in
+     `neutral-50..950` scale. */
+  --bar: #334155;
+
+  /* Hairline — for internal card divisions, where a full --border reads as a
+     structural edge and over-segments the surface. */
+  --hairline: rgba(26, 26, 46, 0.5);
+
+  /* Text ramp, brightest → dimmest. Four steps, not a gradient: primary copy,
+     secondary/labels, tertiary/units, and quaternary for row meta that must
+     recede below the label tier. */
+  --text-1: #E2E8F0;
+  --text-2: #94A3B8;
+  --text-3: #64748B;
+  --text-4: #475569;
+
   /* Typography — mono-forward. JetBrains Mono is the PRIMARY voice (display +
      marketing/terminal body); DM Sans is secondary, for product UI chrome only. */
   --font-display: 'JetBrains Mono', monospace;
   --font-body:    'JetBrains Mono', monospace;
   --font-sans:    'DM Sans', system-ui, sans-serif;
   --font-mono:    'JetBrains Mono', monospace;
+
+  /* Prose token. The handoff specifies Inter for running sentences, mono for
+     all chrome. Introduced as its OWN token rather than by repointing
+     --font-sans at Inter: --font-sans is consumed by the marketing site and
+     every non-app surface, so repointing it would restyle pages this slice
+     never looked at. Inter is already loaded by the @import above. */
+  --font-prose: 'Inter', system-ui, sans-serif;
 
   /* Blue Hood type system (T-V1) — MONO-FIRST. Terminal-real: every text
      node in the Hood section runs through ONE of these two tokens. Never
