@@ -404,7 +404,8 @@ export default function BankPage() {
   const [view, setView]       = useState<View>("tokens");
   const [actionOpen, setActionOpen] = useState(false);
   const [copied, setCopied]   = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
+  // `linkCopied` went with `sharePayLink()` (#254) — see the note where that
+  // function used to be. `copied` stays: Copy address still has a live target.
   const openAction = (p: Panel) => {
     if (p === "send") { setScanPrefill(null); setScanKey(k => k + 1); }
     setPanel(p); setActionOpen(true);
@@ -1039,24 +1040,45 @@ export default function BankPage() {
     navigator.clipboard?.writeText(acct).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
   }
 
-  function sharePayLink() {
-    if (!acct) return;
-    // The link carries the RECEIVE chain the user picked in the panel, not the
-    // page's home chain — a request made on Robinhood must share as Robinhood.
-    // `rcv` is the component-level derivation of that same pick.
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const qs = new URLSearchParams({ asset: reqAsset, network: receiveChain });
-    if (parseFloat(reqAmount) > 0) qs.set("amount", reqAmount);
-    const url = `${origin}/pay/${acct}?${qs.toString()}`;
-    // `receiveChain` is already in the query string — the human title has to agree
-    // with it, or a Sepolia link gets shared reading "Pay me on Base".
-    const title = parseFloat(reqAmount) > 0 ? `Pay me ${reqAmount} ${reqAsset} on ${rcv.short}` : `Pay me on ${rcv.short}`;
-    if (typeof navigator !== "undefined" && navigator.share) {
-      navigator.share({ title, url }).catch(() => {});
-    } else {
-      navigator.clipboard?.writeText(url).then(() => { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 1500); });
-    }
-  }
+  // `sharePayLink()` lived here and is GONE (#254, 2026-09-16). It built
+  // `${origin}/pay/${acct}?asset=…&network=…` and handed it to navigator.share.
+  //
+  // Every link it published was dead on arrival. `/pay[/…]` has been archived in
+  // middleware.ts since the BlueAgent Relaunch — archivedRedirect() is the FIRST
+  // statement of middleware(), so the 301 fires before routing and the address
+  // segment is DROPPED on the way:
+  //
+  //     GET /pay/0x0295…9205?asset=USDC&network=base&amount=5
+  //       → 301 → app.blueagent.dev/chat?asset=USDC&network=base&amount=5
+  //
+  // The payer lands in Blue Chat holding the amount but not the payee. Measured
+  // in prod on both hostnames 2026-09-11, still true 2026-09-16.
+  //
+  // This is the shape the archive was never audited for. Its own comment assumed
+  // the only live `/pay/` URLs were "QR codes generated earlier" — historical
+  // ones already in the wild, which a 301 to /chat handles gracefully. That was
+  // true the day it was written; it stopped being true when the wallet was
+  // rebuilt at /app/wallet with this button still on it, MINTING NEW dead links
+  // every time someone tapped share. Nothing failed, because nothing was
+  // watching the join between "middleware archives X" and "the app still emits
+  // X". `scripts/archived-routes-check.ts` is now watching it — it grew a third
+  // section for exactly this, and it is CONDITIONAL: while middleware archives
+  // `/pay`, no source file may build a `/pay/…` URL; if `/pay` is ever
+  // un-archived, that ban lifts by itself and the script instead demands the
+  // page has stopped narrowing every network to the Base family.
+  //
+  // Removed rather than repointed, on ShunTr's call (2026-09-16): restoring the
+  // page is a PUBLIC PAYMENT SURFACE and a bigger decision than a dead button.
+  // It also could not have been a one-line repoint — `pay/[address]/page.tsx`
+  // types its network as `YieldNetwork = "base" | "baseSepolia"` and silently
+  // narrows anything else to `base`, while this card's NetworkPicker offers
+  // `robinhood`, whose dollar is USDG. Un-archiving as-is would have turned a
+  // dead link into a Robinhood request rendered as "USDC on Base" — a live
+  // money path asserting the wrong chain, which is worse than a 404.
+  //
+  // What survives is the path that always worked: the EIP-681 QR below, built
+  // by `buildPaymentUri` from `receiveChain`, correct on all three chains. That
+  // is the scan-to-pay wedge; the share link was a second door onto it.
 
   // ── Wallet state (canonical derived state) — MUST be before any early return ──
   const walletState = useMemo(() => buildWalletState({
@@ -2768,12 +2790,16 @@ export default function BankPage() {
                       )}
                       {name && <div className="text-[13px] text-[#4FC3F7] mt-2">{name}</div>}
                       <div className="text-[9px] text-slate-400 mt-1.5 break-all px-2">{acct}</div>
+                      {/* "🔗 Share pay link" stood here until #254. It published
+                          /pay/<address> URLs that middleware 301s to /chat with
+                          the address stripped — see the note where sharePayLink()
+                          was defined. The QR above is the surviving share path and
+                          the one that was never broken: it is an EIP-681 URI built
+                          from `receiveChain`, so it is correct on Robinhood (USDG)
+                          as well as Base, which the /pay page is not. */}
                       <div className="flex items-center gap-2 mt-3">
                         <button onClick={copyAddr} className="text-[11px] px-4 py-2 rounded-lg" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
                           {copied ? "✓ Copied" : "Copy address"}
-                        </button>
-                        <button onClick={sharePayLink} className="text-[11px] px-4 py-2 rounded-lg" style={{ background: "#34D39910", color: "#34D399", border: "1px solid #34D39930" }}>
-                          {linkCopied ? "✓ Link copied" : "🔗 Share pay link"}
                         </button>
                       </div>
                     </div>
