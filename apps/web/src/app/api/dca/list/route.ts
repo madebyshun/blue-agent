@@ -9,7 +9,7 @@
 
 import { NextResponse } from "next/server";
 import { isAddress } from "viem";
-import { kvGet } from "@/lib/kv";
+import { kvGet, kvGetProbe } from "@/lib/kv";
 import { dcaKeys } from "@/lib/dca/kv-keys";
 import type { DcaSchedule, DcaScheduleView } from "@/lib/dca/types";
 
@@ -22,7 +22,19 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "invalid address" }, { status: 400 });
   }
 
-  const ids = (await kvGet<string[]>(dcaKeys.userIndex(address))) ?? [];
+  // #150 read side. `?? []` rendered a KV outage as `schedules: []`, which reads
+  // as the fact "you have no recurring buys" — on a surface whose whole job is
+  // to tell the user what is currently spending their money. "We could not
+  // check" is a different answer and has to be sayable.
+  const index = await kvGetProbe<string[]>(dcaKeys.userIndex(address));
+  if (index.status === "error") {
+    return NextResponse.json({
+      ok: false,
+      error: "storage unavailable — could not read your schedules. This is NOT the same as having none.",
+    }, { status: 503 });
+  }
+  const ids = index.status === "hit" ? index.value : [];
+
   const schedules = await Promise.all(
     ids.map((id) => kvGet<DcaSchedule>(dcaKeys.schedule(id))),
   );

@@ -13,7 +13,7 @@
 
 import { NextResponse } from "next/server";
 import { isAddress } from "viem";
-import { kvGet, kvSet } from "@/lib/kv";
+import { kvGet, kvSetOrThrow, kvMutate } from "@/lib/kv";
 import { dcaKeys } from "@/lib/dca/kv-keys";
 import type { DcaSchedule } from "@/lib/dca/types";
 
@@ -44,13 +44,38 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, alreadyCancelled: true });
   }
 
+  // The blob is what actually stops the spend: the executor re-reads it and
+  // bails on `status !== "active"` before it touches the keeper. So this write
+  // must NOT be best-effort — `kvSet` swallows its own failure, which would let
+  // us answer "cancelled" while the cron keeps spending the user's USDC on the
+  // schedule they just stopped. Let it throw and say so instead.
   const updated: DcaSchedule = { ...schedule, status: "cancelled" };
-  await kvSet(dcaKeys.schedule(scheduleId), updated);
+  try {
+    await kvSetOrThrow(dcaKeys.schedule(scheduleId), updated);
+  } catch (e) {
+    console.error(`[dca:cancel] ${scheduleId} NOT cancelled — blob write failed: ${(e as Error).message}`);
+    return NextResponse.json({
+      error: "storage unavailable — the schedule is still ACTIVE and will keep running. Please retry.",
+    }, { status: 503 });
+  }
 
-  // Remove from active set
-  const active = (await kvGet<string[]>(dcaKeys.activeSet())) ?? [];
-  const nextActive = active.filter((id) => id !== scheduleId);
-  await kvSet(dcaKeys.activeSet(), nextActive);
+  // De-queue from the cron work list. ⚠ #150: the old shape read the active set
+  // with `(await kvGet(...)) ?? []` and wrote the filtered result straight back
+  // to the SAME key — so a single throttled read turned one user's cancel into
+  // `kvSet(activeSet, [])`, silently de-queueing EVERY user's recurring buy.
+  //
+  // Unlike the create path this one is genuinely allowed to skip: the queue is
+  // only a work hint, and `processSchedule` re-reads the blob and returns
+  // `removed` for a non-active status, so a stale id costs one KV read per tick
+  // and never spends anything. Cancel is therefore still `ok` on a skip — the
+  // cancellation itself landed above — but the skip is logged, not silent.
+  const dequeued = await kvMutate<string[]>(
+    dcaKeys.activeSet(), [],
+    (cur) => (cur.includes(scheduleId) ? cur.filter((id) => id !== scheduleId) : null),
+  );
+  if (dequeued === "skipped" || dequeued === "failed") {
+    console.error(`[dca:cancel] ${scheduleId} cancelled but NOT de-queued (${dequeued}) — the executor will drop it on status instead`);
+  }
 
   return NextResponse.json({ ok: true, scheduleId });
 }

@@ -12,6 +12,10 @@ import { WalletPickerModal } from "@/components/WalletPicker";
 const DISMISS_KEY = "blueagent:claim-dismissed";
 
 interface Status {
+  /** #150 — false ⟹ the route could not READ the claim counter. Not the same
+   *  as "no slots left"; we simply don't know, so the banner stays hidden
+   *  rather than printing a slot count nobody measured. */
+  ok?: boolean;
   amount: number;
   total: number;
   remaining: number;
@@ -39,7 +43,11 @@ export default function ClaimBanner() {
     const q = walletAddr ? `?address=${walletAddr}` : "";
     fetch(`/api/credits/claim${q}`)
       .then((r) => r.json())
-      .then((d: Status) => { if (!off) { setStatus(d); if (d.claimed) setClaimed(true); } })
+      .then((d: Status) => {
+        if (off || d.ok === false) return; // counter unreadable → show nothing
+        setStatus(d);
+        if (d.claimed) setClaimed(true);
+      })
       .catch(() => {});
     return () => { off = true; };
   }, [walletAddr]);

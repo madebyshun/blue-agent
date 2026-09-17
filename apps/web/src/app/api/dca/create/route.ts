@@ -24,7 +24,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createPublicClient, http, isAddress, formatUnits, type Address } from "viem";
 import { base } from "viem/chains";
-import { kvGet, kvSet } from "@/lib/kv";
+import { kvSet, kvMutate } from "@/lib/kv";
 import { getKeeperAddress } from "@/lib/dca/keeper";
 import { dcaKeys } from "@/lib/dca/kv-keys";
 import { knownBaseToken } from "@/lib/dca/base-tokens";
@@ -206,17 +206,49 @@ export async function POST(req: Request) {
     lastError: null,
   };
 
+  // ⚠ #150. Both index appends go through `kvMutate`, and the schedule blob is
+  // written LAST, only once both landed. The old shape was
+  //
+  //     const idx = (await kvGet<string[]>(K)) ?? [];  idx.push(id);  kvSet(K, idx);
+  //
+  // and `kvGet` swallows a KV throw into null, so one throttled read during an
+  // Upstash blip (#123/#148 made those routine) did not drop an entry — it
+  // replaced the whole index with `[id]`. On `dcaKeys.activeSet()` that is the
+  // cron's global work queue: ONE user creating a schedule mid-blip silently
+  // de-queues every other user's recurring buy, with no TTL and no backup to
+  // rebuild from.
+  //
+  // Both writes are required, for opposite reasons, so neither is allowed to be
+  // best-effort:
+  //   • activeSet missing → the schedule never executes, and we would still be
+  //     handing back an approve() for the user to sign against a dead schedule.
+  //   • userIndex missing → the schedule DOES execute and spends their USDC,
+  //     but never appears in /api/dca/list, so they cannot see it or cancel it.
+  // The second is the worse failure, which is why "queued but invisible" is not
+  // treated as good enough.
+  const idxWrite = await kvMutate<string[]>(
+    dcaKeys.userIndex(userAddress), [],
+    (cur) => (cur.includes(id) ? null : [...cur, id]),
+  );
+  const activeWrite = await kvMutate<string[]>(
+    dcaKeys.activeSet(), [],
+    (cur) => (cur.includes(id) ? null : [...cur, id]),
+  );
+
+  const landed = (r: typeof idxWrite) => r === "ok" || r === "unchanged";
+  if (!landed(idxWrite) || !landed(activeWrite)) {
+    // Deliberately leaves the schedule blob unwritten. A dangling id in either
+    // index is harmless and self-healing — /api/dca/list filters out ids whose
+    // blob is missing, and the executor reports `removed` for them — whereas an
+    // orphaned `status:"active"` blob is a schedule the UI would show as running
+    // when nothing will ever run it.
+    console.error(`[dca:create] ${id} NOT created — index write failed (userIndex=${idxWrite} activeSet=${activeWrite})`);
+    return NextResponse.json({
+      error: "storage unavailable — schedule was not created. Nothing was charged and no approval is needed; please retry.",
+    }, { status: 503 });
+  }
+
   await kvSet(dcaKeys.schedule(id), schedule);
-
-  // Append to user index
-  const userIdx = (await kvGet<string[]>(dcaKeys.userIndex(userAddress))) ?? [];
-  if (!userIdx.includes(id)) userIdx.push(id);
-  await kvSet(dcaKeys.userIndex(userAddress), userIdx);
-
-  // Append to active set (cron work queue)
-  const activeSet = (await kvGet<string[]>(dcaKeys.activeSet())) ?? [];
-  if (!activeSet.includes(id)) activeSet.push(id);
-  await kvSet(dcaKeys.activeSet(), activeSet);
 
   const response: CreateDcaResponse = {
     scheduleId: id,

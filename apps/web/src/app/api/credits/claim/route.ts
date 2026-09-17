@@ -11,7 +11,7 @@
 // on wallet age / balance.
 
 import { NextResponse } from "next/server";
-import { kv, kvGet, kvSet, kvSetNX, kvDel } from "@/lib/kv";
+import { kv, kvGet, kvSet, kvSetNX, kvDel, kvGetCounter, kvGetProbe } from "@/lib/kv";
 import { topup } from "@/lib/credit-ledger";
 
 export const runtime = "nodejs";
@@ -27,17 +27,51 @@ const ipKey   = (ip: string) => `claim:ip:${ip}`;
 const isAddr = (s: string) => /^0x[a-fA-F0-9]{40}$/.test(s);
 const count  = async () => (await kvGet<number>(COUNT_KEY)) ?? 0;
 
+/**
+ * #150 read side — the SCARCITY number, which is the one thing this response
+ * exists to state.
+ *
+ * `count()` swallows a KV throw into `null` and `?? 0` turns it into `0`, so a
+ * throttled read made the banner announce "300/300 left" — a fabricated
+ * measurement of a public giveaway, printed at exactly the moment we could not
+ * verify a single slot. `claimed` degraded the same way: a wallet that HAD
+ * claimed was shown the Claim button again.
+ *
+ * To be precise about what this does NOT fix, because the two are easy to
+ * conflate: the 300-slot CAP never depended on this read. The enforcement is
+ * the atomic `kv.incr(COUNT_KEY)` in POST below, which returns the true count
+ * and rolls the slot back past the cap — the `count()` pre-check at the top of
+ * POST is a fast path, not the guard. So this was never an over-granting bug.
+ * It was an honesty bug: we advertised a number we had not read.
+ *
+ * Both reads are now probed and an unreadable one answers 503 instead of a
+ * number. ClaimBanner hides itself on `ok: false` — a promo banner that can't
+ * verify its own scarcity should be absent, not confidently wrong.
+ */
 export async function GET(req: Request) {
   const address = new URL(req.url).searchParams.get("address") ?? "";
-  const n = await count();
-  const claimed = isAddr(address) ? !!(await kvGet(doneKey(address))) : false;
+
+  const n = await kvGetCounter(COUNT_KEY);
+  const done = isAddr(address) ? await kvGetProbe<unknown>(doneKey(address)) : null;
+
+  if (n === null || done?.status === "error") {
+    console.error(`[claim] status unreadable (count=${n === null ? "error" : "ok"} done=${done?.status ?? "n/a"}) — refusing to quote a slot count we did not read`);
+    return NextResponse.json({
+      ok: false,
+      amount: CLAIM_AMOUNT,
+      total:  CLAIM_CAP,
+      error:  "storage unavailable — could not read the claim counter. Slots are NOT known to be available or full; the 300 cap is still enforced atomically on claim.",
+    }, { status: 503 });
+  }
+
   return NextResponse.json({
+    ok:           true,
     amount:       CLAIM_AMOUNT,
     total:        CLAIM_CAP,
     claimedCount: n,
     remaining:    Math.max(0, CLAIM_CAP - n),
     soldOut:      n >= CLAIM_CAP,
-    claimed,
+    claimed:      done?.status === "hit",
   });
 }
 

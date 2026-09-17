@@ -12,7 +12,7 @@
 
 import { NextResponse } from "next/server";
 import { isAddress } from "viem";
-import { kvGet } from "@/lib/kv";
+import { kvGet, kvGetProbe } from "@/lib/kv";
 import { dcaKeys } from "@/lib/dca/kv-keys";
 import type { DcaSchedule, DcaExecutionLog } from "@/lib/dca/types";
 
@@ -37,7 +37,23 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "not authorized" }, { status: 403 });
   }
 
-  const logs = (await kvGet<DcaExecutionLog[]>(dcaKeys.logs(scheduleId))) ?? [];
+  // #150 read side. `?? []` here produced a self-contradicting receipt page:
+  // `runsCompleted: 5` from the blob next to `logs: []` from the failed read,
+  // which reads as "your run history was deleted" rather than "we could not
+  // reach storage". Two different facts, so they get two different answers.
+  const buffer = await kvGetProbe<DcaExecutionLog[]>(dcaKeys.logs(scheduleId));
+  if (buffer.status === "error") {
+    return NextResponse.json({
+      ok: false,
+      scheduleId,
+      status: schedule.status,
+      runsCompleted: schedule.runsCompleted,
+      runsFailed:    schedule.runsFailed,
+      error: "storage unavailable — could not read the run log. Your runs are NOT lost; this read failed.",
+    }, { status: 503 });
+  }
+  const logs = buffer.status === "hit" ? buffer.value : [];
+
   return NextResponse.json({
     ok: true,
     scheduleId,

@@ -136,26 +136,35 @@ const VENDOR_COLOR: Record<string, string> = {
 // ─── charts ──────────────────────────────────────────────────────────────────
 
 /** Adoption funnel: Onboarded → Active → Creators. Real counts, animated bars. */
-function Funnel({ claims, active, creators }: { claims: number; active: number; creators: number }) {
+/** A `null` value ⟹ #150: that source was unreadable. The row renders "—" with
+ *  an empty bar instead of a 0-length bar, which would draw as a real measured
+ *  drop-off in the funnel — the one shape a reader is guaranteed to read as a
+ *  finding rather than as a missing input. */
+function Funnel({ claims, active, creators }: { claims: number | null; active: number; creators: number | null }) {
   const { ref, inView } = useInView<HTMLDivElement>();
   const reduce = usePrefersReducedMotion();
-  const max = Math.max(claims, active, creators, 1);
+  const max = Math.max(claims ?? 0, active, creators ?? 0, 1);
   const rows = [
-    { label: "Onboarded", sub: "free-credit claims", value: claims,   color: "#A78BFA" },
+    { label: "Onboarded", sub: claims === null ? "counter unreadable" : "free-credit claims", value: claims, color: "#A78BFA" },
     { label: "Active",    sub: "wallets that spent", value: active,   color: "#4FC3F7" },
-    { label: "Creators",  sub: "launched a token",   value: creators, color: "#34D399" },
+    { label: "Creators",  sub: creators === null ? "launch registry unreadable" : "launched a token", value: creators, color: "#34D399" },
   ];
   return (
     <div ref={ref} className="space-y-4">
       {rows.map((r, i) => {
-        const pct = Math.max(3, Math.round((r.value / max) * 100));
+        const pct = r.value === null ? 0 : Math.max(3, Math.round((r.value / max) * 100));
         return (
           <div key={r.label}>
             <div className="flex items-baseline justify-between mb-1.5">
               <span className="font-mono text-[11px] text-slate-300">
                 {r.label} <span className="text-slate-600">· {r.sub}</span>
               </span>
-              <AnimatedNumber value={r.value} className="font-mono text-sm font-bold" style={{ color: r.color }} />
+              <AnimatedNumber
+                value={r.value ?? undefined}
+                raw={r.value === null ? "—" : undefined}
+                className="font-mono text-sm font-bold"
+                style={{ color: r.color }}
+              />
             </div>
             <div className="h-2.5 rounded-full bg-[#12121a] overflow-hidden">
               <div
@@ -354,21 +363,41 @@ export default function StatsView({ stats, usage: modelUsage }: { stats: PublicS
   const { launches, product, usage, users, credits, settlement } = stats;
   const revenue = parseFloat((usage.revenueEst ?? "").replace(/[^0-9.]/g, "")) || 0;
 
+  // #150 — `usage.ok === false` means some `usage:<id>` counters could not be
+  // READ and were left out of both sums, so Tool Runs / Est. Revenue are a FLOOR.
+  // Publish them with "≥" rather than as a measured total; this page is the
+  // public traction claim, and a smaller number here is indistinguishable from
+  // a quiet week unless we say which it is.
+  const runsFloor = usage.ok === false ? "≥" : "";
+  // `claimsOk === false` means `claim:count` itself was unreadable. A 0 would
+  // read as "nobody has ever signed up" — a far stronger claim than we can make,
+  // so it renders "—" like every other unavailable source on this page.
+  const claimsRaw = users.claimsOk === false ? "—" : undefined;
+  // `launches.ok === false` means the whole `bluechat:launches` registry was
+  // unreadable, so `total` and `uniqueCreators` are both placeholder zeros.
+  // "0 Tokens Launched" is the strongest claim on the page — it denies the
+  // product's entire launch history — so an unread registry says "—" instead.
+  const launchesRaw = launches.ok === false ? "—" : undefined;
+
   // "BLUE Staked" used to sit in the middle of the hero. It was removed with the
   // stake surface: the staking contract is unchanged on Base, but this page is
   // no longer selling a stake, so headlining its TVL advertised a product that
   // isn't offered. Active Users replaces it — same ledger the rest of the page reads.
   const heroCards: Cell[] = [
-    { label: "Tool Runs", color: "#4FC3F7", value: usage.totalRuns },
+    { label: "Tool Runs", color: "#4FC3F7", value: usage.totalRuns, prefix: runsFloor },
     { label: "Active Users", color: "#34D399", value: users.total },
-    { label: "Tokens Launched", color: "#A78BFA", value: launches.total },
+    { label: "Tokens Launched", color: "#A78BFA", value: launches.total, raw: launchesRaw },
   ];
 
   const usageCells: Cell[] = [
-    { label: "Total Tool Runs",   sub: "lifetime paid x402 calls",                      color: "#4FC3F7", value: usage.totalRuns },
-    { label: "Est. Revenue",      sub: "Σ runs × price (USDC)",                          color: "#34D399", value: revenue, decimals: 2, prefix: "$" },
-    { label: "Wallets Onboarded", sub: `free-credit claims · cap ${users.claimCap}`,     color: "#A78BFA", value: users.claims },
-    { label: "Creators",          sub: "unique token launchers",                        color: "#FBBF24", value: launches.uniqueCreators },
+    { label: "Total Tool Runs",   sub: usage.ok === false ? `lower bound · ${usage.unreadable} counters unreadable` : "lifetime paid x402 calls",
+      color: "#4FC3F7", value: usage.totalRuns, prefix: runsFloor },
+    { label: "Est. Revenue",      sub: usage.ok === false ? "lower bound · partial read" : "Σ runs × price (USDC)",
+      color: "#34D399", value: revenue, decimals: 2, prefix: `${runsFloor}$` },
+    { label: "Wallets Onboarded", sub: users.claimsOk === false ? "claim counter unreadable" : `free-credit claims · cap ${users.claimCap}`,
+      color: "#A78BFA", value: users.claims, raw: claimsRaw },
+    { label: "Creators",          sub: launches.ok === false ? "launch registry unreadable" : "unique token launchers",
+      color: "#FBBF24", value: launches.uniqueCreators, raw: launchesRaw },
   ];
 
   const activityCells: Cell[] = [
@@ -451,7 +480,11 @@ export default function StatsView({ stats, usage: modelUsage }: { stats: PublicS
               <span className="font-mono text-[10px] text-slate-600">onboarded → active → creators</span>
             </div>
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6">
-              <Funnel claims={users.claims} active={users.total} creators={launches.uniqueCreators} />
+              <Funnel
+                claims={users.claimsOk === false ? null : users.claims}
+                active={users.total}
+                creators={launches.ok === false ? null : launches.uniqueCreators}
+              />
             </div>
           </Reveal>
         </section>

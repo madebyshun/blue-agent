@@ -33,6 +33,11 @@ type Row = {
 type Stats = {
   totals: {
     tools: number;
+    /** Catalog size. Diverges from `tools` only when KV is degraded. */
+    catalogTools?: number;
+    /** #150 — counters the route could not READ. Omitted from `rows` and from
+     *  both sums, so any value > 0 makes every total below a LOWER BOUND. */
+    countersUnreadable?: number;
     totalRuns: number;
     totalRevenueEst: number;
     usdcBalance: number | null;
@@ -259,6 +264,14 @@ export default function StatsView({ inShell = false }: { inShell?: boolean }) {
   );
   const animRev     = (animRevRaw / 100).toFixed(2);
 
+  // #150 — when some `usage:<id>` counters could not be read they are omitted
+  // from the rows and from both sums, so the headline numbers are a FLOOR, not
+  // a measurement. Say so with a "≥" and a banner instead of quietly printing
+  // a smaller number that looks like a slow day.
+  const unreadable  = data?.totals.countersUnreadable ?? 0;
+  const partial     = unreadable > 0;
+  const floor       = partial ? "≥" : "";
+
   return (
     <>
       {!inShell && <Navbar />}
@@ -371,27 +384,41 @@ export default function StatsView({ inShell = false }: { inShell?: boolean }) {
 
           {data && (
             <>
+              {/* #150 — a partial KV read is stated, not absorbed into the sums. */}
+              {partial && (
+                <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2">
+                  <p className="font-mono text-[11px] text-amber-300">
+                    ⚠ {unreadable} of {data.totals.catalogTools ?? "?"} run counters could not be read
+                  </p>
+                  <p className="font-mono text-[10px] text-amber-300/60 mt-0.5">
+                    Those tools are omitted from the table and from both totals below, so every
+                    number here is a lower bound — not a measurement. This is a storage read
+                    failure, not a drop in usage.
+                  </p>
+                </div>
+              )}
+
               {/* ── KPI row (3 cards) ─────────────────────────────────── */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
                 <KpiCard
                   label="Tools live"
                   value={String(animTools)}
-                  sub="on Blue Hub"
+                  sub={partial ? `of ${data.totals.catalogTools ?? "?"} — rest unreadable` : "on Blue Hub"}
                   accent="#4FC3F7"
                   delay={0}
                   visible={phase >= 1}
                 />
                 <KpiCard
                   label="Total runs"
-                  value={animRuns.toLocaleString()}
-                  sub="all time"
+                  value={`${floor}${animRuns.toLocaleString()}`}
+                  sub={partial ? "lower bound — partial read" : "all time"}
                   delay={80}
                   visible={phase >= 1}
                 />
                 <KpiCard
                   label="Est. revenue"
-                  value={`$${animRev}`}
-                  sub="gross, before fees"
+                  value={`${floor}$${animRev}`}
+                  sub={partial ? "lower bound — partial read" : "gross, before fees"}
                   accent="#34D399"
                   delay={160}
                   visible={phase >= 1}
