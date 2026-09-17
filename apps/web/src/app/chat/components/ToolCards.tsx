@@ -2335,245 +2335,31 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
   );
 }
 
-// ── Swap card (prepare_swap) ──────────────────────────────────────────────────
-// Marker-driven inline swap. Fetches a LIVE 0x quote (/api/swap/quote) and lets
-// the user review the rate + SIGN in their own wallet (non-custodial). Mirrors
-// the Launches TradeModal flow. ZERO fabrication — every number is from 0x.
+// ── prepare_swap result shape ─────────────────────────────────────────────────
+// The TYPE only. The card that used to live here — a second, self-contained 0x
+// swap implementation with its own quote fetch, its own decimals read and its
+// own approve/sign flow — was DELETED 2026-09-17 (#262). It had been an
+// orphaned export since `prepare_swap` switched to `ConvertPanel`: reachable by
+// import, rendered by nobody. Measured before removal — zero consumers in all
+// of `src/`. Only three files import from ToolCards (BankClient →
+// MoveToYieldCard, ChatMessages → ToolResultCard, pay/[address] → SendCard) and
+// none took `SwapCard`; nothing inside this file referenced it either.
+//
+// Why a dead money card was worth a commit rather than a shrug: while it sat
+// there it was a live signing path one import away from being mounted, and it
+// did NOT carry the fixes the rendered cards got. #256 (the testnet/mainnet
+// default) and #215/#261 (fail-open spend gates) were fixed where the app
+// renders — not here. Dead code that can sign is not inert; it is an unowned
+// fork of the signing path, which is exactly the gap between "stopped
+// maintaining" and "stopped exposing" that CLAUDE.md's retirement law exists to
+// close.
+//
+// The type stays: the `prepare_swap` case in the dispatcher below reads it to
+// seed `ConvertPanel`, which is now the only Base swap implementation in chat.
 type SwapResult = {
   tokenIn?: string; tokenOut?: string; amountIn?: string;
   tokenInAddress?: string; tokenOutAddress?: string; network?: string;
 };
-type ChatSwapQuote = {
-  needsKey?: boolean; error?: string;
-  buyAmount?: string; minBuyAmount?: string;
-  transaction?: { to: `0x${string}`; data: `0x${string}`; value?: string };
-  issues?: { allowance?: { spender: `0x${string}` } | null };
-};
-
-const SWAP_NATIVE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
-const DECIMALS_ABI = [
-  { name: "decimals", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] },
-] as const;
-
-function fmtSwapNum(n: number): string {
-  return n.toLocaleString("en-US", { maximumFractionDigits: 6 });
-}
-
-export function SwapCard({ result, account }: { result: SwapResult; account?: `0x${string}` }) {
-  const isConnected = !!account;
-  const { switchChainAsync } = useSwitchChain();
-  const { writeContractAsync } = useWriteContract();
-  const { sendTransactionAsync } = useSendTransaction();
-
-  const sellSym  = (result.tokenIn  || "TOKEN").replace(/^\$/, "");
-  const buySym   = (result.tokenOut || "TOKEN").replace(/^\$/, "");
-  const sellAddr = (result.tokenInAddress  || "").trim();
-  const buyAddr  = (result.tokenOutAddress || "").trim();
-  const sellNative = sellAddr.toLowerCase() === SWAP_NATIVE;
-  const buyNative  = buyAddr.toLowerCase()  === SWAP_NATIVE;
-  const unresolved = !sellAddr || !buyAddr;
-
-  // The SELL leg — balance and its scale, read as one pair. 0x works in base
-  // units, so the exponent is not cosmetic here: it is the difference between
-  // signing 1 USDG and signing 1e12 of them. `sellDec` is whatever the token
-  // said, never a literal.
-  const bal = useSpendableBalance({
-    holder: account, native: sellNative,
-    token: sellNative ? undefined : sellAddr, chainId: base.id,
-  });
-  const balance = bal.balance;
-  const sellDec = bal.decimals;
-
-  // The BUY leg is display-only (we never spend it), so it keeps its own read.
-  // Native scale comes off the chain definition rather than a written-down 18.
-  const { data: buyDecRaw } = useReadContract({
-    address: buyAddr as `0x${string}`, abi: DECIMALS_ABI, functionName: "decimals",
-    chainId: base.id, query: { enabled: !!buyAddr && !buyNative },
-  });
-  const buyDec = buyNative ? base.nativeCurrency.decimals : (buyDecRaw != null ? Number(buyDecRaw) : undefined);
-
-  const [amount, setAmount] = useState<string>(result.amountIn ?? "");
-  const [quote,  setQuote]  = useState<ChatSwapQuote | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState<"idle" | "approving" | "swapping" | "done" | "error">("idle");
-  const [err,  setErr]  = useState("");
-  const [txHash, setTxHash] = useState("");
-
-  const amt = parseFloat(amount);
-  const sellBase = amount && amt > 0 && sellDec != null
-    ? (() => { try { return parseUnits(amount, sellDec).toString(); } catch { return ""; } })()
-    : "";
-  // Three outcomes, not two. `balance != null && amt > balance` answers "are we
-  // over"; on its own it also answered "may we sign", and said yes on a read
-  // that never landed. resolveSpend keeps those two questions apart.
-  const gate = resolveSpend({
-    loading: bal.loading, received: bal.received, failed: bal.failed,
-    over: balance != null && amt > balance,
-  });
-  const overBalance = gate === "insufficient";
-
-  // Debounced 0x quote.
-  const reqId = useRef(0);
-  useEffect(() => {
-    if (!sellBase || !sellAddr || !buyAddr || sellAddr.toLowerCase() === buyAddr.toLowerCase()) { setQuote(null); return; }
-    const id = ++reqId.current;
-    setLoading(true);
-    const tmo = setTimeout(() => {
-      const qs = new URLSearchParams({ sellToken: sellAddr, buyToken: buyAddr, sellAmount: sellBase, ...(account ? { taker: account } : {}) });
-      fetch(`/api/swap/quote?${qs}`).then(r => r.json()).then((j: ChatSwapQuote) => {
-        if (id !== reqId.current) return; setQuote(j); setLoading(false);
-      }).catch(() => { if (id === reqId.current) { setQuote({ error: "quote failed" }); setLoading(false); } });
-    }, 450);
-    return () => clearTimeout(tmo);
-  }, [sellBase, sellAddr, buyAddr, account]);
-
-  const buyAmount = quote?.buyAmount && buyDec != null ? Number(formatUnits(BigInt(quote.buyAmount), buyDec)) : null;
-  const minBuy    = quote?.minBuyAmount && buyDec != null ? Number(formatUnits(BigInt(quote.minBuyAmount), buyDec)) : null;
-  const rate = buyAmount != null && amt > 0 ? buyAmount / amt : null;
-
-  const canSwap = !!account && !!quote?.transaction && amt > 0 && gate === "ok" && !loading && sellDec != null;
-  const busy = step === "approving" || step === "swapping";
-
-  function setMax() {
-    if (balance == null) return; // unreachable — the "Bal … Max" line is behind `balance != null`
-    setAmount(String(sellNative ? Math.max(0, balance - 0.00005) : balance));
-  }
-
-  async function doSwap() {
-    if (!account) { setErr("Connect your wallet"); setStep("error"); return; }
-    if (quote?.needsKey) { setErr("Swap needs a 0x API key (ZEROX_API_KEY)"); setStep("error"); return; }
-    if (!quote?.transaction || sellDec == null) { setErr(quote?.error || "No route for this pair"); setStep("error"); return; }
-    // A swap signs TWICE on an ERC-20 sell — approve, then the swap itself. An
-    // unread balance stops it here rather than after the approve has already
-    // been paid for and left dangling.
-    if (gate !== "ok") {
-      setErr(gate === "insufficient" ? `Exceeds your ${sellSym} balance`
-        : gate === "reading" ? "Still reading your balance — one moment"
-        : "Couldn't read your balance — refusing to sign a swap that may not settle");
-      setStep("error"); return;
-    }
-    setErr(""); setTxHash("");
-    try {
-      await switchChainAsync({ chainId: base.id });
-      // ERC-20 sells need an allowance to the 0x AllowanceHolder first.
-      if (!sellNative && quote.issues?.allowance?.spender) {
-        setStep("approving");
-        await writeContractAsync({
-          address: sellAddr as `0x${string}`, abi: ERC20_ABI, functionName: "approve",
-          args: [quote.issues.allowance.spender, parseUnits(amount, sellDec)], chainId: base.id,
-        });
-      }
-      setStep("swapping");
-      const hash = await sendTransactionAsync({
-        to: quote.transaction.to,
-        // Append the ERC-8021 builder-code suffix → tx credited to BlueAgent.
-        data: (quote.transaction.data + DATA_SUFFIX.slice(2)) as `0x${string}`,
-        value: quote.transaction.value ? BigInt(quote.transaction.value) : undefined,
-        chainId: base.id,
-      });
-      setTxHash(hash); setStep("done");
-    } catch (e) {
-      const m = (e as Error).message || String(e);
-      const cancelled = /user rejected|denied|cancell?ed/i.test(m);
-      setErr(cancelled ? "Swap cancelled." : m.slice(0, 160)); setStep("error");
-    }
-  }
-
-  // Unknown token → ask for the contract address (never fabricate one).
-  if (unresolved) {
-    return (
-      <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3.5 py-3">
-        <div className="font-mono text-[11px] text-amber-400">
-          Couldn’t resolve {!sellAddr ? sellSym : buySym}. Re-ask with its contract address (0x…).
-        </div>
-      </div>
-    );
-  }
-
-  if (step === "done") {
-    return (
-      <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
-        <div className="font-mono text-[12px] font-bold mb-1" style={{ color: "#22C55E" }}>
-          ✓ Swapped {fmtSwapNum(amt)} {sellSym} → {buyAmount != null ? fmtSwapNum(buyAmount) : ""} {buySym}
-        </div>
-        {txHash && (
-          <a href={`https://basescan.org/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
-            className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] inline-block mt-1">View tx ↗</a>
-        )}
-        <button onClick={() => { setStep("idle"); setQuote(null); }}
-          className="font-mono text-[10px] text-slate-500 hover:text-slate-300 ml-3">Swap again</button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
-      <div className="flex items-center gap-2 mb-2.5">
-        <span className="text-base leading-none">🔄</span>
-        <span className="font-mono text-[11px] font-bold text-white">Swap {sellSym} → {buySym}</span>
-        <span className="font-mono text-[9px] text-slate-600 ml-auto">Base · via 0x</span>
-      </div>
-
-      {/* You pay */}
-      <div className="rounded-lg border border-[#1A1A2E] bg-[#050508] p-2.5 mb-1">
-        <div className="flex items-center justify-between mb-1">
-          <span className="font-mono text-[9px] text-slate-600">YOU PAY</span>
-          {balance != null && (
-            <span className="font-mono text-[9px] text-slate-600">Bal {balance.toFixed(sellDec === 6 ? 2 : 5)}
-              <button type="button" onClick={setMax} className="text-[#4FC3F7] ml-1">Max</button></span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <input type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.0"
-            className="flex-1 bg-transparent font-mono text-[16px] text-white outline-none placeholder:text-slate-700 w-0" />
-          <span className="font-mono text-[11px] text-slate-200 px-2 py-1.5 border border-[#1A1A2E] rounded-lg">{sellSym}</span>
-        </div>
-        {overBalance && <div className="font-mono text-[9px] text-red-500 mt-1">Exceeds your {sellSym} balance</div>}
-      </div>
-
-      <div className="flex justify-center -my-1 relative z-10">
-        <div className="w-7 h-7 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] text-slate-500 font-mono text-[12px] flex items-center justify-center">↓</div>
-      </div>
-
-      {/* You receive */}
-      <div className="rounded-lg border border-[#1A1A2E] bg-[#050508] p-2.5 mt-1 mb-3">
-        <div className="font-mono text-[9px] text-slate-600 mb-1">YOU RECEIVE</div>
-        <div className="flex items-center gap-2">
-          <div className="flex-1 font-mono text-[16px] text-white w-0 truncate">
-            {loading ? <span className="text-slate-600">…</span> : buyAmount != null ? fmtSwapNum(buyAmount) : <span className="text-slate-700">0.0</span>}
-          </div>
-          <span className="font-mono text-[11px] text-slate-200 px-2 py-1.5 border border-[#1A1A2E] rounded-lg">{buySym}</span>
-        </div>
-      </div>
-
-      {rate != null && (
-        <div className="font-mono text-[9px] text-slate-500 mb-2 flex items-center justify-between">
-          <span>1 {sellSym} ≈ {fmtSwapNum(rate)} {buySym}</span>
-          {minBuy != null && <span className="text-slate-600">min {fmtSwapNum(minBuy)} {buySym}</span>}
-        </div>
-      )}
-
-      {quote?.needsKey && <p className="font-mono text-[9px] text-amber-400 mb-2">Swap needs a free 0x API key — set <span className="text-slate-300">ZEROX_API_KEY</span>.</p>}
-      {quote?.error && !quote.needsKey && !loading && amt > 0 && <p className="font-mono text-[9px] text-amber-400 mb-2">No route found for this pair.</p>}
-      {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
-
-      {isConnected && !busy && gate === "unverified" && (
-        <UnverifiedBalance symbol={sellSym} onRetry={() => { void bal.refetch(); }} busy={bal.refetching} />
-      )}
-
-      <button onClick={doSwap} disabled={!canSwap || busy}
-        className="w-full font-mono text-[12px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
-        style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
-        {!isConnected ? "Connect your wallet"
-          : busy ? (step === "approving" ? "Approve in wallet…" : "Confirm in wallet…")
-          : gate === "unverified" ? "Balance unread — held"
-          : overBalance ? "Insufficient balance"
-          : amt > 0 ? `Swap ${fmtSwapNum(amt)} ${sellSym}` : "Enter an amount"}
-      </button>
-      <p className="font-mono text-[9px] text-slate-700 mt-1.5 text-center">Best route via 0x · you sign · non-custodial · Base mainnet.</p>
-    </div>
-  );
-}
 
 // ── CONVERT in chat — the venue switch the two swap cards cannot make alone ───
 //
