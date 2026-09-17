@@ -12,14 +12,23 @@
 // "robinhood", i.e. the wrong funds on the wrong chain. See the `can.send` note
 // in lib/wallet/chains.ts.
 //
-// This card does not reinterpret either money path. It ports both VERBATIM from
-// the two proven cards:
+// This card does not reinterpret either money path. It ported both VERBATIM
+// from the two proven cards:
 //   • Base       → user signs a plain ERC-20 `transfer` (cash) or a native send,
 //                  exactly SendCard's path — including its EIP-5792 branch (see
 //                  "Why chat mounts this card" below).
 //   • Robinhood  → POST /api/robinhood/router/send-prepare (server builds
 //                  calldata; user signs from their own wallet), exactly
 //                  RhSendCard. No keys server-side, no funds touched.
+//
+// RhSendCard.tsx has since been DELETED (it had zero importers once this card
+// landed), so that second provenance claim is no longer checkable against the
+// tree — `git log -- apps/web/src/app/app/bank/RhSendCard.tsx` has it. It was
+// removed rather than kept as a reference copy on purpose: an unmounted second
+// implementation of a live money path does not stay correct, because fixes land
+// on the card that is mounted. It was fully hardened when deleted (it carried
+// the #215 fail-closed balance gate); that is what it looks like right before
+// it starts falling behind, not a reason to keep it.
 //
 // ─── Why chat mounts this card (#256/#257, 2026-09-12) ───────────────────────
 //
@@ -153,7 +162,8 @@ function fmtAmt(s: string): string {
   return s;
 }
 
-// The send-prepare shape (mirrors RhSendCard / the chat card's PrepareResponse).
+// The send-prepare shape. It mirrors the chat card's PrepareResponse, and was
+// originally lifted from RhSendCard (deleted — see the header).
 type PrepareResponse = {
   ok?: boolean;
   error?: string;
@@ -517,7 +527,8 @@ export default function WalletSendCard({
     setErr(""); setTxHash(""); setCallsId("");
     try {
       if (network === "robinhood") {
-        // Server builds the calldata; the user signs. Identical to RhSendCard.
+        // Server builds the calldata; the user signs. Ported unchanged from
+        // RhSendCard, which is now deleted — see the header.
         setStep("preparing");
         const r = await fetch("/api/robinhood/router/send-prepare", {
           method: "POST", headers: { "Content-Type": "application/json" },

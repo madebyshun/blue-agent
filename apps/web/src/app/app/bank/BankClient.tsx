@@ -45,8 +45,9 @@ import SwapCard, { type SellPreset } from "./SwapCard";
 // its OWN Base/Robinhood selector and ports both proven money paths — a plain
 // transfer on Base, /api/robinhood/router/send-prepare on 4663 — so the wallet no
 // longer needs a top switcher to reach an RH send. It replaces the old
-// `network === "robinhood" ? <RhSendCard> : <SendCard>` split (RhSendCard.tsx is
-// now unused by this page). CONVERT is still split by chain: RhSwapCard speaks
+// `network === "robinhood" ? <RhSendCard> : <SendCard>` split; RhSendCard.tsx
+// was left in the tree unused after that and is now DELETED, so there is no
+// second RH send implementation to drift. CONVERT is still split by chain: RhSwapCard speaks
 // the deployed RobinhoodSwapRouter on 4663 directly, and must mount BEFORE any
 // `can.swap`-based Base mount because the Base SwapCard force-switches the wallet
 // to Base mainnet before signing — letting a true `can.swap` fall through to it
