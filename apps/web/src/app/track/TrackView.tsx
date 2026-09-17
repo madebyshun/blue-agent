@@ -506,9 +506,11 @@ function EvidencePanel({ cohorts }: { cohorts: CohortRead }) {
           This panel analysed the newest {cohorts.analyzed} arrows, not the entire
           history — the feed we read is capped, so older arrows are excluded, and
           the window slides forward as new arrows fire. That means these counts can
-          go down between two visits even though the record only ever grows. The
-          receipts below are a separate and shallower read of the same feed, so
-          they do not fill the gap.
+          go down between two visits even though the record only ever grows, and a
+          cohort sitting near the {a.tests_run}-way correction can gain or lose its
+          &ldquo;survives correction&rdquo; mark for that reason alone, with nothing
+          about the signal having changed. The receipts below are a separate and
+          shallower read of the same feed, so they do not fill the gap.
         </p>
       )}
 

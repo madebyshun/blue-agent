@@ -450,6 +450,22 @@ async function main() {
       !/all[- ]time/i.test(trackSrc),
       "the basis string is derived from feed_capped, not written in",
     );
+
+    // E-7 — the slide reaches the CORRECTION, which is the part that bites.
+    // MEASURED in production 2026-09-17: `tests_run` was 25 on one read and 24
+    // on a later one, because a cohort fell under `min_sample` and left the
+    // family. BH's ceiling is FDR×rank/family_size, so a shrinking family moves
+    // the bar for every cohort — `survives_correction` can flip with nothing
+    // about the signal having changed. An endpoint whose entire promise is
+    // "a percentage never travels without its correction" has to disclose that
+    // the correction is itself window-dependent, or the promise is hollow.
+    check(
+      "E-7 the capped note discloses that the CORRECTION slides too, not just `graded`",
+      typeof body.window_note === "string" &&
+        /tests_run/.test(body.window_note) &&
+        /survives_correction/.test(body.window_note),
+      "a flipped survives_correction must be attributable to the window, not read as news",
+    );
   }
 
   await kvDel(KV_ARROW_HYDRATED);

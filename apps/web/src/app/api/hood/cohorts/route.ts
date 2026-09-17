@@ -19,10 +19,21 @@
  * ⚠ `window_basis: "all_time"` IS NOT THE FULL RECORD, and the response says so
  * in `analyzed` / `feed_capped` / `window_note`. The read is served from the
  * hydrated blob, which caps at 250 while the arrow index held 532 (measured
- * 2026-09-17) — and because the cap slides, `graded` came back 240, then 238,
- * then 234 on three reads that day. The basis field describes the analysis
+ * 2026-09-17) — and because the cap slides, `graded` came back 240, 238, 234,
+ * then 237 across four reads that day. The basis field describes the analysis
  * function, not the history; the three fields beside it describe the history.
  * See cohort-read.ts ③.
+ *
+ * ⚠⚠ THE SLIDE REACHES THE CORRECTION, which is the part that actually bites.
+ * `tests_run` was 25 on the first of those reads and 24 on the last: a cohort
+ * fell under `min_sample` and left the hypothesis family. BH's ceiling is
+ * `FDR × rank / family_size` (cohort-stats.ts `benjaminiHochberg`), so shrinking
+ * the family moves the bar for EVERY cohort — a borderline `survives_correction`
+ * can flip between two reads with nothing about the signal having changed. This
+ * endpoint's entire promise is that a percentage never travels without its
+ * correction; that promise is only kept if the correction's own instability is
+ * disclosed too. Hence `window_note` names it, and two snapshots are comparable
+ * only when `analyzed` AND `tests_run` match.
  *
  * COST: this reads the arrow feed from KV. Since #148 ② that is ONE command
  * (the hydrated blob), not the ~600-key fan-out the depth constant implies, and
@@ -84,7 +95,11 @@ export async function GET(req: NextRequest) {
         ? `Analysed the newest ${read.analyzed} public arrows. The record is LONGER than this — ` +
           "the feed blob is capped, so older arrows exist and were not included. This window " +
           "slides as new arrows fire, so `graded` can fall between two reads even though the " +
-          "record only ever grows. Do not read `window_basis: \"all_time\"` as the full history."
+          "record only ever grows. Do not read `window_basis: \"all_time\"` as the full history. " +
+          "`tests_run` slides with it: a cohort that drops under `min_sample` leaves the " +
+          "hypothesis family entirely, and the Benjamini-Hochberg ceiling is FDR×rank/family_size " +
+          "— so `survives_correction` can change between two reads WITHOUT the underlying signal " +
+          "changing at all. Compare two snapshots only when `analyzed` and `tests_run` match."
         : `Analysed the newest ${read.analyzed} public arrows, which is the whole record — the ` +
           "feed blob was not at its cap.",
       method: {
