@@ -6,7 +6,19 @@
 // Price: $0.05
 
 import { AGENT_TOOLS } from "@/lib/agent-tools";
-import { listRegisteredTools } from "@/lib/hub-registry";
+import { readRegisteredTools, type Coverage } from "@/lib/hub-registry";
+
+// What a caller who PAID $0.05 for a census is owed when part of it is unreadable.
+const COVERAGE_NOTE: Record<Coverage, string | null> = {
+  complete: null,
+  partial:
+    "Some community tool records could not be read from the registry. " +
+    "`totals.community` and `totals.all` are FLOORS, not counts.",
+  unavailable:
+    "The community registry was unreachable. `totals.community: 0` means we could " +
+    "not read it, NOT that no community tools exist. Only the first-party catalog " +
+    "below is authoritative in this response.",
+};
 
 type CatalogEntry = {
   id:          string;
@@ -53,14 +65,28 @@ export default async function handler(req: Request): Promise<Response> {
       .filter((t) => !!t.price) // only callable/paid tools
       .map((t) => toEntry(t, "first-party"));
 
-    // Community registry (KV-backed; degrade gracefully if unavailable).
-    let community: CatalogEntry[] = [];
-    try {
-      const registered = await listRegisteredTools();
-      community = registered.map((t) => toEntry(t, "community", t.callCount ?? 0));
-    } catch { community = []; }
+    // Community registry (KV-backed).
+    //
+    // #149: this used to be a try/catch that set `community = []` "to degrade
+    // gracefully". It was dead code twice over — the old `listRegisteredTools`
+    // (now deleted) swallowed its own KV errors and returned a SHORT list rather
+    // than throwing, so the catch was unreachable and the degradation was
+    // SILENT — the worst of both. A paid caller whose product IS this census got
+    // `totals.community: 0` and no way to tell that apart from an empty
+    // marketplace. `coverage` is now on the wire.
+    const registry = await readRegisteredTools();
+    const community: CatalogEntry[] = registry.tools.map((t) =>
+      toEntry(t, "community", t.callCount ?? 0),
+    );
 
-    const all = [...firstParty, ...community];
+    // Community FIRST. The cap below is 60 and the first-party catalog alone is
+    // ~111 priced tools, so under the old `[...firstParty, ...community]` order
+    // every community tool fell off the end of an unfiltered response — forever,
+    // deterministically. The response advertised `totals.community: N` with zero
+    // of them present and closed by inviting builders to register onto a shelf
+    // nothing could reach. The old comment claimed this "discovery boost"
+    // already existed; the order never implemented it.
+    const all = [...community, ...firstParty];
 
     // Category breakdown (over the full catalog, pre-filter).
     const categories = all.reduce<Record<string, number>>((acc, t) => {
@@ -80,7 +106,7 @@ export default async function handler(req: Request): Promise<Response> {
       );
     }
 
-    // Cap payload; community tools surface first when no filter (discovery boost).
+    // Cap payload. Community tools genuinely surface first — see the order above.
     const limited = matches.slice(0, 60);
 
     return Response.json({
@@ -89,7 +115,15 @@ export default async function handler(req: Request): Promise<Response> {
       data_source: "Blue Hub registry (first-party catalog + KV builder registry)",
       query: query || null,
       category: category || null,
+      // How much of the community half we could actually see. `first_party` is
+      // compiled into the bundle and is therefore always complete; only the
+      // KV-backed half can be short.
+      registry_coverage: registry.coverage,
+      ...(COVERAGE_NOTE[registry.coverage] ? { registry_note: COVERAGE_NOTE[registry.coverage] } : {}),
+      ...(registry.unreadableIds.length ? { registry_unreadable_ids: registry.unreadableIds } : {}),
       totals: {
+        // ⚠ `all`, `community` and `matched` are FLOORS unless
+        // registry_coverage === "complete".
         all:          all.length,
         first_party:  firstParty.length,
         community:    community.length,
@@ -97,6 +131,8 @@ export default async function handler(req: Request): Promise<Response> {
       },
       categories,
       tools: limited,
+      // The cap is real and silent otherwise: say when the list was cut.
+      tools_truncated: matches.length > limited.length,
       how_to_call: {
         x402: "GET /api/x402/{id} for payment requirements, sign EIP-3009 USDC on Base (chain 8453), POST with X-Payment header.",
         mcp:  "Connect the Blue Agent MCP server (https://blueagent.dev/api/mcp) in Claude Desktop / Cursor and call the tool by name.",

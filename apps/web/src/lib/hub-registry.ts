@@ -97,6 +97,17 @@ const K = {
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Master index ids, collapsing an unreadable index into `[]`.
+ *
+ * Sole remaining caller is `removeTool`, where that collapse is CORRECT and
+ * load-bearing: on an unreadable index the empty list makes the `includes`
+ * guard false, so we skip the `kvSet` and never overwrite the master list of
+ * every tool in the marketplace with a truncated copy. It fails CLOSED.
+ *
+ * Anything that LISTS or COUNTS tools must use `readRegisteredTools()` instead
+ * — there the identical collapse is the #149 bug.
+ */
 export async function listRegisteredToolIds(): Promise<string[]> {
   return (await kvGet<string[]>(K.index)) ?? [];
 }
@@ -165,13 +176,68 @@ export async function getRegisteredTool(id: string): Promise<RegisteredTool | nu
   return r.status === "ok" ? r.tool : null;
 }
 
-/** Get every registered tool. Cached at the caller; pagination Phase 4. */
-export async function listRegisteredTools(): Promise<RegisteredTool[]> {
-  const ids = await listRegisteredToolIds();
-  if (ids.length === 0) return [];
-  const items = await Promise.all(ids.map(getRegisteredTool));
-  return items.filter((t): t is RegisteredTool => !!t);
+/**
+ * The whole marketplace, plus what we could NOT see of it.
+ *
+ * Kept identical in shape to `BuilderToolsRead` on purpose. These two are the
+ * same query at two scopes; the moment they are written differently they start
+ * to disagree, which is how the hosted/external twins drifted in the first place.
+ */
+export interface RegistryRead {
+  /** The tools we could actually read. Never a claim that this is all of them. */
+  tools:    RegisteredTool[];
+  coverage: Coverage;
+  /** ids the master index listed but whose record read FAILED (≠ genuinely absent). */
+  unreadableIds: string[];
 }
+
+/**
+ * Every registered tool, honestly. Pagination is Phase 4; cached at the caller.
+ *
+ * This is the PUBLIC CENSUS of the Hub, and it is #149: the old body collapsed a
+ * throttled Upstash read into `[]` at two separate points (the index, then the
+ * per-item `.filter(Boolean)`), so a KV outage published as "0 tools" — a
+ * statement about the marketplace, indistinguishable from "nobody has built
+ * anything". The per-builder path was fixed in #352/#449; this half never was.
+ */
+export async function readRegisteredTools(): Promise<RegistryRead> {
+  const idx = await kvGetProbe<string[]>(K.index);
+  if (idx.status === "error") {
+    return { tools: [], coverage: "unavailable", unreadableIds: [] };
+  }
+
+  // A genuine miss IS an empty registry — nobody has ever submitted a tool.
+  // That is the one case allowed to render as "no community tools yet".
+  const ids = idx.status === "hit" ? idx.value ?? [] : [];
+  if (ids.length === 0) return { tools: [], coverage: "complete", unreadableIds: [] };
+
+  const reads = await Promise.all(ids.map(readRegisteredTool));
+
+  const tools: RegisteredTool[] = [];
+  const unreadableIds: string[] = [];
+  let countersIncomplete = false;
+  reads.forEach((r, i) => {
+    if (r.status === "unavailable") { unreadableIds.push(ids[i]); return; }
+    if (r.status === "missing") return;            // stale index entry — genuinely gone
+    tools.push(r.tool);
+    if (r.tool.callCount === null || r.tool.revenueTotal === null) countersIncomplete = true;
+  });
+
+  return {
+    tools,
+    coverage: unreadableIds.length > 0 || countersIncomplete ? "partial" : "complete",
+    unreadableIds,
+  };
+}
+
+// NOTE: there is deliberately NO `listRegisteredTools()` projection here.
+//
+// It existed, it returned `RegisteredTool[]` with the coverage signal thrown
+// away, and BOTH of its callers — the public census route and a PAID x402
+// handler — published its length as a count. Re-adding it as a convenience
+// wrapper re-opens #149 the first time someone reaches for the shorter name.
+// If you need the array, take `.tools` off `readRegisteredTools()` at the call
+// site, where the `coverage` you are discarding is still visible to you.
 
 /** A wallet's external inventory, plus what we could NOT see of it. */
 export interface BuilderToolsRead {
