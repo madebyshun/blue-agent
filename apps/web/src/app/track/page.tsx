@@ -19,6 +19,7 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import { getPublicTrackRecord } from "@/lib/blue-hood/track-record-public";
+import { readCohortAnalysis } from "@/lib/blue-hood/cohort-read";
 import TrackView from "./TrackView";
 
 export const revalidate = 60;
@@ -48,11 +49,23 @@ export const metadata: Metadata = {
 };
 
 export default async function TrackPage() {
-  const record = await getPublicTrackRecord(200);
+  // Two reads, both served from the SAME hydrated blob (#148 ②) — the arrow
+  // feed is one KV command, so asking for the record and the cohort analysis
+  // separately costs two commands, not two fan-outs.
+  //
+  // `readCohortAnalysis` is the shared reader `/api/hood/cohorts` uses, at the
+  // shared depth, so the percentage rendered below is the same number the API
+  // serves. When the two were computed independently they analysed different
+  // slices of one blob (200 here, 250 there) and neither said so.
+  const [record, cohorts] = await Promise.all([
+    getPublicTrackRecord(200),
+    readCohortAnalysis(),
+  ]);
+
   return (
     <div className="min-h-screen bg-[#050508] text-white">
       <Navbar />
-      <TrackView record={record} />
+      <TrackView record={record} cohorts={cohorts} />
     </div>
   );
 }
