@@ -122,19 +122,42 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ add
   const token = address as `0x${string}`;
 
   try {
+    // An unread chain value is NOT a number (#259).
+    //
+    // These two used to be `.catch(() => 0n)` and `.catch(() => 18)`, and both
+    // failure values were published as fact:
+    //
+    //   decimals → 18  is the expensive one. Every token this route serves is a
+    //     B20 share token, and B20s are 8-decimal (asserted in CLAUDE.md and by
+    //     `isB20` right above). `dec` drives `10^dec / P` at the price math
+    //     below, so a rate-limited `decimals()` read published a price 10^(18-8)
+    //     = 10 BILLION times too high. Same family as #223 (39.5×) and #231
+    //     (333×), three orders of magnitude worse than either. It hid well
+    //     because `dec` CANCELS in the market-cap line — mcap stayed right while
+    //     the price beside it was off by 10^10.
+    //
+    //   totalSupply → 0n  made `supplyWhole` 0, so `computedMcapUsd` came out as
+    //     exactly $0 — a market cap of zero asserted about a token that has one.
+    //
+    // `null` is the honest answer for both, and the client already renders it:
+    // TokenDetailClient guards `totalSupply != null && decimals != null` before
+    // deriving supply, and falls back to DexScreener for price/mcap.
     const [isB20, name, symbol, totalSupply, decimals] = await Promise.all([
       publicClient.readContract({ address: B20_FACTORY, abi: B20_ABI, functionName: "isB20", args: [token] }),
       publicClient.readContract({ address: token, abi: ERC20_ABI, functionName: "name" }).catch(() => "?"),
       publicClient.readContract({ address: token, abi: ERC20_ABI, functionName: "symbol" }).catch(() => "?"),
-      publicClient.readContract({ address: token, abi: ERC20_ABI, functionName: "totalSupply" }).catch(() => 0n),
-      publicClient.readContract({ address: token, abi: ERC20_ABI, functionName: "decimals" }).catch(() => 18),
+      publicClient.readContract({ address: token, abi: ERC20_ABI, functionName: "totalSupply" }).catch(() => null),
+      publicClient.readContract({ address: token, abi: ERC20_ABI, functionName: "decimals" }).catch(() => null),
     ]);
+
+    const supplyRaw: bigint | null = totalSupply == null ? null : (totalSupply as bigint);
+    const decimalsN: number | null = decimals == null ? null : Number(decimals);
 
     if (!isB20) {
       return NextResponse.json({
         ok: true, isB20: false, name, symbol,
-        totalSupply: (totalSupply as bigint).toString(),
-        decimals: Number(decimals),
+        totalSupply: supplyRaw === null ? null : supplyRaw.toString(),
+        decimals: decimalsN,
         pool: null,
       });
     }
@@ -152,7 +175,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ add
       feeTier:           number;
       feeLabel:          string;
       creator:           `0x${string}`;
-      lpTokenIdA:        string;
+      lpTokenIdA:        string | null;
       lpNftOwner?:       `0x${string}` | null;
       slot0?:            { sqrtPriceX96: string; tick: number; protocolFee: number; lpFee: number } | null;
       // Onchain-computed metrics — independent of DexScreener indexer.
@@ -170,10 +193,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ add
       }).catch(() => "0x0000000000000000000000000000000000000000" as const);
       if (c !== "0x0000000000000000000000000000000000000000") {
         const [lpId, slot0raw, ownerRaw] = await Promise.all([
+          // `null`, not `0n` (#259): token id 0 is a real, valid NFT id, so a
+          // failed read published as `0n` rendered "#0" in the UI with a live
+          // Basescan link to a position this pool does not own. `null` renders
+          // "—" — the client already branches on it.
           publicClient.readContract({
             address: B20HUB_HOOK as `0x${string}`, abi: HOOK_ABI,
             functionName: "lpTokenIdOfPool", args: [id],
-          }).catch(() => 0n),
+          }).catch(() => null),
           publicClient.readContract({
             address: STATE_VIEW, abi: STATE_VIEW_ABI,
             functionName: "getSlot0", args: [id],
@@ -202,19 +229,28 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ add
         let computedPriceUsd: number | null = null;
         let computedMcapUsd:  number | null = null;
         const ethPriceUsd = await ethPricePromise.catch(() => null);
-        if (slot0raw && ethPriceUsd != null) {
+        // `decimalsN != null` is load-bearing, not defensive typing (#259).
+        // `dec` is the exponent in BOTH lines below, so a guessed value does not
+        // degrade this number, it fabricates it. There is no honest price to
+        // publish without the real exponent — hence null, and the client falls
+        // back to DexScreener.
+        if (slot0raw && ethPriceUsd != null && decimalsN != null) {
           const sqrtP_X96 = slot0raw[0] as bigint;
           // Do the math in FP; fine for display since we're aiming at
           // 4-6 significant digits, not gwei precision.
           const sqrtP = Number(sqrtP_X96) / Math.pow(2, 96);
           const P     = sqrtP * sqrtP;               // base_tokens / wei_WETH
-          const dec   = Number(decimals);
-          const supplyWhole = Number(totalSupply as bigint) / Math.pow(10, dec);
+          const dec   = decimalsN;
           if (P > 0) {
             const tokenPriceWETH_wei = Math.pow(10, dec) / P;   // wei_WETH per whole token
             const tokenPriceETH      = tokenPriceWETH_wei / 1e18;
             computedPriceUsd = tokenPriceETH * ethPriceUsd;
-            computedMcapUsd  = supplyWhole * computedPriceUsd;
+            // Mcap needs the supply too, and that is a SEPARATE read — so it
+            // gets a separate condition rather than riding on the price's.
+            // An unread supply leaves mcap null while the price stands.
+            if (supplyRaw !== null) {
+              computedMcapUsd = (Number(supplyRaw) / Math.pow(10, dec)) * computedPriceUsd;
+            }
           }
         }
 
@@ -223,7 +259,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ add
           feeTier:           t.fee,
           feeLabel:          t.label,
           creator:           c as `0x${string}`,
-          lpTokenIdA:        (lpId as bigint).toString(),
+          lpTokenIdA:        lpId == null ? null : (lpId as bigint).toString(),
           lpNftOwner:        ownerRaw as `0x${string}` | null,
           slot0: slot0raw ? {
             sqrtPriceX96: (slot0raw[0] as bigint).toString(),
@@ -243,8 +279,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ add
       ok: true,
       isB20: true,
       name, symbol,
-      totalSupply: (totalSupply as bigint).toString(),
-      decimals: Number(decimals),
+      totalSupply: supplyRaw === null ? null : supplyRaw.toString(),
+      decimals: decimalsN,
       pool,
     }, { headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60" } });
   } catch (e) {

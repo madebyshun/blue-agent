@@ -12,7 +12,9 @@ interface PoolInfo {
   feeTier:           number;
   feeLabel:          string;
   creator:           string;
-  lpTokenIdA:        string;
+  // `| null` is the server saying "that read did not answer", not "id 0" (#259).
+  // Token id 0 is a valid NFT id, so the route may not use it as a miss marker.
+  lpTokenIdA:        string | null;
   lpNftOwner?:       string | null;
   slot0?:            { sqrtPriceX96: string; tick: number; protocolFee: number; lpFee: number } | null;
   computedPriceUsd?: number | null;
@@ -24,8 +26,11 @@ interface PoolResponse {
   isB20?: boolean;
   name?: string;
   symbol?: string;
-  totalSupply?: string;
-  decimals?: number;
+  // `| null` distinguishes "the chain did not answer" from a real value (#259).
+  // Absent is not 0 and not 18: a guessed exponent scales every number derived
+  // from it, so the `!= null` check below is arithmetic, not defensive typing.
+  totalSupply?: string | null;
+  decimals?: number | null;
   pool?: PoolInfo | null;
   error?: string;
 }
@@ -206,7 +211,7 @@ function PoolCard({ pool }: { pool: PoolInfo | null }) {
       <div className="space-y-2 text-[11px] font-mono">
         <Row label="Fee tier"    value={pool.feeLabel} />
         <Row label="Creator"     value={pool.creator.slice(0, 8) + "…" + pool.creator.slice(-6)} />
-        <Row label="Position A"  value={"#" + pool.lpTokenIdA} />
+        <Row label="Position A"  value={pool.lpTokenIdA == null ? "—" : "#" + pool.lpTokenIdA} />
         <Row label="Current tick" value={pool.slot0 ? pool.slot0.tick.toString() : "—"} />
         <Row label="LP status"   value={lpLocked ? "🔒 Locked in hook" : "⚠ NFT not held by hook"} color={lpLocked ? "#22C55E" : "#F59E0B"} />
       </div>
