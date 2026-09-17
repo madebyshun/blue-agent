@@ -90,6 +90,17 @@ function must(ok: boolean, label: string, detail?: string) {
 // — including how it degrades when that service is down — stays `must` and
 // stays fatal in both modes. This narrows what can block a merge; it does not
 // narrow what gets checked.
+//
+// ⚠️ ONE CAVEAT, LEARNED THE HARD WAY (2026-09-17). "Depends on a third party"
+// is a statement about the CALL, not about the CAUSE. A `mustUpstream` failing
+// does not prove the third party is at fault — the same symptom can be our own
+// bug reached through their API. The A4 provider assertion below flapped for
+// nine days and the `mustUpstream` label read as "Virtuals is flaky"; it was in
+// fact our token budget, and the label helped it hide. Downgrading the SEVERITY
+// of a third-party-dependent check is right. Concluding from the downgrade that
+// a red run is someone else's problem is not. Whenever one of these fires,
+// read the upstream error text before attributing it — which is why these
+// assertions now carry that text in their detail string.
 const SMOKE_MODE = (process.env.SMOKE_MODE ?? "monitor").toLowerCase() === "gate" ? "gate" : "monitor";
 const upstreamDown: string[] = [];
 function mustUpstream(ok: boolean, label: string, detail?: string) {
@@ -213,11 +224,41 @@ async function a4Brief() {
     provider?: string | null;
     web_search_used?: boolean;
     duration_ms?: number | null;
-    attempts?: Array<{ provider?: string; status?: string; duration_ms?: number }>;
+    // `error` carries the verbatim upstream text from callVirtualsLLM. It is
+    // the only field that distinguishes "Virtuals is down" from "our token
+    // budget starved the answer" — both of which present as provider=null.
+    attempts?: Array<{ provider?: string; status?: string; duration_ms?: number; error?: string }>;
   } | undefined;
-  // Upstream: this is Virtuals' uptime, not our correctness. Fatal on the 6h
-  // monitor, advisory on a PR — see the mustUpstream header.
-  mustUpstream(llm?.provider != null, "A4 llm.provider non-null", `got provider=${llm?.provider}`);
+  // KEPT, and kept `mustUpstream` — but the reason written here in #419 was
+  // wrong, and the wrong reason is what let a real bug hide for nine days.
+  //
+  // #419 classified this as "Virtuals' uptime, not our correctness" and moved
+  // on. MEASURED 2026-09-17: every observed failure of this assertion was OUR
+  // bug. `deepseek-deepseek-v4-flash` is a reasoning model whose reasoning is
+  // billed out of `max_tokens` but never returned in `content`; A4 asks for 400
+  // and the reasoning phase alone used 189–417. The exact A4 prompt failed 8/12
+  // at that budget and 0/24 once given headroom. The model was listed in the
+  // catalog and healthy the whole time. Fixed in `_lib/llm.ts`
+  // (REASONING_HEADROOM_TOKENS), which is why this can now pass by being right.
+  //
+  // So the severity is unchanged — a genuine Virtuals outage still makes this
+  // red, and that still shouldn't block a merge — but the DETAIL now carries
+  // the upstream error text, because the two causes are indistinguishable from
+  // `provider=null` alone and the label "upstream dependency" actively pointed
+  // the last three investigations at the wrong party. `finish_reason=length` +
+  // `cause=budget_exhausted_by_reasoning` in that string means it is ours.
+  //
+  // Deliberately NOT done: retrying the call to make this flap less. A retry
+  // would have turned the monitor green while 2 of every 3 paid A4 calls in
+  // production were still returning no context — hiding the bug instead of
+  // reporting it. The monitor was right to be red; it just named the wrong
+  // suspect.
+  const a4Err = llm?.attempts?.find((a) => a.status === "error")?.error ?? "";
+  mustUpstream(
+    llm?.provider != null,
+    "A4 llm.provider non-null",
+    `got provider=${llm?.provider}${a4Err ? ` — upstream_error="${a4Err.slice(0, 200)}"` : ""}`,
+  );
 
   // Log-only evidence (no assertion change). Grep target for launch
   // content — the first line here becomes "provider=virtuals model=X
@@ -239,8 +280,12 @@ async function a4Brief() {
     // assertion. Grep target: `[a4-fail-chain]`.
     const attemptsStr = (llm?.attempts ?? [])
       .map((a) => {
-        const err = (a as { error?: string }).error ?? "";
-        return `${a.provider ?? "?"}:${a.status ?? "?"}${a.duration_ms != null ? `:${a.duration_ms}ms` : ""}${err ? ` err="${err.slice(0, 120)}"` : ""}`;
+        // Widened from 120 → 300 chars. The truncation used to cut the string
+        // exactly where the diagnosis lives: the old 120-char window ended at
+        // "…(content_len=0 model=deepseek-deepseek-v4-flash)" and dropped the
+        // finish_reason / reasoning_tokens that name the real cause.
+        const err = a.error ?? "";
+        return `${a.provider ?? "?"}:${a.status ?? "?"}${a.duration_ms != null ? `:${a.duration_ms}ms` : ""}${err ? ` err="${err.slice(0, 300)}"` : ""}`;
       })
       .join(" | ") || "no_attempts_array";
     console.log(`  [a4-fail-chain] attempts=[${attemptsStr}] warnings=${JSON.stringify(((r.data.warnings ?? []) as string[]).slice(0, 6))}`);
