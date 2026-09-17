@@ -11,12 +11,18 @@
  *   }
  *
  * Protocol: JSON-RPC 2.0 over HTTP POST
- * Tools: 87 — 5 console + 65 hub_* + 8 blue_* first-party + blue_score/blue_new
- *        + 7 b20_* MCP-native tools (deploy/mint/burn/grant/payment/check_activation/read_token)
- *        (77 unique x402 hub tools fully covered; 1 narrative alias; blue_score/blue_new
- *         + the 7 b20_* tools are MCP-only — pure calldata builders + on-chain reads, no x402 payment)
- *        NOTE: verified via scripts/p4-mcp-smoke.ts. Do NOT change this count
- *        without re-running the smoke — landing copy and docs quote it.
+ * Tools: 86 — 15 blue_* + 64 hub_* + 7 b20_*
+ *        The 7 b20_* (deploy/mint/burn/grant/payment/check_activation/read_token) are
+ *        MCP-only — pure calldata builders + on-chain reads, no x402 payment.
+ *        MEASURED 2026-09-17 against a live tools/list POST, and the source agrees.
+ *        The header said 87 for months; it was off by one, which is exactly why this
+ *        line is now pinned by apps/web/scripts/docs-truth-check.ts and fails CI if
+ *        it drifts. Do not hand-edit it — re-measure, then update both.
+ *
+ *        This is NOT the catalog total. `AGENT_TOOLS` holds 111; the hub_* names here
+ *        are a deliberately-curated subset, and each maps to a real catalog id (also
+ *        checked by docs-truth-check.ts, because an MCP tool pointing at a toolId that
+ *        does not exist is a 404 an agent cannot diagnose).
  * Docs: https://blueagent.dev/.well-known/openapi.json
  */
 import { NextRequest, NextResponse } from "next/server";
