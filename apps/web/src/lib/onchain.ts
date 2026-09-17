@@ -1,9 +1,25 @@
 // Shared on-chain data layer for Base wallet tools.
 // Real numbers only — native ETH balance + nonce via viem RPC, ERC-20 activity
-// via Basescan, current token balances via multicall, USD prices via DexScreener
-// (lib/market-data getTokenMarket). Everything fails soft (null/[]) so handlers
-// can degrade to a labelled advisory instead of 500ing. Used to ground the
-// wallet-strategy / portfolio-rebalancer tools instead of letting the LLM guess.
+// via Basescan, token identity via multicall, USD prices via DexScreener
+// (lib/market-data getTokenMarket). Used to ground the wallet-strategy /
+// portfolio-rebalancer tools instead of letting the LLM guess.
+//
+// Failure is reported as `null`, NEVER as a number or an empty list (#259).
+// This header used to read "everything fails soft (null/[])", and the `[]` half
+// of that is the bug family, not a safety property: an empty list and a failed
+// read render identically, so a rate-limited RPC call becomes "this wallet holds
+// nothing" — a confident, complete-looking, WRONG answer. `null` is worse-looking
+// and better: the caller is forced to decide what to say about a value it does
+// not have. An unread chain value is not a number and not an empty set.
+//
+// Deleted 2026-09-17 for exactly that reason: `getHoldings` (+ its `Holding`
+// type and `holdingsToPrompt` formatter). It returned `[]` on a multicall
+// throw, and `holdingsToPrompt` then told the LLM, as fact, "none readable —
+// empty wallet or unpriced tokens" about a wallet it had simply failed to read.
+// MEASURED before deleting: 11 files import this module, ZERO imported any of
+// the three; the live holdings path is `_handlers/wallet-holdings.ts`. Its
+// recent #259 decimals fix came from a repo-wide sweep, not from maintenance —
+// per CLAUDE.md, "last commit date is NOT evidence a surface is alive".
 
 import { createPublicClient, http, formatEther, formatUnits, parseAbi, isAddress, getAddress } from "viem";
 import { base } from "viem/chains";
@@ -100,75 +116,6 @@ export async function getWalletSnapshot(rawAddr: string): Promise<WalletSnapshot
   };
 }
 
-// ─── Current token holdings (exact via multicall) + USD value (DexScreener) ───
-
-export interface Holding {
-  contractAddress: string;
-  symbol: string;
-  balance: number;
-  priceUsd: number | null;
-  valueUsd: number | null;
-  allocationPct: number | null;
-}
-
-// Reads current balanceOf for the given token contracts (multicall), prices the
-// top ones via DexScreener, returns positions sorted by USD value desc.
-export async function getHoldings(rawAddr: string, contracts: string[], priceTop = 8): Promise<Holding[]> {
-  const address = normalizeAddress(rawAddr);
-  if (!address || !contracts.length) return [];
-  const tokens = contracts.map(normalizeAddress).filter((a): a is `0x${string}` => !!a).slice(0, 12);
-  if (!tokens.length) return [];
-
-  // Multicall balanceOf + decimals + symbol for each token.
-  const calls = tokens.flatMap((t) => [
-    { address: t, abi: ERC20, functionName: "balanceOf", args: [address] } as const,
-    { address: t, abi: ERC20, functionName: "decimals" } as const,
-    { address: t, abi: ERC20, functionName: "symbol" } as const,
-  ]);
-  let results: { status: "success" | "failure"; result?: unknown }[] = [];
-  try {
-    results = await client.multicall({ contracts: calls, allowFailure: true });
-  } catch { return []; }
-
-  const raw: { contractAddress: string; symbol: string; balance: number }[] = [];
-  for (let i = 0; i < tokens.length; i++) {
-    const bal = results[i * 3];
-    const dec = results[i * 3 + 1];
-    const sym = results[i * 3 + 2];
-    if (bal?.status !== "success") continue;
-    // A balance is a raw integer and MEANS NOTHING without its scale, so an
-    // unread `decimals` is a row we cannot report — not a row that is 18 (#259).
-    // Guessing 18 against a 6-decimal stablecoin understates the holding by
-    // 10^12, and against an 8-decimal B20 share token by 10^10; both land well
-    // under the `balance <= 0` line below and get dropped silently, so the wrong
-    // guess doesn't even surface as a wrong number — it surfaces as an absent
-    // position. Skipping says "we could not read this" by omission too, but it
-    // omits only the rows we actually failed on instead of corrupting them.
-    if (dec?.status !== "success") continue;
-    const decimals = Number(dec.result as number);
-    if (!Number.isFinite(decimals) || decimals < 0 || decimals > 36) continue;
-    const balance = +(+formatUnits(bal.result as bigint, decimals)).toFixed(6);
-    if (balance <= 0) continue;
-    raw.push({ contractAddress: tokens[i].toLowerCase(), symbol: sym?.status === "success" ? (sym.result as string) : "?", balance });
-  }
-  if (!raw.length) return [];
-
-  // Price the first `priceTop` (by raw order = transfer-frequency order) via DexScreener.
-  const priced = await Promise.all(
-    raw.map(async (h, idx) => {
-      if (idx >= priceTop) return { ...h, priceUsd: null, valueUsd: null };
-      const m = await getTokenMarket(h.contractAddress);
-      const priceUsd = m?.priceUsd ?? null;
-      return { ...h, priceUsd, valueUsd: priceUsd != null ? +(priceUsd * h.balance).toFixed(2) : null };
-    })
-  );
-
-  const totalUsd = priced.reduce((s, h) => s + (h.valueUsd ?? 0), 0);
-  return priced
-    .map((h) => ({ ...h, allocationPct: h.valueUsd != null && totalUsd > 0 ? +((h.valueUsd / totalUsd) * 100).toFixed(1) : null }))
-    .sort((a, b) => (b.valueUsd ?? 0) - (a.valueUsd ?? 0));
-}
-
 // ─── Prompt formatters — compact real-number context for the LLM ──────────────
 
 const fmtUsd = (n: number | null) =>
@@ -182,15 +129,6 @@ export function snapshotToPrompt(s: WalletSnapshot): string {
     `ERC-20 transfers (recent sample): ${s.transferCount} across ${s.distinctTokens} tokens`,
     `Last on-chain activity: ${s.lastActivityDays === null ? "unknown" : `${s.lastActivityDays}d ago`}`,
     `Most-traded tokens: ${top}`,
-  ].join("\n");
-}
-
-export function holdingsToPrompt(h: Holding[]): string {
-  if (!h.length) return "Current holdings: (none readable — empty wallet or unpriced tokens)";
-  const total = h.reduce((s, x) => s + (x.valueUsd ?? 0), 0);
-  return [
-    `Current holdings (live balanceOf + DexScreener price), total ${fmtUsd(total)}:`,
-    ...h.map((x, i) => `${i + 1}. ${x.symbol} — ${x.balance} (${x.valueUsd != null ? fmtUsd(x.valueUsd) : "unpriced"}${x.allocationPct != null ? `, ${x.allocationPct}%` : ""})`),
   ].join("\n");
 }
 
