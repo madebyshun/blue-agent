@@ -1,15 +1,16 @@
 // x402/rh-stock-correlations (D5) — on-chain price correlation matrix.
 // Price: $0.10
 //
-// Reads GeckoTerminal OHLC (daily) for each ticker's deepest pool, computes
-// pairwise Pearson correlations. Real math — no LLM.
+// Reads GeckoTerminal OHLC (daily) for each ticker's dollar-anchored primary
+// pool (resolvePrimaryPool — USDG preferred), computes pairwise Pearson
+// correlations. Real math — no LLM.
 //
 // Caveat: OHLC availability on RH Chain is nascent (some pools have < 7
 // candles). If a ticker has < 3 overlapping candles with another, correlation
 // is returned as null with an honest "insufficient overlap" note.
 
 import { RH_CHAIN, findByTicker } from "@/lib/robinhood/rwa-registry";
-import { poolsForToken, poolOhlc, type Candle } from "@/lib/robinhood/rwa-market";
+import { resolvePrimaryPool, poolOhlc, type Candle } from "@/lib/robinhood/rwa-market";
 
 export default async function handler(req: Request): Promise<Response> {
   try {
@@ -29,25 +30,26 @@ export default async function handler(req: Request): Promise<Response> {
 
     const timestamp = new Date().toISOString();
 
-    // Fetch daily candles for each token's deepest pool. Prefer base-side pools
-    // (already-USD candles). If all pools are quote-side, we skip (correlation
-    // is invariant to constant scaling, so USDG-quoted OHLC pairs are OK too).
+    // Fetch daily candles for each token's dollar-anchored primary pool.
+    //
+    // #231. This used to pick by SIDE (`pools.find(p => p.token_is_base)`),
+    // never by counterparty, so a token whose deepest pool was stock-vs-stock
+    // yielded a close series denominated in that other stock. The old header
+    // defended it with "Pearson is scale-invariant" — true for a CONSTANT
+    // scale, but a counterparty equity's own price is a second time series, so
+    // two tokens sharing a counterparty would correlate through it. Anchoring
+    // makes the denominator a dollar, which is the constant the argument needs.
     const series = await Promise.all(
       tokens.map(async (t) => {
-        const pools = await poolsForToken(t.contract);
-        if (!pools.length) return { token: t, closes: [] as { t: number; c: number }[] };
-        // anchor-debt(#231): picks the series by SIDE (is our token the base?), not
-        // by quote asset, so a token whose deepest pool is stock-vs-stock yields a
-        // close series denominated in that other stock. The header argues Pearson is
-        // scale-invariant — true for a CONSTANT scale, but the counterparty stock's
-        // own price moves, so the "constant" is a second time series. Two such
-        // tokens sharing a counterparty would correlate through it.
-        const basePool = pools.find((p) => p.token_is_base) ?? pools[0];
-        const invert = !basePool.token_is_base;
-        const mul = invert ? (basePool.counterparty_usd ?? 1) : 1;
-        const candles = await poolOhlc(basePool.address, "day", days, { invert, usd_multiplier: mul });
+        const primary = await resolvePrimaryPool(t.contract);
+        const empty = { token: t, closes: [] as { t: number; c: number }[], selection: primary.selection };
+        if (!primary.pool) return empty;
+        const candles = await poolOhlc(primary.pool.address, "day", days, {
+          side: primary.pool.token_is_base ? "base" : "quote",
+        });
         return {
           token: t,
+          selection: primary.selection,
           closes: (candles ?? []).map((c: Candle) => ({ t: c.t, c: c.c })).filter((x) => Number.isFinite(x.c)),
         };
       }),
@@ -78,8 +80,12 @@ export default async function handler(req: Request): Promise<Response> {
       window_days: days,
       tickers: tokens.map((t) => t.ticker),
       series_lengths: Object.fromEntries(tokens.map((t) => [t.ticker, (byTicker[t.ticker] && Object.keys(byTicker[t.ticker]).length) || 0])),
+      // Why a ticker's series is empty. `no_usd_anchored_pool` is NOT an
+      // outage — it means the token trades only against non-dollar assets, so
+      // there is no USD series to correlate (#231).
+      pool_selection: Object.fromEntries(series.map((s) => [s.token.ticker, s.selection])),
       correlations: rows,
-      note: "Pearson r over overlapping daily closes from GeckoTerminal pool OHLC. Correlation null when overlap < 3 candles — RH RWA OHLC history is still shallow.",
+      note: "Pearson r over overlapping daily closes from GeckoTerminal pool OHLC, taken from each token's dollar-anchored primary pool. Correlation null when overlap < 3 candles — RH RWA OHLC history is still shallow.",
       data_sources: ["api.geckoterminal.com (RH Chain)"],
       network: RH_CHAIN,
       timestamp,

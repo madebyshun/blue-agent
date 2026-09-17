@@ -9,7 +9,7 @@
 // with a note. Never fabricates flow.
 
 import { RH_CHAIN, findByTicker } from "@/lib/robinhood/rwa-registry";
-import { poolsForToken } from "@/lib/robinhood/rwa-market";
+import { resolvePrimaryPool } from "@/lib/robinhood/rwa-market";
 
 const GT = "https://api.geckoterminal.com/api/v2/networks/robinhood";
 
@@ -36,27 +36,33 @@ export default async function handler(req: Request): Promise<Response> {
     if (!token) return Response.json({ tool: "rh-stock-flow", ticker, error: "Ticker not in registry." }, { status: 404 });
 
     const timestamp = new Date().toISOString();
-    const pools = await poolsForToken(token.contract);
-    if (!pools.length) {
+    // #231. The pool is now resolved to a dollar-anchored counterparty. The old
+    // `pools[0]` took the deepest pool of ANY counterparty, so BUY_HEAVY /
+    // SELL_HEAVY could be computed from a stock-vs-stock pair — flow BETWEEN
+    // two equities, not dollar flow into this one — and every `volume_in_usd`
+    // was GT's valuation of the counterparty rather than a dollar market.
+    const primary = await resolvePrimaryPool(token.contract);
+    const pool = primary.pool;
+    if (!pool) {
       return Response.json({
         tool: "rh-stock-flow",
         ticker: token.ticker,
-        pool_count: 0,
-        note: "No DEX pool found for this token on Robinhood Chain.",
+        pool_count: primary.pool_count,
+        anchored_pool_count: primary.anchored_pool_count,
+        pool_selection: primary.selection,
+        note: primary.selection === "no_usd_anchored_pool"
+          ? `${primary.pool_count} pool(s) exist for this token but none is quoted against a dollar-anchored asset (USDG/WETH). Buy/sell pressure measured against another equity or a memecoin is not dollar flow, so no verdict is returned.`
+          : "No DEX pool found for this token on Robinhood Chain.",
         network: RH_CHAIN, timestamp,
       });
     }
 
-    // anchor-debt(#231): `pools[0]` is the deepest pool of ANY counterparty, so
-    // the BUY_HEAVY/SELL_HEAVY verdict can be computed from a stock-vs-stock
-    // pair — flow BETWEEN two stocks, not dollar flow into this one — and every
-    // `volume_in_usd` in it is GT's valuation of the counterparty rather than a
-    // dollar market. Second hazard on the same line, tracked in #231: GT's
-    // `kind` is oriented to the pool's BASE token, so when this token is the
-    // quote side (`token_is_base === false`) buy and sell are swapped and the
-    // verdict inverts. Neither is fixed here; #227's scope is the five
-    // `resolvePrimaryPool` callers.
-    const pool = pools[0];
+    // GT's `kind` is oriented to the pool's BASE token: a "buy" is someone
+    // buying the base side. When OUR token is the quote side, that trade is a
+    // SELL of our token, so the two must be swapped before they mean anything
+    // about this ticker — otherwise the verdict reports exactly backwards.
+    // Tracked as the second hazard on this line in #231.
+    const flipSides = !pool.token_is_base;
     let trades: Trade[] = [];
     let gt_status: string | null = null;
     let gt_error: string | null = null;
@@ -85,8 +91,12 @@ export default async function handler(req: Request): Promise<Response> {
       const ts = attr.block_timestamp ? Math.floor(new Date(attr.block_timestamp).getTime() / 1000) : 0;
       if (ts && ts < cutoff) continue;
       const v = attr.volume_in_usd ? parseFloat(attr.volume_in_usd) : 0;
-      if (attr.kind === "buy") { buyCount++; buyVolUsd += v; }
-      else if (attr.kind === "sell") { sellCount++; sellVolUsd += v; }
+      // Re-orient from the pool's base token to OUR token — see `flipSides`.
+      const side = attr.kind === "buy" ? (flipSides ? "sell" : "buy")
+                 : attr.kind === "sell" ? (flipSides ? "buy" : "sell")
+                 : null;
+      if (side === "buy") { buyCount++; buyVolUsd += v; }
+      else if (side === "sell") { sellCount++; sellVolUsd += v; }
       if (ts > latestTs) latestTs = ts;
     }
 
@@ -125,7 +135,14 @@ export default async function handler(req: Request): Promise<Response> {
         dex: pool.dex,
         tvl_usd: pool.reserve_usd,
         volume_24h_usd_from_pool_meta: pool.volume_24h_usd,
+        token_is_base: pool.token_is_base,
       },
+      pool_selection: primary.selection,
+      pool_count: primary.pool_count,
+      anchored_pool_count: primary.anchored_pool_count,
+      side_orientation: flipSides
+        ? `${token.ticker} is the QUOTE side of this pool, so GeckoTerminal's base-oriented buy/sell labels were swapped to describe ${token.ticker}.`
+        : `${token.ticker} is the BASE side of this pool, so GeckoTerminal's buy/sell labels already describe ${token.ticker}.`,
       window_hours: 24,
       trades_seen: trades.length,
       gt_trades_endpoint_status: gt_status,

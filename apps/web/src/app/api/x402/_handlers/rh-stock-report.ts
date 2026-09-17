@@ -11,10 +11,20 @@
 //
 // The prompt makes the LLM label news items as `[estimate]` or with source
 // URLs, per CLAUDE.md's data-vs-advisory rule.
+//
+// #231 — THE `dex_*` FIELDS ARE PROMPT INPUT, which is the reason this file
+// matters more than its $0.20 suggests. Everything in `facts` is handed to the
+// model under "Do NOT contradict them", so a wrong number here is not merely
+// displayed — it is ARGUED FOR, in prose, by a research brief. The no-
+// fabrication rule protects a number's provenance, never its denomination, so
+// the denomination has to be right before the prompt is built. The pool is
+// therefore `resolvePrimaryPool` (dollar-anchored, USDG preferred), and when
+// no dollar market exists every `dex_*` field is null with an explicit
+// `dex_price_unavailable_reason` the model is told to report as a gap.
 
 import { findByTicker, RH_CHAIN } from "@/lib/robinhood/rwa-registry";
 import { chainlinkLatest } from "@/lib/robinhood/rwa-price";
-import { poolsForToken } from "@/lib/robinhood/rwa-market";
+import { resolvePrimaryPool } from "@/lib/robinhood/rwa-market";
 import { callLLM, NO_FABRICATION_RULE } from "@/app/api/_lib/llm";
 
 export default async function handler(req: Request): Promise<Response> {
@@ -33,30 +43,44 @@ export default async function handler(req: Request): Promise<Response> {
     const timestamp = new Date().toISOString();
 
     // ── Real, verifiable numbers from our own primitives ─────────────────
-    const [oracle, pools] = await Promise.all([
+    const [oracle, primary] = await Promise.all([
       token.chainlinkFeed ? chainlinkLatest(token.chainlinkFeed, token.chainlinkHeartbeat ?? 86400) : Promise.resolve(null),
-      poolsForToken(token.contract),
+      resolvePrimaryPool(token.contract),
     ]);
-    // anchor-debt(#231): deepest pool of ANY counterparty, and every `dex_*`
-    // field below is copied out of it into the FACTS block the LLM is told not
-    // to contradict. If that pool is stock-vs-stock, an exchange rate enters
-    // the prompt labelled `dex_price_usd` and the model will faithfully build a
-    // report on it — the no-fabrication rule protects the number's provenance,
-    // not its denomination.
-    const deepestPool = pools[0] ?? null;
+    const primaryPool = primary.pool;
+    // Why there is no DEX price, stated in the FACTS block itself rather than
+    // left as a bare null for the model to fill in from priors. `no_usd_
+    // anchored_pool` is NOT an outage — the token has pools, they just price it
+    // against another equity or a memecoin, so there is no dollar quote to
+    // report. Saying so is the whole point (#231).
+    const dex_price_unavailable_reason = primaryPool
+      ? null
+      : primary.selection === "no_usd_anchored_pool"
+        ? `${primary.pool_count} DEX pool(s) exist for this token on Robinhood Chain but none is quoted against a dollar-anchored asset (USDG/WETH). Their prices are exchange rates against another equity or a memecoin, not USD, so no dex_* figure is reported.`
+        : "No DEX pool found for this token on Robinhood Chain.";
     const facts = {
       ticker: token.ticker,
       name: token.name,
       contract: token.contract,
       chainlink_price_usd: oracle?.price_usd ?? null,
       chainlink_updated_at: oracle?.updated_at ?? null,
-      dex_price_usd: deepestPool?.price_usd ?? null,
-      dex_change_24h_pct: deepestPool?.change_24h ?? null,
-      dex_change_1h_pct: deepestPool?.change_1h ?? null,
-      dex_volume_24h_usd: deepestPool?.volume_24h_usd ?? null,
-      dex_tvl_usd: deepestPool?.reserve_usd ?? null,
-      pool_address: deepestPool?.address ?? null,
-      pool_dex: deepestPool?.dex ?? null,
+      dex_price_usd: primaryPool?.price_usd ?? null,
+      dex_change_24h_pct: primaryPool?.change_24h ?? null,
+      dex_change_1h_pct: primaryPool?.change_1h ?? null,
+      dex_volume_24h_usd: primaryPool?.volume_24h_usd ?? null,
+      // Anchored-only aggregate depth, matching #227 upstream. `pool_tvl_usd`
+      // is just this one pool; `dex_tvl_usd` keeps its old name and meaning of
+      // "the pool we quoted from" so existing readers don't silently shift.
+      dex_tvl_usd: primaryPool?.reserve_usd ?? null,
+      dex_anchored_tvl_usd_all_pools: primary.total_tvl_usd,
+      dex_unanchored_tvl_usd_excluded: primary.unanchored_tvl_usd,
+      pool_ref: primaryPool?.pool_ref ?? null,
+      pool_address: primaryPool?.address ?? null,
+      pool_dex: primaryPool?.dex ?? null,
+      pool_selection: primary.selection,
+      pool_count: primary.pool_count,
+      anchored_pool_count: primary.anchored_pool_count,
+      dex_price_unavailable_reason,
     };
 
     // ── Venice web-search + LLM synthesis ────────────────────────────────
@@ -65,6 +89,9 @@ export default async function handler(req: Request): Promise<Response> {
 ${NO_FABRICATION_RULE}
 
 You will be given a "FACTS" block of verified on-chain numbers. Do NOT contradict them or invent new numbers.
+If a field is null, it is UNKNOWN — say so plainly. Never substitute a remembered, typical, or real-world
+value for a null, and never estimate one from the other fields. When \`dex_price_unavailable_reason\` is
+non-null, quote that reason in the On-chain observation section instead of reporting a DEX price.
 Use web search to gather recent (last ${horizon}) news headlines about the underlying equity ${token.ticker} (${token.name}).
 
 Return concise Markdown with these sections:
@@ -123,8 +150,9 @@ Do NOT recommend buy/sell — this is a brief, not a signal.`;
       warnings: [
         llm_error ? "llm_synthesis_unavailable: all providers returned error; report degraded to data-only" : null,
         llm_provider !== null && !llm_web_search_used ? `no_web_search_this_run: served by ${llm_provider} which does not search; "News" section relies on training-data recall + \"[data unavailable]\" markers` : null,
+        dex_price_unavailable_reason ? `${primary.selection}: ${dex_price_unavailable_reason}` : null,
       ].filter((x): x is string => !!x),
-      note: "Numbers in `facts` are verifiable on-chain (Chainlink + GT). Synthesis chain: Virtuals (primary, sponsored) → Venice (web-search if reached) → Bankr (fallback). Every attempt logged with provider + status + duration.",
+      note: "Numbers in `facts` are verifiable on-chain (Chainlink + GT), and every `dex_*` figure comes from this token's dollar-anchored primary pool (#231) — never from a stock-vs-stock or stock-vs-memecoin pair. Synthesis chain: Virtuals (primary, sponsored) → Venice (web-search if reached) → Bankr (fallback). Every attempt logged with provider + status + duration.",
       data_sources: [
         "Chainlink AggregatorV3 (RH Chain)",
         "api.geckoterminal.com (RH Chain)",
