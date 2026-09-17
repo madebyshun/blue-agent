@@ -7,9 +7,15 @@
 //
 // Real data only — no fabricated movers. If < 3 registered RWA pools show up
 // with volume, returns an empty list rather than pad the response.
+//
+// #231 — A RANKING IS A DOLLAR CLAIM. Only dollar-anchored pools can rank:
+// `change_24h` on a stock-vs-stock pool is the move in the EXCHANGE RATE
+// between two equities, so a token could top the gainers list while its own
+// dollar price fell — the counterparty just fell harder. Tokens whose pools
+// are all unanchored are dropped into `excluded_unanchored`, never silently.
 
 import { RWA_TOKENS, RH_CHAIN } from "@/lib/robinhood/rwa-registry";
-import { poolsForToken, topPools, type PoolMeta } from "@/lib/robinhood/rwa-market";
+import { poolsForToken, topPools, anchoredPools, resolvePrimaryPool, type PoolMeta } from "@/lib/robinhood/rwa-market";
 
 // Dust-pool filter — protects the ranking from thin-liquidity noise.
 // A pool with $453 TVL and $0.01 24h volume can quote AAPL at $868 for a
@@ -50,23 +56,41 @@ export default async function handler(req: Request): Promise<Response> {
     }
     const candidates = stocks.filter((t) => traded.has(t.contract.toLowerCase()));
 
+    type Scan =
+      | { ok: true; rwa: (typeof RWA_TOKENS)[number]; pool: PoolMeta; is_primary_pool: boolean }
+      | { ok: false; rwa: (typeof RWA_TOKENS)[number]; unanchored: false }
+      | { ok: false; rwa: (typeof RWA_TOKENS)[number]; unanchored: true; pool_count: number; unanchored_tvl_usd: number };
+
     const perToken = await Promise.all(
-      candidates.map(async (rwa) => {
+      candidates.map(async (rwa): Promise<Scan | null> => {
         try {
           const pools = await poolsForToken(rwa.contract);
           if (!pools.length) return null;
-          // Deepest pool that reports a 24h change becomes the mover source.
-          // anchor-debt(#231): "reports a change" is not "reports a change in
-          // dollars". On a stock-vs-stock pool `change_24h` is the move in the
-          // EXCHANGE RATE between two equities, so a token can rank as a top
-          // gainer while its own dollar price fell — the counterparty just fell
-          // harder. The note at the map() below ("already for OUR token") is
-          // about which SIDE the number describes and is correct; it says
-          // nothing about what the number is denominated in, and the two get
-          // read as the same guarantee.
-          const best = pools.find((p) => p.change_24h !== null) ?? null;
-          if (!best) return null;
-          return { rwa, pool: best };
+          // #231. Only a dollar-anchored pool may rank. `poolsForToken` already
+          // orients price/change to OUR SIDE of the pool — that part was always
+          // correct — but side is not denomination, and the two were being read
+          // as the same guarantee. A move measured against another equity is
+          // not a move in dollars, so unanchored-only tokens leave the ranking.
+          const anchored = anchoredPools(pools);
+          if (!anchored.length) {
+            return {
+              ok: false, rwa, unanchored: true,
+              pool_count: pools.length,
+              unanchored_tvl_usd: pools.reduce((s, p) => s + (p.reserve_usd || 0), 0),
+            };
+          }
+          // Prefer the SAME pool the rest of the catalog calls primary (M1/M2/
+          // M5/L1) so a mover row and an OHLC series for one ticker describe one
+          // pool. `resolvePrimaryPool` re-reads the memoized GT URL, so this
+          // costs no extra network. Fall back to the deepest anchored pool that
+          // does report a change — a primary with `change_24h === null` would
+          // otherwise drop a real mover.
+          const primary = await resolvePrimaryPool(rwa.contract);
+          const best = primary.pool && primary.pool.change_24h !== null
+            ? primary.pool
+            : anchored.find((p) => p.change_24h !== null) ?? null;
+          if (!best) return { ok: false, rwa, unanchored: false };
+          return { ok: true, rwa, pool: best, is_primary_pool: best.pool_ref === primary.pool?.pool_ref };
         } catch {
           return null;
         }
@@ -76,16 +100,29 @@ export default async function handler(req: Request): Promise<Response> {
     type WithToken = {
       rwa: (typeof RWA_TOKENS)[number];
       pool: PoolMeta;
+      is_primary_pool: boolean;
       token_change_24h: number;
       token_price_usd: number;
     };
-    const raw = perToken
-      .filter((r): r is { rwa: (typeof RWA_TOKENS)[number]; pool: PoolMeta } => r !== null)
+    // Tokens that trade only against non-dollar assets. Reported, never dropped
+    // in silence — an absent ticker should be explainable, not mysterious.
+    const excluded_unanchored = perToken
+      .filter((r): r is Extract<Scan, { ok: false; unanchored: true }> => r?.ok === false && r.unanchored)
+      .map((r) => ({
+        ticker: r.rwa.ticker,
+        pool_count: r.pool_count,
+        unanchored_tvl_usd: +r.unanchored_tvl_usd.toFixed(2),
+        reason: "no pool quoted against a dollar-anchored asset (USDG/WETH) — a move against another equity is not a move in dollars",
+      }));
+    const raw: WithToken[] = perToken
+      .filter((r): r is Extract<Scan, { ok: true }> => r?.ok === true)
       .map((r) => ({
         rwa: r.rwa,
         pool: r.pool,
+        is_primary_pool: r.is_primary_pool,
         // pool.change_24h + pool.price_usd are already for OUR token (poolsForToken
-        // selects the correct side per token).
+        // selects the correct side per token) and the pool is dollar-anchored
+        // (checked above), so this is a move in dollars.
         token_change_24h: r.pool.change_24h!,
         token_price_usd: r.pool.price_usd,
       }));
@@ -116,8 +153,16 @@ export default async function handler(req: Request): Promise<Response> {
         tool: "rh-stock-movers",
         gainers: [],
         losers: [],
-        note: "No RWA tokens on Robinhood Chain currently report a 24h change via GeckoTerminal — DEX liquidity is still forming.",
-        universe: { registered_tokens: stocks.length, tokens_with_pool_change: 0 },
+        note: excluded_unanchored.length
+          ? `No RWA token on Robinhood Chain currently reports a 24h change from a DOLLAR-ANCHORED pool. ${excluded_unanchored.length} token(s) do have pools, but only against another equity or a memecoin — see excluded_unanchored. That is an exchange-rate move, not a price move, so it cannot rank (#231).`
+          : "No RWA tokens on Robinhood Chain currently report a 24h change via GeckoTerminal — DEX liquidity is still forming.",
+        universe: {
+          registered_tokens: stocks.length,
+          tokens_with_pool_change: raw.length,
+          tokens_after_dust_filter: 0,
+          tokens_excluded_unanchored: excluded_unanchored.length,
+        },
+        anchor_filter: { excluded_unanchored },
         data_sources: ["api.geckoterminal.com (RH Chain)"],
         network: RH_CHAIN,
         timestamp,
@@ -135,9 +180,14 @@ export default async function handler(req: Request): Promise<Response> {
       change_1h_pct: r.pool.change_1h,
       volume_24h_usd: r.pool.volume_24h_usd,
       tvl_usd: r.pool.reserve_usd,
+      pool_ref: r.pool.pool_ref,
       pool_address: r.pool.address,
       pool_name: r.pool.name,
       pool_url: r.pool.url,
+      // True when this row's pool is the same one resolvePrimaryPool hands the
+      // other tools. False means the primary reported no 24h change and we used
+      // the deepest anchored pool that did — still dollars, different pool.
+      is_primary_pool: r.is_primary_pool,
     });
 
     // Filter by sign so a token with -1.56% never appears in gainers when
@@ -162,6 +212,14 @@ export default async function handler(req: Request): Promise<Response> {
         registered_tokens: stocks.length,
         tokens_with_pool_change: raw.length,
         tokens_after_dust_filter: rwaPools.length,
+        tokens_excluded_unanchored: excluded_unanchored.length,
+      },
+      // #231. Separate from the dust filter on purpose: dust is "too small to
+      // trust", unanchored is "not measured in dollars at all". Collapsing them
+      // would let a real dollar market look like noise, and vice versa.
+      anchor_filter: {
+        rule: "only pools quoted against a dollar-anchored asset (USDG/WETH) may rank",
+        excluded_unanchored,
       },
       dust_filter: {
         min_tvl_usd: minTvl,
