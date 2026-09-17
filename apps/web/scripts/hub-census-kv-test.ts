@@ -51,6 +51,9 @@ import {
   type HostedTool,
 } from "../src/lib/hub-hosted";
 import registryHandler from "../src/app/api/x402/_handlers/blue-registry";
+// The REAL route, imported as a module: group C asserts a route-level response
+// HEADER, which the library function underneath it cannot tell you anything about.
+import * as hostedRoute from "../src/app/api/hub/hosted/route";
 import { AGENT_TOOLS } from "../src/lib/agent-tools";
 
 let failures = 0;
@@ -88,6 +91,7 @@ const HOST_ITEM  = (s: string) => `hub:hosted:item:${s}`;
 const TOOL_A = "census-tool-a";
 const TOOL_B = "census-tool-b";
 const HOST_A = "census-hosted-a";
+const HOST_B = "census-hosted-b";
 
 // Fully typed on purpose — NO `as RegisteredTool`. A cast would let this fixture
 // keep compiling after a field is renamed in the real interface, and the suite
@@ -132,7 +136,7 @@ async function reset() {
   await Promise.all([
     kvDel(EXT_INDEX), kvDel(EXT_ITEM(TOOL_A)), kvDel(EXT_ITEM(TOOL_B)),
     kvDel(EXT_CALLS(TOOL_A)), kvDel(EXT_CALLS(TOOL_B)),
-    kvDel(HOST_INDEX), kvDel(HOST_ITEM(HOST_A)),
+    kvDel(HOST_INDEX), kvDel(HOST_ITEM(HOST_A)), kvDel(HOST_ITEM(HOST_B)),
   ]);
 }
 
@@ -328,6 +332,85 @@ async function main() {
     `keys: ${hostOk.tools.length ? Object.keys(hostOk.tools[0]).join(",") : "—"}`,
   );
 
+  console.log("\nH-D. DISCRIMINATION — a genuinely empty hosted registry:");
+  await reset();
+  const hostMiss = await readPublicHostedTools();
+  check(
+    "an index MISS reports `complete` on the hosted half too",
+    hostMiss.coverage === "complete" && hostMiss.tools.length === 0,
+    `coverage=${hostMiss.coverage}, ${hostMiss.tools.length} tools`,
+  );
+
+  console.log("\nH-E. PARTIAL — one hosted record dark, the other still served:");
+  await reset();
+  await kvSet(HOST_INDEX, [HOST_A, HOST_B]);
+  await kvSet(HOST_ITEM(HOST_A), hostTool(HOST_A));
+  await kvSet(HOST_ITEM(HOST_B), hostTool(HOST_B));
+  const hostPartial = await withReadFailureOn(
+    (k) => k === HOST_ITEM(HOST_B),
+    readPublicHostedTools,
+  );
+  check(
+    "coverage says `partial` — the hosted count is a floor",
+    hostPartial.coverage === "partial",
+    `coverage=${hostPartial.coverage}`,
+  );
+  check(
+    "the readable hosted tool is STILL served, and the dark slug is NAMED",
+    hostPartial.tools.length === 1
+      && hostPartial.tools[0].slug === HOST_A
+      && hostPartial.unreadableSlugs.join() === HOST_B,
+    `${hostPartial.tools.length} tool(s), unreadableSlugs=[${hostPartial.unreadableSlugs.join()}]`,
+  );
+
+  // ══ C. The EDGE CACHE — the half that outlives the outage ══════════════════
+  //
+  // `/api/hub/hosted` is the one census route that was cacheable, and an
+  // incomplete read is the single thing it must never hand to a CDN: a 60s
+  // `s-maxage` on a throttled Upstash read pins "0 hosted tools" in front of
+  // every visitor for a minute, and `stale-while-revalidate=300` keeps serving
+  // that for five more. The fix outlasts the outage by 6 minutes if it is
+  // wrong, so it is asserted here rather than trusted.
+  //
+  // Asserted through the REAL route handler — the header is route-level, so
+  // testing the library function alone would prove nothing about it.
+
+  console.log("\nC-A. CACHE — an incomplete read must NOT reach the CDN:");
+  await reset();
+  await kvSet(HOST_INDEX, [HOST_A]);
+  await kvSet(HOST_ITEM(HOST_A), hostTool(HOST_A));
+  const ccDarkRes  = await withReadFailure(hostedRoute.GET);
+  const ccDarkCC   = ccDarkRes.headers.get("cache-control") ?? "";
+  const ccDarkBody = await ccDarkRes.json();
+  check(
+    "no-store under an outage — nothing to pin, nothing to revalidate stale",
+    ccDarkCC === "no-store",
+    `Cache-Control: ${ccDarkCC || "(none)"}`,
+  );
+  check(
+    "the response still SAYS it is unreadable rather than publishing count: 0 bare",
+    ccDarkBody.coverage === "unavailable" && ccDarkBody.count === 0,
+    `coverage=${ccDarkBody.coverage}, count=${ccDarkBody.count}`,
+  );
+
+  console.log("\nC-B. CACHE — and it comes BACK when the read is complete:");
+  await reset();
+  await kvSet(HOST_INDEX, [HOST_A]);
+  await kvSet(HOST_ITEM(HOST_A), hostTool(HOST_A));
+  const okRes  = await hostedRoute.GET();
+  const okCC   = okRes.headers.get("cache-control") ?? "";
+  const okBody = await okRes.json();
+  check(
+    "a complete read is cacheable again — the fix is conditional, not a blanket no-store",
+    okCC.includes("s-maxage=60") && okCC.includes("stale-while-revalidate=300"),
+    `Cache-Control: ${okCC || "(none)"}`,
+  );
+  check(
+    "and it carries the real hosted tool",
+    okBody.coverage === "complete" && okBody.count === 1,
+    `coverage=${okBody.coverage}, count=${okBody.count}`,
+  );
+
   // ══ T. The PAID handler — truncation, with no KV fault at all ═════════════
   //
   // `blue-registry` costs $0.05 and its product IS this census. Community tools
@@ -391,6 +474,53 @@ async function main() {
     "the first-party catalog is unaffected — it is compiled in, not read from KV",
     darkBody.totals.first_party === pricedCount,
     `first_party=${darkBody.totals.first_party} of ${pricedCount}`,
+  );
+
+  console.log("\nT-C. PAID handler under a PARTIAL read — the dangerous middle:");
+  //
+  // The outage in T-B is loud: everything is dark, `unavailable`, obvious. THIS
+  // is the one that reads as normal — the index and one item come back fine, so
+  // the response is well-formed, populated, and WRONG BY ONE. A paying caller
+  // whose product IS this census gets `totals.community: 1` when the answer is
+  // 2, and nothing in the shape of the payload says so. The number has to be
+  // labelled a FLOOR at the point of sale, and the missing id has to be named
+  // so the caller can retry exactly it instead of re-buying the whole census.
+  await reset(); await seedExternal();
+  const partRes  = await withReadFailureOn(
+    (key) => key === EXT_ITEM(TOOL_B),
+    () => registryHandler(new Request("https://blueagent.dev/api/x402/blue-registry")),
+  );
+  const partBody = await partRes.json() as {
+    tools: { id: string }[];
+    totals: { community: number };
+    registry_coverage: string;
+    registry_note?: string;
+    registry_unreadable_ids?: string[];
+  };
+  check(
+    "coverage is `partial`, not the `complete` a well-formed payload would imply",
+    partBody.registry_coverage === "partial",
+    `registry_coverage=${partBody.registry_coverage}`,
+  );
+  check(
+    "the note says FLOOR in so many words — a caller must not read the total as a count",
+    /floor/i.test(partBody.registry_note ?? ""),
+    partBody.registry_note ? `"${partBody.registry_note.slice(0, 60)}…"` : "NO NOTE",
+  );
+  check(
+    "the short total is exactly the undercount it claims to be (1 served, 2 exist)",
+    partBody.totals.community === 1,
+    `totals.community=${partBody.totals.community}, truth=2`,
+  );
+  check(
+    "the readable tool is still SERVED — one dark record does not blank the shelf",
+    partBody.tools.some((t) => t.id === TOOL_A),
+    `${partBody.tools.filter((t) => t.id.startsWith("census-")).length} seeded tool(s) in the payload`,
+  );
+  check(
+    "and the unreadable id is NAMED, so the retry is one key not the whole census",
+    (partBody.registry_unreadable_ids ?? []).includes(TOOL_B),
+    `registry_unreadable_ids=${JSON.stringify(partBody.registry_unreadable_ids ?? [])}`,
   );
 
   await reset();
