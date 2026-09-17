@@ -60,12 +60,16 @@ export interface WalletChainCfg {
    *   fiat     Coinbase Onramp/Offramp pin `defaultNetwork=base` in the URL and
    *            `blockchains: ["base"]` in the session — Base-only, no per-chain
    *            card exists, so this is false everywhere but Base.
-   *   send     Base + Base Sepolia use SendCard, whose network type is
-   *            `YieldNetwork` (base|baseSepolia) — it reads any other value as
-   *            baseSepolia, so it CANNOT represent 4663. Robinhood therefore has
-   *            its own RhSendCard, which speaks /api/robinhood/router/send-prepare
-   *            on 4663 directly. The flag says a send path exists; the chain
-   *            switch in BankClient picks the card that can actually serve it.
+   *   send     ONE card serves both chains now — WalletSendCard, which carries
+   *            its own network selector and branches internally: a plain ERC-20
+   *            transfer on Base, /api/robinhood/router/send-prepare on 4663.
+   *            The old `network === "robinhood" ? <RhSendCard> : <SendCard>`
+   *            split is gone and RhSendCard.tsx is deleted, so this is the one
+   *            `can` entry NOT satisfied by a chain branch in BankClient.
+   *            The constraint that forced the split still holds and is the
+   *            reason the unified card branches at all: the Base `SendCard`
+   *            types its network as `YieldNetwork` (base|baseSepolia) and reads
+   *            any other value as baseSepolia, so it cannot represent 4663.
    *   swap     Base uses SwapCard (0x API, force-switches to Base mainnet before
    *            signing). Robinhood cannot use it — wrong chain, wrong router — so
    *            it has RhSwapCard against the deployed RobinhoodSwapRouter on 4663.
@@ -143,15 +147,20 @@ export const WALLET_CHAINS: Record<WalletChain, WalletChainCfg> = {
     stable: getAddress("0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"),
     stableSymbol: "USDG",
     stableDecimals: 6,
-    // Send + swap now WORK on 4663 — through chain-native cards (RhSendCard,
-    // RhSwapCard in app/bank/) that speak /api/robinhood/router/send-prepare and
-    // the deployed RobinhoodSwapRouter directly. They exist as separate cards
-    // precisely because the Base ones cannot represent 4663: SendCard is
-    // `YieldNetwork`-typed (renders a Base Sepolia form when handed "robinhood")
-    // and SwapCard force-switches the wallet to Base mainnet before signing. The
-    // flag flip is paired with a `network === "robinhood"` branch in BankClient
-    // that mounts the RH card BEFORE any `can`-based Base mount, so a true flag
-    // can never route 4663 through a Base card.
+    // Send + swap both WORK on 4663, but by two DIFFERENT mechanisms now, and
+    // the difference matters when reading BankClient:
+    //   send  — WalletSendCard, one card for both chains, chain chosen INSIDE
+    //           it. No BankClient branch. RhSendCard.tsx is deleted.
+    //   swap  — still chain-native: RhSwapCard speaks the deployed
+    //           RobinhoodSwapRouter on 4663 directly, and BankClient mounts it
+    //           BEFORE any `can.swap`-based Base mount, because the Base
+    //           SwapCard force-switches the wallet to Base mainnet before
+    //           signing — a true flag falling through to it on 4663 would sign
+    //           a Base swap under a Robinhood heading.
+    // Either way the invariant is the same one: a true flag must never route
+    // 4663 through a Base-shaped card. The Base `SendCard` is `YieldNetwork`-
+    // typed and renders a Base Sepolia form when handed "robinhood", which is
+    // why send is served by a card that branches rather than by that one.
     //
     // `txHistory` is TRUE and it does NOT mean Moralis learned to index 4663 —
     // it never will, and /api/wallet/transactions still refuses this chain by
@@ -180,8 +189,9 @@ export const WALLET_CHAINS: Record<WalletChain, WalletChainCfg> = {
  * balances read fine (wagmi has a 4663 transport, and `stable` above is the
  * real USDG address), /api/wallet/rh-holdings reads the chain through
  * Blockscout, StockTable has returned an RH leg on every call since it shipped,
- * and send + swap now have chain-native cards (RhSendCard, RhSwapCard) that
- * speak 4663 directly instead of borrowing the Base-shaped ones. So the wallet
+ * and send + swap both reach 4663 directly instead of borrowing the Base-shaped
+ * cards — send through WalletSendCard's in-card network selector, swap through
+ * the chain-native RhSwapCard. So the wallet
  * was already SHOWING two chains while offering to switch between one — the
  * omission had stopped protecting anyone and had started hiding a whole chain's
  * holdings behind an external link.

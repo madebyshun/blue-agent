@@ -17,12 +17,15 @@ import { ConnectButton } from "@/components/ConnectModal";
 import { useLang } from "@/lib/i18n/context";
 import { B20_ENABLED, B20_USDC } from "@/lib/orders";
 import { encodeTransferWithMemo, isValidMemo, MEMO_MAX_CHARS } from "@/lib/b20/encode";
-import { QRCodeSVG } from "qrcode.react";
 import { useSpendableBalance } from "@/lib/wallet/useSpendableBalance";
 import { resolveSpend } from "@/lib/wallet/read-state";
 import { UnverifiedBalance } from "@/components/wallet/UnverifiedBalance";
 import { RobinhoodSwapCard, type RobinhoodSwapResult } from "./RobinhoodSwapCard";
-import { RobinhoodSendCard, type RobinhoodSendResult } from "./RobinhoodSendCard";
+// Type-only: the RobinhoodSendCard COMPONENT is no longer mounted here (chat
+// sends through the wallet's own WalletSendCard, below). Only the result shape
+// is still read, at the `robinhood_send` marker branch. The file itself stays —
+// it has four other importers.
+import { type RobinhoodSendResult } from "./RobinhoodSendCard";
 import { RobinhoodBridgeCard, type RobinhoodBridgeResult } from "./RobinhoodBridgeCard";
 // ─── The wallet's own money cards, mounted in chat (#256/#257, 2026-09-12) ────
 //
@@ -42,9 +45,20 @@ import { RobinhoodBridgeCard, type RobinhoodBridgeResult } from "./RobinhoodBrid
 // bare ticker — a ticker names a different token on each chain (CLAUDE.md rule
 // 2), so a miss raises a banner and arms NOTHING rather than guessing.
 // Aliased because this file still declares its own `SwapCard` — the marker card
-// these replace. It is now reachable only through /pay/[address] (SendCard) and
-// nothing at all (SwapCard); both come out in the retirement commit that follows
-// this one, together with RobinhoodSendCard and bank/RhSendCard.
+// these replace.
+//
+// Retirement status, MEASURED 2026-09-17 (the commit above promised one commit;
+// it took two, and the second could only take part of the list):
+//   • bank/RhSendCard      DELETED. Zero importers.
+//   • RobinhoodSendCard    component no longer imported here (type-only, above).
+//                          The FILE stays — four other importers.
+//   • local SendCard       ALIVE, one real consumer: /pay/[address], a public
+//                          payment surface. Not retirable without replacing it.
+//   • local SwapCard       orphaned export, zero consumers — but it is ~200
+//                          lines of money card inside a live file, so it is
+//                          filed rather than swept in with an import cleanup.
+// The lesson from the first attempt: a comment that promises a follow-up commit
+// is not a mechanism. This block states what is measured true today instead.
 import WalletSendCard from "@/app/app/bank/WalletSendCard";
 import BankSwapCard from "@/app/app/bank/SwapCard";
 import BankRhSwapCard from "@/app/app/bank/RhSwapCard";
