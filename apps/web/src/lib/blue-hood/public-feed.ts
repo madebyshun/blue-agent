@@ -42,12 +42,35 @@ export function isPublicArrow(a: Arrow): boolean {
 export async function readPublicArrowsProbe(
   limit = 200,
 ): Promise<
-  | { status: "ok"; arrows: Arrow[]; built_at: string; source: "cache" | "rebuild"; kv_commands: number }
+  | {
+      status: "ok";
+      arrows: Arrow[];
+      built_at: string;
+      source: "cache" | "rebuild";
+      kv_commands: number;
+      /**
+       * How many arrows the underlying blob held BEFORE the public filter and
+       * `limit` were applied.
+       *
+       * Exists so a caller can tell "the feed is this short" from "the feed was
+       * cut off here". The blob is capped at `ARROW_HYDRATED_MAX`, but
+       * `arrows.length` alone cannot reveal that: the trust filter runs first,
+       * so a full 250-arrow blob holding a few test arrows returns <250 and
+       * looks identical to a genuinely short record. Any surface that describes
+       * its own window — "all time", "the full record" — needs this number to
+       * say so truthfully.
+       */
+      feed_size: number;
+    }
   | { status: "unavailable"; reason: string }
 > {
   const read = await readArrowFeed();
   if (read.status !== "ok") return read;
-  return { ...read, arrows: read.arrows.filter(isPublicArrow).slice(0, limit) };
+  return {
+    ...read,
+    feed_size: read.arrows.length,
+    arrows: read.arrows.filter(isPublicArrow).slice(0, limit),
+  };
 }
 
 /**

@@ -12,12 +12,22 @@
  * component renders "warming up · N/needed" and NOTHING that discloses the rate
  * — no pct, no hits/misses aggregate. Individual arrow outcomes still show
  * (that's the evidence, and misses are the point).
+ *
+ * THE SAME GATE BINDS THE EVIDENCE PANEL, and there it is load-bearing rather
+ * than decorative: `chain:base` is currently 2 hits / 0 misses, so printing the
+ * tally a `ready:false` cohort carries would publish a readable 100% off n=2 —
+ * the exact number the gate exists to withhold. <DeskRow> therefore renders
+ * `n of needed` and nothing else until the sample earns a rate.
  */
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { Arrow, HoodChain } from "@/lib/blue-hood/types";
 import { chainOf } from "@/lib/blue-hood/types";
 import type { PublicTrackRecord, PublicPerTypeStats } from "@/lib/blue-hood/track-record-public";
+// Type-only on purpose: both modules are server-side (cohort-read reaches KV),
+// and `import type` is erased by tsc, so nothing follows them into the bundle.
+import type { CohortRead } from "@/lib/blue-hood/cohort-read";
+import type { CohortStat } from "@/lib/blue-hood/cohort-stats";
 
 const RH_GREEN = "#34D399";
 // Base venue accent — text-only (pills stay green; venue color lives in the tag).
@@ -37,7 +47,13 @@ type SortKey = "newest" | "oldest" | "duration";
 
 const PAGE_SIZE = 50;
 
-export default function TrackView({ record }: { record: PublicTrackRecord }) {
+export default function TrackView({
+  record,
+  cohorts,
+}: {
+  record: PublicTrackRecord;
+  cohorts: CohortRead;
+}) {
   const arrows = record.receipts.arrows;
   const [outcome, setOutcome] = useState<OutcomeFilter>("all");
   const [ttype, setTtype] = useState<TypeFilter>("all");
@@ -84,6 +100,7 @@ export default function TrackView({ record }: { record: PublicTrackRecord }) {
       <Header arrowsToday={record.receipts.arrows_today} />
       <HeadlineHero headline={record.headline} />
       <MetricStrip record={record} filteredCount={filtered.length} />
+      <EvidencePanel cohorts={cohorts} />
 
       <div className="mb-3 mt-10 font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
         // every graded arrow · forever · misses included
@@ -337,6 +354,233 @@ function MetricStrip({ record, filteredCount }: { record: PublicTrackRecord; fil
   );
 }
 
+// ── Evidence panel (recent-window, multiplicity-corrected) ───────────────────
+/**
+ * The claim, with its own caveats attached — not a second headline.
+ *
+ * WHY IT SITS UNDER THE 7-DAY HERO AND NOT BESIDE IT: these are two different
+ * windows over two different samples, and a reader who compares them is being
+ * misled by the layout rather than by any number. The window is measured, not
+ * assumed, and printed, so the panel cannot drift from its own basis.
+ *
+ * IT DOES NOT SAY "ALL TIME", THOUGH `window_basis` DOES. That field means "the
+ * analysis applied no time filter", which is true of the function and false of
+ * the claim: the input was already cut to the newest ~250 arrows by the feed
+ * blob, out of 532 in the index (measured 2026-09-17). The cut also slides, so
+ * `graded` came back 240, 238, then 234 on three reads that day — a reader who
+ * refreshed would watch the "all time" record shrink. This panel prints the
+ * count it actually analysed and says older arrows are excluded. See
+ * cohort-read.ts ③.
+ *
+ * WHAT MAY BE CALLED AN EDGE: only `validated` — cohorts that survive
+ * Benjamini-Hochberg across the whole pre-registered family. A cohort that
+ * reaches p<0.05 alone but not as best-of-N is `exploratory` and is counted
+ * here, never quoted. The naive version of this feature fires on 38.5% of
+ * pure-noise records in our own control test, which is why the correction is
+ * rendered next to the number instead of in a footnote.
+ *
+ * THE BASE ROW IS THE POINT OF THE GATE. `chain:base` was pre-declared in
+ * `cohortDefs` while n was 0 — precisely so it could never be added ad hoc once
+ * the data looked good — and it currently holds 2 hits / 0 misses. A tally is
+ * a percentage a reader can do in their head, so below the gate this renders
+ * `n of needed` and NOTHING else. It also assumes nothing about Base ever
+ * clearing it: the row states the sample it has, and if Base pools stay
+ * efficient and never produce drift, "no arrows" is a finding about Base, not a
+ * broken desk.
+ */
+function EvidencePanel({ cohorts }: { cohorts: CohortRead }) {
+  // An unreadable feed is NOT "no edge" (see cohort-read.ts ②). The honest
+  // answer and the alarming one look identical from outside unless we say which.
+  if (cohorts.status !== "ok") {
+    return (
+      <section
+        className="mt-6 rounded-xl border p-6"
+        style={{ borderColor: BORDER, backgroundColor: SURFACE }}
+      >
+        <div className="mb-2 font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
+          // the evidence
+        </div>
+        <div className="font-mono text-[14px]" style={{ color: AMBER }}>
+          Couldn&apos;t read the arrow feed — no analysis was run.
+        </div>
+        <p className="mt-2 max-w-2xl text-[12.5px] leading-relaxed" style={{ color: MUTED }}>
+          This is the absence of an answer, not a result: it is neither
+          &ldquo;not enough data&rdquo; nor &ldquo;no edge found&rdquo;. The receipts below are served
+          separately and are unaffected. Reload in a minute.
+        </p>
+      </section>
+    );
+  }
+
+  const a = cohorts.analysis;
+  const o = a.overall;
+  const rh = a.cohorts.find((c) => c.key === "chain:robinhood");
+  const base = a.cohorts.find((c) => c.key === "chain:base");
+  // NOT "all time" when the feed was capped — that is the one phrase the data
+  // does not support. `rolling 7d` is a real time filter and stays as-is.
+  const basis =
+    a.window_basis === "rolling_7d"
+      ? "rolling 7d"
+      : cohorts.feed_capped
+        ? `newest ${cohorts.analyzed} arrows`
+        : "full record";
+
+  return (
+    <section
+      className="mt-6 rounded-xl border p-6 md:p-8"
+      style={{ borderColor: BORDER, backgroundColor: SURFACE }}
+    >
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+        <div className="font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
+          // the evidence · {basis} · {a.graded} graded
+        </div>
+        {/* Said out loud so it can never be silently read against the 7d hero. */}
+        <div className="font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
+          different window from the hit rate above
+        </div>
+      </div>
+
+      {o.ready && typeof o.pct === "number" ? (
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
+          <div className="font-mono text-4xl font-bold text-white tabular-nums">{o.pct}%</div>
+          <div className="font-mono text-[13px]" style={{ color: MUTED }}>
+            n={o.n}
+            {o.ci && <> · 95% CI {o.ci.lo}–{o.ci.hi}</>}
+            {typeof o.p_value === "number" && (
+              <> · p={formatP(o.p_value)} vs a coin flip</>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div className="font-mono text-3xl font-bold tabular-nums" style={{ color: AMBER }}>
+            warming up
+          </div>
+          <div className="mt-1 text-[13px]" style={{ color: MUTED }}>
+            {o.n} graded — not enough sample for a rate yet
+          </div>
+        </div>
+      )}
+
+      {o.ready && (
+        <p className="mt-3 max-w-2xl text-[12.5px] leading-relaxed" style={{ color: "#9aa1ac" }}>
+          One pre-declared test of the whole record against a 50% null — no
+          multiplicity to correct, because nothing was selected to produce it.
+          The splits below are a different matter: {a.tests_run} pre-registered
+          hypotheses were tested, and{" "}
+          <span style={{ color: a.validated.length > 0 ? GREEN : MUTED }}>
+            {a.validated.length}
+          </span>{" "}
+          survive Benjamini-Hochberg as best-of-{a.tests_run}
+          {a.exploratory.length > 0 && (
+            <> ({a.exploratory.length} more clear p&lt;0.05 alone but not the correction, so they are not quoted)</>
+          )}
+          .
+        </p>
+      )}
+
+      <div className="mt-5">
+        <div className="mb-1 font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
+          by desk
+        </div>
+        <DeskRow label="Robinhood Chain" chain="robinhood" stat={rh} />
+        <DeskRow label="Base" chain="base" stat={base} />
+      </div>
+
+      {base && !base.ready && (
+        <p className="mt-3 max-w-2xl text-[12.5px] leading-relaxed" style={{ color: MUTED }}>
+          The Base desk is expanding and does not have the sample yet — so it
+          gets no percentage here, not even a hits/misses tally, which is a rate
+          in disguise. It was declared as a split before it had any data, so it
+          can never be added later just because it looks good. If Base pools
+          simply stay efficient and never drift far enough to fire, that is a
+          result about Base — not a desk that is broken.
+        </p>
+      )}
+
+      {/* Said here rather than omitted: a reader who refreshes WILL see these
+          counts move down as well as up, and an unexplained shrinking record
+          reads as tampering. Cheaper to state the window than to be doubted. */}
+      {cohorts.feed_capped && (
+        <p className="mt-3 max-w-2xl text-[12.5px] leading-relaxed" style={{ color: MUTED }}>
+          This panel analysed the newest {cohorts.analyzed} arrows, not the entire
+          history — the feed we read is capped, so older arrows are excluded, and
+          the window slides forward as new arrows fire. That means these counts can
+          go down between two visits even though the record only ever grows. The
+          receipts below are a separate and shallower read of the same feed, so
+          they do not fill the gap.
+        </p>
+      )}
+
+      <div className="mt-5 border-t pt-3 font-mono text-[11px]" style={{ borderColor: BORDER, color: MUTED }}>
+        Wilson 95% intervals · exact two-sided binomial · BH FDR across the whole
+        family · cohorts fixed in code before the data.{" "}
+        <Link href="/api/hood/cohorts" className="underline" style={{ color: BLUE }}>
+          Full payload ↗
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+/** One venue line. Below the gate it shows a sample, never a rate — see above. */
+function DeskRow({ label, chain, stat }: { label: string; chain: HoodChain; stat?: CohortStat }) {
+  if (!stat) return null;
+  const accent = chain === "base" ? BASE_BLUE_TEXT : RH_GREEN;
+
+  return (
+    <div
+      className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t py-2.5"
+      style={{ borderColor: "#0f1218" }}
+    >
+      <span className="min-w-[9rem] font-mono text-[12px] font-semibold" style={{ color: accent }}>
+        {label}
+      </span>
+
+      {stat.ready && typeof stat.pct === "number" ? (
+        <>
+          <span className="font-mono text-[15px] font-bold text-white tabular-nums">{stat.pct}%</span>
+          <span className="font-mono text-[12px]" style={{ color: MUTED }}>n={stat.n}</span>
+          {stat.ci && (
+            <span className="font-mono text-[12px]" style={{ color: MUTED }}>
+              CI {stat.ci.lo}–{stat.ci.hi}
+            </span>
+          )}
+          {typeof stat.p_value === "number" && (
+            <span className="font-mono text-[12px]" style={{ color: MUTED }}>
+              p={formatP(stat.p_value)}
+            </span>
+          )}
+          {stat.survives_correction ? (
+            <span
+              className="rounded px-2 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider"
+              style={{ color: GREEN, backgroundColor: `${GREEN}18` }}
+            >
+              survives correction
+            </span>
+          ) : (
+            <span
+              className="rounded px-2 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider"
+              style={{ color: AMBER, backgroundColor: `${AMBER}18` }}
+              title="Reaches significance alone but not as best-of-N — not quotable as an edge."
+            >
+              not corrected-significant
+            </span>
+          )}
+        </>
+      ) : (
+        <>
+          <span className="font-mono text-[13px]" style={{ color: AMBER }}>expanding</span>
+          {/* n and needed ONLY. hits/misses here would publish the rate the gate withholds. */}
+          <span className="font-mono text-[12px]" style={{ color: MUTED }}>
+            {stat.n} of {stat.needed} graded — not enough sample yet
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Filters ──────────────────────────────────────────────────────────────────
 function FilterPills<K extends string>({
   label, value, onChange, opts,
@@ -569,6 +813,20 @@ function outcomeBadge(a: Arrow): { label: string; color: string } {
   if (a.outcome === "void") return { label: "VOID", color: AMBER };
   if (a.outcome === "informational") return { label: "INFO", color: MUTED };
   return { label: "—", color: MUTED };
+}
+
+/**
+ * p-values here run to 1e-08, which `toFixed` renders as a row of zeros and
+ * `String()` renders with a full mantissa. Two significant figures in
+ * scientific notation is the form a reader can actually compare.
+ */
+function formatP(p: number): string {
+  if (!Number.isFinite(p) || p < 0) return "—";
+  if (p >= 0.001) return p.toFixed(3);
+  const exp = Math.floor(Math.log10(p));
+  const mantissa = p / Math.pow(10, exp);
+  const sign = exp < 0 ? "-" : "+";
+  return `${mantissa.toFixed(1)}e${sign}${String(Math.abs(exp)).padStart(2, "0")}`;
 }
 
 function formatDuration(ms: number): string {
