@@ -10,12 +10,25 @@ import HubHome from "./_components/HubHome";
 import SubmitTool from "./_components/SubmitTool";
 import DashboardView from "./_components/DashboardView";
 import MarkdownOutput from "@/components/MarkdownOutput";
+// `import type`, not a value import: hub-registry.ts pulls in the Upstash client,
+// and this is a "use client" file. The type-only form is erased by tsc, so no KV
+// code follows `Coverage` into the browser bundle.
+import type { Coverage } from "@/lib/hub-registry";
 
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 const ERC20_BAL_ABI = [{
   name: "balanceOf", type: "function", stateMutability: "view",
   inputs: [{ name: "account", type: "address" }], outputs: [{ type: "uint256" }],
 }] as const;
+
+// Hover text for the `≥` that replaces a bare catalog count when the community
+// half of the registry came back short (#149). The distinction is the whole
+// point: a number we cannot stand behind has to LOOK different from one we can,
+// and "≥" is the convention already used for partial wallet reads (#211/#212).
+const COVERAGE_TITLE =
+  "Part of the community registry could not be read, so this is a lower bound — " +
+  "there are at least this many tools, possibly more. The first-party catalog is " +
+  "always complete; only community submissions can be short.";
 
 // ─── Tool registry ──────────────────────────────────────────────────────────
 
@@ -1385,6 +1398,18 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
   const [preload, setPreload] = useState<{ toolId: string; data: ToolResult } | null>(null);
   const [usage, setUsage]     = useState<Record<string, number>>({});
   const [communityTools, setCommunityTools] = useState<Tool[]>([]);
+  /**
+   * How much of the COMMUNITY half of the catalog we actually read (#149).
+   *
+   * Starts `unavailable`, not `complete`: before the fetch resolves we have not
+   * read the registry, and the header renders on that first paint. Defaulting
+   * optimistically would print an unqualified count during every load and, on a
+   * failed load, leave it printed.
+   *
+   * The first-party half is compiled into the bundle, so it is never short —
+   * only this half can be, which is why one flag covers the whole count.
+   */
+  const [communityCoverage, setCommunityCoverage] = useState<Coverage>("unavailable");
   const [source, setSource] = useState<SourceFilter>("all"); // v2 sidebar: provenance filter
   const [price, setPrice]   = useState<PriceFilter>("all");  // v2 sidebar: price bucket
   const searchRef             = useRef<HTMLInputElement>(null);
@@ -1499,32 +1524,42 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
     // External tools (builder hosts the endpoint; Hub proxies + forwards payment).
     // no-store: the registry is mutable (submit/delete) — a stale list would keep
     // showing a tool the creator just removed, so never serve a cached copy here.
+    // ⚠ A FAILED READ IS NOT AN EMPTY REGISTRY (#149). The three fallbacks below
+    // (`!r.ok`, a missing `tools`, the `.catch`) each produce the same `[]` as a
+    // genuinely empty community registry, and the header then prints a confident
+    // "N tools" that is short by however many we could not read. `coverage` —
+    // published by the route as of #149 — is what tells those apart, so it is
+    // carried out of here rather than discarded. An older response without the
+    // field is treated as `unavailable`, not assumed complete.
     const external = fetch("/api/hub/tools", { cache: "no-store" })
-      .then(r => r.ok ? r.json() : { tools: [] })
-      .then((d: { tools: Registered[] }): Tool[] => (d.tools ?? []).map(r => ({
-        id:             r.id,
-        name:           r.name,
-        cat:            asCat(r.category),
-        price:          r.price,
-        agents:         ["blue"],
-        desc:           r.description,
-        inputs:         r.inputs.map(i => ({ key: i.key, label: i.label, placeholder: i.placeholder, required: !!i.required })),
-        verified:       r.verified,
-        aiReady:        r.aiReady,
-        builderAddress: r.builderAddress,
-        releasedAt:    r.submittedAt,
-        source:         "external",
-        status:         r.status ?? "live",
-        creatorHandle:  r.agentName || shortAddr(r.builderAddress),
-        logoUrl:        r.logoUrl,
-        callCount:      r.callCount,
-        // Route through Hub proxy (forwards to builder endpoint + tracks usage/revenue)
-        callPath:       `/api/hub/tools/${r.id}/call`,
-        x402Body:       r.priceUSDC > 0
-                          ? (vals: Record<string, string>) => vals as Record<string, unknown>
-                          : undefined,
-      })))
-      .catch((): Tool[] => []);
+      .then(r => r.ok ? r.json() : { tools: [], coverage: "unavailable" })
+      .then((d: { tools: Registered[]; coverage?: Coverage }) => {
+        setCommunityCoverage(d.coverage ?? "unavailable");
+        return (d.tools ?? []).map((r): Tool => ({
+          id:             r.id,
+          name:           r.name,
+          cat:            asCat(r.category),
+          price:          r.price,
+          agents:         ["blue"],
+          desc:           r.description,
+          inputs:         r.inputs.map(i => ({ key: i.key, label: i.label, placeholder: i.placeholder, required: !!i.required })),
+          verified:       r.verified,
+          aiReady:        r.aiReady,
+          builderAddress: r.builderAddress,
+          releasedAt:     r.submittedAt,
+          source:         "external",
+          status:         r.status ?? "live",
+          creatorHandle:  r.agentName || shortAddr(r.builderAddress),
+          logoUrl:        r.logoUrl,
+          callCount:      r.callCount,
+          // Route through Hub proxy (forwards to builder endpoint + tracks usage/revenue)
+          callPath:       `/api/hub/tools/${r.id}/call`,
+          x402Body:       r.priceUSDC > 0
+                            ? (vals: Record<string, string>) => vals as Record<string, unknown>
+                            : undefined,
+        }));
+      })
+      .catch((): Tool[] => { setCommunityCoverage("unavailable"); return []; });
 
     // NOTE: Hosted tools (AI-tool / API-wrapper) are intentionally NOT loaded into
     // the marketplace grid right now — the backend (/api/hub/hosted + community
@@ -1692,8 +1727,15 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
             <span className="font-mono text-[10.5px]" style={{ color: "#64748B" }}>
               AI tools · multi-agent · x402 · Base
             </span>
-            <span className="ml-auto font-mono text-[10.5px]" style={{ color: "#94A3B8" }}>
-              {allTools.length} tools
+            {/* `≥` when the community half was short — the same lower-bound
+                convention the wallet tables use for a partial read (#211/#212).
+                An unqualified count here would be an assertion we cannot make. */}
+            <span
+              className="ml-auto font-mono text-[10.5px]"
+              style={{ color: "#94A3B8" }}
+              title={communityCoverage === "complete" ? undefined : COVERAGE_TITLE}
+            >
+              {communityCoverage === "complete" ? "" : "≥"}{allTools.length} tools
             </span>
           </div>
         )}
@@ -1706,7 +1748,13 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
           {/* Header */}
           <div className="px-4 min-h-[56px] py-2 flex items-center gap-3 border-b border-[#1A1A2E] shrink-0">
             <p className="font-mono font-semibold text-[10.5px] tracking-[0.14em]" style={{ color: "#E2E8F0" }}>// MARKETPLACE</p>
-            <span className="font-mono text-[9.5px]" style={{ color: "#64748B" }}>{filtered.length} of {allTools.length}</span>
+            <span
+              className="font-mono text-[9.5px]"
+              style={{ color: "#64748B" }}
+              title={communityCoverage === "complete" ? undefined : COVERAGE_TITLE}
+            >
+              {filtered.length} of {communityCoverage === "complete" ? "" : "≥"}{allTools.length}
+            </span>
           </div>
 
           {/* Filters — scrollable so the List / Creator actions stay pinned below */}

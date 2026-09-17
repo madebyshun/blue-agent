@@ -33,7 +33,7 @@ import { AGENT_TOOLS } from "@/lib/agent-tools";
 import {
   getHostedTool,
   putHostedTool,
-  listPublicHostedTools,
+  readPublicHostedTools,
   hostedSiweMessage,
   toPublicHostedTool,
   type HostedTool,
@@ -50,10 +50,30 @@ const NATIVE_IDS = new Set(AGENT_TOOLS.map(t => t.id));
 // ─── GET — list hosted tools (secrets stripped) ───────────────────────────────
 
 export async function GET() {
-  const tools = await listPublicHostedTools();
-  return NextResponse.json({ tools, count: tools.length }, {
-    headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
-  });
+  const read = await readPublicHostedTools();
+  // Twin of /api/hub/tools: `count` is a FLOOR unless coverage === "complete",
+  // and a KV outage must NOT be published as an empty hosted registry (#149).
+  //
+  // The cache header is now conditional on that. An incomplete read is the one
+  // thing we must never hand to the CDN: a 60s s-maxage on a throttled Upstash
+  // read pins "0 hosted tools" in front of every visitor for a minute, and
+  // stale-while-revalidate keeps serving it for five more.
+  const cacheable = read.coverage === "complete";
+  return NextResponse.json(
+    {
+      tools:    read.tools,
+      count:    read.tools.length,   // ⚠ a FLOOR unless coverage === "complete"
+      coverage: read.coverage,
+      unreadableSlugs: read.unreadableSlugs,
+    },
+    {
+      headers: {
+        "Cache-Control": cacheable
+          ? "public, s-maxage=60, stale-while-revalidate=300"
+          : "no-store",
+      },
+    },
+  );
 }
 
 // ─── POST — register a hosted tool ────────────────────────────────────────────

@@ -121,6 +121,17 @@ export function toPublicHostedTool(t: HostedTool): PublicHostedTool {
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Master index slugs, collapsing an unreadable index into `[]`.
+ *
+ * Sole remaining caller is `removeHostedTool`, where that collapse is CORRECT
+ * and load-bearing: on an unreadable index the empty list makes the `includes`
+ * guard false, so we skip the `kvSet` and never overwrite the master list of
+ * every hosted tool with a truncated copy. It fails CLOSED.
+ *
+ * Anything that LISTS or COUNTS hosted tools must use `readPublicHostedTools()`
+ * instead — there the identical collapse is the #149 bug.
+ */
 export async function listHostedSlugs(): Promise<string[]> {
   return (await kvGet<string[]>(K.index)) ?? [];
 }
@@ -168,13 +179,57 @@ export async function getPublicHostedTool(slug: string): Promise<PublicHostedToo
   return t ? toPublicHostedTool(t) : null;
 }
 
-/** Every hosted tool, secrets stripped. */
-export async function listPublicHostedTools(): Promise<PublicHostedTool[]> {
-  const slugs = await listHostedSlugs();
-  if (slugs.length === 0) return [];
-  const items = await Promise.all(slugs.map(getHostedTool));
-  return items.filter((t): t is HostedTool => !!t).map(toPublicHostedTool);
+/** The whole hosted marketplace, plus what we could NOT see of it. */
+export interface HostedRegistryRead {
+  /** The tools we could actually read. Never a claim that this is all of them. */
+  tools:    PublicHostedTool[];
+  coverage: Coverage;
+  /** slugs the master index listed but whose record read FAILED (≠ absent). */
+  unreadableSlugs: string[];
 }
+
+/**
+ * Every hosted tool, honestly. Secrets stripped.
+ *
+ * Same two collapse points as the external half, fixed the same way. This half
+ * currently has no marketplace-grid consumer (HubView deliberately does not load
+ * hosted tools yet), but `/api/hub/hosted` is a public endpoint that publishes a
+ * `count`, and the two registries drifting apart is precisely how #150 part 3
+ * happened. Fix both or neither.
+ */
+export async function readPublicHostedTools(): Promise<HostedRegistryRead> {
+  const idx = await kvGetProbe<string[]>(K.index);
+  if (idx.status === "error") {
+    return { tools: [], coverage: "unavailable", unreadableSlugs: [] };
+  }
+
+  // A genuine miss IS an empty registry — nobody has ever hosted a tool.
+  const slugs = idx.status === "hit" ? idx.value ?? [] : [];
+  if (slugs.length === 0) return { tools: [], coverage: "complete", unreadableSlugs: [] };
+
+  const reads = await Promise.all(slugs.map(readHostedTool));
+
+  const tools: PublicHostedTool[] = [];
+  const unreadableSlugs: string[] = [];
+  let countersIncomplete = false;
+  reads.forEach((r, i) => {
+    if (r.status === "unavailable") { unreadableSlugs.push(slugs[i]); return; }
+    if (r.status === "missing") return;           // stale index entry — genuinely gone
+    tools.push(toPublicHostedTool(r.tool));
+    if (r.tool.callCount === null || r.tool.earnedTotal === null) countersIncomplete = true;
+  });
+
+  return {
+    tools,
+    coverage: unreadableSlugs.length > 0 || countersIncomplete ? "partial" : "complete",
+    unreadableSlugs,
+  };
+}
+
+// NOTE: no `listPublicHostedTools()` projection — same reason as the external
+// twin in hub-registry.ts. Its only caller published `.length` as a public
+// `count`. Take `.tools` at the call site, where the discarded `coverage` is
+// still in front of you.
 
 /** A wallet's hosted inventory, plus what we could NOT see of it. */
 export interface BuilderHostedToolsRead {
