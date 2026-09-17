@@ -407,36 +407,53 @@ export type OhlcTimeframe = "minute" | "hour" | "day";
  *   • usd_multiplier  — multiply o/h/l/c by this after (optional) inversion,
  *                       to convert raw ratio → USD when the counterparty is a
  *                       stablecoin ≈ $1 (or a known USD-priced token).      */
+/**
+ * OHLC candles for one pool, ALWAYS in USD for the side you ask for.
+ *
+ * ⚠️ #231 — THE `invert` OPTION THIS REPLACES WAS WRONG BY 333×, MEASURED.
+ *
+ * The old signature took `{ invert, usd_multiplier }` and the quote-side path
+ * did `1/candle × counterparty_current_usd`. That is only correct if GT returns
+ * the pool's base/quote EXCHANGE RATE. It does not — it returns the base
+ * token's USD PRICE, and `token=base|quote` picks which side that price is for.
+ *
+ * MEASURED 2026-09-17 against the live `INU / AAPL` pool on RH Chain
+ * (`0x7e271c40…648a`, AAPL on the quote side, spot $332.96):
+ *
+ *   GT default (token=base) close  = 0.004962   ← INU's USD price
+ *   base/quote ratio would be      = 0.0000149  ← what `invert` assumed
+ *   GT with token=quote     close  = 332.63     ← AAPL's USD price, correct
+ *
+ *   old code: 1/0.004962 × 0.004961 = $1.00   ← what we published for AAPL
+ *                    previous day   = $1.04
+ *                    day before     = $0.64
+ *
+ * So every quote-side series resolved to ≈$1.00 and wandered with the
+ * COUNTERPARTY's history, not the token's. AAPL at $333 was served as a
+ * dollar-ish flat line — which reads as a stablecoin chart, not as an obvious
+ * failure, and is why it survived in two paid tools (M2 ohlc, D5 correlations).
+ *
+ * `side` maps straight onto GT's own `token` param, so there is no arithmetic
+ * left to get wrong: ask for the side our token is on and the candles are that
+ * token's USD price.
+ */
 export async function poolOhlc(
   pool: string,
   timeframe: OhlcTimeframe = "hour",
   limit = 100,
-  options: { invert?: boolean; usd_multiplier?: number } = {},
+  options: { side?: "base" | "quote" } = {},
 ): Promise<Candle[] | null> {
+  const side = options.side ?? "base";
   const d = await fetchJson<OhlcvResp>(
-    `${GT}/pools/${pool.toLowerCase()}/ohlcv/${timeframe}?limit=${limit}`,
+    `${GT}/pools/${pool.toLowerCase()}/ohlcv/${timeframe}?limit=${limit}&token=${side}`,
     8000,
   );
   const rows = d?.data?.attributes?.ohlcv_list;
   if (!rows?.length) return null;
   // GeckoTerminal returns rows as [timestamp, open, high, low, close, volume]
   // Newest-first — flip to chronological (oldest-first) so charting is trivial.
-  const invert = !!options.invert;
-  const mul = options.usd_multiplier ?? 1;
-  return rows
-    .map(([t, o, h, l, c, v]) => {
-      if (invert) {
-        // 1/x flips high & low: max of 1/l vs 1/h → high
-        const io = safeInv(o), ic = safeInv(c);
-        const ih = safeInv(l), il = safeInv(h);
-        return { t, o: io * mul, h: ih * mul, l: il * mul, c: ic * mul, v };
-      }
-      return { t, o: o * mul, h: h * mul, l: l * mul, c: c * mul, v };
-    })
-    .reverse();
+  return rows.map(([t, o, h, l, c, v]) => ({ t, o, h, l, c, v })).reverse();
 }
-
-function safeInv(x: number): number { return x > 0 && Number.isFinite(x) ? 1 / x : 0; }
 
 // ─── OHLC math helpers (used by M2 summary + M5 arb history) ───────────────
 
