@@ -162,6 +162,23 @@ export const STATIC_KNOWLEDGE_DISCLAIMER =
 // env-controlled and the retry logic below preserves the full upstream
 // response body so this class of regression is grep-visible.
 //
+// ⚠️ `provider: null` HAS TWO CAUSES AND THEY LOOK IDENTICAL FROM THE OUTSIDE.
+// Measured 2026-09-17, after the same null-provider symptom flapped the 6h
+// semantic-smoke monitor and was misread as a repeat of the de-listing above:
+//
+//   (a) DE-LISTED — the id is gone from /v1/models. Error text is a 4xx with
+//       an "Invalid model provided" body. `getVirtualsCatalog()` catches this.
+//   (b) BUDGET STARVED — the id is present and healthy, but this model is a
+//       REASONING model and its reasoning is billed out of `max_tokens`
+//       without ever appearing in `content`. Error text is
+//       "empty response (content_len=0)" with finish_reason=length.
+//       That is OUR bug, not the provider's. See REASONING_HEADROOM_TOKENS.
+//
+// Discriminate before blaming Virtuals: `GET /v1/models` is unauthenticated
+// (see probeVirtuals), so checking whether the id is still listed costs one
+// curl and takes seconds. On 2026-09-17 the id WAS listed (198 models) and
+// trivial prompts answered 10/10 — every failure was (b).
+//
 // No web search on Virtuals; Venice remains the fallback for that.
 
 export const VIRTUALS_DEFAULT_MODEL = "deepseek-deepseek-v4-flash";
@@ -689,8 +706,55 @@ export const getAvailableVirtualsPresets = getAvailablePresets;
 /** Floor on `max_tokens` (all providers). Below ~400 tokens the model
  *  frequently truncates a JSON object mid-key, which — combined with
  *  reasoning models spending tokens inside `<think>…</think>` — is the
- *  #1 cause of "empty response" and "unparseable JSON" failures. */
+ *  #1 cause of "empty response" and "unparseable JSON" failures.
+ *
+ *  This floor is about ANSWER length only. The reasoning phase gets its
+ *  own budget — see REASONING_HEADROOM_TOKENS. */
 const MIN_MAX_TOKENS = 400;
+
+/**
+ * Extra `max_tokens` granted on top of whatever the caller asked for, to pay
+ * for the model's hidden reasoning phase.
+ *
+ * WHY THIS EXISTS — measured 2026-09-17, root cause of the flapping
+ * `RH RWA — Semantic Smoke` monitor:
+ *
+ * `deepseek-deepseek-v4-flash` (our VIRTUALS_DEFAULT_MODEL) is a REASONING
+ * model. Virtuals bills its reasoning inside `usage.completion_tokens` and
+ * spends it out of the SAME `max_tokens` pocket as the answer — but never
+ * returns it in `message.content`. So `max_tokens` is not "how long may the
+ * answer be", it is "reasoning + answer combined".
+ *
+ * A4 (`rh-stock-agent-brief`) asks for `maxTokens: 400`. Measured against the
+ * exact A4 prompt, 12 consecutive calls at `max_tokens: 400`:
+ *
+ *     8 / 12 returned finish_reason="length" with content_len=0
+ *     reasoning_tokens alone ranged 189 … 417   (avg 369)
+ *
+ * i.e. the reasoning phase ate the entire 400-token budget and the answer was
+ * truncated to nothing. The same prompt at 1000/1500/2000 was 8/8 clean at
+ * every budget. A second, unrelated analytic prompt at `max_tokens: 600` failed
+ * 3/6 the same way — so this was never A4-specific, it hit every caller whose
+ * prompt is complex enough to provoke real reasoning. Nine call sites pass
+ * ≤ 600.
+ *
+ * This was NOT a Virtuals outage, though it presented as one: the catalog lists
+ * the model (198 ids, id present, 2026-09-17) and trivial prompts answer 10/10.
+ * The old error text said only "empty response (content_len=0)", which reads as
+ * "the gateway returned nothing" and sent three investigations at the provider.
+ * The throw below now names the real cause.
+ *
+ * Sizing: 1200. Peak reasoning observed across 36 probes was 1061 tokens (at a
+ * 2000 budget); reasoning grows with the offered budget but saturates around
+ * ~1100. Cost is ~$0.0001/call — and note the failure mode was the EXPENSIVE
+ * one: a starved call still bills the full 400 tokens and returns nothing.
+ *
+ * Safe for non-reasoning models: they emit no reasoning tokens, stop at
+ * `finish_reason: "stop"`, and are billed only for what they generate, so the
+ * headroom is never spent. That matters because `VIRTUALS_MODEL` can point
+ * anywhere in the catalog — this fix is not coupled to one model id.
+ */
+const REASONING_HEADROOM_TOKENS = 1200;
 
 /** Strip a leading `<think>…</think>` block. Deepseek-R1 and derivatives
  *  emit reasoning wrapped in this tag; when the model burns most of the
@@ -730,7 +794,11 @@ export async function callVirtualsLLM(opts: {
     throw new Error(`Virtuals model "${model}" not in catalog (catalog_size=${catalog.size}). Check the preset spec — this class of bug fired 3 times before catalog-driven validation landed.`);
   }
   const msgs = opts.messages ?? (opts.user != null ? [{ role: "user", content: opts.user }] : []);
-  const maxTokens = Math.max(MIN_MAX_TOKENS, opts.maxTokens ?? 1000);
+  // The caller's budget is for the ANSWER. Reasoning models spend from the same
+  // pocket without ever surfacing that spend in `content`, so the wire value is
+  // answer-budget + reasoning headroom. See REASONING_HEADROOM_TOKENS.
+  const answerTokens = Math.max(MIN_MAX_TOKENS, opts.maxTokens ?? 1000);
+  const maxTokens = answerTokens + REASONING_HEADROOM_TOKENS;
   const res = await fetch("https://compute.virtuals.io/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -770,13 +838,48 @@ export async function callVirtualsLLM(opts: {
     // survived 4 CI runs.
     throw new Error(`Virtuals ${res.status} model=${model}: ${(await res.text()).slice(0, 400)}`);
   }
-  const d = (await res.json()) as { choices?: { message?: { content?: string; reasoning_content?: string } }[] };
-  const rawContent = d.choices?.[0]?.message?.content ?? "";
+  const d = (await res.json()) as {
+    choices?: {
+      finish_reason?: string;
+      message?: { content?: string; reasoning_content?: string; reasoning?: string };
+    }[];
+    usage?: { completion_tokens?: number; completion_tokens_details?: { reasoning_tokens?: number } };
+  };
+  const choice = d.choices?.[0];
+  const rawContent = choice?.message?.content ?? "";
   // Fallback: if content is empty but the upstream surfaced a separate
   // `reasoning_content` field (some deepseek gateways split them), use
   // it. Otherwise strip a leading think block from `content`.
-  const text = stripThinkBlock(rawContent) || d.choices?.[0]?.message?.reasoning_content?.trim() || "";
-  if (!text) throw new Error(`Virtuals empty response (content_len=${rawContent.length} model=${model})`);
+  //
+  // NOTE (measured 2026-09-17): on Virtuals this fallback never fires. The
+  // gateway names the field `reasoning` (alongside `reasoning_details`), not
+  // `reasoning_content`. That is deliberately NOT read here: when the budget
+  // runs out, `reasoning` holds chain-of-thought that was cut off mid-thought,
+  // and handing a truncated draft to `extractJsonObject` would surface a
+  // half-formed answer the model had not committed to. Per CLAUDE.md, missing
+  // context must degrade to "unavailable", not to a guess. It is measured
+  // below for the error message only.
+  const text = stripThinkBlock(rawContent) || choice?.message?.reasoning_content?.trim() || "";
+  if (!text) {
+    // Name the real cause. "empty response (content_len=0)" alone reads as a
+    // provider outage and sent three separate investigations at Virtuals; the
+    // actual failure was our own token budget being eaten by the hidden
+    // reasoning phase. finish_reason + reasoning_tokens/max_tokens is the pair
+    // that discriminates the two, so it goes in the string the attempts trace
+    // stores and the CI log prints.
+    const reasoningTokens = d.usage?.completion_tokens_details?.reasoning_tokens ?? null;
+    const starved = choice?.finish_reason === "length";
+    throw new Error(
+      `Virtuals empty response (content_len=${rawContent.length} model=${model}` +
+        ` finish_reason=${choice?.finish_reason ?? "unknown"}` +
+        ` reasoning_tokens=${reasoningTokens ?? "unknown"}/${maxTokens}` +
+        ` reasoning_len=${(choice?.message?.reasoning ?? "").length}` +
+        (starved
+          ? " cause=budget_exhausted_by_reasoning — OUR max_tokens is too low for this model, not a gateway outage"
+          : " cause=gateway_returned_no_content") +
+        `)`,
+    );
+  }
   return text;
 }
 
