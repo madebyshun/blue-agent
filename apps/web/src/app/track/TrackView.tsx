@@ -18,6 +18,13 @@
  * tally a `ready:false` cohort carries would publish a readable 100% off n=2 —
  * the exact number the gate exists to withhold. <DeskRow> therefore renders
  * `n of needed` and nothing else until the sample earns a rate.
+ *
+ * THIS COMPONENT IS NEVER RENDERED WITH AN UNREAD FEED (#264). `page.tsx` reads
+ * through `getPublicTrackRecordProbe` and branches to <TrackUnavailable/> below
+ * when KV cannot be reached, so `record` here always describes arrows that were
+ * actually fetched. An empty `receipts.arrows` now means one thing only: no
+ * arrow has fired. It used to mean that OR "the database is down", and the two
+ * rendered identically on the page whose whole job is to prove the first is false.
  */
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -47,12 +54,27 @@ type SortKey = "newest" | "oldest" | "duration";
 
 const PAGE_SIZE = 50;
 
+/**
+ * How much of the record these receipts actually are — measured by the reader,
+ * never assumed here. `truncated` is the only flag the copy may gate on; the
+ * two causes travel with it so a maintainer can tell "raise the limit" from
+ * "the blob is capped on purpose".
+ */
+export type ReceiptWindow = {
+  shown: number;
+  truncated: boolean;
+  feed_capped: boolean;
+  limit_capped: boolean;
+};
+
 export default function TrackView({
   record,
   cohorts,
+  window: win,
 }: {
   record: PublicTrackRecord;
   cohorts: CohortRead;
+  window: ReceiptWindow;
 }) {
   const arrows = record.receipts.arrows;
   const [outcome, setOutcome] = useState<OutcomeFilter>("all");
@@ -99,12 +121,29 @@ export default function TrackView({
     <div className="mx-auto max-w-5xl px-4 py-10 md:py-14">
       <Header arrowsToday={record.receipts.arrows_today} />
       <HeadlineHero headline={record.headline} />
-      <MetricStrip record={record} filteredCount={filtered.length} />
+      <MetricStrip record={record} filteredCount={filtered.length} win={win} />
       <EvidencePanel cohorts={cohorts} />
 
+      {/*
+        The label is DERIVED, never written in. It read "every graded arrow ·
+        forever" while the table held the newest 200 of a 532-arrow index
+        (measured in production 2026-09-17) — the same overclaim #265 removed
+        from the evidence panel, still live one section below it. Same rule as
+        there: a capped read may not call itself the full record.
+      */}
       <div className="mb-3 mt-10 font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
-        // every graded arrow · forever · misses included
+        {win.truncated
+          ? `// newest ${win.shown} arrows · misses included`
+          : "// every graded arrow · forever · misses included"}
       </div>
+      {win.truncated && (
+        <p className="mb-4 max-w-2xl text-[12px] leading-relaxed" style={{ color: MUTED }}>
+          Older arrows exist and are not in this table. The window slides as new
+          arrows fire, so these counts can fall between two visits even though the
+          record only ever grows — and the panel above analysed a{" "}
+          <em>different</em> slice, so the two are not expected to match.
+        </p>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <FilterPills
@@ -175,6 +214,70 @@ export default function TrackView({
       <Footer meta={record.meta} />
 
       {rulesOpen && <GradingRulesModal onClose={() => setRulesOpen(false)} />}
+    </div>
+  );
+}
+
+// ── The unreadable-feed page (#264) ──────────────────────────────────────────
+/**
+ * What /track renders when the arrow feed could not be read.
+ *
+ * THE POINT IS WHAT IS **NOT** HERE: no table, no zero, no "0 graded", no
+ * "warming up". Every one of those is an ANSWER, and we do not have one. The
+ * bug this replaces produced a complete, confident, well-formed page asserting
+ * `arrows: []` / `total_graded: 0` — i.e. Blue Hood has never fired a signal —
+ * on the single page whose entire purpose is to prove that it has.
+ *
+ * It takes down the whole page rather than just the table because the two reads
+ * behind /track hit the SAME hydrated blob: a headline hit-rate with no receipts
+ * under it is worse than nothing here. This page's claim IS its evidence.
+ *
+ * Deliberately hook-free so `page.tsx` can render it from the server branch
+ * without the island ever mounting, and `reason` is shown verbatim — it comes
+ * from our own probe, not from user input, and a reader who can see *which*
+ * read failed can tell an outage from a deploy.
+ */
+export function TrackUnavailable({ reason }: { reason: string }) {
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-10 md:py-14">
+      <Header arrowsToday={0} />
+      <section
+        className="mt-6 rounded-xl border p-6 md:p-8"
+        style={{ borderColor: BORDER, backgroundColor: SURFACE }}
+      >
+        <div className="mb-2 font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
+          // the receipts
+        </div>
+        <div className="font-mono text-2xl font-bold" style={{ color: AMBER }}>
+          Couldn&apos;t read the arrow feed.
+        </div>
+        <p className="mt-3 max-w-2xl text-[13px] leading-relaxed" style={{ color: "#9aa1ac" }}>
+          This is the absence of an answer, not a result. It does{" "}
+          <strong className="text-white">not</strong> mean zero arrows fired, and
+          it does not mean the track record is empty — we simply could not reach
+          the feed that stores it, so there is nothing here we are willing to
+          show you. The record itself is append-only and unaffected.
+        </p>
+        <p className="mt-3 max-w-2xl text-[13px] leading-relaxed" style={{ color: MUTED }}>
+          The hit rate is deliberately hidden too. A percentage with no receipts
+          underneath it is exactly the claim this page exists to refuse, so when
+          the evidence is unreadable the headline goes with it. Reload in a
+          minute.
+        </p>
+        <div
+          className="mt-5 border-t pt-3 font-mono text-[11px]"
+          style={{ borderColor: BORDER, color: MUTED }}
+        >
+          read failed: {reason} ·{" "}
+          <Link href="/hood" className="underline" style={{ color: BLUE }}>
+            Live board ↗
+          </Link>{" "}
+          ·{" "}
+          <Link href="/docs/blue-hood#grading" className="underline" style={{ color: BLUE }}>
+            Grading rules ↗
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }
@@ -313,7 +416,15 @@ function RecordCurve({ curve }: { curve: Extract<PublicTrackRecord["headline"]["
 }
 
 // ── Metric strip (no pct leak when not ready) ────────────────────────────────
-function MetricStrip({ record, filteredCount }: { record: PublicTrackRecord; filteredCount: number }) {
+function MetricStrip({
+  record,
+  filteredCount,
+  win,
+}: {
+  record: PublicTrackRecord;
+  filteredCount: number;
+  win: ReceiptWindow;
+}) {
   const arrows = record.receipts.arrows;
   const graded = arrows.filter((a) => a.status === "graded");
   const durations = graded
@@ -326,9 +437,18 @@ function MetricStrip({ record, filteredCount }: { record: PublicTrackRecord; fil
   const hitRate = hr.ready ? `${hr.pct}%` : "n/a";
   const hitSub = hr.ready ? `${hr.graded} graded · 7d` : `warming up · ${hr.graded}/${hr.needed}`;
 
+  // A count over a truncated list is a LOWER BOUND, and the two cards that
+  // report one say so with "≥". Printing a bare `200` under a label like
+  // "SIGNALS LOGGED" reads as the lifetime total; it is the newest slice of it.
+  const bound = win.truncated ? "≥" : "";
+
   const items: { label: string; value: string; sub?: string }[] = [
     { label: "HIT RATE 7D", value: hitRate, sub: hitSub },
-    { label: "TOTAL GRADED", value: String(graded.length), sub: `${filteredCount} match filter` },
+    {
+      label: "TOTAL GRADED",
+      value: `${bound}${graded.length}`,
+      sub: `${filteredCount} match filter`,
+    },
     {
       label: "AVG DURATION",
       value: durations.length ? formatDuration(avgDurationMs) : "—",
@@ -336,8 +456,8 @@ function MetricStrip({ record, filteredCount }: { record: PublicTrackRecord; fil
     },
     {
       label: "SIGNALS LOGGED",
-      value: String(arrows.length),
-      sub: "engine-fired · non-test",
+      value: `${bound}${arrows.length}`,
+      sub: win.truncated ? "engine-fired · newest slice" : "engine-fired · non-test",
     },
   ];
 
@@ -403,10 +523,21 @@ function EvidencePanel({ cohorts }: { cohorts: CohortRead }) {
         <div className="font-mono text-[14px]" style={{ color: AMBER }}>
           Couldn&apos;t read the arrow feed — no analysis was run.
         </div>
+        {/*
+          This paragraph used to end "The receipts below are served separately
+          and are unaffected." That was false in the most damaging possible way:
+          both reads come from the SAME hydrated blob (`bh:arrow:hydrated`), so
+          whatever broke this analysis almost certainly broke the receipts too —
+          and back then the receipts answered a failed read with an empty table
+          instead of an error. The sentence therefore vouched for the one number
+          on the page that was actually fabricated. #264.
+        */}
         <p className="mt-2 max-w-2xl text-[12.5px] leading-relaxed" style={{ color: MUTED }}>
           This is the absence of an answer, not a result: it is neither
-          &ldquo;not enough data&rdquo; nor &ldquo;no edge found&rdquo;. The receipts below are served
-          separately and are unaffected. Reload in a minute.
+          &ldquo;not enough data&rdquo; nor &ldquo;no edge found&rdquo;. The receipts below come
+          from the same feed, so if any are shown they were genuinely read — an
+          unreadable feed takes down this whole page rather than emptying the
+          table. Reload in a minute.
         </p>
       </section>
     );
