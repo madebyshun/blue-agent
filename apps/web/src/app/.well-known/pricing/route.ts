@@ -34,7 +34,14 @@ export async function GET() {
 
   const manifest = {
     version:     2,
-    description: "Blue Hub — 40 AI tools on Base, pay-per-call via x402 + USDC",
+    // DERIVED from the payload, not from TOOL_COUNT and never hand-typed. This
+    // line read "40 AI tools" for months while the same function was mapping
+    // over the live catalog three lines above — the file imported the truth and
+    // then ignored it. `routes.length` is also the RIGHT number here, which
+    // TOOL_COUNT would not be: the filter drops tools with no handler and the
+    // two $0.00 tools (priceUSDC 0 is falsy), so this manifest lists fewer
+    // tools than the catalog holds and now says so.
+    description: `Blue Hub — ${routes.length} paid AI tools on Base, pay-per-call via x402 + USDC`,
     network:     NETWORK,
     asset:       USDC_BASE,
     payTo:       PAY_TO,
