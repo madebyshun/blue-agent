@@ -52,17 +52,27 @@ function ScoreBar({ label, score, max }: { label: string; score: number; max: nu
   );
 }
 
-function detectStack(handle: string): string[] {
-  const h = handle.toLowerCase();
-  const tags: string[] = [];
-  if (h.includes("blue") || h.includes("agent")) tags.push("Base");
-  if (h.includes("bankr")) tags.push("Bankr LLM");
-  if (h.includes("langchain") || h.includes("lang")) tags.push("LangChain");
-  if (h.includes("vercel") || h.includes("ai")) tags.push("Vercel AI");
-  if (h.includes("kit")) tags.push("AgentKit");
-  if (tags.length === 0) tags.push("Base", "Bankr LLM");
-  return tags;
-}
+// `detectStack(handle)` was removed here on 2026-09-18. It guessed an agent's
+// tech stack by substring-matching its HANDLE — `includes("lang")` → "LangChain",
+// `includes("ai")` → "Vercel AI", `includes("kit")` → "AgentKit" — and when
+// nothing matched it fell through to `tags.push("Base", "Bankr LLM")`.
+//
+// Three things were wrong, in increasing order of seriousness:
+//   1. The fallback named Bankr as an agent's LLM provider. Bankr has been
+//      403-banned since 2026-07-20 and the account is suspended on every verb
+//      (re-measured 2026-09-18), so it is not a stack anyone runs on today.
+//   2. The fallback fired on NO evidence at all. "We could not detect anything"
+//      was rendered as two positive claims — the silent-zero shape, where absent
+//      data becomes an assertion instead of an absence.
+//   3. These are THIRD-PARTY agents. The tags render unlabelled next to the
+//      handle and XP, so they read as measured facts about someone else's
+//      software, from a string match on their name.
+//
+// There is no data source for "what stack does this agent use" — the score API
+// does not return one. Per CLAUDE.md, missing data is "unknown", and the honest
+// rendering of unknown is to show nothing. A heuristic here cannot be fixed by
+// making it cleverer; it can only be fixed by having a source. If one is ever
+// added, render it from that field, never from the handle.
 
 export default function AgentProfilePage() {
   const params = useParams();
@@ -84,8 +94,6 @@ export default function AgentProfilePage() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [handle]);
-
-  const stackTags = detectStack(handle);
 
   const dimensions = data
     ? [
@@ -149,14 +157,9 @@ export default function AgentProfilePage() {
                         ● {data.status.toUpperCase()}
                       </span>
                     </div>
-                    {/* Stack tags */}
-                    <div className="flex flex-wrap gap-1">
-                      {stackTags.map((tag) => (
-                        <span key={tag} className="font-mono text-[10px] text-slate-600 border border-[#1A1A2E] px-1.5 py-0.5 rounded">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
+                    {/* Stack tags removed 2026-09-18 — they were guessed from
+                        the handle string, not measured. See the note above
+                        detectStack's former definition at the top of this file. */}
                   </div>
                   <div className="text-right shrink-0">
                     <span className="font-mono text-4xl font-bold text-white">{data.xp}</span>

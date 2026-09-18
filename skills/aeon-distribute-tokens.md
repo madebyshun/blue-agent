@@ -1,18 +1,46 @@
 ---
 name: aeon-distribute-tokens
 description: |
-  Batch token payouts via the Bankr Wallet API with per-recipient idempotency, two-phase
-  resolve→execute, dry-run preview, and recovery from partial runs. Re-runs within the same UTC
-  day are a no-op for completed rows. Use for weekly contributor rewards, tip pools, leaderboard
-  payouts — any "pay N wallets X amount" flow where double-sending must be impossible.
-  Triggers: "distribute tokens", "pay contributors", "weekly payout", "send USDC to this list",
-  "tip these handles".
+  ⚠️ CANNOT RUN — the transfer rail this skill depends on is banned. Batch token payouts via
+  the Bankr Wallet API with per-recipient idempotency, two-phase resolve→execute, dry-run
+  preview, and recovery from partial runs. The design below is sound and is kept as a
+  specification, but every Bankr endpoint it calls answers 403, so it must NOT be offered as
+  an executable capability. If asked to "distribute tokens", "pay contributors", "run the
+  weekly payout", "send USDC to this list" or "tip these handles": say the payout rail is
+  unavailable and that reinstating it needs a different transfer rail. Do not attempt the
+  calls, and do not report a payout as sent.
 source: BankrBot/skills
 ---
 
 # aeon-distribute-tokens
 
-Production-grade batch payouts. State is keyed on `(list, recipient, utc_date)` so any re-run within the same day skips already-completed rows.
+> 🔴 **THIS SKILL CANNOT EXECUTE. Do not run it, and do not tell anyone a payout went out.**
+>
+> Every endpoint below lives on `api.bankr.bot`, and Blue Agent's Bankr account is suspended:
+>
+> ```
+> POST /token-launches/deploy  → 403
+> {"error":"Account suspended","banned":true,"banType":"restricted","reasonCode":"fraud"}
+> ```
+>
+> Measured 2026-09-06 on both `?chain=base` and `?chain=robinhood`; re-measured 2026-09-18.
+> The suspension is on the **account**, not on one hostname or one key — so a different
+> `BANKR_API_KEY` does not help, and neither does a different endpoint. Reads were carved
+> out as still-working on 2026-09-06 (`GET /token-launches` → 200); that carve-out **expired**
+> — `GET /v1/usage` answered 403 on 2026-09-18. A carve-out earned by one measurement is not
+> permanent, and `POST /wallet/transfer` was never in it.
+>
+> This file is retained as a **specification**, not as an instruction: the idempotency design
+> (state keyed on `(list, recipient, utc_date)`, persist-after-every-line) is the part worth
+> keeping for whatever rail replaces Bankr. Everything below describes how the payout *would*
+> work, in the past-conditional. Reinstating it is a rail change, not a config change.
+>
+> ⚠️ This matters more than a normal stale doc because `skills/` is concatenated into the
+> **system prompt** of the grounded `blue` commands. Left unmarked, a model reads the sections
+> below as a live runbook and will confidently narrate a payout that never happened — the
+> failure mode where absent execution is reported as a completed transfer.
+
+Batch payout design. State is keyed on `(list, recipient, utc_date)` so any re-run within the same day skips already-completed rows.
 
 ## Phases
 
@@ -103,6 +131,17 @@ Verdict line first: `COMPLETE` / `PARTIAL` / `FAILED` / `DRY_RUN` / `NOTHING_TO_
 
 `BANKR_API_KEY` with **Wallet API** enabled and **read-write** access. Read-only keys 403 at preflight.
 
+⚠️ This scope requirement is now unsatisfiable. The 403 at preflight no longer discriminates
+between a read-only key and a read-write one — the **account** is restricted, so every key
+returns the same 403 regardless of its scope. Do not read a 403 here as "wrong key" and go
+looking for a better one; there isn't one.
+
 ## Blue Agent usage
 
-Use for weekly $BLUEAGENT rewards distribution to community top builders. Pair with leaderboard data from `users.json` to auto-generate the recipients list.
+Weekly $BLUEAGENT rewards distribution to top community builders was the intended use, paired
+with leaderboard data from `users.json` to generate the recipients list.
+
+**It has never run on this rail and cannot be scheduled.** Do not promise a payout date, do not
+queue a run, and if a distribution is genuinely wanted, escalate to ShunTr as a rail decision —
+choosing a replacement transfer path moves real money and is not Claude's call. The leaderboard
+half still works; only the sending half is blocked.

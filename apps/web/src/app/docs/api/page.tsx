@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TOOL_COUNT } from "@/lib/agent-tools";
 import { DocHeader, H2, P, CodeBlock, Callout, CardGrid, Card, PrevNext } from "../_ui";
 
 export const metadata = { title: "API Reference — Blue Agent Docs" };
@@ -9,7 +10,12 @@ export default function ApiDoc() {
       <DocHeader
         eyebrow="Platform"
         title="API Reference"
-        lead="112 x402 endpoints on blueagent.dev. Pay per call in USDC on Base — no API keys, no subscription, no signup. Every Blue command and Hub tool is reachable over HTTP."
+        // Derived, not typed. This was the literal "112" — one past the real
+        // catalog, which is the kind of error a hand-typed number makes silently.
+        // The page is server-rendered, so importing the catalog costs no client
+        // bundle (a "use client" tree would pay ~16 kB gzipped — see
+        // lib/mcp-tools.ts header).
+        lead={`${TOOL_COUNT} x402 endpoints on blueagent.dev. Pay per call in USDC on Base — no API keys, no subscription, no signup. Every Blue command and Hub tool is reachable over HTTP.`}
       />
 
       <H2 id="base-url">Base URL</H2>

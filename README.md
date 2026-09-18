@@ -96,9 +96,17 @@ npm install -g @blueagent/cli
 ```
 
 ```bash
-export BANKR_API_KEY=your_key_here
+export VIRTUALS_API_KEY=your_key_here
 blueagent
 ```
+
+Inference runs through Virtuals (`compute.virtuals.io`). This line said
+`export BANKR_API_KEY` until 2026-09-18 — an instruction that could not work for
+anyone: Blue Agent's Bankr account has answered `403 {"banned":true}` on every
+verb since 2026-07-20, so the first grounded command a new user ran would fail
+with an auth error against a key they had just been told to set. A README is the
+first thing a stranger trusts, so a dead setup step costs more than a dead
+feature further down.
 
 Navigate with `↑ ↓ Enter`. Press `Esc` to go back.
 
@@ -114,8 +122,21 @@ Navigate with `↑ ↓ Enter`. Press `Esc` to go back.
 | **Trading** | whale-copy-signal · token-momentum-scanner |
 | **Content** | thread-intelligence · community-growth-playbook |
 | **Earn** | lp-analyzer · cross-protocol-yield |
-| **Tasks** | post-task · accept · submit · list |
-| **Bankr** | swap · transfer · portfolio · launch-token |
+
+Two categories the TUI still renders are **not** listed above, because they do not
+work and listing them as features is how a stranger loses an afternoon:
+
+- **Bankr** (`swap · transfer · portfolio · launch-token`) — routed through Blue
+  Agent's Bankr account, which has answered `403 {"banned":true,"banType":"restricted"}`
+  on every verb since 2026-07-20. Reads were carved out as still-working when
+  measured on 2026-09-06; that carve-out expired — `GET /v1/usage` answered 403 on
+  2026-09-18. The ban is account-level, so a different API key does not help.
+- **Tasks** (`post-task · accept · submit · list`) — the microtask marketplace was
+  retired on 2026-09-02 and its six API routes were deleted, so these commands
+  call endpoints that no longer exist.
+
+Both still ship in `@blueagent/cli`. Removing them from the package is a published-package
+change, not a README edit, and is tracked separately.
 
 ### System check
 

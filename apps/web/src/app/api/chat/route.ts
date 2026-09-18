@@ -216,13 +216,34 @@ function creditErrorSSE(needed: number, balance: number): Response {
 // is the budget guard so even an LLM that ignores the prompt can't run away
 // into a 2000-token essay for a one-line price question. Verbose intents
 // ("explain in detail", "deep dive") use longer answers but still fit.
-const MODELS: Record<string, { id: string; maxTokens: number }> = {
-  fast:     { id: "claude-haiku-4-5",   maxTokens: 768  },  // was 1024
-  pro:      { id: "claude-sonnet-4-6",  maxTokens: 1200 },  // was 2048
-  max:      { id: "claude-opus-4-7",    maxTokens: 2400 },  // real Opus 4.7 (Bankr serves it)
-  deepseek: { id: "deepseek-v4-flash",  maxTokens: 2400 },  // DeepSeek V4 Flash, 1M ctx — via Bankr
-  gemini:   { id: "gemini-2.5-flash",   maxTokens: 2400 },  // Gemini 2.5 Flash — via Bankr
-  kimi:     { id: "kimi-k2-6",          maxTokens: 2400 },  // Kimi K2, long context — via Bankr
+// ⚠️ This is a TOKEN BUDGET table and nothing else. Each entry used to carry an
+// `id` ("claude-opus-4-7", "gemini-2.5-flash", …) annotated "via Bankr" / "Bankr
+// serves it". Every one of those `id`s was DEAD: the only read of this map is
+// `(MODELS[tier] ?? MODELS.pro).maxTokens` at the Virtuals branch below — the
+// `id` field was never read by anything, ever. The model id actually sent is
+// resolved from VIRTUALS_PRESETS (`presetForTier?.model ?? VIRTUALS_CHAT_DEFAULT_MODEL`).
+// So the field named a provider that has been 403-banned since 2026-07-20 for
+// requests it does not shape. Dropped 2026-09-18; the numbers are untouched.
+//
+// The KEYS are also legacy and deliberately left alone. The live preset ids are
+// fast · free · balanced · deep · private · flash · grok · search, so only `fast`
+// still matches; the other seven fall through to `pro` (1200). `pro`/`max`/
+// `deepseek`/`gemini`/`kimi` are unreachable from the web client but the route
+// trusts a client-supplied `tier`, so a direct API caller can still hit them —
+// removing the keys would silently cut those callers from 2400 to 1200. Changing
+// the budget is a separate, measured decision, not a rider on a comment fix.
+//
+// max_tokens is lowered for Pro/Max to enforce the concise default: the system
+// prompt's "Output style" section pushes toward short answers, and this is the
+// budget guard so a model that ignores the prompt still can't run away into a
+// 2000-token essay for a one-line price question.
+const MODELS: Record<string, { maxTokens: number }> = {
+  fast:     { maxTokens: 768  },  // was 1024
+  pro:      { maxTokens: 1200 },  // was 2048 — also the fallback for every unlisted tier
+  max:      { maxTokens: 2400 },
+  deepseek: { maxTokens: 2400 },
+  gemini:   { maxTokens: 2400 },
+  kimi:     { maxTokens: 2400 },
 };
 
 // ─── Model display names ──────────────────────────────────────────────────────
@@ -235,25 +256,34 @@ const VENICE_DISPLAY: Record<string, string> = {
   "qwen3-5-9b":                         "Qwen 3.5 9B (Venice) · Free",
 };
 
-// Pre-merge task #4 — label bug. Bankr was banned 2026-07-18; Blue
-// Chat now routes every non-venice tier to `VIRTUALS_CHAT_DEFAULT_MODEL`
-// via Virtuals (see task-B commit cfaf061). The old BANKR_DISPLAY map
-// was a LIE — it kept showing "Haiku 4.5 · Fast" while every request
-// was actually hitting Sonnet 5 via Virtuals. Kept as the map's shape
-// (tier → label) but every entry now points at the ACTUAL routing so
-// UI + system-prompt `modelLine` never disagree with what ran.
+// Pre-merge task #4 — label bug. Bankr was banned 2026-07-18; Blue Chat routes
+// every non-venice tier through Virtuals. The old BANKR_DISPLAY map was a LIE —
+// it showed "Haiku 4.5 · Fast" while every request actually hit Sonnet 5.
 //
-// When we later split Virtuals tiers (e.g. `fast → haiku, pro →
-// sonnet, max → opus` on Virtuals), swap this for a per-tier map and
-// mirror it on the client side. Better still: pipe the real model via
-// an SSE `model_used` event so the client renders response-metadata
-// truth instead of a shared hardcoded map. Follow-up task.
+// ⚠️ That fix then REGRESSED into the same lie, and this is the instructive part.
+// The 2026-07 repair hardcoded `VIRTUALS_CHAT_DEFAULT_MODEL` because, at the
+// time, every Virtuals tier really did collapse to one model — the constant was
+// TRUE when written. The catalog-driven preset picker (#120) later gave each
+// preset its OWN model, and the request path below resolves it per-preset:
+//
+//     const virtualsModel = presetForTier?.model ?? VIRTUALS_CHAT_DEFAULT_MODEL;
+//
+// …while this label kept returning the default. So `balanced`, `deep`, `private`,
+// `flash` and `grok` — five of the eight live presets — ran one model and
+// announced another. And `modelLine` does not merely display it: it instructs
+// the model to answer "what model are you?" *precisely* with this name, so the
+// wrong value was spoken to the user in the first person.
+//
+// It is the same bug twice because a COPY of a routing decision was stored
+// beside the routing decision. Fixed by deriving from the same source the
+// request path uses, so the two cannot disagree again — if a preset's model
+// changes, both move together, with no third place to update.
 function getModelLabel(tier: string, modelId?: string, provider?: string): string {
-  void tier;
   if (provider === "venice" && modelId) {
     return VENICE_DISPLAY[modelId] ?? `${modelId} (Venice)`;
   }
-  return `${VIRTUALS_CHAT_DEFAULT_MODEL} · Virtuals`;
+  const preset = VIRTUALS_PRESETS.find((p) => p.id === tier);
+  return `${preset?.model ?? VIRTUALS_CHAT_DEFAULT_MODEL} · Virtuals`;
 }
 
 // ─── Per-model max_tokens ─────────────────────────────────────────────────────
@@ -2926,8 +2956,8 @@ export async function POST(req: NextRequest) {
     await undoDebit?.();
     return textToSSE(
       "[Chat unavailable: VIRTUALS_API_KEY not set on the server. " +
-      "Ask an operator to configure it. Bankr provider has been " +
-      "permanently removed from Blue Chat.]",
+      "Ask an operator to configure it. There is no fallback provider — " +
+      "Blue Chat does not silently answer from somewhere else.]",
       [{ type: "upstream_error", provider: "virtuals", status: 0 }],
     );
   }
