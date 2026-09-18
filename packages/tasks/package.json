@@ -4,11 +4,29 @@
   "description": "Blue Agent Work Hub — post tasks, earn USDC, build reputation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist", "src"],
-  "scripts": { "build": "tsc", "dev": "tsc --watch" },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
   "devDependencies": {
     "typescript": "^5.3.0",
     "@types/node": "^20.0.0"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/madebyshun/blue-agent",
+    "directory": "packages/tasks"
+  },
+  "homepage": "https://blueagent.dev",
+  "bugs": {
+    "url": "https://github.com/madebyshun/blue-agent/issues"
+  }
 }

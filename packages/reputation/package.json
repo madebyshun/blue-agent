@@ -18,5 +18,15 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/madebyshun/blue-agent",
+    "directory": "packages/reputation"
+  },
+  "homepage": "https://blueagent.dev",
+  "bugs": {
+    "url": "https://github.com/madebyshun/blue-agent/issues"
   }
 }
