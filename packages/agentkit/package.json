@@ -1,7 +1,7 @@
 {
   "name": "@blueagent/agentkit",
-  "version": "1.2.0",
-  "description": "Coinbase AgentKit plugin for Blue Agent — 32 x402 tools on Base",
+  "version": "1.3.0",
+  "description": "Coinbase AgentKit plugin for Blue Agent — 12 x402 tools on Base",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

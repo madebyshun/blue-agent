@@ -9,8 +9,12 @@ import { callWithGrounding, BLUE_AGENT_PRICING } from "@blueagent/core";
 import fs from "fs";
 import path from "path";
 
+// One declaration. The startup banner below reads this rather than repeating the
+// literal — the two had already drifted apart once.
+const VERSION = "0.4.1";
+
 const server = new Server(
-  { name: "blueagent-skill", version: "0.4.0" },
+  { name: "blueagent-skill", version: VERSION },
   { capabilities: { tools: {} } }
 );
 
@@ -50,12 +54,26 @@ async function callHubTool(toolId: string, body: Record<string, unknown>): Promi
 // ─── Builder Score ────────────────────────────────────────────────────────────
 
 async function fetchBuilderScore(handle: string): Promise<string> {
-  // External callers (this MCP runs on the user's machine) use the PAID x402
-  // endpoint — they pay per call, same as every other Hub tool here.
-  const url = `${BLUEAGENT_API}/api/x402/builder-score?handle=${encodeURIComponent(handle)}`;
+  // This used to call `/api/x402/builder-score`, described in-comment as the PAID
+  // endpoint external callers pay per call. MEASURED 2026-09-18: that id is in
+  // neither AGENT_TOOLS nor HANDLERS, so it has always answered 501 "you were not
+  // charged" — GET and POST alike. It was never a paywall and never carried a
+  // price; blue_score threw `Builder Score API error: 501` on every invocation.
+  //
+  // `/api/builder-score` runs the same handler and returns 200. Its guard rejects
+  // cross-site *browser* callers via Sec-Fetch-Site, a header no Node process
+  // sends — so this MCP was already admitted there, and was pointed instead at the
+  // one endpoint that could not work.
+  //
+  // To make it genuinely paid: register `builder-score` in AGENT_TOOLS + HANDLERS
+  // with a price, then flip this URL back. One line on each side.
+  const url = `${BLUEAGENT_API}/api/builder-score?handle=${encodeURIComponent(handle)}`;
   const res = await fetch(url);
   if (res.status === 402) {
     return `Builder Score is a paid x402 tool.\nConnect a wallet and pay via x402 to call it.\nSee: https://blueagent.dev/api-docs#auth`;
+  }
+  if (res.status === 501) {
+    return `Builder Score is not implemented on the server (501) — you were not charged.\nLive tool ids: https://blueagent.dev/api/catalog`;
   }
   if (!res.ok) throw new Error(`Builder Score API error: ${res.status}`);
   return JSON.stringify(await res.json(), null, 2);
@@ -177,12 +195,6 @@ const CONSOLE_TOOLS = [
 
 // Hub tools — call blueagent.dev/api/v1/{id}
 const HUB_TOOLS = [
-  {
-    name: "hub_builder_score",
-    toolId: "builder-score",
-    description: "Builder Score for an X/Twitter handle — on-chain activity, shipping history, community (0-100).",
-    inputSchema: { type: "object", properties: { handle: { type: "string", description: "X/Twitter handle without @" } }, required: ["handle"] },
-  },
   {
     name: "hub_agent_score",
     toolId: "agent-score",
@@ -397,12 +409,6 @@ const HUB_TOOLS = [
     inputSchema: { type: "object", properties: { handle: { type: "string" } }, required: ["handle"] },
   },
   {
-    name: "hub_brand_score",
-    toolId: "builder-brand-score",
-    description: "Brand score for a Base project — visibility, narrative alignment, community resonance.",
-    inputSchema: { type: "object", properties: { project: { type: "string" } }, required: ["project"] },
-  },
-  {
     name: "hub_roadmap",
     toolId: "roadmap-validator",
     description: "Validate a product roadmap — feasibility, sequencing, market timing, missing milestones.",
@@ -421,24 +427,6 @@ const HUB_TOOLS = [
     inputSchema: { type: "object", properties: { pitch: { type: "string" } }, required: ["pitch"] },
   },
   // ── Premium ────────────────────────────────────────────────────────────────
-  {
-    name: "hub_wallet_pnl",
-    toolId: "wallet-pnl",
-    description: "Full PnL report for a wallet — realized/unrealized gains, win rate, best/worst trades on Base.",
-    inputSchema: { type: "object", properties: { address: { type: "string" } }, required: ["address"] },
-  },
-  {
-    name: "hub_wallet_strategy",
-    toolId: "wallet-strategy-analyzer",
-    description: "Analyze a wallet's trading strategy — pattern recognition, risk profile, alpha sources.",
-    inputSchema: { type: "object", properties: { address: { type: "string" } }, required: ["address"] },
-  },
-  {
-    name: "hub_portfolio",
-    toolId: "portfolio-rebalancer",
-    description: "Portfolio rebalancer — optimal allocation across Base DeFi positions by risk tolerance.",
-    inputSchema: { type: "object", properties: { address: { type: "string" }, risk: { type: "string" } }, required: ["address"] },
-  },
   {
     name: "hub_defi_opportunity",
     toolId: "defi-opportunity",
@@ -468,18 +456,6 @@ const HUB_TOOLS = [
     name: "hub_agent_perf",
     toolId: "agent-performance",
     description: "Performance analytics for an AI agent — response quality, task success rate, user satisfaction.",
-    inputSchema: { type: "object", properties: { agent: { type: "string" } }, required: ["agent"] },
-  },
-  {
-    name: "hub_agent_revenue",
-    toolId: "agent-revenue-optimizer",
-    description: "Revenue optimizer for an AI agent — pricing strategy, tool monetization, x402 fee recommendations.",
-    inputSchema: { type: "object", properties: { agent: { type: "string" }, tools: { type: "string" } }, required: ["agent"] },
-  },
-  {
-    name: "hub_agent_token",
-    toolId: "agent-token-strategy",
-    description: "Token strategy for an AI agent — should you launch, how to structure it, timing on Base.",
     inputSchema: { type: "object", properties: { agent: { type: "string" } }, required: ["agent"] },
   },
   // ── Community ──────────────────────────────────────────────────────────────
@@ -634,7 +610,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error(`Blue Agent MCP server v0.4.0 — ${ALL_TOOLS.length} tools ready`);
+  console.error(`Blue Agent MCP server v${VERSION} — ${ALL_TOOLS.length} tools ready`);
 }
 
 main().catch((err) => { console.error(err); process.exit(1); });

@@ -62,6 +62,17 @@
  *    file — pairs it with a presence assertion on the catalog URL.
  * 7. Every /api/x402/<id> named in a doc resolves to a real tool. This is the
  *    check that would have caught the 20 at the time they were written.
+ * 8. The two PUBLISHED npm packages are held to the same catalog. Group 6 fixed
+ *    the markdown; the same fiction was also shipping on npm. MEASURED
+ *    2026-09-18: @blueagent/skill 0.4.0 carried 7 toolIds that resolve to
+ *    neither HANDLERS nor AGENT_TOOLS, and @blueagent/agentkit 1.2.0 carried 20
+ *    — the identical NEVER_EXISTED set, so the .md and the package were copying
+ *    the same imaginary source. agentkit also understated 7 of its 12 real
+ *    prices (risk_gate 4× low, key_exposure 5× low) and posted every call to
+ *    `/api/tools/{id}`, a path that has never existed on any branch and 404s,
+ *    which means not one of its 32 actions could ever run. A package is the
+ *    worst place for this: the reader is an agent executing the call, and a
+ *    stale .md at least has a human in front of it.
  *
  * Run: npx tsx scripts/docs-truth-check.ts
  */
@@ -381,6 +392,141 @@ check(
   mcpToolIds.length > 0 && phantomMcp.length === 0,
   phantomMcp.join(", ") || `${mcpToolIds.length} mappings resolve`,
 );
+
+// ── 8. the two published npm packages resolve to the same catalog ─────────
+console.log("\n8. @blueagent/skill and @blueagent/agentkit name only real tools");
+// Groups 6 and 7 covered the markdown. The packages are the same bug one layer
+// out and strictly worse: a wrong count in a .md is read by a human who can go
+// look, while a wrong toolId in an npm package is executed by an agent that gets
+// a 501 it cannot diagnose. MEASURED 2026-09-18 — @blueagent/skill 0.4.0 shipped
+// 7 such ids and agentkit 1.2.0 shipped 20, the exact NEVER_EXISTED set above.
+//
+// Derivation, not a whitelist: the names come from the package source and the
+// truth comes from AGENT_TOOLS, so a phantom added tomorrow fails the same way.
+const SKILL_SRC = readRepo("packages/skill/src/index.ts");
+const SKILL_PKG = JSON.parse(readRepo("packages/skill/package.json"));
+const AK_SRC = readRepo("packages/agentkit/src/provider.ts");
+const AK_CLIENT = readRepo("packages/agentkit/src/client.ts");
+const AK_README = readRepo("packages/agentkit/README.md");
+const AK_PKG = JSON.parse(readRepo("packages/agentkit/package.json"));
+
+const priceById = new Map(AGENT_TOOLS.map((t) => [t.id, String(t.price)]));
+
+// -- @blueagent/skill --
+const skillNames = [
+  ...new Set([...SKILL_SRC.matchAll(/^\s*name: "([a-z0-9_]+)",$/gm)].map((m) => m[1])),
+];
+const skillToolIds = [...SKILL_SRC.matchAll(/toolId:\s*"([a-z0-9-]+)"/g)].map((m) => m[1]);
+const skillTasks = [...SKILL_SRC.matchAll(/task:\s*"([a-z0-9_-]+)"/g)].map((m) => m[1]);
+const skillPhantom = [...new Set(skillToolIds.filter((id) => !IDS.has(id)))];
+check(
+  "every @blueagent/skill toolId is a real catalog tool",
+  skillToolIds.length > 0 && skillPhantom.length === 0,
+  skillPhantom.join(", ") || `${skillToolIds.length} mappings resolve`,
+);
+// The published description is the surface npm search renders, and it was the
+// last thing to be updated when tools moved. Derived, so it cannot drift again.
+check(
+  "@blueagent/skill description matches its own tool list",
+  SKILL_PKG.description ===
+    `MCP server for Blue Agent — ${skillNames.length} tools: ${skillTasks.length} console commands + ` +
+      `${skillToolIds.length} Hub tools + blue_score + blue_new`,
+  SKILL_PKG.description,
+);
+// Vacuity floor: the two regexes above must keep finding things. If a refactor
+// changes the literal shape they match, every check here would pass on zero.
+check(
+  "the @blueagent/skill scan is not vacuous",
+  skillNames.length > 0 && skillTasks.length === 5,
+  `${skillNames.length} names, ${skillTasks.length} console commands`,
+);
+
+// -- @blueagent/agentkit --
+// Tempered dot: an unanchored lazy span would pair one action's name with the
+// NEXT action's callTool id, which silently mislabels every row by one.
+const akPairs = [
+  ...AK_SRC.matchAll(
+    /name: "([a-z0-9_]+)",(?:(?!name: ")[\s\S])*?callTool\(\s*"([a-z0-9-]+)"/g,
+  ),
+].map((m) => ({ name: m[1], toolId: m[2] }));
+const akPhantom = akPairs.filter((p) => !IDS.has(p.toolId)).map((p) => p.toolId);
+check(
+  "every @blueagent/agentkit action resolves to a real catalog tool",
+  akPairs.length > 0 && akPhantom.length === 0,
+  akPhantom.join(", ") || `${akPairs.length} actions resolve`,
+);
+check(
+  "@blueagent/agentkit description matches its action count",
+  AK_PKG.description === `Coinbase AgentKit plugin for Blue Agent — ${akPairs.length} x402 tools on Base`,
+  AK_PKG.description,
+);
+check(
+  "@blueagent/agentkit README headline matches its action count",
+  AK_README.includes(`— ${akPairs.length} x402-powered AI tools on Base`),
+  `${akPairs.length} actions`,
+);
+// Prices are the money-facing half. agentkit understated 7 of its 12 — risk_gate
+// by 4× and key_exposure by 5× — in BOTH the README table and the `description`
+// string the LLM reads when deciding whether a call is worth making.
+const akReadmeRows = [...AK_README.matchAll(/^\| `([a-z0-9_]+)` \|[^|]*\| (\$[\d.]+) \|$/gm)].map(
+  (m) => ({ name: m[1], price: m[2] }),
+);
+check(
+  "the agentkit README table lists exactly the actions the provider ships",
+  akReadmeRows.length === akPairs.length &&
+    akReadmeRows.every((r) => akPairs.some((p) => p.name === r.name)),
+  `${akReadmeRows.length} rows vs ${akPairs.length} actions`,
+);
+const wrongPrice: string[] = [];
+for (const { name, toolId } of akPairs) {
+  const real = priceById.get(toolId);
+  const inDesc = AK_SRC.match(
+    new RegExp(`name: "${name}",(?:(?!name: ")[\\s\\S])*?Price: (\\$[\\d.]+) USDC\\.`),
+  )?.[1];
+  const inRow = akReadmeRows.find((r) => r.name === name)?.price;
+  if (inDesc !== real) wrongPrice.push(`${name} desc ${inDesc} != ${real}`);
+  if (inRow !== real) wrongPrice.push(`${name} README ${inRow} != ${real}`);
+}
+check(
+  "every agentkit price matches the catalog",
+  wrongPrice.length === 0,
+  wrongPrice.join("; ") || `${akPairs.length} actions priced from AGENT_TOOLS`,
+);
+// The path bug that made all 32 actions unreachable: `/api/tools/{id}` has never
+// existed on any branch and 404s in production. Pin the live path so a future
+// edit cannot quietly point the client at a route again without one.
+check(
+  "the agentkit client posts to the live x402 path",
+  AK_CLIENT.includes("/api/x402/${toolName}") && !AK_CLIENT.includes("/api/tools/${toolName}"),
+  "/api/x402/{id} — /api/tools/{id} 404s and never existed",
+);
+
+// Group 7 scans a fixed file list that never included the packages, which is how
+// blue_score kept calling `/api/x402/builder-score` for months: a *hardcoded* id
+// in a URL rather than a `toolId:` field, in a file nothing checked. MEASURED
+// 2026-09-18 — that id is in neither map, so it answered 501 on every call, while
+// the free `/api/builder-score` (guarded only by a browser-only Sec-Fetch-Site
+// check, which no Node caller trips) had been returning 200 the whole time.
+// Any literal tool id baked into an /api/x402/ or /api/v1/ path here must resolve.
+//
+// Comments are stripped first, and that is semantic rather than a workaround: the
+// invariant is "no dead id is ever FETCHED", while a comment naming a dead id is
+// how the history above stays readable. Only line comments anchored at the start
+// of a line are removed, so the `//` inside a `https://…` literal survives.
+for (const [label, raw] of [
+  ["packages/skill/src/index.ts", SKILL_SRC],
+  ["packages/agentkit/src/client.ts", AK_CLIENT],
+  ["packages/agentkit/src/provider.ts", AK_SRC],
+] as const) {
+  const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  const hardcoded = [...src.matchAll(/\/api\/(?:x402|v1)\/([a-z0-9][a-z0-9-]*)/g)].map((m) => m[1]);
+  const dead = [...new Set(hardcoded.filter((id) => !IDS.has(id)))];
+  check(
+    `${label} — every hardcoded /api/x402|v1/<id> resolves`,
+    dead.length === 0,
+    dead.length ? `dead ids: ${dead.join(", ")}` : `${hardcoded.length} literal id(s)`,
+  );
+}
 
 console.log(
   failures === 0
