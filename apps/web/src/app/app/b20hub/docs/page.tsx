@@ -1,9 +1,44 @@
+/**
+ * B20HUB public docs.
+ *
+ * ⚠ THIS PAGE IS PUBLIC — it is not behind the app shell's auth and has no
+ * middleware entry. Treat every sentence here as marketing copy a stranger
+ * reads, not as an internal note.
+ *
+ * HONESTY (#272): this page used to render a "$BLUE buyback flywheel" section
+ * promising "constant BUY pressure on $BLUE", plus a contract table listing the
+ * pre-migration token as the current reward token and the retired treasury
+ * wallet as the "5% recipient multisig". Meanwhile /pledge told the same
+ * visitor that liquidity behind the old token is NOT planned to be maintained.
+ * One public page promised buy pressure on a token the other said was being
+ * drained. The mechanism is real and still running, so the fix is not to hide
+ * it — it is to say what it actually buys and where the 5% actually lands.
+ *
+ * Addresses are IMPORTED, never retyped. The old table hardcoded hex literals
+ * and drifted three deployments behind; a literal cannot tell you it has been
+ * superseded. Everything below resolves through `lib/b20hub/constants.ts`.
+ */
 import type { Metadata } from "next";
+import {
+  B20_FACTORY,
+  B20HUB_BUYBACK,
+  B20HUB_FEE_RECIPIENT,
+  B20HUB_HOOK,
+  PERMIT2_BASE,
+  V4_POOL_MANAGER,
+  V4_POSITION_MANAGER,
+} from "@/lib/b20hub/constants";
+// The pledge module is the migration's source of truth for what the OLD token
+// is. Importing it here means this page cannot keep calling that address "the
+// reward token" after the migration reassigns the name.
+import { CHAINS } from "@/lib/pledge/config";
+
+const OLD_BLUE = CHAINS.base.token.address;
 
 export const metadata: Metadata = {
   title: "B20HUB Docs — Tokenomics & Mechanics",
   description:
-    "How B20HUB launches work: 100B fixed supply, hardcoded opening price, permanent LP lock, 80/15/5 fee split, $BLUE buyback flywheel.",
+    "How B20HUB launches work: 100B fixed supply, hardcoded opening price, permanent LP lock, 80/15/5 fee split, and where the buyback share actually goes.",
 };
 
 const Section = ({
@@ -33,6 +68,27 @@ const Block = ({ children }: { children: React.ReactNode }) => (
   <pre className="rounded-xl border border-[#1A1A2E] bg-[#0a0a12] p-4 overflow-x-auto font-mono text-[10px] text-slate-300 leading-relaxed">
     {children}
   </pre>
+);
+
+/**
+ * Amber, not red: these are facts about immutable bytecode a reader needs
+ * before drawing a conclusion, not an error and not a security warning.
+ */
+const Warn = ({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) => (
+  <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-4 my-4">
+    <p className="font-mono text-[11px] font-bold text-amber-300 tracking-wide uppercase mb-2">
+      ⚠ {title}
+    </p>
+    <div className="font-mono text-[12px] text-slate-300 leading-relaxed">
+      {children}
+    </div>
+  </div>
 );
 
 export default function B20HUBDocsPage() {
@@ -136,9 +192,15 @@ uint16 public constant TREASURY_BPS =  500; //  5 %`}
           <Code>setPending(creator, lpTokenId)</Code> — it cannot be
           reassigned. BuyBack and Treasury are hook immutables.
         </p>
+        <p>
+          The 80% is the part that concerns a creator, and it is unqualified:
+          it pays the launch address, permissionlessly, forever. The other two
+          legs both currently land on a wallet Blue Agent has retired — read
+          the next section before reading them as a token thesis.
+        </p>
       </Section>
 
-      <Section id="buyback" title="$BLUE buyback flywheel">
+      <Section id="buyback" title="Where the 15% buyback share goes">
         <p>
           The 15% share lands as WETH in a dedicated{" "}
           <Code>BlueBuyBack</Code> contract. Once its balance clears{" "}
@@ -146,15 +208,46 @@ uint16 public constant TREASURY_BPS =  500; //  5 %`}
           <em>anyone</em> can call <Code>distribute()</Code>. The contract:
         </p>
         <ol className="list-decimal ml-5 space-y-1 text-slate-400">
-          <li>Swaps its entire WETH balance for $BLUE via the BLUE/WETH V4 pool</li>
+          <li>Swaps its entire WETH balance for $BLUEAGENT via the V4 pool</li>
           <li>Skims 0.1% keeper reward → sends to <Code>msg.sender</Code></li>
-          <li>Sends the remaining 99.9% $BLUE → treasury multisig</li>
+          <li>Sends the remaining 99.9% → the recipient set at deploy time</li>
         </ol>
-        <p>
-          Result: constant BUY pressure on $BLUE proportional to B20HUB
-          swap volume. Bots will race to trigger distribute for the
-          keeper reward — no human intervention needed.
-        </p>
+        <Warn title="Read this before treating the buyback as a reason to hold">
+          <p>
+            Both facts below are properties of{" "}
+            <em>already-deployed, immutable bytecode</em>. Neither can be
+            changed without redeploying, and redeploying the V4 hook changes
+            its address — which would require a new pool. We are publishing
+            them rather than working around them.
+          </p>
+          <ol className="list-decimal ml-5 space-y-2 mt-3">
+            <li>
+              <strong>The token it buys is the pre-migration one.</strong>{" "}
+              $BLUEAGENT is mid-relaunch. Our own{" "}
+              <a href="/pledge" className="text-[#4FC3F7] underline">
+                pledge page
+              </a>{" "}
+              states that liquidity behind the old token is{" "}
+              <em>not planned to be maintained</em> after the migration. So
+              this contract does keep buying — it just buys the asset being
+              migrated away from. Do not read it as support for a price.
+            </li>
+            <li>
+              <strong>
+                The 99.9% goes to a wallet we have since retired.
+              </strong>{" "}
+              <Code>payoutRecipient</Code> was fixed in the constructor and has
+              no setter — deliberately, so that a compromised owner could never
+              redirect it. The address it points at is the old Blue Agent
+              treasury, not the current one. Re-read on-chain 2026-09-18.
+            </li>
+          </ol>
+          <p className="mt-3">
+            The keeper reward in step 2 is unaffected: it pays{" "}
+            <Code>msg.sender</Code>, so if you trigger{" "}
+            <Code>distribute()</Code> you receive it.
+          </p>
+        </Warn>
       </Section>
 
       <Section id="lp-lock" title="Permanent LP lock">
@@ -176,15 +269,17 @@ uint16 public constant TREASURY_BPS =  500; //  5 %`}
 
       <Section id="contracts" title="Deployed contracts (Base mainnet)">
         <p className="text-slate-400 text-[12px]">
-          Every launch touches these three addresses. All verified source on
-          Basescan.
+          Every launch touches these addresses. All verified source on
+          Basescan — check them there rather than trusting this table.
         </p>
-        <ContractRow label="B20 Factory" hint="Rust precompile, protocol built-in" addr="0xB20f000000000000000000000000000000000000" />
-        <ContractRow label="V4 PoolManager" hint="Uniswap V4 singleton"   addr="0x498581fF718922c3f8e6A244956aF099B2652b2b" />
-        <ContractRow label="V4 PositionManager" hint="LP NFT contract"    addr="0x7C5f5A4bBd8fD63184577525326123B519429bDc" />
-        <ContractRow label="Permit2" hint="V4's approval router"          addr="0x000000000022D473030F116dDEE9F6B43aC78BA3" />
-        <ContractRow label="$BLUE" hint="Reward token"                     addr="0xF895783B2931c919955E18B5e3343e7C7c456bA3" />
-        <ContractRow label="BlueAgent Treasury" hint="5% recipient multisig" addr="0xB058A1E305d9C720aa5B1BF42B6f2F6294b03b5F" />
+        <ContractRow label="B20 Factory" hint="Rust precompile, protocol built-in" addr={B20_FACTORY} />
+        <ContractRow label="V4 PoolManager" hint="Uniswap V4 singleton"   addr={V4_POOL_MANAGER} />
+        <ContractRow label="V4 PositionManager" hint="LP NFT contract"    addr={V4_POSITION_MANAGER} />
+        <ContractRow label="Permit2" hint="V4's approval router"          addr={PERMIT2_BASE} />
+        <ContractRow label="B20HUB Hook" hint="Holds the LP NFT, enforces the 80/15/5 split" addr={B20HUB_HOOK} />
+        <ContractRow label="BlueBuyBack" hint="Receives the 15% share as WETH" addr={B20HUB_BUYBACK} />
+        <ContractRow label="Fee recipient" hint="Retired wallet — receives BOTH the 5% and the buyback's 99.9%" addr={B20HUB_FEE_RECIPIENT} />
+        <ContractRow label="$BLUEAGENT" hint="Pre-migration token — see the buyback note above" addr={OLD_BLUE} />
       </Section>
 
       <Section id="fees-in-usd" title="What does creator take home?">
