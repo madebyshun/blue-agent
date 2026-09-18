@@ -156,8 +156,11 @@ export const PERMIT2_SEPOLIA = "0x000000000022D473030F116dDEE9F6B43aC78BA3" as c
 
 /**
  * BlueBuyBack v5 — receives 15% of every B20HUB swap as WETH, then anyone can
- * call distribute() to swap it into $BLUE and forward to treasury. Keeper
- * reward: 0.1% of BLUE bought to the caller.
+ * call distribute() to swap it into $BLUEAGENT and forward the 99.9% to
+ * `payoutRecipient` (see B20HUB_FEE_RECIPIENT). Keeper reward: 0.1% to the
+ * caller, and that leg still pays whoever calls it.
+ * ⚠ The token it buys is the PRE-MIGRATION $BLUEAGENT — do not describe this
+ * as buy pressure supporting the current token. See /app/b20hub/docs.
  * https://basescan.org/address/0xe389AcfABe2a4F17187ebA2354555a096BC2A1c9
  */
 export const B20HUB_BUYBACK = "0xe389AcfABe2a4F17187ebA2354555a096BC2A1c9" as const;
@@ -170,6 +173,24 @@ export const B20HUB_BUYBACK = "0xe389AcfABe2a4F17187ebA2354555a096BC2A1c9" as co
  * https://basescan.org/address/0xACbBD7846596162cE6436D65fA8E4f02Eb1Cd200
  */
 export const B20HUB_HOOK = "0xACbBD7846596162cE6436D65fA8E4f02Eb1Cd200" as const;
+
+/**
+ * Where BOTH non-creator fee legs actually land — the hook's 5% `TREASURY()`
+ * and the buyback's 99.9% `payoutRecipient()`. They are the same address, and
+ * it is the RETIRED Bankr Club wallet, not the current payTo
+ * (`0x0295…09205`, which every off-chain payment uses since 2026-08-18).
+ *
+ * Each was set once in a constructor. `payoutRecipient` has no setter BY
+ * DESIGN so a compromised owner could never redirect staker yield; changing
+ * either means a redeploy, and redeploying the hook changes its address
+ * (V4 permission bits live in the low 14 bits) and would need a new pool.
+ *
+ * MEASURED on Base mainnet 2026-09-18 via `cast call`, both returning this
+ * value. It exists as a named export so no page has to retype the hex — the
+ * old /app/b20hub/docs table did, labelled it "5% recipient multisig", and
+ * nothing could tell the reader the wallet behind it had been retired.
+ */
+export const B20HUB_FEE_RECIPIENT = "0xB058A1E305d9C720aa5B1BF42B6f2F6294b03b5F" as const;
 
 /**
  * B20HUBLauncher v6 — pump.fun-style, uniform launch. User picks name +
