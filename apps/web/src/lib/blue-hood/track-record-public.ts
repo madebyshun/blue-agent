@@ -17,7 +17,8 @@
  * emitted (not `pct`, never `pct_internal`) — only `{ready:false, graded, needed}`.
  */
 import type { Arrow } from "@/lib/blue-hood/types";
-import { readPublicArrows, arrowsFiredToday } from "@/lib/blue-hood/public-feed";
+import { readPublicArrowsProbe, arrowsFiredToday } from "@/lib/blue-hood/public-feed";
+import { ARROW_HYDRATED_MAX } from "@/lib/blue-hood/kv-keys";
 import {
   computeHitRate,
   computeRecordCurve,
@@ -114,7 +115,12 @@ export function sanitizePerType(perType: PerType): Record<string, PublicPerTypeS
  * Assemble the public track record from an already-filtered public arrow list.
  * Pure — takes `arrows` (engine-origin, non-test) + an optional clock. Every
  * consumer that has the arrows in hand (or wants a deterministic test) calls
- * this; only `getPublicTrackRecord` below touches KV.
+ * this; only `getPublicTrackRecordProbe` below touches KV.
+ *
+ * ⚠ It cannot tell `[]`-because-empty from `[]`-because-KV-died, and it never
+ * will — it has no KV read to inspect. That discrimination belongs to the
+ * reader, which is exactly why the reader is probe-shaped. Do not call this
+ * with the result of a bare `readPublicArrows`.
  */
 export function buildPublicTrackRecord(
   arrows: Arrow[],
@@ -165,13 +171,86 @@ export function buildPublicTrackRecord(
   };
 }
 
+/** Hard ceiling on `limit`, shared by the page and the ACP endpoint. */
+export const TRACK_RECORD_MAX_LIMIT = 200;
+
+export type PublicTrackRecordRead =
+  | {
+      status: "ok";
+      record: PublicTrackRecord;
+      /** When the underlying feed blob was built — lets a surface date the receipts. */
+      built_at: string;
+      /** How many arrows are actually in `record.receipts.arrows`. */
+      shown: number;
+      /**
+       * True when public arrows OLDER than the last receipt exist and were not
+       * returned. The single flag a surface must consult before calling this
+       * table "every arrow" / "forever" / "the full record".
+       *
+       * Two independent causes, both reported below, because the remedies
+       * differ: `limit_capped` is the caller's own ceiling (raise `limit`),
+       * `feed_capped` is the hydrated blob's (a deliberate cost decision — see
+       * arrow-cache.ts; reading past it restores the ~600-command fan-out).
+       */
+      truncated: boolean;
+      /** The blob was at `ARROW_HYDRATED_MAX` — older arrows exist in the index. */
+      feed_capped: boolean;
+      /** `limit` cut the list below what the blob already held. */
+      limit_capped: boolean;
+    }
+  | { status: "unavailable"; reason: string };
+
 /**
- * KV-backed convenience: read the newest public arrows (the trust-boundary
- * filter lives in `readPublicArrows`) and assemble the gated track record.
- * `limit` is clamped 1..200 to match the ACP endpoint.
+ * KV-backed read: the newest public arrows (the trust-boundary filter lives in
+ * `readPublicArrowsProbe`) assembled into the gated track record, or an explicit
+ * `unavailable`. `limit` is clamped 1..200.
+ *
+ * ⚠ WHY THIS IS THE ONLY KV ENTRY POINT (#264). It replaces
+ * `getPublicTrackRecord`, which called `readPublicArrows` — documented in its own
+ * header as the #150 group-B gap: it returns `[]` when KV is unreachable. Fed
+ * through `buildPublicTrackRecord`, `[]` becomes a complete, confident,
+ * well-formed track record asserting `arrows: []`, `total_graded: 0`,
+ * `hit_rate: {ready:false, graded:0}` — i.e. WE HAVE NEVER FIRED AN ARROW —
+ * on the one page whose entire purpose is to prove that we have.
+ *
+ * It was visible as a self-contradiction on a single screen: `/track` also reads
+ * `readCohortAnalysis`, which was already probe-shaped, so during an outage the
+ * evidence panel said "couldn't read the arrow feed" while the receipts table
+ * directly beneath it rendered an empty record as fact. The two halves disagreed
+ * and the lying half was the half the page exists for.
+ *
+ * The lying shape is not kept as a wrapper on purpose: an `unavailable` a caller
+ * can opt out of is one import away from being opted out of.
  */
-export async function getPublicTrackRecord(limit = 100): Promise<PublicTrackRecord> {
-  const capped = Math.min(200, Math.max(1, limit || 100));
-  const arrows = await readPublicArrows(capped);
-  return buildPublicTrackRecord(arrows);
+export async function getPublicTrackRecordProbe(
+  limit = 100,
+): Promise<PublicTrackRecordRead> {
+  const capped = Math.min(TRACK_RECORD_MAX_LIMIT, Math.max(1, limit || 100));
+  const read = await readPublicArrowsProbe(capped);
+  if (read.status !== "ok") return read;
+
+  // `>=` not `===` on BOTH, and both round toward "we might be missing arrows".
+  //
+  // The cap is the only thing that can produce a full blob, so treating "exactly
+  // at the cap" as uncapped is the failure that matters — identical reasoning to
+  // cohort-read.ts, kept byte-for-byte so the two readers can never disagree
+  // about whether one snapshot was truncated.
+  //
+  // `limit_capped` is deliberately imprecise in the safe direction: the slice
+  // happens after the trust filter, so a list that comes back exactly `capped`
+  // long is indistinguishable from one that was cut. Claiming truncation when
+  // the record happens to end on the boundary costs one honest caveat; the
+  // other rounding would publish "every arrow" over a table that is missing some.
+  const feed_capped = read.feed_size >= ARROW_HYDRATED_MAX;
+  const limit_capped = read.arrows.length >= capped;
+
+  return {
+    status: "ok",
+    record: buildPublicTrackRecord(read.arrows),
+    built_at: read.built_at,
+    shown: read.arrows.length,
+    truncated: feed_capped || limit_capped,
+    feed_capped,
+    limit_capped,
+  };
 }

@@ -21,10 +21,21 @@
  * internal pct + gates the curve) lives in `track-record-public.ts` so this
  * endpoint and the public /track page + OG cards are byte-identical — the same
  * anti-drift discipline hit-rate-gate.ts enforces on the aggregation itself.
+ *
+ * ⚠ AN UNREADABLE FEED IS A 503, NOT AN EMPTY RECEIPT BOOK (#264). This used to
+ * call `getPublicTrackRecord`, which answered a dead KV with `arrows: []` and
+ * `total_graded: 0` — a 200 telling an agent, in the machine-readable contract
+ * it is meant to trust, that Blue Hood has never fired a signal. Same shape and
+ * same fix as `/api/hood/cohorts` (see cohort-read.ts ②): the failure path is
+ * `no-store`, because the one thing worse than publishing an outage as a fact is
+ * having a CDN keep publishing it after the outage ends.
  */
 import { NextRequest } from "next/server";
 import { acpEnvelope, clientIp, corsHeaders, preflight, rateLimit } from "@/lib/acp";
-import { getPublicTrackRecord } from "@/lib/blue-hood/track-record-public";
+import {
+  getPublicTrackRecordProbe,
+  TRACK_RECORD_MAX_LIMIT,
+} from "@/lib/blue-hood/track-record-public";
 
 export const runtime = "nodejs";
 
@@ -43,14 +54,49 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const limit = Math.min(
-    200,
+    TRACK_RECORD_MAX_LIMIT,
     Math.max(1, parseInt(url.searchParams.get("limit") ?? "100", 10) || 100),
   );
 
-  const trackRecord = await getPublicTrackRecord(limit);
+  const read = await getPublicTrackRecordProbe(limit);
+
+  if (read.status !== "ok") {
+    return Response.json(
+      { error: "arrow_feed_unavailable", detail: read.reason },
+      {
+        status: 503,
+        headers: { ...corsHeaders(), "Cache-Control": "no-store" },
+      },
+    );
+  }
 
   return Response.json(
-    acpEnvelope(trackRecord, "https://blueagent.dev/docs/blue-hood#grading"),
+    acpEnvelope(
+      {
+        ...read.record,
+        // The window travels WITH the receipts, never in a separate doc. An
+        // agent that recomputes a hit-rate from `arrows` is doing the right
+        // thing; it needs to know the list it was handed is the newest N of a
+        // longer record, or its denominator is silently wrong.
+        window: {
+          shown: read.shown,
+          truncated: read.truncated,
+          feed_capped: read.feed_capped,
+          limit_capped: read.limit_capped,
+          feed_built_at: read.built_at,
+          ...(read.truncated
+            ? {
+                note:
+                  `These are the newest ${read.shown} public arrows, not the whole record — ` +
+                  `older arrows exist and were not returned. The window also SLIDES as new ` +
+                  `arrows fire, so counts can fall between two reads even though the record ` +
+                  `only ever grows. Compare two snapshots only when \`shown\` matches.`,
+              }
+            : {}),
+        },
+      },
+      "https://blueagent.dev/docs/blue-hood#grading",
+    ),
     { status: 200, headers: corsHeaders() },
   );
 }

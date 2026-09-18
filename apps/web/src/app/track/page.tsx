@@ -18,9 +18,9 @@
  */
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
-import { getPublicTrackRecord } from "@/lib/blue-hood/track-record-public";
+import { getPublicTrackRecordProbe } from "@/lib/blue-hood/track-record-public";
 import { readCohortAnalysis } from "@/lib/blue-hood/cohort-read";
-import TrackView from "./TrackView";
+import TrackView, { TrackUnavailable } from "./TrackView";
 
 export const revalidate = 60;
 
@@ -57,15 +57,41 @@ export default async function TrackPage() {
   // shared depth, so the percentage rendered below is the same number the API
   // serves. When the two were computed independently they analysed different
   // slices of one blob (200 here, 250 there) and neither said so.
-  const [record, cohorts] = await Promise.all([
-    getPublicTrackRecord(200),
+  //
+  // BOTH ARE NOW PROBE-SHAPED (#264). The record read used to be the one that
+  // could not fail: `getPublicTrackRecord` answered a dead KV with an empty
+  // receipt book, so during an outage this page rendered the evidence panel's
+  // honest "couldn't read the arrow feed" directly above a table asserting we
+  // have never fired an arrow. One screen, two answers, and the confident one
+  // was the false one.
+  const [read, cohorts] = await Promise.all([
+    getPublicTrackRecordProbe(200),
     readCohortAnalysis(),
   ]);
 
   return (
     <div className="min-h-screen bg-[#050508] text-white">
       <Navbar />
-      <TrackView record={record} cohorts={cohorts} />
+      {read.status === "ok" ? (
+        <TrackView
+          record={read.record}
+          cohorts={cohorts}
+          window={{
+            shown: read.shown,
+            truncated: read.truncated,
+            feed_capped: read.feed_capped,
+            limit_capped: read.limit_capped,
+          }}
+        />
+      ) : (
+        // THE WHOLE PAGE GOES DARK, not just the table — deliberate. The two
+        // reads hit the same blob, so a cohort analysis that survives while the
+        // receipts do not is a near-impossible race; and if it did happen,
+        // publishing a 67% hit rate with NO receipts under it is worse than
+        // publishing nothing. This page's claim IS its evidence. Without the
+        // evidence there is no claim to make.
+        <TrackUnavailable reason={read.reason} />
+      )}
     </div>
   );
 }
