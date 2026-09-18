@@ -106,10 +106,16 @@ export default function BlueHoodDoc() {
           Runs every 5 min via <code>/api/cron/blue-hood/poll</code>.
           Writes <code>bh:snapshot:latest</code> to KV.
         </Card>
+        {/* Said "LLM chain (Virtuals → Venice)". There is no chain — callLLM is
+            Virtuals-only and throws LLM_UNAVAILABLE rather than falling back,
+            which is why the missing case below is worth stating: an arrow with
+            no context is an arrow whose NUMBERS are still fully deterministic. */}
         <Card title="T-B · Explain">
-          A4 rh-stock-agent-brief LLM chain (Virtuals → Venice)
-          writes a 1-line context for each fired arrow. Runs every 1 min
-          via <code>/api/cron/blue-hood/brief-worker</code>.
+          A4 rh-stock-agent-brief asks Virtuals (no fallback provider, no web
+          search) for a 1-line context on each fired arrow. Runs every 1 min
+          via <code>/api/cron/blue-hood/brief-worker</code>. If inference is
+          down the arrow still fires — the verdict is hard-mapped from the
+          numbers, never written by the model.
         </Card>
         <Card title="T-C/D · Alert">
           Drift board (<Link href="/hood" className="underline">/hood</Link>),

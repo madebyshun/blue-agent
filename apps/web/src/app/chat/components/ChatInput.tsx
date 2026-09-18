@@ -52,15 +52,23 @@ export interface ModelTier {
 // remaps any unknown ID back to "pro" so the picker never lands on a
 // model that doesn't exist in the UI any more.
 
-// Pre-merge task #4 followup — every non-venice tier now routes to
-// Virtuals with `anthropic-claude-sonnet-5` (see task-B commit cfaf061
-// + label truthing commit 5cded17). The tier IDs stay (they still
-// differentiate credit cost + are read by the server prompt for the
-// system-line), but the picker LABEL now reflects what actually runs.
-// When Virtuals tiers diverge (fast → haiku on Virtuals, etc.), swap
-// each entry back to a distinct label. Group is renamed `virtuals` so
-// the picker header says "Virtuals" instead of "Bankr" (Bankr = dead).
-export const BANKR_TIERS: ModelTier[] = [
+// ⚠️ LEGACY COSMETIC TABLE — renamed from `BANKR_TIERS` on 2026-09-18. It never
+// described Bankr by then and Bankr has been 403-banned since 2026-07-20, but
+// the name kept a dead provider alive in every grep of this file.
+//
+// What is actually READ off these rows is narrow: `color` and `badge` for the
+// collapsed picker pill, plus `label` as a last-resort fallback. The `model` and
+// `credits` fields are DEAD — nothing reads them. Do not trust `model` here: it
+// says `anthropic-claude-sonnet-5` on every row, which was true when the picker
+// collapsed to a single Virtuals model and is now simply a stale copy. The live
+// per-preset model comes from VIRTUALS_PRESETS (server-side `getModelLabel` was
+// fixed the same day for exactly this reason — it had copied the same constant).
+//
+// Only `fast` still matches a live preset id; the other seven presets (free,
+// balanced, deep, private, flash, grok, search) miss and take the `[1]` fallback
+// below, so this table contributes a colour and nothing more. Kept rather than
+// deleted because that fallback is load-bearing for the pill's styling.
+export const LEGACY_TIERS: ModelTier[] = [
   { id: "fast",     label: "Sonnet 5 · Fast",   model: "anthropic-claude-sonnet-5", color: "#34D399", badge: "", note: "Sonnet 5 via Virtuals",         group: "virtuals", credits: 10  },
   { id: "pro",      label: "Sonnet 5 · Chat",   model: "anthropic-claude-sonnet-5", color: "#4FC3F7", badge: "", note: "Sonnet 5 via Virtuals",         group: "virtuals", credits: 50  },
   { id: "max",      label: "Sonnet 5 · Deep",   model: "anthropic-claude-sonnet-5", color: "#A78BFA", badge: "", note: "Sonnet 5 via Virtuals (deep)",  group: "virtuals", credits: 200 },
@@ -79,7 +87,7 @@ export const PRIVACY_TIERS: ModelTier[] = [
   { id: "venice-e2ee-gemma", label: "Private Gemma", model: "e2ee-gemma-3-27b-p", color: "#6EE7B7", badge: "🔒", note: "E2EE · No logs", group: "privacy", credits: 30 },
 ];
 
-export const ALL_TIERS: ModelTier[] = [...BANKR_TIERS, ...VENICE_TIERS, ...PRIVACY_TIERS];
+export const ALL_TIERS: ModelTier[] = [...LEGACY_TIERS, ...VENICE_TIERS, ...PRIVACY_TIERS];
 
 /**
  * Use-case presets — what most users actually want at the moment of
@@ -173,7 +181,7 @@ export default function ChatInput() {
   const activeVirtualsPreset = virtualsPresets.find(p => p.id === chatTier) ?? virtualsPresets[0];
   const activePreset = MODEL_PRESETS.find(p => p.id === chatTier);
 
-  const activeTier = ALL_TIERS.find(t => t.id === chatTier) ?? BANKR_TIERS[1];
+  const activeTier = ALL_TIERS.find(t => t.id === chatTier) ?? LEGACY_TIERS[1];
 
   // ── File handling ────────────────────────────────────────────────────────────
   const handleFiles = useCallback(async (fileList: FileList | null) => {

@@ -13,10 +13,28 @@ export default function AeonSkillsDoc() {
         lead="Five trading & research skills bundled from BankrBot/skills, available to any command or agent session. When a request matches a trigger phrase, the skill loads and shapes the output."
       />
 
+      {/* This paragraph used to end "…which needs BANKR_API_KEY with Wallet write
+          scope" — an instruction to go get a credential for a transfer that cannot
+          execute. MEASURED 2026-09-06 with a valid key: every Bankr WRITE returns
+          403 {"error":"Account suspended","banned":true,"reasonCode":"fraud"}, on
+          both ?chain=base and ?chain=robinhood. The ban is on the account, so no
+          key the reader could obtain for us changes it. Re-measured 2026-09-18:
+          the READ surface is now 403 as well. Four of five skills are unaffected —
+          they shape output and never move funds — so the honest edit names the
+          one that is blocked instead of softening all five. */}
       <P>
-        Aeon skills are <strong className="text-slate-200">read-to-apply</strong> — no extra setup, except
-        <code className="text-slate-300"> aeon-distribute-tokens</code>, which needs <code className="text-slate-300">BANKR_API_KEY</code> with Wallet write scope.
+        Aeon skills are <strong className="text-slate-200">read-to-apply</strong> — no setup, no key. They
+        change how a request is answered; they do not move funds.
       </P>
+      <Callout color="#F59E0B" title="aeon-distribute-tokens cannot run">
+        The fifth skill is a payout runbook, and its payout rail is closed. It would settle through
+        Bankr&apos;s Wallet API, and Blue Agent&apos;s Bankr account is suspended — every write returns{" "}
+        <code className="text-slate-300">403 Account suspended</code> (measured 2026-09-06, re-measured
+        2026-09-18). That is an account-level ban, so a different API key does not help. The skill is
+        documented here because it is bundled and readable, <strong className="text-slate-200">not</strong>{" "}
+        because it is runnable: do not schedule or promise a distribution through it. Reinstating it means
+        a different transfer rail, not a new credential.
+      </Callout>
 
       <H2 id="skills">The five skills</H2>
       <div className="space-y-3 my-5">

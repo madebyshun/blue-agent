@@ -14,9 +14,19 @@
 //     it now delegates to callVirtualsLLM under the hood so no HTTP call ever
 //     reaches api.venice.ai. Handlers should migrate to callLLM in follow-up
 //     work; the shim is deliberate to keep the chain-strip PR small.
-//   • callBankrLLM stays untouched at the file level so ~46 handlers that
-//     directly import it keep compiling. Those calls are DEAD in prod today
-//     (Bankr account 403 banned) — see the migration task that follows.
+//   • callBankrLLM is the same kind of shim — it delegates to callVirtualsLLM
+//     (see its body) and no HTTP call reaches llm.bankr.bot either.
+//
+// ⚠️ These three bullets said callBankrLLM's callers were "DEAD in prod today"
+// until 2026-09-18. That was FALSE, and false in the direction that costs an
+// on-call hour: the shim has delegated to Virtuals since the chain strip, so
+// the ~46 handlers importing it have been WORKING the whole time. A header
+// claiming your own live code is dead is the healthz failure mode (a false
+// NEGATIVE invites someone to rotate keys and redeploy against an outage that
+// isn't happening) — and here the header outranks the body, because a reader
+// grepping for "bankr" during an incident stops at the top of the file. Only
+// the NAMES are legacy. Nothing in this module can 403 on Bankr, because
+// nothing in this module calls Bankr.
 //
 // Env: VIRTUALS_API_KEY (required), VIRTUALS_MODEL (optional).
 //
@@ -306,10 +316,14 @@ export async function probeVirtuals(timeoutMs = 4000): Promise<VirtualsProbe> {
 // 2026-07-24 (see the "chốt preset" spec). The `-fast` variants are
 // deliberately absent: 6× the price for the same capability.
 // NAME NOTE: `VirtualsPreset` / `VIRTUALS_PRESETS` keep their original names
-// even though the list is no longer Virtuals-only — same convention as
-// `BANKR_TIERS` in ChatInput.tsx, which outlived Bankr. Renaming would touch 5
-// files for zero behaviour change; the `provider` field below is what actually
-// decides where a preset dispatches.
+// even though the list is no longer Virtuals-only; the `provider` field below is
+// what actually decides where a preset dispatches. This note used to cite
+// `BANKR_TIERS` in ChatInput.tsx as the same convention — that one was renamed
+// to `LEGACY_TIERS` on 2026-09-18, because a *dead provider* in a name is not
+// the same as a *narrowed scope* in a name. VIRTUALS_PRESETS still dispatches to
+// Virtuals for most rows, so its name is merely incomplete; BANKR_TIERS named a
+// vendor that has answered 403 on every verb since 2026-07-20, which sends
+// anyone grepping "bankr" to a file that has nothing to do with Bankr.
 //
 // WHY A PROVIDER FIELD NOW (2026-09-03). Blue Chat had TWO live upstreams and
 // was only using one. `/api/chat` has a complete Venice branch (route.ts:2495)
@@ -1085,8 +1099,11 @@ export async function runAeonSkill(skill: string, varInput = ""): Promise<string
     if (!skillPrompt) return null;
     const today   = new Date().toISOString().split("T")[0];
     const varLine = varInput ? `\nFocus on: ${varInput}` : "";
+    // `model: "claude-haiku-4-5"` used to be passed here. callBankrLLM DROPS
+    // opts.model (Virtuals picks a catalog-validated model), so that argument
+    // only ever claimed a model choice this code does not make. Removed rather
+    // than left as decoration — a dead argument reads like a live one.
     const draft = await callBankrLLM({
-      model: "claude-haiku-4-5",
       system: `You are drafting a MODEL-GENERATED ESTIMATE in the style of the Aeon skill below. You do NOT have live data. Produce a plausible framework only — NEVER invent specific prices, market caps, volumes, or on-chain figures as if measured. Today is ${today}.`,
       messages: [{ role: "user", content: `Follow this skill template. Where a real figure would go, write "unknown" instead of inventing one.\n\nSkill:\n${skillPrompt}${varLine}\n\nReturn only the skill output, no preamble.` }],
       temperature: 0.2,
@@ -1127,8 +1144,8 @@ export async function runMiroSharkSkill(opts: {
       ? `${miroPrompt}${personaLine}${schemaLine}`
       : `You are MiroShark — scenario simulator. ${personaLine}${schemaLine}`;
 
+    // No `model:` — callBankrLLM drops it; see the note in runAeonSkill above.
     return await callBankrLLM({
-      model: "claude-haiku-4-5",
       system,
       messages: [{
         role: "user",
@@ -1174,8 +1191,8 @@ export async function runBlueSkill(opts: {
       ? `${skillContext}\n\n---\n\n## Task\n${opts.task}${schemaLine}`
       : `You are Blue Agent — AI-native intelligence for Base builders.\n\n## Task\n${opts.task}${schemaLine}`;
 
+    // No `model:` — callBankrLLM drops it; see the note in runAeonSkill above.
     return await callBankrLLM({
-      model: "claude-haiku-4-5",
       system,
       messages: [{ role: "user", content: opts.input }],
       temperature: 0.3,

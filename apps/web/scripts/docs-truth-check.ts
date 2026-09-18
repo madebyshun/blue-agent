@@ -79,6 +79,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { AGENT_TOOLS, TOOL_COUNT } from "../src/lib/agent-tools";
+import { MCP_TOOLS } from "../src/lib/mcp-tools";
 
 const WEB = join(__dirname, "..");
 const REPO = join(__dirname, "..", "..", ".."); // scripts → web → apps → repo root
@@ -115,17 +116,22 @@ const SKILL = readRepo("SKILL.md");
 const CLAUDE_MD = readRepo("CLAUDE.md");
 const MCP_ROUTE = read("src/app/api/mcp/route.ts");
 
-// ── the MCP surface, measured from the route rather than remembered ───────
+// ── the MCP surface, measured from the manifest rather than remembered ────
 // SKILL.md and CLAUDE.md both quote this number, and it is NOT TOOL_COUNT.
 // Deriving it here means those two files stay pinned to something real
 // instead of being waved through by an exemption. The route header itself
 // said 87 for months while the array held 86 — off by one, and nothing in CI
 // disagreed, because nothing was comparing them.
-const mcpNames = [
-  ...new Set(
-    [...MCP_ROUTE.matchAll(/name: "((?:blue|hub|b20)_[a-z0-9_]+)"/g)].map((m) => m[1]),
-  ),
-];
+//
+// ⚠️ This was a REGEX over `app/api/mcp/route.ts` until 2026-09-18, when the
+// manifest moved to `lib/mcp-tools.ts` so `/docs/mcp` could render the same
+// object the route serves. The regex then matched nothing, MCP_COUNT silently
+// became 0, and four pins started demanding "MCP serves 0 tools". That is the
+// checker committing the exact fault it exists to catch: a derivation whose
+// SOURCE moved degrades to a confident wrong answer, not to an error. Importing
+// the array cannot fail that way — if the module moves, this file does not
+// compile, which is the loud failure a silent 0 was not.
+const mcpNames = [...new Set(MCP_TOOLS.map((t) => t.name))];
 const MCP_COUNT = mcpNames.length;
 const mcpPrefix = (p: string) => mcpNames.filter((n) => n.startsWith(`${p}_`)).length;
 
@@ -191,10 +197,15 @@ for (const [name, src] of [
 // ── 2. the scanner, for claims added after this whitelist ─────────────────
 console.log("\n2. every '<n> … tools' claim is still true");
 // Negative lookbehind/lookahead on a dot keeps version strings ("0.1.0") out.
-// `x` is in the lookbehind because "## x402 Tools" otherwise reads as a claim of
-// 402 tools — found the first time SKILL.md was scanned, and it would have fired
-// on any file carrying that heading.
-const COUNT_RE = /(?<![\d.xX])(\d+)(\+?)(?![\d.])(?=[\w -]{0,24}?\btools\b)/gi;
+// The lookbehind was `[\d.xX]` — `x` specifically, so that "## x402 Tools" did
+// not read as a claim of 402 tools. Widened to `\w` on 2026-09-18 when group 10
+// started scanning /docs: "B20 token tools" and "exposes B20 as MCP tools" both
+// parsed as a claim of 20 tools, i.e. OUR OWN PRODUCT NAME read as a count. The
+// general rule behind both cases: a digit glued to a letter is an identifier
+// (x402, B20, v2, ERC20), never a quantity — a real count claim always has a
+// space or a line start in front of it. Widening only ever drops matches that
+// were false, and the vacuity floor below would catch it if it dropped real ones.
+const COUNT_RE = /(?<![\w.])(\d+)(\+?)(?![\d.])(?=[\w -]{0,24}?\btools\b)/gi;
 /** "111 tools" must be exact. "100+ tools" is a floor — true while we have at
  *  least that many, which is the point of writing it that way.
  *
@@ -202,8 +213,8 @@ const COUNT_RE = /(?<![\d.xX])(\d+)(\+?)(?![\d.])(?=[\w -]{0,24}?\btools\b)/gi;
  *  same breath — SKILL.md and CLAUDE.md both explain how the MCP subset
  *  relates to the catalog, and refusing them that sentence would push the
  *  explanation out of the two documents that most need it. Every alternate is
- *  itself derived from the surface it names (MCP_COUNT is counted out of
- *  mcp/route.ts), so this widens what is true, not what goes unchecked. */
+ *  itself derived from the surface it names (MCP_COUNT is counted out of the
+ *  MCP_TOOLS manifest), so this widens what is true, not what goes unchecked. */
 const claimHolds = (n: number, plus: boolean, alts: number[] = []) =>
   (plus ? TOOL_COUNT >= n : TOOL_COUNT === n) || (!plus && alts.includes(n));
 
@@ -252,9 +263,20 @@ check(
 console.log("\n3. TOOL_COUNT is imported only where it costs nothing to ship");
 // Comments are stripped before the literal scan: the farcaster route's header
 // quotes the retired "stale 69" to explain what was removed, and a bare
-// substring test would read that explanation as the bug itself.
+// substring test would read that explanation as the bug itself. This matters
+// far beyond one route — the honest record of what we retired lives almost
+// entirely in comments, so a checker that cannot tell a comment from a claim
+// punishes exactly the files that documented themselves best.
+//
+// Block comments are removed as a unit (2026-09-18). The line filter alone
+// only caught lines that BEGIN with a comment marker, which silently missed
+// every JSX `{/* … */}` block — the dominant form in .tsx, and the form the
+// /docs retirement notices use. `app/docs/develop/page.tsx` quotes the old
+// "Virtuals / Venice LLM gateway" copy inside one to explain why it went away;
+// read as rendered text, the explanation looks identical to the bug.
 const stripComments = (src: string) =>
   src
+    .replace(/\{?\/\*[\s\S]*?\*\/\}?/g, "")
     .split("\n")
     .filter((l) => {
       const t = l.trim();
@@ -628,15 +650,169 @@ check(
 );
 
 // Dead providers, named as live. Bankr was 403-banned 2026-07-20 and Venice was
-// dropped from the chain 2026-07-25; every LLM call goes to Virtuals. agent.json
-// said "Powered by Bankr LLM" for ~2 months after the ban.
+// dropped from the x402 chain 2026-07-25; every TOOL call goes to Virtuals.
+// agent.json said "Powered by Bankr LLM" for ~2 months after the ban.
+//
+// "Venice" is banned HERE and not repo-wide, and the distinction is load-bearing
+// (measured 2026-09-18): agent.json describes the x402 tool surface, where
+// callLLM is Virtuals-only. Venice is NOT dead generally — `api/chat/route.ts`
+// has its own branch that really does POST api.venice.ai/api/v1/chat/completions
+// with VENICE_INFERENCE_KEY, and `api/crypto-rpc` really does call Venice's RPC.
+// So Blue Chat's "routed through Virtuals + Venice" is TRUE and must stay. A
+// repo-wide Venice ban would force a page to deny a provider it genuinely uses,
+// which is the same fault as advertising a dead one, pointed the other way.
 for (const dead of ["Bankr LLM", "Venice"]) {
   check(
     `agent.json does not name ${dead} as the inference provider`,
     !AGENT_JSON_RAW.includes(dead),
-    `"${dead}" is not a provider this repo calls — see CLAUDE.md`,
+    `"${dead}" is not in the x402 tool path — that is callLLM → Virtuals only`,
   );
 }
+
+// ── 10. the public site — /about and every /docs page ─────────────────────
+// Groups 1–9 pin the files agents read (README, SKILL.md, llms.txt, agent.json,
+// the npm packages). None of them looked at the pages a HUMAN reads first. That
+// is how `/about` sat at "57 tools" while the MCP manifest grew to 86: not one
+// check was pointed at it, so the number had nothing to be wrong against.
+//
+// The page list is READ FROM DISK, never typed. A hand-kept list is the same
+// failure one level up — a new /docs page would ship unscanned and nobody would
+// see the gap, because a whitelist that is missing an entry looks exactly like
+// a whitelist that is complete.
+console.log("\n10. /about and /docs tell the truth");
+const DOCS_DIR = join(WEB, "src/app/docs");
+const docsPages = readdirSync(DOCS_DIR, { withFileTypes: true })
+  .filter((d) => d.isDirectory())
+  .map((d) => `src/app/docs/${d.name}/page.tsx`);
+const PUBLIC_PAGES: [string, string][] = [
+  ["src/app/about/page.tsx", read("src/app/about/page.tsx")],
+  ["src/app/docs/page.tsx", read("src/app/docs/page.tsx")],
+  ["src/app/docs/_data.ts", read("src/app/docs/_data.ts")],
+  ...docsPages.map((p) => [p, read(p)] as [string, string]),
+];
+check(
+  "the public-page list was discovered, not typed",
+  docsPages.length >= 15,
+  `${PUBLIC_PAGES.length} pages scanned, ${docsPages.length} of them enumerated from src/app/docs/`,
+);
+
+// 10a — same scanner as group 2. MCP_COUNT is an accepted alternate for the
+// same reason SKILL.md gets one: /docs/mcp legitimately describes that surface.
+//
+// ⚠️ MEASURED 2026-09-18: this finds ZERO matches across all 19 pages, and that
+// is the state we want, not a bug. Every public page interpolates —
+// `{TOOL_COUNT} tools`, `{MCP_TOOL_COUNT} tools` — so there is no literal digit
+// for the scanner to land on. This is therefore a REGRESSION GUARD, not a
+// verifier: it has nothing to verify until someone types a number, and it fires
+// the moment they do (mutation-tested: "Blue Hub has 120 tools today." pasted
+// into /docs/quickstart fails it).
+//
+// So it gets NO vacuity floor, unlike group 2. A floor here would assert that
+// at least one page hardcodes a count — demanding the exact thing the pages are
+// right not to do. The failure a floor normally protects against (COUNT_RE
+// silently stops matching, so every scan passes empty) is already covered:
+// group 2 runs the same regex over files that DO carry literals and holds it to
+// a derived floor. If COUNT_RE dies, group 2 fails first and loudly.
+//
+// One check, not one per page: 19 lines of permanently-green output would read
+// as 19 numbers being checked. The failure message still names file and line.
+const publicBad: string[] = [];
+for (const [name, src] of PUBLIC_PAGES) {
+  stripComments(src)
+    .split("\n")
+    .forEach((line, i) => {
+      COUNT_RE.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = COUNT_RE.exec(line))) {
+        if (!claimHolds(Number(m[1]), m[2] === "+", [MCP_COUNT])) {
+          publicBad.push(`${name}:${i + 1} — ${m[1]}${m[2]} in "${line.trim().slice(0, 60)}"`);
+        }
+      }
+    });
+}
+check(
+  "no public page hardcodes a tool count that has gone stale",
+  publicBad.length === 0,
+  publicBad.join(" | ") ||
+    `${PUBLIC_PAGES.length} pages scanned; they interpolate the count rather than typing it, which is why there is nothing here to be wrong`,
+);
+
+// 10b — /about is "use client", so it cannot import the manifest to derive the
+// number (that ships ~86 full JSON schemas to the browser to render one
+// integer; measured precedent is +16 kB gzipped First Load). The literal is the
+// right call there — but a literal with nothing watching it is precisely what
+// rotted to 57, so it is pinned here instead, character for character.
+const ABOUT = read("src/app/about/page.tsx");
+const aboutCode = stripComments(ABOUT);
+check(
+  "/about's pinned MCP_TOOL_COUNT equals the real manifest",
+  aboutCode.includes(`const MCP_TOOL_COUNT = ${MCP_COUNT};`),
+  `expected "const MCP_TOOL_COUNT = ${MCP_COUNT};"`,
+);
+check(
+  "/about's prefix breakdown equals the real manifest",
+  aboutCode.includes(
+    `(${mcpPrefix("blue")} blue_ + ${mcpPrefix("hub")} hub_ + ${mcpPrefix("b20")} b20_)`,
+  ),
+  `expected "(${mcpPrefix("blue")} blue_ + ${mcpPrefix("hub")} hub_ + ${mcpPrefix("b20")} b20_)" — a correct total can still hide three wrong parts`,
+);
+check(
+  "/about does not pull the MCP manifest into its client bundle",
+  !/from "@\/lib\/mcp-tools"/.test(aboutCode),
+  "that is what the pin above exists to avoid; derive it only on a server page",
+);
+check(
+  "/about names the script that pins it",
+  ABOUT.includes("docs-truth-check.ts"),
+  "a reader who edits the literal needs to know what will stop them",
+);
+
+// 10c — dead providers on public pages.
+//
+// Bankr only. Venice is deliberately NOT here: it is live on the chat path
+// (api/chat/route.ts posts api.venice.ai directly) and in api/crypto-rpc, so
+// banning the word would force /docs to deny a provider we really do call. The
+// x402-path claim is already pinned in group 9 against agent.json, where it is
+// the exact and only thing being asserted.
+//
+// `BankrBot` is carved out: the Aeon skills genuinely came from the BankrBot
+// GitHub org, and that repo is still there. The org name is provenance; the
+// bare product name is what gets read as a live integration.
+const BANKR_RE = /\bBankr(?!Bot)\b/;
+// A page may name Bankr as long as it says, in the same breath, that it is
+// closed. Three /docs pages do exactly that and are right to.
+const DISAVOWED =
+  /\b(cannot run|can't run|suspended|banned|403|is gone|no longer|retired|closed|not runnable)\b/i;
+for (const [name, src] of PUBLIC_PAGES) {
+  const code = stripComments(src);
+  if (!BANKR_RE.test(code)) continue;
+  check(
+    `${name} — names Bankr only alongside the fact that it is dead`,
+    DISAVOWED.test(code),
+    "every Bankr verb returns 403 (account-level, measured 2026-09-06 and re-measured 2026-09-18); naming it without saying so reads as a live integration",
+  );
+}
+// The allowance above is per-file, so a page could in principle disavow in one
+// paragraph and still advertise in another. These phrases close that door: each
+// asserts a dead provider is IN the tool call path, which no wording makes true.
+// They are checked with no allowance — but after comment-stripping, because two
+// /docs pages quote them verbatim to record what was removed.
+const NEVER_TRUE = ["Powered by Bankr", "Virtuals / Venice", "Virtuals → Venice", "Venice → Bankr"];
+for (const phrase of NEVER_TRUE) {
+  const offenders = PUBLIC_PAGES.filter(([, src]) => stripComments(src).includes(phrase)).map(
+    ([n]) => n,
+  );
+  check(
+    `no public page claims "${phrase}"`,
+    offenders.length === 0,
+    offenders.join(", ") || "callLLM is Virtuals-only — there is no chain and no Bankr",
+  );
+}
+check(
+  "the dead-provider scan is not vacuous",
+  PUBLIC_PAGES.some(([, src]) => BANKR_RE.test(stripComments(src))),
+  "no page mentions Bankr at all — if that is real the check is dead weight, not passing",
+);
 
 console.log(
   failures === 0

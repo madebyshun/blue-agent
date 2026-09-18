@@ -2,15 +2,17 @@
 // stays thin and the numbers don't drift across pages.
 
 import { TOOL_COUNT } from "@/lib/agent-tools";
+import { MCP_TOOL_COUNT } from "@/lib/mcp-tools";
 
 export const STATS = [
-  // Hub-tool count is dynamic (TOOL_COUNT). Every Hub tool is now x402, so the old
-  // "x402 Tools" subset stat collapsed into Hub Tools — replaced with Commands (5)
-  // to keep four distinct, non-redundant numbers.
-  { value: String(TOOL_COUNT), label: "Hub Tools", color: "#4FC3F7" },
-  { value: "5",                label: "Commands",  color: "#34D399" },
-  { value: "57",               label: "MCP Tools", color: "#A78BFA" },
-  { value: "3",                label: "Agents",    color: "#fbbf24" },
+  // Both counts are DERIVED, and they are different surfaces on purpose: the Hub
+  // catalog is everything, the MCP manifest is a curated subset. "MCP Tools" sat
+  // at a literal 57 long enough for the real surface to reach 86 without it
+  // moving — which is why this file no longer gets to type a count at all.
+  { value: String(TOOL_COUNT),     label: "Hub Tools", color: "#4FC3F7" },
+  { value: "5",                    label: "Commands",  color: "#34D399" },
+  { value: String(MCP_TOOL_COUNT), label: "MCP Tools", color: "#A78BFA" },
+  { value: "3",                    label: "Agents",    color: "#fbbf24" },
 ];
 
 export const PRODUCTS = [
@@ -77,7 +79,7 @@ export const COMMANDS_DOCS = [
     { cmd: "blue validate [dir]", desc: "Validate project structure — package.json, tsconfig, env, src/, git", example: "blue validate ./my-project" },
   ]},
   { group: "CHAT", items: [
-    { cmd: "blue chat [prompt]",  desc: "Interactive chat with the Blue Agent LLM (Venice) in the terminal",  example: 'blue chat "how do I add x402 to my API?"' },
+    { cmd: "blue chat [prompt]",  desc: "Interactive chat with the Blue Agent LLM (Virtuals) in the terminal", example: 'blue chat "how do I add x402 to my API?"' },
   ]},
   { group: "REPUTATION", items: [
     { cmd: "blue score [handle]",       desc: "Builder Score for a wallet or X handle",                        example: "blue score @blueagent_" },
@@ -159,7 +161,21 @@ export const AEON_SKILLS = [
   { file: "aeon-token-pick",        color: "#4FC3F7", trigger: '"give me a token pick" · "asymmetric setup today"',       desc: "Surfaces one asymmetric setup with a thesis — entry logic, why now, and the risk." },
   { file: "aeon-narrative-tracker", color: "#A78BFA", trigger: '"what\'s running on CT" · narrative positions · content', desc: "Tracks live crypto-Twitter narratives and the tokens positioned under each one." },
   { file: "aeon-deep-research",     color: "#fbbf24", trigger: '"DD on X" · "build me a memo" · contrarian take',         desc: "Full due-diligence memo on a token or project, with a contrarian angle." },
-  { file: "aeon-distribute-tokens", color: "#f87171", trigger: "Weekly $BLUEAGENT rewards payout to the leaderboard",     desc: "Distributes $BLUEAGENT rewards to top contributors. Needs BANKR_API_KEY with Wallet write scope." },
+  // DEAD, and labelled dead rather than quietly dropped — the skill file still
+  // ships, so a reader who finds it needs to know why it cannot run. MEASURED
+  // 2026-09-06: POST /token-launches/deploy → 403 {"error":"Account suspended",
+  // "banned":true,"banType":"restricted"}. The ban is on the ACCOUNT, not a
+  // hostname, so every Bankr WRITE is closed — including the Wallet API a payout
+  // would use.
+  //
+  // This entry ended "Reads still work; the transfer does not" until 2026-09-18,
+  // when GET llm.bankr.bot/v1/usage answered 403 "This account has been banned"
+  // on all three windows. The read carve-out was TRUE when measured on 09-06 and
+  // FALSE twelve days later, so the clause is gone rather than re-hedged: a
+  // carve-out earned by one measurement expires, and a public page is the worst
+  // place to keep one alive. The other four skills are fine for a reason that
+  // does not depend on Bankr at all — they shape output and never call it.
+  { file: "aeon-distribute-tokens", color: "#f87171", trigger: "Weekly $BLUEAGENT rewards payout to the leaderboard",     desc: "Distributes $BLUEAGENT rewards to top contributors. ⚠️ Cannot run — payouts settle through the Bankr Wallet API and Blue Agent's Bankr account is suspended (403 on every verb, measured 2026-09-06 and 2026-09-18). Account-level ban: a different API key does not help. Reinstating it needs a different transfer rail." },
 ];
 
 export const PACKAGES = [
@@ -168,79 +184,21 @@ export const PACKAGES = [
     { pkg: "@blueagent/x402", desc: "x402 client SDK · auto payment · createX402Client()" },
   ]},
   { label: "CORE — runtime & data", color: "#A78BFA", items: [
-    { pkg: "@blueagent/core",       desc: "Runtime · skill loading · Venice LLM gateway · schemas" },
+    { pkg: "@blueagent/core",       desc: "Runtime · skill loading · Virtuals LLM gateway · schemas" },
     { pkg: "@blueagent/reputation", desc: "Builder Score · Agent Score · Work Hub reputation" },
   ]},
   { label: "INTEGRATIONS", color: "#34D399", items: [
     { pkg: "@blueagent/skill",    desc: "MCP server · Claude Code · Cursor · Claude Desktop" },
-    { pkg: "@blueagent/agentkit", desc: "Coinbase AgentKit plugin · 32 x402 actions" },
+    // 12, not the 32 this said until 2026-09-18. `apps/web` does not depend on
+    // the package, so the number cannot be imported — it is pinned instead by
+    // scripts/docs-truth-check.ts group 10, counted out of provider.ts.
+    { pkg: "@blueagent/agentkit", desc: "Coinbase AgentKit plugin · 12 x402 actions" },
     { pkg: "@blueagent/sdk",      desc: "Unified SDK · ba.builder.idea() etc." },
   ]},
 ];
 
-// 56 MCP tools — snapshot mirrored from apps/web/src/app/api/mcp/route.ts (TOOLS).
-export const MCP_TOOLS: { name: string; desc: string }[] = [
-  { name: "blue_idea", desc: "Turn a rough concept into a fundable brief — problem, why now, why Base, MVP scope, risks, 24h plan." },
-  { name: "blue_build", desc: "Architecture, stack, folder structure, integrations, and test plan for a Base project." },
-  { name: "blue_audit", desc: "Security review — 500+ checks, 13 categories. Critical issues, suggested fixes, go/no-go." },
-  { name: "blue_ship", desc: "Deployment checklist, verification steps, release notes, and monitoring plan." },
-  { name: "blue_raise", desc: "Pitch narrative — market framing, why this wins, traction, ask, target investors." },
-  { name: "hub_builder_score", desc: "Builder Score (0-100) — anchored in REAL GitHub repo activity and/or on-chain wallet activity when supplied; the X/CT community part is a labelled estimate." },
-  { name: "hub_agent_score", desc: "Agent Score (0-100) — anchored in REAL GitHub repo activity and/or on-chain wallet activity when supplied; XP/community is a labelled estimate." },
-  { name: "hub_market_fit", desc: "Market fit analysis — problem clarity, timing, competition, demand signals for a Base project." },
-  { name: "hub_token_pick", desc: "AI token pick — falsifiable thesis, entry, sizing, kill criterion. Returns NO_PICK when nothing clears the bar." },
-  { name: "hub_narrative", desc: "Narrative map — mindshare scores, velocity, phase (Emerging/Rising/Peak/Fading), position calls." },
-  { name: "hub_ecosystem", desc: "Daily Base ecosystem digest — top launches, protocol updates, builder activity." },
-  { name: "hub_competitor_scan", desc: "Competitor analysis — named competitors are grounded in REAL DefiLlama Base TVL/change when they match a protocol; reasons about defensible edge on top." },
-  { name: "hub_investor_memo", desc: "Full investor memo — thesis, market, moat, risks, ask. Ready to send." },
-  { name: "hub_repo_health", desc: "GitHub repo health — commit velocity, test coverage, dependency risk, bus factor." },
-  { name: "hub_base_grant", desc: "Find active grants and funding opportunities for your Base project." },
-  { name: "hub_risk_gate", desc: "Screen any transaction before execution — rug check, AML, malicious contract patterns." },
-  { name: "hub_honeypot", desc: "Detect honeypot tokens that cannot be sold after purchase." },
-  { name: "hub_deep_analysis", desc: "Comprehensive token fundamentals — on-chain activity, holder distribution, risk signals." },
-  { name: "hub_whale_signal", desc: "Whale wallet copy-trade signals — track large moves for a token on Base." },
-  { name: "hub_fundraise_timing", desc: "Is now the right time to raise? Market conditions, stage readiness, investor appetite." },
-  { name: "hub_contract_trust", desc: "Trust score for any smart contract — code quality, upgrade risk, ownership, audit history." },
-  { name: "hub_aml_screen", desc: "AML screening for a wallet address — sanctions, mixer exposure, illicit flow patterns." },
-  { name: "hub_key_exposure", desc: "Check if a wallet's public key is exposed on-chain (quantum vulnerability risk)." },
-  { name: "hub_token_momentum", desc: "Token momentum scanner — price velocity, volume spikes, social acceleration for Base tokens." },
-  { name: "hub_whale_tracker", desc: "Whale/large-transfer tracker for a Base token or wallet — real Basescan transfer data. Pass a 0x address." },
-  { name: "hub_community_sentiment", desc: "Community sentiment for a token or project — CT mindshare, Farcaster buzz, Telegram signals." },
-  { name: "hub_launch_simulator", desc: "Simulate a token or product launch — model price action, liquidity, community growth scenarios." },
-  { name: "hub_token_launch", desc: "Token launch readiness — market TIMING grounded in REAL Base data (live chain TVL + trending pools); if a token address is given its live DexScreener market grounds momentum. Returns GO/WAIT + action items." },
-  { name: "hub_builder_dd", desc: "Deep due diligence on a builder — onchain history, shipped projects, GitHub activity, reputation signals." },
-  { name: "hub_brand_score", desc: "Brand score for a Base project — visibility/narrative/community (AI estimate, no live social feed); credibility is anchored in REAL GitHub activity when a repo is supplied." },
-  { name: "hub_roadmap", desc: "Validate a product roadmap — feasibility, sequencing, market timing, missing milestones." },
-  { name: "hub_gtm", desc: "Go-to-market brief — distribution channels, launch sequence, community strategy for a Base project." },
-  { name: "hub_pitch_intel", desc: "Pitch intelligence — analyze and strengthen a pitch deck or fundraising narrative with investor-lens feedback." },
-  { name: "hub_wallet_pnl", desc: "Full PnL report for a wallet — realized/unrealized gains, win rate, best/worst trades on Base." },
-  { name: "hub_wallet_strategy", desc: "Decode a Base wallet's trading strategy from REAL on-chain activity (live ETH balance, tx count, ERC-20 transfer patterns, current priced holdings)." },
-  { name: "hub_portfolio", desc: "Portfolio rebalancer — grounds in a wallet's REAL current holdings (live balances + USD prices) when an address is given; recommends target allocation by risk + goal." },
-  { name: "hub_defi_opportunity", desc: "Best DeFi yield opportunities on Base — APY rankings, risk-adjusted returns, protocol safety." },
-  { name: "hub_protocol_risk", desc: "Real-time risk monitor for a Base DeFi protocol — TVL changes, exploit signals, governance risks." },
-  { name: "hub_multi_agent", desc: "Orchestrate a multi-agent workflow — route tasks across Blue Agent + Aeon + MiroShark for complex analysis." },
-  { name: "hub_agent_match", desc: "Find the best collaborator agent for a task — match your project with Base agents by capability." },
-  { name: "hub_agent_perf", desc: "Performance report for an AI agent — grounded in REAL GitHub activity (stars/commits/recency) when a repo is supplied; otherwise a labelled estimate." },
-  { name: "hub_agent_revenue", desc: "Revenue optimizer for an AI agent — pricing strategy, tool monetization, x402 fee recommendations." },
-  { name: "hub_agent_token", desc: "Token strategy for an AI agent — should you launch, how to structure it, timing on Base." },
-  { name: "hub_community_growth", desc: "Community growth playbook — channels, content strategy, retention loops, milestones for a Base project." },
-  { name: "hub_thread_intel", desc: "Thread intelligence — analyze a CT thread or topic for signal vs noise, key takes, actionable insights." },
-  { name: "hub_narrative_pulse", desc: "Real-time narrative pulse — what's being talked about right now on Base CT, velocity and sentiment." },
-  { name: "blue_score", desc: "Builder Score for a GitHub/Farcaster handle or wallet address on Base (0-100)." },
-  { name: "blue_new", desc: "Scaffold a new Base project. Templates: base-agent | base-x402 | base-token." },
-  { name: "blue_monitor", desc: "On-demand health + risk snapshot for a Base token/contract — live price, liquidity, Basescan verification, risk signals + a watch plan with alert thresholds." },
-  { name: "blue_registry", desc: "Discover the Blue Hub tool catalog — every callable x402 tool (first-party + community), filterable by query/category, with prices and how-to-call." },
-  { name: "blue_research", desc: "Deep DD memo on a Base project, narrative, or token — thesis, bull/bear, risks, contrarian take, verdict. Grounds in live DexScreener data when a token address is given." },
-  { name: "blue_compose", desc: "Turn a goal into a runnable chain of Blue Hub tools — picks from the real catalog, orders the steps, suggests inputs, and estimates cost." },
-  { name: "blue_deploy", desc: "Technical deploy mechanics for Base mainnet — deploy scripts, Basescan verify commands, env vars, gas notes, post-deploy checks. Never invents addresses." },
-  { name: "blue_analytics", desc: "Performance/metrics read on a Base token — live price, momentum, liquidity health, volume/liquidity ratio, growth signals. Real DexScreener data." },
-  { name: "blue_simulate", desc: "Bull/base/bear scenario modeling for a Base decision — tokenomics, fee model, growth, runway — with assumptions, projections, and sensitivities." },
-  { name: "blue_stream", desc: "Live snapshot feed of Base onchain activity — trending & new pools, TVL, real price/volume/liquidity. Pure real data; poll for a near-real-time feed." },
-  { name: "b20_check_activation", desc: "Check whether B20 ASSET / STABLECOIN are activated on Base mainnet or Sepolia — read live from the on-chain ActivationRegistry (isActivated). No wallet, no payment." },
-  { name: "b20_read_token", desc: "Inspect a B20 token live via multicall — isB20, name/symbol/decimals, supply, cap, variant, per-feature pause, per-scope policy gating. Deterministic on-chain read (zero LLM). No wallet, no payment." },
-  { name: "b20_encode_deploy", desc: "Encode a B20 token deployment (createB20). Returns { to, data, value } for your own wallet to sign via EIP-5792 send_calls / Base MCP. Non-custodial — no keys, no payment." },
-  { name: "b20_encode_mint", desc: "Encode a mint on an existing B20 token (mint or mintWithMemo). Returns { to, data, value } for a MINT_ROLE holder to sign. Non-custodial calldata builder." },
-  { name: "b20_encode_burn", desc: "Encode burnWithMemo — burn B20 tokens from the caller's balance with an on-chain memo. Returns { to, data, value } for a BURN_ROLE holder to sign." },
-  { name: "b20_encode_grant_mint_role", desc: "Encode grantRole(MINT_ROLE, account) on a B20 token. Returns { to, data, value } for the DEFAULT_ADMIN_ROLE holder to sign." },
-  { name: "b20_encode_payment", desc: "Encode transferWithMemo — send B20 tokens with an on-chain memo (order id) for reconciliation. Returns { to, data, value } for the sender to sign." },
-];
+// Re-exported, not re-typed. This file used to carry a hand-copied snapshot of
+// the MCP manifest; it drifted to 63 entries while /api/mcp served 86, and 7 of
+// those 63 were served by nothing at all. /docs/mcp now renders the same array
+// the route returns. See lib/mcp-tools.ts for the measurement.
+export { MCP_TOOLS, MCP_TOOL_COUNT } from "@/lib/mcp-tools";

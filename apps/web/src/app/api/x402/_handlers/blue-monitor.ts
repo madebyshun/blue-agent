@@ -9,10 +9,12 @@ import { getTokenMarket, type TokenMarket } from "@/lib/market-data";
 import { getBasescanSource } from "@/lib/moralis";
 import { callLLM } from "@/app/api/_lib/llm";
 
-// Delegates to the shared Virtuals → Venice → Bankr chain. Bankr was
-// banned 2026-07-18; the direct-Bankr fetch this used to do is dead
-// on prod. `callLLM` retries providers in order and returns text +
-// provenance. Kept as `llm(system, user, temp, tokens)` so all
+// Delegates to `callLLM`, which calls VIRTUALS AND NOTHING ELSE. This said
+// "the shared Virtuals → Venice → Bankr chain" until 2026-09-18; that chain
+// was stripped 2026-07-25 (see the header of api/_lib/llm.ts). There is no
+// retry across providers — on failure callLLM throws a typed LLM_UNAVAILABLE
+// for the caller to degrade around, rather than silently trying a second
+// vendor. Kept as `llm(system, user, temp, tokens)` so all
 // call sites in this handler stay identical.
 async function llm(system: string, user: string, temp = 0.3, tokens = 900): Promise<string> {
   const r = await callLLM({ system, user, temperature: temp, maxTokens: tokens });

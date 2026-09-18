@@ -5,10 +5,12 @@ import { callLLM } from "@/app/api/_lib/llm";
 
 type BankrMessage = { role: string; content: string };
 
-// Delegates to the shared Virtuals → Venice → Bankr chain. Bankr was
-// banned 2026-07-18; the direct-Bankr fetch this used to do is dead
-// on prod. `callLLM` retries providers in order and returns text +
-// provenance. Name/signature preserved so all call sites stay identical.
+// Delegates to `callLLM`, which calls VIRTUALS AND NOTHING ELSE. This said
+// "the shared Virtuals → Venice → Bankr chain" until 2026-09-18; that chain
+// was stripped 2026-07-25 (see the header of api/_lib/llm.ts). There is no
+// retry across providers — on failure callLLM throws a typed LLM_UNAVAILABLE
+// for the caller to degrade around, rather than silently trying a second
+// vendor. Name/signature preserved so all call sites stay identical.
 async function callBankrLLM(opts: {
   model?: string; system: string; messages: BankrMessage[];
   temperature?: number; maxTokens?: number;

@@ -17,7 +17,6 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { PublicStats } from "@/lib/public-stats";
-import type { BankrUsage, UsageWindow } from "@/lib/bankr-usage";
 
 // ─── motion primitives ───────────────────────────────────────────────────────
 
@@ -128,11 +127,6 @@ function fmtUSD(n: number): string {
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-const VENDOR_COLOR: Record<string, string> = {
-  Anthropic: "#D97757", Google: "#4285F4", DeepSeek: "#4FC3F7", OpenAI: "#10A37F",
-  xAI: "#E5E7EB", Moonshot: "#A78BFA", Alibaba: "#F59E0B", Mistral: "#FA520F", Meta: "#0866FF",
-};
-
 // ─── charts ──────────────────────────────────────────────────────────────────
 
 /** Adoption funnel: Onboarded → Active → Creators. Real counts, animated bars. */
@@ -238,128 +232,38 @@ function MetricGrid({ cells, cols }: { cells: Cell[]; cols: string }) {
   );
 }
 
-// ─── model usage (Bankr) ─────────────────────────────────────────────────────
-
-function ModelUsageSection({ usage }: { usage: BankrUsage }) {
-  const [win, setWin] = useState<7 | 30 | 90>(30);
-  const active: UsageWindow | null = usage.windows[win];
-  const { ref, inView } = useInView<HTMLDivElement>();
-  const reduce = usePrefersReducedMotion();
-
-  const summary = [
-    { label: "Cost",     color: "#34D399", value: active?.cost ?? 0,     fmt: fmtUSD },
-    { label: "Tokens",   color: "#4FC3F7", value: active?.tokens ?? 0,   fmt: compact },
-    { label: "Requests", color: "#A78BFA", value: active?.requests ?? 0, fmt: (n: number) => compact(n) },
-    { label: "Models",   color: "#FBBF24", value: active?.models ?? 0,   fmt: (n: number) => String(Math.round(n)) },
-  ];
-  const maxCost = active?.byModel[0]?.cost || 1;
-  const hasData = !!active && active.requests > 0;
-
-  return (
-    <section className="max-w-5xl mx-auto px-6 py-6">
-      <Reveal>
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <div className="flex items-baseline gap-2">
-            <h2 className="font-mono text-sm text-white">AI model usage</h2>
-            <span className="font-mono text-[10px] text-slate-600">live · via Bankr</span>
-          </div>
-          {/* window toggle */}
-          <div className="inline-flex rounded-full border border-[#1A1A2E] bg-[#0a0a0f] p-0.5">
-            {([7, 30, 90] as const).map((d) => (
-              <button
-                key={d}
-                onClick={() => setWin(d)}
-                className={`font-mono text-[11px] px-3 py-1 rounded-full transition-colors ${
-                  win === d ? "bg-[#4FC3F7] text-[#050508] font-bold" : "text-slate-500 hover:text-slate-300"
-                }`}
-              >
-                {d}d
-              </button>
-            ))}
-          </div>
-        </div>
-      </Reveal>
-
-      {/* summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-[#1A1A2E] rounded-2xl overflow-hidden border border-[#1A1A2E]">
-        {summary.map((s) => (
-          <div key={s.label} className="bg-[#0a0a0f] p-5">
-            <AnimatedNumber
-              value={s.value} format={s.fmt}
-              className="block font-mono text-2xl sm:text-3xl font-bold mb-1"
-              style={{ color: s.color }}
-            />
-            <div className="font-mono text-[10px] text-slate-400 tracking-wide uppercase">{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* usage by model */}
-      <div ref={ref} className="mt-4 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] overflow-hidden">
-        <div className="flex items-baseline justify-between px-5 py-3 border-b border-[#111119]">
-          <span className="font-mono text-xs text-white">Usage by model</span>
-          <span className="font-mono text-[10px] text-slate-600">last {win} days</span>
-        </div>
-
-        {/* column header */}
-        <div className="hidden sm:grid grid-cols-[1.5rem_1fr_6rem_5rem_5rem] gap-3 px-5 py-2 font-mono text-[9px] text-slate-600 uppercase tracking-widest">
-          <span></span><span>Model</span><span className="text-right">Requests</span>
-          <span className="text-right">Tokens</span><span className="text-right">Cost</span>
-        </div>
-
-        {!hasData ? (
-          <div className="px-5 py-8 text-center font-mono text-[11px] text-slate-600">
-            {active ? `No model calls in the last ${win} days.` : "Usage data unavailable."}
-          </div>
-        ) : (
-          <div className="divide-y divide-[#111119]">
-            {active!.byModel.map((m, i) => {
-              const pct = Math.max(2, Math.round((m.cost / maxCost) * 100));
-              const vc = VENDOR_COLOR[m.vendor] ?? "#4FC3F7";
-              return (
-                <div
-                  key={`${m.model}-${i}`}
-                  className="relative grid grid-cols-[1.5rem_1fr_auto] sm:grid-cols-[1.5rem_1fr_6rem_5rem_5rem] items-center gap-3 px-5 py-3"
-                >
-                  <div
-                    className="absolute inset-y-0 left-0" aria-hidden
-                    style={{
-                      width: inView || reduce ? `${pct}%` : "0%",
-                      background: `linear-gradient(90deg, ${vc}14, ${vc}03)`,
-                      transition: reduce ? undefined : `width .9s cubic-bezier(.22,1,.36,1) ${i * 80}ms`,
-                    }}
-                  />
-                  <span className="relative font-mono text-[10px] text-slate-600">{i + 1}</span>
-                  <span className="relative min-w-0">
-                    <span className="block font-mono text-xs text-white truncate">{m.model}</span>
-                    <span className="font-mono text-[10px]" style={{ color: vc }}>{m.vendor}</span>
-                  </span>
-                  <span className="relative font-mono text-xs text-slate-300 text-right hidden sm:block">
-                    <AnimatedNumber value={m.requests} format={compact} />
-                  </span>
-                  <span className="relative font-mono text-xs text-slate-300 text-right hidden sm:block">
-                    <AnimatedNumber value={m.tokens} format={compact} />
-                  </span>
-                  <span className="relative font-mono text-xs text-[#34D399] text-right">
-                    <AnimatedNumber value={m.cost} format={fmtUSD} />
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-      <p className="font-mono text-[10px] text-slate-600 mt-3 leading-relaxed">
-        Live model spend, tokens, and requests for Blue Agent across Blue Chat + hub tools — read
-        directly from Bankr for our API key. Aggregate account totals, no per-user data.
-      </p>
-    </section>
-  );
-}
+/*
+ * The "AI model usage" section lived here until 2026-09-18 and is GONE, not
+ * disabled — there is no state in which it comes back.
+ *
+ * It read GET https://llm.bankr.bot/v1/usage with BANKR_API_KEY and published the
+ * result under the heading "live · via Bankr" / "Live model spend … across Blue
+ * Chat + hub tools". Two independent reasons that was false:
+ *
+ *  1. MEASURED 2026-09-18, all three windows (7/30/90d):
+ *       403 {"error":{"message":"This account has been banned","type":"auth_error"}}
+ *     The ban is on the ACCOUNT (see CLAUDE.md), so it is not a transient outage
+ *     and no key rotation fixes it. Every window came back null.
+ *  2. Even when the read worked it could not describe this product. Bankr stopped
+ *     being an inference provider on 2026-07-20 (403-banned) and callLLM has been
+ *     Virtuals-only since 2026-07-25. So "model spend across Blue Chat + hub
+ *     tools" was measuring a provider that serves neither.
+ *
+ * And the failure mode was the dangerous one: the four summary cards read
+ * `active?.cost ?? 0`, with no null gate of their own. With every window null the
+ * page rendered **Cost $0.00 · 0 tokens · 0 requests · 0 models** — a fabricated
+ * financial figure on the public traction page, which reads as "we spent nothing"
+ * when the truth is "we cannot read it". That is the silent-zero family (#150,
+ * #259) and the wallet-honesty rule: missing data is "unknown", never a zero.
+ *
+ * If per-model spend should be published again it has to come from the provider
+ * that actually serves the traffic (Virtuals), as a new read — not by repointing
+ * this one. Deleting is the honest interim; an empty panel headed "live" is not.
+ */
 
 // ─── main view ───────────────────────────────────────────────────────────────
 
-export default function StatsView({ stats, usage: modelUsage }: { stats: PublicStats; usage: BankrUsage }) {
+export default function StatsView({ stats }: { stats: PublicStats }) {
   const { launches, product, usage, users, credits, settlement } = stats;
   const revenue = parseFloat((usage.revenueEst ?? "").replace(/[^0-9.]/g, "")) || 0;
 
@@ -469,8 +373,8 @@ export default function StatsView({ stats, usage: modelUsage }: { stats: PublicS
           </Reveal>
         </section>
 
-        {/* ══ AI MODEL USAGE (Bankr) ══ */}
-        <ModelUsageSection usage={modelUsage} />
+        {/* AI MODEL USAGE removed 2026-09-18 — see the block comment above
+            the main view for the measurement and why it is not coming back. */}
 
         {/* ══ ADOPTION FUNNEL ══ */}
         <section className="max-w-5xl mx-auto px-6 py-6">
