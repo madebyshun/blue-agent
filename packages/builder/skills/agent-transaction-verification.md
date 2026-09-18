@@ -2032,23 +2032,52 @@ blue chat "review this transaction: send 50 USDC to 0xabc..."
 # 7. Wait for explicit user approval
 ```
 
-Example chat integration (packages/core/src/chat-tx-handler.ts):
+Example chat integration:
 ```typescript
-import { callBankrLLM } from "@blueagent/bankr";
+import { callWithGrounding } from "@blueagent/core";
 
+/**
+ * Two things here are load-bearing and easy to get wrong:
+ *
+ *  - `callWithGrounding` returns a plain STRING, not a provider envelope. There is
+ *    no `.content[0].text` to reach into — inference goes through Virtuals, which
+ *    is OpenAI-compatible, not Anthropic-compatible.
+ *  - The system prompt is NOT a parameter. It is built from the skill registry for
+ *    the task you name ("audit" here), which is the whole point of the grounded
+ *    call — instructions go in the user prompt.
+ *  - No `model` is passed. An id that is not in the live Virtuals catalog returns
+ *    400 rather than falling back, so hardcoding one here would break this handler
+ *    the first time that id is de-listed. Leave it unset and let VIRTUALS_MODEL
+ *    (or the package default) resolve it.
+ */
 export async function handleTxChatCommand(userMessage: string): Promise<string> {
   // Step 1: extract intent via LLM (structured output)
-  const extractionResponse = await callBankrLLM({
-    model: "claude-opus-4-5",
-    max_tokens: 1024,
-    system: `Extract transaction intent from the user message. Return JSON only.
-    Schema: { "action": "transfer"|"approve"|"unknown", "tokenSymbol": string, "recipient": string|null, "amount": string|null, "isAmbiguous": boolean, "clarifyingQuestions": string[] }`,
-    messages: [{ role: "user", content: userMessage }],
-  });
+  const raw = await callWithGrounding(
+    "audit",
+    `Extract transaction intent from the message below. Return JSON only.
+Schema: { "action": "transfer"|"approve"|"unknown", "tokenSymbol": string, "recipient": string|null, "amount": string|null, "isAmbiguous": boolean, "clarifyingQuestions": string[] }
+
+Message: ${userMessage}`,
+    {
+      // Deterministic: the same message must not extract a different recipient
+      // between runs. This value gates a signature.
+      temperature: 0,
+      // The default model reasons before answering and that reasoning is billed
+      // from this same budget without appearing in the response. Below ~1500 it
+      // can consume the whole allowance and return an empty — but fully billed —
+      // string. Do not lower this.
+      maxTokens: 2000,
+    },
+  );
 
   let intent: any;
   try {
-    intent = JSON.parse(extractionResponse.content[0].text);
+    // Never JSON.parse(raw) directly — models wrap JSON in ``` fences and add
+    // preamble. Slice from the first { to the last }.
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start === -1 || end <= start) throw new Error("no JSON object in response");
+    intent = JSON.parse(raw.slice(start, end + 1));
   } catch {
     return "Could not parse transaction intent. Please be more specific.";
   }

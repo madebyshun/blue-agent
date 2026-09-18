@@ -83,7 +83,7 @@ bot.command("start", async (ctx) => {
         .text("🔄 Swap Tokens", "swap")
         .text("📊 View Tasks", "tasks")
         .row()
-        .url("🌐 Open App", "https://app.blueagent.xyz"),
+        .url("🌐 Open App", "https://blueagent.dev"),
     }
   );
 });

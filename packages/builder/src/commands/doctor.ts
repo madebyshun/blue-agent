@@ -7,7 +7,7 @@ const SKILL_FILES = [
   "base-security.md",
   "base-addresses.md",
   "base-standards.md",
-  "bankr-tools.md",
+  "blue-agent-platform.md",   // renamed from bankr-tools.md, 2026-09-18
   "blue-agent-identity.md",
   "design-system.md",
   "base-ecosystem.md",
@@ -111,17 +111,29 @@ export async function runDoctor(): Promise<void> {
     allGood = false;
   }
 
-  // 5. BANKR_API_KEY — check env first, then config.toml
-  let bankrKey = process.env.BANKR_API_KEY?.trim() ?? "";
-  if (!bankrKey && fs.existsSync(CONFIG_FILE)) {
+  // 5. VIRTUALS_API_KEY — check env first, then config.toml
+  //
+  // This checked BANKR_API_KEY until 2026-09-18, which made `blue doctor` report a
+  // ready install on a machine where all five grounded commands (idea/build/audit/
+  // ship/raise) would 401: they run through callWithGrounding in @blueagent/core,
+  // which posts to Virtuals and reads VIRTUALS_API_KEY. A doctor that greenlights a
+  // broken install is worse than no doctor.
+  //
+  // BANKR_API_KEY is still reported below, un-failed, because the seven Bankr-backed
+  // commands in this package (history/watch/search/launch/market/trending/chat) do
+  // read it. Those are separately broken — Bankr's account is 403-banned for writes
+  // since 2026-07-20 — and migrating them is not this change.
+  let virtualsKey = process.env.VIRTUALS_API_KEY?.trim() ?? "";
+  if (!virtualsKey && fs.existsSync(CONFIG_FILE)) {
     const raw = fs.readFileSync(CONFIG_FILE, "utf8");
-    const match = raw.match(/^\s*bankr_api_key\s*=\s*"([^"]+)"/m);
-    if (match) bankrKey = match[1].trim();
+    const match = raw.match(/^\s*virtuals_api_key\s*=\s*"([^"]+)"/m);
+    if (match) virtualsKey = match[1].trim();
   }
-  if (bankrKey) {
-    ok("BANKR_API_KEY set");
+  if (virtualsKey) {
+    ok("VIRTUALS_API_KEY set");
   } else {
-    fail("BANKR_API_KEY not set — add to ~/.blue-agent/config.toml or env");
+    fail("VIRTUALS_API_KEY not set — add to ~/.blue-agent/config.toml or env");
+    dim("required by idea / build / audit / ship / raise");
     allGood = false;
   }
 

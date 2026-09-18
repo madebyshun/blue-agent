@@ -57,11 +57,23 @@ program
   .version("0.1.10");
 
 // ── Core workflow ─────────────────────────────────────────────────────────────
+//
+// `--model` deliberately has NO default. Until 2026-09-18 all five of these
+// commands passed a commander default of "claude-sonnet-4-6" straight into
+// callWithGrounding. An Anthropic id is not in the Virtuals catalog, and an
+// unknown id there returns 400 rather than falling back — so the option being
+// *always set* meant every `blue idea|build|audit|ship|raise` 400'd, whether or
+// not the user ever typed -m. Leaving it undefined is what lets @blueagent/core
+// resolve VIRTUALS_MODEL → its measured default.
+//
+// `--max-tokens` floors at 2000 for the same measured reason recorded in
+// runtime.ts: the default model bills hidden reasoning from this same budget,
+// and a starved call returns nothing while billing in full.
 
 program
   .command("idea [prompt]")
   .description("Turn a rough concept into a fundable brief — why now, why Base, MVP scope, risks, 24h plan")
-  .option("-m, --model <model>", "Bankr LLM model override", "claude-sonnet-4-6")
+  .option("-m, --model <model>", "Model id override — must exist in the Virtuals catalog")
   .option("--max-tokens <n>", "Max output tokens", "2000")
   .action(async (prompt, opts) => {
     await runIdea(prompt, { model: opts.model, maxTokens: parseInt(opts.maxTokens, 10) });
@@ -70,7 +82,7 @@ program
 program
   .command("build [prompt]")
   .description("Generate architecture, stack, folder structure, integrations, and test plan")
-  .option("-m, --model <model>", "Bankr LLM model override", "claude-sonnet-4-6")
+  .option("-m, --model <model>", "Model id override — must exist in the Virtuals catalog")
   .option("--max-tokens <n>", "Max output tokens", "3000")
   .action(async (prompt, opts) => {
     await runBuild(prompt, { model: opts.model, maxTokens: parseInt(opts.maxTokens, 10) });
@@ -79,7 +91,7 @@ program
 program
   .command("audit [prompt]")
   .description("Security and product risk review — critical issues, suggested fixes, go/no-go")
-  .option("-m, --model <model>", "Bankr LLM model override", "claude-sonnet-4-6")
+  .option("-m, --model <model>", "Model id override — must exist in the Virtuals catalog")
   .option("--max-tokens <n>", "Max output tokens", "3000")
   .action(async (prompt, opts) => {
     await runAudit(prompt, { model: opts.model, maxTokens: parseInt(opts.maxTokens, 10) });
@@ -88,7 +100,7 @@ program
 program
   .command("ship [prompt]")
   .description("Deployment checklist, verification steps, release notes, monitoring plan")
-  .option("-m, --model <model>", "Bankr LLM model override", "claude-sonnet-4-6")
+  .option("-m, --model <model>", "Model id override — must exist in the Virtuals catalog")
   .option("--max-tokens <n>", "Max output tokens", "2000")
   .action(async (prompt, opts) => {
     await runShip(prompt, { model: opts.model, maxTokens: parseInt(opts.maxTokens, 10) });
@@ -97,7 +109,7 @@ program
 program
   .command("raise [prompt]")
   .description("Pitch narrative — market framing, why this wins, traction, ask, target investors")
-  .option("-m, --model <model>", "Bankr LLM model override", "claude-sonnet-4-6")
+  .option("-m, --model <model>", "Model id override — must exist in the Virtuals catalog")
   .option("--max-tokens <n>", "Max output tokens", "2000")
   .action(async (prompt, opts) => {
     await runRaise(prompt, { model: opts.model, maxTokens: parseInt(opts.maxTokens, 10) });

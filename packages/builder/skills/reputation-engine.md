@@ -1403,20 +1403,48 @@ EAS on Base:         Verify current address on Basescan — do not hardcode with
 
 All transactions and attestations are Base (chain ID 8453) only. Never suggest Ethereum mainnet.
 
-### 13.3 Bankr LLM Integration Note
+### 13.3 LLM Integration Note
 
-If the reputation system needs AI-assisted dispute resolution (Section 6.4), use Bankr LLM:
+If the reputation system needs AI-assisted dispute resolution (Section 6.4), route it
+through `@blueagent/core`. Inference goes to Virtuals; do not call OpenAI or Anthropic
+directly, and do not pin a `model` — an id that is not in the live Virtuals catalog
+returns **400 rather than falling back**, so a hardcoded one breaks this handler the
+day it is de-listed.
 
 ```typescript
-import { callBankrLLM } from "@blueagent/bankr"; // do NOT use OpenAI or Anthropic directly
+import { callWithGrounding } from "@blueagent/core";
 
-const resolution = await callBankrLLM(
+const raw = await callWithGrounding(
+  "audit",
   `You are a neutral arbitrator for a gig marketplace dispute.
-   Evaluate the submitted proof against the task requirements.
-   Return ONLY: { "resolution": "for_worker" | "against_worker" | "inconclusive", "reason": "..." }`,
-  `Task: ${task.description}\nProof submitted: ${proof}\nPoster's rejection reason: ${rejectionReason}`
+Evaluate the submitted proof against the task requirements.
+Return ONLY: { "resolution": "for_worker" | "against_worker" | "inconclusive", "reason": "..." }
+
+Task: ${task.description}
+Proof submitted: ${proof}
+Poster's rejection reason: ${rejectionReason}`,
+  {
+    // An arbitration verdict must not flip between runs on identical evidence.
+    temperature: 0,
+    // The default model reasons before answering and bills that reasoning from
+    // this same budget without returning it. Below ~1500 a call can spend the
+    // whole allowance and hand back an empty — but fully charged — string.
+    maxTokens: 2000,
+  },
 );
+
+// `callWithGrounding` returns a plain string. Models fence their JSON and add
+// preamble, so slice from the first { to the last } rather than parsing raw.
+const start = raw.indexOf("{");
+const end = raw.lastIndexOf("}");
+if (start === -1 || end <= start) throw new Error("arbitration returned no JSON object");
+const resolution = JSON.parse(raw.slice(start, end + 1));
 ```
+
+Note what this is and is not allowed to decide: a qualitative verdict on contested
+evidence, never the reputation score itself. If the arbitration call fails, the dispute
+stays **open** — it does not resolve against whichever party the absence of an answer
+happens to disadvantage.
 
 ### 13.4 Key Design Principles to Follow
 

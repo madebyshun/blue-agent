@@ -83,6 +83,25 @@ async function fetchBuilderScore(handle: string): Promise<string> {
 
 type TemplateType = "base-agent" | "base-x402" | "base-token";
 
+// MEASURED 2026-09-18 — every file below is written to a real user's disk by
+// `blue_new`, so a wrong string here is a project that does not run.
+//
+// Two faults were fixed on this date, both of which made a scaffolded project
+// fail before its first line of code executed:
+//
+//   1. `@blue-agent/bankr` is 404 ON npm — the package is `private: true` in
+//      this monorepo and has never been published. `npm install` in a fresh
+//      scaffold died with E404, for BOTH templates. base-x402 did not even
+//      import it; it was a phantom dependency that only broke the install.
+//   2. It was reached via `callBankrLLM` against llm.bankr.bot with model
+//      `claude-haiku-4-5`. Bankr is 403-banned for writes (account-level,
+//      2026-07-20) and that model id is not in the Virtuals catalog.
+//
+// base-agent now calls Virtuals with plain `fetch` and no Blue Agent
+// dependency at all. A starter has no business pinning an internal package to
+// print one line — and a dependency-free template cannot 404 again.
+// Keep the model id in step with a measured source (VIRTUALS_DEFAULT_MODEL in
+// apps/web/src/app/api/_lib/llm.ts); an unknown id is a 400, not a fallback.
 const TEMPLATES: Record<TemplateType, Record<string, string>> = {
   "base-agent": {
     "package.json": `{
@@ -90,20 +109,32 @@ const TEMPLATES: Record<TemplateType, Record<string, string>> = {
   "version": "0.1.0",
   "type": "module",
   "scripts": { "dev": "tsx watch src/index.ts", "start": "tsx src/index.ts" },
-  "dependencies": { "@blue-agent/bankr": "latest", "x402-fetch": "latest" },
+  "dependencies": { "x402-fetch": "^1.2.0" },
   "devDependencies": { "typescript": "^5.3.0", "@types/node": "^20.0.0", "tsx": "^4.0.0" }
 }`,
-    ".env.example": `BANKR_API_KEY=your_bankr_api_key_here\nWALLET_PRIVATE_KEY=your_private_key_here`,
-    "src/index.ts": `import { callBankrLLM } from "@blue-agent/bankr";
+    ".env.example": `VIRTUALS_API_KEY=your_virtuals_api_key_here\nWALLET_PRIVATE_KEY=your_private_key_here`,
+    "src/index.ts": `const API_KEY = process.env.VIRTUALS_API_KEY;
+if (!API_KEY) throw new Error("VIRTUALS_API_KEY env var required — see .env.example");
+
 async function main() {
-  const result = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: "You are {{PROJECT_NAME}}, an AI agent on Base (chain 8453).",
-    messages: [{ role: "user", content: "Hello from Base!" }],
+  const res = await fetch("https://compute.virtuals.io/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: \`Bearer \${API_KEY}\`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "deepseek-deepseek-v4-flash",
+      messages: [
+        { role: "system", content: "You are {{PROJECT_NAME}}, an AI agent on Base (chain 8453)." },
+        { role: "user", content: "Hello from Base!" },
+      ],
+      max_tokens: 1000,
+      temperature: 0.6,
+    }),
   });
-  console.log(result);
+  if (!res.ok) throw new Error(\`Virtuals \${res.status}: \${(await res.text()).slice(0, 300)}\`);
+  const data = await res.json();
+  console.log(data.choices?.[0]?.message?.content ?? "(no content)");
 }
-main().catch(console.error);`,
+main().catch((err) => { console.error(err); process.exit(1); });`,
     "README.md": `# {{PROJECT_NAME}}\n\nBuilt with [Blue Agent](https://blueagent.dev).`,
   },
   "base-x402": {
@@ -112,10 +143,9 @@ main().catch(console.error);`,
   "version": "0.1.0",
   "type": "module",
   "scripts": { "dev": "tsx watch src/index.ts" },
-  "dependencies": { "@blue-agent/bankr": "latest" },
   "devDependencies": { "typescript": "^5.3.0", "@types/node": "^20.0.0", "tsx": "^4.0.0" }
 }`,
-    ".env.example": `BANKR_API_KEY=your_bankr_api_key_here\nPORT=3000`,
+    ".env.example": `PORT=3000`,
     "src/index.ts": `import http from "node:http";
 const PORT = Number(process.env.PORT ?? 3000);
 http.createServer((req, res) => {

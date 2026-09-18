@@ -21,8 +21,27 @@
     "start": "node bin/blue.js",
     "prepublishOnly": "npm run build"
   },
+  "_comment": [
+    "MEASURED 2026-09-18 — the core range below was `^0.1.2`, which no version of",
+    "core has satisfied since 1.0.0. Two consequences, both live:",
+    "  * npm: `npm install @blueagent/builder` resolved @blueagent/core@0.1.2 — an",
+    "    ancient build whose runtime POSTs to https://llm.bankr.bot with",
+    "    BANKR_API_KEY. Bankr is 403-banned for writes and the installing user has",
+    "    no key either way, so the five grounded commands 401'd on arrival.",
+    "  * workspace: `^0.1.2` is unsatisfiable by the local core, so a root",
+    "    `npm install` fetches a registry copy into packages/builder/node_modules",
+    "    and shadows the workspace symlink. The monorepo silently tests a",
+    "    different core than it ships.",
+    "`*` matches the three sibling packages (skill, sdk, cli) and lets the fix in",
+    "core 1.1.0 actually reach this package.",
+    "STILL BROKEN, NOT FIXED HERE: src/bankr.ts is a SECOND, independent Bankr",
+    "client (POST llm.bankr.bot/v1/messages, model claude-sonnet-4-6) behind seven",
+    "commands — history, watch, search, launch, market, trending, chat. Those do",
+    "not go through core and are untouched by this range change. This package is",
+    "in the set ShunTr is holding; migrating it is his call, not a rider here."
+  ],
   "dependencies": {
-    "@blueagent/core": "^0.1.2",
+    "@blueagent/core": "*",
     "@blueagent/reputation": "*",
     "commander": "^12.0.0"
   },
