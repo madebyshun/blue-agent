@@ -205,7 +205,7 @@ blue-agent/
 ├── apps/
 │   ├── web/              # Next.js 15 — the whole live x402 surface + /hub, /chat, /hood
 │   └── docs/             # Mintlify docs source (not an npm workspace)
-├── packages/             # 18 workspaces; the ones worth knowing:
+├── packages/             # the ones worth knowing:
 │   ├── x402-client/      # @blueagent/x402 — x402 SDK for Blue Hub
 │   ├── cli/              # @blueagent/cli — TUI (Ink + React)
 │   ├── builder/          # the `blue` command implementations
@@ -214,23 +214,54 @@ blue-agent/
 │   ├── payments/         # x402 payment helpers
 │   ├── reputation/       # @blueagent/reputation — Builder Score + Agent Score
 │   ├── skill/            # @blueagent/skill — MCP server
-│   └── skills/           # Bundled .md skill files
+│   ├── claude-plugin/    # Claude Code plugin manifest — not an npm workspace
+│   └── langchain/        # Python package (pyproject.toml) — not an npm workspace
 ├── bankr-skills/         # BankrBot/skills submissions (blue-hub + 5 commands)
 ├── commands/             # Command contract docs (idea.md, build.md, ...)
+├── skills/               # Bundled .md grounding files (Aeon skills, Base addresses, ...)
 ├── scripts/              # register-all-tools.sh — ERC-8257 registration
 └── docs/                 # Product brief, roadmap, quickstart
 ```
+
+This block used to say `18 workspaces` and list `packages/skills/` as "Bundled .md skill
+files". Both were wrong: only 12 of those 18 directories had a `package.json`, and four
+(`agents`, `config`, `skills`, `ui`) held nothing but a `.gitkeep` — including the one this
+block pointed readers at. The skill files have always lived in **root `skills/`**, which is
+what `CLAUDE.md` documents and what the commands actually load. The four empty placeholders
+were deleted rather than described, and the count was dropped rather than corrected: an
+uncheckable number on the front page is what produced the wrong one.
 
 ---
 
 ## Published packages
 
-| Package | Version | Description |
+The version column is a live npm badge, not a number typed here. It renders whatever npm's
+`latest` tag currently serves, so it cannot go stale — this table previously pinned
+`@blueagent/skill` at `0.1.1` while npm had been serving `0.4.0`.
+
+| Package | Version (live from npm) | Description |
 |---|---|---|
-| [`@blueagent/x402`](https://npmjs.com/package/@blueagent/x402) | 0.1.0 | x402 SDK — call any Blue Hub tool |
-| [`@blueagent/cli`](https://npmjs.com/package/@blueagent/cli) | 1.3.14 | CLI/TUI — full builder console |
-| [`@blueagent/skill`](https://npmjs.com/package/@blueagent/skill) | 0.1.1 | MCP server for Blue Agent tools |
-| [`@blueagent/reputation`](https://npmjs.com/package/@blueagent/reputation) | 0.1.1 | Builder Score + Agent Score |
+| [`@blueagent/x402`](https://npmjs.com/package/@blueagent/x402) | ![npm](https://img.shields.io/npm/v/@blueagent/x402?label=) | x402 SDK — call any Blue Hub tool |
+| [`@blueagent/cli`](https://npmjs.com/package/@blueagent/cli) | ![npm](https://img.shields.io/npm/v/@blueagent/cli?label=) | CLI/TUI — full builder console |
+| [`@blueagent/skill`](https://npmjs.com/package/@blueagent/skill) | ![npm](https://img.shields.io/npm/v/@blueagent/skill?label=) | MCP server for Blue Agent tools |
+| [`@blueagent/reputation`](https://npmjs.com/package/@blueagent/reputation) | ![npm](https://img.shields.io/npm/v/@blueagent/reputation?label=) | Builder Score + Agent Score |
+| [`@blueagent/core`](https://npmjs.com/package/@blueagent/core) | ![npm](https://img.shields.io/npm/v/@blueagent/core?label=) | Shared schemas + pricing. ⚠️ its `runtime.ts` still calls `llm.bankr.bot`, which is 403-banned |
+| [`@blueagent/builder`](https://npmjs.com/package/@blueagent/builder) | ![npm](https://img.shields.io/npm/v/@blueagent/builder?label=) | `blue` command implementations |
+| [`@blueagent/sdk`](https://npmjs.com/package/@blueagent/sdk) | ![npm](https://img.shields.io/npm/v/@blueagent/sdk?label=) | Unified interface over commands + Hub tools |
+| [`@blueagent/agentkit`](https://npmjs.com/package/@blueagent/agentkit) | ![npm](https://img.shields.io/npm/v/@blueagent/agentkit?label=) | Coinbase AgentKit plugin — exposes Hub tools as AgentKit actions |
+| [`@blueagent/tasks`](https://npmjs.com/package/@blueagent/tasks) | ![npm](https://img.shields.io/npm/v/@blueagent/tasks?label=) | ⚠️ the microtask marketplace it describes was retired 2026-09-02 |
+
+Four packages were missing from this table entirely. Two of the nine carry a ⚠️ because
+what npm serves today does not match what this repo says is true — those are package
+*republishes*, not README edits, and are tracked separately. `@blueagent/vercel-ai` is
+deliberately absent: it has never been published, and 20 of the 32 tool ids it hardcodes
+resolve to nothing.
+
+No description here states how many tools its package exposes. That number is not
+derivable from this file, and the two packages that do state one on npm are both wrong
+by a wide margin — `@blueagent/cli` hardcodes 35 ids of which 22 don't exist, and
+`@blueagent/vercel-ai` hardcodes 32 of which 20 don't. A count nobody can check is
+how those got that way.
 
 ---
 

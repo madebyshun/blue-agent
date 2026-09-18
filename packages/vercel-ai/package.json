@@ -4,7 +4,10 @@
   "description": "Vercel AI SDK tools for Blue Agent — 32 x402 tools on Base",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch"
@@ -19,5 +22,17 @@
     "ai": "^3.0.0",
     "zod": "^3.22.0"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/madebyshun/blue-agent",
+    "directory": "packages/vercel-ai"
+  },
+  "homepage": "https://blueagent.dev",
+  "bugs": {
+    "url": "https://github.com/madebyshun/blue-agent/issues"
+  }
 }

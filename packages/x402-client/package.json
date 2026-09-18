@@ -46,5 +46,8 @@
     "url": "https://github.com/madebyshun/blue-agent",
     "directory": "packages/x402-client"
   },
-  "homepage": "https://blueagent.dev"
+  "homepage": "https://blueagent.dev",
+  "bugs": {
+    "url": "https://github.com/madebyshun/blue-agent/issues"
+  }
 }
