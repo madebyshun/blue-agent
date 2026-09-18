@@ -834,7 +834,8 @@ function calculateFee(grossUsdc: number): FeeBreakdown {
 ### 8.3 Fee Distribution
 
 Platform fee goes to:
-- Treasury: `Base` (Base)
+- Your own treasury address on Base. This file does not carry one — a placeholder that
+  looks like an address is how a wrong payee ships. Supply it from your own config.
 
 Worker net goes to:
 - Worker's wallet address (resolved from `claimant_address`)
@@ -1682,7 +1683,7 @@ When a user asks about escrow in chat context:
 - Chain ID: `8453`
 - USDC contract: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
 - USDC decimals: `6`
-- Treasury: `Base`
+- Treasury: yours, not listed here — see §8.3
 - Basescan: `https://basescan.org`
 
 Verify every address on Basescan before use. Never hardcode an address that has not been verified.

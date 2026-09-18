@@ -224,22 +224,35 @@ Use the `nonce` from the payment authorization as an idempotency key. Same nonce
 
 ## 7. Blue Agent x402 Services
 
-Current services live in `apps/web/src/app/api/x402/_handlers/`. The table below is a sample —
-the live catalog is `AGENT_TOOLS` in `apps/web/src/lib/agent-tools.ts`, or
-`https://blueagent.dev/.well-known/openapi.json`:
+Services live in `apps/web/src/app/api/x402/_handlers/` and are served at
+`https://blueagent.dev/api/x402/<tool-id>`.
 
-| Service | Path | Price | What it does |
-|---|---|---|---|
-| `deep-analysis` | `/api/x402/deep-analysis` | $0.001 | LLM-powered project risk + opportunity analysis |
-| `wallet-pnl` | `/api/x402/wallet-pnl` | $0.001 | PnL analysis for a wallet address on Base |
-| `launch-advisor` | `/api/x402/launch-advisor` | $0.01 | Token or agent launch strategy |
-| `grant-evaluator` | `/api/x402/grant-evaluator` | $0.005 | Evaluate grant application quality |
-| `risk-gate` | `/api/x402/risk-gate` | $0.001 | Risk score for a contract or wallet |
+⚠️ **Do not treat the table below as the catalog.** It is five hand-picked rows, and a table
+in a markdown file drifts the moment a price changes. Two of the rows that used to sit here
+named tool ids (`wallet-pnl`, `launch-advisor`) that exist in neither `HANDLERS` nor
+`AGENT_TOOLS`, and the three that were real were priced 200×–1000× under their true cost.
 
-All accept `x-payment` header, all settle to Blue Agent treasury:
-`Base`
+**Resolve an id and a price at call time**, from either:
 
-All services: Base mainnet only (chain ID 8453), USDC only.
+- `AGENT_TOOLS` in `apps/web/src/lib/agent-tools.ts` (in-repo), or
+- `https://blueagent.dev/.well-known/pricing` (over the wire).
+
+| Service | Price | What it does |
+|---|---|---|
+| `token-price` | $0.01 | Live price, mcap, volume, liquidity for a Base token |
+| `gas-tracker` | $0.01 | Live Base gas price + USD cost for common actions |
+| `risk-gate` | $0.20 | Pre-transaction risk assessment for an address or swap |
+| `deep-analysis` | $0.50 | Full due diligence on a Base token |
+| `grant-evaluator` | $5.00 | Base ecosystem grant scoring |
+
+*(Measured against the catalog 2026-09-18. If this table and `AGENT_TOOLS` disagree,
+`AGENT_TOOLS` is right.)*
+
+In `AGENT_TOOLS` the machine-readable field is `priceUSDC`, in **raw USDC units at 6
+decimals** — `200000` is $0.20. The `price: "$0.20"` string beside it is display only.
+
+All accept the `x-payment` header. All settle in native USDC on Base mainnet (8453) to
+`0x02950ad38ada1d599375bd447e080cd404809205`.
 
 ---
 

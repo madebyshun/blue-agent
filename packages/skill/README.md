@@ -28,7 +28,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
     "blueagent": {
       "command": "blueagent-skill",
       "env": {
-        "BANKR_API_KEY": "your_bankr_api_key"
+        "VIRTUALS_API_KEY": "your_virtuals_api_key"
       }
     }
   }
@@ -38,8 +38,14 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ## Environment
 
 ```bash
-BANKR_API_KEY=your_key          # required
+VIRTUALS_API_KEY=your_key           # required — inference runs through Virtuals
 BLUE_AGENT_SKILLS_DIR=/custom/path  # optional skill override
+```
+
+Instead of the env block you can put the key in `~/.blue-agent/config.toml`:
+
+```toml
+virtuals_api_key = "your_key"
 ```
 
 Built by [Blocky Studio](https://blocky.studio).

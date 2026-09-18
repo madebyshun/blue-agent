@@ -7,7 +7,7 @@ export type Template = "base-agent" | "base-x402" | "base-token";
 const TEMPLATES_DIR = path.resolve(__dirname, "../../templates");
 
 const TEMPLATE_DESCRIPTIONS: Record<Template, string> = {
-  "base-agent": "Bankr agent with wallet, LLM, and x402 payment support",
+  "base-agent": "AI agent with wallet, Virtuals inference, and x402 payment support",
   "base-x402":  "Paid API service (x402 pattern, same as apps/web/src/app/api/x402 in this repo)",
   "base-token": "ERC-20 token + Uniswap v4 hook + Base deploy script",
 };

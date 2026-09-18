@@ -8,7 +8,6 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@blue-agent/bankr": "latest",
     "x402-fetch": "latest"
   },
   "devDependencies": {
