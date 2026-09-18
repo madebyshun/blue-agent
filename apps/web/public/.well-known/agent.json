@@ -1,26 +1,29 @@
 {
+  "_comment": "Pinned by apps/web/scripts/docs-truth-check.ts and apps/web/scripts/link-liveness-check.ts. Counts here are compared against AGENT_TOOLS and every blueagent.dev URL is resolved against the real route tree, so a stale number or a dead endpoint fails CI. Do not hand-edit a count — change the catalog.",
   "schema": "agent-discovery/v1",
   "agent": {
     "name": "Blue Agent",
     "handle": "@blueagent_",
-    "description": "Base-native AI agent for builders — idea, build, audit, ship, raise. 40 tools on Blue Hub, x402 pay-per-call. Powered by Bankr LLM.",
-    "version": "1.1.0",
+    "description": "Base-native AI agent for builders — idea, build, audit, ship, raise. 111 tools on Blue Hub, x402 pay-per-call. Inference by Virtuals.",
+    "version": "1.2.0",
     "network": "base",
     "chain_id": 8453,
-    "treasury": "0xf31f59e7b8b58555f7871f71973a394c8f1bffe5",
-    "token": "0xf895783b2931c919955e18b5e3343e7c7c456ba3"
+    "payTo": "0x02950ad38ada1d599375bd447e080cd404809205",
+    "token": {
+      "address": "0xf895783b2931c919955e18b5e3343e7c7c456ba3",
+      "status": "pre-migration",
+      "note": "$BLUEAGENT is relaunching. This is the OLD token — do not treat it as the live reward asset. Terms: https://blueagent.dev/pledge"
+    }
   },
   "endpoints": {
     "web": "https://blueagent.dev",
     "hub": "https://blueagent.dev/hub",
-    "terminal": "https://blueagent.dev/terminal",
-    "console": "https://blueagent.dev/console",
+    "chat": "https://app.blueagent.dev/chat",
     "catalog": "https://blueagent.dev/api/catalog",
     "pricing": "https://blueagent.dev/.well-known/pricing",
     "mcp": "https://blueagent.dev/api/mcp",
     "llms": "https://blueagent.dev/llms.txt",
     "signal": "https://blueagent.dev/api/signal",
-    "simulate": "https://blueagent.dev/api/simulate",
     "health": "https://blueagent.dev/api/health",
     "ai_plugin": "https://blueagent.dev/.well-known/ai-plugin.json",
     "openapi": "https://blueagent.dev/.well-known/openapi.json"
@@ -35,46 +38,45 @@
     "pricing": "https://blueagent.dev/.well-known/pricing",
     "endpoint_pattern": "https://blueagent.dev/api/x402/{tool-id}",
     "manifest_pattern": "https://blueagent.dev/.well-known/ai-tool/{tool-id}.json",
-    "tools": 40,
+    "tools": 111,
     "sdk": "npm install @blueagent/x402",
-    "note": "Any x402-capable agent can call a tool endpoint and pay per call in USDC — no API key. Use /.well-known/pricing for machine-readable price discovery, or install @blueagent/x402 SDK."
+    "note": "Any x402-capable agent can call a tool endpoint and pay per call in USDC — no API key. This file is a pointer, not a price list: /api/catalog is the only authoritative source for tool ids and prices. Install @blueagent/x402 to handle payment automatically."
   },
   "skills": [
     {
       "name": "blue_idea",
+      "tool_id": "blue-idea",
       "description": "Turn a rough concept into a fundable brief — problem, why now, why Base, MVP scope, risks, 24h plan.",
       "price_usdc": "0.05",
       "payment": "x402"
     },
     {
       "name": "blue_build",
+      "tool_id": "blue-build",
       "description": "Architecture, stack, folder structure, integrations, and test plan.",
       "price_usdc": "0.50",
       "payment": "x402"
     },
     {
       "name": "blue_audit",
+      "tool_id": "blue-audit",
       "description": "Security and product risk review — critical issues, suggested fixes, go/no-go.",
       "price_usdc": "1.00",
       "payment": "x402"
     },
     {
       "name": "blue_ship",
+      "tool_id": "blue-ship",
       "description": "Deployment checklist, verification steps, release notes, monitoring plan.",
       "price_usdc": "0.10",
       "payment": "x402"
     },
     {
       "name": "blue_raise",
+      "tool_id": "blue-raise",
       "description": "Pitch narrative — market framing, why this wins, traction, ask, target investors.",
       "price_usdc": "0.20",
       "payment": "x402"
-    },
-    {
-      "name": "blue_score",
-      "description": "Builder Score for a Base wallet or Farcaster handle — onchain reputation at a glance.",
-      "price_usdc": "0.00",
-      "payment": "free"
     }
   ],
   "sdk": {
@@ -87,33 +89,24 @@
   "mcp": {
     "package": "@blueagent/skill",
     "install": "npx skills add blueagent",
-    "registry": "https://skills.bankr.bot"
+    "registry": "https://skills.bankr.bot",
+    "endpoint": "https://blueagent.dev/api/mcp"
   },
   "cli": {
     "package": "@blueagent/cli",
     "install": "npm install -g @blueagent/cli",
-    "commands": 31
+    "description": "Terminal UI over the Blue Hub catalog — browse by category and run a tool with x402 payment."
   },
   "registry": {
     "erc8257": "0x265BB2DBFC0A8165C9A1941Eb1372F349baD2cf1",
     "network": "eip155:8453",
-    "tools_registered": 13,
-    "agentic_market": "https://agentic.market/blueagent-dev",
+    "explorer": "https://basescan.org/address/0x265BB2DBFC0A8165C9A1941Eb1372F349baD2cf1",
     "bankr_skills": "https://github.com/BankrBot/skills/pull/432"
-  },
-  "collab": {
-    "accepts_signals_from": ["aeon"],
-    "sends_scenarios_to": ["miroshark"],
-    "powered_by": ["bankr"],
-    "protocol": "http-post",
-    "payment": "x402-usdc-base",
-    "bridge_specs": "https://github.com/madebyshun/blue-agent/tree/main/collab"
   },
   "links": {
     "github": "https://github.com/madebyshun/blue-agent",
     "telegram": "https://t.me/blueagent_hub",
     "x": "https://x.com/blueagent_",
-    "bankr": "https://bankr.bot/agents/blue-agent",
     "npm": "https://npmjs.com/package/@blueagent/x402"
   }
 }

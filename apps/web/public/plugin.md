@@ -45,7 +45,7 @@ no auth. Returns:
   "network": "eip155:8453",
   "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   "payTo": "0x02950ad38ada1d599375bd447e080cd404809205",
-  "count": 34,
+  "count": 111,
   "tools": [
     {
       "id": "token-pick-signal",
@@ -185,24 +185,28 @@ That said, Blue Hub composes cleanly with execution plugins:
 
 ## Popular tools (excerpt — full list via `/api/catalog`)
 
+> Prices below are pinned to the catalog by `apps/web/scripts/docs-truth-check.ts`
+> — a row whose id or price drifts from `AGENT_TOOLS` fails CI. Treat
+> `/api/catalog` as authoritative anyway; it is generated, this table is written.
+
 | Tool ID                   | Price  | What it returns                                              |
 |---------------------------|--------|--------------------------------------------------------------|
 | `contract-trust`          | $0.15  | SAFE / CAUTION / RED_FLAG verdict before swapping            |
 | `ecosystem-digest`        | $0.20  | Weekly Base pulse — movers, narratives, what to watch        |
 | `token-pick-signal`       | $0.20  | One actionable pick + entry, sizing, kill criterion          |
-| `narrative-position`      | $0.25  | Narrative map · FRONT-RUN / RIDE / FADE / IGNORE             |
-| `market-fit`              | $0.35  | GO / WAIT / PIVOT verdict for a Base project                 |
-| `token-launch-readiness`  | $0.50  | Score 0–100 + GO/WAIT verdict + checklist                    |
-| `builder-deep-dd`         | $1.00  | STRONG_BUY → RED_FLAG due diligence verdict                  |
-| `competitor-scan`         | $0.75  | Competitive landscape · STRONG / COMPETITIVE / WEAK          |
-| `investor-memo`           | $0.75  | Full investor memo (market / thesis / traction / ask)        |
-| `base-grant-finder`       | $0.35  | Matching grants for a Base project (Coinbase, OP RetroPGF)   |
-| `whale-copy-signal`       | $0.35  | Smart-money flows + copy-trade signal                        |
+| `narrative-position`      | $0.15  | Narrative map · FRONT-RUN / RIDE / FADE / IGNORE             |
+| `market-fit`              | $0.25  | GO / WAIT / PIVOT verdict for a Base project                 |
+| `token-launch-readiness`  | $0.30  | Score 0–100 + GO/WAIT verdict + checklist                    |
+| `builder-deep-dd`         | $0.35  | STRONG_BUY → RED_FLAG due diligence verdict                  |
+| `competitor-scan`         | $0.20  | Competitive landscape · STRONG / COMPETITIVE / WEAK          |
+| `investor-memo`           | $0.35  | Full investor memo (market / thesis / traction / ask)        |
+| `base-grant-finder`       | $0.20  | Matching grants for a Base project (Coinbase, OP RetroPGF)   |
+| `whale-copy-signal`       | $0.25  | Smart-money flows + copy-trade signal                        |
 | `protocol-risk-monitor`   | $0.35  | Real-time protocol risk · smart-contract, liquidity, oracle  |
-| `wallet-strategy-analyzer`| $0.50  | Decode on-chain strategy of a wallet · replicable plays      |
+| `wallet-risk`             | $0.05  | AML / risk screen for a Base wallet from real on-chain flow  |
 | `blue-idea`               | $0.05  | Rough concept → fundable brief (programmatic only)           |
 | `blue-build`              | $0.50  | Architecture, stack, folder structure, integrations          |
-| `blue-audit`              | $1.00  | 500+ security checks · 13 categories · Base-native           |
+| `blue-audit`              | $1.00  | Security + product risk review · critical issues · go/no-go  |
 | `blue-ship`               | $0.10  | Deploy checklist + verification + monitoring                 |
 | `blue-raise`              | $0.20  | Fundraising narrative + investor map                         |
 

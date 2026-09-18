@@ -175,6 +175,34 @@ walk(SRC, (dir) => {
   }
 });
 
+/**
+ * The agent-facing manifests in public/ — scanned as link SOURCES, not just
+ * served as targets.
+ *
+ * These are the strongest possible case for this file and were the one gap in
+ * it. The motivating incident was an email nobody renders in CI; a manifest is
+ * worse on every axis. It is fetched by software, on a schedule, and the reader
+ * cannot look at a 404 and decide to go find the real page — it just fails, or
+ * worse, treats the failure as our service being down.
+ *
+ * MEASURED 2026-09-18, with this script reporting all checks passed:
+ * `.well-known/agent.json` advertised `endpoints.console` → /console and
+ * `endpoints.simulate` → /api/simulate. Neither route has ever existed in this
+ * app. They sat in the published discovery manifest because the manifest lives
+ * in public/ and public/ was only ever the thing links pointed AT.
+ *
+ * Deliberately narrow: only the manifests, not all of public/. A URL inside a
+ * downloadable asset is not something this app promises to serve.
+ */
+for (const manifest of [
+  ".well-known/agent.json",
+  ".well-known/farcaster.json",
+  "plugin.md",
+  "llms.txt",
+]) {
+  scanFile(join(PUBLIC, manifest));
+}
+
 console.log(`\n1. every published blueagent.dev link resolves (${found.size} distinct)`);
 const dead: string[] = [];
 for (const [key, sources] of [...found].sort()) {

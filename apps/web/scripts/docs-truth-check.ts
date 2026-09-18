@@ -528,6 +528,116 @@ for (const [label, raw] of [
   );
 }
 
+// ── 9. the two manifests an AGENT reads, not a human ──────────────────────
+console.log("\n9. agent.json and plugin.md's price table agree with the catalog");
+// Groups 1–8 grew around files a person browses. These two are different in
+// kind: /.well-known/agent.json and /plugin.md are fetched by software that
+// then ACTS on what it reads. Nothing here was checked before, and everything
+// here was wrong — MEASURED 2026-09-18, with this file reporting ALL 77 CHECKS
+// PASSED on the same commit:
+//
+//   agent.json   "40 tools" (×2) · "Powered by Bankr LLM" (403-banned since
+//                2026-07-20) · endpoints /console and /simulate, both 404 ·
+//                a `treasury` belonging to the RETIRED microtask product ·
+//                `agentic.market/blueagent-dev`, 404 (the live path is
+//                /services/…) · a free skill `blue_score` whose only id,
+//                builder-score, is in neither map · "tools_registered: 13"
+//                for a registry our own Hub labelled "64 tools".
+//   plugin.md    8 of 18 table rows priced ABOVE the real price, plus a row
+//                for `wallet-strategy-analyzer`, which does not exist.
+//
+// The price direction matters and is not reassuring: overstating means an
+// agent told "confirm USDC balance ≥ the tool's price" (plugin.md §1) can
+// refuse a call it could afford. Nobody is overcharged — the 402 quotes the
+// catalog — but the doc still steers the caller wrong.
+//
+// WHY THESE ESCAPED: group 2's scanner is line-scoped, and in JSON the count
+// sits on its own line (`"count": 34,` above `"tools": [`), so "34" and
+// "tools" never met. Group 7 matches only /api/x402/<id> URLs, and the price
+// table names bare ids in backticks. Both files were in `scanned` the whole
+// time. Being listed is not the same as being covered.
+const AGENT_JSON_RAW = read("public/.well-known/agent.json");
+const AGENT_JSON = JSON.parse(AGENT_JSON_RAW);
+
+// The table is hand-written prose with a machine-checkable spine. Deriving it
+// (generating plugin.md from AGENT_TOOLS) would have cost the surrounding
+// explanation, which is the reason the file exists; pinning it keeps the prose
+// editable and still fails the moment a price drifts.
+const PRICE_ROWS = [...PLUGIN.matchAll(/^\|\s*`([a-z0-9-]+)`\s*\|\s*(\$[\d.]+)\s*\|/gm)];
+const priceByIdEntry = new Map(AGENT_TOOLS.map((t) => [t.id, t.price]));
+const rowErrors = PRICE_ROWS.flatMap(([, id, price]) => {
+  if (!priceByIdEntry.has(id)) return [`${id} — not in catalog`];
+  const real = priceByIdEntry.get(id);
+  return real === price ? [] : [`${id} — doc ${price}, catalog ${real}`];
+});
+check(
+  "plugin.md price table — every row resolves and is priced correctly",
+  PRICE_ROWS.length > 10 && rowErrors.length === 0,
+  rowErrors.join(" | ") || `${PRICE_ROWS.length} rows match the catalog`,
+);
+
+// The count inside the sample /api/catalog response. It is illustrative, but an
+// agent has no way to know that, and it sat at 34 while the endpoint served 111.
+check(
+  "plugin.md sample catalog response quotes the real count",
+  PLUGIN.includes(`"count": ${TOOL_COUNT},`),
+  `expected "count": ${TOOL_COUNT}`,
+);
+
+check(
+  "agent.json — x402.tools equals the catalog",
+  AGENT_JSON.x402?.tools === TOOL_COUNT,
+  `${AGENT_JSON.x402?.tools} vs ${TOOL_COUNT}`,
+);
+check(
+  "agent.json — the prose description quotes the same count",
+  typeof AGENT_JSON.agent?.description === "string" &&
+    AGENT_JSON.agent.description.includes(`${TOOL_COUNT} tools on Blue Hub`),
+  `expected "${TOOL_COUNT} tools on Blue Hub" in agent.description`,
+);
+
+// Every advertised skill must name a tool that exists AND quote its real price.
+// `blue_score` advertised `price_usdc: "0.00"` / `payment: "free"` for an id in
+// neither map — the worst shape available, because an agent reads "free", skips
+// its own spend-approval step, and gets a 501 it cannot diagnose.
+const skillErrors = (AGENT_JSON.skills ?? []).flatMap((s: Record<string, unknown>) => {
+  const id = String(s.tool_id ?? "");
+  const tool = AGENT_TOOLS.find((t) => t.id === id);
+  if (!tool) return [`${s.name} → ${id || "(no tool_id)"} not in catalog`];
+  const want = `$${s.price_usdc}`;
+  return tool.price === want ? [] : [`${s.name} — says ${want}, catalog ${tool.price}`];
+});
+check(
+  "agent.json — every skill names a real tool at its real price",
+  (AGENT_JSON.skills ?? []).length > 0 && skillErrors.length === 0,
+  skillErrors.join(" | ") || `${AGENT_JSON.skills.length} skills resolve`,
+);
+
+// One payee, stated three times in this file and once per 402 response. The
+// server constant is the one that moves money (api/_lib/x402-cdp.ts PAY_TO);
+// these are copies, and a copy that drifts sends an agent's USDC elsewhere.
+const PAY_TO = read("src/app/api/_lib/x402-cdp.ts").match(
+  /PAY_TO\s*=\s*["'](0x[a-fA-F0-9]{40})["']/,
+)?.[1];
+check(
+  "agent.json — payTo matches the server constant that settles",
+  !!PAY_TO &&
+    AGENT_JSON.x402?.payTo?.toLowerCase() === PAY_TO.toLowerCase() &&
+    AGENT_JSON.agent?.payTo?.toLowerCase() === PAY_TO.toLowerCase(),
+  PAY_TO ? `both fields = ${PAY_TO}` : "could not read PAY_TO from x402-cdp.ts",
+);
+
+// Dead providers, named as live. Bankr was 403-banned 2026-07-20 and Venice was
+// dropped from the chain 2026-07-25; every LLM call goes to Virtuals. agent.json
+// said "Powered by Bankr LLM" for ~2 months after the ban.
+for (const dead of ["Bankr LLM", "Venice"]) {
+  check(
+    `agent.json does not name ${dead} as the inference provider`,
+    !AGENT_JSON_RAW.includes(dead),
+    `"${dead}" is not a provider this repo calls — see CLAUDE.md`,
+  );
+}
+
 console.log(
   failures === 0
     ? `\nALL ${checks} CHECKS PASSED\n`
