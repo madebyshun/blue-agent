@@ -3,9 +3,19 @@ import { DocHeader, H2, P, CodeBlock, Callout, CardGrid, Card, PrevNext } from "
 
 export const metadata = { title: "Blue CLI — Blue Agent Docs" };
 
+// This table said `BANKR_API_KEY` — "Bankr LLM key" — until 2026-09-18, which
+// sent every CLI installer to get a credential for a provider that cannot answer.
+// Bankr's LLM host was 403-banned for this project on 2026-07-20 and the account
+// is suspended on every verb (re-measured 2026-09-18: even the usage READ now
+// returns 403 "This account has been banned"). Inference is Virtuals everywhere,
+// and the published runtime reads VIRTUALS_API_KEY / VIRTUALS_MODEL.
+//
+// The file that decides this is packages/core/src/runtime.ts — if the key name
+// here and the key name it reads ever disagree again, this page is the one that
+// is wrong, because a doc cannot make a fetch succeed.
 const ENV = [
-  { key: "VIRTUALS_API_KEY",     desc: "Virtuals inference key — required for AI-backed commands (idea/build/audit/ship/raise). Core scaffolding works without it." },
-  { key: "VIRTUALS_MODEL",       desc: "Optional. Pin a model id from the live Virtuals catalog. Left unset, the CLI uses the @blueagent/core default." },
+  { key: "VIRTUALS_API_KEY",      desc: "Virtuals Compute key — required for AI-backed commands (idea/build/audit/ship/raise). Scaffolding (blue new / init / validate) works without it. Can also live as virtuals_api_key in ~/.blue-agent/config.toml." },
+  { key: "VIRTUALS_MODEL",        desc: "Optional — override the default model id. Validated against the live Virtuals catalog, so a de-listed id fails loudly instead of 400-ing mid-command." },
   { key: "BLUE_AGENT_SKILLS_DIR", desc: "Override the skills directory. Takes priority over ~/.blue-agent/skills/ and the bundled skills." },
 ];
 

@@ -46,8 +46,21 @@ $ npm install @blueagent/agentkit    # Coinbase AgentKit plugin`}</CodeBlock>
         ))}
       </div>
 
+      {/*
+        Two corrections here, 2026-09-18:
+        • "Base chain only (8453)" erased Robinhood Chain (4663), a second LIVE
+          venue with ~30 rh-* tools and its own registry. A contributor following
+          that rule would have resolved an RH token against Basescan, where it
+          does not exist.
+        • "Virtuals / Venice LLM gateway" named a provider the tool path does not
+          call. callLLM is Virtuals-only (api/_lib/llm.ts); Venice survives only
+          in Blue Chat's own presets, which is a different module.
+      */}
       <Callout title="Hard rules for contributors">
-        Base chain only (8453). Use the Virtuals LLM gateway for all AI calls. Never hallucinate contract addresses — verify on Basescan.
+        Two live chains — Base (8453) and Robinhood Chain (4663). Never assume which; state it, and verify addresses on
+        that chain&apos;s own explorer (Basescan for Base, robinhoodchain.blockscout.com for RH). A ticker can exist on both,
+        so a ticker alone never identifies a token. Route every AI call through <code className="text-slate-300">callLLM</code>
+        {" "}(Virtuals) — never call a provider SDK directly, and never hallucinate a contract address.
         Business logic lives in <code className="text-slate-300">packages/</code>, not the app.
       </Callout>
 

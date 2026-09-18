@@ -9,6 +9,7 @@ import { Metadata } from "next";
 import Link from "next/link";
 import { cache } from "react";
 import { kvGet } from "@/lib/kv";
+import { VIRTUALS_PRESETS } from "@/app/api/_lib/llm";
 import type { ShareDoc } from "@/app/api/chat/share/route";
 
 export const runtime = "nodejs";
@@ -193,13 +194,32 @@ function fmtTime(ts?: number) {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-const MODEL_LABELS: Record<string, string> = {
-  "haiku":           "Haiku · fast",
-  "sonnet":          "Sonnet · balanced",
-  "opus":            "Opus · deep",
-  "venice-sonnet":   "Sonnet · Venice",
-  "venice-deepseek": "DeepSeek · web",
-};
+/**
+ * Tier id → the label shown on a PUBLIC transcript.
+ *
+ * DERIVED, because the hand-written version had rotted completely. It mapped
+ * `haiku` / `sonnet` / `opus` / `venice-sonnet` / `venice-deepseek` — and as of
+ * 2026-09-18 not one of those five ids exists: the live tiers are fast · free ·
+ * balanced · deep · private · flash · grok · search. Every key missed, so the
+ * `?? msg.modelUsed` fallback was carrying the whole page, and "Sonnet · Venice"
+ * was sitting there naming a provider/model pair we do not serve.
+ *
+ * This page is a server component, so reading the real preset list costs no
+ * client bundle. Note that `provider` here is genuinely two-valued: Blue Chat
+ * DOES still call Venice for the `free` and `search` tiers (its own module),
+ * unlike the x402/command path, where callLLM is Virtuals-only. Deriving keeps
+ * that distinction correct without anyone having to remember it.
+ *
+ * Unknown ids still fall through to the raw id — archived transcripts can carry
+ * a tier that has since been retired, and showing the id is honest where
+ * inventing a label would not be.
+ */
+const MODEL_LABELS: Record<string, string> = Object.fromEntries(
+  VIRTUALS_PRESETS.map((p) => [
+    p.id,
+    `${p.label} · ${p.provider === "venice" ? "Venice" : "Virtuals"}`,
+  ]),
+);
 
 function MessageBubble({ msg }: { msg: ShareDoc["messages"][0] }) {
   const isAssistant = msg.role === "assistant";

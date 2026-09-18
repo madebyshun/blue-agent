@@ -4,6 +4,22 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { TOOL_COUNT } from "@/lib/agent-tools";
 
+/**
+ * The MCP manifest size, PINNED — this page is "use client", and importing
+ * lib/mcp-tools.ts would ship all 86 tool definitions (names, descriptions,
+ * full JSON schemas) to the browser to render one integer. Measured precedent:
+ * pulling a tool array into a client tree cost ~16 kB gzipped on First Load.
+ *
+ * So the number is typed here and checked in CI instead — see
+ * scripts/docs-truth-check.ts group 10, which reads MCP_TOOLS.length and fails
+ * the build if this literal disagrees. It sat at 57 while the real surface grew
+ * to 86, because nothing was watching it.
+ *
+ * Server-rendered pages do NOT do this: they import and derive (see
+ * app/docs/_data.ts, app/docs/api/page.tsx).
+ */
+const MCP_TOOL_COUNT = 86;
+
 // ── Data ──────────────────────────────────────────────────────────────────────
 
 const SURFACES = [
@@ -41,11 +57,11 @@ const SURFACES = [
     icon: "⚡",
     name: "MCP Server",
     handle: "blueagent.dev/api/mcp",
-    desc: "57 tools via MCP (15 blue_ + 42 hub_) — plug into Claude Desktop, Cursor, or any MCP client. No API key needed. Tools run free via internal bypass.",
+    desc: `${MCP_TOOL_COUNT} tools via MCP (15 blue_ + 64 hub_ + 7 b20_) — plug into Claude Desktop, Cursor, or any MCP client. No API key needed. Tools run free via internal bypass.`,
     link: "https://blueagent.dev/api/mcp",
     linkLabel: "Connect MCP →",
     color: "#F59E0B",
-    stats: [{ label: "Tools", value: "57" }, { label: "Clients", value: "Cursor · Claude" }],
+    stats: [{ label: "Tools", value: String(MCP_TOOL_COUNT) }, { label: "Clients", value: "Cursor · Claude" }],
   },
 ];
 
@@ -58,7 +74,10 @@ const ROADMAP = [
       { done: true, text: `Blue Hub — ${TOOL_COUNT} x402 tools, pay-per-call in USDC on Base` },
       { done: true, text: "Blue Chat — multi-model AI, artifacts, public share links" },
       { done: true, text: "Blue Bank — send, swap, yield, invoices, QR pay (archived 2026-07)" },
-      { done: true, text: "MCP Server — 57 tools, full x402 catalog parity" },
+      // Was "57 tools, full x402 catalog parity" — both halves false. The manifest
+      // is 86, and it is a CURATED SUBSET of the 111-tool catalog by design, so
+      // "parity" was never true and cannot become true without shipping all 111.
+      { done: true, text: `MCP Server — ${MCP_TOOL_COUNT} tools, a curated subset of the x402 catalog` },
       { done: true, text: "Agent SDK — @blueagent/x402, agents pay + call tools onchain" },
       { done: true, text: "B20 — deploy from chat, plus tracker, check, analyze, launch" },
       { done: true, text: "x402 Builder Codes — every paid call attributed onchain" },
@@ -92,11 +111,15 @@ const ROADMAP = [
   },
 ];
 
+// The second slot used to be TOOL_COUNT again, labelled "API Endpoints" — the
+// same number twice, which reads as two independent facts when it is one. The
+// MCP manifest is a genuinely different surface (curated subset), so it earns
+// the slot honestly.
 const STATS = [
-  { value: String(TOOL_COUNT), label: "AI Tools",      color: "#4FC3F7" },
-  { value: String(TOOL_COUNT), label: "API Endpoints", color: "#A78BFA" },
-  { value: "RH+Base", label: "Chains",        color: "#34D399" },
-  { value: "x402",   label: "Payment rail",   color: "#F59E0B" },
+  { value: String(TOOL_COUNT),     label: "x402 Tools",    color: "#4FC3F7" },
+  { value: String(MCP_TOOL_COUNT), label: "MCP Tools",     color: "#A78BFA" },
+  { value: "RH+Base",              label: "Chains",        color: "#34D399" },
+  { value: "x402",                 label: "Payment rail",  color: "#F59E0B" },
 ];
 
 // ── Components ────────────────────────────────────────────────────────────────
@@ -197,7 +220,7 @@ export default function AboutPage() {
               what you run. Value flows to the builders behind each tool, and the loop closes onchain.
             </p>
             <p className="text-slate-300">
-              MCP makes the whole stack agent-native: 57 tools plug directly into Claude Desktop and Cursor,
+              MCP makes the whole stack agent-native: {MCP_TOOL_COUNT} tools plug directly into Claude Desktop and Cursor,
               no API key, no setup. The same tools that power Blue Chat run inside your IDE.
               One platform. Three surfaces. Built on Base.
             </p>

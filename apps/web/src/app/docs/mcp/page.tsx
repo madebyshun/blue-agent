@@ -39,10 +39,16 @@ export default function McpDoc() {
               <span className="font-mono text-[10px] text-slate-600">{tools.length}</span>
             </div>
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden divide-y divide-[#1A1A2E]">
+              {/* `t.description`, not `t.desc`. The hand-copied snapshot this page
+                  used to render invented a `desc` key; the MCP wire format the
+                  server actually returns has always been `description`. Nobody
+                  noticed because the snapshot was the only thing typing the page
+                  — the drift became a compile error the moment /docs/mcp started
+                  reading the real manifest, which is the point of the extraction. */}
               {tools.map((t) => (
                 <div key={t.name} className="px-5 py-3">
                   <code className="font-mono text-[12px] font-bold" style={{ color: g.color }}>{t.name}</code>
-                  <p className="font-mono text-[10px] text-slate-500 leading-relaxed mt-0.5">{t.desc}</p>
+                  <p className="font-mono text-[10px] text-slate-500 leading-relaxed mt-0.5">{t.description}</p>
                 </div>
               ))}
             </div>

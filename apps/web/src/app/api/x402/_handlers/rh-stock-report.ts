@@ -1,16 +1,23 @@
-// x402/rh-stock-report (A3) — on-chain vol + real-world news brief.
+// x402/rh-stock-report (A3) — on-chain vol brief.
 // Price: $0.20
 //
 // Composes:
 //   • Chainlink oracle price + 24h DEX change (L1 / M1 / M4 data)
 //   • Top DEX pool + TVL / volume
-//   • Venice web-search for real-world news headlines about the underlying
-//     equity, tagged with source citations
 // Then asks the LLM to synthesize a brief report. All numbers come from
 // tools; the LLM interprets, doesn't invent. Temperature 0.3.
 //
-// The prompt makes the LLM label news items as `[estimate]` or with source
-// URLs, per CLAUDE.md's data-vs-advisory rule.
+// NO NEWS, AND NO CITATIONS — corrected 2026-09-18. This header advertised
+// "Venice web-search for real-world news headlines … tagged with source
+// citations", and the prompt ordered the model to search and return URLs.
+// Neither was ever possible: the gateway is Virtuals (callLLM), which has no
+// web search, and `webSearch` is a documented no-op param. So the "News" section
+// of a PAID report was headlines and URLs recalled by a model and presented as
+// sourced reporting — the exact failure mode CLAUDE.md's data-vs-advisory rule
+// exists to prevent ("prompts do not prevent hallucination; data sources do").
+// The section is now background-only, self-labelled unverified, with the model
+// told plainly that it has no web access. If real news is wanted here, it needs
+// a real news API wired in — not a prompt that asks nicely.
 //
 // #231 — THE `dex_*` FIELDS ARE PROMPT INPUT, which is the reason this file
 // matters more than its $0.20 suggests. Everything in `facts` is handed to the
@@ -83,7 +90,15 @@ export default async function handler(req: Request): Promise<Response> {
       dex_price_unavailable_reason,
     };
 
-    // ── Venice web-search + LLM synthesis ────────────────────────────────
+    // ── LLM synthesis (Virtuals, NO web search) ──────────────────────────
+    // This block was headed "Venice web-search + LLM synthesis" and the prompt
+    // below ordered the model to "Use web search to gather recent news headlines"
+    // and return "source URLs in parentheses". There is no search: callLLM is
+    // Virtuals-only and documents `webSearch` as an ignored param. So every
+    // headline and every URL in the News section of this PAID report was model
+    // recall presented as sourced reporting. The prompt now states the absence
+    // and forbids the URLs, instead of a warning further down trying to walk it
+    // back after the fact.
     const system = `You are Blue Agent — a research analyst for on-chain tokenized equities on Robinhood Chain.
 
 ${NO_FABRICATION_RULE}
@@ -92,15 +107,18 @@ You will be given a "FACTS" block of verified on-chain numbers. Do NOT contradic
 If a field is null, it is UNKNOWN — say so plainly. Never substitute a remembered, typical, or real-world
 value for a null, and never estimate one from the other fields. When \`dex_price_unavailable_reason\` is
 non-null, quote that reason in the On-chain observation section instead of reporting a DEX price.
-Use web search to gather recent (last ${horizon}) news headlines about the underlying equity ${token.ticker} (${token.name}).
+
+You have NO web access on this call and cannot look anything up. Do not cite URLs — you cannot open one.
 
 Return concise Markdown with these sections:
 1. **Snapshot** — 2-3 lines: current price, 24h Δ, DEX pool depth, one plain-English takeaway.
-2. **News (last ${horizon})** — 3-5 bullet headlines with source URLs in parentheses. Skip if no relevant results.
+2. **Background on ${token.ticker} (${token.name})** — 2-4 bullets of durable context about the underlying
+   company from your own knowledge, each prefixed "[from training data, not verified]". Say plainly that you
+   cannot see news from the last ${horizon}. Omit this section entirely rather than guess at recent events.
 3. **On-chain observation** — 1-2 lines interpreting the DEX data vs Chainlink oracle. Note if DEX is thin.
 4. **Not investment advice** — one-line disclaimer.
 
-Label anything you cannot verify with a source as "[estimate]".
+Label anything not taken from the FACTS block as "[estimate]".
 Do NOT recommend buy/sell — this is a brief, not a signal.`;
 
     const userPrompt = `FACTS:\n${JSON.stringify(facts, null, 2)}\n\nProduce the brief.`;
@@ -112,15 +130,17 @@ Do NOT recommend buy/sell — this is a brief, not a signal.`;
     let llm_attempts: unknown[] = [];
     let llm_error: string | null = null;
     try {
-      // Primary: Virtuals (sponsored, Kimi/DeepSeek) → Venice (may add web
-      // search) → Bankr (last resort). Every attempt is logged with
-      // provider/status/duration for prod tail visibility.
+      // Virtuals, and only Virtuals. This said "Virtuals → Venice (may add web
+      // search) → Bankr (last resort)"; that chain was stripped 2026-07-25 and
+      // callLLM now throws LLM_UNAVAILABLE instead of trying a second vendor.
+      // `webSearch: true` was also passed here and is an explicitly ignored
+      // param — dropped, because passing it implied a capability we don't have.
+      // Every attempt is still logged with provider/status/duration.
       const r = await callLLM({
         system,
         user: userPrompt,
         temperature: 0.3,
         maxTokens: 900,
-        webSearch: true,
       });
       markdown = r.text;
       llm_provider = r.provider;
@@ -148,18 +168,24 @@ Do NOT recommend buy/sell — this is a brief, not a signal.`;
         attempts: llm_attempts,
       },
       warnings: [
-        llm_error ? "llm_synthesis_unavailable: all providers returned error; report degraded to data-only" : null,
-        llm_provider !== null && !llm_web_search_used ? `no_web_search_this_run: served by ${llm_provider} which does not search; "News" section relies on training-data recall + \"[data unavailable]\" markers` : null,
+        llm_error ? "llm_synthesis_unavailable: the inference gateway returned an error; report degraded to data-only" : null,
+        // Unconditional once the LLM answers — Virtuals has no search at all, so
+        // this is a property of the gateway, not of a particular run. It said
+        // "no_web_search_this_run" while the prompt was still ordering the model
+        // to search and cite URLs.
+        llm_provider !== null && !llm_web_search_used ? `no_web_search: ${llm_provider} has no web-search capability, so the report contains no news and no citations — only on-chain FACTS plus background the model is asked to label as unverified` : null,
         dex_price_unavailable_reason ? `${primary.selection}: ${dex_price_unavailable_reason}` : null,
       ].filter((x): x is string => !!x),
-      note: "Numbers in `facts` are verifiable on-chain (Chainlink + GT), and every `dex_*` figure comes from this token's dollar-anchored primary pool (#231) — never from a stock-vs-stock or stock-vs-memecoin pair. Synthesis chain: Virtuals (primary, sponsored) → Venice (web-search if reached) → Bankr (fallback). Every attempt logged with provider + status + duration.",
+      // Said "Virtuals (primary, sponsored) → Venice (web-search if reached) →
+      // Bankr (fallback)" until 2026-09-18. There is no chain: callLLM is
+      // Virtuals-only since 2026-07-25 and throws rather than falling back, so
+      // the venice/bankr arms of the data_sources ternary below were dead code
+      // describing vendors this request never touches.
+      note: "Numbers in `facts` are verifiable on-chain (Chainlink + GT), and every `dex_*` figure comes from this token's dollar-anchored primary pool (#231) — never from a stock-vs-stock or stock-vs-memecoin pair. Synthesis: Virtuals only — no provider fallback and no web search, so the prose is model recall and the FACTS block is the sourced part. Every attempt logged with provider + status + duration.",
       data_sources: [
         "Chainlink AggregatorV3 (RH Chain)",
         "api.geckoterminal.com (RH Chain)",
-        llm_provider === "virtuals" ? "Virtuals Compute (partner-sponsored)"
-        : llm_provider === "venice" ? (llm_web_search_used ? "Venice AI (web-search)" : "Venice AI")
-        : llm_provider === "bankr" ? "Bankr LLM (fallback)"
-        : null,
+        llm_provider === "virtuals" ? "Virtuals Compute (partner-sponsored, no web search)" : null,
       ].filter(Boolean),
       network: RH_CHAIN,
       timestamp,

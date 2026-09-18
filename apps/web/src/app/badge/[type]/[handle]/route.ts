@@ -95,10 +95,14 @@ export async function GET(
     return new Response(errorBadgeSvg("invalid type"), { headers: svgHeaders });
   }
 
-  const apiKey = process.env.BANKR_API_KEY;
-  if (!apiKey) {
-    return new Response(errorBadgeSvg("no API key"), { headers: svgHeaders });
-  }
+  // A `BANKR_API_KEY` presence gate stood here and rendered a "no API key"
+  // badge when it was unset. It was never sent anywhere: the only outbound call
+  // below is a same-origin fetch to /api/builder-score, which runs the x402
+  // builder-score handler on Virtuals via callLLM. So a dead credential —
+  // measured 403-banned on every verb, 2026-09-18 — was gating a live public
+  // endpoint, and unsetting the variable during an env cleanup would have
+  // blanked every embedded badge for a reason no reader could have guessed.
+  // Removed: the badge now depends only on the service it actually calls.
 
   try {
     const decodedHandle = decodeURIComponent(handle);
