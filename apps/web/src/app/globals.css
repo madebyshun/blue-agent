@@ -410,3 +410,44 @@ code, pre, .font-mono {
 /* Light-only polish, scoped to the landing (never leaks to the dark app). */
 html[data-theme="light"] .landing-root ::selection { background: rgba(2,132,199,0.18); color: #0b1220; }
 html[data-theme="light"] .landing-root ::-webkit-scrollbar-thumb { background: #cdd7e5; }
+
+/* Provider wordmarks (§04) — theme-adaptive monochrome, no per-theme SVG swap
+   and no card/plate wrapper. Any colored source SVG collapses to a silhouette:
+   white on the dark palette, near-black on the light one. Default (dark) first;
+   the light override mirrors the --ln-* flip. */
+.landing-root .provider-logo { filter: brightness(0) invert(1); opacity: 0.9; }
+html[data-theme="light"] .landing-root .provider-logo { filter: brightness(0); opacity: 0.82; }
+
+/* ── Landing hero — ambient motion (Halo-style) ────────────────────────────
+   A faint masked grid + two slow-drifting aurora blobs behind the hero. Both
+   are compositor-only (transform/opacity) so they stay cheap, and blue-only to
+   honor the single-accent rule. Reduced-motion pins the blobs still (the inline
+   base opacity then holds). */
+@keyframes ln-aurora-a {
+  0%, 100% { transform: translate3d(-6%, -4%, 0) scale(1);   opacity: 0.55; }
+  50%      { transform: translate3d(6%, 6%, 0)   scale(1.18); opacity: 0.85; }
+}
+@keyframes ln-aurora-b {
+  0%, 100% { transform: translate3d(8%, 2%, 0)   scale(1.1);  opacity: 0.40; }
+  50%      { transform: translate3d(-6%, -6%, 0)  scale(1);    opacity: 0.70; }
+}
+.landing-root .ln-aurora {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(64px);
+  will-change: transform, opacity;
+}
+.landing-root .ln-aurora-a { animation: ln-aurora-a 15s ease-in-out infinite; }
+.landing-root .ln-aurora-b { animation: ln-aurora-b 19s ease-in-out infinite; }
+.landing-root .ln-hero-grid {
+  background-image:
+    linear-gradient(to right,  rgba(79, 195, 247, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(79, 195, 247, 0.06) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(ellipse 62% 58% at 50% 0%, #000 0%, transparent 72%);
+          mask-image: radial-gradient(ellipse 62% 58% at 50% 0%, #000 0%, transparent 72%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-root .ln-aurora-a,
+  .landing-root .ln-aurora-b { animation: none; }
+}

@@ -113,6 +113,10 @@ export const en = {
   },
   nav_marketing: {
     about: "About",
+    // `hub`/`pricing` added 2026-09-19 — product-forward nav (Dot-structured).
+    // `pricing` targets the §07 credits anchor on the landing ("/#pricing").
+    hub: "Hub",
+    pricing: "Pricing",
     // `soul` (was `skills`, 2026-08) — the SOUL.md identity page at /soul.
     // "Skills" now means the app's installed-skill catalog, so the marketing
     // nav no longer uses that word.

@@ -111,6 +111,10 @@ export const zh: Dict = {
   },
   nav_marketing: {
     about: "关于",
+    // `hub`/`pricing` 于 2026-09-19 新增 —— 产品优先的导航（对齐 Dot 结构）。
+    // `pricing` 指向落地页 §07 额度锚点（"/#pricing"）。
+    hub: "中心",
+    pricing: "定价",
     // `soul`（原 `skills`，2026-08）—— /soul 上的 SOUL.md 身份页。
     // “技能”现在专指应用内已安装的技能目录，营销导航不再使用该词。
     soul: "灵魂",

@@ -49,6 +49,21 @@ const CHAT_CAPS = [
   "web search · file upload",
 ];
 
+// Wallet actions that run INSIDE Blue Chat — each is a real, registered chat
+// tool (api/chat schemas), and each is NON-CUSTODIAL: Blue only *prepares* the
+// transaction (a 0x/route quote + calldata) and YOU sign it from your own
+// wallet. Base 8453 unless the row names Robinhood Chain (4663). The Base-MCP
+// get_wallets/send/swap primitives are intentionally excluded — still "soon",
+// not wired (chat/agent-skills.ts), so listing them would over-promise.
+const WALLET_ACTIONS: { label: string; note: string }[] = [
+  { label: "Check balance", note: "portfolio + tokens" },
+  { label: "Send",         note: "USDC / ERC-20 · Base" },
+  { label: "Swap",         note: "0x quote · Base" },
+  { label: "Earn yield",   note: "supply to a vault" },
+  { label: "RH swap",      note: "Robinhood Chain" },
+  { label: "Bridge",       note: "Base ↔ RH" },
+];
+
 // Models available in Blue Chat — the 8 real presets from api/_lib/llm.ts
 // (VIRTUALS_PRESETS). `provider` and the per-message credit note are the LIVE
 // values; models are switchable mid-conversation and share one credit balance.
@@ -98,13 +113,21 @@ const PROVIDERS: { name: string; role: string; models: string; href: string; hre
 
 // USDC credit packs — the live CREDIT_PACKS from lib/payments.ts
 // (5/20/50/100 USDC → ×2,000 credits). Amounts are round so the on-chain
-// transfer and the "≈ N credits" preview agree exactly.
-const PACKS: { usdc: string; credits: string; label: string; popular?: boolean }[] = [
-  { usdc: "$5",   credits: "10,000",  label: "Starter" },
-  { usdc: "$20",  credits: "40,000",  label: "Plus", popular: true },
-  { usdc: "$50",  credits: "100,000", label: "Pro" },
-  { usdc: "$100", credits: "200,000", label: "Scale" },
+// transfer and the "≈ N credits" preview agree exactly. `cr` is numeric so the
+// "≈ N messages" estimate is DERIVED in code (cr ÷ SONNET_CR), never a
+// marketing figure.
+const PACKS: { usdc: string; cr: number; label: string; popular?: boolean }[] = [
+  { usdc: "$5",   cr: 10_000,  label: "Starter" },
+  { usdc: "$20",  cr: 40_000,  label: "Plus", popular: true },
+  { usdc: "$50",  cr: 100_000, label: "Pro" },
+  { usdc: "$100", cr: 200_000, label: "Scale" },
 ];
+
+// Sonnet 5 per-message credit cost (the MODELS note). The single anchor for the
+// honest "≈ N messages" yardstick on the free tier + each pack — every tier
+// gets EVERY model, so this is only a scale reference, not a gated feature.
+const SONNET_CR = 50;
+const FREE_DAILY = 500; // WALLET_DAILY (credits.ts) — free credits per wallet/day.
 
 const HUB_CATEGORIES = [
   { label: "RH RWA",       tools: "rh-stock-arb · rh-stock-movers · rh-stock-swap · rh-rwa-dca" },
@@ -131,16 +154,6 @@ const SOLUTIONS: { tag: string; title: string; body: string; chips: string[]; hr
     body: "Point your own agent at the Hub over x402 — pay per call in USDC, no key exchange, settled on Base. Or attach the MCP server and call Blue from Claude Code, Cursor, or Desktop.",
     chips: [`${TOOL_COUNT} tools`, "x402", "MCP"],
     href: "/hub", cta: "Browse the Hub →" },
-];
-
-// Convictions — Halo-style principle band. Each is a literal property of the
-// system, not aspiration: verifiable/on-chain stats (LiveUsage), non-custodial
-// signing (payments.ts), pay-per-use credits (credits.ts), public grading (Hood).
-const CONVICTIONS: { title: string; body: string }[] = [
-  { title: "Verifiable, not vibes", body: "Every stat on this page is aggregate and on-chain. Missing data shows as “—”, never a fake 0." },
-  { title: "Non-custodial by default", body: "You sign every transaction from your own wallet. We never hold your keys or your funds." },
-  { title: "Pay per use", body: "USDC on Base, credits per message. No subscription, no token to hold, no lock-up." },
-  { title: "Misses shown in public", body: "Blue Hood grades every signal it makes — including the calls it got wrong." },
 ];
 
 // How you use Blue — modality tabs (Dot-style). `k` maps to home.use_<k>_label/desc.
@@ -376,11 +389,28 @@ function HowYouUse() {
               {t(`home.use_${tab.k}_desc`)}
             </p>
             {tab.k === "chat" && (
-              <div className="flex flex-wrap gap-2">
-                {CHAT_CAPS.map((c) => (
-                  <span key={c} className="font-mono text-[12px] ln-accent border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-lg px-2.5 py-1">{c}</span>
-                ))}
-              </div>
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {CHAT_CAPS.map((c) => (
+                    <span key={c} className="font-mono text-[12px] ln-accent border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-lg px-2.5 py-1">{c}</span>
+                  ))}
+                </div>
+                {/* Wallet skills — real chat tools, non-custodial (you sign). */}
+                <div className="mt-5 pt-5 border-t ln-hair">
+                  <div className="flex items-center gap-2 font-mono text-[10px] tracking-[0.16em] uppercase ln-faint mb-2.5">
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: ACCENT, boxShadow: `0 0 6px ${ACCENT}` }} />
+                    Wallet actions · you sign every tx
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {WALLET_ACTIONS.map((w) => (
+                      <span key={w.label} className="inline-flex items-baseline gap-1.5 font-mono text-[12px] rounded-lg border ln-brd px-2.5 py-1">
+                        <span className="ln-body">{w.label}</span>
+                        <span className="ln-faint text-[10px]">{w.note}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </Reveal>
@@ -399,8 +429,13 @@ export default function Home() {
     <div className="landing-root min-h-screen" style={{ fontFamily: MONO }}>
       <Navbar />
 
-      {/* Ambient glow */}
-      <div className="fixed inset-x-0 top-0 h-[800px] pointer-events-none overflow-hidden" aria-hidden>
+      {/* Ambient — Halo-style: a masked grid, two slow-drifting aurora blobs,
+          and the base radial wash. pointer-events-none + aria-hidden; the blobs
+          pin still under prefers-reduced-motion (see globals.css). */}
+      <div className="fixed inset-x-0 top-0 h-[820px] pointer-events-none overflow-hidden" aria-hidden>
+        <div className="ln-hero-grid absolute inset-0" />
+        <div className="ln-aurora ln-aurora-a" style={{ top: "-170px", left: "7%", width: "520px", height: "520px", background: "radial-gradient(circle, #4FC3F7 0%, transparent 70%)", opacity: 0.5 }} />
+        <div className="ln-aurora ln-aurora-b" style={{ top: "-130px", right: "5%", width: "460px", height: "460px", background: "radial-gradient(circle, #29ABE2 0%, transparent 70%)", opacity: 0.4 }} />
         <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 75% 50% at 50% -8%, #4FC3F71f 0%, transparent 70%)" }} />
       </div>
 
@@ -576,18 +611,16 @@ export default function Home() {
             {PROVIDERS.map((p, i) => (
               <Reveal key={p.name} delay={i * 80}>
                 <div className="ba-card h-full rounded-2xl p-6 sm:p-7 flex flex-col">
-                  {/* Real wordmark on a white plate — the green Virtuals mark and
-                      the dark-ink Venice mark both read on white in either theme,
-                      so no per-theme logo swap is needed. Hides on 404. */}
-                  <div className="flex items-center gap-2.5 mb-4">
-                    <span className="inline-flex items-center h-11 rounded-xl bg-white px-4 border border-black/5 shadow-sm">
-                      <img
-                        src={p.logo}
-                        alt={p.name}
-                        className="h-5 sm:h-[22px] w-auto object-contain"
-                        onError={(e) => { e.currentTarget.style.display = "none"; }}
-                      />
-                    </span>
+                  {/* Wordmark only — no plate/card. Theme-adaptive monochrome via
+                      `.provider-logo` (white on dark, near-black on light), so one
+                      colored SVG serves both palettes. Hides itself on 404. */}
+                  <div className="flex items-center gap-2.5 mb-5">
+                    <img
+                      src={p.logo}
+                      alt={p.name}
+                      className="provider-logo h-5 sm:h-6 w-auto object-contain"
+                      onError={(e) => { e.currentTarget.style.display = "none"; }}
+                    />
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: ACCENT, boxShadow: `0 0 8px ${ACCENT}` }} />
                   </div>
                   <p className="ln-body text-[14px] leading-relaxed mb-4">{p.role}</p>
@@ -601,12 +634,13 @@ export default function Home() {
             ))}
           </div>
 
-          {/* Live aggregate usage — a single real total from /api/stats/public
-              (forward-only tokens meter), never a fabricated number. Halo-style
-              headline of what the two inference nets have actually served; the
-              component carries its own label and renders "—" until it accrues. */}
+          {/* Live aggregate usage — a real total from /api/stats/public
+              (forward-only tokens meter) over three sub-stats, never a fabricated
+              number. Halo-style headline of what the two inference nets have
+              actually served; renders "—" for any unread/zero meter. `models` is
+              the live preset count so the sub-stat can't drift from the chips. */}
           <Reveal delay={160} className="mt-4">
-            <LiveUsage />
+            <LiveUsage models={MODELS.length} />
           </Reveal>
 
           <Reveal delay={220}>
@@ -691,7 +725,7 @@ export default function Home() {
         </section>
 
         {/* ══════════ 07 CREDITS & PRICING — public ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t ln-divide">
+        <section id="pricing" className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t ln-divide scroll-mt-24">
           <SectionHead
             num="07" kicker="Credits & pricing"
             title={<>Every price, <span className="ln-accent">in the open.</span></>}
@@ -700,8 +734,9 @@ export default function Home() {
 
           {/* Pay-with rail — USDC is live; $BLUEAGENT lands after the relaunch. Credits
               never require the token (credits.ts is token-free), so this is an added
-              rail, not a gate. No monthly tier: Blue is pay-as-you-go by design. */}
-          <Reveal className="mb-5">
+              rail, not a gate. No monthly/yearly toggle: Blue is pay-as-you-go, so a
+              billing-cycle switch would be dishonest. */}
+          <Reveal className="mb-6">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[11px]">
               <span className="tracking-widest uppercase ln-faint">Pay with</span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4FC3F7]/40 bg-[#4FC3F7]/10 px-3 py-1 ln-body">
@@ -714,41 +749,65 @@ export default function Home() {
             </div>
           </Reveal>
 
-          {/* Pricing — one rail: USDC → credits. Every figure is a live constant
-              (CREDITS_PER_USDC = 2,000; the CREDIT_PACKS amounts). The free daily
-              bucket and the Hub's per-call x402 pricing live in their own sections;
-              this is the credit menu, nothing invented. */}
-          <div className="max-w-md mx-auto">
-            <Reveal>
-              <div className="ba-card ba-card--hot rounded-2xl p-7 sm:p-8 flex flex-col">
-                <div className="text-sm font-semibold ln-accent">Credits</div>
-                <div className="mt-3 flex items-baseline gap-1.5">
-                  <span className="text-4xl font-bold ln-h tracking-tight">1 USDC</span>
-                  <span className="font-mono text-[12px] ln-mut">= 2,000 cr</span>
+          {/* Free tier — the daily bucket as its own banner above the packs (Dot's
+              free row). FREE_DAILY (500) is the live WALLET_DAILY constant; the
+              "≈ N messages" line is derived (FREE_DAILY ÷ SONNET_CR). */}
+          <Reveal className="mb-4">
+            <div className="ba-card rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex-1">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-lg font-semibold ln-h">Free</span>
+                  <span className="font-mono text-[12px] ln-accent">{FREE_DAILY} credits every day</span>
+                  <span className="font-mono text-[11px] ln-faint">≈ {Math.round(FREE_DAILY / SONNET_CR)} Sonnet 5 msgs / day</span>
                 </div>
-                <div className="mt-5 grid grid-cols-4 gap-2">
-                  {PACKS.map((p) => (
-                    <div key={p.usdc} className="rounded-lg border p-2.5 text-center"
-                      style={p.popular ? { borderColor: "#4FC3F740", background: "#4FC3F70d" } : { borderColor: "var(--ln-border)" }}>
-                      <div className="font-mono text-[13px] font-bold ln-h">{p.usdc}</div>
-                      <div className="font-mono text-[10px] ln-mut">{p.credits}</div>
-                    </div>
-                  ))}
-                </div>
-                <ul className="mt-6 space-y-2 font-mono text-[12px] flex-1">
-                  <li className="ln-accent">✓ <span className="ln-body">Credits never expire</span></li>
-                  <li className="ln-accent">✓ <span className="ln-body">Failed model call auto-refunded</span></li>
-                  <li className="ln-accent">✓ <span className="ln-body">Every frontier model, one balance</span></li>
-                  <li className="ln-accent">✓ <span className="ln-body">Or start free — 500 credits every day</span></li>
-                </ul>
-                <Link href="/app/chat" className="mt-6 inline-flex items-center justify-center rounded-lg bg-[#4FC3F7] px-4 py-2.5 font-mono text-[12px] font-semibold text-black hover:bg-[#7ad3f9] transition-colors">Top up in USDC →</Link>
+                <p className="font-mono text-[12px] ln-mut mt-1.5">
+                  Any connected wallet — no card, no token to hold. Resets every 24h; every model included.
+                </p>
               </div>
-            </Reveal>
+              <Link href="/app/chat" className="shrink-0 text-sm font-semibold ln-accent border border-[#4FC3F7]/30 px-5 py-2.5 rounded-xl text-center hover:bg-[#4FC3F7]/5 transition-all">
+                Start free →
+              </Link>
+            </div>
+          </Reveal>
+
+          {/* Credit packs — the live CREDIT_PACKS (5/20/50/100 USDC → ×2,000).
+              The cards escalate by PRICE + CREDITS only; every tier gets every
+              model and every feature (credits.ts is a flat, token-free allowance),
+              so the checklist is identical BY DESIGN — the difference is the credit
+              count and the derived "≈ N messages". This is not feature-gating. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            {PACKS.map((p, i) => (
+              <Reveal key={p.usdc} delay={i * 70}>
+                <div className={"h-full rounded-2xl p-6 flex flex-col ba-card" + (p.popular ? " ba-card--hot" : "")}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-mono text-[11px] tracking-widest uppercase ln-accent">{p.label}</span>
+                    {p.popular && (
+                      <span className="font-mono text-[9px] tracking-widest uppercase ln-accent border border-[#4FC3F7]/30 bg-[#4FC3F7]/10 rounded px-1.5 py-0.5">Popular</span>
+                    )}
+                  </div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-3xl font-bold ln-h tracking-tight">{p.usdc}</span>
+                    <span className="font-mono text-[11px] ln-mut">one-off</span>
+                  </div>
+                  <div className="mt-2 font-mono text-[13px] ln-accent">{p.cr.toLocaleString("en-US")} credits</div>
+                  <div className="font-mono text-[11px] ln-faint mt-0.5">≈ {Math.round(p.cr / SONNET_CR).toLocaleString("en-US")} Sonnet 5 msgs</div>
+                  <ul className="mt-4 space-y-1.5 font-mono text-[11.5px] flex-1">
+                    {["All 8 models", "Credits never expire", "Failed call refunded", "Non-custodial"].map((f) => (
+                      <li key={f} className="ln-mut"><span className="ln-accent">✓</span> {f}</li>
+                    ))}
+                  </ul>
+                  <Link href="/app/chat"
+                    className={"mt-5 inline-flex items-center justify-center rounded-lg px-4 py-2.5 font-mono text-[12px] font-semibold transition-colors " + (p.popular ? "bg-[#4FC3F7] text-black hover:bg-[#7ad3f9]" : "border ln-brd ln-accent hover:bg-[#4FC3F7]/5")}>
+                    Top up {p.usdc} →
+                  </Link>
+                </div>
+              </Reveal>
+            ))}
           </div>
 
           <Reveal delay={180}>
             <p className="font-mono text-[12px] ln-mut mt-6 text-center max-w-2xl mx-auto">
-              Non-custodial, no subscription — purchased credits never expire and the free daily bucket resets every 24h.
+              Same features on every tier — more USDC just buys more credits (1 USDC = 2,000, they never expire).
               A failed model call is refunded automatically. Paying in <span className="ln-body">$BLUEAGENT</span> arrives
               after the token relaunch; credits stay free to earn and pay-per-use in USDC either way.
             </p>
@@ -846,29 +905,6 @@ export default function Home() {
                 </Link>
               </div>
             </Reveal>
-          </div>
-        </section>
-
-        {/* ══════════ CONVICTIONS ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t ln-divide">
-          <Reveal className="mb-10">
-            <div className="font-mono text-[11px] tracking-[0.22em] mb-4">
-              <span className="ln-accent">// principles</span>
-              <span className="ln-faint ml-2 uppercase">What we won&apos;t do</span>
-            </div>
-          </Reveal>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            {CONVICTIONS.map((c, i) => (
-              <Reveal key={c.title} delay={i * 70}>
-                <div className="ba-card h-full rounded-2xl p-6 flex flex-col">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: ACCENT, boxShadow: `0 0 6px ${ACCENT}` }} />
-                    <span className="text-base font-semibold ln-h">{c.title}</span>
-                  </div>
-                  <p className="font-mono text-[12.5px] ln-mut leading-relaxed">{c.body}</p>
-                </div>
-              </Reveal>
-            ))}
           </div>
         </section>
 
