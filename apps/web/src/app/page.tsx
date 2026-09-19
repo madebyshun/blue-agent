@@ -105,6 +105,24 @@ const HUB_CATEGORIES = [
   { label: "Builder",      color: "#A78BFA", tools: "repo health · founder check · roadmap validator" },
 ];
 
+// Who builds on Blue — persona routing to the real surfaces. Founder → the five
+// commands (fixed USDC prices, packages/core BLUE_AGENT_PRICING). Trader → Blue
+// Hood (graded in public). Agent-dev → the Hub over x402 + the MCP server.
+const SOLUTIONS: { tag: string; title: string; body: string; chips: string[]; href: string; cta: string; color: string }[] = [
+  { color: "#4FC3F7", tag: "Founders", title: "Idea → raise, one thread",
+    body: "Run the five commands end to end: /idea to shape it, /build for architecture, /audit for a go/no-go, /ship for the launch checklist, /raise for the pitch. A fixed USDC price each — no retainer.",
+    chips: ["/idea · $0.05", "/build · $0.50", "/audit · $1.00", "/ship · $0.10", "/raise · $0.20"],
+    href: "/app/chat", cta: "Start with /idea →" },
+  { color: "#34D399", tag: "Traders", title: "Signals graded in public",
+    body: "Blue Hood tracks oracle-vs-DEX drift on tokenized stocks across Base B20 and Robinhood Chain. Every call is signed by you and scored in the open — the misses too, not just the hits.",
+    chips: ["Base 8453", "Robinhood 4663", "hits + misses"],
+    href: "/track", cta: "See the track record →" },
+  { color: "#60A5FA", tag: "Agent builders", title: "Rent the tools, per call",
+    body: "Point your own agent at the Hub over x402 — pay per call in USDC, no key exchange, settled on Base. Or attach the MCP server and call Blue from Claude Code, Cursor, or Desktop.",
+    chips: [`${TOOL_COUNT} tools`, "x402", "MCP"],
+    href: "/hub", cta: "Browse the Hub →" },
+];
+
 // Convictions — Halo-style principle band. Each is a literal property of the
 // system, not aspiration: verifiable/on-chain stats (ProofStrip), non-custodial
 // signing (payments.ts), pay-per-use credits (credits.ts), public grading (Hood).
@@ -618,10 +636,37 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ══════════ 07 CREDITS & PRICING — public ══════════ */}
+        {/* ══════════ 07 WHO BUILDS ON BLUE — personas ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
-            num="07" kicker="Credits & pricing" accent="#34D399"
+            num="07" kicker="Who builds on Blue" accent="#4FC3F7"
+            title={<>One agent, <span className="text-[#4FC3F7]">three ways to work.</span></>}
+            sub="Founders ship products, traders read the market, agent builders rent the tooling — one wallet, one credit balance, and the same skills behind all three."
+          />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+            {SOLUTIONS.map((s, i) => (
+              <Reveal key={s.tag} delay={i * 80}>
+                <div className="ba-card h-full rounded-2xl p-6 sm:p-7 flex flex-col">
+                  <div className="font-mono text-[10px] tracking-widest uppercase mb-3" style={{ color: s.color }}>{s.tag}</div>
+                  <div className="text-base font-semibold mb-2 text-white">{s.title}</div>
+                  <p className="text-slate-400 text-[13.5px] leading-relaxed mb-4">{s.body}</p>
+                  <div className="flex flex-wrap gap-1.5 mb-5">
+                    {s.chips.map((c) => (
+                      <span key={c} className="font-mono text-[10px] rounded px-2 py-0.5 border"
+                        style={{ color: s.color, borderColor: `${s.color}30`, background: `${s.color}0d` }}>{c}</span>
+                    ))}
+                  </div>
+                  <Link href={s.href} className="mt-auto font-mono text-[12px] hover:underline" style={{ color: s.color }}>{s.cta}</Link>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+
+        {/* ══════════ 08 CREDITS & PRICING — public ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+          <SectionHead
+            num="08" kicker="Credits & pricing" accent="#34D399"
             title={<>Every price, <span className="text-[#34D399]">in the open.</span></>}
             sub="No hidden tiers. Here is exactly what a message costs, what a top-up buys, and what you get for free."
           />
@@ -688,39 +733,60 @@ export default function Home() {
           </Reveal>
         </section>
 
-        {/* ══════════ 08 TWO WAYS IN ══════════ */}
+        {/* ══════════ 09 RUNS WHERE YOU BUILD — MCP ══════════ */}
         <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
           <SectionHead
-            num="08" kicker="Chat or API" accent="#60A5FA"
-            title={<>One agent. <span className="text-[#60A5FA]">Two ways in.</span></>}
-            sub="Use it as a chat, or call any tool directly over x402 from your own code or agent — same compute, same prices."
+            num="09" kicker="In your editor" accent="#818CF8"
+            title={<>Blue runs <span className="text-[#818CF8]">where you build.</span></>}
+            sub="Chat is one way in. The other: attach Blue as an MCP server and call it straight from Claude Code, Cursor, or Claude Desktop — the five commands and the Hub skills, without leaving your editor."
           />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 items-stretch">
             <Reveal>
-              <div className="ba-card h-full rounded-2xl p-6 flex flex-col">
-                <div className="text-sm font-semibold mb-2 text-[#4FC3F7]">Blue Chat</div>
-                <p className="font-mono text-[12px] text-slate-500 leading-relaxed mb-5">
-                  The full workspace — every model, every skill, credits in USDC. Nothing to install.
-                </p>
-                <Link href="/app/chat" className="mt-auto text-sm font-semibold text-[#4FC3F7] border border-[#4FC3F7]/30 px-5 py-2.5 rounded-xl text-center hover:bg-[#4FC3F7]/5 transition-all">
-                  Open Blue Chat →
-                </Link>
+              <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a10] overflow-hidden h-full flex flex-col">
+                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#15151f]">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/60" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/60" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]/60" />
+                  <span className="font-mono text-[11px] text-slate-600 ml-2">Claude Code · Cursor · Desktop</span>
+                </div>
+                <pre className="flex-1 p-4 sm:p-5 overflow-x-auto font-mono text-[12px] leading-relaxed m-0">
+<span className="text-slate-600"># one-line install — Claude Code</span>
+{"\n"}<span className="text-slate-600">$ </span><span className="text-[#818CF8]">claude mcp add</span><span className="text-slate-300"> blue-agent \</span>
+{"\n"}<span className="text-slate-500">    --transport http https://blueagent.dev/api/mcp</span>
+{"\n\n"}<span className="text-slate-600"># …or drop into any MCP config</span>
+{"\n"}<span className="text-slate-500">{'{ "mcpServers": {'}</span>
+{"\n"}<span className="text-slate-500">{'    "blue-agent": { "url": '}</span><span className="text-[#34D399]">{'"https://blueagent.dev/api/mcp"'}</span><span className="text-slate-500">{' } } }'}</span>
+                </pre>
               </div>
             </Reveal>
             <Reveal delay={80}>
-              <div className="ba-card h-full rounded-2xl p-6 flex flex-col">
-                <div className="text-sm font-semibold mb-2 text-[#60A5FA]">x402 API · MCP</div>
+              <div className="ba-card h-full rounded-2xl p-6 sm:p-7 flex flex-col">
+                <div className="text-sm font-semibold mb-3 text-[#818CF8]">The commands, in your agent</div>
+                <div className="flex flex-wrap gap-1.5 mb-5">
+                  {["blue_idea", "blue_build", "blue_audit", "blue_ship", "blue_raise"].map((c) => (
+                    <span key={c} className="font-mono text-[11px] text-[#818CF8] border border-[#818CF8]/25 bg-[#818CF8]/5 rounded px-2 py-1">{c}</span>
+                  ))}
+                </div>
                 <p className="font-mono text-[12px] text-slate-500 leading-relaxed mb-5">
-                  Call any of the {TOOL_COUNT} tools from your own agent — pay per call in USDC, or attach the MCP server.
+                  It&apos;s a remote HTTP server — nothing to install, no key to provision. Your editor calls the same skills the chat runs, from /idea all the way to /raise.
                 </p>
-                <Link href="/docs/mcp" className="mt-auto text-sm font-semibold text-[#60A5FA] border border-[#60A5FA]/30 px-5 py-2.5 rounded-xl text-center hover:bg-[#60A5FA]/5 transition-all">
-                  Install MCP
+                <Link href="/docs/mcp" className="mt-auto text-sm font-semibold text-[#818CF8] border border-[#818CF8]/30 px-5 py-2.5 rounded-xl text-center hover:bg-[#818CF8]/5 transition-all">
+                  MCP setup →
                 </Link>
               </div>
             </Reveal>
           </div>
+        </section>
+
+        {/* ══════════ 10 BUILD ON THE API — x402 ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+          <SectionHead
+            num="10" kicker="x402 API" accent="#60A5FA"
+            title={<>Every skill is a <span className="text-[#60A5FA]">paid endpoint.</span></>}
+            sub={<>Point your own agent at any of the {TOOL_COUNT} Hub tools over x402. It signs a USDC payment on Base and gets the result back — no account, no API key to provision, self-hosted through the Coinbase CDP facilitator.</>}
+          />
           <Reveal>
-            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a10] overflow-hidden">
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a10] overflow-hidden mb-4">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#15151f]">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/60" />
                 <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/60" />
@@ -735,6 +801,30 @@ export default function Home() {
               </pre>
             </div>
           </Reveal>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+            <Reveal>
+              <div className="ba-card h-full rounded-2xl p-6 flex flex-col">
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {["Self-hosted x402", "EIP-3009", "Coinbase CDP facilitator", "USDC · Base 8453", "from $0.05 / call"].map((f) => (
+                    <span key={f} className="font-mono text-[10px] text-[#60A5FA] border border-[#60A5FA]/25 bg-[#60A5FA]/5 rounded px-2 py-1">{f}</span>
+                  ))}
+                </div>
+                <p className="font-mono text-[12px] text-slate-500 leading-relaxed">
+                  No storefront in the middle — Blue builds its own 402 payment requirement and settles the USDC transfer you sign. The caller pays per call; nothing is metered or subscribed.
+                </p>
+              </div>
+            </Reveal>
+            <Reveal delay={80}>
+              <div className="ba-card h-full rounded-2xl p-6 flex flex-col justify-center gap-3">
+                <Link href="/hub" className="text-sm font-semibold text-[#A78BFA] border border-[#A78BFA]/30 px-5 py-2.5 rounded-xl text-center hover:bg-[#A78BFA]/5 transition-all">
+                  Browse all {TOOL_COUNT} tools →
+                </Link>
+                <Link href="/docs" className="text-sm font-semibold text-[#60A5FA] border border-[#60A5FA]/30 px-5 py-2.5 rounded-xl text-center hover:bg-[#60A5FA]/5 transition-all">
+                  Read the API docs →
+                </Link>
+              </div>
+            </Reveal>
+          </div>
         </section>
 
         {/* ══════════ CONVICTIONS ══════════ */}
