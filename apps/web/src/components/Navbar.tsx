@@ -4,6 +4,32 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LanguageToggle from "@/components/LanguageToggle";
 import { useLang } from "@/lib/i18n/context";
+import { useTheme } from "@/components/ThemeProvider";
+
+// Sun (shown in dark mode → click to go light) / Moon (shown in light → go dark).
+function ThemeToggle({ className = "" }: { className?: string }) {
+  const { theme, toggle } = useTheme();
+  const dark = theme === "dark";
+  return (
+    <button
+      onClick={toggle}
+      aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+      title={dark ? "Light mode" : "Dark mode"}
+      className={"flex items-center justify-center w-8 h-8 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-[#1A1A2E] transition-all " + className}
+    >
+      {dark ? (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
+          <circle cx="12" cy="12" r="4" />
+          <path strokeLinecap="round" d="M12 2v2m0 16v2m10-10h-2M4 12H2m15.07-7.07-1.42 1.42M6.34 17.66l-1.41 1.41m12.14 0-1.42-1.42M6.34 6.34 4.93 4.93" />
+        </svg>
+      ) : (
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M21.75 15.5A9.75 9.75 0 0 1 8.5 2.25a.75.75 0 0 0-.98-.98A9.75 9.75 0 1 0 22.73 16.48a.75.75 0 0 0-.98-.98Z" />
+        </svg>
+      )}
+    </button>
+  );
+}
 
 // `soul` was `skills` → `/skills` until 2026-08. The page is the SOUL.md
 // identity spec, and /skills now belongs to the app's installed-skill catalog
@@ -19,6 +45,9 @@ export default function Navbar() {
   const pathname = usePathname();
   const { t } = useLang();
   const isActive = (href: string) => pathname.startsWith(href);
+  // Theme toggle only where it does anything — the landing is the only surface
+  // that reads the light palette. Elsewhere the app shell is dark-only.
+  const isHome = pathname === "/";
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[#1A1A2E] bg-[#050508]/90 backdrop-blur-xl">
@@ -61,6 +90,9 @@ export default function Navbar() {
 
         {/* ── Right actions ── */}
         <div className="hidden md:flex items-center gap-3 ml-auto shrink-0">
+          {/* Light/dark toggle — landing only */}
+          {isHome && <ThemeToggle />}
+
           {/* Language toggle — EN | 中文 (shared cookie syncs marketing + app) */}
           <LanguageToggle />
 
@@ -147,9 +179,10 @@ export default function Navbar() {
               {t("nav_marketing.launch_app")}
             </Link>
           </div>
-          {/* Language toggle (mobile) */}
-          <div className="flex justify-center pt-1">
+          {/* Language + theme toggle (mobile) */}
+          <div className="flex justify-center items-center gap-2 pt-1">
             <LanguageToggle />
+            {isHome && <ThemeToggle />}
           </div>
         </div>
       )}

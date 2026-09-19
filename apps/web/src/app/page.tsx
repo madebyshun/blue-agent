@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
-import ProofStrip from "@/components/ProofStrip";
+import LiveUsage from "@/components/LiveUsage";
 import { useLang } from "@/lib/i18n/context";
 import { TOOL_COUNT } from "@/lib/agent-tools";
 import { CREDITS_PER_USDC } from "@/lib/payments";
@@ -12,6 +12,15 @@ import { CREDITS_PER_USDC } from "@/lib/payments";
 // here (display headlines + reading body). DM Sans (.font-ui) is reserved for the
 // product app's UI chrome — chat bubbles, dense tables — not this hero page.
 const MONO = "'JetBrains Mono', monospace";
+
+// Single-accent by design (2026-09-19): the landing uses ONE blue, #4FC3F7, for
+// every accent. `ACCENT` is that blue as a literal — used for dots, glowing
+// fills, low-opacity tint backgrounds and borders, which read fine on both the
+// dark and light palettes. Accent TEXT that must stay WCAG-readable on a white
+// card uses the `.ln-accent` class instead (it resolves to --ln-accent-ink,
+// which darkens to sky-600 in light mode). Everything non-accent is neutral and
+// flips with the theme via the `.ln-*` tone classes (see globals.css).
+const ACCENT = "#4FC3F7";
 
 // i18n: this landing was fully restructured 2026-09-19 around the wallet →
 // credit → chat core. The new/changed copy is English-first; only the
@@ -29,32 +38,32 @@ const SOCIAL_PROOF = ["Non-custodial", "USDC on Base 8453", "Virtuals + Venice i
 
 const CHAT_COMMANDS = ["/idea", "/build", "/audit", "/ship", "/raise", "/pick", "/scan", "/wallet", "/launch"];
 
-// Models available in Blue Chat — the 8 real presets from
-// api/_lib/llm.ts (VIRTUALS_PRESETS). `provider` and the per-message credit
-// note are the LIVE values; models are switchable mid-conversation and share
-// one credit balance. Split: 6 on Virtuals, 2 on Venice (free + live search).
-const MODELS: { name: string; provider: "Virtuals" | "Venice"; color: string; note: string; href?: string }[] = [
-  { name: "Claude Opus 4.8",   provider: "Virtuals", color: "#4FC3F7", note: "200 cr" },
-  { name: "Claude Sonnet 5",   provider: "Virtuals", color: "#60A5FA", note: "50 cr" },
-  { name: "DeepSeek V4 Flash", provider: "Virtuals", color: "#34D399", note: "10 cr" },
-  { name: "Gemini 2.5 Flash",  provider: "Virtuals", color: "#FBBF24", note: "10 cr" },
-  { name: "Grok 4",            provider: "Virtuals", color: "#E879F9", note: "2M ctx" },
-  { name: "Qwen 3.5 9B",       provider: "Venice",   color: "#FB923C", note: "free" },
-  { name: "Grok 4.3 · Search", provider: "Venice",   color: "#F87171", note: "live web" },
+// Models available in Blue Chat — the 8 real presets from api/_lib/llm.ts
+// (VIRTUALS_PRESETS). `provider` and the per-message credit note are the LIVE
+// values; models are switchable mid-conversation and share one credit balance.
+// Split: 6 on Virtuals, 2 on Venice (free + live search).
+const MODELS: { name: string; provider: "Virtuals" | "Venice"; note: string; href?: string }[] = [
+  { name: "Claude Opus 4.8",   provider: "Virtuals", note: "200 cr" },
+  { name: "Claude Sonnet 5",   provider: "Virtuals", note: "50 cr" },
+  { name: "DeepSeek V4 Flash", provider: "Virtuals", note: "10 cr" },
+  { name: "Gemini 2.5 Flash",  provider: "Virtuals", note: "10 cr" },
+  { name: "Grok 4",            provider: "Virtuals", note: "2M ctx" },
+  { name: "Qwen 3.5 9B",       provider: "Venice",   note: "free" },
+  { name: "Grok 4.3 · Search", provider: "Venice",   note: "live web" },
   // Backed by `e2ee-deepseek-v4-flash` in the Virtuals catalog — the claim is
   // real. Links to the Private preset so it's one click to select.
-  { name: "Private · E2EE",    provider: "Virtuals", color: "#6EE7B7", note: "no logs", href: "/app/chat?preset=private" },
+  { name: "Private · E2EE",    provider: "Virtuals", note: "no logs", href: "/app/chat?preset=private" },
 ];
 
 // The core mechanic — wallet → credit → chat. Every number here is the live
 // constant from lib/payments.ts (CREDITS_PER_USDC) + lib/credits.ts
 // (WALLET_DAILY). Do not hardcode a different figure.
-const FLOW: { n: string; color: string; title: string; body: string }[] = [
-  { n: "01", color: "#4FC3F7", title: "Connect a wallet",
+const FLOW: { n: string; title: string; body: string }[] = [
+  { n: "01", title: "Connect a wallet",
     body: "Bring your own, or create a free Coinbase Smart Wallet in one tap — no seed phrase, nothing to install. Non-custodial: you hold the keys, we never touch them." },
-  { n: "02", color: "#34D399", title: "Top up USDC → credits",
+  { n: "02", title: "Top up USDC → credits",
     body: "Send USDC on Base and it settles to credits on-chain: 1 USDC = 2,000 credits. Or start free — 500 credits every day for any connected wallet, no token to hold." },
-  { n: "03", color: "#818CF8", title: "Spend it in chat",
+  { n: "03", title: "Spend it in chat",
     body: "Credits debit per message, priced by the model you pick — switch models any time. If a model call fails, the credits are refunded automatically." },
 ];
 
@@ -63,28 +72,17 @@ const FLOW: { n: string; color: string; title: string; body: string }[] = [
 // serves the frontier + private presets, Venice serves the free tier + the
 // only live-web-search preset. The "Built in Venice" link points at the real
 // directory repo where Blue Chat is listed (veniceai/builtinvenice, PR #64).
-const PROVIDERS: { name: string; color: string; role: string; models: string; href: string; hrefLabel: string }[] = [
-  { name: "Virtuals", color: "#22C55E",
+// `logo` is a drop-in provider mark (public/models/<slug>.svg, same convention
+// as the model-maker marks); it hides itself on 404 until the SVG is added.
+const PROVIDERS: { name: string; role: string; models: string; href: string; hrefLabel: string; logo: string }[] = [
+  { name: "Virtuals", logo: "/models/virtuals.svg",
     role: "Frontier + private inference — the 6 paid presets.",
     models: "Claude Opus 4.8 · Sonnet 5 · DeepSeek V4 · Gemini 2.5 Flash · Grok 4 · E2EE",
     href: "https://compute.virtuals.io", hrefLabel: "compute.virtuals.io ↗" },
-  { name: "Venice", color: "#EF4444",
+  { name: "Venice", logo: "/models/venice.svg",
     role: "The free tier + the only live-web-search model. Privacy-first, no key of yours upstream.",
     models: "Qwen 3.5 9B (free) · Grok 4.3 (live search)",
     href: "https://github.com/veniceai/builtinvenice", hrefLabel: "Listed in Built in Venice ↗" },
-];
-
-// Per-message chat credit costs — the live `credits` field on each preset in
-// api/_lib/llm.ts. Ordered cheapest → priciest.
-const CHAT_PRICES: { label: string; cost: string; sub: string; accent: string }[] = [
-  { label: "Free · Qwen 3.5",      cost: "0",   sub: "Venice · chat only",   accent: "#FB923C" },
-  { label: "Fast · DeepSeek V4",   cost: "10",  sub: "Virtuals",             accent: "#34D399" },
-  { label: "Instant · Gemini 2.5", cost: "10",  sub: "Virtuals · fastest",   accent: "#FBBF24" },
-  { label: "Private · E2EE",       cost: "30",  sub: "Virtuals · no logs",   accent: "#6EE7B7" },
-  { label: "Balanced · Sonnet 5",  cost: "50",  sub: "Virtuals · default",   accent: "#60A5FA" },
-  { label: "Search · Grok 4.3",    cost: "60",  sub: "Venice · live web",    accent: "#F87171" },
-  { label: "Grok 4",               cost: "60",  sub: "Virtuals · 2M ctx",    accent: "#E879F9" },
-  { label: "Deep · Opus 4.8",      cost: "200", sub: "Virtuals · heavy",     accent: "#4FC3F7" },
 ];
 
 // USDC credit packs — the live CREDIT_PACKS from lib/payments.ts
@@ -101,12 +99,12 @@ const PACKS: { usdc: string; credits: string; label: string; popular?: boolean }
 // signs ONE direct USDC transfer to the Blue treasury, the server READS the
 // settled tx and credits the off-chain ledger. No deposit contract, no custody,
 // no "private vault" — the honest inversion of Dot's DotPay framing.
-const FUND_STEPS: { n: string; color: string; title: string; body: string }[] = [
-  { n: "01", color: "#0052FF", title: "One Base transfer",
+const FUND_STEPS: { n: string; title: string; body: string }[] = [
+  { n: "01", title: "One Base transfer",
     body: "You sign a single USDC transfer from your own wallet to the Blue treasury. No deposit contract, no custody — the keys never leave you." },
-  { n: "02", color: "#34D399", title: "Settles on-chain",
+  { n: "02", title: "Settles on-chain",
     body: "It confirms on Base through the Coinbase CDP x402 facilitator. The server only reads the settled tx and credits your balance — it can't move your funds." },
-  { n: "03", color: "#818CF8", title: "Spend on any model",
+  { n: "03", title: "Spend on any model",
     body: "Credits debit per message across every frontier model. They never expire, and a failed model call is refunded automatically." },
 ];
 
@@ -116,50 +114,50 @@ const FUND_STEPS: { n: string; color: string; title: string; body: string }[] = 
 const FUND_AMOUNTS = [5, 20, 50, 100];
 
 const HUB_CATEGORIES = [
-  { label: "RH RWA",       color: "#34D399", tools: "rh-stock-arb · rh-stock-movers · rh-stock-swap · rh-rwa-dca" },
-  { label: "On-chain",     color: "#FBBF24", tools: "token price · pool scan · gas tracker · bridge route" },
-  { label: "Security",     color: "#F87171", tools: "honeypot · risk gate · scam detector · scam-clone check" },
-  { label: "Intelligence", color: "#4FC3F7", tools: "token alpha · narrative pulse · whale tracker" },
-  { label: "DeFi",         color: "#34D399", tools: "cross-protocol yield · liquidity depth · morpho vault" },
-  { label: "Builder",      color: "#A78BFA", tools: "repo health · founder check · roadmap validator" },
+  { label: "RH RWA",       tools: "rh-stock-arb · rh-stock-movers · rh-stock-swap · rh-rwa-dca" },
+  { label: "On-chain",     tools: "token price · pool scan · gas tracker · bridge route" },
+  { label: "Security",     tools: "honeypot · risk gate · scam detector · scam-clone check" },
+  { label: "Intelligence", tools: "token alpha · narrative pulse · whale tracker" },
+  { label: "DeFi",         tools: "cross-protocol yield · liquidity depth · morpho vault" },
+  { label: "Builder",      tools: "repo health · founder check · roadmap validator" },
 ];
 
 // Who builds on Blue — persona routing to the real surfaces. Founder → the five
 // commands (fixed USDC prices, packages/core BLUE_AGENT_PRICING). Trader → Blue
 // Hood (graded in public). Agent-dev → the Hub over x402 + the MCP server.
-const SOLUTIONS: { tag: string; title: string; body: string; chips: string[]; href: string; cta: string; color: string }[] = [
-  { color: "#4FC3F7", tag: "Founders", title: "Idea → raise, one thread",
+const SOLUTIONS: { tag: string; title: string; body: string; chips: string[]; href: string; cta: string }[] = [
+  { tag: "Founders", title: "Idea → raise, one thread",
     body: "Run the five commands end to end: /idea to shape it, /build for architecture, /audit for a go/no-go, /ship for the launch checklist, /raise for the pitch. A fixed USDC price each — no retainer.",
     chips: ["/idea · $0.05", "/build · $0.50", "/audit · $1.00", "/ship · $0.10", "/raise · $0.20"],
     href: "/app/chat", cta: "Start with /idea →" },
-  { color: "#34D399", tag: "Traders", title: "Signals graded in public",
+  { tag: "Traders", title: "Signals graded in public",
     body: "Blue Hood tracks oracle-vs-DEX drift on tokenized stocks across Base B20 and Robinhood Chain. Every call is signed by you and scored in the open — the misses too, not just the hits.",
     chips: ["Base 8453", "Robinhood 4663", "hits + misses"],
     href: "/track", cta: "See the track record →" },
-  { color: "#60A5FA", tag: "Agent builders", title: "Rent the tools, per call",
+  { tag: "Agent builders", title: "Rent the tools, per call",
     body: "Point your own agent at the Hub over x402 — pay per call in USDC, no key exchange, settled on Base. Or attach the MCP server and call Blue from Claude Code, Cursor, or Desktop.",
     chips: [`${TOOL_COUNT} tools`, "x402", "MCP"],
     href: "/hub", cta: "Browse the Hub →" },
 ];
 
 // Convictions — Halo-style principle band. Each is a literal property of the
-// system, not aspiration: verifiable/on-chain stats (ProofStrip), non-custodial
+// system, not aspiration: verifiable/on-chain stats (LiveUsage), non-custodial
 // signing (payments.ts), pay-per-use credits (credits.ts), public grading (Hood).
-const CONVICTIONS: { title: string; body: string; color: string }[] = [
-  { color: "#0052FF", title: "Verifiable, not vibes", body: "Every stat on this page is aggregate and on-chain. Missing data shows as “—”, never a fake 0." },
-  { color: "#34D399", title: "Non-custodial by default", body: "You sign every transaction from your own wallet. We never hold your keys or your funds." },
-  { color: "#818CF8", title: "Pay per use", body: "USDC on Base, credits per message. No subscription, no token to hold, no lock-up." },
-  { color: "#A78BFA", title: "Misses shown in public", body: "Blue Hood grades every signal it makes — including the calls it got wrong." },
+const CONVICTIONS: { title: string; body: string }[] = [
+  { title: "Verifiable, not vibes", body: "Every stat on this page is aggregate and on-chain. Missing data shows as “—”, never a fake 0." },
+  { title: "Non-custodial by default", body: "You sign every transaction from your own wallet. We never hold your keys or your funds." },
+  { title: "Pay per use", body: "USDC on Base, credits per message. No subscription, no token to hold, no lock-up." },
+  { title: "Misses shown in public", body: "Blue Hood grades every signal it makes — including the calls it got wrong." },
 ];
 
 // How you use Blue — modality tabs (Dot-style). `k` maps to home.use_<k>_label/desc.
 // `soon` modalities render a placeholder preview instead of a live mock.
-const USE_TABS: { k: string; color: string; icon: string; soon?: boolean }[] = [
-  { k: "chat",    color: "#4FC3F7", icon: "💬" },
-  { k: "code",    color: "#818CF8", icon: "‹›" },
-  { k: "connect", color: "#34D399", icon: "🧩" },
-  { k: "image",   color: "#F472B6", icon: "🎨", soon: true },
-  { k: "video",   color: "#E879F9", icon: "🎬", soon: true },
+const USE_TABS: { k: string; icon: string; soon?: boolean }[] = [
+  { k: "chat",    icon: "💬" },
+  { k: "code",    icon: "‹›" },
+  { k: "connect", icon: "🧩" },
+  { k: "image",   icon: "🎨", soon: true },
+  { k: "video",   icon: "🎬", soon: true },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -191,35 +189,37 @@ function Reveal({ children, className = "", delay = 0 }: { children: React.React
   );
 }
 
-function SectionHead({ num, kicker, title, sub, accent = "#4FC3F7" }: {
-  num: string; kicker: string; title: React.ReactNode; sub?: React.ReactNode; accent?: string;
+function SectionHead({ num, kicker, title, sub }: {
+  num: string; kicker: string; title: React.ReactNode; sub?: React.ReactNode;
 }) {
   return (
     <Reveal className="mb-10 sm:mb-14">
       <div className="font-mono text-[11px] tracking-[0.22em] mb-4">
-        <span style={{ color: accent }}>// {num}</span>
-        <span className="text-slate-600 ml-2 uppercase">{kicker}</span>
+        <span className="ln-accent">// {num}</span>
+        <span className="ln-faint ml-2 uppercase">{kicker}</span>
       </div>
-      <h2 className="text-3xl sm:text-4xl lg:text-[2.85rem] font-bold tracking-tight leading-[1.06] mb-4 max-w-2xl text-white">
+      <h2 className="text-3xl sm:text-4xl lg:text-[2.85rem] font-bold tracking-tight leading-[1.06] mb-4 max-w-2xl ln-h">
         {title}
       </h2>
-      {sub && <p className="text-slate-400 text-[15px] sm:text-lg leading-relaxed max-w-2xl">{sub}</p>}
+      {sub && <p className="ln-body text-[15px] sm:text-lg leading-relaxed max-w-2xl">{sub}</p>}
     </Reveal>
   );
 }
 
 // ─── Chat mockup with typing animation ────────────────────────────────────────
-// Reads the chain: the response numbers cite a live source (DexScreener + onchain
-// transfers), not a fabricated multi-agent framing.
+// A dark "screen" — stays dark in both themes, like a real terminal. Reads the
+// chain: the response numbers cite a live source (DexScreener + onchain
+// transfers), not a fabricated multi-agent framing. Single-accent: blue for
+// keywords/values-of-note, neutral slate for everything else.
 
 const CHAT_SEGMENTS: { t: string; cls: string }[] = [
   { t: "/pick", cls: "text-[#4FC3F7]" },
   { t: " AERO — asymmetric setup?", cls: "text-slate-400" },
-  { t: "\n↳ token-pick-signal · whale-tracker", cls: "text-[#34D399]" },
+  { t: "\n↳ token-pick-signal · whale-tracker", cls: "text-slate-500" },
   { t: "\n\n{ ", cls: "text-slate-500" },
   { t: '"signal"', cls: "text-slate-400" },
   { t: ": ", cls: "text-slate-500" },
-  { t: '"BUY"', cls: "text-[#34D399] font-semibold" },
+  { t: '"BUY"', cls: "text-[#4FC3F7] font-semibold" },
   { t: ", ", cls: "text-slate-500" },
   { t: '"token"', cls: "text-slate-400" },
   { t: ": ", cls: "text-slate-500" },
@@ -234,7 +234,7 @@ const CHAT_SEGMENTS: { t: string; cls: string }[] = [
   { t: '"source"', cls: "text-slate-400" },
   { t: ': "live DexScreener + 50 transfers" }', cls: "text-slate-500" },
   { t: "\n\n50 cr · Sonnet 5 · 2.1s · Base ", cls: "text-slate-500" },
-  { t: "✓", cls: "text-[#34D399]" },
+  { t: "✓", cls: "text-[#4FC3F7]" },
 ];
 
 function ChatMockup() {
@@ -272,9 +272,9 @@ function ChatMockup() {
         <img src="/logomark.svg" alt="BlueAgent" width={18} height={18} className="rounded" />
         <span className="font-mono text-[12px] text-slate-300">Blue Chat</span>
         <span className="ml-auto flex gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/60" />
-          <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/60" />
-          <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]/60" />
+          <span className="w-2.5 h-2.5 rounded-full bg-slate-600/60" />
+          <span className="w-2.5 h-2.5 rounded-full bg-slate-600/60" />
+          <span className="w-2.5 h-2.5 rounded-full bg-slate-600/60" />
         </span>
       </div>
       <pre className="flex-1 p-4 sm:p-5 whitespace-pre-wrap break-words font-mono text-[12px] sm:text-[13px] leading-relaxed m-0">
@@ -287,7 +287,8 @@ function ChatMockup() {
 
 // ─── How you use Blue — modality tabs ─────────────────────────────────────────
 // Dot-style tabbed switcher. Each tab renders a left copy panel + a right preview.
-// `chat`/`code`/`connect` are live; `image`/`video` are Soon placeholders.
+// `chat`/`code`/`connect` are live; `image`/`video` are Soon placeholders. The
+// preview panels are dark "screens" and stay dark in both themes.
 
 function UsePreview({ tab }: { tab: string }) {
   if (tab === "chat") return <ChatMockup />;
@@ -296,15 +297,15 @@ function UsePreview({ tab }: { tab: string }) {
     return (
       <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden h-full flex flex-col">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-[#15151f]">
-          <span className="font-mono text-[12px] text-[#818CF8]">/build · Opus 4.8</span>
+          <span className="font-mono text-[12px] text-[#4FC3F7]">/build · Opus 4.8</span>
           <span className="ml-auto font-mono text-[10px] text-slate-600">200 cr</span>
         </div>
         <pre className="flex-1 p-4 sm:p-5 whitespace-pre-wrap break-words font-mono text-[12px] sm:text-[13px] leading-relaxed m-0">
-<span className="text-[#818CF8]">/build</span><span className="text-slate-400"> a Base points program</span>
-{"\n\n"}<span className="text-[#34D399]">▸ stack</span><span className="text-slate-400">   Next.js · viem · Base 8453</span>
-{"\n"}<span className="text-[#34D399]">▸ contracts</span><span className="text-slate-400"> Points.sol · Distributor.sol</span>
-{"\n"}<span className="text-[#34D399]">▸ tests</span><span className="text-slate-400">   claim · rate-limit · reentrancy</span>
-{"\n\n"}<span className="text-slate-500">→ next: </span><span className="text-[#FBBF24]">/audit</span>
+<span className="text-[#4FC3F7]">/build</span><span className="text-slate-400"> a Base points program</span>
+{"\n\n"}<span className="text-[#4FC3F7]">▸ stack</span><span className="text-slate-400">   Next.js · viem · Base 8453</span>
+{"\n"}<span className="text-[#4FC3F7]">▸ contracts</span><span className="text-slate-400"> Points.sol · Distributor.sol</span>
+{"\n"}<span className="text-[#4FC3F7]">▸ tests</span><span className="text-slate-400">   claim · rate-limit · reentrancy</span>
+{"\n\n"}<span className="text-slate-500">→ next: </span><span className="text-[#4FC3F7]">/audit</span>
         </pre>
       </div>
     );
@@ -320,7 +321,7 @@ function UsePreview({ tab }: { tab: string }) {
     return (
       <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden h-full flex flex-col">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-[#15151f]">
-          <span className="font-mono text-[12px] text-[#34D399]">Blue Connector · MCP</span>
+          <span className="font-mono text-[12px] text-[#4FC3F7]">Blue Connector · MCP</span>
           <span className="ml-auto font-mono text-[10px] text-slate-600">attached</span>
         </div>
         <div className="flex-1 p-4 sm:p-5 space-y-2.5">
@@ -329,7 +330,7 @@ function UsePreview({ tab }: { tab: string }) {
               <span className="text-lg">{c.icon}</span>
               <span className="font-mono text-[13px] text-slate-300">{c.name}</span>
               <span className="ml-auto font-mono text-[11px] text-slate-600">{c.tools}</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" style={{ boxShadow: "0 0 6px #34D399" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7]" style={{ boxShadow: "0 0 6px #4FC3F7" }} />
             </div>
           ))}
         </div>
@@ -341,7 +342,7 @@ function UsePreview({ tab }: { tab: string }) {
   return (
     <div className="rounded-2xl border border-dashed border-[#1A1A2E] bg-[#0d0d12] h-full flex flex-col items-center justify-center gap-3 p-10 min-h-[280px]">
       <span className="text-4xl opacity-70">{tab === "image" ? "🎨" : "🎬"}</span>
-      <span className="font-mono text-[11px] uppercase tracking-wider text-[#FBBF24] border border-[#FBBF24]/30 bg-[#FBBF24]/5 rounded px-2 py-0.5">Soon</span>
+      <span className="font-mono text-[11px] uppercase tracking-wider text-[#4FC3F7] border border-[#4FC3F7]/30 bg-[#4FC3F7]/5 rounded px-2 py-0.5">Soon</span>
     </div>
   );
 }
@@ -354,18 +355,18 @@ function HowYouUse() {
     <div>
       {/* Tab bar */}
       <Reveal className="mb-8">
-        <div className="inline-flex flex-wrap gap-1.5 p-1.5 rounded-2xl border border-[#1A1A2E] bg-[#0a0a10]">
+        <div className="inline-flex flex-wrap gap-1.5 p-1.5 rounded-2xl border ln-brd" style={{ background: "var(--ln-card)" }}>
           {USE_TABS.map((x) => {
             const on = x.k === active;
             return (
               <button key={x.k} onClick={() => setActive(x.k)}
-                className="flex items-center gap-2 font-mono text-[12px] sm:text-[13px] rounded-xl px-3.5 py-2 transition-all"
+                className={"flex items-center gap-2 font-mono text-[12px] sm:text-[13px] rounded-xl px-3.5 py-2 transition-all " + (on ? "" : "ln-mut")}
                 style={on
-                  ? { background: `${x.color}1a`, color: x.color, border: `1px solid ${x.color}40` }
-                  : { color: "#64748b", border: "1px solid transparent" }}>
+                  ? { background: "#4FC3F71a", color: "var(--ln-accent-ink)", border: "1px solid #4FC3F740" }
+                  : { border: "1px solid transparent" }}>
                 <span>{x.icon}</span>
                 {t(`home.use_${x.k}_label`)}
-                {x.soon && <span className="text-[9px] uppercase tracking-wider text-[#FBBF24]">soon</span>}
+                {x.soon && <span className="text-[9px] uppercase tracking-wider ln-faint">soon</span>}
               </button>
             );
           })}
@@ -376,16 +377,16 @@ function HowYouUse() {
       <div className="grid lg:grid-cols-2 gap-4 sm:gap-5 items-stretch">
         <Reveal key={`copy-${active}`}>
           <div className="ba-card h-full rounded-2xl p-6 sm:p-7 flex flex-col justify-center">
-            <div className="text-lg font-semibold mb-2" style={{ color: tab.color }}>
+            <div className="text-lg font-semibold mb-2 ln-accent">
               {t(`home.use_${tab.k}_label`)}
             </div>
-            <p className="text-slate-400 text-[14px] sm:text-[15px] leading-relaxed mb-5">
+            <p className="ln-body text-[14px] sm:text-[15px] leading-relaxed mb-5">
               {t(`home.use_${tab.k}_desc`)}
             </p>
             {tab.k === "chat" && (
               <div className="flex flex-wrap gap-2">
                 {CHAT_COMMANDS.map((c) => (
-                  <span key={c} className="font-mono text-[12px] text-[#4FC3F7] border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-lg px-2.5 py-1">{c}</span>
+                  <span key={c} className="font-mono text-[12px] ln-accent border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-lg px-2.5 py-1">{c}</span>
                 ))}
               </div>
             )}
@@ -417,26 +418,26 @@ function FundVault() {
         <div className="ba-card h-full rounded-2xl p-6 sm:p-8 flex flex-col">
           {/* Fund-with toggle — USDC live, $BLUEAGENT soon */}
           <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] mb-7">
-            <span className="tracking-widest uppercase text-slate-600 mr-1">Fund with</span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#0052FF]/40 bg-[#0052FF]/10 px-3 py-1 text-slate-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#0052FF]" /> USDC · Base
+            <span className="tracking-widest uppercase ln-faint mr-1">Fund with</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4FC3F7]/40 bg-[#4FC3F7]/10 px-3 py-1 ln-body">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7]" /> USDC · Base
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#15151f] px-3 py-1 text-slate-600">
-              $BLUEAGENT <span className="text-[9px] tracking-widest uppercase text-slate-700">soon</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border ln-hair px-3 py-1 ln-faint">
+              $BLUEAGENT <span className="text-[9px] tracking-widest uppercase ln-faint">soon</span>
             </span>
           </div>
 
           {/* Live amount → credits */}
           <div className="flex items-end justify-between gap-4 mb-6">
             <div>
-              <div className="font-mono text-[10px] tracking-widest uppercase text-slate-600 mb-1.5">You fund</div>
-              <div className="text-4xl sm:text-5xl font-bold tracking-tight text-white tabular-nums">${usd}</div>
+              <div className="font-mono text-[10px] tracking-widest uppercase ln-faint mb-1.5">You fund</div>
+              <div className="text-4xl sm:text-5xl font-bold tracking-tight ln-h tabular-nums">${usd}</div>
             </div>
-            <span className="text-slate-700 text-2xl pb-2">→</span>
+            <span className="ln-faint text-2xl pb-2">→</span>
             <div className="text-right">
-              <div className="font-mono text-[10px] tracking-widest uppercase text-slate-600 mb-1.5">You get</div>
-              <div className="text-4xl sm:text-5xl font-bold tracking-tight tabular-nums" style={{ color: "#4FC3F7" }}>{credits}</div>
-              <div className="font-mono text-[11px] text-slate-500 mt-0.5">credits</div>
+              <div className="font-mono text-[10px] tracking-widest uppercase ln-faint mb-1.5">You get</div>
+              <div className="text-4xl sm:text-5xl font-bold tracking-tight tabular-nums ln-accent">{credits}</div>
+              <div className="font-mono text-[11px] ln-mut mt-0.5">credits</div>
             </div>
           </div>
 
@@ -446,10 +447,10 @@ function FundVault() {
               const on = a === usd;
               return (
                 <button key={a} onClick={() => setUsd(a)} aria-pressed={on}
-                  className="rounded-lg border py-2 font-mono text-[13px] font-bold transition-colors"
+                  className={"rounded-lg border py-2 font-mono text-[13px] font-bold transition-colors " + (on ? "" : "ln-body ln-brd")}
                   style={on
-                    ? { borderColor: "#4FC3F740", background: "#4FC3F70d", color: "#4FC3F7" }
-                    : { borderColor: "#1A1A2E", color: "#94a3b8" }}>
+                    ? { borderColor: "#4FC3F740", background: "#4FC3F70d", color: "var(--ln-accent-ink)" }
+                    : undefined}>
                   ${a}
                 </button>
               );
@@ -459,7 +460,7 @@ function FundVault() {
           <Link href="/app/chat" className="inline-flex items-center justify-center rounded-xl bg-[#4FC3F7] px-4 py-3 font-mono text-[13px] font-semibold text-black hover:bg-[#7ad3f9] transition-colors active:scale-[0.99]">
             Add {credits} credits →
           </Link>
-          <p className="font-mono text-[11px] text-slate-600 mt-3 text-center">
+          <p className="font-mono text-[11px] ln-faint mt-3 text-center">
             1 USDC = 2,000 credits · never expires · you sign the transfer
           </p>
         </div>
@@ -471,10 +472,10 @@ function FundVault() {
           {FUND_STEPS.map((s) => (
             <div key={s.n} className="flex gap-4">
               <span className="font-mono text-sm font-bold rounded-lg px-2.5 py-1 h-fit shrink-0"
-                style={{ color: s.color, background: `${s.color}12`, border: `1px solid ${s.color}30` }}>{s.n}</span>
+                style={{ color: "var(--ln-accent-ink)", background: "#4FC3F712", border: "1px solid #4FC3F730" }}>{s.n}</span>
               <div>
-                <div className="text-[14px] font-semibold text-white mb-1">{s.title}</div>
-                <p className="font-mono text-[12px] text-slate-500 leading-relaxed">{s.body}</p>
+                <div className="text-[14px] font-semibold ln-h mb-1">{s.title}</div>
+                <p className="font-mono text-[12px] ln-mut leading-relaxed">{s.body}</p>
               </div>
             </div>
           ))}
@@ -488,7 +489,7 @@ function FundVault() {
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-[#050508] text-white" style={{ fontFamily: MONO }}>
+    <div className="landing-root min-h-screen" style={{ fontFamily: MONO }}>
       <Navbar />
 
       {/* Ambient glow */}
@@ -504,15 +505,15 @@ export default function Home() {
 
           <div className="inline-flex items-center gap-2 border border-[#4FC3F7]/20 bg-[#4FC3F7]/5 rounded-full px-3.5 py-1.5 mb-8">
             <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
-            <span className="font-mono text-[10px] text-[#4FC3F7] tracking-[0.18em] uppercase">Blue Chat · non-custodial · live on Base</span>
+            <span className="font-mono text-[10px] ln-accent tracking-[0.18em] uppercase">Blue Chat · non-custodial · live on Base</span>
           </div>
 
           {/* Hero — the core product is the wallet + credit + chat loop. Two-beat
               mono headline: pay in USDC, then think onchain across every model. */}
-          <h1 className="text-[2.75rem] leading-[1.04] sm:text-6xl lg:text-7xl font-bold tracking-tight mb-5">
-            Pay in USDC.<br className="hidden sm:block" /> <span className="text-[#4FC3F7]">Think onchain.</span>
+          <h1 className="text-[2.75rem] leading-[1.04] sm:text-6xl lg:text-7xl font-bold tracking-tight mb-5 ln-h">
+            Pay in USDC.<br className="hidden sm:block" /> <span className="ln-accent">Think onchain.</span>
           </h1>
-          <p className="text-base sm:text-xl text-slate-400 mb-9 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-base sm:text-xl ln-body mb-9 max-w-2xl mx-auto leading-relaxed">
             Blue Chat is a non-custodial AI workspace. Create a wallet, top up USDC for credits, and
             spend them across every frontier model — reasoning, code, live web, onchain tools. No
             subscription, no token to hold. Every number verifiable on Base.
@@ -523,36 +524,37 @@ export default function Home() {
               style={{ background: "linear-gradient(135deg, #4FC3F7, #29ABE2)", color: "#050508", boxShadow: "0 0 26px #4FC3F733" }}>
               Open Blue Chat →
             </Link>
-            <a href="#flow" className="text-sm font-semibold text-[#34D399] border border-[#34D399]/30 px-7 py-3 rounded-xl hover:bg-[#34D399]/5 transition-all">
+            <a href="#flow" className="text-sm font-semibold ln-accent border border-[#4FC3F7]/30 px-7 py-3 rounded-xl hover:bg-[#4FC3F7]/5 transition-all">
               How credits work
             </a>
-            <Link href="/hub" className="text-sm font-semibold text-[#A78BFA] border border-[#A78BFA]/30 px-7 py-3 rounded-xl hover:bg-[#A78BFA]/5 transition-all">
+            <Link href="/hub" className="text-sm font-semibold ln-body border ln-brd px-7 py-3 rounded-xl hover:border-[#4FC3F7]/40 transition-all">
               Browse the Hub
             </Link>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 font-mono text-[11px] text-slate-600">
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 font-mono text-[11px] ln-faint">
             {SOCIAL_PROOF.map((s, i) => (
               <span key={s} className="flex items-center gap-3">
-                {i > 0 && <span className="text-slate-800">·</span>}
+                {i > 0 && <span className="ln-faint opacity-50">·</span>}
                 {s}
               </span>
             ))}
           </div>
 
           {/* Product mockup — Blue Chat window: a prompt, the model it ran on,
-              the answer, and the credit cost debited. Shows the real loop
-              (chat + model choice + credits), not a fabricated framing. */}
+              the answer, and the credit cost debited. A dark "screen" — stays
+              dark in both themes. Shows the real loop (chat + model choice +
+              credits), not a fabricated framing. */}
           <Reveal delay={120} className="mt-14 sm:mt-20">
             <div className="relative max-w-3xl mx-auto">
               <div className="absolute -inset-4 rounded-3xl pointer-events-none" style={{ background: "radial-gradient(ellipse 70% 60% at 50% 30%, #4FC3F715 0%, transparent 70%)" }} />
               <div className="relative rounded-2xl border border-[#1A1A2E] bg-[#0a0a10] overflow-hidden shadow-2xl text-left">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-[#15151f]">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/70" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/70" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]/70" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-600/70" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-600/70" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-600/70" />
                   <span className="font-mono text-[11px] text-slate-600 ml-2">Blue Chat · blueagent.dev</span>
-                  <span className="ml-auto font-mono text-[10px] text-[#34D399] border border-[#34D399]/25 bg-[#34D399]/5 rounded px-2 py-0.5">500 cr free today</span>
+                  <span className="ml-auto font-mono text-[10px] text-[#4FC3F7] border border-[#4FC3F7]/25 bg-[#4FC3F7]/5 rounded px-2 py-0.5">500 cr free today</span>
                 </div>
                 <div className="p-4 sm:p-6 space-y-4">
                   <div className="flex justify-end">
@@ -567,11 +569,11 @@ export default function Home() {
                     <div className="flex-1 space-y-2.5">
                       <div className="flex flex-wrap gap-1.5">
                         <span className="font-mono text-[10px] text-[#4FC3F7] border border-[#4FC3F7]/25 bg-[#4FC3F7]/5 rounded px-2 py-0.5">◆ Claude Opus 4.8 · Deep</span>
-                        <span className="font-mono text-[10px] text-[#818CF8] border border-[#818CF8]/25 bg-[#818CF8]/5 rounded px-2 py-0.5">/build → /audit</span>
+                        <span className="font-mono text-[10px] text-[#4FC3F7] border border-[#4FC3F7]/25 bg-[#4FC3F7]/5 rounded px-2 py-0.5">/build → /audit</span>
                         <span className="font-mono text-[10px] text-slate-500 border border-[#1A1A2E] rounded px-2 py-0.5">200 cr</span>
                       </div>
                       <p className="text-[13px] text-slate-300 leading-relaxed">
-                        <span className="text-white font-semibold">Points.sol</span> + Distributor scaffolded on Base 8453 — claim, rate-limit, reentrancy tests included. Audit flags one reentrancy path on <span className="text-[#FBBF24]">_claim()</span>; patch suggested. Ready to ship.
+                        <span className="text-white font-semibold">Points.sol</span> + Distributor scaffolded on Base 8453 — claim, rate-limit, reentrancy tests included. Audit flags one reentrancy path on <span className="text-slate-200">_claim()</span>; patch suggested. Ready to ship.
                       </p>
                       <p className="text-[11px] text-slate-600 font-mono">Virtuals inference · debited from today&apos;s free credits · non-custodial</p>
                     </div>
@@ -588,10 +590,10 @@ export default function Home() {
         </section>
 
         {/* ══════════ 01 THE FLOW — wallet → credit → chat ══════════ */}
-        <section id="flow" className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d] scroll-mt-24">
+        <section id="flow" className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t ln-divide scroll-mt-24">
           <SectionHead
-            num="01" kicker="How it works" accent="#4FC3F7"
-            title={<>One wallet. Credits in USDC. <span className="text-[#4FC3F7]">Every model.</span></>}
+            num="01" kicker="How it works"
+            title={<>One wallet. Credits in USDC. <span className="ln-accent">Every model.</span></>}
             sub="No accounts, no card, no subscription. Connect a wallet, fund it in USDC, and start spending in chat — the whole loop is non-custodial and settles on Base."
           />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
@@ -599,28 +601,28 @@ export default function Home() {
               <Reveal key={s.n} delay={i * 80}>
                 <div className="ba-card h-full rounded-2xl p-6 sm:p-7 flex flex-col">
                   <div className="flex items-center gap-3 mb-4">
-                    <span className="font-mono text-sm font-bold rounded-lg px-2.5 py-1" style={{ color: s.color, background: `${s.color}12`, border: `1px solid ${s.color}30` }}>{s.n}</span>
-                    {i < FLOW.length - 1 && <span className="text-slate-700 text-lg">→</span>}
+                    <span className="font-mono text-sm font-bold rounded-lg px-2.5 py-1" style={{ color: "var(--ln-accent-ink)", background: "#4FC3F712", border: "1px solid #4FC3F730" }}>{s.n}</span>
+                    {i < FLOW.length - 1 && <span className="ln-faint text-lg">→</span>}
                   </div>
-                  <div className="text-base font-semibold mb-2 text-white">{s.title}</div>
-                  <p className="font-mono text-[12.5px] text-slate-500 leading-relaxed">{s.body}</p>
+                  <div className="text-base font-semibold mb-2 ln-h">{s.title}</div>
+                  <p className="font-mono text-[12.5px] ln-mut leading-relaxed">{s.body}</p>
                 </div>
               </Reveal>
             ))}
           </div>
           <Reveal delay={260}>
-            <p className="font-mono text-[12px] text-slate-500 mt-6">
-              Rate: <span className="text-slate-300">1 USDC = 2,000 credits</span> · free tier <span className="text-slate-300">500 cr/day</span> for any wallet ·
+            <p className="font-mono text-[12px] ln-mut mt-6">
+              Rate: <span className="ln-body">1 USDC = 2,000 credits</span> · free tier <span className="ln-body">500 cr/day</span> for any wallet ·
               settled to the Blue treasury on Base via a direct USDC transfer you sign.
             </p>
           </Reveal>
         </section>
 
         {/* ══════════ 02 EVERY MODEL ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t ln-divide">
           <SectionHead
-            num="02" kicker="Inference" accent="#818CF8"
-            title={<>One chat. <span className="text-[#818CF8]">Every frontier model.</span></>}
+            num="02" kicker="Inference"
+            title={<>One chat. <span className="ln-accent">Every frontier model.</span></>}
             sub="Switch models mid-conversation — frontier reasoning, fast and cheap, private E2EE, and live web search. One credit balance across all of them; you never juggle API keys."
           />
           <Reveal delay={80}>
@@ -628,11 +630,11 @@ export default function Home() {
               {MODELS.map((m) => {
                 const chip = (
                   <span
-                    className={"flex items-center gap-2 font-mono text-[12px] sm:text-[13px] rounded-full border px-3.5 py-1.5 " + (m.href ? "hover:brightness-125 transition-all cursor-pointer" : "")}
-                    style={{ borderColor: `${m.color}33`, background: `${m.color}0d`, color: m.color }}>
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: m.color, boxShadow: `0 0 6px ${m.color}` }} />
+                    className={"flex items-center gap-2 font-mono text-[12px] sm:text-[13px] rounded-full border px-3.5 py-1.5 ln-accent " + (m.href ? "hover:brightness-110 transition-all cursor-pointer" : "")}
+                    style={{ borderColor: "#4FC3F733", background: "#4FC3F70d" }}>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: ACCENT, boxShadow: `0 0 6px ${ACCENT}` }} />
                     {m.name}
-                    <span className="text-slate-500 text-[10px]">· {m.provider} · {m.note}</span>
+                    <span className="ln-faint text-[10px]">· {m.provider} · {m.note}</span>
                   </span>
                 );
                 return m.href
@@ -642,63 +644,77 @@ export default function Home() {
             </div>
           </Reveal>
           <Reveal delay={140}>
-            <p className="font-mono text-[12px] text-slate-500 text-center">
-              6 on <span className="text-[#22C55E]">Virtuals</span> · 2 on <span className="text-[#EF4444]">Venice</span> — switch any time, one balance.
+            <p className="font-mono text-[12px] ln-mut text-center">
+              6 on <span className="ln-body">Virtuals</span> · 2 on <span className="ln-body">Venice</span> — switch any time, one balance.
             </p>
           </Reveal>
         </section>
 
         {/* ══════════ 03 HOW YOU USE IT ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t ln-divide">
           <SectionHead
-            num="03" kicker="Modalities" accent="#34D399"
-            title={<>One chat. <span className="text-[#34D399]">Every job.</span></>}
+            num="03" kicker="Modalities"
+            title={<>One chat. <span className="ln-accent">Every job.</span></>}
             sub="Chat, ship code, attach your tools over MCP — same window, same credits. Image and video are on the way."
           />
           <HowYouUse />
         </section>
 
         {/* ══════════ 04 BUILT ON VIRTUALS + VENICE ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t ln-divide">
           <SectionHead
-            num="04" kicker="Powered by" accent="#A78BFA"
-            title={<>The inference behind <span className="text-[#A78BFA]">Blue Chat.</span></>}
+            num="04" kicker="Powered by"
+            title={<>The inference behind <span className="ln-accent">Blue Chat.</span></>}
             sub="Blue Chat doesn't train its own model — it routes your message to two inference networks and settles the cost in credits. You bring a wallet; they bring the thinking."
           />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             {PROVIDERS.map((p, i) => (
               <Reveal key={p.name} delay={i * 80}>
                 <div className="ba-card h-full rounded-2xl p-6 sm:p-7 flex flex-col">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="w-2 h-2 rounded-full" style={{ background: p.color, boxShadow: `0 0 8px ${p.color}` }} />
-                    <span className="text-lg font-semibold" style={{ color: p.color }}>{p.name}</span>
+                  <div className="flex items-center gap-2.5 mb-3">
+                    {/* Provider mark — drop public/models/<slug>.svg to fill; hides on 404. */}
+                    <img
+                      src={p.logo}
+                      alt=""
+                      aria-hidden
+                      className="h-5 w-5 object-contain"
+                      onError={(e) => { e.currentTarget.style.display = "none"; }}
+                    />
+                    <span className="w-2 h-2 rounded-full" style={{ background: ACCENT, boxShadow: `0 0 8px ${ACCENT}` }} />
+                    <span className="text-lg font-semibold ln-accent">{p.name}</span>
                   </div>
-                  <p className="text-slate-400 text-[14px] leading-relaxed mb-4">{p.role}</p>
-                  <p className="font-mono text-[11.5px] text-slate-500 leading-relaxed mb-5">{p.models}</p>
+                  <p className="ln-body text-[14px] leading-relaxed mb-4">{p.role}</p>
+                  <p className="font-mono text-[11.5px] ln-mut leading-relaxed mb-5">{p.models}</p>
                   <a href={p.href} target="_blank" rel="noopener noreferrer"
-                    className="mt-auto font-mono text-[12px] hover:underline" style={{ color: p.color }}>
+                    className="mt-auto font-mono text-[12px] ln-accent hover:underline">
                     {p.hrefLabel}
                   </a>
                 </div>
               </Reveal>
             ))}
           </div>
-          <Reveal delay={200}>
-            <p className="font-mono text-[12px] text-slate-500 mt-6">
-              Blue Chat is listed as a powered-by-Venice project in the public <span className="text-slate-300">Built in Venice</span> directory.
+
+          {/* Live aggregate usage — real totals from /api/stats/public, never a
+              fabricated number (see LiveUsage). Halo-style headline of what the
+              two inference nets have actually served. */}
+          <Reveal delay={160} className="mt-4">
+            <div className="font-mono text-[10px] tracking-[0.22em] uppercase ln-faint mb-3 text-center">Live usage · aggregate, on-chain-verifiable</div>
+            <LiveUsage />
+          </Reveal>
+
+          <Reveal delay={220}>
+            <p className="font-mono text-[12px] ln-mut mt-6">
+              Blue Chat is listed as a powered-by-Venice project in the public <span className="ln-body">Built in Venice</span> directory.
               Frontier + private inference is served through Virtuals compute.
             </p>
           </Reveal>
         </section>
 
-        {/* ══════════ 05 PROOF — tested with real funds (live public stats) ══════════ */}
-        <ProofStrip />
-
-        {/* ══════════ 06 SKILLS — Hood + Hub, built from the agent ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+        {/* ══════════ 05 SKILLS — Hood + Hub, built from the agent ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t ln-divide">
           <SectionHead
-            num="06" kicker="Skills, not separate apps" accent="#34D399"
-            title={<>Products the agent <span className="text-[#34D399]">builds for you.</span></>}
+            num="05" kicker="Skills, not separate apps"
+            title={<>Products the agent <span className="ln-accent">builds for you.</span></>}
             sub="Blue Hood and the Hub aren't other apps to log into — they're skills Blue Agent runs. Same wallet, same credits, same chat window."
           />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
@@ -706,15 +722,15 @@ export default function Home() {
               <div className="ba-card h-full rounded-2xl p-6 sm:p-7 flex flex-col">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-xl">🎯</span>
-                  <span className="text-base font-semibold text-[#34D399]">Blue Hood</span>
+                  <span className="text-base font-semibold ln-accent">Blue Hood</span>
                 </div>
-                <p className="text-slate-400 text-[14px] leading-relaxed mb-4">
+                <p className="ln-body text-[14px] leading-relaxed mb-4">
                   Oracle-vs-DEX drift on tokenized stocks — Base B20 and Robinhood Chain. Every signal is signed by
                   you, and every call is graded in public: hits and misses.
                 </p>
                 <div className="flex gap-4 mt-auto">
-                  <Link href="/app/hood" className="font-mono text-[12px] text-[#34D399] hover:underline">Open Blue Hood →</Link>
-                  <Link href="/track" className="font-mono text-[12px] text-slate-500 hover:underline">Track record →</Link>
+                  <Link href="/app/hood" className="font-mono text-[12px] ln-accent hover:underline">Open Blue Hood →</Link>
+                  <Link href="/track" className="font-mono text-[12px] ln-mut hover:underline">Track record →</Link>
                 </div>
               </div>
             </Reveal>
@@ -722,57 +738,57 @@ export default function Home() {
               <div className="ba-card h-full rounded-2xl p-6 sm:p-7 flex flex-col">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-xl">🛒</span>
-                  <span className="text-base font-semibold text-[#A78BFA]">Blue Hub</span>
+                  <span className="text-base font-semibold ln-accent">Blue Hub</span>
                 </div>
-                <p className="text-slate-400 text-[14px] leading-relaxed mb-4">
+                <p className="ln-body text-[14px] leading-relaxed mb-4">
                   {TOOL_COUNT} pay-per-call tools — RWA, on-chain data, security, DeFi, intelligence, builder.
                   Called right inside the chat, or over x402 from your own agent.
                 </p>
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {HUB_CATEGORIES.map((c) => (
-                    <span key={c.label} className="font-mono text-[10px] rounded px-2 py-0.5 border"
-                      style={{ color: c.color, borderColor: `${c.color}30`, background: `${c.color}0d` }}>{c.label}</span>
+                    <span key={c.label} className="font-mono text-[10px] rounded px-2 py-0.5 border ln-accent"
+                      style={{ borderColor: "#4FC3F730", background: "#4FC3F70d" }}>{c.label}</span>
                   ))}
                 </div>
-                <Link href="/hub" className="mt-auto font-mono text-[12px] text-[#A78BFA] hover:underline">Browse all {TOOL_COUNT} tools →</Link>
+                <Link href="/hub" className="mt-auto font-mono text-[12px] ln-accent hover:underline">Browse all {TOOL_COUNT} tools →</Link>
               </div>
             </Reveal>
           </div>
         </section>
 
-        {/* ══════════ 07 WHO BUILDS ON BLUE — personas ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+        {/* ══════════ 06 WHO BUILDS ON BLUE — personas ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t ln-divide">
           <SectionHead
-            num="07" kicker="Who builds on Blue" accent="#4FC3F7"
-            title={<>One agent, <span className="text-[#4FC3F7]">three ways to work.</span></>}
+            num="06" kicker="Who builds on Blue"
+            title={<>One agent, <span className="ln-accent">three ways to work.</span></>}
             sub="Founders ship products, traders read the market, agent builders rent the tooling — one wallet, one credit balance, and the same skills behind all three."
           />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
             {SOLUTIONS.map((s, i) => (
               <Reveal key={s.tag} delay={i * 80}>
                 <div className="ba-card h-full rounded-2xl p-6 sm:p-7 flex flex-col">
-                  <div className="font-mono text-[10px] tracking-widest uppercase mb-3" style={{ color: s.color }}>{s.tag}</div>
-                  <div className="text-base font-semibold mb-2 text-white">{s.title}</div>
-                  <p className="text-slate-400 text-[13.5px] leading-relaxed mb-4">{s.body}</p>
+                  <div className="font-mono text-[10px] tracking-widest uppercase mb-3 ln-accent">{s.tag}</div>
+                  <div className="text-base font-semibold mb-2 ln-h">{s.title}</div>
+                  <p className="ln-body text-[13.5px] leading-relaxed mb-4">{s.body}</p>
                   <div className="flex flex-wrap gap-1.5 mb-5">
                     {s.chips.map((c) => (
-                      <span key={c} className="font-mono text-[10px] rounded px-2 py-0.5 border"
-                        style={{ color: s.color, borderColor: `${s.color}30`, background: `${s.color}0d` }}>{c}</span>
+                      <span key={c} className="font-mono text-[10px] rounded px-2 py-0.5 border ln-accent"
+                        style={{ borderColor: "#4FC3F730", background: "#4FC3F70d" }}>{c}</span>
                     ))}
                   </div>
-                  <Link href={s.href} className="mt-auto font-mono text-[12px] hover:underline" style={{ color: s.color }}>{s.cta}</Link>
+                  <Link href={s.href} className="mt-auto font-mono text-[12px] ln-accent hover:underline">{s.cta}</Link>
                 </div>
               </Reveal>
             ))}
           </div>
         </section>
 
-        {/* ══════════ 08 CREDITS & PRICING — public ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+        {/* ══════════ 07 CREDITS & PRICING — public ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t ln-divide">
           <SectionHead
-            num="08" kicker="Credits & pricing" accent="#34D399"
-            title={<>Every price, <span className="text-[#34D399]">in the open.</span></>}
-            sub="No hidden tiers. Here is exactly what a message costs, what a top-up buys, and what you get for free."
+            num="07" kicker="Credits & pricing"
+            title={<>Every price, <span className="ln-accent">in the open.</span></>}
+            sub="No hidden tiers, no per-model fine print. Start free, top up in USDC when you want more, or call the Hub per request. That's the whole menu."
           />
 
           {/* Pay-with rail — USDC is live; $BLUEAGENT lands after the relaunch. Credits
@@ -780,159 +796,140 @@ export default function Home() {
               rail, not a gate. No monthly tier: Blue is pay-as-you-go by design. */}
           <Reveal className="mb-5">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[11px]">
-              <span className="tracking-widest uppercase text-slate-600">Pay with</span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#0052FF]/40 bg-[#0052FF]/10 px-3 py-1 text-slate-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#0052FF]" /> USDC · Base
+              <span className="tracking-widest uppercase ln-faint">Pay with</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4FC3F7]/40 bg-[#4FC3F7]/10 px-3 py-1 ln-body">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7]" /> USDC · Base
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#15151f] px-3 py-1 text-slate-600">
-                $BLUEAGENT <span className="text-[9px] tracking-widest uppercase text-slate-700">soon</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border ln-hair px-3 py-1 ln-faint">
+                $BLUEAGENT <span className="text-[9px] tracking-widest uppercase ln-faint">soon</span>
               </span>
-              <span className="text-slate-600 ml-auto">Pay-as-you-go · no subscription</span>
+              <span className="ln-faint ml-auto">Pay-as-you-go · no subscription</span>
             </div>
           </Reveal>
 
           {/* Plans — three real rails (free bucket · credits · Hub API). Not invented
               tiers: every figure is the live constant (WALLET_DAILY, CREDITS_PER_USDC,
               the catalog price floor). */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
             <Reveal>
               <div className="ba-card h-full rounded-2xl p-6 flex flex-col">
-                <div className="text-sm font-semibold text-[#34D399]">Free, every day</div>
+                <div className="text-sm font-semibold ln-accent">Free, every day</div>
                 <div className="mt-3 flex items-baseline gap-1.5">
-                  <span className="text-4xl font-bold text-white tracking-tight">$0</span>
+                  <span className="text-4xl font-bold ln-h tracking-tight">$0</span>
                 </div>
-                <div className="font-mono text-[12px] text-slate-500 mt-1">500 credits / day · any wallet</div>
+                <div className="font-mono text-[12px] ln-mut mt-1">500 credits / day · any wallet</div>
                 <ul className="mt-5 space-y-2 font-mono text-[12px] flex-1">
-                  <li className="text-[#34D399]">✓ <span className="text-slate-400">100 cr/day with no wallet at all</span></li>
-                  <li className="text-[#34D399]">✓ <span className="text-slate-400">Every model — including free Qwen 3.5</span></li>
-                  <li className="text-[#34D399]">✓ <span className="text-slate-400">Non-custodial · no token to hold</span></li>
-                  <li className="text-[#34D399]">✓ <span className="text-slate-400">Resets every 24h</span></li>
+                  <li className="ln-accent">✓ <span className="ln-body">100 cr/day with no wallet at all</span></li>
+                  <li className="ln-accent">✓ <span className="ln-body">Every model — including free Qwen 3.5</span></li>
+                  <li className="ln-accent">✓ <span className="ln-body">Non-custodial · no token to hold</span></li>
+                  <li className="ln-accent">✓ <span className="ln-body">Resets every 24h</span></li>
                 </ul>
-                <Link href="/app/chat" className="mt-5 inline-flex items-center justify-center rounded-lg border border-[#1A1A2E] px-4 py-2.5 font-mono text-[12px] text-slate-200 hover:border-[#34D399]/40 transition-colors">Start free →</Link>
+                <Link href="/app/chat" className="mt-5 inline-flex items-center justify-center rounded-lg border ln-brd px-4 py-2.5 font-mono text-[12px] ln-body hover:border-[#4FC3F7]/40 transition-colors">Start free →</Link>
               </div>
             </Reveal>
             <Reveal delay={80}>
-              <div className="ba-card h-full rounded-2xl p-6 flex flex-col" style={{ borderColor: "#4FC3F740" }}>
+              <div className="ba-card ba-card--hot h-full rounded-2xl p-6 flex flex-col">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-[#4FC3F7]">Credits</div>
-                  <span className="font-mono text-[9px] tracking-widest uppercase text-[#4FC3F7]">most popular</span>
+                  <div className="text-sm font-semibold ln-accent">Credits</div>
+                  <span className="font-mono text-[9px] tracking-widest uppercase ln-accent">most popular</span>
                 </div>
                 <div className="mt-3 flex items-baseline gap-1.5">
-                  <span className="text-4xl font-bold text-white tracking-tight">1 USDC</span>
-                  <span className="font-mono text-[12px] text-slate-500">= 2,000 cr</span>
+                  <span className="text-4xl font-bold ln-h tracking-tight">1 USDC</span>
+                  <span className="font-mono text-[12px] ln-mut">= 2,000 cr</span>
                 </div>
                 <div className="mt-4 grid grid-cols-4 gap-2">
                   {PACKS.map((p) => (
                     <div key={p.usdc} className="rounded-lg border p-2 text-center"
-                      style={p.popular ? { borderColor: "#4FC3F740", background: "#4FC3F70d" } : { borderColor: "#1A1A2E" }}>
-                      <div className="font-mono text-[13px] font-bold text-white">{p.usdc}</div>
-                      <div className="font-mono text-[10px] text-slate-500">{p.credits}</div>
+                      style={p.popular ? { borderColor: "#4FC3F740", background: "#4FC3F70d" } : { borderColor: "var(--ln-border)" }}>
+                      <div className="font-mono text-[13px] font-bold ln-h">{p.usdc}</div>
+                      <div className="font-mono text-[10px] ln-mut">{p.credits}</div>
                     </div>
                   ))}
                 </div>
                 <ul className="mt-5 space-y-2 font-mono text-[12px] flex-1">
-                  <li className="text-[#4FC3F7]">✓ <span className="text-slate-400">Credits never expire</span></li>
-                  <li className="text-[#4FC3F7]">✓ <span className="text-slate-400">Failed model call auto-refunded</span></li>
-                  <li className="text-[#4FC3F7]">✓ <span className="text-slate-400">Every frontier model, one balance</span></li>
+                  <li className="ln-accent">✓ <span className="ln-body">Credits never expire</span></li>
+                  <li className="ln-accent">✓ <span className="ln-body">Failed model call auto-refunded</span></li>
+                  <li className="ln-accent">✓ <span className="ln-body">Every frontier model, one balance</span></li>
                 </ul>
                 <Link href="/app/chat" className="mt-5 inline-flex items-center justify-center rounded-lg bg-[#4FC3F7] px-4 py-2.5 font-mono text-[12px] font-semibold text-black hover:bg-[#7ad3f9] transition-colors">Top up in USDC →</Link>
               </div>
             </Reveal>
             <Reveal delay={160}>
               <div className="ba-card h-full rounded-2xl p-6 flex flex-col">
-                <div className="text-sm font-semibold text-[#60A5FA]">Hub API</div>
+                <div className="text-sm font-semibold ln-accent">Hub API</div>
                 <div className="mt-3 flex items-baseline gap-1.5">
-                  <span className="text-4xl font-bold text-white tracking-tight">$0.05</span>
-                  <span className="font-mono text-[12px] text-slate-500">/ call &amp; up</span>
+                  <span className="text-4xl font-bold ln-h tracking-tight">$0.05</span>
+                  <span className="font-mono text-[12px] ln-mut">/ call &amp; up</span>
                 </div>
-                <div className="font-mono text-[12px] text-slate-500 mt-1">{TOOL_COUNT} tools · pay-per-call</div>
+                <div className="font-mono text-[12px] ln-mut mt-1">{TOOL_COUNT} tools · pay-per-call</div>
                 <ul className="mt-5 space-y-2 font-mono text-[12px] flex-1">
-                  <li className="text-[#60A5FA]">✓ <span className="text-slate-400">USDC on Base · EIP-3009</span></li>
-                  <li className="text-[#60A5FA]">✓ <span className="text-slate-400">No account, no key exchange</span></li>
-                  <li className="text-[#60A5FA]">✓ <span className="text-slate-400">Or attach the MCP server</span></li>
+                  <li className="ln-accent">✓ <span className="ln-body">USDC on Base · EIP-3009</span></li>
+                  <li className="ln-accent">✓ <span className="ln-body">No account, no key exchange</span></li>
+                  <li className="ln-accent">✓ <span className="ln-body">Or attach the MCP server</span></li>
                 </ul>
-                <Link href="/hub" className="mt-5 inline-flex items-center justify-center rounded-lg border border-[#1A1A2E] px-4 py-2.5 font-mono text-[12px] text-slate-200 hover:border-[#60A5FA]/40 transition-colors">Browse the Hub →</Link>
+                <Link href="/hub" className="mt-5 inline-flex items-center justify-center rounded-lg border ln-brd px-4 py-2.5 font-mono text-[12px] ln-body hover:border-[#4FC3F7]/40 transition-colors">Browse the Hub →</Link>
               </div>
             </Reveal>
           </div>
 
-          {/* Per-message model costs */}
-          <Reveal delay={120}>
-            <div className="ba-card rounded-2xl p-6">
-              <div className="text-sm font-semibold mb-4 text-[#818CF8]">Per message, by model</div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {CHAT_PRICES.map((c) => (
-                  <div key={c.label} className="rounded-lg border border-[#15151f] bg-[#0a0a10] p-3">
-                    <div className="flex items-baseline gap-1.5 mb-1">
-                      <span className="text-xl font-bold tracking-tight" style={{ color: c.accent }}>{c.cost}</span>
-                      <span className="font-mono text-[10px] text-slate-600">cr</span>
-                    </div>
-                    <div className="font-mono text-[11px] text-slate-300 leading-tight">{c.label}</div>
-                    <div className="font-mono text-[10px] text-slate-600 mt-0.5">{c.sub}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Reveal>
-
           <Reveal delay={180}>
-            <p className="font-mono text-[12px] text-slate-500 mt-6">
-              Hub tools are pay-per-call in USDC over x402 — from <span className="text-slate-300">$0.05</span>.
+            <p className="font-mono text-[12px] ln-mut mt-6">
+              Hub tools are pay-per-call in USDC over x402 — from <span className="ln-body">$0.05</span>.
               Non-custodial, no subscription; purchased credits don&apos;t expire, the free daily bucket resets every 24h.
-              A failed model call is refunded automatically. Paying in <span className="text-slate-400">$BLUEAGENT</span> arrives
+              A failed model call is refunded automatically. Paying in <span className="ln-body">$BLUEAGENT</span> arrives
               after the token relaunch — credits stay free to earn and pay-per-use in USDC either way.
             </p>
           </Reveal>
         </section>
 
-        {/* ══════════ FUND — DotPay-equivalent credit vault ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+        {/* ══════════ 08 FUND — DotPay-equivalent credit vault ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t ln-divide">
           <SectionHead
-            num="fund" kicker="Fund once" accent="#0052FF"
-            title={<>Fund once. <span className="text-[#0052FF]">Spend on any model.</span></>}
+            num="08" kicker="Fund once"
+            title={<>Fund once. <span className="ln-accent">Spend on any model.</span></>}
             sub="Top up in USDC and it settles to credits on Base — one transfer you sign, no deposit contract, no custody. Spend it across every model whenever you want."
           />
           <FundVault />
         </section>
 
         {/* ══════════ 09 RUNS WHERE YOU BUILD — MCP ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t ln-divide">
           <SectionHead
-            num="09" kicker="In your editor" accent="#818CF8"
-            title={<>Blue runs <span className="text-[#818CF8]">where you build.</span></>}
+            num="09" kicker="In your editor"
+            title={<>Blue runs <span className="ln-accent">where you build.</span></>}
             sub="Chat is one way in. The other: attach Blue as an MCP server and call it straight from Claude Code, Cursor, or Claude Desktop — the five commands and the Hub skills, without leaving your editor."
           />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 items-stretch">
             <Reveal>
               <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a10] overflow-hidden h-full flex flex-col">
                 <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#15151f]">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/60" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/60" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]/60" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-600/60" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-600/60" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-600/60" />
                   <span className="font-mono text-[11px] text-slate-600 ml-2">Claude Code · Cursor · Desktop</span>
                 </div>
                 <pre className="flex-1 p-4 sm:p-5 overflow-x-auto font-mono text-[12px] leading-relaxed m-0">
 <span className="text-slate-600"># one-line install — Claude Code</span>
-{"\n"}<span className="text-slate-600">$ </span><span className="text-[#818CF8]">claude mcp add</span><span className="text-slate-300"> blue-agent \</span>
+{"\n"}<span className="text-slate-600">$ </span><span className="text-[#4FC3F7]">claude mcp add</span><span className="text-slate-300"> blue-agent \</span>
 {"\n"}<span className="text-slate-500">    --transport http https://blueagent.dev/api/mcp</span>
 {"\n\n"}<span className="text-slate-600"># …or drop into any MCP config</span>
 {"\n"}<span className="text-slate-500">{'{ "mcpServers": {'}</span>
-{"\n"}<span className="text-slate-500">{'    "blue-agent": { "url": '}</span><span className="text-[#34D399]">{'"https://blueagent.dev/api/mcp"'}</span><span className="text-slate-500">{' } } }'}</span>
+{"\n"}<span className="text-slate-500">{'    "blue-agent": { "url": '}</span><span className="text-[#4FC3F7]">{'"https://blueagent.dev/api/mcp"'}</span><span className="text-slate-500">{' } } }'}</span>
                 </pre>
               </div>
             </Reveal>
             <Reveal delay={80}>
               <div className="ba-card h-full rounded-2xl p-6 sm:p-7 flex flex-col">
-                <div className="text-sm font-semibold mb-3 text-[#818CF8]">The commands, in your agent</div>
+                <div className="text-sm font-semibold mb-3 ln-accent">The commands, in your agent</div>
                 <div className="flex flex-wrap gap-1.5 mb-5">
                   {["blue_idea", "blue_build", "blue_audit", "blue_ship", "blue_raise"].map((c) => (
-                    <span key={c} className="font-mono text-[11px] text-[#818CF8] border border-[#818CF8]/25 bg-[#818CF8]/5 rounded px-2 py-1">{c}</span>
+                    <span key={c} className="font-mono text-[11px] ln-accent border border-[#4FC3F7]/25 bg-[#4FC3F7]/5 rounded px-2 py-1">{c}</span>
                   ))}
                 </div>
-                <p className="font-mono text-[12px] text-slate-500 leading-relaxed mb-5">
+                <p className="font-mono text-[12px] ln-mut leading-relaxed mb-5">
                   It&apos;s a remote HTTP server — nothing to install, no key to provision. Your editor calls the same skills the chat runs, from /idea all the way to /raise.
                 </p>
-                <Link href="/docs/mcp" className="mt-auto text-sm font-semibold text-[#818CF8] border border-[#818CF8]/30 px-5 py-2.5 rounded-xl text-center hover:bg-[#818CF8]/5 transition-all">
+                <Link href="/docs/mcp" className="mt-auto text-sm font-semibold ln-accent border border-[#4FC3F7]/30 px-5 py-2.5 rounded-xl text-center hover:bg-[#4FC3F7]/5 transition-all">
                   MCP setup →
                 </Link>
               </div>
@@ -941,25 +938,25 @@ export default function Home() {
         </section>
 
         {/* ══════════ 10 BUILD ON THE API — x402 ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t ln-divide">
           <SectionHead
-            num="10" kicker="x402 API" accent="#60A5FA"
-            title={<>Every skill is a <span className="text-[#60A5FA]">paid endpoint.</span></>}
+            num="10" kicker="x402 API"
+            title={<>Every skill is a <span className="ln-accent">paid endpoint.</span></>}
             sub={<>Point your own agent at any of the {TOOL_COUNT} Hub tools over x402. It signs a USDC payment on Base and gets the result back — no account, no API key to provision, self-hosted through the Coinbase CDP facilitator.</>}
           />
           <Reveal>
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a10] overflow-hidden mb-4">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#15151f]">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/60" />
-                <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/60" />
-                <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]/60" />
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-600/60" />
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-600/60" />
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-600/60" />
                 <span className="font-mono text-[11px] text-slate-600 ml-2">terminal</span>
               </div>
               <pre className="p-4 sm:p-5 overflow-x-auto font-mono text-[12px] leading-relaxed m-0">
 <span className="text-slate-600">$ </span><span className="text-[#4FC3F7]">curl</span><span className="text-slate-300"> https://blueagent.dev/api/x402/rh-stock-arb \</span>
-{"\n"}<span className="text-slate-500">    -d </span><span className="text-[#34D399]">{'\'{"ticker":"NVDA"}\''}</span>
+{"\n"}<span className="text-slate-500">    -d </span><span className="text-slate-300">{'\'{"ticker":"NVDA"}\''}</span>
 {"\n"}<span className="text-slate-500">→ </span><span className="text-slate-300">{'{"verdict":"ALIGNED","oracle":208.37,"dex":210.38,"drift":0.97,...}'}</span>
-{"\n"}<span className="text-slate-600">Charged: </span><span className="text-[#FBBF24]">$0.05 USDC · Base</span>
+{"\n"}<span className="text-slate-600">Charged: </span><span className="text-[#4FC3F7]">$0.05 USDC · Base</span>
               </pre>
             </div>
           </Reveal>
@@ -968,20 +965,20 @@ export default function Home() {
               <div className="ba-card h-full rounded-2xl p-6 flex flex-col">
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {["Self-hosted x402", "EIP-3009", "Coinbase CDP facilitator", "USDC · Base 8453", "from $0.05 / call"].map((f) => (
-                    <span key={f} className="font-mono text-[10px] text-[#60A5FA] border border-[#60A5FA]/25 bg-[#60A5FA]/5 rounded px-2 py-1">{f}</span>
+                    <span key={f} className="font-mono text-[10px] ln-accent border border-[#4FC3F7]/25 bg-[#4FC3F7]/5 rounded px-2 py-1">{f}</span>
                   ))}
                 </div>
-                <p className="font-mono text-[12px] text-slate-500 leading-relaxed">
+                <p className="font-mono text-[12px] ln-mut leading-relaxed">
                   No storefront in the middle — Blue builds its own 402 payment requirement and settles the USDC transfer you sign. The caller pays per call; nothing is metered or subscribed.
                 </p>
               </div>
             </Reveal>
             <Reveal delay={80}>
               <div className="ba-card h-full rounded-2xl p-6 flex flex-col justify-center gap-3">
-                <Link href="/hub" className="text-sm font-semibold text-[#A78BFA] border border-[#A78BFA]/30 px-5 py-2.5 rounded-xl text-center hover:bg-[#A78BFA]/5 transition-all">
+                <Link href="/hub" className="text-sm font-semibold ln-accent border border-[#4FC3F7]/30 px-5 py-2.5 rounded-xl text-center hover:bg-[#4FC3F7]/5 transition-all">
                   Browse all {TOOL_COUNT} tools →
                 </Link>
-                <Link href="/docs" className="text-sm font-semibold text-[#60A5FA] border border-[#60A5FA]/30 px-5 py-2.5 rounded-xl text-center hover:bg-[#60A5FA]/5 transition-all">
+                <Link href="/docs" className="text-sm font-semibold ln-body border ln-brd px-5 py-2.5 rounded-xl text-center hover:border-[#4FC3F7]/40 transition-all">
                   Read the API docs →
                 </Link>
               </div>
@@ -990,11 +987,11 @@ export default function Home() {
         </section>
 
         {/* ══════════ CONVICTIONS ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t ln-divide">
           <Reveal className="mb-10">
             <div className="font-mono text-[11px] tracking-[0.22em] mb-4">
-              <span className="text-[#0052FF]">// principles</span>
-              <span className="text-slate-600 ml-2 uppercase">What we won&apos;t do</span>
+              <span className="ln-accent">// principles</span>
+              <span className="ln-faint ml-2 uppercase">What we won&apos;t do</span>
             </div>
           </Reveal>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -1002,10 +999,10 @@ export default function Home() {
               <Reveal key={c.title} delay={i * 70}>
                 <div className="ba-card h-full rounded-2xl p-6 flex flex-col">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: c.color, boxShadow: `0 0 6px ${c.color}` }} />
-                    <span className="text-base font-semibold text-white">{c.title}</span>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: ACCENT, boxShadow: `0 0 6px ${ACCENT}` }} />
+                    <span className="text-base font-semibold ln-h">{c.title}</span>
                   </div>
-                  <p className="font-mono text-[12.5px] text-slate-500 leading-relaxed">{c.body}</p>
+                  <p className="font-mono text-[12.5px] ln-mut leading-relaxed">{c.body}</p>
                 </div>
               </Reveal>
             ))}
@@ -1013,13 +1010,13 @@ export default function Home() {
         </section>
 
         {/* ══════════ FINAL CTA ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-20 sm:py-28 border-t border-[#13131d]">
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-20 sm:py-28 border-t ln-divide">
           <Reveal>
             <div className="rounded-3xl border border-[#4FC3F7]/20 p-8 sm:p-14 text-center" style={{ background: "radial-gradient(ellipse 80% 70% at 50% 40%, #4FC3F710 0%, transparent 70%)" }}>
-              <h2 className="text-3xl sm:text-5xl font-bold tracking-tight mb-4">
-                Pay in USDC. <span className="text-[#4FC3F7]">Think onchain.</span>
+              <h2 className="text-3xl sm:text-5xl font-bold tracking-tight mb-4 ln-h">
+                Pay in USDC. <span className="ln-accent">Think onchain.</span>
               </h2>
-              <p className="text-slate-400 text-[15px] sm:text-lg mb-8 max-w-xl mx-auto leading-relaxed">
+              <p className="ln-body text-[15px] sm:text-lg mb-8 max-w-xl mx-auto leading-relaxed">
                 Connect a wallet and start with 500 free credits today — no card, no subscription.
               </p>
               <div className="flex flex-wrap justify-center gap-3">
@@ -1027,13 +1024,13 @@ export default function Home() {
                   style={{ background: "linear-gradient(135deg, #4FC3F7, #29ABE2)", color: "#050508", boxShadow: "0 0 26px #4FC3F733" }}>
                   Open Blue Chat →
                 </Link>
-                <Link href="/hub" className="text-sm font-semibold text-[#A78BFA] border border-[#A78BFA]/30 px-7 py-3 rounded-xl hover:bg-[#A78BFA]/5 transition-all">
+                <Link href="/hub" className="text-sm font-semibold ln-accent border border-[#4FC3F7]/30 px-7 py-3 rounded-xl hover:bg-[#4FC3F7]/5 transition-all">
                   Browse the Hub
                 </Link>
-                <Link href="/docs/mcp" className="text-sm font-semibold text-slate-400 border border-[#1A1A2E] px-7 py-3 rounded-xl hover:text-white hover:border-[#4FC3F7]/30 transition-all">
+                <Link href="/docs/mcp" className="text-sm font-semibold ln-body border ln-brd px-7 py-3 rounded-xl hover:border-[#4FC3F7]/30 transition-all">
                   Install MCP
                 </Link>
-                <Link href="/docs" className="text-sm font-semibold text-slate-400 border border-[#1A1A2E] px-7 py-3 rounded-xl hover:text-white hover:border-[#4FC3F7]/30 transition-all">
+                <Link href="/docs" className="text-sm font-semibold ln-body border ln-brd px-7 py-3 rounded-xl hover:border-[#4FC3F7]/30 transition-all">
                   Read the docs
                 </Link>
               </div>
@@ -1042,21 +1039,21 @@ export default function Home() {
         </section>
 
         {/* ══════════ FOOTER ══════════ */}
-        <footer className="border-t border-[#1A1A2E] px-5 sm:px-6 py-10 max-w-5xl mx-auto">
+        <footer className="border-t ln-brd px-5 sm:px-6 py-10 max-w-5xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div>
               <div className="flex items-center gap-2.5 mb-2">
                 <img src="/logomark.svg" alt="BlueAgent" width={20} height={20} className="rounded-md" />
-                <span className="font-semibold text-white">BlueAgent</span>
-                <span className="text-xs text-slate-500">· The onchain agent</span>
+                <span className="font-semibold ln-h">BlueAgent</span>
+                <span className="text-xs ln-mut">· The onchain agent</span>
               </div>
-              <p className="font-mono text-[11px] text-slate-600">Built on Virtuals + Venice inference · x402 native · Base</p>
+              <p className="font-mono text-[11px] ln-faint">Built on Virtuals + Venice inference · x402 native · Base</p>
             </div>
-            <div className="flex items-center gap-5 font-mono text-xs text-slate-600">
-              <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">X</a>
-              <a href="https://t.me/blueagent_hub" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Telegram</a>
-              <a href="https://github.com/madebyshun/blue-agent" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">GitHub</a>
-              <Link href="/docs" className="hover:text-white transition-colors">Docs</Link>
+            <div className="flex items-center gap-5 font-mono text-xs">
+              <a href="https://x.com/blueagent_" target="_blank" rel="noopener noreferrer" className="ln-link">X</a>
+              <a href="https://t.me/blueagent_hub" target="_blank" rel="noopener noreferrer" className="ln-link">Telegram</a>
+              <a href="https://github.com/madebyshun/blue-agent" target="_blank" rel="noopener noreferrer" className="ln-link">GitHub</a>
+              <Link href="/docs" className="ln-link">Docs</Link>
             </div>
           </div>
         </footer>

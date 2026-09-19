@@ -74,6 +74,44 @@
   --font-hood-prose: 'DM Sans', system-ui, sans-serif;
 }
 
+/* ── Landing theme tokens (marketing page only) ────────────────────────────
+   The blueagent.dev landing (`.landing-root`) is the ONLY surface that reads
+   `--ln-*`. They carry a full light/dark set so the page can flip with the
+   `data-theme` toggle. NOTHING else in the app consumes these, and the light
+   overrides live under `html[data-theme="light"]` — so toggling light themes
+   the landing and leaves the dark app shell (which uses --bg/--border/--surface)
+   untouched. Single-accent by design (#4FC3F7); the only split is `--ln-accent`
+   (dot/border/fill — stays #4FC3F7 on both) vs `--ln-accent-ink` (blue as TEXT,
+   darkened to sky-600 on white so it stays readable — same hue, WCAG-safe). */
+:root {
+  --ln-bg:          #050508;   /* page background */
+  --ln-card:        #0D0D12;   /* .ba-card surface */
+  --ln-card-hover:  #101019;   /* .ba-card hover surface */
+  --ln-border:      #1A1A2E;   /* card / structural border */
+  --ln-divider:     #13131d;   /* between-section divider */
+  --ln-hair:        #15151f;   /* inner hairline (mockup headers) */
+  --ln-t1:          #ffffff;   /* headings / primary */
+  --ln-t2:          #94a3b8;   /* body copy (slate-400) */
+  --ln-t3:          #64748b;   /* muted (slate-500) */
+  --ln-t4:          #475569;   /* faint labels (slate-600) */
+  --ln-accent:      #4FC3F7;   /* the single accent — dots, borders, fills */
+  --ln-accent-ink:  #4FC3F7;   /* the accent as text/link (dark: same) */
+}
+html[data-theme="light"] {
+  --ln-bg:          #F6F8FB;
+  --ln-card:        #ffffff;
+  --ln-card-hover:  #f2f7fc;
+  --ln-border:      #e3e9f2;
+  --ln-divider:     #e9eef5;
+  --ln-hair:        #eef2f7;
+  --ln-t1:          #0b1220;
+  --ln-t2:          #475569;
+  --ln-t3:          #5b6b7f;
+  --ln-t4:          #8595a8;
+  --ln-accent:      #4FC3F7;   /* keep the dot/fill blue on white */
+  --ln-accent-ink:  #0284C7;   /* darker sky for text/links on white */
+}
+
 * {
   box-sizing: border-box;
 }
@@ -329,12 +367,46 @@ code, pre, .font-mono {
   transform: translateY(-3px);
   box-shadow: 0 8px 28px rgba(79, 195, 247, 0.10);
 }
-/* Emphasis variant (e.g. featured pricing tier) — green tint, same motion. */
+/* Emphasis variant (e.g. featured pricing tier) — single-accent tint, same motion. */
 .ba-card--hot {
-  border-color: rgba(52, 211, 153, 0.40);
-  background-image: linear-gradient(160deg, rgba(52, 211, 153, 0.08), transparent 62%);
+  border-color: rgba(79, 195, 247, 0.40);
+  background-image: linear-gradient(160deg, rgba(79, 195, 247, 0.08), transparent 62%);
 }
 .ba-card--hot:hover {
-  border-color: rgba(52, 211, 153, 0.60);
-  box-shadow: 0 8px 28px rgba(52, 211, 153, 0.12);
+  border-color: rgba(79, 195, 247, 0.60);
+  box-shadow: 0 8px 28px rgba(79, 195, 247, 0.12);
 }
+
+/* ── Landing (.landing-root) — theme-aware chrome ──────────────────────────
+   Scoped to the landing so the toggle themes ONLY this page. `.ba-card` is
+   re-pointed at the --ln-* tokens HERE (not on the base rule) so cards on the
+   rest of the app stay dark. Text tone classes replace bare `text-white` /
+   `text-slate-*` on marketing copy; the dark product "screens" (terminals,
+   chat mock) keep their literal slate utilities and stay dark in both themes,
+   exactly like a real terminal. */
+.landing-root { background-color: var(--ln-bg); color: var(--ln-t2); }
+.landing-root .ln-h     { color: var(--ln-t1); }
+.landing-root .ln-body  { color: var(--ln-t2); }
+.landing-root .ln-mut   { color: var(--ln-t3); }
+.landing-root .ln-faint { color: var(--ln-t4); }
+.landing-root .ln-accent{ color: var(--ln-accent-ink); }
+.landing-root .ln-divide{ border-color: var(--ln-divider); }
+.landing-root .ln-hair  { border-color: var(--ln-hair); }
+.landing-root .ln-brd   { border-color: var(--ln-border); }
+.landing-root .ba-card {
+  background-color: var(--ln-card);
+  border-color: var(--ln-border);
+}
+.landing-root .ba-card:hover {
+  border-color: rgba(79, 195, 247, 0.35);
+  background-color: var(--ln-card-hover);
+}
+/* Neutral link that brightens to primary on hover — themed both ways, so it
+   replaces the `text-slate-600 hover:text-white` pattern that would stay dark
+   under light mode. */
+.landing-root .ln-link { color: var(--ln-t3); transition: color .15s ease; }
+.landing-root .ln-link:hover { color: var(--ln-t1); }
+
+/* Light-only polish, scoped to the landing (never leaks to the dark app). */
+html[data-theme="light"] .landing-root ::selection { background: rgba(2,132,199,0.18); color: #0b1220; }
+html[data-theme="light"] .landing-root ::-webkit-scrollbar-thumb { background: #cdd7e5; }
