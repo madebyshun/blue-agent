@@ -111,8 +111,11 @@ export const zh: Dict = {
   },
   nav_marketing: {
     about: "关于",
-    // `hub`/`pricing` 于 2026-09-19 新增 —— 产品优先的导航（对齐 Dot 结构）。
-    // `pricing` 指向落地页 §07 额度锚点（"/#pricing"）。
+    // 页内区块锚点（2026-09-19）：`how`→§01 #flow，`models`→§02 #models，
+    // `pricing`→§07 #pricing。`hub` 已从导航栏移除（落地页没有 Hub 区块），
+    // 但保留该键以兼容其他读取方。
+    how: "工作原理",
+    models: "模型",
     hub: "中心",
     pricing: "定价",
     // `soul`（原 `skills`，2026-08）—— /soul 上的 SOUL.md 身份页。

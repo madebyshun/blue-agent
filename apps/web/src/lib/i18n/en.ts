@@ -113,8 +113,11 @@ export const en = {
   },
   nav_marketing: {
     about: "About",
-    // `hub`/`pricing` added 2026-09-19 — product-forward nav (Dot-structured).
-    // `pricing` targets the §07 credits anchor on the landing ("/#pricing").
+    // In-page section anchors (2026-09-19): `how`→§01 #flow, `models`→§02
+    // #models, `pricing`→§07 #pricing. `hub` is retired from the bar (the
+    // landing has no Hub section) but the key stays for any other reader.
+    how: "How it works",
+    models: "Models",
     hub: "Hub",
     pricing: "Pricing",
     // `soul` (was `skills`, 2026-08) — the SOUL.md identity page at /soul.

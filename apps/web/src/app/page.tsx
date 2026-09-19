@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
-import LiveUsage from "@/components/LiveUsage";
+// LiveUsage ("Tokens served" hero) is HIDDEN 2026-09-19 pending a rebuild of the
+// number — component kept in components/LiveUsage.tsx; restore this import and the
+// <Reveal> in §04 to re-enable. Do not ship a fabricated figure in the meantime.
+// import LiveUsage from "@/components/LiveUsage";
 import { useLang } from "@/lib/i18n/context";
 import { TOOL_COUNT } from "@/lib/agent-tools";
 
@@ -81,16 +84,19 @@ const MODELS: { name: string; provider: "Virtuals" | "Venice"; note: string; hre
   { name: "Private · E2EE",    provider: "Virtuals", note: "no logs", href: "/app/chat?preset=private" },
 ];
 
-// The core mechanic — wallet → credit → chat. Every number here is the live
-// constant from lib/payments.ts (CREDITS_PER_USDC) + lib/credits.ts
-// (WALLET_DAILY). Do not hardcode a different figure.
+// The core mechanic — wallet → credit → chat, told as one journey (Rialto's
+// "three spans" framing, adapted to Blue Chat's USDC-on-Base loop: no bridge,
+// no USDG — a single non-custodial key is the identity, the payer, and the
+// login). Every number here is the live constant from lib/payments.ts
+// (CREDITS_PER_USDC = 2,000) + lib/credits.ts (WALLET_DAILY = 500). Do not
+// hardcode a different figure.
 const FLOW: { n: string; title: string; body: string }[] = [
-  { n: "01", title: "Connect a wallet",
-    body: "Bring your own, or create a free Coinbase Smart Wallet in one tap — no seed phrase, nothing to install. Non-custodial: you hold the keys, we never touch them." },
-  { n: "02", title: "Top up USDC → credits",
-    body: "Send USDC on Base and it settles to credits on-chain: 1 USDC = 2,000 credits. Or start free — 500 credits every day for any connected wallet, no token to hold." },
-  { n: "03", title: "Spend it in chat",
-    body: "Credits debit per message, priced by the model you pick — switch models any time. If a model call fails, the credits are refunded automatically." },
+  { n: "01", title: "Sign in, get a wallet",
+    body: "Log in and Privy provisions a non-custodial wallet for you in seconds — or connect one you already have. That single key is your identity on Base, your USDC payer and your Blue Chat login: no seed phrase, nothing to install." },
+  { n: "02", title: "Fund it in USDC",
+    body: "No bridge, no crossing — USDC is already native on Base. Sign one transfer and it settles into a prepaid credit balance at 1 USDC = 2,000 credits. Or don't pay at all: every connected wallet gets 500 credits free, every day." },
+  { n: "03", title: "Think, pay, repeat",
+    body: "Every message spends from that balance, priced by the model you pick — switch models mid-thread. You only ever spend what you've funded, and a failed call refunds its credits automatically." },
 ];
 
 // The two inference networks behind Blue Chat — rendered as logos only (§04).
@@ -529,46 +535,37 @@ export default function Home() {
           <SectionHead
             num="01" kicker="How it works"
             title={<>One wallet. Credits in USDC. <span className="ln-accent">Every model.</span></>}
-            sub="No accounts, no card, no subscription. Connect a wallet, fund it in USDC, and start spending in chat — the whole loop is non-custodial and settles on Base."
+            sub="Create a wallet in seconds with Privy, or connect one you own — then load it with USDC credits and spend across every model. The whole loop is non-custodial and settles on Base."
           />
-          {/* Rialto-style stepper: a numbered circle badge per step, joined by a
-              continuous hairline that runs badge-to-badge across the row (the
-              first badge has no line to its left, the last none to its right, so
-              the connector reads as one bridge). Circles are horizontally
-              centered in each equal-width column, which is what keeps the joining
-              lines colinear across the flex gap. Lines hide on mobile (stacked);
-              the badges + centered copy carry the sequence there. */}
-          <div className="flex flex-col sm:flex-row gap-8 sm:gap-0">
-            {FLOW.map((s, i) => {
-              const first = i === 0;
-              const last = i === FLOW.length - 1;
-              return (
-                <Reveal key={s.n} delay={i * 80} className="flex-1">
-                  <div className="flex flex-col items-center text-center">
-                    <div className="flex items-center justify-center w-full mb-5">
-                      <div
-                        className="hidden sm:block h-px flex-1"
-                        style={{ background: first ? "transparent" : "var(--ln-border)" }}
-                      />
-                      <div
-                        className="shrink-0 mx-2 w-9 h-9 rounded-full flex items-center justify-center font-mono text-[13px] font-semibold tabular-nums"
-                        style={{ color: ACCENT, border: "1px solid #4FC3F740", background: "#4FC3F70d" }}
-                      >
-                        {i + 1}
-                      </div>
-                      <div
-                        className="hidden sm:block h-px flex-1"
-                        style={{ background: last ? "transparent" : "var(--ln-border)" }}
-                      />
-                    </div>
-                    <div className="px-4 max-w-xs">
-                      <div className="text-base font-semibold mb-2 ln-h">{s.title}</div>
-                      <p className="font-mono text-[12.5px] ln-mut leading-relaxed">{s.body}</p>
-                    </div>
+          {/* Rialto-style cards (per the reference shot): each step is a
+              bordered card carrying a numbered circle badge at its top-left,
+              then the title and description — all left-aligned. A short accent
+              hairline bridges the gap between adjacent cards at badge height
+              (hidden on mobile, where the cards stack). Equal-height columns via
+              CSS grid, so the longest step sets the shared card height exactly
+              like the reference. */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {FLOW.map((s, i) => (
+              <Reveal key={s.n} delay={i * 80} className="h-full">
+                <div className="relative ba-card rounded-2xl p-6 sm:p-7 h-full text-left">
+                  {i > 0 && (
+                    <span
+                      aria-hidden
+                      className="hidden sm:block absolute h-px"
+                      style={{ top: "2.875rem", left: "-1rem", width: "1rem", background: "#4FC3F740" }}
+                    />
+                  )}
+                  <div
+                    className="w-9 h-9 rounded-full flex items-center justify-center font-mono text-[13px] font-semibold tabular-nums mb-6"
+                    style={{ color: ACCENT, border: "1px solid #4FC3F733", background: "#4FC3F714" }}
+                  >
+                    {i + 1}
                   </div>
-                </Reveal>
-              );
-            })}
+                  <div className="text-base font-semibold mb-2 ln-h">{s.title}</div>
+                  <p className="font-mono text-[12.5px] ln-mut leading-relaxed">{s.body}</p>
+                </div>
+              </Reveal>
+            ))}
           </div>
           <Reveal delay={260}>
             <p className="font-mono text-[12px] ln-mut mt-10 text-center max-w-2xl mx-auto">
@@ -579,7 +576,7 @@ export default function Home() {
         </section>
 
         {/* ══════════ 02 EVERY MODEL ══════════ */}
-        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t ln-divide">
+        <section id="models" className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t ln-divide scroll-mt-24">
           <SectionHead
             num="02" kicker="Inference"
             title={<>One chat. <span className="ln-accent">Every frontier model.</span></>}
@@ -648,15 +645,14 @@ export default function Home() {
             </div>
           </Reveal>
 
-          {/* Live aggregate usage — a real all-time total from /api/stats/public
-              (paid x402 tool runs, ok-gated) over real sub-stats, never a
-              fabricated number. The forward-only tokens meter joins the sub-stats
-              only once it's genuinely > 0, so it's never shown as a weak zero.
-              `models` is the live preset count so the sub-stat can't drift from
-              the chips. */}
-          <Reveal delay={160} className="mt-4">
+          {/* Live aggregate usage — the "Tokens served" hero (LiveUsage) is
+              temporarily HIDDEN pending a rebuild of the number (2026-09-19). The
+              component and its measured baseline stay in components/LiveUsage.tsx;
+              re-enable by restoring the import at the top of this file and the
+              <Reveal> below. Do NOT ship a fabricated figure in the meantime. */}
+          {/* <Reveal delay={160} className="mt-4">
             <LiveUsage models={MODELS.length} />
-          </Reveal>
+          </Reveal> */}
 
           <Reveal delay={220}>
             <p className="font-mono text-[12px] ln-mut mt-6 text-center max-w-2xl mx-auto">

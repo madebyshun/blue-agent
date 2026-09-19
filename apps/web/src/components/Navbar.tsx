@@ -31,15 +31,17 @@ function ThemeToggle({ className = "" }: { className?: string }) {
   );
 }
 
-// Product-forward marketing nav (landing-shaped like Halo/Dot, 2026-09-19): the
-// menu carries only the surfaces the landing actually sells — Hub (the tool
-// catalog), Pricing (the §07 credits anchor on "/"), and Docs. `pricing` is a
-// hash link into the home section, so it scrolls on "/" and navigates-then-
-// scrolls elsewhere. `soul` (/soul identity spec) and `about` were dropped from
-// the bar to keep it landing-focused; both routes still resolve and their i18n
-// keys stay in the Dict so nothing else breaks.
+// Product-forward marketing nav (landing-shaped like Halo/Dot): the bar is
+// in-page section anchors that scroll the landing — How it works (§01 #flow),
+// Models (§02 #models) and Pricing (§07 #pricing) — plus Docs, the one external
+// route. Each hash link scrolls on "/" and navigates-then-scrolls from other
+// routes; the target sections carry `scroll-mt-24` so the fixed bar never covers
+// them. `hub` was dropped 2026-09-19 — the landing has no Hub section for a
+// top-level link to scroll to (the Hub lives in the app shell + the CTA).
+// `soul`/`about` stay dropped; their routes + i18n keys remain so nothing breaks.
 const NAV_LINKS = [
-  { key: "hub",     href: "/hub" },
+  { key: "how",     href: "/#flow" },
+  { key: "models",  href: "/#models" },
   { key: "pricing", href: "/#pricing" },
   { key: "docs",    href: "/docs" },
 ];
