@@ -1,5 +1,23 @@
 # bankr-tools — sample export
 
+> # ☠️ DEAD — do not follow this sample.
+>
+> It is a snapshot of the `bankr-tools` skill, which was removed 2026-09-18. Three of its
+> instructions are now actively wrong:
+>
+> - **"Import `callBankrLLM` from `@blue-agent/bankr`"** — that scope never existed on npm,
+>   and the local `packages/bankr` was deleted. Call `callLLM` from
+>   `apps/web/src/app/api/_lib/llm.ts` instead; it routes to Virtuals.
+> - **`llm.bankr.bot` + `BANKR_API_KEY`** — 403 for this project, account-level suspension
+>   (measured 2026-09-06). The gateway is `https://compute.virtuals.io/v1` with
+>   `VIRTUALS_API_KEY`.
+> - **The model table below** — `claude-haiku-4-5` / `claude-sonnet-4-6` / `claude-opus-4-6`
+>   are Bankr-era ids the Virtuals catalog does not serve. Never hardcode a model id; let it
+>   resolve from `$VIRTUALS_MODEL`, else the `@blueagent/core` default.
+>
+> Only the x402 section is still accurate — payments were never a Bankr path. Blue Agent
+> self-hosts x402 and settles USDC on Base through the Coinbase CDP facilitator.
+
 ## What it covers
 
 The Bankr LLM client, available models, and x402 payment patterns used across Blue Agent.

@@ -19,20 +19,24 @@ Gives you two commands:
 ## Requirements
 
 - Node.js 18+
-- `BANKR_API_KEY` — set in `~/.blue-agent/config.toml` or as env var
+- `VIRTUALS_API_KEY` — set in `~/.blue-agent/config.toml` or as env var
 
 ## Set your API key
 
 ```toml
 # ~/.blue-agent/config.toml
-bankr_api_key = "your_key_here"
+virtuals_api_key = "your_key_here"
 ```
 
 Or via environment:
 
 ```bash
-export BANKR_API_KEY=your_key_here
+export VIRTUALS_API_KEY=your_key_here
 ```
+
+Inference runs through Virtuals (`https://compute.virtuals.io/v1`). Leave the model
+unset and the CLI uses the `@blueagent/core` default; pin one with `VIRTUALS_MODEL`
+only if you know it is in the live Virtuals catalog.
 
 ## Verify install
 

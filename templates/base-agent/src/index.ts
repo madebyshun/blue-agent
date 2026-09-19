@@ -1,13 +1,15 @@
-import { callBankrLLM } from "@blue-agent/bankr";
+import { callVirtuals } from "@blueagent/core";
 // x402-fetch wraps fetch to handle HTTP 402 payment flows automatically
 import { wrapFetchWithPayment } from "x402-fetch";
 
 // Load env
-const BANKR_API_KEY = process.env.BANKR_API_KEY;
-const BLUEAGENT_API_URL = process.env.BLUEAGENT_API_URL ?? "https://api.blueagent.xyz";
+const VIRTUALS_API_KEY = process.env.VIRTUALS_API_KEY;
+// The live x402 surface is blueagent.dev itself. (This used to default to
+// api.blueagent.xyz, a host that does not resolve.)
+const BLUEAGENT_API_URL = process.env.BLUEAGENT_API_URL ?? "https://blueagent.dev";
 const WALLET_PRIVATE_KEY = process.env.WALLET_PRIVATE_KEY;
 
-if (!BANKR_API_KEY) throw new Error("BANKR_API_KEY env var required");
+if (!VIRTUALS_API_KEY) throw new Error("VIRTUALS_API_KEY env var required");
 if (!WALLET_PRIVATE_KEY) throw new Error("WALLET_PRIVATE_KEY env var required");
 
 // x402-fetch: automatically handles HTTP 402 payment challenges
@@ -18,7 +20,7 @@ const paidFetch = wrapFetchWithPayment(fetch, {
 });
 
 async function checkRisk(action: string, contractAddress?: string): Promise<string> {
-  const res = await paidFetch(`${BLUEAGENT_API_URL}/api/tools/risk-gate`, {
+  const res = await paidFetch(`${BLUEAGENT_API_URL}/api/x402/risk-gate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action, contractAddress }),
@@ -28,11 +30,13 @@ async function checkRisk(action: string, contractAddress?: string): Promise<stri
 }
 
 async function think(userMessage: string): Promise<string> {
-  return callBankrLLM({
-    model: "claude-haiku-4-5",
+  // `model` is left unset on purpose: it resolves from $VIRTUALS_MODEL, else the
+  // package default. Hardcoding an id here is how a template goes stale.
+  return callVirtuals({
     system: `You are {{PROJECT_NAME}}, an AI agent running on Base (chain 8453).
 You can reason about onchain actions and use Blue Agent tools to check safety before executing.
-Always check risk before any token transfer or contract interaction.`,
+Always check risk before any token transfer or contract interaction.
+Never invent a contract address or a price. If you do not have the data, say "insufficient data".`,
     messages: [{ role: "user", content: userMessage }],
     temperature: 0.7,
     maxTokens: 1000,
@@ -50,8 +54,11 @@ async function main() {
   const plan = await think(`The user wants to: ${userIntent}. What should I check before doing this?`);
   console.log(`Agent plan:\n${plan}\n`);
 
-  // Step 2: risk check via Blue Agent x402 tool
-  console.log("Running risk check (costs $0.05 USDC via x402)...");
+  // Step 2: risk check via Blue Agent x402 tool.
+  // No price is printed here on purpose — the 402 response carries the current
+  // price, and a hardcoded figure in a template goes stale silently. x402-fetch
+  // reads it and pays that amount, so `maxValue` is where you cap spend.
+  console.log("Running risk check (paid in USDC on Base via x402)...");
   const riskReport = await checkRisk("swap", "0x2626664c2603336E57B271c5C0b26F421741e481");
   console.log(`Risk report:\n${riskReport}\n`);
 

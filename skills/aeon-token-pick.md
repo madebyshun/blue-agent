@@ -55,4 +55,9 @@ Would tip the call: a dated catalyst on $XYZ; a specific committee date for EIGE
 - Crowdedness penalty — if every newsletter is recommending it, the asymmetry is gone.
 - NO_PICK is a valid output. Manufactured picks burn capital.
 
-Pairs naturally with `aeon-narrative-tracker` (narrative fit), `aeon-token-movers` (momentum candidates), and Bankr Submit for execution.
+Pairs naturally with `aeon-narrative-tracker` (narrative fit) and `aeon-token-movers` (momentum candidates).
+
+This skill produces a **thesis, not an order**. It used to name "Bankr Submit" as the execution
+step; Bankr 403-bans this project on every write verb (measured 2026-09-06), so that path is
+dead and no replacement is named here on purpose — execution is the user's decision on their
+own wallet, not something this skill routes.

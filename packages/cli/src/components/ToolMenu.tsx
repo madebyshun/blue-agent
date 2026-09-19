@@ -58,11 +58,11 @@ export const TOOL_PARAMS: Record<string, string[]> = {
   'tax-report':      ['address (0x...)', 'year'],
   'alert-subscribe': ['address (0x...)', 'webhookUrl (https://...)'],
 
-  // Bankr wallet
-  'swap':         ['from (token symbol)', 'to (token symbol)', 'amount'],
-  'transfer':     ['to (address 0x...)', 'amount', 'token (USDC|ETH)'],
-  'portfolio':    [],
-  'launch-token': ['name', 'symbol', 'description'],
+  // `swap`, `transfer`, `portfolio` and `launch-token` had param specs here until
+  // 2026-09-18. They belonged to the Wallet category, which never ran anything — it
+  // printed `bankr agent <op>` for the user to run elsewhere, and Bankr 403-bans this
+  // project on every write verb. Blue Agent's own non-custodial wallet is at
+  // blueagent.dev/app/wallet; it is not a TUI passthrough to someone else's CLI.
 }
 
 const HR = '─'.repeat(61)

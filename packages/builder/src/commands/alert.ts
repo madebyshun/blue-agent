@@ -90,8 +90,12 @@ export async function runAlert(subcommand: string | undefined) {
       process.stdout.write(`    Condition: ${condition}\n`);
       process.stdout.write(`    Channel:   ${channel}${destination ? ` → ${destination}` : ""}\n`);
       process.stdout.write(`\n  Config: ~/.blue-agent/alerts.json\n`);
-      process.stdout.write(`\n  Note: Connect to a live listener to activate real-time delivery.\n`);
-      process.stdout.write(`        Bankr: bankr agent prompt "Monitor ${target} for ${condition}"\n\n`);
+      // Say plainly that nothing fires yet. This used to suggest
+      // `bankr agent prompt "..."` as the way to activate it — Bankr 403-bans this
+      // project on every write verb, so that command failed for everyone who ran it.
+      process.stdout.write(`\n  Note: this is a local record only — nothing delivers yet.\n`);
+      process.stdout.write(`        Wire your own listener against ~/.blue-agent/alerts.json\n`);
+      process.stdout.write(`        to act on it.\n\n`);
     } finally {
       rl.close();
     }

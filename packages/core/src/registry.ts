@@ -12,7 +12,7 @@ export type Task = "idea" | "build" | "audit" | "ship" | "raise";
  */
 export const SKILL_REGISTRY: Record<Task, string[]> = {
   idea:  ["base-standards", "base-addresses", "blue-agent-identity", "base-ecosystem", "base-4337-aa"],
-  build: ["base-standards", "base-addresses", "bankr-tools", "base-ecosystem", "x402-patterns", "base-4337-aa"],
+  build: ["base-standards", "base-addresses", "llm-and-x402", "base-ecosystem", "x402-patterns", "base-4337-aa"],
   audit: ["base-standards", "base-addresses", "base-security", "base-ecosystem", "x402-patterns", "base-4337-aa"],
   ship:  ["x402-patterns"],
   raise: ["blue-agent-identity"],

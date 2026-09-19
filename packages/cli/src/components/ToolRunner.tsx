@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Box, Text, useInput } from 'ink'
 import TextInput from 'ink-text-input'
-import type { Category, CategoryType, ToolItem } from '../App.js'
+import type { Category, ToolItem } from '../App.js'
 import { TOOL_PARAMS } from './ToolMenu.js'
 
 const HR = '─'.repeat(61)
@@ -102,7 +102,7 @@ function ResultDisplay({ result }: { result: unknown }) {
 
 // ── Main ToolRunner ───────────────────────────────────────────────────────────
 
-export function ToolRunner({ category, tool, onRun, onBack, loading, result, error }: Props) {
+export function ToolRunner({ tool, onRun, onBack, loading, result, error }: Props) {
   const rawParams = TOOL_PARAMS[tool.name] ?? []
   const required = rawParams.filter((p) => !p.endsWith('?'))
   const optional = rawParams.filter((p) => p.endsWith('?')).map((p) => p.slice(0, -1))
@@ -111,8 +111,6 @@ export function ToolRunner({ category, tool, onRun, onBack, loading, result, err
   const [values, setValues] = useState<Record<string, string>>({})
   const [cursor, setCursor] = useState(0)
   const [submitted, setSubmitted] = useState(false)
-
-  const type: CategoryType = category.type
 
   useInput((_, key) => {
     if (key.escape) { onBack(); return }
@@ -128,7 +126,7 @@ export function ToolRunner({ category, tool, onRun, onBack, loading, result, err
 
   // Auto-run tools with no inputs
   useEffect(() => {
-    if (allFields.length === 0 && type !== 'bankr' && !submitted) {
+    if (allFields.length === 0 && !submitted) {
       setSubmitted(true)
       onRun({})
     }
@@ -166,24 +164,10 @@ export function ToolRunner({ category, tool, onRun, onBack, loading, result, err
     )
   }
 
-  // ── Bankr — show command hint ──
-  if (type === 'bankr') {
-    const args = Object.values(values).filter(Boolean).join(' ')
-    return (
-      <Box flexDirection="column" gap={1}>
-        <Text color="cyan" bold>{tool.name}</Text>
-        <Text dimColor>{HR}</Text>
-        <Text dimColor>Wallet operations run via the Bankr agent CLI.</Text>
-        <Box marginTop={1}>
-          <Text dimColor>run:  </Text>
-          <Text color="cyan">bankr agent {tool.name}{args ? ` ${args}` : ''}</Text>
-        </Box>
-        <Text dimColor>install: npm install -g bankr</Text>
-        <Text dimColor>{HR}</Text>
-        <Text dimColor> esc to go back</Text>
-      </Box>
-    )
-  }
+  // The `bankr` branch that lived here rendered a "run this elsewhere" hint instead of
+  // running anything: it printed `bankr agent <tool>` plus `npm install -g bankr`.
+  // Removed 2026-09-18 with the Wallet category itself — Bankr 403-bans this project on
+  // every write verb, so it was a wallet screen whose only instruction fails.
 
   // ── Input form ──
   return (

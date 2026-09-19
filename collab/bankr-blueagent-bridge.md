@@ -1,5 +1,24 @@
 # Bankr × Blue Agent Bridge
 
+> # ☠️ DEAD — this integration no longer exists.
+>
+> Bankr 403-bans this project at the **account** level. Measured 2026-09-06:
+>
+> ```
+> POST https://api.bankr.bot/...  → 403
+> {"error":"Account suspended","banned":true,"banType":"restricted",
+>  "reasonCode":"fraud","message":"This action is disabled while your account is
+>  restricted. You can still view your balances and withdraw your funds."}
+> ```
+>
+> Identical on `?chain=base` and `?chain=robinhood`. Every **write** verb fails; reads
+> still return `200`, which is why a dry run looks healthy right up until the first
+> transfer. The `packages/bankr` client this file points at was deleted 2026-09-18.
+>
+> **Inference is Virtuals, and only Virtuals** — `https://compute.virtuals.io/v1`, key
+> `VIRTUALS_API_KEY`. Nothing below is a live capability. Kept as a record of what the
+> integration was, not as something to implement.
+
 > Bankr is not a peer agent in the collab loop — it is the **engine Blue Agent runs on**.  
 > Aeon and MiroShark are collaborators. Bankr is infrastructure.
 

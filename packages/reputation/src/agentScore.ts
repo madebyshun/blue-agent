@@ -1,3 +1,4 @@
+import { callVirtuals } from "@blueagent/core";
 import { AgentScoreResult, AgentTier, AgentScoreDimensions } from "./types";
 import { agentBadgeUrl } from "./badges";
 
@@ -16,38 +17,23 @@ function extractJson(text: string): any {
   throw new Error("No JSON found in response");
 }
 
-async function callBankrLLM(system: string, user: string): Promise<string> {
-  if (!process.env.BANKR_API_KEY) {
-    throw new Error(
-      "BANKR_API_KEY is not set.\n" +
-      "  Export it: export BANKR_API_KEY=<your-key>\n" +
-      "  Check setup: blue doctor"
-    );
-  }
-  const res = await fetch("https://llm.bankr.bot/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": process.env.BANKR_API_KEY,
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      system,
-      messages: [{ role: "user", content: user }],
-      temperature: 0.3,
-      max_tokens: 2000,
-    }),
+/**
+ * Score via Virtuals.
+ *
+ * This file used to POST `https://llm.bankr.bot/v1/messages` with `BANKR_API_KEY`
+ * and a hardcoded `claude-sonnet-4-6`. Bankr 403-bans this project (measured
+ * 2026-09-06), so that call failed for every consumer of the published package.
+ * Delegating to `@blueagent/core` rather than re-inlining a client keeps the
+ * endpoint, the key loader and the model default in exactly one place — the model
+ * id resolves from $VIRTUALS_MODEL, else core's default.
+ */
+function callLLM(system: string, user: string): Promise<string> {
+  return callVirtuals({
+    system,
+    messages: [{ role: "user", content: user }],
+    temperature: 0.3,
+    maxTokens: 2000,
   });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Bankr LLM error ${res.status}: ${body.slice(0, 200)}`);
-  }
-  const data = await res.json() as any;
-  if (data.content?.[0]?.text) return data.content[0].text;
-  // Surface the actual API error for debugging
-  const detail = data.error?.message ?? data.type ?? JSON.stringify(data).slice(0, 200);
-  throw new Error(`Invalid Bankr LLM response: ${detail}`);
 }
 
 // ── GitHub deep fetch ─────────────────────────────────────────────────────────
@@ -419,7 +405,7 @@ export async function scoreAgent(rawInput: string): Promise<AgentScoreResult> {
     ? `Score this AI agent based on the data below.\nInput: ${rawInput}\n\nData:\n${truncated}`
     : `Score this AI agent by X/Twitter handle: @${displayHandle}. Limited data available — score conservatively.`;
 
-  const raw = await callBankrLLM(SYSTEM_PROMPT, userMessage);
+  const raw = await callLLM(SYSTEM_PROMPT, userMessage);
 
   let parsed: { dimensions: AgentScoreDimensions; strengths: string[]; gaps: string[] };
   try {

@@ -77,23 +77,19 @@ export const COMMANDS_DOCS = [
     { cmd: "blue validate [dir]", desc: "Validate project structure — package.json, tsconfig, env, src/, git", example: "blue validate ./my-project" },
   ]},
   { group: "CHAT", items: [
-    { cmd: "blue chat [prompt]",  desc: "Interactive chat with the Blue Agent LLM (Venice) in the terminal",  example: 'blue chat "how do I add x402 to my API?"' },
+    { cmd: "blue chat [prompt]",  desc: "Interactive chat with the Blue Agent LLM (Virtuals) in the terminal", example: 'blue chat "how do I add x402 to my API?"' },
   ]},
   { group: "REPUTATION", items: [
     { cmd: "blue score [handle]",       desc: "Builder Score for a wallet or X handle",                        example: "blue score @blueagent_" },
     { cmd: "blue agent-score [input]",  desc: "Evaluate an agent's reliability score",                         example: "blue agent-score 0x…" },
     { cmd: "blue compare [a] [b]",      desc: "Compare two builders or agents side by side",                   example: "blue compare @a @b" },
   ]},
-  { group: "DISCOVERY", items: [
-    { cmd: "blue search [query]",   desc: "Search builders, agents, projects, tokens",                         example: 'blue search "base lending"' },
-    { cmd: "blue trending [filter]", desc: "What's trending on Base right now",                                example: "blue trending tokens" },
-    { cmd: "blue watch [target]",   desc: "Watch a wallet, handle, or token",                                  example: "blue watch 0x…" },
-    { cmd: "blue alert [subcommand]", desc: "Configure threshold alerts",                                      example: "blue alert add" },
-    { cmd: "blue history [input]",  desc: "Activity history for a builder or agent",                           example: "blue history @blueagent_" },
-  ]},
-  { group: "LAUNCH", items: [
-    { cmd: "blue launch [mode]",      desc: "Launch a token or project on Base",                               example: "blue launch token" },
-    { cmd: "blue market [subcommand]", desc: "Market intelligence for the Base ecosystem",                     example: "blue market movers" },
+  // `search`, `trending`, `watch`, `history`, `launch` and `market` were listed here until
+  // 2026-09-18. They were retired, not renamed: each asked an LLM for market facts with no
+  // data source behind it and printed the answer as measured. Do not re-add a row here
+  // without a real source behind the command.
+  { group: "ALERTS", items: [
+    { cmd: "blue alert [subcommand]", desc: "Record a threshold alert locally — nothing delivers until you wire a listener", example: "blue alert add" },
   ]},
   { group: "TASKS", items: [
     { cmd: "blue tasks",                       desc: "Browse open tasks on the Work Hub",                      example: "blue tasks" },
@@ -159,7 +155,7 @@ export const AEON_SKILLS = [
   { file: "aeon-token-pick",        color: "#4FC3F7", trigger: '"give me a token pick" · "asymmetric setup today"',       desc: "Surfaces one asymmetric setup with a thesis — entry logic, why now, and the risk." },
   { file: "aeon-narrative-tracker", color: "#A78BFA", trigger: '"what\'s running on CT" · narrative positions · content', desc: "Tracks live crypto-Twitter narratives and the tokens positioned under each one." },
   { file: "aeon-deep-research",     color: "#fbbf24", trigger: '"DD on X" · "build me a memo" · contrarian take',         desc: "Full due-diligence memo on a token or project, with a contrarian angle." },
-  { file: "aeon-distribute-tokens", color: "#f87171", trigger: "Weekly $BLUEAGENT rewards payout to the leaderboard",     desc: "Distributes $BLUEAGENT rewards to top contributors. Needs BANKR_API_KEY with Wallet write scope." },
+  { file: "aeon-distribute-tokens", color: "#f87171", trigger: "Weekly $BLUEAGENT rewards payout to the leaderboard",     desc: "☠️ Cannot run. It pays out through Bankr's Wallet API, and Bankr suspended this account — every write verb returns 403 (measured 2026-09-06). Reads still work, so a dry run looks healthy right up to the transfer. Kept as a record only." },
 ];
 
 export const PACKAGES = [
@@ -168,7 +164,7 @@ export const PACKAGES = [
     { pkg: "@blueagent/x402", desc: "x402 client SDK · auto payment · createX402Client()" },
   ]},
   { label: "CORE — runtime & data", color: "#A78BFA", items: [
-    { pkg: "@blueagent/core",       desc: "Runtime · skill loading · Venice LLM gateway · schemas" },
+    { pkg: "@blueagent/core",       desc: "Runtime · skill loading · Virtuals LLM gateway · schemas" },
     { pkg: "@blueagent/reputation", desc: "Builder Score · Agent Score · Work Hub reputation" },
   ]},
   { label: "INTEGRATIONS", color: "#34D399", items: [

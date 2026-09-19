@@ -1,27 +1,51 @@
 ---
 title: Chat
-description: Multi-turn streaming chat with Bankr models
+description: Multi-turn streaming chat grounded on Base
 ---
 
 ## blue chat
 
-Launch a streaming REPL session with a Bankr LLM model.
+Launch a streaming REPL session, or ask a single question inline. Inference runs
+on the [Virtuals](https://compute.virtuals.io) gateway.
 
 ```bash
 blue chat
 blue chat "how do I deploy a contract to Base?"
-blue chat --sonnet
-blue chat --opus
+blue chat -m anthropic-claude-sonnet-5
 ```
 
 **Flags:**
-| Flag | Model | Speed | Price |
-|------|-------|-------|-------|
-| _(default)_ | claude-haiku-4-5 | Fast | ~$0.01/msg |
-| `--sonnet` | claude-sonnet-4-6 | Balanced | ~$0.05/msg |
-| `--opus` | claude-opus-4-6 | Best | ~$0.20/msg |
+| Flag | Description |
+|------|-------------|
+| `-m, --model <model>` | Model id override. Defaults to `$VIRTUALS_MODEL`, else the package default. |
 
-**In-session commands:**
-- `exit` or `ctrl+c` — end session
-- `clear` — clear message history
-- `model haiku` / `model sonnet` / `model opus` — switch mid-session
+<Note>
+Pick a model id from the live Virtuals catalog. The old `--sonnet` / `--opus`
+flags were removed — they hard-coded Anthropic ids the Virtuals gateway does not
+serve, so keeping them would only turn a 403 into a 400.
+</Note>
+
+### Single question
+
+```bash
+blue chat "what's the USDC address on Base?"
+```
+
+Prints the answer, then the model id and real token counts reported by the
+gateway (`123 in · 456 out tokens`). No dollar figure is printed — the gateway
+does not expose a per-token price, so Blue Agent will not invent one.
+
+### Interactive REPL
+
+```bash
+blue chat
+```
+
+Type a message at the `>>` prompt and press Enter. History is kept for the
+session so replies stay in context. Press **Ctrl+C** or submit an **empty line**
+to end the session.
+
+### Setup
+
+`blue chat` needs `VIRTUALS_API_KEY`. Set it in `~/.blue-agent/config.toml`
+(`virtuals_api_key = "..."`) or export it. Verify with `blue doctor`.

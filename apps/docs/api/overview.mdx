@@ -7,19 +7,27 @@ All API endpoints are hosted at `https://blueagent.dev/api`.
 
 ## Authentication
 
+These endpoints take **no API key**. Inference runs on the server against Virtuals with
+our own credentials, so there is nothing for you to configure:
+
 ```bash
-# All requests require BANKR_API_KEY in the x-api-key header
-curl -H "x-api-key: YOUR_KEY" https://blueagent.dev/api/console
+curl -X POST https://blueagent.dev/api/console \
+  -H "content-type: application/json" \
+  -d '{"command":"idea","prompt":"an onchain reputation layer for Base"}'
 ```
+
+The paid x402 tools are the exception — they are metered per call, not per key. An unpaid
+request returns `402` with an `accepts[]` array; you pay one entry and retry with an
+`X-Payment` header. See the x402 pages for the wire format.
 
 ## Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/console` | POST | Run a workflow command (idea/build/audit/ship/raise) |
-| `/api/chat` | POST | Streaming chat with Bankr LLM |
+| `/api/chat` | POST | Streaming chat. Metered in credits against the connected wallet, not an API key |
 | `/api/builder-score` | POST | Get Builder Score for an X handle |
-| `/api/agent-score` | POST | Get Agent Score for a package/repo/URL |
+| `/api/x402/{tool}` | POST | Any tool in the Hub catalog — pay per call in USDC on Base |
 
 ## Base URL
 
@@ -29,4 +37,5 @@ https://blueagent.dev/api
 
 ## Rate limits
 
-Rate limits are enforced per API key. Contact [@blueagent_](https://x.com/blueagent_) for higher limits.
+Rate limits are enforced **per IP** — `/api/console` allows 10 commands/min. Contact
+[@blueagent_](https://x.com/blueagent_) for higher limits.

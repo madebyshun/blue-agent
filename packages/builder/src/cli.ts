@@ -6,8 +6,7 @@
  * Setup / health:  new · init · doctor · validate
  * Chat:            chat
  * Identity/score:  score · agent-score · compare
- * Discovery:       search · trending · watch · alert · history
- * Launch / market: launch · market
+ * Alerts:          alert
  * Tasks:           tasks · post-task · accept · submit
  * Microtasks:      micro post · micro list · micro accept · micro submit · micro approve · micro profile
  * Terminal UI:     tui (spawns @blueagent/cli)
@@ -15,6 +14,8 @@
 
 import { Command } from "commander";
 import { spawnSync }          from "child_process";
+import fs                     from "fs";
+import path                   from "path";
 
 import { runIdea }            from "./commands/idea";
 import { runBuild }           from "./commands/build";
@@ -32,14 +33,8 @@ import { runAcceptTask }      from "./commands/accept";
 import { runSubmitTask }      from "./commands/submit";
 import { runChat }            from "./commands/chat";
 import { runValidate }        from "./commands/validate";
-import { runSearch }          from "./commands/search";
-import { runTrending }        from "./commands/trending";
-import { runWatch }           from "./commands/watch";
 import { runAlert, runAlertRemove } from "./commands/alert";
-import { runHistory }         from "./commands/history";
 import { runCompare }         from "./commands/compare";
-import { runLaunch }          from "./commands/launch";
-import { runMarket }          from "./commands/market";
 import {
   runMicroPost,
   runMicroList,
@@ -51,17 +46,29 @@ import {
 
 const program = new Command();
 
+/** Read the real version off package.json rather than repeating it here.
+ *  The literal that used to live below said 0.1.10 while the package was at
+ *  0.1.16 — `blue --version` was answering with a number six releases old. */
+function pkgVersion(): string {
+  try {
+    const raw = fs.readFileSync(path.resolve(__dirname, "../package.json"), "utf8");
+    return (JSON.parse(raw) as { version?: string }).version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
 program
   .name("blue")
   .description("Blue Agent — AI-native founder console for Base builders")
-  .version("0.1.10");
+  .version(pkgVersion());
 
 // ── Core workflow ─────────────────────────────────────────────────────────────
 
 program
   .command("idea [prompt]")
   .description("Turn a rough concept into a fundable brief — why now, why Base, MVP scope, risks, 24h plan")
-  .option("-m, --model <model>", "Bankr LLM model override", "claude-sonnet-4-6")
+  .option("-m, --model <model>", "Model id override (default: $VIRTUALS_MODEL, else the package default)")
   .option("--max-tokens <n>", "Max output tokens", "2000")
   .action(async (prompt, opts) => {
     await runIdea(prompt, { model: opts.model, maxTokens: parseInt(opts.maxTokens, 10) });
@@ -70,7 +77,7 @@ program
 program
   .command("build [prompt]")
   .description("Generate architecture, stack, folder structure, integrations, and test plan")
-  .option("-m, --model <model>", "Bankr LLM model override", "claude-sonnet-4-6")
+  .option("-m, --model <model>", "Model id override (default: $VIRTUALS_MODEL, else the package default)")
   .option("--max-tokens <n>", "Max output tokens", "3000")
   .action(async (prompt, opts) => {
     await runBuild(prompt, { model: opts.model, maxTokens: parseInt(opts.maxTokens, 10) });
@@ -79,7 +86,7 @@ program
 program
   .command("audit [prompt]")
   .description("Security and product risk review — critical issues, suggested fixes, go/no-go")
-  .option("-m, --model <model>", "Bankr LLM model override", "claude-sonnet-4-6")
+  .option("-m, --model <model>", "Model id override (default: $VIRTUALS_MODEL, else the package default)")
   .option("--max-tokens <n>", "Max output tokens", "3000")
   .action(async (prompt, opts) => {
     await runAudit(prompt, { model: opts.model, maxTokens: parseInt(opts.maxTokens, 10) });
@@ -88,7 +95,7 @@ program
 program
   .command("ship [prompt]")
   .description("Deployment checklist, verification steps, release notes, monitoring plan")
-  .option("-m, --model <model>", "Bankr LLM model override", "claude-sonnet-4-6")
+  .option("-m, --model <model>", "Model id override (default: $VIRTUALS_MODEL, else the package default)")
   .option("--max-tokens <n>", "Max output tokens", "2000")
   .action(async (prompt, opts) => {
     await runShip(prompt, { model: opts.model, maxTokens: parseInt(opts.maxTokens, 10) });
@@ -97,7 +104,7 @@ program
 program
   .command("raise [prompt]")
   .description("Pitch narrative — market framing, why this wins, traction, ask, target investors")
-  .option("-m, --model <model>", "Bankr LLM model override", "claude-sonnet-4-6")
+  .option("-m, --model <model>", "Model id override (default: $VIRTUALS_MODEL, else the package default)")
   .option("--max-tokens <n>", "Max output tokens", "2000")
   .action(async (prompt, opts) => {
     await runRaise(prompt, { model: opts.model, maxTokens: parseInt(opts.maxTokens, 10) });
@@ -139,11 +146,13 @@ program
 program
   .command("chat [prompt]")
   .description("Chat with Blue Agent — streaming responses, multi-turn REPL")
-  .option("--sonnet", "Use Sonnet model (balanced, slower than Haiku)")
-  .option("--opus", "Use Opus model (deep thinking, most capable)")
-  .option("-m, --model <model>", "Override model ID")
+  // `--sonnet` / `--opus` are gone, not renamed: they hard-coded `claude-sonnet-4-6`
+  // and `claude-opus-4-6`, Bankr ids the Virtuals gateway does not serve, so keeping
+  // them would only turn a 403 into a 400. Pick a model from the live catalog with
+  // `-m`, or set VIRTUALS_MODEL.
+  .option("-m, --model <model>", "Override model ID (default: $VIRTUALS_MODEL, else the package default)")
   .action(async (prompt, opts) => {
-    await runChat(prompt, { sonnet: opts.sonnet, opus: opts.opus, model: opts.model });
+    await runChat(prompt, { model: opts.model });
   });
 
 // ── Identity / score ──────────────────────────────────────────────────────────
@@ -169,29 +178,31 @@ program
     await runCompare(a, b);
   });
 
-// ── Discovery ─────────────────────────────────────────────────────────────────
-
-program
-  .command("search [query]")
-  .description("Search builders, agents, projects, and tokens on Base")
-  .action(async (query) => {
-    await runSearch(query);
-  });
-
-program
-  .command("trending [filter]")
-  .description("Trending on Base — builders / agents / tokens (optional filter)")
-  .action(async (filter) => {
-    await runTrending(filter);
-  });
-
-program
-  .command("watch [target]")
-  .description("Watch a wallet, handle, or token for activity")
-  .option("-l, --list", "List all active watches")
-  .action(async (target, opts) => {
-    await runWatch(target, { list: opts.list });
-  });
+// ── Alerts ────────────────────────────────────────────────────────────────────
+//
+// RETIRED 2026-09-18 — `search`, `trending`, `watch`, `history`, `launch`, `market`.
+//
+// All six asked an LLM to produce market facts with NO data source behind them, and
+// printed the answer as if it were measured. Their own prompts said so out loud:
+// search  — "If you don't know exact results, return realistic examples"
+// trending— "Be specific and realistic... Use real handles where you know them"
+// market  — invented a `price`, a `usage` count and a `trust` badge per listing
+// history — invented DATED events in a named real person's timeline
+// launch  — asserted a fixed "40% creator / 40% Bankr / 20% Clanker" fee split
+// watch   — invented the signals and thresholds it then saved to disk
+//
+// Four of them also ended by handing the user a `bankr agent prompt "..."` command to
+// run. Bankr 403-bans this project on every write verb (measured 2026-09-06), so that
+// command fails for everyone — the commands were selling a platform that rejects us.
+//
+// This is the repo's own rule, not a style preference: "A tool with no real source WILL
+// fabricate, no matter how good the prompt is. Prompts do not prevent hallucination;
+// data sources do." Renaming Bankr→Virtuals inside them would have kept the fabrication
+// and just changed which gateway produced it.
+//
+// `alert` SURVIVES because it is the honest one: no LLM, a real interactive prompt, and
+// it already tells the truth that nothing delivers until you wire a listener.
+// ~/.blue-agent/watches.json is deliberately NOT deleted — user state is evidence.
 
 program
   .command("alert [subcommand]")
@@ -203,30 +214,6 @@ program
     } else {
       await runAlert(subcommand);
     }
-  });
-
-program
-  .command("history [input]")
-  .description("Activity history for a builder or agent — @handle / npm:pkg / github.com/repo")
-  .action(async (input) => {
-    await runHistory(input);
-  });
-
-// ── Launch / market ───────────────────────────────────────────────────────────
-
-program
-  .command("launch [mode]")
-  .description("Launch wizard — token launch on Base or agent publish to Bankr (token | agent)")
-  .action(async (mode) => {
-    await runLaunch(mode);
-  });
-
-program
-  .command("market [subcommand]")
-  .description("Browse or publish agents, skills, prompts, and templates on Bankr marketplace")
-  .argument("[query]", "Filter query or item to publish")
-  .action(async (subcommand, query) => {
-    await runMarket(subcommand, query);
   });
 
 // ── Work Hub / tasks ──────────────────────────────────────────────────────────

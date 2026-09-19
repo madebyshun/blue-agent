@@ -48,8 +48,8 @@ function checkTsConfig(dir: string): CheckResult {
 
 function checkEnv(dir: string): CheckResult {
   // Check env var first (most common in CI / already-configured setups)
-  if (process.env.BANKR_API_KEY) {
-    return { ok: true, label: "BANKR_API_KEY set (environment variable)" };
+  if (process.env.VIRTUALS_API_KEY) {
+    return { ok: true, label: "VIRTUALS_API_KEY set (environment variable)" };
   }
 
   // Then check .env files in cwd
@@ -58,16 +58,16 @@ function checkEnv(dir: string): CheckResult {
     const p = path.join(dir, f);
     if (fs.existsSync(p)) {
       const content = fs.readFileSync(p, "utf8");
-      if (content.includes("BANKR_API_KEY")) {
-        return { ok: true, label: `BANKR_API_KEY found in ${f}` };
+      if (content.includes("VIRTUALS_API_KEY")) {
+        return { ok: true, label: `VIRTUALS_API_KEY found in ${f}` };
       }
     }
   }
 
   return {
     ok: false,
-    label: "BANKR_API_KEY not set",
-    detail: "Add to .env: BANKR_API_KEY=<your-key>  or  export BANKR_API_KEY=<key>",
+    label: "VIRTUALS_API_KEY not set",
+    detail: "Add to .env: VIRTUALS_API_KEY=<your-key>  or  export VIRTUALS_API_KEY=<key>",
   };
 }
 

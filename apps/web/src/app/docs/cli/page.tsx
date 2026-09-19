@@ -4,7 +4,8 @@ import { DocHeader, H2, P, CodeBlock, Callout, CardGrid, Card, PrevNext } from "
 export const metadata = { title: "Blue CLI — Blue Agent Docs" };
 
 const ENV = [
-  { key: "BANKR_API_KEY",        desc: "Bankr LLM key — required for AI-backed commands (idea/build/audit/ship/raise). Core scaffolding works without it." },
+  { key: "VIRTUALS_API_KEY",     desc: "Virtuals inference key — required for AI-backed commands (idea/build/audit/ship/raise). Core scaffolding works without it." },
+  { key: "VIRTUALS_MODEL",       desc: "Optional. Pin a model id from the live Virtuals catalog. Left unset, the CLI uses the @blueagent/core default." },
   { key: "BLUE_AGENT_SKILLS_DIR", desc: "Override the skills directory. Takes priority over ~/.blue-agent/skills/ and the bundled skills." },
 ];
 

@@ -84,24 +84,48 @@ async function fetchBuilderScore(handle: string): Promise<string> {
 type TemplateType = "base-agent" | "base-x402" | "base-token";
 
 const TEMPLATES: Record<TemplateType, Record<string, string>> = {
+  // Scaffolds deliberately have ZERO dependency on our own packages. Until
+  // 2026-09-18 this template required `@blue-agent/bankr` — a scope that does not
+  // exist on npm — so `npm install` failed for every project it ever generated.
+  // Virtuals is OpenAI-compatible, so a plain fetch needs no SDK and cannot rot
+  // against our publish state.
   "base-agent": {
     "package.json": `{
   "name": "{{PROJECT_NAME}}",
   "version": "0.1.0",
   "type": "module",
   "scripts": { "dev": "tsx watch src/index.ts", "start": "tsx src/index.ts" },
-  "dependencies": { "@blue-agent/bankr": "latest", "x402-fetch": "latest" },
   "devDependencies": { "typescript": "^5.3.0", "@types/node": "^20.0.0", "tsx": "^4.0.0" }
 }`,
-    ".env.example": `BANKR_API_KEY=your_bankr_api_key_here\nWALLET_PRIVATE_KEY=your_private_key_here`,
-    "src/index.ts": `import { callBankrLLM } from "@blue-agent/bankr";
+    ".env.example": `# Virtuals inference — https://compute.virtuals.io
+VIRTUALS_API_KEY=your_virtuals_api_key_here
+# Pick a model id from the live Virtuals catalog. Required: this template does not
+# hardcode one, because an id baked into a scaffold goes stale the moment the
+# gateway de-lists it.
+VIRTUALS_MODEL=
+WALLET_PRIVATE_KEY=your_private_key_here`,
+    "src/index.ts": `const API_KEY = process.env.VIRTUALS_API_KEY?.trim();
+const MODEL = process.env.VIRTUALS_MODEL?.trim();
+if (!API_KEY) throw new Error("VIRTUALS_API_KEY is not set — see .env.example");
+if (!MODEL) throw new Error("VIRTUALS_MODEL is not set — pick an id from the Virtuals catalog");
+
 async function main() {
-  const result = await callBankrLLM({
-    model: "claude-haiku-4-5",
-    system: "You are {{PROJECT_NAME}}, an AI agent on Base (chain 8453).",
-    messages: [{ role: "user", content: "Hello from Base!" }],
+  // Virtuals is OpenAI-compatible: /chat/completions, Bearer auth, system as the
+  // first message. It is NOT the Anthropic Messages shape.
+  const res = await fetch("https://compute.virtuals.io/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: \`Bearer \${API_KEY}\` },
+    body: JSON.stringify({
+      model: MODEL,
+      messages: [
+        { role: "system", content: "You are {{PROJECT_NAME}}, an AI agent on Base (chain 8453)." },
+        { role: "user", content: "Hello from Base!" },
+      ],
+    }),
   });
-  console.log(result);
+  if (!res.ok) throw new Error(\`Virtuals \${res.status}: \${await res.text()}\`);
+  const data = await res.json();
+  console.log(data.choices?.[0]?.message?.content ?? "");
 }
 main().catch(console.error);`,
     "README.md": `# {{PROJECT_NAME}}\n\nBuilt with [Blue Agent](https://blueagent.dev).`,
@@ -112,10 +136,12 @@ main().catch(console.error);`,
   "version": "0.1.0",
   "type": "module",
   "scripts": { "dev": "tsx watch src/index.ts" },
-  "dependencies": { "@blue-agent/bankr": "latest" },
   "devDependencies": { "typescript": "^5.3.0", "@types/node": "^20.0.0", "tsx": "^4.0.0" }
 }`,
-    ".env.example": `BANKR_API_KEY=your_bankr_api_key_here\nPORT=3000`,
+    // No LLM key here: this scaffold is a bare node:http server and never calls one.
+    // It listed `@blue-agent/bankr` + BANKR_API_KEY until 2026-09-18 — an unresolvable
+    // dependency and an env var nothing read.
+    ".env.example": `PORT=3000`,
     "src/index.ts": `import http from "node:http";
 const PORT = Number(process.env.PORT ?? 3000);
 http.createServer((req, res) => {

@@ -4,6 +4,17 @@
 export { callWithGrounding, streamWithGrounding, diagnoseSkills } from "./runtime";
 export type { GroundedCallOptions } from "./runtime";
 
+// Virtuals inference client — exported so `@blueagent/builder` reuses ONE client
+// instead of keeping a second copy that can drift to a different provider.
+export {
+  callVirtuals,
+  loadApiKey,
+  CONFIG_FILE,
+  VIRTUALS_BASE_URL,
+  VIRTUALS_DEFAULT_MODEL,
+} from "./runtime";
+export type { LLMMessage } from "./runtime";
+
 // Skill registry
 export { SKILL_REGISTRY, getSkillsForTask, ALL_TASKS } from "./registry";
 export type { Task } from "./registry";

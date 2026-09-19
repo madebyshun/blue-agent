@@ -1,10 +1,16 @@
 # bankr-blueagent.yml
-# Bankr × Blue Agent integration config
-# Bankr is the LLM gateway and wallet API that powers Blue Agent's intelligence and onchain execution
+#
+# ☠️ DEAD — this integration no longer exists. Bankr 403-bans this project at the account
+# level (measured 2026-09-06: every write verb; reads still 200, which is why a dry run
+# looks healthy). Inference is Virtuals and only Virtuals — https://compute.virtuals.io/v1,
+# key VIRTUALS_API_KEY. The packages/bankr client was deleted 2026-09-18. Nothing below is
+# a live capability; kept as a record of what the integration was.
 
 name: bankr-blueagent
 version: "1.0"
 updated: "2026-05-17"
+status: dead          # 403-banned account-wide; see the header
+dead_since: "2026-07-20"
 
 # Bankr's role in the Blue Agent stack
 role: infrastructure

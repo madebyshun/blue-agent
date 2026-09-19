@@ -1,6 +1,6 @@
 {
   "name": "@blueagent/builder",
-  "version": "0.1.16",
+  "version": "0.2.0",
   "description": "CLI for Blue Agent — blue idea / build / audit / ship / raise / new / init / doctor / chat / validate",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,7 +22,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@blueagent/core": "^0.1.2",
+    "@blueagent/core": "^1.0.4",
     "@blueagent/reputation": "*",
     "commander": "^12.0.0"
   },

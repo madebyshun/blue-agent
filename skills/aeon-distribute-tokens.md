@@ -1,16 +1,38 @@
 ---
 name: aeon-distribute-tokens
 description: |
-  Batch token payouts via the Bankr Wallet API with per-recipient idempotency, two-phase
-  resolve→execute, dry-run preview, and recovery from partial runs. Re-runs within the same UTC
-  day are a no-op for completed rows. Use for weekly contributor rewards, tip pools, leaderboard
-  payouts — any "pay N wallets X amount" flow where double-sending must be impossible.
-  Triggers: "distribute tokens", "pay contributors", "weekly payout", "send USDC to this list",
-  "tip these handles".
+  ⚠️ DOES NOT RUN — the rail it uses is dead. Batch token payouts via the Bankr Wallet API.
+  Bankr 403-bans this project on every WRITE verb (measured 2026-09-06, account-level
+  suspension), so `POST /wallet/transfer` fails for every recipient. Kept as a design
+  reference for idempotent two-phase payouts, NOT as an executable runbook. Do not load
+  this to answer "distribute tokens", "pay contributors", "weekly payout", "send USDC to
+  this list" or "tip these handles" — say the payout rail is unavailable instead.
 source: BankrBot/skills
 ---
 
 # aeon-distribute-tokens
+
+> 🔴 **THIS SKILL CANNOT EXECUTE. Do not follow it to move money.**
+>
+> Every step below that spends funds goes through the Bankr Wallet API. Bankr suspended this
+> project's account at the **account** level — not per-endpoint, not per-chain. Measured
+> 2026-09-06:
+>
+> ```
+> POST https://api.bankr.bot/...  → 403
+> {"error":"Account suspended","banned":true,"banType":"restricted",
+>  "reasonCode":"fraud","message":"This action is disabled while your account is
+>  restricted. You can still view your balances and withdraw your funds."}
+> ```
+>
+> Identical on `?chain=base` and `?chain=robinhood`. **Reads still return 200**, which is why
+> a dry run can look healthy right up until the first transfer 403s — RESOLVE passes, EXECUTE
+> fails on row 1.
+>
+> If someone asks for a payout run: **say the rail is unavailable and stop.** Do not schedule
+> one, do not promise one, and do not substitute another wallet to "make it work" — moving
+> real funds is ShunTr's decision, not an improvisation. The two-phase/idempotency design
+> below is still worth reading before building a replacement rail.
 
 Production-grade batch payouts. State is keyed on `(list, recipient, utc_date)` so any re-run within the same day skips already-completed rows.
 

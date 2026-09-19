@@ -10,7 +10,7 @@ Built by [Blocky Studio](https://blocky.studio).
 npm install @blueagent/reputation
 ```
 
-Requires `BANKR_API_KEY` in your environment. All scoring calls go through Bankr LLM.
+Requires `VIRTUALS_API_KEY` in your environment. All scoring calls go through Virtuals.
 
 ---
 
@@ -165,7 +165,11 @@ Every task completion awards reputation points:
 
 ## Notes
 
-- Scoring uses Bankr LLM (`https://llm.bankr.bot/v1/messages`). Set `BANKR_API_KEY` in your environment.
+- Scoring uses Virtuals (`https://compute.virtuals.io/v1`) via `@blueagent/core`. Set `VIRTUALS_API_KEY`,
+  or put `virtuals_api_key = "..."` in `~/.blue-agent/config.toml`. Optionally pin `VIRTUALS_MODEL`.
+  Versions ≤ 0.1.1 called `llm.bankr.bot`, which 403s for this project — those never scored anything.
+- The LLM only *interprets*: every input is real GitHub / X data fetched in this package. It is never
+  asked to supply a fact it wasn't given.
 - Task Hub is in-memory by default. Replace with a DB or onchain store for production.
 - All USDC rewards are on Base (chain ID 8453).
 - Treasury address is verified on Basescan: `0xf31f59e7b8b58555f7871f71973a394c8f1bffe5`
