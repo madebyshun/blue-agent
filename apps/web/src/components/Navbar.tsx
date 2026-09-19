@@ -96,7 +96,7 @@ export default function Navbar() {
           {/* Language toggle — EN | 中文 (shared cookie syncs marketing + app) */}
           <LanguageToggle />
 
-          {/* X / Twitter */}
+          {/* Social cluster — X + GitHub */}
           <a
             href="https://x.com/blueagent_"
             target="_blank"
@@ -106,6 +106,17 @@ export default function Navbar() {
           >
             <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+          </a>
+          <a
+            href="https://github.com/madebyshun/blue-agent"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="GitHub"
+            className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-[#1A1A2E] transition-all"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.575.106.785-.25.785-.556 0-.274-.01-1.002-.015-1.967-3.196.695-3.87-1.54-3.87-1.54-.523-1.328-1.277-1.682-1.277-1.682-1.044-.714.08-.699.08-.699 1.155.081 1.763 1.186 1.763 1.186 1.026 1.758 2.693 1.25 3.35.956.103-.744.401-1.25.73-1.538-2.552-.29-5.235-1.276-5.235-5.68 0-1.255.448-2.28 1.184-3.084-.119-.29-.513-1.46.112-3.045 0 0 .966-.309 3.165 1.178a11 11 0 0 1 5.76 0c2.198-1.487 3.163-1.178 3.163-1.178.626 1.585.232 2.755.114 3.045.737.804 1.182 1.829 1.182 3.084 0 4.415-2.687 5.386-5.247 5.67.412.355.78 1.056.78 2.13 0 1.538-.014 2.777-.014 3.155 0 .308.207.667.79.554A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5Z" />
             </svg>
           </a>
 
@@ -159,14 +170,27 @@ export default function Navbar() {
             ))}
           </div>
           <div className="border-t border-[#1A1A2E] pt-3 flex items-center justify-between px-1 mb-3">
-            <a
-              href="https://x.com/blueagent_"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-mono text-xs text-slate-600 hover:text-slate-400 transition-colors tracking-wider"
-            >
-              @blueagent_
-            </a>
+            <div className="flex items-center gap-4">
+              <a
+                href="https://x.com/blueagent_"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-xs text-slate-600 hover:text-slate-400 transition-colors tracking-wider"
+              >
+                @blueagent_
+              </a>
+              <a
+                href="https://github.com/madebyshun/blue-agent"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="GitHub"
+                className="text-slate-600 hover:text-slate-400 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.575.106.785-.25.785-.556 0-.274-.01-1.002-.015-1.967-3.196.695-3.87-1.54-3.87-1.54-.523-1.328-1.277-1.682-1.277-1.682-1.044-.714.08-.699.08-.699 1.155.081 1.763 1.186 1.763 1.186 1.026 1.758 2.693 1.25 3.35.956.103-.744.401-1.25.73-1.538-2.552-.29-5.235-1.276-5.235-5.68 0-1.255.448-2.28 1.184-3.084-.119-.29-.513-1.46.112-3.045 0 0 .966-.309 3.165 1.178a11 11 0 0 1 5.76 0c2.198-1.487 3.163-1.178 3.163-1.178.626 1.585.232 2.755.114 3.045.737.804 1.182 1.829 1.182 3.084 0 4.415-2.687 5.386-5.247 5.67.412.355.78 1.056.78 2.13 0 1.538-.014 2.777-.014 3.155 0 .308.207.667.79.554A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5Z" />
+                </svg>
+              </a>
+            </div>
             <Link
               href="/app/chat"
               onClick={() => setOpen(false)}

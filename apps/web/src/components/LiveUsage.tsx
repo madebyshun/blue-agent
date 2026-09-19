@@ -3,27 +3,24 @@
 import { useEffect, useState } from "react";
 
 /**
- * LiveUsage — Halo-style aggregate usage counter for the landing §04.
+ * LiveUsage — Halo-style single aggregate counter for the landing §04.
  *
- * Shows the REAL totals from /api/stats/public (buildPublicStats). No number is
- * ever fabricated — the same no-zero doctrine the stats module enforces:
+ * Shows ONE real number: total LLM tokens served through the inference nets,
+ * from /api/stats/public (buildPublicStats → `tokens`). No number is ever
+ * fabricated — same no-zero doctrine the stats module enforces:
  *
- *   • credits.messages — chat messages routed through the two inference nets
- *     (Virtuals + Venice). credits.* carries NO `ok` flag: on a source failure
- *     it degrades silently to 0, so a 0 is indistinguishable from an outage.
- *     Any non-positive / absent value therefore renders "—", never "0".
- *
- *   • usage.totalRuns — Σ paid Hub tool runs. Carries `usage.ok`; when false the
- *     sum dropped an unreadable counter and is a LOWER BOUND, so we prefix "≥".
- *     Non-positive / absent → "—".
+ *   • tokens.total carries `tokens.ok`. It is a FORWARD-ONLY meter (starts at
+ *     deploy, never backfilled) and counts only the non-streaming inference
+ *     path, so even when ok it is an honest lower bound — never an invention.
+ *     When ok is false the source was unreadable; a non-positive / absent /
+ *     unreadable value renders "—", never "0".
  *
  * The landing is a client component, so this fetches client-side. Until the
- * request lands (or if it fails), both values stay "—".
+ * request lands (or if it fails), the value stays "—".
  */
 
 type Stats = {
-  usage?: { totalRuns?: number; ok?: boolean };
-  credits?: { messages?: number };
+  tokens?: { total?: number; ok?: boolean };
 };
 
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -41,36 +38,20 @@ export default function LiveUsage() {
     return () => { alive = false; };
   }, []);
 
-  // messages — no ok flag ⟹ any non-positive/absent value renders "—", never 0.
-  const rawMsgs = stats?.credits?.messages;
-  const messages =
-    !failed && typeof rawMsgs === "number" && rawMsgs > 0 ? fmt(rawMsgs) : "—";
-
-  // runs — usage.ok:false ⟹ lower bound ("≥"); non-positive/absent ⟹ "—".
-  const rawRuns = stats?.usage?.totalRuns;
-  const runsOk = stats?.usage?.ok !== false;
-  const runs =
-    !failed && typeof rawRuns === "number" && rawRuns > 0
-      ? (runsOk ? "" : "≥ ") + fmt(rawRuns)
-      : "—";
-
-  const items = [
-    { value: messages, label: "messages routed through Virtuals + Venice" },
-    { value: runs, label: "paid tool runs settled on the Hub" },
-  ];
+  // tokens — forward-only, ok-gated: unreadable / non-positive / absent → "—".
+  const raw = stats?.tokens?.total;
+  const ok = stats?.tokens?.ok !== false;
+  const tokens =
+    !failed && ok && typeof raw === "number" && raw > 0 ? fmt(raw) : "—";
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4">
-      {items.map((it) => (
-        <div key={it.label} className="ba-card rounded-2xl p-6 sm:p-7 flex flex-col items-center text-center">
-          <div className="text-4xl sm:text-5xl font-bold tracking-tight tabular-nums ln-accent">
-            {it.value}
-          </div>
-          <div className="font-mono text-[11.5px] ln-mut mt-2 leading-snug max-w-[24ch]">
-            {it.label}
-          </div>
-        </div>
-      ))}
+    <div className="ba-card rounded-2xl p-8 sm:p-10 flex flex-col items-center text-center max-w-md mx-auto">
+      <div className="text-5xl sm:text-6xl font-bold tracking-tight tabular-nums ln-accent">
+        {tokens}
+      </div>
+      <div className="font-mono text-[11.5px] ln-mut mt-3 leading-snug max-w-[30ch]">
+        tokens served through Virtuals + Venice inference
+      </div>
     </div>
   );
 }

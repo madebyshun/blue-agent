@@ -55,9 +55,9 @@ export const zh: Dict = {
     s_chat_sub:
       "对话、连接、写代码 —— 无需离开 Blue 即可切换模态。图像与视频即将到来。",
     use_chat_label: "对话",
-    use_chat_desc: "提问、运行 / 命令、读取实时 Base 数据 —— 无需钱包即可开始。",
+    use_chat_desc: "用自然语言提问 —— 五大创始人工作流、实时 Base 数据、/skill 技能包。无需钱包即可开始。",
     use_code_label: "代码",
-    use_code_desc: "用 Kimi K2 运行 /build 与 /audit —— 架构、安全审查、上线清单。",
+    use_code_desc: "在 Claude Opus 4.8 上运行 build 与 audit —— 架构、安全审查、上线清单。",
     use_connect_label: "连接",
     use_connect_desc: "接入任意 MCP 服务器 —— GitHub、Notion、Base Docs —— 工具直接出现在对话中。",
     use_image_label: "图像",
