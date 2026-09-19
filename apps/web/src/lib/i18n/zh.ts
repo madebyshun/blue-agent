@@ -122,6 +122,9 @@ export const zh: Dict = {
     // “技能”现在专指应用内已安装的技能目录，营销导航不再使用该词。
     soul: "灵魂",
     docs: "文档",
+    // `physical` —— 运行在 blueagent skill 上的桌面机器人预告（研究中）。
+    // 渲染为不可点击的 “soon” 项，暂无路由。
+    physical: "实体机器人",
     github: "GitHub",
     launch_app: "启动应用 →",
   },

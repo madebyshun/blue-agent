@@ -39,12 +39,24 @@ function ThemeToggle({ className = "" }: { className?: string }) {
 // them. `hub` was dropped 2026-09-19 — the landing has no Hub section for a
 // top-level link to scroll to (the Hub lives in the app shell + the CTA).
 // `soul`/`about` stay dropped; their routes + i18n keys remain so nothing breaks.
-const NAV_LINKS = [
-  { key: "how",     href: "/#flow" },
-  { key: "models",  href: "/#models" },
-  { key: "pricing", href: "/#pricing" },
-  { key: "docs",    href: "/docs" },
+// `physical` is a teaser for the desk bot running on the blueagent skill —
+// no route yet, so it renders as a non-clickable "soon" item (not an <a>),
+// which also keeps it out of the link-liveness check.
+const NAV_LINKS: { key: string; href?: string; soon?: boolean }[] = [
+  { key: "how",      href: "/#flow" },
+  { key: "models",   href: "/#models" },
+  { key: "pricing",  href: "/#pricing" },
+  { key: "docs",     href: "/docs" },
+  { key: "physical", soon: true },
 ];
+
+function SoonBadge() {
+  return (
+    <span className="text-[9px] uppercase tracking-wider text-[#4FC3F7]/70 border border-[#4FC3F7]/25 rounded px-1 py-0.5">
+      soon
+    </span>
+  );
+}
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
@@ -67,14 +79,27 @@ export default function Navbar() {
           </span>
         </Link>
 
-        {/* ── Desktop nav — absolutely centered ── */}
-        <div className="hidden md:flex items-center gap-0.5 absolute left-1/2 -translate-x-1/2">
+        {/* ── Desktop nav — centered via flex-1 so it never overlaps the
+             right cluster as items are added (absolute-centering did). ── */}
+        <div className="hidden md:flex flex-1 items-center justify-center gap-0.5">
           {NAV_LINKS.map((item) => {
-            const active = isActive(item.href);
+            if (item.soon) {
+              return (
+                <span
+                  key={item.key}
+                  className="relative font-mono text-[13px] px-4 py-1.5 rounded-lg flex items-center gap-1.5 cursor-default"
+                  style={{ color: "#64748b" }}
+                >
+                  {t(`nav_marketing.${item.key}`)}
+                  <SoonBadge />
+                </span>
+              );
+            }
+            const active = isActive(item.href!);
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={item.href!}
                 className="relative font-mono text-[13px] px-4 py-1.5 rounded-lg transition-all"
                 style={active
                   ? { color: "#4FC3F7" }
@@ -95,7 +120,7 @@ export default function Navbar() {
         </div>
 
         {/* ── Right actions ── */}
-        <div className="hidden md:flex items-center gap-3 ml-auto shrink-0">
+        <div className="hidden md:flex items-center gap-3 shrink-0">
           {/* Light/dark toggle — landing only */}
           {isHome && <ThemeToggle />}
 
@@ -161,19 +186,30 @@ export default function Navbar() {
       {open && (
         <div className="md:hidden border-t border-[#1A1A2E] bg-[#050508] px-4 py-3">
           <div className="flex flex-col gap-0.5 mb-3">
-            {NAV_LINKS.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                className="font-mono text-sm px-4 py-2.5 rounded-lg transition-all"
-                style={isActive(item.href)
-                  ? { color: "#4FC3F7", background: "#4FC3F710" }
-                  : { color: "#94a3b8" }}
-              >
-                {t(`nav_marketing.${item.key}`)}
-              </Link>
-            ))}
+            {NAV_LINKS.map((item) =>
+              item.soon ? (
+                <span
+                  key={item.key}
+                  className="font-mono text-sm px-4 py-2.5 rounded-lg flex items-center gap-2"
+                  style={{ color: "#94a3b8" }}
+                >
+                  {t(`nav_marketing.${item.key}`)}
+                  <SoonBadge />
+                </span>
+              ) : (
+                <Link
+                  key={item.href}
+                  href={item.href!}
+                  onClick={() => setOpen(false)}
+                  className="font-mono text-sm px-4 py-2.5 rounded-lg transition-all"
+                  style={isActive(item.href!)
+                    ? { color: "#4FC3F7", background: "#4FC3F710" }
+                    : { color: "#94a3b8" }}
+                >
+                  {t(`nav_marketing.${item.key}`)}
+                </Link>
+              )
+            )}
           </div>
           <div className="border-t border-[#1A1A2E] pt-3 flex items-center justify-between px-1 mb-3">
             <div className="flex items-center gap-4">
