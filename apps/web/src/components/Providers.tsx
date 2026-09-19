@@ -16,6 +16,7 @@ import PrivyWalletActivate from "@/lib/privy/wallet-activate";
 import MiniAppReady from "@/components/MiniAppReady";
 import BaseAppAutoConnect from "@/components/BaseAppAutoConnect";
 import { LanguageProvider } from "@/lib/i18n/context";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 // The Farcaster / Base App Mini App connector talks to a host frame over
 // postMessage. It is NOT inert in a normal browser tab: with no host to
@@ -183,7 +184,11 @@ function Shell({ children }: { children: React.ReactNode }) {
       {/* Silently binds the host wallet when embedded in Base App / Farcaster. */}
       <BaseAppAutoConnect />
       {/* EN / 中文 — wraps both marketing + app (root layout uses <Providers>). */}
-      <LanguageProvider>{children}</LanguageProvider>
+      {/* ThemeProvider only drives the landing's light/dark palette (`.landing-root`);
+          the dark app shell ignores `data-theme`, so wrapping globally is safe. */}
+      <LanguageProvider>
+        <ThemeProvider>{children}</ThemeProvider>
+      </LanguageProvider>
     </>
   );
 }

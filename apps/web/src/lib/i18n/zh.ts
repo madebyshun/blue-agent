@@ -55,9 +55,9 @@ export const zh: Dict = {
     s_chat_sub:
       "对话、连接、写代码 —— 无需离开 Blue 即可切换模态。图像与视频即将到来。",
     use_chat_label: "对话",
-    use_chat_desc: "提问、运行 / 命令、读取实时 Base 数据 —— 无需钱包即可开始。",
+    use_chat_desc: "用自然语言提问 —— 五大创始人工作流、实时 Base 数据、/skill 技能包。无需钱包即可开始。",
     use_code_label: "代码",
-    use_code_desc: "用 Kimi K2 运行 /build 与 /audit —— 架构、安全审查、上线清单。",
+    use_code_desc: "在 Claude Opus 4.8 上运行 build 与 audit —— 架构、安全审查、上线清单。",
     use_connect_label: "连接",
     use_connect_desc: "接入任意 MCP 服务器 —— GitHub、Notion、Base Docs —— 工具直接出现在对话中。",
     use_image_label: "图像",
@@ -111,6 +111,13 @@ export const zh: Dict = {
   },
   nav_marketing: {
     about: "关于",
+    // 页内区块锚点（2026-09-19）：`how`→§01 #flow，`models`→§02 #models，
+    // `pricing`→§07 #pricing。`hub` 已从导航栏移除（落地页没有 Hub 区块），
+    // 但保留该键以兼容其他读取方。
+    how: "工作原理",
+    models: "模型",
+    hub: "中心",
+    pricing: "定价",
     // `soul`（原 `skills`，2026-08）—— /soul 上的 SOUL.md 身份页。
     // “技能”现在专指应用内已安装的技能目录，营销导航不再使用该词。
     soul: "灵魂",

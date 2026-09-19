@@ -81,9 +81,17 @@ export const metadata: Metadata = {
   },
 };
 
+// Commits the landing theme to <html data-theme> BEFORE first paint so a
+// light-mode visitor never flashes dark. localStorage (explicit choice) wins;
+// otherwise follow the OS. Only the landing reads it — see ThemeProvider.
+const themeBootstrap = `(function(){try{var t=localStorage.getItem('blueagent_theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+      </head>
       <body><Providers>{children}</Providers><Analytics /></body>
     </html>
   );

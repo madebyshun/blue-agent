@@ -57,9 +57,9 @@ export const en = {
     s_chat_sub:
       "Chat, connect, and code — switch modality without ever leaving Blue. Image and video are coming.",
     use_chat_label: "Chat",
-    use_chat_desc: "Ask anything, run /commands, read live Base data — no wallet to start.",
+    use_chat_desc: "Ask anything in plain language — the five founder workflows, live Base data, /skill packs. No wallet to start.",
     use_code_label: "Code",
-    use_code_desc: "/build and /audit with Kimi K2 — architecture, security review, ship checklist.",
+    use_code_desc: "Build and audit on Claude Opus 4.8 — architecture, security review, ship checklist.",
     use_connect_label: "Connect",
     use_connect_desc: "Attach any MCP server — GitHub, Notion, Base Docs — its tools appear inline.",
     use_image_label: "Image",
@@ -113,6 +113,13 @@ export const en = {
   },
   nav_marketing: {
     about: "About",
+    // In-page section anchors (2026-09-19): `how`→§01 #flow, `models`→§02
+    // #models, `pricing`→§07 #pricing. `hub` is retired from the bar (the
+    // landing has no Hub section) but the key stays for any other reader.
+    how: "How it works",
+    models: "Models",
+    hub: "Hub",
+    pricing: "Pricing",
     // `soul` (was `skills`, 2026-08) — the SOUL.md identity page at /soul.
     // "Skills" now means the app's installed-skill catalog, so the marketing
     // nav no longer uses that word.

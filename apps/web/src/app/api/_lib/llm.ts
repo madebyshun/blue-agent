@@ -35,6 +35,7 @@
 // So: do NOT unset this key during env cleanup.
 
 import { getAeonOutput, formatAeonForLLM } from "./aeon-kv";
+import { recordLlmTokens } from "@/lib/llm-usage";
 
 export type BankrMessage = { role: string; content: string };
 
@@ -843,8 +844,20 @@ export async function callVirtualsLLM(opts: {
       finish_reason?: string;
       message?: { content?: string; reasoning_content?: string; reasoning?: string };
     }[];
-    usage?: { completion_tokens?: number; completion_tokens_details?: { reasoning_tokens?: number } };
+    usage?: {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      total_tokens?: number;
+      completion_tokens_details?: { reasoning_tokens?: number };
+    };
   };
+  // Forward-only "tokens served" meter (lib/llm-usage.ts). Real provider usage —
+  // total_tokens if present, else prompt+completion — recorded before the
+  // empty-content check so reasoning-heavy calls that spent the budget still
+  // count. Best-effort and non-throwing; the tokens are already spent.
+  await recordLlmTokens(
+    d.usage?.total_tokens ?? (d.usage?.prompt_tokens ?? 0) + (d.usage?.completion_tokens ?? 0),
+  );
   const choice = d.choices?.[0];
   const rawContent = choice?.message?.content ?? "";
   // Fallback: if content is empty but the upstream surfaced a separate

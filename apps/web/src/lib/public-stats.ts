@@ -46,6 +46,7 @@ import { AGENT_TOOLS } from "./agent-tools";
 import { kvGet, kvGetCounter } from "./kv";
 import { getLedgerActivity } from "./credit-ledger";
 import { getX402Settlements } from "./x402-settlements";
+import { getLlmUsage } from "./llm-usage";
 
 export interface PublicLaunchLite {
   name:       string;
@@ -103,6 +104,14 @@ export interface PublicStats {
     count:  number;    // # of confirmed on-chain settlements
     lastTx: string | null; // latest settlement tx hash (Basescan proof) — null if none
     ok:     boolean;   // false ⟹ meter unavailable → render "—", never a fake number
+  };
+  tokens: {            // aggregate LLM tokens served through the inference nets
+    total: number;     // Σ total_tokens (prompt + completion) — forward-only meter
+    /** #150 — false ⟹ the token meter was unreadable; `total` is 0 as a
+     *  placeholder and must render as "—", never as "no tokens served". Same
+     *  convention as `settlement.ok`. Forward-only + non-streaming-only, so even
+     *  when ok it is an honest lower bound of all inference (see lib/llm-usage.ts). */
+    ok:    boolean;
   };
 }
 
@@ -239,6 +248,16 @@ export async function buildPublicStats(): Promise<PublicStats> {
     if (s) settlement = { usdc: s.usdc, count: s.count, lastTx: s.lastTx, ok: true };
   } catch { /* leave ok:false → renders "—" */ }
 
+  // ── LLM tokens served (forward-only meter — lib/llm-usage.ts) ──
+  // Aggregate prompt+completion tokens across the non-streaming inference calls.
+  // Forward-only like `settlement`: starts accruing at deploy, never backfilled.
+  // Null source ⟹ ok:false → the landing renders "—", never a fabricated 0.
+  let tokens = { total: 0, ok: false };
+  try {
+    const u = await getLlmUsage();
+    if (u) tokens = { total: u.tokens, ok: true };
+  } catch { /* leave ok:false → renders "—" */ }
+
   return {
     updatedAt: Date.now(),
     launches: { total, uniqueCreators, peakPerDay, byDay, recent, ok: launchesOk },
@@ -247,5 +266,6 @@ export async function buildPublicStats(): Promise<PublicStats> {
     users: { claims, claimCap: CLAIM_CAP, total: totalUsers, claimsOk },
     credits: { spent: creditsSpent, messages: chatMessages },
     settlement,
+    tokens,
   };
 }
