@@ -125,6 +125,9 @@ export const en = {
     // nav no longer uses that word.
     soul: "Soul",
     docs: "Docs",
+    // `physical` — teaser for the desk bot that runs on the blueagent skill
+    // (in research). Rendered as a non-clickable "soon" item; no route yet.
+    physical: "Physical Bot",
     github: "GitHub",
     launch_app: "Launch App →",
   },
