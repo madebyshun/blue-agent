@@ -6,6 +6,7 @@ import Navbar from "@/components/Navbar";
 import ProofStrip from "@/components/ProofStrip";
 import { useLang } from "@/lib/i18n/context";
 import { TOOL_COUNT } from "@/lib/agent-tools";
+import { CREDITS_PER_USDC } from "@/lib/payments";
 
 // Marketing surface → mono-forward. JetBrains Mono is the PRIMARY brand voice
 // here (display headlines + reading body). DM Sans (.font-ui) is reserved for the
@@ -95,6 +96,24 @@ const PACKS: { usdc: string; credits: string; label: string; popular?: boolean }
   { usdc: "$50",  credits: "100,000", label: "Pro" },
   { usdc: "$100", credits: "200,000", label: "Scale" },
 ];
+
+// Fund-vault steps — the real non-custodial top-up path (payments.ts): the user
+// signs ONE direct USDC transfer to the Blue treasury, the server READS the
+// settled tx and credits the off-chain ledger. No deposit contract, no custody,
+// no "private vault" — the honest inversion of Dot's DotPay framing.
+const FUND_STEPS: { n: string; color: string; title: string; body: string }[] = [
+  { n: "01", color: "#0052FF", title: "One Base transfer",
+    body: "You sign a single USDC transfer from your own wallet to the Blue treasury. No deposit contract, no custody — the keys never leave you." },
+  { n: "02", color: "#34D399", title: "Settles on-chain",
+    body: "It confirms on Base through the Coinbase CDP x402 facilitator. The server only reads the settled tx and credits your balance — it can't move your funds." },
+  { n: "03", color: "#818CF8", title: "Spend on any model",
+    body: "Credits debit per message across every frontier model. They never expire, and a failed model call is refunded automatically." },
+];
+
+// Fund-vault amount pills (USDC). The real CREDIT_PACKS amounts from
+// lib/payments.ts — credits are computed live via CREDITS_PER_USDC, never a
+// hardcoded rate.
+const FUND_AMOUNTS = [5, 20, 50, 100];
 
 const HUB_CATEGORIES = [
   { label: "RH RWA",       color: "#34D399", tools: "rh-stock-arb · rh-stock-movers · rh-stock-swap · rh-rwa-dca" },
@@ -376,6 +395,91 @@ function HowYouUse() {
           <UsePreview tab={active} />
         </Reveal>
       </div>
+    </div>
+  );
+}
+
+// ─── Fund vault — DotPay-equivalent credit top-up widget ──────────────────────
+// Interactive: pick a USDC amount, see the credits it buys (live CREDITS_PER_USDC
+// math — never a fabricated rate), and fund it. USDC on Base is the live rail;
+// $BLUEAGENT is a disabled "soon" pill (the token relaunch isn't wired yet, and
+// credits never require it — credits.ts is token-free — so it's an added rail,
+// not a gate). Non-custodial by design: the user signs a direct transfer and the
+// server only reads the settled tx, the honest inverse of Dot's custodial vault.
+
+function FundVault() {
+  const [usd, setUsd] = useState(20);
+  const credits = (usd * CREDITS_PER_USDC).toLocaleString("en-US");
+  return (
+    <div className="grid lg:grid-cols-[1.15fr_1fr] gap-4 sm:gap-5 items-stretch">
+      {/* The vault card */}
+      <Reveal>
+        <div className="ba-card h-full rounded-2xl p-6 sm:p-8 flex flex-col">
+          {/* Fund-with toggle — USDC live, $BLUEAGENT soon */}
+          <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] mb-7">
+            <span className="tracking-widest uppercase text-slate-600 mr-1">Fund with</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#0052FF]/40 bg-[#0052FF]/10 px-3 py-1 text-slate-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#0052FF]" /> USDC · Base
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#15151f] px-3 py-1 text-slate-600">
+              $BLUEAGENT <span className="text-[9px] tracking-widest uppercase text-slate-700">soon</span>
+            </span>
+          </div>
+
+          {/* Live amount → credits */}
+          <div className="flex items-end justify-between gap-4 mb-6">
+            <div>
+              <div className="font-mono text-[10px] tracking-widest uppercase text-slate-600 mb-1.5">You fund</div>
+              <div className="text-4xl sm:text-5xl font-bold tracking-tight text-white tabular-nums">${usd}</div>
+            </div>
+            <span className="text-slate-700 text-2xl pb-2">→</span>
+            <div className="text-right">
+              <div className="font-mono text-[10px] tracking-widest uppercase text-slate-600 mb-1.5">You get</div>
+              <div className="text-4xl sm:text-5xl font-bold tracking-tight tabular-nums" style={{ color: "#4FC3F7" }}>{credits}</div>
+              <div className="font-mono text-[11px] text-slate-500 mt-0.5">credits</div>
+            </div>
+          </div>
+
+          {/* Amount pills */}
+          <div className="grid grid-cols-4 gap-2 mb-7">
+            {FUND_AMOUNTS.map((a) => {
+              const on = a === usd;
+              return (
+                <button key={a} onClick={() => setUsd(a)} aria-pressed={on}
+                  className="rounded-lg border py-2 font-mono text-[13px] font-bold transition-colors"
+                  style={on
+                    ? { borderColor: "#4FC3F740", background: "#4FC3F70d", color: "#4FC3F7" }
+                    : { borderColor: "#1A1A2E", color: "#94a3b8" }}>
+                  ${a}
+                </button>
+              );
+            })}
+          </div>
+
+          <Link href="/app/chat" className="inline-flex items-center justify-center rounded-xl bg-[#4FC3F7] px-4 py-3 font-mono text-[13px] font-semibold text-black hover:bg-[#7ad3f9] transition-colors active:scale-[0.99]">
+            Add {credits} credits →
+          </Link>
+          <p className="font-mono text-[11px] text-slate-600 mt-3 text-center">
+            1 USDC = 2,000 credits · never expires · you sign the transfer
+          </p>
+        </div>
+      </Reveal>
+
+      {/* The 3-step non-custodial strip */}
+      <Reveal delay={80}>
+        <div className="ba-card h-full rounded-2xl p-6 sm:p-8 flex flex-col justify-center gap-5">
+          {FUND_STEPS.map((s) => (
+            <div key={s.n} className="flex gap-4">
+              <span className="font-mono text-sm font-bold rounded-lg px-2.5 py-1 h-fit shrink-0"
+                style={{ color: s.color, background: `${s.color}12`, border: `1px solid ${s.color}30` }}>{s.n}</span>
+              <div>
+                <div className="text-[14px] font-semibold text-white mb-1">{s.title}</div>
+                <p className="font-mono text-[12px] text-slate-500 leading-relaxed">{s.body}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Reveal>
     </div>
   );
 }
@@ -671,28 +775,53 @@ export default function Home() {
             sub="No hidden tiers. Here is exactly what a message costs, what a top-up buys, and what you get for free."
           />
 
-          {/* Free + top-up rails */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 mb-4">
+          {/* Pay-with rail — USDC is live; $BLUEAGENT lands after the relaunch. Credits
+              never require the token (credits.ts is token-free), so this is an added
+              rail, not a gate. No monthly tier: Blue is pay-as-you-go by design. */}
+          <Reveal className="mb-5">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[11px]">
+              <span className="tracking-widest uppercase text-slate-600">Pay with</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#0052FF]/40 bg-[#0052FF]/10 px-3 py-1 text-slate-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#0052FF]" /> USDC · Base
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#15151f] px-3 py-1 text-slate-600">
+                $BLUEAGENT <span className="text-[9px] tracking-widest uppercase text-slate-700">soon</span>
+              </span>
+              <span className="text-slate-600 ml-auto">Pay-as-you-go · no subscription</span>
+            </div>
+          </Reveal>
+
+          {/* Plans — three real rails (free bucket · credits · Hub API). Not invented
+              tiers: every figure is the live constant (WALLET_DAILY, CREDITS_PER_USDC,
+              the catalog price floor). */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-4">
             <Reveal>
               <div className="ba-card h-full rounded-2xl p-6 flex flex-col">
-                <div className="text-sm font-semibold mb-3 text-[#34D399]">Free, every day</div>
-                <div className="flex items-baseline gap-2 mb-1">
-                  <span className="text-3xl font-bold text-white tracking-tight">500</span>
-                  <span className="font-mono text-[12px] text-slate-500">credits / day · any connected wallet</span>
+                <div className="text-sm font-semibold text-[#34D399]">Free, every day</div>
+                <div className="mt-3 flex items-baseline gap-1.5">
+                  <span className="text-4xl font-bold text-white tracking-tight">$0</span>
                 </div>
-                <p className="font-mono text-[12px] text-slate-500 leading-relaxed mt-2">
-                  100 cr/day with no wallet at all. No token to hold, nothing to stake — the daily bucket resets every 24h.
-                </p>
+                <div className="font-mono text-[12px] text-slate-500 mt-1">500 credits / day · any wallet</div>
+                <ul className="mt-5 space-y-2 font-mono text-[12px] flex-1">
+                  <li className="text-[#34D399]">✓ <span className="text-slate-400">100 cr/day with no wallet at all</span></li>
+                  <li className="text-[#34D399]">✓ <span className="text-slate-400">Every model — including free Qwen 3.5</span></li>
+                  <li className="text-[#34D399]">✓ <span className="text-slate-400">Non-custodial · no token to hold</span></li>
+                  <li className="text-[#34D399]">✓ <span className="text-slate-400">Resets every 24h</span></li>
+                </ul>
+                <Link href="/app/chat" className="mt-5 inline-flex items-center justify-center rounded-lg border border-[#1A1A2E] px-4 py-2.5 font-mono text-[12px] text-slate-200 hover:border-[#34D399]/40 transition-colors">Start free →</Link>
               </div>
             </Reveal>
             <Reveal delay={80}>
-              <div className="ba-card h-full rounded-2xl p-6 flex flex-col">
-                <div className="text-sm font-semibold mb-3 text-[#4FC3F7]">Top up in USDC</div>
-                <div className="flex items-baseline gap-2 mb-3">
-                  <span className="text-3xl font-bold text-white tracking-tight">1 USDC</span>
-                  <span className="font-mono text-[12px] text-slate-500">= 2,000 credits</span>
+              <div className="ba-card h-full rounded-2xl p-6 flex flex-col" style={{ borderColor: "#4FC3F740" }}>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-[#4FC3F7]">Credits</div>
+                  <span className="font-mono text-[9px] tracking-widest uppercase text-[#4FC3F7]">most popular</span>
                 </div>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="mt-3 flex items-baseline gap-1.5">
+                  <span className="text-4xl font-bold text-white tracking-tight">1 USDC</span>
+                  <span className="font-mono text-[12px] text-slate-500">= 2,000 cr</span>
+                </div>
+                <div className="mt-4 grid grid-cols-4 gap-2">
                   {PACKS.map((p) => (
                     <div key={p.usdc} className="rounded-lg border p-2 text-center"
                       style={p.popular ? { borderColor: "#4FC3F740", background: "#4FC3F70d" } : { borderColor: "#1A1A2E" }}>
@@ -701,6 +830,28 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
+                <ul className="mt-5 space-y-2 font-mono text-[12px] flex-1">
+                  <li className="text-[#4FC3F7]">✓ <span className="text-slate-400">Credits never expire</span></li>
+                  <li className="text-[#4FC3F7]">✓ <span className="text-slate-400">Failed model call auto-refunded</span></li>
+                  <li className="text-[#4FC3F7]">✓ <span className="text-slate-400">Every frontier model, one balance</span></li>
+                </ul>
+                <Link href="/app/chat" className="mt-5 inline-flex items-center justify-center rounded-lg bg-[#4FC3F7] px-4 py-2.5 font-mono text-[12px] font-semibold text-black hover:bg-[#7ad3f9] transition-colors">Top up in USDC →</Link>
+              </div>
+            </Reveal>
+            <Reveal delay={160}>
+              <div className="ba-card h-full rounded-2xl p-6 flex flex-col">
+                <div className="text-sm font-semibold text-[#60A5FA]">Hub API</div>
+                <div className="mt-3 flex items-baseline gap-1.5">
+                  <span className="text-4xl font-bold text-white tracking-tight">$0.05</span>
+                  <span className="font-mono text-[12px] text-slate-500">/ call &amp; up</span>
+                </div>
+                <div className="font-mono text-[12px] text-slate-500 mt-1">{TOOL_COUNT} tools · pay-per-call</div>
+                <ul className="mt-5 space-y-2 font-mono text-[12px] flex-1">
+                  <li className="text-[#60A5FA]">✓ <span className="text-slate-400">USDC on Base · EIP-3009</span></li>
+                  <li className="text-[#60A5FA]">✓ <span className="text-slate-400">No account, no key exchange</span></li>
+                  <li className="text-[#60A5FA]">✓ <span className="text-slate-400">Or attach the MCP server</span></li>
+                </ul>
+                <Link href="/hub" className="mt-5 inline-flex items-center justify-center rounded-lg border border-[#1A1A2E] px-4 py-2.5 font-mono text-[12px] text-slate-200 hover:border-[#60A5FA]/40 transition-colors">Browse the Hub →</Link>
               </div>
             </Reveal>
           </div>
@@ -728,9 +879,20 @@ export default function Home() {
             <p className="font-mono text-[12px] text-slate-500 mt-6">
               Hub tools are pay-per-call in USDC over x402 — from <span className="text-slate-300">$0.05</span>.
               Non-custodial, no subscription; purchased credits don&apos;t expire, the free daily bucket resets every 24h.
-              A failed model call is refunded automatically.
+              A failed model call is refunded automatically. Paying in <span className="text-slate-400">$BLUEAGENT</span> arrives
+              after the token relaunch — credits stay free to earn and pay-per-use in USDC either way.
             </p>
           </Reveal>
+        </section>
+
+        {/* ══════════ FUND — DotPay-equivalent credit vault ══════════ */}
+        <section className="max-w-5xl mx-auto px-5 sm:px-6 py-16 sm:py-24 border-t border-[#13131d]">
+          <SectionHead
+            num="fund" kicker="Fund once" accent="#0052FF"
+            title={<>Fund once. <span className="text-[#0052FF]">Spend on any model.</span></>}
+            sub="Top up in USDC and it settles to credits on Base — one transfer you sign, no deposit contract, no custody. Spend it across every model whenever you want."
+          />
+          <FundVault />
         </section>
 
         {/* ══════════ 09 RUNS WHERE YOU BUILD — MCP ══════════ */}

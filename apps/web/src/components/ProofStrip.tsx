@@ -119,24 +119,28 @@ export default function ProofStrip() {
         </p>
       </Reveal>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      {/* Flagship figure — one bold number, the same honest "—"/"≥" fallback as
+          the cards (a false 0 would be a fabricated traction claim, never shown). */}
+      <Reveal className="mb-3 sm:mb-4">
+        <div className="ba-card rounded-2xl px-6 py-9 sm:py-11 text-center">
+          <div className="font-mono text-[10px] tracking-widest uppercase text-slate-600 mb-3">USDC settled on Base · live</div>
+          <div className="font-bold tracking-tight tabular-nums text-[3.25rem] leading-none sm:text-6xl lg:text-[5rem]" style={{ color: "#0052FF" }}>{usdc}</div>
+          <div className="font-mono text-[11px] text-slate-500 mt-4">
+            {lastTx
+              ? <a href={`https://basescan.org/tx/${lastTx}`} target="_blank" rel="noopener noreferrer" className="text-[#0052FF] hover:underline">latest settlement on Basescan ↗</a>
+              : "settled through the Coinbase CDP x402 facilitator"}
+          </div>
+        </div>
+      </Reveal>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <Reveal delay={0}>
-          <Metric
-            label="USDC settled · Base"
-            value={usdc}
-            accent="#0052FF"
-            sub={lastTx
-              ? <a href={`https://basescan.org/tx/${lastTx}`} target="_blank" rel="noopener noreferrer" className="text-[#0052FF] hover:underline">latest on Basescan ↗</a>
-              : "Coinbase CDP facilitator"}
-          />
-        </Reveal>
-        <Reveal delay={60}>
           <Metric label="Paid tool runs" value={runs} accent="#4FC3F7" sub="lifetime x402 calls" href="/stats" />
         </Reveal>
-        <Reveal delay={120}>
+        <Reveal delay={80}>
           <Metric label="Tools live" value={tools} accent="#A78BFA" sub="on the Hub" href="/hub" />
         </Reveal>
-        <Reveal delay={180}>
+        <Reveal delay={160}>
           <Metric label="Settlements" value={settleN} accent="#34D399" sub="confirmed on-chain" href="/stats" />
         </Reveal>
       </div>
