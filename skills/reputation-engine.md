@@ -1403,20 +1403,35 @@ EAS on Base:         Verify current address on Basescan — do not hardcode with
 
 All transactions and attestations are Base (chain ID 8453) only. Never suggest Ethereum mainnet.
 
-### 13.3 Bankr LLM Integration Note
+### 13.3 LLM Integration Note
 
-If the reputation system needs AI-assisted dispute resolution (Section 6.4), use Bankr LLM:
+If the reputation system needs AI-assisted dispute resolution (Section 6.4), call Virtuals —
+the only gateway this stack uses. Do NOT call OpenAI or Anthropic directly, and do NOT use
+`callBankrLLM` from `@blueagent/bankr`: that package is not published, and Bankr 403-bans
+this project on every verb.
 
 ```typescript
-import { callBankrLLM } from "@blueagent/bankr"; // do NOT use OpenAI or Anthropic directly
+import { callVirtuals } from "@blueagent/core";
 
-const resolution = await callBankrLLM(
-  `You are a neutral arbitrator for a gig marketplace dispute.
-   Evaluate the submitted proof against the task requirements.
-   Return ONLY: { "resolution": "for_worker" | "against_worker" | "inconclusive", "reason": "..." }`,
-  `Task: ${task.description}\nProof submitted: ${proof}\nPoster's rejection reason: ${rejectionReason}`
-);
+const resolution = await callVirtuals({
+  system:
+    `You are a neutral arbitrator for a gig marketplace dispute.
+     Evaluate the submitted proof against the task requirements.
+     Return ONLY: { "resolution": "for_worker" | "against_worker" | "inconclusive", "reason": "..." }`,
+  messages: [
+    {
+      role: "user",
+      content: `Task: ${task.description}\nProof submitted: ${proof}\nPoster's rejection reason: ${rejectionReason}`,
+    },
+  ],
+  // `model` is left unset on purpose — it resolves from $VIRTUALS_MODEL, else the package
+  // default. A hardcoded id goes stale the moment the gateway de-lists it.
+  temperature: 0,
+});
 ```
+
+Parse that leniently (strip code fences, slice first `{` to last `}`) — models wrap JSON.
+If parsing fails, the resolution is `"inconclusive"`, never a guessed verdict.
 
 ### 13.4 Key Design Principles to Follow
 

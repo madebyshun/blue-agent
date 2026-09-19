@@ -85,15 +85,13 @@ Advantages:
   ✓ Clanker uses this (recommended)
 ```
 
-**Clanker Integration:**
-```bash
-blue launch-token \
-  --name "MyToken" \
-  --symbol "MYT" \
-  --supply 1000000000 \
-  --curve bonding \
-  --liquidity-lock 1year
-```
+**Launching one:** Clanker is a third-party product — launch through Clanker's own interface.
+
+> ⚠️ Earlier revisions of this guide showed a `blue launch-token --curve bonding …` command
+> here. **That command has never existed in any version of the Blue Agent CLI.** Do not run
+> it and do not repeat it to a user. What Blue Agent actually ships for launching on Base is
+> B20HUB (`/app/b20hub`) plus the `b20_encode_deploy` calldata builder — the user signs; the
+> agent never broadcasts.
 
 ### Public Sale (Descending Price)
 
@@ -465,17 +463,12 @@ If token has all 4, it's likely a security:
 
 ## 10. Clanker Integration (Recommended)
 
-**Use Clanker for easy launch:**
+**Use Clanker for easy launch** — through Clanker's own interface. Blue Agent does not wrap it.
 
-```bash
-blue launch-token \
-  --name "Builder Token" \
-  --symbol "BLDR" \
-  --supply 1000000000 \
-  --curve bonding \
-  --liquidity-percent 50 \
-  --liquidity-lock 365 days
-```
+> ⚠️ A `blue launch-token …` invocation used to appear here. **No such CLI command exists**,
+> so anyone who copied it got "command not found". Blue Agent's real Base launch path is
+> B20HUB (`/app/b20hub`) and the `b20_*` calldata builders, which return unsigned calldata for
+> the user to sign themselves.
 
 **Clanker benefits:**
 - ✓ Fair bonding curve (no presale)

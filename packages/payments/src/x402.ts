@@ -1,4 +1,10 @@
-// x402 helper utilities
+// ⚠️ UNFINISHED STUB — zero call sites in this repo, and `private: true` so it has never
+// been published. Do not wire it into anything without finishing it first.
+//
+// `buildExactPayment` returns `signature: ""` and declares x402 **v1** with a
+// `"base-mainnet"` network string. The live server (`apps/web/src/app/api/x402/[tool]`)
+// speaks **v2** with CAIP-2 (`eip155:8453`), so a payload from here is rejected.
+// The real client path is `@blueagent/agentkit`.
 
 export type X402Authorization = {
   from: string;

@@ -34,7 +34,7 @@ The `blue-agent` repo is the **AI-native founder console for Base builders**. It
 |---|---|
 | `apps/web` | Next.js 15 frontend + **the entire live x402 surface** — founder console UI, `AGENT_TOOLS` catalog, all tool compute, self-hosted x402 settled via the Coinbase CDP facilitator (payTo `0x0295…` — see Hard rule 6) |
 | ~~`apps/api`~~ ~~`apps/portal`~~ | 🗑️ **DELETED 2026-08-18.** The Bankr x402 storefront and the `api.blueagent.dev` portal. Both dead before removal — no Vercel project, no importers, `api.blueagent.dev` 404s. Do not recreate; `git log --all -- apps/api apps/portal` has the old text. |
-| `packages/bankr` | ☠️ **Legacy** — Bankr LLM client. Bankr 403-banned 2026-07-20; inference is Virtuals via `apps/web/src/app/api/_lib/llm.ts`. |
+| ~~`packages/bankr`~~ | 🗑️ **DELETED 2026-09-18.** Was a `private: true` Bankr LLM client (`llm.bankr.bot`, `BANKR_API_KEY`) with zero importers. Bankr 403-banned 2026-07-20. Inference is Virtuals via `apps/web/src/app/api/_lib/llm.ts` — do not recreate. |
 | `packages/core` | Shared schemas, command pricing, and tool input definitions |
 | `packages/payments` | x402 payment helpers |
 | Chains | **Base (8453)** — primary tokenized-stock venue (Coinbase B20) + every non-RH tool. **Robinhood Chain (4663)** — second live venue; the ~30 `rh-*` tools and the RWA registry are RH-specific. Never assume which; state it. |
@@ -50,8 +50,7 @@ blue-agent/
 │   └── docs/             # Mintlify docs source (no package.json — not an npm workspace)
 ├── packages/
 │   ├── core/             # Shared types, schemas, pricing, tool-input specs
-│   ├── bankr/            # LEGACY — Bankr LLM client (Bankr 403-banned 2026-07-20)
-│   └── payments/         # x402 payment flow helpers
+│   └── payments/         # UNFINISHED STUB — private, unpublished, zero call sites
 ├── agents/
 │   └── blue-agent/       # Agent runtime config (agent.json, tasks.json)
 ├── commands/             # Command contract docs (idea.md, build.md, etc.)
@@ -86,7 +85,7 @@ When a user request matches a trigger phrase, load the skill file and follow its
 
 2. **All contract addresses must be verified on the explorer for their own chain** — Basescan for Base (8453), `robinhoodchain.blockscout.com` for RH Chain (4663). The two chains share no state: an RH contract does not exist on Basescan and a Base B20 does not exist on RH's explorer, so an explorer check only counts on the token's own chain. **Never resolve a stock token by ticker string** — for a Base B20, cross-check the address against the official `base.org/stocks` table and assert it on-chain (`isB20`, `decimals == 8`, `symbol == "<TICKER>c"`); name-matching a ticker is exactly how an impostor gets in (real bug, #280). Never invent or guess a contract address. If an address is needed and not already in the codebase, flag it for the user to supply. Format: `0x…` — always full checksum address.
 
-3. **Use Virtuals for all AI calls.** Import `callLLM` from `apps/web/src/app/api/_lib/llm.ts`. Do NOT call OpenAI, Anthropic, Bankr, or Venice directly. The endpoint is `https://compute.virtuals.io/v1`, key `process.env.VIRTUALS_API_KEY`. **Do not write new `callBankrLLM` / `callVeniceLLM` calls** — those are compatibility shims that delegate to Virtuals, kept only so ~46 legacy importers compile; their names describe providers this repo no longer uses (Bankr 403-banned 2026-07-20, Venice removed from the fallback chain 2026-07-25). `packages/bankr` is legacy for the same reason.
+3. **Use Virtuals for all AI calls.** Import `callLLM` from `apps/web/src/app/api/_lib/llm.ts`. Do NOT call OpenAI, Anthropic, Bankr, or Venice directly. The endpoint is `https://compute.virtuals.io/v1`, key `process.env.VIRTUALS_API_KEY`. **Do not write new `callBankrLLM` / `callVeniceLLM` calls** — those are compatibility shims that delegate to Virtuals, kept only so ~46 legacy importers compile; their names describe providers this repo no longer uses (Bankr 403-banned 2026-07-20, Venice removed from the fallback chain 2026-07-25). `packages/bankr` was deleted 2026-09-18.
 
 4. **No hallucinated addresses, ever.** If you don't have a verified address, say so. Do not fill in placeholders that look like real addresses.
 

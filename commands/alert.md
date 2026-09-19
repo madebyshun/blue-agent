@@ -22,7 +22,7 @@ blue alert remove <id>   # remove an alert
 - Alert ID
 - Target and condition summary
 - Channel configuration
-- Bankr command to activate real-time delivery
+- A plain statement that nothing delivers yet
 
 ## Storage
 
@@ -30,5 +30,10 @@ Alert configs are saved to `~/.blue-agent/alerts.json`.
 
 ## Notes
 
-- Alert config is local; real-time delivery requires connecting to a live listener or Bankr agent
-- Pair with `blue watch <target>` to configure what to monitor first
+- **This command records an intent; it does not deliver anything.** There is no listener
+  in this CLI. `add` must say so rather than implying the alert is armed.
+- The output used to end by suggesting `bankr agent prompt "..."` as the way to activate
+  delivery. Bankr 403-bans this project on every write verb, so that command failed for
+  every user who followed it. Removed 2026-09-18 rather than re-pointed, because there is
+  no replacement endpoint that does this today.
+- To act on the file, wire your own listener against `~/.blue-agent/alerts.json`.

@@ -5,7 +5,7 @@ import { CategoryMenu } from './components/CategoryMenu.js'
 import { ToolMenu } from './components/ToolMenu.js'
 import { ToolRunner } from './components/ToolRunner.js'
 
-export type CategoryType = 'builder' | 'x402' | 'score' | 'tasks' | 'bankr'
+export type CategoryType = 'builder' | 'x402' | 'score' | 'tasks'
 
 export type ToolItem = {
   name: string
@@ -53,7 +53,7 @@ export const CATEGORIES: Category[] = [
     description: '1 command   interactive AI chat',
     type: 'builder',
     items: [
-      { name: 'blue chat', description: 'interactive chat with Bankr LLM' },
+      { name: 'blue chat', description: 'interactive chat with the Blue Agent LLM (Virtuals)' },
     ],
   },
   {
@@ -67,27 +67,18 @@ export const CATEGORIES: Category[] = [
       { name: 'blue compare',     description: 'compare two builders or agents side by side' },
     ],
   },
+  // The Discovery (search · trending · watch · history) and Launch (launch · market)
+  // groups were removed 2026-09-18 along with the commands themselves. Each one asked an
+  // LLM to produce market facts with no data source behind it — `market` went as far as
+  // inventing a price, an install count and a trust badge per listing. Four of them also
+  // ended by telling the user to run `bankr agent prompt "..."`, which 403s for everyone.
   {
-    label: 'Discovery',
-    icon: '🔭',
-    description: '5 commands   search · trending · watch · alert · history',
+    label: 'Alerts',
+    icon: '🔔',
+    description: '1 command   alert',
     type: 'builder',
     items: [
-      { name: 'blue search',   description: 'search builders, agents, projects, tokens' },
-      { name: 'blue trending', description: 'what\'s trending on Base right now' },
-      { name: 'blue watch',    description: 'watch a wallet, handle, or token' },
-      { name: 'blue alert',    description: 'configure threshold alerts' },
-      { name: 'blue history',  description: 'activity history for a builder or agent' },
-    ],
-  },
-  {
-    label: 'Launch',
-    icon: '🚀',
-    description: '2 commands   launch · market',
-    type: 'builder',
-    items: [
-      { name: 'blue launch', description: 'launch a token or project on Base' },
-      { name: 'blue market', description: 'market intelligence for Base ecosystem' },
+      { name: 'blue alert', description: 'record a threshold alert locally (no delivery yet)' },
     ],
   },
   {
@@ -178,18 +169,12 @@ export const CATEGORIES: Category[] = [
       { name: 'alert-subscribe', price: '$0.01',  description: 'Subscribe to alerts' },
     ],
   },
-  {
-    label: 'Wallet',
-    icon: '💎',
-    description: '4 tools   swap · transfer · portfolio · launch',
-    type: 'bankr',
-    items: [
-      { name: 'swap',         price: 'free', description: 'Swap tokens on Base' },
-      { name: 'transfer',     price: 'free', description: 'Send USDC/ETH' },
-      { name: 'portfolio',    price: 'free', description: 'View wallet balance' },
-      { name: 'launch-token', price: 'free', description: 'Deploy ERC-20 via Clanker' },
-    ],
-  },
+  // The 'Wallet' category (swap · transfer · portfolio · launch-token) was removed
+  // 2026-09-18. It ran nothing: every entry printed `bankr agent <op>` and told the user
+  // to `npm install -g bankr`. Bankr 403-bans this project on every write verb, so those
+  // were four money-touching instructions that fail — the worst kind to leave standing.
+  // Blue Agent has its own non-custodial wallet at blueagent.dev/app/wallet; a TUI
+  // passthrough to someone else's banned CLI is not a substitute for it.
 ]
 
 type Screen = 'home' | 'tools' | 'runner'
@@ -308,14 +293,6 @@ export function App() {
           const out = submitTask(inputs.taskId ?? '', inputs['proof URL'] ?? '')
           setResult(out)
         }
-
-      } else if (type === 'bankr') {
-        // Show the bankr CLI command to run
-        const args = Object.entries(inputs)
-          .filter(([, v]) => v.trim() !== '')
-          .map(([, v]) => v)
-          .join(' ')
-        setResult(`Run in terminal:\n\n  bankr agent ${toolName} ${args}\n\nInstall: npm install -g bankr`)
       }
     } catch (e) {
       setError((e as Error).message)

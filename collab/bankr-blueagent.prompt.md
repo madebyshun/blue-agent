@@ -1,6 +1,20 @@
 # bankr-blueagent.prompt.md
 # Prompt contract: how Blue Agent calls Bankr LLM
 
+> # ☠️ DEAD — Blue Agent does not call Bankr LLM.
+>
+> `llm.bankr.bot` 403s for this project (Bankr suspended the account 2026-07-20; confirmed
+> account-wide on every write verb 2026-09-06). Inference is **Virtuals, and only Virtuals**
+> — `https://compute.virtuals.io/v1`, key `VIRTUALS_API_KEY`, OpenAI-compatible
+> `/v1/chat/completions`.
+>
+> The `@blueagent/bankr` import below never resolved: that package was `private: true` and
+> was deleted 2026-09-18. The migration is **not a URL swap** — Bankr spoke the Anthropic
+> Messages API (`x-api-key`, top-level `system`, `content[0].text`) and Virtuals speaks
+> OpenAI (`Authorization: Bearer`, `system` as the first message, `choices[0].message.content`).
+>
+> Kept as a record of the prompt contract. Do not implement anything below.
+
 ## Context
 
 Blue Agent sends all AI inference through Bankr LLM at `https://llm.bankr.bot/v1/messages`.

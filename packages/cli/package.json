@@ -16,8 +16,8 @@
     "dev": "tsx src/index.tsx"
   },
   "dependencies": {
-    "@blueagent/builder": "^0.1.16",
-    "@blueagent/core": "*",
+    "@blueagent/builder": "^0.2.0",
+    "@blueagent/core": "^1.0.4",
     "@blueagent/reputation": "*",
     "@blueagent/tasks": "*",
     "ink": "^5.0.0",

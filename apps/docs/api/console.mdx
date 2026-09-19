@@ -5,14 +5,18 @@ description: Run workflow commands via REST
 
 ## POST /api/console
 
-Run any of the 5 core workflow commands and get a structured response.
+Run any of the 5 core workflow commands and get a structured response. Inference
+runs on Virtuals.
+
+<Note>
+No API key. The endpoint is open and rate-limited to 10 requests/minute per IP.
+</Note>
 
 ### Request
 
 ```bash
 curl -X POST https://blueagent.dev/api/console \
   -H "Content-Type: application/json" \
-  -H "x-api-key: YOUR_BANKR_KEY" \
   -d '{
     "command": "idea",
     "prompt": "An AI agent marketplace for Base builders"
@@ -46,7 +50,6 @@ curl -X POST https://blueagent.dev/api/console \
 ```bash
 curl -X POST https://blueagent.dev/api/console \
   -H "Content-Type: application/json" \
-  -H "x-api-key: YOUR_BANKR_KEY" \
   -d '{
     "command": "audit",
     "prompt": "function withdraw() { msg.sender.call{value: balance[msg.sender]}(); balance[msg.sender] = 0; }"

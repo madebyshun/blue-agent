@@ -14,8 +14,11 @@ export default function AeonSkillsDoc() {
       />
 
       <P>
-        Aeon skills are <strong className="text-slate-200">read-to-apply</strong> — no extra setup, except
-        <code className="text-slate-300"> aeon-distribute-tokens</code>, which needs <code className="text-slate-300">BANKR_API_KEY</code> with Wallet write scope.
+        Four of the five are <strong className="text-slate-200">read-to-apply</strong> — no setup, no key. The fifth,
+        <code className="text-slate-300"> aeon-distribute-tokens</code>, <strong className="text-slate-200">cannot run</strong>: it
+        pays out through Bankr&apos;s Wallet API, and Bankr suspended this account. Every write verb returns
+        <code className="text-slate-300"> 403</code> (measured 2026-09-06); reads still succeed, so a dry run looks
+        healthy right up to the transfer. It is kept as a record, not as a capability.
       </P>
 
       <H2 id="skills">The five skills</H2>

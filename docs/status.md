@@ -71,12 +71,12 @@ All backed by Bankr LLM with skill-grounded system context (6 skill files).
 
 | Package | Status |
 |---|---|
-| `packages/core` | ✅ runtime, registry, schemas — stable |
-| `packages/bankr` | ✅ LLM client — stable |
-| `packages/builder` | ✅ CLI with 24 commands — expanded this session |
-| `packages/reputation` | ✅ builder/agent score, task hub — stable |
-| `packages/skill` | ✅ MCP server with 56 tools (15 blue_ + 41 hub_) — matches remote /api/mcp |
-| `packages/payments` | ⚠️ helpers exist, not enforced in CLI |
+| `packages/core` | ✅ runtime, registry, schemas — reads `VIRTUALS_API_KEY` |
+| ~~`packages/bankr`~~ | 🗑️ **DELETED 2026-09-18** — was a private Bankr LLM client with zero importers. Do not recreate. |
+| `packages/builder` | ✅ CLI with 20 top-level commands |
+| `packages/reputation` | ✅ builder/agent score, task hub |
+| `packages/skill` | ✅ MCP server, registers 49 tools (15 `blue_` + 34 `hub_`) — a curated subset, **not** the same set as remote `/api/mcp` (86) or the Hub catalog (111) |
+| `packages/payments` | ⚠️ **unfinished stub** — zero call sites, `private: true`, never published. Speaks x402 v1 while the live server speaks v2. |
 
 ---
 

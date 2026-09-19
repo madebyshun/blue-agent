@@ -96,7 +96,7 @@ npm install -g @blueagent/cli
 ```
 
 ```bash
-export BANKR_API_KEY=your_key_here
+export VIRTUALS_API_KEY=your_key_here
 blueagent
 ```
 

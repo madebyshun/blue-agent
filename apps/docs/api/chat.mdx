@@ -1,54 +1,54 @@
 ---
 title: Chat API
-description: Streaming chat with Bankr LLM
+description: Streaming chat backend for Blue Chat, on Virtuals
 ---
 
 ## POST /api/chat
 
-Streaming SSE endpoint. Returns a `text/event-stream` response.
+The backend for Blue Chat. Streaming SSE endpoint — returns a `text/event-stream`
+response. Inference runs on the [Virtuals](https://compute.virtuals.io) gateway.
+
+<Note>
+There is no API key for this endpoint. It is not a raw public LLM API — it is the
+Blue Chat backend. A connected wallet is passed as `address` in the body and is
+metered against its BLUE credit balance server-side (the client-sent `tier` is not
+trusted). Requests with no `address` are treated as guests and cannot use paid tools.
+</Note>
 
 ### Request
 
 ```bash
 curl -X POST https://blueagent.dev/api/chat \
   -H "Content-Type: application/json" \
-  -H "x-api-key: YOUR_BANKR_KEY" \
   -d '{
     "messages": [
       { "role": "user", "content": "How do I deploy an ERC-20 on Base?" }
     ],
-    "tier": "pro"
+    "tier": "pro",
+    "address": "0xYourConnectedWallet"
   }'
 ```
 
 ### Body
 
-```json
-{
-  "messages": [
-    { "role": "user", "content": "string" }
-  ],
-  "tier": "pro"
-}
-```
-
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `messages` | array | required | Message history (role + content) |
-| `tier` | string | `"pro"` | `"fast"` \| `"pro"` \| `"max"` |
+| `messages` | array | required | Message history (`role` + `content`) |
+| `tier` | string | `"pro"` | `"fast"` \| `"pro"` \| `"max"` — sets the output-token budget and credit cost |
+| `address` | string | — | Connected wallet `0x…`. Drives credit metering. Omit for a guest session. |
 
-### Tiers
+### Model
 
-| Tier | Model | Max tokens |
-|------|-------|-----------|
-| `fast` | claude-haiku-4-5 | 1024 |
-| `pro` | claude-sonnet-4-6 | 2048 |
-| `max` | claude-sonnet-4-6 | 4096 |
+Every tier currently routes to the Virtuals default model
+(`VIRTUALS_CHAT_MODEL`, e.g. `anthropic-claude-sonnet-5`). The `tier` sets the
+output-token budget, not a different provider model.
 
 ### Response
 
-Server-sent events stream. Each chunk:
+Server-sent events stream. Text arrives as delta chunks, terminated by
+`data: [DONE]`:
 
 ```
 data: {"type":"content_block_delta","delta":{"text":"Hello"}}
+data: [DONE]
 ```

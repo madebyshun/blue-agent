@@ -1782,7 +1782,7 @@ if (!result.success) throw new Error(result.abortReason);
 
 ```typescript
 // ❌ WRONG — using LLM-generated calldata directly
-const calldata = await bankrLLM("generate calldata to send 10 USDC to Alice");
+const calldata = await callVirtuals({ messages: [{ role: "user", content: "generate calldata to send 10 USDC to Alice" }] });
 await walletClient.sendTransaction({ to: USDC, data: calldata }); // never do this
 
 // ✅ RIGHT — encode calldata deterministically from validated intent
@@ -2034,21 +2034,25 @@ blue chat "review this transaction: send 50 USDC to 0xabc..."
 
 Example chat integration (packages/core/src/chat-tx-handler.ts):
 ```typescript
-import { callBankrLLM } from "@blueagent/bankr";
+import { callVirtuals } from "@blueagent/core";
 
 export async function handleTxChatCommand(userMessage: string): Promise<string> {
-  // Step 1: extract intent via LLM (structured output)
-  const extractionResponse = await callBankrLLM({
-    model: "claude-opus-4-5",
-    max_tokens: 1024,
+  // Step 1: extract intent via LLM (structured output).
+  // `model` is left unset on purpose — it resolves from $VIRTUALS_MODEL, else the package
+  // default. temperature: 0 because an extraction step must not vary between runs.
+  const raw = await callVirtuals({
+    maxTokens: 1024,
+    temperature: 0,
     system: `Extract transaction intent from the user message. Return JSON only.
     Schema: { "action": "transfer"|"approve"|"unknown", "tokenSymbol": string, "recipient": string|null, "amount": string|null, "isAmbiguous": boolean, "clarifyingQuestions": string[] }`,
     messages: [{ role: "user", content: userMessage }],
   });
 
+  // Never `JSON.parse(raw)` directly — models wrap JSON in code fences and add preamble.
   let intent: any;
   try {
-    intent = JSON.parse(extractionResponse.content[0].text);
+    const sliced = raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1);
+    intent = JSON.parse(sliced);
   } catch {
     return "Could not parse transaction intent. Please be more specific.";
   }
@@ -2163,7 +2167,7 @@ export const AGENT_LIMITS = {
 ### 16.5 Blue Agent Internal References
 
 - `packages/core/src/schemas.ts` — `BLUE_AGENT_PRICING`, shared types
-- `packages/bankr/` — `callBankrLLM()` for LLM calls (never call OpenAI directly)
+- `packages/core/src/runtime.ts` — `callVirtuals()` for LLM calls (never call OpenAI or Anthropic directly)
 - `skills/agent-wallet-security.md` — wallet key management, approvals, rate limits
 - `skills/base-addresses.md` — verified Base contract addresses
 - `skills/base-security.md` — Base-specific security considerations

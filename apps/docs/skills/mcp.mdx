@@ -20,14 +20,15 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "blue-agent": {
       "command": "npx",
-      "args": ["-y", "@blueagent/skill"],
-      "env": {
-        "BANKR_API_KEY": "your_key_here"
-      }
+      "args": ["-y", "@blueagent/skill"]
     }
   }
 }
 ```
+
+No API key goes here. The server is a thin client over `https://blueagent.dev` — inference
+runs on our side. The only variable it reads is `BLUEAGENT_API_URL`, and only if you want to
+point it somewhere other than production.
 
 Restart Claude Desktop. You'll see Blue Agent tools in the tool picker.
 

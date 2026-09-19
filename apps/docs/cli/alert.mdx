@@ -1,0 +1,52 @@
+---
+title: Alerts
+description: Record local watch conditions on Base targets
+---
+
+## blue alert
+
+Record an alert condition for a wallet, handle, or token. Alerts are stored
+locally in `~/.blue-agent/alerts.json`.
+
+```bash
+blue alert            # list configured alerts
+blue alert add        # interactive setup
+blue alert remove <id>
+```
+
+### blue alert add
+
+Interactive prompt for a single alert:
+
+| Prompt | Example |
+|--------|---------|
+| Watch target | `0x1234...abcd`, `@blueagent_`, `$BLUEAGENT` |
+| Condition | `transfer >1000 USDC` |
+| Channel | `telegram` \| `webhook` \| `log` (default `log`) |
+| Destination | bot token / `@channel` for Telegram, or a webhook URL |
+
+Each saved alert gets an id like `alert_ltx9k2`.
+
+<Note>
+This is a **local record only** — nothing delivers on its own. `blue alert`
+does not run a background watcher or call any service. To act on an alert,
+wire your own listener against `~/.blue-agent/alerts.json`.
+</Note>
+
+### blue alert list
+
+```bash
+blue alert
+blue alert list
+```
+
+Prints every configured alert with its id, active state, target, condition,
+and channel.
+
+### blue alert remove
+
+```bash
+blue alert remove alert_ltx9k2
+```
+
+Deletes the alert with the given id. List ids with `blue alert` first.

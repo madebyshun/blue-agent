@@ -1,3 +1,4 @@
+import { callVirtuals } from "@blueagent/core";
 import { BuilderScoreResult, BuilderTier, BuilderScoreDimensions } from "./types";
 import { builderBadgeUrl } from "./badges";
 
@@ -16,37 +17,19 @@ function extractJson(text: string): any {
   throw new Error("No JSON found in response");
 }
 
-async function callBankrLLM(system: string, user: string): Promise<string> {
-  if (!process.env.BANKR_API_KEY) {
-    throw new Error(
-      "BANKR_API_KEY is not set.\n" +
-      "  Export it: export BANKR_API_KEY=<your-key>\n" +
-      "  Check setup: blue doctor"
-    );
-  }
-  const res = await fetch("https://llm.bankr.bot/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": process.env.BANKR_API_KEY,
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      system,
-      messages: [{ role: "user", content: user }],
-      temperature: 0.3,
-      max_tokens: 1200,
-    }),
+/**
+ * Score via Virtuals. See the same note in `agentScore.ts`: this used to POST the
+ * 403-banned `llm.bankr.bot` with `BANKR_API_KEY`, so it failed for every consumer
+ * of the published package. The endpoint, key loader and model default live in
+ * `@blueagent/core` — do not re-inline a client here.
+ */
+function callLLM(system: string, user: string): Promise<string> {
+  return callVirtuals({
+    system,
+    messages: [{ role: "user", content: user }],
+    temperature: 0.3,
+    maxTokens: 1200,
   });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Bankr LLM error ${res.status}: ${body.slice(0, 200)}`);
-  }
-  const data = await res.json() as any;
-  if (data.content?.[0]?.text) return data.content[0].text;
-  const detail = data.error?.message ?? JSON.stringify(data).slice(0, 200);
-  throw new Error(`Invalid Bankr LLM response: ${detail}`);
 }
 
 // ── X/Twitter API v2 ──────────────────────────────────────────────────────────
@@ -242,7 +225,7 @@ export async function scoreBuilder(handle: string): Promise<BuilderScoreResult> 
     ? `Score this builder based on real X/Twitter data.\n\nData:\n${xData}`
     : `Score this X/Twitter builder: @${clean}\nNo live data available — score conservatively based on handle alone.`;
 
-  const raw = await callBankrLLM(SYSTEM_PROMPT, userMessage);
+  const raw = await callLLM(SYSTEM_PROMPT, userMessage);
 
   let parsed: { dimensions: BuilderScoreDimensions; summary: string };
   try {

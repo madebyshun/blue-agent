@@ -7,7 +7,6 @@ const SKILL_FILES = [
   "base-security.md",
   "base-addresses.md",
   "base-standards.md",
-  "bankr-tools.md",
   "blue-agent-identity.md",
   "design-system.md",
   "base-ecosystem.md",
@@ -111,17 +110,20 @@ export async function runDoctor(): Promise<void> {
     allGood = false;
   }
 
-  // 5. BANKR_API_KEY — check env first, then config.toml
-  let bankrKey = process.env.BANKR_API_KEY?.trim() ?? "";
-  if (!bankrKey && fs.existsSync(CONFIG_FILE)) {
+  // 5. VIRTUALS_API_KEY — check env first, then config.toml.
+  //    This checked BANKR_API_KEY until 2026-09-18. Bankr 403-banned this project
+  //    at the ACCOUNT level, so a doctor that passed on a Bankr key was certifying
+  //    a CLI that could not answer a single command.
+  let apiKey = process.env.VIRTUALS_API_KEY?.trim() ?? "";
+  if (!apiKey && fs.existsSync(CONFIG_FILE)) {
     const raw = fs.readFileSync(CONFIG_FILE, "utf8");
-    const match = raw.match(/^\s*bankr_api_key\s*=\s*"([^"]+)"/m);
-    if (match) bankrKey = match[1].trim();
+    const match = raw.match(/^\s*virtuals_api_key\s*=\s*"([^"]+)"/m);
+    if (match) apiKey = match[1].trim();
   }
-  if (bankrKey) {
-    ok("BANKR_API_KEY set");
+  if (apiKey) {
+    ok("VIRTUALS_API_KEY set");
   } else {
-    fail("BANKR_API_KEY not set — add to ~/.blue-agent/config.toml or env");
+    fail('VIRTUALS_API_KEY not set — add virtuals_api_key = "..." to ~/.blue-agent/config.toml, or export VIRTUALS_API_KEY');
     allGood = false;
   }
 

@@ -63,8 +63,7 @@
         "cli/setup",
         "cli/chat",
         "cli/score",
-        "cli/discovery",
-        "cli/launch",
+        "cli/alert",
         "cli/tasks",
         "cli/microtasks",
         "cli/tui"

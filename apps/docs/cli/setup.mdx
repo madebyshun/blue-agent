@@ -15,7 +15,7 @@ Installs 6 skill files to `~/.blue-agent/skills/`:
 - `base-security.md`
 - `base-addresses.md`
 - `base-standards.md`
-- `bankr-tools.md`
+- `llm-and-x402.md`
 - `blue-agent-identity.md`
 - `design-system.md`
 
@@ -35,7 +35,7 @@ blue new my-agent --template base-agent
 **Templates:**
 | Template | Description |
 |----------|-------------|
-| `base-agent` | AI agent with Bankr LLM + x402 payments |
+| `base-agent` | AI agent with Virtuals LLM + x402 payments |
 | `base-x402` | Paid API service using x402 protocol |
 | `base-token` | ERC-20 token on Base with fair launch |
 
@@ -51,10 +51,10 @@ blue doctor
 
 Checks:
 - Node.js version (requires 18+)
-- `BANKR_API_KEY` configured
 - Skills installed
 - Config file valid
-- Network connectivity to Bankr LLM
+- `VIRTUALS_API_KEY` configured — read from the environment first, then
+  `virtuals_api_key` in `~/.blue-agent/config.toml`
 
 ---
 
