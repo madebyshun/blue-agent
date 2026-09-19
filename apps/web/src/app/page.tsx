@@ -93,22 +93,15 @@ const FLOW: { n: string; title: string; body: string }[] = [
     body: "Credits debit per message, priced by the model you pick — switch models any time. If a model call fails, the credits are refunded automatically." },
 ];
 
-// The two inference networks behind Blue Chat (Halo-style "who powers the
-// thinking" block). Roles are the real routing in api/_lib/llm.ts: Virtuals
-// serves the frontier + private presets, Venice serves the free tier + the
-// only live-web-search preset. The "Built in Venice" link points at the real
-// directory repo where Blue Chat is listed (veniceai/builtinvenice, PR #64).
-// `logo` is a drop-in provider mark (public/models/<slug>.svg, same convention
-// as the model-maker marks); it hides itself on 404 until the SVG is added.
-const PROVIDERS: { name: string; role: string; models: string; href: string; hrefLabel: string; logo: string }[] = [
-  { name: "Virtuals", logo: "/models/virtuals.svg",
-    role: "Frontier + private inference — the 6 paid presets.",
-    models: "Claude Opus 4.8 · Sonnet 5 · DeepSeek V4 · Gemini 2.5 Flash · Grok 4 · E2EE",
-    href: "https://compute.virtuals.io", hrefLabel: "compute.virtuals.io ↗" },
-  { name: "Venice", logo: "/models/venice.svg",
-    role: "The free tier + the only live-web-search model. Privacy-first, no key of yours upstream.",
-    models: "Qwen 3.5 9B (free) · Grok 4.3 (live search)",
-    href: "https://github.com/veniceai/builtinvenice", hrefLabel: "Listed in Built in Venice ↗" },
+// The two inference networks behind Blue Chat — rendered as logos only (§04).
+// Virtuals serves the frontier + private presets, Venice the free tier + the
+// live-web-search preset (real routing in api/_lib/llm.ts); the §04 footnote
+// carries that provenance now that the per-card copy is gone. `href` links the
+// mark out to the provider; `logo` is a drop-in mark (public/models/<slug>.svg)
+// that hides itself on 404 until the SVG is added.
+const PROVIDERS: { name: string; href: string; logo: string }[] = [
+  { name: "Virtuals", logo: "/models/virtuals.svg", href: "https://compute.virtuals.io" },
+  { name: "Venice",   logo: "/models/venice.svg",   href: "https://github.com/veniceai/builtinvenice" },
 ];
 
 // USDC credit packs — the live CREDIT_PACKS from lib/payments.ts
@@ -199,15 +192,15 @@ function SectionHead({ num, kicker, title, sub }: {
   num: string; kicker: string; title: React.ReactNode; sub?: React.ReactNode;
 }) {
   return (
-    <Reveal className="mb-10 sm:mb-14">
+    <Reveal className="mb-10 sm:mb-14 text-center">
       <div className="font-mono text-[11px] tracking-[0.22em] mb-4">
         <span className="ln-accent">// {num}</span>
         <span className="ln-faint ml-2 uppercase">{kicker}</span>
       </div>
-      <h2 className="text-3xl sm:text-4xl lg:text-[2.85rem] font-bold tracking-tight leading-[1.06] mb-4 max-w-2xl ln-h">
+      <h2 className="text-3xl sm:text-4xl lg:text-[2.85rem] font-bold tracking-tight leading-[1.06] mb-4 max-w-2xl mx-auto ln-h">
         {title}
       </h2>
-      {sub && <p className="ln-body text-[15px] sm:text-lg leading-relaxed max-w-2xl">{sub}</p>}
+      {sub && <p className="ln-body text-[15px] sm:text-lg leading-relaxed max-w-2xl mx-auto">{sub}</p>}
     </Reveal>
   );
 }
@@ -538,25 +531,47 @@ export default function Home() {
             title={<>One wallet. Credits in USDC. <span className="ln-accent">Every model.</span></>}
             sub="No accounts, no card, no subscription. Connect a wallet, fund it in USDC, and start spending in chat — the whole loop is non-custodial and settles on Base."
           />
-          {/* The crossing, in three spans (rialto-style): each card leads with a
-              large numeral over a "span N / 3" index, so the three steps read as
-              one bridge rather than three disconnected boxes. */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
-            {FLOW.map((s, i) => (
-              <Reveal key={s.n} delay={i * 80}>
-                <div className="ba-card h-full rounded-2xl p-6 sm:p-7 flex flex-col">
-                  <div className="flex items-baseline justify-between mb-5">
-                    <span className="text-4xl sm:text-5xl font-bold tabular-nums leading-none ln-accent">{s.n}</span>
-                    <span className="font-mono text-[10px] tracking-[0.2em] uppercase ln-faint">span {i + 1} / {FLOW.length}</span>
+          {/* Rialto-style stepper: a numbered circle badge per step, joined by a
+              continuous hairline that runs badge-to-badge across the row (the
+              first badge has no line to its left, the last none to its right, so
+              the connector reads as one bridge). Circles are horizontally
+              centered in each equal-width column, which is what keeps the joining
+              lines colinear across the flex gap. Lines hide on mobile (stacked);
+              the badges + centered copy carry the sequence there. */}
+          <div className="flex flex-col sm:flex-row gap-8 sm:gap-0">
+            {FLOW.map((s, i) => {
+              const first = i === 0;
+              const last = i === FLOW.length - 1;
+              return (
+                <Reveal key={s.n} delay={i * 80} className="flex-1">
+                  <div className="flex flex-col items-center text-center">
+                    <div className="flex items-center justify-center w-full mb-5">
+                      <div
+                        className="hidden sm:block h-px flex-1"
+                        style={{ background: first ? "transparent" : "var(--ln-border)" }}
+                      />
+                      <div
+                        className="shrink-0 mx-2 w-9 h-9 rounded-full flex items-center justify-center font-mono text-[13px] font-semibold tabular-nums"
+                        style={{ color: ACCENT, border: "1px solid #4FC3F740", background: "#4FC3F70d" }}
+                      >
+                        {i + 1}
+                      </div>
+                      <div
+                        className="hidden sm:block h-px flex-1"
+                        style={{ background: last ? "transparent" : "var(--ln-border)" }}
+                      />
+                    </div>
+                    <div className="px-4 max-w-xs">
+                      <div className="text-base font-semibold mb-2 ln-h">{s.title}</div>
+                      <p className="font-mono text-[12.5px] ln-mut leading-relaxed">{s.body}</p>
+                    </div>
                   </div>
-                  <div className="text-base font-semibold mb-2 ln-h">{s.title}</div>
-                  <p className="font-mono text-[12.5px] ln-mut leading-relaxed">{s.body}</p>
-                </div>
-              </Reveal>
-            ))}
+                </Reveal>
+              );
+            })}
           </div>
           <Reveal delay={260}>
-            <p className="font-mono text-[12px] ln-mut mt-6">
+            <p className="font-mono text-[12px] ln-mut mt-10 text-center max-w-2xl mx-auto">
               Rate: <span className="ln-body">1 USDC = 2,000 credits</span> · free tier <span className="ln-body">500 cr/day</span> for any wallet ·
               settled to the Blue treasury on Base via a direct USDC transfer you sign.
             </p>
@@ -607,44 +622,44 @@ export default function Home() {
             title={<>The inference behind <span className="ln-accent">Blue Chat.</span></>}
             sub="Blue Chat doesn't train its own model — it routes your message to two inference networks and settles the cost in credits. You bring a wallet; they bring the thinking."
           />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-            {PROVIDERS.map((p, i) => (
-              <Reveal key={p.name} delay={i * 80}>
-                <div className="ba-card h-full rounded-2xl p-6 sm:p-7 flex flex-col">
-                  {/* Wordmark only — no plate/card. Theme-adaptive monochrome via
-                      `.provider-logo` (white on dark, near-black on light), so one
-                      colored SVG serves both palettes. Hides itself on 404. */}
-                  <div className="flex items-center gap-2.5 mb-5">
-                    <img
-                      src={p.logo}
-                      alt={p.name}
-                      className="provider-logo h-5 sm:h-6 w-auto object-contain"
-                      onError={(e) => { e.currentTarget.style.display = "none"; }}
-                    />
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: ACCENT, boxShadow: `0 0 8px ${ACCENT}` }} />
-                  </div>
-                  <p className="ln-body text-[14px] leading-relaxed mb-4">{p.role}</p>
-                  <p className="font-mono text-[11.5px] ln-mut leading-relaxed mb-5">{p.models}</p>
-                  <a href={p.href} target="_blank" rel="noopener noreferrer"
-                    className="mt-auto font-mono text-[12px] ln-accent hover:underline">
-                    {p.hrefLabel}
-                  </a>
-                </div>
-              </Reveal>
-            ))}
-          </div>
+          {/* Logos only — no cards, no role/model copy (per the "just the two
+              marks" ask). Each wordmark is theme-adaptive monochrome via
+              `.provider-logo` (white on dark, near-black on light) and links out
+              to the provider; it hides itself on 404 until the SVG lands. */}
+          <Reveal delay={80}>
+            <div className="flex flex-wrap items-center justify-center gap-12 sm:gap-20 py-4">
+              {PROVIDERS.map((p) => (
+                <a
+                  key={p.name}
+                  href={p.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={p.name}
+                  className="opacity-90 hover:opacity-100 transition-opacity"
+                >
+                  <img
+                    src={p.logo}
+                    alt={p.name}
+                    className="provider-logo h-6 sm:h-8 w-auto object-contain"
+                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                  />
+                </a>
+              ))}
+            </div>
+          </Reveal>
 
-          {/* Live aggregate usage — a real total from /api/stats/public
-              (forward-only tokens meter) over three sub-stats, never a fabricated
-              number. Halo-style headline of what the two inference nets have
-              actually served; renders "—" for any unread/zero meter. `models` is
-              the live preset count so the sub-stat can't drift from the chips. */}
+          {/* Live aggregate usage — a real all-time total from /api/stats/public
+              (paid x402 tool runs, ok-gated) over real sub-stats, never a
+              fabricated number. The forward-only tokens meter joins the sub-stats
+              only once it's genuinely > 0, so it's never shown as a weak zero.
+              `models` is the live preset count so the sub-stat can't drift from
+              the chips. */}
           <Reveal delay={160} className="mt-4">
             <LiveUsage models={MODELS.length} />
           </Reveal>
 
           <Reveal delay={220}>
-            <p className="font-mono text-[12px] ln-mut mt-6">
+            <p className="font-mono text-[12px] ln-mut mt-6 text-center max-w-2xl mx-auto">
               Blue Chat is listed as a powered-by-Venice project in the public <span className="ln-body">Built in Venice</span> directory.
               Frontier + private inference is served through Virtuals compute.
             </p>

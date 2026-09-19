@@ -31,20 +31,17 @@ function ThemeToggle({ className = "" }: { className?: string }) {
   );
 }
 
-// Product-forward marketing nav (Dot-structured, 2026-09-19): the menu now leads
-// with the real surfaces the landing sells — Hub (the tool catalog) and Pricing
-// (the §07 credits anchor on "/") — before the identity/reference pages. `pricing`
-// is a hash link into the home section, so it scrolls on "/" and navigates-then-
-// scrolls elsewhere.
-// `soul` was `skills` → `/skills` until 2026-08. The page is the SOUL.md identity
-// spec, and /skills now belongs to the app's installed-skill catalog
-// (app.blueagent.dev/skills), so both the label and the path moved.
+// Product-forward marketing nav (landing-shaped like Halo/Dot, 2026-09-19): the
+// menu carries only the surfaces the landing actually sells — Hub (the tool
+// catalog), Pricing (the §07 credits anchor on "/"), and Docs. `pricing` is a
+// hash link into the home section, so it scrolls on "/" and navigates-then-
+// scrolls elsewhere. `soul` (/soul identity spec) and `about` were dropped from
+// the bar to keep it landing-focused; both routes still resolve and their i18n
+// keys stay in the Dict so nothing else breaks.
 const NAV_LINKS = [
   { key: "hub",     href: "/hub" },
   { key: "pricing", href: "/#pricing" },
-  { key: "soul",    href: "/soul" },
   { key: "docs",    href: "/docs" },
-  { key: "about",   href: "/about" },
 ];
 
 export default function Navbar() {
