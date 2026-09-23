@@ -93,17 +93,43 @@ check("TOOL_ENDPOINT parsed out of route.ts",
 check("HUB_TOOLS schemas parsed out of route.ts",
   declared.size >= 40, `${declared.size} schemas`);
 
-// ── 1. Every curated id renders ──────────────────────────────────────────────
+// ── 1. No curated entry is dead config ───────────────────────────────────────
 // CURATED is module-private, so its ids are read from source and compared
 // against what HUB_SKILLS actually produced.
+//
+// An id missing from AGENT_TOOLS is dropped by the flatMap in hub-skills.ts and
+// renders nothing. That is how `base-builder-network` sat in the list naming a
+// tool present in neither HANDLERS nor the catalog: invisible in the UI, and read
+// as inventory by the next person to open the file.
+//
+// But "not rendered" is not the same as "not real". `builder-score` is also
+// dropped, and its tool is live — `hub_builder_score` routes to the top-level
+// /api/builder-score, deliberately outside x402 because it is free and internal.
+// So the rule is NOT "every id must be in the catalog", which would only be
+// satisfiable by publishing an internal tool for a UI side effect. It is: every
+// id must have something real behind it — a rendered chip, or a declared chat
+// tool that reaches it. The allowance is self-justifying rather than a name in a
+// list: base-builder-network has neither and still fails.
+//
+// Entries that take the second path are printed by name every run, so the
+// clean-up decision stays visible instead of silently becoming permanent.
 const curatedIds = [...HUB_SRC.matchAll(/^\s+\{\s*id:\s*"([a-z0-9][a-z0-9-]*)",/gm)].map((m) => m[1]);
 const renderedIds = new Set(HUB_SKILLS.map((s) => s.id));
-const dropped = curatedIds.filter((id) => !renderedIds.has(id));
 check("CURATED ids parsed out of hub-skills.ts",
   curatedIds.length >= 20, `${curatedIds.length} entries`);
-check("every curated id exists in AGENT_TOOLS (nothing silently dropped)",
-  dropped.length === 0,
-  dropped.length ? `not in the catalog: ${dropped.join(", ")}` : `${curatedIds.length} render`);
+
+const unrendered = curatedIds.filter((id) => !renderedIds.has(id));
+const backedByTool = (id: string) => (reachedBy.get(id) ?? []).some((t) => declared.has(t));
+const deadConfig = unrendered.filter((id) => !backedByTool(id));
+const outliers   = unrendered.filter(backedByTool);
+check("no curated entry is dead config",
+  deadConfig.length === 0,
+  deadConfig.length
+    ? `in neither AGENT_TOOLS nor TOOL_ENDPOINT — nothing is behind these: ${deadConfig.join(", ")}`
+    : `${renderedIds.size} render, ${outliers.length} unrendered but tool-backed`);
+for (const id of outliers) {
+  console.log(`  NOTE  ${id} — no catalog entry, so no chip renders; its chat tool is live. Pending a separate clean-up decision.`);
+}
 
 // ── 2 + 3. Every chip is reachable, and its tool is declared ─────────────────
 const unreachable: string[] = [];

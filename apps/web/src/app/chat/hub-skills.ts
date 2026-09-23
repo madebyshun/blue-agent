@@ -76,19 +76,23 @@ const CATEGORY_ORDER: SkillCategory[] = [
 // The first two remain on the Hub and on /api/mcp, where they are bought
 // deliberately rather than suggested by a chip.
 //
-// A fourth, `builder-score`, came out for a different reason and is worth
-// spelling out because the tool itself is FINE. Its chat tool `hub_builder_score`
-// is live and wired — but to the top-level `/api/builder-score` route, because
-// `_handlers/builder-score.ts` was never registered in HANDLERS and the id is in
-// neither HANDLERS nor AGENT_TOOLS (so `/api/x402/builder-score` answers 501; see
-// the FREE_DIRECT comment in api/chat/route.ts). The flatMap below has therefore
-// been dropping this chip since it was added. Asking for a builder score in plain
-// language still works and always has. Re-adding the chip means giving the tool a
-// real catalog entry first — this list takes its name and description from
-// AGENT_TOOLS on purpose, and hand-typing them here is how the Hub and the chat
-// Tools tab drifted to 51-vs-72 in the first place.
+// ONE ENTRY IS A KNOWN OUTLIER AND IS DELIBERATELY LEFT IN PLACE: `builder-score`.
+// It is NOT a fourth removal and must not be tidied into one. The tool is fine and
+// live — `hub_builder_score` routes to the top-level `/api/builder-score`, not
+// through x402 (see the FREE_DIRECT comment in api/chat/route.ts) — and it is
+// outside the catalog ON PURPOSE, because it is free and internal. So the flatMap
+// below drops its chip, and has since it was added.
 //
-// Enforced by scripts/curated-trigger-check.ts, which runs in CI.
+// The two fixes that look obvious here are both wrong. Adding a catalog entry to
+// make the chip render would drag an intentionally-internal tool into the paid
+// x402 surface purely for a UI side effect. Hand-typing a name and description
+// into this file would break the one property it exists to hold — that the label
+// comes from AGENT_TOOLS — which is how the Hub and this tab drifted to 51-vs-72
+// before. Whether the chip should exist at all is a separate clean-up decision,
+// not a rider on a wiring fix.
+//
+// Enforced by scripts/curated-trigger-check.ts, which runs in CI and carries a
+// self-justifying allowance for exactly this case.
 const CURATED: { id: string; category: SkillCategory; trigger: string }[] = [
   // Market Intel
   { id: "token-pick-signal",       category: "Market Intel",  trigger: "/pick" },
@@ -107,6 +111,8 @@ const CURATED: { id: string; category: SkillCategory; trigger: string }[] = [
   { id: "gtm-brief",               category: "Builder Tools", trigger: "/ship " },
   { id: "stack-recommender",       category: "Builder Tools", trigger: "/build " },
   { id: "repo-health",             category: "Builder Tools", trigger: "Check repo health for " },
+  // Does not render — see the `builder-score` note above. Left in place on purpose.
+  { id: "builder-score",           category: "Builder Tools", trigger: "What's the builder score for " },
   // Fundraise
   { id: "investor-memo",           category: "Fundraise",     trigger: "/raise " },
   { id: "fundraise-timing",        category: "Fundraise",     trigger: "Is now a good time to raise for " },
