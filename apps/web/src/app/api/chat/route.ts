@@ -576,6 +576,150 @@ const HUB_TOOLS = [
       properties: { focus: { type: "string", description: "Focus area e.g. DeFi, AI agents, NFT (optional)" } },
     },
   },
+  // ── Chips that had a trigger but no tool (fixed 2026-09-23) ────────────────
+  //
+  // The eight tools below are named by CURATED entries in app/chat/hub-skills.ts,
+  // which renders every one as a clickable chip in the chat Tools tab. Clicking a
+  // chip drops its `trigger` into the composer — so the user sends "Find DeFi
+  // opportunities on Base" having just clicked a card titled "DeFi Opportunity
+  // Scanner", and the model, which had no such tool, answered from its own
+  // weights. Same failure class as the Trader Intel / Base Builder default skills
+  // and `hub_b20_analyze` documented in TOOL_ENDPOINT below: the handler was live
+  // the whole time, only the chat wiring was missing. Two of the eleven orphans
+  // (community-sentiment, agent-collab-match) are NOT wired here — their triggers
+  // ask for measured facts no upstream can supply, so their chips were removed
+  // instead. `scripts/curated-trigger-check.ts` now fails CI if a chip is ever
+  // shipped without a tool again.
+  //
+  // Names match what /api/mcp already exposes for the same handlers, so one
+  // handler is not called two different things on two surfaces.
+  //
+  // Property names are the handler's OWN body fields — args are POSTed through
+  // verbatim (no normalizer in this route, unlike ARG_SHIMS in /api/mcp), so a
+  // renamed property here silently drops the value.
+  {
+    name: "hub_defi_opportunity",
+    description: "Scan LIVE Base DeFi pools for yield — real protocols, APYs and TVL from DefiLlama, ranked and risk-flagged. Use when the user asks where to earn yield, for DeFi/farming opportunities, or the best APY on Base. Returns real pools only; it never invents a protocol or a rate.",
+    input_schema: {
+      type: "object",
+      properties: {
+        strategy:       { type: "string", description: "What the user is after, e.g. 'yield', 'stables', 'LP', 'lending' (optional, default 'yield')" },
+        risk_tolerance: { type: "string", enum: ["low", "medium", "high"], description: "Only 'low' changes the scan — it restricts to stablecoin pools. 'medium' and 'high' scan the same pool set and differ in how the result is framed." },
+      },
+    },
+  },
+  {
+    name: "hub_protocol_risk",
+    description: "Risk read on one Base DeFi protocol, grounded in its live DefiLlama TVL and 1d/7d TVL change — outflow signals, thin-TVL fragility, plus contract/oracle/governance reasoning on top. Use when the user asks whether a protocol is safe, or to monitor risk on a position they hold. Takes a protocol NAME (Aerodrome, Aave, Uniswap), not an address.",
+    input_schema: {
+      type: "object",
+      properties: {
+        protocol: { type: "string", description: "Protocol name as DefiLlama lists it, e.g. 'Aerodrome', 'Aave', 'Moonwell'" },
+        position: { type: "string", description: "What the user has at stake there, e.g. '5 ETH in the WETH/USDC pool' (optional)" },
+      },
+      required: ["protocol"],
+    },
+  },
+  {
+    name: "hub_protocol_compare",
+    description: "Compare two Base protocols side by side on live DefiLlama data — TVL, 1d/7d change, category. Use when the user asks which of two protocols is better/safer/bigger. If only one is named, a real same-category Base competitor is picked from DefiLlama; never name the second protocol yourself.",
+    input_schema: {
+      type: "object",
+      properties: {
+        protocol_a: { type: "string", description: "First protocol name" },
+        protocol_b: { type: "string", description: "Second protocol name (optional — omit to have a real competitor chosen from live data)" },
+        category:   { type: "string", description: "Category hint used only when protocol_b is omitted, e.g. 'Dexes', 'Lending' (optional)" },
+        use_case:   { type: "string", description: "What the user wants to do with it, e.g. 'park stables for 3 months' (optional)" },
+      },
+      required: ["protocol_a"],
+    },
+  },
+  {
+    // NAMED DIFFERENTLY FROM /api/mcp ON PURPOSE. That surface calls this same
+    // handler `hub_token_launch`; here it must not contain "launch", because
+    // scripts/action-card-inventory-check.ts treats any launch-shaped chat tool
+    // name as a relapse of the retired Bankr launchpad — and it is right to. Chat
+    // is the surface that renders signable cards, so a tool called "token launch"
+    // sitting next to prepare_send and robinhood_swap invites exactly the reading
+    // the retirement removed. This tool scores TIMING; it cannot deploy anything.
+    // If the two surfaces are ever unified, unify on this name, not that one.
+    name: "hub_token_readiness",
+    description: "Launch-TIMING readiness for a token, scored against the live Base market regime (DefiLlama chain TVL + GeckoTerminal trending pools). Pass `address` ONLY if the token already trades — that adds its live DexScreener price/liquidity/volume. With no address this is a PRE-LAUNCH read and the score is an explicitly labelled estimate; relay that label. Use when the user asks if now is a good time to launch, or whether their token is launch-ready.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name:        { type: "string", description: "Project or token name" },
+        ticker:      { type: "string", description: "Ticker symbol (optional)" },
+        address:     { type: "string", description: "0x… contract address — ONLY if the token is already live and trading. Never invent one; omit if unknown." },
+        description: { type: "string", description: "What it is and any traction so far (optional)" },
+      },
+      required: ["name"],
+    },
+  },
+  // The four below are ADVISORY: no measured upstream. They return a structured
+  // framework the model is expected to relay AS a framework — /build and /ship
+  // were the only two of the five Blue Agent commands with no tool behind them,
+  // while /idea, /audit and /raise have had hub_market_fit, hub_deep_analysis and
+  // hub_investor_memo since launch. Each handler tries to enrich itself from the
+  // Aeon KV cache, which has been EXPIRED in production since the research-loop
+  // cron was unscheduled (2026-09-05, #148) — so in prod these take their `null`
+  // path by design and are model-generated end to end. That is why every
+  // description below tells the model to label the output, and why none of them
+  // claim a data source.
+  {
+    name: "hub_gtm",
+    description: "Go-to-market brief for a Base project — target user, entry wedge, distribution channel, launch hook. MODEL-GENERATED STRATEGY, not measured market data: present it as a framework to pressure-test, and never state a market size, user count, or CAC from it as fact. Use for '/ship', 'how do I launch this', 'what's my GTM'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        project:     { type: "string", description: "Project name" },
+        description: { type: "string", description: "What it does — required; ask the user if they only gave a name" },
+        target:      { type: "string", description: "Who it's for, if the user said (optional)" },
+      },
+      required: ["project", "description"],
+    },
+  },
+  {
+    name: "hub_stack",
+    description: "Recommended tech stack for a Base build — frontend, backend, contracts, database, payments, deployment, with a build sequence. MODEL-GENERATED RECOMMENDATION, not a benchmark: present trade-offs, and never quote performance numbers, costs, or version support from it as fact. Use for '/build', 'what stack should I use', 'how should I architect this'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        project:     { type: "string", description: "Project name" },
+        description: { type: "string", description: "What it does — required; ask the user if they only gave a name" },
+        team_size:   { type: "number", description: "Number of engineers (optional, default 1)" },
+        timeline:    { type: "string", description: "Time available, e.g. '6 weeks' (optional, default '3 months')" },
+      },
+      required: ["project", "description"],
+    },
+  },
+  {
+    name: "hub_pitch_intel",
+    description: "Pitch framing for a raise — market framing, why-this-wins, why-now, why-Base, ask framing, investor type. MODEL-GENERATED NARRATIVE, not investor research: it does NOT know what any specific fund has actually deployed into, so never let it name a firm's real portfolio, check size, or current thesis as fact. Use when the user asks how to pitch, what investors want, or what's getting funded.",
+    input_schema: {
+      type: "object",
+      properties: {
+        project:     { type: "string", description: "Project name" },
+        description: { type: "string", description: "The pitch in a few sentences — required" },
+        ask:         { type: "string", description: "How much they're raising, if stated (optional)" },
+        stage:       { type: "string", description: "e.g. 'pre-seed', 'seed' (optional, default 'pre-seed')" },
+      },
+      required: ["project", "description"],
+    },
+  },
+  {
+    name: "hub_multi_agent",
+    description: "Design a multi-agent workflow for a goal — coordination pattern, agent roles, hand-offs, bottleneck risks. MODEL-GENERATED DESIGN: any cost or latency figure in it is an estimate, not a measurement, and it does not know which agents are actually registered anywhere. Use when the user asks how to orchestrate several agents or split a job across them.",
+    input_schema: {
+      type: "object",
+      properties: {
+        goal:        { type: "string", description: "What the workflow must accomplish" },
+        agents:      { type: "string", description: "Agents available, if the user named any (optional)" },
+        constraints: { type: "string", description: "Budget, latency, or tooling limits (optional)" },
+      },
+      required: ["goal"],
+    },
+  },
   {
     name: "hub_agent_score",
     description: "Agent Score for AI agents on Base — XP, interactions, uptime. Use when user asks about an AI agent's score or performance.",
@@ -988,6 +1132,17 @@ const TOOL_ENDPOINT: Record<string, string> = {
   // `[Unknown tool: …]` string below — handing the model garbage and leaving it
   // to answer a factual B20 question from nothing. The handler existed and works.
   hub_b20_analyze:      "b20-analyze",
+  // Chips in the chat Tools tab whose trigger reached no tool until 2026-09-23.
+  // Ids match /api/mcp's map for the same handlers, so one handler is not called
+  // two different things on two surfaces. See the HUB_TOOLS block above.
+  hub_defi_opportunity: "defi-opportunity",
+  hub_protocol_risk:    "protocol-risk-monitor",
+  hub_protocol_compare: "base-protocol-comparison",
+  hub_token_readiness:  "token-launch-readiness",
+  hub_gtm:              "gtm-brief",
+  hub_stack:            "stack-recommender",
+  hub_pitch_intel:      "pitch-intelligence",
+  hub_multi_agent:      "multi-agent-workflow",
 };
 
 // ─── Internal Hub tool caller ─────────────────────────────────────────────────
