@@ -116,7 +116,14 @@ const CURATED: { id: string; category: SkillCategory; trigger: string }[] = [
   // Fundraise
   { id: "investor-memo",           category: "Fundraise",     trigger: "/raise " },
   { id: "fundraise-timing",        category: "Fundraise",     trigger: "Is now a good time to raise for " },
-  { id: "pitch-intelligence",      category: "Fundraise",     trigger: "What are investors funding on Base right now?" },
+  // Trigger reworded 2026-09-23. The old one — "What are investors funding on
+  // Base right now?" — MEASURED as routing to `hub_ecosystem`, not to this chip's
+  // own tool, and the model was right: that sentence asks what the ecosystem is
+  // doing, not how to pitch. It never matched the card either, which reads
+  // "Transform your deck into investor-grade pitch intelligence". The tool returns
+  // pitch_angles / one_liner / investor_thesis for ONE project, so the trigger now
+  // names a project the way the other Fundraise chips do.
+  { id: "pitch-intelligence",      category: "Fundraise",     trigger: "What's the strongest pitch angle for " },
   { id: "base-grant-finder",       category: "Fundraise",     trigger: "Find Base grants for " },
   // Launch
   { id: "token-launch-readiness",  category: "Launch",        trigger: "Is my token ready to launch? " },
