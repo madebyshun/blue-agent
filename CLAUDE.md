@@ -24,8 +24,10 @@ They take precedence over speed.
 
 ## NON-NEGOTIABLE: verify before claiming done
 
-- After ANY code change, run **`npx tsc --noEmit && npm run verify:build`** (from `apps/web/`) and confirm
-  both are green. **`npx tsx` running a file is NOT proof** — tsx skips TypeScript strict checks; the full
+- After ANY code change, run **`npx tsc --noEmit && npm test && npm run verify:build`** (from `apps/web/`)
+  and confirm all three are green. This is the gate that replaced the PR requirement on 2026-09-24 — since
+  a push to `main` deploys straight to production, these three commands are the last check before users
+  see the change. **`npx tsx` running a file is NOT proof** — tsx skips TypeScript strict checks; the full
   Next build is what production runs and what catches real errors.
   *(Real bug: a bulk patch changed a function signature but not its callers — tsx ran fine, next build failed,
   production deploy broke.)*
@@ -121,9 +123,38 @@ maintenance** and **stopping exposure**. Everything below exists to close that g
 
 ## Git discipline
 
-- **Branch from `main`, PR into `main`, delete the branch on merge.** One short-lived branch per change.
-  Always **`git branch --show-current` before committing** — never commit directly to `main`.
-  *(Real bug: a tool committed while accidentally on main was lost when a later merge overwrote it.)*
+- **Committing straight to `main` is ALLOWED (policy changed 2026-09-24), but only behind the local gate
+  below.** There is no PR requirement any more. MEASURED the day the policy changed:
+  `gh api repos/:owner/:repo/branches/main/protection` → `404 Branch not protected`, and
+  `gh api repos/:owner/:repo/rulesets` → `[]`. Nothing server-side blocks a push, so the gate is
+  entirely a local discipline — if you skip it, nothing else catches you before production.
+- 🔴 **The local gate is MANDATORY before every push to `main`.** Run from `apps/web/`:
+  ```
+  npx tsc --noEmit && npm test && npm run verify:build
+  ```
+  This is a **superset of CI, not a substitute for it.** `.github/workflows/ci.yml`'s `verify` job runs
+  exactly two steps — `npx tsc --noEmit` and `npm test` — and deliberately omits `next build` (the
+  workflow header says the Vercel preview already builds every PR, so duplicating it would add ~4min for
+  a second copy of the same answer). Adding `verify:build` locally covers the build that CI never ran.
+- **CI still runs on a direct push — but AFTER the code is on `main`.** `ci.yml` triggers on
+  `push: branches: [main]`, so `verify` does execute. What the policy change actually costs is **ordering**:
+  on a PR the checks run before the merge, on a direct push they run after Vercel has already deployed.
+  A red check then means production is already broken and you are fixing forward, not reverting a merge.
+  That is the entire reason the local gate is non-negotiable.
+- **What a direct push genuinely loses: the `smoke` workflow, and it loses less than it looks.**
+  `rh-rwa-semantic-smoke.yml` triggers on `pull_request` + `schedule`, so a direct push never fires it.
+  But read that workflow's header: it targets `https://blueagent.dev`, meaning it exercises
+  **production, never the branch's code** — on a PR it was never testing the diff either. The 6-hourly
+  `schedule` run still covers prod. Do not treat its absence as a reason to reopen the PR workflow.
+- **A branch + PR is still fine, and still the right call for some changes** — anything touching the
+  payment path, wallet/credit metering, or on-chain writes, and anything you want a Vercel preview URL
+  for before it is live. The rule is no longer "always PR"; it is "PR when you want a preview or a
+  second pair of eyes."
+- **Run `git branch --show-current` before committing anyway.** The hazard inverted rather than
+  disappeared: the old bug was work lost by *accidentally* committing to `main`; the new one is work
+  stranded on a stale feature branch you forgot you were on, never pushed, and later overwrote.
+  *(Real bug, old direction: a tool committed while accidentally on main was lost when a later merge
+  overwrote it.)*
 - **`dev` is RETIRED (2026-09-05). Do not branch from it, commit to it, or re-create it.** The rule until
   then was "always work on `dev`, PRs go dev → main", and a long-lived shared branch failed twice over:
   - **It drifted.** By the time it was drained (PR #269) `dev` was **61 files** behind `main` and carried
@@ -135,9 +166,12 @@ maintenance** and **stopping exposure**. Everything below exists to close that g
     behind is visible; a branch that is behind *on its own CI config* is not, and it quietly exempts
     itself from the checks everything else passes. Short-lived branches cut from `main` inherit the
     current workflow by construction and cannot drift out of the gate.
-- Ship to production via **GitHub Pull Request into `main`**, not a local merge. Local `main` is often behind
-  origin; local merges create divergence and conflicts.
-- After pushing, the PR triggers a Vercel preview build. **Do NOT merge until that preview is green.**
+- **`git pull` before you push.** This survived the policy change and matters *more* now, not less. Local
+  `main` goes stale the moment anything else lands, and the working tree in this repo gets committed
+  concurrently mid-session. Push a stale `main` and you get a merge commit or a rejected push, neither of
+  which you want mid-deploy.
+- **If you do open a PR: after pushing, it triggers a Vercel preview build. Do NOT merge until that
+  preview is green.**
 - **Stacked PRs: merging the parent does NOT retarget the child unless the parent's branch is deleted.**
   If you preserve a parent branch (`--delete-branch` omitted), GitHub leaves the child's base pointing at
   it, and merging the child then lands in the parent instead of `main`. Retarget explicitly with
@@ -155,10 +189,12 @@ maintenance** and **stopping exposure**. Everything below exists to close that g
 
 ## Definition of done
 
-A change is done only when: (1) `npx next build` is green, (2) the handler returns correct output when tested via
-`HANDLERS[id]`, (3) it's committed with a clear message on a branch cut from `main`, and opened as a PR into
-`main`, (4) for a new tool, it's registered in BOTH `HANDLERS` and `AGENT_TOOLS` and catalog count == handler
-count. **State each of these explicitly when reporting done.**
+A change is done only when: (1) the gate is green — `npx tsc --noEmit && npm test && npm run verify:build`
+from `apps/web/`, all three, (2) the handler returns correct output when tested via `HANDLERS[id]`,
+(3) it's committed with a clear message and pushed (to `main` directly, or to a branch if you wanted a
+preview), (4) for a new tool, it's registered in BOTH `HANDLERS` and `AGENT_TOOLS` and catalog count ==
+handler count. **State each of these explicitly when reporting done** — and report the gate as three
+separate results, not one word. "Build is green" has been used before to mean only `tsc` passed.
 
 ---
 
@@ -313,43 +349,57 @@ chore:    tooling, deps, config
 
 ## Branch policy
 
-**Cut a short-lived branch from `main`, PR it back into `main`, delete it on merge.** Never commit
-directly to `main`. **`dev` is retired (2026-09-05) — do not branch from it or re-create it**; see
-Git discipline above for the two measured reasons (61-file drift, and `dev` silently lacking the CI
-workflow so `verify` never ran on it).
+**Commit and push straight to `main`, behind the local gate** (`npx tsc --noEmit && npm test &&
+npm run verify:build`, from `apps/web/`). Changed 2026-09-24; `main` has no branch protection and no
+rulesets, so the gate is local discipline and nothing else enforces it.
+
+**Branch + PR is optional, not forbidden.** Reach for it when you want a Vercel preview URL before the
+change is live, or on anything touching payments, wallet/credit metering, or on-chain writes. When you
+do, cut the branch from `main` and delete it on merge.
+
+**`dev` is retired (2026-09-05) — do not branch from it or re-create it**; see Git discipline above for
+the two measured reasons (61-file drift, and `dev` silently lacking the CI workflow so `verify` never
+ran on it). Note the second reason still applies to *any* long-lived branch and is the reason branches
+here stay short even though they are now optional.
 
 ---
 
 ## Build & deploy workflow
 
-**Build locally first, then deploy.** Never push to `main` (which auto-deploys
-to production) until the change has passed a full local build. This catches
-errors before they burn a Vercel deploy slot — the free plan caps at **100
-deployments/day**, and a failed build wastes one.
+**Build locally first, then deploy.** Pushing to `main` auto-deploys to production, so the local gate
+is the only thing standing between a bad diff and a live site. It also catches errors before they burn
+a Vercel deploy slot — the free plan caps at **100 deployments/day**, and a failed build wastes one.
 
 Pipeline for every change, in order:
 
 ```
 1. Edit code
-2. npx tsc --noEmit -p tsconfig.json   # type errors (fast) — run from apps/web
-3. npm run build                        # next build — lint, prerender, server/client import errors
-4. Manual runtime test at localhost     # logic/UX bugs a build can't catch
-5. Only when 2–4 PASS → open a PR (branch→main); merge only when the Vercel preview is green
+2. cd apps/web
+3. npx tsc --noEmit && npm test && npm run verify:build     # the gate — all three, in one go
+4. Manual runtime test at localhost                         # logic/UX bugs a build can't catch
+5. Only when 3–4 PASS → git pull && git commit && git push origin main
 ```
 
 Notes:
+- **Step 3 is the whole policy.** `tsc --noEmit` + `npm test` is byte-for-byte what CI's `verify` job
+  runs; `verify:build` is the part CI deliberately skips. Green locally means the CI run that fires
+  after your push is a formality. Skipping step 3 means production finds the bug for you.
+- **`npm run verify:build`, never `npm run build`.** verify:build sets `NEXT_DIST_DIR=.next-verify`, so
+  a running `next dev` keeps its own `.next/`. Plain `next build` shares `.next/` with the dev server
+  and corrupts it into a fullscreen-logomark page (seen 4 times). See the NON-NEGOTIABLE section.
 - `tsc --noEmit` only catches **types**. `next build` additionally catches
   **ESLint errors, prerender failures, and server/client boundary mistakes** —
   exactly the class of error that makes a Vercel build fail.
+- `npm test` runs every `scripts/*-test.ts` and `*-check.ts` by **opt-out discovery**, including the
+  truth-checks that pin doc counts, link liveness, the skill catalog, and the retired action cards.
+  These are the guards that catch drift a type-checker cannot see — do not skip them because "it's
+  only a docs change."
 - Step 4 is **mandatory** for sensitive changes (wallet, payments, on-chain,
   credit metering) — those break at **runtime**, not build time. A clean build
-  is necessary but not sufficient.
-- `next build` and `next dev` share the `.next/` directory — **stop the dev
-  server before running a build** or `.next` can corrupt.
-- Deploy = merge the green PR into `main` (see Git discipline above — ship via PR,
-  not a local merge). **Do not** create empty `chore: trigger production redeploy`
-  commits — they burn deploy slots. If `main` doesn't auto-deploy, the cause is
-  almost always the daily cap, not the GitHub integration.
+  is necessary but not sufficient. These are also the changes still worth a branch + PR, for the
+  Vercel preview URL.
+- **Do not** create empty `chore: trigger production redeploy` commits — they burn deploy slots. If
+  `main` doesn't auto-deploy, the cause is almost always the daily cap, not the GitHub integration.
 
 **Deploy target:** production is the Vercel project **`blueagent-web-new`**
 (`blueagent.dev`). Never deploy to or recreate the `blue-agent` project.

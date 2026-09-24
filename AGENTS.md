@@ -129,8 +129,15 @@ chore:    tooling, deps, config
 
 ## Branch policy
 
-**Cut a short-lived branch from `main`, PR it back into `main`, delete it on merge.** Never commit
-directly to `main`. **`dev` is retired (2026-09-05) — do not branch from it or re-create it**; see
+**Commit and push straight to `main`, behind the local gate** (`npx tsc --noEmit && npm test &&
+npm run verify:build`, from `apps/web/`). Changed 2026-09-24: `main` has no branch protection and no
+rulesets, so nothing server-side enforces this — the gate is local discipline, and skipping it means
+production finds the bug.
+
+**Branch + PR is optional, not forbidden.** Use it when you want a Vercel preview URL before the change
+is live, or on anything touching payments, wallet/credit metering, or on-chain writes.
+
+**`dev` is retired (2026-09-05) — do not branch from it or re-create it**; see
 Git discipline in `CLAUDE.md` for the two measured reasons (61-file drift, and `dev` silently lacking
 the CI workflow so `verify` never ran on any `dev` commit).
 
@@ -138,33 +145,42 @@ the CI workflow so `verify` never ran on any `dev` commit).
 
 ## Build & deploy workflow
 
-**Build locally first, then deploy.** Never push to `main` (which auto-deploys
-to production) until the change has passed a full local build. This catches
-errors before they burn a Vercel deploy slot — the free plan caps at **100
-deployments/day**, and a failed build wastes one.
+**Build locally first, then deploy.** Pushing to `main` auto-deploys to production, so the
+local gate is the only thing between a bad diff and a live site. It also catches errors
+before they burn a Vercel deploy slot — the free plan caps at **100 deployments/day**, and
+a failed build wastes one.
 
 Pipeline for every change, in order:
 
 ```
 1. Edit code
-2. npx tsc --noEmit -p tsconfig.json   # type errors (fast) — run from apps/web
-3. npm run build                        # next build — lint, prerender, server/client import errors
-4. Manual runtime test at localhost     # logic/UX bugs a build can't catch
-5. Only when 2–4 PASS → open a PR (branch→main); merge only when the Vercel preview is green
+2. cd apps/web
+3. npx tsc --noEmit && npm test && npm run verify:build     # the gate — all three, in one go
+4. Manual runtime test at localhost                         # logic/UX bugs a build can't catch
+5. Only when 3–4 PASS → git pull && git commit && git push origin main
 ```
 
 Notes:
+- **Step 3 is the whole policy.** `tsc --noEmit` + `npm test` is exactly what CI's `verify`
+  job runs; `verify:build` is the part CI deliberately skips (the workflow header explains
+  that the Vercel preview already builds every PR). Green locally means the CI run that
+  fires on your push is a formality.
+- **`npm run verify:build`, never `npm run build`.** verify:build sets
+  `NEXT_DIST_DIR=.next-verify`, so a running `next dev` keeps its own `.next/`. Plain
+  `next build` shares `.next/` with the dev server and corrupts it into a
+  fullscreen-logomark page (seen 4 times).
 - `tsc --noEmit` only catches **types**. `next build` additionally catches
   **ESLint errors, prerender failures, and server/client boundary mistakes** —
   exactly the class of error that makes a Vercel build fail.
+- `npm test` discovers every `scripts/*-test.ts` and `*-check.ts` by opt-out, including the
+  truth-checks pinning doc counts, link liveness and the skill catalog. Do not skip them
+  because "it's only a docs change" — those are precisely the drift they exist to catch.
 - Step 4 is **mandatory** for sensitive changes (wallet, payments, on-chain,
   credit metering) — those break at **runtime**, not build time. A clean build
-  is necessary but not sufficient.
-- `next build` and `next dev` share the `.next/` directory — **stop the dev
-  server before running a build** or `.next` can corrupt.
-- Deploy = one `git push origin main` after the quota resets. **Do not** create
-  empty `chore: trigger production redeploy` commits — they burn deploy slots.
-  If `main` doesn't auto-deploy, the cause is almost always the daily cap, not
+  is necessary but not sufficient. These are also the changes still worth a branch + PR,
+  for the preview URL.
+- **Do not** create empty `chore: trigger production redeploy` commits — they burn deploy
+  slots. If `main` doesn't auto-deploy, the cause is almost always the daily cap, not
   the GitHub integration.
 
 **Deploy target:** production is the Vercel project **`blueagent-web-new`**
