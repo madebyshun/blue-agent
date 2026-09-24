@@ -236,8 +236,15 @@ did not happen:
 Vercel bakes env into a deployment and injects `Authorization: Bearer
 $CRON_SECRET` into its own cron calls from that same deployment's env, so
 invoker and route always agree — **and changing the env without redeploying
-does nothing.** Old deployment URLs keep the old value and still reach
-production KV; rotation alone does not close them.
+does nothing.**
+
+Old deployments keep the old value baked in, so rotation alone never invalidates
+it. What closes them is **Deployment Protection, which is already on for this
+project** — measured 2026-09-25: `…-1sytz9ane-….vercel.app/api/acp/revenue`
+returned `302 → vercel.com/sso-api`, not the route. So the old secret is inert:
+every build that still honours it is unreachable without a Vercel session on the
+team, and no deployment had to be deleted. Turn protection off and every one of
+those URLs goes live again holding the old value.
 
 Verified end to end with `GET /api/usage/daily` (read-only, same gate) → 200,
 then `GET /api/cron/acp-poll` → `configured: true`, `errors: 0`.
