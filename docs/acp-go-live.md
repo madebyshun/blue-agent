@@ -151,13 +151,24 @@ both submit the same job.
 
 The poll cron runs `*/2 * * * *` (`apps/web/vercel.json`).
 
-To tick it by hand — use the header, never `?secret=`, so the value stays out of shell
-history, proxy logs and browser URLs:
+To tick it by hand. Read the key from the env file by **absolute** path and check its
+length before spending it:
 
+```sh
+SEC=$(grep -m1 '^CRON_SECRET=' ~/projects/blue-agent/apps/web/.env.local | cut -d= -f2- | tr -d '"')
+[ ${#SEC} -eq 64 ] && curl -s -H "Authorization: Bearer $SEC" \
+  https://blueagent.dev/api/cron/acp-poll | jq || echo "secret unreadable: len=${#SEC}"
+unset SEC
 ```
-curl -s -H "Authorization: Bearer $CRON_SECRET" \
-  https://blueagent.dev/api/cron/acp-poll | jq
-```
+
+⚠️ The length guard is not ceremony. The route answers the **same**
+`401 {"error":"Unauthorized"}` for a wrong key and for an empty one, so an unguarded
+command reports "I could not read the file" as what looks like "the rotation broke
+something" — which it did twice on 2026-09-25, once from an emptied clipboard and once
+from running a relative path out of the wrong directory.
+
+Header, never `?secret=` — a query string lands in shell history, proxy logs and browser
+URLs.
 
 `"configured": true` is the whole signal. `false` means at least one of the three
 required vars is missing on the deployment you are hitting.
