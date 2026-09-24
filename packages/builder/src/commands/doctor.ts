@@ -11,6 +11,7 @@ const SKILL_FILES = [
   "design-system.md",
   "base-ecosystem.md",
   "x402-patterns.md",
+  "llm-and-x402.md",
   "agent-wallet-security.md",
   // DeFi protocols
   "aerodrome-dex-guide.md",

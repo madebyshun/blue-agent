@@ -4,8 +4,7 @@ import { wrapFetchWithPayment } from "x402-fetch";
 
 // Load env
 const VIRTUALS_API_KEY = process.env.VIRTUALS_API_KEY;
-// The live x402 surface is blueagent.dev itself. (This used to default to
-// api.blueagent.xyz, a host that does not resolve.)
+// The live x402 surface is blueagent.dev itself — there is no separate api host.
 const BLUEAGENT_API_URL = process.env.BLUEAGENT_API_URL ?? "https://blueagent.dev";
 const WALLET_PRIVATE_KEY = process.env.WALLET_PRIVATE_KEY;
 

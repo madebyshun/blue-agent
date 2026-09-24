@@ -148,9 +148,9 @@ function buildSystemPrompt(task: Task): string {
   const commandDoc = readCommandDoc(task) ?? "";
 
   const skillBlocks = skillNames
-    .map(loadSkill)
-    .filter(Boolean)
-    .map((content, i) => `--- Skill: ${skillNames[i]} ---\n${content}`)
+    .map((name) => ({ name, content: loadSkill(name) }))
+    .filter((s) => s.content)
+    .map((s) => `--- Skill: ${s.name} ---\n${s.content}`)
     .join("\n\n");
 
   return [
