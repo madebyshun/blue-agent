@@ -210,6 +210,11 @@ above only necessary when you need the per-tick tally:
 curl -s https://blueagent.dev/api/acp/revenue | jq '{configured, total_jobs, expire_streak}'
 ```
 
+Measured on production right after that deploy, 2026-09-25:
+`{ "configured": true, "total_jobs": 0, "completed_jobs": 0, "usdc_collected": 0,
+"expire_streak": 0 }` — the live seller, unhired, which is exactly the state that used
+to be indistinguishable from a dead one.
+
 ---
 
 ## Go-live record
@@ -281,9 +286,10 @@ then `GET /api/cron/acp-poll` → `configured: true`, `errors: 0`.
 
 ## Open items
 
-- **Dashboard is behind the code.** `side` is live in the seller but the Job's Step-2
-  Requirements still list three fields, and the description still says buy side. Until
-  someone edits the wizard, sell works for a buyer who reads this doc and not for one
-  who reads the listing. Add `side` (String, not required) and drop the buy-side claim.
-- Fix the ACP agent profile description — it still carries a Blue Chat line that does
-  not belong on an agent-facing listing.
+- **One field still unconfirmed in the wizard.** The agent profile and the Job
+  description were both rewritten on 2026-09-25 and the description now states
+  `side (buy or sell, default buy)`. What has not been confirmed is **Step 2 —
+  Requirements**, which needs `side` added as **String, not required**. Until it is,
+  the listing promises a field the form does not declare: harmless for a buyer who
+  sends `side` anyway (the code reads it regardless), but the two surfaces disagree,
+  and the form is the one a buyer builds against.
