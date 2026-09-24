@@ -35,8 +35,10 @@ const ACCENT = "#4FC3F7";
 // Core positioning: Blue Chat is a non-custodial AI workspace paid in USDC.
 // Social proof leads with that spine (non-custodial · USDC on Base · the two
 // inference networks · the free daily allowance) — not a legacy tool count.
-// Skill count is dynamic (TOOL_COUNT) — never hardcode it.
-const SOCIAL_PROOF = ["Non-custodial", "USDC on Base 8453", "Virtuals + Venice inference", "500 free credits/day", `${TOOL_COUNT} skills`];
+// Count is dynamic (TOOL_COUNT) — never hardcode it. Say "tools", never
+// "skills": skills are the 34 grounding .md files `blue init` installs
+// (/docs/skills, CHAT_CAPS's "/skill packs" below), a different set entirely.
+const SOCIAL_PROOF = ["Non-custodial", "USDC on Base 8453", "Virtuals + Venice inference", "500 free credits/day", `${TOOL_COUNT} tools`];
 
 // Chat capabilities — honest, NOT a fake slash menu. The five founder workflows
 // run in plain language (there is no literal `/idea`); the ONLY literal slash
