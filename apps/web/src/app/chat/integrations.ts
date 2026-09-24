@@ -31,7 +31,11 @@ const DEFAULT_SKILLS: InstalledSkill[] = [
   {
     name: "blueagent",
     description: `${TOOL_COUNT} x402 AI tools for Base — intelligence, security, DeFi, builder.`,
-    url: "https://github.com/BankrBot/skills/tree/main/blueagent",
+    // Was https://github.com/BankrBot/skills/tree/main/blueagent until
+    // 2026-09-25 — an upstream that has never hosted this catalogue and whose
+    // owner 403-bans this project. It points at our own repo now; the skill is
+    // published as @blueagent/skill on npm.
+    url: "https://github.com/madebyshun/blue-agent",
     content: `BlueAgent: ${TOOL_COUNT} pay-per-use x402 tools on Base. Use hub_token_price for prices, hub_risk_gate / hub_honeypot for safety, and the hub_* tools for intelligence, DeFi, and builder workflows.`,
     enabled: true, installedAt: 0, default: true,
   },
@@ -253,7 +257,7 @@ export async function runSkillCommand(input: string): Promise<string> {
     return removeSkill(arg) ? `✓ Skill '${arg}' removed.` : `Skill '${arg}' not found. Run \`/skill list\`.`;
   }
   if (sub === "install") {
-    if (!arg) return "Usage: `/skill install <owner/repo>` — e.g. `/skill install BankrBot/skills/blueagent`";
+    if (!arg) return "Usage: `/skill install <owner/repo>` — e.g. `/skill install base/skills`";
     const parsed = parseRepo(arg);
     if (!parsed) return `Couldn't parse "${arg}". Use \`owner/repo\` or \`owner/repo/path\`.`;
     const md = await fetchSkillMd(parsed.owner, parsed.repo, parsed.path);

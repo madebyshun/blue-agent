@@ -336,7 +336,7 @@ export default function SkillsPanel({ onPick, onUse }: {
               value={installInput}
               onChange={e => setInstallInput(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") doInstall(); }}
-              placeholder="BankrBot/skills/blueagent"
+              placeholder="base/skills"
               autoFocus
               className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-white placeholder:text-slate-700 outline-none mb-3"
             />

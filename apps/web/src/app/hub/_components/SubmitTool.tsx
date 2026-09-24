@@ -437,11 +437,15 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
                   <TestButton testing={testing} disabled={!endpointOk} onClick={runTest} />
                 </div>
                 <div className="mt-2 rounded-lg border border-[#4FC3F7]/20 bg-[#4FC3F7]/[0.04] px-3 py-2">
+                  {/* Pointed builders at "Bankr x402 Cloud" until 2026-09-25 — a
+                      storefront that 403-bans this project at the account level, so
+                      the one concrete next step offered to a new lister was a dead
+                      end. No replacement host is named on purpose: recommending one
+                      is a claim we would have to keep re-measuring, and any endpoint
+                      that speaks x402 works here. */}
                   <p className="text-[10px] text-slate-500 leading-relaxed">
-                    No endpoint yet? Deploy one free on{" "}
-                    <a href="https://bankr.bot" target="_blank" rel="noopener noreferrer"
-                      className="text-[#4FC3F7] hover:underline">Bankr x402 Cloud</a>, then come back to list it here.
-                    Blue Hub doesn&apos;t host your code — you own the endpoint and keep 95%.
+                    Blue Hub doesn&apos;t host your code. Point this at any endpoint that
+                    speaks x402 — you own it, and you keep 95%.
                   </p>
                 </div>
               </Field>

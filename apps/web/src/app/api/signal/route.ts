@@ -51,8 +51,18 @@ interface ProcessedSignal extends IncomingSignal {
 function scoreSignal(signal: IncomingSignal): number {
   let score = Math.round(signal.confidence * 100);
 
-  // Boost for known trusted agents
-  const trustedSources = ["aeon", "miroshark", "bankr"];
+  // Boost for known trusted agents. "bankr" left this list on 2026-09-25 with
+  // the rest of the Bankr removal: it granted +10 to anything declaring a
+  // relationship this project no longer has.
+  //
+  // ⚠️ Note what this boost actually is. This route takes an UNAUTHENTICATED
+  // POST ("any agent on Base can POST a signal here") and `source` is a
+  // self-declared string, so the boost is claimed, not verified — any caller
+  // can type "aeon" and collect it. That is tolerable while the score only
+  // routes a signal to a review queue; it stops being tolerable the moment a
+  // score drives an automated action. Do not add a name here without deciding
+  // how the claim gets proven.
+  const trustedSources = ["aeon", "miroshark"];
   if (trustedSources.includes(signal.source.toLowerCase())) score += 10;
 
   // Boost for high priority

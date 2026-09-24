@@ -142,9 +142,11 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
     Object.keys({ ...(p.dependencies ?? {}), ...(p.devDependencies ?? {}) })
   );
 
-  // Detect onchain signals from deps (includes Bankr as onchain gateway)
+  // Detect onchain signals from deps. "bankr" left this list on 2026-09-25:
+  // it credited a dependency on a gateway that 403-bans callers at the account
+  // level, so a repo scored *higher* for depending on something that cannot run.
   const onchainDeps = [...new Set(allDeps.filter((d: string) =>
-    ["viem", "wagmi", "ethers", "web3", "@coinbase/agentkit", "x402", "ox", "bankr"].some(k => d.includes(k))
+    ["viem", "wagmi", "ethers", "web3", "@coinbase/agentkit", "x402", "ox"].some(k => d.includes(k))
   ))];
 
   // Parse skills.json — list of skill names signals domain depth
@@ -155,9 +157,11 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
      "distribute", "polymarket", "kalshi", "price", "market", "nft", "swap"].some(k => s.toLowerCase().includes(k))
   );
 
-  // Detect Bankr onchain signals from README/CLAUDE.md text
+  // A `bankrOnchain` flag was derived here (README/CLAUDE.md mentioning
+  // bankr.bot / bankr_llm / bankr_api) and surfaced as `uses_bankr_gateway` in
+  // the evidence object. Removed 2026-09-25 with the prompt line that consumed
+  // it — see the onchainActivity rubric below.
   const allText = [readme ?? "", claudeMd ?? ""].join(" ").toLowerCase();
-  const bankrOnchain = allText.includes("bankr.bot") || allText.includes("bankr_llm") || allText.includes("bankr_api");
   const hasWalletMention = allText.includes("wallet") || allText.includes("usdc") || allText.includes("0x");
   const hasOnchainKeywords = ["onchain", "on-chain", "defi", "base chain", "base mainnet", "token distribution",
     "treasury", "distribute token", "x402", "polymarket"].some(k => allText.includes(k));
@@ -255,7 +259,6 @@ async function fetchGitHubData(repoPath: string): Promise<string> {
     onchain_topics: (repoData.topics ?? []).filter((t: string) =>
       ["base", "onchain", "x402", "defi", "web3", "ethereum", "solidity"].some(k => t.includes(k))
     ),
-    uses_bankr_gateway: bankrOnchain,
     has_wallet_mention: hasWalletMention,
     has_onchain_keywords: hasOnchainKeywords,
     crypto_skills_count: cryptoSkills.length,
@@ -331,7 +334,7 @@ const SYSTEM_PROMPT = `You are Blue Agent's Agent Score engine. You score AI age
 
 Dimensions (max pts shown):
 - skillDepth (25): Has CLAUDE.md/SKILL.md? Skills folder? Commands folder? README describes clear domain expertise and toolset? More detail = higher score.
-- onchainActivity (15): Uses onchain deps (viem, wagmi, x402, agentkit, bankr)? Uses Bankr gateway for token ops? has_wallet_mention or has_onchain_keywords? crypto_skills_count > 0? Base/onchain topics? Note: agents using Bankr API for token distribution, DeFi monitoring, or treasury ops ARE onchain-active even without viem/wagmi deps.
+- onchainActivity (15): Uses onchain deps (viem, wagmi, x402, agentkit)? has_wallet_mention or has_onchain_keywords? crypto_skills_count > 0? Base/onchain topics? Note: an agent doing token distribution, DeFi monitoring, or treasury ops through a hosted API IS onchain-active even without viem/wagmi deps.
 - reliability (20): Recent commits in last 30 days? GitHub Actions CI? Open issues low? Regular releases? Active maintenance signals.
 - interoperability (20): npm package published with downloads? CLI bin commands? MCP config? agent.json? Keywords signal ecosystem compatibility (mcp, agentkit, x402, vercel-ai)?
 - reputation (20): Stars, forks, watchers, releases, npm weekly downloads. Community traction. Weighted heavily — real adoption matters most.
@@ -396,7 +399,7 @@ export async function scoreAgent(rawInput: string): Promise<AgentScoreResult> {
     contextData = await pingEndpoint(input.value);
   }
 
-  // Truncate context to ~6000 chars to stay within Bankr LLM limits
+  // Truncate context to ~6000 chars to stay within the gateway's limits
   const truncated = contextData && contextData.length > 6000
     ? contextData.slice(0, 6000) + "\n... [truncated]"
     : contextData;

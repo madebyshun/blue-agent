@@ -36,11 +36,13 @@ const SLASH_COMMANDS: SlashCommand[] = [
 export interface ModelTier {
   id: string; label: string; model: string;
   color: string; badge: string; note: string;
-  // Pre-merge task #4 followup — Bankr got banned; the non-venice group
-  // is now "virtuals" (routes through Virtuals server-side). Kept
-  // "bankr" as a legacy alias so localStorage state written by older
-  // clients still round-trips without a runtime error.
-  group: "bankr" | "venice" | "privacy" | "virtuals";
+  // A "bankr" member sat in this union, justified as "a legacy alias so
+  // localStorage state written by older clients still round-trips". MEASURED
+  // 2026-09-25: that justification was false. `ModelTier` types a static
+  // in-code table, nothing deserializes a ModelTier out of storage, and `group`
+  // has ZERO readers anywhere in src/ — no row even sets it to "bankr". The
+  // alias protected nothing and kept a dead provider in every grep of this file.
+  group: "venice" | "privacy" | "virtuals";
   credits: number; // cost per msg
 }
 
