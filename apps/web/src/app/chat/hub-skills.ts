@@ -54,13 +54,51 @@ const CATEGORY_ORDER: SkillCategory[] = [
 // Hand-tuned category + chat trigger for the tools that are genuinely useful
 // IN CHAT (slash commands + prompts the model can actually action). Keyed by id
 // (shared with AGENT_TOOLS).
+//
+// EVERY id here MUST have a chat tool behind it. A chip is a promise: clicking
+// it drops `trigger` into the composer, so the user sends a prompt having just
+// clicked a card titled with a Hub tool's name and description. Until 2026-09-23
+// eleven of these had no entry in TOOL_ENDPOINT (api/chat/route.ts) and the model
+// answered them from its own weights — a "DeFi Opportunity Scanner" chip that
+// produced invented APYs. Eight were wired; three were removed and are recorded
+// below so they are not re-added by someone reading the Hub catalog:
+//
+//   community-sentiment  — the handler carries a STATIC_KNOWLEDGE_DISCLAIMER and
+//                          has no social feed behind it. "What's the sentiment
+//                          around X" asks for a measurement, so there is no
+//                          honest way to label the answer inside a chat bubble.
+//   agent-collab-match   — LLM-only, and it does not know who is registered.
+//                          The builder registry is empty; matching against it
+//                          would be matching against nothing.
+//   base-builder-network — in NEITHER HANDLERS nor AGENT_TOOLS, so the flatMap
+//                          below already dropped it. Dead config, never rendered.
+//
+// The first two remain on the Hub and on /api/mcp, where they are bought
+// deliberately rather than suggested by a chip.
+//
+// ONE ENTRY IS A KNOWN OUTLIER AND IS DELIBERATELY LEFT IN PLACE: `builder-score`.
+// It is NOT a fourth removal and must not be tidied into one. The tool is fine and
+// live — `hub_builder_score` routes to the top-level `/api/builder-score`, not
+// through x402 (see the FREE_DIRECT comment in api/chat/route.ts) — and it is
+// outside the catalog ON PURPOSE, because it is free and internal. So the flatMap
+// below drops its chip, and has since it was added.
+//
+// The two fixes that look obvious here are both wrong. Adding a catalog entry to
+// make the chip render would drag an intentionally-internal tool into the paid
+// x402 surface purely for a UI side effect. Hand-typing a name and description
+// into this file would break the one property it exists to hold — that the label
+// comes from AGENT_TOOLS — which is how the Hub and this tab drifted to 51-vs-72
+// before. Whether the chip should exist at all is a separate clean-up decision,
+// not a rider on a wiring fix.
+//
+// Enforced by scripts/curated-trigger-check.ts, which runs in CI and carries a
+// self-justifying allowance for exactly this case.
 const CURATED: { id: string; category: SkillCategory; trigger: string }[] = [
   // Market Intel
   { id: "token-pick-signal",       category: "Market Intel",  trigger: "/pick" },
   { id: "narrative-position",      category: "Market Intel",  trigger: "What narratives are running on Base right now?" },
   { id: "whale-copy-signal",       category: "Market Intel",  trigger: "Show me whale signals for " },
   { id: "token-momentum-scanner",  category: "Market Intel",  trigger: "Scan top momentum tokens on Base" },
-  { id: "community-sentiment",     category: "Market Intel",  trigger: "What's the sentiment around " },
   // Due Diligence
   { id: "deep-analysis",           category: "Due Diligence", trigger: "/audit " },
   { id: "honeypot-check",          category: "Due Diligence", trigger: "/scan " },
@@ -73,18 +111,24 @@ const CURATED: { id: string; category: SkillCategory; trigger: string }[] = [
   { id: "gtm-brief",               category: "Builder Tools", trigger: "/ship " },
   { id: "stack-recommender",       category: "Builder Tools", trigger: "/build " },
   { id: "repo-health",             category: "Builder Tools", trigger: "Check repo health for " },
+  // Does not render — see the `builder-score` note above. Left in place on purpose.
   { id: "builder-score",           category: "Builder Tools", trigger: "What's the builder score for " },
   // Fundraise
   { id: "investor-memo",           category: "Fundraise",     trigger: "/raise " },
   { id: "fundraise-timing",        category: "Fundraise",     trigger: "Is now a good time to raise for " },
-  { id: "pitch-intelligence",      category: "Fundraise",     trigger: "What are investors funding on Base right now?" },
+  // Trigger reworded 2026-09-23. The old one — "What are investors funding on
+  // Base right now?" — MEASURED as routing to `hub_ecosystem`, not to this chip's
+  // own tool, and the model was right: that sentence asks what the ecosystem is
+  // doing, not how to pitch. It never matched the card either, which reads
+  // "Transform your deck into investor-grade pitch intelligence". The tool returns
+  // pitch_angles / one_liner / investor_thesis for ONE project, so the trigger now
+  // names a project the way the other Fundraise chips do.
+  { id: "pitch-intelligence",      category: "Fundraise",     trigger: "What's the strongest pitch angle for " },
   { id: "base-grant-finder",       category: "Fundraise",     trigger: "Find Base grants for " },
   // Launch
   { id: "token-launch-readiness",  category: "Launch",        trigger: "Is my token ready to launch? " },
   // Agent Network
-  { id: "agent-collab-match",      category: "Agent Network", trigger: "Which agents should I collaborate with for " },
   { id: "multi-agent-workflow",    category: "Agent Network", trigger: "Design a multi-agent workflow for " },
-  { id: "base-builder-network",    category: "Agent Network", trigger: "Who should I connect with on Base for " },
   // Ecosystem
   { id: "ecosystem-digest",        category: "Ecosystem",     trigger: "What happened on Base today?" },
   { id: "base-protocol-comparison",category: "Ecosystem",     trigger: "Compare these Base protocols: " },
