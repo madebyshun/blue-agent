@@ -178,18 +178,14 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/b20-analyze`,
     x402Body: (v) => ({ action: v.action ?? "guide", address: v.address, context: v.context }),
   },
-  {
-    id: "b20-tracker",
-    name: "B20 Tracker",
-    description: "Live B20 activity on Base — B20-related launches and Beryl activation status. Distinguishes B20-themed tokens from native B20 standard.",
-    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
-    category: "data",
-    inputs: [],
-    isComposite: true,
-    price: "$0.05", priceUSDC: 50000,
-    x402Url: `${X402_BASE}/b20-tracker`,
-    x402Body: () => ({}),
-  },
+  // `b20-tracker` ($0.05) RETIRED 2026-09-24. Half of what it sold — "B20-related
+  // launches" — came from api.bankr.bot/token-launches, the last live Bankr call
+  // left in this repo. That URL is public and still answers 200, so this was not
+  // forced by the ban; it is the deliberate end of the Bankr dependency. The
+  // handler, the HANDLERS entry, this catalog entry with its price, and the
+  // hub_b20_tracker MCP name all went in ONE commit, because a payment path must
+  // never outlive the product it sells. Beryl activation status survives in
+  // `b20-inspect` and `b20-analyze`, which read Base RPC and need no upstream.
   {
     id: "b20-inspect",
     name: "B20 Inspect",

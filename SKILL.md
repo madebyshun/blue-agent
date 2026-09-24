@@ -83,9 +83,9 @@ JSON Schema per tool) · [`llms.txt`](https://blueagent.dev/llms.txt) (short bri
      Source of truth: apps/web/src/lib/agent-tools.ts (AGENT_TOOLS).
      Body fields are the WIRE shape (post-x402Body), not the Hub form. -->
 
-Blue Hub exposes **111 paid tools** across 12 categories.
+Blue Hub exposes **110 paid tools** across 11 categories.
 
-Categories: on-chain · security · data · intelligence · builder · trading · content · agent-economy · base-ecosystem · earn · signal · portfolio
+Categories: on-chain · security · intelligence · builder · trading · content · agent-economy · base-ecosystem · earn · signal · portfolio
 
 `POST https://blueagent.dev/api/x402/{id}` · x402 v2 · `eip155:8453` ·
 USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. Fields marked `*` are required;
@@ -143,12 +143,6 @@ full JSON Schema per tool: https://blueagent.dev/api/catalog
 | `risk-gate` | $0.20 | `to`* `action` `value` | Pre-transaction risk assessment — screen any address or swap for drainer patterns, AML signals, and malicious contracts. |
 | `token-distribution` | $0.05 | `contract`* | Holder concentration + rug-risk distribution score (Moralis holders). |
 | `wallet-risk` | $0.05 | `address`* | AML / risk screen for a Base wallet from real on-chain flow (Moralis). |
-
-### data (1)
-
-| id | price | body | what it does |
-|---|---|---|---|
-| `b20-tracker` | $0.05 | _(no body)_ | Live B20 activity on Base — B20-related launches and Beryl activation status. Distinguishes B20-themed tokens from native B20 standard. |
 
 ### intelligence (12)
 
@@ -283,7 +277,7 @@ them.
 
 The MCP surface is deliberately a **subset**, not a mirror.
 
-MCP serves 86 tools — 15 `blue_` + 64 `hub_` + 7 `b20_`.
+MCP serves 85 tools — 15 `blue_` + 63 `hub_` + 7 `b20_`.
 
 Only the 64 `hub_` tools are drawn from the 111-tool catalog; `blue_` are the console commands
 and `b20_` are MCP-only calldata builders that take no x402 payment. So **none of these

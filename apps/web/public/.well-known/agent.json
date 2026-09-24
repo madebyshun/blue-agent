@@ -4,7 +4,7 @@
   "agent": {
     "name": "Blue Agent",
     "handle": "@blueagent_",
-    "description": "Base-native AI agent for builders — idea, build, audit, ship, raise. 111 tools on Blue Hub, x402 pay-per-call. Inference by Virtuals.",
+    "description": "Base-native AI agent for builders — idea, build, audit, ship, raise. 110 tools on Blue Hub, x402 pay-per-call. Inference by Virtuals.",
     "version": "1.2.0",
     "network": "base",
     "chain_id": 8453,
@@ -38,7 +38,7 @@
     "pricing": "https://blueagent.dev/.well-known/pricing",
     "endpoint_pattern": "https://blueagent.dev/api/x402/{tool-id}",
     "manifest_pattern": "https://blueagent.dev/.well-known/ai-tool/{tool-id}.json",
-    "tools": 111,
+    "tools": 110,
     "sdk": "npm install @blueagent/x402",
     "note": "Any x402-capable agent can call a tool endpoint and pay per call in USDC — no API key. This file is a pointer, not a price list: /api/catalog is the only authoritative source for tool ids and prices. Install @blueagent/x402 to handle payment automatically."
   },

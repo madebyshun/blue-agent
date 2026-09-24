@@ -338,11 +338,8 @@ export const MCP_TOOLS = [
     description: "B20 (Base Native Token Standard) guide — variants, roles, policies, integration tips. Powered by Beryl upgrade docs. Optionally analyze a specific contract address.",
     inputSchema: { type: "object", properties: { action: { type: "string", description: "guide | roles | policy | analyze | compare (default: guide)" }, address: { type: "string", description: "Token contract address 0x... (optional)" }, context: { type: "string", description: "Your use case or question (optional)" } } },
   },
-  {
-    name: "hub_b20_tracker",
-    description: "Live B20 activity on Base — B20-related token launches and Beryl activation status. Distinguishes B20-themed tokens from the native B20 standard.",
-    inputSchema: { type: "object", properties: {} },
-  },
+  // hub_b20_tracker retired 2026-09-24 with the b20-tracker catalog entry: its
+  // launches half came from api.bankr.bot, the last live Bankr call in the repo.
   // ── On-chain primitives & data (new batch) ────────────────────────────────
   {
     name: "hub_token_price",

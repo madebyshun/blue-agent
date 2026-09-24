@@ -11,7 +11,7 @@
  *   }
  *
  * Protocol: JSON-RPC 2.0 over HTTP POST
- * Tools: 86 — 15 blue_* + 64 hub_* + 7 b20_*
+ * Tools: 85 — 15 blue_* + 63 hub_* + 7 b20_*
  *        The 7 b20_* (deploy/mint/burn/grant/payment/check_activation/read_token) are
  *        MCP-only — pure calldata builders + on-chain reads, no x402 payment.
  *        MEASURED 2026-09-17 against a live tools/list POST, and the source agrees.
@@ -127,7 +127,7 @@ const HUB_MAP: Record<string, string> = {
   hub_grant_eval:           "grant-evaluator",
   // B20 / Beryl
   hub_b20_analyze:          "b20-analyze",
-  hub_b20_tracker:          "b20-tracker",
+  // hub_b20_tracker retired 2026-09-24 — see mcp-tools.ts.
   // On-chain primitives & data (new batch)
   hub_token_price:          "token-price",
   hub_pool_scan:            "pool-scan",
