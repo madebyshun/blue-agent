@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { buildRequirements, cdpVerify, cdpSettle } from "@/app/api/_lib/x402-cdp";
 import { HANDLERS } from "@/app/api/x402/_handlers";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
+import { wireSchema } from "@/lib/tool-wire-schema";
 import { kv } from "@/lib/kv";
 import { declareBuilderCodeExtension } from "@x402/extensions/builder-code";
 
@@ -40,9 +41,23 @@ const PRICE_UNITS = new Map<string, number>(
  *   - Just info.input + info.output, matches exact CDP resource format
  */
 function buildBazaarExtension(meta: typeof AGENT_TOOLS[number] | undefined) {
-  // Example body: required inputs get placeholder, optionals get empty string
+  // Example body: required fields get a placeholder, optionals get the value
+  // the Hub sends (or "" when the caller supplies it).
+  //
+  // This is the WIRE shape, from wireSchema — NOT `meta.inputs`, which is the
+  // /hub FORM. x402Body renames form keys for 17 of the 111 live tools, and
+  // this object is the literal template a Bazaar agent copies into its POST,
+  // so publishing the form here meant handing the caller a body the handler
+  // destructures nothing out of. It would then pay full price for a run with
+  // every field at its default. See lib/tool-wire-schema.ts for the
+  // measurement and the probe that derives this.
   const bodyExample = meta
-    ? Object.fromEntries(meta.inputs.map(i => [i.key, i.required ? `<${i.key}>` : ""]))
+    ? Object.fromEntries(
+        wireSchema(meta).fields.map(f => [
+          f.name,
+          f.required ? `<${f.name}>` : f.default ?? "",
+        ]),
+      )
     : {};
 
   return {
@@ -129,11 +144,12 @@ export async function GET(
   const requirements = buildRequirements(String(priceUnits));
   const meta = AGENT_TOOLS.find(t => t.id === tool);
   const paymentRequired = buildPaymentRequired(tool, requirements, meta);
-  const inputSchema = meta ? {
-    type: "object",
-    properties: Object.fromEntries(meta.inputs.map(i => [i.key, { type: "string", description: i.label }])),
-    required: meta.inputs.filter(i => i.required).map(i => i.key),
-  } : undefined;
+  // Same reasoning as buildBazaarExtension: this is the schema an agent reads
+  // in the 402 immediately BEFORE it decides to pay, so it has to be the wire
+  // shape. `fields` is dropped — JSON Schema is what a caller consumes.
+  const inputSchema = meta
+    ? (({ fields: _fields, ...schema }) => schema)(wireSchema(meta))
+    : undefined;
 
   const paymentRequiredHeader = Buffer.from(JSON.stringify(paymentRequired)).toString("base64");
   return NextResponse.json(
