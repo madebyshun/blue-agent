@@ -74,7 +74,11 @@ Five Aeon skills are bundled in `skills/` and available to any command or agent 
 | `aeon-deep-research` | `skills/aeon-deep-research.md` | "DD on X", "build me a memo", "contrarian take" |
 | `aeon-distribute-tokens` | `skills/aeon-distribute-tokens.md` | Weekly $BLUEAGENT rewards payout to leaderboard |
 
-When a user request matches a trigger phrase, load the skill file and follow its output rules. All Aeon skills are **read-to-apply** — no extra setup required except `aeon-distribute-tokens` which needs `BANKR_API_KEY` with Wallet write scope — ⚠️ **assume dead until tested**: that is Bankr's *Wallet* API, a different endpoint from the 403-banned `llm.bankr.bot`, but it authenticates against the same Bankr account, and no code in this repo reads `BANKR_API_KEY` any more. Verify before relying on a payout run.
+When a user request matches a trigger phrase, load the skill file and follow its output rules. Four of the five are **read-to-apply** — they shape output, never move funds, and need no setup and no key.
+
+🔴 **`aeon-distribute-tokens` CANNOT RUN. This is measured, not a hedge.** The old wording here said "needs `BANKR_API_KEY` with Wallet write scope — assume dead until tested", which left a reader chasing a credential for a transfer that cannot execute. MEASURED 2026-09-06 with a valid key, `POST /token-launches/deploy` → `403 {"error":"Account suspended","banned":true,"reasonCode":"fraud"}`, identical on `?chain=base` and `?chain=robinhood`. The ban is on the **ACCOUNT**, not one hostname, so Bankr's *Wallet* API — the endpoint a payout would use — is banned too, and **no key anyone could obtain for us changes that.** Do not schedule, promise, or narrate an `aeon-distribute-tokens` payout; it will 403 at the transfer. Reinstating it means a different transfer rail, not a new credential.
+
+**Reads still work** (`GET /token-launches` → `200`), which is why `_handlers/b20-tracker.ts` stays — it hits that **public** URL with no key at all. `BANKR_API_KEY` itself has **zero readers** as of 2026-09-24 and is a dead env var; see the Bankr section in `CLAUDE.md` for the full measurement. **Write ≠ read: measure the specific verb before declaring either dead.**
 
 ---
 
