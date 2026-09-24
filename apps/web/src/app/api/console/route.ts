@@ -3,6 +3,7 @@ import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { CONSOLE_SYSTEMS, CONSOLE_MAX_TOKENS, groundConsolePrompt, type ConsoleCommand } from "@/lib/console-systems";
 import { callLLM, NO_FABRICATION_RULE } from "@/app/api/_lib/llm";
 import { kv } from "@/lib/kv";
+import { recordCall } from "@/lib/usage-daily";
 
 export const runtime = "nodejs";
 // 120s lets the upstream LLM's ~100s ceiling resolve before Vercel kills us.
@@ -59,6 +60,9 @@ export async function POST(req: NextRequest) {
     // counters. It is NOT a lifetime-since-launch figure and must never be
     // presented as one — the UI only renders it once it is > 0.
     try { await kv.incr(`usage:blue_${cmd}`); } catch { /* counter is best-effort */ }
+    // Same run with the day attached, so the console commands get a trend and
+    // not just a forward-only lifetime total. See lib/usage-daily.ts.
+    await recordCall(`blue_${cmd}`, "console", "ok");
 
     return NextResponse.json({
       result:      r.text,

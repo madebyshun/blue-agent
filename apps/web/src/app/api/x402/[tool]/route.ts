@@ -12,6 +12,7 @@ import { buildRequirements, cdpVerify, cdpSettle } from "@/app/api/_lib/x402-cdp
 import { HANDLERS } from "@/app/api/x402/_handlers";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { wireSchema } from "@/lib/tool-wire-schema";
+import { recordCall } from "@/lib/usage-daily";
 import { kv } from "@/lib/kv";
 import { declareBuilderCodeExtension } from "@x402/extensions/builder-code";
 
@@ -388,6 +389,10 @@ async function handle(
 
   // If the handler itself returned an error, do NOT charge
   if (!resp.ok || (typeof data.error === "string")) {
+    // A verified payer got this far and the tool broke. No settlement happens,
+    // so no counter would otherwise record it — and "paid demand that failed"
+    // is the most expensive thing in this file to not know about.
+    await recordCall(tool, "x402", "err");
     return NextResponse.json(
       { error: "Tool failed — you were not charged", detail: data.error ?? `status ${resp.status}` },
       { status: 502 }
@@ -399,6 +404,10 @@ async function handle(
   // the ERC-8021 suffix with bc_2ejr35xc attribution to the settlement calldata.
   const settle = await cdpSettle(paymentPayload, requirements, resourceInfo, allExtensions);
   try { await kv.incr(`usage:${tool}`); } catch {}
+  // Same call, recorded with its SURFACE and DAY. `usage:<tool>` above is shared
+  // with the free MCP bypass and the Hub runner, so on its own it cannot say
+  // whether a tool's runs were paid. See lib/usage-daily.ts.
+  await recordCall(tool, "x402", "ok");
   // Real USDC settled on Base via Coinbase CDP. Two books, written together and
   // only when the settlement actually cleared:
   //

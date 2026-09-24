@@ -72,6 +72,27 @@ const fallback = {
     if (memClean(key)) return [];
     return ((memStore.get(key)?.value as string[]) ?? []);
   },
+  // Hash ops back the daily usage meter (lib/usage-daily.ts). A hash is the
+  // right shape there because one HINCRBY records a call and one HGETALL reads
+  // a whole day — Upstash bills per command, so the alternative (a flat key per
+  // tool per surface per day) would turn a 14-day report into thousands of GETs.
+  async hincrby(key: string, field: string, by: number): Promise<number> {
+    if (memClean(key)) memStore.set(key, { value: {} });
+    const entry = memStore.get(key);
+    const h = { ...((entry?.value as Record<string, number>) ?? {}) };
+    h[field] = (h[field] ?? 0) + by;
+    memStore.set(key, { value: h, expiresAt: entry?.expiresAt });
+    return h[field];
+  },
+  async hgetall(key: string): Promise<Record<string, unknown> | null> {
+    if (memClean(key)) return null;
+    return ((memStore.get(key)?.value as Record<string, unknown>) ?? null);
+  },
+  async expire(key: string, seconds: number): Promise<void> {
+    if (memClean(key)) return;
+    const entry = memStore.get(key);
+    if (entry) memStore.set(key, { ...entry, expiresAt: Date.now() + seconds * 1000 });
+  },
 };
 
 // ─── Upstash Redis client ─────────────────────────────────────────────────────
@@ -84,6 +105,9 @@ type KVClient = {
   sadd(key: string, ...members: string[]): Promise<number>;
   srem(key: string, ...members: string[]): Promise<number>;
   smembers(key: string): Promise<string[]>;
+  hincrby(key: string, field: string, by: number): Promise<number>;
+  hgetall(key: string): Promise<Record<string, unknown> | null>;
+  expire(key: string, seconds: number): Promise<void>;
 };
 
 // Resolve Upstash REST credentials from either env var convention:
@@ -122,6 +146,13 @@ function getKV(): KVClient {
       srem: (key: string, ...members: string[]) =>
               redis.srem(key, ...(members as [string, ...string[]])),
       smembers: (key: string) => redis.smembers(key) as Promise<string[]>,
+      // Atomic per-field counter — no read-modify-write, so concurrent tool
+      // calls on different serverless instances cannot lose an increment.
+      hincrby: (key: string, field: string, by: number) =>
+                 redis.hincrby(key, field, by) as Promise<number>,
+      hgetall: (key: string) =>
+                 redis.hgetall(key) as Promise<Record<string, unknown> | null>,
+      expire:  async (key: string, seconds: number) => { await redis.expire(key, seconds); },
     };
   }
 

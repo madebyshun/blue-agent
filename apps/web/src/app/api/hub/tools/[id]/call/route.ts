@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { getRegisteredTool, incrCallCount, addRevenue } from "@/lib/hub-registry";
 import { kv } from "@/lib/kv";
+import { recordCall } from "@/lib/usage-daily";
 
 export const runtime = "nodejs";
 
@@ -58,6 +59,10 @@ export async function POST(
   // that powers Hub Featured ranking).
   try { await kv.incr(`usage:${id}`); } catch {}
   await incrCallCount(id);
+  // Same call with surface + day + outcome kept apart. `usage:<id>` above is
+  // written by three surfaces into one integer; this is the one that can answer
+  // "was this the Hub runner or a paying agent?". See lib/usage-daily.ts.
+  await recordCall(id, "hub", upstream.ok ? "ok" : "err");
 
   // If upstream succeeded AND tool has a price, credit the builder's share
   // (Phase 3: bookkeeping only; no funds move until Phase 4 splitter).

@@ -28,6 +28,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { kv } from "@/lib/kv";
+import { recordCall } from "@/lib/usage-daily";
 import { internalX402Headers, hasInternalKey } from "@/lib/x402-internal";
 import {
   buildB20Calldata,
@@ -534,6 +535,13 @@ export async function POST(req: NextRequest) {
 
     if (!name) return err(id, -32602, "tools/call requires name", useSse);
 
+    // What this call is recorded as in the daily meter. Resolved to the CATALOG
+    // id where one exists (`hub_token_price` → `token-price`) so the same tool
+    // reached through MCP and through x402 aggregates into one row instead of
+    // two rows that look like two different tools. Console commands share the
+    // `blue_<cmd>` namespace /api/console already writes to, for the same reason.
+    const meterId = HUB_MAP[name] ?? (CONSOLE_MAP[name] ? `blue_${CONSOLE_MAP[name]}` : name);
+
     try {
       // Console tools
       const consoleCmd = CONSOLE_MAP[name];
@@ -541,6 +549,7 @@ export async function POST(req: NextRequest) {
         const prompt = args.prompt as string;
         if (!prompt) return err(id, -32602, "prompt is required", useSse);
         const text = await callConsole(consoleCmd, prompt);
+        await recordCall(meterId, "mcp", "ok");
         return ok(id, { content: [{ type: "text", text }] }, useSse);
       }
 
@@ -548,6 +557,7 @@ export async function POST(req: NextRequest) {
       const hubId = HUB_MAP[name];
       if (hubId) {
         const text = await callHubTool(hubId, args);
+        await recordCall(meterId, "mcp", "ok");
         return ok(id, { content: [{ type: "text", text }] }, useSse);
       }
 
@@ -556,6 +566,7 @@ export async function POST(req: NextRequest) {
         const handle = args.handle as string;
         if (!handle) return err(id, -32602, "handle is required", useSse);
         const text = await callBuilderScore(handle);
+        await recordCall(meterId, "mcp", "ok");
         return ok(id, { content: [{ type: "text", text }] }, useSse);
       }
 
@@ -583,6 +594,7 @@ export async function POST(req: NextRequest) {
       // B20 MCP-native calldata builders (free — no x402, no bypass key)
       if (B20_ENCODE_TOOLS.has(name)) {
         const text = await callB20Native(name, args);
+        await recordCall(meterId, "mcp", "ok");
         return ok(id, { content: [{ type: "text", text }] }, useSse);
       }
 
@@ -590,6 +602,12 @@ export async function POST(req: NextRequest) {
 
     } catch (e) {
       const err = e as Error & { code?: string };
+      // Record the FAILURE too. `callHubTool` increments `usage:<id>` only after
+      // a 2xx, so before this a tool that was called constantly and failed every
+      // time was indistinguishable from a tool nobody called — demand present,
+      // counter reading zero. That is the shape most likely to get a tool
+      // retired for the wrong reason.
+      await recordCall(meterId, "mcp", "err");
       // HubToolError carries a machine-readable code (WALLET_REQUIRED,
       // INSUFFICIENT_CREDITS, MISSING_KEY, PAYMENT_REQUIRED, UPSTREAM); prefix
       // it so agents can dispatch on the code without regex-scraping the msg.
