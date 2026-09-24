@@ -17,6 +17,7 @@
  */
 import { acpEnvelope, clientIp, corsHeaders, preflight, rateLimit } from "@/lib/acp";
 import { computeAcpRevenue } from "@/lib/blue-hood/acp-jobs";
+import { isAcpSellerConfigured } from "@/lib/blue-hood/acp-seller";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,7 +38,13 @@ export async function GET(req: Request) {
   }
 
   const summary = await computeAcpRevenue();
-  return Response.json(acpEnvelope({ ok: true, ...summary }, DOCS), {
+  // `configured` disambiguates the two ways this endpoint can report zero jobs:
+  // a live seller nobody has hired yet, versus a seller that was never wired.
+  // Without it they are byte-identical, and only someone holding CRON_SECRET
+  // could tell them apart — so "no revenue" read as proof of a dead agent.
+  // It leaks nothing: it reports WHETHER the env is set, never what it is set to.
+  const configured = isAcpSellerConfigured();
+  return Response.json(acpEnvelope({ ok: true, configured, ...summary }, DOCS), {
     status: 200,
     headers: corsHeaders(),
   });

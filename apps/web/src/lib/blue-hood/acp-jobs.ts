@@ -46,6 +46,9 @@ import {
   ACP_EXPIRE_STREAK_WARN,
   ACP_EXPIRE_STREAK_DANGER,
 } from "@/lib/blue-hood/kv-keys";
+// Type-only: the ledger records which side was priced, and there must be exactly
+// one definition of that vocabulary — the engine's.
+import type { ExecSide } from "@/lib/blue-hood/execution-plan";
 
 /** Lifecycle states, mirroring the ACP JobSession status vocabulary. */
 export type AcpJobStatus =
@@ -72,6 +75,15 @@ const TERMINAL: ReadonlySet<AcpJobStatus> = new Set(["completed", "rejected", "e
  */
 export type AcpSubjectChain = "robinhood" | "base" | "unknown";
 
+/**
+ * Which side of the book the job asked to be priced, with the same `"unknown"`
+ * escape hatch as `AcpSubjectChain` and for the same reason: a job rejected for
+ * an uninterpretable side must still leave behind WHAT was uninterpretable.
+ * Store only `ExecSide` and every rejection collapses into "something was wrong",
+ * which is the state the ledger exists to prevent.
+ */
+export type AcpSubjectSide = ExecSide | "unknown";
+
 /** One job's durable record. Only public routing + economic facts — never a key. */
 export interface AcpJobRecord {
   job_id: string;
@@ -81,6 +93,7 @@ export interface AcpJobRecord {
   buyer?: string; // buyer wallet address (public)
   ticker?: string; // parsed from the job requirement
   subject_chain?: AcpSubjectChain; // desk the ticker trades on — NOT chain_id
+  side?: AcpSubjectSide; // which side was priced — a buy and a sell route differently
   size_usd?: number; // parsed from the job requirement
   price_usdc?: number; // budget agreed for the job
   usdc_collected?: number; // amount actually received on completion
@@ -117,7 +130,10 @@ const now = () => new Date().toISOString();
 export async function recordJobSeen(
   job: Pick<AcpJobRecord, "job_id" | "chain_id" | "offering"> &
     Partial<
-      Pick<AcpJobRecord, "buyer" | "ticker" | "subject_chain" | "size_usd" | "price_usdc" | "status">
+      Pick<
+        AcpJobRecord,
+        "buyer" | "ticker" | "subject_chain" | "side" | "size_usd" | "price_usdc" | "status"
+      >
     >,
 ): Promise<AcpJobRecord> {
   const existing = await kvGet<AcpJobRecord>(kvAcpJob(job.job_id));
@@ -132,6 +148,7 @@ export async function recordJobSeen(
         buyer: job.buyer,
         ticker: job.ticker,
         subject_chain: job.subject_chain,
+        side: job.side,
         size_usd: job.size_usd,
         price_usdc: job.price_usdc,
         created_at: ts,
@@ -160,6 +177,7 @@ export async function updateJobStatus(
       | "price_usdc"
       | "ticker"
       | "subject_chain"
+      | "side"
       | "size_usd"
       | "buyer"
       | "error"

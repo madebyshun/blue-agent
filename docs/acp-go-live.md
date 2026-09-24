@@ -78,6 +78,7 @@ Four-step wizard.
 | `ticker` | String | yes |
 | `size_usd` | Number | yes |
 | `chain` | String | **no** |
+| `side` | String | **no** |
 
 `chain` is optional on purpose. `normalizeChain` treats absent as `"robinhood"` —
 this offering's only desk — and the field builder has no enum, so the real guard is
@@ -85,9 +86,16 @@ the code-level reject, which runs on **both** the `open` and `funded` branches.
 Anything that is not RH is rejected with `unsupported_chain` rather than silently
 priced against the wrong venue.
 
+`side` is optional the same way and for a different reason: absent means `"buy"`, which
+is what every job sold before 2026-09-25 received. Only `buy` and `sell` are accepted —
+anything else (`short`, `exit`, …) is rejected with `unsupported_side` rather than
+defaulting, because `computeExecutionPlan` coerces any non-`"sell"` value to `"buy"`
+(`execution-plan.ts:273`) and a silent default would bill someone for the opposite of
+what they asked.
+
 Accepted aliases (`extractRequirement`): `ticker`|`symbol`, `size_usd`|`sizeUsd`|`size`,
-`chain`|`chain_id`|`chainId`. `robinhood`/`robinhoodchain`/`rh`/`4663` all normalize to
-`"robinhood"`.
+`chain`|`chain_id`|`chainId`, `side`|`direction`|`action`.
+`robinhood`/`robinhoodchain`/`rh`/`4663` all normalize to `"robinhood"`.
 
 ### Step 2 — Deliverables (what we return)
 
@@ -96,9 +104,9 @@ Exactly the outer keys of `buildDeliverable`, snake_case:
 `offering` · `version` · `chain` · `chain_id` · `generated_at` · `plan`
 
 **`plan` is declared as an undeclared Object on purpose.** `ExecPlan` has ~20 fields
-and is already at version 1.1. A strict declared schema would eventually reject our
-own submission — which loses the escrow *and* adds an expiration to the streak. The
-version field is how a buyer pins the shape.
+(39 leaf values once nested) and is already at version 1.2. A strict declared schema
+would eventually reject our own submission — which loses the escrow *and* adds an
+expiration to the streak. The version field is how a buyer pins the shape.
 
 ### Step 4 — Examples
 
@@ -113,19 +121,31 @@ The sample deliverable was produced by actually running
 
 ---
 
-## Known limitation: buy side only
+## Both sides — and what that does *not* mean
 
-`acp-seller.ts:348` calls:
+`side` is wired through `extractRequirement` → `computeExecutionPlan` as of 2026-09-25,
+and the deliverable version went `1.1` → `1.2` because `plan.side` could previously only
+ever be `"buy"`.
 
-```ts
-computeExecutionPlan({ ticker: req.ticker, size_usd: req.size_usd })
-```
+🔴 **Read this before writing any listing copy.** MEASURED the same day, NVDA at $25k: a
+buy plan and a sell plan differ in **exactly one of 39 leaf fields — `side` itself.**
+Route, legs, primary pool, slippage, TVL, mid price: all identical, to the digit.
 
-`side` is not passed, so it defaults to `"buy"` (`execution-plan.ts:273`). The listing
-says buy side. Wiring sell through is ~4 lines (`extractRequirement` → the call site)
-but it touches the payment path, so it needs the full gate and ideally a preview.
+That is not an oversight to fix later. First-order impact is `size/(one_side + size)`
+against the same reserve, which is direction-symmetric under xy=k *by construction*. The
+numbers are the same because under this model they genuinely are the same.
 
-Related: `runAcpPollCycle` filters sessions by `roles.includes("provider")` with **no
+So what did wiring `side` actually buy? **A correct receipt, not new analysis.** Before
+it, a buyer asking for `"sell"` got a plan stamped `side: "buy"`, and a buyer typing
+`"short"` was silently priced as a buy. Now the first is labelled honestly and the second
+is rejected. Do not let the Job description imply sell-side modelling — if that ever
+becomes real it will be a change in `execution-plan.ts`, not in the seller.
+
+---
+
+## Known limitation: one handler for every offering
+
+`runAcpPollCycle` filters sessions by `roles.includes("provider")` with **no
 offering filter**. Today that is fine — there is one offering. The moment a second one
 is listed, every job will still route into the RH execution-plan handler.
 
@@ -177,10 +197,18 @@ The public, unauthenticated read is `/api/acp/revenue` — completed jobs, USDC
 collected, and the live expire streak, straight from the KV ledger. An empty ledger
 returns an honest all-zero summary, never a placeholder.
 
-⚠️ `/api/acp/revenue` does **not** expose `configured`, so `total_jobs: 0` looks
-identical whether the seller is wired or not wired at all. Today only someone holding
-`CRON_SECRET` can tell those two apart. Adding a `configured` boolean there leaks
-nothing — it reports whether env is set, not what it is set to.
+It also carries `configured`, added 2026-09-25 off the same SDK-free
+`isAcpSellerConfigured()` the cron uses. Without it, `total_jobs: 0` looked identical
+whether the seller was live and unhired or never wired at all, and only someone holding
+`CRON_SECRET` could tell those apart — so "no revenue" read as proof of a dead agent.
+It leaks nothing: it reports **whether** the env is set, never what it is set to.
+
+That makes the public read sufficient for the common check, and the authenticated tick
+above only necessary when you need the per-tick tally:
+
+```sh
+curl -s https://blueagent.dev/api/acp/revenue | jq '{configured, total_jobs, expire_streak}'
+```
 
 ---
 
@@ -253,7 +281,9 @@ then `GET /api/cron/acp-poll` → `configured: true`, `errors: 0`.
 
 ## Open items
 
+- **Dashboard is behind the code.** `side` is live in the seller but the Job's Step-2
+  Requirements still list three fields, and the description still says buy side. Until
+  someone edits the wizard, sell works for a buyer who reads this doc and not for one
+  who reads the listing. Add `side` (String, not required) and drop the buy-side claim.
 - Fix the ACP agent profile description — it still carries a Blue Chat line that does
   not belong on an agent-facing listing.
-- Decide: expose `configured` on `/api/acp/revenue`.
-- Decide: wire `side` through, or keep the offering buy-side only.

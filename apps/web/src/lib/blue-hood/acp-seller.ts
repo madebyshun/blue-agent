@@ -51,6 +51,7 @@ import {
   updateJobStatus,
   acquireSubmitLock,
   type AcpSubjectChain,
+  type AcpSubjectSide,
 } from "@/lib/blue-hood/acp-jobs";
 import { computeExecutionPlan, type ExecPlan } from "@/lib/blue-hood/execution-plan";
 import { findByTicker } from "@/lib/robinhood/rwa-registry";
@@ -157,7 +158,7 @@ function lenientJson(raw: string): Record<string, unknown> | null {
 }
 
 /**
- * Pull the `{ ticker, size_usd, chain? }` requirement from a session. Tries the
+ * Pull the `{ ticker, size_usd, chain?, side? }` requirement from a session. Tries the
  * job description first (populated by hydration), then the latest
  * requirement-shaped message entry. Returns null when the payload is missing or
  * malformed → the caller reject-incompletes.
@@ -185,9 +186,43 @@ function normalizeChain(v: unknown): AcpSubjectChain {
   return "unknown";
 }
 
+/**
+ * Which side the buyer is pricing. Absent → `"buy"`, matching every job sold
+ * before sell support existed, so no in-flight buyer changes behaviour.
+ *
+ * An UNRECOGNISED value returns `"unknown"` and gets rejected rather than
+ * falling back to `"buy"`. The engine itself coerces anything non-`"sell"` to
+ * `"buy"` (`execution-plan.ts:273`), so a silent default here would take money
+ * for a buy plan from someone who typed `"short"` and meant to exit — the same
+ * shape of bug as answering a Base ticker off the Robinhood desk. Rejecting is
+ * free; a wrong answer the buyer paid escrow for is not.
+ *
+ * ⚠️ MEASURED 2026-09-25, NVDA @ $25k: a buy plan and a sell plan differ in
+ * exactly ONE of 39 leaf fields — `side` itself. The engine's first-order impact
+ * is `size/(one_side + size)` against the same reserve, which is genuinely
+ * direction-symmetric under xy=k, so route, legs and slippage are identical by
+ * construction and not by oversight. What this wiring buys is an ACCURATE
+ * RECEIPT, not new analysis: before it, a job asking for `"sell"` was answered
+ * with a plan stamped `side: "buy"`, and one asking for `"short"` was silently
+ * priced as a buy. Do not let the listing imply we model sell-side effects the
+ * engine does not compute — if that ever becomes true, it will be a change in
+ * `execution-plan.ts`, not here.
+ */
+function normalizeSide(v: unknown): AcpSubjectSide {
+  const s = String(v ?? "").trim().toLowerCase();
+  if (!s) return "buy"; // absent → the historical default (stated, not assumed)
+  if (s === "buy" || s === "sell") return s;
+  return "unknown";
+}
+
 function extractRequirement(
   session: JobSession,
-): { ticker: string; size_usd: number; chain: AcpSubjectChain } | null {
+): {
+  ticker: string;
+  size_usd: number;
+  chain: AcpSubjectChain;
+  side: AcpSubjectSide;
+} | null {
   const sources: string[] = [];
   const desc = session.job?.description;
   if (desc) sources.push(desc);
@@ -207,7 +242,10 @@ function extractRequirement(
     const ticker = String(obj.ticker ?? obj.symbol ?? "").trim();
     const size = Number(obj.size_usd ?? obj.sizeUsd ?? obj.size);
     const chain = normalizeChain(obj.chain ?? obj.chain_id ?? obj.chainId);
-    if (ticker && Number.isFinite(size) && size > 0) return { ticker, size_usd: size, chain };
+    const side = normalizeSide(obj.side ?? obj.direction ?? obj.action);
+    if (ticker && Number.isFinite(size) && size > 0) {
+      return { ticker, size_usd: size, chain, side };
+    }
   }
   return null;
 }
@@ -230,7 +268,10 @@ function grossUsdcFromJob(session: JobSession): number | undefined {
 function buildDeliverable(cfg: AcpSellerConfig, plan: ExecPlan): string {
   return JSON.stringify({
     offering: cfg.offeringName,
-    version: "1.1",
+    // 1.1 → 1.2: `plan.side` could only ever be "buy"; it can now be "sell".
+    // The shape is unchanged, but the version field exists so a buyer can pin
+    // what it will receive, and a value domain that widens is exactly that.
+    version: "1.2",
     chain: "robinhood",
     chain_id: 4663,
     generated_at: new Date().toISOString(),
@@ -267,6 +308,7 @@ async function handleSession(
     // the accept path, the ledger could show a rejection with no way to tell
     // whether the buyer meant Base or sent junk.
     subject_chain: req?.chain,
+    side: req?.side,
     size_usd: req?.size_usd,
     price_usdc: cfg.price,
   });
@@ -296,6 +338,12 @@ async function handleSession(
         tally.rejected_input++;
         return;
       }
+      if (req.side === "unknown") {
+        await session.reject(`unsupported side — send "buy" or "sell" (omit the field for "buy")`);
+        await updateJobStatus(jobId, "rejected", { error: "unsupported_side", side: req.side });
+        tally.rejected_input++;
+        return;
+      }
       if (!findByTicker(req.ticker)) {
         await session.reject(`unknown ticker "${req.ticker}" — not a Robinhood-Chain RWA token`);
         await updateJobStatus(jobId, "rejected", { error: "unknown_ticker" });
@@ -308,6 +356,7 @@ async function handleSession(
         ticker: req.ticker,
         size_usd: req.size_usd,
         subject_chain: req.chain,
+        side: req.side,
       });
       tally.budget_proposed++;
       return;
@@ -336,6 +385,14 @@ async function handleSession(
         tally.rejected_input++;
         return;
       }
+      // Repeated here for the same reason as the chain gate above: a job first
+      // seen at `funded` never ran the `open` branch at all.
+      if (req.side === "unknown") {
+        await session.reject(`unsupported side at funding — send "buy" or "sell"`);
+        await updateJobStatus(jobId, "rejected", { error: "unsupported_side", side: req.side });
+        tally.rejected_input++;
+        return;
+      }
       // Exactly-once: only one tick may ever submit this job.
       const won = await acquireSubmitLock(jobId);
       if (!won) {
@@ -345,7 +402,7 @@ async function handleSession(
       await updateJobStatus(jobId, "funded");
 
       const plan = await withDeadline(
-        computeExecutionPlan({ ticker: req.ticker, size_usd: req.size_usd }),
+        computeExecutionPlan({ ticker: req.ticker, size_usd: req.size_usd, side: req.side }),
         INTERNAL_DEADLINE_MS,
       );
       if (!plan) {
@@ -357,7 +414,11 @@ async function handleSession(
       }
       if (plan.ok) {
         await session.submit(buildDeliverable(cfg, plan));
-        await updateJobStatus(jobId, "submitted", { ticker: plan.ticker, size_usd: plan.size_usd });
+        await updateJobStatus(jobId, "submitted", {
+          ticker: plan.ticker,
+          size_usd: plan.size_usd,
+          side: plan.side, // from the PLAN, not the request — what we actually priced
+        });
         tally.delivered++;
         return;
       }
