@@ -11,6 +11,7 @@
 import { NextResponse } from "next/server";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { HANDLERS }    from "@/app/api/x402/_handlers";
+import { wireSchema }  from "@/lib/tool-wire-schema";
 
 export const runtime = "nodejs";
 // Vercel kills serverless functions at 60s by default — explicit budget so
@@ -75,13 +76,13 @@ export async function GET() {
       priceUsdcUnits: priceUnits(t.price),
       endpoint: `${BASE}/api/x402/${t.id}`,
       method: "POST",
-      input: {
-        type: "object",
-        properties: Object.fromEntries(
-          t.inputs.map(i => [i.key, { type: "string", description: i.label }])
-        ),
-        required: t.inputs.filter(i => i.required).map(i => i.key),
-      },
+      // The WIRE shape, derived by running t.x402Body — not `inputs[].key`,
+      // which is the Hub form and differs from the wire for 18 of these tools.
+      // See lib/tool-wire-schema.ts: publishing the form meant an agent could
+      // POST exactly what this endpoint told it to, have every field ignored,
+      // and still pay. `fields` is dropped here because JSON Schema is what a
+      // caller consumes; the doc generator uses it.
+      input: (({ fields: _fields, ...schema }) => schema)(wireSchema(t)),
     }));
 
   return NextResponse.json(

@@ -419,14 +419,17 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     agentType: "composite",
     category: "intelligence",
     skillId: "digest",
-    inputs: [
-      { key: "focus", label: "Focus area (optional)", placeholder: "e.g. DeFi protocols, AI agents, gaming" },
-    ],
+    // No inputs, and that is the handler's real shape, not an omission:
+    // `_handlers/ecosystem-digest.ts` is `handler(): Promise<Response>` — it
+    // takes no `req`, so it cannot read a body under any field name. A "Focus
+    // area" box was advertised here until 2026-09-24 and fed `{ focus }` over
+    // the wire; the handler never saw it, on the Hub or from a paying agent.
+    inputs: [],
     isComposite: true,
     price: "$0.20",
     priceUSDC: 200000,
     x402Url: `${X402_BASE}/ecosystem-digest`,
-    x402Body: (v) => ({ focus: v.focus ?? "" }),
+    x402Body: () => ({}),
   },
   {
     id: "market-fit",
@@ -733,15 +736,22 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     agentName: "Blue + Aeon",
     agentType: "composite",
     category: "trading",
+    // `min_mcap` is the ONLY field the handler reads (`_handlers/token-momentum-
+    // scanner.ts` — `body.min_mcap ?? searchParams.get("min_mcap")`). Until
+    // 2026-09-24 this advertised "Timeframe" and "Filter", which x402Body folded
+    // into `{ chain, context }`; the handler reads neither, so both boxes were
+    // inert on the Hub and in the published catalog. The scan window and the
+    // filtering are decided inside the handler, not by the caller — so the
+    // honest surface is one numeric floor, not two free-text boxes that imply
+    // control the tool does not offer.
     inputs: [
-      { key: "timeframe", label: "Timeframe", placeholder: "e.g. 1h, 4h, 24h" },
-      { key: "filter", label: "Filter", placeholder: "e.g. min $50k volume, specific narrative, mcap range" },
+      { key: "min_mcap", label: "Minimum market cap (USD)", placeholder: "e.g. 50000" },
     ],
     isComposite: true,
     price: "$0.20",
     priceUSDC: 200000,
     x402Url: `${X402_BASE}/token-momentum-scanner`,
-    x402Body: (v) => ({ chain: "base", context: `${v.timeframe ?? ""} ${v.filter ?? ""}`.trim() }),
+    x402Body: (v) => ({ min_mcap: Number(v.min_mcap ?? 0) || 0 }),
   },
 
   // ── Content ─────────────────────────────────────────────────────────────────
