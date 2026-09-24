@@ -516,8 +516,20 @@ export default function StatsView({ inShell = false }: { inShell?: boolean }) {
                       Registry Status
                     </p>
                     <div className="flex flex-col gap-2.5">
+                      {/*
+                        The ToolRegistry note used to read "64 tools · Base" while
+                        /.well-known/agent.json claimed 13 for the SAME registry —
+                        one fact, two numbers, and neither was derived from
+                        anything. On-chain only exposes a global `toolCount()`
+                        (729 across all publishers, measured 2026-09-18); there is
+                        no per-owner getter in any ABI we hold, so OUR share of it
+                        is not a number either surface can honestly state. Both
+                        now drop the count and link to Basescan instead — a reader
+                        who wants the figure can read the chain. Missing data is
+                        "unknown", never a plausible-looking guess.
+                      */}
                       {[
-                        { label: "ERC-8257 ToolRegistry",  note: "64 tools · Base",          href: "https://basescan.org/address/0x265BB2DBFC0A8165C9A1941Eb1372F349baD2cf1" },
+                        { label: "ERC-8257 ToolRegistry",  note: "Base mainnet",            href: "https://basescan.org/address/0x265BB2DBFC0A8165C9A1941Eb1372F349baD2cf1" },
                         { label: "agentic.market",          note: "1 service endpoint",       href: "https://agentic.market/services/blueagent-dev" },
                         { label: "CDP Bazaar",              note: "merchant indexed",         href: "https://api.cdp.coinbase.com/platform/v2/x402/discovery/merchant?payTo=0x02950ad38ada1d599375bd447e080cd404809205" },
                         { label: "OpenAPI spec",            note: "/.well-known/openapi.json",href: "https://blueagent.dev/.well-known/openapi.json" },
