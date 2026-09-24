@@ -19,8 +19,14 @@
  *      env var is dead as an inference credential, and both packages are
  *      `private: true` in this monorepo — `npm i` returns E404. So `blue build`
  *      was reliably emitting code that cannot install and could not authenticate
- *      if it did. Renamed to `blue-agent-platform.md`; see registry.ts for why a
+ *      if it did. Renamed to `llm-and-x402.md`; see registry.ts for why a
  *      rename rather than a rewrite was the only fix that reaches existing users.
+ *      (This paragraph said `blue-agent-platform.md` until 2026-09-25. That name
+ *      exists only on the unmerged branch `fix/core-virtuals-runtime` — 302c3aec,
+ *      not an ancestor of main — because the work landed instead via 102fbe39 under
+ *      the name `llm-and-x402.md`. So the file policing phantom filenames named one
+ *      for a week. Check 4 below is the mechanism; this line is the reminder that
+ *      prose in this header is not covered by it.)
  *
  *   2. `SKILL_REGISTRY` named `base-4337-aa` for idea/build/audit. No file of that
  *      name has ever existed. It did not throw: `loadSkill` warns and returns "",
@@ -50,18 +56,28 @@
  *    a red ✗ and `process.exit(1)` on a HEALTHY install. Renaming a skill
  *    without editing that list breaks the tool whose entire job is to tell the
  *    user nothing is broken.
- * 4. Dead hosts / phantom packages / stale model ids inside CODE — fences in
+ * 4. `/docs/skills` claiming a file `blue init` does not copy, or omitting one it
+ *    does. MEASURED 2026-09-25: `SKILLS_DOCS` listed 35 files, builder shipped 34,
+ *    and the two sets differed in BOTH directions — `x402-tools.md` (a name with
+ *    no file in any commit, ever) and `token-launch-guide.md` (real, but root-only
+ *    web grounding) were advertised as installable, while `llm-and-x402.md` —
+ *    shipped AND injected into `blue build` — was listed nowhere. Neither number
+ *    was reachable by reading one file, which is why a human reviewer signed off
+ *    on both for two months. Same class: a skill name a reader is told to open
+ *    must be a skill the reader will have, which is also why the cross-references
+ *    inside shipped skills are checked here.
+ * 5. Dead hosts / phantom packages / stale model ids inside CODE — fences in
  *    skills, and template sources verbatim. Prose may and should name a dead
  *    thing (that is how the history above stays legible); code may not, because
  *    code gets copied.
- * 5. `/api/x402/<id>` paths in that same code. A price and a call site that
+ * 6. `/api/x402/<id>` paths in that same code. A price and a call site that
  *    resolve to a 404 are worse than none — the caller budgets against them.
- * 6. A published package depending on a `private: true` workspace package.
+ * 7. A published package depending on a `private: true` workspace package.
  *    It resolves locally forever and E404s for every user.
  *
  * SCOPE, STATED HONESTLY
  * ----------------------
- * Checks 4 and 5 scan the SHIPPED set only: `packages/builder/skills/**` (the
+ * Checks 5 and 6 scan the SHIPPED set only: `packages/builder/skills/**` (the
  * files in builder's `files[]`, which `blue init` copies) plus
  * `packages/builder/templates/**` (scaffolded verbatim by `blue new`), plus any
  * root `skills/` file named in `SKILL_REGISTRY`. Root-only files that are
@@ -82,6 +98,7 @@
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { AGENT_TOOLS } from "../src/lib/agent-tools";
+import { SKILLS_DOCS } from "../src/app/docs/_data";
 
 const REPO = join(__dirname, "..", "..", ".."); // scripts → web → apps → repo root
 const ROOT_SKILLS = join(REPO, "skills");
@@ -120,8 +137,8 @@ function walk(dir: string, out: string[] = []): string[] {
 /**
  * Concatenate only the fenced code blocks of a markdown file.
  *
- * This distinction is the whole point of checks 4 and 5: `blue-agent-platform.md`
- * has to be able to SAY "llm.bankr.bot is not the gateway" without that sentence
+ * This distinction is the whole point of checks 5 and 6: `llm-and-x402.md` has to
+ * be able to SAY "llm.bankr.bot is not the gateway" without that sentence
  * tripping the rule that exists to stop anyone CALLING llm.bankr.bot.
  */
 function fencedCode(md: string): string {
@@ -232,14 +249,60 @@ check(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4 + 5. Nothing dead inside shipped CODE.
+// 4. /docs/skills advertises exactly what `blue init` copies.
+//
+// SKILLS_DOCS is imported, not text-parsed: it lives inside apps/web, so a real
+// import is available and a rename that breaks it fails at `tsc` instead of
+// silently matching zero lines. Equality, not subset, in both directions — an
+// entry here is a promise the file lands in the reader's ~/.blue-agent/skills/,
+// and a shipped file missing from the list is a skill nobody is told they have.
+//
+// The same invariant covers cross-references: a shipped skill that ends with
+// "Related skills: `foo.md`" is telling a user to open a file, and that file has
+// to be one `blue init` gave them. `aerodrome-dex-guide.md` pointed at
+// `token-launch-guide.md`, which is root-only — the reader would have found
+// nothing on disk.
+// ─────────────────────────────────────────────────────────────────────────────
+check("SKILLS_DOCS loaded", SKILLS_DOCS.length > 0, `${SKILLS_DOCS.length} entries`);
+
+const docFiles = SKILLS_DOCS.map((s) => s.file).sort();
+const docPhantom = docFiles.filter((f) => !pkgSkillFiles.includes(f));
+const docUnlisted = pkgSkillFiles.filter((f) => !docFiles.includes(f));
+check(
+  "SKILLS_DOCS == packages/builder/skills/*.md",
+  docPhantom.length === 0 && docUnlisted.length === 0,
+  docPhantom.length || docUnlisted.length
+    ? `advertised-but-not-shipped: [${docPhantom.join(", ")}] · shipped-but-unadvertised: [${docUnlisted.join(", ")}]`
+    : `${docFiles.length} entries match`,
+);
+
+const crossRefs: Array<[string, string]> = [];
+for (const f of pkgSkillFiles) {
+  for (const line of read(join(PKG_SKILLS, f)).split("\n")) {
+    if (!/Related skills:/.test(line)) continue;
+    for (const m of line.matchAll(/`([^`]+\.md)`/g)) crossRefs.push([f, m[1]]);
+  }
+}
+check("shipped skills' cross-references parsed", crossRefs.length > 0, `${crossRefs.length} references`);
+
+const danglingRefs = crossRefs.filter(([, target]) => !pkgSkillFiles.includes(target));
+check(
+  "every 'Related skills' reference resolves inside the shipped set",
+  danglingRefs.length === 0,
+  danglingRefs.length
+    ? danglingRefs.map(([from, to]) => `${from} → ${to}`).join(" · ")
+    : `${crossRefs.length} references resolve`,
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5 + 6. Nothing dead inside shipped CODE.
 //
 // SHIPPED_DOCS = what `blue init` copies + what the registry injects.
 // SHIPPED_CODE = what `blue new` scaffolds, taken verbatim (a template's own
 // comments get copied into the user's repo, so they are code here too).
 // ─────────────────────────────────────────────────────────────────────────────
 // An unresolvable registry name is already a FAIL in check 1; filtering here keeps
-// checks 4+5 running on the rest instead of dying at the first missing file.
+// checks 5+6 running on the rest instead of dying at the first missing file.
 const SHIPPED_DOCS = [
   ...pkgSkillFiles.map((f) => join(PKG_SKILLS, f)),
   ...registryNames.map((n) => join(ROOT_SKILLS, `${n}.md`)),
@@ -299,7 +362,7 @@ check(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 6. No published package depends on one we never publish.
+// 7. No published package depends on one we never publish.
 // ─────────────────────────────────────────────────────────────────────────────
 const pkgDirs = readdirSync(join(REPO, "packages")).filter((d) =>
   existsSync(join(REPO, "packages", d, "package.json")),
