@@ -1,0 +1,324 @@
+{
+  "_meta": {
+    "description": "Frozen, verified on-chain pledge ledger. Pledge window closed 2026-08-24T00:00:00Z; the eligible set is final.",
+    "source": "On-chain ERC-20 Transfer logs into the receiving wallet, both chains, deadline-filtered (timestamp < deadline).",
+    "receivingWallet": "0xA4660F6b1d939358042Abd8111735a1D6F149845",
+    "deadlineIso": "2026-08-24T00:00:00Z",
+    "generatedAt": "2026-09-19T15:41:57.419Z",
+    "base": {
+      "token": "0xF895783B2931c919955E18B5e3343e7C7c456bA3",
+      "chainId": 8453,
+      "transfers": 19,
+      "wallets": 16,
+      "totalRawUnits": "4163047402974483597022721674",
+      "totalTokens": "4,163,047,402.974483597022721674"
+    },
+    "rh": {
+      "token": "0x820D283f7b9b00BC8874ef9E1910bBe8912cB127",
+      "chainId": 4663,
+      "transfers": 18,
+      "wallets": 16,
+      "totalRawUnits": "351010702417858252244455425",
+      "totalTokens": "351,010,702.417858252244455425"
+    },
+    "lateTransfersExcluded": 0
+  },
+  "transfers": [
+    {
+      "chain": "base",
+      "wallet": "0xf31f59e7b8b58555f7871f71973a394c8f1bffe5",
+      "amount": "3250531000000000000000000",
+      "txHash": "0x4dc278ef174552315f7d44e21383b479e2940deb32cdc8c9e4ba7f671515ad2c",
+      "blockNumber": 49778740,
+      "timestamp": 1786346827
+    },
+    {
+      "chain": "base",
+      "wallet": "0x5141057bbeb9320e48c79418df72189f06ad58cd",
+      "amount": "90532069182254341506482572",
+      "txHash": "0xba6c039911988d599adccfd8c8b12be15495e56ce48c0fd9276a8bfabff44440",
+      "blockNumber": 49841059,
+      "timestamp": 1786471465
+    },
+    {
+      "chain": "base",
+      "wallet": "0x51d9cef1323f4b35308fb5bd9a56ac89c5a6a925",
+      "amount": "1297423898234082851193193",
+      "txHash": "0xb1260a68227fa0a25e43b43e41303125cdbd9b1b8da20d3f6d6b6a78e5fc4ae9",
+      "blockNumber": 49841236,
+      "timestamp": 1786471819
+    },
+    {
+      "chain": "base",
+      "wallet": "0xff8d75c31230f5509f22b6a8513b31efb73e5202",
+      "amount": "9000000747479813225884061",
+      "txHash": "0x5fac75b90ffa4f6e64cacbf2bd2a8ac401033e76a0727bf63c4dd396b044705c",
+      "blockNumber": 49846411,
+      "timestamp": 1786482169
+    },
+    {
+      "chain": "base",
+      "wallet": "0x590c2b9ba2956d5d9c9056fa9851eab6b6bd205b",
+      "amount": "1000000000000000000000000",
+      "txHash": "0x3681d78adbec8b34fb80a2bbc1ead6464f8d2746b3b1c2b65ed37da8156ed4af",
+      "blockNumber": 49855351,
+      "timestamp": 1786500049
+    },
+    {
+      "chain": "base",
+      "wallet": "0x590c2b9ba2956d5d9c9056fa9851eab6b6bd205b",
+      "amount": "119210741463447632273411308",
+      "txHash": "0xb1ca6a37ecf887e79b0968c0c362e629f1029d18bb510f7041c10fa3543703a4",
+      "blockNumber": 49856244,
+      "timestamp": 1786501835
+    },
+    {
+      "chain": "base",
+      "wallet": "0x28121144edcad957f83a241e61cd1ddc9bba5d09",
+      "amount": "178816112195171448410116963",
+      "txHash": "0x57510b4ad67c6f321731c4612916e2e980886c4728bb306cfa17fa9e0d9c565f",
+      "blockNumber": 49860882,
+      "timestamp": 1786511111
+    },
+    {
+      "chain": "base",
+      "wallet": "0x590c2b9ba2956d5d9c9056fa9851eab6b6bd205b",
+      "amount": "178816112195171448410116963",
+      "txHash": "0x2673b46b874f64a133b1dffb4cfe038a77d4ff885df530c2cc5438c9508ee407",
+      "blockNumber": 49861042,
+      "timestamp": 1786511431
+    },
+    {
+      "chain": "base",
+      "wallet": "0xad9fcb441d2da02b3e3929ba6fde7311f4609e72",
+      "amount": "364355848980366715586850239",
+      "txHash": "0xe7cab215d8c8e653c03046646d9b78b35b45abf0e65116e5e064163cd657cb39",
+      "blockNumber": 49935947,
+      "timestamp": 1786661241
+    },
+    {
+      "chain": "base",
+      "wallet": "0x316b2449ba8d409a86b0fdcefd016d054a28bfc9",
+      "amount": "184709254901696192650221704",
+      "txHash": "0x35b3b1261e3092e27b119a8b118aaa425b8ceac5deb50e3e2dfe02e4a8702ccc",
+      "blockNumber": 49935975,
+      "timestamp": 1786661297
+    },
+    {
+      "chain": "base",
+      "wallet": "0x0fd14bb2d88ada3f5d7ccfef3d39e5216313ef2b",
+      "amount": "304574786348173019444303593",
+      "txHash": "0x68fa4b05750cfdc285fcc56bceb966e8cb23eb8ce8c148ae3e27c16fac0cd4a2",
+      "blockNumber": 49935991,
+      "timestamp": 1786661329
+    },
+    {
+      "chain": "base",
+      "wallet": "0xe57d16b4363641a557ca27576a5fb86787c45a1e",
+      "amount": "60366398820036874358869347",
+      "txHash": "0xbdfdae0dad39ffef6d0daffcbd52d6fd8bcf9814c04272f8d185dad2f6727b3b",
+      "blockNumber": 49936009,
+      "timestamp": 1786661365
+    },
+    {
+      "chain": "base",
+      "wallet": "0x7c913b0af9b4a9424599caba6472f2da3fe969ca",
+      "amount": "53192544617229334957173286",
+      "txHash": "0x67393be2d9a365fdedafafaa4196b82a9d70c2a1582a8429f8ab9d61ba37fba5",
+      "blockNumber": 49936081,
+      "timestamp": 1786661509
+    },
+    {
+      "chain": "base",
+      "wallet": "0xcaf1f19c27787324dee5e243c81627b2e7c59a7f",
+      "amount": "55168390053927830012967044",
+      "txHash": "0xd4f73b15346c61b3805e26a9b00f7b8efaf9a9b4d90bb3f76584d16548bfb8f3",
+      "blockNumber": 49936151,
+      "timestamp": 1786661649
+    },
+    {
+      "chain": "base",
+      "wallet": "0x0409a3300d4686606415b395c065a5f46a21d552",
+      "amount": "869349987371429951967948303",
+      "txHash": "0xb8ec6012b7ea39a3425a8945f71bf302900d2a4f1dc48b5d83900c35a373aeff",
+      "blockNumber": 49936210,
+      "timestamp": 1786661767
+    },
+    {
+      "chain": "base",
+      "wallet": "0x092b41f2ed01128ee76b5484922d15218c726d73",
+      "amount": "385153488801556162990500052",
+      "txHash": "0x1f7bc12ed46a6c6ff2499711b798c7914844711548d50af5110973cf079d0663",
+      "blockNumber": 49936225,
+      "timestamp": 1786661797
+    },
+    {
+      "chain": "base",
+      "wallet": "0x51d9cef1323f4b35308fb5bd9a56ac89c5a6a925",
+      "amount": "3275425745967118129445769",
+      "txHash": "0x8fec04aa5b4893d0e8add644f954462a3472cf13b79c4a3c5a80c4a45feff91c",
+      "blockNumber": 49998865,
+      "timestamp": 1786787077
+    },
+    {
+      "chain": "base",
+      "wallet": "0x0db14dc82cbb0ce820f65c9796e0bc9e19ef08bf",
+      "amount": "29939714057126554055913039",
+      "txHash": "0x70b52c7b2bcf93c201b2a899b49bc306a8887d24746733d84a0871470fd9172e",
+      "blockNumber": 50085808,
+      "timestamp": 1786960963
+    },
+    {
+      "chain": "base",
+      "wallet": "0x49fd193dc3ee6949821a1a09c8603807f959d787",
+      "amount": "1271038572595215076191324238",
+      "txHash": "0xb288324176456680d090c3932a33e689a43a3d43543f1054c24bc107cb2781fb",
+      "blockNumber": 50296861,
+      "timestamp": 1787383069
+    },
+    {
+      "chain": "rh",
+      "wallet": "0xd5c1dfc036f9911348ea8065f73c8123f4013fab",
+      "amount": "1000000000000000000000",
+      "txHash": "0xc38d5c9fff91f70f958283b8d210b0296dcacc735fcfa07dba7e0baa0103946f",
+      "blockNumber": 32913593,
+      "timestamp": 1786376437
+    },
+    {
+      "chain": "rh",
+      "wallet": "0xfac3890d6491900236298a1f50fe713f6854b2a0",
+      "amount": "29185847968123240168259247",
+      "txHash": "0x1f968d6f6680f867e5324aca1ada3a194f71b8daec18843c1191fd12738dbc29",
+      "blockNumber": 33842912,
+      "timestamp": 1786469416
+    },
+    {
+      "chain": "rh",
+      "wallet": "0xd4b04d12d946db4c0ac413e2769afbf4a86ef3ee",
+      "amount": "27761469489544752121050129",
+      "txHash": "0x6fb2e38347774afcae62be529929ecd45ea4f58f2377d7a253d838c5119b4c5b",
+      "blockNumber": 33843300,
+      "timestamp": 1786469455
+    },
+    {
+      "chain": "rh",
+      "wallet": "0xa7b413412138382575bfb7c782a2f70cadc27ad0",
+      "amount": "31973440245942873646105197",
+      "txHash": "0xd4c2778b114ebbd5d383e9ec8d43a1b93f18d3e3846e06def0692c36254c6d60",
+      "blockNumber": 33843388,
+      "timestamp": 1786469464
+    },
+    {
+      "chain": "rh",
+      "wallet": "0x1fe6cc1a7f6590de8180cff871bfd64f6b311ced",
+      "amount": "27172388163563733633617382",
+      "txHash": "0x603be1b03ca37d721b0d65eda822906c046db191d7bf1f06e30a0dfb1e067f9e",
+      "blockNumber": 33843479,
+      "timestamp": 1786469473
+    },
+    {
+      "chain": "rh",
+      "wallet": "0x474a4016a2d550b79423ff15735e444f59f64ee5",
+      "amount": "25281620692247898860650240",
+      "txHash": "0x14cf07b12277839f1b434479c46ea4c0f1afa222bee14c43c4853edf8556b995",
+      "blockNumber": 33843774,
+      "timestamp": 1786469503
+    },
+    {
+      "chain": "rh",
+      "wallet": "0x5d168e914790726333f8a1dc1683056af56f2fcb",
+      "amount": "7929180234376840902274897",
+      "txHash": "0x242ef01087a8d9cd98391b4b226d69b6393f0d1fd37db2bd8ead967678055fea",
+      "blockNumber": 33900092,
+      "timestamp": 1786475122
+    },
+    {
+      "chain": "rh",
+      "wallet": "0x33f5766755cae19a2a4615bca9f86183f369195a",
+      "amount": "76693505026923007762275592",
+      "txHash": "0x765e16b02de04a9780c56ef87f5fdedbdc98451822e3c2bdabbb8557ac21dd60",
+      "blockNumber": 33993147,
+      "timestamp": 1786484412
+    },
+    {
+      "chain": "rh",
+      "wallet": "0x48401c696fcfc7e5cfeb8b7aec4f3f0fbb011374",
+      "amount": "11065683010549780411001548",
+      "txHash": "0xb76b61679d0e77d3465f2ee933215f718f49e88f950e9f6699bd0dff712103ef",
+      "blockNumber": 34601280,
+      "timestamp": 1786544994
+    },
+    {
+      "chain": "rh",
+      "wallet": "0xca08041c511915a392205b26fd4542b713788632",
+      "amount": "3772397575669899086307618",
+      "txHash": "0x4b349cbc886fff22bbfa27c256cd96b86bdfedb8a886167540a720f35d8094b5",
+      "blockNumber": 34792270,
+      "timestamp": 1786564118
+    },
+    {
+      "chain": "rh",
+      "wallet": "0xd5c1dfc036f9911348ea8065f73c8123f4013fab",
+      "amount": "18384623352477971670737564",
+      "txHash": "0x635029702987e48b3710afab40717d1a2001ef646a5204a3edc8b2aa7e3db757",
+      "blockNumber": 36767543,
+      "timestamp": 1786762077
+    },
+    {
+      "chain": "rh",
+      "wallet": "0x6c6d7d3fcce1a86695a4a4ef89becaefd9ffc5a9",
+      "amount": "18245837807541834738853483",
+      "txHash": "0xf9d00f9ebb2d5bc2eec515676c03747d3622e66c4ecf18e54be9b0bc3e4f5586",
+      "blockNumber": 36874604,
+      "timestamp": 1786772816
+    },
+    {
+      "chain": "rh",
+      "wallet": "0x3dcd3430c0f99b75f7646340fc3b0e5981d795e3",
+      "amount": "16540528940027230000000000",
+      "txHash": "0x30fee59323292fedef94e7726f00b5ea05fa81401ef155676d071c9ab350f2c1",
+      "blockNumber": 44000246,
+      "timestamp": 1787487688
+    },
+    {
+      "chain": "rh",
+      "wallet": "0x914b88593387c775df7ff2a87a135a50f1d9d59d",
+      "amount": "155745077389948891271624",
+      "txHash": "0x2b686a1ae480f6111a3f330c8443611a4cb06e314a28e3429ceb4269553079e1",
+      "blockNumber": 44185176,
+      "timestamp": 1787506250
+    },
+    {
+      "chain": "rh",
+      "wallet": "0x5d727d08d78b08f93fe75211f812295552fe8250",
+      "amount": "3483815105387230000000000",
+      "txHash": "0x48a7c8162eb8cf40026806d70ba4769a66d32d246a66af8beb2fcdc7a01d01ca",
+      "blockNumber": 44211671,
+      "timestamp": 1787508907
+    },
+    {
+      "chain": "rh",
+      "wallet": "0xcc774f88fb903c6fca72d028c89b5f36cfde0c3c",
+      "amount": "18318892048504160000000000",
+      "txHash": "0xd61706e8453bee590342afd9fc01b349b7f1c5bc5f082dd73dce32a2900c8d53",
+      "blockNumber": 44212360,
+      "timestamp": 1787508977
+    },
+    {
+      "chain": "rh",
+      "wallet": "0xaacc3ad494cd0a3848d51024db76c71b1eca6ce3",
+      "amount": "31566665228790550000000000",
+      "txHash": "0x92e54c27d707435c21846b18adc983fcdab834dc6404ac358bcc9acb513f9d4b",
+      "blockNumber": 44240718,
+      "timestamp": 1787511820
+    },
+    {
+      "chain": "rh",
+      "wallet": "0x48401c696fcfc7e5cfeb8b7aec4f3f0fbb011374",
+      "amount": "3478062450797300352050904",
+      "txHash": "0xf84fd4b7d9c9b589baa02770987ce15a2f0913bd1942156b97939daa4a6ddf69",
+      "blockNumber": 44256056,
+      "timestamp": 1787513357
+    }
+  ]
+}

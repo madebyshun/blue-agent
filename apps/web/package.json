@@ -21,6 +21,7 @@
     "test:series": "tsx scripts/series-persist-test.ts",
     "test:series-api": "tsx scripts/series-endpoint-test.ts",
     "test:pledge": "tsx scripts/pledge-ledger-test.ts",
+    "test:frozen": "tsx scripts/frozen-transfers-test.ts",
     "test:sales": "tsx scripts/sale-batches-test.ts",
     "test:workspace-sync": "tsx scripts/workspace-sync-test.ts",
     "pledge:verify": "tsx scripts/pledge-verify.ts",

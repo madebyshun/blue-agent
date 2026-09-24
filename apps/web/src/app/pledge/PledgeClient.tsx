@@ -217,7 +217,7 @@ function ChainCard({ snap, chain }: { snap: LedgerSnapshot; chain: ChainKey }) {
       </div>
 
       <div className="mt-4 font-mono text-[10px] text-slate-600 leading-relaxed">
-        read via {s.source === "none" ? "—" : s.source}
+        read via {s.source === "none" ? "—" : s.source === "frozen" ? "verified snapshot (window closed)" : s.source}
         {s.supplySource === "pinned" ? " · supply from fallback constant, not the contract" : ""}
         {s.truncated ? " · LIST TRUNCATED at the page cap" : ""}
       </div>

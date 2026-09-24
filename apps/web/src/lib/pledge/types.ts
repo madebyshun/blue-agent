@@ -27,7 +27,7 @@ export interface PledgeTx {
  * `truncated` exists only for the hard page cap and is surfaced to the UI.
  */
 export type SourceResult =
-  | { ok: true; txs: PledgeTx[]; source: "indexer" | "rpc"; truncated: boolean }
+  | { ok: true; txs: PledgeTx[]; source: "indexer" | "rpc" | "frozen"; truncated: boolean }
   | { ok: false; error: string };
 
 export interface WalletPledge {
@@ -64,7 +64,7 @@ export interface ChainSummary {
   walletCount: number;
   txCount: number;
   /** Which path produced these numbers. */
-  source: "indexer" | "rpc" | "none";
+  source: "indexer" | "rpc" | "frozen" | "none";
   /**
    * `ok`       — read succeeded, numbers below are current.
    * `degraded` — read FAILED. Numbers below are whatever was last known, or

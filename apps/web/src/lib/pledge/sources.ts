@@ -28,6 +28,7 @@
 import { createPublicClient, http, parseAbiItem, getAddress } from "viem";
 import { CHAINS, RECEIVING_WALLET, type ChainKey } from "./config";
 import type { PledgeTx, SourceResult } from "./types";
+import { fetchFrozenChain } from "./frozen";
 
 const TRANSFER_EVENT = parseAbiItem(
   "event Transfer(address indexed from, address indexed to, uint256 value)",
@@ -288,16 +289,32 @@ export async function fetchFromRpc(chain: ChainKey): Promise<SourceResult> {
 }
 
 /**
- * Indexer first, RPC second. Returns the RPC error only if BOTH fail, since
- * that is the case the caller has to surface as degraded rather than empty.
+ * The single chokepoint every consumer of pledge data reads through.
+ *
+ * It serves the FROZEN, committed ledger (`frozen.ts`), NOT a live read — and
+ * that is deliberate, not a degradation:
+ *
+ *   • The pledge window CLOSED 2026-08-24 (config.ts). The eligible set is
+ *     final; nothing new can land, so there is nothing for a live scan to find.
+ *   • The live sources were, at close, unreliable in the one direction this
+ *     page cannot tolerate. Moralis 401'd (key lapsed), Blockscout 403'd
+ *     (Cloudflare), Base RPC rate-limited, and the RH RPC returned a SHORT
+ *     list — 10 of 18 transfers. A silently short public ledger reads to a
+ *     holder as their pledge having been TAKEN; it was live in production
+ *     (RH: 10 wallets/10 txs against a true 16/18) and is the bug this fixes.
+ *
+ * The frozen set was reconstructed once, exhaustively, from on-chain Transfer
+ * logs on both chains — every range scanned, every row carrying its own tx
+ * hash and block timestamp, deadline-filtered, self-checked against the totals.
+ * It returns through the same `SourceResult` contract, so all downstream
+ * aggregation and rendering is unchanged; only the provenance differs, and it
+ * is reported honestly as `source: "frozen"`.
+ *
+ * The live adapters above are KEPT — `scripts/pledge-ledger-test.ts` drives
+ * `getLogsRange`, and they document exactly how the frozen set was derived so a
+ * future re-verification does not start from scratch. If the window is ever
+ * reopened, restore the indexer-first/RPC-second body preserved in git history.
  */
 export async function fetchChainTransfers(chain: ChainKey): Promise<SourceResult> {
-  const primary =
-    chain === "base" ? await fetchBaseFromMoralis() : await fetchRhFromBlockscout();
-  if (primary.ok) return primary;
-
-  const fallback = await fetchFromRpc(chain);
-  if (fallback.ok) return fallback;
-
-  return { ok: false, error: `${primary.error}; ${fallback.error}` };
+  return fetchFrozenChain(chain);
 }
