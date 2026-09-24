@@ -164,6 +164,7 @@ function archivedRedirect(pathname: string, search: string): NextResponse | null
  *   /micro[/…]    → app Hub                (micro-apps were the ancestors of Hub tools)
  *   /terminal[/…] → Blue Chat              (the browser terminal folded into /chat)
  *   /profile[/…]  → app dashboard          (self-management folded into the dashboard)
+ *   /docs/aeon-skills[/…] → /docs/skills   (the five Bankr-vendored skills were deleted)
  *
  * profile used to 307 from a page-level redirect() (temporary, and a 2-hop chain
  * through /app/dashboard). Handling it here makes it a single permanent 301
@@ -190,6 +191,23 @@ function culledRedirect(pathname: string): NextResponse | null {
   }
   if (pathname === "/profile" || pathname.startsWith("/profile/")) {
     return NextResponse.redirect(`https://${APP_HOST}/dashboard`, { status: 301 });
+  }
+  // /docs/aeon-skills joined 2026-09-25 with the Bankr purge. The five
+  // skills/aeon-*.md files it documented were vendored from BankrBot/skills and
+  // are deleted; one of the five (aeon-distribute-tokens) could only ever run
+  // through the Bankr Wallet API, which 403s at the account level.
+  //
+  // It 301s to /docs/skills, NOT to the app home like archivedRedirect() does:
+  // the page answered 200 in production, so the URL is in the wild, and the
+  // reader who follows it wants the skill catalogue — dumping them in /chat
+  // would be a redirect that resolves without answering. The sibling page is
+  // the honest target.
+  //
+  // Do NOT confuse these skills with the Aeon KV pipeline (`aeon:<skill>` in
+  // api/_lib/aeon-kv.ts, read by 15 paid handlers). Same word, unrelated thing,
+  // untouched by this removal.
+  if (pathname === "/docs/aeon-skills" || pathname.startsWith("/docs/aeon-skills/")) {
+    return NextResponse.redirect(`https://${MAIN_HOST}/docs/skills`, { status: 301 });
   }
   return null;
 }

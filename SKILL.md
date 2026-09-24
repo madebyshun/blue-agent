@@ -286,7 +286,7 @@ measured on. If you need a total, measure the surface you are actually calling.
 
 ## Skills (grounding files)
 
-41 grounding files live in `skills/` and are loaded before LLM calls. The frequently-used core:
+36 grounding files live in `skills/` and are loaded before LLM calls. The frequently-used core:
 
 | Skill | Contents |
 |---|---|

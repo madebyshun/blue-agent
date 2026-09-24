@@ -66,10 +66,12 @@
  * `packages/builder/templates/**` (scaffolded verbatim by `blue new`), plus any
  * root `skills/` file named in `SKILL_REGISTRY`. Root-only files that are
  * neither shipped by builder nor injected by the registry are deliberately out
- * of scope here — `skills/aeon-distribute-tokens.md` documents the banned Bankr
- * write path on purpose and is being handled separately. Widening the scope
- * later is a one-line change to SHIPPED_DOCS; leaving it undeclared would be
- * the dishonest option.
+ * of scope here. That carve-out existed for `skills/aeon-distribute-tokens.md`,
+ * which named the banned Bankr write path on purpose; it and the other four
+ * `aeon-*.md` files were deleted on 2026-09-25, so the exemption now protects
+ * nothing in particular and is kept only as a statement of where the scope
+ * line sits. Widening it later is a one-line change to SHIPPED_DOCS; leaving
+ * it undeclared would be the dishonest option.
  *
  * Every absence assertion below is paired with a presence assertion on the
  * thing it parsed. An "assert absence" test that silently parses nothing is
@@ -178,9 +180,14 @@ for (const { task, names } of registryEntries) {
 // 2. The two skill trees agree.
 //
 // Subset, not equality: `skills/` legitimately holds files builder does not ship
-// (the five Aeon skills, the launch guides, a README). The invariant is that
-// anything builder DOES ship is byte-identical to the root copy, and that
-// builder never carries a file the root tree has never seen.
+// (the launch guides, a README). The invariant is that anything builder DOES
+// ship is byte-identical to the root copy, and that builder never carries a
+// file the root tree has never seen.
+//
+// This used to open the parenthetical with "the five Aeon skills"; those were
+// deleted 2026-09-25 with the Bankr purge. The subset relation is unchanged —
+// it was never load-bearing on them — but naming a deleted file as the reason
+// for a rule is how a rule outlives its reason.
 // ─────────────────────────────────────────────────────────────────────────────
 const pkgSkillFiles = mdFiles(PKG_SKILLS);
 check("packages/builder/skills is non-empty", pkgSkillFiles.length > 0, `${pkgSkillFiles.length} files`);

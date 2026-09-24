@@ -18,13 +18,24 @@ export default function SkillsDoc() {
         <code className="font-mono text-white">~/.blue-agent/skills/</code>. Load order:{" "}
         <code className="text-white">BLUE_AGENT_SKILLS_DIR</code> → <code className="text-white">~/.blue-agent/skills/</code> → monorepo <code className="text-white">skills/</code>.
       </P>
+      {/* The "+ 5 Aeon skills documented separately" sentence and its link to
+          /docs/aeon-skills went on 2026-09-25: those five files were vendored
+          from BankrBot/skills and are deleted, so the count is now just this
+          list. Do not re-derive a total from a set that no longer ships. */}
       <P>
-        These are the {SKILLS_DOCS.length} core skill files. The 5 trading/research{" "}
-        <Link href="/docs/aeon-skills" className="text-[#4FC3F7] underline">Aeon skills</Link> are documented separately — {SKILLS_DOCS.length + 5} total.
+        These are the {SKILLS_DOCS.length} skill files that ship with the CLI.
       </P>
 
+      {/* This sample said "✓ 40 skill files installed" — a frozen literal that
+          was SKILLS_DOCS.length + the 5 Aeon skills back when both numbers were
+          different from today's. The count is dropped rather than re-frozen or
+          interpolated, because neither would be true: SKILLS_DOCS lists 35 while
+          packages/builder/skills (what `blue init` actually copies) ships 34,
+          and the two sets differ by three files in both directions. Printing
+          either number here would advertise a install size that does not happen.
+          Fixing that drift is its own change; do not paper over it with a literal. */}
       <CodeBlock title="install skills" badge="$ blue init">{`$ blue init
-✓ 40 skill files installed to ~/.blue-agent/skills/`}</CodeBlock>
+✓ skill files installed to ~/.blue-agent/skills/`}</CodeBlock>
 
       <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden divide-y divide-[#1A1A2E] my-6">
         {SKILLS_DOCS.map((s) => (

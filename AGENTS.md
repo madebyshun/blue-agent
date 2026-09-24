@@ -62,23 +62,35 @@ blue-agent/
 
 ---
 
-## Aeon Skills (installed from BankrBot/skills)
+## Bankr is fully removed — do not reintroduce any part of it
 
-Five Aeon skills are bundled in `skills/` and available to any command or agent session:
+**Completed 2026-09-25.** Nothing in this repo calls, imports, credentials, or
+advertises Bankr. The five `skills/aeon-*.md` files that used to be documented
+here — vendored from BankrBot/skills — are deleted, along with `bankr-skills/`,
+`collab/bankr-*`, the `/docs/aeon-skills` page, and `_handlers/b20-tracker.ts`.
 
-| Skill | File | Use when |
-|---|---|---|
-| `aeon-token-movers` | `skills/aeon-token-movers.md` | "what's pumping", "top movers today", pre-trade scan |
-| `aeon-token-pick` | `skills/aeon-token-pick.md` | "give me a token pick", "asymmetric setup today" |
-| `aeon-narrative-tracker` | `skills/aeon-narrative-tracker.md` | "what's running on CT", "narrative positions", content ideas |
-| `aeon-deep-research` | `skills/aeon-deep-research.md` | "DD on X", "build me a memo", "contrarian take" |
-| `aeon-distribute-tokens` | `skills/aeon-distribute-tokens.md` | Weekly $BLUEAGENT rewards payout to leaderboard |
+**The measurement behind it:** `POST api.bankr.bot/token-launches/deploy` →
+`403 {"error":"Account suspended","banned":true,"reasonCode":"fraud"}`
+(2026-09-06, with a valid key, identical on `?chain=base` and `?chain=robinhood`),
+and `GET llm.bankr.bot/v1/usage` → `403` (2026-09-18). The ban is on the
+**ACCOUNT**, not one hostname, so **no key anyone could obtain for us changes
+it.** One of the deleted skills, `aeon-distribute-tokens`, settled payouts
+through Bankr's Wallet API — do not schedule, promise, or narrate such a payout;
+reinstating it means a different transfer rail, not a new credential.
 
-When a user request matches a trigger phrase, load the skill file and follow its output rules. Four of the five are **read-to-apply** — they shape output, never move funds, and need no setup and no key.
+**A read carve-out was true on 09-06 and false twelve days later.** It is gone
+rather than re-hedged: a carve-out earned by one measurement expires. **Measure
+the specific verb before declaring either direction dead.**
 
-🔴 **`aeon-distribute-tokens` CANNOT RUN. This is measured, not a hedge.** The old wording here said "needs `BANKR_API_KEY` with Wallet write scope — assume dead until tested", which left a reader chasing a credential for a transfer that cannot execute. MEASURED 2026-09-06 with a valid key, `POST /token-launches/deploy` → `403 {"error":"Account suspended","banned":true,"reasonCode":"fraud"}`, identical on `?chain=base` and `?chain=robinhood`. The ban is on the **ACCOUNT**, not one hostname, so Bankr's *Wallet* API — the endpoint a payout would use — is banned too, and **no key anyone could obtain for us changes that.** Do not schedule, promise, or narrate an `aeon-distribute-tokens` payout; it will 403 at the transfer. Reinstating it means a different transfer rail, not a new credential.
+🔴 **`b20-tracker` was not removed because of the ban** — its upstream is public,
+keyless, and answered 200 on 2026-09-24. It went because ShunTr asked for a
+clean break, and the $0.05 payment path died in the same commit as the product
+it sold. `BANKR_API_KEY` has zero readers and is a dead env var.
 
-**Reads still work** (`GET /token-launches` → `200`), which is why `_handlers/b20-tracker.ts` stays — it hits that **public** URL with no key at all. `BANKR_API_KEY` itself has **zero readers** as of 2026-09-24 and is a dead env var; see the Bankr section in `CLAUDE.md` for the full measurement. **Write ≠ read: measure the specific verb before declaring either dead.**
+⚠️ **The Aeon KV pipeline is a DIFFERENT THING and was not touched** —
+`aeon:<skill>` keys in `api/_lib/aeon-kv.ts`, read by 15 paid x402 handlers. It
+shares only a word with the deleted skill files. See the Bankr section in
+`CLAUDE.md` for the full record.
 
 ---
 

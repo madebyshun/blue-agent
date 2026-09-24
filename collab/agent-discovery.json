@@ -2,8 +2,8 @@
   "schema": "agent-discovery/v1",
   "agent": {
     "name": "Blue Agent",
-    "handle": "@blocky_agent",
-    "description": "Base-native AI agent for builders — idea, build, audit, ship, raise. Grounded in real Base knowledge. Powered by Bankr LLM.",
+    "handle": "@blueagent_",
+    "description": "Base-native AI agent for builders — idea, build, audit, ship, raise. Grounded in real Base knowledge. Inference by Virtuals.",
     "version": "1.0.0",
     "network": "base",
     "chain_id": 8453,
@@ -58,7 +58,7 @@
   "mcp": {
     "package": "@blueagent/skill",
     "install": "npx skills add blueagent",
-    "registry": "https://skills.bankr.bot"
+    "registry": "https://npmjs.com/package/@blueagent/skill"
   },
   "cli": {
     "package": "@blueagent/cli",
@@ -68,7 +68,7 @@
   "collab": {
     "accepts_signals_from": ["aeon"],
     "sends_scenarios_to": ["miroshark"],
-    "powered_by": ["bankr"],
+    "powered_by": ["virtuals"],
     "protocol": "http-post",
     "payment": "x402-usdc-base",
     "bridge_specs": "https://github.com/madebyshun/blue-agent/tree/main/collab"
@@ -76,8 +76,7 @@
   "links": {
     "github": "https://github.com/madebyshun/blue-agent",
     "telegram": "https://t.me/blueagent_hub",
-    "x": "https://x.com/blocky_agent",
-    "bankr": "https://bankr.bot/agents/blue-agent",
+    "x": "https://x.com/blueagent_",
     "npm": "https://npmjs.com/package/@blueagent/cli"
   }
 }

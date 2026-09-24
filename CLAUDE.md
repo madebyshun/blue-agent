@@ -218,7 +218,10 @@ Blue Agent is the flagship AI agent of the Base ecosystem. It is not just a chat
 **Links:**
 - X/Twitter: [@blueagent_](https://x.com/blueagent_)
 - Telegram community: [t.me/blueagent_hub](https://t.me/blueagent_hub)
-- Bankr profile: [bankr.bot/agent/blue-agent](https://bankr.bot/agent/blue-agent)
+
+*(A Bankr profile link sat here until 2026-09-25, pointing at an account
+403-suspended since 2026-07-20. This is the block a reader copies into marketing
+copy, which is the worst place to keep a dead storefront.)*
 
 ---
 
@@ -262,47 +265,63 @@ blue-agent/
 
 ---
 
-## Aeon Skills (installed from BankrBot/skills)
+## Bankr is fully removed — do not reintroduce any part of it
 
-Five Aeon skills are bundled in `skills/` and available to any command or agent session:
+**Completed 2026-09-25.** Nothing in this repo calls, imports, credentials, or
+advertises Bankr. This section is the record of what went and why, so the next
+reader does not rebuild a piece of it thinking it was an oversight.
 
-| Skill | File | Use when |
+**What was removed, in order:**
+
+| Date | What | Why it could not stay |
 |---|---|---|
-| `aeon-token-movers` | `skills/aeon-token-movers.md` | "what's pumping", "top movers today", pre-trade scan |
-| `aeon-token-pick` | `skills/aeon-token-pick.md` | "give me a token pick", "asymmetric setup today" |
-| `aeon-narrative-tracker` | `skills/aeon-narrative-tracker.md` | "what's running on CT", "narrative positions", content ideas |
-| `aeon-deep-research` | `skills/aeon-deep-research.md` | "DD on X", "build me a memo", "contrarian take" |
-| `aeon-distribute-tokens` | `skills/aeon-distribute-tokens.md` | Weekly $BLUEAGENT rewards payout to leaderboard |
+| 2026-09-06 | `/api/launch-token` + the `prepare_token_launch` chat card | Every deploy returned 403 |
+| 2026-09-07 | `/api/my-tokens`, `/api/claim-fees`, `/app/launches`, `/api/launches`, `/api/robinhood/explore` | The surfaces that existed to *sell* the launch path |
+| 2026-09-18 | `packages/bankr`, the CLI's Bankr/Wallet TUI category | Zero importers; the TUI printed `bankr agent <op>` and ran nothing |
+| 2026-09-24 | `lib/bankr-usage.ts`, the badge route's key gate | Left `BANKR_API_KEY` with zero readers |
+| 2026-09-25 | `_handlers/b20-tracker.ts`, the 5 `skills/aeon-*.md`, `/docs/aeon-skills`, `bankr-skills/`, `collab/bankr-*` | The last runtime call and the last vendored content |
 
-When a user request matches a trigger phrase, load the skill file and follow its output rules. All Aeon skills are **read-to-apply** — no extra setup required except `aeon-distribute-tokens`, which needs `BANKR_API_KEY` with Wallet write scope and is 🔴 **DEAD — measured, no longer a guess.**
+**The underlying fact, measured twice.** `POST api.bankr.bot/token-launches/deploy`
+→ `403 {"error":"Account suspended","banned":true,"reasonCode":"fraud"}`
+(2026-09-06), and `GET llm.bankr.bot/v1/usage` → `403` (2026-09-18). The ban is
+on the **ACCOUNT**, not a hostname, so no key anyone could obtain changes it.
+A read carve-out was true on 09-06 and false twelve days later — **a carve-out
+earned by one measurement expires; re-measure the specific verb rather than
+inheriting the hedge.**
 
-**MEASURED 2026-09-06** against `api.bankr.bot` with the key present:
+🔴 **`b20-tracker` was NOT removed because of the ban.** Its upstream
+(`api.bankr.bot/token-launches`) is public, keyless, and still answered 200 when
+measured on 2026-09-24. It went because ShunTr asked for a clean break, and per
+the retiring law the $0.05 payment path died in the same commit as the product.
+Beryl activation status survives in `b20-inspect` / `b20-analyze`, which read
+Base RPC directly.
 
-```
-POST /token-launches/deploy  → 403
-{"error":"Account suspended","banned":true,"banType":"restricted",
- "reasonCode":"fraud","message":"This action is disabled while your account is
- restricted. You can still view your balances and withdraw your funds."}
-```
+**Dead env var:** `BANKR_API_KEY` has zero readers. Unsetting it in Vercel is
+ShunTr's call; nothing breaks either way. *Lesson: a "these N files read env X"
+claim rots the moment one is deleted — re-grep the var, never trust the count.*
 
-Identical on `?chain=base` and `?chain=robinhood`. The suspension is on the **ACCOUNT**, not on one hostname — so the old hedge ("a different endpoint from the 403-banned `llm.bankr.bot`, verify before relying on a payout run") resolves in the pessimistic direction: **every Bankr WRITE is banned, including the Wallet API a payout would use.** Do not schedule or promise an `aeon-distribute-tokens` run through Bankr; it will 403 at the transfer.
+**What is LOCKED, and by what.** `apps/web/scripts/action-card-inventory-check.ts`
+fails if the launch/fee cards return. Because an absence assertion alone would
+pass by deleting everything, each is paired there with a presence assertion on
+the surviving self-hosted path (`/app/b20hub/claim`, `/api/b20hub/register`,
+`/api/b20hub/tokens`). `docs-truth-check.ts` additionally forbids any public page
+claiming "Powered by Bankr".
 
-**READS still work** — same day, `GET /token-launches?limit=3` → `200` with live data, exactly as the 403 body promises ("you can still view"). **Write ≠ read: measure the specific verb before declaring either dead.**
+**One deliberate exception.** `/docs/blue-chat` keeps a short callout saying the
+Bankr launchpad is gone and that creator fees are claimed through Bankr's own
+interface. That is not an integration — it is the only signpost telling a user
+who launched a token through the old flow where their money actually is.
+Deleting it would remove the notice, not the dependency.
 
-🔴 **But `BANKR_API_KEY` now has ZERO readers, so it is a dead env var — this paragraph said the opposite until 2026-09-24.** It used to name `lib/bankr-usage.ts` and `/badge/[type]/[handle]` as "the only two that read `process.env.BANKR_API_KEY`" and concluded the key "stays SET in Vercel". Both readers are gone: #463 deleted `bankr-usage.ts` outright and removed the badge route's key-presence gate. MEASURED 2026-09-24 — `grep -rn 'process\.env\.BANKR_API_KEY' apps/web/src packages/*/src` returns **two hits, both historical comments** (`api/v1/healthz/route.ts:15`, `api/chat/route.ts:2782`), and every other mention repo-wide is likewise a comment explaining what was removed. The one surviving Bankr consumer is `_handlers/b20-tracker.ts`, which hits the **public** `api.bankr.bot/token-launches` URL with **no key and no Authorization header** — so it keeps working whether or not the env var exists.
+⚠️ **The Aeon KV pipeline is a DIFFERENT THING and was not touched.**
+`aeon:<skill>` keys in `api/_lib/aeon-kv.ts`, written by `/api/cron/research-loop`,
+read by 15 paid x402 handlers. It shares only the word "Aeon" with the five
+deleted `skills/aeon-*.md` files, which were vendored from BankrBot/skills. The
+KV pipeline has nothing to do with Bankr. See the Aeon-data bullet above for its
+own (unrelated) caveat about the unscheduled cron.
 
-Consequence: this file contradicted itself for six days — the LLM-gateway bullet above already called `BANKR_API_KEY` dead while this paragraph called it live. **The gateway bullet was right.** Unsetting it in Vercel is ShunTr's call, not a code change; nothing breaks either way, but leaving a credential set for a 403-banned account buys nothing. **Lesson generalized: a "these N files read env X" claim rots the moment one of them is deleted, so re-grep the env var instead of trusting the count.**
-
-**The Bankr launch/fee surface is fully retired — do not rebuild any of it.** Two commits, both driven by the 403 above:
-
-- **2026-09-06** — the deploy path (`/api/launch-token` + the `prepare_token_launch` chat card).
-- **2026-09-07** — everything that existed to *sell* it: `/api/my-tokens` and `/api/claim-fees` (thin proxies to Bankr's `doppler/creator-fees` + `doppler/build-claim`), the `/app/launches` showcase page that was their only caller, and `/api/launches` + `/api/robinhood/explore`, which that page's deletion left with zero callers.
-
-  An earlier revision of this file argued the fee path "must stay… closing it would strand their money." **That is no longer true and was never quite right:** the fees live in Bankr's own contracts, not in ours, and ShunTr closed #208 by claiming through Bankr's UI directly. Deleting our proxy removes a button, not an entitlement. Per the retiring law above, the payment path went in the same commit as the product it sold.
-
-  KV launch records (`bluechat:launches`) were **deliberately kept** — user state is evidence, not clutter. `/launches` and `/app/launches` 301 via `archivedRedirect()` because they were published in `/docs/blue-chat`.
-
-Both removals are locked by `apps/web/scripts/action-card-inventory-check.ts`, which fails if any of it comes back — and, because an absence assertion alone would pass by deleting everything, each one is paired there with a presence assertion on the surviving self-hosted path (`/app/b20hub/claim`, `/api/b20hub/register`, `/api/b20hub/tokens`).
+**Published URL:** `/docs/aeon-skills` answered 200 in production, so it 301s to
+`/docs/skills` via `culledRedirect()` in `middleware.ts` — not a 404.
 
 ---
 

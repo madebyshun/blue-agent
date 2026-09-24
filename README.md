@@ -17,7 +17,6 @@ Blue Agent is a full economic actor on Base: it holds a wallet, executes onchain
 - Chat: [app.blueagent.dev/chat](https://app.blueagent.dev/chat)
 - X: [@blueagent_](https://x.com/blueagent_)
 - Telegram: [t.me/blueagent_hub](https://t.me/blueagent_hub)
-- Bankr: [bankr.bot/agents/blue-agent](https://bankr.bot/agents/blue-agent)
 
 ---
 
@@ -100,13 +99,13 @@ export VIRTUALS_API_KEY=your_key_here
 blueagent
 ```
 
-Inference runs through Virtuals (`compute.virtuals.io`). This line said
-`export BANKR_API_KEY` until 2026-09-18 — an instruction that could not work for
-anyone: Blue Agent's Bankr account has answered `403 {"banned":true}` on every
-verb since 2026-07-20, so the first grounded command a new user ran would fail
-with an auth error against a key they had just been told to set. A README is the
-first thing a stranger trusts, so a dead setup step costs more than a dead
-feature further down.
+Inference runs through Virtuals (`compute.virtuals.io`) — that is the only
+provider, and `VIRTUALS_API_KEY` is the only key this line has ever needed to
+name. It named a different one until 2026-09-18, pointing at a provider that
+returned an auth error on the first grounded command a new user ran. A README is
+the first thing a stranger trusts, so a dead setup step costs more than a dead
+feature further down: re-check this export against
+`packages/core/src/runtime.ts` whenever the provider moves.
 
 Navigate with `↑ ↓ Enter`. Press `Esc` to go back.
 
@@ -123,14 +122,9 @@ Navigate with `↑ ↓ Enter`. Press `Esc` to go back.
 | **Content** | thread-intelligence · community-growth-playbook |
 | **Earn** | lp-analyzer · cross-protocol-yield |
 
-Two categories the TUI still renders are **not** listed above, because they do not
-work and listing them as features is how a stranger loses an afternoon:
+One category the TUI still renders is **not** listed above, because it does not
+work and listing it as a feature is how a stranger loses an afternoon:
 
-- **Bankr** (`swap · transfer · portfolio · launch-token`) — routed through Blue
-  Agent's Bankr account, which has answered `403 {"banned":true,"banType":"restricted"}`
-  on every verb since 2026-07-20. Reads were carved out as still-working when
-  measured on 2026-09-06; that carve-out expired — `GET /v1/usage` answered 403 on
-  2026-09-18. The ban is account-level, so a different API key does not help.
 - **Tasks** (`post-task · accept · submit · list`) — the microtask marketplace was
   retired on 2026-09-02 and its six API routes were deleted, so these commands
   call endpoints that no longer exist.
@@ -210,15 +204,13 @@ blue-agent/
 │   ├── cli/              # @blueagent/cli — TUI (Ink + React)
 │   ├── builder/          # the `blue` command implementations
 │   ├── core/             # Shared schemas, pricing, tool-input specs
-│   ├── bankr/            # LEGACY — Bankr 403-banned 2026-07-20, kept so imports compile
 │   ├── payments/         # x402 payment helpers
 │   ├── reputation/       # @blueagent/reputation — Builder Score + Agent Score
 │   ├── skill/            # @blueagent/skill — MCP server
 │   ├── claude-plugin/    # Claude Code plugin manifest — not an npm workspace
 │   └── langchain/        # Python package (pyproject.toml) — not an npm workspace
-├── bankr-skills/         # BankrBot/skills submissions (blue-hub + 5 commands)
 ├── commands/             # Command contract docs (idea.md, build.md, ...)
-├── skills/               # Bundled .md grounding files (Aeon skills, Base addresses, ...)
+├── skills/               # Bundled .md grounding files (Base addresses, standards, ...)
 ├── scripts/              # register-all-tools.sh — ERC-8257 registration
 └── docs/                 # Product brief, roadmap, quickstart
 ```
@@ -245,7 +237,7 @@ The version column is a live npm badge, not a number typed here. It renders what
 | [`@blueagent/cli`](https://npmjs.com/package/@blueagent/cli) | ![npm](https://img.shields.io/npm/v/@blueagent/cli?label=) | CLI/TUI — full builder console |
 | [`@blueagent/skill`](https://npmjs.com/package/@blueagent/skill) | ![npm](https://img.shields.io/npm/v/@blueagent/skill?label=) | MCP server for Blue Agent tools |
 | [`@blueagent/reputation`](https://npmjs.com/package/@blueagent/reputation) | ![npm](https://img.shields.io/npm/v/@blueagent/reputation?label=) | Builder Score + Agent Score |
-| [`@blueagent/core`](https://npmjs.com/package/@blueagent/core) | ![npm](https://img.shields.io/npm/v/@blueagent/core?label=) | Shared schemas + pricing. ⚠️ its `runtime.ts` still calls `llm.bankr.bot`, which is 403-banned |
+| [`@blueagent/core`](https://npmjs.com/package/@blueagent/core) | ![npm](https://img.shields.io/npm/v/@blueagent/core?label=) | Shared schemas + pricing. Its `runtime.ts` calls `compute.virtuals.io/v1` |
 | [`@blueagent/builder`](https://npmjs.com/package/@blueagent/builder) | ![npm](https://img.shields.io/npm/v/@blueagent/builder?label=) | `blue` command implementations |
 | [`@blueagent/sdk`](https://npmjs.com/package/@blueagent/sdk) | ![npm](https://img.shields.io/npm/v/@blueagent/sdk?label=) | Unified interface over commands + Hub tools |
 | [`@blueagent/agentkit`](https://npmjs.com/package/@blueagent/agentkit) | ![npm](https://img.shields.io/npm/v/@blueagent/agentkit?label=) | Coinbase AgentKit plugin — exposes Hub tools as AgentKit actions |
@@ -290,7 +282,7 @@ how those got that way.
    Chain (4663) carries the `rh-*` tools and the RWA registry. A ticker can exist on
    both, so a ticker string never identifies a token — chain + address does.
 2. **All AI calls go through Virtuals.** `apps/web/src/app/api/_lib/llm.ts` → `callLLM()`.
-   No direct OpenAI, Anthropic, Bankr, or Venice calls.
+   No handler calls a model provider directly — the gateway is the only egress.
 3. **Never invent contract addresses.** If an address is needed and not in the codebase, flag it.
 4. **Business logic in packages, not in apps.** Keep `apps/web` thin.
 

@@ -152,27 +152,22 @@ export const X402_SUITE = [
   { id: "blue-registry",  price: "$0.05", color: "#fbbf24", desc: "Discover the full tool catalog" },
 ];
 
-export const AEON_SKILLS = [
-  { file: "aeon-token-movers",      color: "#34D399", trigger: '"what\'s pumping" · "top movers today" · pre-trade scan', desc: "Scans Base for the biggest movers right now — a fast pre-trade radar of what's running." },
-  { file: "aeon-token-pick",        color: "#4FC3F7", trigger: '"give me a token pick" · "asymmetric setup today"',       desc: "Surfaces one asymmetric setup with a thesis — entry logic, why now, and the risk." },
-  { file: "aeon-narrative-tracker", color: "#A78BFA", trigger: '"what\'s running on CT" · narrative positions · content', desc: "Tracks live crypto-Twitter narratives and the tokens positioned under each one." },
-  { file: "aeon-deep-research",     color: "#fbbf24", trigger: '"DD on X" · "build me a memo" · contrarian take',         desc: "Full due-diligence memo on a token or project, with a contrarian angle." },
-  // DEAD, and labelled dead rather than quietly dropped — the skill file still
-  // ships, so a reader who finds it needs to know why it cannot run. MEASURED
-  // 2026-09-06: POST /token-launches/deploy → 403 {"error":"Account suspended",
-  // "banned":true,"banType":"restricted"}. The ban is on the ACCOUNT, not a
-  // hostname, so every Bankr WRITE is closed — including the Wallet API a payout
-  // would use.
-  //
-  // This entry ended "Reads still work; the transfer does not" until 2026-09-18,
-  // when GET llm.bankr.bot/v1/usage answered 403 "This account has been banned"
-  // on all three windows. The read carve-out was TRUE when measured on 09-06 and
-  // FALSE twelve days later, so the clause is gone rather than re-hedged: a
-  // carve-out earned by one measurement expires, and a public page is the worst
-  // place to keep one alive. The other four skills are fine for a reason that
-  // does not depend on Bankr at all — they shape output and never call it.
-  { file: "aeon-distribute-tokens", color: "#f87171", trigger: "Weekly $BLUEAGENT rewards payout to the leaderboard",     desc: "Distributes $BLUEAGENT rewards to top contributors. ⚠️ Cannot run — payouts settle through the Bankr Wallet API and Blue Agent's Bankr account is suspended (403 on every verb, measured 2026-09-06 and 2026-09-18). Account-level ban: a different API key does not help. Reinstating it needs a different transfer rail." },
-];
+// AEON_SKILLS REMOVED 2026-09-25 with the Bankr purge, along with the five
+// skills/aeon-*.md files it described and the /docs/aeon-skills page that
+// rendered it. They were vendored from BankrBot/skills; four shaped LLM output
+// and never called Bankr, but the fifth (aeon-distribute-tokens) settled
+// payouts through the Bankr Wallet API, which 403s at the ACCOUNT level — so
+// the set could not be kept whole and a page advertising four-of-five with a
+// tombstone for the fifth is worse than no page.
+//
+// /docs/aeon-skills answered 200 in production, so it 301s to /docs/skills from
+// culledRedirect() in middleware.ts rather than 404ing. Do not re-add a nav
+// entry for it.
+//
+// ⚠️ NOT the same thing as the Aeon KV pipeline (`aeon:<skill>` keys in
+// api/_lib/aeon-kv.ts, written by /api/cron/research-loop, read by 15 paid x402
+// handlers). Same word, unrelated system, deliberately untouched here.
+
 
 export const PACKAGES = [
   { label: "SURFACE — what users install", color: "#4FC3F7", items: [

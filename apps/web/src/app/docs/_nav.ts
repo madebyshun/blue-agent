@@ -22,9 +22,10 @@ export const DOC_NAV: DocGroup[] = [
   ]},
   { group: "Knowledge", items: [
     { title: "Skills",      href: "/docs/skills" },
-    // Aeon Skills removed from nav 2026-08 (legacy narrative). The page at
-    // /docs/aeon-skills is left parked (still reachable by URL, no 404) — it
-    // is simply unlinked from the sidebar and the prev/next chain.
+    // Aeon Skills left the nav 2026-08 (legacy narrative) and the page itself
+    // was deleted 2026-09-25 with the Bankr purge. /docs/aeon-skills now 301s
+    // to /docs/skills from culledRedirect() in middleware.ts — it answered 200
+    // in production, so it gets a redirect, not a 404. Do not re-add it here.
     { title: "Beryl / B20", href: "/docs/beryl" },
   ]},
   { group: "Platform", items: [
