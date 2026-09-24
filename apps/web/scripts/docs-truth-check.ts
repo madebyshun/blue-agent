@@ -329,8 +329,15 @@ for (const [name, src] of scanned) {
   check(`${name}`, !/3-agent consensus/i.test(src), "personas on one endpoint, not agents");
 }
 
-// ── 6. SKILL.md links the catalog instead of retyping it ──────────────────
-console.log("\n6. SKILL.md does not hardcode a tool list");
+// ── 6. SKILL.md never HAND-TYPES a tool list ──────────────────────────────
+// Superseded in part on 2026-09-24. SKILL.md does carry a tool list again, but
+// it is generated from AGENT_TOOLS and diffed byte-for-byte by
+// scripts/skill-catalog-check.ts, so it cannot drift. That check owns the block;
+// this group keeps owning what a generator cannot catch — an id that never
+// existed can only get back in by being typed in by hand, which is exactly what
+// NEVER_EXISTED below tests for. Both still hold: no phantom id, and the real
+// catalog is still linked.
+console.log("\n6. SKILL.md does not hand-type a tool list");
 // The 20 ids SKILL.md sold that had never existed in HANDLERS or AGENT_TOOLS
 // (measured 2026-09-17). Four were priced $1.50–$3.00. They are listed by name
 // rather than derived because the point is historical: these specific strings
