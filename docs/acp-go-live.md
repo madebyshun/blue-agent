@@ -203,11 +203,38 @@ First live tick:
 
 ---
 
+## `CRON_SECRET` rotation — 2026-09-25
+
+Rotated after the value was exposed during ACP setup. Recorded because the
+previous rotation was marked done without being done: the GitHub Actions copy
+still carried its `2026-06-18` timestamp three months later.
+
+It lives in **five** places, and a rotation that misses one is a rotation that
+did not happen:
+
+1. Vercel Production env on `blueagent-web-new`
+2. **GitHub Actions repo secret** — `.github/workflows/blue-hood-poll.yml:37`
+   reads `${{ secrets.CRON_SECRET }}`. No job declares `environment:`, so an
+   *environment* secret is invisible to it; it must be a **repository** secret.
+3. `apps/web/.env.local`
+4. `apps/web/.env.production`
+5. `apps/web/.env.local.bak` — deleted rather than updated. It was mode `644`.
+
+`.env` and `.env.production.local` do not hold it. Do not add it.
+
+Vercel bakes env into a deployment and injects `Authorization: Bearer
+$CRON_SECRET` into its own cron calls from that same deployment's env, so
+invoker and route always agree — **and changing the env without redeploying
+does nothing.** Old deployment URLs keep the old value and still reach
+production KV; rotation alone does not close them.
+
+Verified end to end with `GET /api/usage/daily` (read-only, same gate) → 200,
+then `GET /api/cron/acp-poll` → `configured: true`, `errors: 0`.
+
+---
+
 ## Open items
 
-- 🔴 **Rotate `CRON_SECRET`.** It was exposed during setup. It gates all 7 crons.
-  `openssl rand -hex 32` → Vercel Production → `apps/web/.env.local` → redeploy.
-  No code change needed.
 - Fix the ACP agent profile description — it still carries a Blue Chat line that does
   not belong on an agent-facing listing.
 - Decide: expose `configured` on `/api/acp/revenue`.
