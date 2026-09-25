@@ -284,6 +284,62 @@ then `GET /api/cron/acp-poll` → `configured: true`, `errors: 0`.
 
 ---
 
+## The first write cannot happen in the cron — 2026-09-25
+
+Two jobs died at `open` before anyone understood why. **A 60s function cannot
+satisfy a 300s approval gate, and no amount of retrying changes that.**
+
+A Virtuals wallet policy can answer a signing request with `403
+APPROVAL_REQUIRED` and a one-off approval URL. The SDK then waits on
+`awaitApproval()` — `DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60000`, hardcoded, no
+caller override — and that promise resolves **only** over the `/wallets/stream`
+SSE that `agent.start()` opens. `/api/cron/acp-poll` has `maxDuration = 60`. So
+the platform kills the function while the promise is still pending: nothing
+throws, no tx is broadcast, the job stays `open`, and the next tick repeats it
+two minutes later, forever.
+
+| Job | Created | Outcome |
+|---|---|---|
+| 81118 | 2026-09-25T06:19:06Z | stuck at `open`, rejected by the buyer at 06:30:52 |
+| 81119 | 2026-09-25T06:42:50Z | stuck at `open` across **eight** ticks |
+
+🔴 **The measurement that mattered was the one that came back empty.** Job 81119
+was watched from the buyer side at 06:56:33 and was still `open` — fourteen
+minutes and seven ticks after creation, the seller had never broadcast a single
+transaction. That is what separates "parked" from "slow" or "failing", and it is
+not visible from the seller's own ledger at all.
+
+**Why it stayed invisible for two jobs.** Every other `await` in
+`acp-seller.ts` was deadline-wrapped; the twelve on-chain writes were not. An
+unbounded write that parks produces no exception, so the per-session `catch`
+never runs and `recordJobError` never fires — the public read showed a seller
+with nothing to do. Both halves are now closed: writes are bounded by
+`boundedWrite`, and the bound is the **cycle's own wall clock**
+(`started + CYCLE_WRITE_BUDGET_MS`), not a fixed timer, because connect can
+already have eaten most of the 60s and a timer that fires after the platform
+kill records nothing at all. First tick on the fixed code, 07:09:07Z:
+
+```
+"error": "setBudget still pending after 15000ms — write never returned"
+```
+
+It threw 15.03s after the tick was recorded, so the cycle had its full budget
+available. Not slow. Parked.
+
+**The fix is out-of-band, not in code.** `scripts/acp-seller-unblock.ts` runs
+the same `setBudget` locally with no ceiling over it, auto-opens the approval
+URL, and lets the promise resolve. It needs the seller secrets in `.env.local`,
+which are normally Vercel-only. It moves no money — `setBudget` proposes a
+price and nothing else.
+
+The buyer wallet needed this exactly once: its first `createJob` demanded
+approval and every write since has gone through unattended. ⚠️ **That is an
+expectation, not a measurement.** If a later cron tick still reports the same
+pending error, the policy is per-transaction and the fix moves to the wallet
+dashboard.
+
+---
+
 ## Open items
 
 - **One field still unconfirmed in the wizard.** The agent profile and the Job
