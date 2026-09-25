@@ -13,9 +13,10 @@
  *     kvSetNX — won by exactly one caller, ever.
  *
  *   • "What revenue have we provably earned, and are we near ungraduation?"
- *     → computeAcpRevenue. Completed-job count + USDC collected is the provable
- *     revenue Blue Agent lacked; the consecutive-expire streak is the EARLY
- *     WARNING that fires before ACP's 10-in-a-row auto-ungraduation.
+ *     → computeAcpRevenue. Completed-job count + gross escrow settled is the
+ *     provable revenue Blue Agent lacked; the consecutive-expire streak is the
+ *     EARLY WARNING that fires before ACP's 10-in-a-row auto-ungraduation.
+ *     Gross, not net — see `usdc_gross` for why the net is not knowable here.
  *
  * Non-custodial / trust: we store only public routing + economic facts (job id,
  * buyer address, ticker, size, budget, USDC amount). NEVER a key, signer, or
@@ -96,7 +97,15 @@ export interface AcpJobRecord {
   side?: AcpSubjectSide; // which side was priced — a buy and a sell route differently
   size_usd?: number; // parsed from the job requirement
   price_usdc?: number; // budget agreed for the job
-  usdc_collected?: number; // amount actually received on completion
+  /**
+   * GROSS escrow that settled, read from the chain — deliberately NOT named
+   * "collected". MEASURED on job 81132: a 0.5 budget paid the provider 0.45,
+   * sent 0.025 to a fee recipient and refunded 0.025 to the buyer. `getJob`
+   * exposes no net field and a single observation is not a fee rate, so the
+   * amount the seller actually banked is NOT derivable here and must not be
+   * inferred. The old name claimed it was, and overstated by ~11%.
+   */
+  usdc_gross?: number;
   error?: string; // last compute/submit error, if any
   created_at: string; // ISO — first seen
   updated_at: string; // ISO — last transition
@@ -106,7 +115,7 @@ export interface AcpJobRecord {
 export interface AcpRevenueSummary {
   offering: string;
   completed_jobs: number;
-  usdc_collected: number;
+  usdc_gross: number; // sum of settled escrow budgets — gross, see AcpJobRecord
   rejected_jobs: number;
   expired_jobs: number;
   in_flight_jobs: number; // seen/budget_set/funded/submitted (not yet terminal)
@@ -118,7 +127,7 @@ export interface AcpRevenueSummary {
   recent: Array<
     Pick<
       AcpJobRecord,
-      "job_id" | "status" | "ticker" | "size_usd" | "usdc_collected" | "updated_at" | "error"
+      "job_id" | "status" | "ticker" | "size_usd" | "usdc_gross" | "updated_at" | "error"
     >
   >;
   as_of: string;
@@ -196,7 +205,7 @@ export async function updateJobStatus(
   patch: Partial<
     Pick<
       AcpJobRecord,
-      | "usdc_collected"
+      | "usdc_gross"
       | "price_usdc"
       | "ticker"
       | "subject_chain"
@@ -238,6 +247,18 @@ export async function getJob(jobId: string): Promise<AcpJobRecord | null> {
 }
 
 /**
+ * Ids the ledger still believes are in flight. These are the ONLY jobs worth a
+ * chain read: a terminal record is already final, and a job absent from the
+ * index was never ours. Bounded by the same cap as the revenue read so a large
+ * keyspace cannot turn one cron tick into an unbounded RPC fan-out.
+ */
+export async function listUnsettledJobIds(): Promise<string[]> {
+  const ids = (await kvSMembers(KV_ACP_JOB_INDEX)).slice(0, ACP_JOB_INDEX_MAX);
+  const records = await Promise.all(ids.map((id) => kvGet<AcpJobRecord>(kvAcpJob(id))));
+  return records.filter((r): r is AcpJobRecord => r !== null && !TERMINAL.has(r.status)).map((r) => r.job_id);
+}
+
+/**
  * Aggregate the ledger into the public revenue summary. Computed FROM the job
  * records (recomputable truth), not from counters that could drift. Bounded by
  * ACP_JOB_INDEX_MAX so a large keyspace can never blow up the request.
@@ -257,7 +278,7 @@ export async function computeAcpRevenue(offering = "execution-plan"): Promise<Ac
     switch (r.status) {
       case "completed":
         completed++;
-        usdc += Number.isFinite(r.usdc_collected) ? (r.usdc_collected as number) : 0;
+        usdc += Number.isFinite(r.usdc_gross) ? (r.usdc_gross as number) : 0;
         break;
       case "rejected":
         rejected++;
@@ -280,7 +301,7 @@ export async function computeAcpRevenue(offering = "execution-plan"): Promise<Ac
       status: r.status,
       ticker: r.ticker,
       size_usd: r.size_usd,
-      usdc_collected: r.usdc_collected,
+      usdc_gross: r.usdc_gross,
       updated_at: r.updated_at,
       error: r.error,
     }));
@@ -288,7 +309,7 @@ export async function computeAcpRevenue(offering = "execution-plan"): Promise<Ac
   return {
     offering,
     completed_jobs: completed,
-    usdc_collected: round2(usdc),
+    usdc_gross: round2(usdc),
     rejected_jobs: rejected,
     expired_jobs: expired,
     in_flight_jobs: inFlight,

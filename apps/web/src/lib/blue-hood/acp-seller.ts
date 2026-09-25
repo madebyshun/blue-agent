@@ -51,9 +51,11 @@ import {
   updateJobStatus,
   recordJobError,
   acquireSubmitLock,
+  listUnsettledJobIds,
   type AcpSubjectChain,
   type AcpSubjectSide,
 } from "@/lib/blue-hood/acp-jobs";
+import { readJobOnChain } from "@/lib/blue-hood/acp-chain";
 import { computeExecutionPlan, type ExecPlan } from "@/lib/blue-hood/execution-plan";
 import { findByTicker } from "@/lib/robinhood/rwa-registry";
 // Type-only import — fully erased at compile time, so it never pulls the heavy
@@ -86,6 +88,7 @@ export interface AcpPollTally {
   expired: number; // terminal expirations reconciled
   noop: number; // awaiting counterparty (budget_set / submitted) or other terminal
   errors: number; // per-session crashes (kept — never aborts the batch)
+  reconciled: number; // terminal states learned from the chain, not the active set
 }
 
 export interface AcpPollResult extends Partial<AcpPollTally> {
@@ -508,7 +511,7 @@ async function handleSession(
 
     case "completed": {
       const usdc = grossUsdcFromJob(session);
-      await updateJobStatus(jobId, "completed", usdc != null ? { usdc_collected: usdc } : {});
+      await updateJobStatus(jobId, "completed", usdc != null ? { usdc_gross: usdc } : {});
       tally.completed++;
       return;
     }
@@ -538,6 +541,83 @@ async function handleSession(
  * Run one ACP poll cycle. Total + safe: returns a result on every path, never
  * throws. Inert (`configured:false`) until the operator wires the env secrets.
  */
+/**
+ * How many stale ledger jobs may be chain-read per tick. Each is one RPC call,
+ * and the cron has a 60s ceiling it shares with real work, so this is a budget,
+ * not a limit we expect to hit.
+ */
+const RECONCILE_MAX_PER_TICK = 10;
+
+/**
+ * Close the books on jobs the active set can no longer tell us about.
+ *
+ * `agent.sessions` comes from `getActiveJobs()`, so a job that settles drops out
+ * of it at once while this cron only looks every 2 minutes. The tick that would
+ * have recorded the outcome therefore usually never sees the job — MEASURED
+ * 2026-09-25: 81125's rejection and 81132's completion were both missed, and
+ * `/api/acp/revenue` kept reporting zero earnings after 0.45 USDC had arrived.
+ * Anything the ledger still calls in-flight but the SDK no longer lists is
+ * exactly the set worth asking the chain about.
+ *
+ * ⚠ A job the ACP SERVER considers expired stays `OPEN` on chain — nothing
+ * on-chain moves a job to EXPIRED, and 81119 has sat past its deadline for
+ * hours still reading `OPEN`. So the `expired` branch below is correctness, not
+ * a path that fires: server-side expiry lands on no public field and this
+ * reconcile genuinely cannot see it. Such jobs stay in-flight in the ledger,
+ * which is the honest answer rather than a guessed one. Newest-first ordering
+ * keeps them from ever crowding a live job out of the per-tick budget.
+ */
+async function reconcileSettledJobs(
+  activeIds: ReadonlySet<string>,
+  cfg: AcpSellerConfig,
+  acp: AcpModule,
+  tally: AcpPollTally,
+): Promise<void> {
+  const contract = acp.ACP_CONTRACT_ADDRESSES[cfg.chainId];
+  if (!contract) return;
+
+  let unsettled: string[];
+  try {
+    unsettled = await listUnsettledJobIds();
+  } catch {
+    return; // ledger unreadable this tick — next one re-reconciles
+  }
+
+  const stale = unsettled
+    .filter((id) => !activeIds.has(id))
+    .sort((a, b) => Number(b) - Number(a))
+    .slice(0, RECONCILE_MAX_PER_TICK);
+
+  for (const jobId of stale) {
+    const chainJob = await readJobOnChain({
+      jobId,
+      chainId: cfg.chainId,
+      contract,
+      abi: acp.ACP_ABI,
+    });
+    if (!chainJob) continue; // unknown state — write nothing
+
+    switch (chainJob.status) {
+      case "completed":
+        await updateJobStatus(jobId, "completed", { usdc_gross: chainJob.budget_usdc });
+        tally.completed++;
+        tally.reconciled++;
+        break;
+      case "rejected":
+        await updateJobStatus(jobId, "rejected");
+        tally.reconciled++;
+        break;
+      case "expired":
+        await updateJobStatus(jobId, "expired");
+        tally.expired++;
+        tally.reconciled++;
+        break;
+      default:
+        break; // still live on chain — the active set just hadn't hydrated it
+    }
+  }
+}
+
 export async function runAcpPollCycle(): Promise<AcpPollResult> {
   const started = Date.now();
   const cfg = readConfig();
@@ -556,6 +636,7 @@ export async function runAcpPollCycle(): Promise<AcpPollResult> {
     expired: 0,
     noop: 0,
     errors: 0,
+    reconciled: 0,
   };
 
   let acp: AcpModule;
@@ -605,6 +686,13 @@ export async function runAcpPollCycle(): Promise<AcpPollResult> {
         tally.errors++;
       }
     }
+
+    await reconcileSettledJobs(
+      new Set(providerSessions.map((s) => String(s.jobId))),
+      cfg,
+      acp,
+      tally,
+    );
   } catch (e) {
     // Init/connect failure → offering is "temporarily unavailable" this tick;
     // jobs remain for the next one. Never throws out of the cron.
