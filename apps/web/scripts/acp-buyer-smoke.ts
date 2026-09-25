@@ -313,8 +313,19 @@ async function watch(agent: Awaited<ReturnType<typeof buyer>>["agent"], jobId: s
       console.log(`  ${new Date().toISOString()}  ${last || "—"} → ${status}`);
       last = status;
       if (status === "submitted" || status === "completed") {
-        const deliverable = s?.entries.filter((e) => e.kind === "message").at(-1)?.content;
+        // Filter on `contentType`, NOT `kind`. The job room carries both sides:
+        // the buyer's requirement and the seller's deliverable are both
+        // `kind: "message"`. MEASURED 2026-09-25 on job 81132 — taking the last
+        // message printed our own requirement back at us, which reads exactly
+        // like a seller echoing the question instead of answering it. The cron
+        // had logged `delivered=1` for the same job, so the deliverable was
+        // there all along and only this line was blind to it.
+        let deliverable: string | undefined;
+        for (const e of s?.entries ?? []) {
+          if (e.kind === "message" && e.contentType === "deliverable") deliverable = e.content;
+        }
         if (deliverable) console.log(`\n  deliverable:\n${deliverable}\n`);
+        else console.log(`\n  (no "deliverable" message in the room yet)\n`);
       }
       if (TERMINAL.has(status)) return status;
     }
