@@ -100,6 +100,20 @@ export interface AcpPollResult extends Partial<AcpPollTally> {
 const INTERNAL_DEADLINE_MS = 12_000;
 /** Bound the connect+hydrate so a slow stream can't eat the whole cron budget. */
 const START_DEADLINE_MS = 30_000;
+/**
+ * Bound each on-chain write. The route's maxDuration is 60s and START_DEADLINE_MS
+ * can already claim 30 of it, so this has to fit in what's left with room to
+ * persist the failure afterwards — a diagnosis written after the kill is no
+ * diagnosis at all.
+ */
+const WRITE_DEADLINE_MS = 15_000;
+/**
+ * How far into the cycle a write may still be outstanding. The route's
+ * maxDuration is 60s; the 10s left over is for persisting the failure and
+ * stopping the agent, because a diagnosis written after the kill is no
+ * diagnosis at all.
+ */
+const CYCLE_WRITE_BUDGET_MS = 50_000;
 
 /**
  * Read config from env. Returns null (→ inert) unless ALL THREE required secrets
@@ -140,6 +154,38 @@ function withDeadline<T>(p: Promise<T>, ms: number): Promise<T | null> {
     p.catch(() => null),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
   ]);
+}
+
+const WRITE_TIMED_OUT = Symbol("write_timed_out");
+
+/**
+ * Bound an on-chain write and turn a hang into a throw.
+ *
+ * Every write here goes through the wallet provider, which can park instead of
+ * failing — the SDK's approval gate waits 300s on a promise that no caller can
+ * shorten. The cron's 60s budget expires first, so the function is killed while
+ * the promise is still pending: nothing throws, no catch runs, no tx is sent,
+ * and the job stays `seen` forever while the next tick repeats it. A silent
+ * retry loop is indistinguishable from an idle seller on the public read.
+ * Throwing lets the per-session backstop record a reason.
+ *
+ * A rejection still propagates unchanged — "it threw" and "it never returned"
+ * are different diagnoses and must not collapse into one.
+ *
+ * `deadlineAt` is the cycle's own wall clock, not a fixed budget: connect can
+ * already have eaten most of the 60s, and a 15s timer that fires after the
+ * platform kill records nothing at all.
+ */
+async function boundedWrite<T>(label: string, p: Promise<T>, deadlineAt: number): Promise<T> {
+  const ms = Math.max(1_000, Math.min(WRITE_DEADLINE_MS, deadlineAt - Date.now()));
+  const raced = await Promise.race([
+    p,
+    new Promise<typeof WRITE_TIMED_OUT>((resolve) => setTimeout(() => resolve(WRITE_TIMED_OUT), ms)),
+  ]);
+  if (raced === WRITE_TIMED_OUT) {
+    throw new Error(`${label} still pending after ${ms}ms — write never returned`);
+  }
+  return raced;
 }
 
 /** Lenient JSON parse — buyers may fence or wrap the requirement payload. */
@@ -289,7 +335,9 @@ async function handleSession(
   cfg: AcpSellerConfig,
   AssetToken: AcpModule["AssetToken"],
   tally: AcpPollTally,
+  deadlineAt: number,
 ): Promise<void> {
+  const write = <T>(label: string, p: Promise<T>) => boundedWrite(label, p, deadlineAt);
   const jobId = session.jobId;
   const chainId = session.chainId;
   const buyer = session.job?.clientAddress;
@@ -318,7 +366,7 @@ async function handleSession(
     case "open": {
       // Reject-incomplete: never set a budget for a job we can't fulfil.
       if (!req) {
-        await session.reject("invalid requirement: expected JSON { ticker, size_usd }");
+        await write("reject", session.reject("invalid requirement: expected JSON { ticker, size_usd }"));
         await updateJobStatus(jobId, "rejected", { error: "bad_requirement" });
         tally.rejected_input++;
         return;
@@ -328,9 +376,12 @@ async function handleSession(
       // desk the ticker trades on. They are legitimately different values and
       // conflating them is how a Base job gets a Robinhood answer.
       if (req.chain !== "robinhood") {
-        await session.reject(
-          `unsupported chain "${req.chain}" — Offering #1 covers Robinhood Chain (4663) only; ` +
-            `"${req.ticker}" may also exist on Base (8453), and this desk cannot price that token`,
+        await write(
+          "reject",
+          session.reject(
+            `unsupported chain "${req.chain}" — Offering #1 covers Robinhood Chain (4663) only; ` +
+              `"${req.ticker}" may also exist on Base (8453), and this desk cannot price that token`,
+          ),
         );
         await updateJobStatus(jobId, "rejected", {
           error: "unsupported_chain",
@@ -340,19 +391,25 @@ async function handleSession(
         return;
       }
       if (req.side === "unknown") {
-        await session.reject(`unsupported side — send "buy" or "sell" (omit the field for "buy")`);
+        await write(
+          "reject",
+          session.reject(`unsupported side — send "buy" or "sell" (omit the field for "buy")`),
+        );
         await updateJobStatus(jobId, "rejected", { error: "unsupported_side", side: req.side });
         tally.rejected_input++;
         return;
       }
       if (!findByTicker(req.ticker)) {
-        await session.reject(`unknown ticker "${req.ticker}" — not a Robinhood-Chain RWA token`);
+        await write(
+          "reject",
+          session.reject(`unknown ticker "${req.ticker}" — not a Robinhood-Chain RWA token`),
+        );
         await updateJobStatus(jobId, "rejected", { error: "unknown_ticker" });
         tally.rejected_input++;
         return;
       }
       // Valid → propose our fixed price (USDC on the job's own chain).
-      await session.setBudget(AssetToken.usdc(cfg.price, chainId));
+      await write("setBudget", session.setBudget(AssetToken.usdc(cfg.price, chainId)));
       await updateJobStatus(jobId, "budget_set", {
         ticker: req.ticker,
         size_usd: req.size_usd,
@@ -365,7 +422,10 @@ async function handleSession(
 
     case "funded": {
       if (!req) {
-        await session.reject("invalid requirement at funding: expected JSON { ticker, size_usd }");
+        await write(
+          "reject",
+          session.reject("invalid requirement at funding: expected JSON { ticker, size_usd }"),
+        );
         await updateJobStatus(jobId, "rejected", { error: "bad_requirement" });
         tally.rejected_input++;
         return;
@@ -376,8 +436,11 @@ async function handleSession(
       // exactly the jobs that reach delivery fastest. A gate on one path is not
       // a gate (#215/#216).
       if (req.chain !== "robinhood") {
-        await session.reject(
-          `unsupported chain "${req.chain}" at funding — Offering #1 covers Robinhood Chain (4663) only`,
+        await write(
+          "reject",
+          session.reject(
+            `unsupported chain "${req.chain}" at funding — Offering #1 covers Robinhood Chain (4663) only`,
+          ),
         );
         await updateJobStatus(jobId, "rejected", {
           error: "unsupported_chain",
@@ -389,7 +452,7 @@ async function handleSession(
       // Repeated here for the same reason as the chain gate above: a job first
       // seen at `funded` never ran the `open` branch at all.
       if (req.side === "unknown") {
-        await session.reject(`unsupported side at funding — send "buy" or "sell"`);
+        await write("reject", session.reject(`unsupported side at funding — send "buy" or "sell"`));
         await updateJobStatus(jobId, "rejected", { error: "unsupported_side", side: req.side });
         tally.rejected_input++;
         return;
@@ -408,13 +471,16 @@ async function handleSession(
       );
       if (!plan) {
         // Timed out — decline (refund), never hang past the SLA.
-        await session.reject("temporarily unavailable — plan timed out, job declined (no charge)");
+        await write(
+          "reject",
+          session.reject("temporarily unavailable — plan timed out, job declined (no charge)"),
+        );
         await updateJobStatus(jobId, "rejected", { error: "deadline" });
         tally.declined++;
         return;
       }
       if (plan.ok) {
-        await session.submit(buildDeliverable(cfg, plan));
+        await write("submit", session.submit(buildDeliverable(cfg, plan)));
         await updateJobStatus(jobId, "submitted", {
           ticker: plan.ticker,
           size_usd: plan.size_usd,
@@ -425,13 +491,16 @@ async function handleSession(
       }
       if (plan.kind === "decline") {
         // Engine blind (no readable market) — decline, no charge.
-        await session.reject(`temporarily unavailable — ${plan.reason} (declined, no charge)`);
+        await write(
+          "reject",
+          session.reject(`temporarily unavailable — ${plan.reason} (declined, no charge)`),
+        );
         await updateJobStatus(jobId, "rejected", { error: plan.error });
         tally.declined++;
         return;
       }
       // Late-caught bad input (e.g. unknown ticker that slipped past "open").
-      await session.reject(`${plan.reason} ${plan.hint ?? ""}`.trim());
+      await write("reject", session.reject(`${plan.reason} ${plan.hint ?? ""}`.trim()));
       await updateJobStatus(jobId, "rejected", { error: plan.error });
       tally.rejected_input++;
       return;
@@ -524,7 +593,7 @@ export async function runAcpPollCycle(): Promise<AcpPollResult> {
 
     for (const session of providerSessions) {
       try {
-        await handleSession(session, cfg, AssetToken, tally);
+        await handleSession(session, cfg, AssetToken, tally, started + CYCLE_WRITE_BUDGET_MS);
       } catch (e) {
         // Per-session backstop — a single job's failure must not stop the batch.
         const message = (e as Error).message;
