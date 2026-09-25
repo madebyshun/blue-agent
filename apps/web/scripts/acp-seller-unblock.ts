@@ -8,21 +8,32 @@
  *
  *   setBudget still pending after 15000ms — write never returned
  *
- * That is not a slow write, it is a parked one. A Virtuals wallet policy can
- * answer a signing request with `403 APPROVAL_REQUIRED`, and the SDK then waits
- * on `awaitApproval()` — hardcoded to 5 minutes, no caller override, resolved
- * ONLY over the `/wallets/stream` SSE that `agent.start()` opens. The cron's
- * maxDuration is 60s. A 300s wait inside a 60s function cannot resolve, so the
- * function is killed mid-promise every single time: the seller can never make
- * its first write from the cron, no matter how many times it retries.
+ * That is not a slow write, it is a parked one. CONFIRMED in the Vercel runtime
+ * logs — every tick from 06:42:46Z to 07:10:46Z logged, with a fresh id each
+ * time:
  *
- * This script is the same write with no ceiling over it. Approve in the browser
- * and the promise resolves here instead of dying. The buyer wallet needed this
- * exactly once — its first `createJob` demanded approval, and every write after
- * that went through unattended — so the expectation is that one approval here
- * unblocks the cron permanently. If a later cron tick still reports the same
- * pending error, that expectation was wrong and the policy is per-transaction,
- * which is a dashboard fix, not a code one.
+ *   [PrivyAlchemy] Manual approval required.
+ *     Reason: RPC request denied due to policy violation
+ *
+ * The SDK waits on `awaitApproval()` — hardcoded to 5 minutes, no caller
+ * override, resolved ONLY over the `/wallets/stream` SSE that `agent.start()`
+ * opens. The cron's maxDuration is 60s. A 300s wait inside a 60s function cannot
+ * resolve, so the function is killed mid-promise every single time.
+ *
+ * 🔴 THIS SCRIPT IS THE FALLBACK, NOT THE FIX. The reason string names a wallet
+ * policy, and the buyer wallet has none — same SDK, same 0 ETH balance, and its
+ * writes land unattended. So this is per-wallet configuration, and the actual
+ * fix is to relax the seller wallet's signing policy in the Virtuals dashboard.
+ * A cron that needs a human to click approve every two minutes is not an
+ * autonomous seller, however many times this script rescues it.
+ *
+ * Reach for this when you want to drive one write yourself and watch it land:
+ * it is the same write with no ceiling over it, so approving in the browser
+ * resolves the promise here instead of dying.
+ *
+ * Whether one approval clears the policy permanently is UNMEASURED — nothing has
+ * ever been approved on this wallet, so "first use only" and "every transaction"
+ * are both still consistent with the evidence. Do not plan around either.
  *
  * Needs the SELLER secrets, which live in Vercel and are NOT in `.env.local` by
  * default. Add them locally to run this. It moves no money: `setBudget` only

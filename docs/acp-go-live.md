@@ -289,19 +289,57 @@ then `GET /api/cron/acp-poll` → `configured: true`, `errors: 0`.
 Two jobs died at `open` before anyone understood why. **A 60s function cannot
 satisfy a 300s approval gate, and no amount of retrying changes that.**
 
-A Virtuals wallet policy can answer a signing request with `403
-APPROVAL_REQUIRED` and a one-off approval URL. The SDK then waits on
-`awaitApproval()` — `DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60000`, hardcoded, no
-caller override — and that promise resolves **only** over the `/wallets/stream`
-SSE that `agent.start()` opens. `/api/cron/acp-poll` has `maxDuration = 60`. So
-the platform kills the function while the promise is still pending: nothing
-throws, no tx is broadcast, the job stays `open`, and the next tick repeats it
-two minutes later, forever.
+The seller's Virtuals wallet carries a signing policy. It answers every signing
+request with `403 APPROVAL_REQUIRED` and a one-off approval URL. The SDK then
+waits on `awaitApproval()` — `DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60000`,
+hardcoded, no caller override — and that promise resolves **only** over the
+`/wallets/stream` SSE that `agent.start()` opens. `/api/cron/acp-poll` has
+`maxDuration = 60`. So the platform kills the function while the promise is
+still pending: nothing throws, no tx is broadcast, the job stays `open`, and the
+next tick repeats it two minutes later, forever.
 
-| Job | Created | Outcome |
-|---|---|---|
-| 81118 | 2026-09-25T06:19:06Z | stuck at `open`, rejected by the buyer at 06:30:52 |
-| 81119 | 2026-09-25T06:42:50Z | stuck at `open` across **eight** ticks |
+**Confirmed in the Vercel runtime logs, not inferred.** Every tick from
+2026-09-25T06:42:46Z to 07:10:46Z logged this, each with a fresh approval id:
+
+```
+[PrivyAlchemy] Manual approval required.
+  Approve at: https://app.virtuals.io/wallet/approve-transaction?id=<uuid>
+  Reason: RPC request denied due to policy violation
+```
+
+Fifteen ticks, fifteen queued approvals, none approved. Read them yourself with
+`npx vercel logs --since <iso> --until <iso> -q "Approval" -x`. Until that log
+line was found, the approval gate was the best available *hypothesis* — the
+bounded-write error proved only that the write never returned, not why.
+
+| Job | Created | On-chain now | Outcome |
+|---|---|---|---|
+| 81118 | 06:18:47Z | `4` REJECTED | stuck at `open`, rejected by the buyer at 06:30:52 |
+| 81119 | 06:42:43Z | `0` OPEN | stuck at `open` across **fifteen** ticks, never written to |
+
+Creation times are derived, not logged: `getJob` returns `expiredAt` and the
+registry's `slaMinutes` is 30, and both jobs are exactly 30 minutes before their
+deadline. So the SLA *is* a creation-plus-30 deadline stamped on chain.
+
+🔴 **Crossing that deadline does nothing.** Job 81119 was read from Base at
+07:45Z — 33 minutes past its deadline — and still returned `status 0 = OPEN`.
+Nothing on chain transitions a job to `EXPIRED`; `expiredAt` is a deadline, not
+a timer that fires. The neighbours prove the field does record real outcomes
+once someone writes one (81118 = `4` REJECTED, 81116/81117 = `3` COMPLETED), so
+**a job still OPEN past its deadline is positive evidence that no transaction
+was ever sent.** Read any job, with no credentials, via:
+
+```
+cast call 0x238E541BfefD82238730D00a2208E5497F1832E0 \
+  "getJob(uint256)((address,uint8,address,uint48,address,address,uint256,string))" \
+  <jobId> --rpc-url https://mainnet.base.org
+```
+
+⚠️ Do not read that as "expiry is harmless". The ACP server keeps its own expiry
+bookkeeping — it dropped 81119 from `getActiveJobs()` shortly after the deadline,
+which is why `--watch` stopped finding it — and that counter appears on **no**
+public field of the agent record. The ungraduation rule is enforced against a
+number you cannot observe, so keep rejecting abandoned jobs.
 
 🔴 **The measurement that mattered was the one that came back empty.** Job 81119
 was watched from the buyer side at 06:56:33 and was still `open` — fourteen
@@ -326,17 +364,37 @@ kill records nothing at all. First tick on the fixed code, 07:09:07Z:
 It threw 15.03s after the tick was recorded, so the cycle had its full budget
 available. Not slow. Parked.
 
-**The fix is out-of-band, not in code.** `scripts/acp-seller-unblock.ts` runs
-the same `setBudget` locally with no ceiling over it, auto-opens the approval
-URL, and lets the promise resolve. It needs the seller secrets in `.env.local`,
-which are normally Vercel-only. It moves no money — `setBudget` proposes a
-price and nothing else.
+The Vercel logs show the before/after directly. Ticks up to 07:06:46Z end with
+`Vercel Runtime Timeout Error: Task timed out after 60 seconds` — the function
+killed, nothing recorded. From 07:08:46Z the same gate produces a clean cycle:
+`[acp-poll] ok sessions=1 … errors=1 duration_ms=17805`, with the reason
+persisted. The fix did not unblock the write; it made the block legible.
 
-The buyer wallet needed this exactly once: its first `createJob` demanded
-approval and every write since has gone through unattended. ⚠️ **That is an
-expectation, not a measurement.** If a later cron tick still reports the same
-pending error, the policy is per-transaction and the fix moves to the wallet
-dashboard.
+**The real fix is the wallet policy, in the Virtuals dashboard.** The reason
+string names it: `RPC request denied due to policy violation`. The buyer wallet
+has no such policy — its `createJob` and `reject` both land unattended with the
+same SDK and the same 0 ETH balance — so this is per-wallet configuration, not
+an ACP-wide rule. An autonomous cron cannot depend on a human clicking approve
+every two minutes, so relaxing the seller wallet's policy is the only fix that
+leaves the seller actually autonomous.
+
+⚠️ **Whether one approval clears it permanently is still unmeasured.** Nothing
+was ever approved, so "first use only" and "every transaction" both remain
+consistent with the evidence. Do not plan around either.
+
+**A queued approval is not lost when the cron dies.** `signedServerCall` POSTs
+the fully signed request *before* the 403, and on approval it returns the
+`result` delivered over the SSE — it never re-sends
+(`privyAlchemyEvmProviderAdapter.js:77-89`). So the server, not the SDK, is what
+executes on approval. The cron giving up after 15s therefore discards only the
+listener, and approving that request later should still land the transaction.
+⚠️ Inferred from the code path, not yet observed end to end, and it says nothing
+about how long the server retains a pending request.
+
+`scripts/acp-seller-unblock.ts` remains the fallback for when you want to drive
+the write yourself: same `setBudget`, no ceiling over it, auto-opens the approval
+URL. It needs the seller secrets in `.env.local`, which are normally
+Vercel-only. It moves no money — `setBudget` proposes a price and nothing else.
 
 ---
 
