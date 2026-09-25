@@ -49,6 +49,7 @@
 import {
   recordJobSeen,
   updateJobStatus,
+  recordJobError,
   acquireSubmitLock,
   type AcpSubjectChain,
   type AcpSubjectSide,
@@ -526,7 +527,12 @@ export async function runAcpPollCycle(): Promise<AcpPollResult> {
         await handleSession(session, cfg, AssetToken, tally);
       } catch (e) {
         // Per-session backstop — a single job's failure must not stop the batch.
-        console.warn(`[acp-poll] session ${session.jobId} failed: ${(e as Error).message}`);
+        const message = (e as Error).message;
+        console.warn(`[acp-poll] session ${session.jobId} failed: ${message}`);
+        // Also persist it: a console.warn is only readable in the Vercel
+        // dashboard, which makes a permanently-stuck seller indistinguishable
+        // from an idle one on the public read.
+        await recordJobError(String(session.jobId), message).catch(() => {});
         tally.errors++;
       }
     }

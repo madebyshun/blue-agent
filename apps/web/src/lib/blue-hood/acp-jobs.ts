@@ -116,7 +116,10 @@ export interface AcpRevenueSummary {
   expire_streak_danger_at: number;
   near_ungraduation: boolean; // streak >= warn threshold — operator should look
   recent: Array<
-    Pick<AcpJobRecord, "job_id" | "status" | "ticker" | "size_usd" | "usdc_collected" | "updated_at">
+    Pick<
+      AcpJobRecord,
+      "job_id" | "status" | "ticker" | "size_usd" | "usdc_collected" | "updated_at" | "error"
+    >
   >;
   as_of: string;
 }
@@ -157,6 +160,26 @@ export async function recordJobSeen(
   await kvSet(kvAcpJob(job.job_id), rec, TTL_ACP_JOB);
   await kvSAdd(KV_ACP_JOB_INDEX, job.job_id);
   return rec;
+}
+
+/**
+ * Attach the reason a tick failed WITHOUT moving the job's status, because the
+ * job genuinely did not transition — it is still whatever it was, just stuck.
+ *
+ * This exists because the poll loop's per-session backstop only `console.warn`s,
+ * so a seller that fails on every job forever looks, from outside, exactly like
+ * a seller with nothing to do. That cost a live debugging session on job 81118
+ * (2026-09-25): a `setBudget` throw was invisible in `/api/acp/revenue` and the
+ * Vercel log was the only copy of the message.
+ */
+export async function recordJobError(jobId: string, message: string): Promise<void> {
+  const existing = await kvGet<AcpJobRecord>(kvAcpJob(jobId));
+  if (!existing) return;
+  await kvSet(
+    kvAcpJob(jobId),
+    { ...existing, error: message.slice(0, 300), updated_at: now() },
+    TTL_ACP_JOB,
+  );
 }
 
 /**
@@ -259,6 +282,7 @@ export async function computeAcpRevenue(offering = "execution-plan"): Promise<Ac
       size_usd: r.size_usd,
       usdc_collected: r.usdc_collected,
       updated_at: r.updated_at,
+      error: r.error,
     }));
 
   return {
