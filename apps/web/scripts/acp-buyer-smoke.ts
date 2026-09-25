@@ -46,11 +46,18 @@
  *   npx tsx scripts/acp-buyer-smoke.ts --complete <jobId>   # release escrow to seller
  *   npx tsx scripts/acp-buyer-smoke.ts --reject <jobId>     # refund, terminal "rejected"
  *
- * ⚠️ If you abandon a test job, `--reject` it. An abandoned job reaches the SLA
- * and terminates as `expired`, which is the ONE outcome that counts toward
- * ungraduation: 10 consecutive expiries auto-ungraduate the agent, and the
- * seller's streak is currently a clean 0. A rejection is free; walking away is
- * not.
+ * ⚠️ If you abandon a test job, `--reject` it. 10 consecutive expiries
+ * auto-ungraduate the agent, and the seller's streak is currently a clean 0.
+ * A rejection is free; walking away is not.
+ *
+ * Do NOT expect to see that expiry happen. MEASURED 2026-09-25 against the Base
+ * contract: job 81119 passed its deadline and stayed `status 0 = OPEN`, because
+ * nothing on chain transitions a job to EXPIRED — `expiredAt` is a deadline, not
+ * a timer that fires. The server keeps its own expiry bookkeeping (it dropped
+ * that job from `getActiveJobs()` shortly after the deadline) and that counter
+ * appears on NO public field of the agent record. So the cost of walking away is
+ * real and simultaneously invisible, which is the worst combination and the
+ * whole reason this warning is here.
  *
  * ── The Privy approval gate ──────────────────────────────────────────────────
  *
@@ -95,6 +102,7 @@ import path from "path";
 const SELLER_WALLET = "0x884fbdd5cf193e7f87cba76419e526d8f4df7a9b";
 const OFFERING_NAME = "executionplan";
 const SETTLE_CHAIN_ID = 8453; // Base — where USDC escrow settles.
+const BASE_RPC_URL = process.env.BASE_RPC_URL?.trim() || "https://mainnet.base.org";
 const SUBJECT_CHAIN = "robinhood"; // RH 4663 — where the priced stock lives.
 const ACP_SERVER = "https://api.acp.virtuals.io";
 
@@ -262,6 +270,38 @@ async function buyer() {
   return { acp, agent, walletAddress };
 }
 
+/**
+ * Read a job straight off Base, bypassing the session surface entirely.
+ *
+ * `agent.sessions` is hydrated from `getActiveJobs()`, so a job the server has
+ * stopped calling active is simply absent — indistinguishable, from the outside,
+ * from one that never existed. MEASURED 2026-09-25: job 81119 dropped out of the
+ * active set while still `OPEN` on chain, and the script reported it as "already
+ * terminal", which was wrong in exactly the case where the truth matters most.
+ *
+ * Needs no credentials: `getJob` is a view call, so this works when the buyer
+ * keys are absent and when the job is far too old to be hydrated.
+ */
+async function readOnChain(jobId: string) {
+  const [{ createPublicClient, http }, acp] = await Promise.all([
+    import("viem"),
+    import("@virtuals-protocol/acp-node-v2"),
+  ]);
+  const address = acp.ACP_CONTRACT_ADDRESSES[SETTLE_CHAIN_ID];
+  if (!address) return null;
+  const client = createPublicClient({ transport: http(BASE_RPC_URL) });
+  // No cast: viem reads `expiredAt` off the ABI as `uint48` and types it
+  // `number`, not `bigint`. Asserting a shape here would have quietly hidden
+  // that, and the unit is seconds either way.
+  const job = await client.readContract({
+    address: address as `0x${string}`,
+    abi: acp.ACP_ABI,
+    functionName: "getJob",
+    args: [BigInt(jobId)],
+  });
+  return { ...job, statusName: acp.JobStatus[job.status] ?? `unknown(${job.status})` };
+}
+
 /** Poll a session, printing every status change until terminal or timeout. */
 async function watch(agent: Awaited<ReturnType<typeof buyer>>["agent"], jobId: string, minutes: number) {
   const deadline = Date.now() + minutes * 60_000;
@@ -338,8 +378,48 @@ async function main() {
 
   const { acp, agent } = await buyer();
   const session = agent.getSession(SETTLE_CHAIN_ID, jobId);
-  if (!session) throw new Error(`no session for job ${jobId} — is it already terminal?`);
+  if (!session) {
+    const job = await readOnChain(jobId);
+    await agent.stop();
+    if (!job) throw new Error(`job ${jobId} does not exist on Base ${SETTLE_CHAIN_ID}`);
+    const deadline = new Date(Number(job.expiredAt) * 1000);
+    const overdue = (Date.now() - deadline.getTime()) / 60_000;
+    console.log(
+      `Job ${jobId} has left the active set, but on Base ${SETTLE_CHAIN_ID} it reads ` +
+        `"${job.statusName}" (deadline ${deadline.toISOString()}, ${overdue.toFixed(1)}m ago).`,
+    );
+    if (job.statusName === "OPEN") {
+      console.log(
+        `\nStill OPEN past its deadline — no transaction was ever sent for it. The chain does\n` +
+          `not expire jobs on its own, so this one stays OPEN indefinitely. The server has its\n` +
+          `own expiry bookkeeping (it dropped this job from the active set) and that counter is\n` +
+          `NOT on the public agent record, so reject abandoned jobs rather than assuming a job\n` +
+          `stuck here is harmless.`,
+      );
+    }
+    return;
+  }
   console.log(`Job ${jobId} status: ${session.status}`);
+  // `expiredAt` is a deadline, NOT a timer that fires. MEASURED 2026-09-25 by
+  // reading the Base contract directly: job 81119 sat 33 minutes past its
+  // deadline and was still `status 0 = OPEN` on chain. Nothing moves a job to
+  // EXPIRED on its own. The neighbours prove the field does record real outcomes
+  // once someone writes one — 81118 = 4 REJECTED, 81116/81117 = 3 COMPLETED — so
+  // a job still OPEN past its deadline means no transaction was ever sent, not
+  // that the deadline slipped. Print it so "we missed the window" is a number on
+  // screen rather than an inference.
+  const expiredAt = session.job?.expiredAt;
+  if (expiredAt) {
+    // Epoch SECONDS: the ABI types it `uint48`, and the events-API path builds it
+    // with `BigInt(new Date(...).getTime() / 1000)` (acpJob.js:72), so both
+    // sources agree on the unit.
+    const ms = Number(expiredAt) * 1000;
+    const mins = (ms - Date.now()) / 60000;
+    console.log(
+      `  deadline: ${new Date(ms).toISOString()} ` +
+        `(${mins >= 0 ? `${mins.toFixed(1)}m left` : `${(-mins).toFixed(1)}m ago — does NOT auto-expire`})`,
+    );
+  }
 
   if (flag("watch") >= 0) {
     await watch(agent, jobId, 40);
