@@ -34,9 +34,11 @@ export interface OnChainJob {
   /**
    * Escrow budget in whole USDC — the GROSS figure, not what the provider nets.
    * MEASURED on job 81132: budget 0.5, of which the provider received 0.45, a
-   * fee recipient took 0.025 and 0.025 was refunded to the buyer. `getJob`
-   * exposes no net field, and one observation is not a fee rate, so callers must
-   * not derive earnings from this number.
+   * fee recipient took 0.025, and 0.025 went to an address that is both the
+   * job's `client` and its `evaluator` — so that leg cannot be classified as a
+   * refund or an evaluator fee from this job alone. `getJob` exposes no net
+   * field, and one observation is not a fee rate, so callers must not derive
+   * earnings from this number.
    */
   budget_usdc: number;
 }

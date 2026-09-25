@@ -133,10 +133,11 @@ async function guardUnknownState(): Promise<void> {
 
 // ── Group 5: gross is never relabelled as collected ──────────────────────────
 // MEASURED on job 81132: a 0.5 budget paid the provider 0.45, sent 0.025 to a
-// fee recipient and refunded 0.025. `getJob` exposes no net field, so the amount
-// banked is NOT derivable. The old field name claimed it was and overstated by
-// ~11%. This is the one number the public read publishes, so the name matters
-// more than it looks.
+// fee recipient and 0.025 to an address that is both the job's `client` and its
+// `evaluator`, which leaves that leg unclassified. `getJob` exposes no net field,
+// so the amount banked is NOT derivable. The old field name claimed it was and
+// overstated by ~11%. This is the one number the public read publishes, so the
+// name matters more than it looks.
 
 {
   check("5.1 the ledger field is named gross", /usdc_gross\?: number/.test(ledgerSrc));

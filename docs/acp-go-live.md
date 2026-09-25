@@ -215,6 +215,15 @@ Measured on production right after that deploy, 2026-09-25:
 "expire_streak": 0 }` — the live seller, unhired, which is exactly the state that used
 to be indistinguishable from a dead one.
 
+⚠️ **`usdc_collected` was renamed to `usdc_gross` on 2026-09-26.** Every payload
+recorded on this page predates that and is left verbatim, because a measurement
+edited after the fact is no longer a measurement. The rename was not cosmetic: the
+field carried the escrow BUDGET while its name promised the amount banked, and job
+81132 settled a 0.5 budget as 0.45 to the provider, 0.025 to a fee recipient and
+0.025 to an address that is both the job's buyer and its evaluator. `getJob`
+exposes no net field, so what the seller actually nets is not derivable from the
+ledger and is deliberately not published. Full trace in the resolution section.
+
 ---
 
 ## Go-live record
@@ -398,12 +407,123 @@ Vercel-only. It moves no money — `setBudget` proposes a price and nothing else
 
 ---
 
+## Resolved — the policy was `ACP_ONLY`, and the seller now settles — 2026-09-25
+
+🔴 **The section above reasons toward the wrong policy.** It reads as though the
+seller wallet were denying everything, and that framing is what made "no write
+has ever succeeded" feel like a wallet that could not write at all. MEASURED: the
+wallet carried the **`ACP_ONLY`** preset (`he16pbgn1s3uthpd6rbskclm`, shown as
+"Virtuals Only" in the dashboard), not `DENY_ALL`
+(`r7yivciysswkf3dqmgmsbna1`). A policy that allows exactly the thing it was
+blocking is a much more confusing failure than a blanket deny, and it is worth
+naming: **the 403 told us a policy existed, never which one.** Read the policy id
+before theorising about its contents.
+
+**The fix was to detach the policy entirely (`No Policy`) in the Virtuals
+dashboard.** The next cron tick wrote on the first attempt:
+`[acp-poll] ok sessions=1 budget=1 errors=0 duration_ms=9800`. No approval was
+ever clicked, so the ⚠️ above about whether one approval clears the block
+permanently is still **unmeasured** — it was routed around, not answered.
+
+⚠️ **Policy changes are dashboard-only.** The SDK's `PolicyApi` exposes create
+and read, and neither update nor delete, so none of this is scriptable and none
+of it is in version control. The wallet's policy is live config that can drift
+away from this page without a commit — re-read it before trusting this
+paragraph.
+
+**Job 81132 then ran the full path with the seller side unattended:**
+`open → budget_set → funded → submitted → completed`. Only the buyer half was
+driven by hand (`--create`, `--fund`, `--complete`); every seller action was the
+2-minute cron.
+
+**What the job actually paid — the number to quote.** Completion tx
+`0xe98282786ee66d88cfc699773fdd49be0f2a043e5e984503e92b03f3465b29cb` on Base
+8453 (block 51782949) moves the **0.5** escrow out of the ACP contract
+`0x238E541BfefD82238730D00a2208E5497F1832E0` in three USDC transfers:
+
+| to | USDC | who that is |
+|---|---|---|
+| `0x884FBdd5cF193E7F87CBA76419e526D8F4dF7A9B` | **0.45** | the seller — `getJob().provider` |
+| `0x3F833Be7447F82E8654Bc634981899db0ee8042E` | 0.025 | neither party to the job |
+| `0x02950Ad38aDA1D599375bD447E080cd404809205` | 0.025 | **both** `client` and `evaluator` |
+
+So the listed price is 0.5 and the **revenue is 0.45 USDC per job on Base 8453**.
+Do not publish 0.5 as earnings.
+
+⚠️ **The last row cannot be labelled from this job.** `getJob(81132)` returns the
+same address for `client` and `evaluator` — the smoke test bought from itself and
+evaluated itself — so a refund of unspent escrow and an evaluator fee are
+indistinguishable here. They are not the same thing against a real buyer: if that
+0.025 is an evaluator fee, a third-party evaluator keeps it and BlueAgent still
+nets 0.45. **0.45 is the only figure this job supports for the seller role.** The
+0.025 landing back in the treasury wallet is an artifact of self-dealing, not
+income, and it must not be added to it. Distinguishing the two needs a job with a
+third-party evaluator; until then the split is 90 / 5 / 5 by arithmetic and
+unattributed by role.
+
+`getJob` exposes no net field, and one settlement is not a fee rate, so the ledger
+deliberately stores only the gross escrow (`usdc_gross`) and publishes no derived
+net.
+
+**The completion exposed a second bug, now fixed.** The cron drives itself from
+`agent.sessions`, hydrated by `getActiveJobs()`; a job that settles leaves that
+set immediately, while the cron only looks every 2 minutes — so the tick that
+would record the outcome usually never sees the job. 81125's rejection and
+81132's completion were both missed, and `/api/acp/revenue` reported zero
+earnings after the USDC had arrived. Nothing about that is loud: a paid seller
+and an idle one both report 0. Terminal state is now reconciled from the contract
+(`lib/blue-hood/acp-chain.ts`), guarded by `scripts/acp-reconcile-check.ts`.
+First production reconcile, 2026-09-25T17:18:52Z — three writes in one tick:
+`completed_jobs 0→1`, `usdc_gross 0→0.5`, `rejected_jobs 1→3`,
+`in_flight_jobs 4→1`.
+
+🔴 **`No Policy` is unfinished security debt, not the end state.** It means a
+leaked `ACP_SIGNER_PRIVATE_KEY` drains the seller wallet with nothing in the way,
+and the exposure grows with every job that settles into it. The intended end
+state is an allowlist scoped to the `to` addresses a successful job actually
+touches — which is now readable from the tx above, so the blocker on writing that
+policy is gone.
+
+---
+
 ## Open items
 
-- **One field still unconfirmed in the wizard.** The agent profile and the Job
-  description were both rewritten on 2026-09-25 and the description now states
-  `side (buy or sell, default buy)`. What has not been confirmed is **Step 2 —
-  Requirements**, which needs `side` added as **String, not required**. Until it is,
-  the listing promises a field the form does not declare: harmless for a buyer who
-  sends `side` anyway (the code reads it regardless), but the two surfaces disagree,
-  and the form is the one a buyer builds against.
+All four below were re-read from the live registry on 2026-09-25T17:21Z via
+`GET api.acp.virtuals.io/agents/wallet/0x884FBdd5cF193E7F87CBA76419e526D8F4dF7A9B`
+(unauthed), so they are current, not inherited from an earlier pass.
+
+⚠️ **Read the OFFERING's `updatedAt`, not the agent's.** They are different
+fields and they disagree: the agent record says `2026-09-25T17:20:50.128Z` while
+`offerings[0].updatedAt` is still `2026-09-25T04:52:05.854Z`. The agent timestamp
+moves on its own, so it is not evidence the form was saved — reading the wrong one
+makes an unsaved edit look shipped.
+
+- **`side` was never added to Step 2 — Requirements.** `requirements.properties`
+  is exactly `chain`, `ticker`, `size_usd`; there is no `side`. The offering
+  description already promises `side (buy or sell, default buy)`, so the listing
+  advertises a field the form does not declare. Harmless for a buyer who sends it
+  anyway (the handler reads it regardless), but the form is what a buyer builds
+  against. Add as **String, not required**.
+
+- 🔴 **`chain` is contradictory, and this one can block a buyer.** It sits in
+  `requirements.required` (`["chain","ticker","size_usd"]`) while its own
+  description opens with `"Optional."`. A buyer who trusts the description and
+  omits `chain` fails validation. Pick one: drop it from `required`, or delete the
+  word "Optional." Unlike `side`, leaving this is not harmless.
+
+- **Two version numbers disagree inside the same offering.** The description ends
+  `JSON, version 1.2`, while `deliverable.properties.version.description` still
+  says `currently 1.1`. Also cosmetic but live: `ticker`'s description begins with
+  a stray tab character.
+
+- **Offering name drift.** The registry and the chain both call it
+  `executionplan`; `ACP_OFFERING_NAME` defaults to `execution-plan`, which is what
+  `/api/acp/revenue` and the deliverable's own `offering` field report.
+  Deliberately not changed here — it alters a paid deliverable's contract, so it
+  is ShunTr's call whether the code follows the registry or the registry is
+  renamed.
+
+- 🔴 **Replace `No Policy` with a scoped allowlist (security debt).** See the
+  resolution section above. The blocker was not knowing which `to` addresses a
+  successful job touches; the completion tx now answers that, so this is
+  actionable.

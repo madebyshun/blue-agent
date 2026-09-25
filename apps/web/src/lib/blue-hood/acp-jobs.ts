@@ -100,9 +100,11 @@ export interface AcpJobRecord {
   /**
    * GROSS escrow that settled, read from the chain — deliberately NOT named
    * "collected". MEASURED on job 81132: a 0.5 budget paid the provider 0.45,
-   * sent 0.025 to a fee recipient and refunded 0.025 to the buyer. `getJob`
-   * exposes no net field and a single observation is not a fee rate, so the
-   * amount the seller actually banked is NOT derivable here and must not be
+   * sent 0.025 to a fee recipient and 0.025 to an address that is BOTH the
+   * job's `client` and its `evaluator` (the smoke test bought from itself), so
+   * that leg is undetermined between a buyer refund and an evaluator fee.
+   * `getJob` exposes no net field and a single observation is not a fee rate, so
+   * the amount the seller actually banked is NOT derivable here and must not be
    * inferred. The old name claimed it was, and overstated by ~11%.
    */
   usdc_gross?: number;
