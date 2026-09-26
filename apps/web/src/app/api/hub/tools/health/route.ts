@@ -5,7 +5,7 @@
  *
  * SEPARATE FROM `/api/hub/tools` ON PURPOSE. That route is the catalog and must
  * stay instant: it reads KV and returns. This one can fan out to every builder's
- * endpoint, so a cold cache costs up to one 8s probe. Folding it into the
+ * endpoint, so a cold cache costs up to one 15s probe. Folding it into the
  * catalog would put a third party's dead tunnel on the Hub's critical render
  * path — the Hub would hang because someone else closed their laptop.
  *
@@ -22,9 +22,12 @@ import { readRegisteredTools } from "@/lib/hub-registry";
 import { healthForTools, HEALTH_TTL_S } from "@/lib/hub-liveness";
 
 export const runtime = "nodejs";
-// A cold call probes every registered endpoint in parallel, each bounded by the
-// 8s timeout inside `probeEndpoint`. 30s leaves headroom for the KV round-trips
-// either side without ever approaching the default function ceiling.
+// A cold call probes every registered endpoint in PARALLEL, each bounded by the
+// 15s timeout inside `probeEndpoint`. Parallelism is what makes this budget hold:
+// the wall-clock cost is one probe, not N, so widening the per-probe timeout from
+// 8s to 15s (see that function's docblock — 8s was reporting a live tool dead)
+// did not require moving this number. 30s still leaves headroom for the KV
+// round-trips either side. Serialise the probes and this breaks immediately.
 export const maxDuration = 30;
 
 export async function GET(req: NextRequest) {

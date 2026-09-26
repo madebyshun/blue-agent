@@ -128,9 +128,10 @@ export async function checkToolHealth(id: string, endpoint: string): Promise<Too
  * Health for a set of tools, re-probing only the ones whose cache went cold.
  *
  * Probes run in PARALLEL because they are independent and each already carries
- * its own 8s timeout inside `probeEndpoint`; serialising six dead tunnels would
- * cost 48s on one page-load. The result is keyed by id and every id in `tools`
- * is present, so a caller cannot silently lose one.
+ * its own 15s timeout inside `probeEndpoint`; serialising six dead tunnels would
+ * cost 90s on one page-load, well past the caller's 30s `maxDuration`. The result
+ * is keyed by id and every id in `tools` is present, so a caller cannot silently
+ * lose one.
  */
 export async function healthForTools(
   tools: { id: string; endpoint: string }[],

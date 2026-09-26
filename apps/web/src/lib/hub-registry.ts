@@ -547,6 +547,21 @@ export interface ProbeResult {
 /**
  * Lenient probe — sends an empty POST and accepts any 2xx OR 402 (x402 paid).
  * Sets `aiReady: true` if the response body parsed as JSON.
+ *
+ * 🔴 The timeout was 8000ms and it produced a WRONG ANSWER about a working tool.
+ * MEASURED 2026-09-26: `desk-x402-block` (a Cloudflare Worker, not a dev tunnel)
+ * aborted at 8003ms and printed as UNREACHABLE; re-probed immediately with a
+ * wider window it answered a valid 402 in 1380ms. A cold start ate the budget.
+ *
+ * The error is ASYMMETRIC, which is why the number moved. A dead tunnel reported
+ * dead costs nothing. A LIVE builder's tool reported dead is the input to a
+ * delisting decision — and the liveness report's own footer tells the reader that
+ * call is ShunTr's, so the report was handing a human a false fact and asking
+ * them to act on it.
+ *
+ * 15s is safe for every caller: `healthForTools` probes in PARALLEL (see its
+ * docblock), so this does not multiply across the catalog, and the health route
+ * budgets 30s. The cost is one slower page-load against a genuinely dead tunnel.
  */
 export async function probeEndpoint(endpoint: string): Promise<ProbeResult> {
   const t0 = Date.now();
@@ -555,7 +570,7 @@ export async function probeEndpoint(endpoint: string): Promise<ProbeResult> {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({}),
-      signal:  AbortSignal.timeout(8000),
+      signal:  AbortSignal.timeout(15_000),
     });
     const durationMs = Date.now() - t0;
     const contentType = res.headers.get("content-type") ?? "";
