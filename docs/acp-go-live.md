@@ -73,12 +73,23 @@ Four-step wizard.
 
 ### Step 2 — Requirements (what the buyer sends)
 
-| Field | Type | Required |
-|---|---|---|
-| `ticker` | String | yes |
-| `size_usd` | Number | yes |
-| `chain` | String | **no** |
-| `side` | String | **no** |
+This is the **intended** form. What the live registry actually declares differs on
+three of the four rows — see *Open items*, and treat that section as the record of
+truth until the form is saved.
+
+| Field | Type | Required | live registry (re-read 2026-09-26) |
+|---|---|---|---|
+| `ticker` | String | yes | matches (description has a stray leading tab) |
+| `size_usd` | Number | yes | declared **String**, described as "buy side" |
+| `chain` | String | **no** | declared **required** |
+| `side` | String | **no** | **absent entirely** |
+
+⚠️ **`size_usd` being a String in the registry is tolerated, not endorsed.** Both
+surfaces coerce with `Number(...)` and gate on `Number.isFinite(size) && size > 0`,
+so `"25000"` and `25000` behave identically and a buyer who follows the schema
+literally is not broken. It is listed because the doc claimed Number and the
+registry said String, and a type that disagrees with its own documentation is how
+the next reader builds the wrong client.
 
 `chain` is optional on purpose. `normalizeChain` treats absent as `"robinhood"` —
 this offering's only desk — and the field builder has no enum, so the real guard is
@@ -99,9 +110,17 @@ Accepted aliases (`extractRequirement`): `ticker`|`symbol`, `size_usd`|`sizeUsd`
 
 ### Step 2 — Deliverables (what we return)
 
-Exactly the outer keys of `buildDeliverable`, snake_case:
+Intended: exactly the outer keys of `buildDeliverable`, snake_case:
 
 `offering` · `version` · `chain` · `chain_id` · `generated_at` · `plan`
+
+🔴 **The live registry declares only five of those six — `chain_id` is missing**
+(`required: ["plan","chain","version","offering","generated_at"]`, re-read
+2026-09-26). We submit it regardless and no job has been rejected for it, because
+the schema is a listing, not a validator we are graded against. But this page said
+"exactly" and it was not exactly, which is the failure mode that matters: a doc
+asserting parity with the code is worth nothing if nobody re-reads the other side.
+See *Open items*.
 
 **`plan` is declared as an undeclared Object on purpose.** `ExecPlan` has ~20 fields
 (39 leaf values once nested) and is already at version 1.2. A strict declared schema
@@ -509,15 +528,29 @@ policy is gone.
 
 ## Open items
 
-All four below were re-read from the live registry on 2026-09-25T17:21Z via
+Re-read from the live registry on **2026-09-26** via
 `GET api.acp.virtuals.io/agents/wallet/0x884FBdd5cF193E7F87CBA76419e526D8F4dF7A9B`
-(unauthed), so they are current, not inherited from an earlier pass.
+(unauthed), so these are current, not inherited from an earlier pass.
 
-⚠️ **Read the OFFERING's `updatedAt`, not the agent's.** They are different
-fields and they disagree: the agent record says `2026-09-25T17:20:50.128Z` while
-`offerings[0].updatedAt` is still `2026-09-25T04:52:05.854Z`. The agent timestamp
-moves on its own, so it is not evidence the form was saved — reading the wrong one
-makes an unsaved edit look shipped.
+⚠️ **Read the OFFERING's `updatedAt`, not the agent's.** They are different fields
+and they disagree, and the gap has now widened across two days: the agent record
+reads `2026-09-26T02:58:47.043Z` while `offerings[0].updatedAt` is **still**
+`2026-09-25T04:52:05.854Z` — the same value it held yesterday. The agent timestamp
+moves on its own, so it is not evidence the form was saved. Reading the wrong one
+makes an unsaved edit look shipped; reading the right one is what tells us every
+item below is still untouched.
+
+**None of these are fixable from code.** The offering form is dashboard-only — the
+SDK exposes no offering-mutation API — so each is an action for ShunTr at
+`app.virtuals.io/acp/agents/01a0d4ac-9791-7df9-9b31-433f31612163`. They are listed
+worst-first.
+
+- 🔴 **`chain` is contradictory, and this is the only one that can block a buyer.**
+  It sits in `requirements.required` (`["chain","ticker","size_usd"]`) while its own
+  description opens with `"Optional."`. A buyer who trusts the description and
+  omits `chain` fails validation before reaching us. Pick one: drop it from
+  `required`, or delete the word "Optional." Everything else on this list is a
+  listing that reads wrong; this one turns buyers away. Fix it first.
 
 - **`side` was never added to Step 2 — Requirements.** `requirements.properties`
   is exactly `chain`, `ticker`, `size_usd`; there is no `side`. The offering
@@ -526,16 +559,29 @@ makes an unsaved edit look shipped.
   anyway (the handler reads it regardless), but the form is what a buyer builds
   against. Add as **String, not required**.
 
-- 🔴 **`chain` is contradictory, and this one can block a buyer.** It sits in
-  `requirements.required` (`["chain","ticker","size_usd"]`) while its own
-  description opens with `"Optional."`. A buyer who trusts the description and
-  omits `chain` fails validation. Pick one: drop it from `required`, or delete the
-  word "Optional." Unlike `side`, leaving this is not harmless.
+- **`size_usd` still says "buy side", and is typed String.** Its description is
+  `"Order size in USD, buy side. Must be greater than 0."` — the "buy side" clause
+  became wrong on 2026-09-25 when `side` was wired through, and it is the only
+  place in the listing that still contradicts the offering's own description
+  (which promises `side (buy or sell, default buy)`). Drop those two words. The
+  `type: "string"` is separately odd — this page said Number — but it is harmless
+  in practice because both surfaces do `Number(...)` then gate on
+  `Number.isFinite && > 0`, so `"25000"` and `25000` are identical to us. Fix the
+  wording; the type is optional.
 
 - **Two version numbers disagree inside the same offering.** The description ends
   `JSON, version 1.2`, while `deliverable.properties.version.description` still
   says `currently 1.1`. Also cosmetic but live: `ticker`'s description begins with
   a stray tab character.
+
+- **`chain_id` is missing from the deliverable schema.** The registry declares
+  `["plan","chain","version","offering","generated_at"]`; `buildDeliverable` sends
+  those five **plus** `chain_id: 4663`. Nothing has broken — the schema is a
+  listing, not a validator applied to our submission — and the extra key is the
+  safe direction to be wrong in (we send more than we promise, never less). Worth
+  adding so the listing describes what a buyer actually receives, and worth noting
+  that the check which would have caught this is re-reading the registry, not
+  re-reading our own code.
 
 - **Offering name drift.** The registry and the chain both call it
   `executionplan`; `ACP_OFFERING_NAME` defaults to `execution-plan`, which is what
