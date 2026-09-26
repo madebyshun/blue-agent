@@ -38,26 +38,68 @@ export const PRODUCTS = [
   { name: "Blue Hub",  color: "#4FC3F7", desc: `Calling from code, or from another agent? ${TOOL_COUNT} tools over x402 — pay per call in USDC, no API key, no account.`, link: "/app/hub",  label: "Browse tools →" },
 ];
 
+/**
+ * 🔴 "Virtuals — every x402 handler and chat call" was FALSE, and it was false by
+ * OVER-correction. Venice left the x402 fallback chain 2026-07-25 and Bankr was
+ * 403-banned 2026-07-20, so this list rightly stopped calling Venice "primary" —
+ * then went one step further and handed Virtuals the chat path too.
+ *
+ * MEASURED 2026-09-26 against `app/chat/components/presets.ts`
+ * (`VIRTUALS_PRESETS_V1` — the authoritative spec, NOT the `MODEL_PRESETS` array
+ * in ChatInput.tsx, whose own comment marks it Deprecated): 8 presets, with
+ * `provider: "venice"` on exactly two — `free` (qwen3-5-9b, 0 credits) and
+ * `search` (grok-4-3, live web). `api/chat/route.ts` carries `veniceCfg`,
+ * `VENICE_API`, `veniceToolStream` and a Venice per-model max-token table to
+ * serve them, so this is a live dependency and not a leftover.
+ *
+ * Therefore `VENICE_INFERENCE_KEY` is NOT a dead env var, whatever CLAUDE.md says
+ * about it: the x402 TOOL path is Virtuals-only, the CHAT path is not. Those two
+ * sentences have to be said separately or one of them ends up wrong — which is
+ * exactly how this line broke. Venice gets its own row rather than being folded
+ * into the Virtuals one because a reader on the free tier is talking to a
+ * different provider than the rest of these docs imply.
+ */
 export const FOUNDATION = [
-  // Venice was removed from the fallback chain 2026-07-25 and Bankr was
-  // 403-banned 2026-07-20; every LLM call now goes to Virtuals via
-  // api/_lib/llm.ts → callLLM. This list used to name Venice as primary.
-  { label: "Virtuals",   desc: "The LLM gateway — every x402 handler and chat call", color: "#22C55E" },
-  { label: "x402",       desc: "Pay per call in USDC on Base — EIP-3009 via CDP",  color: "#34D399" },
-  { label: "RH Chain",   desc: "Robinhood Chain (chain ID 4663) — RWA trading",    color: "#22C55E" },
-  { label: "Base",       desc: "Base (chain ID 8453) — builder + token surface",   color: "#2563EB" },
-  { label: "Moralis",    desc: "Wallet data, token holdings, tx history",          color: "#fbbf24" },
+  { label: "Virtuals",   desc: "LLM gateway — every x402 tool + 6 of 8 chat presets", color: "#22C55E" },
+  { label: "Venice",     desc: "Serves the free and live-search chat presets only",   color: "#A78BFA" },
+  { label: "x402",       desc: "Pay per call in USDC on Base — EIP-3009 via CDP",     color: "#34D399" },
+  { label: "Base",       desc: "Base (chain ID 8453) — builder + token surface",      color: "#2563EB" },
+  { label: "RH Chain",   desc: "Robinhood Chain (chain ID 4663) — RWA trading",       color: "#22C55E" },
+  { label: "Moralis",    desc: "Wallet data, token holdings, tx history",             color: "#fbbf24" },
 ];
 
-// One preset per use-case — kept 1:1 with VIRTUALS_PRESETS_V1 in
-// app/chat/components/ChatInput.tsx (the authoritative picker). All inference
-// runs on Virtuals; update both sites together.
+/**
+ * Mirrors `VIRTUALS_PRESETS_V1` in `app/chat/components/presets.ts`. Order, model
+ * ids, context sizes and credit costs are copied from there — update both sites
+ * together.
+ *
+ * 🔴 The old header said "kept 1:1 with VIRTUALS_PRESETS_V1 in
+ * app/chat/components/ChatInput.tsx (the authoritative picker). All inference
+ * runs on Virtuals." Every clause was wrong, and the first one is why the rest
+ * went unnoticed: ChatInput.tsx re-EXPORTS `VIRTUALS_PRESETS_V1` from
+ * `./presets`, so the name resolved there and looked verified — while the table
+ * actually copied was `MODEL_PRESETS`, five lines further down and labelled
+ * "Deprecated" in its own comment. Citing the right NAME at the wrong FILE reads
+ * as a citation and checks nothing.
+ *
+ * What drifted behind that (measured 2026-09-26):
+ *   · 5 of 8 presets listed. `free` was the omission that mattered — 0 credits,
+ *     no wallet, the one row a first-time reader needs.
+ *   · Balanced and Deep both said "200K ctx"; the spec says 1,000,000.
+ *   · "Live web" sat on `grok`, which has no `webSearch` flag. The flag is on
+ *     `search`, a different preset on a different provider.
+ *
+ * Context windows are the provider's advertised numbers, not measured here.
+ */
 export const CHAT_MODELS = [
-  { icon: "💬", label: "Balanced", model: "Claude Sonnet 5",    note: "Default for most work · 200K ctx", cr: "50 cr",  color: "#4FC3F7" },
-  { icon: "⚡", label: "Fast",     model: "DeepSeek V4 Flash",  note: "Cheapest · snappy · 1M ctx",       cr: "10 cr",  color: "#34D399" },
-  { icon: "🔬", label: "Deep",     model: "Claude Opus 4.8",    note: "Heavy reasoning · 200K ctx",       cr: "200 cr", color: "#A78BFA" },
-  { icon: "🔍", label: "Grok",     model: "Grok 4",             note: "Live web · 2M ctx",                cr: "60 cr",  color: "#E879F9" },
-  { icon: "🔒", label: "Private",  model: "E2EE DeepSeek V4",   note: "E2EE · no logs · 1M ctx",          cr: "30 cr",  color: "#6EE7B7" },
+  { icon: "⚡", label: "Fast",     model: "DeepSeek V4 Flash",   note: "Cheapest · snappy · 1M ctx",           cr: "10 cr",  color: "#34D399" },
+  { icon: "🆓", label: "Free",     model: "Qwen 3.5 9B",         note: "No credits · chat only · no tools",    cr: "0 cr",   color: "#94A3B8" },
+  { icon: "💬", label: "Balanced", model: "Claude Sonnet 5",     note: "Default for most work · 1M ctx",       cr: "50 cr",  color: "#4FC3F7" },
+  { icon: "🔬", label: "Deep",     model: "Claude Opus 4.8",     note: "Heavy reasoning · 1M ctx",             cr: "200 cr", color: "#A78BFA" },
+  { icon: "🔒", label: "Private",  model: "E2EE DeepSeek V4",    note: "E2EE · no logs · 1M ctx",              cr: "30 cr",  color: "#6EE7B7" },
+  { icon: "✨", label: "Instant",  model: "Gemini 2.5 Flash",    note: "Fastest first token · 1M ctx",         cr: "10 cr",  color: "#4285F4" },
+  { icon: "🧠", label: "Grok",     model: "Grok 4",              note: "Widest context · 2M ctx",              cr: "60 cr",  color: "#E879F9" },
+  { icon: "🔍", label: "Search",   model: "Grok 4.3",            note: "Live web search · 1M ctx",             cr: "60 cr",  color: "#F472B6" },
 ];
 
 export const CHAT_CAPABILITIES = [

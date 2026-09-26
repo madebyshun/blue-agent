@@ -3,18 +3,40 @@ import { DocHeader, H2, P, CardGrid, Card, PrevNext, Callout } from "./_ui";
 import { STATS, PRODUCTS, FOUNDATION } from "./_data";
 import { TOOL_COUNT } from "@/lib/agent-tools";
 
+/* 🔴 `description` advertised "Blue Feed" until 2026-09-26 — a surface that does
+   not exist. MEASURED the same day: no `app/app/feed`, no `app/api/feed`, no
+   `app/docs/feed`; `_nav.ts` has carried the comment "Blue Feed hidden while
+   rebuilding — its docs page is parked (404)" for weeks. So the one string
+   search engines and link unfurls quote was selling a 404, which is exactly the
+   failure the retiring law in CLAUDE.md names: the gap is never "dead code
+   exists", it is a payment path or a link that outlives the product.
+   A meta description is the LAST place a dead surface gets noticed, because
+   nothing on the rendered page shows it — the body never mentioned Blue Feed.
+   It also said "Base builders" while the page body and all three product cards
+   name two chains. Hard rule #1: state the chain, and there are two. */
 export const metadata = {
   title: "BlueAgent Docs — The onchain Agent OS",
-  description: `BlueAgent: ${TOOL_COUNT} AI tools, Blue Chat, Blue Feed — built for Base builders and autonomous agents. x402 native, pay per call.`,
+  description: `BlueAgent: ${TOOL_COUNT} AI tools over x402, Blue Chat, and oracle-vs-DEX drift on Base 8453 + Robinhood Chain 4663 — for builders and autonomous agents. Pay per call in USDC, no API key.`,
 };
 
 export default function DocsOverview() {
   return (
     <article>
+      {/* 🔴 The lead said "live Base intelligence" until 2026-09-26 — ONE chain,
+          in the largest string on the page, directly above a body paragraph and
+          three cards that all name TWO. The comment below already claimed this
+          exact phrase was fixed that morning; it had not been. Only the body
+          paragraph was rewritten, and the lead kept the wording the comment was
+          written to bury.
+          That is the lesson worth keeping: a comment saying `Said X until <date>`
+          is a claim about a string, and nothing checks it. It read as done for
+          the rest of the day and would have read as done to the next reader too.
+          When you record a fix here, grep the file for the old phrase before
+          writing the past tense. */}
       <DocHeader
         eyebrow="Introduction"
         title="Blue Agent"
-        lead={`The onchain Agent OS. ${TOOL_COUNT} AI tools, Blue Chat, and live Base intelligence — built for builders and autonomous agents. x402 native, no API key needed.`}
+        lead={`The onchain Agent OS. ${TOOL_COUNT} AI tools, Blue Chat, and live reads on Base 8453 and Robinhood Chain 4663 — built for builders and autonomous agents. x402 native, no API key needed.`}
       />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-[#1A1A2E] rounded-2xl overflow-hidden border border-[#1A1A2E] my-8">
@@ -26,12 +48,13 @@ export default function DocsOverview() {
         ))}
       </div>
 
-      {/* Said "an AI agent layer built on Base" and "live Base intelligence"
-          until 2026-09-26 — one chain, on a page whose own product cards name
-          two. Hard rule #1: state the chain, every time, and there are two here.
-          Both chain ids are spelled out rather than left as names, because an
-          address or an RPC call is meaningless without one and these two share
-          no state. */}
+      {/* Said "an AI agent layer built on Base" until 2026-09-26 — one chain, on
+          a page whose own product cards name two. Hard rule #1: state the chain,
+          every time, and there are two here. Both chain ids are spelled out
+          rather than left as names, because an address or an RPC call is
+          meaningless without one and these two share no state.
+          (This comment also claimed to have fixed "live Base intelligence" in
+          the lead. It had not — see the 🔴 block above DocHeader.) */}
       <H2>What is BlueAgent?</H2>
       <P>
         BlueAgent is an agent on <strong className="text-slate-200">Virtuals</strong> that works onchain across{" "}
