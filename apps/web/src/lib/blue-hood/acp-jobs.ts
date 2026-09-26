@@ -99,13 +99,16 @@ export interface AcpJobRecord {
   price_usdc?: number; // budget agreed for the job
   /**
    * GROSS escrow that settled, read from the chain — deliberately NOT named
-   * "collected". MEASURED on job 81132: a 0.5 budget paid the provider 0.45,
-   * sent 0.025 to a fee recipient and 0.025 to an address that is BOTH the
-   * job's `client` and its `evaluator` (the smoke test bought from itself), so
-   * that leg is undetermined between a buyer refund and an evaluator fee.
-   * `getJob` exposes no net field and a single observation is not a fee rate, so
-   * the amount the seller actually banked is NOT derivable here and must not be
-   * inferred. The old name claimed it was, and overstated by ~11%.
+   * "collected". The contract deducts `platformFeeBP` (5%) and `evaluatorFeeBP`
+   * (5%), so the provider banks 90%. MEASURED on job 81132: a 0.5 budget paid
+   * the provider 0.45, the platform treasury 0.025, and the evaluator 0.025.
+   * The old name promised the amount banked while carrying the budget, and so
+   * overstated revenue by ~11%.
+   *
+   * Still gross on purpose: both fee rates are owner-settable on the contract,
+   * so persisting a net computed with today's 90% would rot into a wrong number
+   * that nothing would flag. Store what settled; derive net at read time from
+   * the live BPs if it is ever needed.
    */
   usdc_gross?: number;
   error?: string; // last compute/submit error, if any

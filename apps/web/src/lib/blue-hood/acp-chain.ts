@@ -33,12 +33,14 @@ export interface OnChainJob {
   status: OnChainJobStatus;
   /**
    * Escrow budget in whole USDC — the GROSS figure, not what the provider nets.
-   * MEASURED on job 81132: budget 0.5, of which the provider received 0.45, a
-   * fee recipient took 0.025, and 0.025 went to an address that is both the
-   * job's `client` and its `evaluator` — so that leg cannot be classified as a
-   * refund or an evaluator fee from this job alone. `getJob` exposes no net
-   * field, and one observation is not a fee rate, so callers must not derive
-   * earnings from this number.
+   * The contract charges `platformFeeBP` (500 = 5%) plus `evaluatorFeeBP`
+   * (500 = 5%), so a provider banks 90% of the budget. MEASURED on job 81132:
+   * 0.5 budget → 0.45 provider, 0.025 platform treasury, 0.025 evaluator.
+   *
+   * Callers must NOT bake 0.9 in. Both rates are owner-settable at runtime
+   * (`setPlatformFee`, `setEvaluatorFee`), so a hardcoded multiplier would go
+   * stale silently and mis-state revenue with no error anywhere. Read the BPs
+   * from the contract if you need a net figure.
    */
   budget_usdc: number;
 }

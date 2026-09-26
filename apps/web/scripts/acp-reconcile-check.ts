@@ -132,12 +132,17 @@ async function guardUnknownState(): Promise<void> {
 }
 
 // ── Group 5: gross is never relabelled as collected ──────────────────────────
-// MEASURED on job 81132: a 0.5 budget paid the provider 0.45, sent 0.025 to a
-// fee recipient and 0.025 to an address that is both the job's `client` and its
-// `evaluator`, which leaves that leg unclassified. `getJob` exposes no net field,
-// so the amount banked is NOT derivable. The old field name claimed it was and
-// overstated by ~11%. This is the one number the public read publishes, so the
-// name matters more than it looks.
+// MEASURED on job 81132: a 0.5 budget paid the provider 0.45, the platform
+// treasury 0.025 and the evaluator 0.025 — the contract's `platformFeeBP` and
+// `evaluatorFeeBP` are both 500, so a provider banks 90%. The old field name
+// promised the amount banked while carrying the budget, overstating by ~11%.
+// This is the one number the public read publishes, so the name matters more
+// than it looks.
+//
+// 5.4 below still forbids hardcoding that 90%, and knowing the rate makes it
+// MORE tempting, not less: both BPs are owner-settable (`setPlatformFee`,
+// `setEvaluatorFee`), so a baked-in 0.9 would drift into a wrong published
+// number with nothing to catch it.
 
 {
   check("5.1 the ledger field is named gross", /usdc_gross\?: number/.test(ledgerSrc));
@@ -150,7 +155,7 @@ async function guardUnknownState(): Promise<void> {
     /usdc_gross: chainJob\.budget_usdc/.test(sellerSrc),
   );
   check(
-    "5.4 no fee rate is inferred from the single observation",
+    "5.4 the owner-settable fee rate is never hardcoded",
     !/0\.9\s*\*|\*\s*0\.9/.test(sellerSrc) && !/FEE_RATE/.test(sellerSrc + chainSrc),
   );
 }

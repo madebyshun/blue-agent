@@ -219,10 +219,10 @@ to be indistinguishable from a dead one.
 recorded on this page predates that and is left verbatim, because a measurement
 edited after the fact is no longer a measurement. The rename was not cosmetic: the
 field carried the escrow BUDGET while its name promised the amount banked, and job
-81132 settled a 0.5 budget as 0.45 to the provider, 0.025 to a fee recipient and
-0.025 to an address that is both the job's buyer and its evaluator. `getJob`
-exposes no net field, so what the seller actually nets is not derivable from the
-ledger and is deliberately not published. Full trace in the resolution section.
+81132 settled a 0.5 budget as 0.45 to the provider, 0.025 to the platform treasury
+and 0.025 to the evaluator. The contract takes 5% platform + 5% evaluator, so a
+provider banks 90% of any budget. `getJob` exposes no net field, so the ledger
+stores gross only. Full trace in the resolution section.
 
 ---
 
@@ -443,27 +443,48 @@ driven by hand (`--create`, `--fund`, `--complete`); every seller action was the
 
 | to | USDC | who that is |
 |---|---|---|
-| `0x884FBdd5cF193E7F87CBA76419e526D8F4dF7A9B` | **0.45** | the seller — `getJob().provider` |
-| `0x3F833Be7447F82E8654Bc634981899db0ee8042E` | 0.025 | neither party to the job |
-| `0x02950Ad38aDA1D599375bD447E080cd404809205` | 0.025 | **both** `client` and `evaluator` |
+| `0x884FBdd5cF193E7F87CBA76419e526D8F4dF7A9B` | **0.45** | the seller, `getJob().provider` |
+| `0x3F833Be7447F82E8654Bc634981899db0ee8042E` | 0.025 | the platform treasury |
+| `0x02950Ad38aDA1D599375bD447E080cd404809205` | 0.025 | the evaluator (also the buyer here) |
 
 So the listed price is 0.5 and the **revenue is 0.45 USDC per job on Base 8453**.
 Do not publish 0.5 as earnings.
 
-⚠️ **The last row cannot be labelled from this job.** `getJob(81132)` returns the
-same address for `client` and `evaluator` — the smoke test bought from itself and
-evaluated itself — so a refund of unspent escrow and an evaluator fee are
-indistinguishable here. They are not the same thing against a real buyer: if that
-0.025 is an evaluator fee, a third-party evaluator keeps it and BlueAgent still
-nets 0.45. **0.45 is the only figure this job supports for the seller role.** The
-0.025 landing back in the treasury wallet is an artifact of self-dealing, not
-income, and it must not be added to it. Distinguishing the two needs a job with a
-third-party evaluator; until then the split is 90 / 5 / 5 by arithmetic and
-unattributed by role.
+**The split is a contract parameter, not an inference.** Read from the ACP
+contract on Base 8453:
 
-`getJob` exposes no net field, and one settlement is not a fee rate, so the ledger
-deliberately stores only the gross escrow (`usdc_gross`) and publishes no derived
-net.
+```
+evaluatorFeeBP()   500   = 5%
+platformFeeBP()    500   = 5%
+platformTreasury() 0x3F833Be7447F82E8654Bc634981899db0ee8042E
+```
+
+`platformTreasury` is exactly the address in row 2, and 5% + 5% of 0.5 is
+0.025 + 0.025, leaving 0.45. So the provider takes **90%** of any budget, and
+that holds for every job, not just this one.
+
+🔴 **An earlier revision of this page called row 3 "possibly a buyer refund" and
+said the two were indistinguishable.** That was wrong, and the way it was wrong is
+the lesson: the whole argument was built on ONE transaction, where the buyer and
+the evaluator happened to be the same address, so the observation genuinely could
+not separate them. The fee schedule was a public view call the entire time.
+**When a split looks ambiguous, read the contract's parameters instead of
+theorising from a single settlement** — `evaluatorFeeBP` / `platformFeeBP` answer
+it in one call and answer it for all jobs.
+
+⚠️ **The 0.025 that came back is still not income.** It is the EVALUATOR fee, and
+it landed in the treasury only because the smoke test named itself evaluator. A
+job with a third-party evaluator pays it to them and BlueAgent still nets 0.45.
+Never add it to revenue.
+
+Note also that the Virtuals whitepaper does **not** publish these percentages —
+it describes the phases and the escrow-refunds-on-expiry rule, and omits the
+split. Do not go looking for it there; the contract is the source.
+
+`getJob` exposes no net field, so the ledger stores only the gross escrow
+(`usdc_gross`). Net is now derivable (`gross × 0.90`) but is deliberately still
+not published from the ledger, because the fee BPs are owner-settable
+(`setEvaluatorFee`, `setPlatformFee`) and a cached 90% would silently go stale.
 
 **The completion exposed a second bug, now fixed.** The cron drives itself from
 `agent.sessions`, hydrated by `getActiveJobs()`; a job that settles leaves that
