@@ -32,7 +32,7 @@
  *
  * Run: npx tsx scripts/dead-tool-check.ts
  */
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MCP_TOOLS } from "../src/lib/mcp-tools";
@@ -173,8 +173,23 @@ check(
 // Its own MCP server, its own tool list, shipped to users as @blueagent/skill.
 // Cutting /api/mcp did nothing to it. `dist/` is what npm actually runs, so a
 // src-only fix is not a fix — compare both and require they agree.
+//
+// `dist/` is gitignored, so this reads an artifact no checkout contains. It
+// exists because packages/skill AND packages/core each declare `"prepare": "tsc"`,
+// which npm runs for every workspace on `npm ci`. core is not optional and is not
+// tidiness: skill imports @blueagent/core, whose `types` points into core's own
+// dist/, so skill cannot compile until core is built — with prepare on skill alone
+// `npm ci` fails outright on TS2307. It passed locally only because a checkout
+// nested under another one resolves @blueagent/core up into the parent's built
+// copy; a runner has no parent. (CI: 3 red runs on 2026-09-26, ENOENT here.)
 const skillEntries = (rel: string) => {
-  const src = readFileSync(join(REPO, rel), "utf8");
+  const abs = join(REPO, rel);
+  if (!existsSync(abs))
+    throw new Error(
+      `${rel} is missing — run \`npm ci\` from the repo root. The workspace ` +
+        `\`prepare\` script builds it; an --ignore-scripts install will not.`
+    );
+  const src = readFileSync(abs, "utf8");
   const names = [...src.matchAll(/name:\s*"((?:blue|hub|b20)_[a-z0-9_]+)"/g)];
   const seen = new Map<string, string | undefined>();
   names.forEach((m, i) => {
