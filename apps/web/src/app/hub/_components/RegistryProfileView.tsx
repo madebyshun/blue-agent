@@ -2,7 +2,7 @@
 
 /**
  * RegistryProfileView — a single agent's graded profile (health score, verdict,
- * strengths, skills, collab, issues, re-audit).
+ * strengths, skills, collab, issues, re-run).
  *
  * Reused by two routes so it resolves on BOTH hosts:
  *   • /hub/registry/[handle]      (public host)      → <RegistryProfileView />
@@ -198,10 +198,10 @@ export default function RegistryProfileView({ inShell = false }: { inShell?: boo
               </div>
             </div>
 
-            {/* Re-audit */}
+            {/* Re-run */}
             <button onClick={handleReaudit} disabled={reauditing}
               className="shrink-0 px-3 py-1.5 border border-[#1A1A2E] hover:border-[#4FC3F7]/20 font-mono text-[10px] text-slate-600 hover:text-[#4FC3F7] rounded-lg transition-all disabled:opacity-40">
-              {reauditing ? "auditing…" : "↻ re-audit"}
+              {reauditing ? "analyzing…" : "↻ re-analyze"}
             </button>
           </div>
 
@@ -295,9 +295,15 @@ export default function RegistryProfileView({ inShell = false }: { inShell?: boo
           )}
 
           {/* ── Footer meta ── */}
+          {/* No persona list and no pass count — see the 🔴 note above SubmitForm in
+              RegistryView.tsx. This line read "audited … · Blue + Aeon + MiroShark"
+              until 2026-09-27; it was the fourth surface of that claim and outlived
+              the other three by a commit. The state and `profile.auditedAt` still say
+              "audit" because that field is persisted in KV for every registered agent,
+              so renaming it is a data migration, not a copy change. */}
           <div className="flex items-center justify-between font-mono text-[10px] text-slate-700 mt-8 pt-4 border-t border-[#1A1A2E]">
             <span>submitted {new Date(profile.submittedAt).toLocaleDateString()}</span>
-            <span>audited {auditAgeH < 1 ? "just now" : `${auditAgeH}h ago`} · Blue + Aeon + MiroShark</span>
+            <span>analyzed {auditAgeH < 1 ? "just now" : `${auditAgeH}h ago`} by Blue Agent</span>
           </div>
 
           <div className="mt-4">
