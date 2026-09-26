@@ -171,14 +171,27 @@ function CardBody({ children }: { children: React.ReactNode }) {
 interface HoneypotResult {
   verdict?: string;
   confidence?: number;
+  /** True when the tax was not read, so `confidence` was capped in the handler. */
+  confidence_capped?: boolean;
   is_honeypot?: boolean;
-  sell_tax_estimate?: string;
-  buy_tax_estimate?: string;
+  /** 🔴 `null` when the tax was NOT read — it used to be the string "unknown",
+   *  which rendered in a tax field and read as a measurement. A `null` here is
+   *  falsy, so a naive `{x && …}` would silently DROP the row and leave the card
+   *  looking like a clean scan; the row below renders an explicit unverified
+   *  state instead. Do not narrow these back to `string`. */
+  sell_tax_estimate?: string | null;
+  buy_tax_estimate?: string | null;
+  /** "template" = read off the contract. Anything else = not read. */
+  tax_read?: "template" | "failed" | "not_applicable";
+  has_blacklist?: boolean | null;
+  token_template?: string | null;
   red_flags?: string[];
   green_flags?: string[];
   assessment?: string;
   token?: { name?: string; symbol?: string; verified?: boolean; url?: string };
   address?: string;
+  /** Appended by the handler when the address has bytecode on RH 4663. */
+  hint?: { found_on_chain?: number; chain?: string; explorer?: string; note?: string };
 }
 
 const HONEYPOT_COLORS: Record<string, { bg: string; text: string; icon: string }> = {
@@ -193,6 +206,11 @@ export function HoneypotCard({ result }: { result: HoneypotResult }) {
   const color     = HONEYPOT_COLORS[verdict]?.text ?? "#94a3b8";
   const accentColor = verdict === "SAFE" ? "#4ade80" : verdict === "HONEYPOT" ? "#f87171" : verdict === "NOT_A_TOKEN" ? "#64748b" : "#fb923c";
   const url       = result.token?.url ?? (result.address ? `https://basescan.org/address/${result.address}` : undefined);
+  // A tax is shown only when it was measured. `tax_read` is authoritative;
+  // the string fallback covers a response cached before this field existed.
+  const taxWasRead =
+    result.tax_read === "template" ||
+    (result.tax_read === undefined && typeof result.sell_tax_estimate === "string" && result.sell_tax_estimate !== "unknown");
 
   return (
     <Card accentColor={accentColor}>
@@ -222,17 +240,25 @@ export function HoneypotCard({ result }: { result: HoneypotResult }) {
           </div>
         )}
 
-        {/* Tax row */}
-        {(result.sell_tax_estimate || result.buy_tax_estimate) && (
-          <div className="flex gap-4 font-mono text-[11px]">
-            {result.buy_tax_estimate && (
-              <span>Buy tax: <span className="text-slate-300">{result.buy_tax_estimate}</span></span>
+        {/* Tax row. Three distinct states, and the unread one is VISIBLE —
+            hiding it is what made a capped scan look like a clean one. */}
+        {result.tax_read === "not_applicable" ? null : taxWasRead ? (
+          <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px]">
+            <span>Buy tax: <span className="text-slate-300">{result.buy_tax_estimate}</span></span>
+            <span>Sell tax: <span style={{ color: result.sell_tax_estimate === "0%" ? "#4ade80" : "#fb923c" }}>
+              {result.sell_tax_estimate}
+            </span></span>
+            {result.has_blacklist === true && (
+              <span style={{ color: "#fb923c" }}>blacklist: present</span>
             )}
-            {result.sell_tax_estimate && (
-              <span>Sell tax: <span style={{ color: result.sell_tax_estimate === "0%" ? "#4ade80" : "#fb923c" }}>
-                {result.sell_tax_estimate}
-              </span></span>
+            {result.token_template && (
+              <span className="text-slate-600">read from {result.token_template}</span>
             )}
+          </div>
+        ) : (
+          <div className="font-mono text-[11px]" style={{ color: "#fb923c" }}>
+            Buy/sell tax: not read — this contract does not expose the tax selectors.
+            {result.confidence_capped && <span className="text-slate-600"> Confidence capped.</span>}
           </div>
         )}
 
@@ -245,6 +271,18 @@ export function HoneypotCard({ result }: { result: HoneypotResult }) {
           <p className="font-mono text-[11px] text-slate-500 leading-relaxed border-t pt-2" style={{ borderColor: `${accentColor}15` }}>
             {result.assessment}
           </p>
+        )}
+
+        {/* Cross-chain pointer. The verdict above is about Base and stays that
+            way — this only says the address has code on RH 4663. */}
+        {result.hint?.explorer && (
+          <div className="flex pt-1">
+            <a href={result.hint.explorer} target="_blank" rel="noopener noreferrer"
+              className="font-mono text-[10px] hover:underline transition-colors"
+              style={{ color: "#60a5fa" }}>
+              Has bytecode on Robinhood Chain {result.hint.found_on_chain ?? 4663} — view there ↗
+            </a>
+          </div>
         )}
 
         {/* Footer */}
