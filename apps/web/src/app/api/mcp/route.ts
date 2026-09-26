@@ -151,8 +151,20 @@ const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
 // untouched, because the shape it must match is the one `blue_registry` just
 // published to the agent. A silent rewrite between "what the registry promised"
 // and "what the handler received" is a bug an agent cannot see or debug.
+//
+// 🔴 That trim dropped one entry it needed to keep, and hub_contract_trust
+// returned `400 {"error":"address is required"}` on EVERY call for a day: the
+// schema publishes `contract`, the handler reads `body.address`, and this map
+// was the only thing joining them. A manifest cut and a remap cut land in the
+// same commit and share no list, so the pairing is now computed instead of
+// remembered — scripts/mcp-arg-contract-check.ts derives each handler's accepted
+// fields from source and fails if a published field cannot reach one.
 const ARG_REMAP: Record<string, (a: Record<string, unknown>) => Record<string, unknown>> = {
   "pool-scan": (a) => ({ ...a, limit: a.limit !== undefined ? Number(a.limit) : 10 }),
+  // `contract` stays the published name on purpose. contract-trust has an EOA
+  // short-circuit because callers do pass wallets, and the field name is the
+  // cheapest place to tell an agent which one this tool wants.
+  "contract-trust": (a) => ({ ...a, address: a.address ?? a.contract }),
 };
 
 /**
