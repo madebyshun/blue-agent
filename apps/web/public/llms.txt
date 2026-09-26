@@ -13,6 +13,11 @@ X-Payment header. Settlement is on-chain via the Coinbase CDP facilitator.
 ## Discovery
 - Machine-readable catalog (all tools, endpoints, prices, input schemas): https://blueagent.dev/api/catalog
 - MCP server (remote, no install): https://blueagent.dev/api/mcp
+  Its manifest advertises 18 tools, a curated subset of the 110 tools above. The
+  rest are not missing and not gated: call blue_registry to list the whole
+  catalog, then blue_call to invoke any entry in it. The manifest is small on
+  purpose, because an always-loaded tool list is context spent before the agent
+  has read the question.
 - Human UI: https://blueagent.dev/hub
 
 ## Payment

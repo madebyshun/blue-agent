@@ -107,6 +107,31 @@ export async function GET() {
       asset: USDC,
       payTo: PAY_TO,
       count: tools.length,
+      // ── the receipt for `count` ───────────────────────────────────────────
+      // `count` on its own is an assertion. These three make it re-computable by
+      // the caller: `listed` is how many entries the catalog holds, `withHandler`
+      // how many of those resolve to code that runs, and `count` is the
+      // intersection this response actually published. Equal ⟹ no ghosts.
+      //
+      // The comment above the filter explains why the filter exists at all: the
+      // sibling /api/v1 index DID advertise two ids that answer 501, and a
+      // directory indexing it could not tell a real tool from a ghost. Silently
+      // filtering fixes the list but hides the fact — a caller sees a smaller
+      // number with no way to know whether we trimmed ghosts or lost tools.
+      // Printing all three makes the difference visible instead of absorbed.
+      //
+      // 🔴 Never collapse these to one number, and never compute `listed` from
+      // `tools.length`. Both are the same mistake: deriving the check from the
+      // thing being checked, which passes no matter what. `scripts/docs-truth-check.ts`
+      // (group 4) pins the equality; `hub-receipts-report.ts` prints it beside
+      // the symbol each came from.
+      integrity: {
+        listed: AGENT_TOOLS.length,
+        withHandler: Object.keys(HANDLERS).length,
+        /** true ⟹ every listed tool has a handler and every handler is listed. */
+        noOrphans: AGENT_TOOLS.length === Object.keys(HANDLERS).length
+          && tools.length === AGENT_TOOLS.length,
+      },
       tools,
     },
     {

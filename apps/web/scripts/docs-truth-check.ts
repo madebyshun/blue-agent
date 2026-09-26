@@ -154,6 +154,14 @@ const pinned: [string, string, string][] = [
   ["README chat section", README, `all ${TOOL_COUNT} Hub tools`],
   ["README cli example", README, `# list all ${TOOL_COUNT} tools`],
   ["llms.txt", LLMS, `Blue Hub exposes ${TOOL_COUNT} paid tools.`],
+  // An agent reads llms.txt, connects to /api/mcp, and counts 18 against the 110
+  // it was just told. Until 2026-09-26 nothing public reconciled those, so the
+  // only available conclusion was that the catalog number was inflated. Both
+  // numbers are interpolated, so the sentence cannot drift away from either
+  // surface — which is the point: it is the one place the gap is EXPLAINED, and
+  // an explanation with a stale number in it is worse than none.
+  ["llms.txt MCP subset line", LLMS,
+   `advertises ${MCP_COUNT} tools, a curated subset of the ${TOOL_COUNT} tools above.`],
   // Said "for Base builders" until 2026-09-26. The pin only ever guarded the
   // NUMBER, so it held the one-chain audience framing in place as a side effect
   // — an editor fixing the chain wording got a CI failure that read like they
@@ -239,7 +247,12 @@ const claimHolds = (n: number, plus: boolean, alts: number[] = []) =>
 
 const scanned: [string, string, number[]?][] = [
   ["README.md", README],
-  ["public/llms.txt", LLMS],
+  // MCP_COUNT joins SKILL.md and CLAUDE.md as an accepted alternate here for the
+  // same reason they have it: llms.txt now explains how the MCP subset relates to
+  // the catalog, and refusing it that sentence would push the explanation out of
+  // the one file agents actually fetch. The alternate is itself derived from
+  // MCP_TOOLS, so this widens what is TRUE, not what goes unchecked.
+  ["public/llms.txt", LLMS, [MCP_COUNT]],
   ["public/plugin.md", PLUGIN],
   ["public/.well-known/farcaster.json", FARCASTER_STATIC],
   ["src/app/waitlist/page.tsx", WAITLIST],
@@ -319,6 +332,31 @@ check(
   FARCASTER_ROUTE.includes("docs-truth-check.ts"),
   "the two paths collide; whoever finds that needs to know which one is pinned",
 );
+
+// /api/catalog publishes `count` as a number an indexer will quote verbatim, so
+// it also publishes the two figures that make it re-computable: `integrity.listed`
+// (catalog entries) and `integrity.withHandler` (handlers that exist). Equal ⟹ no
+// orphan either way. This is the only place a CALLER can verify the count rather
+// than trust it, so the shape is pinned here.
+//
+// 🔴 The failure mode is self-derivation, not absence. `listed: tools.length`
+// type-checks, reads fine, and makes `noOrphans` true forever — the check would
+// then be comparing the published list against itself. Both fields must come off
+// the imported symbols, which is what these two assertions actually test.
+{
+  const catalogCode = stripComments(read("src/app/api/catalog/route.ts"));
+  check(
+    "/api/catalog publishes the integrity block that backs `count`",
+    /integrity:\s*\{/.test(catalogCode) && /noOrphans/.test(catalogCode),
+    "count without listed/withHandler beside it is an assertion, not a receipt",
+  );
+  check(
+    "…and derives it from the symbols, not from the response it just built",
+    /listed:\s*AGENT_TOOLS\.length/.test(catalogCode) &&
+      /withHandler:\s*Object\.keys\(HANDLERS\)\.length/.test(catalogCode),
+    "`listed: tools.length` would compare the published list against itself",
+  );
+}
 
 // The bundle cost is the whole reason these two are held to group 2 instead.
 // Re-adding the import is the regression this guards.
