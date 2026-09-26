@@ -465,6 +465,90 @@ const BSC_FIRST: RawAccept[] = [
           /no fallback by construction/i.test(flat(src)));
 }
 
+// ── Group 11: the payee fix changed what gets MEASURED, and both ways it lied ─
+// Resolving the payee from the builder's live 402 turned one Run click into two
+// requests through the proxy. Neither number below moves money, but both are
+// read by someone deciding something: `usage:<id>` orders Hub Featured, and the
+// liveness report's own footer asks a human whether to delist. A count that is
+// 2× too high and a live tool reported dead are the two errors that shipped.
+
+{
+  /**
+   * Body of the first block whose header matches `re`, by BRACE COUNTING.
+   * Not a `[\s\S]{0,N}` window: 8.7's first draft failed against correct code
+   * because one Tailwind className is ~155 chars, so the window was measuring
+   * formatting rather than structure. "Inside this block" is a real question
+   * with a real answer; distance is a proxy that rots on the next reflow.
+   */
+  const blockAfter = (src: string, re: RegExp): string => {
+    const m = re.exec(src);
+    if (!m) return "";
+    const open = src.indexOf("{", m.index);
+    if (open < 0) return "";
+    let depth = 0;
+    for (let j = open; j < src.length; j++) {
+      if (src[j] === "{") depth++;
+      else if (src[j] === "}" && --depth === 0) return src.slice(open + 1, j);
+    }
+    return "";
+  };
+
+  const proxy     = read("src/app/api/hub/tools/[id]/call/route.ts");
+  const proxyCode = stripComments(proxy);
+  const counted   = blockAfter(proxyCode, /if\s*\(\s*!isDiscovery\s*\)/);
+  const COUNTERS  = [/kv\.incr\(`usage:/, /incrCallCount\(/, /recordCall\(/];
+
+  // The condition is two clauses on purpose. The simpler `!xPayment` would also
+  // silence a genuinely free ($0) external tool, which is called with no payment,
+  // answers 2xx, and IS a use — so the loose version under-counts the honest case
+  // while fixing the dishonest one.
+  check("11.1 a discovery probe is an unpaid request that came back 402, nothing looser",
+        /const\s+isDiscovery\s*=\s*!xPayment\s*&&\s*upstream\.status\s*===\s*402/.test(proxyCode));
+  check("11.2 all three call counters sit inside that guard",
+        counted.length > 0 && COUNTERS.every(r => r.test(counted)));
+  // Paired with 11.2: a guarded copy plus an unguarded one counts twice and
+  // still passes "the counters are inside the block".
+  check("11.3 …and none of them is also invoked outside it",
+        counted.length > 0 &&
+          COUNTERS.every(r => r.test(proxyCode.replace(counted, " ")) === false));
+  // The money assertion. 402 is not `ok`, so revenue was never wrong — this pins
+  // that it stays that way if someone rewrites the block above.
+  check("11.4 revenue is still credited only on a successful upstream response",
+        /if\s*\(\s*upstream\.ok\s*&&\s*tool\.priceUSDC\s*>\s*0\s*\)[\s\S]{0,120}?addRevenue\(/
+          .test(proxyCode));
+  check("11.5 the ranking consequence is written down where the counters are",
+        /usage:<id>[\s\S]{0,200}?Featured/.test(flat(proxy)));
+
+  // ── the probe timeout, and the comments that quote it ──────────────────────
+  const registry = read("src/lib/hub-registry.ts");
+  const probe    = blockAfter(registry, /export async function probeEndpoint/);
+  const ms       = Number((/AbortSignal\.timeout\((\d[\d_]*)\)/.exec(probe)?.[1] ?? "0")
+                     .replace(/_/g, ""));
+  check("11.6 probeEndpoint allows a cold start to finish",
+        ms >= 15_000);
+  check("11.7 the measurement that moved it is recorded, not just the number",
+        /desk-x402-block/.test(flat(registry)) && /8003ms/.test(flat(registry)));
+
+  // The anti-rot assertion, and the reason this group exists at all: widening the
+  // timeout left THREE comments in two other files still saying "8s". Each read
+  // as a fact about this function and each was wrong. A number that lives in one
+  // file and is quoted in others cannot be kept honest by remembering to grep.
+  const quoted = ["src/app/api/hub/tools/health/route.ts", "src/lib/hub-liveness.ts"]
+    .flatMap(f => [...read(f).matchAll(/(\d+)s (?:timeout inside `probeEndpoint`|probe\b)/g)]
+      .map(m => Number(m[1]) * 1000));
+  check("11.8 every comment quoting that timeout quotes the current one",
+        quoted.length >= 3 && quoted.every(q => q === ms));
+
+  // Parallelism is what makes one budget cover N probes. If the probes are ever
+  // serialised, 6 × 15s blows a 30s ceiling and the Hub loses health entirely.
+  const budget = Number(/maxDuration\s*=\s*(\d+)/
+    .exec(read("src/app/api/hub/tools/health/route.ts"))?.[1] ?? "0");
+  check("11.9 the health route still budgets more wall-clock than one probe",
+        budget * 1000 > ms);
+  check("11.10 …and the probes it relies on still run in parallel",
+        /Promise\.all\(/.test(read("src/lib/hub-liveness.ts")));
+}
+
 console.log(`\nexternal-payee guard: ${pass} passed, ${failures.length} failed`);
 for (const f of failures) console.log(`  FAIL  ${f}`);
 process.exit(failures.length === 0 ? 0 : 1);
