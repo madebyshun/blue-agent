@@ -29,6 +29,9 @@
  *      audit. A dead name that still answers 200 is the only kind no user reports.
  *   F  Every toolId published by packages/skill resolves, and dist matches src.
  *      It is a separate npm artifact; nothing about fixing /api/mcp reaches it.
+ *   G  Blue Chat's dispatch table, which is a DIFFERENT map in a different file
+ *      from B's. Chat is allowed targets that are not catalog ids, so the
+ *      invariant is reachability, not membership. See the section for why.
  *
  * Run: npx tsx scripts/dead-tool-check.ts
  */
@@ -43,6 +46,7 @@ import { CONSOLE_SYSTEMS } from "../src/lib/console-systems";
 const WEB = join(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO = join(WEB, "..", "..");
 const routeSrc = readFileSync(join(WEB, "src/app/api/mcp/route.ts"), "utf8");
+const chatSrc = readFileSync(join(WEB, "src/app/api/chat/route.ts"), "utf8");
 
 const fail: string[] = [];
 const note = (s: string) => console.log(`   ${s}`);
@@ -57,11 +61,13 @@ function check(label: string, bad: string[], detail = "") {
 }
 
 // ── parse the dispatch surface out of route.ts ───────────────────────────────
-const block = (start: string, end: string) => {
-  const i = routeSrc.indexOf(start);
-  if (i < 0) throw new Error(`dispatch block not found: ${start} — this audit's source moved, which is a loud failure by design`);
-  return routeSrc.slice(i, routeSrc.indexOf(end, i));
+const blockIn = (src: string, file: string) => (start: string, end: string) => {
+  const i = src.indexOf(start);
+  if (i < 0) throw new Error(`dispatch block not found: ${start} in ${file} — this audit's source moved, which is a loud failure by design`);
+  return src.slice(i, src.indexOf(end, i));
 };
+const block = blockIn(routeSrc, "api/mcp/route.ts");
+const chatBlock = blockIn(chatSrc, "api/chat/route.ts");
 const keysOf = (src: string) => [...src.matchAll(/^\s{2}([a-z0-9_]+):\s*"/gm)].map((m) => m[1]);
 
 const hubMap = keysOf(block("const HUB_MAP", "};"));
@@ -258,6 +264,71 @@ check(
   "dist/ is what npm runs — a src-only edit ships nothing"
 );
 console.log(`   (@blueagent/skill: ${skillSrc.size} tools)`);
+
+// ── G. Blue Chat's dispatch table ────────────────────────────────────────────
+// Chat dispatches through its own map, TOOL_ENDPOINT, in its own file. Check B
+// never saw it: B reads api/mcp/route.ts. Two surfaces, two maps, shared
+// handlers — fixing one has never touched the other.
+//
+// The invariant here is NOT B's. Chat deliberately carries two targets that are
+// not catalog ids (`builder-score`, `crypto-rpc`), each rescued by a FREE_DIRECT
+// entry naming a free first-party route. Requiring catalog membership would
+// demand registering a tool that is intentionally unpriced. What must hold is
+// weaker and truer: every dispatchable chat tool reaches something that answers.
+//
+// LOOKUP ORDER IS THE WHOLE SUBTLETY, and it runs opposite to how the file
+// reads. TOOL_ENDPOINT is the ADMISSION GATE — `if (!endpoint) return "[Unknown
+// tool]"` fires several lines BEFORE FREE_DIRECT is declared — and FREE_DIRECT
+// then only overrides the path for a name already admitted. So the maps do not
+// shadow each other, they compose, and both entries for a free tool are
+// load-bearing in different ways. G1 and G3 are precisely those two deletions:
+// drop `hub_builder_score` from FREE_DIRECT and chat silently falls through to
+// /api/x402/builder-score, which answers 501; drop it from TOOL_ENDPOINT and
+// chat answers "[Unknown tool: hub_builder_score]" having never read the
+// override. Neither deletion fails to compile and neither changes a test today.
+const chatEntries = [...chatBlock("const TOOL_ENDPOINT", "};").matchAll(/^\s{2}([a-z0-9_]+):\s*"([a-z0-9-]+)"/gm)];
+const freeDirect = [...chatBlock("const FREE_DIRECT", "};").matchAll(/^\s{4}([a-z0-9_]+):\s*"(\/[a-z0-9/-]+)"/gm)];
+const freeNames = new Set(freeDirect.map((m) => m[1]));
+
+// Guard the guard. Both regexes are anchored to the indentation of two object
+// literals — TOOL_ENDPOINT at module scope, FREE_DIRECT nested inside a function.
+// A reformat empties the parse, and G1 then filters nothing and passes. That
+// vacuum is the failure mode this entire file is written against.
+//
+// The two floors differ on purpose. An empty TOOL_ENDPOINT is silent — G1 has
+// nothing left to reject — so it needs a real floor. An empty FREE_DIRECT is
+// self-announcing, because G1 immediately loses the overrides that are the only
+// reason two unregistered targets pass. So FREE_DIRECT is floored at 1, not at
+// today's 3: a hardcoded count would fail the day a free tool is legitimately
+// promoted into the catalog and its override correctly deleted, which is a
+// green-to-red flip on a change that fixed something.
+check(
+  "G0 both chat dispatch maps parsed — G1-G3 are not vacuous",
+  chatEntries.length >= 40 && freeDirect.length >= 1
+    ? []
+    : [`TOOL_ENDPOINT=${chatEntries.length} FREE_DIRECT=${freeDirect.length}`],
+  "a reindent of either literal silently empties the match and passes everything"
+);
+check(
+  "G1 every chat TOOL_ENDPOINT target resolves, or has a FREE_DIRECT override",
+  chatEntries
+    .filter(([, name, id]) => (!catalogIds.has(id) || !(id in HANDLERS)) && !freeNames.has(name))
+    .map(([, name, id]) => `${name}->${id}`),
+  "unresolvable id and no override — /api/x402/<id> answers 501 TOOL_UNAVAILABLE"
+);
+check(
+  "G2 every FREE_DIRECT path is a real route on disk",
+  freeDirect
+    .filter(([, , p]) => !existsSync(join(WEB, "src/app", p, "route.ts")))
+    .map(([, name, p]) => `${name}->${p}`),
+  "an override only rescues G1 while the route it names exists"
+);
+check(
+  "G3 every FREE_DIRECT name is admitted by TOOL_ENDPOINT",
+  freeDirect.filter(([, name]) => !chatEntries.some((e) => e[1] === name)).map(([, name]) => name),
+  "TOOL_ENDPOINT gates first — a name absent there returns [Unknown tool] and never reaches its override"
+);
+console.log(`   (chat: ${chatEntries.length} TOOL_ENDPOINT · ${freeDirect.length} FREE_DIRECT)`);
 
 console.log(
   fail.length === 0
