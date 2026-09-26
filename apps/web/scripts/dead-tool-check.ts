@@ -211,19 +211,24 @@ check(
 // Cutting /api/mcp did nothing to it. `dist/` is what npm actually runs, so a
 // src-only fix is not a fix — compare both and require they agree.
 //
-// `dist/` is gitignored, so this reads an artifact no checkout contains. It
-// exists because packages/skill AND packages/core each declare `"prepare": "tsc"`,
-// which npm runs for every workspace on `npm ci`. core is not optional and is not
-// tidiness: skill imports @blueagent/core, whose `types` points into core's own
-// dist/, so skill cannot compile until core is built — with prepare on skill alone
-// `npm ci` fails outright on TS2307. It passed locally only because a checkout
-// nested under another one resolves @blueagent/core up into the parent's built
-// copy; a runner has no parent. (CI: 3 red runs on 2026-09-26, ENOENT here.)
+// `dist/` is gitignored, so this reads an artifact no checkout contains. It is
+// built by the ROOT `prepare` script — `build:core && build:skill`, in that order,
+// on purpose. skill imports @blueagent/core, whose `types` points into core's own
+// dist/, so skill cannot compile until core is built.
+//
+// 🔴 Do NOT move that build back into per-package `"prepare": "tsc"` entries.
+// That was tried on 2026-09-26 and put CI red twice, because **npm runs workspace
+// build scripts in PARALLEL**: skill's tsc raced core's tsc and lost, failing the
+// whole install with TS2307 "Cannot find module '@blueagent/core'". Both packages
+// having `prepare` does not sequence them — it just starts two compilers at once.
+// MEASURED in a clean clone: `npm ci` → exit 2, while `npm ci --foreground-scripts`
+// (which serialises scripts) → exit 0. That flag is the only reason the two-prepare
+// version ever looked green locally; CI does not pass it, so CI saw the race.
 const skillEntries = (rel: string) => {
   const abs = join(REPO, rel);
   if (!existsSync(abs))
     throw new Error(
-      `${rel} is missing — run \`npm ci\` from the repo root. The workspace ` +
+      `${rel} is missing — run \`npm ci\` from the repo root. The root ` +
         `\`prepare\` script builds it; an --ignore-scripts install will not.`
     );
   const src = readFileSync(abs, "utf8");

@@ -22,7 +22,9 @@
     "dev": "npm run dev:web",
     "build:core": "npm --workspace packages/core run build",
     "build:builder": "npm --workspace packages/builder run build",
+    "build:skill": "npm --workspace packages/skill run build",
     "build:packages": "npm run build:core && npm run build:builder",
+    "prepare": "npm run build:core && npm run build:skill",
     "vercel-build": "npm run build:web"
   }
 }
