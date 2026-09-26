@@ -32,6 +32,15 @@ jobs:
       - name: Install workspace deps
         run: npm ci
 
+      # dead-tool-check's F2 compares packages/skill/dist against its src, because
+      # dist/ is what npm actually runs for @blueagent/skill. dist/ is gitignored,
+      # so it has to be built here. This is an EXPLICIT step on purpose — see the
+      # 🔴 block above `skillEntries` in apps/web/scripts/dead-tool-check.ts before
+      # moving it into any `prepare` script. Both shapes of that idea were tried on
+      # 2026-09-26; one broke CI, the other broke six production deploys.
+      - name: Build packages the invariant tests read
+        run: npm run build:skill
+
       - name: Type check
         working-directory: apps/web
         run: npx tsc --noEmit

@@ -31,6 +31,20 @@ They take precedence over speed.
   Next build is what production runs and what catches real errors.
   *(Real bug: a bulk patch changed a function signature but not its callers — tsx ran fine, next build failed,
   production deploy broke.)*
+- **The gate needs `packages/skill/dist`, which no checkout contains** (it is gitignored, and
+  dead-tool-check's F2 compares it against src because `dist/` is what npm actually runs). Build it once
+  from the repo root: `npm run build:skill` — which builds `@blueagent/core` first, since skill's types
+  resolve through core's `dist/`. 🔴 **Do NOT make that automatic with a `prepare` script.** Two shapes of
+  that idea shipped on 2026-09-26: per-package `prepare` put CI red for five runs, and a correctly-ordered
+  root `prepare` put SIX production deploys red — because **Vercel's install is scoped to the repo root and
+  `apps/web`, and never installs `packages/*`**, while still running the root's own hooks. Nothing in the
+  site build may depend on `packages/*` for the same reason. Full measurement and the exact reproduction
+  command are in the 🔴 block above `skillEntries` in `apps/web/scripts/dead-tool-check.ts`.
+- 🔴 **A green gate is NOT a green deploy — after pushing, check Vercel, not just `gh run`.** They cover
+  different phases: the gate and CI both begin *after* `npm ci` has already succeeded, so neither can ever
+  see a failure in Vercel's own install step. MEASURED 2026-09-26: `414005c`, `5aa0678` and `a5d5ddf` were
+  green on GitHub Actions and **every one of them failed in production, twice each** — six red deploys that
+  three consecutive green CI runs reported as healthy. Confirm the deployment reaches `READY`.
 - **Use `npm run verify:build`, NOT `npm run build`.** verify:build writes to `.next-verify/` via
   `NEXT_DIST_DIR`, so the running dev server's `.next/` never gets wiped. Running `next build` while
   `next dev` is up corrupts the shared `.next/` and turns the browser into a giant fullscreen logomark

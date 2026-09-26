@@ -218,24 +218,47 @@ check(
 // src-only fix is not a fix — compare both and require they agree.
 //
 // `dist/` is gitignored, so this reads an artifact no checkout contains. It is
-// built by the ROOT `prepare` script — `build:core && build:skill`, in that order,
-// on purpose. skill imports @blueagent/core, whose `types` points into core's own
-// dist/, so skill cannot compile until core is built.
+// built by an EXPLICIT step: `npm run build:skill` from the repo root, which builds
+// @blueagent/core first because skill imports it and resolves its types through
+// core's own dist/. CI runs that step; see .github/workflows/ci.yml.
 //
-// 🔴 Do NOT move that build back into per-package `"prepare": "tsc"` entries.
-// That was tried on 2026-09-26 and put CI red twice, because **npm runs workspace
-// build scripts in PARALLEL**: skill's tsc raced core's tsc and lost, failing the
-// whole install with TS2307 "Cannot find module '@blueagent/core'". Both packages
-// having `prepare` does not sequence them — it just starts two compilers at once.
-// MEASURED in a clean clone: `npm ci` → exit 2, while `npm ci --foreground-scripts`
-// (which serialises scripts) → exit 0. That flag is the only reason the two-prepare
-// version ever looked green locally; CI does not pass it, so CI saw the race.
+// 🔴 Do NOT move that build into ANY `prepare` script. Two shapes of that idea
+// shipped on 2026-09-26 and each broke a different environment:
+//
+//  1. Per-package `"prepare": "tsc"` on core AND skill → CI red, five runs. **npm
+//     runs workspace build scripts in PARALLEL**, so skill's tsc raced core's and
+//     lost with TS2307 "Cannot find module '@blueagent/core'". Two prepares do not
+//     sequence anything; they start two compilers at once. MEASURED in a clean
+//     clone: `npm ci` → exit 2, `npm ci --foreground-scripts` (serialises) → exit 0.
+//     That flag is the only reason the two-prepare version ever looked green locally.
+//  2. One correctly-ordered ROOT `"prepare": "build:core && build:skill"` → CI green,
+//     and SIX consecutive production deploys red. `prepare` runs INSIDE the install
+//     phase, and **Vercel's install is SCOPED to the repo root + apps/web, never
+//     packages/***. So the root prepare fires (root is in scope) while skill's own
+//     dependencies were never installed at all: Vercel's `npm install` exited 2 with
+//     skill's tsc unable to resolve `@modelcontextprotocol/sdk` *or* `@blueagent/core`.
+//     REPRODUCED locally, five identical errors in the same order, with
+//         npm install --workspace=apps/web --include-workspace-root
+//     while a plain `npm install` in the same clean clone exits 0 — which is exactly
+//     why CI and the local gate both said green.
+//
+// That scope is also why #1 deployed FINE while it was failing CI: per-package
+// prepares live in packages/*, out of Vercel's install scope, so they never ran there.
+// The two failures look unrelated and are one fact seen from two sides.
+//
+// So the lesson is not "order it correctly" — #2 already did. It is that an install-time
+// lifecycle hook is re-interpreted by every environment that installs this repo, under
+// a scope you do not control, and it was buying nothing: apps/web has no real
+// `@blueagent/*` import (the only occurrence is sample code inside a docs CodeBlock),
+// and Vercel cannot even install packages/*, so nothing in the site build may ever
+// depend on them. One test script wants dist/, so one explicit step builds it, in the
+// one place that script runs.
 const skillEntries = (rel: string) => {
   const abs = join(REPO, rel);
   if (!existsSync(abs))
     throw new Error(
-      `${rel} is missing — run \`npm ci\` from the repo root. The root ` +
-        `\`prepare\` script builds it; an --ignore-scripts install will not.`
+      `${rel} is missing — run \`npm run build:skill\` from the repo root ` +
+        `(it builds @blueagent/core first, which skill's types resolve through).`
     );
   const src = readFileSync(abs, "utf8");
   const names = [...src.matchAll(/name:\s*"((?:blue|hub|b20)_[a-z0-9_]+)"/g)];
