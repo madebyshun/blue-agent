@@ -32,7 +32,7 @@
  *
  * Run: npx tsx scripts/dead-tool-check.ts
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MCP_TOOLS } from "../src/lib/mcp-tools";
@@ -105,8 +105,30 @@ check("C2 no handler missing from AGENT_TOOLS", [...handlerIds].filter((id) => !
 // Prose naming a retired tool is fine and deliberate — each dead name in the
 // skills sits in a "There is no `X` any more" note that redirects to blue_call.
 // What must not exist is a name PRESENTED AS CALLABLE with no such note.
-const RETIRED_NOTE = /(no longer|not[a-z ]* any more|retired|does not exist|there is no|never (was|a real)|Do not invoke|ship as|are Skills|was cut|are \*\*not\*\*)/i;
-const pluginFiles = ["packages/claude-plugin/blue-agent/agents/blue-agent.md", "packages/claude-plugin/README.md"];
+// This matches English prose, which is unsatisfying but errs in the safe
+// direction: an unrecognised phrasing yields a FALSE POSITIVE — a real note gets
+// flagged — never a false negative. When that happens the fix is to add the
+// phrasing here, a one-line diff someone reads. It is NOT to loosen the matcher
+// into something that would also excuse a genuine advertisement; widening this
+// to, say, /\bnot\b/ would pass every dead name in the repo.
+const RETIRED_NOTE = new RegExp(
+  [
+    "no longer", "not[a-z ]* any more", "retired", "does not exist", "does not serve",
+    "there is no", "never (was|a real)", "was not real", "was the old",
+    "resolves to nothing", "Do not invoke", "ship as", "are Skills", "was cut",
+    "are \\*\\*not\\*\\*",
+  ].join("|"),
+  "i"
+);
+// Every .md under the plugin, discovered — not a list. A hand-written list is
+// how this surface got here: the cut repaired the skills one by one and the two
+// files nobody thought to open kept 17 dead names each. Discovery means a new
+// skill is covered the day it is added, and dropping one is a visible diff.
+const walkMd = (dir: string): string[] =>
+  readdirSync(join(REPO, dir), { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? walkMd(join(dir, e.name)) : e.name.endsWith(".md") ? [join(dir, e.name)] : []
+  );
+const pluginFiles = walkMd("packages/claude-plugin");
 // Two shapes count as "presented as callable", and the second is the one that
 // actually moves an agent: a backticked name reads as code, but `[Uses X tool]`
 // inside an <example> is a demonstration of invocation — the thing the model
@@ -124,7 +146,7 @@ for (const rel of pluginFiles) {
       for (const m of line.matchAll(re)) {
         if (advertised.includes(m[1])) continue;
         if (RETIRED_NOTE.test(ctx)) continue;
-        pluginBad.push(`${rel.split("/").pop()}:${i + 1} ${m[1]}`);
+        pluginBad.push(`${rel.replace("packages/claude-plugin/", "")}:${i + 1} ${m[1]}`);
       }
     }
     // A doc that redirects to blue_call names a CATALOG id, which has its own
@@ -132,12 +154,12 @@ for (const rel of pluginFiles) {
     // the redirect is that this id is the live path.
     for (const m of line.matchAll(/toolId:?\s*"([a-z0-9-]+)"/g)) {
       if (!catalogIds.has(m[1]) || !(m[1] in HANDLERS)) {
-        pluginBad.push(`${rel.split("/").pop()}:${i + 1} toolId=${m[1]}`);
+        pluginBad.push(`${rel.replace("packages/claude-plugin/", "")}:${i + 1} toolId=${m[1]}`);
       }
     }
   }
 }
-check("D  plugin docs advertise no unresolvable tool", pluginBad);
+check(`D  plugin docs advertise no unresolvable tool (${pluginFiles.length} files)`, pluginBad);
 
 // ── E. CONSOLE_MAP targets ───────────────────────────────────────────────────
 const consoleTargets = [...block("const CONSOLE_MAP", "};").matchAll(/^\s{2}[a-z0-9_]+:\s*"([a-z0-9-]+)"/gm)].map((m) => m[1]);
