@@ -14,11 +14,27 @@ import { getBrandFonts, brandFonts, verdictColor, C, BG_IMAGE } from "@/lib/og-f
 export const runtime = "nodejs";
 const size = { width: 1200, height: 630 };
 
-function agentsOf(t?: { isComposite?: boolean; agentName?: string }): [string, string][] {
-  if (t?.isComposite) return [["Blueagent", C.cyan], ["Aeon", C.violet], ["MiroShark", C.green]];
-  if (t?.agentName === "Aeon") return [["Aeon", C.violet]];
-  if (t?.agentName === "MiroShark") return [["MiroShark", C.green]];
-  return [["Blueagent", C.cyan]];
+/* 🔴 This keyed off `isComposite` until 2026-09-26 and painted three persona
+   badges on every composite tool. `isComposite` means multi-STEP, not
+   multi-AGENT — it is true for 63 of 110 tools, including `gas-tracker`,
+   `token-price` and `pool-scan`, which are single on-chain reads that never
+   prompt Aeon or MiroShark.
+   MEASURED: 59 of 110 share cards rendered the wrong badge set, and every one
+   of the 59 was an OVER-claim — the old branch could add a persona that never
+   ran but could never drop one that did. This is the share card, so it is the
+   version of the claim that leaves the site and gets embedded in a feed.
+   Now derived from `agentName`, mirroring `agentsFor()` in api/catalog/route.ts
+   so the badge set and the catalog's `agents` field cannot disagree. Real
+   distribution: Blue-only 76, +Aeon 26, +MiroShark 4, all three 4.
+   ⚠ These are PERSONAS — a system-prompt prefix plus an injected skill file on
+   one Virtuals endpoint. Never re-word these badges into a "consensus" claim;
+   see the note above agentsFor() for why that phrasing was retired. */
+function agentsOf(t?: { agentName?: string }): [string, string][] {
+  const n = (t?.agentName ?? "").toLowerCase();
+  const out: [string, string][] = [["Blueagent", C.cyan]];
+  if (n.includes("aeon")) out.push(["Aeon", C.violet]);
+  if (n.includes("miroshark")) out.push(["MiroShark", C.green]);
+  return out;
 }
 
 export async function GET(req: Request) {
@@ -34,7 +50,10 @@ export async function GET(req: Request) {
 
   const t = AGENT_TOOLS.find(x => x.id === payload?.toolId);
   const name = t?.name ?? "Blue Hub";
-  const desc = t?.description ?? "AI agent tools for Base builders";
+  // "for Base builders" until 2026-09-26 — the same one-chain framing corrected
+  // in llms.txt and plugin.md. This is the fallback for an unknown/expired share
+  // id, so it describes the Hub as a whole, which reads both chains.
+  const desc = t?.description ?? "AI agent tools for onchain builders";
   const price = t?.price ?? "";
   const agents = agentsOf(t);
 
@@ -90,7 +109,14 @@ export async function GET(req: Request) {
               <div key={label} style={{ display: "flex", alignItems: "center", fontFamily: f.mono, fontSize: 23, color, border: `2px solid ${color}55`, borderRadius: 999, padding: "6px 18px" }}>{label}</div>
             ))}
           </div>
-          <div style={{ display: "flex", fontFamily: f.mono, fontSize: 23, color: C.muted }}>{verdict ? "3-agent consensus · Base" : "Pay per call · USDC on Base · no API key"}</div>
+          {/* Was `verdict ? "3-agent consensus · Base" : <payment line>`. That
+              printed the exact Hub-wide phrasing api/catalog/route.ts retired,
+              on ANY tool that returned a verdict — including the 76 that run
+              the Blue persona alone. The badges to the left already say which
+              personas ran, so the tagline does not need to restate a count, and
+              restating it is how the count went wrong. The payment line is true
+              of every tool on every card, so it is now unconditional. */}
+          <div style={{ display: "flex", fontFamily: f.mono, fontSize: 23, color: C.muted }}>Pay per call · USDC on Base · no API key</div>
         </div>
       </div>
     ),

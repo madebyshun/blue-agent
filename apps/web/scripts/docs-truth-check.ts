@@ -115,6 +115,7 @@ const FARCASTER_ROUTE = read("src/app/.well-known/farcaster.json/route.ts");
 const SKILL = readRepo("SKILL.md");
 const CLAUDE_MD = readRepo("CLAUDE.md");
 const MCP_ROUTE = read("src/app/api/mcp/route.ts");
+const OG_HUB_RESULT = read("src/app/api/og/hub-result/route.tsx");
 
 // ── the MCP surface, measured from the manifest rather than remembered ────
 // SKILL.md and CLAUDE.md both quote this number, and it is NOT TOOL_COUNT.
@@ -245,6 +246,13 @@ const scanned: [string, string, number[]?][] = [
   ["src/app/app/dashboard/_views/OverviewView.tsx", OVERVIEW],
   ["SKILL.md", SKILL, [MCP_COUNT]],
   ["CLAUDE.md", CLAUDE_MD, [MCP_COUNT]],
+  // NOTE: the Hub share card (api/og/hub-result) is deliberately NOT here. It
+  // belongs in group 5, but `scanned` reads raw source, and a .tsx file — unlike
+  // the prose files above — carries comments that quote the very strings these
+  // scans ban. Adding it made the file fail on its own history note (which
+  // names the retired phrase) and on "63 of 110 tools" inside that note, which
+  // COUNT_RE read as a live claim of 63 tools. It is checked on
+  // comment-stripped source in group 5 instead.
 ];
 let scannedClaims = 0;
 for (const [name, text, alts] of scanned) {
@@ -368,6 +376,31 @@ console.log("\n5. no surface re-asserts Hub-wide '3-agent consensus'");
 for (const [name, src] of scanned) {
   check(`${name}`, !/3-agent consensus/i.test(src), "personas on one endpoint, not agents");
 }
+
+// The Hub share card is the copy that LEAVES the site — it is what embeds in a
+// feed when someone shares a result — and it printed "3-agent consensus · Base"
+// on any tool that returned a verdict, including the 76 that run Blue alone.
+// Checked on comment-stripped source, reusing the helper above — the fix's own
+// history note quotes the banned phrase, so scanning raw source would fail on
+// the explanation forever. That is the same trap the note above stripComments
+// already records for the Venice retirement notice: read as rendered text, an
+// explanation of a bug looks identical to the bug.
+const OG_CODE = stripComments(read("src/app/api/og/hub-result/route.tsx"));
+check(
+  "og/hub-result renders no '3-agent' claim",
+  !/3-agent/i.test(OG_CODE),
+  "share card, 76 of 110 tools run Blue alone",
+);
+// Vacuity floor: if the strip ever eats the whole file (or the path moves), the
+// test above goes green on an empty string. Anchored to STRUCTURE, not copy —
+// an earlier draft anchored on the tagline it was guarding, so rewording that
+// tagline would have failed the vacuity check instead of the claim check and
+// pointed the next reader at the wrong problem.
+check(
+  "og/hub-result scan is not vacuous",
+  OG_CODE.includes("ImageResponse") && OG_CODE.includes("agentsOf") && OG_CODE.length > 1500,
+  `${OG_CODE.length} bytes after stripping comments`,
+);
 
 // The phrasing scan above could not have caught the longest-lived instance of
 // this claim: the /docs STATS grid rendered `{ value: "3", label: "Agents" }`,
