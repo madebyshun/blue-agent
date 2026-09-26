@@ -899,6 +899,10 @@ export async function callVirtualsLLM(opts: {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  /** Opt out of the model's hidden reasoning phase on the FIRST attempt.
+   *  Off by default — see the block above `const first` for the callers that
+   *  set it and the measurements that earned it. */
+  reasoningEffort?: "none";
 }): Promise<string> {
   const apiKey = process.env.VIRTUALS_API_KEY ?? "";
   if (!apiKey) throw new Error("VIRTUALS_API_KEY not set");
@@ -921,7 +925,8 @@ export async function callVirtualsLLM(opts: {
   const maxTokens = answerTokens + REASONING_HEADROOM_TOKENS;
 
   /**
-   * One round-trip. `reasoningEffort` is set only on the retry below.
+   * One round-trip. `reasoningEffort` comes from the retry below, or — for the
+   * callers that opt in via `opts.reasoningEffort` — from the first attempt.
    *
    * PAYLOAD HISTORY, and why a fifth key is allowed back in: PR #211 sent
    * `disable_thinking` + `reasoning_effort` and PR #212 stripped them after
@@ -931,8 +936,8 @@ export async function callVirtualsLLM(opts: {
    * the live gateway and NONE returned 4xx; `reasoning_effort: "none"` is
    * honoured exactly (reasoning_tokens 0/12 runs) and is accepted by
    * anthropic-claude-sonnet-5, google-gemini-2-5-flash and x-ai-grok-4-20 too.
-   * It is sent ONLY on the retry, so the happy path is still the minimal
-   * payload the 2026-07 incident argued for.
+   * It defaults to the retry only, so the happy path for the ~46 callers that
+   * do not opt in is still the minimal payload the 2026-07 incident argued for.
    */
   const dispatch = async (reasoningEffort?: "none") => {
     const res = await fetch("https://compute.virtuals.io/v1/chat/completions", {
@@ -1018,7 +1023,32 @@ export async function callVirtualsLLM(opts: {
     };
   };
 
-  const first = await dispatch();
+  /**
+   * MEASURED 2026-09-27, `blue build` (the P1-5 502). Reasoning is not free
+   * headroom for every prompt shape — on a short input that asks for a long
+   * structured document it is the dominant cost, and it is unbounded:
+   *
+   *   build, reasoning ON  (3 runs): 53.9s / 52.0s / 39.8s
+   *                                  reasoning_tokens 5697 / 9109 / 5492
+   *                                  → the 9109 draw EXCEEDED the whole 9000
+   *                                    wire budget: finish_reason="length",
+   *                                    content_len=0, i.e. a paid 502.
+   *   build, reasoning OFF (4 runs): 14.6s / 14.0s / 10.6s / 10.0s
+   *                                  reasoning_tokens 0/0/0/0, finish="stop"
+   *                                  4/4, content 5.6k-8.4k chars, ~5x cheaper.
+   *
+   * Two failures, one cause. `REASONING_HEADROOM_TOKENS` (5000) is a constant
+   * and the reasoning phase is not, so a big enough draw eats the answer; and
+   * a reasoning run that DOES answer takes 40-54s against the 60s abort above,
+   * leaving ~6s of margin. The existing retry cannot rescue either — a second
+   * attempt costs another ~50s, past every caller's ceiling.
+   *
+   * So the fix is opt-in, not a headroom bump: raising the constant makes the
+   * latency worse while still being a constant. Only the five console commands
+   * opt in today (see CONSOLE_REASONING_EFFORT) — idea/audit/ship/raise were
+   * sampled the same way at 9.9-24.5s, finish="stop" 7/7.
+   */
+  const first = await dispatch(opts.reasoningEffort);
   if (first.text) return first.text;
 
   // The headroom above makes this rare, not impossible: reasoning on a single
@@ -1102,6 +1132,10 @@ export async function callLLM(opts: {
   /** Ignored — retained for API compatibility with old callers. Virtuals has
    *  no web-search capability; every response is `web_search_used: false`. */
   webSearch?: boolean;
+  /** Skip the model's hidden reasoning phase on the FIRST attempt. Passed
+   *  straight through to `callVirtualsLLM` — see the measurement block at its
+   *  `const first` for why the five console commands set it. */
+  reasoningEffort?: "none";
 }): Promise<LlmResult> {
   const chainStart = Date.now();
   const attempts: LlmResult["attempts"] = [];

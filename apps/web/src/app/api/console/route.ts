@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
-import { CONSOLE_SYSTEMS, CONSOLE_MAX_TOKENS, groundConsolePrompt, type ConsoleCommand } from "@/lib/console-systems";
+import { CONSOLE_SYSTEMS, CONSOLE_MAX_TOKENS, CONSOLE_REASONING_EFFORT, groundConsolePrompt, type ConsoleCommand } from "@/lib/console-systems";
 import { callLLM, NO_FABRICATION_RULE } from "@/app/api/_lib/llm";
 import { kv } from "@/lib/kv";
 import { recordCall } from "@/lib/usage-daily";
@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
       system,
       user: grounded,
       maxTokens: CONSOLE_MAX_TOKENS[cmd],
+      reasoningEffort: CONSOLE_REASONING_EFFORT[cmd],
     });
     if (!r.text) {
       return NextResponse.json({ error: "Empty LLM response." }, { status: 502 });

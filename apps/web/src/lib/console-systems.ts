@@ -109,6 +109,40 @@ export const CONSOLE_MAX_TOKENS: Record<ConsoleCommand, number> = {
   raise: 2400,
 };
 
+// Opt every console command out of the model's hidden reasoning phase.
+//
+// MEASURED 2026-09-27 against compute.virtuals.io, deepseek-deepseek-v4-flash,
+// after `blue build` started returning 502 in production:
+//
+//   build, reasoning ON  (3 runs): 53.9s / 52.0s / 39.8s
+//                                  reasoning_tokens 5697 / 9109 / 5492
+//                                  the 9109 draw blew the entire 9000-token
+//                                  wire budget: finish_reason="length",
+//                                  content_len=0 — i.e. a PAID 502.
+//   build, reasoning OFF (4 runs): 14.6s / 14.0s / 10.6s / 10.0s
+//                                  reasoning_tokens 0 (4/4), finish="stop" 4/4,
+//                                  content 5.6k-8.4k chars, ~5x cheaper.
+//   idea / audit / ship / raise, reasoning OFF: 9.9-24.5s, finish="stop" 7/7,
+//                                  tails well-formed. audit was sampled three
+//                                  times on its own — it is the $1.00 command
+//                                  and its value is the analysis, so it was not
+//                                  extended to on symmetry with build.
+//
+// Why a mode flag and not a bigger `REASONING_HEADROOM_TOKENS`: the headroom is
+// a constant and the reasoning phase is not, so ANY constant is one unlucky
+// draw from the same truncation — and raising it makes the 40-54s latency worse
+// against the 60s dispatch abort in llm.ts. These five commands ask for a long
+// structured document from a short prompt, the shape where reasoning costs the
+// most and buys the least. The other ~46 callLLM callers do not opt in and
+// still send the minimal payload.
+export const CONSOLE_REASONING_EFFORT: Record<ConsoleCommand, "none"> = {
+  idea: "none",
+  build: "none",
+  audit: "none",
+  ship: "none",
+  raise: "none",
+};
+
 // A `CONSOLE_MODELS` map lived here, claiming `audit` ran on a stronger model
 // than the other four commands. It had ZERO readers — both dispatchers
 // (api/console/route.ts and x402/_handlers/_console.ts) call callLLM without a

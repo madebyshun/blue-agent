@@ -15,7 +15,7 @@
  * those commands (idea / raise). The model still writes its answer, but the
  * caller gets a labelled low-confidence marker for anything fresh-fact-y.
  */
-import { CONSOLE_SYSTEMS, CONSOLE_MAX_TOKENS, groundConsolePrompt, type ConsoleCommand } from "@/lib/console-systems";
+import { CONSOLE_SYSTEMS, CONSOLE_MAX_TOKENS, CONSOLE_REASONING_EFFORT, groundConsolePrompt, type ConsoleCommand } from "@/lib/console-systems";
 import { callLLM, NO_FABRICATION_RULE, STATIC_KNOWLEDGE_DISCLAIMER } from "@/app/api/_lib/llm";
 
 export async function runConsoleCommand(
@@ -42,6 +42,7 @@ export async function runConsoleCommand(
       system,
       user: grounded,
       maxTokens: CONSOLE_MAX_TOKENS[command],
+      reasoningEffort: CONSOLE_REASONING_EFFORT[command],
     });
     const result = r.text;
 
