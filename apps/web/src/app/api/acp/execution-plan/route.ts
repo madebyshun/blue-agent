@@ -27,6 +27,10 @@
  */
 import { acpEnvelope, clientIp, corsHeaders, preflight, rateLimit } from "@/lib/acp";
 import { computeExecutionPlan, type ExecPlanResult } from "@/lib/blue-hood/execution-plan";
+// The SAME normalisers the paid ACP job path uses. This URL is what a buyer
+// self-tests against before escrowing, so it must refuse exactly what the paid
+// path refuses — see `lib/blue-hood/acp-requirement.ts`.
+import { normalizeChain, normalizeSide } from "@/lib/blue-hood/acp-requirement";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,7 +65,8 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const ticker = (url.searchParams.get("ticker") ?? "").trim();
   const sizeRaw = (url.searchParams.get("size_usd") ?? url.searchParams.get("size") ?? "").trim();
-  const side = (url.searchParams.get("side") ?? "buy").trim().toLowerCase() === "sell" ? "sell" : "buy";
+  const chain = normalizeChain(url.searchParams.get("chain"));
+  const side = normalizeSide(url.searchParams.get("side"));
 
   // ── Reject-incomplete FAST — before any compute or network ───────────────
   if (!ticker || !sizeRaw) {
@@ -87,6 +92,45 @@ export async function GET(req: Request) {
           error: "invalid_size",
           reason: "`size_usd` must be a positive number.",
           hint: "e.g. size_usd=100000 for a $100k order.",
+        },
+        DOCS,
+      ),
+      { status: 400, headers: corsHeaders() },
+    );
+  }
+
+  // ── Wrong desk / unreadable side: refuse, exactly as the paid path does ───
+  // A ticker string does not identify a token. NVDA, META, GOOGL and TSLA exist
+  // on BOTH Robinhood Chain (4663) and Base (8453), and this desk prices only
+  // RH. Answering a Base request off RH data is a wrong answer, not a near miss,
+  // and this URL is where a buyer forms their expectations before paying.
+  if (chain !== "robinhood") {
+    return Response.json(
+      acpEnvelope(
+        {
+          ok: false,
+          error: "unsupported_chain",
+          reason:
+            `Offering #1 covers Robinhood Chain (4663) only. "${ticker}" may also exist ` +
+            `on Base (8453), and this desk cannot price that token.`,
+          hint: "Omit `chain`, or send chain=robinhood.",
+        },
+        DOCS,
+      ),
+      { status: 400, headers: corsHeaders() },
+    );
+  }
+  // `"unknown"` means unreadable, never "assume buy" — the engine coerces any
+  // non-"sell" value to a buy, so defaulting here would hand someone who typed
+  // "short" a buy plan stamped as what they asked for.
+  if (side === "unknown") {
+    return Response.json(
+      acpEnvelope(
+        {
+          ok: false,
+          error: "unsupported_side",
+          reason: `Send "buy" or "sell".`,
+          hint: "Omit `side` for a buy.",
         },
         DOCS,
       ),
