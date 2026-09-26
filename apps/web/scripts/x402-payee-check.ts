@@ -52,10 +52,11 @@ const CONSUMERS: Record<string, string[]> = {
     "src/app/api/_lib/x402-cdp.ts",
     "src/app/hub/HubView.tsx",
   ],
+  // api/simulator/route.ts was a third entry here until 2026-09-27, when it was
+  // deleted for billing against a route that had not existed since 2026-05-29.
   "quotes a price then verifies it": [
     "src/app/api/tool/[toolId]/route.ts",
     "src/app/api/tool/_debug/route.ts",
-    "src/app/api/simulator/route.ts",
   ],
   "catalog default payee": [
     "src/lib/agent-tools.ts",

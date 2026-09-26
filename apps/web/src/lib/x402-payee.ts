@@ -8,7 +8,7 @@
  * them publish the payee to external agents:
  *
  *   signs / settles   api/_lib/x402-cdp.ts (PAY_TO) · hub/HubView.tsx
- *   quotes a price    api/tool/[toolId] · api/tool/_debug · api/simulator
+ *   quotes a price    api/tool/[toolId] · api/tool/_debug
  *   catalog default   lib/agent-tools.ts (BLUE_TREASURY)
  *   published to      /.well-known/pricing · /.well-known/openapi.json
  *   foreign agents    /.well-known/ai-plugin.json · /api/catalog

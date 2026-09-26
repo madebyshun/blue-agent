@@ -125,8 +125,10 @@ base64-encoded x402 payload in `X-Payment`. The server then:
 
 1. **Verifies** the payment via the Coinbase CDP facilitator (no charge).
 2. **Runs** the tool over live on-chain data — Base for most of the catalog,
-   Robinhood Chain for the `rh-*` tools. Most tools run one Blue persona;
-   a few (deep-analysis, the launch simulators) weight several personas.
+   Robinhood Chain for the `rh-*` tools. Most tools make a single inference
+   pass; a few (deep-analysis, the launch simulators) make several and weight
+   the results. Every pass goes to the same endpoint, so extra passes buy
+   extra reasoning over the same data, not an extra opinion from elsewhere.
 3. **Settles** the USDC transfer on-chain via CDP (the user is charged
    only on success).
 

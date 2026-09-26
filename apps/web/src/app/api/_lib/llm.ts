@@ -99,7 +99,9 @@ export async function callBankrLLM(opts: {
   // 🔴 CANONICAL NOTE ON THE RETIRED PERSONAS — read before deleting anything
   // here. Aeon and MiroShark were retired 2026-09-27 (ShunTr) and removed from
   // every user-facing surface: catalog descriptions, /api/catalog, the OG share
-  // card, Hub UI, docs, and the 402 payment description in api/simulator.
+  // card, Hub UI and docs. The 402 payment description in api/simulator was the
+  // fourth surface; that whole route was deleted instead, for billing against
+  // /api/launch-simulator, which had not existed since 2026-05-29.
   // The PIPELINE below was deliberately left running. Why:
   //   • The match is on a PREFIX STRING, not a flag. TWENTY paid x402 handlers
   //     open a prompt with "You are MiroShark", and that is the only thing

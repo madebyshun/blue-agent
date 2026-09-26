@@ -217,8 +217,81 @@ check(
   dead.length ? `\n        ${dead.join("\n        ")}` : `${found.size} links, all resolve`,
 );
 
+/**
+ * ── 2. the other direction: routes that fetch THIS app ────────────────────
+ *
+ * Section 1 reads absolute `blueagent.dev` literals and deliberately treats a
+ * `${` as a prefix. That is right for a link a human follows, and blind to the
+ * inbound case: a route calling itself writes the base as a variable and the
+ * path as a static tail — `fetch(`${SELF_BASE}/api/launch-simulator`)` — so
+ * section 1 never sees a path at all, only an unmatched template hole.
+ *
+ * MEASURED 2026-09-27. /api/simulator did exactly that, against a route
+ * deleted 2026-05-29 by 80b95ccd. Every layer degraded instead of failing:
+ * a 404 is still a successful fetch, so the surrounding try/catch never fired;
+ * `res.json()` threw on the 404's HTML and the `.catch(() => ...)` swapped in
+ * `{ error: "Invalid response from tool" }`; the route then SETTLED the USDC
+ * and returned that object with HTTP 200. It billed $0.10–$0.50 for a string
+ * for 121 days. Nothing was loud enough to notice, and it had no caller in
+ * this repo, so no page ever looked wrong.
+ *
+ * The lesson this encodes: an outbound dead link disappoints a reader, an
+ * inbound one charges them. This half is the cheaper one to get right.
+ */
+/*
+ * Only names that denote OUR origin. Lowercase `base` is excluded on purpose
+ * and is not an oversight: the single occurrence in the repo is
+ * `_handlers/agent-readiness.ts`, where it is derived from the user-supplied
+ * URL under analysis. Including it made this check demand that WE serve
+ * `/.well-known/mcp` — which we do not and should not; that handler is probing
+ * somebody else's endpoint for it. A self-fetch guard that cannot tell our
+ * origin from an argument would push us to build routes to satisfy a test.
+ */
+const SELF_FETCH_RE =
+  /\$\{(?:SELF_BASE|BASE_URL|SELF|BASE|ORIGIN|origin)\}(\/[a-zA-Z0-9/._-]*)(\$\{)?/g;
+const selfFetches = new Map<string, Set<string>>();
+walk(SRC, (dir) => {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (!e.isFile() || !/\.(ts|tsx)$/.test(e.name)) continue;
+    const abs = join(dir, e.name);
+    for (const m of readFileSync(abs, "utf8").matchAll(SELF_FETCH_RE)) {
+      let path = m[1];
+      const prefix = m[2] !== undefined || path.endsWith("/");
+      path = path.replace(/\/$/, "");
+      if (path === "") continue;
+      const key = `${path}\0${prefix ? "prefix" : "exact"}`;
+      if (!selfFetches.has(key)) selfFetches.set(key, new Set());
+      selfFetches.get(key)!.add(relative(WEB, abs));
+    }
+  }
+});
+
+console.log(`\n2. every runtime self-fetch hits a route we serve (${selfFetches.size} distinct)`);
+const danglingSelf: string[] = [];
+for (const [key, sources] of [...selfFetches].sort()) {
+  const [path, kind] = key.split("\0");
+  if (!live(path, kind === "prefix")) {
+    danglingSelf.push(`${path}${kind === "prefix" ? "/*" : ""} ← ${[...sources].join(", ")}`);
+  }
+}
+check(
+  "no self-fetch targets a deleted route",
+  danglingSelf.length === 0,
+  danglingSelf.length
+    ? `\n        ${danglingSelf.join("\n        ")}`
+    : `${selfFetches.size} targets, all resolve`,
+);
+// Vacuity floor for the scan above. Anchored on a target that is load-bearing
+// rather than on a count alone: /api/credits/spend is how the chat route debits
+// a user, so if the scanner stops finding it the scan has stopped working.
+check(
+  "the self-fetch scan is not vacuous",
+  selfFetches.size >= 5 && [...selfFetches.keys()].some(k => k.startsWith("/api/credits/spend\0")),
+  `${selfFetches.size} distinct self-fetch targets`,
+);
+
 // A resolver that stops matching would pass this file vacuously.
-console.log("\n2. the resolver is actually resolving");
+console.log("\n3. the resolver is actually resolving");
 check("routes were discovered", routes.length > 50, `${routes.length} route patterns`);
 check("public files were discovered", staticFiles.size > 5, `${staticFiles.size} static files`);
 check("links were discovered", found.size > 20, `${found.size} distinct published links`);
