@@ -434,9 +434,19 @@ check(
 // an earlier draft anchored on the tagline it was guarding, so rewording that
 // tagline would have failed the vacuity check instead of the claim check and
 // pointed the next reader at the wrong problem.
+//
+// Anchor changed 2026-09-27: `agentsOf` → `AGENT_BADGES`. Aeon and MiroShark
+// were retired (ShunTr), so the per-tool badge lookup collapsed to a constant
+// and the old symbol stopped existing — the check failed on its VACUITY arm
+// while the claim arm it protects still passed. Worth noting how that reads
+// from a CI log: "scan is not vacuous — 4898 bytes" sounds like the file went
+// missing, when in fact the file was fine and only the anchor had moved. An
+// anchor on a symbol is only as durable as the symbol; when you re-point one,
+// re-point it at whatever now carries the thing being guarded (here: the
+// agent badge list), never at something merely nearby and stable.
 check(
   "og/hub-result scan is not vacuous",
-  OG_CODE.includes("ImageResponse") && OG_CODE.includes("agentsOf") && OG_CODE.length > 1500,
+  OG_CODE.includes("ImageResponse") && OG_CODE.includes("AGENT_BADGES") && OG_CODE.length > 1500,
   `${OG_CODE.length} bytes after stripping comments`,
 );
 

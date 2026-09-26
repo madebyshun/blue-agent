@@ -153,13 +153,13 @@ full JSON Schema per tool: https://blueagent.dev/api/catalog
 | `blue-research` | $1.00 | `topic`* `target` | Deep DD memo on a Base project, narrative, or token — thesis, bull/bear, risks, contrarian take, verdict. Grounds in live market data when a token address is given. |
 | `ecosystem-digest` | $0.20 | _(no body)_ | Weekly Base ecosystem intelligence: top builders, protocols, and narratives. |
 | `founder-check` | $0.10 | `handle`* | GitHub-based founder trust score — repos, stars, activity. |
-| `market-fit` | $0.25 | `description`* `name` `stage` | Score your product's market fit with swarm intelligence across three personas. |
+| `market-fit` | $0.25 | `description`* `name` `stage` | Score your product's market fit against live Base market context — verdict, gaps, and what to fix first. |
 | `narrative-position` | $0.15 | `topic` `focus` | Which narratives are building vs peaking on CT — and where to position. |
 | `narrative-pulse` | $0.10 | `focus` | Live Base narrative phases, velocity and entry windows. |
 | `protocol-health` | $0.10 | `protocol`* | Protocol TVL health, trend and risk signals (DefiLlama). |
 | `token-alpha` | $0.15 | `token`* | Token trade signal — entry, whale confirmation, momentum and risk. |
 | `token-launch-readiness` | $0.30 | `name`* `project`* `description` | Go/no-go signal on whether your project is ready to launch a token. |
-| `token-pick-signal` | $0.20 | `chain` `context` | AI consensus on the highest-conviction asymmetric token setup on Base right now. |
+| `token-pick-signal` | $0.20 | `chain` `context` | The highest-conviction asymmetric setup on Base, picked from live liquidity, turnover and momentum scores. |
 
 ### builder (29)
 
@@ -185,9 +185,9 @@ full JSON Schema per tool: https://blueagent.dev/api/catalog
 | `grant-evaluator` | $5.00 | `projectName`* `description`* `teamBackground` `requestedAmount` `milestones` `githubUrl` | Base ecosystem grant scoring — innovation, feasibility, impact, team quality. |
 | `gtm-brief` | $0.25 | `project`* `description`* `target` | Go-to-market playbook: channels, timing, messaging, and early adopter strategy. |
 | `investor-memo` | $0.35 | `project`* `description`* `ask` `stage` `traction`* | Full investor memo: thesis, market, moat, risks, and ask — ready to send. |
-| `launch-simulator-1` | $0.10 | `project`* `description` `ticker` | Quick Signal — baseline ecosystem read + 3-agent verdict. Fast pre-launch gut-check. |
+| `launch-simulator-1` | $0.10 | `project`* `description` `ticker` | Quick Signal — baseline ecosystem read, weighted sentiment pass, one verdict. Fast pre-launch gut-check. |
 | `launch-simulator-2` | $0.35 | `project`* `description` `ticker` `contract` | Deep Signal launch simulation with live DexScreener market data — price, volume, liquidity. |
-| `launch-simulator-3` | $0.50 | `project`* `description` `ticker` `contract` | Full Simulation — complete multi-agent report with risk matrix and timeline recommendation. |
+| `launch-simulator-3` | $0.50 | `project`* `description` `ticker` `contract` | Full Simulation — every pass plus risk matrix and timeline recommendation. |
 | `pitch-intelligence` | $0.30 | `project`* `description`* | Transform your deck into investor-grade pitch intelligence with narrative scoring. |
 | `repo-health` | $0.20 | `repo`* `description`* | Audit your GitHub repo health: code quality, docs, CI, contributor signals. |
 | `rh-rwa-embed-kit` | $0.05 | `ticker`* `framework` `theme` | Copy-paste 'Buy $TICKER' button kit: chain config, live-price hook, and wagmi buy button wired to the RH swap prepare endpoint. Non-custodial. The Vlad-Tenev-builder-tweet-answering tool. |
