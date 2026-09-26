@@ -35,6 +35,21 @@ export function parseSlippageBps(raw: string | null): number | null {
 }
 
 /**
+ * `raw` as it should appear in an error message.
+ *
+ * Not `JSON.stringify` alone: it renders NaN and Infinity as the *string*
+ * "null", which is not nullish, so a `?? String(raw)` fallback never fires. A
+ * caller who passed NaN — the precise value the old `String(Number(x))`
+ * coercion produced, and so the likeliest input to land here — was told
+ * `Got null`. An error message that misreports the caller's own input is the
+ * same defect as a `meta` that misreports the slippage applied.
+ */
+export function showSlippageValue(raw: unknown): string {
+  if (typeof raw === "number" && !Number.isFinite(raw)) return String(raw);
+  return JSON.stringify(raw) ?? String(raw);
+}
+
+/**
  * `slippageBps` as an agent passes it to `blue_swap_tx`, defaulting to the 100
  * that tool's own schema advertises.
  *
@@ -55,7 +70,7 @@ export function parseSlippageArg(raw: unknown): number {
   if (!Number.isInteger(n) || n < 0 || n > MAX_SLIPPAGE_BPS) {
     throw new Error(
       `slippageBps must be a whole number of basis points from 0 to ${MAX_SLIPPAGE_BPS} (100 = 1%). ` +
-      `Got ${JSON.stringify(raw) ?? String(raw)}. Not defaulting: this bounds your loss, so a value ` +
+      `Got ${showSlippageValue(raw)}. Not defaulting: this bounds your loss, so a value ` +
       `we cannot honour is refused rather than quietly replaced with a looser one.`,
     );
   }

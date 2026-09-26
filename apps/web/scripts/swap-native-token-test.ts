@@ -81,7 +81,7 @@
 import { decodeFunctionData, parseAbi } from "viem";
 import { NATIVE_SENTINEL as SENTINEL_FROM_TRUST } from "../src/lib/wallet/token-trust";
 import { isNativeToken, toNativeSentinel, NATIVE_SENTINEL } from "../src/lib/tx-chains";
-import { buildBaseApprove, parseSlippageBps, parseSlippageArg } from "../src/lib/zerox-swap";
+import { buildBaseApprove, parseSlippageBps, parseSlippageArg, showSlippageValue } from "../src/lib/zerox-swap";
 import { GET as quoteGET } from "../src/app/api/swap/quote/route";
 import { POST as rhPreparePOST } from "../src/app/api/robinhood/router/swap-prepare/route";
 import { MCP_TOOLS } from "../src/lib/mcp-tools";
@@ -437,8 +437,23 @@ async function main() {
   ok("6.18 parseSlippageArg(0) is 0, not the default", parseSlippageArg(0) === 0);
   const throws = (v: unknown) => { try { parseSlippageArg(v); return false; } catch { return true; } };
   for (const bad of ["abc", NaN, -1, 1.5, 10_001, Infinity, "", {}, []]) {
-    ok(`6.19 parseSlippageArg(${JSON.stringify(bad) ?? String(bad)}) throws rather than guessing`, throws(bad));
+    ok(`6.19 parseSlippageArg(${showSlippageValue(bad)}) throws rather than guessing`, throws(bad));
   }
+  // The refusal message quotes the value back, and must quote the REAL one.
+  // `JSON.stringify(NaN)` is the string "null" — not nullish, so the old
+  // `?? String(raw)` fallback never fired and a caller who passed NaN was told
+  // `Got null`. NaN is exactly what the pre-fix coercion produced, so it was
+  // the likeliest input to hit this path. Labels above shared the same bug,
+  // which is why this run used to print "parseSlippageArg(null) throws" two
+  // lines under "parseSlippageArg(null) is 100".
+  ok("6.26 NaN is reported as NaN, not as null", showSlippageValue(NaN) === "NaN");
+  ok("6.27 Infinity is reported as Infinity", showSlippageValue(Infinity) === "Infinity");
+  ok("6.28 …and a real null still reports null", showSlippageValue(null) === "null");
+  ok("6.29 undefined reports undefined, not the empty string", showSlippageValue(undefined) === "undefined");
+  ok("6.30 strings keep their quotes, so \"50\" is distinguishable from 50",
+    showSlippageValue("50") === "\"50\"" && showSlippageValue(50) === "50");
+  ok("6.31 the thrown message carries the real value",
+    (() => { try { parseSlippageArg(NaN); return ""; } catch (e) { return (e as Error).message; } })().includes("Got NaN"));
 
   // Robinhood Chain 4663. `callSwapTx` is not exported and its Base branch does
   // network I/O, so the RH refusal is asserted against the source — the same
@@ -513,6 +528,18 @@ async function main() {
   ok("control: …so swap-prepare's own \"0\" default applied", (oldRhBody.amountOutMinimum ?? "0") === "0");
   ok("control: §6.20's refusal is what now prevents that claim",
     /args\.slippageBps !== undefined/.test(rhBranch));
+
+  // Control J: Control H's root cause, one layer up — in the REFUSAL message.
+  // The fix replaced the echo with a throw, but the throw quoted the value via
+  // the same `JSON.stringify(raw) ?? String(raw)`, and `?? ` cannot rescue it
+  // because "null" is a string. So the error told a NaN caller `Got null`: the
+  // right outcome carrying the wrong reason, which is the harder kind to notice.
+  const oldShow = (raw: unknown) => JSON.stringify(raw) ?? String(raw);
+  ok("control: the old formatter really rendered NaN as \"null\"", oldShow(NaN) === "null");
+  ok("control: …and Infinity too", oldShow(Infinity) === "null");
+  ok("control: §6.26 rejects that", showSlippageValue(NaN) !== oldShow(NaN));
+  ok("control: the old formatter was right about everything else",
+    oldShow("abc") === showSlippageValue("abc") && oldShow(null) === showSlippageValue(null));
 
   console.log(
     failures === 0
