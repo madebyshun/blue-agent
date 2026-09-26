@@ -1,19 +1,32 @@
 // x402/wallet-holdings — ERC-20 + native ETH balances for any Base wallet
-// Price: $0.05 — pure on-chain data (Moralis), no LLM. Never fabricates a price.
+// Price: $0.05 — pure on-chain data, no LLM. Never fabricates a price.
+//
+// 🔴 FAIL LOUD. This handler used to swallow every upstream failure into
+// `[]` / `null` and then publish `total_usd: 0` with HTTP 200. MEASURED
+// 2026-09-26: Moralis answers 401 "Your Moralis Free usage is paused" on every
+// endpoint, so all three test wallets — one holding 4.1157 ETH + 188.73 USDC —
+// were reported as holding $0.00, confidently, for $0.05 a call. The zero was
+// indistinguishable from a genuinely empty wallet, which is what made it
+// dangerous rather than merely wrong.
+//
+// Two rules follow, and neither is negotiable:
+//  1. An unread value is `null`, never `0` and never `[]`.
+//  2. An unread value returns a NON-2xx status. `route.ts` settles the USDC
+//     only after a 2xx, so a 200 carrying `status:"error"` would still charge
+//     the caller for the outage. 502 = "we could not answer, you were not
+//     charged". That is the whole point of the fix.
+//
+// Native ETH is read from Base RPC (no API key, no indexer, still works) and
+// Moralis' own native figure is kept purely as a cross-check.
 
-const MORALIS_BASE = "https://deep-index.moralis.io/api/v2.2";
+import {
+  getMoralisErc20BalancesResult,
+  getMoralisNativeBalanceResult,
+  type UpstreamError,
+} from "@/lib/moralis";
+import { getRpcWalletState } from "@/lib/onchain";
+
 const WETH_BASE = "0x4200000000000000000000000000000000000006";
-
-type MoralisToken = {
-  symbol?: string;
-  name?: string;
-  balance?: string;
-  decimals?: number | string;
-  token_address?: string;
-  usd_value?: number | string;
-  usd_price?: number | string;
-  possible_spam?: boolean;
-};
 
 function num(v: unknown): number | null {
   const n = typeof v === "string" ? parseFloat(v) : typeof v === "number" ? v : NaN;
@@ -37,39 +50,24 @@ async function getWethPriceUsd(): Promise<number | null> {
   }
 }
 
-async function getErc20Balances(address: string): Promise<MoralisToken[]> {
-  const key = process.env.MORALIS_API_KEY ?? "";
-  if (!key) return [];
-  try {
-    const res = await fetch(`${MORALIS_BASE}/${address}/erc20?chain=base`, {
-      headers: { "X-API-Key": key, Accept: "application/json" },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    // Moralis may return a bare array or { result: [] } depending on endpoint version.
-    if (Array.isArray(data)) return data as MoralisToken[];
-    return ((data as { result?: MoralisToken[] }).result ?? []);
-  } catch {
-    return [];
-  }
-}
-
-// Native ETH balance (wei string) for a Base address. null on failure.
-async function getNativeBalanceWei(address: string): Promise<string | null> {
-  const key = process.env.MORALIS_API_KEY ?? "";
-  if (!key) return null;
-  try {
-    const res = await fetch(`${MORALIS_BASE}/${address}/balance?chain=base`, {
-      headers: { "X-API-Key": key, Accept: "application/json" },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { balance?: string };
-    return data.balance ?? null;
-  } catch {
-    return null;
-  }
+/** Every unreadable field is null, and the caller is told why. 502 so the x402
+ *  route never settles payment for an answer we do not have. */
+function failLoud(address: string, error: UpstreamError, partial: Record<string, unknown> = {}): Response {
+  return Response.json({
+    tool: "wallet-holdings",
+    address,
+    chain: "base",
+    status: "error",
+    native_eth: null,
+    native_eth_usd: null,
+    tokens: null,
+    token_count: null,
+    total_usd: null,
+    ...partial,
+    error,
+    note: "Balances could not be read. Nothing here is an estimate and nothing is zero-by-default — you were not charged.",
+    timestamp: new Date().toISOString(),
+  }, { status: 502 });
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -89,18 +87,52 @@ export default async function handler(req: Request): Promise<Response> {
 
     console.log(`[WalletHoldings] Reading balances for: ${address}`);
 
-    const [rawTokens, nativeWei, wethPrice] = await Promise.all([
-      getErc20Balances(address),
-      getNativeBalanceWei(address),
+    const [erc20, moralisNative, rpc, wethPrice] = await Promise.all([
+      getMoralisErc20BalancesResult(address),
+      getMoralisNativeBalanceResult(address),
+      getRpcWalletState(address),
       getWethPriceUsd(),
     ]);
 
-    // Native ETH: wei (1e18) → ETH. Price via WETH (ETH ≈ WETH).
-    const native_eth = nativeWei != null ? num(nativeWei) !== null ? Number(nativeWei) / 1e18 : null : null;
-    const native_eth_usd =
-      native_eth != null && wethPrice != null ? +(native_eth * wethPrice).toFixed(2) : null;
+    // ── Native ETH: RPC is authoritative, Moralis is the corroborator ────────
+    const nativeWei = rpc ? rpc.wei : moralisNative.ok ? moralisNative.data : null;
+    if (nativeWei === null) {
+      return failLoud(address, {
+        source: "base-rpc",
+        code: "UPSTREAM_ERROR",
+        message: `Base RPC did not return a balance, and the Moralis fallback also failed${moralisNative.ok ? "" : `: ${moralisNative.error.message}`}.`,
+      });
+    }
 
-    const tokens = rawTokens
+    // Cross-check on the ONE quantity both sources answer. Deliberately only
+    // the zero/non-zero disagreement: block lag makes exact equality flaky, but
+    // "one source says the wallet is empty and the other says it is not" is
+    // never lag — and it is precisely the shape of the bug this file had.
+    if (rpc && moralisNative.ok) {
+      const rpcZero = BigInt(rpc.wei) === 0n;
+      const morZero = BigInt(moralisNative.data) === 0n;
+      if (rpcZero !== morZero) {
+        return failLoud(address, {
+          source: "moralis+base-rpc",
+          code: "UPSTREAM_INCONSISTENT",
+          message: `Base RPC reports ${rpc.wei} wei and Moralis reports ${moralisNative.data} wei for the same address. One of them is wrong; this tool will not pick.`,
+        });
+      }
+    }
+
+    const native_eth = +(Number(BigInt(nativeWei)) / 1e18).toFixed(6);
+    const native_eth_usd = wethPrice != null ? +(native_eth * wethPrice).toFixed(2) : null;
+
+    // ── ERC-20 list: the actual product. Unreadable → the call fails. ────────
+    if (!erc20.ok) {
+      return failLoud(address, erc20.error, {
+        native_eth,
+        native_eth_usd,
+        note_partial: "Native ETH above was read from Base RPC and is real; the token list is what could not be read.",
+      });
+    }
+
+    const tokens = erc20.data
       .filter((t) => !t.possible_spam)
       .map((t) => {
         const decimals = num(t.decimals) ?? 18;
@@ -120,19 +152,32 @@ export default async function handler(req: Request): Promise<Response> {
         };
       });
 
+    // `total_usd` is the sum of what we could price, and `unpriced_positions`
+    // says how much of the wallet it leaves out. A wallet full of unpriced
+    // junk tokens should not report a total that silently pretends they are
+    // worth nothing — so the omission is a field, not a rounding decision.
+    let unpriced_positions = 0;
+    if (native_eth > 0 && native_eth_usd == null) unpriced_positions++;
+    for (const t of tokens) {
+      if (t.value_usd == null && (t.balance ?? 0) > 0) unpriced_positions++;
+    }
     const total_usd =
-      tokens.reduce((sum, t) => sum + (t.value_usd ?? 0), 0) + (native_eth_usd ?? 0);
+      +(tokens.reduce((sum, t) => sum + (t.value_usd ?? 0), 0) + (native_eth_usd ?? 0)).toFixed(2);
+
+    const empty = tokens.length === 0 && native_eth === 0;
 
     return Response.json({
       tool: "wallet-holdings",
       address,
       chain: "base",
+      status: empty ? "empty" : "ok",
       native_eth,
       native_eth_usd,
       tokens,
-      total_usd: +total_usd.toFixed(2),
+      total_usd,
       token_count: tokens.length,
-      data_source: "Moralis",
+      unpriced_positions,
+      data_source: rpc ? "Base RPC (native) + Moralis (ERC-20) + DexScreener (ETH price)" : "Moralis + DexScreener",
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
