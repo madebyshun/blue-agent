@@ -26,7 +26,7 @@
  * money has to match the code that moves it, so groups 6–9 pin the copy against
  * the constants rather than trusting a sweep to have been complete.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   selectBaseUsdcAccept,
@@ -803,6 +803,73 @@ const BSC_FIRST: RawAccept[] = [
   const iSign  = hubCode.search(/signTypedDataAsync\(/);
   check("14.9 nothing is signed before the 402 probe, as the warning promises",
         iProbe >= 0 && iSign >= 0 && iProbe < iSign);
+}
+
+// ── Group 15: whatever signs must not pick its requirement by position ───────
+{
+  /**
+   * Hazard 1 from the header of `lib/x402-accepts.ts`, asserted over the WHOLE
+   * tree instead of over the one module that documents it.
+   *
+   * 🔴 Not hypothetical, and the reason this group exists: `src/hooks/useX402Tool.ts`
+   * sat in this repo for months doing exactly the forbidden thing — `const req =
+   * paymentReqs[0]` and then `walletClient.signTypedData(...)` on it, with no
+   * ceiling check of any kind, so it would sign whatever amount a builder's 402
+   * asked for. It was deleted 2026-09-26. Nothing had caught it because nothing
+   * was looking: it had zero callers, so no test exercised it, `tsc` was happy,
+   * and it did not even `require` a package this app depends on. Dead code cannot
+   * lose money — but a 238-line hook named `useX402Tool` is the first thing the
+   * next person wiring up a payment reaches for, and it was pre-broken.
+   *
+   * The property is a CONJUNCTION on purpose. Two positional reads survive in
+   * `lib/hub-registry.ts` (`firstRequirement`, for the submit-time probe) and
+   * `_handlers/agent-readiness.ts` (pulling a price to display), and both are
+   * fine: they describe an endpoint, they never produce a signature. Forbidding
+   * `accepts[0]` outright would force those to be rewritten for nothing, or need
+   * an allowlist that rots. "Signs AND indexes" is the thing that actually costs
+   * a user money, so that is what is banned.
+   */
+  const SIGN_RE = /signTypedData|preparePaymentHeader/;
+  const POS_RE  = /\b(accepts|paymentReqs?|paymentRequirements|requirements)\s*\[\s*0\s*\]/;
+
+  const files = readdirSync(join(ROOT, "src"), { recursive: true, encoding: "utf8" })
+    .filter((f) => /\.(tsx|ts)$/.test(f))
+    .map((f) => join("src", f));
+
+  // Comments stripped first. `x402-accepts.ts` spells `accepts[0]` out in prose
+  // precisely to warn against it, and a guard that fires on its own warning
+  // punishes documenting the hazard — the rule this file already learned once.
+  const bodies = files.map((f) => ({ f, code: stripComments(read(f)) }));
+  const signers   = bodies.filter((b) => SIGN_RE.test(b.code));
+  const positional = bodies.filter((b) => POS_RE.test(b.code));
+  const both = bodies.filter((b) => SIGN_RE.test(b.code) && POS_RE.test(b.code));
+
+  check(`15.1 no module both signs and selects a requirement by position (${both.map((b) => b.f).join(", ")})`,
+        both.length === 0);
+
+  // 🔴 15.1 is an ABSENCE assertion, and an absence assertion passes hardest when
+  // it has gone blind — rename `signTypedDataAsync` and it reports success over an
+  // unchecked tree forever. These two prove each half of the conjunction still
+  // matches real code, so the guard fails loudly when it stops being able to see
+  // rather than quietly when there is nothing to see.
+  check("15.2 …and the signer half of that test still matches something",
+        signers.length > 0 && signers.some((b) => b.f.endsWith("HubView.tsx")));
+  check("15.3 …and so does the by-position half",
+        positional.length > 0);
+
+  // The other direction: the browser's external payee has exactly two possible
+  // origins, the native constant and the module whose whole job is refusing. A
+  // third assignment is how a fallback (`?? PAY_TO_WALLET`) gets in, which is
+  // hazard 3 — a failed read becoming a confident payment.
+  const hub = read("src/app/hub/HubView.tsx");
+  const payToSources = [...stripComments(hub).matchAll(/\bpayTo\s*(?::[^=]*)?=\s*([^;\n]+)/g)]
+    .map((m) => m[1].trim());
+  check(`15.4 the signed payee comes only from the constant or the refusing module (${payToSources.join(" | ")})`,
+        payToSources.length === 2 &&
+          payToSources.some((s) => s === "PAY_TO_WALLET") &&
+          payToSources.some((s) => /^sel\.accept\.payTo\b/.test(s)));
+  check("15.5 …and that module is the one actually called to get it",
+        /selectBaseUsdcAccept\(/.test(hub));
 }
 
 console.log(`\nexternal-payee guard: ${pass} passed, ${failures.length} failed`);

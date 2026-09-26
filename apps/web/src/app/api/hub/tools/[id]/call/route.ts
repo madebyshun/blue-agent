@@ -38,6 +38,35 @@ import { kv } from "@/lib/kv";
 import { recordCall } from "@/lib/usage-daily";
 
 export const runtime = "nodejs";
+/**
+ * 120s, the same as `/api/x402/[tool]` and the community invoke proxy — the other
+ * two routes in this app that run a tool on someone's behalf.
+ *
+ * 🔴 This export was ABSENT until 2026-09-26 while the fetch below asked for 90s,
+ * and an absent `maxDuration` is not "no limit" — Vercel applies its own default,
+ * which is an order of magnitude smaller. So that 90s could never fire: the
+ * platform killed the invocation first, and every sibling route had already been
+ * given a number by the 2026-05-28 sweep. This one was missed because it did not
+ * exist yet.
+ *
+ * It matters more here than in any of those siblings. This is the only route that
+ * is entered with a signature the caller has ALREADY made, and being killed by the
+ * platform means the code below never runs — so a call the user may have paid for
+ * increments nothing, and the response they get is a generic gateway error written
+ * by neither us nor the builder.
+ */
+export const maxDuration = 120;
+
+/**
+ * How long to wait for the builder's endpoint.
+ *
+ * Derived, not written down twice. A second hard-coded number beside the one above
+ * is exactly how the 90s drifted out of range in the first place, and a fetch
+ * budget larger than the function's own envelope is a timeout that cannot happen.
+ * The 30s of headroom is for the KV writes AFTER the fetch returns: being killed
+ * between the builder's answer and `incrCallCount` loses the record of a paid call.
+ */
+const UPSTREAM_TIMEOUT_MS = (maxDuration - 30) * 1_000;
 
 /** 100% — the builder's endpoint is the payee, so the user's one signature
  *  pays them in full. See the 🔴 block above before changing this. */
@@ -71,7 +100,7 @@ export async function POST(
       method:  "POST",
       headers,
       body:    JSON.stringify(body),
-      signal:  AbortSignal.timeout(90_000),
+      signal:  AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
   } catch (e) {
     return NextResponse.json({
