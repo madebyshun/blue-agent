@@ -11,12 +11,25 @@
  * (the AppShell already provides page chrome); all logic is shared.
  *
  * Shows every tool the connected wallet owns across BOTH registries:
- *   • 🌐 External — builder self-hosts the endpoint (95/5 split, per-tool revenue).
+ *   • 🌐 External — builder self-hosts the endpoint (100/0, paid direct to them).
  *   • ✨ Hosted   — Blue Hub runs the tool (90/10 split, pooled earnings).
  *
  * Data comes from /api/hub/builders/[address]/dashboard (secrets stripped there).
- * Earnings are BOOKKEEPING only — the on-chain payout splitter is a Phase 4 hook.
  * "Test" deep-links into the Hub runner so a creator can run their own live tool.
+ *
+ * ── 🔴 TWO KINDS OF MONEY, AND ONLY ONE OF THEM IS CLAIMABLE ─────────────────
+ * External tools settle at the BUILDER's own endpoint — EIP-3009 pays exactly one
+ * recipient and that recipient is the builder — so external figures are money
+ * ALREADY IN THEIR WALLET, estimated as listed price × successful calls. Blue
+ * never held it and has nothing to pay out. Hosted tools settle through Blue, so
+ * the hosted pool is the only real balance.
+ *
+ * This panel said "accrued · ready to claim" over the SUM of both, with external
+ * labelled 95%, beside a Withdraw button — while the external flow had never paid
+ * a builder at all (the Hub signed Blue's treasury; every builder's verifier
+ * refused). The figure was not merely imprecise, it told a third party Blue owed
+ * them money Blue had never received. Branch claim/withdraw copy on
+ * `paidDirect`, never on a non-zero total.
  *
  * ── "—" IS A REAL STATE HERE (#150 group B) ──────────────────────────────────
  * Every figure on this page comes from a KV counter that can fail to READ. The
@@ -77,6 +90,9 @@ interface DashboardItem {
   callCount:   number | null;   // null = counter unreadable, NOT zero
   earnedUnits: number | null;   // null = pooled (hosted) or unreadable — see earningsScope
   earningsScope: "per_tool" | "pooled";
+  /** true = paid straight to the builder's wallet, Blue never held it, nothing
+   *  to claim. false = Blue settled it and holds the share. See the 🔴 header. */
+  paidDirect:  boolean;
   splitPct:    number;
 }
 
@@ -90,7 +106,7 @@ interface DashboardData {
 }
 
 const SOURCE_META: Record<Source, { icon: string; label: string; color: string; split: string }> = {
-  external: { icon: "🌐", label: "External", color: "#34D399", split: "95% builder · 5% Hub" },
+  external: { icon: "🌐", label: "External", color: "#34D399", split: "100% builder · paid direct to your wallet" },
   hosted:   { icon: "✨", label: "Hosted",   color: "#A78BFA", split: "90% builder · 10% Hub" },
 };
 
@@ -190,8 +206,13 @@ export default function DashboardView({ inShell = false, onBack }: { inShell?: b
               <StatCard label="TOOLS"    value={coverage === "unavailable" ? "—" : stats.tools} accent="#4FC3F7"
                 sub={data && coverage !== "unavailable" ? `${data.counts.external} ext · ${data.counts.hosted} hosted` : undefined} />
               <StatCard label="RUNS"     value={stats.calls} accent="#A78BFA" />
+              {/* "accrued" was wrong for the external half — that money is
+                  already in the builder's wallet and Blue never held it, so a
+                  card labelled accrued invited a withdraw that can never come.
+                  "your share, all sources" is true of both halves; the panel
+                  below splits held-by-Blue from paid-direct. */}
               <StatCard label="EARNINGS" value={stats.revenue} accent="#34D399"
-                sub={stats.revenue === "—" ? "could not read — not $0" : "accrued · your share"} />
+                sub={stats.revenue === "—" ? "could not read — not $0" : "your share · all sources"} />
             </div>
 
             {/* Degraded-read banner. Amber, not red: nothing is broken or lost —
@@ -273,18 +294,28 @@ export default function DashboardView({ inShell = false, onBack }: { inShell?: b
             {/* Earnings breakdown + withdraw (Phase 4 hook).
                 Shown when there is anything to say — including "we couldn't
                 read one side of it", which the old `revenue > 0` gate hid
-                entirely (a null total silently removed the whole block). */}
+                entirely (a null total silently removed the whole block).
+
+                🔴 The headline is the HOSTED figure, not the total. External
+                money went straight to the builder's wallet, so a total that
+                mixes the two and calls itself "ready to claim" promises a payout
+                of funds Blue never received. Keep the total out of any sentence
+                containing claim, withdraw, accrued or balance. */}
             {data && (data.earnings.externalUnits !== null || data.earnings.hostedUnits !== null) &&
              (data.earnings.totalUnits === null || data.earnings.totalUnits > 0) && (
               <div className="mt-6 rounded-xl border border-[#A78BFA]/20 bg-[#A78BFA]/5 p-4">
                 <div className="flex items-center justify-between gap-4 mb-3">
                   <div>
                     <p className="text-xs font-semibold mb-0.5">
-                      {stats.revenue === "—"
-                        ? "Accrued balance unavailable"
-                        : `${stats.revenue} accrued · ready to claim`}
+                      {data.earnings.hostedUnits === null
+                        ? "Hosted balance unavailable"
+                        : `${fig(data.earnings.hostedUnits, coverage, usdc)} held by Blue · from hosted tools`}
                     </p>
-                    <p className="text-[10px] text-slate-600">On-chain payout splitter launches Phase 4. Bookkeeping is live now.</p>
+                    <p className="text-[10px] text-slate-600">
+                      Hosted tools settle through Blue, so this is the part Blue owes you — payout
+                      lands with the Phase 4 splitter. External tools pay your wallet directly on
+                      every call, so there is nothing to claim for those.
+                    </p>
                   </div>
                   <button disabled className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA]/60 bg-[#A78BFA]/5 cursor-not-allowed">
                     Withdraw (soon)
@@ -292,11 +323,17 @@ export default function DashboardView({ inShell = false, onBack }: { inShell?: b
                 </div>
                 <div className="grid grid-cols-2 gap-3 pt-3 border-t border-[#A78BFA]/15">
                   <div>
-                    <p className="text-[9px] tracking-widest text-slate-600">🌐 EXTERNAL · 95%</p>
+                    <p
+                      className="text-[9px] tracking-widest text-slate-600"
+                      title={"Paid straight to your wallet by each caller, 100%, because your endpoint is the payee. " +
+                             "Blue never holds it. This is an estimate: listed price × successful calls."}
+                    >
+                      🌐 EXTERNAL · 100% (paid direct, est.)
+                    </p>
                     <p className="text-sm font-bold text-[#34D399] tabular-nums">{fig(data.earnings.externalUnits, coverage, usdc)}</p>
                   </div>
                   <div>
-                    <p className="text-[9px] tracking-widest text-slate-600">✨ HOSTED · 90% (pooled)</p>
+                    <p className="text-[9px] tracking-widest text-slate-600">✨ HOSTED · 90% (pooled, held)</p>
                     <p className="text-sm font-bold text-[#A78BFA] tabular-nums">{fig(data.earnings.hostedUnits, coverage, usdc)}</p>
                   </div>
                 </div>
@@ -386,7 +423,15 @@ function ToolRow({ t, owner, onRemoved }: { t: DashboardItem; owner: string; onR
             {t.earningsScope === "pooled" ? (
               <span className="text-slate-600" title="Hosted earnings are pooled across your hosted tools — see the breakdown below.">earnings pooled ✨</span>
             ) : t.earnedUnits !== null ? (
-              <span><span className="text-[#34D399] font-semibold tabular-nums">{usdc(t.earnedUnits)}</span> earned</span>
+              // "paid direct" rather than "earned": for an external tool the
+              // caller's signature pays this wallet, so the figure describes USDC
+              // already received, estimated from listed price × successful calls.
+              <span title={t.paidDirect
+                ? "Paid straight to your wallet by each caller. Estimate: listed price × successful calls."
+                : "Your share, held by Blue until payout."}>
+                <span className="text-[#34D399] font-semibold tabular-nums">{usdc(t.earnedUnits)}</span>
+                {t.paidDirect ? " paid direct" : " earned"}
+              </span>
             ) : (
               <span className="text-amber-400/70" title="This tool's revenue counter could not be read — this is not $0.">earnings unavailable</span>
             )}

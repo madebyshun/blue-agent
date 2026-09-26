@@ -96,7 +96,7 @@ const ROADMAP = [
       { done: true,  text: "RH RWA Phases 1–7 — registry, market analytics, trading, portfolio, discovery, agent skills, bridge/builder kit" },
       { done: true,  text: "x402 pay-per-call — RH + Base tools billed in USDC on Base" },
       { done: false, text: "Blue Hood reputation — arrow track record → public builder scores" },
-      { done: false, text: "Builder Registry — submit your tool, earn 95% in USDC" },
+      { done: false, text: "Builder Registry — submit your tool, callers pay your wallet 100% in USDC" },
       { done: false, text: "Tool discovery — search, rank by calls/revenue, verified badges" },
       { done: false, text: "Tool chains — compose multiple tools, one payment" },
       { done: false, text: "Distribution — listed on Smithery, MCP.SO, CDP Bazaar, RH Agentic Directory" },

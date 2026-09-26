@@ -8,7 +8,9 @@
  * are hidden from the picker (VISIBLE_TEMPLATES) for a later phase. Tool types:
  *
  *   🌐 external     — you host the endpoint. Blue Hub proxies calls to it and
- *                     forwards the x402 payment. 95/5 split. → POST /api/hub/tools
+ *                     forwards the x402 payment UNCHANGED, so your endpoint is the
+ *                     payee and the caller pays you directly: 100/0, nothing held
+ *                     by Blue. → POST /api/hub/tools
  *   ✨ ai_tool      — you write a prompt; Blue Hub runs it on the Bankr LLM.
  *                     90/10 split. → POST /api/hub/hosted
  *   ✨ api_wrapper  — Blue Hub forwards to your upstream API (optionally with a
@@ -56,8 +58,8 @@ function buildExternalSiwe(spec: {
     `Nonce:     ${nonce}`,
     ``,
     `By signing this message I confirm I control the wallet above and`,
-    `agree to the Blue Hub builder terms: 95/5 revenue split with the`,
-    `Blue Hub treasury, USDC settlement on Base.`,
+    `agree to the Blue Hub builder terms: callers pay this wallet`,
+    `directly, 100% of every call, USDC on Base. Blue Hub takes no cut.`,
   ].join("\n");
 }
 
@@ -90,7 +92,7 @@ type Step  = "form" | "signing" | "submitting" | "done" | "error";
 type TestState = { ok: boolean; hint: string; body?: string } | null;
 
 const TEMPLATES: { id: Template; badge: string; title: string; blurb: string; split: string }[] = [
-  { id: "external",    badge: "🌐", title: "External tool",  blurb: "You host the endpoint. Blue Hub proxies calls and forwards the x402 payment.", split: "95 / 5" },
+  { id: "external",    badge: "🌐", title: "External tool",  blurb: "You host the endpoint. Blue Hub proxies calls and forwards the x402 payment.", split: "100 / 0" },
   { id: "ai_tool",     badge: "✨", title: "AI tool",        blurb: "Write a prompt. Blue Hub runs it on the LLM for you — no server to host.",       split: "90 / 10" },
   { id: "api_wrapper", badge: "✨", title: "API wrapper",    blurb: "Blue Hub forwards to your upstream API, injecting a secret key server-side.",     split: "90 / 10" },
 ];
@@ -356,9 +358,15 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
             <h1 className="text-2xl font-bold tracking-tight mb-1">List your tool on Blue Hub</h1>
             <p className="text-sm text-slate-500 leading-relaxed max-w-xl">
               Anyone calling your tool pays in USDC on Base via x402.
-              You keep <span className="text-[#34D399]">{hosted ? "90%" : "95%"}</span>;
-              Blue Hub treasury takes <span className="text-[#A78BFA]">{hosted ? "10%" : "5%"}</span>.
-              No subscription, no API key.
+              You keep <span className="text-[#34D399]">{hosted ? "90%" : "100%"}</span>
+              {hosted ? (
+                <>; Blue Hub treasury takes <span className="text-[#A78BFA]">10%</span> and holds
+                  your share until payout.</>
+              ) : (
+                <> — the caller pays your endpoint directly, so Blue Hub never holds it and
+                  there is nothing to claim.</>
+              )}
+              {" "}No subscription, no API key.
             </p>
           </div>
 
@@ -442,7 +450,7 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
                       that speaks x402 works here. */}
                   <p className="text-[10px] text-slate-500 leading-relaxed">
                     Blue Hub doesn&apos;t host your code. Point this at any endpoint that
-                    speaks x402 — you own it, and you keep 95%.
+                    speaks x402 — you own it, callers pay it directly, and you keep 100%.
                   </p>
                 </div>
               </Field>
@@ -623,7 +631,7 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
           )}
           <span className="w-1 h-1 rounded-full bg-[#A78BFA] animate-pulse" />
           <p className="text-xs text-[#A78BFA] tracking-widest">// LIST YOUR TOOL</p>
-          <p className="text-[10px] text-slate-700 hidden sm:block">USDC on Base via x402 · 95/5</p>
+          <p className="text-[10px] text-slate-700 hidden sm:block">USDC on Base via x402 · you keep 100%</p>
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-6">
           <div className="max-w-3xl mx-auto">{body}</div>
@@ -639,7 +647,7 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
         <div className="border-b border-[#1A1A2E] px-5 h-14 flex items-center gap-3 shrink-0">
           <span className="w-1 h-1 rounded-full bg-[#A78BFA] animate-pulse" />
           <p className="text-xs text-[#A78BFA] tracking-widest">// LIST YOUR TOOL</p>
-          <p className="text-[10px] text-slate-700 hidden sm:block">USDC on Base via x402 · 95/5</p>
+          <p className="text-[10px] text-slate-700 hidden sm:block">USDC on Base via x402 · you keep 100%</p>
           <button onClick={onClose} aria-label="Close"
             className="ml-auto text-slate-500 hover:text-white transition-colors text-lg leading-none px-1">✕</button>
         </div>

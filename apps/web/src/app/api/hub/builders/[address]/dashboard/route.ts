@@ -2,12 +2,29 @@
  * GET /api/hub/builders/[address]/dashboard — creator dashboard data for one wallet.
  *
  * Aggregates BOTH registries the wallet can own tools in:
- *   • external (hub-registry)  — builder self-hosts the endpoint; 95/5 split.
- *                                Per-tool revenue is tracked (hub:tools:revenue:<id>).
- *   • hosted   (hub-hosted)    — Blue Hub runs the tool; 90/10 split.
+ *   • external (hub-registry)  — builder self-hosts the endpoint; 100/0 split,
+ *                                paid DIRECT to the builder's wallet (see below).
+ *                                Per-tool volume is tracked (hub:tools:revenue:<id>).
+ *   • hosted   (hub-hosted)    — Blue Hub runs the tool; 90/10 split, Blue holds.
  *                                Earnings are POOLED per wallet (builder:earned:<wallet>),
  *                                not per-tool, so hosted items carry no per-tool figure —
  *                                the aggregate is returned once under earnings.hostedUnits.
+ *
+ * 🔴 THE TWO SOURCES MEAN OPPOSITE THINGS BY "EARNED", AND CONFLATING THEM IS
+ * A CLAIM ABOUT SOMEONE ELSE'S MONEY. External tools settle at the BUILDER's own
+ * endpoint: EIP-3009 has one recipient, that recipient is the builder, so the
+ * USDC never touches Blue and there is nothing for Blue to pay out. Hosted tools
+ * settle through Blue, so the hosted pool IS a balance Blue owes.
+ *   external → `paidDirect: true`  — already in their wallet. Not claimable,
+ *                                    because it was never held. An ESTIMATE:
+ *                                    listed price × successful calls.
+ *   hosted   → `paidDirect: false` — held by Blue, awaiting a payout mechanism.
+ * This route published `splitPct: 95` for external until 2026-09-26, next to a
+ * "ready to claim" panel and a Withdraw button. It was bookkeeping against a
+ * splitter that has never existed, and the flow it described had never paid a
+ * builder once — the Hub signed Blue's treasury and every builder's verifier
+ * correctly refused. A builder reading that screen could reasonably have thought
+ * Blue was holding 95% of their revenue for them. Do not merge these fields.
  *
  * Secrets never leave the server: external tools omit no secret (endpoint is public),
  * hosted tools go through toPublicHostedTool() inside readBuilderHostedTools() so
@@ -61,13 +78,20 @@ interface DashboardItem {
   submittedAt: number;
   /** Lifetime paid runs (usage:<id>). `null` = the counter was unreadable, NOT zero. */
   callCount:   number | null;
-  /** External: this tool's 95% accrual, or null if unreadable. Hosted: always
-   *  null — earnings are pooled per wallet. `earningsScope` disambiguates. */
+  /** External: gross volume this tool has been paid DIRECTLY, or null if
+   *  unreadable. Hosted: always null — earnings are pooled per wallet.
+   *  `earningsScope` disambiguates null; `paidDirect` says whose wallet it is
+   *  already in. */
   earnedUnits: number | null;
   /** Why `earnedUnits` may be null: "pooled" = not tracked per tool (hosted);
    *  "per_tool" = it IS tracked, so a null there means we failed to read it. */
   earningsScope: "per_tool" | "pooled";
-  splitPct:    number;             // builder share: 95 (external) | 90 (hosted)
+  /** true  = the caller paid the builder's wallet directly; Blue never held it,
+   *          so it is NOT claimable and there is nothing to withdraw.
+   *  false = Blue settled it and holds the builder's share.
+   *  🔴 The claim/withdraw UI must branch on this, not on a truthy balance. */
+  paidDirect:  boolean;
+  splitPct:    number;             // builder share: 100 (external) | 90 (hosted)
 }
 
 export async function GET(
@@ -98,9 +122,12 @@ export async function GET(
     aiReady:       t.aiReady,
     submittedAt:   t.submittedAt,
     callCount:     t.callCount ?? null,
-    earnedUnits:   t.revenueTotal ?? null,   // per-tool 95% accrual is tracked
+    // Gross volume paid straight to this builder's wallet — an estimate (listed
+    // price × successful calls), never a balance Blue holds. See the 🔴 above.
+    earnedUnits:   t.revenueTotal ?? null,
     earningsScope: "per_tool",
-    splitPct:      95,
+    paidDirect:    true,
+    splitPct:      100,
   }));
 
   const hostedItems: DashboardItem[] = hosted.tools.map(h => ({
@@ -119,6 +146,7 @@ export async function GET(
     callCount:     h.callCount ?? null,
     earnedUnits:   null,                     // hosted earnings are pooled, not per-tool
     earningsScope: "pooled",
+    paidDirect:    false,                    // Blue settled it and holds the share
     splitPct:      90,
   }));
 

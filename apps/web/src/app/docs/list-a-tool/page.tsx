@@ -19,8 +19,8 @@ export default function ListAToolDoc() {
         submission is validated, your wallet signature is verified, and your endpoint is
         probed as a real Base x402 endpoint. Pass all three and the tool is listed with
         status <span className="font-mono text-slate-300">live</span> the same request.
-        Revenue settles in USDC on Base with a 95/5 split in your favour (5% Blue Hub
-        treasury).
+        Callers pay your wallet directly in USDC on Base — 100% of every call, no cut to
+        Blue Hub, nothing held on your behalf.
       </P>
 
       <Callout color="#A78BFA" title="Two ways to list">
@@ -155,8 +155,8 @@ tags        up to 8 tags, 20 chars each`}
   "Nonce:     " + nonce,
   "",
   "By signing this message I confirm I control the wallet above and",
-  "agree to the Blue Hub builder terms: 95/5 revenue split with the",
-  "Blue Hub treasury, USDC settlement on Base.",
+  "agree to the Blue Hub builder terms: callers pay this wallet",
+  "directly, 100% of every call, USDC on Base. Blue Hub takes no cut.",
 ].join("\\n");`}
       </CodeBlock>
 
@@ -193,8 +193,8 @@ const message = [
   "Nonce:     " + nonce,
   "",
   "By signing this message I confirm I control the wallet above and",
-  "agree to the Blue Hub builder terms: 95/5 revenue split with the",
-  "Blue Hub treasury, USDC settlement on Base.",
+  "agree to the Blue Hub builder terms: callers pay this wallet",
+  "directly, 100% of every call, USDC on Base. Blue Hub takes no cut.",
 ].join("\\n");
 
 const signature = await account.signMessage({ message });
@@ -250,12 +250,23 @@ console.log(res.status, out.ok ? out.tool.status : out.error);`}
 
       <H2 id="after">7. After listing</H2>
       <P>
-        The tool is live immediately and callable through the Hub proxy, which forwards
-        payment to your endpoint and tracks usage. Your 95% share of each paid call accrues
-        in the registry for batched payout. The green{" "}
+        The tool is live immediately and callable through the Hub proxy, which forwards the
+        caller&apos;s <span className="font-mono text-slate-300">X-Payment</span> header to
+        your endpoint unchanged and counts the call. It does not verify or settle payment —
+        your endpoint already does both, against your own wallet, so the USDC arrives
+        without passing through Blue Hub and there is no payout to wait for. The green{" "}
         <span className="font-mono text-slate-300">✓ Verified</span> badge is a separate,
         manual trust review — auto-live tools start unverified.
       </P>
+      <Callout color="#34D399" title="What the Hub signs on your behalf">
+        When a human runs your tool from the Hub UI, the Hub reads your endpoint&apos;s own
+        402 and signs the payee <em>it</em> names — not a cached copy of{" "}
+        <span className="font-mono">builderAddress</span> — so rotating your payout wallet
+        takes effect the moment your endpoint advertises it. Two guardrails apply: the
+        amount must be USDC on Base (<span className="font-mono">eip155:8453</span>), and it
+        must not exceed the price you listed. A 402 asking for more than the listing is
+        refused and nothing is signed, so keep the two in sync.
+      </Callout>
       <P>
         To remove a tool, fetch a <em>fresh</em> nonce from{" "}
         <span className="font-mono text-slate-300">GET /api/auth/nonce</span>, sign the
