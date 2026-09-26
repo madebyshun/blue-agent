@@ -101,6 +101,43 @@ const handlerIds = new Set(Object.keys(HANDLERS));
 check("C1 no AGENT_TOOLS entry without a handler", [...catalogIds].filter((id) => !handlerIds.has(id)));
 check("C2 no handler missing from AGENT_TOOLS", [...handlerIds].filter((id) => !catalogIds.has(id)));
 
+// C1/C2 compare the two maps to EACH OTHER, so a handler file absent from both
+// is invisible to both — and to every other check in this repo, none of which
+// read the directory. `builder-score.ts` lived in that blind spot: through the
+// maps it looks deleted, through the filesystem it runs on every dashboard load,
+// because the free top-level route imports the file directly rather than by id.
+// An unregistered file is therefore allowed, but only NAMED, and only with the
+// importer that keeps it alive. This list is the claim; C4 is the evidence.
+const UNREGISTERED: Record<string, string> = {
+  // Deliberately never priced. Serves the dashboard, chat's hub_builder_score
+  // (FREE_DIRECT) and the published @blueagent/skill's blue_score — all via the
+  // free route below. Pricing it is a product decision, not a cleanup.
+  "builder-score": "src/app/api/builder-score/route.ts",
+};
+const handlerFiles = readdirSync(join(WEB, "src/app/api/x402/_handlers"))
+  .filter((f) => f.endsWith(".ts") && f !== "index.ts" && !f.startsWith("_"))
+  .map((f) => f.replace(/\.ts$/, ""));
+check(
+  "C3 every handler file is registered or allowlisted",
+  handlerFiles.filter((id) => !handlerIds.has(id) && !(id in UNREGISTERED)),
+  "in neither map and nothing claims it — /api/x402/<id> 501s and /hub cannot list it"
+);
+// An allowlist with nothing behind it is a mute button: delete the importer and
+// the entry keeps waving the file through as dead code forever. Require the
+// consumer to exist AND to still import the handler, so the exemption expires
+// on its own the moment the reason for it does.
+check(
+  "C4 every allowlisted handler still has the consumer that justifies it",
+  Object.entries(UNREGISTERED).flatMap(([id, consumer]) => {
+    if (!handlerFiles.includes(id)) return [`${id} (allowlisted, but no such handler file)`];
+    let src: string;
+    try { src = readFileSync(join(WEB, consumer), "utf8"); }
+    catch { return [`${id} (consumer ${consumer} is gone)`]; }
+    return src.includes(`_handlers/${id}`) ? [] : [`${id} (${consumer} no longer imports it)`];
+  }),
+  "an unregistered handler is justified only by its importer — with none, it is dead code this list is hiding"
+);
+
 // ── D. plugin docs ───────────────────────────────────────────────────────────
 // Prose naming a retired tool is fine and deliberate — each dead name in the
 // skills sits in a "There is no `X` any more" note that redirects to blue_call.
