@@ -15,12 +15,13 @@ import { getAddress } from "viem";
 // USDC on Base (6 decimals) — canonical, verified on Basescan.
 export const USDC_BASE = getAddress("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
 
-// payTo — the Blue Agent treasury. As of 2026-08-18 this is the SINGLE payee
-// for every surface: chat-credit top-ups AND x402 tool calls (agent-tools'
-// BLUE_TREASURY, x402-cdp's PAY_TO). It used to be deliberately decoupled from
-// the old 0xb058… Bankr payout wallet; that wallet is retired, so the two were
-// unified onto this address. Still kept as a local const so this feature
-// doesn't pull the whole tool catalog into the client bundle.
+// payTo — the Blue Agent treasury. As of 2026-08-18 this holds the same value
+// as the x402 payee (lib/x402-payee's X402_PAY_TO), but it is DELIBERATELY a
+// separate constant, not an import: chat credits are a plain USDC transfer the
+// user signs directly, not an EIP-3009 authorization settled by CDP, so the two
+// flows have no protocol reason to share a recipient. Whether credit revenue
+// follows the x402 payee when that address changes is a business decision, not
+// a refactor — ask before unifying them.
 // Verified checksum address on Base.
 export const TOPUP_TREASURY = getAddress("0x02950Ad38aDA1D599375bD447E080cd404809205");
 

@@ -767,18 +767,30 @@ check(
   skillErrors.join(" | ") || `${AGENT_JSON.skills.length} skills resolve`,
 );
 
-// One payee, stated three times in this file and once per 402 response. The
-// server constant is the one that moves money (api/_lib/x402-cdp.ts PAY_TO);
-// these are copies, and a copy that drifts sends an agent's USDC elsewhere.
-const PAY_TO = read("src/app/api/_lib/x402-cdp.ts").match(
-  /PAY_TO\s*=\s*["'](0x[a-fA-F0-9]{40})["']/,
+// One payee, stated twice in this static file and once per 402 response.
+// agent.json cannot import, so this pin is the only thing keeping it in step,
+// and an agent indexing us reads it before it touches any route.
+//
+// Read from lib/x402-payee — the definition — NOT scraped out of x402-cdp.ts,
+// which now derives its PAY_TO from that module and holds no literal to find.
+const PAY_TO = read("src/lib/x402-payee.ts").match(
+  /X402_PAY_TO\s*=\s*["'](0x[a-fA-F0-9]{40})["']/,
 )?.[1];
 check(
-  "agent.json — payTo matches the server constant that settles",
+  "agent.json — payTo matches the constant that settles",
   !!PAY_TO &&
     AGENT_JSON.x402?.payTo?.toLowerCase() === PAY_TO.toLowerCase() &&
     AGENT_JSON.agent?.payTo?.toLowerCase() === PAY_TO.toLowerCase(),
-  PAY_TO ? `both fields = ${PAY_TO}` : "could not read PAY_TO from x402-cdp.ts",
+  PAY_TO ? `both fields = ${PAY_TO}` : "could not read X402_PAY_TO from lib/x402-payee.ts",
+);
+// …and the settling route really derives from it, so the pin above cannot pass
+// vacuously by having been aimed at a constant that nothing reads.
+const CDP_SRC = read("src/app/api/_lib/x402-cdp.ts");
+check(
+  "…and the settling route derives PAY_TO from that same constant",
+  /from\s+["']@\/lib\/x402-payee["']/.test(CDP_SRC) &&
+    /PAY_TO\s*=\s*X402_PAY_TO\b/.test(CDP_SRC),
+  "api/_lib/x402-cdp.ts imports X402_PAY_TO",
 );
 
 // Dead providers, named as live. Bankr was 403-banned 2026-07-20 and Venice was

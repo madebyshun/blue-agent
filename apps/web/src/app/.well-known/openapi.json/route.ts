@@ -16,12 +16,13 @@
 import { NextResponse } from "next/server";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { HANDLERS } from "@/app/api/x402/_handlers";
+import { X402_PAY_TO } from "@/lib/x402-payee";
 
 export const runtime = "nodejs";
 export const revalidate = 3600; // cache 1 hour
 
 const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-const PAY_TO    = "0x02950ad38ada1d599375bd447e080cd404809205";
+const PAY_TO    = X402_PAY_TO;
 const BASE_URL  = "https://blueagent.dev";
 
 export async function GET() {

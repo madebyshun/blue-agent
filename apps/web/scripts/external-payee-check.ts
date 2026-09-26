@@ -35,6 +35,7 @@ import {
   BASE_USDC,
   type RawAccept,
 } from "../src/lib/x402-accepts";
+import { X402_PAY_TO } from "../src/lib/x402-payee";
 
 let pass = 0;
 const failures: string[] = [];
@@ -97,7 +98,10 @@ const afterCalls = (src: string, name: string): string[] => {
 // (BSC, 18 decimals, amount 10000000000000000) and `acceptsV1`.
 
 const BUILDER = "0x2e882b5f4d97c2acceb7d68c97582e8c8dae6f22";
-const TREASURY = "0x02950ad38ada1d599375bd447e080cd404809205";
+// Imported, not re-typed: this is a CONTRAST fixture — the assertion is "the
+// external payee differs from the treasury", whatever the treasury currently
+// is — so it must follow a payee change instead of pinning a stale value.
+const TREASURY = X402_PAY_TO;
 const CENT = 10_000; // $0.01 in USDC's 6-decimal units
 
 const baseEntry: RawAccept = {
@@ -325,11 +329,21 @@ const BSC_FIRST: RawAccept[] = [
   // server settles against PAY_TO, so a divergence breaks EVERY native payment.
   check("6.12 the native default payee is still the treasury constant",
         /let\s+payTo[^=]*=\s*PAY_TO_WALLET/.test(code));
+  /* 6.13 used to scrape a hex literal out of each side and compare the two
+     strings. That could only ever prove "these two copies currently agree",
+     which is the weaker claim — it passes just as happily when there are
+     thirteen copies as when there are two. Both sides now read one exported
+     constant, so the invariant is structural and there is nothing to compare:
+     assert the single origin instead, and that neither side re-typed it. */
   const serverPayTo = read("src/app/api/_lib/x402-cdp.ts");
-  const clientAddr = code.match(/PAY_TO_WALLET\s*=\s*"(0x[0-9a-fA-F]{40})"/)?.[1] ?? "";
-  check("6.13 client PAY_TO_WALLET and server PAY_TO are the same wallet",
-        clientAddr.length === 42 &&
-          new RegExp(clientAddr, "i").test(serverPayTo));
+  const ONE_SOURCE = /from\s+["']@\/lib\/x402-payee["']/;
+  check("6.13 client and server both read the payee from lib/x402-payee",
+        ONE_SOURCE.test(code) && ONE_SOURCE.test(serverPayTo) &&
+          /PAY_TO_WALLET\s*=\s*X402_PAY_TO\b/.test(code) &&
+          /PAY_TO\s*=\s*X402_PAY_TO\b/.test(serverPayTo));
+  check("6.13b …and neither side re-types an address literal",
+        !/PAY_TO_WALLET\s*=\s*["']0x/.test(code) &&
+          !/\bPAY_TO\s*=\s*["']0x/.test(serverPayTo));
 
   // The user learns the payee from the wallet prompt, which shows a bare hex
   // address. This row is the only place it is named while they can still decline.
