@@ -759,41 +759,92 @@ const MIN_MAX_TOKENS = 400;
  * "the gateway returned nothing" and sent three investigations at the provider.
  * The throw below now names the real cause.
  *
- * Sizing: 1200. Peak reasoning observed across 36 probes was 1061 tokens (at a
- * 2000 budget). Cost is ~$0.0001/call — and note the failure mode was the
- * EXPENSIVE one: a starved call still bills the full 400 tokens and returns
- * nothing.
+ * Safe for non-reasoning models: they emit no reasoning tokens, stop at
+ * `finish_reason: "stop"`, and are billed only for what they generate, so the
+ * headroom is never spent. That matters because `VIRTUALS_MODEL` can point
+ * anywhere in the catalog — this fix is not coupled to one model id.
  *
- * ⚠️ THIS CONSTANT CANNOT RESCUE AN ARITHMETIC-HEAVY PROMPT, and the line above
- * used to claim it could ("reasoning grows with the offered budget but saturates
- * around ~1100"). The saturation was real for the prompts probed in 2026-09 and
- * false as a general law. Re-measured 2026-09-26 against the x402 `dex-flow`
- * prompt, which asked the model to derive per-pair ratios and formatted volumes
- * from five nested DexScreener objects:
+ * ── SIZING: 5000. Re-measured 2026-09-26; was 1200. ────────────────────────
+ *
+ * 1200 came from probing ONE prompt (`rh-stock-agent-brief`, peak 1061) and
+ * generalised badly. `b20-analyze` was returning 500 on roughly 3 of every 8
+ * paid calls, and `builder-deep-dd` intermittently, both with
+ * `cause=budget_exhausted_by_reasoning`.
+ *
+ * Reasoning appetite is set by PROMPT COMPLEXITY, and measured uncensored (at a
+ * budget nothing can exhaust, so the number is real rather than pinned at the
+ * cap):
+ *
+ *     b20-analyze  "guide"      reasoning  584 … 2026
+ *     builder-deep-dd  step 1   reasoning 1128 … 3454
+ *     builder-deep-dd  step 2   reasoning 1714 … 4246   ← peak
+ *     builder-deep-dd  step 3   reasoning 1281 … 3600
+ *
+ * 5000 clears the observed peak with margin. Note the spread on ONE fixed
+ * prompt is 3.8x (1128…4246) — the same request can want triple the reasoning
+ * run to run, which is why margin matters more than precision here, and why the
+ * `reasoning_effort: "none"` retry below exists as the backstop.
+ *
+ * ── WHY A FIXED CONSTANT AND NOT A MULTIPLE OF `maxTokens` ─────────────────
+ *
+ * Because on these prompts reasoning does NOT scale with the budget we offer.
+ * Same prompt, 5 runs at each offered budget:
+ *
+ *     offered 2000 → reasoning mean 1460 (3/5 starved)
+ *     offered 2800 → reasoning mean 2007 (1/5 starved)
+ *     offered 3600 → reasoning mean 1377 (0/5)
+ *     offered 5200 → reasoning mean 1207 (0/5)
+ *     offered 8000 → reasoning mean 1751 (0/5)
+ *
+ * Flat. Quadrupling the offer did not grow the reasoning, it just stopped
+ * starving the answer. Scaling headroom off `maxTokens` would also allocate it
+ * backwards: `maxTokens` describes the ANSWER, and the worst offender here
+ * (`b20-analyze`, 800) asks for one of the shortest answers in the repo while
+ * carrying one of the heaviest prompts — it would have received the least
+ * headroom exactly where the most was needed.
+ *
+ * ── ⚠️ BUT "FLAT" IS A PROPERTY OF THE PROMPT, NOT A LAW ───────────────────
+ *
+ * Measured the same day against the x402 `dex-flow` prompt, which asked the
+ * model to derive per-pair ratios and formatted volumes from five nested
+ * DexScreener objects:
  *
  *     wire budget  2000  →  0/3 answered, reasoning 1657–1830
  *                  3200  →  0/3 answered, reasoning 2607–2676
  *                  6000  →  2/4 answered, reasoning 2645–4493
  *                 12000  →  2/4 answered, reasoning 3333–8099
  *
- * Reasoning TRACKED the budget instead of converging — 8099 tokens is 7.6x the
- * "peak" this comment used to quote — so no headroom value made that prompt
- * reliable, and raising the constant would only have taxed the other ~30 call
- * sites. The fix was to compute the numbers in code and leave the model prose
- * (see the header of x402/_handlers/dex-flow.ts).
+ * There reasoning TRACKED the budget instead of converging, so NO headroom
+ * value made that prompt reliable and raising this constant would only have
+ * taxed the other call sites. That one was fixed by computing the numbers in
+ * code and leaving the model prose (see x402/_handlers/dex-flow.ts).
  *
- * So: a starving caller is evidence about THAT PROMPT, not about this number.
- * Before touching it, check whether the prompt is asking the model to do
- * arithmetic — CLAUDE.md forbids that anyway. The control that settles it: at
- * the identical `maxTokens: 800`, scam-detector (7 scalar facts, flat JSON out)
- * spends ~200 reasoning tokens and answered 6/6 in the same session.
+ * The two results are not in conflict — they are two prompt CLASSES. Flat is
+ * what a knowledge/judgement prompt does; budget-tracking is what an
+ * arithmetic prompt does. So: a starving caller is evidence about THAT PROMPT
+ * first, and about this number only second. Before raising it again, check
+ * whether the prompt is asking the model to do arithmetic — CLAUDE.md forbids
+ * that anyway, and no constant will rescue it. The control that settles the
+ * class: at the identical `maxTokens: 800`, scam-detector (7 scalar facts,
+ * flat JSON out) spends ~200 reasoning tokens and answered 6/6.
  *
- * Safe for non-reasoning models: they emit no reasoning tokens, stop at
- * `finish_reason: "stop"`, and are billed only for what they generate, so the
- * headroom is never spent. That matters because `VIRTUALS_MODEL` can point
- * anywhere in the catalog — this fix is not coupled to one model id.
+ * Both handlers that forced this change were checked against that test and are
+ * in the flat class: `b20-analyze` ships a long B20 KNOWLEDGE block and asks
+ * for prose, and `builder-deep-dd` scores qualitative DD. Neither derives a
+ * number from nested input.
+ *
+ * Cost of the larger number is ~nil FOR THE FLAT CLASS: `max_tokens` is a cap,
+ * not a purchase. Above 3600 those prompts stop on their own
+ * (`finish_reason: "stop"`), so the extra ceiling is never billed. The failure
+ * it replaces was the expensive one — a starved call bills the full budget and
+ * returns nothing. For a budget-tracking prompt the ceiling IS spent, which is
+ * the second reason not to reach for this constant to fix one.
+ *
+ * And for the case no constant covers, the `reasoning_effort: "none"` retry
+ * below is the actual backstop: it removes the reasoning phase rather than
+ * trying to out-size it.
  */
-const REASONING_HEADROOM_TOKENS = 1200;
+const REASONING_HEADROOM_TOKENS = 5000;
 
 /** Strip a leading `<think>…</think>` block. Deepseek-R1 and derivatives
  *  emit reasoning wrapped in this tag; when the model burns most of the
@@ -838,100 +889,126 @@ export async function callVirtualsLLM(opts: {
   // answer-budget + reasoning headroom. See REASONING_HEADROOM_TOKENS.
   const answerTokens = Math.max(MIN_MAX_TOKENS, opts.maxTokens ?? 1000);
   const maxTokens = answerTokens + REASONING_HEADROOM_TOKENS;
-  const res = await fetch("https://compute.virtuals.io/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      // Pre-merge task #7 — minimal payload. History of the "empty
-      // response" saga:
-      //   - PR #211 sent `disable_thinking: true` + `reasoning_effort:
-      //     "none"` hoping strict schemas would ignore unknowns.
-      //   - PR #212 dropped `disable_thinking` after Virtuals returned
-      //     `400: "Unrecognized key(s): 'disable_thinking'"`, kept
-      //     `reasoning_effort` since the validator only flagged the
-      //     first unknown key.
-      //   - 2026-07-21 brief #0008: same virtuals chain error — the
-      //     validator's next unknown-key flag was almost certainly
-      //     `reasoning_effort`. Only way to be sure: minimal payload.
-      // So this call now sends ONLY what OpenAI-compat mandates:
-      //   { model, messages, max_tokens, temperature }
-      // Every hint that could trip the schema is gone. The
-      // `stripThinkBlock` post-processor on the response side is the
-      // only defence against `<think>` blocks eating the token budget —
-      // and the `MIN_MAX_TOKENS = 400` floor gives the model enough
-      // budget that even a thinking model has room for real content
-      // after the `</think>` tag.
-      model,
-      messages: [{ role: "system", content: opts.system }, ...msgs],
-      max_tokens: maxTokens,
-      temperature: opts.temperature ?? 0.3,
-    }),
-    signal: AbortSignal.timeout(60_000),
-  });
-  if (!res.ok) {
-    // Verbatim upstream response (up to 400 chars — enough for a full
-    // Virtuals error object like {"error":{"message":"Invalid model
-    // provided","type":"invalid_request_error"}}). The chain layer above
-    // stores this string on `attempts[i].error`; do NOT truncate to a
-    // generic "Virtuals 4xx" because that's how the model-string bug
-    // survived 4 CI runs.
-    throw new Error(`Virtuals ${res.status} model=${model}: ${(await res.text()).slice(0, 400)}`);
-  }
-  const d = (await res.json()) as {
-    choices?: {
-      finish_reason?: string;
-      message?: { content?: string; reasoning_content?: string; reasoning?: string };
-    }[];
-    usage?: {
-      prompt_tokens?: number;
-      completion_tokens?: number;
-      total_tokens?: number;
-      completion_tokens_details?: { reasoning_tokens?: number };
+
+  /**
+   * One round-trip. `reasoningEffort` is set only on the retry below.
+   *
+   * PAYLOAD HISTORY, and why a fifth key is allowed back in: PR #211 sent
+   * `disable_thinking` + `reasoning_effort` and PR #212 stripped them after
+   * Virtuals answered `400 Unrecognized key(s)`, leaving the OpenAI-compat
+   * minimum `{model, messages, max_tokens, temperature}`. RE-MEASURED
+   * 2026-09-26 — that 400 is gone. Ten candidate params were probed against
+   * the live gateway and NONE returned 4xx; `reasoning_effort: "none"` is
+   * honoured exactly (reasoning_tokens 0/12 runs) and is accepted by
+   * anthropic-claude-sonnet-5, google-gemini-2-5-flash and x-ai-grok-4-20 too.
+   * It is sent ONLY on the retry, so the happy path is still the minimal
+   * payload the 2026-07 incident argued for.
+   */
+  const dispatch = async (reasoningEffort?: "none") => {
+    const res = await fetch("https://compute.virtuals.io/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: opts.system }, ...msgs],
+        max_tokens: maxTokens,
+        temperature: opts.temperature ?? 0.3,
+        ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!res.ok) {
+      // Verbatim upstream response (up to 400 chars — enough for a full
+      // Virtuals error object like {"error":{"message":"Invalid model
+      // provided","type":"invalid_request_error"}}). The chain layer above
+      // stores this string on `attempts[i].error`; do NOT truncate to a
+      // generic "Virtuals 4xx" because that's how the model-string bug
+      // survived 4 CI runs.
+      throw new Error(`Virtuals ${res.status} model=${model}: ${(await res.text()).slice(0, 400)}`);
+    }
+    const d = (await res.json()) as {
+      choices?: {
+        finish_reason?: string;
+        message?: { content?: string; reasoning_content?: string; reasoning?: string };
+      }[];
+      usage?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+        completion_tokens_details?: { reasoning_tokens?: number };
+      };
     };
-  };
-  // Forward-only "tokens served" meter (lib/llm-usage.ts). Real provider usage —
-  // total_tokens if present, else prompt+completion — recorded before the
-  // empty-content check so reasoning-heavy calls that spent the budget still
-  // count. Best-effort and non-throwing; the tokens are already spent.
-  await recordLlmTokens(
-    d.usage?.total_tokens ?? (d.usage?.prompt_tokens ?? 0) + (d.usage?.completion_tokens ?? 0),
-  );
-  const choice = d.choices?.[0];
-  const rawContent = choice?.message?.content ?? "";
-  // Fallback: if content is empty but the upstream surfaced a separate
-  // `reasoning_content` field (some deepseek gateways split them), use
-  // it. Otherwise strip a leading think block from `content`.
-  //
-  // NOTE (measured 2026-09-17): on Virtuals this fallback never fires. The
-  // gateway names the field `reasoning` (alongside `reasoning_details`), not
-  // `reasoning_content`. That is deliberately NOT read here: when the budget
-  // runs out, `reasoning` holds chain-of-thought that was cut off mid-thought,
-  // and handing a truncated draft to `extractJsonObject` would surface a
-  // half-formed answer the model had not committed to. Per CLAUDE.md, missing
-  // context must degrade to "unavailable", not to a guess. It is measured
-  // below for the error message only.
-  const text = stripThinkBlock(rawContent) || choice?.message?.reasoning_content?.trim() || "";
-  if (!text) {
+    // Forward-only "tokens served" meter (lib/llm-usage.ts). Real provider usage —
+    // total_tokens if present, else prompt+completion — recorded before the
+    // empty-content check so reasoning-heavy calls that spent the budget still
+    // count. Best-effort and non-throwing; the tokens are already spent.
+    await recordLlmTokens(
+      d.usage?.total_tokens ?? (d.usage?.prompt_tokens ?? 0) + (d.usage?.completion_tokens ?? 0),
+    );
+    const choice = d.choices?.[0];
+    const rawContent = choice?.message?.content ?? "";
+    // Fallback: if content is empty but the upstream surfaced a separate
+    // `reasoning_content` field (some deepseek gateways split them), use
+    // it. Otherwise strip a leading think block from `content`.
+    //
+    // NOTE (measured 2026-09-17): on Virtuals this fallback never fires. The
+    // gateway names the field `reasoning` (alongside `reasoning_details`), not
+    // `reasoning_content`. That is deliberately NOT read here: when the budget
+    // runs out, `reasoning` holds chain-of-thought that was cut off mid-thought,
+    // and handing a truncated draft to `extractJsonObject` would surface a
+    // half-formed answer the model had not committed to. Per CLAUDE.md, missing
+    // context must degrade to "unavailable", not to a guess. It is measured
+    // below for the error message only.
+    const text = stripThinkBlock(rawContent) || choice?.message?.reasoning_content?.trim() || "";
+    const reasoningTokens = d.usage?.completion_tokens_details?.reasoning_tokens ?? null;
+    const hitCeiling = choice?.finish_reason === "length";
     // Name the real cause. "empty response (content_len=0)" alone reads as a
     // provider outage and sent three separate investigations at Virtuals; the
     // actual failure was our own token budget being eaten by the hidden
-    // reasoning phase. finish_reason + reasoning_tokens/max_tokens is the pair
-    // that discriminates the two, so it goes in the string the attempts trace
-    // stores and the CI log prints.
-    const reasoningTokens = d.usage?.completion_tokens_details?.reasoning_tokens ?? null;
-    const starved = choice?.finish_reason === "length";
-    throw new Error(
-      `Virtuals empty response (content_len=${rawContent.length} model=${model}` +
+    // reasoning phase. Distinguish the two ways a budget runs out, because
+    // after a reasoning_effort=none retry the reasoning explanation is a lie:
+    // a ceiling hit with reasoning_tokens=0 means the ANSWER alone didn't fit,
+    // which is a caller's `maxTokens` problem, not a headroom problem.
+    const cause = !hitCeiling
+      ? "cause=gateway_returned_no_content"
+      : reasoningTokens === 0
+        ? "cause=budget_exhausted_by_answer — the answer alone exceeded max_tokens; raise the caller's maxTokens"
+        : "cause=budget_exhausted_by_reasoning — OUR max_tokens is too low for this model, not a gateway outage";
+    return {
+      text,
+      // Only worth retrying when reasoning is what consumed the budget —
+      // re-sending with reasoning already at 0 would change nothing.
+      starvedByReasoning: hitCeiling && (reasoningTokens ?? 1) > 0,
+      diag:
+        `content_len=${rawContent.length} model=${model}` +
         ` finish_reason=${choice?.finish_reason ?? "unknown"}` +
         ` reasoning_tokens=${reasoningTokens ?? "unknown"}/${maxTokens}` +
         ` reasoning_len=${(choice?.message?.reasoning ?? "").length}` +
-        (starved
-          ? " cause=budget_exhausted_by_reasoning — OUR max_tokens is too low for this model, not a gateway outage"
-          : " cause=gateway_returned_no_content") +
-        `)`,
-    );
+        ` ${cause}`,
+    };
+  };
+
+  const first = await dispatch();
+  if (first.text) return first.text;
+
+  // The headroom above makes this rare, not impossible: reasoning on a single
+  // fixed prompt was measured spanning 1128…4246 tokens, so an unlucky draw can
+  // still clear any constant. Retry ONCE with reasoning switched off, which is
+  // a different MODE rather than the same dice again — with reasoning at 0 the
+  // whole budget reaches the answer, measured 12/12 complete and parseable.
+  //
+  // Deliberately loud: semantic-smoke.ts argues (correctly) that a retry which
+  // quietly turns a monitor green while production still degrades is worse than
+  // the red. This one warns on every fire so the rate stays greppable, and the
+  // throw below still carries the original diagnostic.
+  if (first.starvedByReasoning) {
+    console.warn(`[llm] reasoning exhausted the budget, retrying once with reasoning_effort=none — ${first.diag}`);
+    const retry = await dispatch("none");
+    if (retry.text) return retry.text;
+    throw new Error(`Virtuals empty response after reasoning-free retry (${retry.diag} first_attempt=[${first.diag}])`);
   }
-  return text;
+
+  throw new Error(`Virtuals empty response (${first.diag})`);
 }
 
 /**
