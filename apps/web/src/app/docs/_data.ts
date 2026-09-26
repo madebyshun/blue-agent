@@ -4,17 +4,6 @@
 import { TOOL_COUNT } from "@/lib/agent-tools";
 import { MCP_TOOL_COUNT } from "@/lib/mcp-tools";
 
-export const STATS = [
-  // Both counts are DERIVED, and they are different surfaces on purpose: the Hub
-  // catalog is everything, the MCP manifest is a curated subset. "MCP Tools" sat
-  // at a literal 57 long enough for the real surface to reach 86 without it
-  // moving — which is why this file no longer gets to type a count at all.
-  { value: String(TOOL_COUNT),     label: "Hub Tools", color: "#4FC3F7" },
-  { value: "5",                    label: "Commands",  color: "#34D399" },
-  { value: String(MCP_TOOL_COUNT), label: "MCP Tools", color: "#A78BFA" },
-  { value: "3",                    label: "Agents",    color: "#fbbf24" },
-];
-
 /**
  * The three ways in, ORDERED — Chat first, because it is the one that works
  * without knowing any of these names.
@@ -302,3 +291,33 @@ export const PACKAGES = [
 // those 63 were served by nothing at all. /docs/mcp now renders the same array
 // the route returns. See lib/mcp-tools.ts for the measurement.
 export { MCP_TOOLS, MCP_TOOL_COUNT } from "@/lib/mcp-tools";
+
+/* 🔴 The fourth stat read `{ value: "3", label: "Agents" }` until 2026-09-26 —
+   the last Hub-wide survivor of the "3-agent" claim, sitting in the STATS grid
+   at the top of /docs where it framed everything below it.
+   `api/catalog/route.ts` had already retired the identical claim, in its own
+   words: "These are PERSONAS, not independent agents. Every one is a
+   system-prompt prefix plus an injected skill file on a single Virtuals
+   endpoint (`_lib/llm.ts`) — there is no separate model, no separate vendor,
+   and no voting protocol." So the number was not merely imprecise: a reader
+   counting "3 agents" next to "110 tools" and "18 MCP tools" reads it as a
+   third countable surface, and there is no third vendor to count.
+   MEASURED the same day across the 110-tool catalog: 76 tools run the Blue
+   persona alone, 26 add Aeon, 4 add MiroShark, and 4 mention all three. Four
+   tools out of 110 is the entire basis for a headline "3".
+   Replaced with skill files, which is a real countable surface with its own
+   page (/docs/skills) and is pinned to disk by scripts/skills-truth-check.ts.
+   ⚠️ This block lives at the BOTTOM of the file on purpose: it reads
+   CORE_COMMANDS and SKILLS_DOCS, which are declared above it. `const` bindings
+   are in the temporal dead zone until their initialiser runs, so hoisting STATS
+   back to the top of the file — where it used to be — throws at module load,
+   not at render. Consumers `import { STATS }` and the module is fully evaluated
+   before they read it, so position here costs them nothing.
+   The old comment claimed "this file no longer gets to type a count at all"
+   while typing BOTH "5" and "3" two lines below it. Now it is true. */
+export const STATS = [
+  { value: String(TOOL_COUNT),          label: "Hub Tools",   color: "#4FC3F7" },
+  { value: String(CORE_COMMANDS.length), label: "Commands",   color: "#34D399" },
+  { value: String(MCP_TOOL_COUNT),      label: "MCP Tools",   color: "#A78BFA" },
+  { value: String(SKILLS_DOCS.length),  label: "Skill Files", color: "#fbbf24" },
+];

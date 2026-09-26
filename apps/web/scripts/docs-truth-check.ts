@@ -369,6 +369,41 @@ for (const [name, src] of scanned) {
   check(`${name}`, !/3-agent consensus/i.test(src), "personas on one endpoint, not agents");
 }
 
+// The phrasing scan above could not have caught the longest-lived instance of
+// this claim: the /docs STATS grid rendered `{ value: "3", label: "Agents" }`,
+// which contains neither the word "consensus" nor a hyphen, in a file the scan
+// does not read. It sat at the top of /docs framing every number below it.
+// So this pins the SHAPE instead of the prose — every stat in that grid must be
+// a derived String(...) expression. A literal is how the count drifts (this same
+// grid held "MCP Tools: 57" while the real surface reached 86), and a literal is
+// also the only way an uncountable claim like "3 Agents" gets in at all.
+const DOCS_DATA = read("src/app/docs/_data.ts");
+const statsBlock = DOCS_DATA.match(/export const STATS = \[([\s\S]*?)\n\];/)?.[1] ?? "";
+// Asserted separately so the literal check below cannot pass by matching
+// nothing: if the regex ever stops finding the block, `statLiterals` is empty
+// and "every stat is derived" would go green on a file it never read.
+check(
+  "docs STATS grid is readable",
+  statsBlock.length > 0,
+  statsBlock.length > 0 ? `${statsBlock.trim().split("\n").length} lines` : "REGEX MATCHED NOTHING",
+);
+const statLiterals = [...statsBlock.matchAll(/value:\s*"([^"]*)"/g)].map((m) => m[1]);
+check(
+  "every /docs stat is derived, not typed",
+  statLiterals.length === 0,
+  statLiterals.length ? `hard-typed: ${statLiterals.join(", ")}` : "all String(...)",
+);
+// STATS reads CORE_COMMANDS and SKILLS_DOCS, so it must stay BELOW them — a
+// `const` is in the temporal dead zone until its initialiser runs, and hoisting
+// the block back to the top of the file throws at module load rather than at
+// render. Cheap to assert, and the failure it prevents is a blank page.
+for (const dep of ["CORE_COMMANDS", "SKILLS_DOCS"]) {
+  check(
+    `STATS is declared after ${dep} (TDZ)`,
+    DOCS_DATA.indexOf(`export const ${dep}`) < DOCS_DATA.indexOf("export const STATS"),
+  );
+}
+
 // ── 6. SKILL.md never HAND-TYPES a tool list ──────────────────────────────
 // Superseded in part on 2026-09-24. SKILL.md does carry a tool list again, but
 // it is generated from AGENT_TOOLS and diffed byte-for-byte by
