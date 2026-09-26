@@ -5,13 +5,34 @@ const DEXSCREENER_URL = "https://api.dexscreener.com/latest/dex";
 
 type DsPair = {
   chainId?: string;
-  baseToken?: { symbol?: string; name?: string };
+  baseToken?: { symbol?: string; name?: string; address?: string };
+  quoteToken?: { symbol?: string; name?: string; address?: string };
   priceUsd?: string;
   liquidity?: { usd?: number };
   volume?: { h24?: number };
   marketCap?: number;
   priceChange?: { h1?: number; h6?: number; h24?: number };
 };
+
+// Which side of the pair is the token the caller asked about?
+//
+// DexScreener's /tokens/{address} returns pairs where the address is on EITHER
+// side, and the deepest one is often the pair where it is the QUOTE — for USDC
+// on Base that is AERO/USDC at $39.4M. Reading `baseToken.symbol` off that pair
+// labels a USDC answer "AERO" (measured 2026-09-26).
+//
+// The liquidity figure itself is side-agnostic — `liquidity.usd` is whole-pool
+// TVL and the constant-product approximation below works from either side — so
+// unlike token-price this does NOT need the pair rejected, only the label fixed.
+function sideOf(pair: DsPair, token: string): { symbol: string | null; name: string | null; address: string | null } {
+  const want = token.toLowerCase();
+  const q = pair.quoteToken;
+  if (q?.address?.toLowerCase() === want) {
+    return { symbol: q.symbol ?? null, name: q.name ?? null, address: q.address ?? null };
+  }
+  const b = pair.baseToken;
+  return { symbol: b?.symbol ?? null, name: b?.name ?? null, address: b?.address ?? null };
+}
 
 async function getDeepestBasePair(token: string): Promise<DsPair | null> {
   const isAddress = /^0x[a-fA-F0-9]{40}$/.test(token);
@@ -57,7 +78,7 @@ export default async function handler(req: Request): Promise<Response> {
       return Response.json({
         tool: "liquidity-depth",
         token,
-        symbol: pair?.baseToken?.symbol ?? null,
+        symbol: pair ? sideOf(pair, token).symbol : null,
         total_liquidity_usd: null,
         depth: { impact_1pct_usd: null, impact_2pct_usd: null, impact_5pct_usd: null },
         slippage_estimate: { size_1k: null, size_10k: null, size_100k: null },
@@ -85,7 +106,8 @@ export default async function handler(req: Request): Promise<Response> {
     return Response.json({
       tool: "liquidity-depth",
       token,
-      symbol: pair.baseToken?.symbol ?? null,
+      symbol: sideOf(pair, token).symbol,
+      address: sideOf(pair, token).address,
       total_liquidity_usd: +L.toFixed(2),
       depth: {
         impact_1pct_usd: impactUsd(1),
