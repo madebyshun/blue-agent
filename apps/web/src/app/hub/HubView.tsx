@@ -700,7 +700,6 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         const priceRaw    = tool.price.replace("$", "");
         const priceVal    = parseFloat(priceRaw) || 0;
         const priceUnits  = String(Math.round(priceVal * 1_000_000)); // USDC 6 decimals
-        const validBefore = BigInt(Math.floor(Date.now() / 1000) + 300);
 
         /* ── WHO GETS PAID, AND HOW MUCH ─────────────────────────────────────
            EIP-3009 `transferWithAuthorization` settles to exactly ONE
@@ -745,6 +744,10 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         let domainName    = "USD Coin";
         let domainVersion = "2";
         let payNetwork    = "eip155:8453";
+        // Life of the signature. The native default must equal the one in
+        // buildRequirements() (api/_lib/x402-cdp.ts), because that is the
+        // requirements object CDP compares this payment against.
+        let payTimeoutS   = 120;
 
         if (tool.source === "external") {
           setStep("calling");
@@ -790,7 +793,16 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           domainName    = sel.accept.domainName;
           domainVersion = sel.accept.domainVersion;
           payNetwork    = sel.accept.network;
+          payTimeoutS   = sel.accept.maxTimeoutSeconds;
         }
+
+        // Computed HERE, not above the branch, because the window has to outlive
+        // the `maxTimeoutSeconds` this payment is about to advertise in
+        // `accepted`. The +60 is slack for the round trip and for clock skew
+        // between this browser and a facilitator we do not run: signing a window
+        // exactly equal to the advertised one leaves none, and the one live
+        // registered endpoint asks for the full 300s.
+        const validBefore = BigInt(Math.floor(Date.now() / 1000) + payTimeoutS + 60);
 
         // Pre-check balance so we don't make the user sign a doomed payment.
         // Against the RESOLVED amount: for an external tool that is what its 402
@@ -856,11 +868,43 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         // The header must carry the SAME payee and amount that were just signed.
         // If these ever drift from the typed data above, the signature verifies
         // against a different authorization than the one the user approved —
-        // which is the one failure mode a wallet prompt cannot warn about.
+        // which is the one failure mode a wallet prompt cannot warn about. Every
+        // value below therefore comes from the variables the signature was built
+        // from, never re-derived.
         const xPayment = btoa(JSON.stringify({
           x402Version: 2,
           scheme:      "exact",
           network:     payNetwork,
+          /* 🔴 THE x402 v2 PAYLOAD IS {x402Version, accepted, payload}. This key
+             was missing until 2026-09-26, and NATIVE tools never noticed because
+             OUR OWN SERVER rebuilds it: toV2PaymentPayload in
+             api/_lib/x402-cdp.ts injects `accepted: requirements` before calling
+             CDP. /api/hub/tools/<id>/call forwards this header byte-for-byte to
+             the builder and patches nothing, so an external tool's facilitator
+             received a payload with no requirements in it at all.
+
+             MEASURED 2026-09-26 against PayAI's public /verify with a dummy
+             signature: without this key, 400 `invalid_payload` — "accepted:
+             expected object, received undefined", byte-identical to what the Hub
+             was getting in production. With it, the facilitator recovers the
+             payer and actually checks the signature. That is the entire reason
+             no registered community tool has ever been paid; the payee fix
+             shipped earlier was necessary and, on its own, not sufficient.
+
+             This must mirror buildRequirements() in api/_lib/x402-cdp.ts field
+             for field — it is the same contract, built on the client because for
+             an external tool the requirements come from the BUILDER's 402, and
+             the only thing that may be signed is what that 402 actually asked
+             for. */
+          accepted: {
+            scheme:            "exact",
+            network:           payNetwork,
+            asset:             USDC,
+            amount:            payUnits,
+            payTo,
+            maxTimeoutSeconds: payTimeoutS,
+            extra: { name: domainName, version: domainVersion },
+          },
           payload: {
             signature,
             authorization: {

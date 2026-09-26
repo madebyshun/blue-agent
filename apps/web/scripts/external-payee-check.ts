@@ -50,6 +50,26 @@ const flat = (s: string) => s.replace(/\n\s*\*?/g, " ").replace(/\s+/g, " ");
 /** Strip block + line comments so a claim is not "found" inside a warning about it. */
 const stripComments = (s: string) =>
   s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+/**
+ * The `{…}` that follows a match, balanced by brace depth.
+ *
+ * Deliberately not "the next N characters": the first draft of 11.2 used a
+ * distance window and failed on correct code, because one Tailwind className in
+ * this repo runs to ~155 characters. Depth is the only thing that answers "is
+ * this statement inside that block" without a magic number that rots.
+ */
+const blockAfter = (src: string, re: RegExp): string => {
+  const m = re.exec(src);
+  if (!m) return "";
+  const open = src.indexOf("{", m.index);
+  if (open < 0) return "";
+  let depth = 0;
+  for (let j = open; j < src.length; j++) {
+    if (src[j] === "{") depth++;
+    else if (src[j] === "}" && --depth === 0) return src.slice(open + 1, j);
+  }
+  return "";
+};
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 // Shaped after the ONE live registered endpoint, measured 2026-09-26. Its body
@@ -473,26 +493,6 @@ const BSC_FIRST: RawAccept[] = [
 // 2× too high and a live tool reported dead are the two errors that shipped.
 
 {
-  /**
-   * Body of the first block whose header matches `re`, by BRACE COUNTING.
-   * Not a `[\s\S]{0,N}` window: 8.7's first draft failed against correct code
-   * because one Tailwind className is ~155 chars, so the window was measuring
-   * formatting rather than structure. "Inside this block" is a real question
-   * with a real answer; distance is a proxy that rots on the next reflow.
-   */
-  const blockAfter = (src: string, re: RegExp): string => {
-    const m = re.exec(src);
-    if (!m) return "";
-    const open = src.indexOf("{", m.index);
-    if (open < 0) return "";
-    let depth = 0;
-    for (let j = open; j < src.length; j++) {
-      if (src[j] === "{") depth++;
-      else if (src[j] === "}" && --depth === 0) return src.slice(open + 1, j);
-    }
-    return "";
-  };
-
   const proxy     = read("src/app/api/hub/tools/[id]/call/route.ts");
   const proxyCode = stripComments(proxy);
   const counted   = blockAfter(proxyCode, /if\s*\(\s*!isDiscovery\s*\)/);
@@ -547,6 +547,122 @@ const BSC_FIRST: RawAccept[] = [
         budget * 1000 > ms);
   check("11.10 …and the probes it relies on still run in parallel",
         /Promise\.all\(/.test(read("src/lib/hub-liveness.ts")));
+}
+
+// ── Group 12: the payee was right and the payment still could not be read ────
+// Fixing the payee made the Hub sign the correct authorization and changed
+// nothing about the outcome, because the header it was wrapped in was not a
+// valid x402 v2 PaymentPayload: `{x402Version, accepted, payload}` went out
+// without `accepted`. NATIVE tools were immune for a reason that is easy to
+// misread as "the client is fine" — our own server rebuilds the payload
+// (`toV2PaymentPayload`, api/_lib/x402-cdp.ts) and injects the missing key
+// before CDP ever sees it. The external proxy forwards byte-for-byte, so the
+// builder's facilitator got a payload with no requirements in it.
+//
+// MEASURED 2026-09-26 against PayAI's public /verify with an all-zeros
+// signature: without `accepted`, 400 `invalid_payload` — "accepted: expected
+// object, received undefined", byte-identical to production. With it, the payer
+// is recovered and the signature is actually checked. Two independent bugs, one
+// symptom; fixing either alone still yields zero revenue, which is exactly why
+// the first fix looked like it had failed.
+
+{
+  const cdp = read("src/app/api/_lib/x402-cdp.ts");
+  const hub = read("src/app/hub/HubView.tsx");
+  const hubCode = stripComments(hub);
+  const accepts = read("src/lib/x402-accepts.ts");
+
+  // ── the window, RUN against fixtures — not read ──
+  const win = (v: unknown) =>
+    selectBaseUsdcAccept([{ ...baseEntry, maxTimeoutSeconds: v }], CENT);
+  const asked = win(300);
+  check("12.1 a builder's stated settlement window is carried through unchanged",
+        asked.ok && asked.accept.maxTimeoutSeconds === 300);
+
+  // Not the amount's rule, and the difference is the point: this field decides
+  // neither payee nor sum, so refusing over it would block honest tools for a
+  // value that cannot misdirect a cent. It is bounded anyway — a day-long
+  // window leaves a spendable signature with a stranger long after the user
+  // closed the tab believing the attempt had failed.
+  const absurd = win(86_400);
+  check("12.2 an absurd window is bounded, so no signature outlives the user's attention",
+        absurd.ok && absurd.accept.maxTimeoutSeconds > 0 && absurd.accept.maxTimeoutSeconds <= 600);
+
+  // The three ways this could silently become a zero-length window, each of
+  // which signs an authorization that can never settle.
+  const absent = selectBaseUsdcAccept([baseEntry], CENT);
+  check("12.3 an absent window defaults rather than becoming 0",
+        absent.ok && absent.accept.maxTimeoutSeconds > 0);
+  for (const [label, v] of [["a string", "300"], ["nonsense", "soon"], ["negative", -1]] as const) {
+    const r = win(v);
+    check(`12.4 ${label} window still yields a positive integer, never NaN`,
+          r.ok && Number.isSafeInteger(r.accept.maxTimeoutSeconds) && r.accept.maxTimeoutSeconds > 0);
+  }
+
+  // ── the native default is a contract with the server, not a taste ──
+  const nativeWindow = Number(/maxTimeoutSeconds:\s*(\d+)/.exec(
+    blockAfter(cdp, /export function buildRequirements/))?.[1] ?? "0");
+  const clientDefault = Number(/let\s+payTimeoutS\s*=\s*(\d+)/.exec(hubCode)?.[1] ?? "-1");
+  const moduleDefault = Number(/SIGN_WINDOW_DEFAULT_S\s*=\s*(\d+)/.exec(accepts)?.[1] ?? "-2");
+  check("12.5 native, client and module all advertise the same default window",
+        nativeWindow > 0 && clientDefault === nativeWindow && moduleDefault === nativeWindow);
+
+  // ── the header itself ──
+  const payload  = blockAfter(hubCode, /const\s+xPayment\s*=\s*btoa\(/);
+  const accepted = blockAfter(payload, /accepted\s*:/);
+  check("12.6 the X-PAYMENT the browser builds carries an `accepted` object",
+        accepted.length > 0);
+
+  // Every field buildRequirements() sends, sent here too. Asserted against the
+  // TYPE rather than a hand-copied list, so adding a required field to the
+  // server's requirements cannot leave the client quietly one field short.
+  const required = [...blockAfter(cdp, /export type PaymentRequirements/)
+    .matchAll(/^\s*(\w+)\s*[?]?:/gm)].map(m => m[1]);
+  check("12.7 …with every field the server's own requirements carry",
+        required.length >= 6 &&
+          required.every(f => new RegExp(`\\b${f}\\s*[:,]`).test(accepted)));
+
+  // 🔴 The invariant that actually protects money: each value is the SAME
+  // binding the signature was built from. A field re-derived here instead of
+  // reused describes a different authorization than the one the wallet showed
+  // the user, and a wallet prompt cannot warn about a mismatch it never sees.
+  for (const [field, binding] of [
+    ["network",           /network\s*:\s*payNetwork\b/],
+    ["asset",             /asset\s*:\s*USDC\b/],
+    ["amount",            /amount\s*:\s*payUnits\b/],
+    ["payTo",             /\bpayTo\s*,/],
+    ["maxTimeoutSeconds", /maxTimeoutSeconds\s*:\s*payTimeoutS\b/],
+    ["extra.name",        /name\s*:\s*domainName\b/],
+    ["extra.version",     /version\s*:\s*domainVersion\b/],
+  ] as const) {
+    check(`12.8 accepted.${field} reuses the signed value, it does not re-derive one`,
+          binding.test(accepted));
+  }
+
+  // The two specific re-derivations that would reintroduce the original bug:
+  // the treasury is the wrong payee for an external tool, and the card price is
+  // what the builder TYPED at submit time, not what the live 402 asked for.
+  check("12.9 …and neither the treasury nor the advertised price leaks back in",
+        !/PAY_TO_WALLET/.test(accepted) && !/priceUnits/.test(accepted));
+
+  // ── the signature has to outlive what it advertises ──
+  const vb = /const\s+validBefore\s*=\s*BigInt\(([^;]*)\)/.exec(hubCode)?.[1] ?? "";
+  const slack = Number(/payTimeoutS\s*\+\s*(\d+)/.exec(vb)?.[1] ?? "0");
+  check("12.10 validBefore is derived from the advertised window, not a fixed guess",
+        /payTimeoutS/.test(vb) && slack > 0);
+  // Ordering, not just presence: computed above the external branch it would
+  // read the native default and advertise a window the signature does not cover.
+  // Both indices are required to EXIST first — `-1 < n` is true, so the naive
+  // comparison passes hardest when neither line is there at all.
+  const iRead = hubCode.search(/payTimeoutS\s*=\s*sel\.accept\.maxTimeoutSeconds/);
+  const iSign = hubCode.search(/const\s+validBefore\s*=/);
+  check("12.11 …and is computed after the builder's 402 has been read",
+        iRead >= 0 && iSign >= 0 && iRead < iSign);
+
+  // The evidence, not just the conclusion. A fix whose reason is unrecorded gets
+  // "simplified" away by the next reader who sees a key the server also sets.
+  check("12.12 the measurement that found this is written next to the fix",
+        /invalid_payload/.test(flat(hub)) && /toV2PaymentPayload/.test(flat(hub)));
 }
 
 console.log(`\nexternal-payee guard: ${pass} passed, ${failures.length} failed`);

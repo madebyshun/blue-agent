@@ -58,6 +58,27 @@ const BASE_NETWORKS = new Set(["eip155:8453", "base", "8453"]);
 
 const ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
 
+/**
+ * The life of the signature, in seconds.
+ *
+ * 🔴 This is the ONE field here that DEFAULTS instead of refusing, and the
+ * asymmetry is deliberate: it decides neither WHO is paid nor HOW MUCH. An
+ * absent or nonsense value cannot misdirect a single cent — the worst it can do
+ * is make a settlement miss its window, which costs the user nothing because an
+ * expired authorization moves no money. `payTo` and the amount refuse precisely
+ * because they CAN send the wrong sum to the wrong address.
+ *
+ * It is capped anyway. A 402 asking for a day-long window would leave a signed,
+ * spendable authorization sitting in a stranger's hands long after the user
+ * closed the tab and assumed the attempt had failed. 600s is generous for an
+ * HTTP round trip and short enough that "it did not go through" stays true.
+ *
+ * The default matches `buildRequirements()` in api/_lib/x402-cdp.ts, so the
+ * native and external paths advertise the same window when nobody asks for one.
+ */
+const SIGN_WINDOW_DEFAULT_S = 120;
+const SIGN_WINDOW_MAX_S = 600;
+
 /** One entry of the `accepts` array, as a builder might send it. All optional:
  *  this is untrusted JSON, and the point of this module is to prove otherwise. */
 export type RawAccept = {
@@ -67,6 +88,7 @@ export type RawAccept = {
   payTo?: unknown;
   amount?: unknown;
   maxAmountRequired?: unknown;
+  maxTimeoutSeconds?: unknown;
   extra?: { name?: unknown; version?: unknown } | unknown;
 };
 
@@ -80,6 +102,12 @@ export type SelectedAccept = {
   /** EIP-712 domain for the USDC contract. Defaults are the canonical ones. */
   domainName: string;
   domainVersion: string;
+  /**
+   * How long the authorization the caller is about to sign stays valid, and the
+   * number it must then advertise in the payload's `accepted`. Bounded — see
+   * SIGN_WINDOW_MAX_S.
+   */
+  maxTimeoutSeconds: number;
 };
 
 export type SelectResult =
@@ -218,6 +246,7 @@ export function selectBaseUsdcAccept(accepts: unknown, maxUnits: number | null):
   }
 
   const extra = (match.extra ?? {}) as { name?: unknown; version?: unknown };
+  const askedWindow = Number(match.maxTimeoutSeconds);
   return {
     ok: true,
     accept: {
@@ -229,6 +258,10 @@ export function selectBaseUsdcAccept(accepts: unknown, maxUnits: number | null):
       // one, because getting this wrong makes a signature the token rejects.
       domainName: str(extra.name) || "USD Coin",
       domainVersion: str(extra.version) || "2",
+      maxTimeoutSeconds:
+        Number.isSafeInteger(askedWindow) && askedWindow > 0
+          ? Math.min(askedWindow, SIGN_WINDOW_MAX_S)
+          : SIGN_WINDOW_DEFAULT_S,
     },
   };
 }
