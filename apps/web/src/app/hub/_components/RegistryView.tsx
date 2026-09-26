@@ -41,6 +41,18 @@ const TYPES = ["all", "trading", "builder", "content", "defi", "infra", "general
 
 // ─── Submit form ──────────────────────────────────────────────────────────────
 
+// 🔴 The "three passes" count below is REAL — do not strip it in a sweep that
+// removes "3-agent" claims. api/agent-registry/submit/route.ts runs
+// runAeonSkill twice (deep-research + narrative-tracker), then runMiroSharkSkill,
+// then runBlueSkill, every one of them over the fetched GitHub repo data. Unlike
+// the retired Hub-wide "3-agent consensus" line, this one is not inflated.
+// What changed on 2026-09-26 is vocabulary, not the number: "agent" (the three
+// are system-prompt personas on one Virtuals endpoint — see api/_lib/llm.ts —
+// not independent auditors) and "audit" (the submit button shows a spinner, so
+// it discloses LESS of the mechanism than prose does, and an A–F grade sold as
+// an audit reads as a certification). Keep this in sync with the metadata in
+// app/hub/registry/page.tsx and app/app/hub/registry/page.tsx.
+
 function SubmitForm({ onSubmitted, onClose }: { onSubmitted: (p: AgentProfile) => void; onClose: () => void }) {
   const [repo, setRepo]       = useState("");
   const [name, setName]       = useState("");
@@ -124,12 +136,12 @@ function SubmitForm({ onSubmitted, onClose }: { onSubmitted: (p: AgentProfile) =
           {loading ? (
             <span className="flex items-center justify-center gap-2">
               <span className="w-3 h-3 border border-[#4FC3F7]/30 border-t-[#4FC3F7] rounded-full animate-spin" />
-              running 3-agent audit… (~30s)
+              running 3 analysis passes… (~30s)
             </span>
           ) : "→ submit agent"}
         </button>
         <p className="font-mono text-[10px] text-slate-700 text-center">
-          Blue Agent + Aeon + MiroShark audit your repo automatically
+          Blue · Aeon · MiroShark — three analysis passes over your real repo data
         </p>
       </form>
     </div>
@@ -293,7 +305,14 @@ export default function RegistryView({ inShell = false }: { inShell?: boolean })
           </div>
 
           <div className="mt-auto px-4 py-4 border-t border-[#1A1A2E]">
-            <p className="font-mono text-[10px] text-slate-700">3-agent audit · Blue · Aeon · MiroShark</p>
+            {/* Real count — see the 🔴 note above SubmitForm before removing it.
+                Broken across two lines on purpose: the w-72 rail is ~255px, which
+                wraps this string mid-list and orphans "MiroShark" after a "·". */}
+            <p className="font-mono text-[10px] text-slate-700 leading-relaxed">
+              3 analysis passes
+              <br />
+              Blue · Aeon · MiroShark
+            </p>
           </div>
         </aside>
 
