@@ -5,6 +5,8 @@
 //   - DefiLlama     (api.llama.fi / yields)   — chain TVL + real yield pools
 // All fetchers fail soft (null / []) so a handler can degrade instead of 500ing.
 
+import { pickBaseSidePair } from "@/app/api/x402/_handlers/_dex-side";
+
 const T = 8000; // per-request timeout (ms)
 
 function num(v: unknown): number | null {
@@ -43,7 +45,8 @@ type DsPair = {
   chainId: string;
   dexId?: string;
   url?: string;
-  baseToken?: { name?: string; symbol?: string };
+  baseToken?: { name?: string; symbol?: string; address?: string };
+  quoteToken?: { name?: string; symbol?: string; address?: string };
   priceUsd?: string;
   priceChange?: { h1?: number; h6?: number; h24?: number };
   volume?: { h24?: number };
@@ -52,7 +55,24 @@ type DsPair = {
   fdv?: number;
 };
 
-// Returns the deepest-liquidity Base pair for a token address.
+// Returns the deepest-liquidity Base pair that actually PRICES `address` — i.e.
+// one where it is the pair's BASE token. Every field below except volume and
+// liquidity describes the base side only, so the old "deepest pair, period"
+// read answered with a different token whenever `address` was the quote of its
+// own deepest pool. MEASURED 2026-09-26: USDbC has 30 Base pairs and 28 hold it
+// as the quote, so this returned symbol "fBOMB" at $0.02266 — a dollar
+// stablecoin priced at 2 cents. USDC returned "AERO" at $0.8931. Both then flow
+// into `blue-analytics` metrics and `b20hub/tokens` cards as that token's own
+// price. WETH/cbBTC/AERO/DAI/EURC are 100% base-side, so on a normal token this
+// changes nothing — which is why it went unnoticed. See
+// `api/x402/_handlers/_dex-side.ts` for the full field-by-field breakdown.
+//
+// null when no base-side pair exists: DexScreener carries no direct USD price
+// for such a token and inverting the other side would be invented. That path
+// gives up the pool's real volume/liquidity too, deliberately — `TokenMarket`
+// has no side discriminator, so a half-filled record would be read as this
+// token's own market by all 8 callers. null is a shape every one of them
+// already handles (→ "unknown" / 404 / omitted context).
 export async function getTokenMarket(address: string): Promise<TokenMarket | null> {
   const d = await getJson<{ pairs?: DsPair[] }>(
     `https://api.dexscreener.com/latest/dex/tokens/${address}`
@@ -60,7 +80,8 @@ export async function getTokenMarket(address: string): Promise<TokenMarket | nul
   const basePairs = (d?.pairs ?? []).filter((p) => p.chainId === "base");
   if (!basePairs.length) return null;
   basePairs.sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
-  const p = basePairs[0];
+  const p = pickBaseSidePair(basePairs, address);
+  if (!p) return null;
   return {
     address,
     name: p.baseToken?.name ?? null,

@@ -11,7 +11,8 @@ const DEXSCREENER_URL = "https://api.dexscreener.com/latest/dex";
 type DsPair = {
   chainId?: string;
   dexId?: string;
-  baseToken?: { symbol?: string; name?: string };
+  baseToken?: { symbol?: string; name?: string; address?: string };
+  quoteToken?: { symbol?: string; name?: string; address?: string };
   priceUsd?: string;
   liquidity?: { usd?: number };
   volume?: { h24?: number };
@@ -19,6 +20,16 @@ type DsPair = {
   priceChange?: { h1?: number; h6?: number; h24?: number };
 };
 
+// Address path: keep ONLY pairs that price the queried token, i.e. where it is
+// the base. This tool emits entry_price / stop_loss / target, and `priceUsd` is
+// always the pair's BASE token, so a quote-side pair here is another token's
+// price wearing the queried token's name. MEASURED 2026-09-26: the 6 deepest of
+// USDC's 30 Base pairs are all quote-side, so this slice was AERO/USDC,
+// WETH/USDC, cbBTC/USDC and `pairs[0]` priced USDC at $0.8931. Base-side-only
+// leaves USDC/USDbC at $0.9999. Empty means no pair prices this token — the
+// caller degrades to NO_SIGNAL rather than inverting a quote price.
+// Ticker path keeps every pair: /search has no address to match on, and returns
+// pairs already selected BY that ticker. See ./_dex-side for the full breakdown.
 async function getBasePairs(token: string): Promise<DsPair[]> {
   const isAddress = /^0x[a-fA-F0-9]{40}$/.test(token);
   const url = isAddress
@@ -28,8 +39,10 @@ async function getBasePairs(token: string): Promise<DsPair[]> {
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return [];
     const data = (await res.json()) as { pairs?: DsPair[] };
+    const want = token.trim().toLowerCase();
     return (data.pairs ?? [])
       .filter((p) => p.chainId === "base")
+      .filter((p) => !isAddress || p.baseToken?.address?.toLowerCase() === want)
       .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))
       .slice(0, 3);
   } catch {
@@ -84,6 +97,10 @@ export default async function handler(req: Request): Promise<Response> {
 
     const price = market?.priceUsd ?? (pairs[0]?.priceUsd != null ? Number(pairs[0].priceUsd) : null);
     const symbol = market?.symbol ?? pairs[0]?.baseToken?.symbol ?? null;
+    // Resolved on-chain address — on the ticker path this is what the ticker
+    // actually matched, which is the only way a caller can tell WHICH token
+    // answered. Both sources are now base-side, so they agree.
+    const resolvedAddress = market?.address ?? pairs[0]?.baseToken?.address ?? (isAddress ? token : null);
 
     // Token not found anywhere → no signal, no fabrication.
     if (!market && pairs.length === 0) {
@@ -91,6 +108,7 @@ export default async function handler(req: Request): Promise<Response> {
         tool: "token-alpha",
         token,
         symbol,
+        address: resolvedAddress,
         signal: "NO_SIGNAL",
         confidence: 0,
         entry_price: null,
@@ -108,6 +126,9 @@ export default async function handler(req: Request): Promise<Response> {
 
     // getTokenMarket only resolves an ADDRESS — for a ticker it's null, so fall
     // back to the DexScreener pair (which has volume/liquidity/change too).
+    // It is now also null when no Base pair prices the token, in which case
+    // `pairs` is empty for the same reason and the NO_SIGNAL return above already
+    // fired — so this fallback can no longer reach another token's figures.
     const p0 = pairs[0];
     const mcap = market?.marketCap ?? p0?.marketCap ?? null;
     const vol24 = market?.volume24h ?? p0?.volume?.h24 ?? null;
@@ -118,12 +139,18 @@ export default async function handler(req: Request): Promise<Response> {
 
     // Scam guard — if resolved symbol matches impersonated brand or extreme pump,
     // return an AVOID signal immediately without spending LLM credits.
-    const tokenName = pairs[0]?.baseToken?.name ?? null;
+    // `market` first for the same reason as `symbol` above: reading the name off
+    // pairs[0] while the symbol came from `market` handed this filter a symbol
+    // and a name belonging to two DIFFERENT tokens whenever the queried token
+    // was the quote side — USDC + "Aerodrome" — so brand-impersonation was being
+    // judged on the wrong pairing.
+    const tokenName = market?.name ?? pairs[0]?.baseToken?.name ?? null;
     if (isLikelyScam({ symbol, name: tokenName, change: ch24 ?? ch6 ?? ch1 })) {
       return Response.json({
         tool: "token-alpha",
         token,
         symbol,
+        address: resolvedAddress,
         signal: "AVOID",
         confidence: 0,
         entry_price: null,
@@ -169,6 +196,7 @@ export default async function handler(req: Request): Promise<Response> {
       tool: "token-alpha",
       token,
       symbol,
+      address: resolvedAddress,
       // LLM output spread first — then grounded code values override any LLM estimates.
       ...result,
       // These MUST come AFTER ...result so LLM values cannot override real data.
