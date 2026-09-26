@@ -103,7 +103,26 @@ export async function getTokenMarket(address: string): Promise<TokenMarket | nul
 export type Pool = {
   name: string;
   baseSymbol: string;
+  /** Counterparty leg's symbol, parsed out of `name`. Cosmetic — see baseAddress. */
+  quoteSymbol: string;
   poolAddress: string;
+  /**
+   * The two legs' CONTRACT ADDRESSES, lifted from GeckoTerminal's
+   * `relationships` block — the same response `attributes` came in, so this
+   * costs no extra request.
+   *
+   * These are the identity fields; `baseSymbol` / `quoteSymbol` are labels
+   * split out of the pool's display name and a token wears whichever ticker it
+   * chose (CLAUDE.md hard rule #2, and #280). Any caller deciding WHICH token a
+   * row is about must key off these, never off the symbol.
+   *
+   * "" when GT omitted the relationship — absent, not zero. Callers surface
+   * that as null rather than inventing an address.
+   */
+  baseAddress: string;
+  quoteAddress: string;
+  /** GeckoTerminal dex id (e.g. "aerodrome-base"), or "" if unstated. */
+  dex: string;
   priceUsd: number | null;
   change: { h1: number | null; h6: number | null; h24: number | null };
   volume24h: number | null;
@@ -123,7 +142,39 @@ type GtPool = {
     market_cap_usd?: string;
     fdv_usd?: string;
   };
+  relationships?: {
+    base_token?:  { data?: { id?: string } };
+    quote_token?: { data?: { id?: string } };
+    dex?:         { data?: { id?: string } };
+  };
 };
+
+/**
+ * GeckoTerminal namespaces token relationship ids by network — "base_0x…" on
+ * Base, "robinhood_0x…" on Robinhood Chain. Strip the prefix for the chain we
+ * actually asked about and reject anything that is not a 20-byte address, so a
+ * future GT id format change surfaces as "" (absent) rather than as a
+ * half-parsed string a caller could mistake for an address.
+ */
+function gtTokenAddress(id: string | undefined, chain: GtChain): string {
+  if (!id) return "";
+  const p = `${chain}_`;
+  const raw = (id.startsWith(p) ? id.slice(p.length) : id).toLowerCase();
+  return /^0x[a-f0-9]{40}$/.test(raw) ? raw : "";
+}
+
+/**
+ * Split "AERO / USDC 0.3%" into its two legs.
+ *
+ * GT appends the fee tier to the quote leg on some dexes, so the trailing
+ * "0.3%" is dropped — it is pool metadata, not part of the ticker.
+ */
+export function splitPairName(name: string): { base: string; quote: string } {
+  const [b, q] = (name ?? "").split("/");
+  const clean = (s: string | undefined) =>
+    (s ?? "").trim().replace(/\s+[\d.]+%$/, "").trim();
+  return { base: clean(b) || (name ?? "").trim(), quote: clean(q) };
+}
 
 // GeckoTerminal network id — "base" for Base, "robinhood" for Robinhood Chain.
 // Confirmed live: api.geckoterminal.com/api/v2/networks/robinhood/trending_pools
@@ -134,9 +185,14 @@ export type GtChain = "base" | "robinhood";
 function mapGtPool(p: GtPool, chain: GtChain): Pool {
   const a = p.attributes ?? {};
   const name = a.name ?? "";
+  const { base, quote } = splitPairName(name);
   return {
     name,
-    baseSymbol: name.split("/")[0]?.trim() || name,
+    baseSymbol: base || name,
+    quoteSymbol: quote,
+    baseAddress:  gtTokenAddress(p.relationships?.base_token?.data?.id,  chain),
+    quoteAddress: gtTokenAddress(p.relationships?.quote_token?.data?.id, chain),
+    dex: p.relationships?.dex?.data?.id ?? "",
     poolAddress: a.address ?? "",
     priceUsd: num(a.base_token_price_usd),
     change: {
