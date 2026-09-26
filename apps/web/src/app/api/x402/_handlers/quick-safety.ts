@@ -2,7 +2,7 @@
 // Basescan verification + LLM read). Price: $0.05
 import { callLLM, extractJsonObject } from "@/app/api/_lib/llm";
 import { getBasescanSource } from "@/lib/moralis";
-import { sideOf } from "./_dex-side";
+import { sideOf } from "@/lib/dex-side";
 
 const DS = "https://api.dexscreener.com/latest/dex";
 
@@ -29,7 +29,7 @@ export default async function handler(req: Request): Promise<Response> {
     // `liquidity.usd` is whole-pool TVL, so the deepest pair is the right read
     // whichever side `contract` is on — only the NAME needed fixing. Reading
     // baseToken.symbol unconditionally labelled a USDC scan "AERO", because the
-    // 6 deepest of USDC's 30 Base pairs all hold it as the quote (see _dex-side).
+    // 6 deepest of USDC's 30 Base pairs all hold it as the quote (see lib/dex-side).
     // This tool reports no price, so the pair is kept rather than rejected.
     const liquidity = top?.liquidity?.usd ?? null;
     const symbol = top ? sideOf(top, contract).symbol : null;

@@ -1,7 +1,7 @@
 // x402/launch-simulator-2 — Launch Simulator Tier 2: Deep Signal with live DexScreener data
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
-import { pickBaseSidePair, QUOTE_SIDE_ONLY_NOTE } from "./_dex-side";
+import { pickBaseSidePair, QUOTE_SIDE_ONLY_NOTE } from "@/lib/dex-side";
 // Price: $0.35 — Fully self-contained, no external workspace imports
 
 type BankrMessage = { role: string; content: string };

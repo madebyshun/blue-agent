@@ -15,7 +15,7 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
 
 // No baseToken here on purpose: every figure this tool emits is aggregated over
 // ALL Base pairs (summed liquidity, summed volume, oldest pairCreatedAt), which
-// is side-agnostic — so unlike its siblings it needs no `_dex-side` check. The
+// is side-agnostic — so unlike its siblings it needs no `lib/dex-side` check. The
 // unread `baseToken.symbol` that used to sit in this type was the affordance for
 // exactly that bug, and reading it would have labelled a USDC scan "AERO".
 type DexPair = {

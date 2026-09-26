@@ -5,7 +5,7 @@
 //   - DefiLlama     (api.llama.fi / yields)   — chain TVL + real yield pools
 // All fetchers fail soft (null / []) so a handler can degrade instead of 500ing.
 
-import { pickBaseSidePair } from "@/app/api/x402/_handlers/_dex-side";
+import { pickBaseSidePair } from "./dex-side";
 
 const T = 8000; // per-request timeout (ms)
 
@@ -65,7 +65,7 @@ type DsPair = {
 // into `blue-analytics` metrics and `b20hub/tokens` cards as that token's own
 // price. WETH/cbBTC/AERO/DAI/EURC are 100% base-side, so on a normal token this
 // changes nothing — which is why it went unnoticed. See
-// `api/x402/_handlers/_dex-side.ts` for the full field-by-field breakdown.
+// `lib/dex-side.ts` for the full field-by-field breakdown.
 //
 // null when no base-side pair exists: DexScreener carries no direct USD price
 // for such a token and inverting the other side would be invented. That path

@@ -2,7 +2,7 @@
 // Price: $0.15 — Fully self-contained, no external workspace imports
 
 import { callLLM } from "@/app/api/_lib/llm";
-import { sideOf } from "./_dex-side";
+import { sideOf } from "@/lib/dex-side";
 
 type BankrMessage = { role: string; content: string };
 
@@ -56,7 +56,7 @@ async function getDexData(token: string): Promise<FlowRow[]> {
   // where a stablecoin's flow actually is: USDC's 6 deepest Base pairs are all
   // quote-side, so a base-side-only filter would report a $144k pool as the
   // whole picture. What must not leak is the base token's PRICE and its buy/sell
-  // DIRECTION, which is how this returned AERO's numbers for USDC (see _dex-side).
+  // DIRECTION, which is how this returned AERO's numbers for USDC (see lib/dex-side).
   return ((data.pairs ?? []) as Pair[])
     .filter(p => p.chainId === "base")
     .sort((a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0))

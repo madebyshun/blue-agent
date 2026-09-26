@@ -29,7 +29,7 @@ type DsPair = {
 // leaves USDC/USDbC at $0.9999. Empty means no pair prices this token — the
 // caller degrades to NO_SIGNAL rather than inverting a quote price.
 // Ticker path keeps every pair: /search has no address to match on, and returns
-// pairs already selected BY that ticker. See ./_dex-side for the full breakdown.
+// pairs already selected BY that ticker. See lib/dex-side for the full breakdown.
 async function getBasePairs(token: string): Promise<DsPair[]> {
   const isAddress = /^0x[a-fA-F0-9]{40}$/.test(token);
   const url = isAddress
