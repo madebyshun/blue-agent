@@ -517,12 +517,57 @@ First production reconcile, 2026-09-25T17:18:52Z — three writes in one tick:
 `completed_jobs 0→1`, `usdc_gross 0→0.5`, `rejected_jobs 1→3`,
 `in_flight_jobs 4→1`.
 
-🔴 **`No Policy` is unfinished security debt, not the end state.** It means a
-leaked `ACP_SIGNER_PRIVATE_KEY` drains the seller wallet with nothing in the way,
-and the exposure grows with every job that settles into it. The intended end
-state is an allowlist scoped to the `to` addresses a successful job actually
-touches — which is now readable from the tx above, so the blocker on writing that
-policy is gone.
+### Why `ACP_ONLY` blocked ACP — MEASURED 2026-09-26, no longer a hypothesis
+
+This page previously offered ERC-4337 as the best available story and said not to
+state it as fact. It can now be stated, because the accounts were read directly on
+Base 8453:
+
+```
+seller 0x884FBdd5cF193E7F87CBA76419e526D8F4dF7A9B  code 0xef0100…  0 ETH
+buyer  0x02950Ad38aDA1D599375bD447E080cd404809205  code 0xef0100…  0 ETH
+```
+
+Both carry a 23-byte **EIP-7702 delegation designator** (`0xef0100` + address),
+delegating to `0x77021100bd87b7008e5e1989d0eb38555d0d0000`. And the completion tx
+resolves the rest of the path:
+
+- `tx.to` = `0x0000000071727De22E5E9d8BAf0edAc6f37da032`, the canonical **ERC-4337
+  EntryPoint v0.7**
+- `tx.from` = `0x2fbf4c11589b8a96a6da17a9c19cc51460aaec65`, a bundler, not either
+  party
+- `UserOperationEvent.sender` = the buyer wallet; `paymaster` =
+  `0x2cc0c7981d846b9f2a16276556f6e8cb52bfb633`, which is why 0 ETH still writes
+
+So a signing policy matching on the transaction's `to` sees the EntryPoint, never
+`0x238E541B…`. That is a coherent account of why a preset named "Virtuals Only"
+refused Virtuals calls.
+
+⚠️ **Scope of the measurement.** The tx decoded above is the **buyer's**
+`complete`, not the seller's blocked `setBudget`. What is proven is that this ACP
+stack routes through 7702 + EntryPoint v0.7 + paymaster, and that the seller
+account has the identical delegation and the same 0 ETH balance while its writes
+land. Attributing the seller's specific 403 to that path is now a short inference
+from measured facts rather than a guess, but it is still an inference. To close
+it, decode a seller-signed `setBudget` tx.
+
+🔴 **`No Policy` is unfinished security debt, not the end state.** A leaked
+`ACP_SIGNER_PRIVATE_KEY` drains the seller wallet with nothing in the way, and the
+exposure grows with every job that settles into it.
+
+🔴 **But the fix this page proposed does not work, and the measurement above is
+what kills it.** The plan was "an allowlist scoped to the `to` addresses a
+successful job touches." Under 4337 that `to` is the EntryPoint **for every
+UserOperation the account will ever send** — so allowlisting it authorises
+everything, including a drain, while looking like a tightened policy. That is
+worse than `No Policy`, which at least does not claim to be a control.
+
+A real scope has to constrain the **inner call**: the ACP contract as the target
+of the batched call, and ideally the selector. Whether the Virtuals/Privy policy
+builder can express that at all is **unknown and must be checked in the dashboard
+before any allowlist is written**. If it can only match top-level `to`, then the
+honest options are a spend cap, a separate low-value signer, or accepting the risk
+knowingly — not a policy that reads strict and is not.
 
 ---
 
@@ -590,7 +635,11 @@ worst-first.
   is ShunTr's call whether the code follows the registry or the registry is
   renamed.
 
-- 🔴 **Replace `No Policy` with a scoped allowlist (security debt).** See the
-  resolution section above. The blocker was not knowing which `to` addresses a
-  successful job touches; the completion tx now answers that, so this is
-  actionable.
+- 🔴 **`No Policy` is still live security debt, and the obvious fix is now known
+  to be fake.** See the 4337 subsection above. An allowlist on the transaction's
+  `to` would allowlist the EntryPoint, which is the `to` of every UserOperation
+  the account can send, so it would authorise a drain while reading as a
+  tightened policy. **Next step is a question, not an edit:** open the policy
+  builder and find out whether it can match the inner call target or selector at
+  all. If it cannot, choose a spend cap or a lower-value signer knowingly. Do not
+  ship a `to`-based allowlist.
