@@ -23,7 +23,17 @@ const TITLE = "BlueAgent — The onchain Agent OS";
    not the cheap patch it looks like: setting `openGraph: { description }` drops
    the root's `images`/`url`/`siteName` with it, so /docs would silently lose its
    OG image. Left inheriting on purpose.
-   Verify by content, never by deploy status: `curl -s <url> | grep -o '<meta[^>]*>'`. */
+   Verify by content, never by deploy status — but `curl -s <url> | grep -c` is
+   NOT enough on its own, and this comment said it was for about two hours.
+   `/app/chat` 301s to app.blueagent.dev, so without `-L` curl returns an empty
+   body, every `grep -c` returns 0, and a "this string must be GONE" assertion
+   passes for free on a page it never read. An absence check that passes on an
+   empty body is not a check. Use `-L`, and assert the body is large before
+   trusting a zero:
+     body=$(curl -sL "$url"); [ ${#body} -gt 2000 ] || echo "empty, check is void"
+   (`scripts/link-liveness-check.ts` does not have this hole — it resolves paths
+   against the route tree statically and never fetches. This trap is specific to
+   ad-hoc post-deploy greps.) */
 const DESCRIPTION =
   `${TOOL_COUNT} x402 tools, pay per call in USDC with no API key. Agent chat that hands you transactions to sign, plus live reads on Base 8453 and Robinhood Chain 4663.`;
 
