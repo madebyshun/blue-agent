@@ -760,9 +760,33 @@ const MIN_MAX_TOKENS = 400;
  * The throw below now names the real cause.
  *
  * Sizing: 1200. Peak reasoning observed across 36 probes was 1061 tokens (at a
- * 2000 budget); reasoning grows with the offered budget but saturates around
- * ~1100. Cost is ~$0.0001/call — and note the failure mode was the EXPENSIVE
- * one: a starved call still bills the full 400 tokens and returns nothing.
+ * 2000 budget). Cost is ~$0.0001/call — and note the failure mode was the
+ * EXPENSIVE one: a starved call still bills the full 400 tokens and returns
+ * nothing.
+ *
+ * ⚠️ THIS CONSTANT CANNOT RESCUE AN ARITHMETIC-HEAVY PROMPT, and the line above
+ * used to claim it could ("reasoning grows with the offered budget but saturates
+ * around ~1100"). The saturation was real for the prompts probed in 2026-09 and
+ * false as a general law. Re-measured 2026-09-26 against the x402 `dex-flow`
+ * prompt, which asked the model to derive per-pair ratios and formatted volumes
+ * from five nested DexScreener objects:
+ *
+ *     wire budget  2000  →  0/3 answered, reasoning 1657–1830
+ *                  3200  →  0/3 answered, reasoning 2607–2676
+ *                  6000  →  2/4 answered, reasoning 2645–4493
+ *                 12000  →  2/4 answered, reasoning 3333–8099
+ *
+ * Reasoning TRACKED the budget instead of converging — 8099 tokens is 7.6x the
+ * "peak" this comment used to quote — so no headroom value made that prompt
+ * reliable, and raising the constant would only have taxed the other ~30 call
+ * sites. The fix was to compute the numbers in code and leave the model prose
+ * (see the header of x402/_handlers/dex-flow.ts).
+ *
+ * So: a starving caller is evidence about THAT PROMPT, not about this number.
+ * Before touching it, check whether the prompt is asking the model to do
+ * arithmetic — CLAUDE.md forbids that anyway. The control that settles it: at
+ * the identical `maxTokens: 800`, scam-detector (7 scalar facts, flat JSON out)
+ * spends ~200 reasoning tokens and answered 6/6 in the same session.
  *
  * Safe for non-reasoning models: they emit no reasoning tokens, stop at
  * `finish_reason: "stop"`, and are billed only for what they generate, so the
