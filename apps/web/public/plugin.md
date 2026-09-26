@@ -9,8 +9,9 @@ more. Every tool is a paid HTTP endpoint that speaks **x402 v2** natively, so
 Base MCP can call any tool and settle the USDC payment without extra wiring.
 
 - **Reads:** Base mainnet (8453) and Robinhood Chain (4663) — the `rh-*`
-  tokenized-stock tools are Robinhood Chain only; the two chains share no
-  state, so a ticker alone never identifies a token
+  tokenized-stock tools are the Robinhood Chain desk, and `rh-bridge-route`
+  spans both. The two chains share no state, so a ticker alone never
+  identifies a token
 - **Network:** Base mainnet (`eip155:8453`) — payment only, every tool
   settles here regardless of which chain it reads
 - **Asset:** USDC (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`)
