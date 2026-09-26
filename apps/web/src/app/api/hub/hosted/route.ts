@@ -41,10 +41,10 @@ import {
   type HostedConfig,
   type HostedToolInput,
 } from "@/lib/hub-hosted";
+import { HOSTED_MODEL_ALLOWLIST } from "@/lib/hosted-models";
 
 export const runtime = "nodejs";
 
-const MODEL_ALLOWLIST = new Set(["claude-haiku-4-5", "claude-sonnet-4-5"]);
 const NATIVE_IDS = new Set(AGENT_TOOLS.map(t => t.id));
 
 // ─── GET — list hosted tools (secrets stripped) ───────────────────────────────
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
     if (!systemPrompt) {
       return NextResponse.json({ error: "ai_tool requires config.systemPrompt" }, { status: 400 });
     }
-    const model = typeof raw.model === "string" && MODEL_ALLOWLIST.has(raw.model) ? raw.model : undefined;
+    const model = typeof raw.model === "string" && HOSTED_MODEL_ALLOWLIST.has(raw.model) ? raw.model : undefined;
     config = {
       kind:         "ai_tool",
       systemPrompt: systemPrompt.slice(0, 8000),

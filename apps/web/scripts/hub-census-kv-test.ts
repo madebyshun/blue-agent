@@ -55,6 +55,7 @@ import registryHandler from "../src/app/api/x402/_handlers/blue-registry";
 // HEADER, which the library function underneath it cannot tell you anything about.
 import * as hostedRoute from "../src/app/api/hub/hosted/route";
 import { AGENT_TOOLS } from "../src/lib/agent-tools";
+import { HOSTED_MODEL_DEFAULT } from "../src/lib/hosted-models";
 
 let failures = 0;
 function check(label: string, pass: boolean, detail: string) {
@@ -127,7 +128,7 @@ function hostTool(slug: string): HostedTool {
     // group H checks. Keep them non-empty so an "absent" assertion cannot pass
     // by accident on a falsy value.
     signature: "0xdeadbeef",
-    config: { kind: "ai_tool", systemPrompt: "SECRET-PROMPT", model: "claude-haiku-4-5" },
+    config: { kind: "ai_tool", systemPrompt: "SECRET-PROMPT", model: HOSTED_MODEL_DEFAULT },
     verified: false,
   };
 }

@@ -12,8 +12,15 @@ type BankrMessage = { role: string; content: string };
 // retry across providers — on failure callLLM throws a typed LLM_UNAVAILABLE
 // for the caller to degrade around, rather than silently trying a second
 // vendor. Name/signature preserved so all call sites stay identical.
+// No `model` param: this shim FORWARDS to callLLM, which validates the id
+// against the live Virtuals catalog. Both call sites below used to pass
+// `"claude-haiku-4-5"` — an id Virtuals has never listed (no haiku of any
+// version is in the catalog) — so every call threw before reaching the
+// gateway. Dropping the param instead of correcting the string is deliberate:
+// with no param, a stale id cannot be reintroduced here at all, and the call
+// gets VIRTUALS_DEFAULT_MODEL like every other handler.
 async function callBankrLLM(opts: {
-  model?: string; system: string; messages: BankrMessage[];
+  system: string; messages: BankrMessage[];
   temperature?: number; maxTokens?: number;
 }): Promise<string> {
   const r = await callLLM({
@@ -21,7 +28,6 @@ async function callBankrLLM(opts: {
     messages: opts.messages,
     temperature: opts.temperature,
     maxTokens: opts.maxTokens,
-    model: opts.model,
   });
   return r.text;
 }
@@ -62,7 +68,6 @@ async function runMiroSharkSimulation(opts: {
     : "";
   try {
     const raw = await callBankrLLM({
-      model: "claude-haiku-4-5",
       system: `You are MiroShark — 4-persona crypto consensus engine.
 Personas: Analyst(1.8x weight), Influencer(2.8x), Retail(1.0x), Observer(0.5x).
 Each gives stance: bull/bear/neutral. Weighted consensus → bull%/bear%/neutral%.
@@ -165,7 +170,7 @@ Rules: copy miroshark values EXACTLY. final_verdict = weighted consensus of all 
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const raw = await callBankrLLM({
-          model: "claude-haiku-4-5", system,
+          system,
           messages: [{ role: "user", content: userMsg }],
           temperature: attempt > 0 ? 0.1 : 0.4,
           maxTokens: 1800,

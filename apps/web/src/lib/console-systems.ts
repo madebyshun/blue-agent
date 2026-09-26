@@ -109,15 +109,14 @@ export const CONSOLE_MAX_TOKENS: Record<ConsoleCommand, number> = {
   raise: 2400,
 };
 
-// Per-command model. audit is the $1.00, security-critical command, so it runs
-// on a stronger model; the rest stay on the fast/cheap Haiku tier.
-export const CONSOLE_MODELS: Record<ConsoleCommand, string> = {
-  idea: "claude-haiku-4-5",
-  build: "claude-haiku-4-5",
-  audit: "claude-sonnet-4-6",
-  ship: "claude-haiku-4-5",
-  raise: "claude-haiku-4-5",
-};
+// A `CONSOLE_MODELS` map lived here, claiming `audit` ran on a stronger model
+// than the other four commands. It had ZERO readers — both dispatchers
+// (api/console/route.ts and x402/_handlers/_console.ts) call callLLM without a
+// `model`, so all 5 commands have always run on VIRTUALS_DEFAULT_MODEL. Removed
+// rather than wired up: its 3 distinct ids were all absent from the Virtuals
+// catalog, so "wiring it up" would have broken every command including the
+// $1.00 audit. Per-command model selection is a pricing decision, not a
+// restoration.
 
 // ─── On-chain grounding for the `audit` command ───────────────────────────────
 // `blue audit` is LLM-only. When a user passes a bare contract/wallet ADDRESS,

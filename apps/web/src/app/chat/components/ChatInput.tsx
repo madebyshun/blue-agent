@@ -34,7 +34,15 @@ const SLASH_COMMANDS: SlashCommand[] = [
 ];
 
 export interface ModelTier {
-  id: string; label: string; model: string;
+  id: string; label: string;
+  // No `model`. It had ZERO readers (both `modelId={…}` reads below take the
+  // LIVE VirtualsPresetV1 record, not a tier), and it held three ids Virtuals
+  // has never listed — `deepseek-v4-flash`, `claude-fable-5`,
+  // `e2ee-gemma-3-27b-p`. Same reasoning as the `"bankr"` group member below:
+  // a dead field keeps stale model ids in every grep of this file and reads
+  // like a live model choice. scripts/model-id-check.ts now fails if any model
+  // id is minted outside the three declaration sites, so re-adding a literal
+  // here is caught rather than argued about.
   color: string; badge: string; note: string;
   // A "bankr" member sat in this union, justified as "a legacy alias so
   // localStorage state written by older clients still round-trips". MEASURED
@@ -59,34 +67,38 @@ export interface ModelTier {
 // the name kept a dead provider alive in every grep of this file.
 //
 // What is actually READ off these rows is narrow: `color` and `badge` for the
-// collapsed picker pill, plus `label` as a last-resort fallback. The `model` and
-// `credits` fields are DEAD — nothing reads them. Do not trust `model` here: it
-// says `anthropic-claude-sonnet-5` on every row, which was true when the picker
-// collapsed to a single Virtuals model and is now simply a stale copy. The live
-// per-preset model comes from VIRTUALS_PRESETS (server-side `getModelLabel` was
-// fixed the same day for exactly this reason — it had copied the same constant).
+// collapsed picker pill, plus `label` as a last-resort fallback. `credits` is
+// DEAD — nothing reads it. The `model` field was also dead and is now GONE
+// (2026-09-26): it said `anthropic-claude-sonnet-5` on all six rows here and
+// three never-listed ids in the two tables below, all of it a stale copy left
+// from when the picker collapsed to a single Virtuals model. The live per-preset
+// model comes from VIRTUALS_PRESETS (server-side `getModelLabel` was fixed the
+// same day for exactly this reason — it had copied the same constant).
+//
+// `label`/`note` still SAY "Sonnet 5" and that is cosmetic text, not a model id;
+// only `fast` maps to a live preset, so these strings describe nothing dispatched.
 //
 // Only `fast` still matches a live preset id; the other seven presets (free,
 // balanced, deep, private, flash, grok, search) miss and take the `[1]` fallback
 // below, so this table contributes a colour and nothing more. Kept rather than
 // deleted because that fallback is load-bearing for the pill's styling.
 export const LEGACY_TIERS: ModelTier[] = [
-  { id: "fast",     label: "Sonnet 5 · Fast",   model: "anthropic-claude-sonnet-5", color: "#34D399", badge: "", note: "Sonnet 5 via Virtuals",         group: "virtuals", credits: 10  },
-  { id: "pro",      label: "Sonnet 5 · Chat",   model: "anthropic-claude-sonnet-5", color: "#4FC3F7", badge: "", note: "Sonnet 5 via Virtuals",         group: "virtuals", credits: 50  },
-  { id: "max",      label: "Sonnet 5 · Deep",   model: "anthropic-claude-sonnet-5", color: "#A78BFA", badge: "", note: "Sonnet 5 via Virtuals (deep)",  group: "virtuals", credits: 200 },
-  { id: "deepseek", label: "Sonnet 5 · Long",   model: "anthropic-claude-sonnet-5", color: "#F59E0B", badge: "", note: "Sonnet 5 via Virtuals (long)",  group: "virtuals", credits: 10  },
-  { id: "gemini",   label: "Sonnet 5 · Google", model: "anthropic-claude-sonnet-5", color: "#4285F4", badge: "", note: "Sonnet 5 via Virtuals",         group: "virtuals", credits: 20  },
-  { id: "kimi",     label: "Sonnet 5 · Kimi",   model: "anthropic-claude-sonnet-5", color: "#06B6D4", badge: "", note: "Sonnet 5 via Virtuals",         group: "virtuals", credits: 20  },
+  { id: "fast",     label: "Sonnet 5 · Fast",   color: "#34D399", badge: "", note: "Sonnet 5 via Virtuals",         group: "virtuals", credits: 10  },
+  { id: "pro",      label: "Sonnet 5 · Chat",   color: "#4FC3F7", badge: "", note: "Sonnet 5 via Virtuals",         group: "virtuals", credits: 50  },
+  { id: "max",      label: "Sonnet 5 · Deep",   color: "#A78BFA", badge: "", note: "Sonnet 5 via Virtuals (deep)",  group: "virtuals", credits: 200 },
+  { id: "deepseek", label: "Sonnet 5 · Long",   color: "#F59E0B", badge: "", note: "Sonnet 5 via Virtuals (long)",  group: "virtuals", credits: 10  },
+  { id: "gemini",   label: "Sonnet 5 · Google", color: "#4285F4", badge: "", note: "Sonnet 5 via Virtuals",         group: "virtuals", credits: 20  },
+  { id: "kimi",     label: "Sonnet 5 · Kimi",   color: "#06B6D4", badge: "", note: "Sonnet 5 via Virtuals",         group: "virtuals", credits: 20  },
 ];
 
 export const VENICE_TIERS: ModelTier[] = [
-  { id: "venice-deepseek", label: "V4 Flash",   model: "deepseek-v4-flash", color: "#34D399", badge: "V", note: "Fastest · 1M ctx", group: "venice", credits: 10  },
-  { id: "venice-grok",     label: "Grok 4",     model: "grok-4-3",          color: "#E879F9", badge: "V", note: "X search",         group: "venice", credits: 60  },
-  { id: "venice-fable",    label: "Fable 5",    model: "claude-fable-5",    color: "#F472B6", badge: "V", note: "Claude · 1M ctx",   group: "venice", credits: 120 },
+  { id: "venice-deepseek", label: "V4 Flash",   color: "#34D399", badge: "V", note: "Fastest · 1M ctx", group: "venice", credits: 10  },
+  { id: "venice-grok",     label: "Grok 4",     color: "#E879F9", badge: "V", note: "X search",         group: "venice", credits: 60  },
+  { id: "venice-fable",    label: "Fable 5",    color: "#F472B6", badge: "V", note: "Claude · 1M ctx",   group: "venice", credits: 120 },
 ];
 
 export const PRIVACY_TIERS: ModelTier[] = [
-  { id: "venice-e2ee-gemma", label: "Private Gemma", model: "e2ee-gemma-3-27b-p", color: "#6EE7B7", badge: "🔒", note: "E2EE · No logs", group: "privacy", credits: 30 },
+  { id: "venice-e2ee-gemma", label: "Private Gemma", color: "#6EE7B7", badge: "🔒", note: "E2EE · No logs", group: "privacy", credits: 30 },
 ];
 
 export const ALL_TIERS: ModelTier[] = [...LEGACY_TIERS, ...VENICE_TIERS, ...PRIVACY_TIERS];
