@@ -1,0 +1,188 @@
+/**
+ * dead-tool-check — is any advertised tool name unreachable, and is any
+ * reachable name unadvertised?
+ *
+ * Written 2026-09-26 after the MCP manifest was cut from 85 tools to 18. The
+ * cut repaired 16 plugin skills but missed `agents/blue-agent.md` and the
+ * plugin `README.md`, which kept listing 17 names each that resolve to nothing.
+ * Nothing in CI disagreed, because nothing was comparing them.
+ *
+ * The name matters: run-tests.ts discovers `*-test.ts` / `*-check.ts` only. This
+ * file was born `dead-tool-audit.ts` and would have sat in the directory looking
+ * like a guard while never once executing — the exact failure its own subject
+ * matter is about. Do not rename it out of that pattern.
+ *
+ * "Dead" means something different on each surface, so this checks each against
+ * its own definition rather than grepping for names:
+ *
+ *   A  MCP advertised == MCP callable, BOTH directions. A name in HUB_MAP /
+ *      CONSOLE_MAP / B20_ENCODE_TOOLS is tools/call-able even when absent from
+ *      TOOLS, so the reverse direction is the one that hides a surface.
+ *   B  Every HUB_MAP target is a real catalog id.
+ *   C  Catalog parity — CLAUDE.md: a tool is live only if it is in BOTH
+ *      HANDLERS and AGENT_TOOLS. An orphan either way is dead or invisible.
+ *   D  Plugin docs advertise only names that resolve.
+ *   E  Every CONSOLE_MAP target is a real CONSOLE_SYSTEMS key. This one is NOT
+ *      redundant with a runtime test: /api/console line 35 is
+ *      `command in CONSOLE_SYSTEMS ? command : "idea"`, so a typo'd target does
+ *      not 404 — it silently returns an IDEA BRIEF to someone who asked for an
+ *      audit. A dead name that still answers 200 is the only kind no user reports.
+ *   F  Every toolId published by packages/skill resolves, and dist matches src.
+ *      It is a separate npm artifact; nothing about fixing /api/mcp reaches it.
+ *
+ * Run: npx tsx scripts/dead-tool-check.ts
+ */
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { MCP_TOOLS } from "../src/lib/mcp-tools";
+import { AGENT_TOOLS } from "../src/lib/agent-tools";
+import { HANDLERS } from "../src/app/api/x402/_handlers/index";
+import { CONSOLE_SYSTEMS } from "../src/lib/console-systems";
+
+const WEB = join(dirname(fileURLToPath(import.meta.url)), "..");
+const REPO = join(WEB, "..", "..");
+const routeSrc = readFileSync(join(WEB, "src/app/api/mcp/route.ts"), "utf8");
+
+const fail: string[] = [];
+const note = (s: string) => console.log(`   ${s}`);
+function check(label: string, bad: string[], detail = "") {
+  if (bad.length === 0) console.log(`✅ ${label}`);
+  else {
+    console.log(`❌ ${label} — ${bad.length}`);
+    note(bad.join(" "));
+    if (detail) note(detail);
+    fail.push(label);
+  }
+}
+
+// ── parse the dispatch surface out of route.ts ───────────────────────────────
+const block = (start: string, end: string) => {
+  const i = routeSrc.indexOf(start);
+  if (i < 0) throw new Error(`dispatch block not found: ${start} — this audit's source moved, which is a loud failure by design`);
+  return routeSrc.slice(i, routeSrc.indexOf(end, i));
+};
+const keysOf = (src: string) => [...src.matchAll(/^\s{2}([a-z0-9_]+):\s*"/gm)].map((m) => m[1]);
+
+const hubMap = keysOf(block("const HUB_MAP", "};"));
+const consoleMap = keysOf(block("const CONSOLE_MAP", "};"));
+const b20 = [...block("const B20_ENCODE_TOOLS", "]);").matchAll(/"([a-z0-9_]+)"/g)].map((m) => m[1]);
+// Tools handled by a bespoke `name === "x"` branch rather than a map.
+const explicit = [...routeSrc.matchAll(/name === "([a-z0-9_]+)"/g)].map((m) => m[1]);
+
+const advertised = MCP_TOOLS.map((t) => t.name);
+const callable = [...new Set([...hubMap, ...consoleMap, ...b20, ...explicit])];
+
+console.log(`\nMCP: ${advertised.length} advertised · ${callable.length} callable`);
+console.log(`Catalog: ${AGENT_TOOLS.length} AGENT_TOOLS · ${Object.keys(HANDLERS).length} HANDLERS\n`);
+
+// ── A. both directions ───────────────────────────────────────────────────────
+check(
+  "A1 every advertised MCP tool is callable",
+  advertised.filter((n) => !callable.includes(n)),
+  "advertised but no dispatch branch — returns -32601 to a client that can see it"
+);
+check(
+  "A2 every callable MCP name is advertised (no hidden surface)",
+  callable.filter((n) => !advertised.includes(n)),
+  "callable via tools/call but absent from tools/list — undiscoverable, still invokable"
+);
+
+// ── B. HUB_MAP targets are real catalog ids ──────────────────────────────────
+const catalogIds = new Set(AGENT_TOOLS.map((t) => t.id));
+const hubTargets = [...block("const HUB_MAP", "};").matchAll(/^\s{2}[a-z0-9_]+:\s*"([a-z0-9-]+)"/gm)].map((m) => m[1]);
+check(
+  "B  every HUB_MAP target is a real catalog id",
+  hubTargets.filter((id) => !catalogIds.has(id) || !(id in HANDLERS))
+);
+
+// ── C. catalog parity ────────────────────────────────────────────────────────
+const handlerIds = new Set(Object.keys(HANDLERS));
+check("C1 no AGENT_TOOLS entry without a handler", [...catalogIds].filter((id) => !handlerIds.has(id)));
+check("C2 no handler missing from AGENT_TOOLS", [...handlerIds].filter((id) => !catalogIds.has(id)));
+
+// ── D. plugin docs ───────────────────────────────────────────────────────────
+// Prose naming a retired tool is fine and deliberate — each dead name in the
+// skills sits in a "There is no `X` any more" note that redirects to blue_call.
+// What must not exist is a name PRESENTED AS CALLABLE with no such note.
+const RETIRED_NOTE = /(no longer|not[a-z ]* any more|retired|does not exist|there is no|never (was|a real)|Do not invoke|ship as|are Skills|was cut|are \*\*not\*\*)/i;
+const pluginFiles = ["packages/claude-plugin/blue-agent/agents/blue-agent.md", "packages/claude-plugin/README.md"];
+// Two shapes count as "presented as callable", and the second is the one that
+// actually moves an agent: a backticked name reads as code, but `[Uses X tool]`
+// inside an <example> is a demonstration of invocation — the thing the model
+// imitates. The frontmatter here carried three dead names in that exact shape,
+// and a backticks-only check waved all three through.
+const ADVERTISES = [/`((?:blue|hub|b20)_[a-z0-9_]+)`/g, /\[Uses ((?:blue|hub|b20)_[a-z0-9_]+)\b/g];
+const pluginBad: string[] = [];
+for (const rel of pluginFiles) {
+  const txt = readFileSync(join(REPO, rel), "utf8");
+  const lines = txt.split("\n");
+  for (const [i, line] of lines.entries()) {
+    // Allow a name if this line, or the paragraph around it, explains it is gone.
+    const ctx = lines.slice(Math.max(0, i - 6), i + 3).join(" ");
+    for (const re of ADVERTISES) {
+      for (const m of line.matchAll(re)) {
+        if (advertised.includes(m[1])) continue;
+        if (RETIRED_NOTE.test(ctx)) continue;
+        pluginBad.push(`${rel.split("/").pop()}:${i + 1} ${m[1]}`);
+      }
+    }
+    // A doc that redirects to blue_call names a CATALOG id, which has its own
+    // way of being dead. Retired notes do not excuse these — the whole point of
+    // the redirect is that this id is the live path.
+    for (const m of line.matchAll(/toolId:?\s*"([a-z0-9-]+)"/g)) {
+      if (!catalogIds.has(m[1]) || !(m[1] in HANDLERS)) {
+        pluginBad.push(`${rel.split("/").pop()}:${i + 1} toolId=${m[1]}`);
+      }
+    }
+  }
+}
+check("D  plugin docs advertise no unresolvable tool", pluginBad);
+
+// ── E. CONSOLE_MAP targets ───────────────────────────────────────────────────
+const consoleTargets = [...block("const CONSOLE_MAP", "};").matchAll(/^\s{2}[a-z0-9_]+:\s*"([a-z0-9-]+)"/gm)].map((m) => m[1]);
+check(
+  "E  every CONSOLE_MAP target is a real console command",
+  consoleTargets.filter((c) => !(c in CONSOLE_SYSTEMS)),
+  `/api/console falls back to "idea" on an unknown command — a dead target here answers 200 with the wrong product`
+);
+
+// ── F. published npm package: packages/skill ─────────────────────────────────
+// Its own MCP server, its own tool list, shipped to users as @blueagent/skill.
+// Cutting /api/mcp did nothing to it. `dist/` is what npm actually runs, so a
+// src-only fix is not a fix — compare both and require they agree.
+const skillEntries = (rel: string) => {
+  const src = readFileSync(join(REPO, rel), "utf8");
+  const names = [...src.matchAll(/name:\s*"((?:blue|hub|b20)_[a-z0-9_]+)"/g)];
+  const seen = new Map<string, string | undefined>();
+  names.forEach((m, i) => {
+    const end = i + 1 < names.length ? names[i + 1].index! : src.length;
+    if (!seen.has(m[1])) seen.set(m[1], src.slice(m.index!, end).match(/toolId:\s*"([a-z0-9-]+)"/)?.[1]);
+  });
+  return seen;
+};
+const skillSrc = skillEntries("packages/skill/src/index.ts");
+const skillDist = skillEntries("packages/skill/dist/index.js");
+check(
+  "F1 every @blueagent/skill toolId resolves",
+  [...skillSrc].filter(([, id]) => id && (!catalogIds.has(id) || !(id in HANDLERS))).map(([n, id]) => `${n}->${id}`)
+);
+// Compare presence too, not just the toolId: a console command and an absent
+// name both read as `undefined` from a Map, so a name dropped from dist would
+// otherwise match a console command in src and pass.
+const sig = (m: Map<string, string | undefined>, n: string) => (m.has(n) ? m.get(n) ?? "(console)" : "(absent)");
+check(
+  "F2 @blueagent/skill dist matches src",
+  [...new Set([...skillSrc.keys(), ...skillDist.keys()])]
+    .filter((n) => sig(skillSrc, n) !== sig(skillDist, n))
+    .map((n) => `${n}[src:${sig(skillSrc, n)}|dist:${sig(skillDist, n)}]`),
+  "dist/ is what npm runs — a src-only edit ships nothing"
+);
+console.log(`   (@blueagent/skill: ${skillSrc.size} tools)`);
+
+console.log(
+  fail.length === 0
+    ? "\n✅ ALL CHECKS PASSED — no dead tool on any checked surface\n"
+    : `\n❌ ${fail.length} CHECK(S) FAILED\n`
+);
+process.exit(fail.length === 0 ? 0 : 1);

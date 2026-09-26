@@ -424,8 +424,9 @@ check("the x402 scan found references at all", x402Refs > 0, `${x402Refs} matche
 
 // The same failure one layer in: an MCP tool whose toolId 404s is a dead end an
 // agent cannot diagnose — it gets a payment error, not "no such tool". The
-// published @blueagent/skill package has 7 of these today (see CLAUDE.md); this
-// keeps the surface we control from growing an eighth.
+// published @blueagent/skill package carried 7 of these when this was written;
+// all 7 are gone as of 2026-09-26 and `dead-tool-check.ts` (F1) now holds that
+// package to the same rule, so this line is history, not a live count.
 const mcpToolIds = [
   ...new Set([...MCP_ROUTE.matchAll(/^\s+hub_[a-z0-9_]+:\s+"([a-z0-9-]+)",/gm)].map((m) => m[1])),
 ];

@@ -9,9 +9,10 @@ description: |
   Context: User has a rough project idea
   user: "I want to build a USDC streaming payroll app on Base"
   assistant: "Let me turn that into a fundable brief."
-  [Uses blue_idea tool with the prompt]
+  [Loads the blue-idea Skill]
   <commentary>
-  Any rough concept that needs to be shaped into a structured brief goes through blue_idea.
+  Any rough concept that needs to be shaped into a structured brief goes through the
+  blue-idea Skill. There is no blue_idea MCP tool — it was cut 2026-09-26.
   </commentary>
   </example>
 
@@ -29,9 +30,10 @@ description: |
   Context: User wants a token pick
   user: "What's a good token to buy on Base today?"
   assistant: "Let me get a current signal with thesis and entry."
-  [Uses hub_token_pick tool]
+  [Uses blue_call with toolId "token-pick-signal"]
   <commentary>
-  Token picks, trade signals, market calls → hub_token_pick.
+  Token picks, trade signals, market calls → catalog id `token-pick-signal`, run over
+  x402 through blue_call. There is no hub_token_pick MCP tool.
   </commentary>
   </example>
 
@@ -49,9 +51,10 @@ description: |
   Context: User wants to validate their project
   user: "Does my DeFi lending idea have market fit?"
   assistant: "I'll run a market fit analysis."
-  [Uses hub_market_fit tool]
+  [Uses blue_call with toolId "market-fit"]
   <commentary>
-  Market validation, timing, demand signals → hub_market_fit.
+  Market validation, timing, demand signals → catalog id `market-fit`, run over x402
+  through blue_call. There is no hub_market_fit MCP tool.
   </commentary>
   </example>
 
@@ -165,7 +168,9 @@ the `blue-score` skill for the one real endpoint.
 1. **Read memory** — load `.blue-agent/memory.md` at the start of every session
 2. **Identify** what the user needs, using memory context if relevant
 3. **Load** the matching skill — it has the exact format and context
-4. **Call** the MCP tool with the right inputs
+4. **Run** it — most skills above are self-contained and fire no tool at all. Only reach
+   for an MCP tool when the skill names one; if the name it wants is not in the 18 below,
+   it is a catalog id: `blue_registry` to confirm the input shape, then `blue_call`
 5. **Present** the result clearly
 6. **Update memory** — after every meaningful interaction, write back to `.blue-agent/memory.md`
 
@@ -183,7 +188,10 @@ Track:
 - `notes` — any key decisions or context to remember
 
 **Read:** at the top of every session — greet the user by referencing their project if memory exists.
-**Write:** after `blue_idea`, `blue_build`, `blue_audit`, `blue_ship`, `blue_raise` — update stage and last_command.
+**Write:** after any of the five console commands completes — update stage and last_command.
+Two arrive as MCP tools (`blue_build`, `blue_audit`); three arrive as Skills (`blue-idea`,
+`blue-ship`, `blue-raise`) and fire no tool call, so key the write on the command finishing,
+not on a tool name. `last_command` stays `idea|build|audit|ship|raise` either way.
 **Never** overwrite notes the user has manually added — only append or update specific fields.
 
 ## Sandbox
