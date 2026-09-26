@@ -82,14 +82,32 @@ export async function POST(
 
   const data = await upstream.text();
 
-  // Track the call regardless of upstream status (mirrors usage:<id> counter
-  // that powers Hub Featured ranking).
-  try { await kv.incr(`usage:${id}`); } catch {}
-  await incrCallCount(id);
-  // Same call with surface + day + outcome kept apart. `usage:<id>` above is
-  // written by three surfaces into one integer; this is the one that can answer
-  // "was this the Hub runner or a paying agent?". See lib/usage-daily.ts.
-  await recordCall(id, "hub", upstream.ok ? "ok" : "err");
+  // 🔴 An unpaid request that comes back 402 is the Hub ASKING HOW TO PAY, not a
+  // use of the tool, and it must not be counted as one.
+  //
+  // This became load-bearing the moment the Hub started resolving the payee from
+  // the builder's live 402: one click now sends two requests through here, a
+  // discovery probe and then the paid call. Counting both made every external
+  // tool's public call count and its `usage:<id>` ranking weight ~2× a hosted
+  // tool's for the same amount of real use — and `usage:<id>` is what orders Hub
+  // Featured, so the inflation was not cosmetic. MEASURED on desk-x402-block the
+  // day the payee fix shipped: callCount 3, revenueTotal 0. Not one of those
+  // three was a use; they were failed or unpaid attempts.
+  //
+  // The condition is `!xPayment && 402` and not the simpler `!xPayment`, because
+  // a genuinely free external tool ($0) is called with no payment and answers
+  // 2xx — that IS a use. And an endpoint that 503s an unpaid probe is a real
+  // attempted use that failed, which `recordCall` should still see as "err",
+  // otherwise a down tool looks idle instead of broken.
+  const isDiscovery = !xPayment && upstream.status === 402;
+  if (!isDiscovery) {
+    try { await kv.incr(`usage:${id}`); } catch {}
+    await incrCallCount(id);
+    // Same call with surface + day + outcome kept apart. `usage:<id>` above is
+    // written by three surfaces into one integer; this is the one that can answer
+    // "was this the Hub runner or a paying agent?". See lib/usage-daily.ts.
+    await recordCall(id, "hub", upstream.ok ? "ok" : "err");
+  }
 
   // A successful paid call means the builder was paid DIRECTLY, by the caller's
   // own authorization, to the builder's own wallet. So this is not an accrual
