@@ -731,10 +731,35 @@ export interface ArrowBrief {
    *  LLM-picked). Always populated when the A4 call succeeded. */
   verdict_note: string;
   /** LLM-generated 1-liner context. Null if the LLM chain failed;
-   *  `verdict_note` still carries the deterministic why. */
+   *  `verdict_note` still carries the deterministic why.
+   *
+   *  ALSO null when it was WITHHELD at serve time for failing number
+   *  reconciliation — see `brief_status` directly below, which is the only
+   *  thing that tells those two cases apart. */
   one_line_context: string | null;
+  /** SERVE-TIME ONLY. Absent on every stored record and on every clean
+   *  response; set to `"withheld_number_drift"` by
+   *  `lib/blue-hood/brief-serving.ts` when `warnings` carries a
+   *  `brief_number_drift:` entry, at which point `one_line_context` is served
+   *  as null. Says the null is a DECISION rather than an absence.
+   *
+   *  ⚠️ NOT `Arrow.brief_status`, which is the persisted lifecycle of the async
+   *  brief worker (`pending`/`attached`/`failed`/`skipped`) and is deliberately
+   *  left at `attached` in this case — the brief did attach, and its
+   *  deterministic `verdict_note` is still good. Two different questions, two
+   *  different fields, and conflating them would hide a usable brief.
+   *
+   *  Literal inlined rather than imported from `brief-serving.ts`: that module
+   *  imports `ArrowBrief` from here, so a `typeof import(...)` would make the
+   *  two files circular. `BRIEF_STATUS_WITHHELD` there is the constant to use
+   *  in code, and the test asserts the two agree. */
+  brief_status?: "withheld_number_drift";
   /** Warnings from A4 verbatim — feed_abnormally_stale, thin_dex_pool,
-   *  llm_context_unavailable, etc. Never edited. */
+   *  llm_context_unavailable, etc. Never edited.
+   *
+   *  Passed through UNTOUCHED even when the one-liner above is withheld: the
+   *  drift warning IS the evidence, and suppressing text while hiding the
+   *  reason would turn a visible fabrication into an invisible one. */
   warnings: string[];
   /** Which LLM served the context (virtuals / venice / bankr / null). */
   llm_provider: string | null;

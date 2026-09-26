@@ -39,6 +39,7 @@ import { readArrowFeed } from "@/lib/blue-hood/arrow-cache";
 import { isPublicArrow } from "@/lib/blue-hood/public-feed";
 import { computeHitRate } from "@/lib/blue-hood/hit-rate-gate";
 import { parseArrowFieldMode, projectArrows, omittedFieldsNote } from "@/lib/blue-hood/arrow-fields";
+import { withholdDriftedBriefs } from "@/lib/blue-hood/brief-serving";
 
 export const runtime = "nodejs";
 
@@ -132,6 +133,18 @@ export async function GET(req: NextRequest) {
     (a) => new Date(a.fired_at).getTime() >= Date.now() - 24 * 3_600 * 1000,
   ).length;
 
+  // Serve-time: a brief whose LLM one-liner cited a number that does not
+  // reconcile against its own `facts_at_fire` gets that one-liner withheld
+  // (`one_line_context: null` + `brief.brief_status`), with the
+  // `brief_number_drift` warning passed through untouched. The detector has
+  // flagged these since T-A.1 #2; until now the flagged sentence was served
+  // anyway. See lib/blue-hood/brief-serving.ts.
+  //
+  // Ordered AFTER `computeHitRate` and BEFORE the field trim, deliberately:
+  // nothing about withholding narrative prose may move a published number, and
+  // slicing first means this runs over `limit` records, not the whole window.
+  const served = withholdDriftedBriefs(arrows.slice(0, limit));
+
   return NextResponse.json(
     {
       ok: true,
@@ -139,7 +152,7 @@ export async function GET(req: NextRequest) {
       // never be able to move a published number. It can't today (the four
       // fields aren't inputs to `computeHitRate`), and this ordering keeps that
       // true if one ever becomes one.
-      arrows: projectArrows(arrows.slice(0, limit), fieldMode),
+      arrows: projectArrows(served, fieldMode),
       // Self-describing: the response names what it withheld and how to get it.
       // An escape hatch nobody can discover is not an escape hatch.
       ...omittedFieldsNote(fieldMode),
