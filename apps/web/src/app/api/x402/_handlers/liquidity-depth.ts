@@ -1,5 +1,11 @@
 // x402/liquidity-depth — DEX liquidity depth, price impact and exit-risk for a Base token
 // Price: $0.15 — PURE MATH, no LLM. Constant-product (x*y=k) approximation.
+//
+// Base-only, and it must SAY so when it finds nothing: `No Base-chain DEX pair
+// found for "0x…"` is read as "this token has no liquidity anywhere". On a
+// pair-not-found address we append a `hint` if RH 4663 has bytecode there — a
+// pointer only. See `lib/cross-chain-hint.ts`; no RH data enters this answer.
+import { robinhoodCodeHint } from "@/lib/cross-chain-hint";
 
 const DEXSCREENER_URL = "https://api.dexscreener.com/latest/dex";
 
@@ -75,20 +81,30 @@ export default async function handler(req: Request): Promise<Response> {
 
     // Fail soft — no fabricated numbers.
     if (!pair || pair.liquidity?.usd == null) {
+      // Only when NO pair was found. "Pair found but DexScreener reported no
+      // liquidity figure" is a Base fact about a token that is plainly on Base;
+      // pointing elsewhere there would be misdirection.
+      const hint = !pair ? await robinhoodCodeHint(token) : null;
       return Response.json({
         tool: "liquidity-depth",
         token,
+        chain: "base",
+        chainId: 8453,
         symbol: pair ? sideOf(pair, token).symbol : null,
         total_liquidity_usd: null,
         depth: { impact_1pct_usd: null, impact_2pct_usd: null, impact_5pct_usd: null },
         slippage_estimate: { size_1k: null, size_10k: null, size_100k: null },
         exit_risk: null,
         recommended_max_position_usd: null,
-        note: pair
-          ? "Pair found but no liquidity figure reported by DexScreener."
-          : `No Base-chain DEX pair found for "${token}".`,
+        note: [
+          pair
+            ? "Pair found but no liquidity figure reported by DexScreener."
+            : `No DEX pair found on Base (chain 8453) for "${token}". This tool reads Base only.`,
+          hint ? hint.note : "",
+        ].filter(Boolean).join(" "),
         dataSource: "DexScreener (live)",
         timestamp: new Date().toISOString(),
+        ...(hint ? { hint } : {}),
       });
     }
 

@@ -1,5 +1,14 @@
 // x402/token-price — live price for any Base token (DexScreener). No LLM.
 // Price: $0.01
+//
+// "No Base DEX pair found" is a true sentence that a caller reads as "this token
+// does not exist". MEASURED 2026-09-26: this tool returned exactly that for
+// 0x8Ff92566f2e81BDd68EDfAa8cde73942A723796b — VEX, a live token on Robinhood
+// Chain 4663 — and never named the chain it had searched. See
+// `lib/cross-chain-hint.ts`: on a no-pair address we do ONE `eth_getCode`
+// against 4663 and, if there is code, append a `hint`. The Base answer is
+// untouched; the hint is a pointer, never a second chain's data.
+import { robinhoodCodeHint } from "@/lib/cross-chain-hint";
 
 const DS = "https://api.dexscreener.com/latest/dex";
 type Pair = {
@@ -71,8 +80,21 @@ export default async function handler(req: Request): Promise<Response> {
       const error =
         found.reason === "quote_side_only"
           ? "This token appears on Base only as the QUOTE side of its pairs, so DexScreener carries no direct USD price for it. Report it as unavailable — do not infer a price by inverting the other side."
-          : "No Base DEX pair found (or DexScreener unavailable).";
-      return Response.json({ tool: "token-price", token, price_usd: null, error, data_source: "DexScreener", timestamp });
+          : "No pair found on Base (chain 8453) — or DexScreener was unavailable. This tool searches Base only.";
+      // Only on `no_pairs`. A `quote_side_only` token demonstrably EXISTS on
+      // Base and trades there, so pointing at another chain would be noise.
+      const hint = found.reason === "no_pairs" ? await robinhoodCodeHint(token) : null;
+      return Response.json({
+        tool: "token-price",
+        token,
+        chain: "base",
+        chainId: 8453,
+        price_usd: null,
+        error,
+        data_source: "DexScreener",
+        timestamp,
+        ...(hint ? { hint } : {}),
+      });
     }
     const p = found.pair;
     return Response.json({
