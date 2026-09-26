@@ -29,34 +29,63 @@
  * SwapCard read `issues.allowance.spender` correctly from the same upstream
  * body the whole time. §3 pins the v2 field and the calldata.
  *
+ * ── AND THE THIRD ONE, MEASURED 2026-09-27 ───────────────────────────────────
+ * `blue_swap_tx` accepted `slippageBps`, forwarded it to /api/swap/quote, and
+ * echoed it back in `meta.slippageBps`. The quote route built its OWN query
+ * from five named keys and slippageBps was not one of them, so it never left
+ * the building: 0x applied its 1% default and returned a `minBuyAmount`
+ * computed at 1%, while `meta` reported whatever the caller asked for. A
+ * caller tightening to 25 bps was told they had 25 and had 100 — the response
+ * contradicted itself and the LOOSER number was the binding one.
+ *
+ * Worse on Robinhood Chain 4663, where the same argument was accepted and also
+ * dropped, but the fallback is not 1% — `swap-prepare` defaults
+ * `amountOutMinimum` to "0", so every RH swap this tool built accepted ANY
+ * output. The fix there is a refusal, not a translation: the only RH price
+ * source calls its own figure display-only, and promoting a display-only
+ * estimate to a binding revert threshold is a design decision, not a patch.
+ *
  * ── WHAT THIS FILE BLOCKS ────────────────────────────────────────────────────
  * §1 the translation helper. §2 that the sentinel actually reaches the wire in
  * BOTH directions — the string "ETH" must not appear in the outgoing URL at all.
  * §3 that approve is a signable transaction and approves EXACTLY the quoted
  * amount, never unlimited. §4 the same word on Robinhood Chain 4663, which has
- * its own routing code and only shared the symptom. §5 proves each assertion
- * discriminates by re-implementing the defect and watching the assertion reject
- * it.
+ * its own routing code and only shared the symptom. §6 that a stated slippage
+ * is forwarded, an unstatable one is refused, and an absent one stays absent.
+ * §5 and §7 prove each assertion discriminates by re-implementing the defect
+ * and watching the assertion reject it.
  *
- * ── NEGATIVE CONTROLS, PHYSICALLY PERFORMED 2026-09-27 ───────────────────────
+ * ── NEGATIVE CONTROLS, PHYSICALLY PERFORMED ──────────────────────────────────
  * A guard that has never gone red is a comment, not a check. Each fix was
- * reverted in the source, this file was run, and the fix restored:
+ * reverted in the source, this file was run, and the fix restored.
  *
+ * 2026-09-27, against 82 checks:
  *   1. `toNativeSentinel` (lib/tx-chains.ts) → `return token.trim()`, the
  *      pre-fix pass-through.        →  15 FAILED of 82, across §1 and §2.
  *   2. `buildBaseApprove` (lib/zerox-swap.ts) → read `quote.allowanceTarget`
  *      only, the v1 field.          →  17 FAILED of 82, all of §3.
  *
- * Both returned to 82/82 after restore, and the file is byte-identical to its
- * pre-control state. §5 keeps a simulated copy of each revert so the
+ * 2026-09-27, §6 added, against 137:
+ *   3. quote route drops slippageBps entirely (pre-fix)   →  3 FAILED.
+ *   4. quote route spreads on truthiness, eating 0        →  1 FAILED (§6.2
+ *      alone — the plausible wrong fix, and the reason 6.1 and 6.2 are split).
+ *   5. `parseSlippageBps` → bare `Number(raw)`            →  14 FAILED.
+ *   6. `parseSlippageArg` → bare `Number(raw)` coercion   →  3 FAILED.
+ *   7. RH branch ignores slippageBps again                →  2 FAILED.
+ *   8. schema description back to "Default 100."          →  2 FAILED.
+ *
+ * All returned to full green after restore, and the file is byte-identical to
+ * its pre-control state. §5 and §7 keep a simulated copy of each revert so the
  * discrimination is re-checked on every CI run, not just the day it was proven.
  */
 import { decodeFunctionData, parseAbi } from "viem";
 import { NATIVE_SENTINEL as SENTINEL_FROM_TRUST } from "../src/lib/wallet/token-trust";
 import { isNativeToken, toNativeSentinel, NATIVE_SENTINEL } from "../src/lib/tx-chains";
-import { buildBaseApprove } from "../src/lib/zerox-swap";
+import { buildBaseApprove, parseSlippageBps, parseSlippageArg } from "../src/lib/zerox-swap";
 import { GET as quoteGET } from "../src/app/api/swap/quote/route";
 import { POST as rhPreparePOST } from "../src/app/api/robinhood/router/swap-prepare/route";
+import { MCP_TOOLS } from "../src/lib/mcp-tools";
+import { readFileSync } from "node:fs";
 
 let failures = 0, checks = 0;
 function ok(label: string, cond: boolean) {
@@ -100,6 +129,13 @@ function v2Quote(extra: Record<string, unknown> = {}): Record<string, unknown> {
 async function callQuote(
   sellToken: string,
   buyToken: string,
+  /**
+   * Passed as a RAW string, never a number, because the defect class under test
+   * is what survives the trip through a querystring. A helper that took a
+   * `number` could not express "abc", "1.5" or "-50" — the exact inputs that
+   * used to reach 0x as the literal text "NaN".
+   */
+  slippageBps?: string,
   body: Record<string, unknown> = v2Quote(),
   status = 200,
 ): Promise<{ outgoing: URL; json: Record<string, unknown>; headers: Record<string, string> }> {
@@ -115,7 +151,10 @@ async function callQuote(
     });
   }) as unknown as typeof fetch;
   try {
-    const qs = new URLSearchParams({ sellToken, buyToken, sellAmount: "1000000", taker: TAKER });
+    const qs = new URLSearchParams({
+      sellToken, buyToken, sellAmount: "1000000", taker: TAKER,
+      ...(slippageBps !== undefined ? { slippageBps } : {}),
+    });
     const res = await quoteGET(new Request(`http://local/api/swap/quote?${qs}`));
     return { outgoing: new URL(outgoing), json: await res.json(), headers };
   } finally {
@@ -347,6 +386,133 @@ async function main() {
   ok("control: …which then failed the address regex",
     !/^0x[a-fA-F0-9]{40}$/.test("ETH"));
   ok("control: §4's classification assertion rejects it", classify("ETH") === false);
+
+  console.log("\n§6 slippageBps is honoured, refused, or absent — never echoed as a lie");
+  // MEASURED 2026-09-27. `blue_swap_tx` took `slippageBps`, put it in the query
+  // to /api/swap/quote, and echoed it back in `meta.slippageBps`. That route
+  // built its OWN URLSearchParams from five named keys and slippageBps was not
+  // one of them, so it never left the building. 0x applied its 1% default and
+  // returned a `minBuyAmount` computed at 1% — while `meta` reported whatever
+  // the caller asked for. The response contradicted itself, and the number the
+  // chain would actually enforce was the LOOSER of the two. A caller tightening
+  // to 25 bps got 100 and was told they got 25.
+  const s50 = await callQuote(USDC, WETH, "50");
+  ok("6.1 a caller's slippageBps reaches 0x", s50.outgoing.searchParams.get("slippageBps") === "50");
+  // Zero is a REAL instruction ("revert unless I get the full quote"), not an
+  // absent one. A `...(bps ? {} : {})` spread would drop it, and dropping it
+  // silently loosens the bound to 1% — the same defect in a new place.
+  const s0 = await callQuote(USDC, WETH, "0");
+  ok("6.2 zero is forwarded, not treated as absent", s0.outgoing.searchParams.get("slippageBps") === "0");
+  ok("6.3 10000 (100%) is the inclusive upper bound",
+    (await callQuote(USDC, WETH, "10000")).outgoing.searchParams.get("slippageBps") === "10000");
+  // SwapCard has never sent one and must stay on 0x's default. Absent means
+  // absent: sending an explicit "100" here would be this route inventing a
+  // policy the browser never asked for.
+  const sNone = await callQuote(USDC, WETH);
+  ok("6.4 absent stays absent (SwapCard keeps 0x's default)",
+    !sNone.outgoing.searchParams.has("slippageBps"));
+  // Every rejected value must vanish, never arrive mangled. "NaN" on the wire is
+  // what `String(Number("abc"))` produced before the MCP side was validated.
+  for (const bad of ["abc", "NaN", "-50", "1.5", "10001", "", " ", "1e2", "0x64", "Infinity"]) {
+    const r = await callQuote(USDC, WETH, bad);
+    ok(`6.5 invalid slippageBps ${JSON.stringify(bad)} is dropped, not forwarded`,
+      !r.outgoing.searchParams.has("slippageBps"));
+  }
+  ok("6.6 …and an invalid value still returns a quote (0x's default applies)",
+    (await callQuote(USDC, WETH, "abc")).json.buyAmount === "994321");
+  // The parser itself, directly.
+  ok("6.7 parseSlippageBps(null) is null", parseSlippageBps(null) === null);
+  ok("6.8 parseSlippageBps(\"0\") is 0, not null", parseSlippageBps("0") === 0);
+  ok("6.9 parseSlippageBps(\" 50 \") trims", parseSlippageBps(" 50 ") === 50);
+  ok("6.10 parseSlippageBps(\"10000\") is accepted", parseSlippageBps("10000") === 10_000);
+  ok("6.11 parseSlippageBps(\"10001\") is rejected, not clamped", parseSlippageBps("10001") === null);
+  ok("6.12 parseSlippageBps(\"-1\") is rejected", parseSlippageBps("-1") === null);
+  ok("6.13 parseSlippageBps(\"1.5\") is rejected, not truncated", parseSlippageBps("1.5") === null);
+
+  // The MCP side: refuse a value we cannot honour rather than coerce it.
+  ok("6.14 parseSlippageArg(undefined) is the documented default 100", parseSlippageArg(undefined) === 100);
+  ok("6.15 parseSlippageArg(null) is 100", parseSlippageArg(null) === 100);
+  ok("6.16 parseSlippageArg(50) is 50", parseSlippageArg(50) === 50);
+  ok("6.17 parseSlippageArg(\"50\") accepts the string form", parseSlippageArg("50") === 50);
+  ok("6.18 parseSlippageArg(0) is 0, not the default", parseSlippageArg(0) === 0);
+  const throws = (v: unknown) => { try { parseSlippageArg(v); return false; } catch { return true; } };
+  for (const bad of ["abc", NaN, -1, 1.5, 10_001, Infinity, "", {}, []]) {
+    ok(`6.19 parseSlippageArg(${JSON.stringify(bad) ?? String(bad)}) throws rather than guessing`, throws(bad));
+  }
+
+  // Robinhood Chain 4663. `callSwapTx` is not exported and its Base branch does
+  // network I/O, so the RH refusal is asserted against the source — the same
+  // reasoning §4 gives for asserting a predicate it cannot cheaply invoke.
+  const mcpSrc = readFileSync(new URL("../src/app/api/mcp/route.ts", import.meta.url), "utf8");
+  const rhStart = mcpSrc.indexOf("// Robinhood Chain 4663 — Blue Agent's deployed");
+  const rhBranch = mcpSrc.slice(rhStart, mcpSrc.indexOf("async function callSendTx", rhStart));
+  ok("6.20 the RH branch refuses an explicit slippageBps",
+    /args\.slippageBps !== undefined/.test(rhBranch) && /throw new Error/.test(rhBranch));
+  // Ordering matters: refuse BEFORE the router-config check, so a caller asking
+  // for protection hears "not enforceable here", not "not configured".
+  ok("6.21 …and refuses before the router-config check",
+    rhBranch.indexOf("args.slippageBps !== undefined") < rhBranch.indexOf("ROBINHOOD_SWAP_ROUTER_ADDRESS"));
+  // Matches a KEY assignment, not the word — the branch's comment and error
+  // text both say "amountOutMinimum" on purpose, and an assertion that a fix
+  // cannot be described in prose is an assertion that punishes documenting it.
+  // The day this goes red is the day RH gained a real minimum, and §6.20's
+  // refusal should be reconsidered rather than this check relaxed.
+  ok("6.22 the RH branch still sends no amountOutMinimum (the reason it refuses)",
+    !/amountOutMinimum\s*:/.test(rhBranch));
+  // The schema is the only thing an agent reads before calling. It promised
+  // "Default 100" on both chains; on RH that default was 0.
+  const swapTool = MCP_TOOLS.find((t) => t.name === "blue_swap_tx");
+  const slipDesc = String(
+    ((swapTool?.inputSchema?.properties ?? {}) as Record<string, { description?: string }>)
+      .slippageBps?.description ?? "",
+  );
+  ok("6.23 blue_swap_tx still declares slippageBps", slipDesc.length > 0);
+  ok("6.24 …scoped to Base 8453", /BASE 8453 ONLY/.test(slipDesc));
+  ok("6.25 …and states the RH behaviour it used to hide",
+    /Robinhood/i.test(slipDesc) && /amountOutMinimum = 0/.test(slipDesc));
+
+  console.log("\n§7 negative controls for §6 — the defect, re-implemented");
+  // Control E: the pre-fix querystring. Five named keys, built fresh, with the
+  // caller's sixth nowhere in it.
+  const preSlip = new URLSearchParams({
+    chainId: "8453", sellToken: USDC, buyToken: WETH, sellAmount: "1000000", taker: TAKER,
+  });
+  ok("control: the old route really did drop slippageBps", !preSlip.has("slippageBps"));
+  ok("control: §6.1's forwarding assertion rejects it", preSlip.get("slippageBps") !== "50");
+
+  // Control F: the plausible wrong fix. A truthiness spread forwards 50 and
+  // silently eats 0 — passing §6.1 while failing §6.2, which is exactly why the
+  // two are separate checks.
+  const falsyDrop = (bps: number | null) =>
+    new URLSearchParams({ sellAmount: "1", ...(bps ? { slippageBps: String(bps) } : {}) });
+  ok("control: a truthiness spread still forwards 50", falsyDrop(50).get("slippageBps") === "50");
+  ok("control: …but eats 0, and §6.2 rejects that", !falsyDrop(0).has("slippageBps"));
+
+  // Control G: the old MCP coercion. `Number("abc")` is NaN and `String(NaN)` is
+  // the four-character text "NaN", which is what actually went on the wire.
+  const oldCoerce = (raw: unknown) => String(raw !== undefined ? Number(raw) : 100);
+  ok("control: the old coercion really produced the text \"NaN\"", oldCoerce("abc") === "NaN");
+  ok("control: §6.5's drop assertion rejects \"NaN\"", parseSlippageBps("NaN") === null);
+  ok("control: the old coercion turned \"\" into 0 bps", oldCoerce("") === "0");
+  ok("control: …and [] into 0 bps too", oldCoerce([]) === "0");
+  ok("control: §6.19's refusal rejects both", throws("") && throws([]));
+
+  // Control H: and what the caller SAW. JSON.stringify renders NaN as null, so a
+  // typo'd slippage did not surface as an error — it surfaced as no stated
+  // protection at all, in a field the response otherwise treats as authoritative.
+  ok("control: NaN in meta serialised to null, not to an error",
+    JSON.parse(JSON.stringify({ slippageBps: Number("abc") })).slippageBps === null);
+
+  // Control I: the RH half. The old branch accepted the argument and built a
+  // body with no minimum in it, so the agent reported 1% on a trade the router
+  // would settle at any price.
+  const oldRhBody: Record<string, unknown> = {
+    router: RH_ROUTER, recipient: TAKER, amountIn: "1000", direction: "buy", token: RH_TOKEN,
+  };
+  ok("control: the old RH body carried no amountOutMinimum", !("amountOutMinimum" in oldRhBody));
+  ok("control: …so swap-prepare's own \"0\" default applied", (oldRhBody.amountOutMinimum ?? "0") === "0");
+  ok("control: §6.20's refusal is what now prevents that claim",
+    /args\.slippageBps !== undefined/.test(rhBranch));
 
   console.log(
     failures === 0

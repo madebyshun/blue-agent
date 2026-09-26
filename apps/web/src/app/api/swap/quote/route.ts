@@ -1,4 +1,4 @@
-// GET /api/swap/quote?sellToken=…&buyToken=…&sellAmount=…&taker=0x…
+// GET /api/swap/quote?sellToken=…&buyToken=…&sellAmount=…&taker=0x…&slippageBps=…
 //
 // Server-side proxy for the 0x Swap API (AllowanceHolder flow) on Base mainnet.
 // Returns a firm quote with the transaction to sign + any ERC-20 allowance the
@@ -10,6 +10,7 @@
 
 import { NextResponse } from "next/server";
 import { toNativeSentinel } from "@/lib/tx-chains";
+import { parseSlippageBps } from "@/lib/zerox-swap";
 
 const ZEROX_BASE = "https://api.0x.org/swap/allowance-holder/quote";
 const BASE_CHAIN = 8453;
@@ -20,6 +21,7 @@ export async function GET(req: Request) {
   const buyToken = u.searchParams.get("buyToken") ?? "";
   const sellAmount = u.searchParams.get("sellAmount") ?? "";
   const taker = u.searchParams.get("taker") ?? "";
+  const slippageBps = parseSlippageBps(u.searchParams.get("slippageBps"));
   const key = process.env.ZEROX_API_KEY;
 
   if (!key) return NextResponse.json({ needsKey: true }, { status: 200 });
@@ -35,12 +37,23 @@ export async function GET(req: Request) {
   // browser's SwapCard) and a translation living in the callers is a
   // translation one of them will be missing. See lib/tx-chains.ts for the
   // measurement and for why `isNativeToken` alone was not enough.
+  //
+  // ⚠️ `slippageBps` is forwarded here for the same boundary reason. It was
+  // MISSING until 2026-09-27, and its absence was worse than a dropped param:
+  // `blue_swap_tx` accepted it (mcp-tools.ts documents "Default 100"), sent it,
+  // and then echoed it back in `meta.slippageBps` as though it had applied —
+  // while 0x quietly used its own 1% default. A caller asking for 50 bps got a
+  // `minBuyAmount` computed at 100 and a `meta` claiming 50, so the response
+  // contradicted itself and the looser number was the binding one. Forwarding
+  // it at the boundary (not in each caller) keeps SwapCard, which sends none,
+  // on 0x's default unchanged.
   const qs = new URLSearchParams({
     chainId: String(BASE_CHAIN),
     sellToken: toNativeSentinel(sellToken),
     buyToken: toNativeSentinel(buyToken),
     sellAmount,
     ...(taker ? { taker } : {}),
+    ...(slippageBps !== null ? { slippageBps: String(slippageBps) } : {}),
   });
 
   try {

@@ -140,7 +140,7 @@ export const MCP_TOOLS = [
         tokenIn:     { type: "string", description: "Token being sold: 0x… contract address on `chain`, or \"ETH\" for native. Never invent an address — resolve it first." },
         tokenOut:    { type: "string", description: "Token being bought: 0x… contract address on `chain`, or \"ETH\" for native." },
         amountIn:    { type: "string", description: "Amount of tokenIn in WHOLE units as a decimal string, e.g. \"25.5\" — NOT base units. Decimals are read from the token contract on its own chain; do not do the exponent math yourself." },
-        slippageBps: { type: "number", description: "Max slippage in basis points (100 = 1%). Default 100." },
+        slippageBps: { type: "number", description: "BASE 8453 ONLY. Max slippage in basis points, whole number 0-10000 (100 = 1%). Default 100, enforced by 0x in the quote's minBuyAmount. On Robinhood Chain 4663 this field is REFUSED with an error, not ignored: that router path is built with amountOutMinimum = 0, so the swap accepts any output and no bps value would be binding." },
       },
       required: ["chain", "fromAddress", "tokenIn", "tokenOut", "amountIn"],
     },

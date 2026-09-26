@@ -11,6 +11,57 @@ import { buildErc20ApproveData } from "@/lib/robinhood/swap";
 /** Base mainnet. Stated, never inferred — CLAUDE.md hard rule #1. */
 const BASE_CHAIN_ID = 8453;
 
+/**
+ * Slippage is a whole number of basis points, 0–10000. Both parsers below share
+ * this bound deliberately: they are the two faces of one policy (an agent's
+ * `slippageBps` argument, and the querystring it becomes), and two copies of a
+ * range are two things that drift apart.
+ */
+const MAX_SLIPPAGE_BPS = 10_000;
+
+/**
+ * `slippageBps` as it arrives on GET /api/swap/quote. Returns null for anything
+ * that route will not forward, leaving 0x to apply its own default.
+ *
+ * Rejecting rather than clamping is deliberate. A clamped value is a number the
+ * caller did not ask for, arriving with no signal that it was changed — which
+ * is the exact failure this path was fixed for.
+ */
+export function parseSlippageBps(raw: string | null): number | null {
+  if (raw === null || raw.trim() === "") return null;
+  if (!/^\d+$/.test(raw.trim())) return null;
+  const n = Number(raw.trim());
+  return Number.isInteger(n) && n >= 0 && n <= MAX_SLIPPAGE_BPS ? n : null;
+}
+
+/**
+ * `slippageBps` as an agent passes it to `blue_swap_tx`, defaulting to the 100
+ * that tool's own schema advertises.
+ *
+ * Throws on a value it cannot honour rather than clamping or defaulting: this
+ * number bounds how much the caller can lose, and silently substituting a
+ * LOOSER one than they asked for is the failure this path was fixed for.
+ */
+export function parseSlippageArg(raw: unknown): number {
+  if (raw === undefined || raw === null) return 100;
+  // Narrow to the two types that can MEAN a number before coercing. `Number("")`
+  // and `Number([])` are both 0 — so an empty string or an empty array would
+  // arrive as "0 bps", i.e. "revert unless I get the exact quote", which is the
+  // tightest possible instruction conjured from no instruction at all.
+  const n =
+    typeof raw === "number" ? raw
+    : typeof raw === "string" && raw.trim() !== "" ? Number(raw.trim())
+    : NaN;
+  if (!Number.isInteger(n) || n < 0 || n > MAX_SLIPPAGE_BPS) {
+    throw new Error(
+      `slippageBps must be a whole number of basis points from 0 to ${MAX_SLIPPAGE_BPS} (100 = 1%). ` +
+      `Got ${JSON.stringify(raw) ?? String(raw)}. Not defaulting: this bounds your loss, so a value ` +
+      `we cannot honour is refused rather than quietly replaced with a looser one.`,
+    );
+  }
+  return n;
+}
+
 export type SwapApprove = {
   /** Retained from the original shape so existing readers keep working. */
   token: string;

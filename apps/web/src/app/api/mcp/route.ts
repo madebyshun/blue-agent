@@ -79,7 +79,7 @@ import {
   readTokenMeta,
 } from "@/lib/tx-chains";
 import { ROBINHOOD_SWAP_ROUTER_ADDRESS } from "@/lib/robinhood/swap";
-import { buildBaseApprove } from "@/lib/zerox-swap";
+import { buildBaseApprove, parseSlippageArg } from "@/lib/zerox-swap";
 
 export const runtime = "nodejs";
 // Console commands (blue_idea/build/audit/ship/raise) wait on the LLM, which can
@@ -520,7 +520,12 @@ async function callSwapTx(args: Record<string, unknown>): Promise<string> {
   if (!isPositiveDecimal(amountIn)) {
     throw new Error("amountIn must be a positive decimal string in WHOLE units, e.g. \"25.5\" — not base units");
   }
-  const slippageBps = args.slippageBps !== undefined ? Number(args.slippageBps) : 100;
+  // Validated, not coerced. `Number("abc")` is NaN, and the old code sent
+  // `String(NaN)` upstream and echoed NaN back in `meta` — where JSON.stringify
+  // renders it `null`, so a typo'd slippage silently became "no protection
+  // stated" instead of an error. Refusing beats guessing on a field whose whole
+  // job is bounding the caller's loss.
+  const slippageBps = parseSlippageArg(args.slippageBps);
 
   // Resolve decimals on the token's OWN chain so the agent never does exponent
   // math. See lib/tx-chains.ts — a wrong exponent here is a wrong trade size.
@@ -572,6 +577,26 @@ async function callSwapTx(args: Record<string, unknown>): Promise<string> {
   }
 
   // Robinhood Chain 4663 — Blue Agent's deployed RobinhoodSwapRouter over Uniswap V3.
+  //
+  // ⚠️ NO SLIPPAGE PROTECTION ON THIS PATH, and that is why an explicit
+  // `slippageBps` is REFUSED here rather than ignored. `swap-prepare` defaults
+  // `amountOutMinimum` to "0" and this branch has never sent one, so every RH
+  // swap this tool builds is an unbounded-output trade. Accepting a bps value
+  // and dropping it would tell the caller they are protected at 1% while the
+  // calldata they sign accepts any output at all — the worst possible version
+  // of the Base echo bug fixed above, because here the number is binding
+  // on-chain. Deriving a real minimum is NOT a bug fix: the only RH price
+  // source is GeckoTerminal via /api/robinhood/swap/quote, whose own header
+  // calls the figure display-only, and turning a display-only estimate into a
+  // binding revert threshold is a design decision, not a patch.
+  if (args.slippageBps !== undefined && args.slippageBps !== null) {
+    throw new Error(
+      `slippageBps is not enforceable on Robinhood Chain 4663 through this tool: the router ` +
+      `call is built with amountOutMinimum = 0, so the swap accepts ANY output. Refusing ` +
+      `rather than silently ignoring it. Omit slippageBps to build the trade anyway ` +
+      `(and size it accordingly), or swap on Base 8453 where 0x enforces the bound.`,
+    );
+  }
   if (!ROBINHOOD_SWAP_ROUTER_ADDRESS) {
     throw new Error("Robinhood Chain 4663 swap router is not configured in this deployment.");
   }
