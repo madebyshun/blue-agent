@@ -41,17 +41,27 @@ const TYPES = ["all", "trading", "builder", "content", "defi", "infra", "general
 
 // ─── Submit form ──────────────────────────────────────────────────────────────
 
-// 🔴 The "three passes" count below is REAL — do not strip it in a sweep that
-// removes "3-agent" claims. api/agent-registry/submit/route.ts runs
-// runAeonSkill twice (deep-research + narrative-tracker), then runMiroSharkSkill,
-// then runBlueSkill, every one of them over the fetched GitHub repo data. Unlike
-// the retired Hub-wide "3-agent consensus" line, this one is not inflated.
-// What changed on 2026-09-26 is vocabulary, not the number: "agent" (the three
-// are system-prompt personas on one Virtuals endpoint — see api/_lib/llm.ts —
-// not independent auditors) and "audit" (the submit button shows a spinner, so
-// it discloses LESS of the mechanism than prose does, and an A–F grade sold as
-// an audit reads as a certification). Keep this in sync with the metadata in
-// app/hub/registry/page.tsx and app/app/hub/registry/page.tsx.
+// 🔴 Aeon and MiroShark are GONE from the copy below — do not put them back,
+// and do not re-add a pass count. ShunTr's call 2026-09-27: the product is Blue
+// Agent only. This comment previously said the opposite ("the three passes are
+// REAL, do not strip them"), which was true of the call graph and false of the
+// output, so here is the measurement that settles it:
+//   • api/agent-registry/submit/route.ts still *calls* runAeonSkill twice, then
+//     runMiroSharkSkill, then runBlueSkill. Counting call sites is what made the
+//     old claim look checkable.
+//   • runAeonSkill("deep-research") returns null in production, twice over: the
+//     research-loop cron was unscheduled 2026-09-05 so the aeon:* KV key is
+//     expired, and the GitHub fallback (aaronjmars/aeon .../skills/deep-research/
+//     SKILL.md) 404s — measured 2026-09-27. The route passes it on as `?? ""`,
+//     so that pass contributes literally nothing to the grade.
+//   • runAeonSkill("narrative-tracker") does return text, but with no live Aeon
+//     data it self-labels "MODEL-GENERATED ESTIMATE" — one more prompt on the
+//     same Virtuals endpoint (api/_lib/llm.ts), not a second source.
+// So "three passes" was counting prompts and presenting them as independence.
+// The count is the part that misleads even when every name in it is spelled
+// right; a number invites verification the surface cannot survive. Keep this in
+// sync with the metadata in app/hub/registry/page.tsx and
+// app/app/hub/registry/page.tsx — all three change together or drift again.
 
 function SubmitForm({ onSubmitted, onClose }: { onSubmitted: (p: AgentProfile) => void; onClose: () => void }) {
   const [repo, setRepo]       = useState("");
@@ -136,12 +146,12 @@ function SubmitForm({ onSubmitted, onClose }: { onSubmitted: (p: AgentProfile) =
           {loading ? (
             <span className="flex items-center justify-center gap-2">
               <span className="w-3 h-3 border border-[#4FC3F7]/30 border-t-[#4FC3F7] rounded-full animate-spin" />
-              running 3 analysis passes… (~30s)
+              analyzing your repo… (~30s)
             </span>
           ) : "→ submit agent"}
         </button>
         <p className="font-mono text-[10px] text-slate-700 text-center">
-          Blue · Aeon · MiroShark — three analysis passes over your real repo data
+          Graded A–F by Blue Agent from your real repo data
         </p>
       </form>
     </div>
@@ -305,13 +315,12 @@ export default function RegistryView({ inShell = false }: { inShell?: boolean })
           </div>
 
           <div className="mt-auto px-4 py-4 border-t border-[#1A1A2E]">
-            {/* Real count — see the 🔴 note above SubmitForm before removing it.
-                Broken across two lines on purpose: the w-72 rail is ~255px, which
-                wraps this string mid-list and orphans "MiroShark" after a "·". */}
+            {/* No persona list and no pass count — see the 🔴 note above
+                SubmitForm. Kept to one short line on purpose: the w-72 rail is
+                ~255px (~223px inside px-4), so ~35 chars of 10px mono is the
+                budget before this wraps. */}
             <p className="font-mono text-[10px] text-slate-700 leading-relaxed">
-              3 analysis passes
-              <br />
-              Blue · Aeon · MiroShark
+              Graded A–F by Blue Agent
             </p>
           </div>
         </aside>

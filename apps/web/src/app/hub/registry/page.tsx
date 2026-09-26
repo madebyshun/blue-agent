@@ -4,11 +4,10 @@ import RegistryView from "@/app/hub/_components/RegistryView";
 export const metadata: Metadata = {
   title: "Agent Registry — Blue Hub",
   // Kept in sync with the in-app twin at src/app/app/hub/registry/page.tsx —
-  // the full note lives there. Short version: the three passes are real
-  // (submit/route.ts runs Aeon ×2, MiroShark, then Blue), but they are personas
-  // on one Virtuals endpoint rather than three independent agents, and this
-  // route reads a GitHub repo, so it deliberately names no chain.
-  description: "Discover Base AI agents. Submit your GitHub repo and get graded A–F from three analysis passes (Blue · Aeon · MiroShark) over your real repo data.",
+  // the full note lives there. Short version: Blue Agent only (Aeon and
+  // MiroShark are retired, and the deep-research pass returned nothing anyway),
+  // no pass count, and no chain named because this route reads a GitHub repo.
+  description: "Discover Base AI agents. Submit your GitHub repo and get graded A–F by Blue Agent from your real repo data.",
 };
 
 // /hub/registry — public (marketing host) route. Renders the shared RegistryView
