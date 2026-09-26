@@ -140,7 +140,7 @@ console.log("warnings:", r.data.warnings);
 - `llm.provider === "virtuals"` (Virtuals is primary post PR #203)
 - `llm.attempts[0].provider === "virtuals"`, status `"success"`
 - `llm.web_search_used === false`
-- `warnings` includes `"no_web_search_this_run: served by virtuals..."`
+- `warnings` includes `"no_web_search: virtuals has no web-search capability..."` — the key was `no_web_search_this_run` when this handoff was written and was renamed on 2026-09-24 (2277f3aa)
 
 **Record**:
 ```

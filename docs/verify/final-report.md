@@ -20,7 +20,7 @@ Program state after this report: **FROZEN — hotfix-only, no feature PRs**.
 - **1.3a invalid payment** ✅ — 400 for invalid base64, 402 "Payment verification failed" for valid base64 + garbage payload. Neither serves data.
 - **1.3b replay** ⚠️ **KNOWN-ISSUE (LOW)** — code inspection: EIP-3009 nonce is consumed at settlement, so replay after settle fails on-chain. Concurrent replay (before either settles) can serve twice but charge once. Deferred fix: application-level nonce cache (~2-line change) if abuse observed.
 - **1.3c upstream error** ✅ — code path guarantees no `cdpSettle` if handler fails, so user is not charged. Verified by inspection of `apps/web/src/app/api/x402/[tool]/route.ts` lines 329-353.
-- **1.4 A4 provider check** ⏸ — same handoff. Expected `llm.provider === "virtuals"` with `llm.attempts[0].provider === "virtuals"` and `warnings` including `no_web_search_this_run`.
+- **1.4 A4 provider check** ⏸ — same handoff. Expected `llm.provider === "virtuals"` with `llm.attempts[0].provider === "virtuals"` and `warnings` including `no_web_search` — renamed from `no_web_search_this_run` on 2026-09-24 (2277f3aa), after this report was written. This step is still pending, so it carries the CURRENT key; the run records below are left at the name they actually observed.
 
 **Settle tx hashes** (to be filled by user after 1.2 / 1.4 run):
 ```
@@ -95,7 +95,7 @@ Every number the agents cited matched the captured outputs to 4+ decimal places.
 Two on-chain items remain the user's action. After these, program is fully frozen:
 
 1. **Gate 1.2**: fund a fresh wallet with ~$1 USDC + gas on Base, run the paid client call from `docs/verify/gate1.md`, paste the settle tx into `gate1.md`.
-2. **Gate 1.4**: same wallet, hit `rh-stock-agent-brief`, confirm `llm.provider === "virtuals"` and `warnings` includes `no_web_search_this_run`. Paste tx.
+2. **Gate 1.4**: same wallet, hit `rh-stock-agent-brief`, confirm `llm.provider === "virtuals"` and `warnings` includes `no_web_search` (renamed from `no_web_search_this_run` on 2026-09-24, 2277f3aa). Paste tx.
 3. ~~Add GitHub Actions secret `INTERNAL_SERVICE_KEY` = value from Vercel prod~~ ✅ done 2026-07-17. Wait for 2 consecutive green scheduled 6h crons on `.github/workflows/rh-rwa-semantic-smoke.yml` (first prod dispatch already 22/22).
 
 ## Program status after this report

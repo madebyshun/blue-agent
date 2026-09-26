@@ -296,11 +296,11 @@ async function a4Brief() {
   // rh-stock-agent-brief.ts:
   //
   //   llm_provider === null           → "llm_context_unavailable: …"
-  //   provider !== null && !searched  → "no_web_search_this_run: served by <p>…"
+  //   provider !== null && !searched  → "no_web_search: <provider> has no web-search…"
   //
   // The second is deliberately withheld when no provider answered, because its
-  // own text reads "served by <provider>" and "served by null" is nonsense.
-  // The old check keyed on `web_search_used === false` alone — which is also
+  // own text interpolates the provider and "null has no web-search capability"
+  // is nonsense. The old check keyed on `web_search_used === false` alone — which is also
   // the default when the gateway never answered (llm_web_search_used = false at
   // declaration) — so on an outage it demanded the exact warning the handler is
   // written not to emit, and failed CORRECT degradation.
@@ -310,12 +310,27 @@ async function a4Brief() {
   // the tool answering 200 with a deterministic verdict while never admitting
   // the narrative context is missing. That is our bug, not Virtuals', so it
   // blocks a merge in either mode.
+  //
+  // ⚠️ THE KEY IS `no_web_search`, NOT `no_web_search_this_run`. The handler
+  // renamed it on 2026-09-24 (2277f3aa) because the condition is a property of
+  // the GATEWAY — Virtuals has no search at all — not of one run. This line was
+  // not updated, and `"no_web_search: …"` does not contain the longer string,
+  // so the assertion became unsatisfiable: the 6-hourly monitor went red on the
+  // very next run and stayed red for 7 runs while prod was behaving correctly.
+  // Matched by PREFIX, not equality, for a reason specific to this script — it
+  // tests PROD, never the branch (see the workflow header), so under equality a
+  // future rename would ALSO go red for the whole window between merging and
+  // deploying, which is how a correct diff gets blocked by a stale prod. The
+  // prefix stays non-vacuous: the warning must still be present and must still
+  // lead with this key. What holds the two files together is not this comment
+  // but `scripts/smoke-warning-contract-check.ts`, which pins the key against
+  // the handler's source in `npm test` — i.e. before a rename can ship.
   const warnings = (r.data.warnings ?? []) as string[];
   if (llm?.provider != null) {
     if (llm.web_search_used === false) {
       must(
-        warnings.some((w) => w.includes("no_web_search_this_run")),
-        "A4 no_web_search_this_run warning when a provider answered without search",
+        warnings.some((w) => w.startsWith("no_web_search")),
+        "A4 no_web_search warning when a provider answered without search",
         `warnings=${JSON.stringify(warnings)}`,
       );
     }
