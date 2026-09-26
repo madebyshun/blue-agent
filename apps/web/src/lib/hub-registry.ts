@@ -71,6 +71,27 @@ export interface RegisteredTool {
   signature:      string;                          // SIWE signature of the manifest
   verified:       boolean;                         // Blue Agent reviewed (default false)
   aiReady:        boolean;                         // returns structured JSON
+  /* "live" = the x402 probe passed AT SUBMIT TIME and nothing has re-checked it
+     since. It is a birth certificate, not a pulse.
+     🔴 MEASURED 2026-09-26 — 5 of the 6 registered endpoints were dead while all
+     6 still reported `status: "live"` to every visitor:
+       hermes-evidence     pinggy-free tunnel    conn failed
+       hermes-verify       pinggy-free tunnel    conn failed
+       jefri-base-create2  lhr.life tunnel       503
+       jefri-base-permit2  lhr.life tunnel       503
+       indie-ops-ping      trycloudflare quick   conn failed
+       desk-x402-block     Cloudflare Worker     402  ← the only one still up
+     That is not neglect, it is the submit flow: builders test from a laptop behind
+     an ephemeral tunnel (pinggy / lhr.life / trycloudflare all expire in hours),
+     the probe passes, and the URL dies when they close the terminal. The Hub then
+     advertises a dead tool as live indefinitely and never tells the builder.
+     Note this is a SEPARATE fault from the payee bug documented above
+     PAY_TO_WALLET in hub/HubView.tsx: desk-x402-block is up and still cannot be
+     paid. Fixing liveness alone would surface exactly one payable tool, and it
+     would still fail at checkout.
+     ⚠️ Do NOT "clean up" by deleting dead tools — that is a builder's submission
+     and tunnel expiry is expected. Re-probe and show staleness; any delisting is
+     ShunTr's call. */
   status?:        "live";                          // x402 probe passed at submit → auto-live (agentic.market model)
   // Optional
   agentName?:     string;                          // builder's agent brand (default = short addr)

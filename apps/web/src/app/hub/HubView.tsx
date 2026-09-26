@@ -683,6 +683,31 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         const USDC        = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
         // Self-hosted x402: pay the Blue Agent treasury (CDP facilitator settles to it).
         // MUST match PAY_TO in api/_lib/x402-cdp.ts — this is the `to` we sign.
+        /* 🔴 CORRECT for native catalog tools, WRONG for every `source:"external"`
+           community tool, and that is why no registered tool has ever been paid.
+           An external tool does NOT settle here: `callPath` sends it to
+           /api/hub/tools/<id>/call, which forwards our X-PAYMENT to the BUILDER's
+           own x402 endpoint, and that endpoint verifies `authorization.to`
+           against the builder's own wallet. We sign the Blue treasury for it
+           anyway — there is no branch on `tool.source` below — so the builder's
+           verifier sees the wrong payee and rejects.
+           MEASURED 2026-09-26, the one registered endpoint that is still up:
+             desk-x402-block endpoint 402 → accepts[0].payTo
+                                   0x2e882b5f4d97c2acceb7d68c97582e8c8dae6f22
+             its registry builderAddress  0x2e882b5f4d97c2acceb7d68c97582e8c8dae6f22
+             what we sign                 0x02950ad38ada1d599375bd447e080cd404809205
+           Registry and endpoint agree with each other and disagree with US, so the
+           address we need is already on the tool object (`tool.builderAddress`).
+           Live evidence: that tool reads callCount 2 / revenueTotal 0 — two people
+           tried to pay and both were correctly refused.
+           ⚠️ Do NOT "just swap in builderAddress" as a drive-by. EIP-3009 settles to
+           exactly ONE recipient, so the payee IS the revenue split: signing the
+           builder makes Blue's cut 0% and turns the 95/5 constants in
+           api/hub/tools/[id]/call/route.ts into fiction (they are already
+           bookkeeping-only). Routing to Blue and forwarding to the builder later is
+           the other option and it is a CUSTODY change — holding a third party's
+           money — which is ShunTr's call, not a refactor. Splitting needs two
+           authorizations. Pick deliberately; all three are real products. */
         const PAY_TO_WALLET = "0x02950ad38ada1d599375bd447e080cd404809205" as const;
         const priceRaw    = tool.price.replace("$", "");
         const priceVal    = parseFloat(priceRaw) || 0;
