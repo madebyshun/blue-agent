@@ -101,10 +101,17 @@ export async function callBankrLLM(opts: {
   // every user-facing surface: catalog descriptions, /api/catalog, the OG share
   // card, Hub UI, docs, and the 402 payment description in api/simulator.
   // The PIPELINE below was deliberately left running. Why:
-  //   • The match is on a PREFIX STRING, not a flag. Six paid x402 handlers
-  //     (launch-simulator-1/2/3, contract-trust, honeypot-check, risk-gate,
-  //     agent-collab-match) open a prompt with "You are MiroShark", and that
-  //     is the only thing that loads collab/miroshark-blueagent.prompt.md.
+  //   • The match is on a PREFIX STRING, not a flag. TWENTY paid x402 handlers
+  //     open a prompt with "You are MiroShark", and that is the only thing
+  //     that loads collab/miroshark-blueagent.prompt.md. Count them, do not
+  //     trust this number:
+  //       grep -rl 'You are MiroShark' src/app/api/x402/_handlers/ | wc -l
+  //     A separate 15 read Aeon KV (`getAeonOutput`); same command with
+  //     'getAeonOutput'. The two sets overlap but are not the same set.
+  //     (This bullet first shipped saying "Six", with SEVEN handlers named
+  //     after it — written from the files that happened to be open rather
+  //     than from a grep. A hand-listed roster in a warning is the same bug
+  //     the warning is about: it reads as measured and is not.)
   //   • Rename the prefix and nothing throws. The call still succeeds, the
   //     handler still returns 200, the caller is still charged — the injected
   //     skill file just silently stops arriving and the answers get worse in a
