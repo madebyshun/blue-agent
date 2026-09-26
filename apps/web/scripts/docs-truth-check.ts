@@ -153,7 +153,11 @@ const pinned: [string, string, string][] = [
   ["README chat section", README, `all ${TOOL_COUNT} Hub tools`],
   ["README cli example", README, `# list all ${TOOL_COUNT} tools`],
   ["llms.txt", LLMS, `Blue Hub exposes ${TOOL_COUNT} paid tools.`],
-  ["plugin.md", PLUGIN, `${TOOL_COUNT} AI tools for Base builders`],
+  // Said "for Base builders" until 2026-09-26. The pin only ever guarded the
+  // NUMBER, so it held the one-chain audience framing in place as a side effect
+  // — an editor fixing the chain wording got a CI failure that read like they
+  // had broken a count. Keep the interpolation, not the prose.
+  ["plugin.md", PLUGIN, `${TOOL_COUNT} AI tools for onchain builders`],
   ["farcaster.json (static copy)", FARCASTER_STATIC, `"${TOOL_COUNT} AI tools.`],
   // SKILL.md is the agent-facing brief — the one that was 79 tools stale.
   ["SKILL.md catalog line", SKILL, `Blue Hub exposes **${TOOL_COUNT} paid tools** across ${CATEGORIES.length} categories.`],

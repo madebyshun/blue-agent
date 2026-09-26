@@ -4,7 +4,7 @@
   "agent": {
     "name": "Blue Agent",
     "handle": "@blueagent_",
-    "description": "Base-native AI agent for builders — idea, build, audit, ship, raise. 110 tools on Blue Hub, x402 pay-per-call. Inference by Virtuals.",
+    "description": "Onchain AI agent for builders — idea, build, audit, ship, raise. 110 tools on Blue Hub reading Base 8453 and Robinhood Chain 4663, x402 pay-per-call in USDC on Base. Inference by Virtuals.",
     "version": "1.2.0",
     "network": "base",
     "chain_id": 8453,

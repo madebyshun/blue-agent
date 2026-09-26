@@ -1,8 +1,8 @@
 # Blue Hub
 
-> AI agent tools for Base builders — analysis, audits, and signals over live
-> on-chain data. Pay per call in USDC over the x402 protocol. No API key, no
-> signup, no subscription.
+> AI agent tools for onchain builders and autonomous agents — analysis, audits,
+> and signals over live reads on Base 8453 and Robinhood Chain 4663. Pay per
+> call in USDC over the x402 protocol. No API key, no signup, no subscription.
 
 Blue Hub exposes 110 paid tools. Any x402-capable agent can call a tool's
 endpoint directly and pay per request in USDC on Base (chain id 8453). When a

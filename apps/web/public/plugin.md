@@ -3,12 +3,16 @@
 > Source of truth: https://blueagent.dev/plugin.md
 > Hub UI: https://blueagent.dev/hub · Catalog (machine-readable): https://blueagent.dev/api/catalog
 
-110 AI tools for Base builders and autonomous agents — audits, token signals,
+110 AI tools for onchain builders and autonomous agents — audits, token signals,
 market-fit analysis, deep due diligence, launch readiness, ecosystem intel and
 more. Every tool is a paid HTTP endpoint that speaks **x402 v2** natively, so
 Base MCP can call any tool and settle the USDC payment without extra wiring.
 
-- **Network:** Base mainnet (`eip155:8453`)
+- **Reads:** Base mainnet (8453) and Robinhood Chain (4663) — the `rh-*`
+  tokenized-stock tools are Robinhood Chain only; the two chains share no
+  state, so a ticker alone never identifies a token
+- **Network:** Base mainnet (`eip155:8453`) — payment only, every tool
+  settles here regardless of which chain it reads
 - **Asset:** USDC (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`)
 - **Payment:** x402 v2 · pay-per-call · no API key · no subscription
 - **Settlement:** Coinbase CDP facilitator (on-chain transferWithAuthorization)
@@ -119,7 +123,8 @@ wallet (after explicit approval) and retries the request with the
 base64-encoded x402 payload in `X-Payment`. The server then:
 
 1. **Verifies** the payment via the Coinbase CDP facilitator (no charge).
-2. **Runs** the tool over live Base data. Most tools run one Blue persona;
+2. **Runs** the tool over live on-chain data — Base for most of the catalog,
+   Robinhood Chain for the `rh-*` tools. Most tools run one Blue persona;
    a few (deep-analysis, the launch simulators) weight several personas.
 3. **Settles** the USDC transfer on-chain via CDP (the user is charged
    only on success).
