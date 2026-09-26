@@ -9,6 +9,7 @@
 // route returns { needsKey: true } and the Convert card shows a setup hint.
 
 import { NextResponse } from "next/server";
+import { toNativeSentinel } from "@/lib/tx-chains";
 
 const ZEROX_BASE = "https://api.0x.org/swap/allowance-holder/quote";
 const BASE_CHAIN = 8453;
@@ -26,10 +27,18 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "bad params" }, { status: 200 });
   }
 
+  // P1-4 (measured 2026-09-26): a caller passing the literal "ETH" — which
+  // `blue_swap_tx`'s own schema documents as valid — got 0x's "The input is
+  // invalid" back, because v2 of the Swap API speaks only the ERC-20 native
+  // SENTINEL address. Normalised here, at the boundary, rather than in each
+  // caller: this route has two of them (the MCP execution wrapper and the
+  // browser's SwapCard) and a translation living in the callers is a
+  // translation one of them will be missing. See lib/tx-chains.ts for the
+  // measurement and for why `isNativeToken` alone was not enough.
   const qs = new URLSearchParams({
     chainId: String(BASE_CHAIN),
-    sellToken,
-    buyToken,
+    sellToken: toNativeSentinel(sellToken),
+    buyToken: toNativeSentinel(buyToken),
     sellAmount,
     ...(taker ? { taker } : {}),
   });

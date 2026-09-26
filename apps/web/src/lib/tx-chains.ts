@@ -29,6 +29,9 @@
 import { createPublicClient, http, type PublicClient } from "viem";
 import { base } from "viem/chains";
 import { robinhoodMainnet } from "@/lib/robinhood/chains";
+import { NATIVE_SENTINEL } from "@/lib/wallet/token-trust";
+
+export { NATIVE_SENTINEL };
 
 export type TxChain = "base" | "robinhood";
 
@@ -114,6 +117,37 @@ export function isNativeToken(t: string): boolean {
   const u = s.toUpperCase();
   if (u === "ETH" || u === "NATIVE") return true;
   return NATIVE_HEX.has(s.toLowerCase());
+}
+
+/**
+ * Resolve a caller-supplied token to something an on-chain API will accept.
+ *
+ * ── WHY (P1-4, measured 2026-09-26) ──────────────────────────────────────────
+ * `blue_swap_tx` advertises `tokenIn` / `tokenOut` as "0x… address or \"ETH\"",
+ * and `tokenOut: "ETH"` came back with
+ *     Base 8453 swap quote failed: The input is invalid
+ * while `WETH` at 0x4200…0006 worked. The tool was forwarding the literal
+ * STRING "ETH" to the 0x Swap API, which only speaks the ERC-20 sentinel
+ * address for native ETH. So the description was right about the intent and the
+ * wire format was never translated.
+ *
+ * That failure mode is worse than a missing feature: the agent trusts the
+ * description, sends the documented value, and gets back something that reads
+ * like a chain or liquidity problem. It will then either retry the same call or
+ * tell the user Base cannot route the pair — neither of which is true.
+ *
+ * `isNativeToken` above already recognises every spelling humans and providers
+ * use ("ETH", "NATIVE", "", the zero address, the all-`e` marker). This is its
+ * missing other half: recognition without translation is what left the two
+ * disagreeing. Use them as a pair — test with `isNativeToken`, put
+ * `toNativeSentinel` on the wire.
+ *
+ * The sentinel itself is imported, never retyped. There is exactly one spelling
+ * of it in this repo (`lib/wallet/token-trust.ts`) and a second copy here would
+ * be a checksum waiting to drift.
+ */
+export function toNativeSentinel(token: string): string {
+  return isNativeToken(token) ? NATIVE_SENTINEL : token.trim();
 }
 
 export interface TokenMeta { decimals: number; symbol: string }
