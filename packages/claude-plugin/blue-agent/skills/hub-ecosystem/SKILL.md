@@ -17,11 +17,19 @@ Daily digest of top launches, protocol updates, and builder activity on Base.
 | Builder activity | Notable repos, deployments, commits |
 | What to watch | Upcoming launches or events |
 
-## MCP Tool
+## How to run it
+
+> Changed 2026-09-26. There is **no `hub_ecosystem` MCP tool any more.** The MCP
+> manifest was cut from 85 tools to 18 to keep agent context small. The tool itself
+> is unchanged and still live — it is now reached through the paid door.
 
 ```
-hub_ecosystem(focus?: string)
+blue_call(tool: "ecosystem-digest", input: { focus?: string })
 ```
+
+`blue_call` charges x402. The first call returns HTTP 402 with payment requirements;
+sign them with your own wallet and call again with `payment: <base64 X-PAYMENT>`.
+Blue Agent never holds your key and authorises one exact amount per call.
 
 ## Inputs
 
@@ -30,7 +38,9 @@ hub_ecosystem(focus?: string)
 ## Example
 
 ```
-hub_ecosystem("DeFi and AI agents")
+blue_call(tool: "ecosystem-digest", input: {
+  focus: "DeFi and AI agents"
+})
 ```
 
 ## Price

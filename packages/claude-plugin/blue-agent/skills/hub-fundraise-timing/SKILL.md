@@ -18,11 +18,19 @@ Assesses if now is the right time to raise — market conditions, stage readines
 | Verdict | RAISE NOW / WAIT / BOOTSTRAP |
 | What to hit first | If WAIT — metrics to reach before raising |
 
-## MCP Tool
+## How to run it
+
+> Changed 2026-09-26. There is **no `hub_fundraise_timing` MCP tool any more.** The MCP
+> manifest was cut from 85 tools to 18 to keep agent context small. The tool itself
+> is unchanged and still live — it is now reached through the paid door.
 
 ```
-hub_fundraise_timing(project: string, stage?: string)
+blue_call(tool: "fundraise-timing", input: { project: string, stage?: string })
 ```
+
+`blue_call` charges x402. The first call returns HTTP 402 with payment requirements;
+sign them with your own wallet and call again with `payment: <base64 X-PAYMENT>`.
+Blue Agent never holds your key and authorises one exact amount per call.
 
 ## Inputs
 
@@ -32,10 +40,10 @@ hub_fundraise_timing(project: string, stage?: string)
 ## Example
 
 ```
-hub_fundraise_timing(
-  "USDC streaming payroll on Base",
-  "Pre-seed. 500 users, $12k MRR, 3 pilots. Raising $500k."
-)
+blue_call(tool: "fundraise-timing", input: {
+  project: "USDC streaming payroll on Base",
+  stage: "Pre-seed. 500 users, $12k MRR, 3 pilots. Raising $500k."
+})
 ```
 
 ## Price

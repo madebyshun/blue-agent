@@ -18,11 +18,19 @@ Direct/indirect competitor mapping and defensible edge analysis.
 | Gaps | What competitors are missing |
 | Positioning | How to position vs. competition |
 
-## MCP Tool
+## How to run it
+
+> Changed 2026-09-26. There is **no `hub_competitor_scan` MCP tool any more.** The MCP
+> manifest was cut from 85 tools to 18 to keep agent context small. The tool itself
+> is unchanged and still live — it is now reached through the paid door.
 
 ```
-hub_competitor_scan(project: string, category?: string)
+blue_call(tool: "competitor-scan", input: { project: string, category?: string })
 ```
+
+`blue_call` charges x402. The first call returns HTTP 402 with payment requirements;
+sign them with your own wallet and call again with `payment: <base64 X-PAYMENT>`.
+Blue Agent never holds your key and authorises one exact amount per call.
 
 ## Inputs
 
@@ -32,10 +40,10 @@ hub_competitor_scan(project: string, category?: string)
 ## Example
 
 ```
-hub_competitor_scan(
-  "USDC streaming payroll for remote teams on Base",
-  "payroll, B2B SaaS, DeFi"
-)
+blue_call(tool: "competitor-scan", input: {
+  project: "USDC streaming payroll for remote teams on Base",
+  category: "payroll, B2B SaaS, DeFi"
+})
 ```
 
 ## Price

@@ -277,12 +277,24 @@ them.
 
 The MCP surface is deliberately a **subset**, not a mirror.
 
-MCP serves 85 tools — 15 `blue_` + 63 `hub_` + 7 `b20_`.
+MCP serves 18 tools — 7 `blue_` + 10 `hub_` + 1 `b20_`.
 
-Only the 64 `hub_` tools are drawn from the 111-tool catalog; `blue_` are the console commands
-and `b20_` are MCP-only calldata builders that take no x402 payment. So **none of these
-numbers is interchangeable with another** — a count always belongs to the one surface it was
-measured on. If you need a total, measure the surface you are actually calling.
+Only the 10 `hub_` tools are drawn from the 110-tool catalog; `blue_` are the door
+(`blue_registry`, `blue_call`), the execution primitives and two console commands, and `b20_`
+is an MCP-only calldata builder. So **none of these numbers is interchangeable with another** —
+a count always belongs to the one surface it was measured on. If you need a total, measure the
+surface you are actually calling.
+
+**Cut from 85 to 18 on 2026-09-26, and the cut removed no capability.** The 85-tool manifest
+was 32,160 bytes — roughly 8,000 tokens spent before the agent read a single word of the user's
+question — and published MCP research finds tool-selection accuracy degrades sharply past
+~40 always-loaded entries. All 110 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
+lists them and `blue_call` runs any of them, so the other 95 moved from "always in context" to
+"one lookup away". A manifest is a context budget, not an inventory.
+
+`blue_call` is the one tool here that **charges**. It forwards no internal bypass header, so an
+unpaid call returns a real HTTP 402 with payment requirements the agent settles from its own
+wallet. The other 17 run free.
 
 ## Skills (grounding files)
 

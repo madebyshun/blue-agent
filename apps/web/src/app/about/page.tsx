@@ -18,7 +18,7 @@ import { TOOL_COUNT } from "@/lib/agent-tools";
  * Server-rendered pages do NOT do this: they import and derive (see
  * app/docs/_data.ts, app/docs/api/page.tsx).
  */
-const MCP_TOOL_COUNT = 85;
+const MCP_TOOL_COUNT = 18;
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
@@ -57,7 +57,7 @@ const SURFACES = [
     icon: "⚡",
     name: "MCP Server",
     handle: "blueagent.dev/api/mcp",
-    desc: `${MCP_TOOL_COUNT} tools via MCP (15 blue_ + 63 hub_ + 7 b20_) — plug into Claude Desktop, Cursor, or any MCP client. No API key needed. Tools run free via internal bypass.`,
+    desc: `${MCP_TOOL_COUNT} tools via MCP (7 blue_ + 10 hub_ + 1 b20_) — plug into Claude Desktop, Cursor, or any MCP client. No API key needed. 17 run free; blue_call reaches the rest of the catalog and charges x402.`,
     link: "https://blueagent.dev/api/mcp",
     linkLabel: "Connect MCP →",
     color: "#F59E0B",
@@ -75,8 +75,12 @@ const ROADMAP = [
       { done: true, text: "Blue Chat — multi-model AI, artifacts, public share links" },
       { done: true, text: "Blue Bank — send, swap, yield, invoices, QR pay (archived 2026-07)" },
       // Was "57 tools, full x402 catalog parity" — both halves false. The manifest
-      // is 85, and it is a CURATED SUBSET of the 110-tool catalog by design, so
+      // is 18, and it is a CURATED SUBSET of the 110-tool catalog by design, so
       // "parity" was never true and cannot become true without shipping all 110.
+      // Cut 85 → 18 on 2026-09-26: the old manifest cost ~8k tokens of context
+      // before a single call, and published MCP research puts selection accuracy
+      // in free-fall past ~40 always-loaded tools. Shrinking the manifest did not
+      // shrink the product — all 110 stay reachable through blue_call over x402.
       { done: true, text: `MCP Server — ${MCP_TOOL_COUNT} tools, a curated subset of the x402 catalog` },
       { done: true, text: "Agent SDK — @blueagent/x402, agents pay + call tools onchain" },
       { done: true, text: "B20 — deploy from chat, plus tracker, check, analyze, launch" },

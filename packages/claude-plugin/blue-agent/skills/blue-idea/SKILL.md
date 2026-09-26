@@ -19,11 +19,23 @@ Turns a rough concept into a structured brief grounded in 34 Base skill files.
 | Risks | Top 3 risks + mitigation |
 | 24h plan | What to do in the next 24 hours |
 
-## MCP Tool
+## How to run it
+
+> Changed 2026-09-26. There is **no `blue_idea` MCP tool any more.** The MCP
+> manifest was cut from 85 tools to 18 and the five console commands were not all
+> kept; `blue_idea` runs through the paid door instead. The underlying tool did not
+> go anywhere — only the always-loaded manifest entry did.
 
 ```
-blue_idea(prompt: string)
+blue_call(tool: "blue-idea", input: { prompt: string })
 ```
+
+Note the id is `blue-idea` with a **hyphen** — that is the catalog id. `blue_idea`
+with an underscore was the old MCP tool name and now resolves to nothing.
+
+`blue_call` charges x402. The first call returns HTTP 402 with payment requirements;
+sign them with your own wallet and call again with `payment: <base64 X-PAYMENT>`.
+Blue Agent never holds your key and authorises one exact amount per call.
 
 ## Prompt format
 
@@ -35,8 +47,9 @@ Pass the user's raw concept directly as `prompt`. Include any context they've gi
 ## Example
 
 ```
-blue_idea("A USDC streaming payroll app for remote teams on Base. 
-Employers set up streams, employees withdraw anytime.")
+blue_call(tool: "blue-idea", input: {
+  prompt: "A USDC streaming payroll app for remote teams on Base. Employers set up streams, employees withdraw anytime."
+})
 ```
 
 ## Output

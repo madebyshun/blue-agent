@@ -17,11 +17,19 @@ Tracks large wallet moves for a token and generates copy-trade signals.
 | Signal | BUY / SELL / HOLD with size context |
 | Conviction | Based on number of whales moving together |
 
-## MCP Tool
+## How to run it
+
+> Changed 2026-09-26. There is **no `hub_whale_signal` MCP tool any more.** The MCP
+> manifest was cut from 85 tools to 18 to keep agent context small. The tool itself
+> is unchanged and still live — it is now reached through the paid door.
 
 ```
-hub_whale_signal(token: string, min_usd?: number)
+blue_call(tool: "whale-copy-signal", input: { token: string, min_usd?: number })
 ```
+
+`blue_call` charges x402. The first call returns HTTP 402 with payment requirements;
+sign them with your own wallet and call again with `payment: <base64 X-PAYMENT>`.
+Blue Agent never holds your key and authorises one exact amount per call.
 
 ## Inputs
 
@@ -31,7 +39,10 @@ hub_whale_signal(token: string, min_usd?: number)
 ## Example
 
 ```
-hub_whale_signal("0xf895783b2931c919955e18b5e3343e7c7c456ba3", 5000)
+blue_call(tool: "whale-copy-signal", input: {
+  token: "0xf895783b2931c919955e18b5e3343e7c7c456ba3",
+  min_usd: 5000
+})
 ```
 
 ## Important

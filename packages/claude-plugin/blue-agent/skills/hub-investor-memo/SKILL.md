@@ -21,11 +21,19 @@ Generates a full investor memo — thesis, market, moat, risks, ask. Ready to se
 | The ask | Amount, use of funds, milestones |
 | Team | How to present founder background |
 
-## MCP Tool
+## How to run it
+
+> Changed 2026-09-26. There is **no `hub_investor_memo` MCP tool any more.** The MCP
+> manifest was cut from 85 tools to 18 to keep agent context small. The tool itself
+> is unchanged and still live — it is now reached through the paid door.
 
 ```
-hub_investor_memo(project: string, description: string, ask?: string)
+blue_call(tool: "investor-memo", input: { project: string, description: string, ask?: string })
 ```
+
+`blue_call` charges x402. The first call returns HTTP 402 with payment requirements;
+sign them with your own wallet and call again with `payment: <base64 X-PAYMENT>`.
+Blue Agent never holds your key and authorises one exact amount per call.
 
 ## Inputs
 
@@ -36,11 +44,11 @@ hub_investor_memo(project: string, description: string, ask?: string)
 ## Example
 
 ```
-hub_investor_memo(
-  "StreamPay",
-  "USDC streaming payroll on Base. 500 beta users, $12k MRR, 3 enterprise pilots.",
-  "$500k pre-seed to hire 2 engineers"
-)
+blue_call(tool: "investor-memo", input: {
+  project: "StreamPay",
+  description: "USDC streaming payroll on Base. 500 beta users, $12k MRR, 3 enterprise pilots.",
+  ask: "$500k pre-seed to hire 2 engineers"
+})
 ```
 
 ## Price

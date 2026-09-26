@@ -18,11 +18,19 @@ Finds active grants and funding opportunities for Base projects.
 | Application tips | What reviewers look for |
 | Next steps | Direct links + how to apply |
 
-## MCP Tool
+## How to run it
+
+> Changed 2026-09-26. There is **no `hub_base_grant` MCP tool any more.** The MCP
+> manifest was cut from 85 tools to 18 to keep agent context small. The tool itself
+> is unchanged and still live — it is now reached through the paid door.
 
 ```
-hub_base_grant(project: string, stage?: string)
+blue_call(tool: "base-grant-finder", input: { project: string, stage?: string })
 ```
+
+`blue_call` charges x402. The first call returns HTTP 402 with payment requirements;
+sign them with your own wallet and call again with `payment: <base64 X-PAYMENT>`.
+Blue Agent never holds your key and authorises one exact amount per call.
 
 ## Inputs
 
@@ -32,10 +40,10 @@ hub_base_grant(project: string, stage?: string)
 ## Example
 
 ```
-hub_base_grant(
-  "Open source USDC payroll streaming protocol on Base",
-  "build"
-)
+blue_call(tool: "base-grant-finder", input: {
+  project: "Open source USDC payroll streaming protocol on Base",
+  stage: "build"
+})
 ```
 
 ## Price

@@ -19,11 +19,19 @@ Commit velocity, test coverage, dependency risk, and bus factor for any GitHub r
 | Health score | 0-100 overall |
 | Recommendations | Top 3 improvements |
 
-## MCP Tool
+## How to run it
+
+> Changed 2026-09-26. There is **no `hub_repo_health` MCP tool any more.** The MCP
+> manifest was cut from 85 tools to 18 to keep agent context small. The tool itself
+> is unchanged and still live — it is now reached through the paid door.
 
 ```
-hub_repo_health(url: string)
+blue_call(tool: "repo-health", input: { url: string })
 ```
+
+`blue_call` charges x402. The first call returns HTTP 402 with payment requirements;
+sign them with your own wallet and call again with `payment: <base64 X-PAYMENT>`.
+Blue Agent never holds your key and authorises one exact amount per call.
 
 ## Inputs
 
@@ -32,7 +40,9 @@ hub_repo_health(url: string)
 ## Example
 
 ```
-hub_repo_health("https://github.com/madebyshun/blue-agent")
+blue_call(tool: "repo-health", input: {
+  url: "https://github.com/madebyshun/blue-agent"
+})
 ```
 
 ## Price

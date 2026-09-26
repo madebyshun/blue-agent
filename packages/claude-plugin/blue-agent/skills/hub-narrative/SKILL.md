@@ -18,11 +18,19 @@ Mindshare scores, velocity arrows, phase labels, and position calls across Base 
 | Position call | FRONT-RUN / RIDE / FADE / WATCH |
 | Blue verdict | Which narrative to act on and why |
 
-## MCP Tool
+## How to run it
+
+> Changed 2026-09-26. There is **no `hub_narrative` MCP tool any more.** The MCP
+> manifest was cut from 85 tools to 18 to keep agent context small. The tool itself
+> is unchanged and still live — it is now reached through the paid door.
 
 ```
-hub_narrative(focus?: string)
+blue_call(tool: "narrative-position", input: { focus?: string })
 ```
+
+`blue_call` charges x402. The first call returns HTTP 402 with payment requirements;
+sign them with your own wallet and call again with `payment: <base64 X-PAYMENT>`.
+Blue Agent never holds your key and authorises one exact amount per call.
 
 ## Inputs
 
@@ -31,7 +39,9 @@ hub_narrative(focus?: string)
 ## Example
 
 ```
-hub_narrative("Focus on AI agent tokens and onchain gaming")
+blue_call(tool: "narrative-position", input: {
+  focus: "Focus on AI agent tokens and onchain gaming"
+})
 ```
 
 ## Output

@@ -175,6 +175,9 @@ This means `blue_audit` and `blue_build` can safely read and write files without
 
 - All onchain context defaults to **Base (chain ID 8453)**
 - Never invent contract addresses — if an address is needed and not provided, ask
-- Use Bankr ecosystem tools when available
+- Never use Bankr — the account was 403-banned 2026-07-20 and every trace of it was
+  removed from this project. Inference is Virtuals (`compute.virtuals.io`).
+- Only two catalog tools are preloaded as MCP tools per category; for anything else
+  call `blue_registry` to find the catalog id, then `blue_call` to run it over x402
 - For security checks (honeypot, risk gate), always run before recommending any onchain action
 - Always read memory before responding — personalize based on what you know about their project

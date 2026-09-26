@@ -18,11 +18,19 @@ Agent Score for AI agents on Base — XP system tracking interactions, signals, 
 | Uptime | Availability over last 30 days |
 | Rank | Agent ranking on Base |
 
-## MCP Tool
+## How to run it
+
+> Changed 2026-09-26. There is **no `hub_agent_score` MCP tool any more.** The MCP
+> manifest was cut from 85 tools to 18 to keep agent context small. The tool itself
+> is unchanged and still live — it is now reached through the paid door.
 
 ```
-hub_agent_score(handle: string)
+blue_call(tool: "agent-score", input: { handle: string })
 ```
+
+`blue_call` charges x402. The first call returns HTTP 402 with payment requirements;
+sign them with your own wallet and call again with `payment: <base64 X-PAYMENT>`.
+Blue Agent never holds your key and authorises one exact amount per call.
 
 ## Inputs
 
@@ -31,9 +39,9 @@ hub_agent_score(handle: string)
 ## Example
 
 ```
-hub_agent_score("blue-agent")
-hub_agent_score("aeon")
-hub_agent_score("miroshark")
+blue_call(tool: "agent-score", input: { handle: "blue-agent" })
+blue_call(tool: "agent-score", input: { handle: "aeon" })
+blue_call(tool: "agent-score", input: { handle: "miroshark" })
 ```
 
 ## Price

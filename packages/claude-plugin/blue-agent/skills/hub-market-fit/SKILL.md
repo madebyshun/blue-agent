@@ -20,11 +20,19 @@ Market fit analysis — problem clarity, timing, competition, demand signals.
 | Top risks | 3 biggest risks to address |
 | Suggested change | One thing to change to improve fit |
 
-## MCP Tool
+## How to run it
+
+> Changed 2026-09-26. There is **no `hub_market_fit` MCP tool any more.** The MCP
+> manifest was cut from 85 tools to 18 to keep agent context small. The tool itself
+> is unchanged and still live — it is now reached through the paid door.
 
 ```
-hub_market_fit(project: string, url?: string)
+blue_call(tool: "market-fit", input: { project: string, url?: string })
 ```
+
+`blue_call` charges x402. The first call returns HTTP 402 with payment requirements;
+sign them with your own wallet and call again with `payment: <base64 X-PAYMENT>`.
+Blue Agent never holds your key and authorises one exact amount per call.
 
 ## Inputs
 
@@ -34,9 +42,9 @@ hub_market_fit(project: string, url?: string)
 ## Example
 
 ```
-hub_market_fit("USDC streaming payroll for remote teams on Base. 
-Employers set up payment streams, employees withdraw anytime. 
-No banks, no delays, programmable.")
+blue_call(tool: "market-fit", input: {
+  project: "USDC streaming payroll for remote teams on Base. Employers set up payment streams, employees withdraw anytime. No banks, no delays, programmable."
+})
 ```
 
 ## Output

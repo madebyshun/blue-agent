@@ -38,7 +38,23 @@ export interface AgentSkill {
   /** Ids whose `usage:<id>` KV counters sum to this skill's run count.
    *  Unset = no instrumented backend, so the run count is UNKNOWN and the UI
    *  renders nothing — not a zero, which would read as "nobody uses this" when
-   *  the truth is "we don't measure this". */
+   *  the truth is "we don't measure this".
+   *
+   *  ⚠️ THESE ARE CATALOG IDS (`honeypot-check`), NEVER MCP TOOL NAMES
+   *  (`hub_honeypot`). Every writer of `usage:<id>` keys by catalog id —
+   *  `api/x402/[tool]` writes `recordCall(tool)`, `api/hub/tools/[id]/call`
+   *  writes `recordCall(id)`, and `api/mcp` resolves through HUB_MAP to the
+   *  catalog id first, precisely so one tool does not split into two rows.
+   *  The only non-catalog ids that are correct here are the five `blue_<cmd>`
+   *  counters `/api/console` writes.
+   *
+   *  Fixed 2026-09-26: all 14 `hub_*` entries below were MCP names, so every
+   *  bundle summed keys nothing has ever written and read a permanent 0. The
+   *  hook only renders a count when > 0, so this failed SILENTLY — three
+   *  bundles looked un-instrumented when they were merely mis-keyed, which is
+   *  the same shape as a tool with real demand whose counter reads zero and
+   *  gets retired for it. One of them, `hub_builder_score`, resolved to no tool
+   *  on any surface at all. */
   meterIds?:   string[];
 }
 
@@ -193,19 +209,25 @@ export const AGENT_SKILLS: AgentSkill[] = [
     badge:       "Bundle · 4 tools",
     tools:       ["hub_risk_gate", "hub_honeypot", "hub_contract_trust", "hub_key_exposure"],
     author:      BLUE_AUTHOR,
-    meterIds:    ["hub_risk_gate", "hub_honeypot", "hub_contract_trust", "hub_key_exposure"],
+    meterIds:    ["risk-gate", "honeypot-check", "contract-trust", "key-exposure"],
   },
   {
     id:          "bundle-base-builder",
     name:        "Base Builder",
-    description: "Builder intelligence — repo health, builder score, grant eligibility, deep due diligence",
+    // Was "Bundle · 4 tools" listing `hub_builder_score`, which exists in
+    // NEITHER `HANDLERS` nor `AGENT_TOOLS` — the badge advertised a fourth tool
+    // that no surface can run. Same dead id as the 7 stale ones in the published
+    // @blueagent/skill package (see CLAUDE.md). Dropped rather than substituted:
+    // no other catalog tool scores a builder, and picking a near-miss would make
+    // the bundle quietly do something different from what its name says.
+    description: "Builder intelligence — repo health, grant eligibility, deep due diligence",
     provider:    "Bundled",
     status:      "active",
     trigger:     "Evaluate this Base builder/project: ",
-    badge:       "Bundle · 4 tools",
-    tools:       ["hub_repo_health", "hub_builder_score", "hub_base_grant", "hub_builder_dd"],
+    badge:       "Bundle · 3 tools",
+    tools:       ["hub_repo_health", "hub_base_grant", "hub_builder_dd"],
     author:      BLUE_AUTHOR,
-    meterIds:    ["hub_repo_health", "hub_builder_score", "hub_base_grant", "hub_builder_dd"],
+    meterIds:    ["repo-health", "base-grant-finder", "builder-deep-dd"],
   },
   {
     id:          "bundle-trader-intel",
@@ -217,7 +239,7 @@ export const AGENT_SKILLS: AgentSkill[] = [
     badge:       "Bundle · 5 tools",
     tools:       ["hub_token_pick", "hub_whale_signal", "hub_narrative_pulse", "hub_token_momentum", "hub_dex_flow"],
     author:      BLUE_AUTHOR,
-    meterIds:    ["hub_token_pick", "hub_whale_signal", "hub_narrative_pulse", "hub_token_momentum", "hub_dex_flow"],
+    meterIds:    ["token-pick-signal", "whale-copy-signal", "narrative-pulse", "token-momentum-scanner", "dex-flow"],
   },
 
   {

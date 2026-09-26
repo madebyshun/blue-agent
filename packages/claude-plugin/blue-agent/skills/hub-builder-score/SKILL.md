@@ -1,39 +1,44 @@
 ---
-name: Blue Hub — Builder Score
-description: Use when user wants to check a builder's score or reputation. Triggers — "builder score", "check my score", "how active is X on Base", "onchain reputation", "shipping score", "who is this builder".
-version: 1.0.0
+name: Blue Hub — Builder Score (retired name)
+description: Do not invoke. Historical pointer only, kept so the retired name `hub_builder_score` resolves to an explanation instead of failing silently. For a real builder score use the "Blue Agent — Score" skill.
+version: 2.0.0
 ---
 
-# Hub Builder Score — Onchain Reputation
+# hub_builder_score — retired name, never a real tool
 
-Builder Score for an X/Twitter handle — on-chain activity, shipping history, community (0-100).
+**There is no `hub_builder_score` on any surface, and there never was.**
 
-## What it produces
+This is not a casualty of the 2026-09-26 MCP cut. Verified against the previous
+version of the server's `HUB_MAP`: the name was absent there too. It is one of the
+seven ids the published `@blueagent/skill` package advertises that resolve to
+`toolId`s present in **neither** `HANDLERS` **nor** `AGENT_TOOLS`.
 
-| Field | Content |
-|-------|---------|
-| Score | 0-100 overall Builder Score |
-| On-chain activity | Transactions, contracts deployed |
-| Shipping | Projects shipped, repos, releases |
-| Community | Followers, engagement, influence |
-| Tier | Explorer / Builder / Founder / Legend |
+Two things this file used to claim, both false:
 
-## MCP Tool
+| Claim | Reality |
+|---|---|
+| `hub_builder_score(handle)` is callable | No such tool. `/api/x402/builder-score` answers **501** — `builder-score` is deliberately not registered in the catalog. |
+| "$0.001 per call" | It has never had a price. There is no paywall here to pay. |
 
-```
-hub_builder_score(handle: string)
-```
+It also claimed a split from `blue_score` — that `hub_builder_score` took an
+X/Twitter handle while `blue_score` took GitHub/Farcaster/wallet. That split was
+not real either. Both names described one free route, `/api/builder-score`, whose
+handler reads `handle` / `repo` / `address` and does not care which surface asked.
 
-## Inputs
+## What to use instead
 
-- `handle` — X/Twitter handle without @ (required)
+The **"Blue Agent — Score"** skill (`blue-score/`). It documents the one real
+endpoint, its inputs, its `degraded: true` self-degrade behaviour, and its
+first-party-only guard.
 
-## Example
+## Why this file still exists
 
-```
-hub_builder_score("madebyshun")
-```
+Deleting it would be reasonable. It is kept for one release so that an agent or
+user carrying the old name — from the published package, a cached manifest, or an
+older conversation — lands on this explanation rather than on a tool call that
+fails with no reason given, and so nobody re-adds the name later believing it was
+dropped by mistake.
 
-## Price
-
-$0.001 per call
+Its `description` above is deliberately written so Claude will **not** match it to
+a user asking for a builder score; that phrasing belongs to `blue-score`. Two
+skills answering the same trigger, one of them dead, is worse than either alone.
