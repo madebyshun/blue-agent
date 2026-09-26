@@ -25,7 +25,13 @@ const SELF_BASE   = process.env.VERCEL_URL
   : "https://blueagent.dev";
 
 const TIERS: Record<number, { price: string; usd: string; description: string }> = {
-  1: { price: "100000",  usd: "$0.10", description: "Launch Simulator Tier 1 — Quick Signal (Blue Agent + Aeon + MiroShark)" },
+  // ⚠️ `description` is not internal copy — it is echoed in the 402 payment
+  // requirements, so it is the sentence a caller agrees to before paying.
+  // Tier 1 read "(Blue Agent + Aeon + MiroShark)" until 2026-09-27; two of
+  // those three are retired products (ShunTr). Keep these in sync with the
+  // catalog descriptions in lib/agent-tools.ts — they are separate strings
+  // for the same three products and nothing enforces that they agree.
+  1: { price: "100000",  usd: "$0.10", description: "Launch Simulator Tier 1 — Quick Signal, baseline ecosystem read + weighted sentiment pass" },
   2: { price: "350000",  usd: "$0.35", description: "Launch Simulator Tier 2 — Deep Signal with live market data" },
   3: { price: "500000",  usd: "$0.50", description: "Launch Simulator Tier 3 — Full Simulation with risk matrix" },
 };

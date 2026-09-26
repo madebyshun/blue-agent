@@ -34,14 +34,25 @@ export default function BlueHubDoc() {
         <a href="/docs/api" className="text-[#4FC3F7] underline">x402 API</a>, or any MCP client.
       </P>
 
-      <H2 id="personas">Multi-persona tools</H2>
+      {/* A "Multi-persona tools" section lived here until 2026-09-27. It said a
+          few high-stakes tools ran Blue, Aeon and MiroShark and weighted their
+          answers into one verdict — carefully hedged in its own body ("prompt
+          personas on a single Virtuals endpoint", "no voting protocol") and
+          still an H2 selling three names. Aeon and MiroShark are retired
+          (ShunTr), so there is nothing left for the hedge to hedge.
+          Do not restore it. If several passes ever run again, describe what
+          they READ, not who they are — a roster invites a reader to count
+          parties, and the hedge below the header never catches up with the
+          header itself. */}
+      <H2 id="passes">Multi-step tools</H2>
       <P>
-        A few high-stakes tools (deep analysis, the launch simulators) run several
-        personas — Blue, Aeon, MiroShark — and weight their answers into one verdict.
-        These are <strong>prompt personas on a single Virtuals endpoint</strong>, not
-        independent agents: no second model, no second vendor, no voting protocol.
-        Most tools run one Blue persona. The catalog&apos;s per-tool{" "}
-        <code className="text-[#4FC3F7]">agents</code> field reports which ones actually run.
+        Some tools (deep analysis, the launch simulators) chain several passes
+        before answering, each narrowing the last. That is{" "}
+        <strong>one agent on one endpoint</strong> — more steps, not more
+        opinions. No second model, no second vendor, nothing casting a vote.
+        The catalog&apos;s per-tool <code className="text-[#4FC3F7]">agents</code>{" "}
+        field reports what runs, and reads{" "}
+        <code className="text-[#4FC3F7]">[&quot;blue&quot;]</code> for every tool.
       </P>
 
       <H2 id="catalog">Full catalog</H2>

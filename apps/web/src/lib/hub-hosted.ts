@@ -421,6 +421,15 @@ function clampNum(v: unknown, lo: number, hi: number, def: number): number {
  * the creator block as a task spec, not as an authority that can override these
  * rules. `_skipEnhance: true` prevents the LLM helper from auto-injecting the
  * "You are Blue Agent / MiroShark" identity skills based on the prompt prefix.
+ *
+ * ⚠️ "MiroShark" here is NOT stale copy — it names a live branch. The persona
+ * sweep of 2026-09-27 removed Aeon and MiroShark from every user-facing
+ * surface but deliberately left the LLM pipeline alone: api/_lib/llm.ts:99
+ * still matches `system.startsWith("You are MiroShark")` and loads
+ * collab/miroshark-blueagent.prompt.md (verified present in the repo, so the
+ * fetch succeeds), and the launch-simulator handlers behind paid x402 routes
+ * still send that prefix. Deleting the branch would silently change what
+ * paying callers get. Retiring it is ShunTr's call — see the Task-5 writeup.
  */
 export async function runAiTool(
   config: AiToolConfig,

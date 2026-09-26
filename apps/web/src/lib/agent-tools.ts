@@ -7,8 +7,14 @@ export type AgentToolInput = {
   required?: boolean;
 };
 
+// 🔴 `agentType` was `"aeon" | "blue" | "miroshark"` until 2026-09-27. Aeon and
+// MiroShark are retired (ShunTr) — do not widen this back. `skillId` survives
+// only because a handful of entries still carry one; nothing dispatches on it.
+// Note what `label` is for: it names the ANALYSIS a step performs ("Community
+// rug signal", "On-chain fundamentals"), not the persona that performed it.
+// That is why the labels stayed when the types collapsed.
 export type CompositeSkill = {
-  agentType: "aeon" | "blue" | "miroshark";
+  agentType: "blue";
   skillId?: string;
   skillFiles?: string[];
   label: string;
@@ -28,8 +34,13 @@ export type AgentTool = {
   name: string;
   description: string;
   agentHandle: string;
+  // Always "Blue Agent" on first-party tools — see the 🔴 note on CompositeSkill.
+  // ⚠️ Do NOT confuse this with the `agentName` on HOSTED/community tools
+  // (lib/hub-hosted.ts, lib/hub-registry.ts, SubmitTool.tsx): same field name,
+  // different type, and there it is a builder-supplied brand that is SUPPOSED
+  // to vary. A sweep that unifies "every agentName" would erase creator names.
   agentName: string;
-  agentType: "aeon" | "blue" | "miroshark" | "composite";
+  agentType: "blue" | "composite";
   category: string;
   skillId?: string;
   skillFiles?: string[];
@@ -373,9 +384,14 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "token-pick-signal",
     name: "Token Pick Signal",
-    description: "AI consensus on the highest-conviction asymmetric token setup on Base right now.",
+    // "AI consensus on…" until 2026-09-27. Consensus needs parties, and the
+    // handler makes exactly one `You are Blue Agent` call over tokens the code
+    // already scored on-chain. Naming the real input (liquidity/turnover/
+    // momentum from DexScreener) is both true and a stronger sell than the
+    // adjective was — see feedback_marketing-copy: prove, don't announce.
+    description: "The highest-conviction asymmetric setup on Base, picked from live liquidity, turnover and momentum scores.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "intelligence",
     skillId: "token-pick",
@@ -394,7 +410,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Narrative Position",
     description: "Which narratives are building vs peaking on CT — and where to position.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "intelligence",
     skillId: "narrative-tracker",
@@ -413,7 +429,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Ecosystem Digest",
     description: "Weekly Base ecosystem intelligence: top builders, protocols, and narratives.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "intelligence",
     skillId: "digest",
@@ -432,9 +448,15 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "market-fit",
     name: "Market Fit Validator",
-    description: "Score your product's market fit with swarm intelligence across three personas.",
+    // "…with swarm intelligence across three personas" until 2026-09-27. There
+    // were never three personas here: _handlers/market-fit.ts runs two steps and
+    // both open `You are Blue Agent`. This one predates the Aeon/MiroShark
+    // retirement and was false on its own terms — it is listed here because it
+    // is the SAME failure mode (an unverifiable count used as a selling point),
+    // and a sweep that only grepped the two retired names would have left it.
+    description: "Score your product's market fit against live Base market context — verdict, gaps, and what to fix first.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "intelligence",
     inputs: [
@@ -453,7 +475,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Token Launch Readiness",
     description: "Go/no-go signal on whether your project is ready to launch a token.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "intelligence",
     inputs: [
@@ -474,7 +496,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Roadmap Validator",
     description: "Validate your roadmap against market timing, execution risk, and narrative fit.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "builder",
     inputs: [
@@ -492,7 +514,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Competitor Scan",
     description: "Identify direct/indirect competitors and surface your defensible edge.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "builder",
     inputs: [
@@ -510,7 +532,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Pitch Intelligence",
     description: "Transform your deck into investor-grade pitch intelligence with narrative scoring.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "builder",
     inputs: [
@@ -528,7 +550,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Fundraise Timing",
     description: "Is now the right time to raise? Market conditions, stage readiness, investor appetite.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "builder",
     inputs: [
@@ -546,7 +568,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "GTM Brief",
     description: "Go-to-market playbook: channels, timing, messaging, and early adopter strategy.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "builder",
     inputs: [
@@ -565,7 +587,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Stack Recommender",
     description: "Optimal tech stack for Base builders — infra, tooling, protocols, integrations.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "builder",
     inputs: [
@@ -583,7 +605,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Investor Memo",
     description: "Full investor memo: thesis, market, moat, risks, and ask — ready to send.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "builder",
     inputs: [
@@ -603,7 +625,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Agent Performance",
     description: "Benchmark your AI agent's revenue, engagement, and retention metrics.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "builder",
     inputs: [
@@ -621,7 +643,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Agent Collab Match",
     description: "Find agents that complement your tool and surface collab opportunities.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "builder",
     inputs: [
@@ -640,7 +662,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Repo Health",
     description: "Audit your GitHub repo health: code quality, docs, CI, contributor signals.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "builder",
     inputs: [
@@ -657,7 +679,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Community Sentiment",
     description: "Real-time sentiment analysis across your community channels.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "builder",
     inputs: [
@@ -675,7 +697,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "DeFi Opportunity",
     description: "Scan Base DeFi for emerging yield, liquidity, and protocol opportunities.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "builder",
     inputs: [
@@ -693,7 +715,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Builder Deep DD",
     description: "Full due diligence on a Base builder: onchain activity, shipped products, credibility.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "builder",
     inputs: [
@@ -713,7 +735,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Whale Copy Signal",
     description: "Track and copy high-alpha whale wallets on Base — entry, size, and timing.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "trading",
     inputs: [
@@ -731,7 +753,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Token Momentum Scanner",
     description: "Real-time momentum scan for Base tokens — breakouts, volume spikes, narrative alignment.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "trading",
     // `min_mcap` is the ONLY field the handler reads (`_handlers/token-momentum-
@@ -759,7 +781,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Thread Intelligence",
     description: "Turn your alpha or project update into a high-engagement X thread.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "content",
     inputs: [
@@ -777,7 +799,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Community Growth Playbook",
     description: "Proven growth tactics for Base builder communities — from 0 to 1000 members.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "content",
     inputs: [
@@ -798,18 +820,24 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Multi-Agent Workflow",
     description: "Design an automated workflow combining multiple agents for complex tasks.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "agent-economy",
     inputs: [
       { key: "goal", label: "Workflow goal", placeholder: "What should this workflow accomplish end-to-end?", required: true },
-      { key: "agents", label: "Agents to use (optional)", placeholder: "e.g. Blue Agent, Aeon, MiroShark, or your own" },
+      // Free text, and deliberately so: this tool DESIGNS a workflow, so the
+      // roster is whatever the caller wants to combine — their own agents
+      // included. The placeholder and the default below both named Aeon and
+      // MiroShark, which made a blank field seed the design with two retired
+      // products. Handler-side defaults exist too — keep them in sync
+      // (api/x402/_handlers/multi-agent-workflow.ts, two `agents ||` spots).
+      { key: "agents", label: "Agents to use (optional)", placeholder: "e.g. Blue Agent, your own agents, or third-party ones" },
     ],
     isComposite: true,
     price: "$0.25",
     priceUSDC: 250000,
     x402Url: `${X402_BASE}/multi-agent-workflow`,
-    x402Body: (v) => ({ goal: v.goal ?? "", agents: v.agents ?? "Blue Agent, Aeon, MiroShark" }),
+    x402Body: (v) => ({ goal: v.goal ?? "", agents: v.agents ?? "Blue Agent" }),
   },
 
   // ── Base Ecosystem ───────────────────────────────────────────────────────────
@@ -819,7 +847,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Base Grant Finder",
     description: "Find active grants, hackathons, and funding programs for Base builders.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "base-ecosystem",
     inputs: [
@@ -837,7 +865,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Base Protocol Comparison",
     description: "Side-by-side comparison of Base protocols for integrations and partnerships.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "base-ecosystem",
     inputs: [
@@ -859,7 +887,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Protocol Risk Monitor",
     description: "Real-time risk assessment for your DeFi positions — exit signals, risk scores.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "on-chain",
     inputs: [
@@ -879,7 +907,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Honeypot Check",
     description: "Detect honeypot tokens that can be bought but not sold. Transfer tax analysis + rug pattern detection on Base.",
     agentHandle: "composite",
-    agentName: "Blue + MiroShark",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "security",
     inputs: [
@@ -888,7 +916,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     isComposite: true,
     compositeSkills: [
       { agentType: "blue", label: "Honeypot detection" },
-      { agentType: "miroshark", label: "Community rug signal" },
+      { agentType: "blue", label: "Community rug signal" },
     ],
     featured: false,
     price: "$0.10", priceUSDC: 100000,
@@ -900,7 +928,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Risk Gate",
     description: "Pre-transaction risk assessment — screen any address or swap for drainer patterns, AML signals, and malicious contracts.",
     agentHandle: "composite",
-    agentName: "Blue + MiroShark",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "security",
     inputs: [
@@ -911,7 +939,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     isComposite: true,
     compositeSkills: [
       { agentType: "blue", label: "Risk assessment" },
-      { agentType: "miroshark", label: "AML + community signal" },
+      { agentType: "blue", label: "AML + community signal" },
     ],
     featured: false,
     price: "$0.20", priceUSDC: 200000,
@@ -923,7 +951,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Deep Analysis",
     description: "Full due diligence on any Base token — security score, market fundamentals, on-chain activity, and composite verdict.",
     agentHandle: "composite",
-    agentName: "Blue + Aeon + MiroShark",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "security",
     inputs: [
@@ -933,8 +961,8 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     isComposite: true,
     compositeSkills: [
       { agentType: "blue", label: "Security deep dive" },
-      { agentType: "miroshark", label: "Market + community signal" },
-      { agentType: "aeon", label: "On-chain fundamentals" },
+      { agentType: "blue", label: "Market + community signal" },
+      { agentType: "blue", label: "On-chain fundamentals" },
     ],
     featured: false,
     price: "$0.50", priceUSDC: 500000,
@@ -946,7 +974,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Agent Score",
     description: "Performance score for AI agents on Base — XP, interaction volume, uptime, ecosystem impact.",
     agentHandle: "composite",
-    agentName: "Blue + MiroShark",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "builder",
     inputs: [
@@ -955,7 +983,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     isComposite: true,
     compositeSkills: [
       { agentType: "blue", label: "Agent performance" },
-      { agentType: "miroshark", label: "Ecosystem impact" },
+      { agentType: "blue", label: "Ecosystem impact" },
     ],
     featured: false,
     price: "$0.35", priceUSDC: 350000,
@@ -967,7 +995,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     name: "Contract Trust",
     description: "Audit any Base contract before swapping or interacting. Basescan verification + security scan + community signal. Verdict: SAFE / CAUTION / RED_FLAG.",
     agentHandle: "composite",
-    agentName: "Blue + MiroShark",
+    agentName: "Blue Agent",
     agentType: "composite",
     category: "security",
     inputs: [
@@ -977,7 +1005,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     isComposite: true,
     compositeSkills: [
       { agentType: "blue", label: "Security analysis" },
-      { agentType: "miroshark", label: "Community trust signal" },
+      { agentType: "blue", label: "Community trust signal" },
     ],
     featured: false,
     price: "$0.15", priceUSDC: 150000,
@@ -1004,7 +1032,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     id: "blue-idea",
     name: "Blue Idea",
     description: "Turn a rough concept into a fundable brief — problem, why now, why Base, MVP scope, risks, 24h plan.",
-    agentHandle: "blue", agentName: "Blue", agentType: "blue",
+    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
     category: "builder",
     inputs: [{ key: "prompt", label: "Your idea or concept", placeholder: "A USDC streaming payroll app for DAOs on Base", required: true }],
     isComposite: false,
@@ -1016,7 +1044,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     id: "blue-build",
     name: "Blue Build",
     description: "Architecture, stack, folder structure, integrations, test plan. Verified Base patterns, no hallucinations.",
-    agentHandle: "blue", agentName: "Blue", agentType: "blue",
+    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
     category: "builder",
     inputs: [{ key: "prompt", label: "What you're building", placeholder: "Build a token-gated API with x402 payments on Base", required: true }],
     isComposite: false,
@@ -1028,7 +1056,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     id: "blue-audit",
     name: "Blue Audit",
     description: "Security + product risk review. Reentrancy, oracle, MEV, x402, Coinbase Smart Wallet. Go/no-go.",
-    agentHandle: "blue", agentName: "Blue", agentType: "blue",
+    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
     category: "builder",
     inputs: [{ key: "prompt", label: "Code, contract, or system to audit", placeholder: "Paste contract code or paste system description", required: true }],
     isComposite: false,
@@ -1040,7 +1068,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     id: "blue-ship",
     name: "Blue Ship",
     description: "Deployment checklist, verification, release notes, monitoring. Everything you forget when excited to launch.",
-    agentHandle: "blue", agentName: "Blue", agentType: "blue",
+    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
     category: "builder",
     inputs: [{ key: "prompt", label: "What you're shipping", placeholder: "Ship my Uniswap v4 hook to Base mainnet", required: true }],
     isComposite: false,
@@ -1052,7 +1080,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     id: "blue-raise",
     name: "Blue Raise",
     description: "Fundraising narrative, investor deck outline, smart money map, competitive landscape for your Base niche.",
-    agentHandle: "blue", agentName: "Blue", agentType: "blue",
+    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
     category: "builder",
     inputs: [{ key: "prompt", label: "Project + raise context", placeholder: "Raise a pre-seed for my Base DeFi protocol", required: true }],
     isComposite: false,
@@ -1064,7 +1092,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     id: "blue-monitor",
     name: "Blue Monitor",
     description: "On-demand health + risk snapshot for a Base token/contract — live price, liquidity, verification, risk signals, and a watch plan with alert thresholds.",
-    agentHandle: "blue", agentName: "Blue", agentType: "blue",
+    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
     category: "security",
     inputs: [
       { key: "target", label: "Target", placeholder: "0x… token/contract address, or a protocol name", required: true },
@@ -1079,7 +1107,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     id: "blue-registry",
     name: "Blue Registry",
     description: "Discover the Blue Hub tool catalog — every callable x402 tool (first-party + community), filterable by query/category, with prices and how-to-call.",
-    agentHandle: "blue", agentName: "Blue", agentType: "blue",
+    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
     category: "builder",
     inputs: [
       { key: "query", label: "Search (optional)", placeholder: "e.g. honeypot, token, audit" },
@@ -1094,7 +1122,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     id: "blue-research",
     name: "Blue Research",
     description: "Deep DD memo on a Base project, narrative, or token — thesis, bull/bear, risks, contrarian take, verdict. Grounds in live market data when a token address is given.",
-    agentHandle: "blue", agentName: "Blue", agentType: "blue",
+    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
     category: "intelligence",
     inputs: [
       { key: "topic", label: "Topic / project", placeholder: "e.g. Base restaking, or a protocol name", required: true },
@@ -1109,7 +1137,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     id: "blue-compose",
     name: "Blue Compose",
     description: "Turn a goal into a runnable chain of Blue Hub tools — picks from the real catalog, orders them, suggests inputs, and estimates cost.",
-    agentHandle: "blue", agentName: "Blue", agentType: "blue",
+    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
     category: "builder",
     inputs: [
       { key: "goal", label: "Goal", placeholder: "e.g. take my Base DeFi idea from concept to audited + funded", required: true },
@@ -1123,7 +1151,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     id: "blue-deploy",
     name: "Blue Deploy",
     description: "Technical deploy mechanics for Base mainnet — deploy scripts, Basescan verify commands, env vars, gas notes, post-deploy checks. Never invents addresses.",
-    agentHandle: "blue", agentName: "Blue", agentType: "blue",
+    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
     category: "builder",
     inputs: [
       { key: "project", label: "What you're deploying", placeholder: "e.g. an ERC-20 + staking contract (Foundry)", required: true },
@@ -1138,7 +1166,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     id: "blue-analytics",
     name: "Blue Analytics",
     description: "Performance/metrics read on a Base token — live price, momentum, liquidity health, volume/liquidity ratio, growth signals. Real DexScreener data.",
-    agentHandle: "blue", agentName: "Blue", agentType: "blue",
+    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
     category: "intelligence",
     inputs: [
       { key: "target", label: "Token address", placeholder: "0x… Base token contract", required: true },
@@ -1153,7 +1181,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     id: "blue-simulate",
     name: "Blue Simulate",
     description: "Bull/base/bear scenario modeling for a Base decision — tokenomics, fee model, growth, runway — with assumptions, projections, and sensitivities.",
-    agentHandle: "blue", agentName: "Blue", agentType: "blue",
+    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
     category: "builder",
     inputs: [
       { key: "scenario", label: "What to simulate", placeholder: "e.g. fee model at 0.3% vs 1% over 12 months", required: true },
@@ -1168,7 +1196,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     id: "blue-stream",
     name: "Blue Stream",
     description: "Live snapshot feed of onchain activity on Base or Robinhood Chain — trending & new pools, TVL, real price/volume/liquidity. Pure real data, poll for a near-real-time feed.",
-    agentHandle: "blue", agentName: "Blue", agentType: "blue",
+    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
     category: "on-chain",
     inputs: [
       { key: "feed", label: "Feed", placeholder: "movers | new | all (default: movers)" },
@@ -1265,8 +1293,16 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "launch-simulator-1",
     name: "Launch Simulator Tier 1",
-    description: "Quick Signal — baseline ecosystem read + 3-agent verdict. Fast pre-launch gut-check.",
-    agentHandle: "composite", agentName: "Blue + Aeon + MiroShark", agentType: "composite",
+    // "+ 3-agent verdict" until 2026-09-27. The steps are real (ecosystem read,
+    // weighted sentiment pass, synthesis) — the "3 agents" were not: all three
+    // are prompts on one Virtuals endpoint, and two of the three names are now
+    // retired products. Describe the WORK, not a roster.
+    // ⚠️ The handler's JSON response still emits `aeon` and `miroshark` keys
+    // (same for tiers 2 and 3). Those are the paid response SHAPE, not copy —
+    // renaming them breaks every existing caller, so it is ShunTr's call and is
+    // deliberately not done here. See the Task-5 writeup.
+    description: "Quick Signal — baseline ecosystem read, weighted sentiment pass, one verdict. Fast pre-launch gut-check.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
     category: "builder",
     inputs: [
       { key: "project", label: "Project name", placeholder: "Your project name", required: true },
@@ -1282,7 +1318,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     id: "launch-simulator-2",
     name: "Launch Simulator Tier 2",
     description: "Deep Signal launch simulation with live DexScreener market data — price, volume, liquidity.",
-    agentHandle: "composite", agentName: "Blue + Aeon + MiroShark", agentType: "composite",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
     category: "builder",
     inputs: [
       { key: "project", label: "Project name", placeholder: "Your project name", required: true },
@@ -1298,8 +1334,9 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "launch-simulator-3",
     name: "Launch Simulator Tier 3",
-    description: "Full Simulation — complete multi-agent report with risk matrix and timeline recommendation.",
-    agentHandle: "composite", agentName: "Blue + Aeon + MiroShark", agentType: "composite",
+    // "complete multi-agent report" until 2026-09-27 — see the note on tier 1.
+    description: "Full Simulation — every pass plus risk matrix and timeline recommendation.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
     category: "builder",
     inputs: [
       { key: "project", label: "Project name", placeholder: "Your project name", required: true },

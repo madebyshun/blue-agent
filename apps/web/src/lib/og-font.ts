@@ -105,8 +105,12 @@ export const C = {
   success:   "#22C55E",
   warning:   "#F59E0B",
   danger:    "#EF4444",
-  violet:    "#A78BFA", // Aeon
-  green:     "#34D399", // MiroShark
+  // These two were named after Aeon and MiroShark (retired 2026-09-27). The
+  // hex values stay — they are still used as generic accents — but the names
+  // are now colours, so nothing invites a reader to reintroduce a persona
+  // badge just because there is a colour reserved for one.
+  violet:    "#A78BFA",
+  green:     "#34D399",
 } as const;
 
 /** Subtle cobalt→cyan radial glow over the navy base (image-3 depth, no grid). */

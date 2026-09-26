@@ -95,6 +95,27 @@ export async function callBankrLLM(opts: {
   let system = opts.system;
 
   // ── Auto-inject real skills based on system prompt prefix ────────────────
+  //
+  // 🔴 CANONICAL NOTE ON THE RETIRED PERSONAS — read before deleting anything
+  // here. Aeon and MiroShark were retired 2026-09-27 (ShunTr) and removed from
+  // every user-facing surface: catalog descriptions, /api/catalog, the OG share
+  // card, Hub UI, docs, and the 402 payment description in api/simulator.
+  // The PIPELINE below was deliberately left running. Why:
+  //   • The match is on a PREFIX STRING, not a flag. Six paid x402 handlers
+  //     (launch-simulator-1/2/3, contract-trust, honeypot-check, risk-gate,
+  //     agent-collab-match) open a prompt with "You are MiroShark", and that
+  //     is the only thing that loads collab/miroshark-blueagent.prompt.md.
+  //   • Rename the prefix and nothing throws. The call still succeeds, the
+  //     handler still returns 200, the caller is still charged — the injected
+  //     skill file just silently stops arriving and the answers get worse in a
+  //     way no test and no error rate would show. A refactor that "cleans up
+  //     the last persona names" is therefore a SILENT output regression on
+  //     paid routes, which is the worst failure shape available here.
+  //   • The `You are Aeon —` arm is already inert (it matches, then does
+  //     nothing — there is no Aeon body in the else-if). Left as-is so the
+  //     prefix contract stays readable; do not "simplify" it into the Blue arm.
+  // Retiring this properly means changing the prompts AND re-checking output
+  // quality on those six routes. That is ShunTr's call, not a sweep.
   if (!opts._skipEnhance) {
     if (system.startsWith("You are MiroShark")) {
       const miroPrompt = await loadSkillFile(SKILL_URLS.miroshark);

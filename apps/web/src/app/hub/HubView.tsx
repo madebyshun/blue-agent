@@ -41,7 +41,10 @@ const COVERAGE_TITLE =
 
 // ─── Tool registry ──────────────────────────────────────────────────────────
 
-type Agent = "blue" | "aeon" | "miroshark";
+// "blue" | "aeon" | "miroshark" until 2026-09-27; the other two are retired
+// products (ShunTr). Left as a one-member union rather than inlined "blue"
+// because Tool.agents is an array the community-tool path also fills.
+type Agent = "blue";
 type Category = "all" | "intelligence" | "builder" | "trading" | "content" | "agent-economy" | "base-ecosystem" | "on-chain";
 
 // v2 marketplace filters (sidebar-driven, applied to the unified grid).
@@ -157,7 +160,7 @@ const TOOL_EXAMPLES: Record<string, Record<string, string>> = {
   "thread-intelligence":       { topic: "x402 pay-per-call changes how agents monetize on Base", angle: "alpha drop — explain the pattern, why it matters for agent builders" },
   "community-growth-playbook": { project: "ExampleDAO (sample)", current_size: "sample input, not real numbers — early community, a few hundred members" },
   // ── Agent Economy ─────────────────────────────────────────────────────────────
-  "multi-agent-workflow":      { goal: "Research top 5 AI agent tokens on Base and generate a buy/sell signal", agents: "Blue Agent, Aeon, MiroShark" },
+  "multi-agent-workflow":      { goal: "Research top 5 AI agent tokens on Base and generate a buy/sell signal", agents: "Blue Agent" },
   // ── Base Ecosystem ────────────────────────────────────────────────────────────
   "base-grant-finder":         { project: "AI tool marketplace with x402 pay-per-call micropayments on Base", stage: "MVP — live product, early usage" },
   "base-protocol-comparison":  { protocol_a: "Aerodrome", protocol_b: "Uniswap v4", use_case: "liquidity pool for BLUEAGENT/ETH pair" },
@@ -195,8 +198,9 @@ const TOOLS: Tool[] = AGENT_TOOLS.map(t => ({
   name:   t.name,
   cat:    t.category as Exclude<Category, "all">,
   price:  t.price ?? "",
-  // Blue is the only real first-party provider. (Aeon / MiroShark were
-  // display-only placeholders — removed to keep provider data honest.)
+  // Blue is the only first-party provider. This was already hardcoded before
+  // Aeon and MiroShark were retired (2026-09-27) — they had been display-only
+  // placeholders with no backing usage data, removed earlier for that reason.
   agents: ["blue"] as Agent[],
   desc:   t.description,
   inputs: t.inputs,
@@ -220,16 +224,8 @@ const CATEGORIES: { key: Category; label: string }[] = [
   { key: "on-chain",      label: "On-chain" },
 ];
 
-const AGENT_COLORS: Record<Agent, string> = {
-  blue:      "#4FC3F7",
-  aeon:      "#A78BFA",
-  miroshark: "#34D399",
-};
-const AGENT_LABELS: Record<Agent, string> = {
-  blue:      "Blue",
-  aeon:      "Aeon",
-  miroshark: "MiroShark",
-};
+const AGENT_COLORS: Record<Agent, string> = { blue: "#4FC3F7" };
+const AGENT_LABELS: Record<Agent, string> = { blue: "Blue" };
 
 // ─── Result renderer ─────────────────────────────────────────────────────────
 
@@ -1372,7 +1368,10 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                 ? <MarkdownOutput content={result} />
                 : <ResultObj obj={result} />}
               {tool.source && tool.source !== "native" ? (
-                // Community tool — attribute the builder, not the 3-agent stack.
+                // Community tool — attribute the builder, not Blue Agent.
+                // (Said "not the 3-agent stack" until 2026-09-27; the stack is
+                // one agent now, but the branch exists for the same reason:
+                // a hosted tool's output is its creator's work, not ours.)
                 <p className="font-mono text-[10px] text-slate-700 mt-6 pt-4 border-t border-[#1A1A2E]">
                   powered by <span className="text-[#A78BFA]">{tool.creatorHandle || "an independent builder"}</span> via Blue Hub
                   {!isMock && typeof result !== "string" && result.timestamp
@@ -1598,44 +1597,10 @@ function ShelfCard({
   );
 }
 
-/** Provider showcase card — agent identity + stats. */
-function ProviderCard({ provider }: { provider: { agent: Agent; toolCount: number; totalCalls: number } }) {
-  const color = AGENT_COLORS[provider.agent];
-  const label = AGENT_LABELS[provider.agent];
-  const blurb =
-    provider.agent === "blue"      ? "Multi-agent orchestration + console commands · idea → ship"
-    : provider.agent === "aeon"    ? "Ecosystem signals, narrative tracking, token picks on Base"
-    :                                "Sentiment consensus + crowd intelligence for trade decisions";
-  return (
-    <div className="rounded-2xl p-4 border flex flex-col" style={{ borderColor: `${color}25`, background: `${color}06` }}>
-      <div className="flex items-center gap-2 mb-2">
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0"
-          style={{ background: `${color}18`, color, border: `1px solid ${color}40` }}>
-          {label.slice(0, 2)}
-        </div>
-        <div className="min-w-0">
-          <p className="font-mono text-sm font-bold" style={{ color }}>{label}</p>
-          <p className="font-mono text-[10px] text-slate-700">Provider</p>
-        </div>
-        <span className="font-mono text-[9px] px-1.5 py-0.5 rounded border ml-auto"
-          style={{ borderColor: `${color}40`, color, background: `${color}10` }}>
-          ✓ Verified
-        </span>
-      </div>
-      <p className="font-mono text-[10px] text-slate-500 leading-relaxed mb-3 flex-1">{blurb}</p>
-      <div className="grid grid-cols-2 gap-2 pt-2 border-t" style={{ borderColor: `${color}15` }}>
-        <div>
-          <p className="font-mono text-[9px] text-slate-700">TOOLS</p>
-          <p className="font-mono text-sm font-bold text-white tabular-nums">{provider.toolCount}</p>
-        </div>
-        <div>
-          <p className="font-mono text-[9px] text-slate-700">CALLS</p>
-          <p className="font-mono text-sm font-bold tabular-nums" style={{ color }}>{provider.totalCalls > 0 ? provider.totalCalls.toLocaleString() : "—"}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
+// A ProviderCard lived here until 2026-09-27 — dead code with zero call sites
+// in this file, kept alive only by tsc because it was a module-level function.
+// It carried aeon/miroshark blurb branches, so a persona sweep that only
+// grepped RENDERED copy would have missed it. HubHome has the live one.
 
 // ─── Cached result type ───────────────────────────────────────────────────────
 

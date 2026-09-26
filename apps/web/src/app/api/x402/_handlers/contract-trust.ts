@@ -1,6 +1,10 @@
 // x402/contract-trust/index.ts
-// Contract Trust — on-chain identity + Basescan verification + Blue security + MiroShark signal
+// Contract Trust — on-chain identity + Basescan verification + a security pass
+// and a community-signal pass
 // Price: $0.15 — SAFE / CAUTION / RED_FLAG verdict before swapping into a contract
+// The community pass still opens "You are MiroShark" on purpose even though the
+// persona is retired from all copy — that prefix is load-bearing. See the 🔴
+// CANONICAL NOTE in api/_lib/llm.ts before renaming it.
 
 import { getTokenIdentity, tokenIdentityToPrompt } from "@/lib/onchain";
 import { getBasescanSource } from "@/lib/moralis";

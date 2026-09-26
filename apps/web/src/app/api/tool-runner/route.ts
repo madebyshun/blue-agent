@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  runAeonSkill,
-  runMiroSharkSkill,
   runBlueSkill,
   callLLM,
 } from "@/app/api/_lib/llm";
@@ -15,18 +13,12 @@ export const runtime = "nodejs";
 // so it fails loudly instead of silently 504-ing.
 export const maxDuration = 120;
 
+// The "aeon" and "miroshark" branches were deleted here 2026-09-27 with the
+// personas themselves. Both were already unreachable in practice: the aeon one
+// needed `tool.skillId`, and `runAeonSkill` resolves through the aeon:* KV keys
+// whose writer cron (api/cron/research-loop) has been unscheduled since
+// 2026-09-05, so it returned null and this route answered "No result from Aeon".
 async function runSingleTool(tool: AgentTool, userInput: string): Promise<string> {
-  if (tool.agentType === "aeon" && tool.skillId) {
-    return (await runAeonSkill(tool.skillId, userInput)) ?? "No result from Aeon";
-  }
-  if (tool.agentType === "miroshark") {
-    return (await runMiroSharkSkill({
-      scenario: `${tool.name}: ${userInput}`,
-      context: { input: userInput, tool: tool.name },
-      persona: "analyst",
-      maxTokens: 800,
-    })) ?? "No result from MiroShark";
-  }
   if (tool.agentType === "blue" && tool.skillFiles) {
     return (await runBlueSkill({
       task: `Run the ${tool.name} tool. Input: ${userInput}`,
@@ -46,43 +38,37 @@ async function runSingleTool(tool: AgentTool, userInput: string): Promise<string
   return r.text;
 }
 
+/* The per-step fan-out here was removed 2026-09-27, and what it was actually
+   doing is worth recording, because the code read as if it did much more.
+
+   It mapped each compositeSkill to a persona call, but only ever had branches
+   for "aeon" and "miroshark" — there was NO "blue" branch, so every Blue step
+   fell through to `result: ""` and was then dropped by `.filter(r => r.result)`.
+   Across the catalog that was 6 contributing steps out of every composite
+   tool's list; every other step contributed an empty string. The synthesis
+   prompt still announced it was combining "these N intelligence reports".
+
+   With the two personas retired, all steps would return "" and the count in
+   that prompt would describe nothing at all. So the steps now go in as the
+   OUTLINE they always really were — `label` names an analysis to perform, not
+   a report already written — and one Blue pass does the work. Same number of
+   LLM calls in the common case, minus a claim the output could not support. */
 async function runCompositeTool(tool: AgentTool, userInput: string): Promise<string> {
   if (!tool.compositeSkills?.length) throw new Error("No composite skills defined");
 
-  const results = await Promise.all(
-    tool.compositeSkills.map(async (cs) => {
-      if (cs.agentType === "aeon" && cs.skillId) {
-        const r = await runAeonSkill(cs.skillId, userInput);
-        return { label: cs.label, result: r ?? "" };
-      }
-      if (cs.agentType === "miroshark") {
-        const r = await runMiroSharkSkill({
-          scenario: `${cs.label}: ${userInput}`,
-          context: { input: userInput },
-          persona: "analyst",
-          maxTokens: 600,
-        });
-        return { label: cs.label, result: r ?? "" };
-      }
-      return { label: cs.label, result: "" };
-    })
-  );
-
-  const combinedContext = results
-    .filter(r => r.result)
-    .map(r => `=== ${r.label} ===\n${r.result}`)
-    .join("\n\n");
+  const outline = tool.compositeSkills.map(cs => `- ${cs.label}`).join("\n");
 
   const synthesis = await runBlueSkill({
-    task: `Synthesize these ${tool.compositeSkills.length} intelligence reports into one unified "${tool.name}" brief.
+    task: `Produce one unified "${tool.name}" brief. Cover each of these angles as its own section:
+${outline}
 Focus on: actionable insights, key patterns, what this means for the user.
-Structure the output clearly with sections. Be specific and concrete.`,
+Be specific and concrete. If you lack the data for an angle, say "insufficient data" for it rather than estimating.`,
     skillFiles: ["base-ecosystem.md"],
-    input: `User focus: ${userInput || "general"}\n\n${combinedContext.slice(0, 3000)}`,
+    input: `User focus: ${userInput || "general"}`,
     maxTokens: 1200,
   });
 
-  return synthesis ?? combinedContext;
+  return synthesis ?? "No result from Blue Agent";
 }
 
 // ─── POST /api/tool-runner ────────────────────────────────────────────────────

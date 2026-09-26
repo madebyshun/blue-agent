@@ -1,6 +1,9 @@
 // x402/agent-collab-match/index.ts
-// Agent Collab Match — Blue agent-score x2 + MiroShark analyst
+// Agent Collab Match — two agent-score passes + one analyst pass
 // Price: $0.35
+// The analyst pass still opens "You are MiroShark" on purpose even though the
+// persona is retired from all copy — that prefix is load-bearing. See the 🔴
+// CANONICAL NOTE in api/_lib/llm.ts before renaming it.
 // Fully self-contained
 
 import { callLLM } from "@/app/api/_lib/llm";

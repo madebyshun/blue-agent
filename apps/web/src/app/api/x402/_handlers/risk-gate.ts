@@ -102,7 +102,9 @@ Contract name: ${addrInfo.contractName ?? "unknown"}
 ${addrInfo.raw}
 `.trim();
 
-    // Blue risk assessment + MiroShark AML signal in parallel
+    // Two passes in parallel: risk assessment + AML signal. The second keeps
+    // its "You are MiroShark" prefix (retired persona, load-bearing prefix) —
+    // see the 🔴 CANONICAL NOTE in api/_lib/llm.ts.
     const [blueRaw, msRaw] = await Promise.all([
       llm(
         `You are Blue Agent — transaction risk guard for Base (chain ID 8453).

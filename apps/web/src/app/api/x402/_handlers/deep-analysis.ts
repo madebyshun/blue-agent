@@ -199,7 +199,13 @@ RULES:
 ${context ? `Additional context: ${context}` : ""}
 `.trim();
 
-    // 3-agent parallel deep analysis: Blue security + MiroShark market + Aeon fundamentals
+    // Three parallel passes on ONE endpoint: security, market, fundamentals.
+    // Named "3-agent … Blue + MiroShark + Aeon" until 2026-09-27; Aeon and
+    // MiroShark are retired (ShunTr). The variable names below (`msRaw`,
+    // `aeonRaw`) and the `You are MiroShark` prefix are NOT renamed here —
+    // the prefix is load-bearing (api/_lib/llm.ts:99 matches it to inject
+    // collab/miroshark-blueagent.prompt.md) and this is a paid route, so
+    // touching it is ShunTr's call. Describe the ANALYSIS, not a roster.
     const [blueRaw, msRaw, aeonRaw] = await Promise.all([
       // Blue Agent: security deep dive
       llm(

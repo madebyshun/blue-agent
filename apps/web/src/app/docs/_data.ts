@@ -302,9 +302,14 @@ export { MCP_TOOLS, MCP_TOOL_COUNT } from "@/lib/mcp-tools";
    and no voting protocol." So the number was not merely imprecise: a reader
    counting "3 agents" next to "110 tools" and "18 MCP tools" reads it as a
    third countable surface, and there is no third vendor to count.
-   MEASURED the same day across the 110-tool catalog: 76 tools run the Blue
-   persona alone, 26 add Aeon, 4 add MiroShark, and 4 mention all three. Four
-   tools out of 110 is the entire basis for a headline "3".
+   MEASURED the same day across the 110-tool catalog: 76 tools ran the Blue
+   persona alone, 26 added Aeon, 4 added MiroShark, and 4 named all three. Four
+   tools out of 110 was the entire basis for a headline "3".
+   Superseded 2026-09-27 — Aeon and MiroShark are retired (ShunTr) and all 110
+   tools now read `agentName: "Blue Agent"`, so even the 4 are gone. Kept in
+   past tense rather than deleted: the reason the stat was wrong (a headline
+   generalising four tools to the whole catalog) outlives the specific numbers,
+   and a future "N Agents" stat would fail the same way.
    Replaced with skill files, which is a real countable surface with its own
    page (/docs/skills) and is pinned to disk by scripts/skills-truth-check.ts.
    ⚠️ This block lives at the BOTTOM of the file on purpose: it reads

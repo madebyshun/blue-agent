@@ -65,14 +65,6 @@ function catMeta(cat: string) {
   return CAT_META[cat] ?? { label: cat, color: "#6B6B7E", bg: "rgba(107,107,126,0.1)" };
 }
 
-const AGENT_META: Record<string, { label: string; color: string }> = {
-  "Blue + Aeon":      { label: "Blue + Aeon",     color: "#4FC3F7" },
-  "Blue":             { label: "Blue",             color: "#4FC3F7" },
-  "Blue + MiroShark": { label: "Blue + MiroShark", color: "#34D399" },
-};
-
-const AGENT_MAP = Object.fromEntries(AGENT_TOOLS.map(t => [t.id, t.agentName]));
-
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
 /** Animates a number from 0 → target over `duration` ms */
@@ -237,20 +229,6 @@ export default function StatsView({ inShell = false }: { inShell?: boolean }) {
     return Object.entries(map)
       .map(([cat, v]) => ({ cat, ...v }))
       .sort((a, b) => b.runs - a.runs || b.revenue - a.revenue);
-  }, [data]);
-
-  const agentStats = useMemo(() => {
-    if (!data) return [];
-    const map: Record<string, { runs: number; count: number }> = {};
-    for (const r of data.rows) {
-      const agent = AGENT_MAP[r.id] ?? "Blue";
-      if (!map[agent]) map[agent] = { runs: 0, count: 0 };
-      map[agent].runs  += r.runs;
-      map[agent].count += 1;
-    }
-    return Object.entries(map)
-      .map(([agent, v]) => ({ agent, ...v }))
-      .sort((a, b) => b.count - a.count);
   }, [data]);
 
   const maxRuns    = data ? Math.max(1, ...data.rows.map(r => r.runs)) : 1;
@@ -460,59 +438,15 @@ export default function StatsView({ inShell = false }: { inShell?: boolean }) {
                 {/* Right column */}
                 <div className="lg:col-span-2 flex flex-col gap-4">
 
-                  {/* Agent distribution */}
-                  <div className="rounded-xl border border-[#1A1A2E] bg-[#0A0A12] p-5 flex-1">
-                    <p className="font-mono text-[10px] uppercase tracking-widest text-slate-500 mb-4">
-                      Agent Distribution
-                    </p>
-                    <div className="flex flex-col gap-3">
-                      {agentStats.map((a, i) => {
-                        const m   = AGENT_META[a.agent] ?? { label: a.agent, color: "#4FC3F7" };
-                        const tot = agentStats.reduce((s, x) => s + x.count, 0);
-                        const pct = tot > 0 ? Math.round((a.count / tot) * 100) : 0;
-                        return (
-                          <div
-                            key={a.agent}
-                            className="transition-all duration-500"
-                            style={{ opacity: phase >= 2 ? 1 : 0, transitionDelay: `${i * 80}ms` }}
-                          >
-                            <div className="flex items-center justify-between mb-1.5">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="w-2 h-2 rounded-full shrink-0"
-                                  style={{ background: m.color, boxShadow: `0 0 6px ${m.color}` }}
-                                />
-                                <span className="font-mono text-[11px] text-slate-300">{m.label}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-[10px] text-slate-600">
-                                  {a.runs.toLocaleString()} runs
-                                </span>
-                                <span className="font-mono text-[11px] font-bold tabular-nums" style={{ color: m.color }}>
-                                  {a.count}
-                                </span>
-                              </div>
-                            </div>
-                            {/* mini pct bar */}
-                            <div className="h-0.5 bg-[#1A1A2E] rounded-full overflow-hidden">
-                              <div
-                                className="h-full rounded-full"
-                                style={{
-                                  width: phase >= 2 ? `${pct}%` : "0%",
-                                  background: m.color,
-                                  opacity: 0.5,
-                                  transition: `width 700ms cubic-bezier(0.16,1,0.3,1) ${i * 80 + 100}ms`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
+                  {/* An "Agent Distribution" panel lived here until 2026-09-27.
+                      It grouped the leaderboard by `agentName`, which now reads
+                      "Blue Agent" for all 110 tools, so the chart was one bar at
+                      100% — and a 100% bar is not a finding, it is a label
+                      wearing a chart's clothes. The leaderboard's per-row Agent
+                      column went for the same reason. Category Breakdown (left)
+                      is the surviving real distribution. */}
                   {/* Registry status */}
-                  <div className="rounded-xl border border-[#1A1A2E] bg-[#0A0A12] p-5">
+                  <div className="rounded-xl border border-[#1A1A2E] bg-[#0A0A12] p-5 flex-1">
                     <p className="font-mono text-[10px] uppercase tracking-widest text-slate-500 mb-4">
                       Registry Status
                     </p>
@@ -583,12 +517,11 @@ export default function StatsView({ inShell = false }: { inShell?: boolean }) {
                 {/* Column headers */}
                 <div
                   className="grid items-center px-5 py-2 border-b border-[#1A1A2E]/60 font-mono text-[9px] uppercase tracking-wider text-slate-700"
-                  style={{ gridTemplateColumns: "2rem 1fr 6.5rem 5.5rem 5rem 4rem 4.5rem" }}
+                  style={{ gridTemplateColumns: "2rem 1fr 6.5rem 5rem 4rem 4.5rem" }}
                 >
                   <span>#</span>
                   <span>Tool</span>
                   <span>Category</span>
-                  <span>Agent</span>
                   <span className="text-right">Price</span>
                   <span className="text-right">Runs</span>
                   <span className="text-right">Est. rev</span>
@@ -597,8 +530,6 @@ export default function StatsView({ inShell = false }: { inShell?: boolean }) {
                 {/* Rows with staggered fade */}
                 {data.rows.map((r, i) => {
                   const cat    = catMeta(r.category);
-                  const agent  = AGENT_MAP[r.id] ?? "Blue";
-                  const agentM = AGENT_META[agent] ?? { label: agent, color: "#4FC3F7" };
                   const barPct = maxRuns > 0 ? (r.runs / maxRuns) * 100 : 0;
 
                   return (
@@ -606,7 +537,7 @@ export default function StatsView({ inShell = false }: { inShell?: boolean }) {
                       key={r.id}
                       className="row-fade grid items-center px-5 py-2.5 border-b border-[#1A1A2E]/40 hover:bg-[#4FC3F7]/[0.025] transition-colors group"
                       style={{
-                        gridTemplateColumns: "2rem 1fr 6.5rem 5.5rem 5rem 4rem 4.5rem",
+                        gridTemplateColumns: "2rem 1fr 6.5rem 5rem 4rem 4.5rem",
                         animationDelay: `${i * 28}ms`,
                         animationFillMode: "forwards",
                       }}
@@ -643,15 +574,6 @@ export default function StatsView({ inShell = false }: { inShell?: boolean }) {
                         >
                           {cat.label}
                         </span>
-                      </div>
-
-                      {/* Agent */}
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className="w-1.5 h-1.5 rounded-full shrink-0"
-                          style={{ background: agentM.color }}
-                        />
-                        <span className="font-mono text-[9px] text-slate-500 truncate">{agentM.label}</span>
                       </div>
 
                       {/* Price */}

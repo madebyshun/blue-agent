@@ -128,7 +128,9 @@ ${identity ? tokenIdentityToPrompt(identity) : `Token address: ${address} (Base,
 Basescan: source verified = ${tokenInfo.verified}, contract name = ${tokenInfo.contractName ?? "unknown"}. (An unverified source is common for legitimate tokens and is NOT, by itself, a honeypot signal.)
 `.trim();
 
-    // Run Blue Agent honeypot analysis + MiroShark degen signal in parallel
+    // Two passes in parallel: honeypot analysis + degen signal. The second
+    // keeps its "You are MiroShark" prefix (retired persona, load-bearing
+    // prefix) — see the 🔴 CANONICAL NOTE in api/_lib/llm.ts.
     const [blueRaw, msRaw] = await Promise.all([
       llm(
         `You are Blue Agent — token security specialist for Base (chain ID 8453).

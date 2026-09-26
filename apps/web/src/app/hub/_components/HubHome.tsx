@@ -28,7 +28,10 @@ import {
 // Kept loose on purpose — HubHome doesn't import from page.tsx to avoid a
 // circular dep. The parent passes already-typed data.
 
-export type Agent = "blue" | "aeon" | "miroshark";
+// "blue" | "aeon" | "miroshark" until 2026-09-27 — Aeon and MiroShark are
+// retired products (ShunTr). One-member union, not an inlined literal,
+// because HubTool.agents is an array shared with the community-tool path.
+export type Agent = "blue";
 
 export interface HubTool {
   id:       string;
@@ -87,14 +90,8 @@ export interface HubGroup {
   ids:   string[];
 }
 
-const AGENT_COLORS: Record<Agent, string> = {
-  blue:      "#4FC3F7",
-  aeon:      "#A78BFA",
-  miroshark: "#34D399",
-};
-const AGENT_LABELS: Record<Agent, string> = {
-  blue: "Blue", aeon: "Aeon", miroshark: "MiroShark",
-};
+const AGENT_COLORS: Record<Agent, string> = { blue: "#4FC3F7" };
+const AGENT_LABELS: Record<Agent, string> = { blue: "Blue" };
 
 // ─── Intent cards — 4 entry points for newcomers ──────────────────────────────
 
@@ -171,10 +168,11 @@ function HomeView(props: HubHomeProps) {
     .reverse()
     .slice(0, 6);
 
-  // Providers — Blue is the only REAL first-party provider. Its tools carry
-  // agents:["blue"] and track real usage via usage:<id>. (Aeon / MiroShark were
-  // display-only placeholders with fabricated tool/call numbers — removed to keep
-  // provider stats honest. Real partners get a "coming soon" card, no fake data.)
+  // Providers — Blue is the only first-party provider. Its tools carry
+  // agents:["blue"] and track real usage via usage:<id>. Aeon and MiroShark were
+  // display-only placeholders with fabricated tool/call numbers, dropped from
+  // here well before the products themselves were retired (2026-09-27); a real
+  // partner gets a "coming soon" card and no numbers until there are numbers.
   const blueProvider = {
     agent: "blue" as Agent,
     toolCount:  tools.filter(t => t.agents.includes("blue")).length,

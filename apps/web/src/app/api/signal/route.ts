@@ -28,7 +28,7 @@ const KV_TTL_LOG         = 60 * 60 * 24 * 30; // 30 days for log
 
 interface IncomingSignal {
   id:          string;
-  source:      string;       // agent name e.g. "aeon", "miroshark"
+  source:      string;       // self-declared agent name, e.g. "blue"; see scoreSignal
   type:        string;       // "trending" | "risk" | "opportunity" | "alert"
   data:        Record<string, unknown>;
   confidence:  number;       // 0.0 – 1.0
@@ -62,7 +62,15 @@ function scoreSignal(signal: IncomingSignal): number {
   // routes a signal to a review queue; it stops being tolerable the moment a
   // score drives an automated action. Do not add a name here without deciding
   // how the claim gets proven.
-  const trustedSources = ["aeon", "miroshark"];
+  //
+  // "aeon" and "miroshark" left on 2026-09-27 for the same reason "bankr" did:
+  // both are retired, so no legitimate caller will ever declare them again —
+  // while any caller still could, and collect +10 for naming a product that
+  // no longer exists. A trust list outliving the trustee is strictly worse
+  // than an empty one: it only rewards the callers who should not get it.
+  // The list is intentionally left in place (rather than deleting the boost)
+  // so the ⚠️ above stays attached to live code for whoever adds the next name.
+  const trustedSources: string[] = [];
   if (trustedSources.includes(signal.source.toLowerCase())) score += 10;
 
   // Boost for high priority

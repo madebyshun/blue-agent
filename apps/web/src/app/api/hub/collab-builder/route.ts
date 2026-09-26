@@ -13,10 +13,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callLLM } from "@/app/api/_lib/llm";
 
+// Only first-party agents get a profile. `aeon` and `miroshark` lines were
+// removed 2026-09-27 — both are retired (ShunTr), and leaving them here meant
+// a caller who passed them got a confident capability blurb for products that
+// no longer exist. Unknown keys are NOT an error: the lookup below falls
+// through to the raw string, which is correct for this route — it DESIGNS a
+// workflow, so the roster is the caller's to choose, third-party agents
+// included. Add an entry here only for agents we actually operate.
 const AGENT_PROFILES: Record<string, string> = {
-  blue:      "Blue Agent — builder intelligence, security, fundraising, Base ecosystem context, x402 payments",
-  aeon:      "Aeon — market signals, token analysis, narrative tracking, on-chain data, CT sentiment",
-  miroshark: "MiroShark — crowd intelligence, community sentiment, social signals, Farcaster + Telegram buzz",
+  blue: "Blue Agent — builder intelligence, security, fundraising, Base ecosystem context, x402 payments",
 };
 
 export async function POST(req: NextRequest) {
@@ -50,7 +55,7 @@ Return ONLY valid JSON with this exact structure:
   "name": "Tool name (2-4 words, punchy)",
   "tagline": "One sentence — what it does and for whom",
   "category": "intelligence | builder | trading | content | agent-economy | security",
-  "agents": ["blue", "aeon", "miroshark"],
+  "agents": ["<echo back the agent keys you were given above>"],
   "price": "$0.XX",
   "pipeline": [
     { "step": 1, "agent": "agent name", "action": "what this agent does", "output": "what it produces" },
@@ -64,6 +69,8 @@ Return ONLY valid JSON with this exact structure:
   "why_this_collab": "1-2 sentences on why these agents together are better than one alone",
   "base_native": "How this tool is specifically useful for Base builders/traders"
 }
+
+Use ONLY the agents listed above — never introduce one that was not supplied. If only one agent was supplied, "why_this_collab" must say so plainly rather than inventing a second party.
 
 No markdown. No explanation. Raw JSON only.`;
 

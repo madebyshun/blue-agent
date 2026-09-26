@@ -1,5 +1,19 @@
 // x402/launch-simulator-1 — Tier 1: Quick Signal ($0.10)
-// 3-agent verdict, baseline ecosystem read. NO market data (that's Tier 2).
+// Baseline ecosystem read + weighted sentiment pass + synthesis, then one
+// verdict. NO market data (that's Tier 2).
+//
+// 🔴 This header said "3-agent verdict" until 2026-09-27. Aeon and MiroShark
+// are retired (ShunTr) and every user-facing surface now says Blue Agent only.
+// What did NOT change, on purpose:
+//   • the `aeon` and `miroshark` keys in the response JSON below. That is the
+//     paid response SHAPE — renaming it breaks existing callers with no
+//     warning, so it is ShunTr's call, not a copy edit.
+//   • the `You are MiroShark` system prefix, which api/_lib/llm.ts:99 matches
+//     to inject collab/miroshark-blueagent.prompt.md. Drop the prefix and the
+//     4-persona weighting quietly stops loading — the call still succeeds, so
+//     nothing would fail loudly. That is exactly why it is flagged, not fixed.
+// The steps are real. The word "agent" was the lie, and it has been removed
+// from the catalog description; the internals are a separate decision.
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
 

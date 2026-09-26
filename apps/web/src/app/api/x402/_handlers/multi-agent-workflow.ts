@@ -47,7 +47,7 @@ Schema: {
   "cost_estimate": "<per workflow run in USD>",
   "analyst_verdict": "<1-2 sentences>"
 }`,
-      `Goal: ${goal}\nAgents available: ${agents || "Blue Agent, Aeon, MiroShark"}\nConstraints: ${constraints || "none"}\nResearch: ${researchRaw ?? "multi-agent systems"}`, 0.3, 500);
+      `Goal: ${goal}\nAgents available: ${agents || "Blue Agent"}\nConstraints: ${constraints || "none"}\nResearch: ${researchRaw ?? "multi-agent systems"}`, 0.3, 500);
     const analyst = parseJson(msRaw) ?? {};
 
     const resultRaw = await llm(`You are Blue Agent — multi-agent workflow architect for Base ecosystem.
@@ -65,7 +65,7 @@ Schema: {
   "implementation_notes": ["<key implementation detail>"],
   "summary": "<2 sentences>"
 }`,
-      `Goal: ${goal}\nAgents: ${agents || "Blue Agent, Aeon, MiroShark"}\nConstraints: ${constraints || "none"}\nResearch: ${researchRaw ?? "multi-agent"}\nAnalyst: ${JSON.stringify(analyst)}`, 0.3, 1400);
+      `Goal: ${goal}\nAgents: ${agents || "Blue Agent"}\nConstraints: ${constraints || "none"}\nResearch: ${researchRaw ?? "multi-agent"}\nAnalyst: ${JSON.stringify(analyst)}`, 0.3, 1400);
 
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };

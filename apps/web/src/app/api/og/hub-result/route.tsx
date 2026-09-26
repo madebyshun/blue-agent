@@ -14,28 +14,24 @@ import { getBrandFonts, brandFonts, verdictColor, C, BG_IMAGE } from "@/lib/og-f
 export const runtime = "nodejs";
 const size = { width: 1200, height: 630 };
 
-/* 🔴 This keyed off `isComposite` until 2026-09-26 and painted three persona
-   badges on every composite tool. `isComposite` means multi-STEP, not
-   multi-AGENT — it is true for 63 of 110 tools, including `gas-tracker`,
-   `token-price` and `pool-scan`, which are single on-chain reads that never
-   prompt Aeon or MiroShark.
-   MEASURED: 59 of 110 share cards rendered the wrong badge set, and every one
-   of the 59 was an OVER-claim — the old branch could add a persona that never
-   ran but could never drop one that did. This is the share card, so it is the
-   version of the claim that leaves the site and gets embedded in a feed.
-   Now derived from `agentName`, mirroring `agentsFor()` in api/catalog/route.ts
-   so the badge set and the catalog's `agents` field cannot disagree. Real
-   distribution: Blue-only 76, +Aeon 26, +MiroShark 4, all three 4.
-   ⚠ These are PERSONAS — a system-prompt prefix plus an injected skill file on
-   one Virtuals endpoint. Never re-word these badges into a "consensus" claim;
-   see the note above agentsFor() for why that phrasing was retired. */
-function agentsOf(t?: { agentName?: string }): [string, string][] {
-  const n = (t?.agentName ?? "").toLowerCase();
-  const out: [string, string][] = [["Blueagent", C.cyan]];
-  if (n.includes("aeon")) out.push(["Aeon", C.violet]);
-  if (n.includes("miroshark")) out.push(["MiroShark", C.green]);
-  return out;
-}
+/* One badge, always. Aeon and MiroShark were retired 2026-09-27 (ShunTr).
+   ⚠ This is the share card — the one version of the claim that LEAVES the site
+   and gets embedded in someone else's feed, where nobody can check it against
+   the catalog. Any over-claim here is the most expensive one in the codebase,
+   which is why it has now been narrowed twice:
+     • Until 2026-09-26 it keyed off `isComposite` and painted three persona
+       badges on every composite tool. `isComposite` means multi-STEP, not
+       multi-AGENT, and is true for 63 of 110 tools — including `gas-tracker`,
+       `token-price` and `pool-scan`, single on-chain reads that never prompt
+       an LLM at all. MEASURED: 59 of 110 cards rendered the wrong badge set,
+       and all 59 erred the same direction. The branch could ADD a persona that
+       never ran but could never DROP one that did — a bug that can only
+       over-claim is not a bug you get to discover from user reports.
+     • Then derived from `agentName`, mirroring the catalog so the two could
+       not disagree. Correct, and moot once `agentName` became constant.
+   Keep it a constant. If badges ever vary again, drive them from what the
+   handler RAN, not from a catalog label. */
+const AGENT_BADGES: [string, string][] = [["Blueagent", C.cyan]];
 
 export async function GET(req: Request) {
   const id = new URL(req.url).searchParams.get("s") ?? "";
@@ -55,7 +51,7 @@ export async function GET(req: Request) {
   // id, so it describes the Hub as a whole, which reads both chains.
   const desc = t?.description ?? "AI agent tools for onchain builders";
   const price = t?.price ?? "";
-  const agents = agentsOf(t);
+  const agents = AGENT_BADGES;
 
   const r = (payload?.result ?? {}) as Record<string, unknown>;
   const blue = (r.blue_agent ?? {}) as Record<string, unknown>;
