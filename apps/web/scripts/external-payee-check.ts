@@ -344,6 +344,26 @@ const BSC_FIRST: RawAccept[] = [
   check("8.4 no surface still advertises a 95% external share",
         !/95\s*%/.test(view) && !/95\s*\/\s*5/.test(view));
 
+  // 8.6–8.7: the OTHER direction of the same mistake. 8.2 stops the headline
+  // over-claiming a total Blue never held; these stop it under-claiming. With
+  // `hostedUnits === 0` — the common case, since every external builder
+  // registered today is external-only — a headline of "$0.0000 held by Blue"
+  // is a true sentence that summarises to "you earned nothing" for a builder
+  // who did earn, and a Withdraw button beside it reads as a broken payout.
+  // Both branches are asserted because either alone is satisfiable by deleting
+  // the panel, and a deleted panel is the same misinformation with no UI.
+  check("8.6 with nothing held, the headline shows the paid-direct figure instead",
+        /hostedUnits\s*>\s*0[\s\S]{0,260}?externalUnits[\s\S]{0,120}?paid direct/.test(view));
+  // Slice-based, not a `[\s\S]{0,N}` window: the first draft of this assertion
+  // failed against correct code because one Tailwind className between the guard
+  // and the label is ~155 characters, so the window was measuring class-attribute
+  // length, not code structure. A distance regex across JSX silently becomes a
+  // style-churn detector.
+  const wIdx  = view.indexOf("Withdraw (soon)");
+  const guard = wIdx < 0 ? "" : view.slice(Math.max(0, wIdx - 400), wIdx);
+  check("8.7 the Withdraw button is conditional on Blue actually holding something",
+        wIdx > 0 && /hostedUnits/.test(guard) && /(===\s*null|>\s*0)/.test(guard));
+
   // Sweep the user-visible copy as a whole: eleven places carried 95/5, and a
   // partial sweep is how a stale number survives to be quoted back at us.
   const copy = [

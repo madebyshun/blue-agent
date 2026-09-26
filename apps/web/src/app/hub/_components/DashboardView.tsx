@@ -300,7 +300,18 @@ export default function DashboardView({ inShell = false, onBack }: { inShell?: b
                 money went straight to the builder's wallet, so a total that
                 mixes the two and calls itself "ready to claim" promises a payout
                 of funds Blue never received. Keep the total out of any sentence
-                containing claim, withdraw, accrued or balance. */}
+                containing claim, withdraw, accrued or balance.
+
+                🔴 …but when Blue holds NOTHING, the hosted figure must not be the
+                headline either. Every external builder registered today is
+                external-only, so `hostedUnits === 0` is the COMMON case, and
+                headlining a truthful "$0.0000 held by Blue" over the biggest
+                number on the panel reads at a glance as "you earned nothing" to
+                exactly the builder who did earn. Honest sentence, wrong summary.
+                So the headline follows the money: hosted when Blue holds some,
+                external-paid-direct when it does not. The Withdraw button is
+                bound to the same condition, because offering a withdrawal of $0
+                is how a builder concludes their revenue is missing. */}
             {data && (data.earnings.externalUnits !== null || data.earnings.hostedUnits !== null) &&
              (data.earnings.totalUnits === null || data.earnings.totalUnits > 0) && (
               <div className="mt-6 rounded-xl border border-[#A78BFA]/20 bg-[#A78BFA]/5 p-4">
@@ -309,17 +320,23 @@ export default function DashboardView({ inShell = false, onBack }: { inShell?: b
                     <p className="text-xs font-semibold mb-0.5">
                       {data.earnings.hostedUnits === null
                         ? "Hosted balance unavailable"
-                        : `${fig(data.earnings.hostedUnits, coverage, usdc)} held by Blue · from hosted tools`}
+                        : data.earnings.hostedUnits > 0
+                          ? `${fig(data.earnings.hostedUnits, coverage, usdc)} held by Blue · from hosted tools`
+                          : `${fig(data.earnings.externalUnits, coverage, usdc)} paid direct to your wallet`}
                     </p>
                     <p className="text-[10px] text-slate-600">
-                      Hosted tools settle through Blue, so this is the part Blue owes you — payout
-                      lands with the Phase 4 splitter. External tools pay your wallet directly on
-                      every call, so there is nothing to claim for those.
+                      {data.earnings.hostedUnits !== null && data.earnings.hostedUnits === 0
+                        ? "Callers pay your endpoint's wallet on every call, 100%, USDC on Base. Blue never holds it, so there is nothing here to claim. Figure is an estimate: listed price × successful calls."
+                        : "Hosted tools settle through Blue, so this is the part Blue owes you — payout lands with the Phase 4 splitter. External tools pay your wallet directly on every call, so there is nothing to claim for those."}
                     </p>
                   </div>
-                  <button disabled className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA]/60 bg-[#A78BFA]/5 cursor-not-allowed">
-                    Withdraw (soon)
-                  </button>
+                  {/* Bound to the headline condition above, not rendered unconditionally:
+                      a Withdraw button over $0 held is read as a broken payout. */}
+                  {(data.earnings.hostedUnits === null || data.earnings.hostedUnits > 0) && (
+                    <button disabled className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA]/60 bg-[#A78BFA]/5 cursor-not-allowed">
+                      Withdraw (soon)
+                    </button>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-3 pt-3 border-t border-[#A78BFA]/15">
                   <div>
