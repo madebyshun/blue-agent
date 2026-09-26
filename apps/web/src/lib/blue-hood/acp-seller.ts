@@ -51,11 +51,13 @@ import {
   updateJobStatus,
   recordJobError,
   acquireSubmitLock,
-  listUnsettledJobIds,
+  listOpenJobs,
+  seedOpenIndexOnce,
+  type AcpJobRecord,
   type AcpSubjectChain,
   type AcpSubjectSide,
 } from "@/lib/blue-hood/acp-jobs";
-import { readJobOnChain } from "@/lib/blue-hood/acp-chain";
+import { readJobOnChain, type OnChainJob } from "@/lib/blue-hood/acp-chain";
 // Shared with the free `/api/acp/execution-plan` URL so the paid path and the
 // path buyers self-test against cannot disagree about what `chain`/`side` mean.
 import { readRequirement } from "@/lib/blue-hood/acp-requirement";
@@ -92,6 +94,14 @@ export interface AcpPollTally {
   noop: number; // awaiting counterparty (budget_set / submitted) or other terminal
   errors: number; // per-session crashes (kept — never aborts the batch)
   reconciled: number; // terminal states learned from the chain, not the active set
+  /**
+   * Expirations we had to INFER rather than read, because crossing the deadline
+   * is not an on-chain transition. Counted separately from `expired` on purpose:
+   * one is an outcome the contract told us, the other is a judgement we made
+   * from a clock. Folding them together would let a bug in the inference quietly
+   * manufacture revenue-affecting terminal states that look chain-confirmed.
+   */
+  expired_inferred: number;
 }
 
 export interface AcpPollResult extends Partial<AcpPollTally> {
@@ -515,6 +525,47 @@ async function handleSession(
 const RECONCILE_MAX_PER_TICK = 10;
 
 /**
+ * How long past its own deadline a departed job must sit before we are willing
+ * to call it expired.
+ *
+ * Purely anti-race: the deadline and our clock are different clocks, and a job
+ * funded in the last seconds before expiry is a job we still want to fulfil.
+ * Small, because the evidence is already strong — the job is past a deadline the
+ * CONTRACT published and has dropped out of the active set. MEASURED 2026-09-27:
+ * the real gap on 81119 was 36.1 HOURS, four orders of magnitude clear of this.
+ */
+const EXPIRY_GRACE_MS = 5 * 60_000;
+
+/**
+ * Decide whether a departed, still-`open` job should be written off as expired.
+ * PURE and exported so the guard can pin both directions without a chain, a
+ * clock, or KV — the inference is the only part of this file that invents a
+ * terminal state, so it is the part that most needs to be directly testable.
+ *
+ * Deliberately narrow. It fires ONLY for `open`: a `funded` or `submitted` job
+ * past its deadline has the buyer's money in escrow and an evaluator still
+ * entitled to act, so guessing there could write off revenue that is about to
+ * settle. Those keep looping, which is the honest answer.
+ */
+export function shouldInferExpiry(chainJob: OnChainJob, nowMs: number): boolean {
+  if (chainJob.status !== "open") return false;
+  if (!Number.isFinite(chainJob.expires_at) || chainJob.expires_at <= 0) return false;
+  return nowMs >= chainJob.expires_at * 1000 + EXPIRY_GRACE_MS;
+}
+
+/**
+ * Keep the prior diagnosis and add the write-off note, rather than replacing it.
+ *
+ * The existing `error` is usually the whole explanation of WHY the job expired —
+ * job 81119 carries "setBudget still pending after 15000ms", which is the reason
+ * it was never funded. Overwriting that with "deadline passed" would delete the
+ * cause and keep only the symptom.
+ */
+function appendReason(prior: string | undefined, note: string): string {
+  return (prior ? `${prior}; ${note}` : note).slice(0, 300);
+}
+
+/**
  * Close the books on jobs the active set can no longer tell us about.
  *
  * `agent.sessions` comes from `getActiveJobs()`, so a job that settles drops out
@@ -525,13 +576,19 @@ const RECONCILE_MAX_PER_TICK = 10;
  * Anything the ledger still calls in-flight but the SDK no longer lists is
  * exactly the set worth asking the chain about.
  *
- * ⚠ A job the ACP SERVER considers expired stays `OPEN` on chain — nothing
- * on-chain moves a job to EXPIRED, and 81119 has sat past its deadline for
- * hours still reading `OPEN`. So the `expired` branch below is correctness, not
- * a path that fires: server-side expiry lands on no public field and this
- * reconcile genuinely cannot see it. Such jobs stay in-flight in the ledger,
- * which is the honest answer rather than a guessed one. Newest-first ordering
- * keeps them from ever crowding a live job out of the per-tick budget.
+ * ⚠ EXPIRY IS NOT AN ON-CHAIN TRANSITION. A job the ACP server considers expired
+ * keeps reading `open` from the contract forever — nothing ever flips it. So the
+ * `expired` case below is correctness for a status the contract can technically
+ * hold, while the REAL expiry path is the inference: past the published deadline
+ * plus a grace, with the active set no longer carrying it.
+ *
+ * MEASURED 2026-09-27: 81119 read `open` **36.1 hours** past its own `expiredAt`.
+ * Without the inference that record is never terminal, so it is re-read by RPC
+ * every tick forever (720/day), it is counted as in-flight revenue that is still
+ * coming, and — the part that actually bites — it can never append to the
+ * terminal log, so `expire_streak` stays 0. A streak stuck at 0 does not read as
+ * broken, it reads as HEALTHY, right up until ACP auto-ungraduates the agent at
+ * ten consecutive expirations that the early-warning counter never saw.
  */
 async function reconcileSettledJobs(
   activeIds: ReadonlySet<string>,
@@ -542,19 +599,24 @@ async function reconcileSettledJobs(
   const contract = acp.ACP_CONTRACT_ADDRESSES[cfg.chainId];
   if (!contract) return;
 
-  let unsettled: string[];
+  let open: AcpJobRecord[];
   try {
-    unsettled = await listUnsettledJobIds();
+    // One-shot back-fill for jobs that predate the open index. Deliberately
+    // BEFORE the read, not after: the jobs it recovers are exactly the ones
+    // stuck non-terminal, so deferring it by a tick defers the fix too.
+    await seedOpenIndexOnce();
+    open = await listOpenJobs();
   } catch {
     return; // ledger unreadable this tick — next one re-reconciles
   }
 
-  const stale = unsettled
-    .filter((id) => !activeIds.has(id))
-    .sort((a, b) => Number(b) - Number(a))
+  const stale = open
+    .filter((r) => !activeIds.has(r.job_id))
+    .sort((a, b) => Number(b.job_id) - Number(a.job_id))
     .slice(0, RECONCILE_MAX_PER_TICK);
 
-  for (const jobId of stale) {
+  for (const rec of stale) {
+    const jobId = rec.job_id;
     const chainJob = await readJobOnChain({
       jobId,
       chainId: cfg.chainId,
@@ -579,7 +641,23 @@ async function reconcileSettledJobs(
         tally.reconciled++;
         break;
       default:
-        break; // still live on chain — the active set just hadn't hydrated it
+        if (shouldInferExpiry(chainJob, Date.now())) {
+          // Stamped INFERRED in the record's own error so the ledger never
+          // presents a guessed terminal state as a chain-confirmed one.
+          await updateJobStatus(jobId, "expired", {
+            error: appendReason(
+              rec.error,
+              `expiry INFERRED: still open on chain past deadline ${new Date(
+                chainJob.expires_at * 1000,
+              ).toISOString()}`,
+            ),
+          });
+          tally.expired++;
+          tally.expired_inferred++;
+          tally.reconciled++;
+        }
+        // else: genuinely still live — the active set just hadn't hydrated it.
+        break;
     }
   }
 }
@@ -603,6 +681,7 @@ export async function runAcpPollCycle(): Promise<AcpPollResult> {
     noop: 0,
     errors: 0,
     reconciled: 0,
+    expired_inferred: 0,
   };
 
   let acp: AcpModule;

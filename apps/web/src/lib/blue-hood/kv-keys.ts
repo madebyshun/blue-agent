@@ -471,6 +471,38 @@ export const kvAcpJob = (jobId: string) => `bh:acp:job:${jobId}`;
 /** SET of every job id we've ever seen — enumeration source for the revenue endpoint. */
 export const KV_ACP_JOB_INDEX = "bh:acp:job:index";
 
+/**
+ * SET of job ids that have NOT reached a terminal state — the reconciler's work
+ * list.
+ *
+ * WHY A SECOND INDEX RATHER THAN FILTERING THE ONE ABOVE: the reconciler runs on
+ * every 2-minute tick (720/day) and asks "which jobs are still open". Answering
+ * that from `KV_ACP_JOB_INDEX` costs `1 + N` commands where N is every job ever
+ * seen, so the price of a tick grows forever even though the answer is almost
+ * always "none" — at 300 lifetime jobs that is ~216K commands/day against the
+ * 500K *monthly* Upstash allowance that has starved this engine twice (#123,
+ * #148). Through this key the same question costs one command plus one read per
+ * genuinely-open job.
+ *
+ * Kept in sync by `recordJobSeen` (add) and `updateJobStatus` (remove on the
+ * terminal transition). It is a CACHE of a property the job records already
+ * carry, never the source of truth: a stale member is corrected on the next read
+ * and a lost member costs one job's reconciliation, not the ledger.
+ */
+export const KV_ACP_JOB_OPEN_INDEX = "bh:acp:job:open";
+
+/**
+ * Marker: the open index above has been back-filled from `KV_ACP_JOB_INDEX`.
+ *
+ * The open index was added after jobs already existed in KV, and the jobs that
+ * most need reconciling are exactly the ones that stopped being observed — they
+ * will never be re-added by a write. Without one back-fill they stay
+ * non-terminal forever, which is the bug this mechanism exists to fix. The scan
+ * is self-limiting: it happens on the first tick after deploy and then never
+ * again.
+ */
+export const KV_ACP_JOB_OPEN_SEEDED = "bh:acp:job:open:seeded";
+
 /** Atomic submit lock (kvSetNX). Won ⇒ this tick is the sole fulfiller of the job. */
 export const kvAcpSubmitLock = (jobId: string) => `bh:acp:lock:submit:${jobId}`;
 

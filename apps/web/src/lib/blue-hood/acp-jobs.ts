@@ -32,12 +32,15 @@ import {
   kvSet,
   kvSetNX,
   kvSAdd,
+  kvSRem,
   kvSMembers,
   kvMutate,
 } from "@/lib/kv";
 import {
   kvAcpJob,
   KV_ACP_JOB_INDEX,
+  KV_ACP_JOB_OPEN_INDEX,
+  KV_ACP_JOB_OPEN_SEEDED,
   kvAcpSubmitLock,
   KV_ACP_TERMINAL_LOG,
   TTL_ACP_JOB,
@@ -173,6 +176,7 @@ export async function recordJobSeen(
       };
   await kvSet(kvAcpJob(job.job_id), rec, TTL_ACP_JOB);
   await kvSAdd(KV_ACP_JOB_INDEX, job.job_id);
+  await syncOpenIndex(rec);
   return rec;
 }
 
@@ -230,6 +234,7 @@ export async function updateJobStatus(
   const becomesTerminal = TERMINAL.has(status);
   const rec: AcpJobRecord = { ...existing, ...stripUndefined(patch), status, updated_at: now() };
   await kvSet(kvAcpJob(jobId), rec, TTL_ACP_JOB);
+  await syncOpenIndex(rec);
   // Only log the FIRST time a job crosses into a terminal state.
   if (becomesTerminal && !wasTerminal) {
     await pushTerminalOutcome(status);
@@ -252,15 +257,70 @@ export async function getJob(jobId: string): Promise<AcpJobRecord | null> {
 }
 
 /**
- * Ids the ledger still believes are in flight. These are the ONLY jobs worth a
+ * Jobs the ledger still believes are in flight. These are the ONLY jobs worth a
  * chain read: a terminal record is already final, and a job absent from the
- * index was never ours. Bounded by the same cap as the revenue read so a large
- * keyspace cannot turn one cron tick into an unbounded RPC fan-out.
+ * index was never ours.
+ *
+ * Returns whole RECORDS, not ids, because the caller writes off departed jobs as
+ * expired and stamps the reason onto the record's existing `error` — the prior
+ * diagnosis is usually the whole explanation of WHY it expired, and an id cannot
+ * carry it. Fetching the record costs nothing extra either way: the membership
+ * read has to be followed by a per-job read regardless.
+ *
+ * Reads the OPEN index (`1 + open`) rather than the lifetime one (`1 + ever`) —
+ * see `KV_ACP_JOB_OPEN_INDEX` for the Upstash-budget arithmetic. A member whose
+ * record has since gone terminal is dropped here AND evicted, so the cache
+ * self-heals on read instead of needing a separate sweeper.
  */
-export async function listUnsettledJobIds(): Promise<string[]> {
-  const ids = (await kvSMembers(KV_ACP_JOB_INDEX)).slice(0, ACP_JOB_INDEX_MAX);
+export async function listOpenJobs(): Promise<AcpJobRecord[]> {
+  const ids = (await kvSMembers(KV_ACP_JOB_OPEN_INDEX)).slice(0, ACP_JOB_INDEX_MAX);
+  if (ids.length === 0) return [];
   const records = await Promise.all(ids.map((id) => kvGet<AcpJobRecord>(kvAcpJob(id))));
-  return records.filter((r): r is AcpJobRecord => r !== null && !TERMINAL.has(r.status)).map((r) => r.job_id);
+  const open: AcpJobRecord[] = [];
+  const evict: string[] = [];
+  for (let i = 0; i < ids.length; i++) {
+    const rec = records[i];
+    // A null read is ambiguous (KV blip OR a record that TTL'd out after 90d).
+    // Leave the member alone: an unread record is not evidence of anything, and
+    // a stale member costs one wasted read per tick, while a wrong eviction
+    // costs the job its reconciliation permanently.
+    if (!rec) continue;
+    if (TERMINAL.has(rec.status)) evict.push(ids[i]);
+    else open.push(rec);
+  }
+  await kvSRem(KV_ACP_JOB_OPEN_INDEX, ...evict);
+  return open;
+}
+
+/**
+ * Back-fill the open index from the lifetime index, exactly once per deployment
+ * lifetime of the KV namespace.
+ *
+ * Without this the mechanism cannot see the jobs it was built for. The open
+ * index is only populated by a WRITE (`recordJobSeen` / `updateJobStatus`), and
+ * a job that stopped transitioning is by definition one nothing writes to any
+ * more — job 81119 has been non-terminal since 2026-09-25 and no tick has
+ * touched its record since. The jobs most in need of reconciling are precisely
+ * the ones a write-populated index would never learn about.
+ *
+ * Self-limiting: `kvSetNX` on the marker means the `1 + N` scan happens on the
+ * first tick after deploy and then never again, even across concurrent ticks.
+ * Marker-first, so a crash mid-scan costs one back-fill rather than repeating
+ * the scan every tick forever.
+ */
+export async function seedOpenIndexOnce(): Promise<number> {
+  const won = await kvSetNX(KV_ACP_JOB_OPEN_SEEDED, now(), TTL_ACP_JOB);
+  if (!won) return 0;
+  const ids = (await kvSMembers(KV_ACP_JOB_INDEX)).slice(0, ACP_JOB_INDEX_MAX);
+  if (ids.length === 0) return 0;
+  const records = await Promise.all(ids.map((id) => kvGet<AcpJobRecord>(kvAcpJob(id))));
+  const open = ids.filter((_, i) => {
+    const r = records[i];
+    return r !== null && !TERMINAL.has(r.status);
+  });
+  await kvSAdd(KV_ACP_JOB_OPEN_INDEX, ...open);
+  console.log(`[acp] open index seeded: ${open.length} open of ${ids.length} lifetime jobs`);
+  return open.length;
 }
 
 /**
@@ -340,6 +400,23 @@ export async function expireStreak(): Promise<number> {
 }
 
 // ── internals ────────────────────────────────────────────────────────────────
+
+/**
+ * Keep the open index agreeing with the record that was just written. Called
+ * after EVERY write rather than only on the terminal transition, so the index
+ * converges even if a prior tick's remove was dropped by a KV error — both
+ * helpers swallow their own failures, which makes a lost membership edit
+ * invisible at the call site.
+ *
+ * Deriving membership from the record (rather than from the transition) is what
+ * makes it idempotent: replaying the same write is a no-op on a SET, and a
+ * record whose status disagrees with its membership is corrected by whichever
+ * write happens next.
+ */
+async function syncOpenIndex(rec: AcpJobRecord): Promise<void> {
+  if (TERMINAL.has(rec.status)) await kvSRem(KV_ACP_JOB_OPEN_INDEX, rec.job_id);
+  else await kvSAdd(KV_ACP_JOB_OPEN_INDEX, rec.job_id);
+}
 
 /**
  * Prepend a terminal outcome, keeping the log capped + newest-first.

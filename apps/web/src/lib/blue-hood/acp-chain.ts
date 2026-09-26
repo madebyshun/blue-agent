@@ -43,6 +43,23 @@ export interface OnChainJob {
    * from the contract if you need a net figure.
    */
   budget_usdc: number;
+  /**
+   * The job's SLA deadline, UNIX SECONDS, straight off the same struct as
+   * `status` above.
+   *
+   * It is here because crossing it is NOT an on-chain transition, so `status`
+   * alone can never report an expiry. MEASURED 2026-09-27 on Base 8453: job
+   * 81119 read `status = 0` (open) **36.1 hours** past its own `expiredAt`,
+   * while 81118/81125 read `rejected` and 81132 read `completed`. The contract
+   * closes every terminal state except this one, and a job nobody will ever
+   * fund again sits `open` forever.
+   *
+   * Reading it HERE rather than capturing it from a hydrated `JobSession` is
+   * deliberate: it costs no extra call (same `getJob` result), it cannot be
+   * missed by a job the poller never hydrated, and it is available for jobs
+   * recorded long before anything thought to store a deadline.
+   */
+  expires_at: number;
 }
 
 /** USDC is 6-decimal on every chain ACP settles on. */
@@ -97,12 +114,22 @@ export async function readJobOnChain(args: {
  */
 function decodeJob(raw: unknown): OnChainJob | null {
   if (typeof raw !== "object" || raw === null) return null;
-  const job = raw as { status?: unknown; budget?: unknown };
+  const job = raw as { status?: unknown; budget?: unknown; expiredAt?: unknown };
   const idx = typeof job.status === "number" ? job.status : Number(job.status);
   if (!Number.isInteger(idx) || idx < 0 || idx >= JOB_STATUS.length) return null;
   if (typeof job.budget !== "bigint") return null;
+  // `expiredAt` is a `uint48`, which viem decodes to a NUMBER, not a bigint —
+  // MEASURED 2026-09-27 against the live contract rather than inferred from the
+  // ABI, because the number/bigint cutoff is a viem-width rule and getting it
+  // wrong here fails closed in the worst way: every job would decode as null and
+  // the reconciler would silently stop reconciling anything at all. `Number()`
+  // accepts either width so a future contract change to `uint64` degrades to a
+  // still-correct value instead of nulling the whole read.
+  const expiresAt = Number(job.expiredAt);
+  if (!Number.isFinite(expiresAt) || expiresAt <= 0) return null;
   return {
     status: JOB_STATUS[idx],
     budget_usdc: Number(job.budget) / 10 ** USDC_DECIMALS,
+    expires_at: expiresAt,
   };
 }

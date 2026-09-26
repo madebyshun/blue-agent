@@ -49,7 +49,13 @@ async function handle(req: NextRequest) {
           `sessions=${result.provider_sessions ?? 0} budget=${result.budget_proposed ?? 0} ` +
           `delivered=${result.delivered ?? 0} rejected=${result.rejected_input ?? 0} ` +
           `declined=${result.declined ?? 0} completed=${result.completed ?? 0} ` +
-          `expired=${result.expired ?? 0} errors=${result.errors ?? 0} ` +
+          // `of_which_inferred` is a SUBSET of expired, not a sibling — written
+          // that way so the log can never be read as two independent counts.
+          // An expiry we inferred from a clock is weaker evidence than one the
+          // contract reported, and the operator should be able to see which is
+          // which without opening the JSON.
+          `expired=${result.expired ?? 0}(of_which_inferred=${result.expired_inferred ?? 0}) ` +
+          `errors=${result.errors ?? 0} ` +
           `${result.error ? "err=" + result.error + " " : ""}duration_ms=${result.duration_ms}`,
       );
     }
