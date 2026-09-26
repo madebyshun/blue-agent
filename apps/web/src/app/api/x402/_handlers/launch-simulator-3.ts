@@ -1,6 +1,7 @@
 // x402/launch-simulator-3 — Launch Simulator Tier 3: Full Simulation with risk matrix and timeline
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
+import { pickBaseSidePair, QUOTE_SIDE_ONLY_NOTE } from "./_dex-side";
 // Price: $0.50 — Fully self-contained, no external workspace imports
 
 type BankrMessage = { role: string; content: string };
@@ -86,10 +87,18 @@ async function fetchDexScreener(contract: string): Promise<Record<string, unknow
     const data = await res.json() as { pairs?: Array<Record<string, unknown>> };
     const pairs = (data.pairs ?? []).filter(p => (p as { chainId?: string }).chainId === "base");
     if (!pairs.length) return { available: false };
-    type Pair = Record<string, unknown> & { liquidity?: { usd?: number }; baseToken?: { name?: string; symbol?: string }; priceUsd?: string; volume?: { h24?: number }; priceChange?: { h24?: number }; txns?: { h24?: { buys?: number; sells?: number } }; fdv?: number; marketCap?: number; pairCreatedAt?: number };
-    const pair = pairs.sort((a, b) =>
-      (((b as Pair).liquidity?.usd) ?? 0) - (((a as Pair).liquidity?.usd) ?? 0)
-    )[0] as Pair;
+    type Pair = Record<string, unknown> & { liquidity?: { usd?: number }; baseToken?: { name?: string; symbol?: string; address?: string }; quoteToken?: { name?: string; symbol?: string; address?: string }; priceUsd?: string; volume?: { h24?: number }; priceChange?: { h24?: number }; txns?: { h24?: { buys?: number; sells?: number } }; fdv?: number; marketCap?: number; pairCreatedAt?: number };
+    const sorted = (pairs as Pair[]).sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+    // name, symbol, priceUsd, priceChange24h, fdv AND marketCap all describe the
+    // pair's BASE token, so sort-then-take-[0] described a different token
+    // entirely whenever `contract` is the quote side of its deepest pool.
+    // MEASURED 2026-09-26: the deepest Base pair holding USDC is AERO/USDC, so a
+    // USDC contract came back as symbol "AERO", price 0.8919, FDV $1.77B. Sizing
+    // a launch against a 1.77-billion-dollar FDV belonging to another token is
+    // worse than having no market data at all, so a contract that no Base pair
+    // prices is reported unavailable rather than described from the other side.
+    const pair = pickBaseSidePair(sorted, contract);
+    if (!pair) return { available: false, reason: "quote_side_only", note: QUOTE_SIDE_ONLY_NOTE };
     return {
       available: true, name: pair.baseToken?.name, symbol: pair.baseToken?.symbol,
       priceUsd: pair.priceUsd, volume24h: pair.volume?.h24, liquidityUsd: pair.liquidity?.usd,
@@ -131,9 +140,14 @@ export default async function handler(req: Request): Promise<Response> {
 
     const miroShark = await runMiroSharkSimulation({ project, description, ticker, marketData });
 
+    // "pre-launch" is only true when DexScreener knows nothing. A quote-side-only
+    // token trades plenty; telling the model it is pre-launch would trade one
+    // fabrication for another, so the real reason is passed through when known.
     const marketSection = marketData.available
       ? `\n=== Live Market Data ===\n${JSON.stringify(marketData, null, 2)}`
-      : "\n=== Market Data === Not yet trading (pre-launch)";
+      : typeof marketData.note === "string"
+        ? `\n=== Market Data === Unavailable — ${marketData.note}`
+        : "\n=== Market Data === Not yet trading (pre-launch)";
     const aeonSection = aeon.available ? `\n=== Aeon Ecosystem Signals ===\n${aeon.summary}` : "";
     const msSection = miroShark
       ? `\n=== MiroShark Consensus ===\nbull=${miroShark.bull}% bear=${miroShark.bear}% neutral=${miroShark.neutral}%\nrecommendation=${miroShark.recommendation}\nsentiment=${miroShark.sentiment_summary}`
