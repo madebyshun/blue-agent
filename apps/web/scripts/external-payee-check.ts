@@ -70,6 +70,26 @@ const blockAfter = (src: string, re: RegExp): string => {
   }
   return "";
 };
+/**
+ * What directly follows each balanced `name(…)` call.
+ *
+ * Also brace counting, and for the same reason twice over: 13.2's first draft
+ * asked for `setErr\([\s\S]*?\);\s*return;` and reported an orphan that was not
+ * one, because a non-greedy gap will happily run a thousand characters to find
+ * the `return` it was told to look for. "The very next statement" is structural;
+ * any regex for it is really a distance measurement wearing a disguise.
+ */
+const afterCalls = (src: string, name: string): string[] => {
+  const out: string[] = [];
+  for (let i = src.indexOf(`${name}(`); i >= 0; i = src.indexOf(`${name}(`, i + 1)) {
+    let depth = 0;
+    for (let j = i + name.length; j < src.length; j++) {
+      if (src[j] === "(") depth++;
+      else if (src[j] === ")" && --depth === 0) { out.push(src.slice(j + 1, j + 80)); break; }
+    }
+  }
+  return out;
+};
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 // Shaped after the ONE live registered endpoint, measured 2026-09-26. Its body
@@ -663,6 +683,67 @@ const BSC_FIRST: RawAccept[] = [
   // "simplified" away by the next reader who sees a key the server also sets.
   check("12.12 the measurement that found this is written next to the fix",
         /invalid_payload/.test(flat(hub)) && /toV2PaymentPayload/.test(flat(hub)));
+}
+
+// ── Group 13: a refusal the user cannot read, and a lie about who cancelled ──
+// Both of these are about what the payer is TOLD, which is not decoration when
+// the subject is an irreversible signature. Two shipped bugs:
+//
+//   • the insufficient-balance refusal called `setErr` and returned without
+//     `setStep("error")`. The error panel is gated on that step, so the message
+//     never rendered — and for an external tool `step` was still "calling" from
+//     the 402 probe, which keeps `loading` true, so the button sat on "Calling
+//     agents…" forever with nothing to read. The one refusal in the whole
+//     function that was invisible.
+//
+//   • the catch decided "Signature cancelled" by substring-matching "rejected"
+//     against the error message. On the branch that matters that message is the
+//     BUILDER's own text, forwarded verbatim. A tool answering
+//     {"error":"payment rejected"} told a user who had just signed that they had
+//     cancelled — about a payment that may well have settled.
+
+{
+  const hub = read("src/app/hub/HubView.tsx");
+  const hubCode = stripComments(hub);
+
+  // The general invariant, not just the one instance: the panel renders only on
+  // `step === "error"`, so a `setErr` that returns without setting it is a
+  // message with no reader.
+  check("13.1 the error panel is still gated on the error step",
+        /step\s*===\s*"error"\s*&&\s*err/.test(hubCode));
+  const errCalls = afterCalls(hubCode, "setErr");
+  check("13.2 no refusal returns without reaching that step",
+        errCalls.length >= 8 && errCalls.every(a => !/^\s*;\s*return\b/.test(a)));
+  check("13.3 …including the one that broke: insufficient balance",
+        /Insufficient USDC[\s\S]*?setStep\("error"\)/.test(hubCode));
+
+  // ── who cancelled ──
+  const iDecl = hubCode.search(/let\s+signed\s*=\s*false/);
+  const iSign = hubCode.search(/signTypedDataAsync\(/);
+  const iSet  = hubCode.search(/\bsigned\s*=\s*true/);
+  check("13.4 the signed flag is raised only after the wallet actually returns",
+        iDecl >= 0 && iSign >= 0 && iSet >= 0 && iDecl < iSign && iSign < iSet);
+
+  const cancelled = blockAfter(hubCode, /if\s*\(\s*!signed\s*\)/);
+  check("13.5 'Signature cancelled' is reachable only before anything was signed",
+        /Signature cancelled/.test(cancelled));
+  check("13.6 …and is not also decided somewhere by reading the message",
+        (hubCode.match(/Signature cancelled/g) ?? []).length === 1);
+
+  // ── after the signature, for a tool we do not settle for ──
+  // The asymmetry is the assertion: /api/x402/<id> settles only after a
+  // successful run, so a native failure really does mean uncharged and must keep
+  // saying so. The external proxy settles nothing, so the honest answer there is
+  // that we do not know.
+  const unknown = blockAfter(hubCode, /else\s+if\s*\(\s*tool\.source\s*===\s*"external"\s*\)/);
+  check("13.7 a post-signature failure on an external tool admits we cannot tell",
+        /cannot tell you whether the USDC moved/.test(unknown));
+  check("13.8 …and never claims the caller was not charged",
+        unknown.length > 0 && !/not charged/.test(unknown));
+  check("13.9 the native path still states the fact it actually knows",
+        /you were not charged/.test(hubCode));
+  check("13.10 the warning survives rendering as its own paragraph",
+        /whitespace-pre-line[\s\S]{0,40}\{err\}/.test(hubCode));
 }
 
 console.log(`\nexternal-payee guard: ${pass} passed, ${failures.length} failed`);

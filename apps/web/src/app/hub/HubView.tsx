@@ -679,7 +679,15 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
 
   async function run() {
     const missing = tool.inputs.filter(i => i.required && !vals[i.key]?.trim());
-    if (missing.length) { setErr(`Required: ${missing.map(i => i.label).join(", ")}`); return; }
+    // `setStep("error")` is not optional here either, for the same reason as the
+    // balance refusal below: the panel renders only in that step. Without it the
+    // commonest interaction in the Hub — press Run with a field empty — did
+    // nothing at all, and on a second attempt re-showed the PREVIOUS error.
+    if (missing.length) {
+      setErr(`Required: ${missing.map(i => i.label).join(", ")}`);
+      setStep("error");
+      return;
+    }
 
     setErr(null); setResult(null); setIsMock(false);
 
@@ -688,6 +696,21 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
 
     // ── x402 flow: wallet connected + tool has price ──────────────────────────
     if (tool.x402Body && isConnected && address) {
+      /* 🔴 The line between "nothing happened" and "money may have moved", and
+         the catch at the bottom needs to know which side it is on — so this is
+         declared out here, where both scopes can see it, rather than beside the
+         signature it describes.
+
+         Everything before `signTypedDataAsync` resolves is reversible by closing
+         the tab; the moment it does, a spendable USDC authorization exists and
+         has left the browser. The catch used to decide that by substring-
+         matching "rejected" against the error message — but on the branch that
+         matters, that message is the BUILDER's own text, forwarded verbatim from
+         their endpoint. A tool answering {"error":"payment rejected"} therefore
+         told a user who had just signed that they had cancelled, about a payment
+         that may well have settled. A flag can only be wrong if someone moves
+         it; a substring is wrong whenever a stranger picks the wrong word. */
+      let signed = false;
       try {
         // The EIP-712 verifying contract. External tools cannot move this:
         // selectBaseUsdcAccept only ever returns BASE_USDC, the same address.
@@ -811,6 +834,12 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         const payVal = Number(payUnits) / 1_000_000;
         if (usdcBalance != null && usdcBalance < payVal) {
           setErr(`Insufficient USDC — you have $${usdcBalance.toFixed(2)}, need $${payVal}. Top up your wallet on Base.`);
+          // `setErr` alone is invisible: the error panel is gated on
+          // `step === "error"`, and for an external tool `step` is still
+          // "calling" from the 402 probe — which also keeps `loading` true, so
+          // the button sat on "Calling agents…" forever with nothing to read.
+          // The one refusal in this function the user could not see.
+          setStep("error");
           return;
         }
 
@@ -862,6 +891,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
             nonce,
           },
         });
+        signed = true;
 
         setStep("paying");
 
@@ -991,7 +1021,22 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
 
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        setErr(msg.includes("rejected") || msg.includes("denied") ? "Signature cancelled" : msg);
+        if (!signed) {
+          // Nothing has been signed, so the only thing that can have refused is
+          // the wallet prompt, and "rejected" can only mean the user.
+          setErr(/reject|denied/i.test(msg) ? "Signature cancelled" : msg);
+        } else if (tool.source === "external") {
+          /* An external tool settles its own payments; /api/hub/tools/<id>/call
+             verifies nothing and settles nothing, it forwards. So once the
+             signature is out the door we genuinely do not know whether the USDC
+             moved, and saying either "paid" or "not charged" would be a guess
+             about someone's money. The native branch does not need this and must
+             not copy it: /api/x402/<id> settles only after a successful run, so
+             a failure there really does mean uncharged. */
+          setErr(`${msg}\n\nYour wallet signed a USDC authorization and it was sent. Blue does not settle this tool's payments, its builder does, so we cannot tell you whether the USDC moved. Check your wallet on Basescan before retrying, or you may pay twice.`);
+        } else {
+          setErr(msg);
+        }
         setStep("error");
       }
       return;
@@ -1129,7 +1174,10 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           {/* Run button + error */}
           <div className="px-6 pb-6 shrink-0">
             {step === "error" && err && (
-              <p className="font-mono text-xs text-red-400 mb-3">{err}</p>
+              // pre-line: the post-signature "we cannot tell you whether the
+              // USDC moved" warning is a second paragraph, and collapsing it
+              // into the builder's error text buries the only part that matters.
+              <p className="font-mono text-xs text-red-400 mb-3 whitespace-pre-line">{err}</p>
             )}
             {tool.x402Body && !isConnected && (
               <div className="mb-3 px-4 py-3 rounded-xl bg-[#0D0D1A] border border-[#1A1A2E] flex items-center justify-between gap-3">
