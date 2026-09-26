@@ -69,10 +69,12 @@ import {
   parseTxChain,
   TX_CHAINS,
   isNativeToken,
+  toNativeSentinel,
   isPositiveDecimal,
   readTokenMeta,
 } from "@/lib/tx-chains";
 import { ROBINHOOD_SWAP_ROUTER_ADDRESS } from "@/lib/robinhood/swap";
+import { buildBaseApprove } from "@/lib/zerox-swap";
 
 export const runtime = "nodejs";
 // Console commands (blue_idea/build/audit/ship/raise) wait on the LLM, which can
@@ -512,9 +514,16 @@ async function callSwapTx(args: Record<string, unknown>): Promise<string> {
   if (chain === "base") {
     // 0x AllowanceHolder. GET, and it answers 200 with { error } rather than a
     // non-2xx for a bad pair, so the ok-check below reads the body not the status.
+    //
+    // ⚠️ `toNativeSentinel`, NOT the literal "ETH" (P1-4, measured 2026-09-26).
+    // These two lines used to send the string "ETH", which 0x v2 rejects with
+    // "The input is invalid" — so `tokenOut: "ETH"`, a value this tool's own
+    // description tells agents to use, failed while WETH worked. The route also
+    // normalises, so this is belt-and-braces; it is spelled out here because
+    // this is the call site the failure was measured at.
     const qs = new URLSearchParams({
-      sellToken:  inIsNative ? "ETH" : tokenIn,
-      buyToken:   isNativeToken(tokenOut) ? "ETH" : tokenOut,
+      sellToken:  toNativeSentinel(tokenIn),
+      buyToken:   toNativeSentinel(tokenOut),
       sellAmount: amountInBase,
       taker:      fromAddress,
       slippageBps: String(slippageBps),
@@ -534,9 +543,7 @@ async function callSwapTx(args: Record<string, unknown>): Promise<string> {
       ok: true,
       chain: "base", chainId: TX_CHAINS.base.chainId,
       tx: { to: tx.to, data: tx.data, value: tx.value ?? "0", chainId: TX_CHAINS.base.chainId },
-      approve: data.allowanceTarget && !inIsNative
-        ? { token: tokenIn, spender: data.allowanceTarget, note: "Approve before the swap if current allowance is short." }
-        : null,
+      approve: buildBaseApprove(data, tokenIn, amountInBase, inIsNative),
       meta: {
         venue: "0x AllowanceHolder", from: fromAddress,
         tokenIn, tokenOut, amountIn, amountInBase, decimals, slippageBps,
