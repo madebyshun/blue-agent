@@ -118,8 +118,18 @@ export const COMMANDS_DOCS = [
   ]},
 ];
 
-// The 35 core skill files in skills/ (the 5 aeon-*.md skills are documented
-// separately on /docs/aeon-skills; 35 + 5 = the 40 total).
+// Exactly the files `blue init` copies — i.e. `packages/builder/skills/*.md`,
+// nothing more. /docs/skills renders this list under the sentence "these ship
+// with the CLI", so an entry here is a promise that the file lands in the
+// reader's ~/.blue-agent/skills/. Equality with the shipped directory is
+// enforced by apps/web/scripts/skills-truth-check.ts, which is why this comment
+// no longer carries a count: the number is derived, not asserted.
+//
+// It did carry one — "the 35 core skill files (+ 5 aeon-*.md documented
+// separately on /docs/aeon-skills; 35 + 5 = the 40 total)" — and every clause of
+// that was false by 2026-09-25: the Aeon files and their page were deleted with
+// the Bankr purge, and the list itself had drifted three files away from what
+// builder ships. Root `skills/` is a SUPERSET of this list and always has been.
 export const SKILLS_DOCS = [
   { file: "base-security.md",                 desc: "500+ security checks across 13 categories. Loaded for blue audit." },
   { file: "base-addresses.md",                desc: "Verified contract addresses on Base — USDC, WETH, Uniswap, Aave." },
@@ -127,7 +137,15 @@ export const SKILLS_DOCS = [
   { file: "base-ecosystem.md",                desc: "Base ecosystem overview — key protocols, teams, infrastructure." },
   { file: "base-account-integration.md",      desc: "Coinbase Smart Wallet — ERC-4337, passkeys, sponsored txs." },
   { file: "account-abstraction-deep-dive.md", desc: "ERC-4337 deep dive — UserOps, bundlers, paymasters, EntryPoint." },
-  { file: "x402-tools.md",                    desc: `The full ${TOOL_COUNT}-tool x402 hub — pricing, inputs, and how agents call each one.` },
+  // Was `x402-tools.md` here until 2026-09-25 — a filename that has never existed
+  // in any commit (`git log --all` for it is empty in both skill trees). Commit
+  // 8577ed1d, 2026-07-24, whose own body reads "x402-tools.md replaces
+  // bankr-tools.md entry", de-Bankr'd the NAME in this list without renaming any
+  // file. The real file was renamed bankr-tools.md → llm-and-x402.md two months
+  // later (102fbe39, in both trees) and nothing reconnected the two. So this page
+  // advertised a skill `blue init` cannot install, while the shipped file it
+  // describes was listed nowhere — one drift, visible from both ends.
+  { file: "llm-and-x402.md",                  desc: "Inference gateway + payment layer — Virtuals API shape, x402 pricing, paid calls. Loaded for blue build." },
   { file: "blue-agent-identity.md",           desc: "Blue Agent mission, product voice, do/don't rules." },
   { file: "design-system.md",                 desc: "Visual language, colors, card patterns, spacing." },
   { file: "x402-patterns.md",                 desc: "x402 payment patterns — pay-per-call APIs, pricing, flow." },
@@ -141,7 +159,14 @@ export const SKILLS_DOCS = [
   { file: "flashloan-patterns.md",            desc: "Flashloan fundamentals — callback structure, use cases." },
   { file: "flashloan-patterns-advanced.md",   desc: "Advanced flashloan strategies and attack vectors." },
   { file: "staking-yield-farming.md",         desc: "Staking and yield farming — vaults, rewards, compounding." },
-  { file: "token-launch-guide.md",            desc: "Token launch — contract, Uniswap pool, liquidity, listing on Base." },
+  // `token-launch-guide.md` was listed here until 2026-09-25 and is NOT shipped:
+  // it has never been in packages/builder/skills/ in any commit, and SKILL_REGISTRY
+  // does not name it, so neither `blue init` nor any of the five commands ever put
+  // it in front of a CLI user. It is not dead, though — it is WEB grounding, fetched
+  // from the root copy on GitHub by SKILL_URLS.tokenLaunch in
+  // apps/web/src/app/api/_lib/llm.ts. Same status as `b20-launch-guide.md`, which
+  // this list correctly never claimed. Root-only by design; keep the file, drop the
+  // claim that the CLI installs it.
   { file: "solidity-security-patterns.md",    desc: "Solidity security — access control, overflow, reentrancy." },
   { file: "oracle-design-guide.md",           desc: "Oracle design — Chainlink, TWAP, price feed validation." },
   { file: "mev-protection-guide.md",          desc: "MEV protection — frontrun defense, slippage, commit-reveal." },

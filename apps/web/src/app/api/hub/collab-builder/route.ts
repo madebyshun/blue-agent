@@ -70,8 +70,10 @@ No markdown. No explanation. Raw JSON only.`;
   let text: string;
   try {
     text = (await callLLM({
+      // No `model`: this route passed `"claude-haiku-4-5"`, which Virtuals has
+      // never listed, so callLLM's catalog pre-flight threw and every request
+      // answered 503. Omitting it takes VIRTUALS_DEFAULT_MODEL.
       system:    "You are Blue Agent — AI founder console for Base builders. Return ONLY raw JSON, no markdown, no preamble.",
-      model:     "claude-haiku-4-5",
       messages:  [{ role: "user", content: prompt }],
       maxTokens: 1200,
     })).text;

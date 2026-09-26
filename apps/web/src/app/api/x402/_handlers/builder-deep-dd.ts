@@ -8,7 +8,12 @@ import { slugifyRepo, fetchRepo, scoreRepoActivity, repoFactsPrompt } from "@/li
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
 
-async function llm(system: string, user: string, temp = 0, tokens = 1000, model = "claude-haiku-4-5"): Promise<string> {
+// The 5th param used to be `model = "claude-haiku-4-5"`, and one call site below
+// overrode it with `"claude-sonnet-4-5"`. Neither id exists in the Virtuals
+// catalog, and the body never passed `model` to callLLM anyway — so the
+// parameter only ever looked like a per-step model choice. Removed; every step
+// runs on VIRTUALS_DEFAULT_MODEL, which is what was already happening.
+async function llm(system: string, user: string, temp = 0, tokens = 1000): Promise<string> {
   return (await callLLM({ system, user, temperature: temp, maxTokens: tokens })).text;
 }
 function parseJson(t: string): Record<string, unknown> | null {
@@ -106,7 +111,7 @@ Schema: {
   "recommended_action": "<specific next step>",
   "open_questions": ["<question to answer before deciding>"]
 }`,
-      `Target: ${target}\nType: ${type}\nProject: ${projectResearch ?? target}\nAudit: ${JSON.stringify(audit)}\nAnalyst: ${JSON.stringify(analyst)}`,  0, 1500, "claude-sonnet-4-5");
+      `Target: ${target}\nType: ${type}\nProject: ${projectResearch ?? target}\nAudit: ${JSON.stringify(audit)}\nAnalyst: ${JSON.stringify(analyst)}`,  0, 1500);
 
     let result = parseJson(resultRaw);
     // HARDMAP verdict from dd_score (deterministic, no LLM flip)

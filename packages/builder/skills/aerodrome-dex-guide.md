@@ -414,5 +414,5 @@ Aerodrome spot prices are susceptible to manipulation in low-liquidity pools. Ne
 - Aerodrome app: `aerodrome.finance`
 - Velodrome docs (same architecture): `docs.velodrome.finance`
 - Bribe analytics: `aerodrome.finance/vote` (built-in bribe display)
-- Related skills: `base-ecosystem.md`, `token-launch-guide.md`
+- Related skills: `base-ecosystem.md`, `staking-yield-farming.md`
 - CLI: `blue build "liquidity pool on Base"`, `blue audit --check liquidity-risk`

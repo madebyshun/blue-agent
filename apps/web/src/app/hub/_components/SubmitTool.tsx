@@ -37,6 +37,7 @@ import { useAccount, useSignMessage } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
 import { useToolDetailHref } from "@/lib/hub-links";
 import { fetchServerNonce } from "@/lib/siwe-nonce";
+import { HOSTED_MODELS, HOSTED_MODEL_DEFAULT } from "@/lib/hosted-models";
 
 type Template = "external" | "ai_tool" | "api_wrapper";
 
@@ -83,10 +84,6 @@ function buildHostedSiwe(spec: {
 
 const SLUG_RE = /^[a-z][a-z0-9-]{2,40}$/;
 const CATEGORIES = ["intelligence", "builder", "trading", "content", "agent-economy", "base-ecosystem", "on-chain", "other"];
-const MODELS = [
-  { id: "claude-haiku-4-5",  label: "Haiku 4.5 — fast & cheap" },
-  { id: "claude-sonnet-4-5", label: "Sonnet 4.5 — smarter" },
-];
 
 type Input = { key: string; label: string; placeholder: string; required: boolean };
 type Step  = "form" | "signing" | "submitting" | "done" | "error";
@@ -137,7 +134,7 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
 
   // ai_tool config
   const [systemPrompt, setSystemPrompt] = useState("");
-  const [model, setModel]               = useState("claude-haiku-4-5");
+  const [model, setModel]               = useState<string>(HOSTED_MODEL_DEFAULT);
   const [temperature, setTemperature]   = useState("0.7");
   const [maxTokens, setMaxTokens]       = useState("900");
 
@@ -461,7 +458,7 @@ export default function SubmitTool({ variant = "page", onClose, onBack, onSubmit
                 <div className="grid grid-cols-3 gap-3">
                   <Field label="Model">
                     <select value={model} onChange={e => setModel(e.target.value)} className={inputCls(true)}>
-                      {MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                      {HOSTED_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
                     </select>
                   </Field>
                   <Field label="Temperature" hint="0–1">

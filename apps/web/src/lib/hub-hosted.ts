@@ -37,6 +37,7 @@ import { assertSafeMcpUrl } from "@/lib/mcp-client";
 // having to reconcile two spellings of "we couldn't read it".
 import type { Coverage } from "@/lib/hub-registry";
 import { callBankrLLM } from "@/app/api/_lib/llm";
+import { HOSTED_MODEL_ALLOWLIST, HOSTED_MODEL_DEFAULT } from "@/lib/hosted-models";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,7 +54,7 @@ export interface HostedToolInput {
 export interface AiToolConfig {
   kind:         "ai_tool";
   systemPrompt: string;                 // creator-authored — UNTRUSTED DATA at run time
-  model?:       string;                 // clamped to MODEL_ALLOWLIST
+  model?:       string;                 // clamped to HOSTED_MODEL_ALLOWLIST; not yet honoured at dispatch
   temperature?: number;                 // clamped 0..1
   maxTokens?:   number;                 // clamped 100..2000
 }
@@ -106,8 +107,6 @@ const K = {
   // builder:earned:<wallet> — accrued creator payout across all their tools
   earned:   (addr: string) => `builder:earned:${addr.toLowerCase()}`,
 };
-
-const MODEL_ALLOWLIST = new Set(["claude-haiku-4-5", "claude-sonnet-4-5"]);
 
 // ─── Public-safe projection ─────────────────────────────────────────────────
 
@@ -427,9 +426,14 @@ export async function runAiTool(
   config: AiToolConfig,
   inputs: Record<string, unknown>,
 ): Promise<HostedRunResult> {
-  const model = config.model && MODEL_ALLOWLIST.has(config.model)
+  // NOTE: `model` is resolved but NOT honoured — callBankrLLM below drops
+  // opts.model, so this always runs on VIRTUALS_DEFAULT_MODEL. Kept so the
+  // allowlist still rejects creator-supplied junk before it is stored/echoed,
+  // and so the gap is visible instead of implied. See lib/hosted-models.ts for
+  // why honouring it is blocked on a pricing decision.
+  const model = config.model && HOSTED_MODEL_ALLOWLIST.has(config.model)
     ? config.model
-    : "claude-haiku-4-5";
+    : HOSTED_MODEL_DEFAULT;
   const temperature = clampNum(config.temperature, 0, 1, 0.7);
   const maxTokens   = clampNum(config.maxTokens, 100, 2000, 900);
 

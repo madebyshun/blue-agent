@@ -6,10 +6,17 @@ import { callLLM } from "@/app/api/_lib/llm";
 type BankrMessage = { role: string; content: string };
 
 // Bankr LLM (llm.bankr.bot) was 403-banned 2026-07-20 → route this local
-// helper through callLLM (Virtuals). Signature kept so both call sites are
-// unchanged; the original 0.7 temperature default is preserved.
+// helper through callLLM (Virtuals). The original 0.7 temperature default is
+// preserved.
+//
+// The `model?: string` param is gone: it was never forwarded to callLLM, so the
+// `"claude-haiku-4-5"` both call sites passed was decoration — and it read like
+// a live model choice. Tier 2 and Tier 3 have the same-looking shim but DO
+// forward, so there the identical string threw on every call. Same code, two
+// behaviours: keep the param absent here so the two files cannot be "made
+// consistent" by reintroducing it.
 async function callBankrLLM(opts: {
-  model?: string; system: string; messages: BankrMessage[];
+  system: string; messages: BankrMessage[];
   temperature?: number; maxTokens?: number;
 }): Promise<string> {
   return (await callLLM({
@@ -56,7 +63,6 @@ async function runMiroSharkSimulation(opts: {
     : "";
   try {
     const raw = await callBankrLLM({
-      model: "claude-haiku-4-5",
       system: `You are MiroShark — 4-persona crypto consensus engine.
 Personas: Analyst(1.8x weight), Influencer(2.8x), Retail(1.0x), Observer(0.5x).
 Each gives stance: bull/bear/neutral. Weighted consensus → bull%/bear%/neutral%.
@@ -116,7 +122,7 @@ Rules: copy miroshark values EXACTLY. final_verdict = weighted consensus of all 
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const raw = await callBankrLLM({
-          model: "claude-haiku-4-5", system,
+          system,
           messages: [{ role: "user", content: userMsg }],
           temperature: attempt > 0 ? 0.1 : 0.4,
           maxTokens: 1200,

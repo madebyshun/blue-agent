@@ -8,7 +8,16 @@
 // data; CT/Farcaster presence cannot be verified and is reported [data unavailable]
 // in real results, not guessed from the handle name. The LLM never invents the
 // grounded numbers; missing data is labelled "unavailable". Resilient: never 500.
-// Price: $0.35
+//
+// NOT a paid x402 tool, despite sitting in _handlers/. It is in neither HANDLERS
+// nor AGENT_TOOLS, so /api/x402/builder-score answers 501 and /hub never lists
+// it. This line read "Price: $0.35" until 2026-09-26 — a price for a tool that
+// has never been purchasable, and the one detail that makes a reader tidy this
+// file away or register it. Every live caller reaches it through the FREE
+// /api/builder-score, which imports this module directly: the dashboard, chat's
+// hub_builder_score (FREE_DIRECT) and the published @blueagent/skill's
+// blue_score. Deleting it breaks all three; pricing it is a product decision.
+// Pinned by dead-tool-check C3/C4.
 
 import { fetchRepo, slugifyRepo, scoreRepoActivity, repoFactsPrompt, type RepoData } from "@/lib/github";
 import { getWalletSnapshot, snapshotToPrompt, normalizeAddress } from "@/lib/onchain";

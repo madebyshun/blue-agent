@@ -19,11 +19,10 @@ import {
   type AiToolConfig,
   type ApiWrapperConfig,
 } from "@/lib/hub-hosted";
+import { HOSTED_MODEL_ALLOWLIST } from "@/lib/hosted-models";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
-
-const MODEL_ALLOWLIST = new Set(["claude-haiku-4-5", "claude-sonnet-4-5"]);
 
 const clamp = (n: unknown, lo: number, hi: number, def: number): number => {
   const v = typeof n === "number" && Number.isFinite(n) ? n : def;
@@ -55,7 +54,7 @@ export async function POST(req: NextRequest) {
     const cfg: AiToolConfig = {
       kind:         "ai_tool",
       systemPrompt: systemPrompt.slice(0, 8000),
-      model:        typeof raw.model === "string" && MODEL_ALLOWLIST.has(raw.model) ? raw.model : undefined,
+      model:        typeof raw.model === "string" && HOSTED_MODEL_ALLOWLIST.has(raw.model) ? raw.model : undefined,
       temperature:  clamp(raw.temperature, 0, 1, 0.7),
       maxTokens:    clamp(raw.maxTokens, 100, 2000, 900),
     };

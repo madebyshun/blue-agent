@@ -787,8 +787,8 @@ const MIN_MAX_TOKENS = 400;
  *
  * ── WHY A FIXED CONSTANT AND NOT A MULTIPLE OF `maxTokens` ─────────────────
  *
- * Because reasoning does NOT scale with the budget we offer. Same prompt, 5
- * runs at each offered budget:
+ * Because on these prompts reasoning does NOT scale with the budget we offer.
+ * Same prompt, 5 runs at each offered budget:
  *
  *     offered 2000 → reasoning mean 1460 (3/5 starved)
  *     offered 2800 → reasoning mean 2007 (1/5 starved)
@@ -803,10 +803,46 @@ const MIN_MAX_TOKENS = 400;
  * carrying one of the heaviest prompts — it would have received the least
  * headroom exactly where the most was needed.
  *
- * Cost of the larger number is ~nil: `max_tokens` is a cap, not a purchase.
- * Above 3600 the model stops on its own (`finish_reason: "stop"`), so the extra
- * ceiling is never billed. The failure it replaces was the expensive one — a
- * starved call bills the full budget and returns nothing.
+ * ── ⚠️ BUT "FLAT" IS A PROPERTY OF THE PROMPT, NOT A LAW ───────────────────
+ *
+ * Measured the same day against the x402 `dex-flow` prompt, which asked the
+ * model to derive per-pair ratios and formatted volumes from five nested
+ * DexScreener objects:
+ *
+ *     wire budget  2000  →  0/3 answered, reasoning 1657–1830
+ *                  3200  →  0/3 answered, reasoning 2607–2676
+ *                  6000  →  2/4 answered, reasoning 2645–4493
+ *                 12000  →  2/4 answered, reasoning 3333–8099
+ *
+ * There reasoning TRACKED the budget instead of converging, so NO headroom
+ * value made that prompt reliable and raising this constant would only have
+ * taxed the other call sites. That one was fixed by computing the numbers in
+ * code and leaving the model prose (see x402/_handlers/dex-flow.ts).
+ *
+ * The two results are not in conflict — they are two prompt CLASSES. Flat is
+ * what a knowledge/judgement prompt does; budget-tracking is what an
+ * arithmetic prompt does. So: a starving caller is evidence about THAT PROMPT
+ * first, and about this number only second. Before raising it again, check
+ * whether the prompt is asking the model to do arithmetic — CLAUDE.md forbids
+ * that anyway, and no constant will rescue it. The control that settles the
+ * class: at the identical `maxTokens: 800`, scam-detector (7 scalar facts,
+ * flat JSON out) spends ~200 reasoning tokens and answered 6/6.
+ *
+ * Both handlers that forced this change were checked against that test and are
+ * in the flat class: `b20-analyze` ships a long B20 KNOWLEDGE block and asks
+ * for prose, and `builder-deep-dd` scores qualitative DD. Neither derives a
+ * number from nested input.
+ *
+ * Cost of the larger number is ~nil FOR THE FLAT CLASS: `max_tokens` is a cap,
+ * not a purchase. Above 3600 those prompts stop on their own
+ * (`finish_reason: "stop"`), so the extra ceiling is never billed. The failure
+ * it replaces was the expensive one — a starved call bills the full budget and
+ * returns nothing. For a budget-tracking prompt the ceiling IS spent, which is
+ * the second reason not to reach for this constant to fix one.
+ *
+ * And for the case no constant covers, the `reasoning_effort: "none"` retry
+ * below is the actual backstop: it removes the reasoning phase rather than
+ * trying to out-size it.
  */
 const REASONING_HEADROOM_TOKENS = 5000;
 

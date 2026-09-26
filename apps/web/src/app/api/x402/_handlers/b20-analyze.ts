@@ -106,8 +106,10 @@ export default async function handler(req: Request): Promise<Response> {
 
     // LLM advisory + live on-chain activation read, in parallel.
     const [raw, act] = await Promise.all([
+      // No `model`: the shared callBankrLLM drops opts.model (Virtuals picks a
+      // catalog-validated id), so the `"claude-haiku-4-5"` here claimed a model
+      // choice this code never made — and the id is absent from the catalog.
       callBankrLLM({
-        model: "claude-haiku-4-5",
         temperature: 0,
         maxTokens: 800,
         system: SYSTEM,
