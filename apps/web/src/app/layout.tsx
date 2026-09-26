@@ -31,9 +31,27 @@ const TITLE = "BlueAgent — The onchain Agent OS";
    empty body is not a check. Use `-L`, and assert the body is large before
    trusting a zero:
      body=$(curl -sL "$url"); [ ${#body} -gt 2000 ] || echo "empty, check is void"
-   (`scripts/link-liveness-check.ts` does not have this hole — it resolves paths
-   against the route tree statically and never fetches. This trap is specific to
-   ad-hoc post-deploy greps.) */
+   🔴 That byte floor is NOT sufficient either — measured 2026-09-26, about two
+   hours after this comment prescribed it. Polling a deploy in a tight loop
+   tripped Vercel's own bot mitigation, and from request #7 onward EVERY path on
+   the domain answered `403 text/html` + `x-vercel-mitigated: challenge` with a
+   33,972-byte "Vercel Security Checkpoint" page. (Before that, requests #1–#6 of
+   the same loop returned a real 96,777-byte `image/png`, so the loop broke
+   itself mid-run.) That body is not empty, so `> 2000` passes; it does not
+   contain the old copy, so `grep -c` returns 0; so the recipe above reports "the
+   fix is live" about a page that was never served. Verifying harder is what
+   causes it.
+   Check the STATUS, and assert a string you expect to be PRESENT — an
+   absence-only check cannot tell your page apart from someone else's error page:
+     out=$(curl -sL -w '\n%{http_code}' "$url"); code=${out##*$'\n'}
+     [ "$code" = 200 ] || echo "http $code — check is void"
+   Once challenged, STOP curling: the 403 is keyed to the caller, so retrying
+   only extends it. Read the deploy state from the Vercel API, or fetch through
+   different egress (the WebFetch tool) — which is how the two-chain copy above
+   was finally confirmed live. Never attempt to satisfy the challenge itself.
+   (`scripts/link-liveness-check.ts` does not have either hole — it resolves
+   paths against the route tree statically and never fetches. Both traps are
+   specific to ad-hoc post-deploy greps.) */
 const DESCRIPTION =
   `${TOOL_COUNT} x402 tools, pay per call in USDC with no API key. Agent chat that hands you transactions to sign, plus live reads on Base 8453 and Robinhood Chain 4663.`;
 
