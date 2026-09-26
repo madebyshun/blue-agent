@@ -118,27 +118,47 @@ You are a **skill router** for Base builders. Identify what the user needs and l
 
 ## MCP Tools
 
-- `blue_idea` — concept → fundable brief
+> Rewritten 2026-09-26. This list named 21 tools, **17 of which no longer
+> resolve** — the manifest at `/api/mcp` was cut from 85 to 18 that day. An
+> agent trusting the old list called `blue_idea` and got `-32601` with no
+> explanation. The capability did not go anywhere: all 110 catalog tools are
+> live at `/api/x402/<id>`, reached through `blue_registry` → `blue_call`.
+
+**Discovery and execution**
+
+- `blue_registry` — search the 110-tool catalog; returns id, price, input shape
+- `blue_call` — run any catalog tool by id. **Charges x402**: the first call
+  returns a 402 with payment requirements you sign from your own wallet
+- `blue_swap_tx` — unsigned swap calldata. `chain` required, no default
+- `blue_send_tx` — unsigned ERC-20 / native transfer. `chain` required
+- `blue_bridge_tx` — unsigned bridge, Base ⇄ Robinhood Chain, via Relay
+- `b20_encode_payment` — B20 `transferWithMemo` calldata, Base only
+
+**Live reads**
+
+- `hub_hood_arrow` — open a Blue Hood signal. Pass `chain` when the user named one
+- `hub_token_price` — live price / mcap / volume, Base 8453
+- `hub_wallet_holdings` — balances with USD values, Base 8453
+- `hub_pool_scan` — trending pools, Base 8453
+- `hub_gas_tracker` — live gas with USD cost estimates, Base 8453
+
+**Safety — run these before money moves, unprompted**
+
+- `hub_risk_gate` — screen a pending transaction
+- `hub_honeypot` — can it be sold at all
+- `hub_contract_trust` — source, upgradeability, admin powers
+- `hub_wallet_risk` — AML / sanctions exposure of an address
+- `hub_liquidity_depth` — can the position be closed, and at what cost
+
+**Console**
+
 - `blue_build` — architecture + stack
 - `blue_audit` — security review
-- `blue_ship` — deployment checklist
-- `blue_raise` — pitch narrative
-- `hub_token_pick` — AI token pick
-- `hub_narrative` — narrative map
-- `hub_whale_signal` — whale copy signals
-- `hub_deep_analysis` — token fundamentals
-- `hub_ecosystem` — Base daily digest
-- `hub_honeypot` — honeypot check
-- `hub_risk_gate` — transaction screen
-- `hub_market_fit` — market fit analysis
-- `hub_competitor_scan` — competitor analysis
-- `hub_investor_memo` — full investor memo
-- `hub_fundraise_timing` — raise timing
-- `hub_base_grant` — grant finder
-- `hub_builder_score` — builder score
-- `hub_repo_health` — repo health
-- `blue_score` — onchain builder score
-- `blue_new` — project scaffolding
+
+`blue_idea`, `blue_ship` and `blue_raise` are **not** MCP tools any more. They
+ship as the Skills in this plugin, which costs no context until loaded. The
+former `blue_score` / `hub_builder_score` names were never a matched pair — see
+the `blue-score` skill for the one real endpoint.
 
 ## Workflow
 

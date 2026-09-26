@@ -1,6 +1,7 @@
 # Blue Agent — Claude Plugin
 
-Claude Code plugin for Base builders. One install gives you 21 MCP tools — console commands + Hub intelligence.
+Claude Code plugin for Base builders. One install gives you 18 MCP tools plus
+the whole 110-tool Blue Hub catalog behind two of them.
 
 ## Install
 
@@ -14,38 +15,52 @@ claude plugin install blue-agent
 
 ## What you get
 
-### Console Commands
-| Command | What it does | Price |
-|---------|-------------|-------|
-| `blue_idea` | Concept → fundable brief | $0.05 |
-| `blue_build` | Architecture + stack | $0.50 |
-| `blue_audit` | Security review, 500+ checks | $1.00 |
-| `blue_ship` | Deployment checklist | $0.10 |
-| `blue_raise` | Pitch narrative | $0.20 |
+> Rewritten 2026-09-26. These tables listed 21 tools, **17 of which no longer
+> resolve**, each with a price — and the prices were wrong twice over: they were
+> the x402 catalog prices, while an MCP tool here runs **free**. (`hub_builder_score`
+> was listed at $0.001 and has never had a price, because it has never been a
+> tool.) The manifest was cut from 85 to 18 that day for context, not scope: all
+> 110 catalog tools stay live and are reached through `blue_registry` → `blue_call`.
 
-### Hub Tools
-| Tool | What it does | Price |
-|------|-------------|-------|
-| `hub_token_pick` | AI token pick, thesis + entry | $0.20 |
-| `hub_narrative` | Narrative map, FRONT-RUN/RIDE/FADE | $0.15 |
-| `hub_whale_signal` | Whale copy-trade signals | $0.005 |
-| `hub_deep_analysis` | Token fundamentals, on-chain DD | $0.001 |
-| `hub_ecosystem` | Daily Base digest | $0.20 |
-| `hub_honeypot` | Honeypot detection | $0.01 |
-| `hub_risk_gate` | Pre-tx safety screen | $0.05 |
-| `hub_market_fit` | GO / WAIT / PIVOT verdict | $0.25 |
-| `hub_competitor_scan` | Competitor analysis | $0.20 |
-| `hub_investor_memo` | Full investor memo | $0.35 |
-| `hub_fundraise_timing` | Is now right to raise? | $0.20 |
-| `hub_base_grant` | Active Base grants | $0.01 |
-| `hub_builder_score` | Onchain builder reputation | $0.001 |
-| `hub_repo_health` | GitHub repo health | $0.005 |
+### Discovery and execution
+| Tool | What it does | Cost |
+|------|-------------|------|
+| `blue_registry` | Search the 110-tool catalog — id, price, input shape | Free |
+| `blue_call` | Run any catalog tool by id | **x402** — you sign, from your own wallet |
+| `blue_swap_tx` | Unsigned swap calldata, `chain` required | Free |
+| `blue_send_tx` | Unsigned ERC-20 / native transfer | Free |
+| `blue_bridge_tx` | Unsigned bridge, Base ⇄ Robinhood Chain | Free |
+| `b20_encode_payment` | B20 `transferWithMemo` calldata, Base only | Free |
 
-### Utility
+Execution tools return **unsigned calldata**. Blue Agent never holds a key,
+never broadcasts, and cannot pull funds — you sign in your own wallet.
+
+### Live reads — Base 8453
 | Tool | What it does |
 |------|-------------|
-| `blue_score` | Builder Score for any handle/wallet |
-| `blue_new` | Scaffold base-agent / base-x402 / base-token |
+| `hub_hood_arrow` | Open a Blue Hood signal (pass `chain` when the user named one) |
+| `hub_token_price` | Live price, mcap, volume |
+| `hub_wallet_holdings` | Balances with USD values |
+| `hub_pool_scan` | Trending pools |
+| `hub_gas_tracker` | Live gas, USD cost per action |
+
+### Safety — run before money moves
+| Tool | What it does |
+|------|-------------|
+| `hub_risk_gate` | Screen a pending transaction |
+| `hub_honeypot` | Can the token be sold at all |
+| `hub_contract_trust` | Source, upgradeability, admin powers |
+| `hub_wallet_risk` | AML / sanctions exposure of an address |
+| `hub_liquidity_depth` | Can the position be closed, at what cost |
+
+### Console
+| Tool | What it does |
+|------|-------------|
+| `blue_build` | Architecture + stack |
+| `blue_audit` | Security review, 500+ checks |
+
+`blue_idea`, `blue_ship` and `blue_raise` are Skills in this plugin rather than
+MCP tools — progressive disclosure costs no context until they load.
 
 ## Usage examples
 
