@@ -24,6 +24,7 @@
  */
 import { kvGet, kvSet, kvMutate } from "@/lib/kv";
 import { absoluteUrl } from "@/lib/site-url";
+import { BRIEF_STATUS_WITHHELD, briefHasNumberDrift } from "./brief-serving";
 import { kvChatCard, KV_CHAT_CARD_FEED, TTL_CHAT_CARD } from "./kv-keys";
 import type { Arrow } from "./types";
 
@@ -111,6 +112,96 @@ export async function writeChatCard(a: Arrow): Promise<ChatCard | null> {
 /** Best-effort read for the API surface + eventual chat consumer. */
 export async function readChatCard(arrowId: string): Promise<ChatCard | null> {
   return (await kvGet<ChatCard>(kvChatCard(arrowId))) ?? null;
+}
+
+/**
+ * ── SERVE-TIME WITHHOLDING FOR THE CARD'S `context` LINE ─────────────────────
+ *
+ * `context` is a VERBATIM COPY of `brief.one_line_context` — the one field in
+ * this whole system that an LLM writes freely, and the one `brief-serving.ts`
+ * exists to withhold when `detectBriefNumberDrift` catches it citing a
+ * percentage that does not reconcile against `facts_at_fire`.
+ *
+ * The copy is the hole. `brief-serving.ts` withholds the ORIGINAL, on the
+ * arrow; the card carries a second copy, written at fire time, with no
+ * `warnings` field on it to judge itself by. So `/api/hood/chat/card/[id]` and
+ * `/api/hood/chat/recent` were serving the exact sentence the arrow feed had
+ * already been taught to suppress, from a different URL. `/api/chat` was fixed
+ * in-line and is the reason this is a projection and not a rewrite — see the
+ * `briefWithheld` branch there.
+ *
+ * ⚠️ PROJECTION, NOT MUTATION, NOT A CORRECTION — same law as
+ * `brief-serving.ts` and `arrow-fields.ts`. The stored card keeps its original
+ * `context` verbatim and so does the arrow; a published number stays exactly as
+ * published, wrong ones included. Only what leaves the server changes.
+ *
+ * Done at READ time rather than at `buildChatCard` time on purpose: cards live
+ * for `TTL_CHAT_CARD` (30 days), so a write-time fix would leave a month of
+ * already-written cards still serving the flagged sentence — the backlog is the
+ * whole reason this is worth doing, not an edge case of it.
+ */
+
+/** `context` was blanked because the arrow's brief carries a drift warning. */
+export const CONTEXT_WITHHELD_DRIFT = BRIEF_STATUS_WITHHELD;
+
+/**
+ * `context` was blanked because the arrow it came from could not be read, so
+ * there was nothing to reconcile it against.
+ *
+ * A separate value from the one above because the two are different facts and
+ * a reader acts on them differently: the first says "we caught a bad number",
+ * the second says "we could not check". Collapsing them would let an outage
+ * masquerade as a detection.
+ */
+export const CONTEXT_WITHHELD_UNVERIFIED = "withheld_unverified" as const;
+
+export type ChatCardContextStatus =
+  | typeof CONTEXT_WITHHELD_DRIFT
+  | typeof CONTEXT_WITHHELD_UNVERIFIED;
+
+export interface ServedChatCard extends ChatCard {
+  /** Present ONLY when `context` was withheld. Absent on every clean card, so
+   *  an empty `context` with no status still means what it always meant: the
+   *  brief chain wrote no context line. */
+  context_status?: ChatCardContextStatus;
+  /** The arrow's brief warnings, verbatim. Part three of the withholding rule:
+   *  suppressing the text while hiding the reason would turn a visible
+   *  fabrication into an invisible one, which is worse than the bug. Only
+   *  attached alongside a `withheld_number_drift` status — a clean card is
+   *  served byte-identical to what it has always been. */
+  warnings?: string[];
+}
+
+/**
+ * The served form of one card.
+ *
+ * Returns the SAME REFERENCE when there is nothing to withhold — including for
+ * a card whose `context` is already empty, which is most of them. That keeps
+ * "a clean card is served completely unchanged" true by identity, and stops a
+ * context-less card from being stamped with an alarming status that describes
+ * nothing.
+ *
+ * `arrow` is `undefined` when the lookup was never attempted and `null` when it
+ * was attempted and missed. Both are treated as unverified — but only the miss
+ * can happen on the routes below, and it is the case that must never silently
+ * pass a narrative line through.
+ */
+export function serveChatCard(
+  card: ChatCard,
+  arrow: { brief?: unknown } | null | undefined,
+): ServedChatCard {
+  if (!card.context) return card;
+  if (!arrow) {
+    return { ...card, context: "", context_status: CONTEXT_WITHHELD_UNVERIFIED };
+  }
+  if (!briefHasNumberDrift(arrow.brief)) return card;
+  const warnings = (arrow.brief as { warnings?: unknown }).warnings;
+  return {
+    ...card,
+    context: "",
+    context_status: CONTEXT_WITHHELD_DRIFT,
+    warnings: Array.isArray(warnings) ? warnings.filter((w): w is string => typeof w === "string") : [],
+  };
 }
 
 /** Newest N card ids (default 20). Trimmed inline so the chat consumer

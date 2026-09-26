@@ -8,9 +8,17 @@
  * 404 semantics: returns `{ ok: false, error: "not_found" }` with a 404
  * status. Never leaks the underlying arrow record; if the chat wants
  * more than the card carries, it should hit `/api/hood/arrows`.
+ *
+ * ⚠️ The arrow IS read here, for one reason: the card's `context` is a verbatim
+ * copy of `brief.one_line_context`, and only the arrow carries the `warnings`
+ * that say whether that sentence survived number reconciliation. Without the
+ * lookup this route served the exact line `/api/hood/arrows` already withholds.
+ * One extra KV command, on a route with no in-repo caller. See `serveChatCard`.
  */
 import { NextResponse } from "next/server";
-import { readChatCard } from "@/lib/blue-hood/chat-card";
+import { kvGet } from "@/lib/kv";
+import { readChatCard, serveChatCard } from "@/lib/blue-hood/chat-card";
+import { kvArrow } from "@/lib/blue-hood/kv-keys";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,8 +41,12 @@ export async function GET(
       { status: 404, headers: { "Cache-Control": "no-store" } },
     );
   }
+  // Direct read, not the hydrated feed blob: the blob caps at the newest 250
+  // arrows while a card lives 30 days, so for a single id the precise lookup is
+  // both cheaper (1 command, no rebuild risk) and correct at any age.
+  const arrow = await kvGet<{ brief?: unknown }>(kvArrow(id));
   return NextResponse.json(
-    { ok: true, card },
+    { ok: true, card: serveChatCard(card, arrow ?? null) },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

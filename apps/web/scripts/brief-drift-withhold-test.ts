@@ -37,8 +37,16 @@ import {
   hoodArrowInstruction,
   answerFromClause,
 } from "../src/lib/blue-hood/brief-serving";
+import {
+  CONTEXT_WITHHELD_DRIFT,
+  CONTEXT_WITHHELD_UNVERIFIED,
+  buildChatCard,
+  serveChatCard,
+  type ServedChatCard,
+} from "../src/lib/blue-hood/chat-card";
 import { detectBriefNumberDrift } from "../src/lib/blue-hood/brief";
 import type { Arrow, ArrowBrief } from "../src/lib/blue-hood/types";
+import { readFileSync } from "node:fs";
 
 let failures = 0;
 function check(label: string, pass: boolean, detail: string) {
@@ -292,6 +300,103 @@ function main() {
     !rhWithheld.includes("one_line_context") && !baseWithheld.includes("one_line_context"), "absent on both");
   check("withheld instruction points at the measured fields instead",
     rhWithheld.includes("facts_at_fire") && rhWithheld.includes("verdict_note"), "both named");
+
+  // ── H. THE SECOND COPY — Blue Chat cards carried the same sentence ──────
+  //
+  // `buildChatCard` copies `brief.one_line_context` into `ChatCard.context` at
+  // fire time. Sections B–G withhold the ORIGINAL on the arrow; the copy lives
+  // in its own KV key with NO `warnings` field to judge itself by, and
+  // `/api/hood/chat/card/[id]` + `/api/hood/chat/recent` served it raw. Same
+  // fabricated sentence, different URL.
+  //
+  // Cards live 30 days (`TTL_CHAT_CARD`), which is why the fix is at READ time:
+  // a write-time fix would leave a month of already-written cards still serving
+  // it, and that backlog is the reason this is worth doing at all.
+  console.log("\nH. THE CARD COPY — the same sentence, withheld on the chat-card surface too:");
+  const driftedArrow = makeArrow(driftedBrief);
+  const driftedCard = buildChatCard(driftedArrow);
+  check("buildChatCard still copies the one-liner verbatim (forward-only: the record is not rewritten)",
+    driftedCard.context === DRIFTED_CONTEXT, `context_len=${driftedCard.context.length}`);
+
+  const servedCard = serveChatCard(driftedCard, driftedArrow);
+  check("served context is blanked", servedCard.context === "", JSON.stringify(servedCard.context));
+  check(`context_status = ${CONTEXT_WITHHELD_DRIFT} (the blank is a DECISION, not an absence)`,
+    servedCard.context_status === CONTEXT_WITHHELD_DRIFT, String(servedCard.context_status));
+  check("the drift warning rides along as evidence",
+    (servedCard.warnings ?? []).some((w) => w.startsWith(DRIFT_WARNING_PREFIX)),
+    (servedCard.warnings ?? []).find((w) => w.startsWith(DRIFT_WARNING_PREFIX)) ?? "MISSING");
+  check("headline survives — it is verdict_note, code-mapped and never LLM-written",
+    servedCard.headline === driftedBrief.verdict_note, "identical");
+  check("the stored card is not mutated by the projection",
+    driftedCard.context === DRIFTED_CONTEXT, "source intact");
+
+  console.log("\n   …and a clean card is served completely unchanged:");
+  const cleanCard = buildChatCard(makeArrow(cleanBrief, "#0604"));
+  check("same object reference returned", serveChatCard(cleanCard, makeArrow(cleanBrief, "#0604")) === cleanCard,
+    "identity");
+  check("clean context preserved verbatim",
+    serveChatCard(cleanCard, makeArrow(cleanBrief, "#0604")).context === cleanBrief.one_line_context,
+    String(cleanCard.context));
+  check("no context_status key on a clean card",
+    !has(serveChatCard(cleanCard, makeArrow(cleanBrief, "#0604")), "context_status"), "absent");
+  check("no warnings key on a clean card (byte-identical to what it has always been)",
+    !has(serveChatCard(cleanCard, makeArrow(cleanBrief, "#0604")), "warnings"), "absent");
+
+  console.log("\n   …an UNREADABLE arrow withholds too — an outage must not publish an unchecked line:");
+  const unverified = serveChatCard(driftedCard, null);
+  check("context blanked when the arrow could not be read", unverified.context === "",
+    JSON.stringify(unverified.context));
+  check(`context_status = ${CONTEXT_WITHHELD_UNVERIFIED}, NOT the drift value`,
+    unverified.context_status === CONTEXT_WITHHELD_UNVERIFIED, String(unverified.context_status));
+  // Widened to `string` on purpose. As literal types tsc proves the two can
+  // never be equal and rejects the comparison outright (TS2367) — which is the
+  // stronger guarantee, and the reason this reads the VALUES instead: what
+  // matters at runtime is that the drift status is still the arrow-side literal
+  // the rest of the system pins, and that the outage status is its own word.
+  check("the two statuses are different strings — an outage cannot masquerade as a detection",
+    (CONTEXT_WITHHELD_DRIFT as string) !== (CONTEXT_WITHHELD_UNVERIFIED as string)
+      && CONTEXT_WITHHELD_DRIFT === BRIEF_STATUS_WITHHELD,
+    `${CONTEXT_WITHHELD_DRIFT} vs ${CONTEXT_WITHHELD_UNVERIFIED}`);
+  check("no warnings invented when there was nothing to read",
+    !has(unverified, "warnings"), "absent");
+
+  console.log("\n   …a card with no context line is never stamped (most cards are this):");
+  const noContextCard = { ...driftedCard, context: "" };
+  check("empty context + drifted arrow → identity",
+    serveChatCard(noContextCard, driftedArrow) === noContextCard, "identity");
+  check("empty context + unreadable arrow → identity, no alarming status",
+    serveChatCard(noContextCard, null) === noContextCard, "identity");
+
+  // ── H-NEG. the card battery must go red on the pre-fix pass-through ─────
+  console.log("\n   NEGATIVE CONTROL — serving the card raw MUST fail these assertions:");
+  const cardPassthrough = (c: typeof driftedCard): ServedChatCard => c;
+  const rawDrifted = cardPassthrough(driftedCard);
+  const rawUnverified = cardPassthrough(driftedCard);
+  const cardFailures: string[] = [];
+  if (rawDrifted.context === "") cardFailures.push("(blank on drift)");
+  if (rawDrifted.context_status === CONTEXT_WITHHELD_DRIFT) cardFailures.push("(status on drift)");
+  if (rawUnverified.context === "") cardFailures.push("(blank when unreadable)");
+  check("the pre-fix pass-through fails all three withholding assertions",
+    cardFailures.length === 0,
+    cardFailures.length === 0 ? "red on: blank-on-drift, status-on-drift, blank-when-unreadable" : `LEAKED: ${cardFailures.join(" ")}`);
+  check("…while still passing the clean one (goes red on the withhold, not on noise)",
+    cardPassthrough(cleanCard).context === cleanCard.context, "clean unchanged");
+
+  // ── H-WIRE. a helper nobody calls is a comment ──────────────────────────
+  //
+  // Both assertions match an IMPORT plus a CALL, not the bare word: this file
+  // and those routes all mention `serveChatCard` in prose, and an assertion a
+  // comment can satisfy is an assertion that punishes documenting the fix.
+  console.log("\n   WIRED — both public card routes actually call the projection:");
+  for (const [label, rel] of [
+    ["/api/hood/chat/card/[id]", "../src/app/api/hood/chat/card/[id]/route.ts"],
+    ["/api/hood/chat/recent", "../src/app/api/hood/chat/recent/route.ts"],
+  ] as const) {
+    const src = readFileSync(new URL(rel, import.meta.url), "utf8");
+    check(`${label} imports and calls serveChatCard`,
+      /import\s*\{[^}]*\bserveChatCard\b[^}]*\}\s*from/.test(src) && /serveChatCard\s*\(/.test(src),
+      /serveChatCard\s*\(/.test(src) ? "called" : "NOT CALLED — the route serves the raw card");
+  }
 
   console.log(failures === 0
     ? "\n✓ all brief-drift withholding assertions passed\n"
