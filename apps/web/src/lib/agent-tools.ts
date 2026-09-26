@@ -1497,6 +1497,20 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => ({ contract: v.contract ?? "", expected_ticker: v.expected_ticker ?? "" }),
   },
   {
+    id: "rh-token-scan",
+    name: "RH Token Scan (Owner Powers)",
+    description: "What can the owner still do to this token? Reads a Virtuals AgentToken / AgentTokenV4 on Robinhood Chain 4663 straight off the bytecode: buy/sell tax in basis points, projectTaxRecipient, vault, owner and pendingOwner, the blacklists(address) lever, and the bot-protection window. Selector probes, not contract names — a deployer picks the name, not the bytecode. Every unread field stays null and is listed in `unread`, because on this template a zero owner, a zero pendingOwner and a zero bot window are all the reassuring answer. No LLM. Free — safety checks should never be gated.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "security",
+    inputs: [
+      { key: "contract", label: "Contract address (RH 4663)", placeholder: "0x…", required: true },
+    ],
+    isComposite: false,
+    price: "$0.00", priceUSDC: 0,
+    x402Url: `${X402_BASE}/rh-token-scan`,
+    x402Body: (v) => ({ contract: v.contract ?? "" }),
+  },
+  {
     id: "rh-stock-quote",
     name: "RH Stock Quote (Chainlink)",
     description: "Deterministic live quote for Robinhood Chain tokenized stocks. On-chain Chainlink AggregatorV3 latestRoundData → raw answer + decimals + updatedAt + staleness. Falls back to DEX spot only if no feed exists. The one embed-friendly price tool.",

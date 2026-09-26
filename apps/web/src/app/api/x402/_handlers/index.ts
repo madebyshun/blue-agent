@@ -93,6 +93,7 @@ import hRhStockToken   from "./rh-stock-token";
 import hRhRwaIndex     from "./rh-rwa-index";
 import hRhStockSearch  from "./rh-stock-search";
 import hRhRwaVerify    from "./rh-rwa-verify";
+import hRhTokenScan    from "./rh-token-scan";
 import hRhStockQuote   from "./rh-stock-quote";
 // RH RWA Phase 2 (M2·M3·M4·M5) — market analytics
 import hRhStockOhlc      from "./rh-stock-ohlc";
@@ -216,6 +217,7 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "rh-rwa-index":       hRhRwaIndex,
   "rh-stock-search":    hRhStockSearch,
   "rh-rwa-verify":      hRhRwaVerify,
+  "rh-token-scan":      hRhTokenScan,
   "rh-stock-quote":     hRhStockQuote,
   // ── RH RWA Phase 2 — Market Analytics ─────────────────────────────────
   "rh-stock-ohlc":      hRhStockOhlc,

@@ -83,7 +83,7 @@ JSON Schema per tool) · [`llms.txt`](https://blueagent.dev/llms.txt) (short bri
      Source of truth: apps/web/src/lib/agent-tools.ts (AGENT_TOOLS).
      Body fields are the WIRE shape (post-x402Body), not the Hub form. -->
 
-Blue Hub exposes **110 paid tools** across 11 categories.
+Blue Hub exposes **111 paid tools** across 11 categories.
 
 Categories: on-chain · security · intelligence · builder · trading · content · agent-economy · base-ecosystem · earn · signal · portfolio
 
@@ -124,7 +124,7 @@ full JSON Schema per tool: https://blueagent.dev/api/catalog
 | `wallet-holdings` | $0.02 | `address`* | Live ERC-20 + ETH holdings and USD value for a Base wallet (Moralis). |
 | `whale-tracker` | $0.10 | `address`* | Smart money and whale flow analysis — accumulation vs distribution signal for any token. |
 
-### security (15)
+### security (16)
 
 | id | price | body | what it does |
 |---|---|---|---|
@@ -140,6 +140,7 @@ full JSON Schema per tool: https://blueagent.dev/api/catalog
 | `quick-safety` | $0.05 | `contract`* | Fast contract safety check — liquidity, verification, risk verdict. |
 | `rh-rwa-verify` | $0.00 | `contract`* `expected_ticker` | Given a contract address on Robinhood Chain, is it a canonical RHJ-issued stock token or an impersonator? Cross-checks registry + live ERC-20 metadata. Surfaces the real contract when a fake claims a matching ticker. Free — safety checks should never be gated. |
 | `rh-stock-beacon-check` | $0.05 | `ticker` `contract` | EIP-1967 beacon slot + implementation + admin/owner read for a RWA token proxy. Governance-risk snapshot — compare across runs to detect implementation upgrades. Real on-chain storage reads. |
+| `rh-token-scan` | $0.00 | `contract`* | What can the owner still do to this token? Reads a Virtuals AgentToken / AgentTokenV4 on Robinhood Chain 4663 straight off the bytecode: buy/sell tax in basis points, projectTaxRecipient, vault, owner and pendingOwner, the blacklists(address) lever, and the bot-protection window. Selector probes, not contract names — a deployer picks the name, not the bytecode. Every unread field stays null and is listed in `unread`, because on this template a zero owner, a zero pendingOwner and a zero bot window are all the reassuring answer. No LLM. Free — safety checks should never be gated. |
 | `risk-gate` | $0.20 | `to`* `action` `value` | Pre-transaction risk assessment — screen any address or swap for drainer patterns, AML signals, and malicious contracts. |
 | `token-distribution` | $0.05 | `contract`* | Holder concentration + rug-risk distribution score (Moralis holders). |
 | `wallet-risk` | $0.05 | `address`* | AML / risk screen for a Base wallet from real on-chain flow (Moralis). |
@@ -279,7 +280,7 @@ The MCP surface is deliberately a **subset**, not a mirror.
 
 MCP serves 18 tools — 7 `blue_` + 10 `hub_` + 1 `b20_`.
 
-Only the 10 `hub_` tools are drawn from the 110-tool catalog; `blue_` are the door
+Only the 10 `hub_` tools are drawn from the 111-tool catalog; `blue_` are the door
 (`blue_registry`, `blue_call`), the execution primitives and two console commands, and `b20_`
 is an MCP-only calldata builder. So **none of these numbers is interchangeable with another** —
 a count always belongs to the one surface it was measured on. If you need a total, measure the
@@ -288,7 +289,7 @@ surface you are actually calling.
 **Cut from 85 to 18 on 2026-09-26, and the cut removed no capability.** The 85-tool manifest
 was 32,160 bytes — roughly 8,000 tokens spent before the agent read a single word of the user's
 question — and published MCP research finds tool-selection accuracy degrades sharply past
-~40 always-loaded entries. All 110 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
+~40 always-loaded entries. All 111 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
 lists them and `blue_call` runs any of them, so the other 95 moved from "always in context" to
 "one lookup away". A manifest is a context budget, not an inventory.
 
