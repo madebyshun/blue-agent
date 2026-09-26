@@ -191,7 +191,11 @@ function HomeView(props: HubHomeProps) {
             The x402 tool marketplace <span className="text-[#4FC3F7]">on Base.</span>
           </h1>
           <p className="font-mono text-[12.5px] sm:text-sm leading-[1.6] mb-5 max-w-2xl" style={{ color: "#94A3B8" }}>
-            Agents call. Creators keep <span style={{ color: "#E2E8F0" }}>95%</span> self-hosted,{" "}
+            {/* 100% is not generosity, it is what EIP-3009 allows: one signature,
+                one recipient. A self-hosted tool's own endpoint is the payee, so
+                the caller pays it directly and Blue is not in the path. Hosted
+                tools do settle through Blue, hence the 90. */}
+            Agents call. Creators keep <span style={{ color: "#E2E8F0" }}>100%</span> self-hosted,{" "}
             <span style={{ color: "#E2E8F0" }}>90%</span> hosted on Blue Hub — paid per call in USDC over{" "}
             <span style={{ color: "#E2E8F0" }}>Coinbase x402</span> on Base.
           </p>
@@ -205,7 +209,7 @@ function HomeView(props: HubHomeProps) {
             </button>
             {(() => {
               const cls = "font-mono text-[11px] font-medium px-4 py-2.5 rounded-[9px] border border-[#A78BFA]/35 text-[#A78BFA] hover:bg-[#A78BFA]/10 transition-colors";
-              const inner = <>List your tool · keep up to 95% →</>;
+              const inner = <>List your tool · keep 100% self-hosted →</>;
               return onListTool
                 ? <button type="button" onClick={onListTool} className={cls}>{inner}</button>
                 : <Link href="/hub/submit" className={cls}>{inner}</Link>;
@@ -390,12 +394,18 @@ function BrowseView(props: HubHomeProps) {
             <div className="text-center py-12 max-w-md mx-auto">
               <div className="text-3xl mb-3">{SOURCE_META[source as NonNullable<HubTool["source"]>].icon}</div>
               <p className="font-mono text-sm text-white font-bold mb-1">No {sourceLabel.toLowerCase()} tools yet.</p>
+              {/* The share depends on WHICH empty list this is: a self-hosted tool
+                  is paid directly by the caller (100%), a Blue-hosted one settles
+                  through Blue (90%). One hardcoded number was wrong on whichever
+                  tab it wasn't written for. */}
               <p className="font-mono text-[11px] text-slate-500 mb-4">
-                Be the first to list — creators keep <span className="text-[#A78BFA] font-semibold">95%</span> of every call, in USDC on Base.
+                Be the first to list — creators keep{" "}
+                <span className="text-[#A78BFA] font-semibold">{source === "hosted" ? "90%" : "100%"}</span>{" "}
+                of every call, in USDC on Base.
               </p>
               {(() => {
                 const cls = "inline-block font-mono text-xs font-semibold px-4 py-2.5 rounded-xl border border-[#A78BFA]/40 bg-[#A78BFA]/10 text-[#A78BFA] hover:bg-[#A78BFA]/20 transition-colors";
-                const inner = <>List your tool → earn 95%</>;
+                const inner = <>List your tool → earn {source === "hosted" ? "90%" : "100%"}</>;
                 return onListTool
                   ? <button type="button" onClick={onListTool} className={cls}>{inner}</button>
                   : <Link href="/hub/submit" className={cls}>{inner}</Link>;

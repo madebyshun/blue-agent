@@ -9,7 +9,8 @@
  *   hub:tools:index            → string[] of tool IDs (the master list)
  *   hub:tools:item:<id>        → RegisteredTool JSON
  *   hub:tools:calls:<id>       → integer (lifetime call count; mirrors usage:<id>)
- *   hub:tools:revenue:<id>     → integer (lifetime USDC units earned by builder, 95% split)
+ *   hub:tools:revenue:<id>     → integer (lifetime USDC units paid DIRECT to the
+ *                                 builder, 100%; volume received, not a balance held)
  *   hub:builders:tools:<addr>  → string[] of tool IDs owned by this wallet
  *
  * ── KV WRITE DISCIPLINE (#150) ───────────────────────────────────────────────
@@ -410,8 +411,14 @@ export async function removeTool(id: string): Promise<void> {
 
 /**
  * Add to the builder's lifetime revenue counter.
- * `usdcUnits` should be the BUILDER'S 95% share (caller already split off
- * the 5% treasury cut before invoking).
+ *
+ * `usdcUnits` is the builder's share, which for an external tool is the WHOLE
+ * amount: the caller's authorization names the builder's endpoint as payee, so
+ * the money went directly to them and Blue took nothing. That makes this counter
+ * a record of gross volume already received, NOT a balance Blue owes — and an
+ * estimate at that, since it multiplies the listed price by successful calls
+ * while the signed amount comes from the builder's live 402. Never pay out from
+ * it. See the 🔴 block in `api/hub/tools/[id]/call/route.ts`.
  *
  * ⚠ MONEY BOOKKEEPING (#150). The old body was
  *
@@ -427,9 +434,11 @@ export async function removeTool(id: string): Promise<void> {
  * error against wiping the balance, and it is logged so the gap is at least
  * attributable.
  *
- * This is the external 95% twin of `hub-hosted.addBuilderEarnings`, which was
- * fixed in the first #150 pass; this file was never swept, so the twins
- * disagreed until now.
+ * This is the external twin of `hub-hosted.addBuilderEarnings`, which was fixed
+ * in the first #150 pass; this file was never swept, so the twins disagreed
+ * until now. They still differ in MEANING — the hosted one tracks money Blue
+ * holds, this one tracks money that never reached Blue — so keep the two
+ * counters and their labels apart.
  */
 export async function addRevenue(id: string, usdcUnits: number): Promise<void> {
   const res = await kvMutate<number>(K.revenue(id), 0, (cur) => cur + usdcUnits);
@@ -460,7 +469,24 @@ export function sanitizeLogoUrl(raw: unknown): string | undefined {
   return s.slice(0, 300);
 }
 
-/** Returns the canonical message a builder must sign to register a tool. */
+/**
+ * Returns the canonical message a builder must sign to register a tool.
+ *
+ * 🔴 The terms lines said "95/5 revenue split with the Blue Hub treasury" until
+ * 2026-09-26. That was never true and could not have been: an external tool
+ * settles at the BUILDER's own endpoint, EIP-3009 pays exactly one recipient, so
+ * there is no point in the flow where Blue could take 5% without either holding
+ * the builder's funds (custody) or asking the caller for a second signature.
+ * The 5% existed only as a KV counter. Signing a split nobody performs is the
+ * worst place to keep a wrong number — it is the one sentence a builder is asked
+ * to consent to.
+ *
+ * ⚠️ Byte-identical copies live in `hub/_components/SubmitTool.tsx` (the client
+ * builds the string it asks the wallet to sign) and in `/docs/list-a-tool` (which
+ * publishes it verbatim so a builder can read the terms before connecting).
+ * Change all three together or POST /api/hub/tools rejects every submission.
+ * Pinned by `scripts/external-payee-check.ts`.
+ */
 export function siweMessage(
   spec: Pick<RegisteredTool, "id" | "name" | "endpoint" | "priceUSDC" | "builderAddress">,
   nonce: string,
@@ -476,8 +502,8 @@ export function siweMessage(
     `Nonce:     ${nonce}`,
     ``,
     `By signing this message I confirm I control the wallet above and`,
-    `agree to the Blue Hub builder terms: 95/5 revenue split with the`,
-    `Blue Hub treasury, USDC settlement on Base.`,
+    `agree to the Blue Hub builder terms: callers pay this wallet`,
+    `directly, 100% of every call, USDC on Base. Blue Hub takes no cut.`,
   ].join("\n");
 }
 

@@ -16,6 +16,12 @@ import MarkdownOutput from "@/components/MarkdownOutput";
 import type { Coverage } from "@/lib/hub-registry";
 // Type only — the probing module imports KV and must not reach this bundle.
 import type { ToolHealth } from "@/lib/hub-liveness-format";
+// Deciding which payment requirement to sign for a tool WE DO NOT RUN. Pure —
+// no fetch, no wallet, no imports of its own — so it is safe in this client
+// bundle and drivable by fixtures in scripts/external-payee-check.ts. Read its
+// header before touching the external branch of run(): every refusal in it is
+// there because the alternative is signing away the user's USDC.
+import { selectBaseUsdcAccept, priceToUnits, extractAccepts } from "@/lib/x402-accepts";
 
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 const ERC20_BAL_ABI = [{
@@ -683,44 +689,116 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
     // ── x402 flow: wallet connected + tool has price ──────────────────────────
     if (tool.x402Body && isConnected && address) {
       try {
-        // Known constants — no discovery call needed
+        // The EIP-712 verifying contract. External tools cannot move this:
+        // selectBaseUsdcAccept only ever returns BASE_USDC, the same address.
         const USDC        = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
-        // Self-hosted x402: pay the Blue Agent treasury (CDP facilitator settles to it).
-        // MUST match PAY_TO in api/_lib/x402-cdp.ts — this is the `to` we sign.
-        /* 🔴 CORRECT for native catalog tools, WRONG for every `source:"external"`
-           community tool, and that is why no registered tool has ever been paid.
-           An external tool does NOT settle here: `callPath` sends it to
-           /api/hub/tools/<id>/call, which forwards our X-PAYMENT to the BUILDER's
-           own x402 endpoint, and that endpoint verifies `authorization.to`
-           against the builder's own wallet. We sign the Blue treasury for it
-           anyway — there is no branch on `tool.source` below — so the builder's
-           verifier sees the wrong payee and rejects.
-           MEASURED 2026-09-26, the one registered endpoint that is still up:
-             desk-x402-block endpoint 402 → accepts[0].payTo
-                                   0x2e882b5f4d97c2acceb7d68c97582e8c8dae6f22
-             its registry builderAddress  0x2e882b5f4d97c2acceb7d68c97582e8c8dae6f22
-             what we sign                 0x02950ad38ada1d599375bd447e080cd404809205
-           Registry and endpoint agree with each other and disagree with US, so the
-           address we need is already on the tool object (`tool.builderAddress`).
-           Live evidence: that tool reads callCount 2 / revenueTotal 0 — two people
-           tried to pay and both were correctly refused.
-           ⚠️ Do NOT "just swap in builderAddress" as a drive-by. EIP-3009 settles to
-           exactly ONE recipient, so the payee IS the revenue split: signing the
-           builder makes Blue's cut 0% and turns the 95/5 constants in
-           api/hub/tools/[id]/call/route.ts into fiction (they are already
-           bookkeeping-only). Routing to Blue and forwarding to the builder later is
-           the other option and it is a CUSTODY change — holding a third party's
-           money — which is ShunTr's call, not a refactor. Splitting needs two
-           authorizations. Pick deliberately; all three are real products. */
+        // NATIVE tools settle here, through the CDP facilitator, so the payee is
+        // the Blue treasury and this MUST match PAY_TO in api/_lib/x402-cdp.ts —
+        // the browser signs `authorization.to` against this value, so a
+        // divergence fails verification on every native Hub payment.
         const PAY_TO_WALLET = "0x02950ad38ada1d599375bd447e080cd404809205" as const;
         const priceRaw    = tool.price.replace("$", "");
         const priceVal    = parseFloat(priceRaw) || 0;
         const priceUnits  = String(Math.round(priceVal * 1_000_000)); // USDC 6 decimals
         const validBefore = BigInt(Math.floor(Date.now() / 1000) + 300);
 
-        // Pre-check balance so we don't make the user sign a doomed payment
-        if (usdcBalance != null && usdcBalance < priceVal) {
-          setErr(`Insufficient USDC — you have $${usdcBalance.toFixed(2)}, need ${tool.price}. Top up your wallet on Base.`);
+        /* ── WHO GETS PAID, AND HOW MUCH ─────────────────────────────────────
+           EIP-3009 `transferWithAuthorization` settles to exactly ONE
+           recipient. There is no on-chain fan-out, so the payee IS the revenue
+           split — 100% to whoever ends up in `to`. Two different answers here,
+           and using the native one for an external tool is the whole reason no
+           registered community tool had ever been paid:
+
+             native / hosted → the Blue treasury (PAY_TO_WALLET).
+               /api/x402/<id> verifies and settles against PAY_TO, so any other
+               payee fails.
+             external        → the BUILDER, 100%, read from that builder's own
+               402. `callPath` sends the call to /api/hub/tools/<id>/call, which
+               verifies and settles NOTHING — it forwards our X-PAYMENT to the
+               builder's endpoint, and THAT endpoint checks `authorization.to`
+               against the builder's own wallet.
+
+           MEASURED 2026-09-26 on desk-x402-block, the one registered endpoint
+           still up: its 402 `payTo` and its registry `builderAddress` agree with
+           each other (0x2e88…6f22) and both disagree with PAY_TO_WALLET. That
+           tool read callCount 2 / revenueTotal 0 — two people tried to pay and
+           the builder's verifier correctly refused both.
+
+           🔴 The payee is read from the LIVE 402, not from tool.builderAddress,
+           and that is not a style preference:
+             • a cached registry address goes stale the day a builder rotates
+               wallets, and the failure mode is a signature for the wrong payee;
+             • only the live 402 gives us an amount to check, so only this path
+               can hold the builder to the price the Hub advertised. The card
+               price is what the builder typed into the registry at submit time;
+               the 402 is generated live and can say anything.
+           Every refusal lives in lib/x402-accepts.ts, every one of them signs
+           nothing, and there is NO fallback to PAY_TO_WALLET — a fallback would
+           silently restore the original bug on the first unreadable 402.
+
+           The two alternatives were considered and are products, not refactors:
+           routing to Blue and forwarding later is a CUSTODY change (Blue holds a
+           third party's money — ShunTr's call); splitting needs two
+           authorizations, so two wallet signatures per call. */
+        let payTo: `0x${string}` = PAY_TO_WALLET;
+        let payUnits      = priceUnits;
+        let domainName    = "USD Coin";
+        let domainVersion = "2";
+        let payNetwork    = "eip155:8453";
+
+        if (tool.source === "external") {
+          setStep("calling");
+          let probe: Response;
+          try {
+            probe = await fetch(tool.callPath!, {
+              method:  "POST",
+              headers: { "Content-Type": "application/json" },
+              body:    JSON.stringify(tool.x402Body(body)),
+            });
+          } catch (e) {
+            setErr(`Could not reach this tool to ask how to pay it. Nothing was signed. (${(e as Error).message})`);
+            setStep("error");
+            return;
+          }
+          // Anything but 402 means the tool has not told us where to send money.
+          // Refuse: a wrong payee is a signature the user cannot undo, and a
+          // guess here is indistinguishable from a working payment until the
+          // USDC is gone.
+          if (probe.status !== 402) {
+            const t = await probe.text().catch(() => "");
+            setErr(probe.ok
+              ? "This tool answered without asking for payment, so the Hub has nothing to sign. Nothing was signed."
+              : `This tool is not answering right now (HTTP ${probe.status}). Nothing was signed.${t ? ` ${t.slice(0, 160)}` : ""}`);
+            setStep("error");
+            return;
+          }
+          const sel = selectBaseUsdcAccept(
+            extractAccepts(await probe.json().catch(() => null)),
+            priceToUnits(tool.price),   // the ceiling — refuse above it, never clamp
+          );
+          if (!sel.ok) {
+            // The module's reasons deliberately omit this sentence so it is
+            // appended once, here, and cannot be forgotten on a new branch.
+            setErr(`${sel.reason} Nothing was signed.`);
+            setStep("error");
+            return;
+          }
+          // Checked against /^0x[0-9a-fA-F]{40}$/ inside the module — the cast
+          // is asserting a validation that already ran, not skipping one.
+          payTo         = sel.accept.payTo as `0x${string}`;
+          payUnits      = sel.accept.amountUnits;
+          domainName    = sel.accept.domainName;
+          domainVersion = sel.accept.domainVersion;
+          payNetwork    = sel.accept.network;
+        }
+
+        // Pre-check balance so we don't make the user sign a doomed payment.
+        // Against the RESOLVED amount: for an external tool that is what its 402
+        // actually asks for, which is ≤ the card price, so checking the card
+        // price here would refuse payments the user can afford.
+        const payVal = Number(payUnits) / 1_000_000;
+        if (usdcBalance != null && usdcBalance < payVal) {
+          setErr(`Insufficient USDC — you have $${usdcBalance.toFixed(2)}, need $${payVal}. Top up your wallet on Base.`);
           return;
         }
 
@@ -743,9 +821,12 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         // Sign EIP-3009 TransferWithAuthorization
         const nonce = randomNonce();
         const signature = await signTypedDataAsync({
+          // Canonical USDC domain for native; for an external tool, whatever its
+          // 402 supplied in `extra` (defaulted to the canonical pair by the
+          // module). Getting this wrong produces a signature the token rejects.
           domain: {
-            name:              "USD Coin",
-            version:           "2",
+            name:              domainName,
+            version:           domainVersion,
             chainId:           8453,
             verifyingContract: USDC,
           },
@@ -762,8 +843,8 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           primaryType: "TransferWithAuthorization",
           message: {
             from:        address,
-            to:          PAY_TO_WALLET,
-            value:       BigInt(priceUnits),
+            to:          payTo,
+            value:       BigInt(payUnits),
             validAfter:  BigInt(0),
             validBefore: validBefore,
             nonce,
@@ -772,17 +853,20 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
 
         setStep("paying");
 
-        // Single call with X-PAYMENT — proxy forwards to Bankr / CDP
+        // The header must carry the SAME payee and amount that were just signed.
+        // If these ever drift from the typed data above, the signature verifies
+        // against a different authorization than the one the user approved —
+        // which is the one failure mode a wallet prompt cannot warn about.
         const xPayment = btoa(JSON.stringify({
           x402Version: 2,
           scheme:      "exact",
-          network:     "eip155:8453",
+          network:     payNetwork,
           payload: {
             signature,
             authorization: {
               from:        address,
-              to:          PAY_TO_WALLET,
-              value:       priceUnits,
+              to:          payTo,
+              value:       payUnits,
               validAfter:  "0",
               validBefore: validBefore.toString(),
               nonce,
@@ -1023,6 +1107,30 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                   usdcBalance < (parseFloat(tool.price.replace("$", "")) || 0) ? "text-red-400" : "text-[#34D399]"
                 }`}>
                   ${usdcBalance.toFixed(2)}
+                </span>
+              </div>
+            )}
+            {/* Who receives the USDC, said out loud BEFORE the wallet opens.
+                An external tool settles at the builder's own endpoint, so the
+                signature pays the builder directly and Blue takes 0%. The wallet
+                prompt shows a bare `to` address with no idea whose it is; this
+                row is the only place the user learns that answer while they can
+                still decline. Do not soften it into "processed by Blue" — that
+                would be false, and the address in the prompt would contradict
+                it. */}
+            {tool.source === "external" && tool.x402Body && isConnected && (
+              <div className="flex items-center justify-between mb-2 px-1 gap-2">
+                <span className="font-mono text-[10px] text-slate-600">Paid to</span>
+                <span
+                  className="font-mono text-[10px] text-slate-500 text-right"
+                  title={
+                    "This tool runs on its builder's own server. Your signature sends USDC " +
+                    "straight to the builder's wallet, read from that server's live payment " +
+                    "request, and Blue takes no cut. The exact address is shown in your wallet " +
+                    "prompt. The Hub will not sign an amount above the listed price."
+                  }
+                >
+                  the builder&apos;s wallet, 100%
                 </span>
               </div>
             )}
@@ -1955,7 +2063,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
             </button>
             {view !== "submit" && (
               <p className="pl-4 mt-1 font-mono text-[9.5px] leading-[1.6]" style={{ color: "#64748B" }}>
-                95% self-hosted<br />90% hosted on Blue Hub
+                100% self-hosted<br />90% hosted on Blue Hub
               </p>
             )}
             <button

@@ -96,8 +96,12 @@ export default function BuilderView({
           <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] px-5 py-4">
             <p className="text-[10px] tracking-widest mb-1 text-[#34D399]">REVENUE</p>
             <p className="text-2xl font-bold leading-none text-[#34D399]">{fig(stats.totalRevenue, stats.coverage, usdc)}</p>
+            {/* These are external (self-hosted) tools, whose callers pay the
+                builder's endpoint directly — so this is volume already in their
+                wallet, not a share Blue holds. "builder share" implied a split
+                Blue performs; it performs none. */}
             <p className="text-[10px] text-slate-700 mt-1">
-              {stats.coverage === "unavailable" ? "could not read — not $0" : "95% builder share"}
+              {stats.coverage === "unavailable" ? "could not read — not $0" : "100% to builders · paid direct"}
             </p>
           </div>
         </div>
