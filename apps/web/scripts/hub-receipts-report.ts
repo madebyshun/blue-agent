@@ -61,6 +61,11 @@ import { join } from "node:path";
 import { AGENT_TOOLS, TOOL_COUNT } from "../src/lib/agent-tools";
 import { MCP_TOOLS, MCP_TOOL_COUNT } from "../src/lib/mcp-tools";
 import { HANDLERS } from "../src/app/api/x402/_handlers";
+// The parsing lives in its own pure module so `hub-receipts-check.ts` can drive
+// it with fixture strings — including the failure fixtures, which is the only way
+// to prove the refusal path runs rather than merely reads well. This file cannot
+// be imported by a guard: it fetches production on import-time module eval.
+import { hiddenMcpEndpoints } from "./hub-receipts-parse";
 
 const BASE = process.env.HUB_BASE_URL ?? "https://blueagent.dev";
 const ROOT = process.cwd();
@@ -101,23 +106,6 @@ add({ label: "MCP advertised", value: String(MCP_TOOL_COUNT), tier: "import",
 
 // ── parse tier: read out of files, so a shape change can lie quietly ─────────
 
-/** The KEYS of an object literal named `name` in `src`, or null if not found. */
-function literalKeys(src: string, name: string): string[] | null {
-  const open = src.indexOf(`${name}`);
-  if (open < 0) return null;
-  const brace = src.indexOf("{", open);
-  if (brace < 0) return null;
-  let depth = 0;
-  let end = -1;
-  for (let i = brace; i < src.length; i++) {
-    if (src[i] === "{") depth++;
-    else if (src[i] === "}") { depth--; if (depth === 0) { end = i; break; } }
-  }
-  if (end < 0) return null;
-  const body = src.slice(brace + 1, end).replace(/\/\/[^\n]*/g, "");
-  return [...body.matchAll(/^\s*([A-Za-z_][\w]*)\s*:/gm)].map((m) => m[1]);
-}
-
 try {
   const vercelRaw = JSON.parse(readFileSync(join(ROOT, "vercel.json"), "utf8"));
   // `?? []` would render a renamed key as "0 crons scheduled", which is a
@@ -138,26 +126,20 @@ try {
 // it should read 0 forever.
 try {
   const mcpSrc = readFileSync(join(ROOT, "src/app/api/mcp/route.ts"), "utf8");
-  const hub = literalKeys(mcpSrc, "HUB_MAP");
-  const con = literalKeys(mcpSrc, "CONSOLE_MAP");
-  const b20 = [...(mcpSrc.match(/const B20_ENCODE_TOOLS = new Set\(\[([\s\S]*?)\]\)/)?.[1] ?? "")
-    .matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  const r = hiddenMcpEndpoints(mcpSrc, MCP_TOOLS.map((t) => t.name));
 
-  if (hub === null || con === null) {
+  if (!r.ok) {
     // A renamed map yields an EMPTY difference, which would print as "0 hidden"
     // — the most reassuring wrong answer available. Refuse instead.
     add({ label: "MCP hidden endpoints", value: null, tier: "parse",
           source: "HUB_MAP / CONSOLE_MAP / B20_ENCODE_TOOLS in api/mcp/route.ts",
-          note: `a map was renamed (${hub === null ? "HUB_MAP" : "CONSOLE_MAP"} not found) — refusing to report 0, which is what a broken parse looks like` });
+          note: `not found: ${r.missing.join(", ")} — renamed or moved. Refusing to report 0, which is exactly what a broken parse looks like` });
   } else {
-    const advertised = new Set(MCP_TOOLS.map((t) => t.name));
-    const callable = [...hub, ...con, ...b20];
-    const hidden = callable.filter((n) => !advertised.has(n));
-    add({ label: "MCP hidden endpoints", value: String(hidden.length), tier: "parse",
+    add({ label: "MCP hidden endpoints", value: String(r.hidden.length), tier: "parse",
           source: "keys of HUB_MAP+CONSOLE_MAP+B20_ENCODE_TOOLS minus the advertised MCP_TOOLS names",
-          note: hidden.length === 0
-            ? `0 of ${callable.length} mapped names are unadvertised. Advertised set == callable set, which is the invariant; 67 were hidden before the 2026-09-26 trim`
-            : `⚠ ${hidden.join(", ")} — callable via tools/call, absent from the manifest, so undiscoverable and still invocable` });
+          note: r.hidden.length === 0
+            ? `0 of ${r.callable.length} mapped names are unadvertised. Advertised set == callable set, which is the invariant; 67 were hidden before the 2026-09-26 trim`
+            : `⚠ ${r.hidden.join(", ")} — callable via tools/call, absent from the manifest, so undiscoverable and still invocable` });
   }
 } catch (e) {
   add({ label: "MCP hidden endpoints", value: null, tier: "parse",
