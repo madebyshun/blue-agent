@@ -58,7 +58,7 @@ import {
 import { readJobOnChain } from "@/lib/blue-hood/acp-chain";
 // Shared with the free `/api/acp/execution-plan` URL so the paid path and the
 // path buyers self-test against cannot disagree about what `chain`/`side` mean.
-import { normalizeChain, normalizeSide } from "@/lib/blue-hood/acp-requirement";
+import { readRequirement } from "@/lib/blue-hood/acp-requirement";
 import { computeExecutionPlan, type ExecPlan } from "@/lib/blue-hood/execution-plan";
 import { findByTicker } from "@/lib/robinhood/rwa-registry";
 // Type-only import — fully erased at compile time, so it never pulls the heavy
@@ -255,10 +255,10 @@ function extractRequirement(
   for (const raw of sources) {
     const obj = lenientJson(raw);
     if (!obj) continue;
-    const ticker = String(obj.ticker ?? obj.symbol ?? "").trim();
-    const size = Number(obj.size_usd ?? obj.sizeUsd ?? obj.size);
-    const chain = normalizeChain(obj.chain ?? obj.chain_id ?? obj.chainId);
-    const side = normalizeSide(obj.side ?? obj.direction ?? obj.action);
+    // One alias table, shared with the free URL (REQUIREMENT_KEYS). Spelling the
+    // aliases out here again is what let the two surfaces drift on WHICH KEY
+    // carries `chain` long after they agreed on what its values mean.
+    const { ticker, size_usd: size, chain, side } = readRequirement((k) => obj[k]);
     if (ticker && Number.isFinite(size) && size > 0) {
       return { ticker, size_usd: size, chain, side };
     }

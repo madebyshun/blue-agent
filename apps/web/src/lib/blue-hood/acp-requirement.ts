@@ -65,3 +65,70 @@ export function normalizeSide(v: unknown): AcpSubjectSide {
   if (s === "buy" || s === "sell") return s;
   return "unknown";
 }
+
+/**
+ * Which KEYS a buyer may use to carry each field, in precedence order.
+ *
+ * 🔴 SHARING THE NORMALISER WAS NOT ENOUGH — the aliases have to be shared too.
+ * The first fix moved `normalizeChain`/`normalizeSide` here so the two surfaces
+ * could not disagree about what a VALUE means. They still disagreed about which
+ * KEY carries it: the paid path read `chain ?? chain_id ?? chainId` while the
+ * free URL read `chain` alone, so the alias arrived as `undefined` there and
+ * defaulted to "robinhood" instead of being rejected.
+ *
+ * MEASURED in production 2026-09-26, /api/acp/execution-plan?ticker=NVDA&size_usd=1000:
+ *   chain=base        400 unsupported_chain    (agrees with the paid path)
+ *   chain_id=8453     200 Robinhood plan       (paid path REFUSES)
+ *   chainId=8453      200 Robinhood plan       (paid path REFUSES)
+ *   side=short        400 unsupported_side     (agrees)
+ *   direction=short   200 stamped side:"buy"   (paid path REFUSES)
+ *   action=sell       200 priced as a BUY      (paid path prices a SELL)
+ *
+ * Same failure direction as the original bug, one layer up: the free URL — the
+ * one a buyer self-tests against before escrowing — is the PERMISSIVE one, so it
+ * answers confidently for a desk it cannot price. `action=sell` is the sharpest
+ * of the six: both surfaces return 200 and they return a different product.
+ *
+ * Read through `readRequirement` rather than spelling any of these out at a call
+ * site. Two hand-written alias lists is the same class of drift as two parsers,
+ * and it already cost one round-trip to find twice.
+ */
+export const REQUIREMENT_KEYS = {
+  ticker:   ["ticker", "symbol"],
+  size_usd: ["size_usd", "sizeUsd", "size"],
+  chain:    ["chain", "chain_id", "chainId"],
+  side:     ["side", "direction", "action"],
+} as const;
+
+export type RawRequirement = {
+  ticker: string;
+  size_usd: number;
+  chain: AcpSubjectChain;
+  side: AcpSubjectSide;
+};
+
+/**
+ * Pull a buyer's requirement out of anything key-addressable — `get` is
+ * `(k) => url.searchParams.get(k)` on the free URL and `(k) => obj[k]` on the
+ * paid path, which is the whole point: one alias table, two shapes of input.
+ *
+ * An empty or whitespace-only value counts as ABSENT and falls through to the
+ * next alias, so `?chain=&chain_id=8453` reads the 8453 rather than stopping at
+ * the blank. Nothing here throws, reaches the network, or defaults `chain`/`side`
+ * on an unreadable value — `"unknown"` is returned for the caller to reject.
+ */
+export function readRequirement(get: (key: string) => unknown): RawRequirement {
+  const pick = (keys: readonly string[]): unknown => {
+    for (const k of keys) {
+      const v = get(k);
+      if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+    }
+    return undefined;
+  };
+  return {
+    ticker: String(pick(REQUIREMENT_KEYS.ticker) ?? "").trim(),
+    size_usd: Number(pick(REQUIREMENT_KEYS.size_usd)),
+    chain: normalizeChain(pick(REQUIREMENT_KEYS.chain)),
+    side: normalizeSide(pick(REQUIREMENT_KEYS.side)),
+  };
+}

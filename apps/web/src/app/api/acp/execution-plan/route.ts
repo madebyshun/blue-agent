@@ -30,7 +30,7 @@ import { computeExecutionPlan, type ExecPlanResult } from "@/lib/blue-hood/execu
 // The SAME normalisers the paid ACP job path uses. This URL is what a buyer
 // self-tests against before escrowing, so it must refuse exactly what the paid
 // path refuses — see `lib/blue-hood/acp-requirement.ts`.
-import { normalizeChain, normalizeSide } from "@/lib/blue-hood/acp-requirement";
+import { readRequirement } from "@/lib/blue-hood/acp-requirement";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,13 +63,17 @@ export async function GET(req: Request) {
   }
 
   const url = new URL(req.url);
-  const ticker = (url.searchParams.get("ticker") ?? "").trim();
-  const sizeRaw = (url.searchParams.get("size_usd") ?? url.searchParams.get("size") ?? "").trim();
-  const chain = normalizeChain(url.searchParams.get("chain"));
-  const side = normalizeSide(url.searchParams.get("side"));
+  // Same alias table as the paid path (REQUIREMENT_KEYS), so a buyer who
+  // self-tests here with `chain_id` / `action` gets the answer the paid job
+  // would give rather than a confident plan for the wrong desk.
+  const req0 = readRequirement((k) => url.searchParams.get(k));
+  const ticker = req0.ticker;
+  const hasSize = Number.isFinite(req0.size_usd);
+  const chain = req0.chain;
+  const side = req0.side;
 
   // ── Reject-incomplete FAST — before any compute or network ───────────────
-  if (!ticker || !sizeRaw) {
+  if (!ticker || !hasSize) {
     return Response.json(
       acpEnvelope(
         {
@@ -83,7 +87,7 @@ export async function GET(req: Request) {
       { status: 400, headers: corsHeaders() },
     );
   }
-  const size = Number(sizeRaw);
+  const size = req0.size_usd;
   if (!Number.isFinite(size) || size <= 0) {
     return Response.json(
       acpEnvelope(
@@ -166,5 +170,12 @@ export async function GET(req: Request) {
     return Response.json(acpEnvelope(result, DOCS), { status, headers: corsHeaders() });
   }
 
-  return Response.json(acpEnvelope(result, DOCS), { status: 200, headers: corsHeaders() });
+  // Name the desk, like the paid deliverable does (`buildDeliverable`, which
+  // stamps chain/chain_id for the same reason). Depth, slippage and a route are
+  // meaningless without the chain they were measured on, and this was the one
+  // receipt of the two that omitted it — the surface a buyer reads FIRST.
+  return Response.json(
+    acpEnvelope({ ...result, chain: "robinhood", chain_id: 4663 }, DOCS),
+    { status: 200, headers: corsHeaders() },
+  );
 }
