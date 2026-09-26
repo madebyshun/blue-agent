@@ -14,12 +14,14 @@ export type CompositeSkill = {
   label: string;
 };
 
+import { X402_PAY_TO } from "@/lib/x402-payee";
+
 const X402_BASE = "https://blueagent.dev/api/x402";
 
 // Blue Agent treasury — default builder address for first-party tools, and the
-// single x402 payee (same wallet as x402-cdp PAY_TO and payments TOPUP_TREASURY).
+// single x402 payee. Re-exported from lib/x402-payee so it cannot drift.
 // Builder-submitted tools (Hub v2 Phase 3) will set this to the builder's own wallet.
-export const BLUE_TREASURY = "0x02950ad38ada1d599375bd447e080cd404809205" as const;
+export const BLUE_TREASURY = X402_PAY_TO;
 
 export type AgentTool = {
   id: string;

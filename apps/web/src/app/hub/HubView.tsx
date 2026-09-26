@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
+import { X402_PAY_TO } from "@/lib/x402-payee";
 import { useAccount, useSignTypedData, useReadContract, useChainId, useSwitchChain } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
 import HubHome from "./_components/HubHome";
@@ -720,10 +721,11 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         // selectBaseUsdcAccept only ever returns BASE_USDC, the same address.
         const USDC        = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
         // NATIVE tools settle here, through the CDP facilitator, so the payee is
-        // the Blue treasury and this MUST match PAY_TO in api/_lib/x402-cdp.ts —
-        // the browser signs `authorization.to` against this value, so a
-        // divergence fails verification on every native Hub payment.
-        const PAY_TO_WALLET = "0x02950ad38ada1d599375bd447e080cd404809205" as const;
+        // the Blue treasury. Imported, not re-typed: api/_lib/x402-cdp.ts's
+        // PAY_TO reads the same constant, and the browser signs
+        // `authorization.to` against this value, so a divergence would fail
+        // verification on every native Hub payment.
+        const PAY_TO_WALLET = X402_PAY_TO;
         const priceRaw    = tool.price.replace("$", "");
         const priceVal    = parseFloat(priceRaw) || 0;
         const priceUnits  = String(Math.round(priceVal * 1_000_000)); // USDC 6 decimals

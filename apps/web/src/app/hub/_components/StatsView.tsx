@@ -18,6 +18,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
+import { X402_PAY_TO } from "@/lib/x402-payee";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -531,7 +532,7 @@ export default function StatsView({ inShell = false }: { inShell?: boolean }) {
                       {[
                         { label: "ERC-8257 ToolRegistry",  note: "Base mainnet",            href: "https://basescan.org/address/0x265BB2DBFC0A8165C9A1941Eb1372F349baD2cf1" },
                         { label: "agentic.market",          note: "1 service endpoint",       href: "https://agentic.market/services/blueagent-dev" },
-                        { label: "CDP Bazaar",              note: "merchant indexed",         href: "https://api.cdp.coinbase.com/platform/v2/x402/discovery/merchant?payTo=0x02950ad38ada1d599375bd447e080cd404809205" },
+                        { label: "CDP Bazaar",              note: "merchant indexed",         href: `https://api.cdp.coinbase.com/platform/v2/x402/discovery/merchant?payTo=${X402_PAY_TO}` },
                         { label: "OpenAPI spec",            note: "/.well-known/openapi.json",href: "https://blueagent.dev/.well-known/openapi.json" },
                         { label: "ai-plugin.json",          note: "ChatGPT-compatible",       href: "https://blueagent.dev/.well-known/ai-plugin.json" },
                       ].map((r, i) => (

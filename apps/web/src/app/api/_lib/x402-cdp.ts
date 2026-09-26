@@ -11,14 +11,14 @@
  *
  * Requires env: CDP_API_KEY_ID, CDP_API_KEY_SECRET
  */
+import { X402_PAY_TO } from "@/lib/x402-payee";
+
 const CDP_HOST = "https://api.cdp.coinbase.com/platform/v2/x402";
 export const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-// Blue Agent treasury — receives every USDC settlement. Same wallet as
-// payments.ts TOPUP_TREASURY (chat credits), unified 2026-08-18: the old
-// 0xb058… Bankr Club wallet is retired. MUST stay in lockstep with the
-// client-side payTo in hub/HubView.tsx — the browser signs `authorization.to`
-// against it, so any divergence fails CDP verification on every Hub call.
-export const PAY_TO = "0x02950ad38ada1d599375bd447e080cd404809205";
+// Blue Agent treasury — receives every USDC settlement. Re-exported from
+// lib/x402-payee so it cannot drift from the value the browser signs against;
+// a divergence fails CDP verification on every Hub call.
+export const PAY_TO = X402_PAY_TO;
 
 export type PaymentRequirements = {
   scheme: "exact";

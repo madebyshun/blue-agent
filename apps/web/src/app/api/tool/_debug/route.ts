@@ -6,10 +6,11 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { recoverTypedDataAddress } from "viem";
+import { X402_PAY_TO } from "@/lib/x402-payee";
 
 export const runtime = "nodejs";
 
-const PAY_TO = (process.env.PAYMENT_WALLET ?? "0x02950ad38ada1d599375bd447e080cd404809205").toLowerCase();
+const PAY_TO = (process.env.PAYMENT_WALLET ?? X402_PAY_TO).toLowerCase();
 const USDC   = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 
 export async function POST(req: NextRequest) {

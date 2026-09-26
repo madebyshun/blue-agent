@@ -21,13 +21,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { kvGetCounter } from "@/lib/kv";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
+import { X402_PAY_TO } from "@/lib/x402-payee";
 
 export const runtime = "nodejs";
 // Vercel kills serverless functions at 60s by default — explicit budget so
 // it fails loudly instead of silently 504-ing.
 export const maxDuration = 15;
 
-const PAY_TO = "0x02950ad38ada1d599375bd447e080cd404809205";
+// The wallet whose USDC balance this route publishes as revenue. Tied to the
+// x402 payee on purpose: reading a different address would publish a number
+// that has nothing to do with what the tools actually collected.
+const PAY_TO = X402_PAY_TO;
 const USDC   = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
 function priceNum(price?: string): number {

@@ -12,6 +12,7 @@ import { NextResponse } from "next/server";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { HANDLERS }    from "@/app/api/x402/_handlers";
 import { wireSchema }  from "@/lib/tool-wire-schema";
+import { X402_PAY_TO } from "@/lib/x402-payee";
 
 export const runtime = "nodejs";
 // Vercel kills serverless functions at 60s by default — explicit budget so
@@ -20,7 +21,7 @@ export const maxDuration = 15;
 
 const BASE = "https://blueagent.dev";
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-const PAY_TO = "0x02950ad38ada1d599375bd447e080cd404809205";
+const PAY_TO = X402_PAY_TO;
 
 function priceUnits(price?: string): number | null {
   if (!price) return null;
