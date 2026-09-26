@@ -375,6 +375,62 @@ const BY_CONTRACT: Record<string, RwaToken> = Object.fromEntries(
   RWA_TOKENS.map((t) => [t.contract.toLowerCase(), t]),
 );
 
+/**
+ * Normalise a ticker-list input to `string[]`, accepting BOTH a real array and
+ * a comma-separated string.
+ *
+ * 🔴 This exists because two paid tools were 100% broken from the Hub UI and
+ * nothing caught it. They both parsed their input as:
+ *
+ *     const tickersRaw = body.tickers ?? (query.get("tickers") ?? "").split(",")
+ *
+ * which splits the QUERY string but never the BODY. The Hub form posts JSON
+ * whose values are all strings (HubView builds `Record<string,string>` from the
+ * inputs), so `body.tickers` is `"AAPL,TSLA,NVDA"` — truthy, so `??` never
+ * falls through — and a STRING then flows into array code:
+ *
+ *   • `tickersRaw.length` becomes the CHARACTER count, so the arity guard
+ *     `length > 10` rejects any list over 10 characters with the thoroughly
+ *     misleading "Provide `tickers` — 2 to 10 tickers."
+ *   • a shorter string slips past that guard and dies on `.map is not a
+ *     function`.
+ *
+ * MEASURED 2026-09-26 against the real handlers:
+ *   "AAPL,TSLA,NVDA"        → 400 "Provide `tickers` — 2 to 10 tickers."
+ *   "AAPL,TSLA"             → 500 "tickersRaw.map is not a function"
+ *   ["AAPL","TSLA","NVDA"]  → 200
+ *
+ * Both failures surface to the buyer as the same opaque "Tool failed — you were
+ * not charged", so the tool looked merely flaky rather than structurally
+ * unusable. The placeholders (`AAPL,TSLA,NVDA`) and rh-sector-basket's own
+ * header ("comma-separated list of tickers") both advertised the string form,
+ * so the documented contract was right and only the body path disagreed.
+ *
+ * Callers must use THIS for any ticker-list input rather than re-deriving the
+ * `??`-plus-split idiom, which is what produced two copies of the same bug.
+ */
+export function parseTickerList(
+  fromBody: unknown,
+  fromQuery: string | null,
+): string[] {
+  if (Array.isArray(fromBody)) {
+    return fromBody.map((s) => String(s).trim()).filter(Boolean);
+  }
+  // An EMPTY body string counts as ABSENT, so it cannot shadow the query param.
+  // The Hub form posts every declared input including the ones left blank, so
+  // `{ tickers: "", sector: "tech" }` is the normal shape rather than an edge
+  // case. A bare `??` would let that `""` beat `?tickers=AAPL` — the same
+  // "body silently wins over query" failure this function exists to kill, just
+  // pointing the other way. Caught by scripts/ticker-list-input-test.ts on its
+  // first run, not by reading it.
+  const trimmed = typeof fromBody === "string" ? fromBody.trim() : fromBody;
+  const raw =
+    trimmed === "" || trimmed === undefined || trimmed === null
+      ? (fromQuery ?? "")
+      : String(trimmed);
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
 export function findByTicker(tickerOrName: string): RwaToken | null {
   const raw = tickerOrName.trim();
   const q = raw.toUpperCase();

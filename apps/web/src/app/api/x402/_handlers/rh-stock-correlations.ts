@@ -9,18 +9,24 @@
 // candles). If a ticker has < 3 overlapping candles with another, correlation
 // is returned as null with an honest "insufficient overlap" note.
 
-import { RH_CHAIN, findByTicker } from "@/lib/robinhood/rwa-registry";
+import { RH_CHAIN, findByTicker, parseTickerList } from "@/lib/robinhood/rwa-registry";
 import { resolvePrimaryPool, poolOhlc, type Candle } from "@/lib/robinhood/rwa-market";
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { tickers?: string[]; days?: number } = {};
+    // `tickers` arrives as a STRING from the Hub form and as an array from API
+    // callers. Both are valid; see parseTickerList for what the old
+    // `body.tickers ?? query.split(",")` idiom did to the string case.
+    let body: { tickers?: string[] | string; days?: number } = {};
     try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const url = new URL(req.url);
-    const tickersRaw = body.tickers ?? (url.searchParams.get("tickers") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    const tickersRaw = parseTickerList(body.tickers, url.searchParams.get("tickers"));
     const days = Math.max(3, Math.min(90, Number(body.days ?? url.searchParams.get("days") ?? 30)));
 
-    if (!tickersRaw.length || tickersRaw.length > 10) {
+    // Arity is now counted in TICKERS, not characters. The message said "2 to 10"
+    // while the guard accepted 1, so a single ticker got past here and failed
+    // later with a less obvious error; it is a real 2-minimum.
+    if (tickersRaw.length < 2 || tickersRaw.length > 10) {
       return Response.json({ error: "Provide `tickers` — 2 to 10 tickers." }, { status: 400 });
     }
     const tokens = tickersRaw.map((t) => findByTicker(t)).filter((t): t is NonNullable<typeof t> => !!t);

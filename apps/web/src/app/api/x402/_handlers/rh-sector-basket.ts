@@ -19,7 +19,7 @@
 // lands in `unpriced_legs` with a reason instead of being silently dropped, so
 // a basket that shrank is visibly a basket that shrank.
 
-import { RH_CHAIN, RWA_TOKENS, findByTicker } from "@/lib/robinhood/rwa-registry";
+import { RH_CHAIN, RWA_TOKENS, findByTicker, parseTickerList } from "@/lib/robinhood/rwa-registry";
 import { chainlinkLatest } from "@/lib/robinhood/rwa-price";
 import { resolvePrimaryPool } from "@/lib/robinhood/rwa-market";
 
@@ -29,7 +29,9 @@ export default async function handler(req: Request): Promise<Response> {
   try {
     let body: {
       sector?: string;
-      tickers?: string[];
+      // String from the Hub form, array from API callers — the header above has
+      // always documented "comma-separated list of tickers". See parseTickerList.
+      tickers?: string[] | string;
       total_usd?: number;
       weighting?: string;
       max_constituents?: number;
@@ -38,7 +40,7 @@ export default async function handler(req: Request): Promise<Response> {
     const url = new URL(req.url);
 
     const sector = (body.sector ?? url.searchParams.get("sector") ?? "").trim().toLowerCase();
-    const tickersRaw = body.tickers ?? (url.searchParams.get("tickers") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    const tickersRaw = parseTickerList(body.tickers, url.searchParams.get("tickers"));
     const totalUsd = Math.max(0.01, Number(body.total_usd ?? url.searchParams.get("total_usd") ?? 100));
     const weighting = ((body.weighting ?? url.searchParams.get("weighting") ?? "equal") as string).toLowerCase();
     const maxN = Math.max(1, Math.min(20, Number(body.max_constituents ?? url.searchParams.get("max_constituents") ?? 10)));
