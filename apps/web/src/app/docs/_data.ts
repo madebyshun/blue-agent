@@ -15,10 +15,27 @@ export const STATS = [
   { value: "3",                    label: "Agents",    color: "#fbbf24" },
 ];
 
+/**
+ * The three ways in, ORDERED — Chat first, because it is the one that works
+ * without knowing any of these names.
+ *
+ * Each `desc` opens with the VISITOR'S situation, not the product's feature
+ * list. The previous version led with "Oracle-vs-DEX drift" and "AI agent chat ·
+ * multi-model · skill-based", which only parse for someone who already knows
+ * what Blue Hood and Blue Chat are — i.e. not the person this page is for. A
+ * first-time reader cannot pick between three brand names they have no
+ * definition for, and the page gave them no other way to choose.
+ *
+ * Chat is marked "Start here" because it is not a peer of the other two: the
+ * chat route wires in 38 Hub tools plus `hub_hood_arrow` / `hood_swap` /
+ * `hood_send` / `hood_bridge`, so it can already reach both of the others. The
+ * navbar had also settled this — its only CTA is Open Blue Chat. This grid used
+ * to be the one surface still presenting them as three equal choices.
+ */
 export const PRODUCTS = [
-  { name: "Blue Hood", color: "#34D399", desc: "Oracle-vs-DEX drift · tokenized stocks on Base + RH · graded in public",  link: "/app/hood", label: "Open Hood →" },
-  { name: "Blue Chat", color: "#A78BFA", desc: "AI agent chat · multi-model · skill-based · Built for RH + Base",         link: "/app/chat", label: "Open Chat →" },
-  { name: "Blue Hub",  color: "#4FC3F7", desc: `${TOOL_COUNT} AI tools · live on-chain data · x402 pay-per-call · no API key`, link: "/app/hub",  label: "Open Hub →" },
+  { name: "Blue Chat", color: "#A78BFA", desc: "Start here. Ask it anything — it reads Base 8453 and Robinhood Chain 4663 live, and hands back transactions you sign yourself.", link: "/app/chat", label: "Start here →" },
+  { name: "Blue Hood", color: "#34D399", desc: "Watching tokenized stocks? Oracle-vs-DEX drift on Base 8453 and Robinhood Chain 4663, every call graded in public.", link: "/app/hood", label: "See the record →" },
+  { name: "Blue Hub",  color: "#4FC3F7", desc: `Calling from code, or from another agent? ${TOOL_COUNT} tools over x402 — pay per call in USDC, no API key, no account.`, link: "/app/hub",  label: "Browse tools →" },
 ];
 
 export const FOUNDATION = [

@@ -26,16 +26,36 @@ export default function DocsOverview() {
         ))}
       </div>
 
+      {/* Said "an AI agent layer built on Base" and "live Base intelligence"
+          until 2026-09-26 — one chain, on a page whose own product cards name
+          two. Hard rule #1: state the chain, every time, and there are two here.
+          Both chain ids are spelled out rather than left as names, because an
+          address or an RPC call is meaningless without one and these two share
+          no state. */}
       <H2>What is BlueAgent?</H2>
       <P>
-        BlueAgent is an AI agent layer built on Base. It is not just a chatbot — it is a full economic actor:
-        it holds a wallet, executes onchain transactions, and powers a growing ecosystem of tools and services.
-        It is the <strong className="text-slate-200">onchain Agent OS</strong> — chat with AI agents, run {TOOL_COUNT} tools,
-        and read live Base intelligence, all in one place.
+        BlueAgent is an agent on <strong className="text-slate-200">Virtuals</strong> that works onchain across{" "}
+        <strong className="text-slate-200">Base 8453</strong> and{" "}
+        <strong className="text-slate-200">Robinhood Chain 4663</strong>. It is not just a chatbot — it holds a
+        wallet, reads both chains live, and hands you transactions you sign yourself. Ask it in chat, or call any
+        of its {TOOL_COUNT} tools directly over x402.
       </P>
 
-      <H2>The ecosystem</H2>
-      <P>Four products, one agent — all built on Base, all x402 native.</P>
+      {/* Said "Four products, one agent — all built on Base" until 2026-09-26,
+          and was wrong three ways at once. PRODUCTS held THREE entries, so the
+          count had drifted off a list sitting six lines below it — the same
+          shape as the MCP header claiming 111 while AGENT_TOOLS held 110, fixed
+          the same morning. It also named one chain while two of the three cards
+          underneath it said Base AND Robinhood Chain. And "products" was the
+          real damage: it framed three brand names as a menu to choose from,
+          which a first-time reader cannot do, because nothing on the page tells
+          them what a "Blue Hood" is. The count is derived now so it cannot drift
+          again, and the framing is "ways in" because only one of them is a door. */}
+      <H2>Where to start</H2>
+      <P>
+        One agent, {PRODUCTS.length} ways in — across Base 8453 and Robinhood Chain 4663, all x402 native.
+        Chat is the door: it already calls the other two for you.
+      </P>
       <CardGrid cols={2}>
         {PRODUCTS.map((p) => (
           <Card key={p.name} title={p.name} color={p.color} href={p.link}>
