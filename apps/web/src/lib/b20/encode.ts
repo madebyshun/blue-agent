@@ -196,19 +196,32 @@ export function memoToOrderId(memo: Hex): string {
   try { return hexToString(memo, { size: 32 }); } catch { return ""; }
 }
 
-/** Encode transferWithMemo calldata. `amount` is human units; decimals defaults
- *  to 6 (B20 USDC is a fixed-6-decimal stablecoin). `memo` is the order id. */
+/** Encode transferWithMemo calldata. `amount` is human units; `memo` is the
+ *  order id.
+ *
+ *  🔴 `decimals` is REQUIRED, and was optional-defaulting-to-6 until
+ *  2026-09-26. The justification was "B20 USDC is a fixed-6-decimal
+ *  stablecoin" — true of that one token and of nothing else this function
+ *  accepts. Called for an 18-decimal token with `decimals` omitted it encoded
+ *  `1` as 1e6 rather than 1e18: a transfer of 0.000000000001 tokens, wrong by
+ *  a factor of a trillion, as perfectly valid calldata with no error raised
+ *  anywhere. Its own siblings `encodeMintWithMemo` / `encodeBurnWithMemo` have
+ *  always required the argument. Transfer was the odd one out, and transfer is
+ *  the one that moves someone else's money.
+ *
+ *  Keep it required. No default here can be safe, because the safe value is a
+ *  property of the token and this function is never given the token — the
+ *  caller is. So the caller reads `decimals()` on-chain and passes it. */
 export function encodeTransferWithMemo(opts: {
   to: string;
   amount: string | number;
-  decimals?: number;
+  decimals: number;
   memo: string;
 }): Hex {
-  const dec = opts.decimals ?? 6;
   return encodeFunctionData({
     abi: TRANSFER_WITH_MEMO_ABI,
     functionName: "transferWithMemo",
-    args: [opts.to as `0x${string}`, parseUnits(String(opts.amount), dec), orderMemo(opts.memo)],
+    args: [opts.to as `0x${string}`, parseUnits(String(opts.amount), opts.decimals), orderMemo(opts.memo)],
   });
 }
 

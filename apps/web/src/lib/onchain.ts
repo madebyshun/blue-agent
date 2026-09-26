@@ -116,6 +116,36 @@ export async function getWalletSnapshot(rawAddr: string): Promise<WalletSnapshot
   };
 }
 
+// ─── Base RPC ground truth (no indexer, no API key) ──────────────────────────
+
+export interface RpcWalletState {
+  address: string;
+  wei:     string;   // native balance, raw
+  eth:     number;
+  /** `eth_getTransactionCount` — transactions SENT BY this address. This is the
+   *  outbound nonce and is NOT a total transaction count: a wallet that has
+   *  only ever received funds reads 0 here while an explorer shows dozens of
+   *  transfers. Never surface it under a name like `tx_count`. */
+  nonce:   number;
+}
+
+/** Native balance + outbound nonce straight from Base RPC — the one wallet
+ *  source that needs no indexer and no API key. `null` means the RPC call
+ *  itself failed; an empty wallet is `{ eth: 0, nonce: 0 }`, never `null`. */
+export async function getRpcWalletState(rawAddr: string): Promise<RpcWalletState | null> {
+  const address = normalizeAddress(rawAddr);
+  if (!address) return null;
+  try {
+    const [wei, nonce] = await Promise.all([
+      client.getBalance({ address }),
+      client.getTransactionCount({ address }),
+    ]);
+    return { address, wei: wei.toString(), eth: +(+formatEther(wei)).toFixed(6), nonce };
+  } catch {
+    return null;
+  }
+}
+
 // ─── Prompt formatters — compact real-number context for the LLM ──────────────
 
 const fmtUsd = (n: number | null) =>

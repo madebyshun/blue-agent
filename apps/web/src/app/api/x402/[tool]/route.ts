@@ -300,9 +300,86 @@ async function handle(
     }
   }
 
+  // ── A tool priced at $0.00 must never ask anyone to sign anything ─────────
+  //
+  // `rh-rwa-verify` is $0.00 and its own description ends "Free — safety
+  // checks should never be gated". It still answered 402 with `amount: "0"`,
+  // because the 402 below is chosen by "is there an X-PAYMENT header" and
+  // never consulted the price. So the free anti-scam check demanded a wallet
+  // signature for zero USDC: the agents least able to pay — the ones checking
+  // whether a token is a scam BEFORE their first transaction — were the ones
+  // turned away, and an authorization for 0 buys nothing on either side.
+  //
+  // Handled before the `!xPayment` branch, not inside it, so that a free tool
+  // called WITH a payment header is also just run rather than settled. There
+  // is no amount to settle and `cdpSettle` should never see a zero.
+  if (priceUnits === 0) {
+    let freeBody: Record<string, unknown> = {};
+    try { freeBody = await req.json(); } catch {}
+    try {
+      const innerReq = new Request(`https://blueagent.dev/api/x402/${tool}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(freeBody),
+      });
+      const resp = await handler(innerReq);
+      const data = await resp.json().catch(() => ({}));
+      await recordCall(tool, "x402", resp.ok ? "ok" : "err");
+      return NextResponse.json(data, { status: resp.ok ? 200 : resp.status });
+    } catch (e) {
+      await recordCall(tool, "x402", "err");
+      return NextResponse.json(
+        { error: "Tool failed — this tool is free, you were not charged", message: (e as Error).message },
+        { status: 502 }
+      );
+    }
+  }
+
   // No payment → 402 with self-describing metadata (name, description, inputs)
   if (!xPayment) {
     const meta = AGENT_TOOLS.find(t => t.id === tool);
+
+    // ── Reject a malformed call BEFORE quoting it a price ──────────────────
+    //
+    // Measured 2026-09-26: `rh-rwa-verify` takes `contract`; a call sending
+    // `address` got a 402 anyway. The caller then signs, pays, and only THEN
+    // reaches the handler that tells it the field name was wrong. Charging
+    // for the round trip that discovers a typo is the wrong order of
+    // operations — the schema is right here in `meta.inputs`, and it is the
+    // same schema the 402 is about to advertise.
+    //
+    // Only fires on a NON-EMPTY body. An empty `{}` POST is how several
+    // clients probe for price, and 400-ing that would break discovery: the
+    // distinction is "asked us nothing" (quote it) vs "asked us something
+    // malformed" (correct it).
+    let probeBody: Record<string, unknown> = {};
+    try { probeBody = await req.json(); } catch {}
+    if (meta && Object.keys(probeBody).length > 0) {
+      const missing = meta.inputs
+        .filter(i => i.required)
+        .map(i => i.key)
+        .filter(k => {
+          const v = probeBody[k];
+          return v === undefined || v === null || (typeof v === "string" && v.trim() === "");
+        });
+      if (missing.length > 0) {
+        const known = meta.inputs.map(i => i.key);
+        const unknown = Object.keys(probeBody).filter(k => !known.includes(k));
+        return NextResponse.json(
+          {
+            error: "Invalid input — you were not charged",
+            code: "MISSING_REQUIRED_INPUT",
+            tool,
+            missing,
+            ...(unknown.length ? { unrecognized: unknown } : {}),
+            expected: meta.inputs.map(i => ({ key: i.key, required: !!i.required, label: i.label })),
+            detail: `Fix the input and call again; a 402 quote is only issued for a well-formed request.`,
+          },
+          { status: 400, headers: { "Access-Control-Allow-Origin": "*" } }
+        );
+      }
+    }
+
     const paymentRequired = buildPaymentRequired(tool, requirements, meta);
     const inputSchema = meta ? {
       type: "object",
@@ -393,8 +470,21 @@ async function handle(
     // so no counter would otherwise record it — and "paid demand that failed"
     // is the most expensive thing in this file to not know about.
     await recordCall(tool, "x402", "err");
+    // Pass the handler's own body through rather than flattening it to a
+    // string. The free and internal-bypass paths above already return it
+    // verbatim, so collapsing it here would give one failure two different
+    // shapes depending on how the caller paid — and the fail-loud handlers
+    // put the diagnosis (`error:{source,code,message}`) and the explicit
+    // nulls in that body precisely so a caller can act on them.
     return NextResponse.json(
-      { error: "Tool failed — you were not charged", detail: data.error ?? `status ${resp.status}` },
+      {
+        ...data,
+        charged: false,
+        error: typeof data.error === "string" || data.error == null
+          ? "Tool failed — you were not charged"
+          : data.error,
+        detail: typeof data.error === "string" ? data.error : `status ${resp.status}`,
+      },
       { status: 502 }
     );
   }
