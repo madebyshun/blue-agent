@@ -1558,14 +1558,31 @@ async function callHubTool(
       };
     }
 
-    const arrow = await kvGet<import("@/lib/blue-hood/types").Arrow>(kvArrow(arrowId));
-    if (!arrow) {
+    const stored = await kvGet<import("@/lib/blue-hood/types").Arrow>(kvArrow(arrowId));
+    if (!stored) {
       return {
         text: `Arrow ${arrowId} vanished from KV — treat as not-found and do NOT fabricate details.`,
         result: { kind: "hood_arrow", not_found: true, arrow_id: arrowId },
       };
     }
-    const card = await readChatCard(arrowId);
+
+    // Serve-time withholding, identical to /api/mcp's `hub_hood_arrow` — same
+    // tool name must mean the same contract on both surfaces. When the brief's
+    // LLM one-liner cited a number that does not reconcile against its own
+    // `facts_at_fire`, the sentence is withheld (`one_line_context: null` +
+    // `brief.brief_status`) and the `text` instruction below stops telling the
+    // model to answer from it. `warnings` is passed through untouched, and KV
+    // is NOT written: the stored arrow keeps the original text verbatim.
+    const { briefHasNumberDrift, withholdDriftedBrief } = await import("@/lib/blue-hood/brief-serving");
+    const briefWithheld = briefHasNumberDrift(stored.brief);
+    const arrow = withholdDriftedBrief(stored);
+
+    const storedCard = await readChatCard(arrowId);
+    // The chat card was built and persisted at fire time and carries its own
+    // copy of the one-liner in `context`, with no warnings to judge it by — so
+    // it has to be projected from the arrow, not from itself. Blanking it here
+    // keeps the rendered card from showing the quote the tool result withheld.
+    const card = storedCard && briefWithheld ? { ...storedCard, context: "" } : storedCard;
 
     // Compact fact strip the LLM can quote from without touching training.
     // Ordered top-to-bottom by "what a trader wants first": direction/why,
@@ -1599,6 +1616,9 @@ async function callHubTool(
       `reference_price=${arrow.reference_price} grading_window_h=${arrow.grading_window_h}`,
       brief?.verdict_note ? `verdict_note="${brief.verdict_note.replace(/"/g, "'").slice(0, 240)}"` : "verdict_note=null",
       brief?.one_line_context ? `context="${brief.one_line_context.replace(/"/g, "'").slice(0, 240)}"` : "context=null",
+      briefWithheld
+        ? `context_withheld=brief_number_drift (the model-written narrative line failed reconciliation against facts_at_fire and was withheld; the exact mismatch is in warnings — do NOT reconstruct it)`
+        : "",
       facts ? `facts_at_fire=${JSON.stringify({
         dex: facts.dex_price_usd, oracle: facts.oracle_price_usd,
         tvl: facts.dex_tvl_usd, vol_24h: facts.dex_volume_24h_usd,
@@ -1608,7 +1628,7 @@ async function callHubTool(
     ].filter(Boolean).join(" | ");
 
     return {
-      text: `Blue Hood arrow rendered. Facts you may quote verbatim (do NOT invent numbers beyond these): ${answerHints}. When the user asks "why short/long X?", answer from verdict_note + context; when they ask "what were the numbers?", quote facts_at_fire. Keep the reply to 2-3 sentences and end with "Signals fire from oracle-vs-DEX drift; grading is deterministic (see /hood/arrows)."`,
+      text: `Blue Hood arrow rendered. Facts you may quote verbatim (do NOT invent numbers beyond these): ${answerHints}. When the user asks "why short/long X?", answer from ${briefWithheld ? "verdict_note + facts_at_fire ONLY — this arrow's narrative line was withheld for failing number reconciliation, so there is no context to quote and you must not supply one" : "verdict_note + context"}; when they ask "what were the numbers?", quote facts_at_fire. Keep the reply to 2-3 sentences and end with "Signals fire from oracle-vs-DEX drift; grading is deterministic (see /hood/arrows)."`,
       result: {
         kind: "hood_arrow",
         arrow,

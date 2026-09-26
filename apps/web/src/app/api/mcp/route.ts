@@ -63,6 +63,11 @@ import { recordCall } from "@/lib/usage-daily";
 import { internalX402Headers, hasInternalKey } from "@/lib/x402-internal";
 import { encodeTransferWithMemo, isValidMemo } from "@/lib/b20/encode";
 import { MCP_TOOLS } from "@/lib/mcp-tools";
+import {
+  briefHasNumberDrift,
+  withholdDriftedBriefRecord,
+  hoodArrowInstruction,
+} from "@/lib/blue-hood/brief-serving";
 import { parseUnits } from "viem";
 import {
   type TxChain,
@@ -695,12 +700,22 @@ async function callHoodArrow(args: Record<string, unknown>): Promise<string> {
 
   const chain = chainOf(hit);
   const firedAt = typeof hit.fired_at === "string" ? Date.parse(hit.fired_at) : NaN;
+
+  // A brief whose LLM one-liner failed number reconciliation against its own
+  // `facts_at_fire` has that one-liner withheld here, and — the half that was
+  // missing — the `instruction` below stops naming it. Serving the flagged
+  // sentence while telling the agent to answer from it is the bug this fixes;
+  // leaving the instruction pointed at it would be the same bug one field over.
+  // `warnings` still carries the `brief_number_drift` entry verbatim.
+  const briefWithheld = briefHasNumberDrift(hit.brief);
+  const served = withholdDriftedBriefRecord(hit);
+
   return JSON.stringify({
-    ...hit,
+    ...served,
     chain,
     chainId: chain === "base" ? TX_CHAINS.base.chainId : TX_CHAINS.robinhood.chainId,
     age_hours: Number.isFinite(firedAt) ? Math.round((Date.now() - firedAt) / 36_000) / 100 : null,
-    instruction: `This arrow is on ${chain === "base" ? "Base 8453" : "Robinhood Chain 4663"} — STATE THAT CHAIN in your answer. Answer only from verdict_note, one_line_context and facts_at_fire. A graded arrow is history: describe it in the past tense with its age. NEVER invent a number or a reason.`,
+    instruction: hoodArrowInstruction(chain, briefWithheld),
   }, null, 2);
 }
 

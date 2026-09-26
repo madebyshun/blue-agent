@@ -16,6 +16,7 @@ import { NextRequest } from "next/server";
 import { readPublicArrowsProbe } from "@/lib/blue-hood/public-feed";
 import { acpEnvelope, clientIp, corsHeaders, preflight, rateLimit } from "@/lib/acp";
 import { computeHitRate } from "@/lib/blue-hood/hit-rate-gate";
+import { withholdDriftedBriefs } from "@/lib/blue-hood/brief-serving";
 
 export const runtime = "nodejs";
 
@@ -60,7 +61,13 @@ export async function GET(req: NextRequest) {
   return Response.json(
     acpEnvelope(
       {
-        arrows,
+        // Same serve-time withholding as /api/hood/arrows, and for a sharper
+        // reason: the paragraph above already says ACP consumers are agents
+        // that store whatever we return, somewhere we can never correct it. A
+        // fabricated one-liner is exactly that class of damage, so it is the
+        // last surface that should be handing one out. `warnings` still carries
+        // the drift entry, and the hit rate above was computed before this ran.
+        arrows: withholdDriftedBriefs(arrows),
         arrows_today: arrows.filter((a) => new Date(a.fired_at).getTime() >= Date.now() - 24 * 3_600 * 1000).length,
         hit_rate,
         per_type,
