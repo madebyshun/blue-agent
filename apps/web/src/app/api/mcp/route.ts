@@ -19,10 +19,26 @@
  *        line is now pinned by apps/web/scripts/docs-truth-check.ts and fails CI if
  *        it drifts. Do not hand-edit it — re-measure, then update both.
  *
- *        This is NOT the catalog total. `AGENT_TOOLS` holds 111; the hub_* names here
- *        are a deliberately-curated subset, and each maps to a real catalog id (also
- *        checked by docs-truth-check.ts, because an MCP tool pointing at a toolId that
- *        does not exist is a 404 an agent cannot diagnose).
+ *        This is NOT the catalog total. `AGENT_TOOLS` holds 110; the hub_* names here
+ *        are a curated subset, and each maps to a real catalog id (also checked by
+ *        docs-truth-check.ts, because an MCP tool pointing at a toolId that does not
+ *        exist is a 404 an agent cannot diagnose).
+ *        This number said 111 until 2026-09-26. The line ABOVE was pinned after
+ *        drifting by one; this one sat two lines below it, unpinned, and drifted by
+ *        one in the same way. Both are pinned now. A pin covers the string it names
+ *        and nothing else, including its own neighbours.
+ *
+ * CHAIN SCOPE: this surface is **Base 8453 only**, MEASURED 2026-09-26 — zero
+ *        occurrences of `rh-`, `robinhood` or `4663` in this file or the manifest.
+ *        The catalog's 30 `rh-*` Robinhood Chain (4663) tools are live on x402 and
+ *        reachable by HTTP, and NONE of them is served here. Tokenized stocks that
+ *        ARE served (hub_b20_*, b20_*) are Coinbase B20 on Base, not Robinhood, so
+ *        "no stock tools in MCP" would be the wrong summary.
+ *        ⚠️ Whether that exclusion is a decision or an omission is NOT recorded
+ *        anywhere, and this comment is not the place to invent one. What is worth
+ *        knowing before deciding: MCP calls skip x402 settlement (see INTERNAL_KEY
+ *        below), so adding a tool here makes it free on this surface. That is a
+ *        pricing question, not a wiring question. Ask ShunTr.
  * Docs: https://blueagent.dev/.well-known/openapi.json
  */
 import { NextRequest, NextResponse } from "next/server";

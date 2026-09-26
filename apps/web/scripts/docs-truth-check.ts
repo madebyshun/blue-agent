@@ -170,6 +170,20 @@ const pinned: [string, string, string][] = [
     MCP_ROUTE,
     `Tools: ${MCP_COUNT} — ${mcpPrefix("blue")} blue_* + ${mcpPrefix("hub")} hub_* + ${mcpPrefix("b20")} b20_*`,
   ],
+  // ...and the CATALOG total the same header quotes, eight lines below it.
+  // MEASURED 2026-09-26: that sentence said 111 while AGENT_TOOLS held 110.
+  // The pin above had already caught the MCP number drifting by one; this one
+  // then drifted by one in the identical way, in the same comment block, and
+  // nothing fired. Two reasons it was invisible, both worth knowing before
+  // trusting any other "it's covered" instinct in this file:
+  //   1. a `pinned` entry asserts ONE substring. Proximity buys nothing —
+  //      neighbouring lines are as unchecked as a different file's.
+  //   2. group 2's scanner cannot reach it either, twice over: MCP_ROUTE is
+  //      not in `scanned`, and even if it were, COUNT_RE needs the word
+  //      "tools" AFTER the digits, while this sentence writes the count after
+  //      `AGENT_TOOLS`. Adding the file to `scanned` would NOT have caught it.
+  // Hence an explicit pin rather than widening the scan.
+  ["mcp/route.ts catalog aside", MCP_ROUTE, `\`AGENT_TOOLS\` holds ${TOOL_COUNT};`],
   // CLAUDE.md is what every future session reads first; a stale number there
   // propagates into work before anyone thinks to measure.
   [
