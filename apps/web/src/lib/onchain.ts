@@ -171,15 +171,61 @@ export function snapshotToPrompt(s: WalletSnapshot): string {
 // token. Every audit/security tool MUST ground on this instead of letting the
 // LLM guess "EOA / not a contract" from missing Basescan metadata.
 
+/**
+ * EIP-7702 delegation designator. A `SetCode` authorization writes exactly 23
+ * bytes to an EOA: `0xef0100` followed by the 20-byte delegate address.
+ *
+ * 🔴 `eth_getCode` returns bytecode for such an address, so the plain
+ * "code ⟹ contract" test calls it a contract — and every downstream consumer
+ * then reports a MetaMask or Alchemy smart-account user as an *unverified
+ * contract*, which reads as a warning about the user's own wallet. MEASURED:
+ * `0xD5C1…3FAB` (EOA delegated to the MetaMask delegator) came back from
+ * risk-gate as `isContract: true, verified: false`.
+ *
+ * A delegated EOA is still an EOA: it has a private key, it pays for its own
+ * transactions, and it is not "a contract someone deployed". So the designator
+ * is detected BEFORE the isContract decision, not folded in after it.
+ */
+const EIP7702_DESIGNATOR = "0xef0100";
+const DESIGNATOR_CODE_LEN = 2 + 6 + 40; // "0x" + ef0100 + 20-byte address
+
+/**
+ * Decode `eth_getCode` output into a delegate address, or null if it is not a
+ * designator. Pure and exported so scripts/eip7702-designator-test.ts can pin
+ * it without an RPC — the length check is the part that silently over-matches
+ * if someone "simplifies" it to a bare `startsWith`.
+ */
+export function parseDelegationDesignator(code: string | undefined): string | null {
+  if (!code || code.length !== DESIGNATOR_CODE_LEN) return null;
+  if (!code.toLowerCase().startsWith(EIP7702_DESIGNATOR)) return null;
+  return `0x${code.slice(8).toLowerCase()}`;
+}
+
+export interface Delegation {
+  /** The contract this EOA currently delegates to. */
+  address: string;
+  /**
+   * The delegate's VERIFIED contract name, read from the explorer — never a
+   * hardcoded address→vendor table. A table is a guess that ages silently:
+   * vendors redeploy delegators, and a stale row would confidently mislabel
+   * the wallet it is supposed to explain. Null when the delegate is unverified.
+   */
+  label: string | null;
+  /** Whether the delegate's source is verified on the explorer. */
+  verified: boolean;
+}
+
 export interface TokenIdentity {
   address: string;
-  isContract: boolean;          // eth_getCode returned bytecode
+  isContract: boolean;          // eth_getCode returned bytecode (7702 EOAs excluded — see below)
   isToken: boolean;             // standard ERC-20 metadata readable
   name: string | null;
   symbol: string | null;
   decimals: number | null;
   totalSupply: number | null;   // human-readable (divided by 10^decimals)
   market: TokenMarket | null;   // DexScreener Base pair, null if unlisted
+  /** Non-null only for an EIP-7702 delegated EOA. `isContract` is false here. */
+  delegation: Delegation | null;
 }
 
 export async function getTokenIdentity(rawAddr: string): Promise<TokenIdentity | null> {
@@ -187,7 +233,16 @@ export async function getTokenIdentity(rawAddr: string): Promise<TokenIdentity |
   if (!address) return null;
 
   const code = await client.getCode({ address }).catch(() => undefined);
-  const isContract = !!code && code !== "0x";
+  const hasCode = !!code && code !== "0x";
+
+  // Read the designator first: a delegated EOA has code, but is not a contract.
+  let delegation: Delegation | null = null;
+  const delegate = parseDelegationDesignator(code);
+  if (delegate) {
+    const src = await getSourceSignals(delegate).catch(() => null);
+    delegation = { address: delegate, label: src?.contractName ?? null, verified: src?.verified ?? false };
+  }
+  const isContract = hasCode && delegation === null;
 
   let name: string | null = null, symbol: string | null = null,
       decimals: number | null = null, totalSupply: number | null = null;
@@ -215,7 +270,7 @@ export async function getTokenIdentity(rawAddr: string): Promise<TokenIdentity |
   const isToken = isContract && symbol != null && decimals != null;
   const market = isToken ? await getTokenMarket(address) : null;
 
-  return { address, isContract, isToken, name, symbol, decimals, totalSupply, market };
+  return { address, isContract, isToken, name, symbol, decimals, totalSupply, market, delegation };
 }
 
 // Scan VERIFIED Solidity source for privileged / risk-bearing functions and
@@ -281,6 +336,17 @@ export async function getSourceSignals(address: string): Promise<{ verified: boo
 }
 
 export function tokenIdentityToPrompt(t: TokenIdentity): string {
+  if (t.delegation) {
+    const d = t.delegation;
+    return [
+      `Address ${t.address} (Base, chain 8453): eth_getCode returned an EIP-7702 delegation designator (0xef0100 + address) — this is an externally-owned account (EOA / normal wallet) that has delegated its code to ${d.address}.`,
+      `It is NOT a deployed contract and NOT a token. Delegating is a normal, user-initiated wallet upgrade (MetaMask, Alchemy, Bitget and others ship 7702 accounts).`,
+      d.label
+        ? `The delegate's source IS verified on the explorer, under the name "${d.label}".`
+        : `The delegate's source is NOT verified on the explorer. Report that as an unknown, NOT as evidence of wrongdoing — most delegates are unverified.`,
+      `Do NOT describe this address as an "unverified contract" and do NOT raise a risk score because it has code. The only thing worth flagging is the DELEGATE, and only on its own evidence.`,
+    ].join("\n");
+  }
   if (!t.isContract) {
     return `Address ${t.address} (Base, chain 8453): eth_getCode returned NO bytecode — this is an externally-owned account (EOA / normal wallet). It is NOT a contract or token. There is no code to audit.`;
   }

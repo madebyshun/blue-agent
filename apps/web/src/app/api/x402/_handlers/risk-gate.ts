@@ -85,8 +85,14 @@ export default async function handler(req: Request): Promise<Response> {
       getTokenIdentity(to),
     ]);
     const isContract = identity?.isContract ?? addrInfo.isContract;
+    // An EIP-7702 delegated EOA has bytecode, so `addrInfo` (Basescan ABI/verified)
+    // reads it as an unverified contract. getTokenIdentity resolves the designator
+    // and returns isContract:false, which is why identity wins the `??` above.
+    const delegation = identity?.delegation ?? null;
     const tokenDesc = identity?.isToken
       ? `Target is an ERC-20 token: ${identity.name ?? "?"} (${identity.symbol ?? "?"})`
+      : delegation
+      ? `Target is an externally-owned account (EOA / wallet) that has delegated its code to ${delegation.address} under EIP-7702${delegation.label ? ` ("${delegation.label}", verified on Basescan)` : " (delegate source unverified)"}. This is a normal wallet upgrade. Do NOT call it an unverified contract and do NOT raise the risk score because it has code.`
       : isContract ? "Target is a smart contract (non-token or unrecognized)" : "Target is an externally-owned account (EOA / wallet)";
 
     const txCtx = `
@@ -95,7 +101,7 @@ Action: ${action}
 Target address: ${to}
 Value: ${value || "0 ETH"}
 Calldata present: ${data ? "yes" : "no"}
-Target type (from on-chain eth_getCode — authoritative): ${isContract ? "contract" : "EOA"}
+Target type (from on-chain eth_getCode — authoritative): ${delegation ? "EOA with an EIP-7702 delegation" : isContract ? "contract" : "EOA"}
 ${tokenDesc}
 Basescan source verified: ${addrInfo.verified}
 Contract name: ${addrInfo.contractName ?? "unknown"}
@@ -181,6 +187,12 @@ Schema: {
       chainId: 8453,
       target: {
         isContract,
+        account_type: delegation ? "eoa_7702" : isContract ? "contract" : "eoa",
+        delegate: delegation
+          ? { address: delegation.address, label: delegation.label, verified: delegation.verified, explorer: `https://basescan.org/address/${delegation.address}` }
+          : null,
+        // For a 7702 EOA this is the EOA's own (always-absent) verification, not
+        // the delegate's — read `delegate.verified` for that one.
         verified:   addrInfo.verified,
         contractName: addrInfo.contractName ?? (identity?.isToken ? `${identity.name ?? ""} (${identity.symbol ?? ""})`.trim() : null),
         url: `https://basescan.org/address/${to}`,

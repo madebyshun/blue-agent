@@ -108,20 +108,34 @@ export default async function handler(req: Request): Promise<Response> {
     // this, the LLM treats "no metadata" as red flags and emits a scary verdict
     // on a plain wallet.
     if (identity && identity.isContract === false) {
+      // An EIP-7702 delegated EOA lands here too, and must not be described as
+      // "no code" — it has code, it is just not a contract. See the designator
+      // note in lib/onchain.ts.
+      const d = identity.delegation;
       return Response.json({
         tool: "contract-trust",
         timestamp: new Date().toISOString(),
         address,
         chain: "base",
         chainId: 8453,
+        account_type: d ? "eoa_7702" : "eoa",
+        delegate: d ? { address: d.address, label: d.label, verified: d.verified, explorer: `https://basescan.org/address/${d.address}` } : null,
         basescan: { verified: false, contractName: null, isProxy: false, url: `https://basescan.org/address/${address}` },
-        security: { score: null, verified: false, proxy_risk: "n/a", red_flags: [], green_flags: [], attack_vectors: [], known_pattern: "EOA", assessment: "This address is an externally-owned account (EOA / wallet), not a smart contract — there is no contract to trust-check." },
+        security: {
+          score: null, verified: false, proxy_risk: "n/a", red_flags: [], green_flags: [], attack_vectors: [],
+          known_pattern: d ? "EOA (EIP-7702 delegated)" : "EOA",
+          assessment: d
+            ? `This address is an externally-owned account (EOA / wallet) that has delegated its code to ${d.address} under EIP-7702. It is not a deployed contract, so there is no contract to trust-check here. Delegating is a normal wallet upgrade, not a risk signal.`
+            : "This address is an externally-owned account (EOA / wallet), not a smart contract — there is no contract to trust-check.",
+        },
         community: { trust: "n/a", recognition: "wallet", degen_flags: [], verdict: "" },
         verdict: "NOT_A_CONTRACT",
         confidence: 100,
-        headline: "Not a contract — this is a wallet address",
+        headline: d ? "Not a contract — this is a wallet using an EIP-7702 delegate" : "Not a contract — this is a wallet address",
         action: "N/A",
-        summary: "No contract code exists at this address. If you meant to check a token or protocol, paste its contract address.",
+        summary: d
+          ? `This is a wallet, not a contract. Its code is an EIP-7702 delegation designator pointing at ${d.address}${d.label ? ` ("${d.label}", verified)` : " (delegate source not verified on Basescan)"}. To trust-check a token or protocol, paste that contract's address instead.`
+          : "No contract code exists at this address. If you meant to check a token or protocol, paste its contract address.",
         checklist: [],
       });
     }
