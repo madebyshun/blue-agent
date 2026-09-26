@@ -746,6 +746,65 @@ const BSC_FIRST: RawAccept[] = [
         /whitespace-pre-line[\s\S]{0,40}\{err\}/.test(hubCode));
 }
 
+// ── Group 14: the runner knew none of what the grid already knew ─────────────
+// The grid badges an external tool's endpoint and the runner did not, so the one
+// screen where someone is about to sign a payment was the only screen that never
+// mentioned the endpoint had failed its last probe. It could not have: `selected`
+// is a snapshot taken at click time and the probe is the slow second fetch, so a
+// tool opened before it lands keeps `health: undefined` for as long as the panel
+// is open. And the API panel printed `/api/x402/<id>` for every tool — the native
+// path, on six cards that are not served by it.
+
+{
+  const hub = read("src/app/hub/HubView.tsx");
+  const hubCode = stripComments(hub);
+
+  // ── the endpoint that is printed is the endpoint that is called ──
+  // Anchored on `POST {`, not on the "// API ENDPOINT" label above it: that
+  // label is JSX TEXT that happens to start with two slashes, so stripComments
+  // eats it along with the rest of its line. A label is a caption anyway; the
+  // code is the claim.
+  const shown  = /POST \{([\s\S]*?)\}<\/code>/.exec(hubCode)?.[1] ?? "";
+  const called = /await fetch\((tool\.callPath\s*\?\?[^,]*),/.exec(hubCode)?.[1] ?? "";
+  check("14.1 the API panel prints a path at all",
+        shown.trim().length > 0 && called.trim().length > 0);
+  check("14.2 …and prints the same expression the runner posts to",
+        shown.replace(/\s+/g, "") === called.replace(/\s+/g, ""));
+  // An external tool is served by the proxy. If `callPath` ever stops being set
+  // for one, 14.2 still passes while the panel silently reverts to the native
+  // path — so pin the assignment too.
+  check("14.3 external tools still carry the proxy path that makes 14.2 true",
+        /callPath:\s*`\/api\/hub\/tools\/\$\{r\.id\}\/call`/.test(hubCode));
+
+  // ── the runner can actually see a probe that landed after the click ──
+  check("14.4 the open tool is re-read from the live probe map",
+        /selectedLive/.test(hubCode) &&
+          /selected\.id in toolHealth/.test(hubCode));
+  check("14.5 …and it is the re-read one that reaches the runner",
+        /<ToolRunner[\s\S]{0,400}?tool=\{selectedLive\}/.test(hubCode));
+
+  // ── what it may and may not say ──
+  const warn = blockAfter(hubCode, /tool\.source\s*===\s*"external"\s*&&\s*livenessLabel/);
+  check("14.6 the runner warns before the click, not after the signature",
+        /did not answer our last check/.test(hubCode));
+  // 🔴 The single most important line in this group. "unknown" is a third state:
+  // on first paint almost every tool is in it, and warning there would accuse
+  // every builder whose tool is fine.
+  check("14.7 the warning fires on unreachable alone, never on not-yet-checked",
+        /livenessLabel\(tool\.health\)\s*===\s*"unreachable"/.test(hubCode) &&
+          !/livenessLabel\(tool\.health\)\s*!==\s*"up"/.test(hubCode));
+  check("14.8 …and it reports rather than delists — Run stays enabled",
+        warn.length > 0 && !/disabled/.test(warn));
+  // The reassurance has to stay true: for an external tool run() asks for the
+  // 402 before it asks for a signature, so an unreachable endpoint returns
+  // before the wallet opens. Reorder those and the warning becomes a false
+  // promise about someone's money.
+  const iProbe = hubCode.search(/probe\s*=\s*await\s+fetch\(tool\.callPath!/);
+  const iSign  = hubCode.search(/signTypedDataAsync\(/);
+  check("14.9 nothing is signed before the 402 probe, as the warning promises",
+        iProbe >= 0 && iSign >= 0 && iProbe < iSign);
+}
+
 console.log(`\nexternal-payee guard: ${pass} passed, ${failures.length} failed`);
 for (const f of failures) console.log(`  FAIL  ${f}`);
 process.exit(failures.length === 0 ? 0 : 1);

@@ -15,7 +15,7 @@ import MarkdownOutput from "@/components/MarkdownOutput";
 // code follows `Coverage` into the browser bundle.
 import type { Coverage } from "@/lib/hub-registry";
 // Type only — the probing module imports KV and must not reach this bundle.
-import type { ToolHealth } from "@/lib/hub-liveness-format";
+import { livenessLabel, ageLabel, type ToolHealth } from "@/lib/hub-liveness-format";
 // Deciding which payment requirement to sign for a tool WE DO NOT RUN. Pure —
 // no fetch, no wallet, no imports of its own — so it is safe in this client
 // bundle and drivable by fixtures in scripts/external-payee-check.ts. Read its
@@ -569,7 +569,11 @@ function ToolInfoBlock({ tool }: { tool: Tool }) {
       <div className={`${open ? "block mt-3" : "hidden"} lg:block lg:mt-0 space-y-4`}>
         <div>
           <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-1.5">// API ENDPOINT</p>
-          <code className="font-mono text-[11px] text-[#4FC3F7] bg-[#0D0D1A] border border-[#1A1A2E] rounded-md px-2 py-1 inline-block">POST /api/x402/{tool.id}</code>
+          {/* The SAME expression ToolRunner.run() posts to. A community tool is
+              served by the registry proxy, not by /api/x402/<id> — printing the
+              native path on all six external cards handed every reader a URL
+              that 501s, in the one panel whose whole job is to be copied. */}
+          <code className="font-mono text-[11px] text-[#4FC3F7] bg-[#0D0D1A] border border-[#1A1A2E] rounded-md px-2 py-1 inline-block">POST {tool.callPath ?? `/api/x402/${tool.id}`}</code>
         </div>
         <div>
           <p className="font-mono text-[10px] text-[#A78BFA] tracking-widest mb-2">// HOW IT WORKS</p>
@@ -1173,6 +1177,30 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
 
           {/* Run button + error */}
           <div className="px-6 pb-6 shrink-0">
+            {/* The grid already badges this, and the runner did not — so the one
+                screen where someone is about to spend money was the one screen
+                that never mentioned the endpoint had failed its last probe.
+
+                🔴 Gated on "unreachable" ALONE. "unknown" is a third state, not
+                a soft "down": warning on it would accuse every builder whose
+                tool is fine before the probe has landed, which is most of them
+                on first paint. See the 🔴 block in lib/hub-liveness-format.ts.
+
+                It does not disable Run. Tunnel expiry is normal, the probe may
+                be minutes stale, and delisting is not ours to do. The last
+                sentence is load-bearing and it is true by construction: for an
+                external tool `run()` asks for the 402 before it asks for a
+                signature, so an unreachable endpoint returns before the wallet
+                is ever opened. */}
+            {tool.source === "external" && livenessLabel(tool.health) === "unreachable" && (
+              <p className="font-mono text-[11px] text-[#F87171]/90 mb-3 leading-relaxed">
+                ⚠ This endpoint did not answer our last check
+                {ageLabel(tool.health?.checkedAt) ? `, ${ageLabel(tool.health?.checkedAt)} ago` : ""}.
+                It runs on its builder&apos;s own server, often a dev tunnel that expires.
+                It may be back up since; we have not re-checked.
+                {" "}You can still run it: if it is unreachable, nothing is signed and you are not charged.
+              </p>
+            )}
             {step === "error" && err && (
               // pre-line: the post-signature "we cannot tell you whether the
               // USDC moved" warning is a second paragraph, and collapsing it
@@ -1691,6 +1719,26 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
       ),
     ],
     [communityTools, toolHealth],
+  );
+
+  /**
+   * The open tool, re-read from the live probe map.
+   *
+   * `selected` is a SNAPSHOT taken at click time, and the probe is deliberately
+   * the slow second fetch — so a tool opened before it lands keeps
+   * `health: undefined` for as long as the panel stays open, no matter what
+   * comes back. The runner's warning could therefore never fire on the path it
+   * exists for: someone who deep-links straight into a dead tool.
+   *
+   * Same `in` check as above, for the same reason: an explicit `null` is an
+   * answer and must overwrite the absent-key default.
+   */
+  const selectedLive = useMemo<Tool | null>(
+    () =>
+      selected && selected.id in toolHealth
+        ? { ...selected, health: toolHealth[selected.id] }
+        : selected,
+    [selected, toolHealth],
   );
 
   // ── App-shell deep routing ────────────────────────────────────────────────
@@ -2235,16 +2283,18 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
             ? <SubmitTool variant="shell" onBack={backToBrowse} onSubmitted={() => loadCommunityTools()} />
             : view === "dashboard"
             ? <DashboardView inShell onBack={() => { loadCommunityTools(); backToBrowse(); }} />
-            : selected
+            : selectedLive
             ? <ToolRunner
                 // Remount per tool (clean state); when a shared ?s= result
                 // arrives, the key flips to ":shared" so the runner re-inits
                 // into the "done" view instead of staying on the idle form.
-                key={`${selected.id}:${preload?.toolId === selected.id ? "shared" : "fresh"}`}
-                tool={selected}
+                // Keyed on id only — a late probe must refresh the warning, not
+                // wipe what the user has already typed.
+                key={`${selectedLive.id}:${preload?.toolId === selectedLive.id ? "shared" : "fresh"}`}
+                tool={selectedLive}
                 onBack={clearSelected}
-                cached={preload?.toolId === selected.id ? preload.data : null}
-                onResult={(r) => saveResult(selected.id, r)}
+                cached={preload?.toolId === selectedLive.id ? preload.data : null}
+                onResult={(r) => saveResult(selectedLive.id, r)}
               />
             : <div className="overflow-y-auto flex-1"><EmptyState
                 tools={allTools}
