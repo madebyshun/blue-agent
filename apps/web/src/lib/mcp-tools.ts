@@ -181,15 +181,18 @@ export const MCP_TOOLS = [
   {
     name: "b20_encode_payment",
     description:
-      "Encode a B20 `transferWithMemo` call on Base 8453 — send a B20 token with an on-chain memo (order id, invoice ref) so the payment reconciles against off-chain books. Returns { to, data, value } for the sender to sign; pure calldata builder, no keys, no payment, no broadcast. Use when an agent or merchant needs a payment that carries its own reference. Triggers — \"pay invoice 1234 in USDC\", \"send payment with order id\", \"settle this with a memo\", \"reconcilable transfer\". Memo is capped at 31 characters on-chain. B20 is Base-only — there is no B20 registry on Robinhood Chain 4663.",
+      "Encode a B20 `transferWithMemo` call on Base 8453 — send a B20 token with an on-chain memo (order id, invoice ref) so the payment reconciles against off-chain books. Returns { to, data, value } for the sender to sign; pure calldata builder, no keys, no payment, no broadcast. Use when an agent or merchant needs a payment that carries its own reference. Triggers — \"pay invoice 1234 in USDC\", \"send payment with order id\", \"settle this with a memo\", \"reconcilable transfer\". Memo is capped at 32 UTF-8 bytes on-chain. B20 is Base-only — there is no B20 registry on Robinhood Chain 4663.",
     inputSchema: {
       type: "object",
       properties: {
         tokenAddress: { type: "string", description: "B20 token contract 0x… on Base 8453." },
         to:           { type: "string", description: "Recipient 0x… on Base 8453." },
-        amount:       { type: "string", description: "Amount in whole tokens as a decimal string." },
-        decimals:     { type: "number", description: "Token decimals. Default 6 (USDC-style). Pass the real value when you know it." },
-        memo:         { type: "string", description: "On-chain memo / order id. Max 31 characters — longer strings will not fit the slot." },
+        amount:       { type: "string", description: "Amount in WHOLE tokens as a decimal string (\"25.5\"). Never base units / wei — the scaling happens server-side." },
+        // Advertising a default is how the caller was invited to guess in the
+        // first place. Decimals are now read from the token, so the honest
+        // schema says "omit this" and states what happens if you do not.
+        decimals:     { type: "number", description: "OMIT THIS. Decimals are read from the token contract on-chain. If you pass a value it is treated as a claim and checked against the chain — a mismatch is rejected, never silently applied." },
+        memo:         { type: "string", description: "On-chain memo / order id. Max 32 BYTES when UTF-8 encoded — not characters; an emoji costs 4. It fills one bytes32 slot." },
       },
       required: ["tokenAddress", "to", "amount", "memo"],
     },

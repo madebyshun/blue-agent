@@ -231,7 +231,25 @@ async function callHubTool(toolId: string, rawArgs: Record<string, unknown>): Pr
     throw new HubToolError("UPSTREAM", `Tool "${toolId}" rate-limited (429). Back off and retry.`);
   }
   if (!res.ok) {
-    throw new HubToolError("UPSTREAM", `Tool "${toolId}" returned ${res.status}.`);
+    // Surface the handler's own error contract. A bare "returned 502" tells the
+    // agent nothing it can act on, and the fail-loud handlers put the whole
+    // diagnosis in the body — `{ error: { source, code, message } }` — so that
+    // the MCP wrapper and the x402 endpoint describe a failure identically
+    // instead of the MCP caller getting a strictly worse story.
+    let detail = "";
+    try {
+      const parsed = JSON.parse(text) as { error?: unknown; message?: unknown };
+      const e = parsed.error;
+      if (e && typeof e === "object") {
+        const { source, code, message } = e as Record<string, unknown>;
+        detail = [code, message].filter(Boolean).join(": ") + (source ? ` (source: ${String(source)})` : "");
+      } else if (typeof e === "string") {
+        detail = e;
+      } else if (typeof parsed.message === "string") {
+        detail = parsed.message;
+      }
+    } catch {}
+    throw new HubToolError("UPSTREAM", `Tool "${toolId}" returned ${res.status}.${detail ? ` ${detail}` : ""}`);
   }
   // Track MCP usage (paid path tracks via x402 route; internal path doesn't, so track here)
   try { await kv.incr(`usage:${toolId}`); } catch {}
@@ -286,15 +304,54 @@ async function callB20Native(name: string, args: Record<string, unknown>): Promi
       const to = reqAddr(args.to, "to");
       const amount = String(args.amount ?? "").trim();
       if (!amount) throw new Error("amount is required");
+      if (!isPositiveDecimal(amount)) {
+        throw new Error(`amount must be a positive decimal in whole token units (got "${amount}"). Do not pass wei or scientific notation.`);
+      }
       const memo = String(args.memo ?? "").trim();
-      if (!isValidMemo(memo)) throw new Error("memo must be 1-31 characters (bytes32 slot)");
-      const decimals = args.decimals !== undefined ? Number(args.decimals) : 6;
+      // 32, not 31: `orderMemo` calls stringToHex(…, { size: 32 }), which is
+      // the real ceiling and throws above it. The old message said
+      // "1-31 characters" and was wrong in both directions — it under-stated
+      // the limit by one and counted characters, while the constraint is on
+      // UTF-8 BYTES, so a single emoji memo failed a length check it passed.
+      if (!isValidMemo(memo)) {
+        throw new Error(`memo must be 1-32 BYTES when UTF-8 encoded (got ${new TextEncoder().encode(memo).length}); it fills one bytes32 slot`);
+      }
+
+      // 🔴 decimals is READ FROM THE CHAIN, never defaulted.
+      //
+      // This defaulted to 6 until 2026-09-26. For an 18-decimal token with
+      // `decimals` omitted, `amount: "1"` encoded as 1e6 instead of 1e18 —
+      // 0.000000000001 tokens, wrong by a factor of a trillion, returned as
+      // valid calldata with no warning. The caller signs what we hand back, so
+      // a silently-wrong amount here is a silently-wrong transfer.
+      //
+      // The token itself is the only authority on its own decimals, and we
+      // have the token address, so there is no reason to guess. Same reader
+      // `blue_send_tx` uses (cached, and it rejects nonsense values).
+      const { decimals, symbol } = await readTokenMeta("base", tokenAddress as `0x${string}`);
+
+      // A caller-supplied `decimals` is now a CLAIM to check, not an override.
+      // Silently preferring either side hides a real disagreement: if the
+      // caller thinks 6 and the chain says 18, one of us is about to encode
+      // the wrong number and the caller is the one who signs it.
+      if (args.decimals !== undefined) {
+        const claimed = Number(args.decimals);
+        if (!Number.isInteger(claimed) || claimed !== decimals) {
+          throw new Error(
+            `decimals mismatch: you passed ${String(args.decimals)} but ${symbol || tokenAddress} reports ${decimals} on-chain. ` +
+            `Omit \`decimals\` and it is read from the token.`
+          );
+        }
+      }
+
+      const amountWei = parseUnits(amount, decimals).toString();
       return JSON.stringify({
         to: tokenAddress,
         data: encodeTransferWithMemo({ to, amount, decimals, memo }),
         value: "0x0",
         chainId: 8453,
         chain: "base",
+        meta: { symbol: symbol || null, decimals, amountWei, decimalsSource: "onchain" },
         note: "Sign with the sender wallet on Base 8453. Emits a Memo event indexed by the order id for reconciliation.",
       }, null, 2);
     }
