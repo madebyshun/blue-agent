@@ -799,14 +799,32 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           return;
         }
 
-        // Single call with X-PAYMENT — proxy forwards to Bankr (synchronous)
+        // Single call with X-PAYMENT, settled in-process by /api/x402/<id> via the
+        // CDP facilitator. (This said "proxy forwards to Bankr" until 2026-09-26;
+        // there has been no Bankr in the payment path since the 403 ban — see the
+        // header of api/x402/[tool]/route.ts.)
         const r2 = await fetch(tool.callPath ?? `/api/x402/${tool.id}`, {
           method:  "POST",
           headers: { "Content-Type": "application/json", "X-PAYMENT": xPayment },
           body:    JSON.stringify(tool.x402Body(body)),
         });
         const d2 = await r2.json() as Record<string,unknown>;
-        if (!r2.ok) throw new Error([d2.error, d2.message, d2.reason].filter(Boolean).join(": ") || `Payment failed ${r2.status}`);
+        /* 🔴 `detail` was missing from this list until 2026-09-26, and it is the
+           ONLY field carrying a cause on the most common failure branch.
+           api/x402/[tool]/route.ts reports a failed run two different ways: a
+           THROWN handler returns `{error, message}`, but a handler that returns an
+           error object returns `{error, detail: data.error}` (route.ts ~:397) —
+           and payment verification failures return `{error, detail}` too (~:366).
+           Joining only error/message/reason rendered those as a bare
+           "Tool failed — you were not charged" with no suffix, which is what a
+           real user reported and what sent this triage looking for the wrong bug:
+           the message is indistinguishable from the thrown-handler case, so you
+           cannot even tell WHICH branch produced it, let alone why.
+           The suffix-less string is not a cosmetic gap — it is the difference
+           between "a tool is down" and "no information exists about which tool or
+           why". The sibling hosted branch above (~:776) already joins `detail`;
+           this is the same lesson reaching the native branch. Keep them in sync. */
+        if (!r2.ok) throw new Error([d2.error, d2.message, d2.detail, d2.reason].filter(Boolean).join(": ") || `Payment failed ${r2.status}`);
         const res2 = (d2.result ?? d2) as Record<string,unknown>;
         // Show result immediately — don't block behind animation
         setResult(res2);
