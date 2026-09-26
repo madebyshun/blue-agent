@@ -1,16 +1,82 @@
 // x402/honeypot-check
 // Honeypot token detection — checks if a token can be bought but not sold on Base
 // Price: $0.10 — verdict: SAFE / HONEYPOT / SUSPICIOUS
+//
+// 🔴 CONFIDENCE IS EARNED BY A TAX READ, IN CODE. Read `clampConfidence` below
+// before touching anything that produces `confidence`.
+//
+// MEASURED 2026-09-26 across the 18 tools on /api/mcp: 12 of 12 tokens came back
+// `tax: "unknown"` and every one of them was still `verdict: SAFE` at
+// `confidence: 90-99`. Both halves came from the model — the tax string because
+// the prompt asked it to write one, the confidence because the prompt asked it
+// to "reflect evidence strength". A number the model chooses is not evidence of
+// anything, and "SAFE, 95%" is read by a human as a verification that happened.
+//
+// Two things changed, and they are both code, not prompt (CLAUDE.md: prompts do
+// not prevent hallucination, data sources do):
+//   1. The tax comes from `lib/token-tax.ts` — an `eth_call` against the token's
+//      own selectors — or it is `null`. The model is no longer asked for it and
+//      no longer has a field to put one in.
+//   2. `confidence >= 90` is unreachable unless that read succeeded. The clamp
+//      is arithmetic on the way out, so no prompt edit, model swap or
+//      temperature change can lift it.
+//
+// The verdict/action mapping is likewise arithmetic. Per CLAUDE.md a verdict
+// word chosen by the LLM flips between runs on identical input; both passes now
+// run at temperature 0 and only write prose and flags.
 
 import { getTokenIdentity, tokenIdentityToPrompt } from "@/lib/onchain";
 import { callLLM } from "@/app/api/_lib/llm";
+import { readTokenTax, type TaxRead } from "@/lib/token-tax";
+import { robinhoodCodeHint } from "@/lib/cross-chain-hint";
 
 type Msg = { role: string; content: string };
+
+/** The ceiling a tool may claim when it never read the tax. */
+export const TAX_UNVERIFIED_CONFIDENCE_CAP = 70;
+
+/** A sell tax at or above this is a sell restriction, i.e. the honeypot itself.
+ *  Only ever applied to a MEASURED value — an unread tax stays unread. */
+export const HONEYPOT_SELL_TAX_BPS = 5_000; // 50%
+
+/**
+ * The whole fix in one function. `raw` is whatever the model said; the return
+ * value is what the caller is allowed to be told.
+ *
+ * Deleting the `Math.min(..., CAP)` restores the measured bug with zero visible
+ * symptoms — the tool still answers 200, still says SAFE, and the only
+ * difference is a number nobody can check. `scripts/honeypot-tax-read-test.ts`
+ * asserts both directions (capped when unread, NOT capped when read) so the
+ * revert goes red instead of shipping.
+ */
+export function clampConfidence(raw: unknown, taxRead: TaxRead["tax_read"] | "not_applicable"): number {
+  const n = typeof raw === "number" && Number.isFinite(raw) ? Math.round(raw) : 50;
+  const bounded = Math.max(0, Math.min(100, n));
+  return taxRead === "template" ? bounded : Math.min(bounded, TAX_UNVERIFIED_CONFIDENCE_CAP);
+}
+
+/**
+ * Hard-mapped from the verdict + whether the tax was read. `SAFE_TO_TRADE` is
+ * the claim this tool was making without evidence, so it is now reachable only
+ * on a successful read; everything else tradeable says so in the action word
+ * itself rather than burying it in prose the caller may not render.
+ */
+export function honeypotAction(verdict: string, taxRead: TaxRead["tax_read"] | "not_applicable"): string {
+  if (verdict === "HONEYPOT") return "DO_NOT_BUY";
+  if (verdict === "NOT_A_TOKEN") return "N/A";
+  if (taxRead !== "template") return "TRADEABLE_TAX_UNVERIFIED";
+  return verdict === "SUSPICIOUS" ? "DYOR" : "SAFE_TO_TRADE";
+}
 
 // Bankr LLM (llm.bankr.bot) was 403-banned 2026-07-20 → route through callLLM
 // (Virtuals). Signature/temperature defaults preserved so call sites are unchanged.
 async function llm(system: string, user: string, temp = 0.2, tokens = 600): Promise<string> {
   return (await callLLM({ system, messages: [{ role: "user", content: user }] as Msg[], temperature: temp, maxTokens: tokens })).text;
+}
+
+/** A model-produced list, or an empty one. Never a string split into letters. */
+function asList(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
 function parseJson(t: string): Record<string, unknown> | null {
@@ -86,10 +152,15 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     // Authoritative on-chain identity (eth_getCode + ERC-20 metadata + live
-    // DexScreener liquidity) alongside the Basescan verification lookup.
-    const [identity, tokenInfo] = await Promise.all([
+    // DexScreener liquidity), the Basescan verification lookup, and the tax
+    // read — all three in parallel. The tax probe is three `eth_call`s that
+    // return immediately against an address with no code, so running it before
+    // we know whether this IS a token costs a round-trip we are already waiting
+    // on, and saves a serial hop on the common path.
+    const [identity, tokenInfo, tax] = await Promise.all([
       getTokenIdentity(address),
       getTokenInfo(address),
+      readTokenTax(address),
     ]);
 
     // Guard: there is nothing to honeypot-check unless the address is an actual
@@ -99,6 +170,13 @@ export default async function handler(req: Request): Promise<Response> {
     // return a dangerous false "HONEYPOT". Short-circuit to a clean NOT_A_TOKEN.
     if (identity && identity.isToken === false) {
       const isEOA = identity.isContract === false;
+      // This tool reads Base 8453 and nothing else, and the sentence below used
+      // to phrase that as a verdict about the TOKEN. VEX
+      // (0x8Ff9…796b) is a live token on Robinhood Chain 4663 and got back "this
+      // is a wallet, not a token" — true of Base, false of the token, and the
+      // tool never named the chain it was speaking for. One `eth_getCode`
+      // against 4663 turns a wrong answer into a correct one plus a pointer.
+      const hint = await robinhoodCodeHint(address);
       return Response.json({
         tool: "honeypot-check",
         timestamp: new Date().toISOString(),
@@ -110,22 +188,60 @@ export default async function handler(req: Request): Promise<Response> {
         action: "N/A",
         confidence: 0,
         is_honeypot: false,
+        // No token means no tax to read — "not_applicable" is a different fact
+        // from "failed" (we looked and the contract does not expose it) and the
+        // two must not collapse into one word.
+        tax_read: "not_applicable" as const,
+        tax_units: "basis_points" as const,
+        buy_tax: null,
+        sell_tax: null,
+        tax_source: null,
+        token_template: null,
+        has_blacklist: null,
+        confidence_capped: false,
         sell_tax_estimate: "n/a",
         buy_tax_estimate: "n/a",
         red_flags: [],
         green_flags: [],
         honeypot_patterns: [],
         community: { alert: "none", known_rug: false, rug_patterns: [], signal: "" },
-        assessment: isEOA
-          ? "This address is an externally-owned account (EOA / normal wallet), not a token contract — there is nothing to honeypot-check. Pass a token CONTRACT address to scan a token."
-          : `This is a non-token contract${tokenInfo.contractName ? ` (${tokenInfo.contractName})` : ""} — infrastructure such as a liquidity pool or router, not an ERC-20 token. A honeypot check only applies to tradeable tokens.`,
+        assessment: [
+          isEOA
+            ? "On Base (chain 8453) this address is an externally-owned account (EOA / normal wallet), not a token contract — there is nothing to honeypot-check here. Pass a Base token CONTRACT address to scan a token."
+            : `On Base (chain 8453) this is a non-token contract${tokenInfo.contractName ? ` (${tokenInfo.contractName})` : ""} — infrastructure such as a liquidity pool or router, not an ERC-20 token. A honeypot check only applies to tradeable tokens.`,
+          hint ? hint.note : "",
+        ].filter(Boolean).join(" "),
+        ...(hint ? { hint } : {}),
       });
     }
+
+    // The tax block is a MEASUREMENT handed to the model, not a question asked
+    // of it. When the read failed the model is told so in the imperative — it
+    // has no tax field in its schema any more, and inventing one in the prose
+    // is the last remaining way to reintroduce the bug.
+    const taxCtx = tax.tax_read === "template"
+      ? [
+          `On-chain tax (AUTHORITATIVE — read from the contract's own ${tax.tax_source}):`,
+          `- buy tax: ${tax.buy_tax} basis points (${tax.buy_tax_pct})`,
+          `- sell tax: ${tax.sell_tax} basis points (${tax.sell_tax_pct})`,
+          `- template: ${tax.template}`,
+          `- blacklists(address): ${tax.has_blacklist
+            ? "PRESENT — a privileged role can block addresses from transferring (censorship / honeypot lever)."
+            : "ABSENT on this template — no address can be frozen. This is a POSITIVE, not a risk."}`,
+          `These are measured numbers. Use them; do not restate them differently and do not hedge them.`,
+        ].join("\n")
+      : [
+          `On-chain tax read FAILED: this contract does not answer totalBuyTaxBasisPoints() / totalSellTaxBasisPoints(), so the buy and sell tax are GENUINELY UNKNOWN.`,
+          `Do NOT state, estimate, bracket or imply a tax figure — not "0%", not "low", not "likely standard". Say the tax could not be read.`,
+          `An unread tax is NOT evidence of a honeypot either. It is absence of information: it must not raise is_honeypot and must not be listed as a red flag.`,
+        ].join("\n");
 
     const tokenCtx = `
 ${identity ? tokenIdentityToPrompt(identity) : `Token address: ${address} (Base, chain 8453). On-chain identity read unavailable — do NOT assume EOA.`}
 
-Basescan: source verified = ${tokenInfo.verified}, contract name = ${tokenInfo.contractName ?? "unknown"}. (An unverified source is common for legitimate tokens and is NOT, by itself, a honeypot signal.)
+${taxCtx}
+
+Basescan: source verified = ${tokenInfo.verified}, contract name = ${tokenInfo.contractName ?? "unknown"}. (An unverified source is common for legitimate tokens and is NOT, by itself, a honeypot signal. The contract NAME is deployer-chosen and proves nothing — the tax block above was read by selector, which cannot be faked.)
 `.trim();
 
     // Two passes in parallel: honeypot analysis + degen signal. The second
@@ -141,22 +257,23 @@ EVIDENCE RULES (critical — avoid false positives):
 - Only set is_honeypot=true when there is CONCRETE evidence of a sell restriction (sell blocked, sell tax >50%, blacklist, trading disabled, or a known rug). With no such evidence, set is_honeypot=false.
 - Missing Basescan verification, missing metadata, or an unfamiliar token name is NOT evidence of a honeypot. Do NOT flag on absence of information.
 - Healthy two-sided DEX liquidity and real 24h volume (in the context) are strong evidence the token is tradeable — weight them as green flags, not red.
-- Do NOT invent tax numbers. If you cannot determine a tax, use "unknown" — never "extreme".
-- Set confidence to reflect EVIDENCE strength, not how scary the unknowns feel.
+- TAX NUMBERS ARE NOT YOURS TO PRODUCE. The tax block in the context is either a measured read or an explicit failure. There is no tax field in your schema; never write a tax figure into a flag or the assessment unless the context measured it.
+- Set confidence to reflect EVIDENCE strength, not how scary the unknowns feel. It is a ceiling, not a score: an unread tax is capped downstream regardless of what you write here, so do not compensate.
 
 CRITICAL: Return ONLY raw JSON. No markdown.
 Schema: {
   "is_honeypot": <boolean>,
   "confidence": <0-100>,
-  "sell_tax_estimate": "<0%|high|extreme|unknown>",
-  "buy_tax_estimate": "<0%|low|high|unknown>",
   "red_flags": ["<flag>" or empty],
   "green_flags": ["<flag>" or empty],
   "honeypot_patterns": ["<pattern>" or empty],
   "assessment": "<2 sentences — is this safe to trade?>"
 }`,
         tokenCtx,
-        0.2,
+        // temperature 0: `is_honeypot` and `confidence` both feed a verdict.
+        // A verdict that flips between runs on identical input is the exact
+        // failure CLAUDE.md names.
+        0,
         500
       ),
       llm(
@@ -170,17 +287,20 @@ Schema: {
   "community_signal": "<1-2 sentences>"
 }`,
         tokenCtx,
-        0.3,
+        // temperature 0 for the same reason: `known_rug` ORs straight into the
+        // HONEYPOT verdict.
+        0,
         300
       ),
     ]);
 
     const hasLiquidity = (identity?.market?.liquidityUsd ?? 0) > 0;
+    // NOTE: no `*_tax_estimate` keys here any more. The fallback used to seed
+    // them with "unknown", which then rendered in a tax field as though it were
+    // a reading. Tax now comes from `tax` (measured) or is `null` (unread).
     const blue = parseJson(blueRaw) ?? {
       is_honeypot: false,
       confidence: 50,
-      sell_tax_estimate: "unknown",
-      buy_tax_estimate: "unknown",
       red_flags: [],
       green_flags: [
         ...(tokenInfo.verified ? ["source verified on Basescan"] : []),
@@ -197,11 +317,44 @@ Schema: {
       community_signal: "No community data available.",
     };
 
-    // Final verdict
-    const isHoneypot   = blue.is_honeypot || ms.known_rug;
-    const confidence   = (blue.confidence ?? 50) as number;
-    const verdict      = isHoneypot ? "HONEYPOT" : confidence >= 70 ? "SAFE" : "SUSPICIOUS";
-    const action       = verdict === "HONEYPOT" ? "DO_NOT_BUY" : verdict === "SUSPICIOUS" ? "DYOR" : "SAFE_TO_TRADE";
+    // ── Final verdict — arithmetic, not opinion ──────────────────────────────
+    // A MEASURED sell tax at or above 50% is a honeypot by definition: the
+    // holder cannot get their money out. This is the one place a successful tax
+    // read feeds the verdict rather than merely decorating it. An UNREAD tax
+    // never contributes here — absence of a reading is not evidence of a trap.
+    const measuredHoneypot = tax.sell_tax != null && tax.sell_tax >= HONEYPOT_SELL_TAX_BPS;
+    const isHoneypot = Boolean(blue.is_honeypot) || Boolean(ms.known_rug) || measuredHoneypot;
+
+    // The clamp. `confidence` can only clear 90 when `tax_read === "template"`.
+    const confidence = clampConfidence(blue.confidence, tax.tax_read);
+    // Did the clamp actually bite? Compare against what the same input would
+    // have produced had the tax been read — that difference IS the cap.
+    const confidenceCapped = confidence !== clampConfidence(blue.confidence, "template");
+
+    const verdict = isHoneypot ? "HONEYPOT" : confidence >= 70 ? "SAFE" : "SUSPICIOUS";
+    const action = honeypotAction(verdict, tax.tax_read);
+
+    // Code-derived flags. These are measurements, so they are appended in code
+    // rather than asked for in a prompt.
+    const taxRedFlags = [
+      ...(measuredHoneypot
+        ? [`measured sell tax ${tax.sell_tax_pct} on Base 8453 — a seller cannot exit at that rate`]
+        : []),
+      ...(tax.has_blacklist === true
+        ? ["contract exposes blacklists(address) — the owner can block individual wallets from selling"]
+        : []),
+    ];
+    const taxGreenFlags =
+      tax.tax_read === "template" && tax.buy_tax === 0 && tax.sell_tax === 0
+        ? ["buy and sell tax both measured at 0% on the contract (Base 8453)"]
+        : [];
+
+    // Appended in code so the caveat cannot be dropped by a model that decided
+    // the token looked fine.
+    const taxCaveat =
+      tax.tax_read === "template"
+        ? ""
+        : ` Buy/sell tax could NOT be read from this contract (it does not expose the Virtuals AgentToken tax selectors), so confidence is capped at ${TAX_UNVERIFIED_CONFIDENCE_CAP}. This is unverified, not clean — do a small test sell before committing size.`;
 
     return Response.json({
       tool: "honeypot-check",
@@ -220,19 +373,33 @@ Schema: {
       verdict,
       action,
       confidence,
+      confidence_capped: confidenceCapped,
       is_honeypot: isHoneypot,
-      sell_tax_estimate: blue.sell_tax_estimate ?? "unknown",
-      buy_tax_estimate:  blue.buy_tax_estimate  ?? "unknown",
-      red_flags:         blue.red_flags ?? [],
-      green_flags:       blue.green_flags ?? [],
-      honeypot_patterns: blue.honeypot_patterns ?? [],
+      // ── Tax: measured on-chain or explicitly null. Never a guess. ──────────
+      tax_read: tax.tax_read,
+      tax_units: tax.tax_units,
+      buy_tax: tax.buy_tax,
+      sell_tax: tax.sell_tax,
+      tax_source: tax.tax_source,
+      token_template: tax.template,
+      has_blacklist: tax.has_blacklist,
+      // BREAKING (documented): these were the string "unknown" when unread.
+      // They are now `null`, because "unknown" rendered as a measurement.
+      sell_tax_estimate: tax.sell_tax_pct,
+      buy_tax_estimate:  tax.buy_tax_pct,
+      // Measured flags lead; the model's prose flags follow. `asList` is a
+      // guard, not decoration — `parseJson` types these `unknown`, and a model
+      // that returns a bare string here would otherwise spread into characters.
+      red_flags:         [...taxRedFlags, ...asList(blue.red_flags)],
+      green_flags:       [...taxGreenFlags, ...asList(blue.green_flags)],
+      honeypot_patterns: asList(blue.honeypot_patterns),
       community: {
         alert:   ms.community_alert ?? "watch",
         known_rug: ms.known_rug ?? false,
         rug_patterns: ms.rug_patterns ?? [],
         signal:  ms.community_signal ?? "",
       },
-      assessment: blue.assessment ?? "",
+      assessment: `${typeof blue.assessment === "string" ? blue.assessment : ""}${taxCaveat}`,
     });
   } catch (error) {
     console.error("[HoneypotCheck]", error);
