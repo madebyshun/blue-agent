@@ -15,6 +15,14 @@ import Link from "next/link";
 import { useState } from "react";
 import { useAccount } from "wagmi";
 import SpendConsole from "@/components/SpendConsole";
+// Pure formatters only — the module that PROBES (`hub-liveness.ts`) imports KV
+// and must never reach a client component.
+import {
+  livenessLabel,
+  livenessTitle,
+  LIVENESS_META,
+  type ToolHealth,
+} from "@/lib/hub-liveness-format";
 
 // ─── Types (shape mirrors the local Tool/Category from /hub/page.tsx) ─────────
 // Kept loose on purpose — HubHome doesn't import from page.tsx to avoid a
@@ -37,6 +45,15 @@ export interface HubTool {
   creatorHandle?: string;
   logoUrl?:       string;   // creator-supplied logo (public); falls back to the source badge
   callCount?:     number;
+  /**
+   * Live re-probe of the BUILDER's endpoint (external tools only).
+   *
+   * `undefined` = still loading, `null` = asked and could not find out. Both
+   * render as "Not checked" and NEITHER may render as up or down — the whole
+   * bug this field exists for was 5 dead tunnels wearing a `status: "live"`
+   * nobody had re-verified. See `lib/hub-liveness-format.ts`.
+   */
+  health?:        ToolHealth | null;
 }
 
 // Source badge — provenance of a tool in the unified grid.
@@ -437,15 +454,47 @@ function SearchHero({ value, onChange, totalTools }: { value: string; onChange: 
   );
 }
 
+/**
+ * Endpoint pulse for a community tool.
+ *
+ * Shown ONLY for `source: "external"` — those are the ones whose endpoint lives
+ * on the builder's own infrastructure and can disappear without telling us.
+ * Native tools run in this app; hosted tools run on our runner. Badging those
+ * would imply a check we do not perform.
+ *
+ * This is presentation, not moderation: a red badge does not hide, filter or
+ * delist anything. `✓ Verified` above is a claim about review; this is a claim
+ * about one HTTP request, and the two are deliberately not merged.
+ */
+function EndpointBadge({ tool }: { tool: HubTool }) {
+  if (tool.source !== "external") return null;
+  const state = livenessLabel(tool.health);
+  const meta = LIVENESS_META[state];
+  return (
+    <span
+      title={livenessTitle(tool.health)}
+      className="font-mono text-[8px] px-1 py-0.5 rounded border inline-flex items-center gap-1"
+      style={{ color: `${meta.color}e6`, borderColor: `${meta.color}4d`, background: `${meta.color}0d` }}
+    >
+      <span
+        className="w-1 h-1 rounded-full inline-block"
+        style={{ background: meta.color }}
+      />
+      {meta.label}
+    </span>
+  );
+}
+
 function VerifiedAiBadges({ tool }: { tool: HubTool }) {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1 flex-wrap">
       {tool.verified && (
         <span className="font-mono text-[8px] px-1 py-0.5 rounded border border-[#34D399]/30 text-[#34D399]/90 bg-[#34D399]/5">✓ Verified</span>
       )}
       {tool.aiReady && (
         <span className="font-mono text-[8px] px-1 py-0.5 rounded border border-[#A78BFA]/30 text-[#A78BFA]/90 bg-[#A78BFA]/5">🤖 AI Ready</span>
       )}
+      <EndpointBadge tool={tool} />
     </div>
   );
 }

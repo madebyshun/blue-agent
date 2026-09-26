@@ -14,6 +14,8 @@ import MarkdownOutput from "@/components/MarkdownOutput";
 // and this is a "use client" file. The type-only form is erased by tsc, so no KV
 // code follows `Coverage` into the browser bundle.
 import type { Coverage } from "@/lib/hub-registry";
+// Type only — the probing module imports KV and must not reach this bundle.
+import type { ToolHealth } from "@/lib/hub-liveness-format";
 
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 const ERC20_BAL_ABI = [{
@@ -81,6 +83,8 @@ interface Tool {
   creatorHandle?:  string;   // "@handle" or brand shown as "by …" on community cards
   logoUrl?:        string;   // creator-supplied logo (public) shown on the tool card
   callCount?:      number;   // lifetime paid runs (community tools carry this from KV)
+  /** Live re-probe of the builder's endpoint. Absent/`null` = NOT CHECKED. */
+  health?:         ToolHealth | null;
   // Hosted tools invoke asynchronously (202 + job poll) — see ToolRunner.run().
   async?:          boolean;
 }
@@ -1453,12 +1457,41 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
    * only this half can be, which is why one flag covers the whole count.
    */
   const [communityCoverage, setCommunityCoverage] = useState<Coverage>("unavailable");
+  /**
+   * Live re-probe of each external builder's endpoint, keyed by tool id.
+   *
+   * `{}` until the second fetch lands, so every card starts as "Not checked" —
+   * which is the honest state before we have asked, and the one state that was
+   * MISSING before: `status: "live"` is written once at submit and never
+   * re-verified, so 5 expired dev tunnels advertised themselves as live
+   * indefinitely (measured 2026-09-26, see lib/hub-liveness.ts).
+   *
+   * A missing key and an explicit `null` both mean "we do not know" and must
+   * never render as up or down.
+   */
+  const [toolHealth, setToolHealth] = useState<Record<string, ToolHealth | null>>({});
   const [source, setSource] = useState<SourceFilter>("all"); // v2 sidebar: provenance filter
   const [price, setPrice]   = useState<PriceFilter>("all");  // v2 sidebar: price bucket
   const searchRef             = useRef<HTMLInputElement>(null);
 
   // ── Merge first-party (TOOLS) + community-submitted (registered) ──────────
-  const allTools = useMemo<Tool[]>(() => [...TOOLS, ...communityTools], [communityTools]);
+  // `toolHealth` is folded in HERE rather than at fetch time on purpose: the
+  // catalog and the probe are two independent requests and the probe is the slow
+  // one (it fans out to third-party endpoints). Merging late means the grid
+  // paints from the catalog alone and the badges fill in afterwards, so nobody's
+  // dead tunnel can delay the Hub's first render.
+  const allTools = useMemo<Tool[]>(
+    () => [
+      ...TOOLS,
+      ...communityTools.map((t) =>
+        // `in` rather than a truthy check — an explicit `null` from the route is
+        // a real answer ("asked, could not find out") and must overwrite the
+        // absent-key default, not be mistaken for it.
+        t.id in toolHealth ? { ...t, health: toolHealth[t.id] } : t,
+      ),
+    ],
+    [communityTools, toolHealth],
+  );
 
   // ── App-shell deep routing ────────────────────────────────────────────────
   // Selecting a tool updates the URL to /app/hub/[id] without a reload (the view
@@ -1613,6 +1646,27 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
   }, []);
 
   useEffect(() => { loadCommunityTools(); }, [loadCommunityTools]);
+
+  // ── Re-probe the builders' endpoints, AFTER the grid already has data ──────
+  // A SECOND request on purpose. `status: "live"` is written once at submit and
+  // never re-checked, so the Hub happily advertised 5 expired dev tunnels; this
+  // is the pulse. It is kept off the catalog fetch because it fans out to
+  // third-party endpoints — folding it in would let someone else's dead tunnel
+  // hold up the Hub's first paint.
+  //
+  // Every failure path leaves `toolHealth` as-is, so the badges stay at
+  // "Not checked". A failed probe fetch is not evidence about anyone's endpoint,
+  // and rendering it as one would accuse builders whose tools are fine.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/hub/tools/health", { cache: "no-store" })
+      .then(r => (r.ok ? r.json() : null))
+      .then((d: { health?: Record<string, ToolHealth | null> } | null) => {
+        if (!cancelled && d?.health) setToolHealth(d.health);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const featuredIds = useMemo<Set<string>>(() => {
     // Most-run tools first, then pad with static FEATURED_IDS so we always show 4
