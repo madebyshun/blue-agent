@@ -152,11 +152,33 @@ export const COMMANDS_DOCS = [
   { group: "ALERTS", items: [
     { cmd: "blue alert [subcommand]", desc: "Record a threshold alert locally — nothing delivers until you wire a listener", example: "blue alert add" },
   ]},
-  { group: "TASKS", items: [
-    { cmd: "blue tasks",                       desc: "Browse open tasks on the Work Hub",                      example: "blue tasks" },
-    { cmd: "blue post-task [handle]",          desc: "Post a task + escrow USDC",                              example: "blue post-task @myhandle" },
-    { cmd: "blue accept [taskId] [handle]",    desc: "Accept an open task",                                    example: "blue accept task_abc123 @me" },
-    { cmd: "blue submit [taskId] [h] [proof]", desc: "Submit proof of work and earn XP + USDC",                example: "blue submit task_abc123 @me https://github.com/…" },
+  /* 🔴 These four rows said "Browse open tasks on the Work Hub", "Post a task +
+     escrow USDC", and "Submit proof of work and earn XP + USDC" until
+     2026-09-26 — three promises, and not one of them had a mechanism.
+     MEASURED that day. The marketplace backend was retired 2026-09-02 (PR #357):
+     `src/app/api/microtasks` and `src/app/api/micro` are both GONE. The CLI half
+     was deliberately kept, and it never called them anyway — `packages/tasks`
+     reads and writes `~/.blue-agent/tasks.json` via `fs`, and grep finds zero
+     HTTP calls in `packages/builder/src/commands/micro/`. So there is no Work
+     Hub to browse: `blue tasks` lists a JSON file on your own laptop that
+     nobody else can see.
+     "escrow USDC" and "earn USDC" are the serious half. `escrowRelease`
+     (builder/src/commands/micro/storage.ts:287) increments
+     `amount_released` and decrements `amount_locked` on a plain object and
+     saves the file — no transfer, no signer, no chain. `approve.ts` says so in
+     its own comment: "record the claim as owed. No transfer is made." A reader
+     who did the work would be waiting on money that no code path can send.
+     CLAUDE.md's retiring law is about a payment path outliving its product;
+     this is the mirror image — an ADVERTISED payment path that never existed,
+     which is worse, because there is no collecting endpoint to find and delete.
+     Copy the ALERTS row above for the pattern: say where the state lives and
+     what does NOT happen. Whether these commands should ship at all is
+     ShunTr's call, so the wording is fixed here and the CLI is untouched. */
+  { group: "TASKS (local only)", items: [
+    { cmd: "blue tasks",                       desc: "List tasks from ~/.blue-agent/tasks.json on this machine — not a shared board", example: "blue tasks" },
+    { cmd: "blue post-task [handle]",          desc: "Write a task to that local file. Records a budget figure; moves no USDC",      example: "blue post-task @myhandle" },
+    { cmd: "blue accept [taskId] [handle]",    desc: "Mark a local task accepted",                                                    example: "blue accept task_abc123 @me" },
+    { cmd: "blue submit [taskId] [h] [proof]", desc: "Attach proof and record the reward as owed — nothing pays out until you settle it yourself", example: "blue submit task_abc123 @me https://github.com/…" },
   ]},
 ];
 
@@ -260,7 +282,10 @@ export const PACKAGES = [
   ]},
   { label: "CORE — runtime & data", color: "#A78BFA", items: [
     { pkg: "@blueagent/core",       desc: "Runtime · skill loading · Virtuals LLM gateway · schemas" },
-    { pkg: "@blueagent/reputation", desc: "Builder Score · Agent Score · Work Hub reputation" },
+    // "Work Hub reputation" until 2026-09-26 — the last survivor of the same
+    // dead name the TASKS rows above were selling. There is no Work Hub; the
+    // local-task reputation this refers to is a counter in ~/.blue-agent.
+    { pkg: "@blueagent/reputation", desc: "Builder Score · Agent Score · local task reputation" },
   ]},
   { label: "INTEGRATIONS", color: "#34D399", items: [
     { pkg: "@blueagent/skill",    desc: "MCP server · Claude Code · Cursor · Claude Desktop" },

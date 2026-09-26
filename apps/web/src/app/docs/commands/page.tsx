@@ -1,6 +1,18 @@
 import { DocHeader, H2, P, PrevNext } from "../_ui";
 import { CORE_COMMANDS, COMMANDS_DOCS } from "../_data";
 
+/* The lead hard-typed "18 CLI commands across Workflow, Setup, Chat, Reputation,
+   Alerts, and Tasks" until 2026-09-26. The count happened to be right, which is
+   exactly why it was worth deriving: the sibling literal on /docs/quickstart read
+   "40 skill files" against a real 34, and nothing told them apart until someone
+   counted both. The group list was the more urgent half — TASKS was renamed
+   "TASKS (local only)" in this same commit, so a hand-written list of group names
+   would have started contradicting the headings rendered ten lines below it.
+   It also said "grounded in verified Base knowledge" — one chain, on a CLI whose
+   skills and commands cover Base 8453 and Robinhood Chain 4663. Hard rule #1. */
+const CLI_COMMAND_COUNT = COMMANDS_DOCS.reduce((n, g) => n + g.items.length, 0);
+const GROUP_LIST = COMMANDS_DOCS.map((g) => g.group[0] + g.group.slice(1).toLowerCase()).join(", ");
+
 export const metadata = { title: "Commands — Blue Agent Docs" };
 
 export default function CommandsDoc() {
@@ -9,7 +21,7 @@ export default function CommandsDoc() {
       <DocHeader
         eyebrow="CLI Reference"
         title="Commands"
-        lead="18 CLI commands across Workflow, Setup, Chat, Reputation, Alerts, and Tasks — all grounded in verified Base knowledge. Install with npm i -g @blueagent/cli."
+        lead={`${CLI_COMMAND_COUNT} CLI commands across ${GROUP_LIST} — grounded in verified addresses on Base 8453 and Robinhood Chain 4663. Install with npm i -g @blueagent/cli.`}
       />
 
       <H2 id="core">5 core commands</H2>
@@ -41,7 +53,29 @@ export default function CommandsDoc() {
         </section>
       ))}
 
-      <P>The 5 workflow commands also run inside Blue Chat as slash commands, and through the MCP server in your IDE.</P>
+      {/* 🔴 Said "The 5 workflow commands also run inside Blue Chat as slash
+          commands, and through the MCP server in your IDE" until 2026-09-26.
+          BOTH halves were false, and each is contradicted by a comment in the
+          file that owns the answer.
+          Slash commands: `api/chat/route.ts:2358` — "Only /credits and /help
+          remain as slash commands." Typing /idea into Blue Chat does nothing.
+          MCP: `lib/mcp-tools.ts` declares 7 `blue_` tools and only TWO of the
+          five are there (blue_build, blue_audit). Line 323 spells out why —
+          "blue_idea / blue_ship / blue_raise are deliberately NOT loaded here —
+          they ship as Claude Skills in the blue-agent plugin, where progressive
+          disclosure costs no context." Verified on disk:
+          packages/claude-plugin/blue-agent/skills/{blue-idea,blue-ship,blue-raise}.
+          That is the 85→18 manifest cut working as designed, and the docs kept
+          advertising the pre-cut surface. A sentence like this one ages every
+          time a manifest is trimmed, so it names the mechanism, not a count. */}
+      <P>
+        All 5 run in the CLI, and each is a paid x402 tool. In your IDE the MCP server loads{" "}
+        <code className="font-mono text-[#4FC3F7]">blue_build</code> and{" "}
+        <code className="font-mono text-[#4FC3F7]">blue_audit</code>; idea, ship and raise ship as Claude
+        Skills in the blue-agent plugin instead, so they cost no context until you use one. Blue Chat has no
+        slash command for them — it keeps only <code className="font-mono text-slate-400">/credits</code> and{" "}
+        <code className="font-mono text-slate-400">/help</code>.
+      </P>
 
       <PrevNext current="/docs/commands" />
     </article>

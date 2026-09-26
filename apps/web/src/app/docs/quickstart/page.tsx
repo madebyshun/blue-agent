@@ -1,5 +1,19 @@
 import Link from "next/link";
 import { DocHeader, H2, P, CodeBlock, Callout, CardGrid, Card, PrevNext } from "../_ui";
+import { COMMANDS_DOCS, SKILLS_DOCS } from "../_data";
+
+/* 🔴 The callout below hard-typed "18 CLI commands" and "40 skill files" until
+   2026-09-26. MEASURED that day: 18 was right, 40 was wrong by six — the real
+   number is 34. It went stale when the five vendored `aeon-*.md` skills were
+   deleted in the Bankr purge (2026-09-25), and `_data.ts` even records that the
+   "35 core + 5 aeon = 40" arithmetic died with them. The comment got updated;
+   this sentence, one file away, did not.
+   Both numbers are derived from the arrays now. That is the same fix STATS in
+   `_data.ts` already carries for the identical bug ("MCP Tools" sat at a literal
+   57 while the real surface reached 86), and `SKILLS_DOCS` is itself pinned to
+   the shipped directory by scripts/skills-truth-check.ts — so this count is now
+   anchored to disk, not to a memory of disk. Do not retype either as a literal. */
+const CLI_COMMAND_COUNT = COMMANDS_DOCS.reduce((n, g) => n + g.items.length, 0);
 
 export const metadata = { title: "Quickstart — Blue Agent Docs" };
 
@@ -44,8 +58,8 @@ $ blue doctor`}</CodeBlock>
 }`}</CodeBlock>
 
       <Callout title="What's next?">
-        Explore the <Link href="/docs/commands" className="text-[#4FC3F7] underline">18 CLI commands</Link>,
-        browse the <Link href="/docs/skills" className="text-[#4FC3F7] underline">40 skill files</Link>,
+        Explore the <Link href="/docs/commands" className="text-[#4FC3F7] underline">{CLI_COMMAND_COUNT} CLI commands</Link>,
+        browse the <Link href="/docs/skills" className="text-[#4FC3F7] underline">{SKILLS_DOCS.length} skill files</Link>,
         or read how <Link href="/docs/credits" className="text-[#4FC3F7] underline">credits &amp; tiers</Link> work in Blue Chat.
       </Callout>
 
