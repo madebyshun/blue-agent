@@ -9,6 +9,7 @@
     "lint": "next lint",
     "test": "tsx scripts/run-tests.ts",
     "hub:liveness": "tsx scripts/hub-liveness-report.ts",
+    "hub:receipts": "tsx scripts/hub-receipts-report.ts",
     "hood:smoke": "tsx scripts/blue-hood-smoke.ts",
     "hood:kick-crons": "tsx scripts/hood-kick-crons.ts",
     "hood:decompose": "tsx scripts/gap-closure-dryrun.ts",
