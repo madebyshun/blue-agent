@@ -5,6 +5,7 @@ import {
   buildErc20ApproveData,
   buildTokenToTokenSwapCalldata,
 } from "@/lib/robinhood/swap";
+import { isNativeToken } from "@/lib/tx-chains";
 
 // Prepares calldata for a swap against the deployed RobinhoodSwapRouter.
 //
@@ -50,15 +51,19 @@ export async function POST(req: NextRequest) {
     }
     if (!amountIn) return NextResponse.json({ error: "amountIn (base units) required" }, { status: 400 });
 
-    // Native-ETH sentinels: absent, empty, all-zeros, or Uniswap's ETH marker.
-    // Anything else is treated as an ERC20 tokenIn and switches to token↔token mode.
-    const NATIVE_ETH_SENTINELS = new Set<string>([
-      "",
-      "0x0000000000000000000000000000000000000000",
-      "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-    ]);
-    const rawTokenIn = (body.tokenIn ?? "").trim().toLowerCase();
-    const isTokenToToken = !!rawTokenIn && !NATIVE_ETH_SENTINELS.has(rawTokenIn);
+    // Native-ETH sentinels: absent, empty, all-zeros, Uniswap's ETH marker —
+    // and, since P1-4, the WORDS "ETH" / "NATIVE".
+    //
+    // The words matter because `blue_swap_tx` documents `"ETH"` as a valid
+    // token and agents take it at its word. Before this, `tokenIn: "ETH"` fell
+    // past this set, got classified as an ERC-20, and died four lines later on
+    // `valid tokenIn address required` — a shape error for a documented input.
+    // `isNativeToken` in lib/tx-chains.ts is the one place that knows every
+    // spelling; this defers to it rather than keeping a third partial copy.
+    // (Base 8453 has the same fix at api/swap/quote. Robinhood Chain 4663 needs
+    // its own because the two chains share no routing code, only the symptom.)
+    const rawTokenIn = (body.tokenIn ?? "").trim();
+    const isTokenToToken = !!rawTokenIn && !isNativeToken(rawTokenIn);
 
     const amountInBig = BigInt(amountIn);
     const amountOutMinBig = BigInt(amountOutMinimum);
