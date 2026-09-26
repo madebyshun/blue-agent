@@ -1,6 +1,24 @@
 import Link from "next/link";
 import { DocHeader, H2, P, Card, CardGrid, Callout, PrevNext } from "../_ui";
-import { TOOL_COUNT } from "@/lib/agent-tools";
+import { AGENT_TOOLS, TOOL_COUNT } from "@/lib/agent-tools";
+
+/* 🔴 The Hub bullet below said "call any tool for $0.05" until 2026-09-26. That
+   is a PRICE, stated as a flat fact, and it was wrong for 82 of the 110 tools.
+   MEASURED from AGENT_TOOLS that day: 15 distinct prices from $0.005 to $5.00.
+   $0.05 is merely the most common (28 tools, a quarter of the catalog), so a
+   reader sizing a budget off this line was understating the top of the range by
+   100x. Wrong counts waste a reader's time; a wrong price on a pay-per-call
+   product is the one number they act on before money moves.
+   Derived from the catalog now — the same fix STATS in _data.ts already carries.
+   `priceUSDC` is the field to read, not `price`: it is an integer in 6-decimal
+   USDC units, so it cannot be tripped up by a "$" or a missing trailing zero,
+   and it is what the x402 route actually charges. Free tools (priceUSDC 0 —
+   picks-check, rh-rwa-verify) are excluded from the floor on purpose, because
+   "from $0.00" would describe the catalog as free. */
+const PAID_USDC = AGENT_TOOLS.map((t) => t.priceUSDC ?? 0).filter((n) => n > 0);
+const fmtUSDC = (n: number) => `$${(n / 1e6).toFixed(n < 10000 ? 3 : 2)}`;
+const PRICE_FLOOR = fmtUSDC(Math.min(...PAID_USDC));
+const PRICE_CEIL = fmtUSDC(Math.max(...PAID_USDC));
 
 export const metadata = {
   title: "Blue Hood — Blue Agent Docs",
@@ -38,7 +56,7 @@ const PILLARS = [
     name: "Build",
     accent: "#FBBF24",
     items: [
-      { k: "Hub", d: `${TOOL_COUNT} x402 skills — call any tool for $0.05, no auth. B2B routing endpoints available for indexes.` },
+      { k: "Hub", d: `${TOOL_COUNT} x402 tools — pay per call in USDC, no auth, no account. Priced per tool, ${PRICE_FLOOR} to ${PRICE_CEIL}.` },
       { k: "Docs / Embed", d: "Public API + embed widgets for other builders." },
     ],
   },
