@@ -101,6 +101,20 @@ function handlerReads(id: string): Set<string> | null {
 // ── Render ───────────────────────────────────────────────────────────────────
 const LIVE = AGENT_TOOLS.filter((t) => t.x402Url);
 
+// The headline said "N **paid** tools" until 2026-09-27, when six of the N were
+// priced $0.00. That is not a cosmetic inaccuracy for the audience this file is
+// written for: an agent that believes every tool is paid will build and sign an
+// EIP-3009 authorization for ZERO USDC before running a safety check, and the
+// 2026-09-26 live pass recorded that most agents simply stop at that prompt.
+// `x402-free-and-validation-test.ts` exists because of that exact finding.
+//
+// So the split is COUNTED, never asserted. A word like "paid" is a claim about
+// every row in the table below it, and a claim that big has no business being a
+// hardcoded adjective — it went stale the first time a free tool shipped and
+// nothing disagreed, because nothing was comparing it to a price.
+const FREE = LIVE.filter((t) => (t.priceUSDC ?? -1) === 0);
+const PAID = LIVE.length - FREE.length;
+
 function renderBody(toolId: string): string {
   const { fields } = wireSchema(AGENT_TOOLS.find((t) => t.id === toolId)!);
   if (!fields.length) return "_(no body)_";
@@ -126,7 +140,7 @@ function render(): string {
     "     Source of truth: apps/web/src/lib/agent-tools.ts (AGENT_TOOLS).",
     "     Body fields are the WIRE shape (post-x402Body), not the Hub form. -->",
     "",
-    `Blue Hub exposes **${LIVE.length} paid tools** across ${byCategory.size} categories.`,
+    `Blue Hub exposes **${LIVE.length} tools** across ${byCategory.size} categories — ${PAID} paid, ${FREE.length} free.`,
     "",
     `Categories: ${[...byCategory.keys()].join(" · ")}`,
     "",
@@ -134,6 +148,16 @@ function render(): string {
     "USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. Fields marked `*` are required;",
     "every other field has a server-side default. Machine-readable equivalent, with",
     "full JSON Schema per tool: https://blueagent.dev/api/catalog",
+    "",
+    // Named, not just counted. "6 are free" tells an agent a number; the ids tell
+    // it which calls need no wallet at all, which is the only form of this fact
+    // that changes what it does. They are listed in the table below too — at
+    // $0.00 in the price column — but a price inside a 115-row table is not
+    // something a reader notices before it has already signed for nothing.
+    `The ${FREE.length} priced $0.00 never answer 402 and never ask for a signature:`,
+    `${FREE.map((t) => `\`${t.id}\``).join(" · ")}.`,
+    "Do not build an authorization for them — there is nothing to sign and no",
+    "transfer to make.",
     "",
   );
 

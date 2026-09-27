@@ -83,7 +83,7 @@ JSON Schema per tool) · [`llms.txt`](https://blueagent.dev/llms.txt) (short bri
      Source of truth: apps/web/src/lib/agent-tools.ts (AGENT_TOOLS).
      Body fields are the WIRE shape (post-x402Body), not the Hub form. -->
 
-Blue Hub exposes **115 paid tools** across 11 categories.
+Blue Hub exposes **115 tools** across 11 categories — 109 paid, 6 free.
 
 Categories: on-chain · signal · security · intelligence · builder · trading · content · agent-economy · base-ecosystem · earn · portfolio
 
@@ -91,6 +91,11 @@ Categories: on-chain · signal · security · intelligence · builder · trading
 USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. Fields marked `*` are required;
 every other field has a server-side default. Machine-readable equivalent, with
 full JSON Schema per tool: https://blueagent.dev/api/catalog
+
+The 6 priced $0.00 never answer 402 and never ask for a signature:
+`blue-doctor` · `hood-live` · `hood-track-record` · `picks-check` · `rh-rwa-verify` · `rh-token-scan`.
+Do not build an authorization for them — there is nothing to sign and no
+transfer to make.
 
 ### on-chain (29)
 

@@ -105,6 +105,15 @@ function check(name: string, cond: boolean, detail = "") {
 // names and their order too, not merely how many there are.
 const CATEGORIES = [...new Set(AGENT_TOOLS.map((t) => t.category))];
 
+// Both public blurbs said "N **paid** tools" while six of the N were $0.00.
+// Counted here for the same reason every other number in this file is: the
+// adjective is a claim about all N rows, and it had already been false for four
+// tools before the two Blue Hood readers made it six. Interpolating the split
+// means the sentence cannot outlive the pricing it describes — price a free
+// tool, or free a paid one, and these pins fail until the copy agrees.
+const FREE_COUNT = AGENT_TOOLS.filter((t) => (t.priceUSDC ?? -1) === 0).length;
+const PAID_COUNT = TOOL_COUNT - FREE_COUNT;
+
 const README = readRepo("README.md");
 const LLMS = read("public/llms.txt");
 const PLUGIN = read("public/plugin.md");
@@ -153,7 +162,13 @@ const pinned: [string, string, string][] = [
   ],
   ["README chat section", README, `all ${TOOL_COUNT} Hub tools`],
   ["README cli example", README, `# list all ${TOOL_COUNT} tools`],
-  ["llms.txt", LLMS, `Blue Hub exposes ${TOOL_COUNT} paid tools.`],
+  ["llms.txt", LLMS, `Blue Hub exposes ${TOOL_COUNT} tools: ${PAID_COUNT} paid and ${FREE_COUNT} free.`],
+  // The operative half. The count is trivia; "these never answer 402" is the
+  // sentence that stops an agent signing an EIP-3009 authorization for zero
+  // USDC — the exact 2026-09-26 finding that `x402-free-and-validation-test.ts`
+  // was written for. Pinned so the number here cannot drift from the price.
+  ["llms.txt free-tool line", LLMS,
+   `The ${FREE_COUNT} free tools are priced $0.00 in the catalog and never answer 402.`],
   // An agent reads llms.txt, connects to /api/mcp, and counts 18 against the 110
   // it was just told. Until 2026-09-26 nothing public reconciled those, so the
   // only available conclusion was that the catalog number was inflated. Both
@@ -169,7 +184,7 @@ const pinned: [string, string, string][] = [
   ["plugin.md", PLUGIN, `${TOOL_COUNT} AI tools for onchain builders`],
   ["farcaster.json (static copy)", FARCASTER_STATIC, `"${TOOL_COUNT} AI tools.`],
   // SKILL.md is the agent-facing brief — the one that was 79 tools stale.
-  ["SKILL.md catalog line", SKILL, `Blue Hub exposes **${TOOL_COUNT} paid tools** across ${CATEGORIES.length} categories.`],
+  ["SKILL.md catalog line", SKILL, `Blue Hub exposes **${TOOL_COUNT} tools** across ${CATEGORIES.length} categories — ${PAID_COUNT} paid, ${FREE_COUNT} free.`],
   ["SKILL.md category list", SKILL, `Categories: ${CATEGORIES.join(" · ")}`],
   [
     "SKILL.md MCP line",
@@ -252,7 +267,12 @@ const scanned: [string, string, number[]?][] = [
   // the catalog, and refusing it that sentence would push the explanation out of
   // the one file agents actually fetch. The alternate is itself derived from
   // MCP_TOOLS, so this widens what is TRUE, not what goes unchecked.
-  ["public/llms.txt", LLMS, [MCP_COUNT]],
+  // FREE_COUNT joins MCP_COUNT for the same reason and with the same caveat:
+  // "the 6 free tools" is a claim about a real, derived subset, and COUNT_RE
+  // cannot tell a subset claim from a catalog claim. Both alternates are counted
+  // out of AGENT_TOOLS, so price a free tool and this line stops being accepted
+  // rather than quietly staying whitelisted.
+  ["public/llms.txt", LLMS, [MCP_COUNT, FREE_COUNT]],
   ["public/plugin.md", PLUGIN],
   ["public/.well-known/farcaster.json", FARCASTER_STATIC],
   ["src/app/waitlist/page.tsx", WAITLIST],
