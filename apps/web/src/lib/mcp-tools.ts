@@ -344,6 +344,14 @@ export const MCP_TOOLS = [
       required: ["prompt"],
     },
   },
+
+  // ══ F · Ops — the one tool you reach for after something else broke ═══════
+  {
+    name: "blue_doctor",
+    description:
+      "Check whether the data sources behind these tools are reachable — Base 8453 and Robinhood Chain 4663 RPC, DexScreener, GeckoTerminal, DefiLlama, GitHub — and get a one-line verdict on whether a failure you just hit is an outage or your own input. Use IMMEDIATELY after any tool here returns an error or empty data, BEFORE retrying and before telling the user the answer is unavailable: a dead upstream and a malformed address produce the same failure, and only one of them is worth retrying. Triggers — any 5xx, any timeout, any \"no data\" you did not expect, \"is it down\", \"why did that fail\", \"is this broken or is it me\". Reports `down` ONLY where a request was sent and failed; upstreams it cannot reach without a credential are reported `unknown` with the reason, never as an outage. Free, no input, no payment.",
+    inputSchema: { type: "object", properties: {} },
+  },
 ];
 
 export const MCP_TOOL_COUNT = MCP_TOOLS.length;

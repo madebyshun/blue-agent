@@ -280,9 +280,9 @@ them.
 
 The MCP surface is deliberately a **subset**, not a mirror.
 
-MCP serves 18 tools — 7 `blue_` + 10 `hub_` + 1 `b20_`.
+MCP serves 19 tools — 8 `blue_` + 10 `hub_` + 1 `b20_`.
 
-Only the 10 `hub_` tools are drawn from the 113-tool catalog; `blue_` are the door
+Only the 10 `hub_` tools and `blue_doctor` are drawn from the 113-tool catalog; `blue_` are the door
 (`blue_registry`, `blue_call`), the execution primitives and two console commands, and `b20_`
 is an MCP-only calldata builder. So **none of these numbers is interchangeable with another** —
 a count always belongs to the one surface it was measured on. If you need a total, measure the

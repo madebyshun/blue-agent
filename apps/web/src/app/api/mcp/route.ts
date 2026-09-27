@@ -11,7 +11,7 @@
  *   }
  *
  * Protocol: JSON-RPC 2.0 over HTTP POST
- * Tools: 18 — 7 blue_* + 10 hub_* + 1 b20_*
+ * Tools: 19 — 8 blue_* + 10 hub_* + 1 b20_*
  *        CUT FROM 85 ON 2026-09-26. The reasoning, the measurements, and the rule
  *        for adding a 19th all live in the header of lib/mcp-tools.ts — read that
  *        before touching this number. One-line version: 85 always-loaded tools cost
@@ -131,6 +131,12 @@ const HUB_MAP: Record<string, string> = {
   // The door. `blue_call` reaches the other ~95 catalog tools over x402 and is
   // deliberately NOT in this map — it must not take the internal bypass.
   blue_registry:        "blue-registry",
+  // The 19th slot, and the only one added since the cut. It earns preloading by
+  // the same rule as the safety five, in reverse: those are reached before money
+  // moves, this is reached after something has already failed. An agent that has
+  // to discover a diagnostic will retry or give up instead, and both are wrong
+  // half the time. Free either way, so it costs description bytes and nothing else.
+  blue_doctor:          "blue-doctor",
 };
 
 // Only the two console commands that survived the cut. blue_idea / blue_ship /

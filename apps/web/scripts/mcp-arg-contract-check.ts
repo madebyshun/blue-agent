@@ -105,9 +105,12 @@ function vocabularyOf(handlerId: string): { fields: Set<string>; found: boolean 
   return { fields, found: true };
 }
 
-// gas-tracker takes no input at all — a chain-wide read with nothing to
-// parameterise. Named, so an accidentally-empty vocabulary elsewhere still fails.
-const NO_INPUT_BY_DESIGN = new Set(["gas-tracker"]);
+// Two handlers take no input at all: gas-tracker is a chain-wide read with
+// nothing to parameterise, and blue-doctor probes a fixed upstream list — a
+// diagnostic you have to configure is one more thing to get wrong at the exact
+// moment something is already broken. Named one by one, so an accidentally
+// empty vocabulary anywhere else still fails loud.
+const NO_INPUT_BY_DESIGN = new Set(["gas-tracker", "blue-doctor"]);
 
 for (const [mcpName, handlerId] of HUB_MAP) {
   const tool = MCP_TOOLS.find((t) => t.name === mcpName);
