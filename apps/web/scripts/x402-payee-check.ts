@@ -120,6 +120,61 @@ check(`3.2 …and the sweep actually read the tree (${scanned.length} files)`,
 check("3.3 …and can still recognise the literal where it is supposed to be",
       hardcoded.includes("src/lib/x402-payee.ts"));
 
+// ── 3b. the inverse sweep: an address in a manifest that is NOT the payee ────
+/* 🔴 3.1 searches for the CORRECT literal turning up where it should not. That
+   shape is structurally blind to the opposite mistake, and the opposite mistake
+   is the one that actually shipped.
+
+   MEASURED 2026-09-27: /.well-known/ai-tool/{id}.json published
+   `pricing[].recipient: eip155:8453:0x62b45ff0…` — the ERC-8257 deployer wallet,
+   not the payee — for every paid tool. The endpoint's own 402 quotes
+   X402_PAY_TO and CDP settles only on an exact match, so an agent that trusted
+   the manifest signed to the wrong address and was refused. Nothing here fired:
+   3.1 cannot see an address it is not looking for, and the file was absent from
+   group 2 because it did not import the constant it was supposed to publish.
+   The Hub UI reads the constant and kept working throughout, which is why the
+   x402-payee.ts header calls this the hardest version of the bug to notice.
+
+   So this group asserts the complement over the manifest routes — the files
+   whose entire job is telling a foreign agent where to send money. Every
+   40-hex literal in them must be a NAMED, explained exception. An unexplained
+   address in a manifest is the bug, whatever its value. */
+const MANIFEST_DIRS = [
+  "src/app/.well-known",
+  "src/app/api/x402/.well-known",
+  "src/app/api/catalog",
+];
+/** Each entry is a role this address plays, so a future reader can tell whether
+ *  a new exception is legitimate or is someone silencing a real failure. */
+const KNOWN_NON_PAYEE: Record<string, string> = {
+  "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "USDC on Base — the asset, not a recipient",
+  "0x265bb2dbfc0a8165c9a1941eb1372f349bad2cf1": "ERC-8257 ToolRegistry contract",
+  "0x62b45ff0ff8620d36a48dd981614fd27fa52a8a2":
+    "ERC-8257 creatorAddress — who REGISTERED the tool. Legitimate in `creatorAddress`; " +
+    "it was ALSO used as pricing[].recipient until 2026-09-27, which is the bug this group exists for.",
+};
+const manifestFiles = MANIFEST_DIRS.flatMap((d) => walk(join(ROOT, d)));
+check(`3b.1 …and the manifest sweep actually read something (${manifestFiles.length} files)`,
+      manifestFiles.length >= 3);
+const strays: string[] = [];
+for (const p of manifestFiles) {
+  const body = readFileSync(p, "utf8");
+  for (const m of body.matchAll(/0x[0-9a-fA-F]{40}/g)) {
+    const a = m[0].toLowerCase();
+    if (a === X402_PAY_TO || a in KNOWN_NON_PAYEE) continue;
+    strays.push(`${relative(ROOT, p)}: ${m[0]}`);
+  }
+}
+check(`3b.2 no unexplained address literal in a published manifest (${strays.join(", ") || "none"})`,
+      strays.length === 0);
+/* The recipient itself, pinned by VALUE rather than by absence — 3b.2 would
+   stay green if someone deleted the pricing block entirely. */
+const aiToolRoute = read("src/app/.well-known/ai-tool/[tool]/route.ts");
+check("3b.3 the ERC-8257 manifest builds pricing[].recipient from the payee constant",
+      /recipient:\s*`eip155:8453:\$\{PAY_TO\}`/.test(aiToolRoute));
+check("3b.4 …and PAY_TO there is X402_PAY_TO, not a local literal",
+      /const\s+PAY_TO\s*=\s*X402_PAY_TO\s*;/.test(aiToolRoute));
+
 // ── 4. the static published files cannot import, so pin them here ────────────
 // These are what an indexing agent reads before it ever touches a route.
 const agentJson = read("public/.well-known/agent.json");

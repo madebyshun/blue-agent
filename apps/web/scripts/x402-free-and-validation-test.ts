@@ -41,11 +41,25 @@
  *     2b enumerates `priceUSDC === 0` from the catalog instead, so a new free
  *     tool is covered by being added, not by someone remembering this file.
  *
+ *  - AND THE ENDPOINT IS NOT THE WHOLE SURFACE. Cases 1–5 only ever call
+ *     `/api/x402/[tool]`, so for a year they were green while the three
+ *     `.well-known` manifests — the files an agent reads BEFORE it can call
+ *     anything — said the opposite. Two of them filtered on `t.priceUSDC`
+ *     truthiness and `0` is falsy, so the free tools were either absent from the
+ *     OpenAPI spec or 404'd as "Tool not found"; the third told every LLM that
+ *     "Each tool is a paid API endpoint". Group 6 closes that, and the general
+ *     lesson is the one that keeps costing: a guard on the behaviour says
+ *     nothing about the advertisement of the behaviour.
+ *
  * NEGATIVE CONTROLS — revert the line, this suite must go red:
  *   a. delete the `if (priceUnits === 0)` block ......................... case 1, 2, 2b
  *   b. drop the `Object.keys(probeBody).length > 0` condition ........... case 3
  *   c. delete the MISSING_REQUIRED_INPUT block .......................... case 4
  *   d. price any free tool above zero without meaning to ................ case 2b
+ *   e. restore `&& t.priceUSDC` in the openapi.json filter .............. case 6a
+ *   f. restore `!meta.priceUSDC` in the ai-tool 404 guard ............... case 6b
+ *   g. emit a $0 x402 pricing entry for a free tool ..................... case 6b
+ *   h. put the word "paid" back in description_for_model ................ case 6c
  *
  * Hermetic: `globalThis.fetch` is stubbed, so a free tool that reaches its
  * handler fails there rather than calling out. That failure is still a pass —
@@ -172,6 +186,161 @@ async function call(tool: string, body: unknown) {
     const { status, paymentHeader } = await call("wallet-risk", { address: ADDR });
     check("answers 402 with a quote", status === 402, `got ${status}`);
     check("ships the payment-required header", typeof paymentHeader === "string" && paymentHeader.length > 0);
+  }
+
+  // ── 6. The DISCOVERY layer tells the same story as the endpoint ──────────
+  /* Cases 1–5 prove `/api/x402/[tool]` behaves. They cannot prove an agent ever
+     gets far enough to try it, and on 2026-09-27 it did not:
+
+       /.well-known/openapi.json  filtered `&& t.priceUSDC`, and micro-units
+         mean a free tool holds `0` — falsy. All six were ABSENT from the spec
+         OpenAI's plugin loader and the agent directories read.
+       /.well-known/ai-tool/{id}.json  used the same test in its 404 guard and
+         answered `{"error":"Tool not found"}` for six tools that exist, are
+         registered, and answer 200 when POSTed.
+       /.well-known/ai-plugin.json  counted all 115 correctly — and its
+         `description_for_model`, which is the instruction an LLM actually
+         follows, said "Each tool is a paid API endpoint".
+
+     Every one of those is the *inverse* of the 402 bug cases 1–2b pin, aimed at
+     the same six tools, and none of them could fail this suite because this
+     suite only ever called the endpoint. The six are the safety checks: the
+     calls an agent should make BEFORE it signs anything were the only ones
+     discovery could not see, or described as wanting money.
+
+     So: enumerated from the catalog, never named — same reason as case 2b. */
+  console.log("\n6. the three published manifests agree with the price");
+  {
+    const { GET: openapiGET }  = await import("../src/app/.well-known/openapi.json/route");
+    const { GET: aiPluginGET } = await import("../src/app/.well-known/ai-plugin.json/route");
+    const { GET: aiToolGET }   = await import("../src/app/.well-known/ai-tool/[tool]/route");
+    const { X402_PAY_TO }      = await import("../src/lib/x402-payee");
+
+    const free = AGENT_TOOLS.filter((t) => (t.priceUSDC ?? -1) === 0);
+    const paid = AGENT_TOOLS.filter((t) => (t.priceUSDC ?? -1) > 0);
+    check("there are free AND paid tools to compare", free.length > 0 && paid.length > 0,
+          `${free.length} free / ${paid.length} paid`);
+
+    // ── 6a. openapi.json ──────────────────────────────────────────────────
+    const spec = (await (await openapiGET()).json()) as {
+      paths: Record<string, { post: Record<string, unknown> }>;
+      info: { description: string };
+    };
+    const pathFor = (id: string) => spec.paths[`/api/x402/${id}`]?.post;
+
+    // Presence first: the bug was an ABSENCE, and every assertion below about
+    // what a free tool's entry must NOT contain passes vacuously if the entry
+    // is missing altogether. That is exactly how this shipped.
+    check("openapi.json lists every free tool",
+          free.every((t) => !!pathFor(t.id)),
+          free.filter((t) => !pathFor(t.id)).map((t) => t.id).join(", ") || "all present");
+    check("openapi.json lists every paid tool",
+          paid.every((t) => !!pathFor(t.id)),
+          paid.filter((t) => !pathFor(t.id)).map((t) => t.id).join(", ") || "all present");
+
+    // `x-x402` is not decoration: its presence is what tells an x402-aware
+    // agent to build an EIP-3009 authorization. On a $0.00 tool that is a
+    // signature prompt for nothing, which is where agents stop.
+    const freeWithX402 = free.filter((t) => pathFor(t.id)?.["x-x402"] !== undefined);
+    check("no free tool carries an x-x402 block", freeWithX402.length === 0,
+          freeWithX402.map((t) => t.id).join(", "));
+    const freeWith402 = free.filter(
+      (t) => (pathFor(t.id)?.responses as Record<string, unknown>)?.["402"] !== undefined);
+    check("no free tool documents a 402 response", freeWith402.length === 0,
+          freeWith402.map((t) => t.id).join(", "));
+
+    // The complement, by value — otherwise deleting `x-x402` everywhere passes.
+    const paidNoX402 = paid.filter((t) => pathFor(t.id)?.["x-x402"] === undefined);
+    check("every paid tool still carries x-x402", paidNoX402.length === 0,
+          paidNoX402.map((t) => t.id).join(", "));
+    const paidNo402 = paid.filter(
+      (t) => (pathFor(t.id)?.responses as Record<string, unknown>)?.["402"] === undefined);
+    check("every paid tool still documents 402", paidNo402.length === 0,
+          paidNo402.map((t) => t.id).join(", "));
+
+    // The prose, not just the schema. An agent reads `info.description` before
+    // it reads `paths`, and "Each tool requires a micro-payment" was a hardcoded
+    // claim about all 115 rows that went false the day a free tool shipped.
+    check("openapi.json's own blurb counts the free tools",
+          spec.info.description.includes(`${free.length} free`),
+          spec.info.description.slice(0, 110));
+
+    // $0.005 rounded to "$0.01" in the human-readable price for b20-inspect —
+    // double, beside a machine field carrying the right micro-units. Any price
+    // whose exact value cannot survive two decimals is the case that breaks.
+    const odd = paid.filter((t) => {
+      const d = t.priceUSDC! / 1_000_000;
+      return Math.abs(d - Number(d.toFixed(2))) > 1e-9;
+    });
+    check("the sub-cent price case still exists to be checked", odd.length > 0,
+          odd.map((t) => `${t.id}=${t.price}`).join(", "));
+    const misquoted = odd.filter((t) => {
+      const desc = String(pathFor(t.id)?.description ?? "");
+      return !desc.includes(`$${String(t.priceUSDC! / 1_000_000)} USDC`);
+    });
+    check("no description rounds a sub-cent price up", misquoted.length === 0,
+          misquoted.map((t) => `${t.id} (${t.price})`).join(", "));
+
+    // ── 6b. ai-tool/{id}.json — the ERC-8257 manifest ─────────────────────
+    const manifestFor = async (id: string) => {
+      const res = await aiToolGET(
+        new NextRequest(`https://blueagent.dev/.well-known/ai-tool/${id}.json`),
+        { params: Promise.resolve({ tool: `${id}.json` }) },
+      );
+      const body = (await res.json()) as {
+        pricing?: { recipient?: string }[];
+        x402Free?: boolean;
+      };
+      return { status: res.status, body };
+    };
+
+    const notFound: string[] = [];
+    const wrongPricing: string[] = [];
+    for (const t of free) {
+      const { status, body } = await manifestFor(t.id);
+      if (status !== 200) { notFound.push(`${t.id}→${status}`); continue; }
+      // Empty array, not a $0 x402 entry: an entry naming a protocol, an asset
+      // and a recipient is an instruction to pay, and one that says to pay zero
+      // to a real address is a contradiction an agent resolves by signing.
+      if (body.pricing?.length !== 0 || body.x402Free !== true) wrongPricing.push(t.id);
+    }
+    check("ai-tool manifest resolves for every free tool", notFound.length === 0,
+          notFound.join(", ") || `${free.length} resolved`);
+    check("…and prices them as free, with no x402 entry to settle",
+          wrongPricing.length === 0, wrongPricing.join(", ") || "all empty + x402Free");
+
+    // A paid tool must still get a real entry, paying the real payee. Without
+    // this, emptying `pricing` for everything would pass the two above.
+    {
+      const sample = paid[0];
+      const { status, body } = await manifestFor(sample.id);
+      check(`ai-tool manifest still prices ${sample.id} (${sample.price})`,
+            status === 200 && body.pricing?.length === 1, `status ${status}`);
+      check("…to the x402 payee, not the ERC-8257 creator",
+            body.pricing?.[0]?.recipient === `eip155:8453:${X402_PAY_TO}`,
+            String(body.pricing?.[0]?.recipient));
+    }
+
+    // A genuinely absent id must still 404 — "not found" has to keep meaning it.
+    {
+      const { status } = await manifestFor("no-such-tool-here");
+      check("an unknown id still 404s", status === 404, `got ${status}`);
+    }
+
+    // ── 6c. ai-plugin.json — the text an LLM actually follows ─────────────
+    const plugin = (await (await aiPluginGET()).json()) as {
+      description_for_model: string;
+      "x-x402": { freeTools?: string[] };
+    };
+    check("description_for_model no longer claims every tool is paid",
+          !/Each tool is a paid API endpoint/.test(plugin.description_for_model));
+    check("…and names every free tool by id",
+          free.every((t) => plugin.description_for_model.includes(t.id)),
+          free.filter((t) => !plugin.description_for_model.includes(t.id)).map((t) => t.id).join(", ") || "all named");
+    check("its x-x402 block lists the free tools alongside payTo",
+          Array.isArray(plugin["x-x402"].freeTools) &&
+            free.every((t) => plugin["x-x402"].freeTools!.includes(t.id)),
+          JSON.stringify(plugin["x-x402"].freeTools));
   }
 
   console.log(failures === 0 ? "\nPASS — free means free, and a quote implies a runnable request" : `\nFAIL — ${failures} assertion(s)`);
