@@ -59,8 +59,8 @@ export default function CommandsDoc() {
           file that owns the answer.
           Slash commands: `api/chat/route.ts:2358` — "Only /credits and /help
           remain as slash commands." Typing /idea into Blue Chat does nothing.
-          MCP: `lib/mcp-tools.ts` declares 7 `blue_` tools and only TWO of the
-          five are there (blue_build, blue_audit). Line 323 spells out why —
+          MCP: of the five, only TWO are in `lib/mcp-tools.ts` (blue_build,
+          blue_audit). The blue_build entry's own description spells out why —
           "blue_idea / blue_ship / blue_raise are deliberately NOT loaded here —
           they ship as Claude Skills in the blue-agent plugin, where progressive
           disclosure costs no context." Verified on disk:
